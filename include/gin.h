@@ -54,47 +54,84 @@ struct gin_ctx_s {
   int params_count;
 };
 
-/** @brief Move to the next handler in the chain. */
+/** @brief Move to the next handler in the chain.
+ * @param c The request context. */
 void gin_next(gin_ctx_t* c);
-/** @brief Abort the handler chain execution. */
+/** @brief Abort the handler chain execution.
+ * @param c The request context. */
 void gin_abort(gin_ctx_t* c);
-/** @brief Set the response status code. */
+/** @brief Set the response status code.
+ * @param c The request context.
+ * @param status The HTTP status code. */
 void gin_status(gin_ctx_t* c, int status);
-/** @brief Set response body and status code. */
+/** @brief Set response body and status code.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param msg The response body message. */
 void gin_string(gin_ctx_t* c, int status, const char* msg);
-/** @brief Get a URL parameter by key. */
+/** @brief Get a URL parameter by key.
+ * @param c The request context.
+ * @param key The parameter key.
+ * @return The parameter value, or NULL if not found. */
 const char* gin_get_param(gin_ctx_t* c, const char* key);
-/** @brief Get a request header by key. */
+/** @brief Get a request header by key.
+ * @param c The request context.
+ * @param key The header key.
+ * @return The header value, or NULL if not found. */
 const char* gin_get_header(gin_ctx_t* c, const char* key);
-/** @brief Get a query parameter by key. */
+/** @brief Get a query parameter by key.
+ * @param c The request context.
+ * @param key The query parameter key.
+ * @return The query parameter value, or NULL if not found. */
 const char* gin_get_query(gin_ctx_t* c, const char* key);
-/** @brief Set a response header. */
+/** @brief Set a response header.
+ * @param c The request context.
+ * @param key The header key.
+ * @param value The header value. */
 void gin_set_header(gin_ctx_t* c, const char* key, const char* value);
-/** @brief Clean up context resources. */
+/** @brief Clean up context resources.
+ * @param c The request context. */
 void gin_ctx_cleanup(gin_ctx_t* c);
 
-/** @brief Recovery middleware handler. */
+/** @brief Recovery middleware handler.
+ * @param c The request context. */
 void gin_recovery_handler(gin_ctx_t* c);
-/** @brief Panic in the handler. */
+/** @brief Panic in the handler.
+ * @param c The request context. */
 void gin_panic(gin_ctx_t* c);
 
-/** @brief Logging middleware handler. */
+/** @brief Logging middleware handler.
+ * @param c The request context. */
 void gin_logger_handler(gin_ctx_t* c);
 
 typedef int (*gin_auth_validator_t)(const char* token);
-/** @brief Authentication middleware. */
+/** @brief Authentication middleware.
+ * @param c The request context.
+ * @param validator The authentication validator function. */
 void gin_auth_middleware(gin_ctx_t* c, gin_auth_validator_t validator);
-/** @brief Static file serving middleware. */
+/** @brief Static file serving middleware.
+ * @param c The request context.
+ * @param root_dir The root directory for static files. */
 void gin_static(gin_ctx_t* c, const char* root_dir);
 
-/** @brief Bind request body to JSON. */
+/** @brief Bind request body to JSON.
+ * @param c The request context.
+ * @return A cJSON pointer representing the parsed body, or NULL. */
 cJSON* gin_bind_json(gin_ctx_t* c);
-/** @brief Set JSON response body and status. */
+/** @brief Set JSON response body and status.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param json The cJSON pointer to send as response. */
 void gin_json(gin_ctx_t* c, int status, cJSON* json);
 
-/** @brief Internal helper to split URL path and query. */
+/** @brief Internal helper to split URL path and query.
+ * @param url The URL string.
+ * @param path Pointer to store the path string.
+ * @param query Pointer to store the query string. */
 void gin_split_url(const char* url, char** path, char** query);
-/** @brief Internal helper to parse query string. */
+/** @brief Internal helper to parse query string.
+ * @param c The request context.
+ * @param query_string The query string to parse. */
 void gin_parse_query(gin_ctx_t* c, const char* query_string);
 
 typedef struct gin_router_node_s gin_router_node_t;
@@ -104,29 +141,56 @@ typedef struct gin_router_s {
 
 typedef struct gin_group_s gin_group_t;
 
-/** @brief Create a new router. */
+/** @brief Create a new router.
+ * @return A new gin_router_t instance. */
 gin_router_t* gin_router_new();
-/** @brief Add a route to the router. */
+/** @brief Add a route to the router.
+ * @param r The router.
+ * @param method The HTTP method.
+ * @param path The route path.
+ * @param handlers Array of handlers.
+ * @param handler_count Number of handlers. */
 void gin_router_add(gin_router_t* r, const char* method, const char* path,
                     gin_handler_t* handlers, size_t handler_count);
-/** @brief Match a route to handlers. */
+/** @brief Match a route to handlers.
+ * @param r The router.
+ * @param method The HTTP method.
+ * @param path The route path.
+ * @return Array of handlers, or NULL if no match. */
 gin_handler_t* gin_router_match(gin_router_t* r, const char* method,
                                 const char* path);
-/** @brief Match a route and update context. */
+/** @brief Match a route and update context.
+ * @param r The router.
+ * @param c The request context.
+ * @return 1 if matched, 0 otherwise. */
 int gin_router_match_ctx(gin_router_t* r, gin_ctx_t* c);
-/** @brief Free the router. */
+/** @brief Free the router.
+ * @param r The router to free. */
 void gin_router_free(gin_router_t* r);
 
-/** @brief Create a new group. */
+/** @brief Create a new group.
+ * @param router The router.
+ * @param prefix The group prefix.
+ * @return A new gin_group_t instance. */
 gin_group_t* gin_group_new(gin_router_t* router, const char* prefix);
-/** @brief Create a sub-group. */
+/** @brief Create a sub-group.
+ * @param parent The parent group.
+ * @param prefix The sub-group prefix.
+ * @return A new gin_group_t instance. */
 gin_group_t* gin_group_group(gin_group_t* parent, const char* prefix);
-/** @brief Use middleware in the group. */
+/** @brief Use middleware in the group.
+ * @param group The group.
+ * @param handler The middleware handler. */
 void gin_group_use(gin_group_t* group, gin_handler_t handler);
-/** @brief Add a route to the group. */
+/** @brief Add a route to the group.
+ * @param group The group.
+ * @param method The HTTP method.
+ * @param path The route path.
+ * @param handler The handler. */
 void gin_group_add_route(gin_group_t* group, const char* method,
                          const char* path, gin_handler_t handler);
-/** @brief Free the group. */
+/** @brief Free the group.
+ * @param group The group to free. */
 void gin_group_free(gin_group_t* group);
 
 // Convenience macros for groups
@@ -146,11 +210,17 @@ void gin_group_free(gin_group_t* group);
   gin_group_add_route(group, "HEAD", path, handler)
 
 typedef struct gin_server_s gin_server_t;
-/** @brief Create a new server. */
+/** @brief Create a new server.
+ * @param router The router to be used by the server.
+ * @return A new gin_server_t instance. */
 gin_server_t* gin_server_new(gin_router_t* router);
-/** @brief Free the server. */
+/** @brief Free the server.
+ * @param server The server to free. */
 void gin_server_free(gin_server_t* server);
-/** @brief Run the server. */
+/** @brief Run the server.
+ * @param server The server.
+ * @param port The port to listen on.
+ * @return 0 on success, -1 on failure. */
 int gin_server_run(gin_server_t* server, int port);
 
 #endif

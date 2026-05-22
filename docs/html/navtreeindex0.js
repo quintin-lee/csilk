@@ -1,0 +1,21 @@
+var NAVTREEINDEX0 =
+{
+"annotated.html":[0,0],
+"classes.html":[0,1],
+"dir_d44c64559bbebec7f509842c48db8b23.html":[1,0,0],
+"files.html":[1,0],
+"gin_8h_source.html":[1,0,0,0],
+"index.html":[],
+"pages.html":[],
+"structgin__client__t.html":[0,0,0],
+"structgin__ctx__s.html":[0,0,1],
+"structgin__group__s.html":[0,0,2],
+"structgin__header__s.html":[0,0,3],
+"structgin__method__handler__s.html":[0,0,4],
+"structgin__param__t.html":[0,0,5],
+"structgin__request__t.html":[0,0,6],
+"structgin__response__t.html":[0,0,7],
+"structgin__router__node__s.html":[0,0,8],
+"structgin__router__s.html":[0,0,9],
+"structgin__server__s.html":[0,0,10]
+};
