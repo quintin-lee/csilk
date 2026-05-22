@@ -1,0 +1,129 @@
+\doxysection{gin.\+h}
+\hypertarget{gin_8h_source}{}\label{gin_8h_source}\index{include/gin.h@{include/gin.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ GIN\_H}}
+\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ GIN\_H}}
+\DoxyCodeLine{00003\ }
+\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <setjmp.h>}}
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <stddef.h>}}
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ "{}cJSON.h"{}}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#define\ GIN\_VERSION\ "{}0.1.0"{}}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#define\ GIN\_MAX\_PARAMS\ 20}}
+\DoxyCodeLine{00013\ }
+\DoxyCodeLine{00014\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ gin\_ctx\_t;}
+\DoxyCodeLine{00015\ \textcolor{keyword}{typedef}\ void\ (*gin\_handler\_t)(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}\ gin\_header\_t;}
+\DoxyCodeLine{00018\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}\ \{}
+\DoxyCodeLine{00019\ \ \ \textcolor{keywordtype}{char}*\ key;}
+\DoxyCodeLine{00020\ \ \ \textcolor{keywordtype}{char}*\ value;}
+\DoxyCodeLine{00021\ \ \ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}*\ next;}
+\DoxyCodeLine{00022\ \};}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00024\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00025\ \ \ \textcolor{keywordtype}{char}*\ method;}
+\DoxyCodeLine{00026\ \ \ \textcolor{keywordtype}{char}*\ path;}
+\DoxyCodeLine{00027\ \ \ \textcolor{keywordtype}{char}*\ body;}
+\DoxyCodeLine{00028\ \ \ \textcolor{keywordtype}{size\_t}\ body\_len;}
+\DoxyCodeLine{00029\ \ \ gin\_header\_t*\ headers;}
+\DoxyCodeLine{00030\ \ \ gin\_header\_t*\ query\_params;}
+\DoxyCodeLine{00031\ \}\ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}};}
+\DoxyCodeLine{00032\ }
+\DoxyCodeLine{00033\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00034\ \ \ \textcolor{keywordtype}{int}\ status;}
+\DoxyCodeLine{00035\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ body;}
+\DoxyCodeLine{00036\ \ \ gin\_header\_t*\ headers;}
+\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{int}\ body\_is\_managed;}
+\DoxyCodeLine{00038\ \}\ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}};}
+\DoxyCodeLine{00039\ }
+\DoxyCodeLine{00040\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{char}*\ key;}
+\DoxyCodeLine{00042\ \ \ \textcolor{keywordtype}{char}*\ value;}
+\DoxyCodeLine{00043\ \}\ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}};}
+\DoxyCodeLine{00044\ }
+\DoxyCodeLine{00045\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ \{}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordtype}{int}\ handler\_index;}
+\DoxyCodeLine{00047\ \ \ gin\_handler\_t*\ handlers;\ \ \textcolor{comment}{//\ NULL\ terminated\ array}}
+\DoxyCodeLine{00048\ \ \ \textcolor{keywordtype}{int}\ aborted;}
+\DoxyCodeLine{00049\ \ \ jmp\_buf\ jump\_buffer;}
+\DoxyCodeLine{00050\ \ \ \textcolor{keywordtype}{int}\ has\_jump\_buffer;}
+\DoxyCodeLine{00051\ \ \ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}}\ request;}
+\DoxyCodeLine{00052\ \ \ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}}\ response;}
+\DoxyCodeLine{00053\ \ \ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}}\ params[GIN\_MAX\_PARAMS];}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordtype}{int}\ params\_count;}
+\DoxyCodeLine{00055\ \};}
+\DoxyCodeLine{00056\ }
+\DoxyCodeLine{00059\ \textcolor{keywordtype}{void}\ gin\_next(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00062\ \textcolor{keywordtype}{void}\ gin\_abort(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00066\ \textcolor{keywordtype}{void}\ gin\_status(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status);}
+\DoxyCodeLine{00071\ \textcolor{keywordtype}{void}\ gin\_string(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ msg);}
+\DoxyCodeLine{00076\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_param(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00081\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_header(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00086\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_query(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00091\ \textcolor{keywordtype}{void}\ gin\_set\_header(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ value);}
+\DoxyCodeLine{00094\ \textcolor{keywordtype}{void}\ gin\_ctx\_cleanup(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00095\ }
+\DoxyCodeLine{00098\ \textcolor{keywordtype}{void}\ gin\_recovery\_handler(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00101\ \textcolor{keywordtype}{void}\ gin\_panic(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00102\ }
+\DoxyCodeLine{00105\ \textcolor{keywordtype}{void}\ gin\_logger\_handler(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00106\ }
+\DoxyCodeLine{00107\ \textcolor{keyword}{typedef}\ int\ (*gin\_auth\_validator\_t)(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ token);}
+\DoxyCodeLine{00111\ \textcolor{keywordtype}{void}\ gin\_auth\_middleware(gin\_ctx\_t*\ c,\ gin\_auth\_validator\_t\ validator);}
+\DoxyCodeLine{00115\ \textcolor{keywordtype}{void}\ gin\_static(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ root\_dir);}
+\DoxyCodeLine{00116\ }
+\DoxyCodeLine{00120\ cJSON*\ gin\_bind\_json(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00125\ \textcolor{keywordtype}{void}\ gin\_json(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status,\ cJSON*\ json);}
+\DoxyCodeLine{00126\ }
+\DoxyCodeLine{00131\ \textcolor{keywordtype}{void}\ gin\_split\_url(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ url,\ \textcolor{keywordtype}{char}**\ path,\ \textcolor{keywordtype}{char}**\ query);}
+\DoxyCodeLine{00135\ \textcolor{keywordtype}{void}\ gin\_parse\_query(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ query\_string);}
+\DoxyCodeLine{00136\ }
+\DoxyCodeLine{00137\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__node__s}{gin\_router\_node\_s}}\ gin\_router\_node\_t;}
+\DoxyCodeLine{00138\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__s}{gin\_router\_s}}\ \{}
+\DoxyCodeLine{00139\ \ \ gin\_router\_node\_t*\ root;}
+\DoxyCodeLine{00140\ \}\ gin\_router\_t;}
+\DoxyCodeLine{00141\ }
+\DoxyCodeLine{00142\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__group__s}{gin\_group\_s}}\ gin\_group\_t;}
+\DoxyCodeLine{00143\ }
+\DoxyCodeLine{00146\ gin\_router\_t*\ gin\_router\_new();}
+\DoxyCodeLine{00153\ \textcolor{keywordtype}{void}\ gin\_router\_add(gin\_router\_t*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,}
+\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gin\_handler\_t*\ handlers,\ \textcolor{keywordtype}{size\_t}\ handler\_count);}
+\DoxyCodeLine{00160\ gin\_handler\_t*\ gin\_router\_match(gin\_router\_t*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
+\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path);}
+\DoxyCodeLine{00166\ \textcolor{keywordtype}{int}\ gin\_router\_match\_ctx(gin\_router\_t*\ r,\ gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00169\ \textcolor{keywordtype}{void}\ gin\_router\_free(gin\_router\_t*\ r);}
+\DoxyCodeLine{00170\ }
+\DoxyCodeLine{00175\ gin\_group\_t*\ gin\_group\_new(gin\_router\_t*\ router,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ prefix);}
+\DoxyCodeLine{00180\ gin\_group\_t*\ gin\_group\_group(gin\_group\_t*\ parent,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ prefix);}
+\DoxyCodeLine{00184\ \textcolor{keywordtype}{void}\ gin\_group\_use(gin\_group\_t*\ group,\ gin\_handler\_t\ handler);}
+\DoxyCodeLine{00190\ \textcolor{keywordtype}{void}\ gin\_group\_add\_route(gin\_group\_t*\ group,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
+\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,\ gin\_handler\_t\ handler);}
+\DoxyCodeLine{00194\ \textcolor{keywordtype}{void}\ gin\_group\_free(gin\_group\_t*\ group);}
+\DoxyCodeLine{00195\ }
+\DoxyCodeLine{00196\ \textcolor{comment}{//\ Convenience\ macros\ for\ groups}}
+\DoxyCodeLine{00197\ \textcolor{preprocessor}{\#define\ gin\_GET(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00198\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}GET"{},\ path,\ handler)}}
+\DoxyCodeLine{00199\ \textcolor{preprocessor}{\#define\ gin\_POST(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00200\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}POST"{},\ path,\ handler)}}
+\DoxyCodeLine{00201\ \textcolor{preprocessor}{\#define\ gin\_PUT(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00202\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PUT"{},\ path,\ handler)}}
+\DoxyCodeLine{00203\ \textcolor{preprocessor}{\#define\ gin\_DELETE(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00204\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}DELETE"{},\ path,\ handler)}}
+\DoxyCodeLine{00205\ \textcolor{preprocessor}{\#define\ gin\_PATCH(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PATCH"{},\ path,\ handler)}}
+\DoxyCodeLine{00207\ \textcolor{preprocessor}{\#define\ gin\_OPTIONS(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00208\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}OPTIONS"{},\ path,\ handler)}}
+\DoxyCodeLine{00209\ \textcolor{preprocessor}{\#define\ gin\_HEAD(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00210\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}HEAD"{},\ path,\ handler)}}
+\DoxyCodeLine{00211\ }
+\DoxyCodeLine{00212\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__server__s}{gin\_server\_s}}\ gin\_server\_t;}
+\DoxyCodeLine{00216\ gin\_server\_t*\ gin\_server\_new(gin\_router\_t*\ router);}
+\DoxyCodeLine{00219\ \textcolor{keywordtype}{void}\ gin\_server\_free(gin\_server\_t*\ server);}
+\DoxyCodeLine{00224\ \textcolor{keywordtype}{int}\ gin\_server\_run(gin\_server\_t*\ server,\ \textcolor{keywordtype}{int}\ port);}
+\DoxyCodeLine{00225\ }
+\DoxyCodeLine{00226\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}
