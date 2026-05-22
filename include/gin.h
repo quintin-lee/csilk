@@ -9,15 +9,24 @@
 typedef struct gin_ctx_s gin_ctx_t;
 typedef void (*gin_handler_t)(gin_ctx_t *c);
 
+typedef struct gin_header_s gin_header_t;
+struct gin_header_s {
+    char *key;
+    char *value;
+    struct gin_header_s *next;
+};
+
 typedef struct {
     char *method;
     char *path;
     char *body;
+    gin_header_t *headers;
 } gin_request_t;
 
 typedef struct {
     int status;
     const char *body;
+    gin_header_t *headers;
 } gin_response_t;
 
 typedef struct {
@@ -40,6 +49,8 @@ void gin_abort(gin_ctx_t *c);
 void gin_status(gin_ctx_t *c, int status);
 void gin_string(gin_ctx_t *c, int status, const char *msg);
 const char* gin_get_param(gin_ctx_t *c, const char *key);
+const char* gin_get_header(gin_ctx_t *c, const char *key);
+void gin_set_header(gin_ctx_t *c, const char *key, const char *value);
 void gin_ctx_cleanup(gin_ctx_t *c);
 
 typedef struct gin_router_node_s gin_router_node_t;
