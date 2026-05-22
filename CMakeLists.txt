@@ -42,6 +42,8 @@ set(GIN_SOURCES
     src/group.c
     src/server.c
     src/url_parser.c
+    src/middleware/logger.c
+    src/middleware/recovery.c
 )
 
 # Build library
@@ -49,6 +51,9 @@ add_library(gin ${GIN_SOURCES})
 target_link_libraries(gin uv llhttp cjson)
 
 # Test executables
+add_executable(test_logger tests/test_logger.c)
+target_link_libraries(test_logger gin)
+
 add_executable(test_context tests/test_context.c)
 target_link_libraries(test_context gin)
 
@@ -72,6 +77,9 @@ target_link_libraries(test_query gin)
 
 add_executable(test_json tests/test_json.c)
 target_link_libraries(test_json gin)
+
+add_executable(test_recovery tests/test_recovery.c)
+target_link_libraries(test_recovery gin)
 
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
