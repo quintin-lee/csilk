@@ -2,6 +2,7 @@
 #define GIN_H
 
 #include <stddef.h>
+#include "cJSON.h"
 
 #define GIN_VERSION "0.1.0"
 #define GIN_MAX_PARAMS 20
@@ -55,6 +56,9 @@ const char* gin_get_header(gin_ctx_t *c, const char *key);
 const char* gin_get_query(gin_ctx_t *c, const char *key);
 void gin_set_header(gin_ctx_t *c, const char *key, const char *value);
 void gin_ctx_cleanup(gin_ctx_t *c);
+
+cJSON* gin_bind_json(gin_ctx_t *c);
+void gin_json(gin_ctx_t *c, int status, cJSON *json);
 
 // Internal URL helpers
 void gin_split_url(const char *url, char **path, char **query);

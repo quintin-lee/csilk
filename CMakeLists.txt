@@ -33,6 +33,7 @@ FetchContent_MakeAvailable(cjson)
 
 # Include directories
 include_directories(include)
+include_directories(${cjson_SOURCE_DIR})
 
 # Source files
 set(GIN_SOURCES
@@ -68,6 +69,9 @@ target_link_libraries(test_server gin)
 
 add_executable(test_query tests/test_query.c)
 target_link_libraries(test_query gin)
+
+add_executable(test_json tests/test_json.c)
+target_link_libraries(test_json gin)
 
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
