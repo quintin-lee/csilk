@@ -9,6 +9,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
+    
+    # 查找所有源文件和头文件
+    file(GLOB_RECURSE ALL_SOURCE_FILES
+        "src/*.c" "src/*.h"
+        "include/*.h"
+        "tests/*.c" "tests/*.h"
+    )
+
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT_EXECUTABLE} -i ${ALL_SOURCE_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-format on source files"
+    )
+
     # 设置 clang-format 选项
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=implicit-function-declaration")
 endif()
