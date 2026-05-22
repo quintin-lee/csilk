@@ -40,6 +40,7 @@ set(GIN_SOURCES
     src/router.c
     src/group.c
     src/server.c
+    src/url_parser.c
 )
 
 # Build library
@@ -64,6 +65,9 @@ target_link_libraries(test_headers gin)
 
 add_executable(test_server tests/test_server.c)
 target_link_libraries(test_server gin)
+
+add_executable(test_query tests/test_query.c)
+target_link_libraries(test_query gin)
 
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)

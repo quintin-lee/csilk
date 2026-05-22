@@ -45,6 +45,17 @@ const char* gin_get_header(gin_ctx_t *c, const char *key) {
     return NULL;
 }
 
+const char* gin_get_query(gin_ctx_t *c, const char *key) {
+    gin_header_t *h = c->request.query_params;
+    while (h) {
+        if (strcmp(h->key, key) == 0) {
+            return h->value;
+        }
+        h = h->next;
+    }
+    return NULL;
+}
+
 void gin_set_header(gin_ctx_t *c, const char *key, const char *value) {
     gin_header_t *h = c->response.headers;
     gin_header_t *prev = NULL;
@@ -106,6 +117,8 @@ void gin_ctx_cleanup(gin_ctx_t *c) {
 
     free_headers(c->request.headers);
     c->request.headers = NULL;
+    free_headers(c->request.query_params);
+    c->request.query_params = NULL;
     free_headers(c->response.headers);
     c->response.headers = NULL;
 }
