@@ -1,3 +1,9 @@
+/**
+ * @file server.c
+ * @brief Server implementation.
+ * @license MIT
+ */
+
 #include <llhttp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +12,7 @@
 
 #include "gin.h"
 
+/** @brief Server structure. */
 struct gin_server_s {
   uv_loop_t* loop;
   gin_router_t* router;
@@ -13,6 +20,7 @@ struct gin_server_s {
   llhttp_settings_t settings;
 };
 
+/** @brief Client connection structure. */
 typedef struct {
   uv_tcp_t handle;
   uv_timer_t timer;
@@ -24,6 +32,10 @@ typedef struct {
   char* current_header_value;
 } gin_client_t;
 
+/** @brief Buffer allocation callback.
+ * @param handle UV handle.
+ * @param suggested_size Suggested buffer size.
+ * @param buf Pointer to the buffer. */
 static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
                          uv_buf_t* buf) {
   (void)handle;
@@ -204,6 +216,9 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/** @brief HTTP message completion callback.
+ * @param p HTTP parser instance.
+ * @return 0 on success, HPE_USER on error. */
 static int on_message_complete(llhttp_t* p) {
   gin_client_t* client = (gin_client_t*)p->data;
 
@@ -320,33 +335,9 @@ static int on_message_complete(llhttp_t* p) {
   return 0;
 }
 
-static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-  gin_client_t* client = (gin_client_t*)stream->data;
-  uv_timer_stop(&client->timer);
-
-  if (nread > 0) {
-    enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
-    if (err != HPE_OK) {
-      fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
-              client->parser.reason);
-      if (!uv_is_closing((uv_handle_t*)stream)) {
-        uv_close((uv_handle_t*)stream, on_close);
-      }
-    }
-  } else if (nread < 0) {
-    if (nread != UV_EOF) {
-      fprintf(stderr, "Read error %s\n", uv_err_name(nread));
-    }
-    if (!uv_is_closing((uv_handle_t*)stream)) {
-      uv_close((uv_handle_t*)stream, on_close);
-    }
-  }
-
-  if (buf->base) {
-    free(buf->base);
-  }
-}
-
+/** @brief New connection callback.
+ * @param server_stream Server stream.
+ * @param status Connection status. */
 static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (status < 0) {
     fprintf(stderr, "New connection error %s\n", uv_strerror(status));
@@ -386,6 +377,40 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   }
 }
 
+/** @brief Read callback.
+ * @param stream Stream.
+ * @param nread Number of bytes read.
+ * @param buf Buffer read into. */
+static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+  gin_client_t* client = (gin_client_t*)stream->data;
+  uv_timer_stop(&client->timer);
+
+  if (nread > 0) {
+    enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
+    if (err != HPE_OK) {
+      fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
+              client->parser.reason);
+      if (!uv_is_closing((uv_handle_t*)stream)) {
+        uv_close((uv_handle_t*)stream, on_close);
+      }
+    }
+  } else if (nread < 0) {
+    if (nread != UV_EOF) {
+      fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+    }
+    if (!uv_is_closing((uv_handle_t*)stream)) {
+      uv_close((uv_handle_t*)stream, on_close);
+    }
+  }
+
+  if (buf->base) {
+    free(buf->base);
+  }
+}
+
+/** @brief Create a new server.
+ * @param router The router to be used by the server.
+ * @return A new gin_server_t instance. */
 gin_server_t* gin_server_new(gin_router_t* router) {
   gin_server_t* s = calloc(1, sizeof(gin_server_t));
   if (!s) return NULL;
@@ -404,6 +429,8 @@ gin_server_t* gin_server_new(gin_router_t* router) {
   return s;
 }
 
+/** @brief Free the server.
+ * @param server The server to free. */
 void gin_server_free(gin_server_t* server) {
   if (server) {
     if (server->server_handle.loop &&
@@ -414,6 +441,10 @@ void gin_server_free(gin_server_t* server) {
   }
 }
 
+/** @brief Run the server.
+ * @param server The server.
+ * @param port The port to listen on.
+ * @return 0 on success, -1 on failure. */
 int gin_server_run(gin_server_t* server, int port) {
   int r = uv_tcp_init(server->loop, &server->server_handle);
   if (r < 0) {
