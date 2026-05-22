@@ -25,4 +25,9 @@ void gin_router_add(gin_router_t *r, const char *method, const char *path, gin_h
 gin_handler_t gin_router_match(gin_router_t *r, const char *method, const char *path);
 void gin_router_free(gin_router_t *r);
 
+typedef struct gin_server_s gin_server_t;
+gin_server_t* gin_server_new(gin_router_t *router);
+void gin_server_free(gin_server_t *server);
+int gin_server_run(gin_server_t *server, int port);
+
 #endif
