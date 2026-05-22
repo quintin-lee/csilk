@@ -1,0 +1,16 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.o
+*.so
+*.a
+compile_commands.json
+
+# Cache and IDE
+.cache/
+.vscode/
+.idea/
+.clangd/
+
+# Plans and Specs (keeping them in git is fine, but maybe user wants them ignored? No, standard is to keep them)
