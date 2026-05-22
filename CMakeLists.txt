@@ -7,5 +7,17 @@ set(CMAKE_C_STANDARD 11)
 # Include directories
 include_directories(include)
 
+# Source files
+set(GIN_SOURCES
+    src/context.c
+)
+
+# Build library
+add_library(gin ${GIN_SOURCES})
+
+# Test executables
+add_executable(test_context tests/test_context.c)
+target_link_libraries(test_context gin)
+
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
