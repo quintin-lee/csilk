@@ -121,5 +121,8 @@ target_link_libraries(test_recovery gin)
 add_executable(test_auth tests/test_auth.c)
 target_link_libraries(test_auth gin)
 
+add_executable(test_keepalive tests/test_keepalive.c)
+target_link_libraries(test_keepalive gin)
+
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
