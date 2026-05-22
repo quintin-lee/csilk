@@ -124,5 +124,12 @@ target_link_libraries(test_auth gin)
 add_executable(test_keepalive tests/test_keepalive.c)
 target_link_libraries(test_keepalive gin)
 
+add_executable(test_timeout tests/test_timeout.c)
+target_link_libraries(test_timeout gin)
+
+# Example server
+add_executable(example_server example_server.c)
+target_link_libraries(example_server gin)
+
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
