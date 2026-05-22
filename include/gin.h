@@ -2,6 +2,7 @@
 #define GIN_H
 
 #include <stddef.h>
+#include <setjmp.h>
 #include "cJSON.h"
 
 #define GIN_VERSION "0.1.0"
@@ -30,6 +31,7 @@ typedef struct {
     int status;
     const char *body;
     gin_header_t *headers;
+    int body_is_managed;
 } gin_response_t;
 
 typedef struct {
@@ -41,6 +43,8 @@ struct gin_ctx_s {
     int handler_index;
     gin_handler_t *handlers; // NULL terminated array
     int aborted;
+    jmp_buf jump_buffer;
+    int has_jump_buffer;
     gin_request_t request;
     gin_response_t response;
     gin_param_t params[GIN_MAX_PARAMS];
@@ -56,6 +60,11 @@ const char* gin_get_header(gin_ctx_t *c, const char *key);
 const char* gin_get_query(gin_ctx_t *c, const char *key);
 void gin_set_header(gin_ctx_t *c, const char *key, const char *value);
 void gin_ctx_cleanup(gin_ctx_t *c);
+
+void gin_recovery_handler(gin_ctx_t *c);
+void gin_panic(gin_ctx_t *c);
+
+void gin_logger_handler(gin_ctx_t *c);
 
 cJSON* gin_bind_json(gin_ctx_t *c);
 void gin_json(gin_ctx_t *c, int status, cJSON *json);

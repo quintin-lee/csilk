@@ -127,7 +127,7 @@ void gin_ctx_cleanup(gin_ctx_t *c) {
     free_headers(c->response.headers);
     c->response.headers = NULL;
 
-    if (c->response.body) {
+    if (c->response.body && c->response.body_is_managed) {
         free((void*)c->response.body);
         c->response.body = NULL;
     }
@@ -144,5 +144,6 @@ void gin_json(gin_ctx_t *c, int status, cJSON *json) {
     c->response.status = status;
     gin_set_header(c, "Content-Type", "application/json");
     c->response.body = cJSON_PrintUnformatted(json);
+    c->response.body_is_managed = 1;
     cJSON_Delete(json);
 }
