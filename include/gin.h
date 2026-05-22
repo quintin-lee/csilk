@@ -66,6 +66,9 @@ void gin_panic(gin_ctx_t *c);
 
 void gin_logger_handler(gin_ctx_t *c);
 
+typedef int (*gin_auth_validator_t)(const char *token);
+void gin_auth_middleware(gin_ctx_t *c, gin_auth_validator_t validator);
+
 cJSON* gin_bind_json(gin_ctx_t *c);
 void gin_json(gin_ctx_t *c, int status, cJSON *json);
 

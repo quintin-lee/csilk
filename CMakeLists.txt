@@ -44,6 +44,7 @@ set(GIN_SOURCES
     src/url_parser.c
     src/middleware/logger.c
     src/middleware/recovery.c
+    src/middleware/auth.c
 )
 
 # Build library
@@ -80,6 +81,9 @@ target_link_libraries(test_json gin)
 
 add_executable(test_recovery tests/test_recovery.c)
 target_link_libraries(test_recovery gin)
+
+add_executable(test_auth tests/test_auth.c)
+target_link_libraries(test_auth gin)
 
 # For now, just a dummy executable to ensure build works.
 add_executable(run_tests tests/test_main.c)
