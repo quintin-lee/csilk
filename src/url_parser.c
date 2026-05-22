@@ -3,6 +3,10 @@
 
 #include "gin.h"
 
+/** @brief Internal helper to split URL path and query.
+ * @param url The URL string.
+ * @param path Pointer to store the path string.
+ * @param query Pointer to store the query string. */
 void gin_split_url(const char* url, char** path, char** query) {
   *path = NULL;
   *query = NULL;
@@ -22,6 +26,9 @@ void gin_split_url(const char* url, char** path, char** query) {
   }
 }
 
+/** @brief Internal helper to parse query string.
+ * @param c The request context.
+ * @param query_string The query string to parse. */
 void gin_parse_query(gin_ctx_t* c, const char* query_string) {
   if (!query_string || *query_string == '\0') return;
 
