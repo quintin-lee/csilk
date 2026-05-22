@@ -1,0 +1,5 @@
+PROJECT_NAME = "Gin"
+INPUT = include src
+OUTPUT_DIRECTORY = docs
+GENERATE_HTML = YES
+HTML_OUTPUT = html
