@@ -15,6 +15,7 @@ struct gin_server_s {
 
 typedef struct {
   uv_tcp_t handle;
+  uv_timer_t timer;
   llhttp_t parser;
   gin_server_t* server;
   gin_ctx_t ctx;
@@ -55,6 +56,13 @@ static void on_write(uv_write_t* req, int status) {
   }
   free(req->data);
   free(req);
+}
+
+static void on_timeout(uv_timer_t* handle) {
+  gin_client_t* client = (gin_client_t*)handle->data;
+  if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+    uv_close((uv_handle_t*)&client->handle, on_close);
+  }
 }
 
 static void gin_set_request_header(gin_ctx_t* c, const char* key,
@@ -211,13 +219,16 @@ static int on_message_complete(llhttp_t* p) {
       client->ctx.response.body ? strlen(client->ctx.response.body) : 0;
   const char* body = client->ctx.response.body ? client->ctx.response.body : "";
 
+  int keep_alive = llhttp_should_keep_alive(p);
+
   int len = snprintf(NULL, 0,
                      "HTTP/1.1 %d %s\r\n"
                      "Content-Length: %zu\r\n"
-                     "Connection: close\r\n"
+                     "Connection: %s\r\n"
                      "\r\n"
                      "%s",
-                     status, status_text, body_len, body);
+                     status, status_text, body_len,
+                     keep_alive ? "keep-alive" : "close", body);
 
   if (len < 0) {
     return 0;
@@ -230,10 +241,11 @@ static int on_message_complete(llhttp_t* p) {
       snprintf(write_base, len + 1,
                "HTTP/1.1 %d %s\r\n"
                "Content-Length: %zu\r\n"
-               "Connection: close\r\n"
+               "Connection: %s\r\n"
                "\r\n"
                "%s",
-               status, status_text, body_len, body);
+               status, status_text, body_len,
+               keep_alive ? "keep-alive" : "close", body);
       uv_buf_t buf = uv_buf_init(write_base, len);
       req->data = write_base;
       uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
@@ -242,11 +254,21 @@ static int on_message_complete(llhttp_t* p) {
     }
   }
 
+  if (keep_alive) {
+    llhttp_reset(p);
+    uv_timer_start(&client->timer, on_timeout, 5000, 0);
+  } else {
+    if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+      uv_close((uv_handle_t*)&client->handle, on_close);
+    }
+  }
+
   return 0;
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   gin_client_t* client = (gin_client_t*)stream->data;
+  uv_timer_stop(&client->timer);
 
   if (nread > 0) {
     enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
@@ -293,6 +315,8 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
+    uv_timer_init(server->loop, &client->timer);
+    client->timer.data = client;
 
     r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
     if (r < 0) {
