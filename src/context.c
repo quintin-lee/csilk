@@ -115,6 +115,11 @@ void gin_ctx_cleanup(gin_ctx_t *c) {
     }
     c->params_count = 0;
 
+    if (c->request.body) {
+        free(c->request.body);
+        c->request.body = NULL;
+    }
+
     free_headers(c->request.headers);
     c->request.headers = NULL;
     free_headers(c->request.query_params);

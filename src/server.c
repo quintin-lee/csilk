@@ -119,6 +119,24 @@ static int on_header_value(llhttp_t *p, const char *at, size_t length) {
     return 0;
 }
 
+static int on_body(llhttp_t *p, const char *at, size_t length) {
+    gin_client_t *client = (gin_client_t *)p->data;
+    if (client->ctx.request.body_len + length > 1024 * 1024) {
+        return HPE_USER;
+    }
+
+    char *new_body = realloc(client->ctx.request.body, client->ctx.request.body_len + length + 1);
+    if (!new_body) {
+        return HPE_USER;
+    }
+    client->ctx.request.body = new_body;
+    memcpy(client->ctx.request.body + client->ctx.request.body_len, at, length);
+    client->ctx.request.body_len += length;
+    client->ctx.request.body[client->ctx.request.body_len] = '\0';
+
+    return 0;
+}
+
 static int on_message_complete(llhttp_t *p) {
     gin_client_t *client = (gin_client_t *)p->data;
     
@@ -281,6 +299,7 @@ gin_server_t* gin_server_new(gin_router_t *router) {
     s->settings.on_url = on_url;
     s->settings.on_header_field = on_header_field;
     s->settings.on_header_value = on_header_value;
+    s->settings.on_body = on_body;
     s->settings.on_message_complete = on_message_complete;
     return s;
 }
