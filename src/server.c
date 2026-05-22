@@ -16,6 +16,10 @@ typedef struct {
     uv_tcp_t handle;
     llhttp_t parser;
     gin_server_t *server;
+    gin_ctx_t ctx;
+    char *current_url;
+    char *current_header_field;
+    char *current_header_value;
 } gin_client_t;
 
 static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
@@ -30,6 +34,16 @@ static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *b
 
 static void on_close(uv_handle_t *handle) {
     gin_client_t *client = (gin_client_t *)handle->data;
+    gin_ctx_cleanup(&client->ctx);
+    if (client->current_url) {
+        free(client->current_url);
+    }
+    if (client->current_header_field) {
+        free(client->current_header_field);
+    }
+    if (client->current_header_value) {
+        free(client->current_header_value);
+    }
     free(client);
 }
 
@@ -41,30 +55,161 @@ static void on_write(uv_write_t *req, int status) {
     free(req);
 }
 
+static void gin_set_request_header(gin_ctx_t *c, const char *key, const char *value) {
+    gin_header_t *h = malloc(sizeof(gin_header_t));
+    if (h) {
+        h->key = strdup(key);
+        h->value = strdup(value);
+        if (!h->key || !h->value) {
+            if (h->key) free(h->key);
+            if (h->value) free(h->value);
+            free(h);
+            return;
+        }
+        h->next = c->request.headers;
+        c->request.headers = h;
+    }
+}
+
+static int append_chunk(char **str, const char *at, size_t length) {
+    if (*str == NULL) {
+        *str = malloc(length + 1);
+        if (!*str) return HPE_USER;
+        memcpy(*str, at, length);
+        (*str)[length] = '\0';
+    } else {
+        size_t old_len = strlen(*str);
+        char *new_str = realloc(*str, old_len + length + 1);
+        if (!new_str) return HPE_USER;
+        *str = new_str;
+        memcpy(*str + old_len, at, length);
+        (*str)[old_len + length] = '\0';
+    }
+    return 0;
+}
+
+static int on_url(llhttp_t *p, const char *at, size_t length) {
+    gin_client_t *client = (gin_client_t *)p->data;
+    if (append_chunk(&client->current_url, at, length) != 0) {
+        return HPE_USER;
+    }
+    return 0;
+}
+
+static int on_header_field(llhttp_t *p, const char *at, size_t length) {
+    gin_client_t *client = (gin_client_t *)p->data;
+    if (client->current_header_value) {
+        gin_set_request_header(&client->ctx, client->current_header_field, client->current_header_value);
+        free(client->current_header_field);
+        free(client->current_header_value);
+        client->current_header_field = NULL;
+        client->current_header_value = NULL;
+    }
+    if (append_chunk(&client->current_header_field, at, length) != 0) {
+        return HPE_USER;
+    }
+    return 0;
+}
+
+static int on_header_value(llhttp_t *p, const char *at, size_t length) {
+    gin_client_t *client = (gin_client_t *)p->data;
+    if (append_chunk(&client->current_header_value, at, length) != 0) {
+        return HPE_USER;
+    }
+    return 0;
+}
+
+static int on_message_complete(llhttp_t *p) {
+    gin_client_t *client = (gin_client_t *)p->data;
+    
+    if (client->current_url) {
+        char *path = NULL;
+        char *query = NULL;
+        gin_split_url(client->current_url, &path, &query);
+        client->ctx.request.path = path;
+        if (query) {
+            gin_parse_query(&client->ctx, query);
+            free(query);
+        }
+        free(client->current_url);
+        client->current_url = NULL;
+    }
+
+    if (client->current_header_field && client->current_header_value) {
+        gin_set_request_header(&client->ctx, client->current_header_field, client->current_header_value);
+        free(client->current_header_field);
+        free(client->current_header_value);
+        client->current_header_field = NULL;
+        client->current_header_value = NULL;
+    }
+
+    client->ctx.request.method = (char *)llhttp_method_name(llhttp_get_method(p));
+    
+    if (gin_router_match_ctx(client->server->router, &client->ctx)) {
+        gin_next(&client->ctx);
+    } else {
+        gin_string(&client->ctx, 404, "Not Found");
+    }
+
+    int status = client->ctx.response.status ? client->ctx.response.status : 200;
+    const char *status_text = "OK";
+    switch (status) {
+        case 200: status_text = "OK"; break;
+        case 201: status_text = "Created"; break;
+        case 204: status_text = "No Content"; break;
+        case 400: status_text = "Bad Request"; break;
+        case 401: status_text = "Unauthorized"; break;
+        case 403: status_text = "Forbidden"; break;
+        case 404: status_text = "Not Found"; break;
+        case 500: status_text = "Internal Server Error"; break;
+        default: status_text = "OK"; break;
+    }
+
+    size_t body_len = client->ctx.response.body ? strlen(client->ctx.response.body) : 0;
+    const char *body = client->ctx.response.body ? client->ctx.response.body : "";
+
+    int len = snprintf(NULL, 0,
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "%s",
+        status, status_text,
+        body_len,
+        body);
+
+    if (len < 0) {
+        return 0;
+    }
+
+    uv_write_t *req = malloc(sizeof(uv_write_t));
+    if (req) {
+        char *write_base = malloc(len + 1);
+        if (write_base) {
+            snprintf(write_base, len + 1,
+                "HTTP/1.1 %d %s\r\n"
+                "Content-Length: %zu\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "%s",
+                status, status_text,
+                body_len,
+                body);
+            uv_buf_t buf = uv_buf_init(write_base, len);
+            req->data = write_base;
+            uv_write(req, (uv_stream_t *)&client->handle, &buf, 1, on_write);
+        } else {
+            free(req);
+        }
+    }
+
+    return 0;
+}
+
 static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     gin_client_t *client = (gin_client_t *)stream->data;
 
     if (nread > 0) {
-        // Echo back for MVP
-        uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-        if (req != NULL) {
-            char *write_base = malloc(nread);
-            if (write_base != NULL) {
-                uv_buf_t write_buf = uv_buf_init(write_base, nread);
-                memcpy(write_base, buf->base, nread);
-                req->data = write_base;
-                int r = uv_write(req, stream, &write_buf, 1, on_write);
-                if (r < 0) {
-                    fprintf(stderr, "uv_write error %s\n", uv_strerror(r));
-                    free(write_base);
-                    free(req);
-                }
-            } else {
-                free(req);
-            }
-        }
-
-        // Feed into llhttp
         enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
         if (err != HPE_OK) {
             fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err), client->parser.reason);
@@ -93,10 +238,11 @@ static void on_new_connection(uv_stream_t *server_stream, int status) {
     }
 
     gin_server_t *server = (gin_server_t *)server_stream->data;
-    gin_client_t *client = malloc(sizeof(gin_client_t));
+    gin_client_t *client = calloc(1, sizeof(gin_client_t));
     if (!client) return;
 
     client->server = server;
+    client->parser.data = client;
     int r = uv_tcp_init(server->loop, &client->handle);
     if (r < 0) {
         fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
@@ -132,6 +278,10 @@ gin_server_t* gin_server_new(gin_router_t *router) {
     }
     s->router = router;
     llhttp_settings_init(&s->settings);
+    s->settings.on_url = on_url;
+    s->settings.on_header_field = on_header_field;
+    s->settings.on_header_value = on_header_value;
+    s->settings.on_message_complete = on_message_complete;
     return s;
 }
 
