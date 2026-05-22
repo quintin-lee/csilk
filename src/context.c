@@ -51,8 +51,10 @@ void gin_set_header(gin_ctx_t *c, const char *key, const char *value) {
 
     while (h) {
         if (strcasecmp(h->key, key) == 0) {
+            char *new_val = strdup(value);
+            if (!new_val) return;
             free(h->value);
-            h->value = strdup(value);
+            h->value = new_val;
             return;
         }
         prev = h;
@@ -60,8 +62,21 @@ void gin_set_header(gin_ctx_t *c, const char *key, const char *value) {
     }
 
     gin_header_t *new_h = malloc(sizeof(gin_header_t));
+    if (!new_h) return;
+
     new_h->key = strdup(key);
+    if (!new_h->key) {
+        free(new_h);
+        return;
+    }
+
     new_h->value = strdup(value);
+    if (!new_h->value) {
+        free(new_h->key);
+        free(new_h);
+        return;
+    }
+
     new_h->next = NULL;
 
     if (prev) {
