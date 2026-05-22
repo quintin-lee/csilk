@@ -38,14 +38,22 @@ typedef struct {
  * @param buf Pointer to the buffer. */
 static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
                          uv_buf_t* buf) {
-  (void)handle;
-  buf->base = malloc(suggested_size);
-  if (buf->base == NULL) {
-    buf->len = 0;
-  } else {
-    buf->len = suggested_size;
-  }
+    (void)handle;
+    buf->base = malloc(suggested_size);
+    if (buf->base == NULL) {
+        buf->len = 0;
+    } else {
+        buf->len = suggested_size;
+    }
 }
+
+/**
+ * @brief Read callback for client connections.
+ * @param stream UV stream.
+ * @param nread Number of bytes read.
+ * @param buf Buffer data.
+ */
+static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 
 /**
  * @brief Close handler for client connections.
@@ -338,6 +346,7 @@ static int on_message_complete(llhttp_t* p) {
 /** @brief New connection callback.
  * @param server_stream Server stream.
  * @param status Connection status. */
+static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (status < 0) {
     fprintf(stderr, "New connection error %s\n", uv_strerror(status));

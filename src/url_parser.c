@@ -6,7 +6,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-...
+#include "gin.h"
 
 /** @brief Internal helper to split URL path and query.
  * @param url The URL string.
@@ -72,8 +72,8 @@ void gin_parse_query(gin_ctx_t* c, const char* query_string) {
           *tail = new_q;
           tail = &new_q->next;
         } else {
-          free(new_q->key);
-          free(new_q->value);
+          if (new_q->key) free(new_q->key);
+          if (new_q->value) free(new_q->value);
           free(new_q);
         }
       }
