@@ -3,11 +3,9 @@
 #include <stdlib.h>
 
 void gin_split_url(const char *url, char **path, char **query) {
-    if (!url) {
-        *path = NULL;
-        *query = NULL;
-        return;
-    }
+    *path = NULL;
+    *query = NULL;
+    if (!url) return;
 
     const char *qmark = strchr(url, '?');
     if (qmark) {
@@ -20,33 +18,6 @@ void gin_split_url(const char *url, char **path, char **query) {
         *query = strdup(qmark + 1);
     } else {
         *path = strdup(url);
-        *query = NULL;
-    }
-}
-
-static void add_query_param(gin_ctx_t *c, const char *key, const char *value) {
-    gin_header_t *new_q = malloc(sizeof(gin_header_t));
-    if (!new_q) return;
-
-    new_q->key = strdup(key);
-    new_q->value = strdup(value);
-    new_q->next = NULL;
-
-    if (!new_q->key || !new_q->value) {
-        free(new_q->key);
-        free(new_q->value);
-        free(new_q);
-        return;
-    }
-
-    if (!c->request.query_params) {
-        c->request.query_params = new_q;
-    } else {
-        gin_header_t *curr = c->request.query_params;
-        while (curr->next) {
-            curr = curr->next;
-        }
-        curr->next = new_q;
     }
 }
 
@@ -56,16 +27,47 @@ void gin_parse_query(gin_ctx_t *c, const char *query_string) {
     char *qs = strdup(query_string);
     if (!qs) return;
 
-    char *saveptr1, *saveptr2;
-    char *pair = strtok_r(qs, "&", &saveptr1);
-    while (pair != NULL) {
-        char *key = strtok_r(pair, "=", &saveptr2);
-        char *value = strtok_r(NULL, "=", &saveptr2);
-        
-        if (key) {
-            add_query_param(c, key, value ? value : "");
+    gin_header_t **tail = &c->request.query_params;
+    // Fast-forward to end if already populated
+    while (*tail) {
+        tail = &((*tail)->next);
+    }
+
+    char *pos = qs;
+    while (pos && *pos) {
+        char *amp = strchr(pos, '&');
+        if (amp) *amp = '\0';
+
+        char *eq = strchr(pos, '=');
+        char *key = pos;
+        char *value = "";
+
+        if (eq) {
+            *eq = '\0';
+            value = eq + 1;
         }
-        pair = strtok_r(NULL, "&", &saveptr1);
+
+        // Only add if key is not empty (ignores =val and &&)
+        if (*key != '\0') {
+            gin_header_t *new_q = malloc(sizeof(gin_header_t));
+            if (new_q) {
+                new_q->key = strdup(key);
+                new_q->value = strdup(value);
+                new_q->next = NULL;
+
+                if (new_q->key && new_q->value) {
+                    *tail = new_q;
+                    tail = &new_q->next;
+                } else {
+                    free(new_q->key);
+                    free(new_q->value);
+                    free(new_q);
+                }
+            }
+        }
+
+        if (amp) pos = amp + 1;
+        else pos = NULL;
     }
     free(qs);
 }
