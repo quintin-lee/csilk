@@ -21,6 +21,7 @@ typedef struct {
     char *path;
     char *body;
     gin_header_t *headers;
+    gin_header_t *query_params;
 } gin_request_t;
 
 typedef struct {
@@ -50,8 +51,13 @@ void gin_status(gin_ctx_t *c, int status);
 void gin_string(gin_ctx_t *c, int status, const char *msg);
 const char* gin_get_param(gin_ctx_t *c, const char *key);
 const char* gin_get_header(gin_ctx_t *c, const char *key);
+const char* gin_get_query(gin_ctx_t *c, const char *key);
 void gin_set_header(gin_ctx_t *c, const char *key, const char *value);
 void gin_ctx_cleanup(gin_ctx_t *c);
+
+// Internal URL helpers
+void gin_split_url(const char *url, char **path, char **query);
+void gin_parse_query(gin_ctx_t *c, const char *query_string);
 
 typedef struct gin_router_node_s gin_router_node_t;
 typedef struct gin_router_s {
