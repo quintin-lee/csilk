@@ -78,8 +78,14 @@ static void on_timeout(uv_timer_t* handle) {
   }
 }
 
+/**
+ * @brief Set a request header in the context.
+ * @param c Gin context.
+ * @param key Header key.
+ * @param value Header value.
+ */
 static void gin_set_request_header(gin_ctx_t* c, const char* key,
-                                   const char* value) {
+                                    const char* value) {
   gin_header_t* h = malloc(sizeof(gin_header_t));
   if (h) {
     h->key = strdup(key);
@@ -95,6 +101,13 @@ static void gin_set_request_header(gin_ctx_t* c, const char* key,
   }
 }
 
+/**
+ * @brief Append a chunk of data to a string.
+ * @param str Pointer to string pointer.
+ * @param at Data to append.
+ * @param length Length of data to append.
+ * @return 0 on success, HPE_USER on allocation failure.
+ */
 static int append_chunk(char** str, const char* at, size_t length) {
   if (*str == NULL) {
     *str = malloc(length + 1);
@@ -112,6 +125,13 @@ static int append_chunk(char** str, const char* at, size_t length) {
   return 0;
 }
 
+/**
+ * @brief HTTP URL parser callback.
+ * @param p HTTP parser instance.
+ * @param at Pointer to URL data.
+ * @param length Length of URL data.
+ * @return 0 on success, HPE_USER on error.
+ */
 static int on_url(llhttp_t* p, const char* at, size_t length) {
   gin_client_t* client = (gin_client_t*)p->data;
   if (append_chunk(&client->current_url, at, length) != 0) {
@@ -120,11 +140,18 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/**
+ * @brief HTTP header field parser callback.
+ * @param p HTTP parser instance.
+ * @param at Pointer to header field data.
+ * @param length Length of header field data.
+ * @return 0 on success, HPE_USER on error.
+ */
 static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   gin_client_t* client = (gin_client_t*)p->data;
   if (client->current_header_value) {
     gin_set_request_header(&client->ctx, client->current_header_field,
-                           client->current_header_value);
+                            client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
     client->current_header_field = NULL;
@@ -136,6 +163,13 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/**
+ * @brief HTTP header value parser callback.
+ * @param p HTTP parser instance.
+ * @param at Pointer to header value data.
+ * @param length Length of header value data.
+ * @return 0 on success, HPE_USER on error.
+ */
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   gin_client_t* client = (gin_client_t*)p->data;
   if (append_chunk(&client->current_header_value, at, length) != 0) {
@@ -144,6 +178,13 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/**
+ * @brief HTTP body parser callback.
+ * @param p HTTP parser instance.
+ * @param at Pointer to body data.
+ * @param length Length of body data.
+ * @return 0 on success, HPE_USER on error.
+ */
 static int on_body(llhttp_t* p, const char* at, size_t length) {
   gin_client_t* client = (gin_client_t*)p->data;
   if (client->ctx.request.body_len + length > 1024 * 1024) {
@@ -151,7 +192,7 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   }
 
   char* new_body = realloc(client->ctx.request.body,
-                           client->ctx.request.body_len + length + 1);
+                            client->ctx.request.body_len + length + 1);
   if (!new_body) {
     return HPE_USER;
   }
