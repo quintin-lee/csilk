@@ -126,4 +126,23 @@ void gin_ctx_cleanup(gin_ctx_t *c) {
     c->request.query_params = NULL;
     free_headers(c->response.headers);
     c->response.headers = NULL;
+
+    if (c->response.body) {
+        free((void*)c->response.body);
+        c->response.body = NULL;
+    }
+}
+
+cJSON* gin_bind_json(gin_ctx_t *c) {
+    if (!c || !c->request.body) return NULL;
+    return cJSON_Parse(c->request.body);
+}
+
+void gin_json(gin_ctx_t *c, int status, cJSON *json) {
+    if (!c || !json) return;
+    
+    c->response.status = status;
+    gin_set_header(c, "Content-Type", "application/json");
+    c->response.body = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
 }
