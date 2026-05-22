@@ -59,6 +59,9 @@ target_link_libraries(test_radix gin)
 add_executable(test_group tests/test_group.c)
 target_link_libraries(test_group gin)
 
+add_executable(test_headers tests/test_headers.c)
+target_link_libraries(test_headers gin)
+
 add_executable(test_server tests/test_server.c)
 target_link_libraries(test_server gin)
 
