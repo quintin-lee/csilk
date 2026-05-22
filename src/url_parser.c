@@ -1,7 +1,12 @@
+/**
+ * @file url_parser.c
+ * @brief URL parsing implementation.
+ * @license MIT
+ */
+
 #include <stdlib.h>
 #include <string.h>
-
-#include "gin.h"
+...
 
 /** @brief Internal helper to split URL path and query.
  * @param url The URL string.

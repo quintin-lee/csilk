@@ -1,9 +1,17 @@
+/**
+ * @file recovery.c
+ * @brief Recovery middleware implementation.
+ * @license MIT
+ */
+
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "gin.h"
 
+/** @brief Recovery middleware handler.
+ * @param c The request context. */
 void gin_recovery_handler(gin_ctx_t* c) {
   if (setjmp(c->jump_buffer) == 0) {
     c->has_jump_buffer = 1;
@@ -14,6 +22,8 @@ void gin_recovery_handler(gin_ctx_t* c) {
   }
 }
 
+/** @brief Panic in the handler.
+ * @param c The request context. */
 void gin_panic(gin_ctx_t* c) {
   if (c->has_jump_buffer) {
     longjmp(c->jump_buffer, 1);

@@ -1,3 +1,9 @@
+/**
+ * @file static.c
+ * @brief Static file serving middleware implementation.
+ * @license MIT
+ */
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +14,9 @@
 
 #include "gin.h"
 
-// Basic MIME type mapping
+/** @brief Internal helper to get MIME type from file path.
+ * @param path The file path.
+ * @return The MIME type string. */
 static const char* get_mime_type(const char* path) {
   const char* ext = strrchr(path, '.');
   if (!ext) return "application/octet-stream";
@@ -18,6 +26,9 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
+/** @brief Static file serving middleware.
+ * @param c The request context.
+ * @param root_dir The root directory for static files. */
 void gin_static(gin_ctx_t* c, const char* root_dir) {
   char full_path[1024];
   snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, c->request.path);

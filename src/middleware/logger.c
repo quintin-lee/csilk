@@ -1,8 +1,16 @@
+/**
+ * @file logger.c
+ * @brief Logging middleware implementation.
+ * @license MIT
+ */
+
 #include <stdio.h>
 #include <time.h>
 
-#include "../include/gin.h"
+#include "gin.h"
 
+/** @brief Logging middleware handler.
+ * @param c The request context. */
 void gin_logger_handler(gin_ctx_t* c) {
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);

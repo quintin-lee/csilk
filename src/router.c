@@ -1,3 +1,9 @@
+/**
+ * @file router.c
+ * @brief Router implementation.
+ * @license MIT
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,6 +31,7 @@ struct gin_router_node_s {
   struct gin_router_node_s* children;
   struct gin_router_node_s* sibling;
 };
+...
 
 /** @brief Create a new router.
  * @return A new gin_router_t instance. */
