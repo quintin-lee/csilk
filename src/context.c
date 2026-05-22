@@ -5,6 +5,8 @@
 
 #include "gin.h"
 
+/** @brief Move to the next handler in the chain.
+ * @param c The request context. */
 void gin_next(gin_ctx_t* c) {
   if (c->aborted) return;
   c->handler_index++;
@@ -13,15 +15,28 @@ void gin_next(gin_ctx_t* c) {
   }
 }
 
+/** @brief Abort the handler chain execution.
+ * @param c The request context. */
 void gin_abort(gin_ctx_t* c) { c->aborted = 1; }
 
+/** @brief Set the response status code.
+ * @param c The request context.
+ * @param status The HTTP status code. */
 void gin_status(gin_ctx_t* c, int status) { c->response.status = status; }
 
+/** @brief Set response body and status code.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param msg The response body message. */
 void gin_string(gin_ctx_t* c, int status, const char* msg) {
   c->response.status = status;
   c->response.body = msg;
 }
 
+/** @brief Get a URL parameter by key.
+ * @param c The request context.
+ * @param key The parameter key.
+ * @return The parameter value, or NULL if not found. */
 const char* gin_get_param(gin_ctx_t* c, const char* key) {
   for (int i = 0; i < c->params_count; i++) {
     if (strcmp(c->params[i].key, key) == 0) {
@@ -31,6 +46,10 @@ const char* gin_get_param(gin_ctx_t* c, const char* key) {
   return NULL;
 }
 
+/** @brief Get a request header by key.
+ * @param c The request context.
+ * @param key The header key.
+ * @return The header value, or NULL if not found. */
 const char* gin_get_header(gin_ctx_t* c, const char* key) {
   gin_header_t* h = c->request.headers;
   while (h) {
@@ -42,6 +61,10 @@ const char* gin_get_header(gin_ctx_t* c, const char* key) {
   return NULL;
 }
 
+/** @brief Get a query parameter by key.
+ * @param c The request context.
+ * @param key The query parameter key.
+ * @return The query parameter value, or NULL if not found. */
 const char* gin_get_query(gin_ctx_t* c, const char* key) {
   gin_header_t* h = c->request.query_params;
   while (h) {
@@ -53,6 +76,10 @@ const char* gin_get_query(gin_ctx_t* c, const char* key) {
   return NULL;
 }
 
+/** @brief Set a response header.
+ * @param c The request context.
+ * @param key The header key.
+ * @param value The header value. */
 void gin_set_header(gin_ctx_t* c, const char* key, const char* value) {
   gin_header_t* h = c->response.headers;
   gin_header_t* prev = NULL;
@@ -94,6 +121,8 @@ void gin_set_header(gin_ctx_t* c, const char* key, const char* value) {
   }
 }
 
+/** @brief Internal helper to free header list.
+ * @param h The head of the header list. */
 static void free_headers(gin_header_t* h) {
   while (h) {
     gin_header_t* next = h->next;
@@ -104,6 +133,8 @@ static void free_headers(gin_header_t* h) {
   }
 }
 
+/** @brief Clean up context resources.
+ * @param c The request context. */
 void gin_ctx_cleanup(gin_ctx_t* c) {
   if (!c) return;
   for (int i = 0; i < c->params_count; i++) {
@@ -130,11 +161,18 @@ void gin_ctx_cleanup(gin_ctx_t* c) {
   }
 }
 
+/** @brief Bind request body to JSON.
+ * @param c The request context.
+ * @return A cJSON pointer representing the parsed body, or NULL. */
 cJSON* gin_bind_json(gin_ctx_t* c) {
   if (!c || !c->request.body) return NULL;
   return cJSON_Parse(c->request.body);
 }
 
+/** @brief Set JSON response body and status.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param json The cJSON pointer to send as response. */
 void gin_json(gin_ctx_t* c, int status, cJSON* json) {
   if (!c || !json) return;
 

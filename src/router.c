@@ -3,18 +3,21 @@
 
 #include "gin.h"
 
+/** @brief Node type for router trie. */
 typedef enum {
   GIN_NODE_STATIC,
   GIN_NODE_PARAM,
   GIN_NODE_WILDCARD
 } gin_node_type_t;
 
+/** @brief Handler for a specific method at a node. */
 typedef struct gin_method_handler_s {
   char* method;
   gin_handler_t* handlers;
   struct gin_method_handler_s* next;
 } gin_method_handler_t;
 
+/** @brief Router trie node. */
 struct gin_router_node_s {
   char* segment;
   gin_node_type_t type;
@@ -23,6 +26,8 @@ struct gin_router_node_s {
   struct gin_router_node_s* sibling;
 };
 
+/** @brief Create a new router.
+ * @return A new gin_router_t instance. */
 gin_router_t* gin_router_new() {
   gin_router_t* r = calloc(1, sizeof(gin_router_t));
   if (r) {
@@ -42,6 +47,8 @@ gin_router_t* gin_router_new() {
   return r;
 }
 
+/** @brief Internal helper to free router nodes.
+ * @param node The node to free. */
 static void free_node(gin_router_node_t* node) {
   while (node) {
     free_node(node->children);
@@ -62,6 +69,8 @@ static void free_node(gin_router_node_t* node) {
   }
 }
 
+/** @brief Free the router.
+ * @param r The router to free. */
 void gin_router_free(gin_router_t* r) {
   if (r) {
     free_node(r->root);
@@ -69,6 +78,9 @@ void gin_router_free(gin_router_t* r) {
   }
 }
 
+/** @brief Internal helper to get the next URL segment.
+ * @param path Pointer to the path string.
+ * @return The next segment string. */
 static char* get_next_segment(const char** path) {
   if (**path == '/') (*path)++;
   if (**path == '\0') return NULL;
@@ -84,6 +96,12 @@ static char* get_next_segment(const char** path) {
   return segment;
 }
 
+/** @brief Add a route to the router.
+ * @param r The router.
+ * @param method The HTTP method.
+ * @param path The route path.
+ * @param handlers Array of handlers.
+ * @param handler_count Number of handlers. */
 void gin_router_add(gin_router_t* r, const char* method, const char* path,
                     gin_handler_t* handlers, size_t handler_count) {
   gin_router_node_t* curr = r->root;
@@ -157,6 +175,12 @@ void gin_router_add(gin_router_t* r, const char* method, const char* path,
   curr->handlers = mh;
 }
 
+/** @brief Internal helper to match route.
+ * @param node The current node.
+ * @param method The HTTP method.
+ * @param path The path.
+ * @param ctx The request context.
+ * @return The handler array, or NULL if no match. */
 static gin_handler_t* match_node(gin_router_node_t* node, const char* method,
                                  const char* path, gin_ctx_t* ctx) {
   if (*path == '/') path++;
@@ -245,11 +269,20 @@ static gin_handler_t* match_node(gin_router_node_t* node, const char* method,
   return NULL;
 }
 
+/** @brief Match a route to handlers.
+ * @param r The router.
+ * @param method The HTTP method.
+ * @param path The route path.
+ * @return Array of handlers, or NULL if no match. */
 gin_handler_t* gin_router_match(gin_router_t* r, const char* method,
                                 const char* path) {
   return match_node(r->root, method, path, NULL);
 }
 
+/** @brief Match a route and update context.
+ * @param r The router.
+ * @param c The request context.
+ * @return 1 if matched, 0 otherwise. */
 int gin_router_match_ctx(gin_router_t* r, gin_ctx_t* c) {
   if (!c) return 0;
   c->params_count = 0;

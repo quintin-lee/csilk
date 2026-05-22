@@ -35,6 +35,10 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
   }
 }
 
+/**
+ * @brief Close handler for client connections.
+ * @param handle UV handle associated with client connection.
+ */
 static void on_close(uv_handle_t* handle) {
   gin_client_t* client = (gin_client_t*)handle->data;
   gin_ctx_cleanup(&client->ctx);
@@ -50,6 +54,11 @@ static void on_close(uv_handle_t* handle) {
   free(client);
 }
 
+/**
+ * @brief Write completion callback.
+ * @param req Write request.
+ * @param status Write status.
+ */
 static void on_write(uv_write_t* req, int status) {
   if (status) {
     fprintf(stderr, "Write error %s\n", uv_strerror(status));
@@ -58,6 +67,10 @@ static void on_write(uv_write_t* req, int status) {
   free(req);
 }
 
+/**
+ * @brief Timeout callback for client connections.
+ * @param handle Timer handle.
+ */
 static void on_timeout(uv_timer_t* handle) {
   gin_client_t* client = (gin_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
