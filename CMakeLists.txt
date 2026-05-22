@@ -5,6 +5,14 @@ project(c_gin_framework C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# 查找 clang-format
+find_program(CLANG_FORMAT_EXECUTABLE clang-format)
+if(CLANG_FORMAT_EXECUTABLE)
+    message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
+    # 设置 clang-format 选项
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=implicit-function-declaration")
+endif()
+
 include(FetchContent)
 
 # Fetch libuv
@@ -45,6 +53,7 @@ set(GIN_SOURCES
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c
+    src/middleware/static.c
 )
 
 # Build library
@@ -54,6 +63,9 @@ target_link_libraries(gin uv llhttp cjson)
 # Test executables
 add_executable(test_logger tests/test_logger.c)
 target_link_libraries(test_logger gin)
+
+add_executable(test_static tests/test_static.c)
+target_link_libraries(test_static gin)
 
 add_executable(test_context tests/test_context.c)
 target_link_libraries(test_context gin)
