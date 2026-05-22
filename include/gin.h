@@ -20,6 +20,7 @@ typedef struct {
     char *method;
     char *path;
     char *body;
+    size_t body_len;
     gin_header_t *headers;
     gin_header_t *query_params;
 } gin_request_t;
