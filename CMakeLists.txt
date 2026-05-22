@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.11)
 project(c_gin_framework C)
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
@@ -37,6 +38,7 @@ include_directories(include)
 set(GIN_SOURCES
     src/context.c
     src/router.c
+    src/group.c
     src/server.c
 )
 
@@ -50,6 +52,12 @@ target_link_libraries(test_context gin)
 
 add_executable(test_router tests/test_router.c)
 target_link_libraries(test_router gin)
+
+add_executable(test_radix tests/test_radix.c)
+target_link_libraries(test_radix gin)
+
+add_executable(test_group tests/test_group.c)
+target_link_libraries(test_group gin)
 
 add_executable(test_server tests/test_server.c)
 target_link_libraries(test_server gin)
