@@ -85,7 +85,7 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
 
     if (current_count > limit) {
         csilk_set_header(c, "Retry-After", "60");
-        csilk_json_error(c, 429, "Too Many Requests");
+        csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
         csilk_abort(c);
     } else {
         csilk_next(c);

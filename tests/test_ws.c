@@ -29,7 +29,7 @@ static void test_handshake() {
     csilk_set_request_header(&ctx, "Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
 
     csilk_ws_handshake(&ctx);
-    assert(ctx.response.status == 101);
+    assert(ctx.response.status == CSILK_STATUS_SWITCHING_PROTOCOLS);
     assert(ctx.is_websocket == 1);
 
     int found_accept = 0, found_upgrade = 0;
@@ -59,7 +59,7 @@ static void test_handshake_missing_key() {
     csilk_ctx_t ctx = {0};
     ctx.arena = csilk_arena_new(1024);
     csilk_ws_handshake(&ctx);
-    assert(ctx.response.status == 400);
+    assert(ctx.response.status == CSILK_STATUS_BAD_REQUEST);
     csilk_ctx_cleanup(&ctx);
     csilk_arena_free(ctx.arena);
     printf("Handshake missing key test passed!\n");

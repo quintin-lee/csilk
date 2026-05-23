@@ -32,7 +32,7 @@ void test_csrf_middleware_missing_token() {
     ctx.handlers = handlers;
 
     csilk_csrf_middleware(&ctx);
-    assert(ctx.response.status == 403 || ctx.response.status == 0);
+    assert(ctx.response.status == CSILK_STATUS_FORBIDDEN || ctx.response.status == 0);
 
     csilk_ctx_cleanup(&ctx);
     csilk_arena_free(ctx.arena);

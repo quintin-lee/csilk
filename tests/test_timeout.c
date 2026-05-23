@@ -12,7 +12,7 @@
 static csilk_server_t* g_server = NULL;
 
 void idle_handler(csilk_ctx_t* c) {
-    csilk_string(c, 200, "ok");
+    csilk_string(c, CSILK_STATUS_OK, "ok");
 }
 
 void* run_server(void* arg) {

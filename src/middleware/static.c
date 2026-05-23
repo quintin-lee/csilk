@@ -40,7 +40,7 @@ static void static_work_cb(uv_work_t* req) {
 
   // Resolve root_dir to absolute path
   if (realpath(root_dir, resolved_root) == NULL) {
-    csilk_string(c, 500, "Internal Server Error");
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
     return;
   }
 
@@ -54,20 +54,20 @@ static void static_work_cb(uv_work_t* req) {
 
   // Resolve full_path to absolute path
   if (realpath(full_path, resolved_file) == NULL) {
-    csilk_string(c, 404, "Not Found");
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");;
     return;
   }
 
   // Security: check if resolved_file starts with resolved_root
   if (strncmp(resolved_root, resolved_file, strlen(resolved_root)) != 0) {
-    csilk_string(c, 403, "Forbidden");
+    csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
     return;
   }
 
   uv_fs_t open_req;
   int fd = uv_fs_open(NULL, &open_req, resolved_file, O_RDONLY, 0, NULL);
   if (fd < 0) {
-    csilk_string(c, 404, "Not Found");
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");;
     return;
   }
 
@@ -80,7 +80,7 @@ static void static_work_cb(uv_work_t* req) {
     uv_fs_close(NULL, &open_req, fd, NULL);
     uv_fs_req_cleanup(&open_req);
     uv_fs_req_cleanup(&stat_req);
-    csilk_string(c, 500, "Internal Server Error");
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
     return;
   }
 
@@ -93,13 +93,13 @@ static void static_work_cb(uv_work_t* req) {
       uv_fs_req_cleanup(&open_req);
       uv_fs_req_cleanup(&stat_req);
       uv_fs_req_cleanup(&read_req);
-      csilk_string(c, 500, "Internal Server Error");
+      csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
       return;
   }
   buffer[size] = '\0';
 
   csilk_set_header(c, "Content-Type", get_mime_type(resolved_file));
-  csilk_status(c, 200);
+  csilk_status(c, CSILK_STATUS_OK);
   
   if (c->response.body && c->response.body_is_managed) {
       free((void*)c->response.body);

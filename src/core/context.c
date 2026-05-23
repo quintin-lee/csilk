@@ -245,7 +245,7 @@ void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
 
 /** @brief Redirect to another URL (default 302). */
 void csilk_redirect_simple(csilk_ctx_t* c, const char* url) {
-    csilk_redirect(c, 302, url);
+    csilk_redirect(c, CSILK_STATUS_FOUND, url);
 }
 
 /** @brief Store a value in the context storage. */
@@ -521,14 +521,14 @@ static void on_stream_write(uv_write_t* req, int status) {
 static int send_chunked_headers(csilk_ctx_t* c) {
     if (!c || !c->_internal_client) return -1;
 
-    int status = c->response.status ? c->response.status : 200;
-    const char* status_text = status == 200 ? "OK" :
-                              status == 201 ? "Created" :
-                              status == 400 ? "Bad Request" :
-                              status == 401 ? "Unauthorized" :
-                              status == 403 ? "Forbidden" :
-                              status == 404 ? "Not Found" :
-                              status == 500 ? "Internal Server Error" : "OK";
+    int status = c->response.status ? c->response.status : CSILK_STATUS_OK;
+    const char* status_text = status == CSILK_STATUS_OK ? "OK" :
+                              status == CSILK_STATUS_CREATED ? "Created" :
+                              status == CSILK_STATUS_BAD_REQUEST ? "Bad Request" :
+                              status == CSILK_STATUS_UNAUTHORIZED ? "Unauthorized" :
+                              status == CSILK_STATUS_FORBIDDEN ? "Forbidden" :
+                              status == CSILK_STATUS_NOT_FOUND ? "Not Found" :
+                              status == CSILK_STATUS_INTERNAL_SERVER_ERROR ? "Internal Server Error" : "OK";
 
     size_t custom_headers_len = 0;
     for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {

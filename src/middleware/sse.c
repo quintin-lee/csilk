@@ -30,7 +30,7 @@ void csilk_sse_init(csilk_ctx_t* c) {
     csilk_set_header(c, "Connection", "keep-alive");
     csilk_set_header(c, "X-Accel-Buffering", "no");
 
-    c->response.status = 200;
+    c->response.status = CSILK_STATUS_OK;
     c->is_websocket = 1;
 
     if (!c->_internal_client) return;

@@ -26,6 +26,38 @@
 /** @brief Maximum number of URL parameters. */
 #define CSILK_MAX_PARAMS 20
 
+/** @name HTTP Status Codes
+ *  Standardized macros for common HTTP response status codes.
+ *  @{ */
+#define CSILK_STATUS_CONTINUE                      100
+#define CSILK_STATUS_SWITCHING_PROTOCOLS           101
+#define CSILK_STATUS_OK                            200
+#define CSILK_STATUS_CREATED                       201
+#define CSILK_STATUS_NO_CONTENT                    204
+#define CSILK_STATUS_MOVED_PERMANENTLY             301
+#define CSILK_STATUS_FOUND                         302
+#define CSILK_STATUS_NOT_MODIFIED                  304
+#define CSILK_STATUS_TEMPORARY_REDIRECT            307
+#define CSILK_STATUS_BAD_REQUEST                   400
+#define CSILK_STATUS_UNAUTHORIZED                  401
+#define CSILK_STATUS_PAYMENT_REQUIRED              402
+#define CSILK_STATUS_FORBIDDEN                     403
+#define CSILK_STATUS_NOT_FOUND                     404
+#define CSILK_STATUS_METHOD_NOT_ALLOWED            405
+#define CSILK_STATUS_REQUEST_TIMEOUT               408
+#define CSILK_STATUS_CONFLICT                      409
+#define CSILK_STATUS_GONE                          410
+#define CSILK_STATUS_PAYLOAD_TOO_LARGE             413
+#define CSILK_STATUS_URI_TOO_LONG                  414
+#define CSILK_STATUS_UNSUPPORTED_MEDIA_TYPE        415
+#define CSILK_STATUS_TOO_MANY_REQUESTS             429
+#define CSILK_STATUS_INTERNAL_SERVER_ERROR         500
+#define CSILK_STATUS_NOT_IMPLEMENTED               501
+#define CSILK_STATUS_BAD_GATEWAY                   502
+#define CSILK_STATUS_SERVICE_UNAVAILABLE           503
+#define CSILK_STATUS_GATEWAY_TIMEOUT               504
+/** @} */
+
 /** @brief Opaque request context type. */
 typedef struct csilk_ctx_s csilk_ctx_t;
 /** @brief Handler function pointer type. */

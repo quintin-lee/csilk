@@ -6,7 +6,7 @@
 #include "csilk_internal.h"
 
 void redirect_handler(csilk_ctx_t* c) {
-    csilk_redirect(c, 302, "/new-location");
+    csilk_redirect(c, CSILK_STATUS_FOUND, "/new-location");
 }
 
 const char* get_resp_header(csilk_ctx_t* c, const char* key) {
@@ -35,7 +35,7 @@ void test_redirect() {
     
     redirect_handler(&c);
     
-    assert(c.response.status == 302);
+    assert(c.response.status == CSILK_STATUS_FOUND);
     assert(c.aborted == 1);
     
     const char* loc = get_resp_header(&c, "Location");

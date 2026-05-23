@@ -19,7 +19,7 @@
 
 /** @brief Handler for GET / — "Hello from csilk easy API!" */
 static void hello(csilk_ctx_t* c) {
-    csilk_string(c, 200, "Hello from csilk easy API!");
+    csilk_string(c, CSILK_STATUS_OK, "Hello from csilk easy API!");
 }
 
 /** @brief Handler for GET /user/:id — returns the user ID from path param. */
@@ -27,7 +27,7 @@ static void user(csilk_ctx_t* c) {
     const char* id = csilk_get_param(c, "id");
     char buf[64];
     snprintf(buf, sizeof(buf), "user id: %s", id ? id : "?");
-    csilk_string(c, 200, buf);
+    csilk_string(c, CSILK_STATUS_OK, buf);
 }
 
 /** @brief Handler for GET /ping — returns a JSON status response. */
@@ -35,20 +35,20 @@ static void ping(csilk_ctx_t* c) {
     cJSON* obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "status", "ok");
     cJSON_AddNumberToObject(obj, "time", (double)time(NULL));
-    csilk_json(c, 200, obj);
+    csilk_json(c, CSILK_STATUS_OK, obj);
 }
 
 /** @brief Handler for POST /login — authenticates user and returns a token. */
 static void login(csilk_ctx_t* c) {
     cJSON* in = csilk_bind_json(c);
-    if (!in) { csilk_string(c, 400, "bad json"); return; }
+    if (!in) { csilk_string(c, CSILK_STATUS_BAD_REQUEST, "bad json"); return; }
     cJSON* u = cJSON_GetObjectItem(in, "user");
     if (cJSON_IsString(u) && !strcmp(u->valuestring, "admin")) {
         cJSON* out = cJSON_CreateObject();
         cJSON_AddStringToObject(out, "token", "demo-token");
-        csilk_json(c, 200, out);
+        csilk_json(c, CSILK_STATUS_OK, out);
     } else {
-        csilk_string(c, 401, "unauthorized");
+        csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "unauthorized");
     }
     cJSON_Delete(in);
 }
@@ -58,7 +58,7 @@ static void echo(csilk_ctx_t* c) {
     const char* q = csilk_get_query(c, "msg");
     char buf[256];
     snprintf(buf, sizeof(buf), "echo: %s", q ? q : "(nothing)");
-    csilk_string(c, 200, buf);
+    csilk_string(c, CSILK_STATUS_OK, buf);
 }
 
 /* ---- SSE demo ---- */

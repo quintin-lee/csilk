@@ -16,7 +16,7 @@ static volatile int server_ready = 0;
 static csilk_server_t* g_server = NULL;
 
 static void echo_handler(csilk_ctx_t* c) {
-    csilk_string(c, 200, "ok");
+    csilk_string(c, CSILK_STATUS_OK, "ok");
 }
 
 static void param_handler(csilk_ctx_t* c) {
@@ -24,7 +24,7 @@ static void param_handler(csilk_ctx_t* c) {
     const char* q = csilk_get_query(c, "q");
     char resp[512];
     snprintf(resp, sizeof(resp), "id=%s q=%s", id ? id : "", q ? q : "");
-    csilk_string(c, 200, resp);
+    csilk_string(c, CSILK_STATUS_OK, resp);
 }
 
 static void* run_server(void* arg) {
@@ -94,7 +94,7 @@ int main() {
     printf("Test 1: Normal GET / ... ");
     fflush(stdout);
     int n = connect_server("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", buf, sizeof(buf));
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     // Test 2: Query string with special characters
@@ -102,7 +102,7 @@ int main() {
     fflush(stdout);
     n = connect_server("GET /search?q=hello+world&n=%42 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", buf, sizeof(buf));
     // Note: query values are currently not URL-decoded, just check ok
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     // Test 3: Long path (path param)
@@ -113,21 +113,21 @@ int main() {
         "GET /users/%s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         "user12345678901234567890");
     n = connect_server(long_path, buf, sizeof(buf));
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     // Test 4: Header with special characters (underscores, hyphens)
     printf("Test 4: Custom header with special chars ... ");
     fflush(stdout);
     n = connect_server("GET / HTTP/1.1\r\nHost: localhost\r\nX-Custom-Header: test_value-123\r\nConnection: close\r\n\r\n", buf, sizeof(buf));
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     // Test 5: Multiple query parameters
     printf("Test 5: Multiple query params ... ");
     fflush(stdout);
     n = connect_server("GET /search?a=1&b=2&c=3&d=4&e=5 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", buf, sizeof(buf));
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     // Test 6: Malformed header with empty key (llhttp rejects with error -> connection close)
@@ -149,7 +149,7 @@ int main() {
     pos += snprintf(long_url + pos, sizeof(long_url) - pos,
         " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
     n = connect_server(long_url, buf, sizeof(buf));
-    if (n > 0 && expect_status(buf, 200)) { printf("PASS\n"); passed++; }
+    if (n > 0 && expect_status(buf, CSILK_STATUS_OK)) { printf("PASS\n"); passed++; }
     else { printf("FAIL (n=%d)\n", n); failed++; }
 
     printf("\nEdge case tests: %d passed, %d failed\n", passed, failed);

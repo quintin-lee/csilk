@@ -16,14 +16,14 @@ static volatile int server_ready = 0;
 static csilk_server_t* g_server = NULL;
 
 static void hello_handler(csilk_ctx_t* c) {
-    csilk_string(c, 200, "Hello");
+    csilk_string(c, CSILK_STATUS_OK, "Hello");
 }
 
 static void echo_handler(csilk_ctx_t* c) {
     const char* name = csilk_get_query(c, "name");
     char resp[256];
     snprintf(resp, sizeof(resp), "Echo: %s", name ? name : "none");
-    csilk_string(c, 200, resp);
+    csilk_string(c, CSILK_STATUS_OK, resp);
 }
 
 static void* run_server(void* arg) {
