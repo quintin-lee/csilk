@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <uv.h>
 
 #include "csilk.h"
 
@@ -42,6 +43,7 @@ void test_static_serves_file() {
     fclose(f);
 
     csilk_static(&ctx, TEST_DIR);
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
     assert(ctx.response.status == 200);
     assert(ctx.response.body != NULL);
@@ -61,6 +63,7 @@ void test_static_traversal_blocked() {
     assert(ctx.request.path != NULL);
 
     csilk_static(&ctx, ".");
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
     assert(ctx.response.status == 403 ||
            ctx.response.status == 404);
