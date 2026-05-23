@@ -177,8 +177,10 @@
 - [x] **P4-3: 优雅关闭** — 当前 `csilk_server_stop` 直接 `uv_stop`，断活跃连接。已实现通过 `uv_walk` 显式关闭所有句柄。
 - [ ] P4-4: 分块传输编码（chunked transfer encoding）
 - [ ] P4-5: WebSocket 关闭握手 — 按 RFC 6455 Section 5.5.1
-- [ ] P4-6: 重定向辅助函数 csilk_redirect()
-- [ ] P4-7: CSRF token 生成工具
+- [x] **P4-6: 重定向辅助函数 csilk_redirect()**
+  已实现支持 302 重定向及自定义状态码重定向（`csilk_redirect` 和 `csilk_redirect_simple`）。
+- [x] **P4-7: CSRF token 生成工具** — `src/middleware/csrf.c:43`
+  已实现，并增加了 `tests/test_csrf.c` 验证。
 - [ ] P4-8: 最大并发连接数限制
 - [ ] P4-9: 响应流式处理支持
 
@@ -193,7 +195,8 @@
 - [ ] src/app/app.c — csilk_app_t 高层 API
 
 **功能覆盖不足：**
-- [ ] csilk_config_validate — src/core/config.c:197-234
+- [x] **csilk_config_validate** — `src/core/config.c:197-234`
+  已增加 `tests/test_config_validate.c` 验证。
 - [ ] csilk_config_free — src/core/config.c:161-195
 - [ ] csilk_next(NULL handlers) — src/core/context.c:15-21
 - [ ] csilk_get_param 未找到时 — src/core/context.c:45-52

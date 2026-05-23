@@ -107,6 +107,17 @@ int csilk_is_aborted(csilk_ctx_t* c);
 /** @brief Set the callback for incoming WebSocket messages. */
 void csilk_set_on_ws_message(csilk_ctx_t* c, void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
 
+/** @brief Redirect to another URL with custom status.
+ * @param c The request context.
+ * @param status HTTP status code (e.g., 301, 302).
+ * @param location The destination URL. */
+void csilk_redirect(csilk_ctx_t* c, int status, const char* location);
+
+/** @brief Redirect to another URL (302 Found).
+ * @param c The request context.
+ * @param location The destination URL. */
+void csilk_redirect_simple(csilk_ctx_t* c, const char* location);
+
 /** @brief Store a value in the context.
  * The key is duplicated and stored in the request arena.
  * Note: The context does NOT take ownership of the value pointer; 
@@ -420,12 +431,6 @@ void csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator);
  *       (the low-level API uses c->request.path directly). Use
  *       csilk_app_static() for automatic prefix handling. */
 void csilk_static(csilk_ctx_t* c, const char* root_dir);
-
-/** @brief Send an HTTP redirect response.
- * @param c The request context.
- * @param status HTTP redirect status code (301, 302, 303, 307, or 308).
- * @param location Target URL for the Location header. */
-void csilk_redirect(csilk_ctx_t* c, int status, const char* location);
 
 /** @brief Bind request body to a cJSON object.
  * @param c The request context.
