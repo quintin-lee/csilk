@@ -80,6 +80,9 @@ int main(void) {
 
     csilk_app_log_level(app, CSILK_LOG_DEBUG);
 
+    /* enable JSON structured logging (comment out for plain text) */
+    /* csilk_app_log_json(app, 1); */
+
     /* global middleware */
     csilk_app_use(app, timer_mw);
 

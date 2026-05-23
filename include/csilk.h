@@ -204,6 +204,7 @@ typedef struct {
   const char* file_path;    /**< Log file path (NULL for stdout). */
   size_t max_file_size;     /**< Max size before rotation (bytes, 0 to disable). */
   int use_colors;           /**< Enable ANSI colors (auto-detected if -1). */
+  int json_format;          /**< Enable JSON structured log output. */
 } csilk_log_config_t;
 
 /** @brief Initialize the global logger with config.
@@ -223,6 +224,44 @@ void _csilk_log_internal(csilk_log_level_t level, const char* file, int line, co
 /** @brief Close the global logger. */
 void csilk_log_close();
 
+/** @brief Log a structured JSON message with extra key-value fields.
+ *
+ * Produces a JSON log line with the standard fields (time/level/file/line/func/msg)
+ * plus any fields in @p extra.  If json_format is off this behaves like a
+ * normal log line (extra fields are ignored).
+ *
+ * @param level   Log severity level.
+ * @param file    Source file name (__FILE__).
+ * @param line    Source line number (__LINE__).
+ * @param func    Function name (__func__).
+ * @param extra   cJSON object with extra structured fields (can be NULL).
+ *                Ownership is taken — do not use after the call.
+ * @param fmt     Printf-style format string for the log message.
+ * @param ...     Format arguments. */
+void _csilk_log_structured(csilk_log_level_t level, const char* file, int line,
+                           const char* func, cJSON* extra,
+                           const char* fmt, ...);
+
+/** @brief Check whether the logger is in JSON format mode.
+ * @return 1 if json_format is enabled, 0 otherwise. */
+int csilk_log_is_json(void);
+
+/** @brief Create a simple key-value cJSON object for structured logging.
+ *
+ * Convenience helper that builds a cJSON object from alternating key/value
+ * string pairs terminated by a NULL key.
+ *
+ * @code
+ *   cJSON* fields = csilk_log_make_kv("method", method, "path", path, NULL);
+ *   _csilk_log_structured(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, fields,
+ *                         "request completed");
+ * @endcode
+ *
+ * @param key   First key.
+ * @param ...   Value, then key, value, ... terminated by NULL.
+ * @return New cJSON object (caller owns). */
+cJSON* csilk_log_make_kv(const char* key, ...);
+
 /** @name Logging Macros
  * Convenience macros that capture source location.
  * @{ */
@@ -238,6 +277,13 @@ void csilk_log_close();
 #define CSILK_LOG_E(...) _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a FATAL-level message. */
 #define CSILK_LOG_F(...) _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+
+/** @brief Log a structured JSON message (only meaningful when json_format is on).
+ * @param level Log level.
+ * @param extra  cJSON* with extra fields (can be NULL).
+ * @param ...    printf-style format and args for the message string. */
+#define CSILK_LOG_STRUCT(level, extra, ...) \
+    _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
 /** @} */
 
 /** @brief Logging middleware handler.
