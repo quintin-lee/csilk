@@ -31,9 +31,9 @@ void test_json_response() {
   cJSON* json = cJSON_CreateObject();
   cJSON_AddStringToObject(json, "status", "ok");
 
-  csilk_json(&ctx, 200, json);
+  csilk_json(&ctx, CSILK_STATUS_OK, json);
 
-  assert(ctx.response.status == 200);
+  assert(ctx.response.status == CSILK_STATUS_OK);
   assert(ctx.response.body != NULL);
   // Note: csilk_set_header is not implemented for checking, but we rely on
   // csilk_json implementation The body should be "{"status":"ok"}"
@@ -79,20 +79,20 @@ void test_json_error() {
   csilk_ctx_t ctx;
   memset(&ctx, 0, sizeof(ctx));
 
-  csilk_json_error(&ctx, 404, "Not found");
-  assert(ctx.response.status == 404);
+  csilk_json_error(&ctx, CSILK_STATUS_NOT_FOUND, "Not found");
+  assert(ctx.response.status == CSILK_STATUS_NOT_FOUND);
   assert(ctx.response.body != NULL);
   assert(strstr(ctx.response.body, "\"error\"") != NULL);
   assert(strstr(ctx.response.body, "Not found") != NULL);
   csilk_ctx_cleanup(&ctx);
 
   memset(&ctx, 0, sizeof(ctx));
-  csilk_json_error(&ctx, 500, NULL);
-  assert(ctx.response.status == 500);
+  csilk_json_error(&ctx, CSILK_STATUS_INTERNAL_SERVER_ERROR, NULL);
+  assert(ctx.response.status == CSILK_STATUS_INTERNAL_SERVER_ERROR);
   assert(strstr(ctx.response.body, "Unknown error") != NULL);
   csilk_ctx_cleanup(&ctx);
 
-  csilk_json_error(NULL, 400, "should not crash");
+  csilk_json_error(NULL, CSILK_STATUS_BAD_REQUEST, "should not crash");
   printf("csilk_json_error passed!\n");
 }
 

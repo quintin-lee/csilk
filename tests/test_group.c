@@ -22,7 +22,7 @@ void middleware2(csilk_ctx_t* c) {
 
 void ping_handler(csilk_ctx_t* c) {
   handler_called++;
-  csilk_string(c, 200, "pong");
+  csilk_string(c, CSILK_STATUS_OK, "pong");
 }
 
 int main() {
@@ -60,7 +60,7 @@ int main() {
     assert(middleware1_called == 1);
     assert(middleware2_called == 1);
     assert(handler_called == 1);
-    assert(ctx.response.status == 200);
+    assert(ctx.response.status == CSILK_STATUS_OK);
     assert(strcmp(ctx.response.body, "pong") == 0);
 
     csilk_ctx_cleanup(&ctx);

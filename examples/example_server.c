@@ -23,7 +23,7 @@ int mock_auth_validator(const char* token) {
 
 /** @brief Handler for GET / — returns welcome message. */
 void hello_handler(csilk_ctx_t* c) {
-    csilk_string(c, 200, "Hello, World! Welcome to the C csilk Framework.");
+    csilk_string(c, CSILK_STATUS_OK, "Hello, World! Welcome to the C csilk Framework.");
 }
 
 /** @brief Handler for GET /user/:id — returns the user ID from the path param. */
@@ -32,9 +32,9 @@ void user_handler(csilk_ctx_t* c) {
     if (user_id) {
         char response[256];
         snprintf(response, sizeof(response), "User ID: %s", user_id);
-        csilk_string(c, 200, response);
+        csilk_string(c, CSILK_STATUS_OK, response);
     } else {
-        csilk_string(c, 400, "Missing user ID");
+        csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Missing user ID");
     }
 }
 
@@ -42,7 +42,7 @@ void user_handler(csilk_ctx_t* c) {
 void login_handler(csilk_ctx_t* c) {
     cJSON* json = csilk_bind_json(c);
     if (!json) {
-        csilk_string(c, 400, "Invalid JSON");
+        csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Invalid JSON");
         return;
     }
     
@@ -51,7 +51,7 @@ void login_handler(csilk_ctx_t* c) {
     
     if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
         cJSON_Delete(json);
-        csilk_string(c, 400, "Username and password required");
+        csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Username and password required");
         return;
     }
     
@@ -61,9 +61,9 @@ void login_handler(csilk_ctx_t* c) {
         cJSON* response = cJSON_CreateObject();
         cJSON_AddStringToObject(response, "token", "secret123");
         cJSON_AddStringToObject(response, "message", "Login successful");
-        csilk_json(c, 200, response);
+        csilk_json(c, CSILK_STATUS_OK, response);
     } else {
-        csilk_string(c, 401, "Invalid credentials");
+        csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "Invalid credentials");
     }
     
     cJSON_Delete(json);
@@ -73,11 +73,11 @@ void login_handler(csilk_ctx_t* c) {
 void protected_handler(csilk_ctx_t* c) {
     const char* token = csilk_get_header(c, "Authorization");
     if (!token || !mock_auth_validator(token)) {
-        csilk_string(c, 401, "Unauthorized");
+        csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "Unauthorized");
         return;
     }
     
-    csilk_string(c, 200, "This is a protected resource. You have valid credentials.");
+    csilk_string(c, CSILK_STATUS_OK, "This is a protected resource. You have valid credentials.");
 }
 
 /** @brief Handler for GET /api/data — returns a JSON object with sample data. */
@@ -96,7 +96,7 @@ void api_data_handler(csilk_ctx_t* c) {
     time_t now = time(NULL);
     cJSON_AddNumberToObject(data, "timestamp", (double)now);
     
-    csilk_json(c, 200, data);
+    csilk_json(c, CSILK_STATUS_OK, data);
 }
 
 // --- New Feature Handlers ---
@@ -140,7 +140,7 @@ void upload_part_handler(csilk_multipart_part_t* part) {
 void upload_handler(csilk_ctx_t* c) {
     printf("[UPLOAD] Received multipart request\n");
     csilk_multipart_parse(c, upload_part_handler);
-    csilk_string(c, 200, "Upload received");
+    csilk_string(c, CSILK_STATUS_OK, "Upload received");
 }
 
 /** @brief Handler for GET /large — returns a sizable response for gzip demo. */
@@ -152,7 +152,7 @@ void large_handler(csilk_ctx_t* c) {
     for (int i = 0; i < 1024; i += 64) {
         memcpy(buf + i, "This is a repetitive line that compresses very well. ", 53);
     }
-    csilk_string(c, 200, buf);
+    csilk_string(c, CSILK_STATUS_OK, buf);
 }
 
 /** @brief Handler for GET/POST /cookie — set, read, or delete a demo cookie. */
@@ -160,15 +160,15 @@ void cookie_handler(csilk_ctx_t* c) {
     const char* action = csilk_get_query(c, "action");
     if (action && strcmp(action, "set") == 0) {
         csilk_set_cookie(c, "demo_session", "abc123", 3600, "/", NULL, 1, 1);
-        csilk_string(c, 200, "Cookie set!");
+        csilk_string(c, CSILK_STATUS_OK, "Cookie set!");
     } else if (action && strcmp(action, "delete") == 0) {
         csilk_set_cookie(c, "demo_session", "deleted", -1, "/", NULL, 0, 0);
-        csilk_string(c, 200, "Cookie deleted!");
+        csilk_string(c, CSILK_STATUS_OK, "Cookie deleted!");
     } else {
         const char* val = csilk_get_cookie(c, "demo_session");
         char buf[256];
         snprintf(buf, sizeof(buf), "demo_session = %s", val ? val : "not set");
-        csilk_string(c, 200, buf);
+        csilk_string(c, CSILK_STATUS_OK, buf);
     }
 }
 

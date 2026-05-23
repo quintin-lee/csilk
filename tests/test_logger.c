@@ -9,7 +9,7 @@
 #include "csilk.h"
 
 // Mock handler
-void dummy_handler(csilk_ctx_t* c) { c->response.status = 200; }
+void dummy_handler(csilk_ctx_t* c) { c->response.status = CSILK_STATUS_OK; }
 
 #define NUM_THREADS 5
 #define LOGS_PER_THREAD 10
@@ -52,7 +52,7 @@ int main() {
 
   printf("Testing middleware logging...\n");
   csilk_next(&c);
-  assert(c.response.status == 200);
+  assert(c.response.status == CSILK_STATUS_OK);
 
   // 2. Test multi-threaded logging
   printf("Testing multi-threaded logging...\n");

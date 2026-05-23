@@ -45,7 +45,7 @@ void test_abort() {
   printf("test_abort passed\n");
 }
 
-void handler_resp(csilk_ctx_t* c) { csilk_string(c, 200, "hello"); }
+void handler_resp(csilk_ctx_t* c) { csilk_string(c, CSILK_STATUS_OK, "hello"); }
 
 void test_context_response() {
   csilk_handler_t handlers[] = {handler_resp, NULL};
@@ -54,7 +54,7 @@ void test_context_response() {
                  .aborted = 0,
                  .response = {0, NULL}};
   csilk_next(&c);
-  assert(c.response.status == 200);
+  assert(c.response.status == CSILK_STATUS_OK);
   assert(c.response.body != NULL);
   // Use string comparison if necessary, but here direct comparison is fine for
   // a test literal

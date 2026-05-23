@@ -32,7 +32,7 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
 
   const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
   if (csilk_get_method(c) && strcmp(csilk_get_method(c), "OPTIONS") == 0 && req_method) {
-    csilk_string(c, 204, "");
+    csilk_string(c, CSILK_STATUS_NO_CONTENT, "");
     csilk_abort(c);
     return;
   }

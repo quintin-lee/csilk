@@ -19,7 +19,7 @@
 void csilk_ws_handshake(csilk_ctx_t* c) {
     const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
     if (!key) {
-        csilk_json_error(c, 400, "Upgrade Required: Sec-WebSocket-Key missing");
+        csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Upgrade Required: Sec-WebSocket-Key missing");
         return;
     }
 
@@ -39,7 +39,7 @@ void csilk_ws_handshake(csilk_ctx_t* c) {
     csilk_set_header(c, "Connection", "Upgrade");
     csilk_set_header(c, "Sec-WebSocket-Accept", accept_key);
     
-    csilk_status(c, 101);
+    csilk_status(c, CSILK_STATUS_SWITCHING_PROTOCOLS);
     c->is_websocket = 1;
 }
 

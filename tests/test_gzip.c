@@ -20,7 +20,7 @@ static void mock_handler(csilk_ctx_t* c) {
     c->response.body = body;
     c->response.body_len = 2000;
     c->response.body_is_managed = 1;
-    c->response.status = 200;
+    c->response.status = CSILK_STATUS_OK;
 }
 
 int main() {

@@ -20,7 +20,7 @@ void csilk_recovery_handler(csilk_ctx_t* c) {
   } else {
     // Panic occurred, send 500
     c->has_jump_buffer = 0; // Ensure reset on panic path too
-    csilk_string(c, 500, "Internal Server Error");
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
   }
 }
 

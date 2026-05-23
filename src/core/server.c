@@ -274,16 +274,16 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
 /** @brief Map HTTP status code to reason phrase. */
 static const char* get_status_text(int status) {
   switch (status) {
-    case 101: return "Switching Protocols";
-    case 200: return "OK";
-    case 201: return "Created";
-    case 204: return "No Content";
-    case 400: return "Bad Request";
-    case 401: return "Unauthorized";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 500: return "Internal Server Error";
-    default:  return "OK";
+    case CSILK_STATUS_SWITCHING_PROTOCOLS:  return "Switching Protocols";
+    case CSILK_STATUS_OK:                   return "OK";
+    case CSILK_STATUS_CREATED:              return "Created";
+    case CSILK_STATUS_NO_CONTENT:           return "No Content";
+    case CSILK_STATUS_BAD_REQUEST:          return "Bad Request";
+    case CSILK_STATUS_UNAUTHORIZED:         return "Unauthorized";
+    case CSILK_STATUS_FORBIDDEN:            return "Forbidden";
+    case CSILK_STATUS_NOT_FOUND:            return "Not Found";
+    case CSILK_STATUS_INTERNAL_SERVER_ERROR: return "Internal Server Error";
+    default:                                return "OK";
   }
 }
 
@@ -313,7 +313,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
   const char* connection_val = keep_alive ? "keep-alive" : "close";
 
   int header_len;
-  if (status == 101) {
+  if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
     header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
   } else if (use_chunked) {
     header_len = snprintf(NULL, 0,
@@ -339,7 +339,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
     char* write_base = malloc(response_len + 1);
     if (write_base) {
       int pos;
-      if (status == 101) {
+      if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
         pos = snprintf(write_base, response_len + 1,
                        "HTTP/1.1 101 Switching Protocols\r\n");
       } else if (use_chunked) {
@@ -460,7 +460,7 @@ static int on_message_complete(llhttp_t* p) {
     csilk_next(&client->ctx);
   } else {
     CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
-    csilk_string(&client->ctx, 404, "Not Found");
+    csilk_string(&client->ctx, CSILK_STATUS_NOT_FOUND, "Not Found");
   }
 
   if (client->ctx.is_async) {

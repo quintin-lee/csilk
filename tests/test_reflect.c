@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 // Extend type map BEFORE including csilk.h/csilk_reflect.h
+#undef CSILK_USER_TYPE_MAP
 #define CSILK_USER_TYPE_MAP \
     , struct TestUser_s: "TestUser", \
       struct TestPoint_s: "TestPoint"
@@ -80,8 +81,8 @@ void test_context_reflect() {
     assert(user.id == 3);
     
     // Test response with macro
-    csilk_json_t(&c, 200, TestUser, &user);
-    assert(c.response.status == 200);
+    csilk_json_t(&c, CSILK_STATUS_OK, TestUser, &user);
+    assert(c.response.status == CSILK_STATUS_OK);
     assert(c.response.body != NULL);
     
     csilk_ctx_cleanup(&c);

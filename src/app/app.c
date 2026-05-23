@@ -93,7 +93,7 @@ static void static_serve(csilk_ctx_t* c) {
             return;
         }
     }
-    csilk_string(c, 404, "Not Found");
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 }
 
 /* ===================================================================

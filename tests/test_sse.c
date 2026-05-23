@@ -32,7 +32,7 @@ static void test_sse_init_headers() {
     csilk_sse_init(&ctx);
     /* csilk_sse_init needs _internal_client to send headers;
      * when _internal_client is NULL it still sets up the context */
-    assert(ctx.is_websocket == 1 || ctx.response.status == 200);
+    assert(ctx.is_websocket == 1 || ctx.response.status == CSILK_STATUS_OK);
 
     csilk_ctx_cleanup(&ctx);
     csilk_arena_free(ctx.arena);

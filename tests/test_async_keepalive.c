@@ -21,7 +21,7 @@ static void hello_handler(csilk_ctx_t* c) {
     char body[2000];
     memset(body, 'A', 1999);
     body[1999] = '\0';
-    csilk_string(c, 200, body);
+    csilk_string(c, CSILK_STATUS_OK, body);
 }
 
 static void* run_server(void* arg) {
