@@ -1,6 +1,7 @@
 /**
  * @file arena.c
  * @brief Arena allocator implementation for request-scoped memory.
+ * @copyright MIT License
  */
 
 #include <stdlib.h>

@@ -1,6 +1,11 @@
 /**
  * @file csilk.h
- * @brief High-performance C web framework inspired by Csilk (Golang).
+ * @brief High-performance C web framework — main public API header.
+ *
+ * Defines all public types, enums, macros, and function declarations
+ * for the csilk HTTP web framework, including the request context,
+ * router, server, middleware, WebSocket, SSE, and utility APIs.
+ * Inspired by Gin (Golang).
  * @version 0.2.0
  * @copyright MIT License
  */

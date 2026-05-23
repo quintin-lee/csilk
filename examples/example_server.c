@@ -15,17 +15,17 @@
 #include <unistd.h>
 #include "csilk.h"
 
-// Mock authentication validator
+/** @brief Mock authentication validator — accepts only "secret123". */
 int mock_auth_validator(const char* token) {
     return token && strcmp(token, "secret123") == 0;
 }
 
-// Handler for GET /
+/** @brief Handler for GET / — returns welcome message. */
 void hello_handler(csilk_ctx_t* c) {
     csilk_string(c, 200, "Hello, World! Welcome to the C csilk Framework.");
 }
 
-// Handler for GET /user/:id
+/** @brief Handler for GET /user/:id — returns the user ID from the path param. */
 void user_handler(csilk_ctx_t* c) {
     const char* user_id = csilk_get_param(c, "id");
     if (user_id) {
@@ -37,7 +37,7 @@ void user_handler(csilk_ctx_t* c) {
     }
 }
 
-// Handler for POST /login
+/** @brief Handler for POST /login — validates credentials and returns a token. */
 void login_handler(csilk_ctx_t* c) {
     cJSON* json = csilk_bind_json(c);
     if (!json) {
@@ -68,7 +68,7 @@ void login_handler(csilk_ctx_t* c) {
     cJSON_Delete(json);
 }
 
-// Handler for GET /protected (requires auth)
+/** @brief Handler for GET /protected — returns content only if authorized. */
 void protected_handler(csilk_ctx_t* c) {
     const char* token = csilk_get_header(c, "Authorization");
     if (!token || !mock_auth_validator(token)) {
@@ -79,7 +79,7 @@ void protected_handler(csilk_ctx_t* c) {
     csilk_string(c, 200, "This is a protected resource. You have valid credentials.");
 }
 
-// Handler for GET /api/data
+/** @brief Handler for GET /api/data — returns a JSON object with sample data. */
 void api_data_handler(csilk_ctx_t* c) {
     cJSON* data = cJSON_CreateObject();
     cJSON_AddNumberToObject(data, "id", 1);
@@ -100,7 +100,7 @@ void api_data_handler(csilk_ctx_t* c) {
 
 // --- New Feature Handlers ---
 
-// SSE handler: GET /events
+/** @brief SSE timer callback — sends counter events. */
 static void sse_on_timer(csilk_ctx_t* c) {
     static int counter = 0;
     counter++;
@@ -112,6 +112,7 @@ static void sse_on_timer(csilk_ctx_t* c) {
     }
 }
 
+/** @brief Handler for GET /events — SSE stream demo. */
 void events_handler(csilk_ctx_t* c) {
     csilk_sse_init(c);
 
@@ -123,7 +124,7 @@ void events_handler(csilk_ctx_t* c) {
     csilk_sse_close(c);
 }
 
-// Multipart upload handler: POST /upload
+/** @brief Multipart part handler — prints file/field info from uploads. */
 void upload_part_handler(csilk_multipart_part_t* part) {
     if (part->filename[0] != '\0') {
         printf("[UPLOAD] File: %s, type: %s, size: %zu\n",
@@ -134,13 +135,14 @@ void upload_part_handler(csilk_multipart_part_t* part) {
     }
 }
 
+/** @brief Handler for POST /upload — parses multipart form data. */
 void upload_handler(csilk_ctx_t* c) {
     printf("[UPLOAD] Received multipart request\n");
     csilk_multipart_parse(c, upload_part_handler);
     csilk_string(c, 200, "Upload received");
 }
 
-// Large response handler (demonstrates gzip): GET /large
+/** @brief Handler for GET /large — returns a sizable response for gzip demo. */
 void large_handler(csilk_ctx_t* c) {
     // Generate a ~4KB response (good for gzip demo)
     static char buf[4096];
@@ -152,7 +154,7 @@ void large_handler(csilk_ctx_t* c) {
     csilk_string(c, 200, buf);
 }
 
-// Cookie demo handler: POST /cookie
+/** @brief Handler for GET/POST /cookie — set, read, or delete a demo cookie. */
 void cookie_handler(csilk_ctx_t* c) {
     const char* action = csilk_get_query(c, "action");
     if (action && strcmp(action, "set") == 0) {
@@ -169,7 +171,7 @@ void cookie_handler(csilk_ctx_t* c) {
     }
 }
 
-// Custom middleware to add request ID
+/** @brief Custom middleware — logs a sequential request ID. */
 void request_id_middleware(csilk_ctx_t* c) {
     static int request_counter = 0;
     request_counter++;
@@ -177,7 +179,7 @@ void request_id_middleware(csilk_ctx_t* c) {
     csilk_next(c);
 }
 
-// Custom middleware to log request time
+/** @brief Custom middleware — measures and logs request processing time. */
 void request_timer_middleware(csilk_ctx_t* c) {
     clock_t start = clock();
     csilk_next(c);

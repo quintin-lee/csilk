@@ -1,7 +1,7 @@
 /**
  * @file context.c
  * @brief Request/response context implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stddef.h>

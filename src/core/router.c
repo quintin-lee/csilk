@@ -1,7 +1,7 @@
 /**
  * @file router.c
  * @brief Router implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdlib.h>
