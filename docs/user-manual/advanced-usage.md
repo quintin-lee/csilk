@@ -144,7 +144,7 @@ sequenceDiagram
     participant MP as Multipart Middleware
     participant Handler as Part Callback
 
-    Client->>Server: POST /upload\nContent-Type: multipart/form-data; boundary=--abc
+    Client->>Server: POST /upload\nContent-Type: multipart/form-data; boundary=abc123
 
     Server->>CTX: Router matches /upload
     CTX->>MP: csilk_multipart_parse(ctx, part_handler)
@@ -152,13 +152,13 @@ sequenceDiagram
     MP->>MP: Parse each part
 
     loop For each part
-        MP->>MP: Find --boundary separator
+        MP->>MP: Find boundary separator
         MP->>MP: Parse Content-Disposition → name, filename
         MP->>MP: Parse Content-Type (if present)
         MP->>Handler: part_handler(ctx, part_name, filename, data, len, NULL)
     end
 
-    MP->>MP: Parse closing --boundary--
+    MP->>MP: Parse closing boundary
 ```
 
 ## Gzip Compression
