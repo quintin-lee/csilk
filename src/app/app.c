@@ -170,6 +170,12 @@ void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
     csilk_log_init(app->config.logger);
 }
 
+void csilk_app_log_json(csilk_app_t* app, int enable) {
+    if (!app) return;
+    app->config.logger.json_format = enable;
+    csilk_log_init(app->config.logger);
+}
+
 /* ---- middleware ---- */
 
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h) {

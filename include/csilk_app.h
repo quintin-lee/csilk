@@ -53,6 +53,11 @@ void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level);
  * @param max_size Max file size before rotation (0 to disable). */
 void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_size);
 
+/** @brief Enable or disable JSON structured log output.
+ * @param app Application handle.
+ * @param enable 1 to enable JSON format, 0 for plain text. */
+void csilk_app_log_json(csilk_app_t* app, int enable);
+
 /* ---- Middleware ---- */
 
 /** @brief Register a global middleware that runs on every route.

@@ -82,6 +82,7 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
                         }
                         else if (strcmp(current_key, "max_file_size") == 0) config->logger.max_file_size = (size_t)atoll(val);
                         else if (strcmp(current_key, "use_colors") == 0) config->logger.use_colors = atoi(val);
+                        else if (strcmp(current_key, "json_format") == 0) config->logger.json_format = atoi(val);
                     } else if (strcmp(current_section, "cors") == 0) {
                         if (strcmp(current_key, "enable") == 0) config->cors.enable = atoi(val);
                         else if (strcmp(current_key, "allow_origin") == 0) {
