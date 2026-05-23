@@ -256,7 +256,7 @@ sequenceDiagram
     participant WS as WebSocket Engine
     participant EvLoop as libuv
 
-    Client->>Server: HTTP GET /ws\nUpgrade: websocket\nSec-WebSocket-Key: abc123...
+    Client->>Server: HTTP GET /ws (WebSocket upgrade)
 
     Note over Server,HTTP: Standard HTTP request parsed by llhttp
     Server->>Server: Router matches /ws handler
@@ -266,7 +266,7 @@ sequenceDiagram
     WS->>WS: Base64(sha1_digest) → accept_key
     WS->>WS: ctx->is_websocket = 1
 
-    Server->>Client: HTTP/1.1 101 Switching Protocols\nUpgrade: websocket\nSec-WebSocket-Accept: ...
+    Server->>Client: HTTP/1.1 101 Switching Protocols (WS upgrade accepted)
 
     Note over Server: Connection stays open, parser switches mode
     Note over EvLoop: on_read() now routes to csilk_ws_parse_frame()
