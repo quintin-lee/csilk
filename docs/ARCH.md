@@ -45,7 +45,16 @@ csilk 原生支持 WebSocket 协议升级：
 - **协议接管**: 升级成功后，框架会自动将 libuv 的读回调从 HTTP 解析器切换到 WebSocket 帧解析器。
 - **异步接口**: 提供 `csilk_ws_send` 异步发送帧，并通过 `on_ws_message` 回调处理接收到的数据。
 
-## 5. 开发者指南
+## 5. 文档生成
+
+csilk 使用 **Doxygen** 生成 API 文档：
+- 所有公共头文件（`include/`）包含完整的 `@brief`、`@param`、`@return` 注解。
+- 所有实现文件（`src/`）包含 `@file`、`@brief` 头部注释，关键函数有 `@brief` 和 `@param` 文档。
+- 示例代码（`examples/`）同样包含 Doxygen 注解。
+- 文档生成命令：`make docs`（需要 Doxygen 1.12+）。
+- CI 中配置了 GitHub Pages 自动部署生成的 HTML 文档。
+
+## 6. 开发者指南
 
 ### 5.1 编写 WebSocket 处理器
 ```c

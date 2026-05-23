@@ -1,7 +1,7 @@
 /**
  * @file utils.c
  * @brief SHA1 hashing and Base64 encoding utilities.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdio.h>

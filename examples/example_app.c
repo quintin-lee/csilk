@@ -16,10 +16,12 @@
 
 /* ---- handlers ---- */
 
+/** @brief Handler for GET / — "Hello from csilk easy API!" */
 static void hello(csilk_ctx_t* c) {
     csilk_string(c, 200, "Hello from csilk easy API!");
 }
 
+/** @brief Handler for GET /user/:id — returns the user ID from path param. */
 static void user(csilk_ctx_t* c) {
     const char* id = csilk_get_param(c, "id");
     char buf[64];
@@ -27,6 +29,7 @@ static void user(csilk_ctx_t* c) {
     csilk_string(c, 200, buf);
 }
 
+/** @brief Handler for GET /ping — returns a JSON status response. */
 static void ping(csilk_ctx_t* c) {
     cJSON* obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "status", "ok");
@@ -34,6 +37,7 @@ static void ping(csilk_ctx_t* c) {
     csilk_json(c, 200, obj);
 }
 
+/** @brief Handler for POST /login — authenticates user and returns a token. */
 static void login(csilk_ctx_t* c) {
     cJSON* in = csilk_bind_json(c);
     if (!in) { csilk_string(c, 400, "bad json"); return; }
@@ -48,6 +52,7 @@ static void login(csilk_ctx_t* c) {
     cJSON_Delete(in);
 }
 
+/** @brief Handler for GET /echo?msg=... — echoes back the query parameter. */
 static void echo(csilk_ctx_t* c) {
     const char* q = csilk_get_query(c, "msg");
     char buf[256];
@@ -56,6 +61,8 @@ static void echo(csilk_ctx_t* c) {
 }
 
 /* ---- SSE demo ---- */
+
+/** @brief Handler for GET /stream — SSE connection demo. */
 static void sse_handler(csilk_ctx_t* c) {
     csilk_sse_init(c);
     csilk_sse_send(c, NULL, "connected");
@@ -64,6 +71,8 @@ static void sse_handler(csilk_ctx_t* c) {
 }
 
 /* ---- custom middleware ---- */
+
+/** @brief Custom middleware — measures and logs request processing time. */
 static void timer_mw(csilk_ctx_t* c) {
     clock_t t0 = clock();
     csilk_next(c);

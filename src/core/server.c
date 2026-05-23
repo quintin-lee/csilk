@@ -1,7 +1,7 @@
 /**
  * @file server.c
  * @brief Server implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <llhttp.h>

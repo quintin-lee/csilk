@@ -63,6 +63,11 @@
 - [x] **README 未列出新功能** — 已更新 Features 和 Project Structure
 - [x] **README 构建命令过时** — 已改为 `make run_tests` / `ctest`
 - [x] **`docs/ARCH.md` 使用旧项目名** — 已统一为 "csilk"
+- [x] **全量 Doxygen 注释统一** — 所有 `.c`/`.h` 文件已完成 @copyright 标准化、缺失注释补全
+- [x] **Doxyfile 配置增强** — 新增 GENERATE_TREEVIEW、FULL_SIDEBAR、EXAMPLE_PATH、扩展 INPUT 路径
+- [x] **示例代码注释升级** — 所有示例文件的 handler 函数已添加 Doxygen @brief 注解
+- [x] **advanced_server.c 国际化** — 中文注释已替换为英文 Doxygen 风格
+- [x] **README 文档覆盖表更新** — 包含所有 4 个头文件和所有源码目录
 
 ## P7 — 新功能探索
 

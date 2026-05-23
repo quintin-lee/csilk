@@ -1,7 +1,7 @@
 /**
  * @file reflect.c
  * @brief Reflection and JSON binding implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdio.h>

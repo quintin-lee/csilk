@@ -1,7 +1,7 @@
 /**
  * @file url.c
  * @brief URL parsing implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdlib.h>

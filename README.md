@@ -87,7 +87,7 @@ make format  # Requires clang-format
 
 ## Documentation
 
-API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk.h`, `include/csilk_internal.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` and `src/middleware/` also carry complete Doxygen documentation.
+API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk.h`, `include/csilk_app.h`, `include/csilk_internal.h`, `include/csilk_reflect.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/core/`, `src/app/`, and `src/middleware/` also carry complete Doxygen documentation with consistent `@copyright` and license annotations.
 
 Online documentation is available at: **[https://quintin-lee.github.io/csilk/](https://quintin-lee.github.io/csilk/)**
 
@@ -103,10 +103,16 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 
 | Component | Status |
 |-----------|--------|
+| Component | Status |
+|-----------|--------|
 | `include/csilk.h` (public API) | Fully documented |
+| `include/csilk_app.h` (app API) | Fully documented |
 | `include/csilk_internal.h` (internal API) | Fully documented |
-| `src/` (core implementation) | Fully documented |
+| `include/csilk_reflect.h` (reflection API) | Fully documented |
+| `src/core/` (core implementation) | Fully documented |
+| `src/app/` (app layer) | Fully documented |
 | `src/middleware/` (middleware) | Fully documented |
+| `examples/` (example code) | Fully documented |
 
 ## Usage
 

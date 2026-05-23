@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation**: Added `CHANGELOG.md` and `CONTRIBUTING.md`.
 
 ### Changed
+- **Documentation**: Comprehensive Doxygen comment overhaul across all source files — standardized `@copyright` annotations, added missing function-level `@brief`/`@param`/`@return` tags, and updated file headers for consistency.
+- **Doxyfile**: Enhanced configuration with `GENERATE_TREEVIEW`, `FULL_SIDEBAR`, `EXAMPLE_PATH`, and expanded `INPUT` to include all documentation files.
+- **README**: Updated documentation coverage table to reflect all components.
 - **Security**: Hardened static file serving middleware with `realpath()` to prevent path traversal.
 - **Resilience**: Implemented total request header size limit (`max_header_size`) to prevent memory-based attacks.
 - **Stability**: Performed comprehensive memory allocation audit, ensuring all `malloc`/`calloc`/`strdup`/`realloc` calls are checked for success.

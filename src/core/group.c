@@ -1,7 +1,7 @@
 /**
  * @file group.c
  * @brief Route group implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdlib.h>
