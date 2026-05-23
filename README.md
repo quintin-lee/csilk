@@ -225,8 +225,9 @@ include/              # Public headers
   └── csilk_reflect.h     # Reflection engine
 tests/                # Unit tests
 examples/             # Advanced usage examples
-example_server.c      # Full-featured demo server
-example_app.c         # Minimal app API demo
+examples/example_server.c      # Full-featured demo server
+examples/example_app.c         # Minimal app API demo
+examples/advanced_server.c     # Advanced config-driven server example
 ```
 
 ## Testing

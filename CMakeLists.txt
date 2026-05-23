@@ -211,11 +211,11 @@ target_link_libraries(test_integration csilk)
 add_test(NAME test_integration COMMAND test_integration)
 
 # Example server
-add_executable(example_server example_server.c)
+add_executable(example_server examples/example_server.c)
 target_link_libraries(example_server csilk)
 
 # Easy API example
-add_executable(example_app example_app.c)
+add_executable(example_app examples/example_app.c)
 target_link_libraries(example_app csilk)
 
 # Add run_tests custom target
