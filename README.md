@@ -1,6 +1,6 @@
 # csilk
 
-A lightweight, high-performance HTTP web framework written in C, inspired by Csilk (Golang) and built on top of libuv, llhttp, and cJSON.
+A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, and cJSON.
 
 ## Features
 
@@ -205,5 +205,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Inspired by [Csilk](https://github.com/gin-gonic/gin) web framework
+- Inspired by [Gin](https://github.com/gin-gonic/gin) web framework
 - Built upon excellent C libraries: libuv, llhttp, and cJSON
