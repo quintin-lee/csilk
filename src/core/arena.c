@@ -72,3 +72,12 @@ void csilk_arena_free(csilk_arena_t* arena) {
     }
     free(arena);
 }
+
+void csilk_arena_reset(csilk_arena_t* arena) {
+    if (!arena) return;
+    csilk_arena_chunk_t* curr = arena->head;
+    while (curr) {
+        curr->used = 0;
+        curr = curr->next;
+    }
+}

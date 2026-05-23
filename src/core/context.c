@@ -171,8 +171,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (!c) return;
   
   if (c->arena) {
-    csilk_arena_free(c->arena);
-    c->arena = NULL;
+    csilk_arena_reset(c->arena);
   }
 
   for (int i = 0; i < c->params_count; i++) {

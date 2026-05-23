@@ -106,6 +106,17 @@ void test_arena_alignment() {
   printf("csilk_arena_alloc alignment passed!\n");
 }
 
+void test_arena_reset() {
+  printf("Testing csilk_arena_reset...\n");
+  csilk_arena_t* arena = csilk_arena_new(1024);
+  void* p1 = csilk_arena_alloc(arena, 100);
+  csilk_arena_reset(arena);
+  void* p2 = csilk_arena_alloc(arena, 100);
+  assert(p1 == p2); // Should reuse the same memory
+  csilk_arena_free(arena);
+  printf("csilk_arena_reset passed!\n");
+}
+
 int main() {
   test_arena_new_free();
   test_arena_alloc_basic();
@@ -113,6 +124,7 @@ int main() {
   test_arena_alloc_fill();
   test_arena_strdup();
   test_arena_alignment();
+  test_arena_reset();
   printf("All arena tests passed!\n");
   return 0;
 }

@@ -183,6 +183,10 @@ char* csilk_arena_strdup(csilk_arena_t* arena, const char* s);
  * @param arena The arena instance. */
 void csilk_arena_free(csilk_arena_t* arena);
 
+/** @brief Reset the arena for reuse without freeing chunks.
+ * @param arena The arena instance. */
+void csilk_arena_reset(csilk_arena_t* arena);
+
 /** @brief Recovery middleware handler.
  * Prevents server from crashing on panics and returns 500.
  * @param c The request context. */
