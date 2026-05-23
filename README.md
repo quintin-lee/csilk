@@ -7,20 +7,30 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🚀 High performance using libuv for asynchronous I/O
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
-- 📦 JSON support via cJSON
-- 🔌 WebSocket support
+- 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
+- 🍪 Cookie parsing and setting (with Max-Age, Secure, HttpOnly, etc.)
+- 🔌 WebSocket support (RFC 6455 handshake, frame send/receive)
 - 🔍 URL parsing and query string handling
 - ⚡ Keep-alive connection support
-- 🛡️ Graceful error handling
+- 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
+- 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)
+- 🏗️ Arena allocator for request-scoped memory management
+- 🗂️ Reflection engine for automatic struct <-> JSON conversion
+- 🔐 Built-in CSRF protection, CORS, and rate limiting
 - 📝 Complete Doxygen documentation for all public APIs and internals
+- 🧵 Thread-safe logging with file rotation and ANSI colors
+- 🔍 Configurable connection timeout and body/header size limits
+- 🎯 Global (server-level) and per-route middleware support
+- 🌲 Radix Tree router with :param and *wildcard matching
 
 ## Dependencies
 
 - [libuv](https://github.com/libuv/libuv) - Asynchronous I/O library
 - [llhttp](https://github.com/nodejs/llhttp) - HTTP parser
 - [cJSON](https://github.com/DaveGamble/cJSON) - JSON parser
+- [libyaml](https://github.com/yaml/libyaml) - YAML parser (system library, install with `apt install libyaml-dev`)
 
-These dependencies are automatically fetched during build via CMake's FetchContent.
+libuv and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml must be installed as a system dependency.
 
 ## Building
 
@@ -29,6 +39,7 @@ These dependencies are automatically fetched during build via CMake's FetchConte
 - CMake 3.11 or higher
 - C compiler (supporting C11)
 - Git (for fetching dependencies)
+- libyaml development headers (`apt install libyaml-dev` on Debian/Ubuntu)
 
 ### Build Steps
 
@@ -51,8 +62,11 @@ make
 # cmake .. -DBUILD_SHARED_LIBS=ON
 
 # Optional: Run tests
+make run_tests     # Runs all tests via ctest
+# or: ctest --test-dir . --output-on-failure
+
+# Optional: Run individual test
 ./tests/test_logger
-./tests/test_router
 # ... other test executables
 
 # Optional: Build documentation

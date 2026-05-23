@@ -14,3 +14,11 @@ compile_commands.json
 .clangd/
 
 # Plans and Specs (keeping them in git is fine, but maybe user wants them ignored? No, standard is to keep them)
+
+# Pre-generated documentation
+docs/html/
+docs/latex/
+
+# Additional build directories
+build_rel*/
+

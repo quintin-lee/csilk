@@ -110,6 +110,16 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
                             config->static_files.prefix = strdup(val);
                             if (!config->static_files.prefix) error = 1;
                         }
+                    } else if (strcmp(current_section, "middleware") == 0) {
+                        if (strcmp(current_key, "enable_logger") == 0) config->middleware.enable_logger = atoi(val);
+                        else if (strcmp(current_key, "enable_recovery") == 0) config->middleware.enable_recovery = atoi(val);
+                        else if (strcmp(current_key, "enable_csrf") == 0) config->middleware.enable_csrf = atoi(val);
+                        else if (strcmp(current_key, "enable_auth") == 0) config->middleware.enable_auth = atoi(val);
+                        else if (strcmp(current_key, "auth_token") == 0) {
+                            if (config->middleware.auth_token) free(config->middleware.auth_token);
+                            config->middleware.auth_token = strdup(val);
+                            if (!config->middleware.auth_token) error = 1;
+                        }
                     }
                     
                     free(current_key);
@@ -175,4 +185,49 @@ void csilk_config_free(csilk_config_t* config) {
         free(config->static_files.prefix);
         config->static_files.prefix = NULL;
     }
+
+    if (config->middleware.auth_token) {
+        free(config->middleware.auth_token);
+        config->middleware.auth_token = NULL;
+    }
+}
+
+int csilk_config_validate(const csilk_config_t* config, const char** error_msg) {
+    if (!config) {
+        if (error_msg) *error_msg = "Null config";
+        return -1;
+    }
+    if (config->port < 1 || config->port > 65535) {
+        if (error_msg) *error_msg = "Port must be between 1 and 65535";
+        return -1;
+    }
+    if (config->server.idle_timeout_ms < 0) {
+        if (error_msg) *error_msg = "idle_timeout_ms must be >= 0";
+        return -1;
+    }
+    if (config->server.max_body_size == 0) {
+        if (error_msg) *error_msg = "max_body_size must be > 0";
+        return -1;
+    }
+    if (config->server.max_header_size == 0) {
+        if (error_msg) *error_msg = "max_header_size must be > 0";
+        return -1;
+    }
+    if (config->server.listen_backlog < 1) {
+        if (error_msg) *error_msg = "listen_backlog must be >= 1";
+        return -1;
+    }
+    if (config->rate_limit.enable && config->rate_limit.requests_per_minute < 1) {
+        if (error_msg) *error_msg = "requests_per_minute must be > 0 when rate_limit is enabled";
+        return -1;
+    }
+    if (config->static_files.enable && (!config->static_files.root_dir || strlen(config->static_files.root_dir) == 0)) {
+        if (error_msg) *error_msg = "root_dir must be set when static_files is enabled";
+        return -1;
+    }
+    if (config->middleware.enable_auth && (!config->middleware.auth_token || strlen(config->middleware.auth_token) == 0)) {
+        if (error_msg) *error_msg = "auth_token must be set when auth middleware is enabled";
+        return -1;
+    }
+    return 0;
 }

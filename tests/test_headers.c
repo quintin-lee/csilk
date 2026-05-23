@@ -55,9 +55,33 @@ void test_set_header() {
   printf("csilk_set_header passed!\n");
 }
 
+void test_add_header() {
+  printf("Testing csilk_add_header...\n");
+  csilk_ctx_t c = {0};
+
+  csilk_add_header(&c, "Set-Cookie", "a=1");
+  csilk_add_header(&c, "Set-Cookie", "b=2");
+  csilk_add_header(&c, "X-Custom", "value");
+
+  int cookie_count = 0;
+  int custom_found = 0;
+  csilk_header_t* h = c.response.headers;
+  while (h) {
+    if (strcmp(h->key, "Set-Cookie") == 0) cookie_count++;
+    if (strcmp(h->key, "X-Custom") == 0 && strcmp(h->value, "value") == 0) custom_found = 1;
+    h = h->next;
+  }
+  assert(cookie_count == 2);
+  assert(custom_found == 1);
+
+  csilk_ctx_cleanup(&c);
+  printf("csilk_add_header passed!\n");
+}
+
 int main() {
   test_get_header();
   test_set_header();
+  test_add_header();
   printf("All header tests passed!\n");
   return 0;
 }

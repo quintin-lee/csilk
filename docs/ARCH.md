@@ -1,8 +1,8 @@
-# Server-C 架构白皮书
+# csilk 架构白皮书
 
 ## 1. 核心架构设计
 
-Server-C 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 语言 Csilk 框架的 **洋葱模型 (Onion Model)** 中间件机制。
+csilk 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 语言 Gin 框架的 **洋葱模型 (Onion Model)** 中间件机制。
 
 ### 1.1 事件驱动底座
 框架底层基于 `libuv`。
@@ -24,7 +24,7 @@ Server-C 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 
 ## 2. 内存管理策略
 
 ### 2.1 请求级内存池 (Arena Allocator)
-为了解决高并发下大量小内存分配导致的堆碎片和锁竞争问题，Server-C 引入了 **Arena Allocator**：
+为了解决高并发下大量小内存分配导致的堆碎片和锁竞争问题，csilk 引入了 **Arena Allocator**：
 - 每一条 HTTP 连接在开始处理请求时，都会分配一个初始大小为 4KB 的 Arena 块。
 - 请求生命周期内的所有临时字符串（如 `csilk_string`）、URL 参数、解析出的 Headers 均从 Arena 中分配。
 - **优点**: 内存分配仅为指针偏移，速度极快；请求结束时一键释放整个 Arena，彻底杜绝内存泄漏。
@@ -38,7 +38,7 @@ Server-C 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 
 
 ## 4. WebSocket 支持
 
-Server-C 原生支持 WebSocket 协议升级：
+csilk 原生支持 WebSocket 协议升级：
 - **握手逻辑**: 实现了符合 RFC 6455 的 SHA1 + Base64 握手算法。
 - **协议接管**: 升级成功后，框架会自动将 libuv 的读回调从 HTTP 解析器切换到 WebSocket 帧解析器。
 - **异步接口**: 提供 `csilk_ws_send` 异步发送帧，并通过 `on_ws_message` 回调处理接收到的数据。
@@ -68,7 +68,7 @@ void my_middleware(csilk_ctx_t* c) {
 }
 ```
 
-### 4.2 启动服务
+### 5.3 启动服务
 ```c
 int main() {
     csilk_router_t* r = csilk_router_new();
