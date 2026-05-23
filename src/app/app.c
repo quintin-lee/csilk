@@ -1,5 +1,5 @@
 /**
- * @file csilk_easy.c
+ * @file app.c
  * @brief High-level convenience API — csilk_app_t implementation.
  *
  * Wraps router, server, config, logging and built-in middleware into
@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "csilk.h"
-#include "csilk_easy.h"
+#include "csilk_app.h"
 
 #define CSILK_MAX_GROUPS  32
 #define CSILK_MAX_STATIC  8
