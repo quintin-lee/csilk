@@ -61,9 +61,38 @@ void test_empty_query() {
   printf("test_empty_query passed\n");
 }
 
+void test_boundary_query() {
+  char *path, *query;
+  
+  // NULL url
+  gin_split_url(NULL, &path, &query);
+  assert(path == NULL);
+  assert(query == NULL);
+
+  gin_ctx_t ctx = {0};
+  
+  // NULL query string
+  gin_parse_query(&ctx, NULL);
+  assert(ctx.request.query_params == NULL);
+
+  // Consecutive ampersands
+  gin_parse_query(&ctx, "a=1&&b=2&");
+  assert(strcmp(gin_get_query(&ctx, "a"), "1") == 0);
+  assert(strcmp(gin_get_query(&ctx, "b"), "2") == 0);
+
+  // Empty values
+  gin_parse_query(&ctx, "c=&d");
+  assert(strcmp(gin_get_query(&ctx, "c"), "") == 0);
+  assert(strcmp(gin_get_query(&ctx, "d"), "") == 0);
+
+  gin_ctx_cleanup(&ctx);
+  printf("test_boundary_query passed\n");
+}
+
 int main() {
   test_split_url();
   test_parse_query();
   test_empty_query();
+  test_boundary_query();
   return 0;
 }

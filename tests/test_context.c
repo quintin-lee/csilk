@@ -58,6 +58,7 @@ void test_context_response() {
   // a test literal
   assert(sizeof("hello") == 6);
   // Just a basic check that it's set
+  gin_ctx_cleanup(&c);
   printf("test_context_response passed\n");
 }
 

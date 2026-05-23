@@ -47,7 +47,8 @@ int main() {
         pthread_join(thread, NULL);
         return 1;
     }
-    send(sock, "GET /idle HTTP/1.1\r\nConnection: close\r\n\r\n", 44, 0);
+    const char* req = "GET /idle HTTP/1.1\r\nConnection: close\r\n\r\n";
+    send(sock, req, strlen(req), 0);
 
     // Blocking read for response
     char buf[1024] = {0};

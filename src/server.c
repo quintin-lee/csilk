@@ -59,6 +59,21 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
  */
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 
+static void on_timer_close(uv_handle_t* handle) {
+  gin_client_t* client = (gin_client_t*)handle->data;
+  if (client) {
+    if (client->ctx.request.path) {
+      free((void*)client->ctx.request.path);
+    }
+    gin_ctx_cleanup(&client->ctx);
+    free(client->ctx.response.headers);
+    free(client->current_header_field);
+    free(client->current_header_value);
+    free(client->current_url);
+    free(client);
+  }
+}
+
 /**
  * @brief Close handler for client connections.
  * @param handle UV handle associated with client connection.
@@ -67,11 +82,9 @@ static void on_close(uv_handle_t* handle) {
   gin_client_t* client = (gin_client_t*)handle->data;
   if (client) {
     uv_timer_stop(&client->timer);
-    gin_ctx_cleanup(&client->ctx);
-    free(client->ctx.response.headers);
-    free(client->current_header_field);
-    free(client->current_header_value);
-    free(client);
+    if (!uv_is_closing((uv_handle_t*)&client->timer)) {
+      uv_close((uv_handle_t*)&client->timer, on_timer_close);
+    }
   }
 }
 
@@ -268,6 +281,9 @@ static int on_message_complete(llhttp_t* p) {
     char* path = NULL;
     char* query = NULL;
     gin_split_url(client->current_url, &path, &query);
+    if (client->ctx.request.path) {
+      free((void*)client->ctx.request.path);
+    }
     client->ctx.request.path = path;
     if (query) {
       gin_parse_query(&client->ctx, query);

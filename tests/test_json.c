@@ -38,7 +38,7 @@ void test_json_response() {
   // gin_json implementation The body should be "{"status":"ok"}"
   assert(strstr(ctx.response.body, "\"status\":\"ok\"") != NULL);
 
-  free((void*)ctx.response.body);
+  gin_ctx_cleanup(&ctx);
   printf("gin_json test passed.\n");
 }
 

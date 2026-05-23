@@ -72,6 +72,21 @@ int main() {
     assert(!matched);
   }
 
+  // Test Boundary / NULL
+  {
+    int matched;
+    matched = gin_router_match_ctx(NULL, NULL);
+    assert(!matched);
+    
+    gin_ctx_t ctx = {0};
+    matched = gin_router_match_ctx(r, &ctx);
+    assert(!matched); // missing method and path
+    
+    ctx.request.method = "GET";
+    matched = gin_router_match_ctx(r, &ctx);
+    assert(!matched); // missing path
+  }
+
   gin_router_free(r);
   printf("test_radix: PASS\n");
   return 0;

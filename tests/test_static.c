@@ -21,6 +21,7 @@ void test_static_serves_file() {
   gin_static(&ctx, "test_dir");
 
   printf("test_static_serves_file passed (assumed)\n");
+  gin_ctx_cleanup(&ctx);
 
   // Cleanup
   remove("test_dir/test.html");
@@ -35,6 +36,8 @@ void test_static_traversal_blocked() {
   gin_static(&ctx, ".");
 
   printf("test_static_traversal_blocked passed (assumed)\n");
+
+  gin_ctx_cleanup(&ctx);
 }
 
 int main() {

@@ -30,7 +30,11 @@ void gin_status(gin_ctx_t* c, int status) { c->response.status = status; }
  * @param msg The response body message. */
 void gin_string(gin_ctx_t* c, int status, const char* msg) {
   c->response.status = status;
-  c->response.body = msg;
+  if (c->response.body && c->response.body_is_managed) {
+    free((void*)c->response.body);
+  }
+  c->response.body = msg ? strdup(msg) : NULL;
+  c->response.body_is_managed = 1;
 }
 
 /** @brief Get a URL parameter by key.

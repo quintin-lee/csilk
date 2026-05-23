@@ -111,6 +111,7 @@ static char* get_next_segment(const char** path) {
  * @param handler_count Number of handlers. */
 void gin_router_add(gin_router_t* r, const char* method, const char* path,
                     gin_handler_t* handlers, size_t handler_count) {
+  if (!r || !r->root || !method || !path || !handlers) return;
   gin_router_node_t* curr = r->root;
   const char* p = path;
   char* seg;
@@ -283,6 +284,7 @@ static gin_handler_t* match_node(gin_router_node_t* node, const char* method,
  * @return Array of handlers, or NULL if no match. */
 gin_handler_t* gin_router_match(gin_router_t* r, const char* method,
                                 const char* path) {
+  if (!r || !r->root || !method || !path) return NULL;
   return match_node(r->root, method, path, NULL);
 }
 
@@ -291,7 +293,7 @@ gin_handler_t* gin_router_match(gin_router_t* r, const char* method,
  * @param c The request context.
  * @return 1 if matched, 0 otherwise. */
 int gin_router_match_ctx(gin_router_t* r, gin_ctx_t* c) {
-  if (!c) return 0;
+  if (!r || !c || !r->root || !c->request.method || !c->request.path) return 0;
   c->params_count = 0;
   gin_handler_t* handlers =
       match_node(r->root, c->request.method, c->request.path, c);
