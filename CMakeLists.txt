@@ -8,6 +8,14 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 enable_testing()
 
+option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
+if(USE_ASAN)
+    message(STATUS "AddressSanitizer enabled")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+endif()
+
 # 查找 clang-format
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
@@ -130,6 +138,14 @@ add_gin_test(test_keepalive tests/test_keepalive.c)
 add_gin_test(test_edge tests/test_edge.c)
 add_gin_test(test_timeout tests/test_timeout.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
+
+option(USE_FUZZER "Enable libFuzzer" OFF)
+if(USE_FUZZER)
+    add_executable(fuzz_test tests/fuzz_test.c)
+    target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+    target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+    target_link_libraries(fuzz_test gin)
+endif()
 
 # Integration tests (may have pre-existing failures, not run by default)
 add_executable(test_integration tests/test_integration.c)

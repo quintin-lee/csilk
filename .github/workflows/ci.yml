@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake clang libllhttp-dev
+        
+    - name: Configure CMake
+      run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON
+      
+    - name: Build
+      run: cmake --build build -j4
+      
+    - name: Test
+      run: cd build && ctest --output-on-failure
+
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake clang libllhttp-dev
+        
+    - name: Configure CMake
+      run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON -DUSE_FUZZER=ON
+      
+    - name: Build Fuzzer
+      run: cmake --build build --target fuzz_test -j4
+      
+    - name: Run Fuzzer
+      run: cd build && ./fuzz_test -max_total_time=10

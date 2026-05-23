@@ -22,9 +22,11 @@ int main() {
 
   if (c.response.status == 500) {
     printf("Recovered from panic! Status: %d\n", c.response.status);
+    gin_ctx_cleanup(&c);
     return 0;  // Test passed
   } else {
     printf("Failed to recover! Status: %d\n", c.response.status);
+    gin_ctx_cleanup(&c);
     return 1;  // Test failed
   }
 }
