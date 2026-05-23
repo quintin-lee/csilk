@@ -22,3 +22,6 @@ docs/latex/
 # Additional build directories
 build_rel*/
 
+# Test executables in project root
+test_async_keepalive
+
