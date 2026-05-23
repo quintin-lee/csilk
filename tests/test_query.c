@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void test_split_url() {
   char *path, *query;
@@ -56,7 +56,7 @@ void test_empty_query() {
   ctx.arena = csilk_arena_new(1024);
 
   csilk_parse_query(&ctx, "");
-  // query_params is a struct, no longer NULLable. 
+  // query_params is a struct, no longer NULLable.
   // We check if getting a key returns NULL.
   assert(csilk_get_query(&ctx, "any") == NULL);
 
@@ -71,7 +71,7 @@ void test_empty_query() {
 
 void test_boundary_query() {
   char *path, *query;
-  
+
   // NULL url
   csilk_split_url(NULL, &path, &query);
   assert(path == NULL);
@@ -79,7 +79,7 @@ void test_boundary_query() {
 
   csilk_ctx_t ctx = {0};
   ctx.arena = csilk_arena_new(1024);
-  
+
   // NULL query string
   csilk_parse_query(&ctx, NULL);
   assert(csilk_get_query(&ctx, "any") == NULL);

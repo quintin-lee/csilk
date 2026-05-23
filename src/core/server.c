@@ -12,10 +12,9 @@
 
 #include "csilk.h"
 #include "csilk_internal.h"
-#include "csilk_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
-#define CSILK_DEFAULT_IDLE_TIMEOUT  5000
+#define CSILK_DEFAULT_IDLE_TIMEOUT 5000
 /** @brief Default maximum request body size in bytes. */
 #define CSILK_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
 /** @brief Default maximum request header size in bytes. */
@@ -27,30 +26,30 @@
 
 /** @brief Server structure. */
 struct csilk_server_s {
-  uv_loop_t* loop;              /**< libuv event loop. */
-  csilk_router_t* router;         /**< Associated router instance. */
-  uv_tcp_t server_handle;       /**< TCP server handle. */
-  uv_signal_t sig_handle;        /**< SIGINT signal handler. */
-  uv_async_t async_handle;      /**< Async handle for cross-thread wakeup. */
-  llhttp_settings_t settings;   /**< HTTP parser callback settings. */
-  csilk_server_config_t config;   /**< Server configuration. */
+  uv_loop_t* loop;                 /**< libuv event loop. */
+  csilk_router_t* router;          /**< Associated router instance. */
+  uv_tcp_t server_handle;          /**< TCP server handle. */
+  uv_signal_t sig_handle;          /**< SIGINT signal handler. */
+  uv_async_t async_handle;         /**< Async handle for cross-thread wakeup. */
+  llhttp_settings_t settings;      /**< HTTP parser callback settings. */
+  csilk_server_config_t config;    /**< Server configuration. */
   csilk_handler_t middlewares[32]; /**< Global middlewares. */
-  int middleware_count;          /**< Number of global middlewares. */
-  int max_connections;           /**< Max concurrent connections (0=unlimited). */
-  int active_connections;        /**< Current connection count. */
+  int middleware_count;            /**< Number of global middlewares. */
+  int max_connections;    /**< Max concurrent connections (0=unlimited). */
+  int active_connections; /**< Current connection count. */
 };
 
 /** @brief Client connection structure. */
 typedef struct {
-  uv_tcp_t handle;                   /**< libuv TCP stream handle. */
-  uv_timer_t timer;                  /**< Connection idle timer. */
-  llhttp_t parser;                   /**< HTTP request parser. */
-  csilk_server_t* server;              /**< Owning server instance. */
-  csilk_ctx_t ctx;                     /**< Request context for this connection. */
-  size_t total_header_size;          /**< Total size of headers parsed so far. */
-  char* current_url;                 /**< Current URL being parsed. */
-  char* current_header_field;        /**< Temporary header field name. */
-  char* current_header_value;        /**< Temporary header field value. */
+  uv_tcp_t handle;            /**< libuv TCP stream handle. */
+  uv_timer_t timer;           /**< Connection idle timer. */
+  llhttp_t parser;            /**< HTTP request parser. */
+  csilk_server_t* server;     /**< Owning server instance. */
+  csilk_ctx_t ctx;            /**< Request context for this connection. */
+  size_t total_header_size;   /**< Total size of headers parsed so far. */
+  char* current_url;          /**< Current URL being parsed. */
+  char* current_header_field; /**< Temporary header field name. */
+  char* current_header_value; /**< Temporary header field value. */
 } csilk_client_t;
 
 /** @brief Buffer allocation callback.
@@ -91,12 +90,13 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
-    // Critical: Unlink the context from the client to prevent UAF in async callbacks
+    // Critical: Unlink the context from the client to prevent UAF in async
+    // callbacks
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
     if (client->ctx.arena) {
-        csilk_arena_free(client->ctx.arena);
-        client->ctx.arena = NULL;
+      csilk_arena_free(client->ctx.arena);
+      client->ctx.arena = NULL;
     }
     if (!uv_is_closing((uv_handle_t*)&client->timer)) {
       uv_close((uv_handle_t*)&client->timer, on_timer_close);
@@ -115,16 +115,16 @@ static void on_signal(uv_signal_t* handle, int signum) {
 
 /** @brief Callback to close all active handles. */
 static void close_cb(uv_handle_t* handle, void* arg) {
-    if (!uv_is_closing(handle)) {
-        uv_close(handle, NULL);
-    }
+  if (!uv_is_closing(handle)) {
+    uv_close(handle, NULL);
+  }
 }
 
 /** @brief Async callback to stop the server gracefully.
  * @param handle Async handle. */
 static void on_stop_async(uv_async_t* handle) {
   csilk_server_t* server = (csilk_server_t*)handle->data;
-  
+
   // Close all active handles in the loop to allow uv_run to exit
   uv_walk(server->loop, (uv_walk_cb)close_cb, NULL);
 }
@@ -184,12 +184,12 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
   if (client->total_header_size > client->server->config.max_header_size) {
-      return HPE_USER;
+    return HPE_USER;
   }
 
   if (client->current_header_field && client->current_header_value) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
-                            client->current_header_value);
+                             client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
     client->current_header_field = NULL;
@@ -218,10 +218,11 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
   if (client->total_header_size > client->server->config.max_header_size) {
-      return HPE_USER;
+    return HPE_USER;
   }
 
-  size_t prev_len = client->current_header_value ? strlen(client->current_header_value) : 0;
+  size_t prev_len =
+      client->current_header_value ? strlen(client->current_header_value) : 0;
   char* new_val = realloc(client->current_header_value, prev_len + length + 1);
   if (!new_val) {
     return HPE_USER;
@@ -238,7 +239,7 @@ static int on_headers_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_field && client->current_header_value) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
-                            client->current_header_value);
+                             client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
     client->current_header_field = NULL;
@@ -253,10 +254,12 @@ static int on_headers_complete(llhttp_t* p) {
  * @param length Length of body data. */
 static int on_body(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
-  if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
-      return HPE_USER;
+  if (client->ctx.request.body_len + length >
+      client->server->config.max_body_size) {
+    return HPE_USER;
   }
-  char* new_body = realloc(client->ctx.request.body, client->ctx.request.body_len + length + 1);
+  char* new_body = realloc(client->ctx.request.body,
+                           client->ctx.request.body_len + length + 1);
   if (new_body) {
     memcpy(new_body + client->ctx.request.body_len, at, length);
     client->ctx.request.body_len += length;
@@ -274,16 +277,26 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
 /** @brief Map HTTP status code to reason phrase. */
 static const char* get_status_text(int status) {
   switch (status) {
-    case CSILK_STATUS_SWITCHING_PROTOCOLS:  return "Switching Protocols";
-    case CSILK_STATUS_OK:                   return "OK";
-    case CSILK_STATUS_CREATED:              return "Created";
-    case CSILK_STATUS_NO_CONTENT:           return "No Content";
-    case CSILK_STATUS_BAD_REQUEST:          return "Bad Request";
-    case CSILK_STATUS_UNAUTHORIZED:         return "Unauthorized";
-    case CSILK_STATUS_FORBIDDEN:            return "Forbidden";
-    case CSILK_STATUS_NOT_FOUND:            return "Not Found";
-    case CSILK_STATUS_INTERNAL_SERVER_ERROR: return "Internal Server Error";
-    default:                                return "OK";
+    case CSILK_STATUS_SWITCHING_PROTOCOLS:
+      return "Switching Protocols";
+    case CSILK_STATUS_OK:
+      return "OK";
+    case CSILK_STATUS_CREATED:
+      return "Created";
+    case CSILK_STATUS_NO_CONTENT:
+      return "No Content";
+    case CSILK_STATUS_BAD_REQUEST:
+      return "Bad Request";
+    case CSILK_STATUS_UNAUTHORIZED:
+      return "Unauthorized";
+    case CSILK_STATUS_FORBIDDEN:
+      return "Forbidden";
+    case CSILK_STATUS_NOT_FOUND:
+      return "Not Found";
+    case CSILK_STATUS_INTERNAL_SERVER_ERROR:
+      return "Internal Server Error";
+    default:
+      return "OK";
   }
 }
 
@@ -291,17 +304,20 @@ static const char* get_status_text(int status) {
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
-  
+
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
   const char* status_text = get_status_text(status);
 
   // If response has body, use Content-Length
-  int use_chunked = (client->ctx.response.body_len == 0 && client->ctx.is_async);
-  const char* transfer_encoding = use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
+  int use_chunked =
+      (client->ctx.response.body_len == 0 && client->ctx.is_async);
+  const char* transfer_encoding =
+      use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
 
   size_t custom_headers_len = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-    for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h; h = h->next) {
+    for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
+         h = h->next) {
       custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
     }
   }
@@ -316,11 +332,12 @@ void _csilk_send_response(csilk_ctx_t* c) {
   if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
     header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
   } else if (use_chunked) {
-    header_len = snprintf(NULL, 0,
-                          "HTTP/1.1 %d %s\r\n"
-                          "%s"
-                          "Connection: %s\r\n",
-                          status, status_text, transfer_encoding, connection_val);
+    header_len =
+        snprintf(NULL, 0,
+                 "HTTP/1.1 %d %s\r\n"
+                 "%s"
+                 "Connection: %s\r\n",
+                 status, status_text, transfer_encoding, connection_val);
   } else {
     header_len = snprintf(NULL, 0,
                           "HTTP/1.1 %d %s\r\n"
@@ -331,8 +348,10 @@ void _csilk_send_response(csilk_ctx_t* c) {
 
   if (header_len < 0) return;
 
-  // For non-chunked response, the length should be header + headers + crlf + body
-  size_t response_len = (size_t)header_len + custom_headers_len + 2 + (use_chunked ? 0 : body_len);
+  // For non-chunked response, the length should be header + headers + crlf +
+  // body
+  size_t response_len = (size_t)header_len + custom_headers_len + 2 +
+                        (use_chunked ? 0 : body_len);
 
   uv_write_t* req = malloc(sizeof(uv_write_t));
   if (req) {
@@ -365,12 +384,14 @@ void _csilk_send_response(csilk_ctx_t* c) {
       }
 
       if (!use_chunked) {
-          snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+        snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s",
+                 body);
       } else {
-          snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+        snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
       }
 
-      uv_buf_t buf = uv_buf_init(write_base, (use_chunked ? (size_t)pos + 2 : response_len));
+      uv_buf_t buf = uv_buf_init(
+          write_base, (use_chunked ? (size_t)pos + 2 : response_len));
       req->data = write_base;
       uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
     } else {
@@ -379,16 +400,17 @@ void _csilk_send_response(csilk_ctx_t* c) {
   }
 
   if (client->ctx.is_websocket) {
-      // WebSocket or SSE connection: keep alive without idle timer
+    // WebSocket or SSE connection: keep alive without idle timer
   } else {
-      if (keep_alive) {
-        uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
-        uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
-      } else {
-        if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-          uv_close((uv_handle_t*)&client->handle, on_close);
-        }
+    if (keep_alive) {
+      uv_timer_start(&client->timer, on_timeout,
+                     client->server->config.idle_timeout_ms, 0);
+      uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+    } else {
+      if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+        uv_close((uv_handle_t*)&client->handle, on_close);
       }
+    }
   }
 
   csilk_ctx_cleanup(&client->ctx);
@@ -398,7 +420,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
 static void finalize_request(csilk_client_t* client, llhttp_t* p) {
   if (client->current_header_field && client->current_header_value) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
-                            client->current_header_value);
+                             client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
     client->current_header_field = NULL;
@@ -431,7 +453,8 @@ static int on_message_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
 
   finalize_request(client, p);
-  CSILK_LOG_I("Request: %s %s", client->ctx.request.method, client->ctx.request.path);
+  CSILK_LOG_I("Request: %s %s", client->ctx.request.method,
+              client->ctx.request.path);
 
   if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
     CSILK_LOG_D("Route matched, calling next handler");
@@ -444,13 +467,15 @@ static int on_message_complete(llhttp_t* p) {
       }
 
       int total_count = client->server->middleware_count + route_handler_count;
-      csilk_handler_t* arena_handlers = csilk_arena_alloc(client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
+      csilk_handler_t* arena_handlers = csilk_arena_alloc(
+          client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
       if (arena_handlers) {
         for (int i = 0; i < client->server->middleware_count; i++) {
           arena_handlers[i] = client->server->middlewares[i];
         }
         for (int i = 0; i < route_handler_count; i++) {
-          arena_handlers[client->server->middleware_count + i] = client->ctx.handlers[i];
+          arena_handlers[client->server->middleware_count + i] =
+              client->ctx.handlers[i];
         }
         arena_handlers[total_count] = NULL;
         client->ctx.handlers = arena_handlers;
@@ -517,7 +542,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->parser.data = client;
     uv_timer_init(server_stream->loop, &client->timer);
     client->timer.data = client;
-    
+
     // Initialize arena for the request
     client->ctx.arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
 
@@ -544,19 +569,20 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   uv_timer_stop(&client->timer);
   if (nread > 0) {
     if (client->ctx.is_websocket) {
-        csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base, (size_t)nread);
+      csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base,
+                           (size_t)nread);
     } else {
-        enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
-        if (err == HPE_CLOSED_CONNECTION) {
-          llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
-          client->parser.data = client;
-        } else if (err != HPE_OK) {
-          fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
-                  client->parser.reason);
-          if (!uv_is_closing((uv_handle_t*)stream)) {
-            uv_close((uv_handle_t*)stream, on_close);
-          }
+      enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
+      if (err == HPE_CLOSED_CONNECTION) {
+        llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
+        client->parser.data = client;
+      } else if (err != HPE_OK) {
+        fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
+                client->parser.reason);
+        if (!uv_is_closing((uv_handle_t*)stream)) {
+          uv_close((uv_handle_t*)stream, on_close);
         }
+      }
     }
   } else if (nread < 0) {
     if (nread != UV_EOF) {
@@ -579,13 +605,13 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
   struct sockaddr_storage addr;
   int len = sizeof(addr);
   if (uv_tcp_getpeername(&client->handle, (struct sockaddr*)&addr, &len) == 0) {
-      char ip[46];
-      if (addr.ss_family == AF_INET) {
-          uv_ip4_name((struct sockaddr_in*)&addr, ip, sizeof(ip));
-      } else {
-          uv_ip6_name((struct sockaddr_in6*)&addr, ip, sizeof(ip));
-      }
-      return csilk_arena_strdup(c->arena, ip);
+    char ip[46];
+    if (addr.ss_family == AF_INET) {
+      uv_ip4_name((struct sockaddr_in*)&addr, ip, sizeof(ip));
+    } else {
+      uv_ip6_name((struct sockaddr_in6*)&addr, ip, sizeof(ip));
+    }
+    return csilk_arena_strdup(c->arena, ip);
   }
   return NULL;
 }
@@ -611,7 +637,7 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   s->settings.on_headers_complete = on_headers_complete;
   s->settings.on_body = on_body;
   s->settings.on_message_complete = on_message_complete;
-  
+
   s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
   s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
   s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
@@ -638,24 +664,26 @@ static void on_server_handle_close(uv_handle_t* handle) {
   (void)handle;
 }
 
-/** @brief Free server resources. Note: This should be called AFTER the loop has stopped. */
+/** @brief Free server resources. Note: This should be called AFTER the loop has
+ * stopped. */
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
-  
+
   if (uv_is_active((uv_handle_t*)&server->server_handle)) {
-      uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
+    uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
   }
   if (uv_is_active((uv_handle_t*)&server->sig_handle)) {
-      uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
+    uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
   }
   if (uv_is_active((uv_handle_t*)&server->async_handle)) {
-      uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
+    uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
   }
-  
+
   // Note: Since uv_close is async, handles might not be fully closed yet.
-  // In a clean shutdown, the user should run the loop until uv_loop_close returns 0.
-  // We free the server memory here, which is risky if callbacks are still pending,
-  // but this matches the current framework's simplified lifecycle.
+  // In a clean shutdown, the user should run the loop until uv_loop_close
+  // returns 0. We free the server memory here, which is risky if callbacks are
+  // still pending, but this matches the current framework's simplified
+  // lifecycle.
   free(server);
 }
 
@@ -666,7 +694,8 @@ void csilk_server_stop(csilk_server_t* server) {
 }
 
 /** @brief Apply server configuration. */
-void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config) {
+void csilk_server_set_config(csilk_server_t* server,
+                             csilk_server_config_t config) {
   if (!server) return;
   server->config = config;
 }
@@ -680,8 +709,8 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
 }
 
 #ifndef _WIN32
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 /** @brief Worker thread initialization data for multi-loop mode. */
@@ -709,8 +738,8 @@ static void worker_thread(void* arg) {
 #ifndef _WIN32
   int fd;
   if (uv_fileno((const uv_handle_t*)&server_handle, &fd) == 0) {
-      int on = 1;
-      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
   }
 #endif
 
@@ -748,11 +777,11 @@ int csilk_server_run(csilk_server_t* server, int port) {
 
 #ifndef _WIN32
   if (workers > 1) {
-      int fd;
-      if (uv_fileno((const uv_handle_t*)&server->server_handle, &fd) == 0) {
-          int on = 1;
-          setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-      }
+    int fd;
+    if (uv_fileno((const uv_handle_t*)&server->server_handle, &fd) == 0) {
+      int on = 1;
+      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+    }
   }
 #endif
 
@@ -766,7 +795,7 @@ int csilk_server_run(csilk_server_t* server, int port) {
 
   // Apply TCP settings
   if (server->config.tcp_keepalive > 0) {
-      uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
+    uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
   }
 
   struct sockaddr_in addr;
@@ -775,8 +804,8 @@ int csilk_server_run(csilk_server_t* server, int port) {
   r = uv_tcp_bind(&server->server_handle, (const struct sockaddr*)&addr, 0);
   if (r < 0) return -1;
 
-  r = uv_listen((uv_stream_t*)&server->server_handle, server->config.listen_backlog,
-                on_new_connection);
+  r = uv_listen((uv_stream_t*)&server->server_handle,
+                server->config.listen_backlog, on_new_connection);
   if (r < 0) return -1;
 
   if (workers > 1) {
@@ -804,8 +833,8 @@ int csilk_server_run(csilk_server_t* server, int port) {
     return -1;
   }
 
-  printf("Server listening on port %d\n", port);
-  fflush(stdout);
+  CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port,
+              workers);
 
   return uv_run(server->loop, UV_RUN_DEFAULT);
 }

@@ -1,84 +1,88 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
-static int count_headers(csilk_header_map_t* map, const char* key, const char* value_contains) {
-    int count = 0;
-    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-        csilk_header_t* h = map->buckets[i];
-        while (h) {
-            if (strcasecmp(h->key, key) == 0) {
-                if (!value_contains || strstr(h->value, value_contains)) {
-                    count++;
-                }
-            }
-            h = h->next;
+static int count_headers(csilk_header_map_t* map, const char* key,
+                         const char* value_contains) {
+  int count = 0;
+  for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+    csilk_header_t* h = map->buckets[i];
+    while (h) {
+      if (strcasecmp(h->key, key) == 0) {
+        if (!value_contains || strstr(h->value, value_contains)) {
+          count++;
         }
+      }
+      h = h->next;
     }
-    return count;
+  }
+  return count;
 }
 
 void test_set_cookie() {
-    csilk_ctx_t c = {0};
-    c.arena = csilk_arena_new(1024);
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
 
-    csilk_set_cookie(&c, "session", "12345", 3600, "/", "example.com", 1, 1);
-    
-    assert(count_headers(&c.response.headers, "Set-Cookie", "session=12345") == 1);
-    assert(count_headers(&c.response.headers, "Set-Cookie", "Max-Age=3600") == 1);
-    assert(count_headers(&c.response.headers, "Set-Cookie", "Path=/") == 1);
-    assert(count_headers(&c.response.headers, "Set-Cookie", "Domain=example.com") == 1);
-    assert(count_headers(&c.response.headers, "Set-Cookie", "Secure") == 1);
-    assert(count_headers(&c.response.headers, "Set-Cookie", "HttpOnly") == 1);
+  csilk_set_cookie(&c, "session", "12345", 3600, "/", "example.com", 1, 1);
 
-    csilk_ctx_cleanup(&c);
-    csilk_arena_free(c.arena);
-    printf("test_set_cookie passed\n");
+  assert(count_headers(&c.response.headers, "Set-Cookie", "session=12345") ==
+         1);
+  assert(count_headers(&c.response.headers, "Set-Cookie", "Max-Age=3600") == 1);
+  assert(count_headers(&c.response.headers, "Set-Cookie", "Path=/") == 1);
+  assert(count_headers(&c.response.headers, "Set-Cookie",
+                       "Domain=example.com") == 1);
+  assert(count_headers(&c.response.headers, "Set-Cookie", "Secure") == 1);
+  assert(count_headers(&c.response.headers, "Set-Cookie", "HttpOnly") == 1);
+
+  csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
+  printf("test_set_cookie passed\n");
 }
 
 void test_get_cookie() {
-    csilk_ctx_t c = {0};
-    c.arena = csilk_arena_new(1024);
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
 
-    // Mock request header
-    csilk_set_request_header(&c, "Cookie", "user=admin; theme=dark; extra=foo=bar");
+  // Mock request header
+  csilk_set_request_header(&c, "Cookie",
+                           "user=admin; theme=dark; extra=foo=bar");
 
-    const char* user = csilk_get_cookie(&c, "user");
-    assert(user != NULL);
-    assert(strcmp(user, "admin") == 0);
+  const char* user = csilk_get_cookie(&c, "user");
+  assert(user != NULL);
+  assert(strcmp(user, "admin") == 0);
 
-    const char* theme = csilk_get_cookie(&c, "theme");
-    assert(theme != NULL);
-    assert(strcmp(theme, "dark") == 0);
+  const char* theme = csilk_get_cookie(&c, "theme");
+  assert(theme != NULL);
+  assert(strcmp(theme, "dark") == 0);
 
-    const char* extra = csilk_get_cookie(&c, "extra");
-    assert(extra != NULL);
-    assert(strcmp(extra, "foo=bar") == 0);
+  const char* extra = csilk_get_cookie(&c, "extra");
+  assert(extra != NULL);
+  assert(strcmp(extra, "foo=bar") == 0);
 
-    const char* missing = csilk_get_cookie(&c, "missing");
-    assert(missing == NULL);
+  const char* missing = csilk_get_cookie(&c, "missing");
+  assert(missing == NULL);
 
-    csilk_ctx_cleanup(&c);
-    csilk_arena_free(c.arena);
-    printf("test_get_cookie passed\n");
+  csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
+  printf("test_get_cookie passed\n");
 }
 
 void test_multiple_cookies() {
-    csilk_ctx_t c = {0};
-    c.arena = csilk_arena_new(1024);
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
 
-    csilk_set_cookie(&c, "c1", "v1", 0, NULL, NULL, 0, 0);
-    csilk_set_cookie(&c, "c2", "v2", 0, NULL, NULL, 0, 0);
+  csilk_set_cookie(&c, "c1", "v1", 0, NULL, NULL, 0, 0);
+  csilk_set_cookie(&c, "c2", "v2", 0, NULL, NULL, 0, 0);
 
-    assert(count_headers(&c.response.headers, "Set-Cookie", NULL) == 2);
+  assert(count_headers(&c.response.headers, "Set-Cookie", NULL) == 2);
 
-    csilk_ctx_cleanup(&c);
-    csilk_arena_free(c.arena);
-    printf("test_multiple_cookies passed\n");
+  csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
+  printf("test_multiple_cookies passed\n");
 }
 
 void test_cookie_delete() {
@@ -167,15 +171,15 @@ void test_get_cookie_with_nulls() {
 }
 
 int main() {
-    test_set_cookie();
-    test_get_cookie();
-    test_multiple_cookies();
-    test_cookie_delete();
-    test_long_cookie_value();
-    test_empty_cookie_header();
-    test_cookie_with_spaces();
-    test_malformed_cookie();
-    test_get_cookie_with_nulls();
-    printf("All cookie tests passed!\n");
-    return 0;
+  test_set_cookie();
+  test_get_cookie();
+  test_multiple_cookies();
+  test_cookie_delete();
+  test_long_cookie_value();
+  test_empty_cookie_header();
+  test_cookie_with_spaces();
+  test_malformed_cookie();
+  test_get_cookie_with_nulls();
+  printf("All cookie tests passed!\n");
+  return 0;
 }

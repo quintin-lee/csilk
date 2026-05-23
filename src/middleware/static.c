@@ -15,7 +15,6 @@
 
 #include "csilk.h"
 #include "csilk_internal.h"
-#include "csilk_internal.h"
 
 /** @brief Internal helper to get MIME type from file path.
  * @param path The file path.
@@ -29,7 +28,8 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
-/** @brief libuv work callback: read static file from disk (offloaded from event loop). @param req libuv work request. */
+/** @brief libuv work callback: read static file from disk (offloaded from event
+ * loop). @param req libuv work request. */
 static void static_work_cb(uv_work_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   const char* root_dir = (const char*)csilk_get(c, "static_root");
@@ -40,21 +40,24 @@ static void static_work_cb(uv_work_t* req) {
 
   // Resolve root_dir to absolute path
   if (realpath(root_dir, resolved_root) == NULL) {
-    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
+                 "Internal Server Error");
+    ;
     return;
   }
 
   const char* relative_path = csilk_get_path(c);
   if (prefix && strncmp(relative_path, prefix, strlen(prefix)) == 0) {
-      relative_path += strlen(prefix);
-      if (*relative_path == '/') relative_path++;
+    relative_path += strlen(prefix);
+    if (*relative_path == '/') relative_path++;
   }
 
   snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, relative_path);
 
   // Resolve full_path to absolute path
   if (realpath(full_path, resolved_file) == NULL) {
-    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");;
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    ;
     return;
   }
 
@@ -67,7 +70,8 @@ static void static_work_cb(uv_work_t* req) {
   uv_fs_t open_req;
   int fd = uv_fs_open(NULL, &open_req, resolved_file, O_RDONLY, 0, NULL);
   if (fd < 0) {
-    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");;
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    ;
     return;
   }
 
@@ -80,7 +84,9 @@ static void static_work_cb(uv_work_t* req) {
     uv_fs_close(NULL, &open_req, fd, NULL);
     uv_fs_req_cleanup(&open_req);
     uv_fs_req_cleanup(&stat_req);
-    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
+                 "Internal Server Error");
+    ;
     return;
   }
 
@@ -88,21 +94,23 @@ static void static_work_cb(uv_work_t* req) {
   uv_buf_t iov = uv_buf_init(buffer, size);
   int nread = uv_fs_read(NULL, &read_req, fd, &iov, 1, 0, NULL);
   if (nread < 0) {
-      free(buffer);
-      uv_fs_close(NULL, &open_req, fd, NULL);
-      uv_fs_req_cleanup(&open_req);
-      uv_fs_req_cleanup(&stat_req);
-      uv_fs_req_cleanup(&read_req);
-      csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");;
-      return;
+    free(buffer);
+    uv_fs_close(NULL, &open_req, fd, NULL);
+    uv_fs_req_cleanup(&open_req);
+    uv_fs_req_cleanup(&stat_req);
+    uv_fs_req_cleanup(&read_req);
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
+                 "Internal Server Error");
+    ;
+    return;
   }
   buffer[size] = '\0';
 
   csilk_set_header(c, "Content-Type", get_mime_type(resolved_file));
   csilk_status(c, CSILK_STATUS_OK);
-  
+
   if (c->response.body && c->response.body_is_managed) {
-      free((void*)c->response.body);
+    free((void*)c->response.body);
   }
   c->response.body = buffer;
   c->response.body_is_managed = 1;
@@ -114,7 +122,8 @@ static void static_work_cb(uv_work_t* req) {
   uv_fs_req_cleanup(&read_req);
 }
 
-/** @brief libuv after-work callback: send the static file response. @param req libuv work request. @param status Work status. */
+/** @brief libuv after-work callback: send the static file response. @param req
+ * libuv work request. @param status Work status. */
 static void static_after_work_cb(uv_work_t* req, int status) {
   (void)status;
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
@@ -128,5 +137,6 @@ void csilk_static(csilk_ctx_t* c, const char* root_dir) {
   c->is_async = 1;
   c->work_req.data = c;
   csilk_set(c, "static_root", (void*)root_dir);
-  uv_queue_work(uv_default_loop(), &c->work_req, static_work_cb, static_after_work_cb);
+  uv_queue_work(uv_default_loop(), &c->work_req, static_work_cb,
+                static_after_work_cb);
 }

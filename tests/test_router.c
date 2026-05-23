@@ -1,9 +1,9 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void mock_handler1(csilk_ctx_t* c) { (void)c; }
 void mock_handler2(csilk_ctx_t* c) { (void)c; }
@@ -49,7 +49,7 @@ int main() {
   assert(matched != NULL && matched[0] == mock_handler1);
 
   csilk_router_free(r);
-  
+
   // Test double free safety
   csilk_router_free(NULL);
 

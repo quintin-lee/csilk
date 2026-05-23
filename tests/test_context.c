@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 int counter = 0;
 
@@ -50,9 +50,9 @@ void handler_resp(csilk_ctx_t* c) { csilk_string(c, CSILK_STATUS_OK, "hello"); }
 void test_context_response() {
   csilk_handler_t handlers[] = {handler_resp, NULL};
   csilk_ctx_t c = {.handler_index = -1,
-                 .handlers = handlers,
-                 .aborted = 0,
-                 .response = {0, NULL}};
+                   .handlers = handlers,
+                   .aborted = 0,
+                   .response = {0, NULL}};
   csilk_next(&c);
   assert(c.response.status == CSILK_STATUS_OK);
   assert(c.response.body != NULL);
@@ -65,35 +65,35 @@ void test_context_response() {
 }
 
 void test_context_storage() {
-    csilk_ctx_t c = {0};
-    c.arena = csilk_arena_new(1024);
-    int val = 42;
-    csilk_set(&c, "test_key", &val);
-    
-    void* retrieved = csilk_get(&c, "test_key");
-    assert(retrieved != NULL);
-    assert(*(int*)retrieved == 42);
-    
-    // Overwrite
-    int val2 = 100;
-    csilk_set(&c, "test_key", &val2);
-    assert(*(int*)csilk_get(&c, "test_key") == 100);
-    
-    csilk_ctx_cleanup(&c);
-    csilk_arena_free(c.arena);
-    printf("test_context_storage passed\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+  int val = 42;
+  csilk_set(&c, "test_key", &val);
+
+  void* retrieved = csilk_get(&c, "test_key");
+  assert(retrieved != NULL);
+  assert(*(int*)retrieved == 42);
+
+  // Overwrite
+  int val2 = 100;
+  csilk_set(&c, "test_key", &val2);
+  assert(*(int*)csilk_get(&c, "test_key") == 100);
+
+  csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
+  printf("test_context_storage passed\n");
 }
 
 void test_context_arena() {
-    csilk_ctx_t c = {0};
-    c.arena = csilk_arena_new(1024);
-    
-    char* s = csilk_arena_strdup(c.arena, "arena string");
-    assert(strcmp(s, "arena string") == 0);
-    
-    csilk_ctx_cleanup(&c);
-    csilk_arena_free(c.arena);
-    printf("test_context_arena passed\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  char* s = csilk_arena_strdup(c.arena, "arena string");
+  assert(strcmp(s, "arena string") == 0);
+
+  csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
+  printf("test_context_arena passed\n");
 }
 
 int main() {

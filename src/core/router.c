@@ -22,25 +22,27 @@ typedef enum {
 
 /** @brief Method-specific handler mapping. */
 typedef struct csilk_method_handler_s {
-  char* method;                       /**< HTTP method string. */
-  csilk_handler_t* handlers;            /**< Array of handlers for this method. */
-  struct csilk_method_handler_s* next;  /**< Next method handler in list. */
+  char* method;              /**< HTTP method string. */
+  csilk_handler_t* handlers; /**< Array of handlers for this method. */
+  struct csilk_method_handler_s* next; /**< Next method handler in list. */
 } csilk_method_handler_t;
 
 /** @brief Node in the router trie. */
 struct csilk_router_node_s {
-  char* segment;                                      /**< URL path segment. */
-  csilk_node_type_t type;                               /**< Type of node (static/param/wildcard). */
-  csilk_method_handler_t* handlers;                     /**< Method handlers for this node. */
-  struct csilk_router_node_s* children[CSILK_MAX_CHILDREN]; /**< Child nodes array. */
-  int children_count;                                 /**< Number of child nodes. */
+  char* segment;          /**< URL path segment. */
+  csilk_node_type_t type; /**< Type of node (static/param/wildcard). */
+  csilk_method_handler_t* handlers; /**< Method handlers for this node. */
+  struct csilk_router_node_s*
+      children[CSILK_MAX_CHILDREN]; /**< Child nodes array. */
+  int children_count;               /**< Number of child nodes. */
 };
 
 /** @brief Create a new node.
  * @param segment The segment name.
  * @param type The node type.
  * @return A new csilk_router_node_t instance. */
-static csilk_router_node_t* node_new(const char* segment, csilk_node_type_t type) {
+static csilk_router_node_t* node_new(const char* segment,
+                                     csilk_node_type_t type) {
   csilk_router_node_t* node = calloc(1, sizeof(csilk_router_node_t));
   if (!node) return NULL;
   node->segment = strdup(segment);
@@ -109,7 +111,7 @@ void csilk_router_free(csilk_router_t* r) {
 
 /** @brief Register a route with method, path pattern, and handler chain. */
 void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
-                    csilk_handler_t* handlers, size_t handler_count) {
+                      csilk_handler_t* handlers, size_t handler_count) {
   if (!r || !r->root || !method || !path || !handlers) return;
   csilk_router_node_t* curr = r->root;
   const char* p = path;
@@ -139,12 +141,12 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
       if (curr->children_count < CSILK_MAX_CHILDREN) {
         found = node_new(seg_name, type);
         if (found) {
-            curr->children[curr->children_count++] = found;
+          curr->children[curr->children_count++] = found;
         }
       }
     }
     free(seg);
-    if (!found) return; // Should not happen unless CSILK_MAX_CHILDREN exceeded
+    if (!found) return;  // Should not happen unless CSILK_MAX_CHILDREN exceeded
     curr = found;
     if (type == CSILK_NODE_WILDCARD) break;
   }
@@ -183,8 +185,9 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
  * @param path The remaining path.
  * @param ctx The request context (optional).
  * @return Array of handlers, or NULL if no match. */
-static csilk_handler_t* match_node(csilk_router_node_t* node, const char* method,
-                                 const char* path, csilk_ctx_t* ctx) {
+static csilk_handler_t* match_node(csilk_router_node_t* node,
+                                   const char* method, const char* path,
+                                   csilk_ctx_t* ctx) {
   if (!path || *path == '\0' || strcmp(path, "/") == 0) {
     csilk_method_handler_t* mh = node->handlers;
     while (mh) {
@@ -255,14 +258,16 @@ static csilk_handler_t* match_node(csilk_router_node_t* node, const char* method
   return result;
 }
 
-/** @brief Match a method+path against the routing table (standalone, no context). */
+/** @brief Match a method+path against the routing table (standalone, no
+ * context). */
 csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
-                                const char* path) {
+                                    const char* path) {
   if (!r || !r->root || !method || !path) return NULL;
   return match_node(r->root, method, path, NULL);
 }
 
-/** @brief Match current request context against the routing table, populating params. */
+/** @brief Match current request context against the routing table, populating
+ * params. */
 int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c) {
   if (!r || !c || !r->root || !c->request.method || !c->request.path) return 0;
   c->params_count = 0;
