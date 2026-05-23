@@ -10,3 +10,9 @@
 - **动作**: 修复 ASan 检测出的多处核心内存泄漏和段错误（gin_string, libuv 句柄泄漏等）。
 - **动作**: 集成了基于 libFuzzer 的 `fuzz_test.c` 并在 CMake 中配置。
 - **动作**: 添加 GitHub Actions CI 配置文件。
+
+## [2026-05-23] 阶段二完成
+- **动作**: 引入了请求级内存池 Arena，实现了 `gin_string` 的自动化内存管理。
+- **动作**: 将 Radix Tree 重构为固定数组子节点布局，提升了缓存局部性。
+- **动作**: 修复了路由 handler 数组的生命周期问题，通过深拷贝确保了内存安全。
+- **动作**: 优化了 `gin_recovery_handler` 的 jump_buffer 生命周期范围。

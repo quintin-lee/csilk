@@ -434,6 +434,9 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->parser.data = client;
     uv_timer_init(server->loop, &client->timer);
     client->timer.data = client;
+    
+    // Initialize arena for the request
+    client->ctx.arena = gin_arena_new(4096);
 
     r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
     if (r < 0) {

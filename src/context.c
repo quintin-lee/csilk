@@ -30,11 +30,16 @@ void gin_status(gin_ctx_t* c, int status) { c->response.status = status; }
  * @param msg The response body message. */
 void gin_string(gin_ctx_t* c, int status, const char* msg) {
   c->response.status = status;
-  if (c->response.body && c->response.body_is_managed) {
-    free((void*)c->response.body);
+  if (c->arena) {
+    c->response.body = msg ? gin_arena_strdup(c->arena, msg) : NULL;
+    c->response.body_is_managed = 0; // Managed by arena
+  } else {
+    if (c->response.body && c->response.body_is_managed) {
+      free((void*)c->response.body);
+    }
+    c->response.body = msg ? strdup(msg) : NULL;
+    c->response.body_is_managed = 1;
   }
-  c->response.body = msg ? strdup(msg) : NULL;
-  c->response.body_is_managed = 1;
 }
 
 /** @brief Get a URL parameter by key.
@@ -141,6 +146,12 @@ static void free_headers(gin_header_t* h) {
  * @param c The request context. */
 void gin_ctx_cleanup(gin_ctx_t* c) {
   if (!c) return;
+  
+  if (c->arena) {
+    gin_arena_free(c->arena);
+    c->arena = NULL;
+  }
+
   for (int i = 0; i < c->params_count; i++) {
     free(c->params[i].key);
     free(c->params[i].value);
