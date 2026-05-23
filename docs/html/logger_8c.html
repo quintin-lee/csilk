@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/logger.c File Reference</title>
+<title>Csilk: src/logger.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -102,28 +102,28 @@ $(function(){initNavTree('logger_8c.html','',''); });
 <code>#include &lt;unistd.h&gt;</code><br />
 <code>#include &lt;sys/stat.h&gt;</code><br />
 <code>#include &lt;uv.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:gin_5Flogger_5Ft" id="r_gin_5Flogger_5Ft"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__logger__t.html">gin_logger_t</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal global logger state.  <a href="structgin__logger__t.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Flogger_5Ft" id="r_csilk_5Flogger_5Ft"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__logger__t.html">csilk_logger_t</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal global logger state.  <a href="structcsilk__logger__t.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a4146824cff8cbdf8a491b5d8730437ac" id="r_a4146824cff8cbdf8a491b5d8730437ac"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a4146824cff8cbdf8a491b5d8730437ac">gin_log_init</a> (<a class="el" href="structgin__log__config__t.html">gin_log_config_t</a> config)</td></tr>
-<tr class="memdesc:a4146824cff8cbdf8a491b5d8730437ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the global logger with config.  <br /></td></tr>
-<tr class="memitem:a5321a3d676521280ee7f8a4211d29d67" id="r_a5321a3d676521280ee7f8a4211d29d67"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5321a3d676521280ee7f8a4211d29d67">_gin_log_internal</a> (<a class="el" href="gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6e">gin_log_level_t</a> level, const char *file, int line, const char *func, const char *fmt,...)</td></tr>
-<tr class="memdesc:a5321a3d676521280ee7f8a4211d29d67"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal log function (use macros instead).  <br /></td></tr>
-<tr class="memitem:a2c67982a89a392166574f9905cec9c21" id="r_a2c67982a89a392166574f9905cec9c21"><td class="memItemLeft"><a id="a2c67982a89a392166574f9905cec9c21" name="a2c67982a89a392166574f9905cec9c21"></a>
-void&#160;</td><td class="memItemRight"><b>gin_log_close</b> ()</td></tr>
-<tr class="memdesc:a2c67982a89a392166574f9905cec9c21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Close the global logger. <br /></td></tr>
+<tr class="memitem:a842c19b0fdc84e576924b762d4ace71a" id="r_a842c19b0fdc84e576924b762d4ace71a"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a842c19b0fdc84e576924b762d4ace71a">csilk_log_init</a> (<a class="el" href="structcsilk__log__config__t.html">csilk_log_config_t</a> config)</td></tr>
+<tr class="memdesc:a842c19b0fdc84e576924b762d4ace71a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the global logger with config.  <br /></td></tr>
+<tr class="memitem:a9d335f994386f18f92c261173af6caa9" id="r_a9d335f994386f18f92c261173af6caa9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9d335f994386f18f92c261173af6caa9">_gin_log_internal</a> (<a class="el" href="csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066">csilk_log_level_t</a> level, const char *file, int line, const char *func, const char *fmt,...)</td></tr>
+<tr class="memdesc:a9d335f994386f18f92c261173af6caa9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal log function (use macros instead).  <br /></td></tr>
+<tr class="memitem:aa58966bae2873462e4c4b7e54386cf45" id="r_aa58966bae2873462e4c4b7e54386cf45"><td class="memItemLeft"><a id="aa58966bae2873462e4c4b7e54386cf45" name="aa58966bae2873462e4c4b7e54386cf45"></a>
+void&#160;</td><td class="memItemRight"><b>csilk_log_close</b> ()</td></tr>
+<tr class="memdesc:aa58966bae2873462e4c4b7e54386cf45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Close the global logger. <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Thread-safe logging with rotation and source location. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="a5321a3d676521280ee7f8a4211d29d67" name="a5321a3d676521280ee7f8a4211d29d67"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5321a3d676521280ee7f8a4211d29d67">&#9670;&#160;</a></span>_gin_log_internal()</h2>
+<a id="a9d335f994386f18f92c261173af6caa9" name="a9d335f994386f18f92c261173af6caa9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d335f994386f18f92c261173af6caa9">&#9670;&#160;</a></span>_gin_log_internal()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -131,7 +131,7 @@ void&#160;</td><td class="memItemRight"><b>gin_log_close</b> ()</td></tr>
         <tr>
           <td class="memname">void _gin_log_internal </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6e">gin_log_level_t</a></td>          <td class="paramname"><span class="paramname"><em>level</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066">csilk_log_level_t</a></td>          <td class="paramname"><span class="paramname"><em>level</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -176,16 +176,16 @@ void&#160;</td><td class="memItemRight"><b>gin_log_close</b> ()</td></tr>
 
 </div>
 </div>
-<a id="a4146824cff8cbdf8a491b5d8730437ac" name="a4146824cff8cbdf8a491b5d8730437ac"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4146824cff8cbdf8a491b5d8730437ac">&#9670;&#160;</a></span>gin_log_init()</h2>
+<a id="a842c19b0fdc84e576924b762d4ace71a" name="a842c19b0fdc84e576924b762d4ace71a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a842c19b0fdc84e576924b762d4ace71a">&#9670;&#160;</a></span>csilk_log_init()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int gin_log_init </td>
+          <td class="memname">int csilk_log_init </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structgin__log__config__t.html">gin_log_config_t</a></td>          <td class="paramname"><span class="paramname"><em>config</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structcsilk__log__config__t.html">csilk_log_config_t</a></td>          <td class="paramname"><span class="paramname"><em>config</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

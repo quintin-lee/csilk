@@ -10,8 +10,8 @@ Web\+Socket handshake, send, and frame parsing implementation. MIT License.
 {\ttfamily \+\#include $<$string.\+h$>$}\newline
 {\ttfamily \+\#include $<$stdint.\+h$>$}\newline
 {\ttfamily \+\#include $<$uv.\+h$>$}\newline
-{\ttfamily \+\#include "{}gin.\+h"{}}\newline
-{\ttfamily \+\#include "{}gin\+\_\+internal.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk\+\_\+internal.\+h"{}}\newline
 \doxysubsubsection*{Macros}
 \begin{DoxyCompactItemize}
 \item 
@@ -21,11 +21,11 @@ Web\+Socket handshake, send, and frame parsing implementation. MIT License.
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-void \doxymbox{\hyperlink{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f}{gin\+\_\+ws\+\_\+handshake}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+void \doxymbox{\hyperlink{websocket_8c_a38487bb8cdf5625ca12e7d7a57ef27bb}{csilk\+\_\+ws\+\_\+handshake}} (\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
 \begin{DoxyCompactList}\small\item\em Handshake and upgrade to Web\+Socket. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3}{gin\+\_\+ws\+\_\+send}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}payload, size\+\_\+t len, int opcode)
+void \doxymbox{\hyperlink{websocket_8c_a19bc5bb3d492699c7ff3055dceaa2f68}{csilk\+\_\+ws\+\_\+send}} (\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}payload, size\+\_\+t len, int opcode)
 \begin{DoxyCompactList}\small\item\em Send a Web\+Socket message. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5}{gin\+\_\+ws\+\_\+parse\+\_\+frame}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}buf, size\+\_\+t nread)
+void \doxymbox{\hyperlink{websocket_8c_a4da99a240bab4f2ceddcd3333232feb4}{csilk\+\_\+ws\+\_\+parse\+\_\+frame}} (\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}buf, size\+\_\+t nread)
 \begin{DoxyCompactList}\small\item\em Parse incoming Web\+Socket frame data. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
 
@@ -37,11 +37,11 @@ Web\+Socket handshake, send, and frame parsing implementation. MIT License.
 \label{doc-func-members}
 \Hypertarget{websocket_8c_doc-func-members}
 \doxysubsection{Function Documentation}
-\Hypertarget{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f}\index{websocket.c@{websocket.c}!gin\_ws\_handshake@{gin\_ws\_handshake}}
-\index{gin\_ws\_handshake@{gin\_ws\_handshake}!websocket.c@{websocket.c}}
-\doxysubsubsection{\texorpdfstring{gin\_ws\_handshake()}{gin\_ws\_handshake()}}
-{\footnotesize\ttfamily \label{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f} 
-void gin\+\_\+ws\+\_\+handshake (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+\Hypertarget{websocket_8c_a38487bb8cdf5625ca12e7d7a57ef27bb}\index{websocket.c@{websocket.c}!csilk\_ws\_handshake@{csilk\_ws\_handshake}}
+\index{csilk\_ws\_handshake@{csilk\_ws\_handshake}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_ws\_handshake()}{csilk\_ws\_handshake()}}
+{\footnotesize\ttfamily \label{websocket_8c_a38487bb8cdf5625ca12e7d7a57ef27bb} 
+void csilk\+\_\+ws\+\_\+handshake (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
 
 
 
@@ -52,11 +52,11 @@ Handshake and upgrade to Web\+Socket.
 {\em c} & The request context. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5}\index{websocket.c@{websocket.c}!gin\_ws\_parse\_frame@{gin\_ws\_parse\_frame}}
-\index{gin\_ws\_parse\_frame@{gin\_ws\_parse\_frame}!websocket.c@{websocket.c}}
-\doxysubsubsection{\texorpdfstring{gin\_ws\_parse\_frame()}{gin\_ws\_parse\_frame()}}
-{\footnotesize\ttfamily \label{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5} 
-void gin\+\_\+ws\+\_\+parse\+\_\+frame (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{nread}{}\end{DoxyParamCaption})}
+\Hypertarget{websocket_8c_a4da99a240bab4f2ceddcd3333232feb4}\index{websocket.c@{websocket.c}!csilk\_ws\_parse\_frame@{csilk\_ws\_parse\_frame}}
+\index{csilk\_ws\_parse\_frame@{csilk\_ws\_parse\_frame}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_ws\_parse\_frame()}{csilk\_ws\_parse\_frame()}}
+{\footnotesize\ttfamily \label{websocket_8c_a4da99a240bab4f2ceddcd3333232feb4} 
+void csilk\+\_\+ws\+\_\+parse\+\_\+frame (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{nread}{}\end{DoxyParamCaption})}
 
 
 
@@ -71,11 +71,11 @@ Parse incoming Web\+Socket frame data.
 {\em nread} & Number of bytes read. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3}\index{websocket.c@{websocket.c}!gin\_ws\_send@{gin\_ws\_send}}
-\index{gin\_ws\_send@{gin\_ws\_send}!websocket.c@{websocket.c}}
-\doxysubsubsection{\texorpdfstring{gin\_ws\_send()}{gin\_ws\_send()}}
-{\footnotesize\ttfamily \label{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3} 
-void gin\+\_\+ws\+\_\+send (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{payload}{, }\item[{size\+\_\+t}]{len}{, }\item[{int}]{opcode}{}\end{DoxyParamCaption})}
+\Hypertarget{websocket_8c_a19bc5bb3d492699c7ff3055dceaa2f68}\index{websocket.c@{websocket.c}!csilk\_ws\_send@{csilk\_ws\_send}}
+\index{csilk\_ws\_send@{csilk\_ws\_send}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_ws\_send()}{csilk\_ws\_send()}}
+{\footnotesize\ttfamily \label{websocket_8c_a19bc5bb3d492699c7ff3055dceaa2f68} 
+void csilk\+\_\+ws\+\_\+send (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{payload}{, }\item[{size\+\_\+t}]{len}{, }\item[{int}]{opcode}{}\end{DoxyParamCaption})}
 
 
 

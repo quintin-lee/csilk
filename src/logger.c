@@ -11,18 +11,18 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <uv.h>
-#include "gin.h"
+#include "csilk.h"
 
 /** @brief Internal global logger state. */
 typedef struct {
-    gin_log_config_t config; /**< Logger configuration. */
+    csilk_log_config_t config; /**< Logger configuration. */
     FILE* fp;                /**< Output file pointer (stdout or file). */
     size_t current_size;     /**< Current log file size for rotation. */
     uv_mutex_t mutex;        /**< Mutex for thread safety. */
     int initialized;         /**< Flag indicating logger is initialized. */
-} gin_logger_t;
+} csilk_logger_t;
 
-static gin_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
+static csilk_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
 
 static const char* level_strings[] = { "TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL" };
 static const char* level_colors[] = { "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m" };
@@ -41,8 +41,8 @@ static void rotate_log_files() {
     g_logger.current_size = 0;
 }
 
-int gin_log_init(gin_log_config_t config) {
-    if (g_logger.initialized) gin_log_close();
+int csilk_log_init(csilk_log_config_t config) {
+    if (g_logger.initialized) csilk_log_close();
 
     g_logger.config = config;
     if (config.file_path) {
@@ -71,7 +71,7 @@ int gin_log_init(gin_log_config_t config) {
     return 0;
 }
 
-void _gin_log_internal(gin_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...) {
+void _gin_log_internal(csilk_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...) {
     if (!g_logger.initialized || level < g_logger.config.level) return;
 
     uv_mutex_lock(&g_logger.mutex);
@@ -121,7 +121,7 @@ void _gin_log_internal(gin_log_level_t level, const char* file, int line, const 
     uv_mutex_unlock(&g_logger.mutex);
 }
 
-void gin_log_close() {
+void csilk_log_close() {
     if (!g_logger.initialized) return;
     uv_mutex_lock(&g_logger.mutex);
     if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {

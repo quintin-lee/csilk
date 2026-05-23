@@ -1,0 +1,128 @@
+\doxysection{csilk\+\_\+config\+\_\+t Struct Reference}
+\hypertarget{structcsilk__config__t}{}\label{structcsilk__config__t}\index{csilk\_config\_t@{csilk\_config\_t}}
+
+
+Global Configuration structure.  
+
+
+
+
+{\ttfamily \+\#include $<$csilk.\+h$>$}
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+int \doxymbox{\hyperlink{structcsilk__config__t_a0bbdee6ecfd5da6352608d7ccaa5eaff}{port}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}} \doxymbox{\hyperlink{structcsilk__config__t_a349bb8e19a6ecd0cdc3c26d7b20e0e03}{server}}
+\item 
+\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}} \doxymbox{\hyperlink{structcsilk__config__t_a4e9e70c25b0aa38f9241f1aa65267131}{logger}}
+\item 
+\begin{tabbing}
+xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=\kill
+struct \{\\
+\>int \doxymbox{\hyperlink{structcsilk__config__t_aba1c9839947eecc036b524e8cc6f05b9}{enable}}\\
+\>\doxymbox{\hyperlink{structcsilk__cors__config__t}{csilk\_cors\_config\_t}} \doxymbox{\hyperlink{structcsilk__config__t_a5d536589c449d3975300d63a898990d5}{config}}\\
+\} \doxymbox{\hyperlink{structcsilk__config__t_a2c34f3d4b6148c9dc051dd20b34afc29}{cors}}\\
+
+\end{tabbing}\item 
+\begin{tabbing}
+xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=\kill
+struct \{\\
+\>int \doxymbox{\hyperlink{structcsilk__config__t_aba1c9839947eecc036b524e8cc6f05b9}{enable}}\\
+\>int \doxymbox{\hyperlink{structcsilk__config__t_ab041cbd52b37b9030751c78d8b96befb}{requests\_per\_minute}}\\
+\} \doxymbox{\hyperlink{structcsilk__config__t_a87edb516d3fc13acc2e57cfdcf576e2d}{rate\_limit}}\\
+
+\end{tabbing}\item 
+\begin{tabbing}
+xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=xx\=\kill
+struct \{\\
+\>int \doxymbox{\hyperlink{structcsilk__config__t_aba1c9839947eecc036b524e8cc6f05b9}{enable}}\\
+\>char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__config__t_a1cd9fcfc03122ca3ba46e700eaa270ea}{root\_dir}}\\
+\>char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__config__t_ae3c2af9aeaea6c3d737e6654b01cb0b1}{prefix}}\\
+\} \doxymbox{\hyperlink{structcsilk__config__t_ad210b631e68b2a403ea226df274d491c}{static\_files}}\\
+
+\end{tabbing}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Global Configuration structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__config__t_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__config__t_a5d536589c449d3975300d63a898990d5}\index{csilk\_config\_t@{csilk\_config\_t}!config@{config}}
+\index{config@{config}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{config}{config}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a5d536589c449d3975300d63a898990d5} 
+\doxymbox{\hyperlink{structcsilk__cors__config__t}{csilk\+\_\+cors\+\_\+config\+\_\+t}} csilk\+\_\+config\+\_\+t::\+config}
+
+CORS config. \Hypertarget{structcsilk__config__t_a2c34f3d4b6148c9dc051dd20b34afc29}\index{csilk\_config\_t@{csilk\_config\_t}!cors@{cors}}
+\index{cors@{cors}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{[struct]}{[struct]}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a2c34f3d4b6148c9dc051dd20b34afc29} 
+struct  \{ ... \}  csilk\+\_\+config\+\_\+t::\+cors}
+
+CORS settings. \Hypertarget{structcsilk__config__t_aba1c9839947eecc036b524e8cc6f05b9}\index{csilk\_config\_t@{csilk\_config\_t}!enable@{enable}}
+\index{enable@{enable}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{enable}{enable}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_aba1c9839947eecc036b524e8cc6f05b9} 
+int csilk\+\_\+config\+\_\+t::\+enable}
+
+Enable CORS.
+
+Enable rate limiting.
+
+Enable static file serving. \Hypertarget{structcsilk__config__t_a4e9e70c25b0aa38f9241f1aa65267131}\index{csilk\_config\_t@{csilk\_config\_t}!logger@{logger}}
+\index{logger@{logger}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{logger}{logger}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a4e9e70c25b0aa38f9241f1aa65267131} 
+\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}} csilk\+\_\+config\+\_\+t::\+logger}
+
+Logger config. \Hypertarget{structcsilk__config__t_a0bbdee6ecfd5da6352608d7ccaa5eaff}\index{csilk\_config\_t@{csilk\_config\_t}!port@{port}}
+\index{port@{port}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{port}{port}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a0bbdee6ecfd5da6352608d7ccaa5eaff} 
+int csilk\+\_\+config\+\_\+t::\+port}
+
+Server port. \Hypertarget{structcsilk__config__t_ae3c2af9aeaea6c3d737e6654b01cb0b1}\index{csilk\_config\_t@{csilk\_config\_t}!prefix@{prefix}}
+\index{prefix@{prefix}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{prefix}{prefix}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_ae3c2af9aeaea6c3d737e6654b01cb0b1} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+config\+\_\+t::\+prefix}
+
+URL prefix (e.\+g., "{}/\+static"{}). \Hypertarget{structcsilk__config__t_a87edb516d3fc13acc2e57cfdcf576e2d}\index{csilk\_config\_t@{csilk\_config\_t}!rate\_limit@{rate\_limit}}
+\index{rate\_limit@{rate\_limit}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{[struct]}{[struct]}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a87edb516d3fc13acc2e57cfdcf576e2d} 
+struct  \{ ... \}  csilk\+\_\+config\+\_\+t::\+rate\+\_\+limit}
+
+Rate limit settings. \Hypertarget{structcsilk__config__t_ab041cbd52b37b9030751c78d8b96befb}\index{csilk\_config\_t@{csilk\_config\_t}!requests\_per\_minute@{requests\_per\_minute}}
+\index{requests\_per\_minute@{requests\_per\_minute}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{requests\_per\_minute}{requests\_per\_minute}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_ab041cbd52b37b9030751c78d8b96befb} 
+int csilk\+\_\+config\+\_\+t::\+requests\+\_\+per\+\_\+minute}
+
+Limit per IP. \Hypertarget{structcsilk__config__t_a1cd9fcfc03122ca3ba46e700eaa270ea}\index{csilk\_config\_t@{csilk\_config\_t}!root\_dir@{root\_dir}}
+\index{root\_dir@{root\_dir}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{root\_dir}{root\_dir}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a1cd9fcfc03122ca3ba46e700eaa270ea} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+config\+\_\+t::\+root\+\_\+dir}
+
+Local directory path. \Hypertarget{structcsilk__config__t_a349bb8e19a6ecd0cdc3c26d7b20e0e03}\index{csilk\_config\_t@{csilk\_config\_t}!server@{server}}
+\index{server@{server}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{server}{server}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_a349bb8e19a6ecd0cdc3c26d7b20e0e03} 
+\doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}} csilk\+\_\+config\+\_\+t::\+server}
+
+Server low-\/level config. \Hypertarget{structcsilk__config__t_ad210b631e68b2a403ea226df274d491c}\index{csilk\_config\_t@{csilk\_config\_t}!static\_files@{static\_files}}
+\index{static\_files@{static\_files}!csilk\_config\_t@{csilk\_config\_t}}
+\doxysubsubsection{\texorpdfstring{[struct]}{[struct]}}
+{\footnotesize\ttfamily \label{structcsilk__config__t_ad210b631e68b2a403ea226df274d491c} 
+struct  \{ ... \}  csilk\+\_\+config\+\_\+t::\+static\+\_\+files}
+
+Static file settings. 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+include/\+\doxymbox{\hyperlink{csilk_8h}{csilk.\+h}}\end{DoxyCompactItemize}

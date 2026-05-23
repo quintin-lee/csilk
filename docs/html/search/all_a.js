@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['jump_5fbuffer_0',['jump_buffer',['../structgin__ctx__s.html#a26b274fd8cf5637121770b94ff8e49a7',1,'gin_ctx_s']]]
+  ['jump_5fbuffer_0',['jump_buffer',['../structcsilk__ctx__s.html#ae4c809320fe26e447c4c0596e57ca19c',1,'csilk_ctx_s']]]
 ];

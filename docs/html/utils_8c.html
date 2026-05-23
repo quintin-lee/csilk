@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/utils.c File Reference</title>
+<title>Csilk: src/utils.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -100,8 +100,8 @@ $(function(){initNavTree('utils_8c.html','',''); });
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:gin_5Fsha1_5Fctx" id="r_gin_5Fsha1_5Fctx"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">SHA1 hashing context.  <a href="structgin__sha1__ctx.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Fsha1_5Fctx" id="r_csilk_5Fsha1_5Fctx"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">SHA1 hashing context.  <a href="structcsilk__sha1__ctx.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
@@ -110,14 +110,14 @@ Macros</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a390977ad55c5bb9e69b3deb0f95388ff" id="r_a390977ad55c5bb9e69b3deb0f95388ff"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a390977ad55c5bb9e69b3deb0f95388ff">gin_sha1_init</a> (<a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *context)</td></tr>
-<tr class="memdesc:a390977ad55c5bb9e69b3deb0f95388ff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize a SHA1 context.  <br /></td></tr>
-<tr class="memitem:abd7779f32ff374d6c36d959990403c8c" id="r_abd7779f32ff374d6c36d959990403c8c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abd7779f32ff374d6c36d959990403c8c">gin_sha1_update</a> (<a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *context, const uint8_t *data, uint32_t len)</td></tr>
-<tr class="memdesc:abd7779f32ff374d6c36d959990403c8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Feed data into the SHA1 hashing context.  <br /></td></tr>
-<tr class="memitem:ae4549cc6de928be723492356ebcbb4b3" id="r_ae4549cc6de928be723492356ebcbb4b3"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae4549cc6de928be723492356ebcbb4b3">gin_sha1_final</a> (<a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *context, uint8_t digest[20])</td></tr>
-<tr class="memdesc:ae4549cc6de928be723492356ebcbb4b3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finalize SHA1 hash and produce the digest.  <br /></td></tr>
-<tr class="memitem:abe7613793f89afaa293b207183bbf4a1" id="r_abe7613793f89afaa293b207183bbf4a1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#abe7613793f89afaa293b207183bbf4a1">gin_base64_encode</a> (const uint8_t *src, size_t len, char *out)</td></tr>
-<tr class="memdesc:abe7613793f89afaa293b207183bbf4a1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Encode raw bytes as Base64 string.  <br /></td></tr>
+<tr class="memitem:ac93984d1b11ff1826df3c00073c6766d" id="r_ac93984d1b11ff1826df3c00073c6766d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac93984d1b11ff1826df3c00073c6766d">csilk_sha1_init</a> (<a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *context)</td></tr>
+<tr class="memdesc:ac93984d1b11ff1826df3c00073c6766d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize a SHA1 context.  <br /></td></tr>
+<tr class="memitem:a3845513fafb2ec3602e7467e6a44a516" id="r_a3845513fafb2ec3602e7467e6a44a516"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3845513fafb2ec3602e7467e6a44a516">csilk_sha1_update</a> (<a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *context, const uint8_t *data, uint32_t len)</td></tr>
+<tr class="memdesc:a3845513fafb2ec3602e7467e6a44a516"><td class="mdescLeft">&#160;</td><td class="mdescRight">Feed data into the SHA1 hashing context.  <br /></td></tr>
+<tr class="memitem:a9581500f95a5d7f7b6074631e0755491" id="r_a9581500f95a5d7f7b6074631e0755491"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9581500f95a5d7f7b6074631e0755491">csilk_sha1_final</a> (<a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *context, uint8_t digest[20])</td></tr>
+<tr class="memdesc:a9581500f95a5d7f7b6074631e0755491"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finalize SHA1 hash and produce the digest.  <br /></td></tr>
+<tr class="memitem:a5fd5dbaae3cc1ed54df203c2a93186cb" id="r_a5fd5dbaae3cc1ed54df203c2a93186cb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5fd5dbaae3cc1ed54df203c2a93186cb">csilk_base64_encode</a> (const uint8_t *src, size_t len, char *out)</td></tr>
+<tr class="memdesc:a5fd5dbaae3cc1ed54df203c2a93186cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Encode raw bytes as Base64 string.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>SHA1 hashing and Base64 encoding utilities. MIT License. </p>
@@ -147,14 +147,14 @@ Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="abe7613793f89afaa293b207183bbf4a1" name="abe7613793f89afaa293b207183bbf4a1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abe7613793f89afaa293b207183bbf4a1">&#9670;&#160;</a></span>gin_base64_encode()</h2>
+<a id="a5fd5dbaae3cc1ed54df203c2a93186cb" name="a5fd5dbaae3cc1ed54df203c2a93186cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5fd5dbaae3cc1ed54df203c2a93186cb">&#9670;&#160;</a></span>csilk_base64_encode()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_base64_encode </td>
+          <td class="memname">void csilk_base64_encode </td>
           <td>(</td>
           <td class="paramtype">const uint8_t *</td>          <td class="paramname"><span class="paramname"><em>src</em></span>, </td>
         </tr>
@@ -183,16 +183,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ae4549cc6de928be723492356ebcbb4b3" name="ae4549cc6de928be723492356ebcbb4b3"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae4549cc6de928be723492356ebcbb4b3">&#9670;&#160;</a></span>gin_sha1_final()</h2>
+<a id="a9581500f95a5d7f7b6074631e0755491" name="a9581500f95a5d7f7b6074631e0755491"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9581500f95a5d7f7b6074631e0755491">&#9670;&#160;</a></span>csilk_sha1_final()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_sha1_final </td>
+          <td class="memname">void csilk_sha1_final </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -213,16 +213,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a390977ad55c5bb9e69b3deb0f95388ff" name="a390977ad55c5bb9e69b3deb0f95388ff"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a390977ad55c5bb9e69b3deb0f95388ff">&#9670;&#160;</a></span>gin_sha1_init()</h2>
+<a id="ac93984d1b11ff1826df3c00073c6766d" name="ac93984d1b11ff1826df3c00073c6766d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac93984d1b11ff1826df3c00073c6766d">&#9670;&#160;</a></span>csilk_sha1_init()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_sha1_init </td>
+          <td class="memname">void csilk_sha1_init </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -238,16 +238,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="abd7779f32ff374d6c36d959990403c8c" name="abd7779f32ff374d6c36d959990403c8c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abd7779f32ff374d6c36d959990403c8c">&#9670;&#160;</a></span>gin_sha1_update()</h2>
+<a id="a3845513fafb2ec3602e7467e6a44a516" name="a3845513fafb2ec3602e7467e6a44a516"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3845513fafb2ec3602e7467e6a44a516">&#9670;&#160;</a></span>csilk_sha1_update()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_sha1_update </td>
+          <td class="memname">void csilk_sha1_update </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="structgin__sha1__ctx.html">gin_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span>, </td>
+          <td class="paramtype"><a class="el" href="structcsilk__sha1__ctx.html">csilk_sha1_ctx</a> *</td>          <td class="paramname"><span class="paramname"><em>context</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

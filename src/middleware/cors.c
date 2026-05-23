@@ -7,37 +7,37 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 /** @brief CORS middleware handler.
  * Sets Access-Control-* response headers based on configuration.
  * Handles CORS preflight (OPTIONS) requests.
  * @param c The request context.
  * @param config CORS configuration. */
-void gin_cors_middleware(gin_ctx_t* c, gin_cors_config_t config) {
-  gin_set_header(c, "Access-Control-Allow-Origin", config.allow_origin);
-  gin_set_header(c, "Access-Control-Allow-Methods", config.allow_methods);
-  gin_set_header(c, "Access-Control-Allow-Headers", config.allow_headers);
+void csilk_cors_middleware(csilk_ctx_t* c, csilk_cors_config_t config) {
+  csilk_set_header(c, "Access-Control-Allow-Origin", config.allow_origin);
+  csilk_set_header(c, "Access-Control-Allow-Methods", config.allow_methods);
+  csilk_set_header(c, "Access-Control-Allow-Headers", config.allow_headers);
 
   if (config.allow_credentials) {
-    gin_set_header(c, "Access-Control-Allow-Credentials", "true");
+    csilk_set_header(c, "Access-Control-Allow-Credentials", "true");
   }
 
   if (config.max_age > 0) {
     char buf[32];
     int n = snprintf(buf, sizeof(buf), "%d", config.max_age);
     if (n > 0 && (size_t)n < sizeof(buf)) {
-      gin_set_header(c, "Access-Control-Max-Age", buf);
+      csilk_set_header(c, "Access-Control-Max-Age", buf);
     }
   }
 
-  const char* req_method = gin_get_header(c, "Access-Control-Request-Method");
+  const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
   if (c->request.method && strcmp(c->request.method, "OPTIONS") == 0 &&
       req_method != NULL) {
-    gin_string(c, 204, "");
-    gin_abort(c);
+    csilk_string(c, 204, "");
+    csilk_abort(c);
     return;
   }
 
-  gin_next(c);
+  csilk_next(c);
 }

@@ -9,36 +9,36 @@
 #include <string.h>
 #include <stdint.h>
 #include <uv.h>
-#include "gin.h"
-#include "gin_internal.h"
+#include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief WebSocket GUID for handshake key generation (RFC 6455). */
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-void gin_ws_handshake(gin_ctx_t* c) {
-    const char* key = gin_get_header(c, "Sec-WebSocket-Key");
+void csilk_ws_handshake(csilk_ctx_t* c) {
+    const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
     if (!key) {
-        gin_json_error(c, 400, "Upgrade Required: Sec-WebSocket-Key missing");
+        csilk_json_error(c, 400, "Upgrade Required: Sec-WebSocket-Key missing");
         return;
     }
 
     char combined[256];
     snprintf(combined, sizeof(combined), "%s%s", key, WS_GUID);
 
-    gin_sha1_ctx sha_ctx;
+    csilk_sha1_ctx sha_ctx;
     uint8_t digest[20];
-    gin_sha1_init(&sha_ctx);
-    gin_sha1_update(&sha_ctx, (uint8_t*)combined, (uint32_t)strlen(combined));
-    gin_sha1_final(&sha_ctx, digest);
+    csilk_sha1_init(&sha_ctx);
+    csilk_sha1_update(&sha_ctx, (uint8_t*)combined, (uint32_t)strlen(combined));
+    csilk_sha1_final(&sha_ctx, digest);
 
     char accept_key[32];
-    gin_base64_encode(digest, 20, accept_key);
+    csilk_base64_encode(digest, 20, accept_key);
 
-    gin_set_header(c, "Upgrade", "websocket");
-    gin_set_header(c, "Connection", "Upgrade");
-    gin_set_header(c, "Sec-WebSocket-Accept", accept_key);
+    csilk_set_header(c, "Upgrade", "websocket");
+    csilk_set_header(c, "Connection", "Upgrade");
+    csilk_set_header(c, "Sec-WebSocket-Accept", accept_key);
     
-    gin_status(c, 101);
+    csilk_status(c, 101);
     c->is_websocket = 1;
 }
 
@@ -50,7 +50,7 @@ static void on_ws_write(uv_write_t* req, int status) {
     free(req);
 }
 
-void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
+void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     if (!c || !c->_internal_client) return;
 
     size_t header_len = 2;
@@ -79,7 +79,7 @@ void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     if (write_req) {
         uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)(header_len + len));
         write_req->data = frame;
-        // The first member of gin_client_t is uv_tcp_t handle
+        // The first member of csilk_client_t is uv_tcp_t handle
         uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
         uv_write(write_req, stream, &buf, 1, on_ws_write);
     } else {
@@ -87,7 +87,7 @@ void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     }
 }
 
-void gin_ws_parse_frame(gin_ctx_t* c, const uint8_t* buf, size_t nread) {
+void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
     if (nread < 2) return;
     
     // uint8_t fin = (buf[0] >> 7) & 0x01;

@@ -4,12 +4,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 // Mock context for testing
 void test_static_serves_file() {
-  gin_ctx_t ctx;
-  memset(&ctx, 0, sizeof(gin_ctx_t));
+  csilk_ctx_t ctx;
+  memset(&ctx, 0, sizeof(csilk_ctx_t));
   ctx.request.path = "/test.html";
 
   // Create temp directory and file
@@ -18,10 +18,10 @@ void test_static_serves_file() {
   fprintf(f, "<html><body>Hello</body></html>");
   fclose(f);
 
-  gin_static(&ctx, "test_dir");
+  csilk_static(&ctx, "test_dir");
 
   printf("test_static_serves_file passed (assumed)\n");
-  gin_ctx_cleanup(&ctx);
+  csilk_ctx_cleanup(&ctx);
 
   // Cleanup
   remove("test_dir/test.html");
@@ -29,15 +29,15 @@ void test_static_serves_file() {
 }
 
 void test_static_traversal_blocked() {
-  gin_ctx_t ctx;
-  memset(&ctx, 0, sizeof(gin_ctx_t));
+  csilk_ctx_t ctx;
+  memset(&ctx, 0, sizeof(csilk_ctx_t));
   ctx.request.path = "/../../etc/passwd";
 
-  gin_static(&ctx, ".");
+  csilk_static(&ctx, ".");
 
   printf("test_static_traversal_blocked passed (assumed)\n");
 
-  gin_ctx_cleanup(&ctx);
+  csilk_ctx_cleanup(&ctx);
 }
 
 int main() {

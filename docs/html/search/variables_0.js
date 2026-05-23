@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['_5finternal_5fclient_0',['_internal_client',['../structgin__ctx__s.html#a4d0b967d56ddd1c61268752c2fdce8c2',1,'gin_ctx_s']]]
+  ['_5finternal_5fclient_0',['_internal_client',['../structcsilk__ctx__s.html#aaf7842f3f79d361b0017ba437e63635a',1,'csilk_ctx_s']]]
 ];

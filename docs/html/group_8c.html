@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/group.c File Reference</title>
+<title>Csilk: src/group.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -96,39 +96,39 @@ $(function(){initNavTree('group_8c.html','',''); });
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:gin_5Fgroup_5Fs" id="r_gin_5Fgroup_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__group__s.html">gin_group_s</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Route group structure.  <a href="structgin__group__s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Fgroup_5Fs" id="r_csilk_5Fgroup_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__group__s.html">csilk_group_s</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Route group structure.  <a href="structcsilk__group__s.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a61fdabf12c2b3b57bc50342695531736" id="r_a61fdabf12c2b3b57bc50342695531736"><td class="memItemLeft"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a61fdabf12c2b3b57bc50342695531736">gin_group_new</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *router, const char *prefix)</td></tr>
-<tr class="memdesc:a61fdabf12c2b3b57bc50342695531736"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new root group.  <br /></td></tr>
-<tr class="memitem:a77697d41cd807b19163e630ddcbe1b69" id="r_a77697d41cd807b19163e630ddcbe1b69"><td class="memItemLeft"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a77697d41cd807b19163e630ddcbe1b69">gin_group_group</a> (<a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *parent, const char *prefix)</td></tr>
-<tr class="memdesc:a77697d41cd807b19163e630ddcbe1b69"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a child group from an existing group.  <br /></td></tr>
-<tr class="memitem:a1a532b39372da3d40181563bc21b9b7c" id="r_a1a532b39372da3d40181563bc21b9b7c"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a1a532b39372da3d40181563bc21b9b7c">gin_group_use</a> (<a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *group, <a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> handler)</td></tr>
-<tr class="memdesc:a1a532b39372da3d40181563bc21b9b7c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add middleware to the group.  <br /></td></tr>
-<tr class="memitem:aa502689654e50b55bcecdfa0b535ebae" id="r_aa502689654e50b55bcecdfa0b535ebae"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa502689654e50b55bcecdfa0b535ebae">gin_group_add_route</a> (<a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *group, const char *method, const char *path, <a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> handler)</td></tr>
-<tr class="memdesc:aa502689654e50b55bcecdfa0b535ebae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a specific route to the group.  <br /></td></tr>
-<tr class="memitem:a4da5595e0e4d27154d0b9d3057db6e18" id="r_a4da5595e0e4d27154d0b9d3057db6e18"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a4da5595e0e4d27154d0b9d3057db6e18">gin_group_free</a> (<a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *group)</td></tr>
-<tr class="memdesc:a4da5595e0e4d27154d0b9d3057db6e18"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate a route group.  <br /></td></tr>
+<tr class="memitem:a910e8b5b110e57dd47502491427f65e7" id="r_a910e8b5b110e57dd47502491427f65e7"><td class="memItemLeft"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a910e8b5b110e57dd47502491427f65e7">csilk_group_new</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *router, const char *prefix)</td></tr>
+<tr class="memdesc:a910e8b5b110e57dd47502491427f65e7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new root group.  <br /></td></tr>
+<tr class="memitem:a27a5f0b57f089eae72984b3c8186c104" id="r_a27a5f0b57f089eae72984b3c8186c104"><td class="memItemLeft"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a27a5f0b57f089eae72984b3c8186c104">csilk_group_group</a> (<a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *parent, const char *prefix)</td></tr>
+<tr class="memdesc:a27a5f0b57f089eae72984b3c8186c104"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a child group from an existing group.  <br /></td></tr>
+<tr class="memitem:ada6a189485c23b06f5056ccf62d4fb30" id="r_ada6a189485c23b06f5056ccf62d4fb30"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ada6a189485c23b06f5056ccf62d4fb30">csilk_group_use</a> (<a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *group, <a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> handler)</td></tr>
+<tr class="memdesc:ada6a189485c23b06f5056ccf62d4fb30"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add middleware to the group.  <br /></td></tr>
+<tr class="memitem:a2f2a537c5f61d14df45763ca08037062" id="r_a2f2a537c5f61d14df45763ca08037062"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a2f2a537c5f61d14df45763ca08037062">csilk_group_add_route</a> (<a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *group, const char *method, const char *path, <a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> handler)</td></tr>
+<tr class="memdesc:a2f2a537c5f61d14df45763ca08037062"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a specific route to the group.  <br /></td></tr>
+<tr class="memitem:a339e9d924635fa73e04f8d1891c1bfa8" id="r_a339e9d924635fa73e04f8d1891c1bfa8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a339e9d924635fa73e04f8d1891c1bfa8">csilk_group_free</a> (<a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *group)</td></tr>
+<tr class="memdesc:a339e9d924635fa73e04f8d1891c1bfa8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate a route group.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Route group implementation. MIT License. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="aa502689654e50b55bcecdfa0b535ebae" name="aa502689654e50b55bcecdfa0b535ebae"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa502689654e50b55bcecdfa0b535ebae">&#9670;&#160;</a></span>gin_group_add_route()</h2>
+<a id="a2f2a537c5f61d14df45763ca08037062" name="a2f2a537c5f61d14df45763ca08037062"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f2a537c5f61d14df45763ca08037062">&#9670;&#160;</a></span>csilk_group_add_route()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_group_add_route </td>
+          <td class="memname">void csilk_group_add_route </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -143,7 +143,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a></td>          <td class="paramname"><span class="paramname"><em>handler</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a></td>          <td class="paramname"><span class="paramname"><em>handler</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -161,16 +161,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a4da5595e0e4d27154d0b9d3057db6e18" name="a4da5595e0e4d27154d0b9d3057db6e18"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4da5595e0e4d27154d0b9d3057db6e18">&#9670;&#160;</a></span>gin_group_free()</h2>
+<a id="a339e9d924635fa73e04f8d1891c1bfa8" name="a339e9d924635fa73e04f8d1891c1bfa8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a339e9d924635fa73e04f8d1891c1bfa8">&#9670;&#160;</a></span>csilk_group_free()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_group_free </td>
+          <td class="memname">void csilk_group_free </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -186,16 +186,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a77697d41cd807b19163e630ddcbe1b69" name="a77697d41cd807b19163e630ddcbe1b69"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a77697d41cd807b19163e630ddcbe1b69">&#9670;&#160;</a></span>gin_group_group()</h2>
+<a id="a27a5f0b57f089eae72984b3c8186c104" name="a27a5f0b57f089eae72984b3c8186c104"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a27a5f0b57f089eae72984b3c8186c104">&#9670;&#160;</a></span>csilk_group_group()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> * gin_group_group </td>
+          <td class="memname"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> * csilk_group_group </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>parent</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>parent</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -217,16 +217,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a61fdabf12c2b3b57bc50342695531736" name="a61fdabf12c2b3b57bc50342695531736"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a61fdabf12c2b3b57bc50342695531736">&#9670;&#160;</a></span>gin_group_new()</h2>
+<a id="a910e8b5b110e57dd47502491427f65e7" name="a910e8b5b110e57dd47502491427f65e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a910e8b5b110e57dd47502491427f65e7">&#9670;&#160;</a></span>csilk_group_new()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> * gin_group_new </td>
+          <td class="memname"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> * csilk_group_new </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>router</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>router</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -248,21 +248,21 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a1a532b39372da3d40181563bc21b9b7c" name="a1a532b39372da3d40181563bc21b9b7c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1a532b39372da3d40181563bc21b9b7c">&#9670;&#160;</a></span>gin_group_use()</h2>
+<a id="ada6a189485c23b06f5056ccf62d4fb30" name="ada6a189485c23b06f5056ccf62d4fb30"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ada6a189485c23b06f5056ccf62d4fb30">&#9670;&#160;</a></span>csilk_group_use()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_group_use </td>
+          <td class="memname">void csilk_group_use </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#afd512684205cd95459f1f028a278dff8">gin_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd">csilk_group_t</a> *</td>          <td class="paramname"><span class="paramname"><em>group</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a></td>          <td class="paramname"><span class="paramname"><em>handler</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a></td>          <td class="paramname"><span class="paramname"><em>handler</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -13,21 +13,21 @@ Thread-\/safe logging with rotation and source location.
 {\ttfamily \+\#include $<$unistd.\+h$>$}\newline
 {\ttfamily \+\#include $<$sys/\+stat.\+h$>$}\newline
 {\ttfamily \+\#include $<$uv.\+h$>$}\newline
-{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk.\+h"{}}\newline
 \doxysubsubsection*{Classes}
 \begin{DoxyCompactItemize}
 \item 
-struct \doxymbox{\hyperlink{structgin__logger__t}{gin\+\_\+logger\+\_\+t}}
+struct \doxymbox{\hyperlink{structcsilk__logger__t}{csilk\+\_\+logger\+\_\+t}}
 \begin{DoxyCompactList}\small\item\em Internal global logger state. \end{DoxyCompactList}\end{DoxyCompactItemize}
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-int \doxymbox{\hyperlink{logger_8c_a4146824cff8cbdf8a491b5d8730437ac}{gin\+\_\+log\+\_\+init}} (\doxymbox{\hyperlink{structgin__log__config__t}{gin\+\_\+log\+\_\+config\+\_\+t}} config)
+int \doxymbox{\hyperlink{logger_8c_a842c19b0fdc84e576924b762d4ace71a}{csilk\+\_\+log\+\_\+init}} (\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}} config)
 \begin{DoxyCompactList}\small\item\em Initialize the global logger with config. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{logger_8c_a5321a3d676521280ee7f8a4211d29d67}{\+\_\+gin\+\_\+log\+\_\+internal}} (\doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6e}{gin\+\_\+log\+\_\+level\+\_\+t}} level, const char \texorpdfstring{$\ast$}{*}file, int line, const char \texorpdfstring{$\ast$}{*}func, const char \texorpdfstring{$\ast$}{*}fmt,...)
+void \doxymbox{\hyperlink{logger_8c_a9d335f994386f18f92c261173af6caa9}{\+\_\+gin\+\_\+log\+\_\+internal}} (\doxymbox{\hyperlink{csilk_8h_ab3f37cbd51892721b84e3558cdd9c066}{csilk\+\_\+log\+\_\+level\+\_\+t}} level, const char \texorpdfstring{$\ast$}{*}file, int line, const char \texorpdfstring{$\ast$}{*}func, const char \texorpdfstring{$\ast$}{*}fmt,...)
 \begin{DoxyCompactList}\small\item\em Internal log function (use macros instead). \end{DoxyCompactList}\item 
-\Hypertarget{logger_8c_a2c67982a89a392166574f9905cec9c21}\label{logger_8c_a2c67982a89a392166574f9905cec9c21} 
-void {\bfseries gin\+\_\+log\+\_\+close} ()
+\Hypertarget{logger_8c_aa58966bae2873462e4c4b7e54386cf45}\label{logger_8c_aa58966bae2873462e4c4b7e54386cf45} 
+void {\bfseries csilk\+\_\+log\+\_\+close} ()
 \begin{DoxyCompactList}\small\item\em Close the global logger. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
 
@@ -39,11 +39,11 @@ Thread-\/safe logging with rotation and source location.
 \label{doc-func-members}
 \Hypertarget{logger_8c_doc-func-members}
 \doxysubsection{Function Documentation}
-\Hypertarget{logger_8c_a5321a3d676521280ee7f8a4211d29d67}\index{logger.c@{logger.c}!\_gin\_log\_internal@{\_gin\_log\_internal}}
+\Hypertarget{logger_8c_a9d335f994386f18f92c261173af6caa9}\index{logger.c@{logger.c}!\_gin\_log\_internal@{\_gin\_log\_internal}}
 \index{\_gin\_log\_internal@{\_gin\_log\_internal}!logger.c@{logger.c}}
 \doxysubsubsection{\texorpdfstring{\_gin\_log\_internal()}{\_gin\_log\_internal()}}
-{\footnotesize\ttfamily \label{logger_8c_a5321a3d676521280ee7f8a4211d29d67} 
-void \+\_\+gin\+\_\+log\+\_\+internal (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6e}{gin\+\_\+log\+\_\+level\+\_\+t}}}]{level}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{file}{, }\item[{int}]{line}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{func}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{fmt}{, }\item[{}]{...}{}\end{DoxyParamCaption})}
+{\footnotesize\ttfamily \label{logger_8c_a9d335f994386f18f92c261173af6caa9} 
+void \+\_\+gin\+\_\+log\+\_\+internal (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_ab3f37cbd51892721b84e3558cdd9c066}{csilk\+\_\+log\+\_\+level\+\_\+t}}}]{level}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{file}{, }\item[{int}]{line}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{func}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{fmt}{, }\item[{}]{...}{}\end{DoxyParamCaption})}
 
 
 
@@ -64,11 +64,11 @@ Internal log function (use macros instead).
 {\em ...} & Format arguments. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{logger_8c_a4146824cff8cbdf8a491b5d8730437ac}\index{logger.c@{logger.c}!gin\_log\_init@{gin\_log\_init}}
-\index{gin\_log\_init@{gin\_log\_init}!logger.c@{logger.c}}
-\doxysubsubsection{\texorpdfstring{gin\_log\_init()}{gin\_log\_init()}}
-{\footnotesize\ttfamily \label{logger_8c_a4146824cff8cbdf8a491b5d8730437ac} 
-int gin\+\_\+log\+\_\+init (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{structgin__log__config__t}{gin\+\_\+log\+\_\+config\+\_\+t}}}]{config}{}\end{DoxyParamCaption})}
+\Hypertarget{logger_8c_a842c19b0fdc84e576924b762d4ace71a}\index{logger.c@{logger.c}!csilk\_log\_init@{csilk\_log\_init}}
+\index{csilk\_log\_init@{csilk\_log\_init}!logger.c@{logger.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_log\_init()}{csilk\_log\_init()}}
+{\footnotesize\ttfamily \label{logger_8c_a842c19b0fdc84e576924b762d4ace71a} 
+int csilk\+\_\+log\+\_\+init (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}}}]{config}{}\end{DoxyParamCaption})}
 
 
 

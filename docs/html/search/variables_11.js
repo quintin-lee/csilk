@@ -1,10 +1,10 @@
 var searchData=
 [
-  ['rate_5flimit_0',['rate_limit',['../structgin__config__t.html#a42f310dd9f469f69029b6d5c8f59fc6b',1,'gin_config_t']]],
-  ['request_1',['request',['../structgin__ctx__s.html#a8345148b2cb3fc8db451fdfc304c3670',1,'gin_ctx_s']]],
-  ['requests_5fper_5fminute_2',['requests_per_minute',['../structgin__config__t.html#aaa7140dddcfacf0e24bdec914c72a682',1,'gin_config_t']]],
-  ['response_3',['response',['../structgin__ctx__s.html#a7ded2e0a123c9251866b6d9ea1fd14c1',1,'gin_ctx_s']]],
-  ['root_4',['root',['../structgin__router__s.html#aa89e4e54640d00daebcdc792a134a1c9',1,'gin_router_s']]],
-  ['root_5fdir_5',['root_dir',['../structgin__config__t.html#adda27163c3bffcb83faf986e170cdb0a',1,'gin_config_t']]],
-  ['router_6',['router',['../structgin__group__s.html#a6855d1e21b2d23d7ffffe9f56bb76ae4',1,'gin_group_s::router'],['../structgin__server__s.html#a3f54a981e43b8522fee49437ee486beb',1,'gin_server_s::router']]]
+  ['rate_5flimit_0',['rate_limit',['../structcsilk__config__t.html#a87edb516d3fc13acc2e57cfdcf576e2d',1,'csilk_config_t']]],
+  ['request_1',['request',['../structcsilk__ctx__s.html#a3a8cbbac27d729d8b0dfb428e4e874a4',1,'csilk_ctx_s']]],
+  ['requests_5fper_5fminute_2',['requests_per_minute',['../structcsilk__config__t.html#ab041cbd52b37b9030751c78d8b96befb',1,'csilk_config_t']]],
+  ['response_3',['response',['../structcsilk__ctx__s.html#a5c50997b4fa95d94654d873316069f16',1,'csilk_ctx_s']]],
+  ['root_4',['root',['../structcsilk__router__s.html#a797efc5df28d7f5c61bf2e8038a28af9',1,'csilk_router_s']]],
+  ['root_5fdir_5',['root_dir',['../structcsilk__config__t.html#a1cd9fcfc03122ca3ba46e700eaa270ea',1,'csilk_config_t']]],
+  ['router_6',['router',['../structcsilk__group__s.html#a95cd38ba4150355df05599cacfd18f0f',1,'csilk_group_s::router'],['../structcsilk__server__s.html#aed27983eeefe4bf1b474436c1eb8a3ac',1,'csilk_server_s::router']]]
 ];

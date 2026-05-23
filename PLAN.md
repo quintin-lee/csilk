@@ -1,28 +1,28 @@
-# c-gin-framework 完善计划
+# csilk 完善计划
 
 ## P0 - 严重缺陷 (已修复 ✓)
 
-- [x] **修复响应头被忽略的 bug** — `gin_set_header()` 设置的响应头在 `on_message_complete` 中从未被序列化到 HTTP 响应中，所有自定义响应头实际上被静默忽略
+- [x] **修复响应头被忽略的 bug** — `csilk_set_header()` 设置的响应头在 `on_message_complete` 中从未被序列化到 HTTP 响应中，所有自定义响应头实际上被静默忽略
   - 修改: `src/server.c:on_message_complete()` — 遍历 `ctx.response.headers` 链表并写入响应
-- [x] **修复 README 示例语法错误** — README 中使用 `^(gin_ctx_t* ctx) { ... }` 的 block 语法在 C11 中非法，应改为标准函数指针语法
+- [x] **修复 README 示例语法错误** — README 中使用 `^(csilk_ctx_t* ctx) { ... }` 的 block 语法在 C11 中非法，应改为标准函数指针语法
   - 修改: `README.md` — 所有示例改用标准 C 函数，匹配实际 API
 - [x] **修复 llhttp ABI 不匹配** — 系统安装 llhttp 9.3 而 FetchContent 拉取 9.2，导致 `on_protocol` 字段偏移差异使 `on_url` 回调失效
   - 修改: `CMakeLists.txt` — 改用系统 llhttp 库，消除 ABI 冲突
 
 ## P1 - 核心功能增强
 
-- [x] **优雅关闭** — 添加 `SIGINT`/`SIGTERM` 信号处理 + `gin_server_stop()` 线程安全停止
-  - 新增: `src/server.c` — `on_signal()`, `on_async_stop()` 回调, `gin_server_stop()` 公共 API
-  - 新增: `include/gin.h` — `gin_server_stop()` 声明
-- [x] **超时与限制可配置** — 将硬编码的 idle timeout(5s)、body 大小限制(1MB)、listen backlog(128) 改为通过 `gin_server_config_t` 结构体可配置
-  - 新增: `include/gin.h` — `gin_server_config_t` 结构体, `gin_server_set_config()` 声明
+- [x] **优雅关闭** — 添加 `SIGINT`/`SIGTERM` 信号处理 + `csilk_server_stop()` 线程安全停止
+  - 新增: `src/server.c` — `on_signal()`, `on_async_stop()` 回调, `csilk_server_stop()` 公共 API
+  - 新增: `include/csilk.h` — `csilk_server_stop()` 声明
+- [x] **超时与限制可配置** — 将硬编码的 idle timeout(5s)、body 大小限制(1MB)、listen backlog(128) 改为通过 `csilk_server_config_t` 结构体可配置
+  - 新增: `include/csilk.h` — `csilk_server_config_t` 结构体, `csilk_server_set_config()` 声明
   - 修改: `src/server.c` — 所有硬编码常量替换为 `server->config.*`
 - [x] **CORS 中间件** — 实现标准 CORS 中间件，支持可配置的 Origin/Methods/Headers/Credentials/Max-Age
-  - 新增: `src/middleware/cors.c` — `gin_cors_middleware()` 实现
-  - 新增: `include/gin.h` — `gin_cors_config_t`, `gin_cors_middleware()` 声明
-- [x] **丰富 JSON API** — 添加 `gin_bind_json_err()` (带错误反馈) 和 `gin_json_error()` (JSON 错误响应)
-  - 新增: `src/context.c` — `gin_bind_json_err()`, `gin_json_error()`
-  - 新增: `include/gin.h` — 对应声明
+  - 新增: `src/middleware/cors.c` — `csilk_cors_middleware()` 实现
+  - 新增: `include/csilk.h` — `csilk_cors_config_t`, `csilk_cors_middleware()` 声明
+- [x] **丰富 JSON API** — 添加 `csilk_bind_json_err()` (带错误反馈) 和 `csilk_json_error()` (JSON 错误响应)
+  - 新增: `src/context.c` — `csilk_bind_json_err()`, `csilk_json_error()`
+  - 新增: `include/csilk.h` — 对应声明
 
 ## P2 - 测试体系
 
@@ -47,7 +47,7 @@
 
 ## P5 - 新功能 (可选)
 
-- [ ] **Cookie 支持** — `gin_get_cookie()` / `gin_set_cookie()` API
+- [ ] **Cookie 支持** — `csilk_get_cookie()` / `csilk_set_cookie()` API
 - [ ] **文件上传** — multipart/form-data 解析
 - [ ] **gzip 压缩** — 响应体压缩中间件
 - [ ] **限流中间件** — 基于 IP 或路由的速率限制

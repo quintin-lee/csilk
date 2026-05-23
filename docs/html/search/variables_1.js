@@ -1,10 +1,10 @@
 var searchData=
 [
-  ['aborted_0',['aborted',['../structgin__ctx__s.html#aecd4003a0db9efd595f17e7aaa2090cf',1,'gin_ctx_s']]],
-  ['allow_5fcredentials_1',['allow_credentials',['../structgin__cors__config__t.html#ad9f0e26cdd8f7352a1f57bca45cca66c',1,'gin_cors_config_t']]],
-  ['allow_5fheaders_2',['allow_headers',['../structgin__cors__config__t.html#a5527f3eadc2fc2da1969e110f88e2959',1,'gin_cors_config_t']]],
-  ['allow_5fmethods_3',['allow_methods',['../structgin__cors__config__t.html#a3de69ba1046fd0c5c59e0cd8df6cae32',1,'gin_cors_config_t']]],
-  ['allow_5forigin_4',['allow_origin',['../structgin__cors__config__t.html#a0dac283708fe863cc1bbb81b79ba71ae',1,'gin_cors_config_t']]],
-  ['arena_5',['arena',['../structgin__ctx__s.html#ad8d8b329909cb64d0b186815846c0729',1,'gin_ctx_s']]],
-  ['async_5fhandle_6',['async_handle',['../structgin__server__s.html#a4bdc1c89b88235dd92fdb84e8cd3b94b',1,'gin_server_s']]]
+  ['aborted_0',['aborted',['../structcsilk__ctx__s.html#af5ed6a60668fee907c92737c4ce1d1a9',1,'csilk_ctx_s']]],
+  ['allow_5fcredentials_1',['allow_credentials',['../structcsilk__cors__config__t.html#abeb7e36eeb4110c847246993ea8ad4f7',1,'csilk_cors_config_t']]],
+  ['allow_5fheaders_2',['allow_headers',['../structcsilk__cors__config__t.html#a886a567e7f3304ed50381f6cbbe297a4',1,'csilk_cors_config_t']]],
+  ['allow_5fmethods_3',['allow_methods',['../structcsilk__cors__config__t.html#a0eebe37f8d0896e838b4814971d8a7eb',1,'csilk_cors_config_t']]],
+  ['allow_5forigin_4',['allow_origin',['../structcsilk__cors__config__t.html#acd4e353aa59b0f38f358bf0b1741a6f0',1,'csilk_cors_config_t']]],
+  ['arena_5',['arena',['../structcsilk__ctx__s.html#a15bf681fbf7cb955fa876969b1fcccb5',1,'csilk_ctx_s']]],
+  ['async_5fhandle_6',['async_handle',['../structcsilk__server__s.html#a0c2ee5c0944eca30e8f30cd52be7e8c4',1,'csilk_server_s']]]
 ];

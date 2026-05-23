@@ -6,41 +6,41 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include "gin.h"
+#include "csilk.h"
 
 #define PORT 8097
 #define BUFSIZE 8192
 
 static volatile int server_ready = 0;
-static gin_server_t* g_server = NULL;
+static csilk_server_t* g_server = NULL;
 
-static void echo_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "ok");
+static void echo_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "ok");
 }
 
-static void param_handler(gin_ctx_t* c) {
-    const char* id = gin_get_param(c, "id");
-    const char* q = gin_get_query(c, "q");
+static void param_handler(csilk_ctx_t* c) {
+    const char* id = csilk_get_param(c, "id");
+    const char* q = csilk_get_query(c, "q");
     char resp[512];
     snprintf(resp, sizeof(resp), "id=%s q=%s", id ? id : "", q ? q : "");
-    gin_string(c, 200, resp);
+    csilk_string(c, 200, resp);
 }
 
 static void* run_server(void* arg) {
     (void)arg;
-    gin_router_t* r = gin_router_new();
-    gin_handler_t h1[] = {echo_handler};
-    gin_router_add(r, "GET", "/", h1, 1);
-    gin_handler_t h2[] = {param_handler};
-    gin_router_add(r, "GET", "/search", h2, 1);
-    gin_handler_t h3[] = {param_handler};
-    gin_router_add(r, "GET", "/users/:id", h3, 1);
+    csilk_router_t* r = csilk_router_new();
+    csilk_handler_t h1[] = {echo_handler};
+    csilk_router_add(r, "GET", "/", h1, 1);
+    csilk_handler_t h2[] = {param_handler};
+    csilk_router_add(r, "GET", "/search", h2, 1);
+    csilk_handler_t h3[] = {param_handler};
+    csilk_router_add(r, "GET", "/users/:id", h3, 1);
 
-    g_server = gin_server_new(r);
+    g_server = csilk_server_new(r);
     server_ready = 1;
-    gin_server_run(g_server, PORT);
-    gin_server_free(g_server);
-    gin_router_free(r);
+    csilk_server_run(g_server, PORT);
+    csilk_server_free(g_server);
+    csilk_router_free(r);
     return NULL;
 }
 
@@ -153,7 +153,7 @@ int main() {
 
     printf("\nEdge case tests: %d passed, %d failed\n", passed, failed);
 
-    gin_server_stop(g_server);
+    csilk_server_stop(g_server);
     pthread_join(thread, NULL);
     return failed > 0 ? 1 : 0;
 }

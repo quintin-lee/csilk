@@ -1,0 +1,79 @@
+\doxysection{csilk\+\_\+server\+\_\+s Struct Reference}
+\hypertarget{structcsilk__server__s}{}\label{structcsilk__server__s}\index{csilk\_server\_s@{csilk\_server\_s}}
+
+
+Server structure.  
+
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+uv\+\_\+loop\+\_\+t \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__server__s_ac49c36db0c035242276748109cc87481}{loop}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_a85c477ce92b8be8ddd93963e3fd07625}{csilk\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__server__s_aed27983eeefe4bf1b474436c1eb8a3ac}{router}}
+\item 
+uv\+\_\+tcp\+\_\+t \doxymbox{\hyperlink{structcsilk__server__s_a41e7ad559df84e29413ce2b85533873f}{server\+\_\+handle}}
+\item 
+uv\+\_\+signal\+\_\+t \doxymbox{\hyperlink{structcsilk__server__s_adb340e1f60a5a2dc93d7a94ca4583e71}{sig\+\_\+handle}}
+\item 
+uv\+\_\+async\+\_\+t \doxymbox{\hyperlink{structcsilk__server__s_a0c2ee5c0944eca30e8f30cd52be7e8c4}{async\+\_\+handle}}
+\item 
+llhttp\+\_\+settings\+\_\+t \doxymbox{\hyperlink{structcsilk__server__s_a0fde9f180743a57a5626d68f94ad09c5}{settings}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}} \doxymbox{\hyperlink{structcsilk__server__s_a6388942ca1c1e3edacf06d1c46d9bad2}{config}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Server structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__server__s_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__server__s_a0c2ee5c0944eca30e8f30cd52be7e8c4}\index{csilk\_server\_s@{csilk\_server\_s}!async\_handle@{async\_handle}}
+\index{async\_handle@{async\_handle}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{async\_handle}{async\_handle}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_a0c2ee5c0944eca30e8f30cd52be7e8c4} 
+uv\+\_\+async\+\_\+t csilk\+\_\+server\+\_\+s::\+async\+\_\+handle}
+
+Async handle for cross-\/thread wakeup. \Hypertarget{structcsilk__server__s_a6388942ca1c1e3edacf06d1c46d9bad2}\index{csilk\_server\_s@{csilk\_server\_s}!config@{config}}
+\index{config@{config}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{config}{config}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_a6388942ca1c1e3edacf06d1c46d9bad2} 
+\doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}} csilk\+\_\+server\+\_\+s::\+config}
+
+Server configuration. \Hypertarget{structcsilk__server__s_ac49c36db0c035242276748109cc87481}\index{csilk\_server\_s@{csilk\_server\_s}!loop@{loop}}
+\index{loop@{loop}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{loop}{loop}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_ac49c36db0c035242276748109cc87481} 
+uv\+\_\+loop\+\_\+t\texorpdfstring{$\ast$}{*} csilk\+\_\+server\+\_\+s::\+loop}
+
+libuv event loop. \Hypertarget{structcsilk__server__s_aed27983eeefe4bf1b474436c1eb8a3ac}\index{csilk\_server\_s@{csilk\_server\_s}!router@{router}}
+\index{router@{router}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{router}{router}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_aed27983eeefe4bf1b474436c1eb8a3ac} 
+\doxymbox{\hyperlink{csilk_8h_a85c477ce92b8be8ddd93963e3fd07625}{csilk\+\_\+router\+\_\+t}}\texorpdfstring{$\ast$}{*} csilk\+\_\+server\+\_\+s::\+router}
+
+Associated router instance. \Hypertarget{structcsilk__server__s_a41e7ad559df84e29413ce2b85533873f}\index{csilk\_server\_s@{csilk\_server\_s}!server\_handle@{server\_handle}}
+\index{server\_handle@{server\_handle}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{server\_handle}{server\_handle}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_a41e7ad559df84e29413ce2b85533873f} 
+uv\+\_\+tcp\+\_\+t csilk\+\_\+server\+\_\+s::\+server\+\_\+handle}
+
+TCP server handle. \Hypertarget{structcsilk__server__s_a0fde9f180743a57a5626d68f94ad09c5}\index{csilk\_server\_s@{csilk\_server\_s}!settings@{settings}}
+\index{settings@{settings}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{settings}{settings}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_a0fde9f180743a57a5626d68f94ad09c5} 
+llhttp\+\_\+settings\+\_\+t csilk\+\_\+server\+\_\+s::\+settings}
+
+HTTP parser callback settings. \Hypertarget{structcsilk__server__s_adb340e1f60a5a2dc93d7a94ca4583e71}\index{csilk\_server\_s@{csilk\_server\_s}!sig\_handle@{sig\_handle}}
+\index{sig\_handle@{sig\_handle}!csilk\_server\_s@{csilk\_server\_s}}
+\doxysubsubsection{\texorpdfstring{sig\_handle}{sig\_handle}}
+{\footnotesize\ttfamily \label{structcsilk__server__s_adb340e1f60a5a2dc93d7a94ca4583e71} 
+uv\+\_\+signal\+\_\+t csilk\+\_\+server\+\_\+s::\+sig\+\_\+handle}
+
+SIGINT signal handler. 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+src/\+\doxymbox{\hyperlink{server_8c}{server.\+c}}\end{DoxyCompactItemize}

@@ -2,17 +2,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "gin.h"
+#include "csilk.h"
 
-// Define auth failure helper (based on typical gin behavior)
-void gin_abort_with_status(gin_ctx_t* c, int status) {
-  gin_status(c, status);
-  gin_abort(c);
+// Define auth failure helper (based on typical csilk behavior)
+void csilk_abort_with_status(csilk_ctx_t* c, int status) {
+  csilk_status(c, status);
+  csilk_abort(c);
 }
 
 // Helper to add request header
-void add_request_header(gin_ctx_t* c, const char* key, const char* value) {
-  gin_header_t* h = malloc(sizeof(gin_header_t));
+void add_request_header(csilk_ctx_t* c, const char* key, const char* value) {
+  csilk_header_t* h = malloc(sizeof(csilk_header_t));
   h->key = strdup(key);
   h->value = strdup(value);
   h->next = c->request.headers;
@@ -22,14 +22,14 @@ void add_request_header(gin_ctx_t* c, const char* key, const char* value) {
 // Minimal test setup
 int validate_success(const char* token) { return strcmp(token, "secret") == 0; }
 
-void handler(gin_ctx_t* c) {
-  gin_auth_middleware(c, validate_success);
+void handler(csilk_ctx_t* c) {
+  csilk_auth_middleware(c, validate_success);
   if (c->aborted) return;
-  gin_string(c, 200, "authorized");
+  csilk_string(c, 200, "authorized");
 }
 
 int main() {
-  gin_ctx_t c;
+  csilk_ctx_t c;
   memset(&c, 0, sizeof(c));
 
   // Test 1: No header
@@ -62,6 +62,6 @@ int main() {
   }
   printf("Test 3 Passed: Correct token results in 200\n");
 
-  gin_ctx_cleanup(&c);
+  csilk_ctx_cleanup(&c);
   return 0;
 }

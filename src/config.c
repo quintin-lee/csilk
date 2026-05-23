@@ -7,22 +7,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yaml.h>
-#include "gin.h"
+#include "csilk.h"
 
 /** @brief Convert a string to a log level enum value.
  * @param s Log level string (case-insensitive).
- * @return Corresponding gin_log_level_t value, defaults to GIN_LOG_INFO. */
-static gin_log_level_t string_to_log_level(const char* s) {
-    if (strcasecmp(s, "TRACE") == 0) return GIN_LOG_TRACE;
-    if (strcasecmp(s, "DEBUG") == 0) return GIN_LOG_DEBUG;
-    if (strcasecmp(s, "INFO") == 0) return GIN_LOG_INFO;
-    if (strcasecmp(s, "WARN") == 0) return GIN_LOG_WARN;
-    if (strcasecmp(s, "ERROR") == 0) return GIN_LOG_ERROR;
-    if (strcasecmp(s, "FATAL") == 0) return GIN_LOG_FATAL;
-    return GIN_LOG_INFO;
+ * @return Corresponding csilk_log_level_t value, defaults to CSILK_LOG_INFO. */
+static csilk_log_level_t string_to_log_level(const char* s) {
+    if (strcasecmp(s, "TRACE") == 0) return CSILK_LOG_TRACE;
+    if (strcasecmp(s, "DEBUG") == 0) return CSILK_LOG_DEBUG;
+    if (strcasecmp(s, "INFO") == 0) return CSILK_LOG_INFO;
+    if (strcasecmp(s, "WARN") == 0) return CSILK_LOG_WARN;
+    if (strcasecmp(s, "ERROR") == 0) return CSILK_LOG_ERROR;
+    if (strcasecmp(s, "FATAL") == 0) return CSILK_LOG_FATAL;
+    return CSILK_LOG_INFO;
 }
 
-int gin_load_config(const char* yaml_path, gin_config_t* config) {
+int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
     if (!yaml_path || !config) return -1;
 
     FILE* fh = fopen(yaml_path, "rb");
@@ -42,13 +42,13 @@ int gin_load_config(const char* yaml_path, gin_config_t* config) {
     char* current_section = NULL;
 
     // Default values
-    memset(config, 0, sizeof(gin_config_t));
+    memset(config, 0, sizeof(csilk_config_t));
     config->port = 8080;
     config->server.idle_timeout_ms = 5000;
     config->server.max_body_size = 1024 * 1024;
     config->server.listen_backlog = 128;
     config->server.tcp_nodelay = 1;
-    config->logger.level = GIN_LOG_INFO;
+    config->logger.level = CSILK_LOG_INFO;
     config->logger.use_colors = -1;
 
     int done = 0;

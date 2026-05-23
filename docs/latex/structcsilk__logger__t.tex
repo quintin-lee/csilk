@@ -1,0 +1,63 @@
+\doxysection{csilk\+\_\+logger\+\_\+t Struct Reference}
+\hypertarget{structcsilk__logger__t}{}\label{structcsilk__logger__t}\index{csilk\_logger\_t@{csilk\_logger\_t}}
+
+
+Internal global logger state.  
+
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}} \doxymbox{\hyperlink{structcsilk__logger__t_af2963be546339bc19d773f0ecab346be}{config}}
+\item 
+FILE \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__logger__t_a30dc02887a025c4d8ed3c691a9616bcb}{fp}}
+\item 
+size\+\_\+t \doxymbox{\hyperlink{structcsilk__logger__t_a425950b01bac82ac212aec5441a393fe}{current\+\_\+size}}
+\item 
+uv\+\_\+mutex\+\_\+t \doxymbox{\hyperlink{structcsilk__logger__t_a5bd745a3879ff4fc41b2c2cb46d96e6e}{mutex}}
+\item 
+int \doxymbox{\hyperlink{structcsilk__logger__t_ab5c32a6c28c6a542072c736145a1aec5}{initialized}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Internal global logger state. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__logger__t_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__logger__t_af2963be546339bc19d773f0ecab346be}\index{csilk\_logger\_t@{csilk\_logger\_t}!config@{config}}
+\index{config@{config}!csilk\_logger\_t@{csilk\_logger\_t}}
+\doxysubsubsection{\texorpdfstring{config}{config}}
+{\footnotesize\ttfamily \label{structcsilk__logger__t_af2963be546339bc19d773f0ecab346be} 
+\doxymbox{\hyperlink{structcsilk__log__config__t}{csilk\+\_\+log\+\_\+config\+\_\+t}} csilk\+\_\+logger\+\_\+t::\+config}
+
+Logger configuration. \Hypertarget{structcsilk__logger__t_a425950b01bac82ac212aec5441a393fe}\index{csilk\_logger\_t@{csilk\_logger\_t}!current\_size@{current\_size}}
+\index{current\_size@{current\_size}!csilk\_logger\_t@{csilk\_logger\_t}}
+\doxysubsubsection{\texorpdfstring{current\_size}{current\_size}}
+{\footnotesize\ttfamily \label{structcsilk__logger__t_a425950b01bac82ac212aec5441a393fe} 
+size\+\_\+t csilk\+\_\+logger\+\_\+t::\+current\+\_\+size}
+
+Current log file size for rotation. \Hypertarget{structcsilk__logger__t_a30dc02887a025c4d8ed3c691a9616bcb}\index{csilk\_logger\_t@{csilk\_logger\_t}!fp@{fp}}
+\index{fp@{fp}!csilk\_logger\_t@{csilk\_logger\_t}}
+\doxysubsubsection{\texorpdfstring{fp}{fp}}
+{\footnotesize\ttfamily \label{structcsilk__logger__t_a30dc02887a025c4d8ed3c691a9616bcb} 
+FILE\texorpdfstring{$\ast$}{*} csilk\+\_\+logger\+\_\+t::\+fp}
+
+Output file pointer (stdout or file). \Hypertarget{structcsilk__logger__t_ab5c32a6c28c6a542072c736145a1aec5}\index{csilk\_logger\_t@{csilk\_logger\_t}!initialized@{initialized}}
+\index{initialized@{initialized}!csilk\_logger\_t@{csilk\_logger\_t}}
+\doxysubsubsection{\texorpdfstring{initialized}{initialized}}
+{\footnotesize\ttfamily \label{structcsilk__logger__t_ab5c32a6c28c6a542072c736145a1aec5} 
+int csilk\+\_\+logger\+\_\+t::\+initialized}
+
+Flag indicating logger is initialized. \Hypertarget{structcsilk__logger__t_a5bd745a3879ff4fc41b2c2cb46d96e6e}\index{csilk\_logger\_t@{csilk\_logger\_t}!mutex@{mutex}}
+\index{mutex@{mutex}!csilk\_logger\_t@{csilk\_logger\_t}}
+\doxysubsubsection{\texorpdfstring{mutex}{mutex}}
+{\footnotesize\ttfamily \label{structcsilk__logger__t_a5bd745a3879ff4fc41b2c2cb46d96e6e} 
+uv\+\_\+mutex\+\_\+t csilk\+\_\+logger\+\_\+t::\+mutex}
+
+Mutex for thread safety. 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+src/\+\doxymbox{\hyperlink{logger_8c}{logger.\+c}}\end{DoxyCompactItemize}

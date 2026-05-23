@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['key_0',['key',['../structgin__header__s.html#a95ea331fa294c46689d9fee1b3bf1306',1,'gin_header_s::key'],['../structgin__param__t.html#afe2ad2b853b7d7a815cccbd338b2212d',1,'gin_param_t::key']]]
+  ['key_0',['key',['../structcsilk__header__s.html#a530e63ae46677be86074e89d5c86cc3b',1,'csilk_header_s::key'],['../structcsilk__param__t.html#ac3073bd7d64ac0fc3ab01b6d4ac6f7c5',1,'csilk_param_t::key']]]
 ];

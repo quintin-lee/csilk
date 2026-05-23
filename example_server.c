@@ -3,7 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
-#include "gin.h"
+#include "csilk.h"
 
 // Mock authentication validator
 int mock_auth_validator(const char* token) {
@@ -12,28 +12,28 @@ int mock_auth_validator(const char* token) {
 }
 
 // Handler for GET /
-void hello_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "Hello, World! Welcome to the C Gin Framework.");
+void hello_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "Hello, World! Welcome to the C Csilk Framework.");
 }
 
 // Handler for GET /user/:id
-void user_handler(gin_ctx_t* c) {
-    const char* user_id = gin_get_param(c, "id");
+void user_handler(csilk_ctx_t* c) {
+    const char* user_id = csilk_get_param(c, "id");
     if (user_id) {
         char response[256];
         snprintf(response, sizeof(response), "User ID: %s", user_id);
-        gin_string(c, 200, response);
+        csilk_string(c, 200, response);
     } else {
-        gin_string(c, 400, "Missing user ID");
+        csilk_string(c, 400, "Missing user ID");
     }
 }
 
 // Handler for POST /login
-void login_handler(gin_ctx_t* c) {
+void login_handler(csilk_ctx_t* c) {
     // Parse JSON body
-    cJSON* json = gin_bind_json(c);
+    cJSON* json = csilk_bind_json(c);
     if (!json) {
-        gin_string(c, 400, "Invalid JSON");
+        csilk_string(c, 400, "Invalid JSON");
         return;
     }
     
@@ -43,7 +43,7 @@ void login_handler(gin_ctx_t* c) {
     
     if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
         cJSON_Delete(json);
-        gin_string(c, 400, "Username and password required");
+        csilk_string(c, 400, "Username and password required");
         return;
     }
     
@@ -55,27 +55,27 @@ void login_handler(gin_ctx_t* c) {
         cJSON* response = cJSON_CreateObject();
         cJSON_AddStringToObject(response, "token", "secret123");
         cJSON_AddStringToObject(response, "message", "Login successful");
-        gin_json(c, 200, response);
+        csilk_json(c, 200, response);
     } else {
-        gin_string(c, 401, "Invalid credentials");
+        csilk_string(c, 401, "Invalid credentials");
     }
     
     cJSON_Delete(json);
 }
 
 // Handler for GET /protected (requires auth)
-void protected_handler(gin_ctx_t* c) {
-    const char* token = gin_get_header(c, "Authorization");
+void protected_handler(csilk_ctx_t* c) {
+    const char* token = csilk_get_header(c, "Authorization");
     if (!token || !mock_auth_validator(token)) {
-        gin_string(c, 401, "Unauthorized");
+        csilk_string(c, 401, "Unauthorized");
         return;
     }
     
-    gin_string(c, 200, "This is a protected resource. You have valid credentials.");
+    csilk_string(c, 200, "This is a protected resource. You have valid credentials.");
 }
 
 // Handler for GET /api/data
-void api_data_handler(gin_ctx_t* c) {
+void api_data_handler(csilk_ctx_t* c) {
     // Create sample data
     cJSON* data = cJSON_CreateObject();
     cJSON_AddNumberToObject(data, "id", 1);
@@ -92,11 +92,11 @@ void api_data_handler(gin_ctx_t* c) {
     time_t now = time(NULL);
     cJSON_AddNumberToObject(data, "timestamp", (double)now);
     
-    gin_json(c, 200, data);
+    csilk_json(c, 200, data);
 }
 
 // Custom middleware to add request ID
-void request_id_middleware(gin_ctx_t* c) {
+void request_id_middleware(csilk_ctx_t* c) {
     // In a real implementation, you'd generate a proper UUID
     static int request_counter = 0;
     request_counter++;
@@ -104,13 +104,13 @@ void request_id_middleware(gin_ctx_t* c) {
     // For demo, we'll just log it
     printf("[MIDDLEWARE] Request ID: %d\n", request_counter);
     
-    gin_next(c);
+    csilk_next(c);
 }
 
 // Custom middleware to log request time
-void request_timer_middleware(gin_ctx_t* c) {
+void request_timer_middleware(csilk_ctx_t* c) {
     clock_t start = clock();
-    gin_next(c);
+    csilk_next(c);
     clock_t end = clock();
     
     double duration = ((double)(end - start)) / CLOCKS_PER_SEC;
@@ -118,7 +118,7 @@ void request_timer_middleware(gin_ctx_t* c) {
 }
 
 int main(int argc, char* argv[]) {
-    gin_config_t cfg;
+    csilk_config_t cfg;
     const char* config_file = "config.yaml";
     
     if (argc > 1) {
@@ -126,11 +126,11 @@ int main(int argc, char* argv[]) {
     }
 
     printf("Loading config from %s...\n", config_file);
-    if (gin_load_config(config_file, &cfg) != 0) {
+    if (csilk_load_config(config_file, &cfg) != 0) {
         printf("Config file not found or invalid, using defaults.\n");
         // Manual defaults if config fails
         cfg.port = 8080;
-        cfg.logger.level = GIN_LOG_DEBUG;
+        cfg.logger.level = CSILK_LOG_DEBUG;
         cfg.logger.file_path = NULL;
         cfg.logger.max_file_size = 0;
         cfg.logger.use_colors = -1;
@@ -140,75 +140,75 @@ int main(int argc, char* argv[]) {
     }
 
     // Initialize logger from config
-    gin_log_init(cfg.logger);
-    GIN_LOG_I("Starting C Gin Framework Example Server...");
+    csilk_log_init(cfg.logger);
+    CSILK_LOG_I("Starting C Csilk Framework Example Server...");
     
     // Create router
-    gin_router_t* router = gin_router_new();
+    csilk_router_t* router = csilk_router_new();
     if (!router) {
-        GIN_LOG_E("Failed to create router");
+        CSILK_LOG_E("Failed to create router");
         return 1;
     }
     
     // Global middleware group
-    gin_group_t* root = gin_group_new(router, "");
-    gin_group_use(root, gin_recovery_handler);
-    gin_group_use(root, gin_logger_handler);
+    csilk_group_t* root = csilk_group_new(router, "");
+    csilk_group_use(root, csilk_recovery_handler);
+    csilk_group_use(root, csilk_logger_handler);
 
     if (cfg.rate_limit.enable) {
-        GIN_LOG_I("Rate limiting enabled: %d req/min", cfg.rate_limit.requests_per_minute);
+        CSILK_LOG_I("Rate limiting enabled: %d req/min", cfg.rate_limit.requests_per_minute);
         // Note: For real use, we'd need a way to pass the limit to the middleware properly
         // For now we just show it's enabled in the log
     }
 
     // Create API group
-    gin_group_t* api_group = gin_group_group(root, "/api");
+    csilk_group_t* api_group = csilk_group_group(root, "/api");
     if (!api_group) {
-        GIN_LOG_E("Failed to create API group");
-        gin_router_free(router);
+        CSILK_LOG_E("Failed to create API group");
+        csilk_router_free(router);
         return 1;
     }
     
     // Add routes to API group
-    gin_GET(api_group, "/data", api_data_handler);
+    csilk_GET(api_group, "/data", api_data_handler);
     
     // Create protected group (auth will be handled in the handler)
-    gin_group_t* protected_group = gin_group_group(root, "");
+    csilk_group_t* protected_group = csilk_group_group(root, "");
     if (!protected_group) {
-        GIN_LOG_E("Failed to create protected group");
-        gin_group_free(api_group);
-        gin_router_free(router);
+        CSILK_LOG_E("Failed to create protected group");
+        csilk_group_free(api_group);
+        csilk_router_free(router);
         return 1;
     }
     
-    gin_GET(protected_group, "/protected", protected_handler);
+    csilk_GET(protected_group, "/protected", protected_handler);
     
     // Add routes to root
-    gin_GET(root, "/", hello_handler);
-    gin_GET(root, "/user/:id", user_handler);
-    gin_POST(root, "/login", login_handler);
+    csilk_GET(root, "/", hello_handler);
+    csilk_GET(root, "/user/:id", user_handler);
+    csilk_POST(root, "/login", login_handler);
     
     if (cfg.static_files.enable && cfg.static_files.root_dir) {
         const char* prefix = cfg.static_files.prefix ? cfg.static_files.prefix : "/static";
         char route[256];
         snprintf(route, sizeof(route), "%s/*path", prefix);
-        GIN_LOG_I("Static files enabled: %s -> %s", route, cfg.static_files.root_dir);
-        // gin_GET(root, route, ...); // Needs a way to bind root_dir
+        CSILK_LOG_I("Static files enabled: %s -> %s", route, cfg.static_files.root_dir);
+        // csilk_GET(root, route, ...); // Needs a way to bind root_dir
     }
 
     // Create server
-    gin_server_t* server = gin_server_new(router);
+    csilk_server_t* server = csilk_server_new(router);
     if (!server) {
-        GIN_LOG_E("Failed to create server");
-        gin_group_free(api_group);
-        gin_group_free(protected_group);
-        gin_group_free(root);
-        gin_router_free(router);
+        CSILK_LOG_E("Failed to create server");
+        csilk_group_free(api_group);
+        csilk_group_free(protected_group);
+        csilk_group_free(root);
+        csilk_router_free(router);
         return 1;
     }
 
     // Apply server config
-    gin_server_set_config(server, cfg.server);
+    csilk_server_set_config(server, cfg.server);
     
     printf("Server running on http://localhost:%d\n", cfg.port);
     printf("Try these endpoints:\n");
@@ -219,15 +219,15 @@ int main(int argc, char* argv[]) {
     printf("  GET  /api/data\n");
     printf("Press Ctrl+C to stop\n");
     
-    int result = gin_server_run(server, cfg.port);
+    int result = csilk_server_run(server, cfg.port);
     
     // Cleanup
-    gin_log_close();
-    gin_server_free(server);
-    gin_group_free(api_group);
-    gin_group_free(protected_group);
-    gin_group_free(root);
-    gin_router_free(router);
+    csilk_log_close();
+    csilk_server_free(server);
+    csilk_group_free(api_group);
+    csilk_group_free(protected_group);
+    csilk_group_free(root);
+    csilk_router_free(router);
     
     return result;
 }

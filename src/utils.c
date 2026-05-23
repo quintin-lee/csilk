@@ -12,7 +12,7 @@ typedef struct {
     uint32_t state[5];   /**< Intermediate hash state. */
     uint32_t count[2];   /**< Message length counter. */
     uint8_t buffer[64];   /**< Data block buffer. */
-} gin_sha1_ctx;
+} csilk_sha1_ctx;
 
 /** @brief Rotate-left bitwise operation. */
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
@@ -55,7 +55,7 @@ static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
     state[0] += a; state[1] += b; state[2] += c; state[3] += d; state[4] += e;
 }
 
-void gin_sha1_init(gin_sha1_ctx* context) {
+void csilk_sha1_init(csilk_sha1_ctx* context) {
     context->state[0] = 0x67452301;
     context->state[1] = 0xEFCDAB89;
     context->state[2] = 0x98BADCFE;
@@ -64,7 +64,7 @@ void gin_sha1_init(gin_sha1_ctx* context) {
     context->count[0] = context->count[1] = 0;
 }
 
-void gin_sha1_update(gin_sha1_ctx* context, const uint8_t* data, uint32_t len) {
+void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, uint32_t len) {
     uint32_t i, j;
     j = context->count[0];
     if ((context->count[0] += len) < j) context->count[1]++;
@@ -89,7 +89,7 @@ void gin_sha1_update(gin_sha1_ctx* context, const uint8_t* data, uint32_t len) {
     memcpy(context->buffer + left, data + i, len - i);
 }
 
-void gin_sha1_final(gin_sha1_ctx* context, uint8_t digest[20]) {
+void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
     uint8_t finalcount[8];
     uint64_t total_bits = (uint64_t)context->count[0] * 8;
     for (int i = 0; i < 8; i++) finalcount[i] = (uint8_t)((total_bits >> (56 - i * 8)) & 0xFF);
@@ -97,8 +97,8 @@ void gin_sha1_final(gin_sha1_ctx* context, uint8_t digest[20]) {
     uint32_t left = (context->count[0] % 64);
     uint32_t pad_len = (left < 56) ? (56 - left) : (120 - left);
     uint8_t padding[128] = {0x80};
-    gin_sha1_update(context, padding, pad_len);
-    gin_sha1_update(context, finalcount, 8);
+    csilk_sha1_update(context, padding, pad_len);
+    csilk_sha1_update(context, finalcount, 8);
     
     for (int i = 0; i < 20; i++) digest[i] = (uint8_t)((context->state[i >> 2] >> (24 - (i & 3) * 8)) & 0xFF);
 }
@@ -106,7 +106,7 @@ void gin_sha1_final(gin_sha1_ctx* context, uint8_t digest[20]) {
 /** @brief Base64 encoding lookup table. */
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-void gin_base64_encode(const uint8_t* src, size_t len, char* out) {
+void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
     size_t i, j;
     for (i = 0, j = 0; i < len; i += 3) {
         uint32_t v = src[i] << 16;

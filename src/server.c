@@ -10,25 +10,25 @@
 #include <string.h>
 #include <uv.h>
 
-#include "gin.h"
-#include "gin_internal.h"
+#include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
-#define GIN_DEFAULT_IDLE_TIMEOUT  5000
+#define CSILK_DEFAULT_IDLE_TIMEOUT  5000
 /** @brief Default maximum request body size in bytes. */
-#define GIN_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
+#define CSILK_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
 /** @brief Default TCP listen backlog. */
-#define GIN_DEFAULT_LISTEN_BACKLOG 128
+#define CSILK_DEFAULT_LISTEN_BACKLOG 128
 
 /** @brief Server structure. */
-struct gin_server_s {
+struct csilk_server_s {
   uv_loop_t* loop;              /**< libuv event loop. */
-  gin_router_t* router;         /**< Associated router instance. */
+  csilk_router_t* router;         /**< Associated router instance. */
   uv_tcp_t server_handle;       /**< TCP server handle. */
   uv_signal_t sig_handle;        /**< SIGINT signal handler. */
   uv_async_t async_handle;      /**< Async handle for cross-thread wakeup. */
   llhttp_settings_t settings;   /**< HTTP parser callback settings. */
-  gin_server_config_t config;   /**< Server configuration. */
+  csilk_server_config_t config;   /**< Server configuration. */
 };
 
 /** @brief Client connection structure. */
@@ -36,12 +36,12 @@ typedef struct {
   uv_tcp_t handle;                   /**< libuv TCP stream handle. */
   uv_timer_t timer;                  /**< Connection idle timer. */
   llhttp_t parser;                   /**< HTTP request parser. */
-  gin_server_t* server;              /**< Owning server instance. */
-  gin_ctx_t ctx;                     /**< Request context for this connection. */
+  csilk_server_t* server;              /**< Owning server instance. */
+  csilk_ctx_t ctx;                     /**< Request context for this connection. */
   char* current_url;                 /**< Current URL being parsed. */
   char* current_header_field;        /**< Temporary header field name. */
   char* current_header_value;        /**< Temporary header field value. */
-} gin_client_t;
+} csilk_client_t;
 
 /** @brief Buffer allocation callback.
  * @param handle UV handle.
@@ -57,12 +57,12 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 /** @brief Timer close callback.
  * @param handle Handle to close. */
 static void on_timer_close(uv_handle_t* handle) {
-  gin_client_t* client = (gin_client_t*)handle->data;
+  csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
     if (client->ctx.request.path) {
       free((void*)client->ctx.request.path);
     }
-    gin_ctx_cleanup(&client->ctx);
+    csilk_ctx_cleanup(&client->ctx);
     free(client->ctx.response.headers);
     free(client->current_header_field);
     free(client->current_header_value);
@@ -75,7 +75,7 @@ static void on_timer_close(uv_handle_t* handle) {
  * @param handle UV handle associated with client connection.
  */
 static void on_close(uv_handle_t* handle) {
-  gin_client_t* client = (gin_client_t*)handle->data;
+  csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
     uv_timer_stop(&client->timer);
     if (!uv_is_closing((uv_handle_t*)&client->timer)) {
@@ -89,8 +89,8 @@ static void on_close(uv_handle_t* handle) {
  * @param signum Signal number. */
 static void on_signal(uv_signal_t* handle, int signum) {
   (void)signum;
-  gin_server_t* server = (gin_server_t*)handle->data;
-  gin_server_stop(server);
+  csilk_server_t* server = (csilk_server_t*)handle->data;
+  csilk_server_stop(server);
 }
 
 /** @brief Write completion callback.
@@ -109,7 +109,7 @@ static void on_write(uv_write_t* req, int status) {
 /** @brief Timeout callback.
  * @param handle Timer handle. */
 static void on_timeout(uv_timer_t* handle) {
-  gin_client_t* client = (gin_client_t*)handle->data;
+  csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
     uv_close((uv_handle_t*)&client->handle, on_close);
   }
@@ -117,7 +117,7 @@ static void on_timeout(uv_timer_t* handle) {
 
 /** @brief HTTP parser callbacks. */
 static int on_url(llhttp_t* p, const char* at, size_t length) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_url) free(client->current_url);
   client->current_url = malloc(length + 1);
   if (client->current_url) {
@@ -128,7 +128,7 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
 }
 
 static int on_header_field(llhttp_t* p, const char* at, size_t length) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_field) free(client->current_header_field);
   client->current_header_field = malloc(length + 1);
   if (client->current_header_field) {
@@ -139,9 +139,9 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
 }
 
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_value) {
-    gin_set_request_header(&client->ctx, client->current_header_field,
+    csilk_set_request_header(&client->ctx, client->current_header_field,
                             client->current_header_value);
     free(client->current_header_value);
     client->current_header_value = NULL;
@@ -155,9 +155,9 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
 }
 
 static int on_headers_complete(llhttp_t* p) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_field && client->current_header_value) {
-    gin_set_request_header(&client->ctx, client->current_header_field,
+    csilk_set_request_header(&client->ctx, client->current_header_field,
                             client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
@@ -168,7 +168,7 @@ static int on_headers_complete(llhttp_t* p) {
 }
 
 static int on_body(llhttp_t* p, const char* at, size_t length) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
       return HPE_USER;
   }
@@ -183,10 +183,10 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
 }
 
 static int on_message_complete(llhttp_t* p) {
-  gin_client_t* client = (gin_client_t*)p->data;
+  csilk_client_t* client = (csilk_client_t*)p->data;
 
   if (client->current_header_field && client->current_header_value) {
-    gin_set_request_header(&client->ctx, client->current_header_field,
+    csilk_set_request_header(&client->ctx, client->current_header_field,
                             client->current_header_value);
     free(client->current_header_field);
     free(client->current_header_value);
@@ -197,13 +197,13 @@ static int on_message_complete(llhttp_t* p) {
   if (client->current_url) {
     char* path = NULL;
     char* query = NULL;
-    gin_split_url(client->current_url, &path, &query);
+    csilk_split_url(client->current_url, &path, &query);
     if (client->ctx.request.path) {
       free((void*)client->ctx.request.path);
     }
     client->ctx.request.path = path;
     if (query) {
-      gin_parse_query(&client->ctx, query);
+      csilk_parse_query(&client->ctx, query);
       free(query);
     }
     free(client->current_url);
@@ -214,14 +214,14 @@ static int on_message_complete(llhttp_t* p) {
     printf("Request: %s %s\n", client->ctx.request.method, client->ctx.request.path);
     fflush(stdout);
 
-    if (gin_router_match_ctx(client->server->router, &client->ctx)) {
+    if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
         printf("Route matched, calling next handler\n");
         fflush(stdout);
-        gin_next(&client->ctx);
+        csilk_next(&client->ctx);
     } else {
         printf("Route not found\n");
         fflush(stdout);
-        gin_string(&client->ctx, 404, "Not Found");
+        csilk_string(&client->ctx, 404, "Not Found");
     }
 
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
@@ -260,7 +260,7 @@ static int on_message_complete(llhttp_t* p) {
   }
 
   size_t custom_headers_len = 0;
-  for (gin_header_t* h = client->ctx.response.headers; h; h = h->next) {
+  for (csilk_header_t* h = client->ctx.response.headers; h; h = h->next) {
     custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
   }
 
@@ -301,7 +301,7 @@ static int on_message_complete(llhttp_t* p) {
                status, status_text, body_len, connection_val);
       }
 
-      for (gin_header_t* h = client->ctx.response.headers; h; h = h->next) {
+      for (csilk_header_t* h = client->ctx.response.headers; h; h = h->next) {
         pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
                         "%s: %s\r\n", h->key, h->value);
       }
@@ -342,8 +342,8 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     return;
   }
 
-  gin_server_t* server = (gin_server_t*)server_stream->data;
-  gin_client_t* client = calloc(1, sizeof(gin_client_t));
+  csilk_server_t* server = (csilk_server_t*)server_stream->data;
+  csilk_client_t* client = calloc(1, sizeof(csilk_client_t));
   if (!client) return;
 
   client->server = server;
@@ -363,7 +363,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->timer.data = client;
     
     // Initialize arena for the request
-    client->ctx.arena = gin_arena_new(4096);
+    client->ctx.arena = csilk_arena_new(4096);
 
     r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
     if (r < 0) {
@@ -384,11 +384,11 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
  * @param nread Number of bytes read.
  * @param buf Buffer read into. */
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-  gin_client_t* client = (gin_client_t*)stream->data;
+  csilk_client_t* client = (csilk_client_t*)stream->data;
   uv_timer_stop(&client->timer);
   if (nread > 0) {
     if (client->ctx.is_websocket) {
-        gin_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base, (size_t)nread);
+        csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base, (size_t)nread);
     } else {
         enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
         if (err == HPE_CLOSED_CONNECTION) {
@@ -416,9 +416,9 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   }
 }
 
-const char* gin_get_client_ip(gin_ctx_t* c) {
+const char* csilk_get_client_ip(csilk_ctx_t* c) {
   if (!c || !c->_internal_client) return NULL;
-  gin_client_t* client = (gin_client_t*)c->_internal_client;
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   struct sockaddr_storage addr;
   int len = sizeof(addr);
   if (uv_tcp_getpeername(&client->handle, (struct sockaddr*)&addr, &len) == 0) {
@@ -433,8 +433,8 @@ const char* gin_get_client_ip(gin_ctx_t* c) {
   return NULL;
 }
 
-gin_server_t* gin_server_new(gin_router_t* router) {
-  gin_server_t* s = calloc(1, sizeof(gin_server_t));
+csilk_server_t* csilk_server_new(csilk_router_t* router) {
+  csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
   if (!s) return NULL;
   s->loop = uv_default_loop();
   if (!s->loop) {
@@ -450,29 +450,29 @@ gin_server_t* gin_server_new(gin_router_t* router) {
   s->settings.on_body = on_body;
   s->settings.on_message_complete = on_message_complete;
   
-  s->config.idle_timeout_ms = GIN_DEFAULT_IDLE_TIMEOUT;
-  s->config.max_body_size = GIN_DEFAULT_MAX_BODY_SIZE;
-  s->config.listen_backlog = GIN_DEFAULT_LISTEN_BACKLOG;
+  s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
+  s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+  s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
   return s;
 }
 
-void gin_server_free(gin_server_t* server) {
+void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
   free(server);
 }
 
-void gin_server_stop(gin_server_t* server) {
+void csilk_server_stop(csilk_server_t* server) {
   if (!server) return;
   uv_stop(server->loop);
 }
 
-void gin_server_set_config(gin_server_t* server, gin_server_config_t config) {
+void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config) {
   if (!server) return;
   server->config = config;
 }
 
-int gin_server_run(gin_server_t* server, int port) {
+int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
 
   int r = uv_tcp_init(server->loop, &server->server_handle);

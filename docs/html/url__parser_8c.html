@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/url_parser.c File Reference</title>
+<title>Csilk: src/url_parser.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -96,28 +96,28 @@ $(function(){initNavTree('url__parser_8c.html','',''); });
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:aa278141b01e136adb61c654ac03ee290" id="r_aa278141b01e136adb61c654ac03ee290"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa278141b01e136adb61c654ac03ee290">gin_split_url</a> (const char *url, char **path, char **query)</td></tr>
-<tr class="memdesc:aa278141b01e136adb61c654ac03ee290"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal: Split URL into path and query string.  <br /></td></tr>
-<tr class="memitem:a5623f5e24f24781b151a866e86aedf2e" id="r_a5623f5e24f24781b151a866e86aedf2e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5623f5e24f24781b151a866e86aedf2e">gin_parse_query</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *query_string)</td></tr>
-<tr class="memdesc:a5623f5e24f24781b151a866e86aedf2e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal: Parse a raw query string into context.  <br /></td></tr>
+<tr class="memitem:a25832a499ec1b2c9deb9c611ddfc0964" id="r_a25832a499ec1b2c9deb9c611ddfc0964"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a25832a499ec1b2c9deb9c611ddfc0964">csilk_split_url</a> (const char *url, char **path, char **query)</td></tr>
+<tr class="memdesc:a25832a499ec1b2c9deb9c611ddfc0964"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal: Split URL into path and query string.  <br /></td></tr>
+<tr class="memitem:a9902001a7f6d76cc8c7297c5e6360aac" id="r_a9902001a7f6d76cc8c7297c5e6360aac"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9902001a7f6d76cc8c7297c5e6360aac">csilk_parse_query</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *query_string)</td></tr>
+<tr class="memdesc:a9902001a7f6d76cc8c7297c5e6360aac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Internal: Parse a raw query string into context.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>URL parsing implementation. MIT License. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="a5623f5e24f24781b151a866e86aedf2e" name="a5623f5e24f24781b151a866e86aedf2e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5623f5e24f24781b151a866e86aedf2e">&#9670;&#160;</a></span>gin_parse_query()</h2>
+<a id="a9902001a7f6d76cc8c7297c5e6360aac" name="a9902001a7f6d76cc8c7297c5e6360aac"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9902001a7f6d76cc8c7297c5e6360aac">&#9670;&#160;</a></span>csilk_parse_query()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_parse_query </td>
+          <td class="memname">void csilk_parse_query </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -138,14 +138,14 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="aa278141b01e136adb61c654ac03ee290" name="aa278141b01e136adb61c654ac03ee290"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa278141b01e136adb61c654ac03ee290">&#9670;&#160;</a></span>gin_split_url()</h2>
+<a id="a25832a499ec1b2c9deb9c611ddfc0964" name="a25832a499ec1b2c9deb9c611ddfc0964"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25832a499ec1b2c9deb9c611ddfc0964">&#9670;&#160;</a></span>csilk_split_url()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_split_url </td>
+          <td class="memname">void csilk_split_url </td>
           <td>(</td>
           <td class="paramtype">const char *</td>          <td class="paramname"><span class="paramname"><em>url</em></span>, </td>
         </tr>

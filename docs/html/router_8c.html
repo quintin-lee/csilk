@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/router.c File Reference</title>
+<title>Csilk: src/router.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -96,61 +96,61 @@ $(function(){initNavTree('router_8c.html','',''); });
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:gin_5Fmethod_5Fhandler_5Fs" id="r_gin_5Fmethod_5Fhandler_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__method__handler__s.html">gin_method_handler_s</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Method-specific handler mapping.  <a href="structgin__method__handler__s.html#details">More...</a><br /></td></tr>
-<tr class="memitem:gin_5Frouter_5Fnode_5Fs" id="r_gin_5Frouter_5Fnode_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__router__node__s.html">gin_router_node_s</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Node in the router trie.  <a href="structgin__router__node__s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Fmethod_5Fhandler_5Fs" id="r_csilk_5Fmethod_5Fhandler_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__method__handler__s.html">csilk_method_handler_s</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Method-specific handler mapping.  <a href="structcsilk__method__handler__s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Frouter_5Fnode_5Fs" id="r_csilk_5Frouter_5Fnode_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__router__node__s.html">csilk_router_node_s</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Node in the router trie.  <a href="structcsilk__router__node__s.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:a9fd1d94f2edbc89b9579d9da4db94268" id="r_a9fd1d94f2edbc89b9579d9da4db94268"><td class="memItemLeft"><a id="a9fd1d94f2edbc89b9579d9da4db94268" name="a9fd1d94f2edbc89b9579d9da4db94268"></a>
-#define&#160;</td><td class="memItemRight"><b>GIN_MAX_CHILDREN</b>&#160;&#160;&#160;128</td></tr>
-<tr class="memdesc:a9fd1d94f2edbc89b9579d9da4db94268"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum number of children per router tree node. <br /></td></tr>
+<tr class="memitem:a877f7d4f7121e085fee6ffa7ea03b349" id="r_a877f7d4f7121e085fee6ffa7ea03b349"><td class="memItemLeft"><a id="a877f7d4f7121e085fee6ffa7ea03b349" name="a877f7d4f7121e085fee6ffa7ea03b349"></a>
+#define&#160;</td><td class="memItemRight"><b>CSILK_MAX_CHILDREN</b>&#160;&#160;&#160;128</td></tr>
+<tr class="memdesc:a877f7d4f7121e085fee6ffa7ea03b349"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum number of children per router tree node. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
-<tr class="memitem:a89290ab4c76f70e91667ce1b3b920a78" id="r_a89290ab4c76f70e91667ce1b3b920a78"><td class="memItemLeft"><a id="a89290ab4c76f70e91667ce1b3b920a78" name="a89290ab4c76f70e91667ce1b3b920a78"></a>
-typedef struct <a class="el" href="structgin__method__handler__s.html">gin_method_handler_s</a>&#160;</td><td class="memItemRight"><b>gin_method_handler_t</b></td></tr>
-<tr class="memdesc:a89290ab4c76f70e91667ce1b3b920a78"><td class="mdescLeft">&#160;</td><td class="mdescRight">Method-specific handler mapping. <br /></td></tr>
+<tr class="memitem:adb2d20e956447b92ef816c5bd8b654ac" id="r_adb2d20e956447b92ef816c5bd8b654ac"><td class="memItemLeft"><a id="adb2d20e956447b92ef816c5bd8b654ac" name="adb2d20e956447b92ef816c5bd8b654ac"></a>
+typedef struct <a class="el" href="structcsilk__method__handler__s.html">csilk_method_handler_s</a>&#160;</td><td class="memItemRight"><b>csilk_method_handler_t</b></td></tr>
+<tr class="memdesc:adb2d20e956447b92ef816c5bd8b654ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Method-specific handler mapping. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-enum-members" class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
-<tr class="memitem:a3081553e206b13d2b821e32c76294c88" id="r_a3081553e206b13d2b821e32c76294c88"><td class="memItemLeft"><a id="a3081553e206b13d2b821e32c76294c88" name="a3081553e206b13d2b821e32c76294c88"></a>enum &#160;</td><td class="memItemRight"><a class="el" href="#a3081553e206b13d2b821e32c76294c88">gin_node_type_t</a> { <b>GIN_NODE_STATIC</b>
-, <b>GIN_NODE_PARAM</b>
-, <b>GIN_NODE_WILDCARD</b>
+<tr class="memitem:afc495bda9eb413a8ad6a261e32abe963" id="r_afc495bda9eb413a8ad6a261e32abe963"><td class="memItemLeft"><a id="afc495bda9eb413a8ad6a261e32abe963" name="afc495bda9eb413a8ad6a261e32abe963"></a>enum &#160;</td><td class="memItemRight"><a class="el" href="#afc495bda9eb413a8ad6a261e32abe963">csilk_node_type_t</a> { <b>CSILK_NODE_STATIC</b>
+, <b>CSILK_NODE_PARAM</b>
+, <b>CSILK_NODE_WILDCARD</b>
  }</td></tr>
-<tr class="memdesc:a3081553e206b13d2b821e32c76294c88"><td class="mdescLeft">&#160;</td><td class="mdescRight">Node type for router trie. <br /></td></tr>
+<tr class="memdesc:afc495bda9eb413a8ad6a261e32abe963"><td class="mdescLeft">&#160;</td><td class="mdescRight">Node type for router trie. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a08fa8a437528249c2604309c82815ca2" id="r_a08fa8a437528249c2604309c82815ca2"><td class="memItemLeft"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a08fa8a437528249c2604309c82815ca2">gin_router_new</a> ()</td></tr>
-<tr class="memdesc:a08fa8a437528249c2604309c82815ca2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new router instance.  <br /></td></tr>
-<tr class="memitem:a3ff9e6478b310dd449cafc4c68288c80" id="r_a3ff9e6478b310dd449cafc4c68288c80"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3ff9e6478b310dd449cafc4c68288c80">gin_router_free</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *r)</td></tr>
-<tr class="memdesc:a3ff9e6478b310dd449cafc4c68288c80"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate router and all its nodes.  <br /></td></tr>
-<tr class="memitem:ab7a13815e9fca25f52ca8d0d689dea2a" id="r_ab7a13815e9fca25f52ca8d0d689dea2a"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab7a13815e9fca25f52ca8d0d689dea2a">gin_router_add</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *r, const char *method, const char *path, <a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> *handlers, size_t handler_count)</td></tr>
-<tr class="memdesc:ab7a13815e9fca25f52ca8d0d689dea2a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a route with handlers to the router.  <br /></td></tr>
-<tr class="memitem:a86babfb2a97d59562e56c6c48c365c1c" id="r_a86babfb2a97d59562e56c6c48c365c1c"><td class="memItemLeft"><a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a86babfb2a97d59562e56c6c48c365c1c">gin_router_match</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *r, const char *method, const char *path)</td></tr>
-<tr class="memdesc:a86babfb2a97d59562e56c6c48c365c1c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Match a raw path to handlers (standalone).  <br /></td></tr>
-<tr class="memitem:ac9403f0ba783ae3c7b6319bcd49dc3ec" id="r_ac9403f0ba783ae3c7b6319bcd49dc3ec"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ac9403f0ba783ae3c7b6319bcd49dc3ec">gin_router_match_ctx</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *r, <a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:ac9403f0ba783ae3c7b6319bcd49dc3ec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Match current request context to router. Updates path parameters in context on success.  <br /></td></tr>
+<tr class="memitem:a0e48c6c6307f42a3f1f8f0903936bb6d" id="r_a0e48c6c6307f42a3f1f8f0903936bb6d"><td class="memItemLeft"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0e48c6c6307f42a3f1f8f0903936bb6d">csilk_router_new</a> ()</td></tr>
+<tr class="memdesc:a0e48c6c6307f42a3f1f8f0903936bb6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new router instance.  <br /></td></tr>
+<tr class="memitem:ae9756acbad60e4b8d7d610c9b9bd9bcd" id="r_ae9756acbad60e4b8d7d610c9b9bd9bcd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ae9756acbad60e4b8d7d610c9b9bd9bcd">csilk_router_free</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *r)</td></tr>
+<tr class="memdesc:ae9756acbad60e4b8d7d610c9b9bd9bcd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate router and all its nodes.  <br /></td></tr>
+<tr class="memitem:acc8e828f3547a4dac6361c2652e412e9" id="r_acc8e828f3547a4dac6361c2652e412e9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#acc8e828f3547a4dac6361c2652e412e9">csilk_router_add</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *r, const char *method, const char *path, <a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> *handlers, size_t handler_count)</td></tr>
+<tr class="memdesc:acc8e828f3547a4dac6361c2652e412e9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add a route with handlers to the router.  <br /></td></tr>
+<tr class="memitem:a0a929b9c038ce4db8b2201294c96dc05" id="r_a0a929b9c038ce4db8b2201294c96dc05"><td class="memItemLeft"><a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a0a929b9c038ce4db8b2201294c96dc05">csilk_router_match</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *r, const char *method, const char *path)</td></tr>
+<tr class="memdesc:a0a929b9c038ce4db8b2201294c96dc05"><td class="mdescLeft">&#160;</td><td class="mdescRight">Match a raw path to handlers (standalone).  <br /></td></tr>
+<tr class="memitem:a5ea77ec8751abea03449cb1e76d8756e" id="r_a5ea77ec8751abea03449cb1e76d8756e"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a5ea77ec8751abea03449cb1e76d8756e">csilk_router_match_ctx</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *r, <a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:a5ea77ec8751abea03449cb1e76d8756e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Match current request context to router. Updates path parameters in context on success.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Router implementation. MIT License. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="ab7a13815e9fca25f52ca8d0d689dea2a" name="ab7a13815e9fca25f52ca8d0d689dea2a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab7a13815e9fca25f52ca8d0d689dea2a">&#9670;&#160;</a></span>gin_router_add()</h2>
+<a id="acc8e828f3547a4dac6361c2652e412e9" name="acc8e828f3547a4dac6361c2652e412e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc8e828f3547a4dac6361c2652e412e9">&#9670;&#160;</a></span>csilk_router_add()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_router_add </td>
+          <td class="memname">void csilk_router_add </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -165,7 +165,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> *</td>          <td class="paramname"><span class="paramname"><em>handlers</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> *</td>          <td class="paramname"><span class="paramname"><em>handlers</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -189,16 +189,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a3ff9e6478b310dd449cafc4c68288c80" name="a3ff9e6478b310dd449cafc4c68288c80"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3ff9e6478b310dd449cafc4c68288c80">&#9670;&#160;</a></span>gin_router_free()</h2>
+<a id="ae9756acbad60e4b8d7d610c9b9bd9bcd" name="ae9756acbad60e4b8d7d610c9b9bd9bcd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9756acbad60e4b8d7d610c9b9bd9bcd">&#9670;&#160;</a></span>csilk_router_free()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_router_free </td>
+          <td class="memname">void csilk_router_free </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -214,16 +214,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a86babfb2a97d59562e56c6c48c365c1c" name="a86babfb2a97d59562e56c6c48c365c1c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a86babfb2a97d59562e56c6c48c365c1c">&#9670;&#160;</a></span>gin_router_match()</h2>
+<a id="a0a929b9c038ce4db8b2201294c96dc05" name="a0a929b9c038ce4db8b2201294c96dc05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0a929b9c038ce4db8b2201294c96dc05">&#9670;&#160;</a></span>csilk_router_match()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="gin_8h.html#a32bd3f9dd28912a03796327bac3cd742">gin_handler_t</a> * gin_router_match </td>
+          <td class="memname"><a class="el" href="csilk_8h.html#a6a0546a31c9dce966b294198210689b3">csilk_handler_t</a> * csilk_router_match </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -251,21 +251,21 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ac9403f0ba783ae3c7b6319bcd49dc3ec" name="ac9403f0ba783ae3c7b6319bcd49dc3ec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac9403f0ba783ae3c7b6319bcd49dc3ec">&#9670;&#160;</a></span>gin_router_match_ctx()</h2>
+<a id="a5ea77ec8751abea03449cb1e76d8756e" name="a5ea77ec8751abea03449cb1e76d8756e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ea77ec8751abea03449cb1e76d8756e">&#9670;&#160;</a></span>csilk_router_match_ctx()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int gin_router_match_ctx </td>
+          <td class="memname">int csilk_router_match_ctx </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>r</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -282,14 +282,14 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a08fa8a437528249c2604309c82815ca2" name="a08fa8a437528249c2604309c82815ca2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a08fa8a437528249c2604309c82815ca2">&#9670;&#160;</a></span>gin_router_new()</h2>
+<a id="a0e48c6c6307f42a3f1f8f0903936bb6d" name="a0e48c6c6307f42a3f1f8f0903936bb6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0e48c6c6307f42a3f1f8f0903936bb6d">&#9670;&#160;</a></span>csilk_router_new()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> * gin_router_new </td>
+          <td class="memname"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> * csilk_router_new </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
           <td></td>

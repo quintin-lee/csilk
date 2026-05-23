@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
-#include "gin.h"
+#include "csilk.h"
 
 /** @brief Maximum number of IP addresses to track. */
 #define MAX_IP_ENTRIES 1024
@@ -28,10 +28,10 @@ static int ip_count = 0;
  * Limits the number of requests per IP within a rolling time window.
  * @param c The request context.
  * @param limit Maximum requests allowed per window. */
-void gin_rate_limit_middleware(gin_ctx_t* c, int limit) {
-    const char* ip = gin_get_client_ip(c);
+void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
+    const char* ip = csilk_get_client_ip(c);
     if (!ip) {
-        gin_next(c);
+        csilk_next(c);
         return;
     }
 
@@ -54,7 +54,7 @@ void gin_rate_limit_middleware(gin_ctx_t* c, int limit) {
             entry->last_reset = now;
         } else {
             // Table full, just allow for now (or implement eviction)
-            gin_next(c);
+            csilk_next(c);
             return;
         }
     }
@@ -68,10 +68,10 @@ void gin_rate_limit_middleware(gin_ctx_t* c, int limit) {
     }
 
     if (entry->count > limit) {
-        gin_set_header(c, "Retry-After", "60");
-        gin_json_error(c, 429, "Too Many Requests");
-        gin_abort(c);
+        csilk_set_header(c, "Retry-After", "60");
+        csilk_json_error(c, 429, "Too Many Requests");
+        csilk_abort(c);
     } else {
-        gin_next(c);
+        csilk_next(c);
     }
 }

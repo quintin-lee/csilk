@@ -26,19 +26,19 @@
     - [x] 4.1.1 集成 SHA1 与 Base64 算法 (用于握手)
     - [x] 4.1.2 实现完整的握手逻辑与协议升级
     - [x] 4.1.3 实现 WebSocket 帧 (Frame) 解析与编码
-    - [x] 4.1.4 整合进 libuv 事件循环与 Gin Context
+    - [x] 4.1.4 整合进 libuv 事件循环与 Csilk Context
 - [x] 4.2 更多官方中间件 (Rate Limiter, CSRF, CORS)
 - [x] 4.3 传输层安全 (TLS/HTTPS) 调研与集成 (已调研，建议 Nginx 代理)
 
 ### 阶段五：日志系统成熟化 (Logger Maturity) [已完成]
-- [x] 5.1 引入日志宏 (GIN_INFO, GIN_ERROR) 自动记录源码行号与函数名
+- [x] 5.1 引入日志宏 (CSILK_INFO, CSILK_ERROR) 自动记录源码行号与函数名
 - [x] 5.2 实现基于文件大小的自动日志滚动 (Log Rotation)
 - [x] 5.3 优化时间戳生成效率与格式化定制
 - [ ] 5.4 增加 JSON 结构化日志输出支持 (可选)
 
 ### 阶段六：YAML 配置文件支持 (YAML Config Support) [已完成]
 - [x] 6.1 集成 libyaml 依赖与 CMake 配置
-- [x] 6.2 定义统一配置结构体 \`gin_config_t\` 与 API
+- [x] 6.2 定义统一配置结构体 \`csilk_config_t\` 与 API
 - [x] 6.3 实现基于事件流的 YAML 解析引擎 (\`src/config.c\`)
 - [x] 6.4 更新示例工程支持 \`config.yaml\` 加载
 

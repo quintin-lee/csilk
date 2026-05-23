@@ -1,0 +1,59 @@
+\doxysection{csilk\+\_\+response\+\_\+t Struct Reference}
+\hypertarget{structcsilk__response__t}{}\label{structcsilk__response__t}\index{csilk\_response\_t@{csilk\_response\_t}}
+
+
+HTTP Response structure.  
+
+
+
+
+{\ttfamily \+\#include $<$csilk.\+h$>$}
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+int \doxymbox{\hyperlink{structcsilk__response__t_a07e9d35431e1a921ae4b856adbfd0c0d}{status}}
+\item 
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__response__t_afbe4362449e3189b7957b17c60f238ba}{body}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_a415c0359beaef1c5055ff15c2779ad39}{csilk\+\_\+header\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__response__t_a8c7c2e796f95b00aab0867814023ff52}{headers}}
+\item 
+int \doxymbox{\hyperlink{structcsilk__response__t_a61ec952f83f2481446b3a6c69c5a1787}{body\+\_\+is\+\_\+managed}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+HTTP Response structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__response__t_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__response__t_afbe4362449e3189b7957b17c60f238ba}\index{csilk\_response\_t@{csilk\_response\_t}!body@{body}}
+\index{body@{body}!csilk\_response\_t@{csilk\_response\_t}}
+\doxysubsubsection{\texorpdfstring{body}{body}}
+{\footnotesize\ttfamily \label{structcsilk__response__t_afbe4362449e3189b7957b17c60f238ba} 
+const char\texorpdfstring{$\ast$}{*} csilk\+\_\+response\+\_\+t::\+body}
+
+Response body content. \Hypertarget{structcsilk__response__t_a61ec952f83f2481446b3a6c69c5a1787}\index{csilk\_response\_t@{csilk\_response\_t}!body\_is\_managed@{body\_is\_managed}}
+\index{body\_is\_managed@{body\_is\_managed}!csilk\_response\_t@{csilk\_response\_t}}
+\doxysubsubsection{\texorpdfstring{body\_is\_managed}{body\_is\_managed}}
+{\footnotesize\ttfamily \label{structcsilk__response__t_a61ec952f83f2481446b3a6c69c5a1787} 
+int csilk\+\_\+response\+\_\+t::\+body\+\_\+is\+\_\+managed}
+
+Flag if body is managed by free(). \Hypertarget{structcsilk__response__t_a8c7c2e796f95b00aab0867814023ff52}\index{csilk\_response\_t@{csilk\_response\_t}!headers@{headers}}
+\index{headers@{headers}!csilk\_response\_t@{csilk\_response\_t}}
+\doxysubsubsection{\texorpdfstring{headers}{headers}}
+{\footnotesize\ttfamily \label{structcsilk__response__t_a8c7c2e796f95b00aab0867814023ff52} 
+\doxymbox{\hyperlink{csilk_8h_a415c0359beaef1c5055ff15c2779ad39}{csilk\+\_\+header\+\_\+t}}\texorpdfstring{$\ast$}{*} csilk\+\_\+response\+\_\+t::\+headers}
+
+Linked list of response headers. \Hypertarget{structcsilk__response__t_a07e9d35431e1a921ae4b856adbfd0c0d}\index{csilk\_response\_t@{csilk\_response\_t}!status@{status}}
+\index{status@{status}!csilk\_response\_t@{csilk\_response\_t}}
+\doxysubsubsection{\texorpdfstring{status}{status}}
+{\footnotesize\ttfamily \label{structcsilk__response__t_a07e9d35431e1a921ae4b856adbfd0c0d} 
+int csilk\+\_\+response\+\_\+t::\+status}
+
+HTTP status code. 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+include/\+\doxymbox{\hyperlink{csilk_8h}{csilk.\+h}}\end{DoxyCompactItemize}

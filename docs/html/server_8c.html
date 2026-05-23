@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/server.c File Reference</title>
+<title>Csilk: src/server.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -99,56 +99,56 @@ $(function(){initNavTree('server_8c.html','',''); });
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
 <code>#include &lt;uv.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
-<code>#include &quot;<a class="el" href="gin__internal_8h_source.html">gin_internal.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk__internal_8h_source.html">csilk_internal.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-nested-classes" class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:gin_5Fserver_5Fs" id="r_gin_5Fserver_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__server__s.html">gin_server_s</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Server structure.  <a href="structgin__server__s.html#details">More...</a><br /></td></tr>
-<tr class="memitem:gin_5Fclient_5Ft" id="r_gin_5Fclient_5Ft"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structgin__client__t.html">gin_client_t</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Client connection structure.  <a href="structgin__client__t.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Fserver_5Fs" id="r_csilk_5Fserver_5Fs"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__server__s.html">csilk_server_s</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Server structure.  <a href="structcsilk__server__s.html#details">More...</a><br /></td></tr>
+<tr class="memitem:csilk_5Fclient_5Ft" id="r_csilk_5Fclient_5Ft"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structcsilk__client__t.html">csilk_client_t</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Client connection structure.  <a href="structcsilk__client__t.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:a6a3e05334511d2963ab23174cb91fa79" id="r_a6a3e05334511d2963ab23174cb91fa79"><td class="memItemLeft"><a id="a6a3e05334511d2963ab23174cb91fa79" name="a6a3e05334511d2963ab23174cb91fa79"></a>
-#define&#160;</td><td class="memItemRight"><b>GIN_DEFAULT_IDLE_TIMEOUT</b>&#160;&#160;&#160;5000</td></tr>
-<tr class="memdesc:a6a3e05334511d2963ab23174cb91fa79"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default idle timeout in milliseconds. <br /></td></tr>
-<tr class="memitem:afb4808d2dac9e7f05112c7eaed101302" id="r_afb4808d2dac9e7f05112c7eaed101302"><td class="memItemLeft"><a id="afb4808d2dac9e7f05112c7eaed101302" name="afb4808d2dac9e7f05112c7eaed101302"></a>
-#define&#160;</td><td class="memItemRight"><b>GIN_DEFAULT_MAX_BODY_SIZE</b>&#160;&#160;&#160;(1024UL * 1024UL)</td></tr>
-<tr class="memdesc:afb4808d2dac9e7f05112c7eaed101302"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default maximum request body size in bytes. <br /></td></tr>
-<tr class="memitem:a62f3560045829fc1a2803ffb5bb1592f" id="r_a62f3560045829fc1a2803ffb5bb1592f"><td class="memItemLeft"><a id="a62f3560045829fc1a2803ffb5bb1592f" name="a62f3560045829fc1a2803ffb5bb1592f"></a>
-#define&#160;</td><td class="memItemRight"><b>GIN_DEFAULT_LISTEN_BACKLOG</b>&#160;&#160;&#160;128</td></tr>
-<tr class="memdesc:a62f3560045829fc1a2803ffb5bb1592f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default TCP listen backlog. <br /></td></tr>
+<tr class="memitem:a46bf93487221401dea41ef0c5e5c3422" id="r_a46bf93487221401dea41ef0c5e5c3422"><td class="memItemLeft"><a id="a46bf93487221401dea41ef0c5e5c3422" name="a46bf93487221401dea41ef0c5e5c3422"></a>
+#define&#160;</td><td class="memItemRight"><b>CSILK_DEFAULT_IDLE_TIMEOUT</b>&#160;&#160;&#160;5000</td></tr>
+<tr class="memdesc:a46bf93487221401dea41ef0c5e5c3422"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default idle timeout in milliseconds. <br /></td></tr>
+<tr class="memitem:a935234dd749d79f6234417ca729353e1" id="r_a935234dd749d79f6234417ca729353e1"><td class="memItemLeft"><a id="a935234dd749d79f6234417ca729353e1" name="a935234dd749d79f6234417ca729353e1"></a>
+#define&#160;</td><td class="memItemRight"><b>CSILK_DEFAULT_MAX_BODY_SIZE</b>&#160;&#160;&#160;(1024UL * 1024UL)</td></tr>
+<tr class="memdesc:a935234dd749d79f6234417ca729353e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default maximum request body size in bytes. <br /></td></tr>
+<tr class="memitem:aa4686bc32034d0b3dab2648063014ae0" id="r_aa4686bc32034d0b3dab2648063014ae0"><td class="memItemLeft"><a id="aa4686bc32034d0b3dab2648063014ae0" name="aa4686bc32034d0b3dab2648063014ae0"></a>
+#define&#160;</td><td class="memItemRight"><b>CSILK_DEFAULT_LISTEN_BACKLOG</b>&#160;&#160;&#160;128</td></tr>
+<tr class="memdesc:aa4686bc32034d0b3dab2648063014ae0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default TCP listen backlog. <br /></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ab99514b14d04a0f47619bb2a87ee11a4" id="r_ab99514b14d04a0f47619bb2a87ee11a4"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ab99514b14d04a0f47619bb2a87ee11a4">gin_get_client_ip</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:ab99514b14d04a0f47619bb2a87ee11a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the client's IP address.  <br /></td></tr>
-<tr class="memitem:af0cefe967a6e8e077fd0ca6e51b869d0" id="r_af0cefe967a6e8e077fd0ca6e51b869d0"><td class="memItemLeft"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#af0cefe967a6e8e077fd0ca6e51b869d0">gin_server_new</a> (<a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *router)</td></tr>
-<tr class="memdesc:af0cefe967a6e8e077fd0ca6e51b869d0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new server instance.  <br /></td></tr>
-<tr class="memitem:a3a9c27ab89a4eaa12fb641af27d2957e" id="r_a3a9c27ab89a4eaa12fb641af27d2957e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3a9c27ab89a4eaa12fb641af27d2957e">gin_server_free</a> (<a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *server)</td></tr>
-<tr class="memdesc:a3a9c27ab89a4eaa12fb641af27d2957e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate server resources.  <br /></td></tr>
-<tr class="memitem:a64aafd1e18741af32c27fc754e8136ad" id="r_a64aafd1e18741af32c27fc754e8136ad"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a64aafd1e18741af32c27fc754e8136ad">gin_server_stop</a> (<a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *server)</td></tr>
-<tr class="memdesc:a64aafd1e18741af32c27fc754e8136ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Signal the server to stop gracefully.  <br /></td></tr>
-<tr class="memitem:a27a082aa71463c314c5b397ee18340f9" id="r_a27a082aa71463c314c5b397ee18340f9"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a27a082aa71463c314c5b397ee18340f9">gin_server_set_config</a> (<a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *server, <a class="el" href="gin_8h.html#a81c4eec790cdadc96b2499054441cde1">gin_server_config_t</a> config)</td></tr>
-<tr class="memdesc:a27a082aa71463c314c5b397ee18340f9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply server configuration.  <br /></td></tr>
-<tr class="memitem:a74a3074c236cee75dba25439c1bba39d" id="r_a74a3074c236cee75dba25439c1bba39d"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a74a3074c236cee75dba25439c1bba39d">gin_server_run</a> (<a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *server, int port)</td></tr>
-<tr class="memdesc:a74a3074c236cee75dba25439c1bba39d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the server event loop. Blocks until server is stopped or error occurs.  <br /></td></tr>
+<tr class="memitem:a785b897c0d473dccc071582fd023d24c" id="r_a785b897c0d473dccc071582fd023d24c"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a785b897c0d473dccc071582fd023d24c">csilk_get_client_ip</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:a785b897c0d473dccc071582fd023d24c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the client's IP address.  <br /></td></tr>
+<tr class="memitem:a7228ef4a25b554253a912ddee907fdfa" id="r_a7228ef4a25b554253a912ddee907fdfa"><td class="memItemLeft"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a7228ef4a25b554253a912ddee907fdfa">csilk_server_new</a> (<a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *router)</td></tr>
+<tr class="memdesc:a7228ef4a25b554253a912ddee907fdfa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new server instance.  <br /></td></tr>
+<tr class="memitem:a23c26f61cb7c291838293488b5a84c63" id="r_a23c26f61cb7c291838293488b5a84c63"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a23c26f61cb7c291838293488b5a84c63">csilk_server_free</a> (<a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *server)</td></tr>
+<tr class="memdesc:a23c26f61cb7c291838293488b5a84c63"><td class="mdescLeft">&#160;</td><td class="mdescRight">Deallocate server resources.  <br /></td></tr>
+<tr class="memitem:a288fd37994637aa7508870ef639eefd8" id="r_a288fd37994637aa7508870ef639eefd8"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a288fd37994637aa7508870ef639eefd8">csilk_server_stop</a> (<a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *server)</td></tr>
+<tr class="memdesc:a288fd37994637aa7508870ef639eefd8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Signal the server to stop gracefully.  <br /></td></tr>
+<tr class="memitem:a9f2aab4fba3b2fe1ca79944b584049f1" id="r_a9f2aab4fba3b2fe1ca79944b584049f1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9f2aab4fba3b2fe1ca79944b584049f1">csilk_server_set_config</a> (<a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *server, <a class="el" href="csilk_8h.html#aa52f4a7293fca2294706ce9f9c67356f">csilk_server_config_t</a> config)</td></tr>
+<tr class="memdesc:a9f2aab4fba3b2fe1ca79944b584049f1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Apply server configuration.  <br /></td></tr>
+<tr class="memitem:ab49f6cc94839809723a16b10cf66ba51" id="r_ab49f6cc94839809723a16b10cf66ba51"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#ab49f6cc94839809723a16b10cf66ba51">csilk_server_run</a> (<a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *server, int port)</td></tr>
+<tr class="memdesc:ab49f6cc94839809723a16b10cf66ba51"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the server event loop. Blocks until server is stopped or error occurs.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Server implementation. MIT License. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="ab99514b14d04a0f47619bb2a87ee11a4" name="ab99514b14d04a0f47619bb2a87ee11a4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab99514b14d04a0f47619bb2a87ee11a4">&#9670;&#160;</a></span>gin_get_client_ip()</h2>
+<a id="a785b897c0d473dccc071582fd023d24c" name="a785b897c0d473dccc071582fd023d24c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a785b897c0d473dccc071582fd023d24c">&#9670;&#160;</a></span>csilk_get_client_ip()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char * gin_get_client_ip </td>
+          <td class="memname">const char * csilk_get_client_ip </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -165,16 +165,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a3a9c27ab89a4eaa12fb641af27d2957e" name="a3a9c27ab89a4eaa12fb641af27d2957e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3a9c27ab89a4eaa12fb641af27d2957e">&#9670;&#160;</a></span>gin_server_free()</h2>
+<a id="a23c26f61cb7c291838293488b5a84c63" name="a23c26f61cb7c291838293488b5a84c63"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23c26f61cb7c291838293488b5a84c63">&#9670;&#160;</a></span>csilk_server_free()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_server_free </td>
+          <td class="memname">void csilk_server_free </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -190,16 +190,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="af0cefe967a6e8e077fd0ca6e51b869d0" name="af0cefe967a6e8e077fd0ca6e51b869d0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af0cefe967a6e8e077fd0ca6e51b869d0">&#9670;&#160;</a></span>gin_server_new()</h2>
+<a id="a7228ef4a25b554253a912ddee907fdfa" name="a7228ef4a25b554253a912ddee907fdfa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7228ef4a25b554253a912ddee907fdfa">&#9670;&#160;</a></span>csilk_server_new()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> * gin_server_new </td>
+          <td class="memname"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> * csilk_server_new </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>router</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625">csilk_router_t</a> *</td>          <td class="paramname"><span class="paramname"><em>router</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -216,16 +216,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a74a3074c236cee75dba25439c1bba39d" name="a74a3074c236cee75dba25439c1bba39d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a74a3074c236cee75dba25439c1bba39d">&#9670;&#160;</a></span>gin_server_run()</h2>
+<a id="ab49f6cc94839809723a16b10cf66ba51" name="ab49f6cc94839809723a16b10cf66ba51"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab49f6cc94839809723a16b10cf66ba51">&#9670;&#160;</a></span>csilk_server_run()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int gin_server_run </td>
+          <td class="memname">int csilk_server_run </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -247,21 +247,21 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a27a082aa71463c314c5b397ee18340f9" name="a27a082aa71463c314c5b397ee18340f9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a27a082aa71463c314c5b397ee18340f9">&#9670;&#160;</a></span>gin_server_set_config()</h2>
+<a id="a9f2aab4fba3b2fe1ca79944b584049f1" name="a9f2aab4fba3b2fe1ca79944b584049f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f2aab4fba3b2fe1ca79944b584049f1">&#9670;&#160;</a></span>csilk_server_set_config()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_server_set_config </td>
+          <td class="memname">void csilk_server_set_config </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a81c4eec790cdadc96b2499054441cde1">gin_server_config_t</a></td>          <td class="paramname"><span class="paramname"><em>config</em></span>&#160;)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#aa52f4a7293fca2294706ce9f9c67356f">csilk_server_config_t</a></td>          <td class="paramname"><span class="paramname"><em>config</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -277,16 +277,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a64aafd1e18741af32c27fc754e8136ad" name="a64aafd1e18741af32c27fc754e8136ad"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a64aafd1e18741af32c27fc754e8136ad">&#9670;&#160;</a></span>gin_server_stop()</h2>
+<a id="a288fd37994637aa7508870ef639eefd8" name="a288fd37994637aa7508870ef639eefd8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a288fd37994637aa7508870ef639eefd8">&#9670;&#160;</a></span>csilk_server_stop()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_server_stop </td>
+          <td class="memname">void csilk_server_stop </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a63d9079307207ca79acec1968f71c6a4">csilk_server_t</a> *</td>          <td class="paramname"><span class="paramname"><em>server</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>

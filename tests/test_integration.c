@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include <time.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 #define PORT 8099
 #define BUFSIZE 4096
@@ -68,32 +68,32 @@ static int send_request(int sock, const char* req) {
 }
 
 /* ---- Handlers ---- */
-static void hello_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "Hello, World!");
+static void hello_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "Hello, World!");
 }
 
-static void user_handler(gin_ctx_t* c) {
-    const char* id = gin_get_param(c, "id");
+static void user_handler(csilk_ctx_t* c) {
+    const char* id = csilk_get_param(c, "id");
     if (id) {
         char resp[256];
         snprintf(resp, sizeof(resp), "User ID: %s", id);
-        gin_string(c, 200, resp);
+        csilk_string(c, 200, resp);
     } else {
-        gin_string(c, 400, "Missing user ID");
+        csilk_string(c, 400, "Missing user ID");
     }
 }
 
-static void login_handler(gin_ctx_t* c) {
-    cJSON* json = gin_bind_json(c);
+static void login_handler(csilk_ctx_t* c) {
+    cJSON* json = csilk_bind_json(c);
     if (!json) {
-        gin_string(c, 400, "Invalid JSON");
+        csilk_string(c, 400, "Invalid JSON");
         return;
     }
     cJSON* username = cJSON_GetObjectItemCaseSensitive(json, "username");
     cJSON* password = cJSON_GetObjectItemCaseSensitive(json, "password");
     if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
         cJSON_Delete(json);
-        gin_string(c, 400, "Username and password required");
+        csilk_string(c, 400, "Username and password required");
         return;
     }
     if (strcmp(username->valuestring, "admin") == 0 &&
@@ -101,9 +101,9 @@ static void login_handler(gin_ctx_t* c) {
         cJSON* resp = cJSON_CreateObject();
         cJSON_AddStringToObject(resp, "token", "test123");
         cJSON_AddStringToObject(resp, "status", "ok");
-        gin_json(c, 200, resp);
+        csilk_json(c, 200, resp);
     } else {
-        gin_string(c, 401, "Invalid credentials");
+        csilk_string(c, 401, "Invalid credentials");
     }
     cJSON_Delete(json);
 }
@@ -112,30 +112,30 @@ static int test_validator(const char* token) {
     return token && strcmp(token, "valid_token") == 0;
 }
 
-static void protected_handler(gin_ctx_t* c) {
-    const char* token = gin_get_header(c, "Authorization");
+static void protected_handler(csilk_ctx_t* c) {
+    const char* token = csilk_get_header(c, "Authorization");
     if (!token || !test_validator(token)) {
-        gin_string(c, 401, "Unauthorized");
+        csilk_string(c, 401, "Unauthorized");
         return;
     }
-    gin_string(c, 200, "Protected data");
+    csilk_string(c, 200, "Protected data");
 }
 
-static void api_handler(gin_ctx_t* c) {
+static void api_handler(csilk_ctx_t* c) {
     cJSON* data = cJSON_CreateObject();
     cJSON_AddStringToObject(data, "key", "value");
     cJSON_AddNumberToObject(data, "num", 42);
-    gin_json(c, 200, data);
+    csilk_json(c, 200, data);
 }
 
-static void echo_handler(gin_ctx_t* c) {
-    const char* name = gin_get_query(c, "name");
+static void echo_handler(csilk_ctx_t* c) {
+    const char* name = csilk_get_query(c, "name");
     if (name) {
         char resp[256];
         snprintf(resp, sizeof(resp), "Echo: %s", name);
-        gin_string(c, 200, resp);
+        csilk_string(c, 200, resp);
     } else {
-        gin_string(c, 200, "Echo: none");
+        csilk_string(c, 200, "Echo: none");
     }
 }
 
@@ -144,29 +144,29 @@ static volatile int server_ready = 0;
 
 static void* run_server(void* arg) {
     (void)arg;
-    gin_router_t* router = gin_router_new();
+    csilk_router_t* router = csilk_router_new();
 
-    gin_group_t* api = gin_group_new(router, "/api");
-    gin_GET(api, "/data", api_handler);
+    csilk_group_t* api = csilk_group_new(router, "/api");
+    csilk_GET(api, "/data", api_handler);
 
-    gin_handler_t h1[] = {hello_handler};
-    gin_router_add(router, "GET", "/", h1, 1);
-    gin_handler_t h2[] = {user_handler};
-    gin_router_add(router, "GET", "/user/:id", h2, 1);
-    gin_handler_t h3[] = {login_handler};
-    gin_router_add(router, "POST", "/login", h3, 1);
-    gin_handler_t h4[] = {protected_handler};
-    gin_router_add(router, "GET", "/protected", h4, 1);
-    gin_handler_t h5[] = {echo_handler};
-    gin_router_add(router, "GET", "/echo", h5, 1);
+    csilk_handler_t h1[] = {hello_handler};
+    csilk_router_add(router, "GET", "/", h1, 1);
+    csilk_handler_t h2[] = {user_handler};
+    csilk_router_add(router, "GET", "/user/:id", h2, 1);
+    csilk_handler_t h3[] = {login_handler};
+    csilk_router_add(router, "POST", "/login", h3, 1);
+    csilk_handler_t h4[] = {protected_handler};
+    csilk_router_add(router, "GET", "/protected", h4, 1);
+    csilk_handler_t h5[] = {echo_handler};
+    csilk_router_add(router, "GET", "/echo", h5, 1);
 
-    gin_server_t* server = gin_server_new(router);
+    csilk_server_t* server = csilk_server_new(router);
     server_ready = 1;
-    gin_server_run(server, PORT);
+    csilk_server_run(server, PORT);
 
-    gin_server_free(server);
-    gin_group_free(api);
-    gin_router_free(router);
+    csilk_server_free(server);
+    csilk_group_free(api);
+    csilk_router_free(router);
     return NULL;
 }
 

@@ -1,0 +1,63 @@
+\doxysection{csilk\+\_\+router\+\_\+node\+\_\+s Struct Reference}
+\hypertarget{structcsilk__router__node__s}{}\label{structcsilk__router__node__s}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+
+
+Node in the router trie.  
+
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__router__node__s_a0f8fd7521c0ded7754e7b95a7827b036}{segment}}
+\item 
+\doxymbox{\hyperlink{router_8c_afc495bda9eb413a8ad6a261e32abe963}{csilk\+\_\+node\+\_\+type\+\_\+t}} \doxymbox{\hyperlink{structcsilk__router__node__s_a7ab0eb834e3d29ba7979e4444449ac02}{type}}
+\item 
+\doxymbox{\hyperlink{router_8c_adb2d20e956447b92ef816c5bd8b654ac}{csilk\+\_\+method\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__router__node__s_ad3266174955a17e65b8835c23a260824}{handlers}}
+\item 
+struct \doxymbox{\hyperlink{structcsilk__router__node__s}{csilk\+\_\+router\+\_\+node\+\_\+s}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__router__node__s_a0ceefc7b43e9f73855c56fc50dea6100}{children}} \+[\doxymbox{\hyperlink{router_8c_a877f7d4f7121e085fee6ffa7ea03b349}{CSILK\+\_\+\+MAX\+\_\+\+CHILDREN}}]\+
+\item 
+int \doxymbox{\hyperlink{structcsilk__router__node__s_aef80c68c8c89791fddba646d923d6327}{children\+\_\+count}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Node in the router trie. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__router__node__s_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__router__node__s_a0ceefc7b43e9f73855c56fc50dea6100}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}!children@{children}}
+\index{children@{children}!csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{children}{children}}
+{\footnotesize\ttfamily \label{structcsilk__router__node__s_a0ceefc7b43e9f73855c56fc50dea6100} 
+struct \doxymbox{\hyperlink{structcsilk__router__node__s}{csilk\+\_\+router\+\_\+node\+\_\+s}}\texorpdfstring{$\ast$}{*} csilk\+\_\+router\+\_\+node\+\_\+s::\+children\+[\doxymbox{\hyperlink{router_8c_a877f7d4f7121e085fee6ffa7ea03b349}{CSILK\+\_\+\+MAX\+\_\+\+CHILDREN}}]\+}
+
+Child nodes array. \Hypertarget{structcsilk__router__node__s_aef80c68c8c89791fddba646d923d6327}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}!children\_count@{children\_count}}
+\index{children\_count@{children\_count}!csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{children\_count}{children\_count}}
+{\footnotesize\ttfamily \label{structcsilk__router__node__s_aef80c68c8c89791fddba646d923d6327} 
+int csilk\+\_\+router\+\_\+node\+\_\+s::\+children\+\_\+count}
+
+Number of child nodes. \Hypertarget{structcsilk__router__node__s_ad3266174955a17e65b8835c23a260824}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}!handlers@{handlers}}
+\index{handlers@{handlers}!csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{handlers}{handlers}}
+{\footnotesize\ttfamily \label{structcsilk__router__node__s_ad3266174955a17e65b8835c23a260824} 
+\doxymbox{\hyperlink{router_8c_adb2d20e956447b92ef816c5bd8b654ac}{csilk\+\_\+method\+\_\+handler\+\_\+t}}\texorpdfstring{$\ast$}{*} csilk\+\_\+router\+\_\+node\+\_\+s::\+handlers}
+
+Method handlers for this node. \Hypertarget{structcsilk__router__node__s_a0f8fd7521c0ded7754e7b95a7827b036}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}!segment@{segment}}
+\index{segment@{segment}!csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{segment}{segment}}
+{\footnotesize\ttfamily \label{structcsilk__router__node__s_a0f8fd7521c0ded7754e7b95a7827b036} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+router\+\_\+node\+\_\+s::\+segment}
+
+URL path segment. \Hypertarget{structcsilk__router__node__s_a7ab0eb834e3d29ba7979e4444449ac02}\index{csilk\_router\_node\_s@{csilk\_router\_node\_s}!type@{type}}
+\index{type@{type}!csilk\_router\_node\_s@{csilk\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{type}{type}}
+{\footnotesize\ttfamily \label{structcsilk__router__node__s_a7ab0eb834e3d29ba7979e4444449ac02} 
+\doxymbox{\hyperlink{router_8c_afc495bda9eb413a8ad6a261e32abe963}{csilk\+\_\+node\+\_\+type\+\_\+t}} csilk\+\_\+router\+\_\+node\+\_\+s::\+type}
+
+Type of node (static/\+param/\+wildcard). 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+src/\+\doxymbox{\hyperlink{router_8c}{router.\+c}}\end{DoxyCompactItemize}
