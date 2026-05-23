@@ -436,6 +436,9 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   client->ctx._internal_client = client;
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
+    if (server->config.tcp_nodelay) {
+      uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
+    }
     server->active_connections++;
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
@@ -599,9 +602,6 @@ int csilk_server_run(csilk_server_t* server, int port) {
   server->async_handle.data = server;
 
   // Apply TCP settings
-  if (server->config.tcp_nodelay) {
-      uv_tcp_nodelay(&server->server_handle, 1);
-  }
   if (server->config.tcp_keepalive > 0) {
       uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
   }
