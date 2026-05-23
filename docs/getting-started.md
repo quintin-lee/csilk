@@ -1,18 +1,121 @@
 # Getting Started
 
 ## Prerequisites
+
 - CMake 3.11+
 - C compiler (C11 support)
 - Git
 - libyaml-dev
+- zlib1g-dev (for gzip middleware)
+- libuv (auto-fetched via CMake if not present)
 
-## Build
-```bash
-git clone ...
-mkdir build && cd build
-cmake ..
-make
+## Build & Dependency Flow
+
+```mermaid
+flowchart LR
+    subgraph Host System
+        CC["C Compiler (C11)"]
+        SYS["libyaml-dev\nzlib1g-dev\npthread"]
+    end
+
+    subgraph "CMake FetchContent"
+        UV["libuv v1.48.0"]
+        LL["llhttp v9.4.1"]
+        CJ["cJSON v1.7.18"]
+    end
+
+    subgraph Build
+        CMAKE["CMakeLists.txt"]
+        OBJ["Object Files\nsrc/*.c"]
+        LIB["libcsilk.a\nlibcsilk.so"]
+        EXE["example_server\nexample_app\ntests/*"]
+    end
+
+    CC --> OBJ
+    SYS --> OBJ
+    UV --> OBJ
+    LL --> OBJ
+    CJ --> OBJ
+    CMAKE --> OBJ
+    OBJ --> LIB
+    OBJ --> EXE
+    LIB --> EXE
 ```
 
+## Build from Source
+
+```bash
+git clone https://github.com/username/csilk.git
+cd csilk
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+### Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CMAKE_BUILD_TYPE` | - | `Debug`, `Release`, `RelWithDebInfo` |
+| `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
+| `USE_ASAN` | OFF | Enable AddressSanitizer |
+| `USE_FUZZER` | OFF | Build fuzz test harness |
+
 ## Run Example
-See `examples/example_server.c`.
+
+```bash
+# Low-level API demo
+./build/example_server
+
+# High-level app API demo
+./build/example_app
+```
+
+## Example Server Walkthrough
+
+```mermaid
+sequenceDiagram
+    participant Main
+    participant Router as csilk_router_t
+    participant Group as csilk_group_t
+    participant Server as csilk_server_t
+    participant Loop as libuv Event Loop
+
+    Main->>Router: csilk_router_new()
+    Main->>Group: csilk_group_new(router, "/api")
+    Main->>Group: csilk_GET(group, "/ping", handler)
+    Main->>Server: csilk_server_new(router)
+    Main->>Server: csilk_server_use(server, cors_middleware)
+    Main->>Server: csilk_server_set_config(server, config)
+    Main->>Server: csilk_server_run(server, 8080)
+    Server->>Loop: uv_run() blocks main thread
+    Note over Loop: Accepting connections...
+```
+
+## Running Tests
+
+```bash
+cd build && ctest --output-on-failure
+```
+
+## Minimal Server Program
+
+```c
+#include "csilk.h"
+
+void ping(csilk_ctx_t* c) {
+    csilk_string(c, 200, "pong");
+}
+
+int main() {
+    csilk_router_t* r = csilk_router_new();
+    csilk_router_add(r, "GET", "/ping", (csilk_handler_t[]){ping, NULL}, 1);
+
+    csilk_server_t* s = csilk_server_new(r);
+    csilk_server_run(s, 8080);
+
+    csilk_router_free(r);
+    csilk_server_free(s);
+    return 0;
+}
+```

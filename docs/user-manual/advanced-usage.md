@@ -1,3 +1,261 @@
 # Advanced Usage
 
-Learn how to use Route Groups, WebSockets, and Server-Sent Events (SSE) in your applications.
+## Route Groups
+
+Route groups allow prefix-based route organization and middleware scoping:
+
+```mermaid
+graph TB
+    subgraph "Router"
+        ROOT["/ "]
+    end
+
+    subgraph "Group /api (auth middleware)"
+        API["/api"]
+        API --> V1["/api/v1"]
+        API --> V2["/api/v2"]
+        V1 --> V1U["/api/v1/users"]
+        V1 --> V1P["/api/v1/posts"]
+        V2 --> V2U["/api/v2/users"]
+
+        Note1["Middleware: auth_handler\nApplied to all /api routes"]
+    end
+
+    subgraph "Group /admin (auth + admin middleware)"
+        ADMIN["/admin"]
+        ADMIN --> DASH["/admin/dashboard"]
+        ADMIN --> SETTINGS["/admin/settings"]
+
+        Note2["Middleware: auth_handler + admin_check\nInherits parent + adds own"]
+    end
+
+    ROOT --> API
+    ROOT --> ADMIN
+```
+
+### Group Code Example
+
+```c
+csilk_group_t* api = csilk_group_new(router, "/api");
+csilk_group_use(api, auth_handler);     // All /api/* routes require auth
+csilk_GET(api, "/users", list_users);
+
+csilk_group_t* admin = csilk_group_group(api, "/admin");
+csilk_group_use(admin, admin_handler);  // /api/admin/* requires auth + admin
+csilk_GET(admin, "/dashboard", dashboard);
+```
+
+## WebSocket Protocol
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant HTTP as llhttp Parser
+    participant CTX as csilk_ctx_t
+    participant WS as WebSocket Engine
+
+    Client->>Server: GET /ws\nUpgrade: websocket\nSec-WebSocket-Key: dGhlIHNhb...
+
+    Note over Server: Regular HTTP parsing
+
+    Server->>CTX: Router matches /ws handler
+    CTX->>CTX: ws_handler(ctx)
+
+    CTX->>WS: csilk_ws_handshake(ctx)
+    WS->>WS: SHA1(key + GUID) → base64 → accept_key
+    WS->>CTX: Set headers: Upgrade + Connection + Accept
+    WS->>CTX: ctx->status = 101 SWITCHING_PROTOCOLS
+    WS->>CTX: ctx->is_websocket = 1
+
+    CTX->>Server: _csilk_send_response() → 101 Switching Protocols
+    Server-->>Client: HTTP/1.1 101 Switching Protocols
+
+    Note over Server: uv_read_start continues but...
+    Note over Server: on_read now routes to csilk_ws_parse_frame()
+
+    Client->>Server: WebSocket frame (text: "Hello")
+    Server->>WS: csilk_ws_parse_frame(ctx, buf, nread)
+    WS->>WS: Unmask payload
+    WS->>WS: Check opcode (0x08 = close, else data)
+    WS->>CTX: ctx->on_ws_message(ctx, payload, len, opcode)
+
+    CTX->>WS: csilk_ws_send(ctx, "Reply", 5, 1)
+    WS->>WS: Build frame: FIN + Opcode + Length + Payload
+    WS->>Server: uv_write() → client
+
+    Client->>Server: Close frame (opcode 0x08)
+    Server->>WS: Auto-respond with close frame
+    Server->>Server: uv_close() connection
+```
+
+### WebSocket Frame Format
+
+```mermaid
+graph LR
+    subgraph "Frame Structure"
+        B0["Byte 0: FIN(1) + RSV(3) + Opcode(4)"]
+        B1["Byte 1: MASK(1) + PayloadLen(7)"]
+        EL["Extended Length: 0/2/8 bytes"]
+        MK["Mask Key: 0 or 4 bytes"]
+        PL["Payload Data"]
+        B0 --> B1 --> EL --> MK --> PL
+    end
+```
+
+## Server-Sent Events (SSE)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant CTX as csilk_ctx_t
+    participant SSE
+
+    Client->>Server: GET /events
+    Server->>CTX: sse_handler(ctx)
+    CTX->>SSE: csilk_sse_init(ctx)
+    SSE->>CTX: Set Content-Type: text/event-stream
+    SSE->>CTX: Set Cache-Control: no-cache
+    SSE->>CTX: Set Connection: keep-alive
+    SSE->>CTX: ctx->is_sse = 1
+    CTX->>Server: Send headers (chunked)
+
+    Note over Server: Connection stays open
+
+    loop Event Stream
+        CTX->>SSE: csilk_sse_send(ctx, "message", "data here")
+        SSE->>Server: write_chunk_frame("event: message\ndata: data here\n\n")
+        Server-->>Client: HTTP chunk
+    end
+
+    CTX->>SSE: csilk_sse_close(ctx)
+    SSE->>Server: write_chunk_frame("0\r\n\r\n")
+    Server-->>Client: Terminal chunk
+```
+
+## Multipart Form Data
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant CTX as csilk_ctx_t
+    participant MP as Multipart Middleware
+    participant Handler as Part Callback
+
+    Client->>Server: POST /upload\nContent-Type: multipart/form-data; boundary=--abc
+
+    Server->>CTX: Router matches /upload
+    CTX->>MP: csilk_multipart_parse(ctx, part_handler)
+    MP->>MP: Extract boundary from Content-Type
+    MP->>MP: Parse each part
+
+    loop For each part
+        MP->>MP: Find --boundary separator
+        MP->>MP: Parse Content-Disposition → name, filename
+        MP->>MP: Parse Content-Type (if present)
+        MP->>Handler: part_handler(ctx, part_name, filename, data, len, NULL)
+    end
+
+    MP->>MP: Parse closing --boundary--
+```
+
+## Gzip Compression
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Context
+    participant Gzip MW as Gzip Middleware
+    participant TP as libuv Thread Pool
+    participant Zlib
+
+    Client->>Server: GET /data\nAccept-Encoding: gzip
+
+    Note over Server: Middleware captures response
+
+    Server->>Gzip MW: gzip_handler(ctx)
+    Gzip MW->>Gzip MW: csilk_next(ctx)
+    Note over Gzip MW: Wait for handler to set response body
+
+    Gzip MW->>Gzip MW: Check Accept-Encoding header
+    alt Client accepts gzip
+        Gzip MW->>TP: Offload compression work
+        TP->>Zlib: deflate(response.body)
+        Zlib-->>TP: compressed data
+        TP-->>Gzip MW: async callback
+        Gzip MW->>Context: Set Content-Encoding: gzip
+        Gzip MW->>Context: Replace response.body with compressed data
+    end
+
+    Gzip MW->>Server: _csilk_send_response()
+    Server-->>Client: HTTP Response (compressed)
+```
+
+## Static File Serving
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Context
+    participant SMW as Static Middleware
+    participant TP as libuv Thread Pool
+    participant FS as Filesystem
+
+    Client->>Server: GET /static/css/app.css
+
+    Server->>Context: Router matches /static/*filepath
+    Context->>Context: param = "css/app.css"
+    Context->>SMW: csilk_static(ctx, "./public")
+    SMW->>SMW: Build full path: ./public/css/app.css
+    SMW->>SMW: Check path traversal attack (..)
+
+    SMW->>TP: Offload file read to thread pool
+    TP->>FS: open() + fstat() + read()
+    FS-->>TP: file contents + size
+    TP-->>SMW: async callback
+
+    SMW->>Context: Set Content-Type (MIME from extension)
+    SMW->>Context: csilk_string(ctx, 200, file_contents)
+    SMW->>Server: _csilk_send_response()
+    Server-->>Client: HTTP Response (file contents)
+```
+
+## High-Level App API
+
+The `csilk_app_t` wrapper simplifies server creation:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as csilk_app_t
+    participant Config
+    participant Router
+    participant Server
+
+    User->>App: csilk_app_new("config.yaml")
+    App->>Config: csilk_load_config("config.yaml")
+    Config-->>App: csilk_config_t
+
+    App->>Router: csilk_router_new()
+    App->>Server: csilk_server_new(router)
+
+    User->>App: csilk_app_use(app, cors_middleware)
+    App->>Server: csilk_server_use(server, cors_middleware)
+
+    User->>App: csilk_app_get(app, "/hello", handler)
+    App->>Router: csilk_router_add(router, "GET", "/hello", handler)
+
+    User->>App: csilk_app_apply_config(app)
+    App->>App: Apply config.settings to server
+    App->>App: Apply config.middlewares to server
+    App->>App: Apply config.routes to router
+
+    User->>App: csilk_app_run(app, 8080)
+    App->>Server: csilk_server_set_config(server, config)
+    App->>Server: csilk_server_run(server, 8080)
+    Note over Server: Blocking event loop
+```
