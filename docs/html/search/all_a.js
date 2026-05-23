@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['infrastructure_20已完成_0',['阶段一：稳定性与测试基建 (Stability &amp;amp; Testing Infrastructure) [已完成]',['../md_task__plan.html#autotoc_md32',1,'']]]
+  ['jump_5fbuffer_0',['jump_buffer',['../structgin__ctx__s.html#a26b274fd8cf5637121770b94ff8e49a7',1,'gin_ctx_s']]]
 ];

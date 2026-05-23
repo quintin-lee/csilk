@@ -91,22 +91,98 @@ $(function(){initNavTree('structgin__router__node__s.html','','structgin__router
   <div class="headertitle"><div class="title">gin_router_node_s Struct Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Node in the router trie.  
+ <a href="#details">More...</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:a9bad980ed1f961fca2b5c8610b0fdf3b" id="r_a9bad980ed1f961fca2b5c8610b0fdf3b"><td class="memItemLeft"><a id="a9bad980ed1f961fca2b5c8610b0fdf3b" name="a9bad980ed1f961fca2b5c8610b0fdf3b"></a>
-char *&#160;</td><td class="memItemRight"><b>segment</b></td></tr>
-<tr class="memitem:ac84a9a91f4a5fc08b6d7476f55023766" id="r_ac84a9a91f4a5fc08b6d7476f55023766"><td class="memItemLeft"><a id="ac84a9a91f4a5fc08b6d7476f55023766" name="ac84a9a91f4a5fc08b6d7476f55023766"></a>
-gin_node_type_t&#160;</td><td class="memItemRight"><b>type</b></td></tr>
-<tr class="memitem:a468a2a6ec12eaa18da7d78291e26c321" id="r_a468a2a6ec12eaa18da7d78291e26c321"><td class="memItemLeft"><a id="a468a2a6ec12eaa18da7d78291e26c321" name="a468a2a6ec12eaa18da7d78291e26c321"></a>
-gin_method_handler_t *&#160;</td><td class="memItemRight"><b>handlers</b></td></tr>
-<tr class="memitem:a2363db4a3c0a8f5db8dbabc4ee41642a" id="r_a2363db4a3c0a8f5db8dbabc4ee41642a"><td class="memItemLeft"><a id="a2363db4a3c0a8f5db8dbabc4ee41642a" name="a2363db4a3c0a8f5db8dbabc4ee41642a"></a>
-struct <a class="el" href="structgin__router__node__s.html">gin_router_node_s</a> *&#160;</td><td class="memItemRight"><b>children</b></td></tr>
-<tr class="memitem:a702e6b191354f0e98115f0442f04104f" id="r_a702e6b191354f0e98115f0442f04104f"><td class="memItemLeft"><a id="a702e6b191354f0e98115f0442f04104f" name="a702e6b191354f0e98115f0442f04104f"></a>
-struct <a class="el" href="structgin__router__node__s.html">gin_router_node_s</a> *&#160;</td><td class="memItemRight"><b>sibling</b></td></tr>
+<tr class="memitem:a9bad980ed1f961fca2b5c8610b0fdf3b" id="r_a9bad980ed1f961fca2b5c8610b0fdf3b"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#a9bad980ed1f961fca2b5c8610b0fdf3b">segment</a></td></tr>
+<tr class="memitem:ac84a9a91f4a5fc08b6d7476f55023766" id="r_ac84a9a91f4a5fc08b6d7476f55023766"><td class="memItemLeft"><a class="el" href="router_8c.html#a3081553e206b13d2b821e32c76294c88">gin_node_type_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac84a9a91f4a5fc08b6d7476f55023766">type</a></td></tr>
+<tr class="memitem:a468a2a6ec12eaa18da7d78291e26c321" id="r_a468a2a6ec12eaa18da7d78291e26c321"><td class="memItemLeft"><a class="el" href="router_8c.html#a89290ab4c76f70e91667ce1b3b920a78">gin_method_handler_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a468a2a6ec12eaa18da7d78291e26c321">handlers</a></td></tr>
+<tr class="memitem:a927c32d2df39b939fdc2a306928b4905" id="r_a927c32d2df39b939fdc2a306928b4905"><td class="memItemLeft">struct <a class="el" href="structgin__router__node__s.html">gin_router_node_s</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a927c32d2df39b939fdc2a306928b4905">children</a> [<a class="el" href="router_8c.html#a9fd1d94f2edbc89b9579d9da4db94268">GIN_MAX_CHILDREN</a>]</td></tr>
+<tr class="memitem:aa3a505fecf711b5e8b2335a58f517c6b" id="r_aa3a505fecf711b5e8b2335a58f517c6b"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#aa3a505fecf711b5e8b2335a58f517c6b">children_count</a></td></tr>
 </table>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Node in the router trie. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="a927c32d2df39b939fdc2a306928b4905" name="a927c32d2df39b939fdc2a306928b4905"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a927c32d2df39b939fdc2a306928b4905">&#9670;&#160;</a></span>children</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structgin__router__node__s.html">gin_router_node_s</a>* gin_router_node_s::children[<a class="el" href="router_8c.html#a9fd1d94f2edbc89b9579d9da4db94268">GIN_MAX_CHILDREN</a>]</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Child nodes array. </p>
+
+</div>
+</div>
+<a id="aa3a505fecf711b5e8b2335a58f517c6b" name="aa3a505fecf711b5e8b2335a58f517c6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa3a505fecf711b5e8b2335a58f517c6b">&#9670;&#160;</a></span>children_count</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int gin_router_node_s::children_count</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Number of child nodes. </p>
+
+</div>
+</div>
+<a id="a468a2a6ec12eaa18da7d78291e26c321" name="a468a2a6ec12eaa18da7d78291e26c321"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a468a2a6ec12eaa18da7d78291e26c321">&#9670;&#160;</a></span>handlers</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="router_8c.html#a89290ab4c76f70e91667ce1b3b920a78">gin_method_handler_t</a>* gin_router_node_s::handlers</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Method handlers for this node. </p>
+
+</div>
+</div>
+<a id="a9bad980ed1f961fca2b5c8610b0fdf3b" name="a9bad980ed1f961fca2b5c8610b0fdf3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9bad980ed1f961fca2b5c8610b0fdf3b">&#9670;&#160;</a></span>segment</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_router_node_s::segment</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>URL path segment. </p>
+
+</div>
+</div>
+<a id="ac84a9a91f4a5fc08b6d7476f55023766" name="ac84a9a91f4a5fc08b6d7476f55023766"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac84a9a91f4a5fc08b6d7476f55023766">&#9670;&#160;</a></span>type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="router_8c.html#a3081553e206b13d2b821e32c76294c88">gin_node_type_t</a> gin_router_node_s::type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Type of node (static/param/wildcard). </p>
+
+</div>
+</div>
 <hr/>The documentation for this struct was generated from the following file:<ul>
-<li>src/<b>router.c</b></li>
+<li>src/<a class="el" href="router_8c.html">router.c</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

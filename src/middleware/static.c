@@ -1,7 +1,7 @@
 /**
  * @file static.c
  * @brief Static file serving middleware implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <fcntl.h>

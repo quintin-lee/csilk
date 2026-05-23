@@ -1,3 +1,9 @@
+/**
+ * @file websocket.c
+ * @brief WebSocket handshake, send, and frame parsing implementation.
+ * MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +12,7 @@
 #include "gin.h"
 #include "gin_internal.h"
 
+/** @brief WebSocket GUID for handshake key generation (RFC 6455). */
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 void gin_ws_handshake(gin_ctx_t* c) {
@@ -35,7 +42,9 @@ void gin_ws_handshake(gin_ctx_t* c) {
     c->is_websocket = 1;
 }
 
-// Forward declaration of write callback
+/** @brief Write completion callback for WebSocket frame writes.
+ * @param req Write request.
+ * @param status Write status. */
 static void on_ws_write(uv_write_t* req, int status) {
     if (req->data) free(req->data);
     free(req);

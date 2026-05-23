@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['license_0',['License',['../md_README.html#autotoc_md27',1,'']]],
-  ['login_5fhandler_1',['login_handler',['../example__server_8c.html#a33c88ec8af65bb5cc8915df4f09e70f2',1,'example_server.c']]]
+  ['key_0',['key',['../structgin__header__s.html#a95ea331fa294c46689d9fee1b3bf1306',1,'gin_header_s::key'],['../structgin__param__t.html#afe2ad2b853b7d7a815cccbd338b2212d',1,'gin_param_t::key']]]
 ];

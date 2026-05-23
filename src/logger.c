@@ -13,12 +13,13 @@
 #include <uv.h>
 #include "gin.h"
 
+/** @brief Internal global logger state. */
 typedef struct {
-    gin_log_config_t config;
-    FILE* fp;
-    size_t current_size;
-    uv_mutex_t mutex;
-    int initialized;
+    gin_log_config_t config; /**< Logger configuration. */
+    FILE* fp;                /**< Output file pointer (stdout or file). */
+    size_t current_size;     /**< Current log file size for rotation. */
+    uv_mutex_t mutex;        /**< Mutex for thread safety. */
+    int initialized;         /**< Flag indicating logger is initialized. */
 } gin_logger_t;
 
 static gin_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
@@ -26,7 +27,7 @@ static gin_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
 static const char* level_strings[] = { "TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL" };
 static const char* level_colors[] = { "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m" };
 
-// Internal helper for rotation
+/** @brief Rotate log file (rename current to .1, open new file). */
 static void rotate_log_files() {
     if (!g_logger.config.file_path) return;
     

@@ -1,8 +1,19 @@
+/**
+ * @file cors.c
+ * @brief CORS middleware implementation.
+ * MIT License
+ */
+
 #include <stdio.h>
 #include <string.h>
 
 #include "gin.h"
 
+/** @brief CORS middleware handler.
+ * Sets Access-Control-* response headers based on configuration.
+ * Handles CORS preflight (OPTIONS) requests.
+ * @param c The request context.
+ * @param config CORS configuration. */
 void gin_cors_middleware(gin_ctx_t* c, gin_cors_config_t config) {
   gin_set_header(c, "Access-Control-Allow-Origin", config.allow_origin);
   gin_set_header(c, "Access-Control-Allow-Methods", config.allow_methods);

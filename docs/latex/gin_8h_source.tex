@@ -1,129 +1,256 @@
 \doxysection{gin.\+h}
 \hypertarget{gin_8h_source}{}\label{gin_8h_source}\index{include/gin.h@{include/gin.h}}
-
+\doxymbox{\hyperlink{gin_8h}{Go to the documentation of this file.}}
 \begin{DoxyCode}{0}
-\DoxyCodeLine{00001\ \textcolor{preprocessor}{\#ifndef\ GIN\_H}}
-\DoxyCodeLine{00002\ \textcolor{preprocessor}{\#define\ GIN\_H}}
-\DoxyCodeLine{00003\ }
-\DoxyCodeLine{00004\ \textcolor{preprocessor}{\#include\ <setjmp.h>}}
-\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#include\ <stddef.h>}}
-\DoxyCodeLine{00006\ }
-\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#include\ "{}cJSON.h"{}}}
-\DoxyCodeLine{00008\ }
-\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#define\ GIN\_VERSION\ "{}0.1.0"{}}\textcolor{preprocessor}{}}
-\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#define\ GIN\_MAX\_PARAMS\ 20}}
-\DoxyCodeLine{00013\ }
-\DoxyCodeLine{00014\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ gin\_ctx\_t;}
-\DoxyCodeLine{00015\ \textcolor{keyword}{typedef}\ void\ (*gin\_handler\_t)(gin\_ctx\_t*\ c);}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00007\ }
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#ifndef\ GIN\_H}}
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#define\ GIN\_H}}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <setjmp.h>}}
+\DoxyCodeLine{00012\ \textcolor{preprocessor}{\#include\ <stddef.h>}}
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00014\ }
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#include\ "{}cJSON.h"{}}}
 \DoxyCodeLine{00016\ }
-\DoxyCodeLine{00017\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}\ gin\_header\_t;}
-\DoxyCodeLine{00018\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}\ \{}
-\DoxyCodeLine{00019\ \ \ \textcolor{keywordtype}{char}*\ key;}
-\DoxyCodeLine{00020\ \ \ \textcolor{keywordtype}{char}*\ value;}
-\DoxyCodeLine{00021\ \ \ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}*\ next;}
-\DoxyCodeLine{00022\ \};}
-\DoxyCodeLine{00023\ }
-\DoxyCodeLine{00024\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
-\DoxyCodeLine{00025\ \ \ \textcolor{keywordtype}{char}*\ method;}
-\DoxyCodeLine{00026\ \ \ \textcolor{keywordtype}{char}*\ path;}
-\DoxyCodeLine{00027\ \ \ \textcolor{keywordtype}{char}*\ body;}
-\DoxyCodeLine{00028\ \ \ \textcolor{keywordtype}{size\_t}\ body\_len;}
-\DoxyCodeLine{00029\ \ \ gin\_header\_t*\ headers;}
-\DoxyCodeLine{00030\ \ \ gin\_header\_t*\ query\_params;}
-\DoxyCodeLine{00031\ \}\ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}};}
-\DoxyCodeLine{00032\ }
-\DoxyCodeLine{00033\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
-\DoxyCodeLine{00034\ \ \ \textcolor{keywordtype}{int}\ status;}
-\DoxyCodeLine{00035\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ body;}
-\DoxyCodeLine{00036\ \ \ gin\_header\_t*\ headers;}
-\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{int}\ body\_is\_managed;}
-\DoxyCodeLine{00038\ \}\ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}};}
-\DoxyCodeLine{00039\ }
-\DoxyCodeLine{00040\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
-\DoxyCodeLine{00041\ \ \ \textcolor{keywordtype}{char}*\ key;}
-\DoxyCodeLine{00042\ \ \ \textcolor{keywordtype}{char}*\ value;}
-\DoxyCodeLine{00043\ \}\ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}};}
-\DoxyCodeLine{00044\ }
-\DoxyCodeLine{00045\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ \{}
-\DoxyCodeLine{00046\ \ \ \textcolor{keywordtype}{int}\ handler\_index;}
-\DoxyCodeLine{00047\ \ \ gin\_handler\_t*\ handlers;\ \ \textcolor{comment}{//\ NULL\ terminated\ array}}
-\DoxyCodeLine{00048\ \ \ \textcolor{keywordtype}{int}\ aborted;}
-\DoxyCodeLine{00049\ \ \ jmp\_buf\ jump\_buffer;}
-\DoxyCodeLine{00050\ \ \ \textcolor{keywordtype}{int}\ has\_jump\_buffer;}
-\DoxyCodeLine{00051\ \ \ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}}\ request;}
-\DoxyCodeLine{00052\ \ \ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}}\ response;}
-\DoxyCodeLine{00053\ \ \ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}}\ params[GIN\_MAX\_PARAMS];}
-\DoxyCodeLine{00054\ \ \ \textcolor{keywordtype}{int}\ params\_count;}
-\DoxyCodeLine{00055\ \};}
-\DoxyCodeLine{00056\ }
-\DoxyCodeLine{00059\ \textcolor{keywordtype}{void}\ gin\_next(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00062\ \textcolor{keywordtype}{void}\ gin\_abort(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00066\ \textcolor{keywordtype}{void}\ gin\_status(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status);}
-\DoxyCodeLine{00071\ \textcolor{keywordtype}{void}\ gin\_string(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ msg);}
-\DoxyCodeLine{00076\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_param(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
-\DoxyCodeLine{00081\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_header(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
-\DoxyCodeLine{00086\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ gin\_get\_query(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
-\DoxyCodeLine{00091\ \textcolor{keywordtype}{void}\ gin\_set\_header(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ value);}
-\DoxyCodeLine{00094\ \textcolor{keywordtype}{void}\ gin\_ctx\_cleanup(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00095\ }
-\DoxyCodeLine{00098\ \textcolor{keywordtype}{void}\ gin\_recovery\_handler(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00101\ \textcolor{keywordtype}{void}\ gin\_panic(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00102\ }
-\DoxyCodeLine{00105\ \textcolor{keywordtype}{void}\ gin\_logger\_handler(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00106\ }
-\DoxyCodeLine{00107\ \textcolor{keyword}{typedef}\ int\ (*gin\_auth\_validator\_t)(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ token);}
-\DoxyCodeLine{00111\ \textcolor{keywordtype}{void}\ gin\_auth\_middleware(gin\_ctx\_t*\ c,\ gin\_auth\_validator\_t\ validator);}
-\DoxyCodeLine{00115\ \textcolor{keywordtype}{void}\ gin\_static(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ root\_dir);}
-\DoxyCodeLine{00116\ }
-\DoxyCodeLine{00120\ cJSON*\ gin\_bind\_json(gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00125\ \textcolor{keywordtype}{void}\ gin\_json(gin\_ctx\_t*\ c,\ \textcolor{keywordtype}{int}\ status,\ cJSON*\ json);}
-\DoxyCodeLine{00126\ }
-\DoxyCodeLine{00131\ \textcolor{keywordtype}{void}\ gin\_split\_url(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ url,\ \textcolor{keywordtype}{char}**\ path,\ \textcolor{keywordtype}{char}**\ query);}
-\DoxyCodeLine{00135\ \textcolor{keywordtype}{void}\ gin\_parse\_query(gin\_ctx\_t*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ query\_string);}
-\DoxyCodeLine{00136\ }
-\DoxyCodeLine{00137\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__node__s}{gin\_router\_node\_s}}\ gin\_router\_node\_t;}
-\DoxyCodeLine{00138\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__s}{gin\_router\_s}}\ \{}
-\DoxyCodeLine{00139\ \ \ gin\_router\_node\_t*\ root;}
-\DoxyCodeLine{00140\ \}\ gin\_router\_t;}
-\DoxyCodeLine{00141\ }
-\DoxyCodeLine{00142\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__group__s}{gin\_group\_s}}\ gin\_group\_t;}
-\DoxyCodeLine{00143\ }
-\DoxyCodeLine{00146\ gin\_router\_t*\ gin\_router\_new();}
-\DoxyCodeLine{00153\ \textcolor{keywordtype}{void}\ gin\_router\_add(gin\_router\_t*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,}
-\DoxyCodeLine{00154\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ gin\_handler\_t*\ handlers,\ \textcolor{keywordtype}{size\_t}\ handler\_count);}
-\DoxyCodeLine{00160\ gin\_handler\_t*\ gin\_router\_match(gin\_router\_t*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
-\DoxyCodeLine{00161\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path);}
-\DoxyCodeLine{00166\ \textcolor{keywordtype}{int}\ gin\_router\_match\_ctx(gin\_router\_t*\ r,\ gin\_ctx\_t*\ c);}
-\DoxyCodeLine{00169\ \textcolor{keywordtype}{void}\ gin\_router\_free(gin\_router\_t*\ r);}
-\DoxyCodeLine{00170\ }
-\DoxyCodeLine{00175\ gin\_group\_t*\ gin\_group\_new(gin\_router\_t*\ router,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ prefix);}
-\DoxyCodeLine{00180\ gin\_group\_t*\ gin\_group\_group(gin\_group\_t*\ parent,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ prefix);}
-\DoxyCodeLine{00184\ \textcolor{keywordtype}{void}\ gin\_group\_use(gin\_group\_t*\ group,\ gin\_handler\_t\ handler);}
-\DoxyCodeLine{00190\ \textcolor{keywordtype}{void}\ gin\_group\_add\_route(gin\_group\_t*\ group,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
-\DoxyCodeLine{00191\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,\ gin\_handler\_t\ handler);}
-\DoxyCodeLine{00194\ \textcolor{keywordtype}{void}\ gin\_group\_free(gin\_group\_t*\ group);}
-\DoxyCodeLine{00195\ }
-\DoxyCodeLine{00196\ \textcolor{comment}{//\ Convenience\ macros\ for\ groups}}
-\DoxyCodeLine{00197\ \textcolor{preprocessor}{\#define\ gin\_GET(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00198\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}GET"{},\ path,\ handler)}}
-\DoxyCodeLine{00199\ \textcolor{preprocessor}{\#define\ gin\_POST(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00200\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}POST"{},\ path,\ handler)}}
-\DoxyCodeLine{00201\ \textcolor{preprocessor}{\#define\ gin\_PUT(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00202\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PUT"{},\ path,\ handler)}}
-\DoxyCodeLine{00203\ \textcolor{preprocessor}{\#define\ gin\_DELETE(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00204\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}DELETE"{},\ path,\ handler)}}
-\DoxyCodeLine{00205\ \textcolor{preprocessor}{\#define\ gin\_PATCH(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00206\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PATCH"{},\ path,\ handler)}}
-\DoxyCodeLine{00207\ \textcolor{preprocessor}{\#define\ gin\_OPTIONS(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00208\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}OPTIONS"{},\ path,\ handler)}}
-\DoxyCodeLine{00209\ \textcolor{preprocessor}{\#define\ gin\_HEAD(group,\ path,\ handler)\ \(\backslash\)}}
-\DoxyCodeLine{00210\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}HEAD"{},\ path,\ handler)}}
-\DoxyCodeLine{00211\ }
-\DoxyCodeLine{00212\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__server__s}{gin\_server\_s}}\ gin\_server\_t;}
-\DoxyCodeLine{00216\ gin\_server\_t*\ gin\_server\_new(gin\_router\_t*\ router);}
-\DoxyCodeLine{00219\ \textcolor{keywordtype}{void}\ gin\_server\_free(gin\_server\_t*\ server);}
-\DoxyCodeLine{00224\ \textcolor{keywordtype}{int}\ gin\_server\_run(gin\_server\_t*\ server,\ \textcolor{keywordtype}{int}\ port);}
-\DoxyCodeLine{00225\ }
-\DoxyCodeLine{00226\ \textcolor{preprocessor}{\#endif}}
+\DoxyCodeLine{00018\ \textcolor{preprocessor}{\#define\ GIN\_VERSION\ "{}0.1.0"{}}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00020\ \textcolor{preprocessor}{\#define\ GIN\_MAX\_PARAMS\ 20}}
+\DoxyCodeLine{00021\ }
+\DoxyCodeLine{00023\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ \doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}};}
+\DoxyCodeLine{00025\ \textcolor{keyword}{typedef}\ void\ (*\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}})(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00026\ }
+\DoxyCodeLine{00028\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}\ \{}
+\DoxyCodeLine{00029\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306}{key}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00030\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52}{value}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00031\ \ \ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__header__s}{gin\_header\_s}}*\ \doxymbox{\hyperlink{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5}{next}};\ }
+\DoxyCodeLine{00032\ \}\ \doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\_header\_t}};}
+\DoxyCodeLine{00033\ }
+\DoxyCodeLine{00035\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00036\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__request__t_a8f06c6a2fd8db1ab3a4e51399eede0ef}{method}};\ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00037\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__request__t_a395f5c8c35572b4cab5f269939d6c5e5}{path}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00038\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__request__t_aeadc624628af4a09f1f70e1f03eb1495}{body}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00039\ \ \ \textcolor{keywordtype}{size\_t}\ \doxymbox{\hyperlink{structgin__request__t_a8303e4e9207fa96b7095402c9462f010}{body\_len}};\ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00040\ \ \ \doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\_header\_t}}*\ \doxymbox{\hyperlink{structgin__request__t_afacfa9d1e767a2e6bbcbb1dbfd5b8dc3}{headers}};\ \ \ \ }
+\DoxyCodeLine{00041\ \ \ \doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\_header\_t}}*\ \doxymbox{\hyperlink{structgin__request__t_ac5e1ded10e261526cb6b3d9d4f0d1722}{query\_params}};\ }
+\DoxyCodeLine{00042\ \}\ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}};}
+\DoxyCodeLine{00043\ }
+\DoxyCodeLine{00045\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00046\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8}{status}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00047\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__response__t_a01791fef52abee19fed2e58deba677a4}{body}};\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00048\ \ \ \doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\_header\_t}}*\ \doxymbox{\hyperlink{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0}{headers}};\ \ \ \ }
+\DoxyCodeLine{00049\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29}{body\_is\_managed}};\ \ \ \ \ \ }
+\DoxyCodeLine{00050\ \}\ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}};}
+\DoxyCodeLine{00051\ }
+\DoxyCodeLine{00053\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00054\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__param__t_afe2ad2b853b7d7a815cccbd338b2212d}{key}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00055\ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__param__t_abcda163b1dd4bfc9c0dbb022302415cd}{value}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00056\ \}\ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}};}
+\DoxyCodeLine{00057\ }
+\DoxyCodeLine{00059\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__arena__s}{gin\_arena\_s}}\ \doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}};}
+\DoxyCodeLine{00060\ }
+\DoxyCodeLine{00064\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__ctx__s}{gin\_ctx\_s}}\ \{}
+\DoxyCodeLine{00065\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__ctx__s_a34d8447140f419264f2191e0d06ba968}{handler\_index}};\ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00066\ \ \ \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}}*\ \doxymbox{\hyperlink{structgin__ctx__s_ab0dc063a3d10eb2249a5eebfd391db5f}{handlers}};\ \ }
+\DoxyCodeLine{00067\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__ctx__s_aecd4003a0db9efd595f17e7aaa2090cf}{aborted}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00068\ \ \ jmp\_buf\ \doxymbox{\hyperlink{structgin__ctx__s_a26b274fd8cf5637121770b94ff8e49a7}{jump\_buffer}};\ \ \ \ \ \ }
+\DoxyCodeLine{00069\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__ctx__s_abd6b77a7f2ab549f3b14bd7bcecd848e}{has\_jump\_buffer}};\ \ \ \ \ \ }
+\DoxyCodeLine{00070\ \ \ \doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}}*\ \doxymbox{\hyperlink{structgin__ctx__s_ad8d8b329909cb64d0b186815846c0729}{arena}};\ \ \ \ \ \ \ }
+\DoxyCodeLine{00071\ \ \ \doxymbox{\hyperlink{structgin__request__t}{gin\_request\_t}}\ \doxymbox{\hyperlink{structgin__ctx__s_a8345148b2cb3fc8db451fdfc304c3670}{request}};\ \ \ \ }
+\DoxyCodeLine{00072\ \ \ \doxymbox{\hyperlink{structgin__response__t}{gin\_response\_t}}\ \doxymbox{\hyperlink{structgin__ctx__s_a7ded2e0a123c9251866b6d9ea1fd14c1}{response}};\ \ }
+\DoxyCodeLine{00073\ \ \ \doxymbox{\hyperlink{structgin__param__t}{gin\_param\_t}}\ \doxymbox{\hyperlink{structgin__ctx__s_a7cd256d3222fb7fe95d4d9f057acaa6e}{params}}[\doxymbox{\hyperlink{gin_8h_ab3c65ea9623b23f7d58e1bcbb78e5515}{GIN\_MAX\_PARAMS}}];\ }
+\DoxyCodeLine{00074\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__ctx__s_adc5dcae716d0490697484d352dbea497}{params\_count}};\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00075\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__ctx__s_a8638f859f642f02b5cf9b446b5cc3763}{is\_websocket}};\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00076\ \ \ void\ (*\doxymbox{\hyperlink{structgin__ctx__s_af57079404661ed47c75759080dff0e1b}{on\_ws\_message}})(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ uint8\_t*\ payload,\ \textcolor{keywordtype}{size\_t}\ len,\ \textcolor{keywordtype}{int}\ opcode);\ }
+\DoxyCodeLine{00077\ \ \ \textcolor{keywordtype}{void}*\ \doxymbox{\hyperlink{structgin__ctx__s_a4d0b967d56ddd1c61268752c2fdce8c2}{\_internal\_client}};\ \ \ }
+\DoxyCodeLine{00078\ \};}
+\DoxyCodeLine{00079\ }
+\DoxyCodeLine{00082\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ad79d5936263e13caed04963a05012910}{gin\_next}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00083\ }
+\DoxyCodeLine{00086\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ac3a63b18c413eac7e9171294dfb5d255}{gin\_abort}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00087\ }
+\DoxyCodeLine{00091\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a84494dbc8883822907df23d287dd4978}{gin\_status}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keywordtype}{int}\ status);}
+\DoxyCodeLine{00092\ }
+\DoxyCodeLine{00098\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_af4ca536f047ff81ce7cf844cf5ac92d1}{gin\_string}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keywordtype}{int}\ status,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ msg);}
+\DoxyCodeLine{00099\ }
+\DoxyCodeLine{00104\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{gin_8h_ad9c3055553cbaeec7479d38f86e0fb12}{gin\_get\_param}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00105\ }
+\DoxyCodeLine{00111\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{gin_8h_a0807a0488575d9d1efeeb728f4df24e6}{gin\_get\_header}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00112\ }
+\DoxyCodeLine{00117\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{gin_8h_a5c84cd149a073eeac82e39e48ae6a75b}{gin\_get\_query}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key);}
+\DoxyCodeLine{00118\ }
+\DoxyCodeLine{00123\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a36783625e91a03472ee1ed5c050d1f11}{gin\_set\_request\_header}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ value);}
+\DoxyCodeLine{00124\ }
+\DoxyCodeLine{00129\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a5d8d58e7649dc971fca83a8d49937bf0}{gin\_set\_header}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ key,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ value);}
+\DoxyCodeLine{00130\ }
+\DoxyCodeLine{00133\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a9772a7ae03b20f9403f3f945f439b4f7}{gin\_ctx\_cleanup}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00134\ }
+\DoxyCodeLine{00138\ \doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}}*\ \doxymbox{\hyperlink{gin_8h_acb4964d4b63a5e672384173abf388499}{gin\_arena\_new}}(\textcolor{keywordtype}{size\_t}\ default\_chunk\_size);}
+\DoxyCodeLine{00139\ }
+\DoxyCodeLine{00145\ \textcolor{keywordtype}{void}*\ \doxymbox{\hyperlink{gin_8h_a969e673816347275f8a2ac8200995941}{gin\_arena\_alloc}}(\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}}*\ arena,\ \textcolor{keywordtype}{size\_t}\ size);}
+\DoxyCodeLine{00146\ }
+\DoxyCodeLine{00151\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{gin_8h_a098b57a2fccc272848bdcc8eb9c7de60}{gin\_arena\_strdup}}(\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}}*\ arena,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ s);}
+\DoxyCodeLine{00152\ }
+\DoxyCodeLine{00155\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a9da4a728adda81dc62e5609af3d16d39}{gin\_arena\_free}}(\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\_arena\_t}}*\ arena);}
+\DoxyCodeLine{00156\ }
+\DoxyCodeLine{00160\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_aca3163f4059b84c60adbd1adc54357f2}{gin\_recovery\_handler}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00161\ }
+\DoxyCodeLine{00165\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a9d275bc3b7d2ea837f9d5d952670dd1a}{gin\_panic}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00166\ }
+\DoxyCodeLine{00168\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{enum}\ \{}
+\DoxyCodeLine{00169\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6eaeaeb45e5fd58b23771907656dd6718c3}{GIN\_LOG\_TRACE}},\ \ }
+\DoxyCodeLine{00170\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6ea30a87eeb0dd65f3941d5203c8a6e01cc}{GIN\_LOG\_DEBUG}},\ \ }
+\DoxyCodeLine{00171\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6ea1230686b625e72ed7d421f0e87b4547d}{GIN\_LOG\_INFO}},\ \ \ }
+\DoxyCodeLine{00172\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6eab24eda29f6d51d94d26c5d0c8742d7b0}{GIN\_LOG\_WARN}},\ \ \ }
+\DoxyCodeLine{00173\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6ea0a2ee67c1f81f04e78d15ef1ac74a5af}{GIN\_LOG\_ERROR}},\ \ }
+\DoxyCodeLine{00174\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6eae7454425ad624d101890a2d3da7371bb}{GIN\_LOG\_FATAL}}\ \ \ }
+\DoxyCodeLine{00175\ \}\ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6e}{gin\_log\_level\_t}};}
+\DoxyCodeLine{00176\ }
+\DoxyCodeLine{00178\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00179\ \ \ \doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6e}{gin\_log\_level\_t}}\ \doxymbox{\hyperlink{structgin__log__config__t_a4a07ac497fa742ed41bd1c43703c7722}{level}};\ \ \ \ }
+\DoxyCodeLine{00180\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__log__config__t_a7c1489862a920150620bdfa667628e39}{file\_path}};\ \ \ \ }
+\DoxyCodeLine{00181\ \ \ \textcolor{keywordtype}{size\_t}\ \doxymbox{\hyperlink{structgin__log__config__t_aca9f6807942eb9e0c50cfb5b69352ca1}{max\_file\_size}};\ \ \ \ \ }
+\DoxyCodeLine{00182\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__log__config__t_a803a65e8047031a6af7c752683242d67}{use\_colors}};\ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00183\ \}\ \doxymbox{\hyperlink{structgin__log__config__t}{gin\_log\_config\_t}};}
+\DoxyCodeLine{00184\ }
+\DoxyCodeLine{00188\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{gin_8h_a4146824cff8cbdf8a491b5d8730437ac}{gin\_log\_init}}(\doxymbox{\hyperlink{structgin__log__config__t}{gin\_log\_config\_t}}\ config);}
+\DoxyCodeLine{00189\ }
+\DoxyCodeLine{00197\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a5321a3d676521280ee7f8a4211d29d67}{\_gin\_log\_internal}}(\doxymbox{\hyperlink{gin_8h_abf23a7bba24c8c4dbb9865c959705f6e}{gin\_log\_level\_t}}\ level,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ file,\ \textcolor{keywordtype}{int}\ line,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ func,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ fmt,\ ...);}
+\DoxyCodeLine{00198\ }
+\DoxyCodeLine{00200\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a2c67982a89a392166574f9905cec9c21}{gin\_log\_close}}();}
+\DoxyCodeLine{00201\ }
+\DoxyCodeLine{00206\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_T(...)\ \_gin\_log\_internal(GIN\_LOG\_TRACE,\ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00208\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_D(...)\ \_gin\_log\_internal(GIN\_LOG\_DEBUG,\ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00210\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_I(...)\ \_gin\_log\_internal(GIN\_LOG\_INFO,\ \ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00212\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_W(...)\ \_gin\_log\_internal(GIN\_LOG\_WARN,\ \ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00214\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_E(...)\ \_gin\_log\_internal(GIN\_LOG\_ERROR,\ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00216\ \textcolor{preprocessor}{\#define\ GIN\_LOG\_F(...)\ \_gin\_log\_internal(GIN\_LOG\_FATAL,\ \_\_FILE\_\_,\ \_\_LINE\_\_,\ \_\_func\_\_,\ \_\_VA\_ARGS\_\_)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00218\ }
+\DoxyCodeLine{00222\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_af2d25caa248e5dad45cbbf804511c674}{gin\_logger\_handler}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00223\ }
+\DoxyCodeLine{00225\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00226\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__cors__config__t_a0dac283708fe863cc1bbb81b79ba71ae}{allow\_origin}};\ \ \ \ \ \ }
+\DoxyCodeLine{00227\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__cors__config__t_a3de69ba1046fd0c5c59e0cd8df6cae32}{allow\_methods}};\ \ \ \ \ }
+\DoxyCodeLine{00228\ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__cors__config__t_a5527f3eadc2fc2da1969e110f88e2959}{allow\_headers}};\ \ \ \ \ }
+\DoxyCodeLine{00229\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__cors__config__t_ad9f0e26cdd8f7352a1f57bca45cca66c}{allow\_credentials}};\ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00230\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__cors__config__t_aaf964ee3a3928c25178cf6e1eade76d3}{max\_age}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00231\ \}\ \doxymbox{\hyperlink{structgin__cors__config__t}{gin\_cors\_config\_t}};}
+\DoxyCodeLine{00232\ }
+\DoxyCodeLine{00236\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ad01736ba327ae9617c1ba435ff1b0af2}{gin\_cors\_middleware}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \doxymbox{\hyperlink{structgin__cors__config__t}{gin\_cors\_config\_t}}\ config);}
+\DoxyCodeLine{00237\ }
+\DoxyCodeLine{00241\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ab96eab58bb5bea202494192381ec970c}{gin\_rate\_limit\_middleware}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keywordtype}{int}\ limit);}
+\DoxyCodeLine{00242\ }
+\DoxyCodeLine{00245\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a6049213bfab58cd4ae1d199094502019}{gin\_csrf\_middleware}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00246\ }
+\DoxyCodeLine{00248\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__server__config__s}{gin\_server\_config\_s}}\ \{}
+\DoxyCodeLine{00249\ \ \ \textcolor{keywordtype}{unsigned}\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__server__config__s_ae4c8ec34d6892357b6a05ca9db7b0e23}{idle\_timeout\_ms}};\ \ \ \ }
+\DoxyCodeLine{00250\ \ \ \textcolor{keywordtype}{size\_t}\ \doxymbox{\hyperlink{structgin__server__config__s_aab3b01f0403c417cd7f53b0b57040c0e}{max\_body\_size}};\ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00251\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__server__config__s_a54c4e6ca3dc27fc865fe74d38a1d5291}{listen\_backlog}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00252\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__server__config__s_a5184f5618de1fbfb36cecc4e1621545f}{tcp\_nodelay}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00253\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__server__config__s_a202e54cffb69ac64b1a71e79c3008251}{tcp\_keepalive}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00254\ \}\ \doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\_server\_config\_t}};}
+\DoxyCodeLine{00255\ }
+\DoxyCodeLine{00257\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00258\ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__config__t_a3861d8e1f35313b292e17e2b4b6afb66}{port}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00259\ \ \ \doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\_server\_config\_t}}\ \doxymbox{\hyperlink{structgin__config__t_ad812ac592cc43b96a783bd31f28f3cd8}{server}};\ \ \ }
+\DoxyCodeLine{00260\ \ \ \doxymbox{\hyperlink{structgin__log__config__t}{gin\_log\_config\_t}}\ \doxymbox{\hyperlink{structgin__config__t_a2969e70b5956f33a6d2e45c26befa8a7}{logger}};\ \ \ \ \ \ }
+\DoxyCodeLine{00261\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00262\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__config__t_a9728eb0030179e65ea96e8b9dde81af7}{enable}};\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00263\ \ \ \ \ \ \ \doxymbox{\hyperlink{structgin__cors__config__t}{gin\_cors\_config\_t}}\ \doxymbox{\hyperlink{structgin__config__t_ad6061fc67cac6b9840de9771c305adce}{config}};\ }
+\DoxyCodeLine{00264\ \ \ \}\ cors;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00265\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00266\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ enable;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00267\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{structgin__config__t_aaa7140dddcfacf0e24bdec914c72a682}{requests\_per\_minute}};\ \ }
+\DoxyCodeLine{00268\ \ \ \}\ rate\_limit;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00269\ \ \ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00270\ \ \ \ \ \ \ \textcolor{keywordtype}{int}\ enable;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00271\ \ \ \ \ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__config__t_adda27163c3bffcb83faf986e170cdb0a}{root\_dir}};\ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00272\ \ \ \ \ \ \ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__config__t_a72b2b09318e349bba26bee51b995242f}{prefix}};\ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00273\ \ \ \}\ static\_files;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ }
+\DoxyCodeLine{00274\ \}\ \doxymbox{\hyperlink{structgin__config__t}{gin\_config\_t}};}
+\DoxyCodeLine{00275\ }
+\DoxyCodeLine{00280\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{gin_8h_a3da7a4c3bb50b4976492d36f9ac33723}{gin\_load\_config}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ yaml\_path,\ \doxymbox{\hyperlink{structgin__config__t}{gin\_config\_t}}*\ config);}
+\DoxyCodeLine{00281\ }
+\DoxyCodeLine{00283\ \textcolor{keyword}{typedef}\ int\ (*\doxymbox{\hyperlink{gin_8h_a7192a9ac2b67ffb436b5ce70ffae8c55}{gin\_auth\_validator\_t}})(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ token);}
+\DoxyCodeLine{00284\ }
+\DoxyCodeLine{00288\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_aa8d8ec46b1974a29b439b05202bb4eae}{gin\_auth\_middleware}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \doxymbox{\hyperlink{gin_8h_a7192a9ac2b67ffb436b5ce70ffae8c55}{gin\_auth\_validator\_t}}\ validator);}
+\DoxyCodeLine{00289\ }
+\DoxyCodeLine{00293\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a48bd8693783301f4d9d732c518efcba3}{gin\_static}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ root\_dir);}
+\DoxyCodeLine{00294\ }
+\DoxyCodeLine{00298\ cJSON*\ \doxymbox{\hyperlink{gin_8h_a2cd07543e0bc93cb0ddac468e7bc90f2}{gin\_bind\_json}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00299\ }
+\DoxyCodeLine{00304\ cJSON*\ \doxymbox{\hyperlink{gin_8h_ad853c90565b37f0940e8a549dc1d31f2}{gin\_bind\_json\_err}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}**\ error);}
+\DoxyCodeLine{00305\ }
+\DoxyCodeLine{00310\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ab2accc0a4f8455ac23cfea33e7eb71d7}{gin\_json}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keywordtype}{int}\ status,\ cJSON*\ json);}
+\DoxyCodeLine{00311\ }
+\DoxyCodeLine{00316\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ad60115d18ed95af3a62acfde2e3b56b7}{gin\_json\_error}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keywordtype}{int}\ status,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ message);}
+\DoxyCodeLine{00317\ }
+\DoxyCodeLine{00321\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{gin_8h_ab99514b14d04a0f47619bb2a87ee11a4}{gin\_get\_client\_ip}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00322\ }
+\DoxyCodeLine{00327\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_aa278141b01e136adb61c654ac03ee290}{gin\_split\_url}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ url,\ \textcolor{keywordtype}{char}**\ path,\ \textcolor{keywordtype}{char}**\ query);}
+\DoxyCodeLine{00328\ }
+\DoxyCodeLine{00332\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a5623f5e24f24781b151a866e86aedf2e}{gin\_parse\_query}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ query\_string);}
+\DoxyCodeLine{00333\ }
+\DoxyCodeLine{00335\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__node__s}{gin\_router\_node\_s}}\ \doxymbox{\hyperlink{gin_8h_a7f6e2ea6ce6149d5c4daad6279bcff7c}{gin\_router\_node\_t}};}
+\DoxyCodeLine{00337\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__router__s}{gin\_router\_s}}\ \{}
+\DoxyCodeLine{00338\ \ \ \doxymbox{\hyperlink{gin_8h_a7f6e2ea6ce6149d5c4daad6279bcff7c}{gin\_router\_node\_t}}*\ \doxymbox{\hyperlink{structgin__router__s_aa89e4e54640d00daebcdc792a134a1c9}{root}};\ \ \ \ \ \ }
+\DoxyCodeLine{00339\ \}\ \doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}};}
+\DoxyCodeLine{00340\ }
+\DoxyCodeLine{00342\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__group__s}{gin\_group\_s}}\ \doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}};}
+\DoxyCodeLine{00343\ }
+\DoxyCodeLine{00346\ \doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ \doxymbox{\hyperlink{gin_8h_a08fa8a437528249c2604309c82815ca2}{gin\_router\_new}}();}
+\DoxyCodeLine{00347\ }
+\DoxyCodeLine{00354\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ab7a13815e9fca25f52ca8d0d689dea2a}{gin\_router\_add}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,}
+\DoxyCodeLine{00355\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}}*\ handlers,\ \textcolor{keywordtype}{size\_t}\ handler\_count);}
+\DoxyCodeLine{00356\ }
+\DoxyCodeLine{00362\ \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}}*\ \doxymbox{\hyperlink{gin_8h_a86babfb2a97d59562e56c6c48c365c1c}{gin\_router\_match}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ r,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
+\DoxyCodeLine{00363\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path);}
+\DoxyCodeLine{00364\ }
+\DoxyCodeLine{00370\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{gin_8h_ac9403f0ba783ae3c7b6319bcd49dc3ec}{gin\_router\_match\_ctx}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ r,\ \doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00371\ }
+\DoxyCodeLine{00374\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a3ff9e6478b310dd449cafc4c68288c80}{gin\_router\_free}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ r);}
+\DoxyCodeLine{00375\ }
+\DoxyCodeLine{00380\ \doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ \doxymbox{\hyperlink{gin_8h_a61fdabf12c2b3b57bc50342695531736}{gin\_group\_new}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ \doxymbox{\hyperlink{structgin__group__s_a6855d1e21b2d23d7ffffe9f56bb76ae4}{router}},\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__group__s_a25ee8f1a3cb5a402fc10c4ba1c85b69d}{prefix}});}
+\DoxyCodeLine{00381\ }
+\DoxyCodeLine{00386\ \doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ \doxymbox{\hyperlink{gin_8h_a77697d41cd807b19163e630ddcbe1b69}{gin\_group\_group}}(\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ \doxymbox{\hyperlink{structgin__group__s_af0a0f9f008a2f5fdc4ca536918a94230}{parent}},\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ \doxymbox{\hyperlink{structgin__group__s_a25ee8f1a3cb5a402fc10c4ba1c85b69d}{prefix}});}
+\DoxyCodeLine{00387\ }
+\DoxyCodeLine{00391\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a1a532b39372da3d40181563bc21b9b7c}{gin\_group\_use}}(\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ group,\ \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}}\ handler);}
+\DoxyCodeLine{00392\ }
+\DoxyCodeLine{00398\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_aa502689654e50b55bcecdfa0b535ebae}{gin\_group\_add\_route}}(\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ group,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ method,}
+\DoxyCodeLine{00399\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}*\ path,\ \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\_handler\_t}}\ handler);}
+\DoxyCodeLine{00400\ }
+\DoxyCodeLine{00403\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a4da5595e0e4d27154d0b9d3057db6e18}{gin\_group\_free}}(\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\_group\_t}}*\ group);}
+\DoxyCodeLine{00404\ }
+\DoxyCodeLine{00409\ \textcolor{preprocessor}{\#define\ gin\_GET(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00410\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}GET"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00412\ \textcolor{preprocessor}{\#define\ gin\_POST(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00413\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}POST"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00415\ \textcolor{preprocessor}{\#define\ gin\_PUT(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00416\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PUT"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00418\ \textcolor{preprocessor}{\#define\ gin\_DELETE(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00419\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}DELETE"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00421\ \textcolor{preprocessor}{\#define\ gin\_PATCH(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00422\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}PATCH"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00424\ \textcolor{preprocessor}{\#define\ gin\_OPTIONS(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00425\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}OPTIONS"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00427\ \textcolor{preprocessor}{\#define\ gin\_HEAD(group,\ path,\ handler)\ \(\backslash\)}}
+\DoxyCodeLine{00428\ \textcolor{preprocessor}{\ \ gin\_group\_add\_route(group,\ "{}HEAD"{},\ path,\ handler)}\textcolor{preprocessor}{}}
+\DoxyCodeLine{00430\ }
+\DoxyCodeLine{00433\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_ada33ef3140c39e2c0e384576700b2a3f}{gin\_ws\_handshake}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c);}
+\DoxyCodeLine{00434\ }
+\DoxyCodeLine{00440\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_af934d67bb8c6aaf8bbae38507d7476c3}{gin\_ws\_send}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ uint8\_t*\ payload,\ \textcolor{keywordtype}{size\_t}\ len,\ \textcolor{keywordtype}{int}\ opcode);}
+\DoxyCodeLine{00441\ }
+\DoxyCodeLine{00443\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\doxymbox{\hyperlink{structgin__server__s}{gin\_server\_s}}\ \doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}};}
+\DoxyCodeLine{00444\ }
+\DoxyCodeLine{00448\ \doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}}*\ \doxymbox{\hyperlink{gin_8h_af0cefe967a6e8e077fd0ca6e51b869d0}{gin\_server\_new}}(\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\_router\_t}}*\ \doxymbox{\hyperlink{structgin__server__s_a3f54a981e43b8522fee49437ee486beb}{router}});}
+\DoxyCodeLine{00449\ }
+\DoxyCodeLine{00452\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a3a9c27ab89a4eaa12fb641af27d2957e}{gin\_server\_free}}(\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}}*\ server);}
+\DoxyCodeLine{00453\ }
+\DoxyCodeLine{00456\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a64aafd1e18741af32c27fc754e8136ad}{gin\_server\_stop}}(\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}}*\ server);}
+\DoxyCodeLine{00457\ }
+\DoxyCodeLine{00461\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin_8h_a27a082aa71463c314c5b397ee18340f9}{gin\_server\_set\_config}}(\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}}*\ server,\ \doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\_server\_config\_t}}\ \doxymbox{\hyperlink{structgin__server__s_ad0291b0967186fe76aa4ccd6af59e35b}{config}});}
+\DoxyCodeLine{00462\ }
+\DoxyCodeLine{00468\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{gin_8h_a74a3074c236cee75dba25439c1bba39d}{gin\_server\_run}}(\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\_server\_t}}*\ server,\ \textcolor{keywordtype}{int}\ port);}
+\DoxyCodeLine{00469\ }
+\DoxyCodeLine{00470\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{/*\ GIN\_H\ */}\textcolor{preprocessor}{}}
 
 \end{DoxyCode}

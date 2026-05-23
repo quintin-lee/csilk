@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['api_5fdata_5fhandler_0',['api_data_handler',['../example__server_8c.html#a6a55a82711f79b955f1043f09b5c144e',1,'example_server.c']]]
+  ['_5fgin_5flog_5finternal_0',['_gin_log_internal',['../gin_8h.html#a5321a3d676521280ee7f8a4211d29d67',1,'_gin_log_internal(gin_log_level_t level, const char *file, int line, const char *func, const char *fmt,...):&#160;logger.c'],['../logger_8c.html#a5321a3d676521280ee7f8a4211d29d67',1,'_gin_log_internal(gin_log_level_t level, const char *file, int line, const char *func, const char *fmt,...):&#160;logger.c']]]
 ];

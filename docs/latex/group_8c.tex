@@ -1,0 +1,131 @@
+\doxysection{src/\+group.c File Reference}
+\hypertarget{group_8c}{}\label{group_8c}\index{src/group.c@{src/group.c}}
+
+
+Route group implementation. MIT License.  
+
+
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structgin__group__s}{gin\+\_\+group\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em Route group structure. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{group_8c_a61fdabf12c2b3b57bc50342695531736}{gin\+\_\+group\+\_\+new}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}router, const char \texorpdfstring{$\ast$}{*}prefix)
+\begin{DoxyCompactList}\small\item\em Create a new root group. \end{DoxyCompactList}\item 
+\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{group_8c_a77697d41cd807b19163e630ddcbe1b69}{gin\+\_\+group\+\_\+group}} (\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}parent, const char \texorpdfstring{$\ast$}{*}prefix)
+\begin{DoxyCompactList}\small\item\em Create a child group from an existing group. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{group_8c_a1a532b39372da3d40181563bc21b9b7c}{gin\+\_\+group\+\_\+use}} (\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}group, \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} handler)
+\begin{DoxyCompactList}\small\item\em Add middleware to the group. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{group_8c_aa502689654e50b55bcecdfa0b535ebae}{gin\+\_\+group\+\_\+add\+\_\+route}} (\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}group, const char \texorpdfstring{$\ast$}{*}method, const char \texorpdfstring{$\ast$}{*}path, \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} handler)
+\begin{DoxyCompactList}\small\item\em Add a specific route to the group. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{group_8c_a4da5595e0e4d27154d0b9d3057db6e18}{gin\+\_\+group\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}group)
+\begin{DoxyCompactList}\small\item\em Deallocate a route group. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Route group implementation. MIT License. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{group_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{group_8c_aa502689654e50b55bcecdfa0b535ebae}\index{group.c@{group.c}!gin\_group\_add\_route@{gin\_group\_add\_route}}
+\index{gin\_group\_add\_route@{gin\_group\_add\_route}!group.c@{group.c}}
+\doxysubsubsection{\texorpdfstring{gin\_group\_add\_route()}{gin\_group\_add\_route()}}
+{\footnotesize\ttfamily \label{group_8c_aa502689654e50b55bcecdfa0b535ebae} 
+void gin\+\_\+group\+\_\+add\+\_\+route (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{group}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{method}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{path}{, }\item[{\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}}}]{handler}{}\end{DoxyParamCaption})}
+
+
+
+Add a specific route to the group. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em group} & Route group. \\
+\hline
+{\em method} & HTTP method. \\
+\hline
+{\em path} & URL pattern. \\
+\hline
+{\em handler} & Route handler function. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{group_8c_a4da5595e0e4d27154d0b9d3057db6e18}\index{group.c@{group.c}!gin\_group\_free@{gin\_group\_free}}
+\index{gin\_group\_free@{gin\_group\_free}!group.c@{group.c}}
+\doxysubsubsection{\texorpdfstring{gin\_group\_free()}{gin\_group\_free()}}
+{\footnotesize\ttfamily \label{group_8c_a4da5595e0e4d27154d0b9d3057db6e18} 
+void gin\+\_\+group\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{group}{}\end{DoxyParamCaption})}
+
+
+
+Deallocate a route group. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em group} & Group instance. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{group_8c_a77697d41cd807b19163e630ddcbe1b69}\index{group.c@{group.c}!gin\_group\_group@{gin\_group\_group}}
+\index{gin\_group\_group@{gin\_group\_group}!group.c@{group.c}}
+\doxysubsubsection{\texorpdfstring{gin\_group\_group()}{gin\_group\_group()}}
+{\footnotesize\ttfamily \label{group_8c_a77697d41cd807b19163e630ddcbe1b69} 
+\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+group\+\_\+group (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{parent}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{prefix}{}\end{DoxyParamCaption})}
+
+
+
+Create a child group from an existing group. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em parent} & Parent group. \\
+\hline
+{\em prefix} & Sub-\/prefix. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+New sub-\/group instance. 
+\end{DoxyReturn}
+\Hypertarget{group_8c_a61fdabf12c2b3b57bc50342695531736}\index{group.c@{group.c}!gin\_group\_new@{gin\_group\_new}}
+\index{gin\_group\_new@{gin\_group\_new}!group.c@{group.c}}
+\doxysubsubsection{\texorpdfstring{gin\_group\_new()}{gin\_group\_new()}}
+{\footnotesize\ttfamily \label{group_8c_a61fdabf12c2b3b57bc50342695531736} 
+\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+group\+\_\+new (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{router}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{prefix}{}\end{DoxyParamCaption})}
+
+
+
+Create a new root group. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em router} & Associated router. \\
+\hline
+{\em prefix} & URL prefix for the group. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+New route group instance. 
+\end{DoxyReturn}
+\Hypertarget{group_8c_a1a532b39372da3d40181563bc21b9b7c}\index{group.c@{group.c}!gin\_group\_use@{gin\_group\_use}}
+\index{gin\_group\_use@{gin\_group\_use}!group.c@{group.c}}
+\doxysubsubsection{\texorpdfstring{gin\_group\_use()}{gin\_group\_use()}}
+{\footnotesize\ttfamily \label{group_8c_a1a532b39372da3d40181563bc21b9b7c} 
+void gin\+\_\+group\+\_\+use (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_afd512684205cd95459f1f028a278dff8}{gin\+\_\+group\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{group}{, }\item[{\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}}}]{handler}{}\end{DoxyParamCaption})}
+
+
+
+Add middleware to the group. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em group} & Route group. \\
+\hline
+{\em handler} & Middleware function. \\
+\hline
+\end{DoxyParams}

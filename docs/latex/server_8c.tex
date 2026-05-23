@@ -1,0 +1,161 @@
+\doxysection{src/\+server.c File Reference}
+\hypertarget{server_8c}{}\label{server_8c}\index{src/server.c@{src/server.c}}
+
+
+Server implementation. MIT License.  
+
+
+{\ttfamily \+\#include $<$llhttp.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$uv.\+h$>$}\newline
+{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+{\ttfamily \+\#include "{}gin\+\_\+internal.\+h"{}}\newline
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structgin__server__s}{gin\+\_\+server\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em Server structure. \end{DoxyCompactList}\item 
+struct \doxymbox{\hyperlink{structgin__client__t}{gin\+\_\+client\+\_\+t}}
+\begin{DoxyCompactList}\small\item\em Client connection structure. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{server_8c_a6a3e05334511d2963ab23174cb91fa79}\label{server_8c_a6a3e05334511d2963ab23174cb91fa79} 
+\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+IDLE\+\_\+\+TIMEOUT}~5000
+\begin{DoxyCompactList}\small\item\em Default idle timeout in milliseconds. \end{DoxyCompactList}\item 
+\Hypertarget{server_8c_afb4808d2dac9e7f05112c7eaed101302}\label{server_8c_afb4808d2dac9e7f05112c7eaed101302} 
+\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+MAX\+\_\+\+BODY\+\_\+\+SIZE}~(1024UL \texorpdfstring{$\ast$}{*} 1024UL)
+\begin{DoxyCompactList}\small\item\em Default maximum request body size in bytes. \end{DoxyCompactList}\item 
+\Hypertarget{server_8c_a62f3560045829fc1a2803ffb5bb1592f}\label{server_8c_a62f3560045829fc1a2803ffb5bb1592f} 
+\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+LISTEN\+\_\+\+BACKLOG}~128
+\begin{DoxyCompactList}\small\item\em Default TCP listen backlog. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_ab99514b14d04a0f47619bb2a87ee11a4}{gin\+\_\+get\+\_\+client\+\_\+ip}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Get the client\textquotesingle{}s IP address. \end{DoxyCompactList}\item 
+\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0}{gin\+\_\+server\+\_\+new}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}router)
+\begin{DoxyCompactList}\small\item\em Create a new server instance. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e}{gin\+\_\+server\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
+\begin{DoxyCompactList}\small\item\em Deallocate server resources. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{server_8c_a64aafd1e18741af32c27fc754e8136ad}{gin\+\_\+server\+\_\+stop}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
+\begin{DoxyCompactList}\small\item\em Signal the server to stop gracefully. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{server_8c_a27a082aa71463c314c5b397ee18340f9}{gin\+\_\+server\+\_\+set\+\_\+config}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, \doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}} config)
+\begin{DoxyCompactList}\small\item\em Apply server configuration. \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{server_8c_a74a3074c236cee75dba25439c1bba39d}{gin\+\_\+server\+\_\+run}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, int port)
+\begin{DoxyCompactList}\small\item\em Run the server event loop. Blocks until server is stopped or error occurs. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Server implementation. MIT License. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{server_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{server_8c_ab99514b14d04a0f47619bb2a87ee11a4}\index{server.c@{server.c}!gin\_get\_client\_ip@{gin\_get\_client\_ip}}
+\index{gin\_get\_client\_ip@{gin\_get\_client\_ip}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_get\_client\_ip()}{gin\_get\_client\_ip()}}
+{\footnotesize\ttfamily \label{server_8c_ab99514b14d04a0f47619bb2a87ee11a4} 
+const char \texorpdfstring{$\ast$}{*} gin\+\_\+get\+\_\+client\+\_\+ip (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Get the client\textquotesingle{}s IP address. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+The IP address string, or NULL on error. 
+\end{DoxyReturn}
+\Hypertarget{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e}\index{server.c@{server.c}!gin\_server\_free@{gin\_server\_free}}
+\index{gin\_server\_free@{gin\_server\_free}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_server\_free()}{gin\_server\_free()}}
+{\footnotesize\ttfamily \label{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e} 
+void gin\+\_\+server\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
+
+
+
+Deallocate server resources. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em server} & Server instance. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0}\index{server.c@{server.c}!gin\_server\_new@{gin\_server\_new}}
+\index{gin\_server\_new@{gin\_server\_new}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_server\_new()}{gin\_server\_new()}}
+{\footnotesize\ttfamily \label{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0} 
+\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+server\+\_\+new (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{router}{}\end{DoxyParamCaption})}
+
+
+
+Create a new server instance. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em router} & The router to handle routing logic. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+New server instance. 
+\end{DoxyReturn}
+\Hypertarget{server_8c_a74a3074c236cee75dba25439c1bba39d}\index{server.c@{server.c}!gin\_server\_run@{gin\_server\_run}}
+\index{gin\_server\_run@{gin\_server\_run}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_server\_run()}{gin\_server\_run()}}
+{\footnotesize\ttfamily \label{server_8c_a74a3074c236cee75dba25439c1bba39d} 
+int gin\+\_\+server\+\_\+run (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{int}]{port}{}\end{DoxyParamCaption})}
+
+
+
+Run the server event loop. Blocks until server is stopped or error occurs. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em server} & Server instance. \\
+\hline
+{\em port} & Port number to listen on. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+0 on success, -\/1 on failure. 
+\end{DoxyReturn}
+\Hypertarget{server_8c_a27a082aa71463c314c5b397ee18340f9}\index{server.c@{server.c}!gin\_server\_set\_config@{gin\_server\_set\_config}}
+\index{gin\_server\_set\_config@{gin\_server\_set\_config}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_server\_set\_config()}{gin\_server\_set\_config()}}
+{\footnotesize\ttfamily \label{server_8c_a27a082aa71463c314c5b397ee18340f9} 
+void gin\+\_\+server\+\_\+set\+\_\+config (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{\doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}}}]{config}{}\end{DoxyParamCaption})}
+
+
+
+Apply server configuration. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em server} & Server instance. \\
+\hline
+{\em config} & Configuration struct. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{server_8c_a64aafd1e18741af32c27fc754e8136ad}\index{server.c@{server.c}!gin\_server\_stop@{gin\_server\_stop}}
+\index{gin\_server\_stop@{gin\_server\_stop}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{gin\_server\_stop()}{gin\_server\_stop()}}
+{\footnotesize\ttfamily \label{server_8c_a64aafd1e18741af32c27fc754e8136ad} 
+void gin\+\_\+server\+\_\+stop (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
+
+
+
+Signal the server to stop gracefully. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em server} & Server instance. \\
+\hline
+\end{DoxyParams}

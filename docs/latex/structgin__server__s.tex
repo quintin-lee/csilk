@@ -1,22 +1,79 @@
 \doxysection{gin\+\_\+server\+\_\+s Struct Reference}
 \hypertarget{structgin__server__s}{}\label{structgin__server__s}\index{gin\_server\_s@{gin\_server\_s}}
+
+
+Server structure.  
+
+
 \doxysubsubsection*{Public Attributes}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{structgin__server__s_aa232324eb9b1dbb99e8b177d5f8093da}\label{structgin__server__s_aa232324eb9b1dbb99e8b177d5f8093da} 
-uv\+\_\+loop\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries loop}
+uv\+\_\+loop\+\_\+t \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__server__s_aa232324eb9b1dbb99e8b177d5f8093da}{loop}}
 \item 
-\Hypertarget{structgin__server__s_a3f54a981e43b8522fee49437ee486beb}\label{structgin__server__s_a3f54a981e43b8522fee49437ee486beb} 
-gin\+\_\+router\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries router}
+\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__server__s_a3f54a981e43b8522fee49437ee486beb}{router}}
 \item 
-\Hypertarget{structgin__server__s_a5959678784e76267c9c0bf8334e379dc}\label{structgin__server__s_a5959678784e76267c9c0bf8334e379dc} 
-uv\+\_\+tcp\+\_\+t {\bfseries server\+\_\+handle}
+uv\+\_\+tcp\+\_\+t \doxymbox{\hyperlink{structgin__server__s_a5959678784e76267c9c0bf8334e379dc}{server\+\_\+handle}}
 \item 
-\Hypertarget{structgin__server__s_a360d681fb78b9162aa4842c4379dc8c0}\label{structgin__server__s_a360d681fb78b9162aa4842c4379dc8c0} 
-llhttp\+\_\+settings\+\_\+t {\bfseries settings}
+uv\+\_\+signal\+\_\+t \doxymbox{\hyperlink{structgin__server__s_ad440bd08c82470cd4184578ba7602296}{sig\+\_\+handle}}
+\item 
+uv\+\_\+async\+\_\+t \doxymbox{\hyperlink{structgin__server__s_a4bdc1c89b88235dd92fdb84e8cd3b94b}{async\+\_\+handle}}
+\item 
+llhttp\+\_\+settings\+\_\+t \doxymbox{\hyperlink{structgin__server__s_a360d681fb78b9162aa4842c4379dc8c0}{settings}}
+\item 
+\doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}} \doxymbox{\hyperlink{structgin__server__s_ad0291b0967186fe76aa4ccd6af59e35b}{config}}
 \end{DoxyCompactItemize}
 
 
+\doxysubsection{Detailed Description}
+Server structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structgin__server__s_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structgin__server__s_a4bdc1c89b88235dd92fdb84e8cd3b94b}\index{gin\_server\_s@{gin\_server\_s}!async\_handle@{async\_handle}}
+\index{async\_handle@{async\_handle}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{async\_handle}{async\_handle}}
+{\footnotesize\ttfamily \label{structgin__server__s_a4bdc1c89b88235dd92fdb84e8cd3b94b} 
+uv\+\_\+async\+\_\+t gin\+\_\+server\+\_\+s::\+async\+\_\+handle}
+
+Async handle for cross-\/thread wakeup. \Hypertarget{structgin__server__s_ad0291b0967186fe76aa4ccd6af59e35b}\index{gin\_server\_s@{gin\_server\_s}!config@{config}}
+\index{config@{config}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{config}{config}}
+{\footnotesize\ttfamily \label{structgin__server__s_ad0291b0967186fe76aa4ccd6af59e35b} 
+\doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}} gin\+\_\+server\+\_\+s::\+config}
+
+Server configuration. \Hypertarget{structgin__server__s_aa232324eb9b1dbb99e8b177d5f8093da}\index{gin\_server\_s@{gin\_server\_s}!loop@{loop}}
+\index{loop@{loop}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{loop}{loop}}
+{\footnotesize\ttfamily \label{structgin__server__s_aa232324eb9b1dbb99e8b177d5f8093da} 
+uv\+\_\+loop\+\_\+t\texorpdfstring{$\ast$}{*} gin\+\_\+server\+\_\+s::\+loop}
+
+libuv event loop. \Hypertarget{structgin__server__s_a3f54a981e43b8522fee49437ee486beb}\index{gin\_server\_s@{gin\_server\_s}!router@{router}}
+\index{router@{router}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{router}{router}}
+{\footnotesize\ttfamily \label{structgin__server__s_a3f54a981e43b8522fee49437ee486beb} 
+\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}}\texorpdfstring{$\ast$}{*} gin\+\_\+server\+\_\+s::\+router}
+
+Associated router instance. \Hypertarget{structgin__server__s_a5959678784e76267c9c0bf8334e379dc}\index{gin\_server\_s@{gin\_server\_s}!server\_handle@{server\_handle}}
+\index{server\_handle@{server\_handle}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{server\_handle}{server\_handle}}
+{\footnotesize\ttfamily \label{structgin__server__s_a5959678784e76267c9c0bf8334e379dc} 
+uv\+\_\+tcp\+\_\+t gin\+\_\+server\+\_\+s::\+server\+\_\+handle}
+
+TCP server handle. \Hypertarget{structgin__server__s_a360d681fb78b9162aa4842c4379dc8c0}\index{gin\_server\_s@{gin\_server\_s}!settings@{settings}}
+\index{settings@{settings}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{settings}{settings}}
+{\footnotesize\ttfamily \label{structgin__server__s_a360d681fb78b9162aa4842c4379dc8c0} 
+llhttp\+\_\+settings\+\_\+t gin\+\_\+server\+\_\+s::\+settings}
+
+HTTP parser callback settings. \Hypertarget{structgin__server__s_ad440bd08c82470cd4184578ba7602296}\index{gin\_server\_s@{gin\_server\_s}!sig\_handle@{sig\_handle}}
+\index{sig\_handle@{sig\_handle}!gin\_server\_s@{gin\_server\_s}}
+\doxysubsubsection{\texorpdfstring{sig\_handle}{sig\_handle}}
+{\footnotesize\ttfamily \label{structgin__server__s_ad440bd08c82470cd4184578ba7602296} 
+uv\+\_\+signal\+\_\+t gin\+\_\+server\+\_\+s::\+sig\+\_\+handle}
+
+SIGINT signal handler. 
+
 The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
 \item 
-src/\+server.\+c\end{DoxyCompactItemize}
+src/\+\doxymbox{\hyperlink{server_8c}{server.\+c}}\end{DoxyCompactItemize}

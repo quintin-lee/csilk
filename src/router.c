@@ -1,7 +1,7 @@
 /**
  * @file router.c
  * @brief Router implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <stdlib.h>
@@ -9,6 +9,7 @@
 
 #include "gin.h"
 
+/** @brief Maximum number of children per router tree node. */
 #define GIN_MAX_CHILDREN 128
 
 /** @brief Node type for router trie. */
@@ -20,18 +21,18 @@ typedef enum {
 
 /** @brief Method-specific handler mapping. */
 typedef struct gin_method_handler_s {
-  char* method;
-  gin_handler_t* handlers;
-  struct gin_method_handler_s* next;
+  char* method;                       /**< HTTP method string. */
+  gin_handler_t* handlers;            /**< Array of handlers for this method. */
+  struct gin_method_handler_s* next;  /**< Next method handler in list. */
 } gin_method_handler_t;
 
 /** @brief Node in the router trie. */
 struct gin_router_node_s {
-  char* segment;
-  gin_node_type_t type;
-  gin_method_handler_t* handlers;
-  struct gin_router_node_s* children[GIN_MAX_CHILDREN];
-  int children_count;
+  char* segment;                                      /**< URL path segment. */
+  gin_node_type_t type;                               /**< Type of node (static/param/wildcard). */
+  gin_method_handler_t* handlers;                     /**< Method handlers for this node. */
+  struct gin_router_node_s* children[GIN_MAX_CHILDREN]; /**< Child nodes array. */
+  int children_count;                                 /**< Number of child nodes. */
 };
 
 /** @brief Create a new node.
@@ -86,8 +87,6 @@ static char* get_next_segment(const char** p) {
   return seg;
 }
 
-/** @brief Create a new router.
- * @return A new gin_router_t instance. */
 gin_router_t* gin_router_new() {
   gin_router_t* r = malloc(sizeof(gin_router_t));
   if (!r) return NULL;
@@ -95,20 +94,12 @@ gin_router_t* gin_router_new() {
   return r;
 }
 
-/** @brief Free the router.
- * @param r The router to free. */
 void gin_router_free(gin_router_t* r) {
   if (!r) return;
   node_free(r->root);
   free(r);
 }
 
-/** @brief Add a route to the router.
- * @param r The router.
- * @param method The HTTP method.
- * @param path The route path.
- * @param handlers Array of handlers.
- * @param handler_count Number of handlers. */
 void gin_router_add(gin_router_t* r, const char* method, const char* path,
                     gin_handler_t* handlers, size_t handler_count) {
   if (!r || !r->root || !method || !path || !handlers) return;
@@ -231,21 +222,12 @@ static gin_handler_t* match_node(gin_router_node_t* node, const char* method,
   return result;
 }
 
-/** @brief Match a route to handlers.
- * @param r The router.
- * @param method The HTTP method.
- * @param path The route path.
- * @return Array of handlers, or NULL if no match. */
 gin_handler_t* gin_router_match(gin_router_t* r, const char* method,
                                 const char* path) {
   if (!r || !r->root || !method || !path) return NULL;
   return match_node(r->root, method, path, NULL);
 }
 
-/** @brief Match a route and update context.
- * @param r The router.
- * @param c The request context.
- * @return 1 if matched, 0 otherwise. */
 int gin_router_match_ctx(gin_router_t* r, gin_ctx_t* c) {
   if (!r || !c || !r->root || !c->request.method || !c->request.path) return 0;
   c->params_count = 0;

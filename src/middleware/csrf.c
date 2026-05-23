@@ -1,10 +1,18 @@
+/**
+ * @file csrf.c
+ * @brief Stateless CSRF protection middleware implementation.
+ * MIT License
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "gin.h"
 
-// Basic CSRF middleware (Stateless, token-based)
-// In a real implementation, this would involve sessions or signed cookies
+/** @brief Stateless CSRF protection middleware.
+ * Checks the X-CSRF-Token header for non-safe methods (POST, PUT, DELETE, PATCH).
+ * GET, HEAD, and OPTIONS are allowed without a token.
+ * @param c The request context. */
 void gin_csrf_middleware(gin_ctx_t* c) {
     if (c->request.method && (strcmp(c->request.method, "GET") == 0 || 
                              strcmp(c->request.method, "HEAD") == 0 ||

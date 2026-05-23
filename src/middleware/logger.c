@@ -1,7 +1,7 @@
 /**
  * @file logger.c
  * @brief Logging middleware implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <stdio.h>

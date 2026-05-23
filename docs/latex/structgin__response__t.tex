@@ -1,22 +1,59 @@
 \doxysection{gin\+\_\+response\+\_\+t Struct Reference}
 \hypertarget{structgin__response__t}{}\label{structgin__response__t}\index{gin\_response\_t@{gin\_response\_t}}
+
+
+HTTP Response structure.  
+
+
+
+
+{\ttfamily \+\#include $<$gin.\+h$>$}
+
 \doxysubsubsection*{Public Attributes}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8}\label{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8} 
-int {\bfseries status}
+int \doxymbox{\hyperlink{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8}{status}}
 \item 
-\Hypertarget{structgin__response__t_a01791fef52abee19fed2e58deba677a4}\label{structgin__response__t_a01791fef52abee19fed2e58deba677a4} 
-const char \texorpdfstring{$\ast$}{*} {\bfseries body}
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__response__t_a01791fef52abee19fed2e58deba677a4}{body}}
 \item 
-\Hypertarget{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0}\label{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0} 
-gin\+\_\+header\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries headers}
+\doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\+\_\+header\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0}{headers}}
 \item 
-\Hypertarget{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29}\label{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29} 
-int {\bfseries body\+\_\+is\+\_\+managed}
+int \doxymbox{\hyperlink{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29}{body\+\_\+is\+\_\+managed}}
 \end{DoxyCompactItemize}
 
 
+\doxysubsection{Detailed Description}
+HTTP Response structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structgin__response__t_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structgin__response__t_a01791fef52abee19fed2e58deba677a4}\index{gin\_response\_t@{gin\_response\_t}!body@{body}}
+\index{body@{body}!gin\_response\_t@{gin\_response\_t}}
+\doxysubsubsection{\texorpdfstring{body}{body}}
+{\footnotesize\ttfamily \label{structgin__response__t_a01791fef52abee19fed2e58deba677a4} 
+const char\texorpdfstring{$\ast$}{*} gin\+\_\+response\+\_\+t::\+body}
+
+Response body content. \Hypertarget{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29}\index{gin\_response\_t@{gin\_response\_t}!body\_is\_managed@{body\_is\_managed}}
+\index{body\_is\_managed@{body\_is\_managed}!gin\_response\_t@{gin\_response\_t}}
+\doxysubsubsection{\texorpdfstring{body\_is\_managed}{body\_is\_managed}}
+{\footnotesize\ttfamily \label{structgin__response__t_acff2104c58aba64ae1f33a79d1b49c29} 
+int gin\+\_\+response\+\_\+t::\+body\+\_\+is\+\_\+managed}
+
+Flag if body is managed by free(). \Hypertarget{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0}\index{gin\_response\_t@{gin\_response\_t}!headers@{headers}}
+\index{headers@{headers}!gin\_response\_t@{gin\_response\_t}}
+\doxysubsubsection{\texorpdfstring{headers}{headers}}
+{\footnotesize\ttfamily \label{structgin__response__t_a3bd2ad74d558bc2cd862103963e742c0} 
+\doxymbox{\hyperlink{gin_8h_a40cb184503dd65c99f1b663b193f277b}{gin\+\_\+header\+\_\+t}}\texorpdfstring{$\ast$}{*} gin\+\_\+response\+\_\+t::\+headers}
+
+Linked list of response headers. \Hypertarget{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8}\index{gin\_response\_t@{gin\_response\_t}!status@{status}}
+\index{status@{status}!gin\_response\_t@{gin\_response\_t}}
+\doxysubsubsection{\texorpdfstring{status}{status}}
+{\footnotesize\ttfamily \label{structgin__response__t_a111ac44116b2104a1c455b424e92e4a8} 
+int gin\+\_\+response\+\_\+t::\+status}
+
+HTTP status code. 
+
 The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
 \item 
-include/\+gin.\+h\end{DoxyCompactItemize}
+include/\+\doxymbox{\hyperlink{gin_8h}{gin.\+h}}\end{DoxyCompactItemize}

@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['acknowledgments_0',['Acknowledgments',['../md_README.html#autotoc_md28',1,'']]],
-  ['api_5fdata_5fhandler_1',['api_data_handler',['../example__server_8c.html#a6a55a82711f79b955f1043f09b5c144e',1,'example_server.c']]],
-  ['architecture_20performance_20tuning_20已完成_2',['阶段二：架构与性能深度调优 (Architecture &amp;amp; Performance Tuning) [已完成]',['../md_task__plan.html#autotoc_md33',1,'']]],
-  ['asan_20内存泄露排查发现_3',['ASan 内存泄露排查发现',['../md_findings.html#autotoc_md2',1,'']]]
+  ['body_0',['body',['../structgin__request__t.html#aeadc624628af4a09f1f70e1f03eb1495',1,'gin_request_t::body'],['../structgin__response__t.html#a01791fef52abee19fed2e58deba677a4',1,'gin_response_t::body']]],
+  ['body_5fis_5fmanaged_1',['body_is_managed',['../structgin__response__t.html#acff2104c58aba64ae1f33a79d1b49c29',1,'gin_response_t']]],
+  ['body_5flen_2',['body_len',['../structgin__request__t.html#a8303e4e9207fa96b7095402c9462f010',1,'gin_request_t']]],
+  ['buffer_3',['buffer',['../structgin__sha1__ctx.html#a78c08c85f4c47e081841fbf1a9ae7388',1,'gin_sha1_ctx']]]
 ];
