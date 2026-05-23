@@ -122,11 +122,17 @@ const char* csilk_get_query(csilk_ctx_t* c, const char* key);
  * @param value The header field value string. */
 void csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value);
 
-/** @brief Set a response header.
+/** @brief Set a response header (overwrites if exists).
  * @param c The request context.
  * @param key The header field name.
  * @param value The header field value string. */
 void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value);
+
+/** @brief Add a response header (allows multiple headers with same key).
+ * @param c The request context.
+ * @param key The header field name.
+ * @param value The header field value string. */
+void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value);
 
 /** @brief Clean up all context-related resources (arena, headers, etc.).
  * @param c The request context. */
@@ -248,6 +254,7 @@ void csilk_csrf_middleware(csilk_ctx_t* c);
 typedef struct csilk_server_config_s {
   unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms). */
   size_t max_body_size;            /**< Maximum request body size. */
+  size_t max_header_size;          /**< Maximum total request headers size. */
   int listen_backlog;              /**< TCP listen backlog. */
   int tcp_nodelay;                 /**< Enable TCP_NODELAY. */
   int tcp_keepalive;               /**< Enable TCP keep-alive (seconds, 0 to disable). */
@@ -302,6 +309,25 @@ cJSON* csilk_bind_json(csilk_ctx_t* c);
  * @param error Pointer to store error string if parsing fails.
  * @return Parsed cJSON pointer, or NULL on error. */
 cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error);
+
+/** @brief Get a cookie value by name.
+ * @param c The request context.
+ * @param name The cookie name.
+ * @return The cookie value string, or NULL if not found. */
+const char* csilk_get_cookie(csilk_ctx_t* c, const char* name);
+
+/** @brief Set a cookie in the response.
+ * @param c The request context.
+ * @param name The cookie name.
+ * @param value The cookie value.
+ * @param max_age Maximum age in seconds (0 for session, -1 to delete).
+ * @param path Cookie path (NULL for "/").
+ * @param domain Cookie domain (NULL for current).
+ * @param secure Flag for Secure attribute.
+ * @param http_only Flag for HttpOnly attribute. */
+void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
+                    int max_age, const char* path, const char* domain,
+                    int secure, int http_only);
 
 /** @brief Send a JSON response.
  * @param c The request context.

@@ -17,11 +17,16 @@ void csilk_split_url(const char* url, char** path, char** query) {
   if (qmark) {
     size_t path_len = qmark - url;
     *path = malloc(path_len + 1);
-    if (*path) {
-      memcpy(*path, url, path_len);
-      (*path)[path_len] = '\0';
-    }
+    if (!*path) return;
+
+    memcpy(*path, url, path_len);
+    (*path)[path_len] = '\0';
+
     *query = strdup(qmark + 1);
+    if (!*query) {
+      free(*path);
+      *path = NULL;
+    }
   } else {
     *path = strdup(url);
   }

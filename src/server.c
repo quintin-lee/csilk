@@ -17,6 +17,8 @@
 #define CSILK_DEFAULT_IDLE_TIMEOUT  5000
 /** @brief Default maximum request body size in bytes. */
 #define CSILK_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
+/** @brief Default maximum request header size in bytes. */
+#define CSILK_DEFAULT_MAX_HEADER_SIZE (64UL * 1024UL)
 /** @brief Default TCP listen backlog. */
 #define CSILK_DEFAULT_LISTEN_BACKLOG 128
 
@@ -38,6 +40,7 @@ typedef struct {
   llhttp_t parser;                   /**< HTTP request parser. */
   csilk_server_t* server;              /**< Owning server instance. */
   csilk_ctx_t ctx;                     /**< Request context for this connection. */
+  size_t total_header_size;          /**< Total size of headers parsed so far. */
   char* current_url;                 /**< Current URL being parsed. */
   char* current_header_field;        /**< Temporary header field name. */
   char* current_header_value;        /**< Temporary header field value. */
@@ -93,6 +96,13 @@ static void on_signal(uv_signal_t* handle, int signum) {
   csilk_server_stop(server);
 }
 
+/** @brief Async callback to stop the server loop.
+ * @param handle Async handle. */
+static void on_stop_async(uv_async_t* handle) {
+  csilk_server_t* server = (csilk_server_t*)handle->data;
+  uv_stop(server->loop);
+}
+
 /** @brief Write completion callback.
  * @param req Write request.
  * @param status Write status. */
@@ -116,6 +126,13 @@ static void on_timeout(uv_timer_t* handle) {
 }
 
 /** @brief HTTP parser callbacks. */
+static int on_message_begin(llhttp_t* p) {
+  csilk_client_t* client = (csilk_client_t*)p->data;
+  client->total_header_size = 0;
+  // Reset other request-specific fields if necessary
+  return 0;
+}
+
 static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_url) free(client->current_url);
@@ -129,7 +146,25 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
 
 static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
-  if (client->current_header_field) free(client->current_header_field);
+  client->total_header_size += length;
+  if (client->total_header_size > client->server->config.max_header_size) {
+      return HPE_USER;
+  }
+
+  if (client->current_header_field && client->current_header_value) {
+    csilk_set_request_header(&client->ctx, client->current_header_field,
+                            client->current_header_value);
+    free(client->current_header_field);
+    free(client->current_header_value);
+    client->current_header_field = NULL;
+    client->current_header_value = NULL;
+  } else if (client->current_header_field) {
+    // We had a field but no value yet? Should not happen in valid HTTP
+    // but we free it to be safe.
+    free(client->current_header_field);
+    client->current_header_field = NULL;
+  }
+
   client->current_header_field = malloc(length + 1);
   if (client->current_header_field) {
     memcpy(client->current_header_field, at, length);
@@ -140,16 +175,17 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
 
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
-  if (client->current_header_value) {
-    csilk_set_request_header(&client->ctx, client->current_header_field,
-                            client->current_header_value);
-    free(client->current_header_value);
-    client->current_header_value = NULL;
+  client->total_header_size += length;
+  if (client->total_header_size > client->server->config.max_header_size) {
+      return HPE_USER;
   }
-  client->current_header_value = malloc(length + 1);
-  if (client->current_header_value) {
-    memcpy(client->current_header_value, at, length);
-    client->current_header_value[length] = '\0';
+
+  size_t prev_len = client->current_header_value ? strlen(client->current_header_value) : 0;
+  char* new_val = realloc(client->current_header_value, prev_len + length + 1);
+  if (new_val) {
+    memcpy(new_val + prev_len, at, length);
+    new_val[prev_len + length] = '\0';
+    client->current_header_value = new_val;
   }
   return 0;
 }
@@ -443,6 +479,7 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   }
   s->router = router;
   llhttp_settings_init(&s->settings);
+  s->settings.on_message_begin = on_message_begin;
   s->settings.on_url = on_url;
   s->settings.on_header_field = on_header_field;
   s->settings.on_header_value = on_header_value;
@@ -452,6 +489,7 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   
   s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
   s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+  s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
   s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
   return s;
@@ -464,7 +502,7 @@ void csilk_server_free(csilk_server_t* server) {
 
 void csilk_server_stop(csilk_server_t* server) {
   if (!server) return;
-  uv_stop(server->loop);
+  uv_async_send(&server->async_handle);
 }
 
 void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config) {
@@ -478,6 +516,10 @@ int csilk_server_run(csilk_server_t* server, int port) {
   int r = uv_tcp_init(server->loop, &server->server_handle);
   if (r < 0) return -1;
   server->server_handle.data = server;
+
+  // Initialize async handle for thread-safe stop
+  uv_async_init(server->loop, &server->async_handle, on_stop_async);
+  server->async_handle.data = server;
 
   // Apply TCP settings
   if (server->config.tcp_nodelay) {

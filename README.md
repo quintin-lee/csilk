@@ -46,6 +46,10 @@ cmake ..
 # Build
 make
 
+# Note: By default, csilk builds as a static library.
+# To build as a shared library, use:
+# cmake .. -DBUILD_SHARED_LIBS=ON
+
 # Optional: Run tests
 ./tests/test_logger
 ./tests/test_router

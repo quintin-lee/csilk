@@ -9,7 +9,7 @@ void panic_handler(csilk_ctx_t* c) { csilk_panic(c); }
 void normal_handler(csilk_ctx_t* c) { csilk_string(c, 200, "OK"); }
 
 int main() {
-  csilk_ctx_t c;
+  csilk_ctx_t c = {0};
   c.has_jump_buffer = 0;
   c.aborted = 0;
   c.handler_index = -1;
