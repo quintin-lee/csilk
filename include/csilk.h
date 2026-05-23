@@ -307,8 +307,8 @@ typedef struct {
 
 /** @brief Enable CORS with specified configuration.
  * @param c The request context.
- * @param config CORS settings. */
-void csilk_cors_middleware(csilk_ctx_t* c, csilk_cors_config_t config);
+ * @param config CORS settings (pointer, for efficiency). */
+void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config);
 
 /** @brief Simple IP-based rate limiting middleware.
  * @param c The request context.
@@ -318,6 +318,12 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
 /** @brief Simple stateless CSRF protection middleware.
  * @param c The request context. */
 void csilk_csrf_middleware(csilk_ctx_t* c);
+
+/** @brief Generate a random CSRF token string.
+ * @param buf Output buffer (at least 33 bytes for 32-char hex token).
+ * @param buf_size Size of the output buffer.
+ * @return 0 on success, -1 on error. */
+int csilk_csrf_generate_token(char* buf, size_t buf_size);
 
 /** @brief Server configuration options. */
 typedef struct csilk_server_config_s {
@@ -382,8 +388,17 @@ void csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator);
 
 /** @brief Serve static files from a directory.
  * @param c The request context.
- * @param root_dir Path to the local directory. */
+ * @param root_dir Path to the local directory.
+ * @note The URL prefix must be stripped before calling this function
+ *       (the low-level API uses c->request.path directly). Use
+ *       csilk_app_static() for automatic prefix handling. */
 void csilk_static(csilk_ctx_t* c, const char* root_dir);
+
+/** @brief Send an HTTP redirect response.
+ * @param c The request context.
+ * @param status HTTP redirect status code (301, 302, 303, 307, or 308).
+ * @param location Target URL for the Location header. */
+void csilk_redirect(csilk_ctx_t* c, int status, const char* location);
 
 /** @brief Bind request body to a cJSON object.
  * @param c The request context.
@@ -637,8 +652,9 @@ csilk_server_t* csilk_server_new(csilk_router_t* router);
 
 /** @brief Add global middleware to the server.
  * @param server Server instance.
- * @param handler Middleware function. */
-void csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
+ * @param handler Middleware function.
+ * @return 0 on success, -1 if handler array is full. */
+int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
 
 /** @brief Deallocate server resources.
  * @param server Server instance. */
@@ -652,6 +668,12 @@ void csilk_server_stop(csilk_server_t* server);
  * @param server Server instance.
  * @param config Configuration struct. */
 void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config);
+
+/** @brief Set the maximum number of concurrent client connections.
+ * @param server Server instance.
+ * @param max Maximum connections (0 = unlimited).
+ * @return Previous limit value. */
+int csilk_server_set_max_connections(csilk_server_t* server, int max);
 
 /** @brief Run the server event loop.
  * Blocks until server is stopped or error occurs.

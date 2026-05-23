@@ -65,26 +65,26 @@ void csilk_sha1_init(csilk_sha1_ctx* context) {
     context->count[0] = context->count[1] = 0;
 }
 
-void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, uint32_t len) {
+void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len) {
     uint32_t i, j;
     j = context->count[0];
-    if ((context->count[0] += len) < j) context->count[1]++;
+    if ((context->count[0] += (uint32_t)len) < j) context->count[1]++;
     
-    // Actually, let's use a simpler way to handle multi-block
-    uint32_t left = (j % 64);
-    uint32_t fill = 64 - left;
+    j %= 64;
+    uint32_t fill = 64 - j;
+    size_t i_sz;
     
     if (len >= fill) {
-        memcpy(context->buffer + left, data, fill);
+        memcpy(context->buffer + j, data, fill);
         sha1_transform(context->state, context->buffer);
-        for (i = fill; i + 63 < len; i += 64) {
-            sha1_transform(context->state, data + i);
+        for (i_sz = fill; i_sz + 63 < len; i_sz += 64) {
+            sha1_transform(context->state, data + i_sz);
         }
-        left = 0;
+        j = 0;
     } else {
-        i = 0;
+        i_sz = 0;
     }
-    memcpy(context->buffer + left, data + i, len - i);
+    memcpy(context->buffer + j, data + i_sz, len - i_sz);
 }
 
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {

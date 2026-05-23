@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+#include <unistd.h>
 #include "csilk.h"
 
 void csilk_csrf_middleware(csilk_ctx_t* c) {
@@ -32,4 +35,33 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
         csilk_json_error(c, 403, "Forbidden: Invalid CSRF token");
         csilk_abort(c);
     }
+}
+
+int csilk_csrf_generate_token(char* buf, size_t buf_size) {
+    if (!buf || buf_size < 33) return -1;
+
+    /* use /dev/urandom for cryptographically random bytes */
+    FILE* fp = fopen("/dev/urandom", "rb");
+    if (!fp) {
+        /* fallback: use time+pid as weak entropy (better than nothing) */
+        unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid();
+        snprintf(buf, buf_size, "%08x%08x%08x%08x",
+                 rand_r(&seed), rand_r(&seed),
+                 rand_r(&seed), rand_r(&seed));
+    } else {
+        uint8_t random[16];
+        if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
+            fclose(fp);
+            return -1;
+        }
+        fclose(fp);
+        snprintf(buf, buf_size,
+                 "%02x%02x%02x%02x%02x%02x%02x%02x"
+                 "%02x%02x%02x%02x%02x%02x%02x%02x",
+                 random[0], random[1], random[2], random[3],
+                 random[4], random[5], random[6], random[7],
+                 random[8], random[9], random[10], random[11],
+                 random[12], random[13], random[14], random[15]);
+    }
+    return 0;
 }

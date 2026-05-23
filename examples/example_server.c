@@ -281,7 +281,6 @@ int main(int argc, char* argv[]) {
         snprintf(route, sizeof(route), "%s/*path", prefix);
         CSILK_LOG_I("Static files: %s -> %s", route, cfg.static_files.root_dir);
         csilk_handler_t handlers[] = {csilk_logger_handler, NULL};
-        handlers[1] = NULL;
         csilk_group_add_handlers(root, "GET", route, handlers, 1);
     }
 
