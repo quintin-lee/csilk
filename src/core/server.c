@@ -72,10 +72,9 @@ static void on_timer_close(uv_handle_t* handle) {
     client->ctx._internal_client = NULL;
     csilk_ctx_cleanup(&client->ctx);
     if (client->ctx.arena) {
-        csilk_arena_free(client->ctx.arena);
-        client->ctx.arena = NULL;
+      csilk_arena_free(client->ctx.arena);
+      client->ctx.arena = NULL;
     }
-    free(client->ctx.response.headers);
     free(client->current_header_field);
     free(client->current_header_value);
     free(client->current_url);
@@ -337,8 +336,10 @@ static int on_message_complete(llhttp_t* p) {
   }
 
   size_t custom_headers_len = 0;
-  for (csilk_header_t* h = client->ctx.response.headers; h; h = h->next) {
-    custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+  for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+    for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h; h = h->next) {
+      custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+    }
   }
 
   size_t body_len = client->ctx.response.body_len;
@@ -349,13 +350,13 @@ static int on_message_complete(llhttp_t* p) {
 
   int header_len;
   if (status == 101) {
-      header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
+    header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
   } else {
-      header_len = snprintf(NULL, 0,
-                     "HTTP/1.1 %d %s\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: %s\r\n",
-                     status, status_text, body_len, connection_val);
+    header_len = snprintf(NULL, 0,
+                          "HTTP/1.1 %d %s\r\n"
+                          "Content-Length: %zu\r\n"
+                          "Connection: %s\r\n",
+                          status, status_text, body_len, connection_val);
   }
 
   if (header_len < 0) return 0;
@@ -368,18 +369,22 @@ static int on_message_complete(llhttp_t* p) {
     if (write_base) {
       int pos;
       if (status == 101) {
-          pos = snprintf(write_base, response_len + 1, "HTTP/1.1 101 Switching Protocols\r\n");
+        pos = snprintf(write_base, response_len + 1,
+                       "HTTP/1.1 101 Switching Protocols\r\n");
       } else {
-          pos = snprintf(write_base, response_len + 1,
-               "HTTP/1.1 %d %s\r\n"
-               "Content-Length: %zu\r\n"
-               "Connection: %s\r\n",
-               status, status_text, body_len, connection_val);
+        pos = snprintf(write_base, response_len + 1,
+                       "HTTP/1.1 %d %s\r\n"
+                       "Content-Length: %zu\r\n"
+                       "Connection: %s\r\n",
+                       status, status_text, body_len, connection_val);
       }
 
-      for (csilk_header_t* h = client->ctx.response.headers; h; h = h->next) {
-        pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
-                        "%s: %s\r\n", h->key, h->value);
+      for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
+             h = h->next) {
+          pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
+                          "%s: %s\r\n", h->key, h->value);
+        }
       }
 
       snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);

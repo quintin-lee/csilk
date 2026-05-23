@@ -12,11 +12,7 @@ void csilk_abort_with_status(csilk_ctx_t* c, int status) {
 
 // Helper to add request header
 void add_request_header(csilk_ctx_t* c, const char* key, const char* value) {
-  csilk_header_t* h = malloc(sizeof(csilk_header_t));
-  h->key = strdup(key);
-  h->value = strdup(value);
-  h->next = c->request.headers;
-  c->request.headers = h;
+  csilk_set_request_header(c, key, value);
 }
 
 // Minimal test setup
@@ -31,11 +27,14 @@ void handler(csilk_ctx_t* c) {
 int main() {
   csilk_ctx_t c;
   memset(&c, 0, sizeof(c));
+  c.arena = csilk_arena_new(1024);
 
   // Test 1: No header
   handler(&c);
   if (c.response.status != 401) {
     printf("Test 1 Failed: Expected 401, got %d\n", c.response.status);
+    csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     return 1;
   }
   printf("Test 1 Passed: No header results in 401\n");
@@ -47,6 +46,8 @@ int main() {
   handler(&c);
   if (c.response.status != 401) {
     printf("Test 2 Failed: Expected 401, got %d\n", c.response.status);
+    csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     return 1;
   }
   printf("Test 2 Passed: Wrong token results in 401\n");
@@ -58,10 +59,13 @@ int main() {
   handler(&c);
   if (c.response.status != 200) {
     printf("Test 3 Failed: Expected 200, got %d\n", c.response.status);
+    csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     return 1;
   }
   printf("Test 3 Passed: Correct token results in 200\n");
 
   csilk_ctx_cleanup(&c);
+  csilk_arena_free(c.arena);
   return 0;
 }
