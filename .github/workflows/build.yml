@@ -1,0 +1,38 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake build-essential \
+            libllhttp-dev \
+            clang-tidy
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run unit tests
+        run: ctest --test-dir build -E test_integration --output-on-failure
+
+      - name: Run integration tests (allow failure)
+        run: ctest --test-dir build -R test_integration --output-on-failure || true

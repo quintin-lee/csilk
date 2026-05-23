@@ -14,7 +14,7 @@
 
 /** @brief Default server config. */
 #define GIN_DEFAULT_IDLE_TIMEOUT  5000
-#define GIN_DEFAULT_MAX_BODY_SIZE (1024 * 1024)
+#define GIN_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
 #define GIN_DEFAULT_LISTEN_BACKLOG 128
 
 /** @brief Server structure. */
@@ -301,7 +301,7 @@ static int on_message_complete(llhttp_t* p) {
     }
 
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
-  const char* status_text = "OK";
+  const char* status_text;
   switch (status) {
     case 200:
       status_text = "OK";
@@ -454,7 +454,7 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     }
   } else if (nread < 0) {
     if (nread != UV_EOF) {
-      fprintf(stderr, "Read error %s\n", uv_err_name(nread));
+      fprintf(stderr, "Read error %s\n", uv_err_name((int)nread));
     }
     if (!uv_is_closing((uv_handle_t*)stream)) {
       uv_close((uv_handle_t*)stream, on_close);
