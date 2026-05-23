@@ -100,6 +100,7 @@ set(CSILK_SOURCES
     src/url_parser.c
     src/arena.c
     src/logger.c
+    src/csilk_easy.c
     src/config.c
     src/reflect.c
     src/utils.c
@@ -212,6 +213,10 @@ add_test(NAME test_integration COMMAND test_integration)
 # Example server
 add_executable(example_server example_server.c)
 target_link_libraries(example_server csilk)
+
+# Easy API example
+add_executable(example_easy example_easy.c)
+target_link_libraries(example_easy csilk)
 
 # Add run_tests custom target
 add_custom_target(run_tests
