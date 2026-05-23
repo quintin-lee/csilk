@@ -63,6 +63,8 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
   buf->len = suggested_size;
 }
 
+static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
+
 /** @brief Timer close callback.
  * @param handle Handle to close. */
 static void on_timer_close(uv_handle_t* handle) {
@@ -345,6 +347,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
   } else {
       if (keep_alive) {
         uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
+        uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
       } else {
         if (!uv_is_closing((uv_handle_t*)&client->handle)) {
           uv_close((uv_handle_t*)&client->handle, on_close);
@@ -416,17 +419,16 @@ static int on_message_complete(llhttp_t* p) {
         csilk_string(&client->ctx, 404, "Not Found");
     }
 
+  if (client->ctx.is_async) {
+      uv_read_stop((uv_stream_t*)&client->handle);
+  }
+
   if (!client->ctx.is_async) {
       _csilk_send_response(&client->ctx);
   }
   return 0;
 }
 
-/** @brief Read callback.
- * @param stream Stream.
- * @param nread Number of bytes read.
- * @param buf Buffer read into. */
-static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (status < 0) {
     fprintf(stderr, "New connection error %s\n", uv_strerror(status));
