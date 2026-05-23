@@ -168,6 +168,7 @@ endif()
 function(add_csilk_test name source)
   add_executable(${name} ${source})
   target_link_libraries(${name} csilk)
+  target_compile_options(${name} PRIVATE $<$<CONFIG:Release>:-UNDEBUG>)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 

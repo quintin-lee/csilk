@@ -7,9 +7,11 @@
 
 #include "csilk.h"
 
+#define TEST_DIR "test_dir_static"
+
 static void cleanup_test_dir(void) {
-    remove("test_dir/test.html");
-    rmdir("test_dir");
+    remove(TEST_DIR "/test.html");
+    rmdir(TEST_DIR);
 }
 
 void test_static_serves_file() {
@@ -18,14 +20,28 @@ void test_static_serves_file() {
     csilk_ctx_t ctx;
     memset(&ctx, 0, sizeof(csilk_ctx_t));
     ctx.arena = csilk_arena_new(1024);
+    assert(ctx.arena != NULL);
     ctx.request.path = strdup("/test.html");
+    assert(ctx.request.path != NULL);
 
-    mkdir("test_dir", 0777);
-    FILE* f = fopen("test_dir/test.html", "w");
+    if (mkdir(TEST_DIR, 0777) != 0) {
+        fprintf(stderr, "WARNING: mkdir failed, skipping test\n");
+        csilk_ctx_cleanup(&ctx);
+        return;
+    }
+
+    FILE* f = fopen(TEST_DIR "/test.html", "w");
+    if (!f) {
+        fprintf(stderr, "WARNING: fopen failed, skipping test\n");
+        rmdir(TEST_DIR);
+        csilk_ctx_cleanup(&ctx);
+        return;
+    }
+
     fprintf(f, "<html><body>Hello</body></html>");
     fclose(f);
 
-    csilk_static(&ctx, "test_dir");
+    csilk_static(&ctx, TEST_DIR);
 
     assert(ctx.response.status == 200);
     assert(ctx.response.body != NULL);
@@ -40,7 +56,9 @@ void test_static_traversal_blocked() {
     csilk_ctx_t ctx;
     memset(&ctx, 0, sizeof(csilk_ctx_t));
     ctx.arena = csilk_arena_new(1024);
+    assert(ctx.arena != NULL);
     ctx.request.path = strdup("/../../etc/passwd");
+    assert(ctx.request.path != NULL);
 
     csilk_static(&ctx, ".");
 
