@@ -7,12 +7,12 @@
 ## P0 — 关键问题（内存安全、数据竞争、安全漏洞）
 
 - [ ] **P0-1: 全局反射注册表无锁保护** — `src/core/reflect.c:15-16`
-  `g_registry` / `g_registry_count` 在多线程下 `csilk_reflect_register()` 与 `csilk_reflect_find()` 存在数据竞争。应使用 `uv_mutex_t` 保护。
+  `g_registry` / `g_registry_count` 在多线程下存在数据竞争（懒加载初始化 `uv_mutex_t` 非线程安全）。应改为显式初始化。
 
-- [ ] **P0-2: WebSocket 帧长度整数溢出** — `src/core/websocket.c:60`
+- [x] **P0-2: WebSocket 帧长度整数溢出** — `src/core/websocket.c:60`
   `malloc(header_len + len)` 中 `len` 接近 `SIZE_MAX` 时加法回绕，导致堆缓冲区溢出。应在 malloc 前校验 `len <= SIZE_MAX - header_len`。
 
-- [ ] **P0-3: `on_body` realloc 失败后 body 指针悬空** — `src/core/server.c:215-221`
+- [x] **P0-3: `on_body` realloc 失败后 body 指针悬空** — `src/core/server.c:215-221`
   realloc 失败时不释放旧 `request.body`，且连接继续运行不报错。
 
 - [ ] **P0-4: `_internal_client` 释放后使用** — `src/core/server.c:81-88, 415`
@@ -150,8 +150,8 @@
 | 优先级 | 工作项 | 预估难度 |
 |--------|--------|----------|
 | **立即** | P0-1 反射注册表加锁 | 低（~10 行） |
-| **立即** | P0-2 WebSocket 长度校验 | 低（~5 行） |
-| **立即** | P0-3 on_body realloc 失败处理 | 低（~5 行） |
+| **已完成** | P0-2 WebSocket 长度校验 | - |
+| **已完成** | P0-3 on_body realloc 失败处理 | - |
 | **高** | P1-3/4 uv_* 返回值检查 | 低（~10 行） |
 | **高** | P2-2 CORS 按指针传递 | 低（~5 行） |
 | **高** | P3-3 URL 解码 | 中（~50 行） |

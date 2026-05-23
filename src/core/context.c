@@ -13,6 +13,10 @@
 
 #include "csilk.h"
 
+/** @brief Hash a header key string into a bucket index.
+ * Uses djb2 hash with case-insensitive folding.
+ * @param key Header key string.
+ * @return Bucket index (0..CSILK_HEADER_BUCKETS-1). */
 static uint32_t hash_key(const char* key) {
   uint32_t hash = 5381;
   int c;
@@ -22,6 +26,10 @@ static uint32_t hash_key(const char* key) {
   return hash % CSILK_HEADER_BUCKETS;
 }
 
+/** @brief Look up a header value by key (case-insensitive).
+ * @param map Header hash map.
+ * @param key Header key to find.
+ * @return Value string, or NULL if not found. */
 static const char* map_get(csilk_header_map_t* map, const char* key) {
   uint32_t bucket = hash_key(key);
   csilk_header_t* h = map->buckets[bucket];
@@ -34,6 +42,11 @@ static const char* map_get(csilk_header_map_t* map, const char* key) {
   return NULL;
 }
 
+/** @brief Set a header value (overwrites existing key).
+ * @param c Request context (for arena allocator).
+ * @param map Header hash map (request or response).
+ * @param key Header key.
+ * @param value Header value. */
 static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
                     const char* value) {
   if (!c->arena) return;
@@ -56,6 +69,11 @@ static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
   }
 }
 
+/** @brief Add a header value (allows duplicates).
+ * @param c Request context (for arena allocator).
+ * @param map Header hash map.
+ * @param key Header key.
+ * @param value Header value. */
 static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
                     const char* value) {
   if (!c->arena) return;
@@ -69,6 +87,7 @@ static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
   }
 }
 
+/** @brief Advance to the next handler in the chain. */
 void csilk_next(csilk_ctx_t* c) {
   if (c->aborted) return;
   c->handler_index++;
@@ -77,10 +96,14 @@ void csilk_next(csilk_ctx_t* c) {
   }
 }
 
+/** @brief Abort the handler chain immediately. */
 void csilk_abort(csilk_ctx_t* c) { c->aborted = 1; }
 
+/** @brief Set the HTTP response status code. */
 void csilk_status(csilk_ctx_t* c, int status) { c->response.status = status; }
 
+/** @brief Set response body as plain text with status code.
+ * Memory handled by arena if available, else strdup. */
 void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
   c->response.status = status;
   size_t msg_len = msg ? strlen(msg) : 0;
@@ -99,6 +122,7 @@ void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
   }
 }
 
+/** @brief Get a URL path parameter by name. */
 const char* csilk_get_param(csilk_ctx_t* c, const char* key) {
   for (int i = 0; i < c->params_count; i++) {
     if (strcmp(c->params[i].key, key) == 0) {
@@ -108,23 +132,29 @@ const char* csilk_get_param(csilk_ctx_t* c, const char* key) {
   return NULL;
 }
 
+/** @brief Get a request header value (case-insensitive). */
 const char* csilk_get_header(csilk_ctx_t* c, const char* key) {
   return map_get(&c->request.headers, key);
 }
 
+/** @brief Get a query parameter value. */
 const char* csilk_get_query(csilk_ctx_t* c, const char* key) {
   return map_get(&c->request.query_params, key);
 }
 
+/** @brief Set a request header (overwrites existing). */
 void csilk_set_request_header(csilk_ctx_t* c, const char* key,
                               const char* value) {
   map_set(c, &c->request.headers, key, value);
 }
 
+/** @brief Set a response header (overwrites existing). */
 void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value) {
   map_set(c, &c->response.headers, key, value);
 }
 
+/** @brief Clean up request context resources between requests.
+ * Resets arena, frees params/body/path, clears headers and storage. */
 void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (!c) return;
 
@@ -170,6 +200,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->handler_index = -1;
 }
 
+/** @brief Store a value in the context storage. */
 void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
   if (!c || !key) return;
   for (int i = 0; i < c->storage_count; i++) {
@@ -185,6 +216,7 @@ void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
   }
 }
 
+/** @brief Retrieve a value from the context storage. */
 void* csilk_get(csilk_ctx_t* c, const char* key) {
   if (!c || !key) return NULL;
   for (int i = 0; i < c->storage_count; i++) {
@@ -195,11 +227,13 @@ void* csilk_get(csilk_ctx_t* c, const char* key) {
   return NULL;
 }
 
+/** @brief Parse request body as JSON. */
 cJSON* csilk_bind_json(csilk_ctx_t* c) {
   if (!c || !c->request.body) return NULL;
   return cJSON_Parse(c->request.body);
 }
 
+/** @brief Parse request body as JSON with detailed error feedback. */
 cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error) {
   if (error) *error = NULL;
   if (!c) {
@@ -219,6 +253,7 @@ cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error) {
   return json;
 }
 
+/** @brief Get a cookie value by name. */
 const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
   if (!c || !name || !c->arena) return NULL;
   const char* cookie_header = csilk_get_header(c, "Cookie");
@@ -249,10 +284,12 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
   return result;
 }
 
+/** @brief Add a response header (allows multiple values for same key). */
 void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value) {
   map_add(c, &c->response.headers, key, value);
 }
 
+/** @brief Set a cookie in the response. */
 void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
                       int max_age, const char* path, const char* domain,
                       int secure, int http_only) {
@@ -293,6 +330,7 @@ void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
   csilk_add_header(c, "Set-Cookie", buf);
 }
 
+/** @brief Send a JSON response (cJSON object is freed by this call). */
 void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
   if (!c || !json) return;
 
@@ -314,6 +352,7 @@ void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
   cJSON_Delete(json);
 }
 
+/** @brief Send a JSON error response with "error" field. */
 void csilk_json_error(csilk_ctx_t* c, int status, const char* message) {
   if (!c) return;
   cJSON* err = cJSON_CreateObject();
@@ -322,11 +361,13 @@ void csilk_json_error(csilk_ctx_t* c, int status, const char* message) {
   csilk_json(c, status, err);
 }
 
+/** @brief Bind request body JSON to a registered struct via reflection. */
 int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr) {
   if (!c || !c->request.body || !type_name || !ptr) return 0;
   return csilk_json_unmarshal(type_name, c->request.body, ptr);
 }
 
+/** @brief Send a JSON response from a registered struct via reflection. */
 void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr) {
   if (!c || !type_name || !ptr) return;
   char* json_str = csilk_json_marshal(type_name, ptr);
@@ -342,6 +383,7 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const
   }
 }
 
+/** @brief Send an HTTP redirect response. */
 void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
   if (!c || !location) return;
   c->response.status = status;
@@ -359,6 +401,7 @@ void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
   csilk_string(c, status, body);
 }
 
+/** @brief Parse a raw query string into the context's query_params map. */
 void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
   if (!query_string || *query_string == '\0' || !c->arena) return;
 

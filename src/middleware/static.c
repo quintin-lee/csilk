@@ -28,6 +28,7 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
+/** @brief libuv work callback: read static file from disk (offloaded from event loop). @param req libuv work request. */
 static void static_work_cb(uv_work_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   const char* root_dir = (const char*)csilk_get(c, "static_root");
@@ -105,6 +106,7 @@ static void static_work_cb(uv_work_t* req) {
   uv_fs_req_cleanup(&read_req);
 }
 
+/** @brief libuv after-work callback: send the static file response. @param req libuv work request. @param status Work status. */
 static void static_after_work_cb(uv_work_t* req, int status) {
   (void)status;
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
@@ -113,6 +115,7 @@ static void static_after_work_cb(uv_work_t* req, int status) {
   }
 }
 
+/** @brief Serve static files from a local directory (async, offloaded). */
 void csilk_static(csilk_ctx_t* c, const char* root_dir) {
   c->is_async = 1;
   c->work_req.data = c;

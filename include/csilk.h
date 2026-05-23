@@ -233,13 +233,13 @@ typedef struct {
 int csilk_log_init(csilk_log_config_t config);
 
 /** @brief Internal log function (use macros instead).
- * @param level Log severity level.
+ * @param lv Log severity level.
  * @param file Source file name (__FILE__).
  * @param line Source line number (__LINE__).
  * @param func Function name (__func__).
  * @param fmt Printf-style format string.
  * @param ... Format arguments. */
-void _csilk_log_internal(csilk_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...);
+void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
 void csilk_log_close();
@@ -250,7 +250,7 @@ void csilk_log_close();
  * plus any fields in @p extra.  If json_format is off this behaves like a
  * normal log line (extra fields are ignored).
  *
- * @param level   Log severity level.
+ * @param lv    Log severity level.
  * @param file    Source file name (__FILE__).
  * @param line    Source line number (__LINE__).
  * @param func    Function name (__func__).
@@ -258,7 +258,7 @@ void csilk_log_close();
  *                Ownership is taken — do not use after the call.
  * @param fmt     Printf-style format string for the log message.
  * @param ...     Format arguments. */
-void _csilk_log_structured(csilk_log_level_t level, const char* file, int line,
+void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
                            const char* func, cJSON* extra,
                            const char* fmt, ...);
 

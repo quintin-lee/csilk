@@ -15,6 +15,7 @@
 
 /* ---- reflectable request-log struct ---- */
 
+/** @brief Request log entry for JSON structured logging. */
 typedef struct csilk_req_log_s {
     char     method[8];      /**< HTTP method */
     char     path[256];      /**< Request path */
@@ -34,6 +35,7 @@ CSILK_REGISTER_REFLECT(csilk_req_log_t, REQ_LOG_MAP)
 
 /* ---- middleware handler ---- */
 
+/** @brief Request logging middleware — logs method, path, status, and duration. */
 void csilk_logger_handler(csilk_ctx_t* c) {
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);

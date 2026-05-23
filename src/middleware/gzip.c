@@ -15,13 +15,15 @@
 #define CSILK_GZIP_CHUNK 16384
 #define CSILK_GZIP_MIN_LENGTH 1024
 
+/** @brief State for asynchronous gzip compression offloading. */
 typedef struct {
-    uint8_t* dest;
-    size_t dest_cap;
-    int ret;
-    size_t compressed_len;
+    uint8_t* dest;        /**< Compressed output buffer. */
+    size_t dest_cap;      /**< Capacity of the output buffer. */
+    int ret;              /**< zlib return status. */
+    size_t compressed_len; /**< Actual compressed data length. */
 } gzip_async_state_t;
 
+/** @brief libuv work callback: perform gzip compression off the event loop. @param req libuv work request. */
 static void gzip_work_cb(uv_work_t* req) {
     csilk_ctx_t* c = (csilk_ctx_t*)req->data;
     gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -55,6 +57,7 @@ static void gzip_work_cb(uv_work_t* req) {
     deflateEnd(&strm);
 }
 
+/** @brief libuv after-work callback: apply compressed body and send response. @param req libuv work request. @param status Work status. */
 static void gzip_after_work_cb(uv_work_t* req, int status) {
     csilk_ctx_t* c = (csilk_ctx_t*)req->data;
     gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -78,6 +81,7 @@ static void gzip_after_work_cb(uv_work_t* req, int status) {
     _csilk_send_response(c);
 }
 
+/** @brief Gzip response compression middleware (offloaded to thread pool). */
 void csilk_gzip_middleware(csilk_ctx_t* c) {
     if (!c) return;
 

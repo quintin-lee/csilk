@@ -14,6 +14,7 @@
 #define CSILK_MAX_PART_NAME 128
 #define CSILK_MAX_PART_FILENAME 256
 
+/** @brief Parse multipart/form-data request body and invoke handler for each part. */
 void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
     if (!c || !c->request.body || !handler) return;
 

@@ -50,8 +50,8 @@ void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level);
 /** @brief Enable file logging with optional rotation.
  * @param app Application handle.
  * @param path Log file path.
- * @param max_size Max file size before rotation (0 to disable). */
-void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_size);
+ * @param max_sz Max file size before rotation (0 to disable). */
+void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz);
 
 /** @brief Enable or disable JSON structured log output.
  * @param app Application handle.
@@ -62,15 +62,15 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
 
 /** @brief Register a global middleware that runs on every route.
  * @param app Application handle.
- * @param handler Middleware handler function. */
-void csilk_app_use(csilk_app_t* app, csilk_handler_t handler);
+ * @param h Middleware handler function. */
+void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
 
 /** @brief Register a middleware that runs only on a specific prefix group.
  * @param app Application handle.
  * @param prefix URL path prefix (e.g., "/api").
- * @param handler Middleware handler function. */
+ * @param h Middleware handler function. */
 void csilk_app_use_group(csilk_app_t* app, const char* prefix,
-                          csilk_handler_t handler);
+                          csilk_handler_t h);
 
 /** @brief Auto-apply built-in middleware based on current config.
  * Enables: logger, recovery, CORS, CSRF, rate-limit, auth, gzip
@@ -93,10 +93,10 @@ void csilk_app_add_route(csilk_app_t* app, const char* method,
  * @param method HTTP method string.
  * @param path URL pattern.
  * @param handlers Array of handler functions.
- * @param count Number of handlers. */
+ * @param n Number of handlers. */
 void csilk_app_add_handlers(csilk_app_t* app, const char* method,
                              const char* path, csilk_handler_t* handlers,
-                             size_t count);
+                             size_t n);
 
 /* Convenience route macros */
 #define csilk_app_get(app, path, handler) \
@@ -127,8 +127,8 @@ void csilk_app_static(csilk_app_t* app, const char* prefix,
 
 /** @brief Apply server-level configuration (timeouts, limits, TCP options).
  * @param app Application handle.
- * @param cfg Server configuration struct. */
-void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t cfg);
+ * @param c Server configuration struct. */
+void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c);
 
 /** @brief Get a copy of the current application configuration.
  * @param app Application handle.

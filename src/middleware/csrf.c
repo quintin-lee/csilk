@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include "csilk.h"
 
+/** @brief Stateless CSRF protection middleware (cookie + header token comparison). */
 void csilk_csrf_middleware(csilk_ctx_t* c) {
     if (c->request.method && (strcmp(c->request.method, "GET") == 0 || 
                              strcmp(c->request.method, "HEAD") == 0 ||
@@ -37,6 +38,7 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
     }
 }
 
+/** @brief Generate a cryptographically random CSRF token. */
 int csilk_csrf_generate_token(char* buf, size_t buf_size) {
     if (!buf || buf_size < 33) return -1;
 

@@ -140,7 +140,8 @@ static void on_timeout(uv_timer_t* handle) {
   }
 }
 
-/** @brief HTTP parser callbacks. */
+/** @brief HTTP parser callback: message begins.
+ * @param p HTTP parser instance. */
 static int on_message_begin(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size = 0;
@@ -148,6 +149,10 @@ static int on_message_begin(llhttp_t* p) {
   return 0;
 }
 
+/** @brief HTTP parser callback: URL received.
+ * @param p HTTP parser instance.
+ * @param at Pointer to URL data.
+ * @param length Length of URL data. */
 static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_url) free(client->current_url);
@@ -160,6 +165,10 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/** @brief HTTP parser callback: header field name received.
+ * @param p HTTP parser instance.
+ * @param at Pointer to header field data.
+ * @param length Length of header field data. */
 static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
@@ -190,6 +199,10 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/** @brief HTTP parser callback: header value received.
+ * @param p HTTP parser instance.
+ * @param at Pointer to header value data.
+ * @param length Length of header value data. */
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
@@ -208,6 +221,8 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/** @brief HTTP parser callback: all headers received.
+ * @param p HTTP parser instance. */
 static int on_headers_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_field && client->current_header_value) {
@@ -221,6 +236,10 @@ static int on_headers_complete(llhttp_t* p) {
   return 0;
 }
 
+/** @brief HTTP parser callback: body data received.
+ * @param p HTTP parser instance.
+ * @param at Pointer to body data.
+ * @param length Length of body data. */
 static int on_body(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
@@ -241,6 +260,10 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+/** @brief Send the fully constructed HTTP response to the client.
+ * Builds the HTTP response from context status/headers/body, writes it
+ * to the connection, then handles keep-alive or close.
+ */
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
@@ -358,6 +381,9 @@ void _csilk_send_response(csilk_ctx_t* c) {
   csilk_ctx_cleanup(&client->ctx);
 }
 
+/** @brief HTTP parser callback: full request message parsed.
+ * Routes the request to matching handlers and sends response.
+ * @param p HTTP parser instance. */
 static int on_message_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
 
@@ -429,6 +455,10 @@ static int on_message_complete(llhttp_t* p) {
   return 0;
 }
 
+/** @brief libuv connection callback: accept new TCP connection.
+ * Creates a client context, initializes parser, timer, and starts reading.
+ * @param server_stream UV stream handle for the server.
+ * @param status Connection status. */
 static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (status < 0) {
     fprintf(stderr, "New connection error %s\n", uv_strerror(status));
@@ -524,6 +554,7 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   }
 }
 
+/** @brief Get the client's IP address from the underlying connection. */
 const char* csilk_get_client_ip(csilk_ctx_t* c) {
   if (!c || !c->_internal_client) return NULL;
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
@@ -541,6 +572,7 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
   return NULL;
 }
 
+/** @brief Create a new server instance. */
 csilk_server_t* csilk_server_new(csilk_router_t* router) {
   csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
   if (!s) return NULL;
@@ -567,6 +599,7 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
+/** @brief Add a global middleware handler to the server. */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   if (!server || !handler) return -1;
   if (server->middleware_count >= 32) return -1;
@@ -574,6 +607,7 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   return 0;
 }
 
+/** @brief Deallocate server resources. */
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
   
@@ -594,16 +628,19 @@ void csilk_server_free(csilk_server_t* server) {
   free(server);
 }
 
+/** @brief Signal the server to stop gracefully. */
 void csilk_server_stop(csilk_server_t* server) {
   if (!server) return;
   uv_async_send(&server->async_handle);
 }
 
+/** @brief Apply server configuration. */
 void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config) {
   if (!server) return;
   server->config = config;
 }
 
+/** @brief Set the maximum number of concurrent client connections. */
 int csilk_server_set_max_connections(csilk_server_t* server, int max) {
   if (!server) return -1;
   int prev = server->max_connections;
@@ -616,11 +653,15 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
 #include <netinet/in.h>
 #endif
 
+/** @brief Worker thread initialization data for multi-loop mode. */
 typedef struct {
-  csilk_server_t* server;
-  int port;
+  csilk_server_t* server; /**< Server instance. */
+  int port;               /**< Port to listen on. */
 } worker_data_t;
 
+/** @brief Worker thread entry point for multi-loop SO_REUSEPORT mode.
+ * Each worker runs its own libuv event loop and accept loop.
+ * @param arg Pointer to worker_data_t (freed inside). */
 static void worker_thread(void* arg) {
   worker_data_t* data = (worker_data_t*)arg;
   csilk_server_t* server = data->server;
@@ -662,6 +703,8 @@ static void worker_thread(void* arg) {
   uv_loop_close(&loop);
 }
 
+/** @brief Run the server event loop.
+ * Blocks until server is stopped or error occurs. */
 int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
 

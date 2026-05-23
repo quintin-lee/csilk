@@ -99,6 +99,7 @@ static void static_serve(csilk_ctx_t* c) {
  * public API
  * =================================================================== */
 
+/** @brief Create a new application with optional YAML configuration. */
 csilk_app_t* csilk_app_new(const char* config_path) {
     csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
     if (!app) return NULL;
@@ -141,6 +142,7 @@ fail:
     return NULL;
 }
 
+/** @brief Deallocate all application resources. */
 void csilk_app_free(csilk_app_t* app) {
     if (!app) return;
     csilk_log_close();
@@ -155,12 +157,14 @@ void csilk_app_free(csilk_app_t* app) {
 
 /* ---- logger ---- */
 
+/** @brief Set the minimum log level. */
 void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t lv) {
     if (!app) return;
     app->config.logger.level = lv;
     csilk_log_init(app->config.logger);
 }
 
+/** @brief Enable file logging with optional rotation size. */
 void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
     if (!app) return;
     if (app->config.logger.file_path)
@@ -170,6 +174,7 @@ void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
     csilk_log_init(app->config.logger);
 }
 
+/** @brief Enable or disable JSON structured log output. */
 void csilk_app_log_json(csilk_app_t* app, int enable) {
     if (!app) return;
     app->config.logger.json_format = enable;
@@ -178,11 +183,13 @@ void csilk_app_log_json(csilk_app_t* app, int enable) {
 
 /* ---- middleware ---- */
 
+/** @brief Register a global middleware handler. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h) {
     if (!app || !app->server) return;
     csilk_server_use(app->server, h);
 }
 
+/** @brief Register a middleware scoped to a URL prefix group. */
 void csilk_app_use_group(csilk_app_t* app, const char* prefix,
                           csilk_handler_t h) {
     if (!app || !prefix) return;
@@ -190,6 +197,7 @@ void csilk_app_use_group(csilk_app_t* app, const char* prefix,
     if (g) csilk_group_use(g, h);
 }
 
+/** @brief Auto-apply built-in middleware based on current configuration. */
 void csilk_app_apply_config(csilk_app_t* app) {
     if (!app) return;
     if (app->config.static_files.enable && app->config.static_files.root_dir) {
@@ -202,6 +210,7 @@ void csilk_app_apply_config(csilk_app_t* app) {
 
 /* ---- routes ---- */
 
+/** @brief Register a route with a single handler. */
 void csilk_app_add_route(csilk_app_t* app, const char* method,
                           const char* path, csilk_handler_t h) {
     if (!app || !method || !path || !h) return;
@@ -210,6 +219,7 @@ void csilk_app_add_route(csilk_app_t* app, const char* method,
     csilk_group_add_route(g, method, path, h);
 }
 
+/** @brief Register a route with multiple handlers (middleware chain). */
 void csilk_app_add_handlers(csilk_app_t* app, const char* method,
                              const char* path, csilk_handler_t* handlers,
                              size_t n) {
@@ -221,6 +231,7 @@ void csilk_app_add_handlers(csilk_app_t* app, const char* method,
 
 /* ---- static files ---- */
 
+/** @brief Configure static file serving from a local directory. */
 void csilk_app_static(csilk_app_t* app, const char* prefix,
                        const char* root_dir) {
     if (!app || !prefix || !root_dir) return;
@@ -248,12 +259,14 @@ void csilk_app_static(csilk_app_t* app, const char* prefix,
 
 /* ---- config / run / accessors ---- */
 
+/** @brief Apply server-level configuration options. */
 void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c) {
     if (!app || !app->server) return;
     app->config.server = c;
     csilk_server_set_config(app->server, c);
 }
 
+/** @brief Get a copy of the current application configuration. */
 csilk_config_t* csilk_app_config(csilk_app_t* app) {
     if (!app) return NULL;
     csilk_config_t* cp = malloc(sizeof(csilk_config_t));
@@ -261,6 +274,7 @@ csilk_config_t* csilk_app_config(csilk_app_t* app) {
     return cp;
 }
 
+/** @brief Start the server and enter the event loop. */
 int csilk_app_run(csilk_app_t* app, int port) {
     if (!app) return -1;
     int p = port > 0 ? port : app->config.port;
@@ -269,10 +283,12 @@ int csilk_app_run(csilk_app_t* app, int port) {
     return csilk_server_run(app->server, p);
 }
 
+/** @brief Get the underlying router handle. */
 csilk_router_t* csilk_app_router(csilk_app_t* app) {
     return app ? app->router : NULL;
 }
 
+/** @brief Get the underlying server handle. */
 csilk_server_t* csilk_app_server(csilk_app_t* app) {
     return app ? app->server : NULL;
 }
