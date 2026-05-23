@@ -208,18 +208,7 @@ int main(int argc, char* argv[]) {
         // csilk_GET(root, route, ...); // Needs a way to bind root_dir
     }
 
-    // Create server
-    csilk_server_t* server = csilk_server_new(router);
-    if (!server) {
-        CSILK_LOG_E("Failed to create server");
-        csilk_group_free(api_group);
-        csilk_group_free(protected_group);
-        csilk_group_free(root);
-        csilk_router_free(router);
-        return 1;
-    }
-
-    // Apply server config
+    // Create server (reuse from earlier)
     csilk_server_set_config(server, cfg.server);
     
     printf("Server running on http://localhost:%d\n", cfg.port);
