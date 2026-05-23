@@ -26,6 +26,7 @@ void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
 }
 
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
+  if (!name) return NULL;
   for (size_t i = 0; i < g_registry_count; i++) {
     if (strcmp(g_registry[i].name, name) == 0) {
       return &g_registry[i];
@@ -59,9 +60,13 @@ static cJSON* serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
     case CSILK_TYPE_STRUCT: {
       const void* struct_addr = desc->is_pointer ? *(const void**)addr : addr;
       if (!struct_addr) return cJSON_CreateNull();
+      
+      const csilk_reflect_entry_t* entry = csilk_reflect_find(desc->nested_type_name);
+      if (!entry) return cJSON_CreateNull();
+
       cJSON* sub_obj = cJSON_CreateObject();
       if (!sub_obj) return NULL;
-      struct_to_cjson_internal(sub_obj, struct_addr, desc->nested, desc->nested_count);
+      struct_to_cjson_internal(sub_obj, struct_addr, entry->fields, entry->count);
       return sub_obj;
     }
   }
@@ -134,8 +139,10 @@ static void deserialize_scalar(const cJSON* item, void* addr,
           struct_addr = *ptr;
         }
         if (struct_addr) {
-          cjson_to_struct_internal(item, struct_addr, desc->nested,
-                                  desc->nested_count);
+          const csilk_reflect_entry_t* entry = csilk_reflect_find(desc->nested_type_name);
+          if (entry) {
+            cjson_to_struct_internal(item, struct_addr, entry->fields, entry->count);
+          }
         }
       }
       break;

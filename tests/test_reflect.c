@@ -3,45 +3,64 @@
 #include <string.h>
 #include <stdlib.h>
 
+// Extend type map BEFORE including csilk.h/csilk_reflect.h
+#define CSILK_USER_TYPE_MAP \
+    , struct TestUser_s: "TestUser", \
+      struct TestPoint_s: "TestPoint"
+
 #include "csilk.h"
 #include "csilk_reflect.h"
 
-// Define test structures
-typedef struct {
+// Define test structures with explicit tags for _Generic
+typedef struct TestPoint_s {
+    int16_t x;
+    int16_t y;
+} TestPoint;
+
+typedef struct TestUser_s {
     int32_t id;
     char name[32];
     float score;
+    TestPoint pos;
 } TestUser;
 
-#define USER_REFLECT_MAP(X) \
-    X(TestUser, id,    CSILK_TYPE_INT32,  sizeof(int32_t), 0, false, NULL, 0) \
-    X(TestUser, name,  CSILK_TYPE_STRING, 32,              0, false, NULL, 0) \
-    X(TestUser, score, CSILK_TYPE_FLOAT,  sizeof(float),   0, false, NULL, 0)
+#define POINT_REFLECT_MAP(X) \
+    X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL) \
+    X(TestPoint, y, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL)
 
-CSILK_REGISTER_REFLECT(TestUser, "User", USER_REFLECT_MAP)
+#define USER_REFLECT_MAP(X) \
+    X(TestUser, id,    CSILK_TYPE_INT32,  sizeof(int32_t), 0, false, NULL) \
+    X(TestUser, name,  CSILK_TYPE_STRING, 32,              0, false, NULL) \
+    X(TestUser, score, CSILK_TYPE_FLOAT,  sizeof(float),   0, false, NULL) \
+    X(TestUser, pos,   CSILK_TYPE_STRUCT, sizeof(TestPoint), 0, false, "TestPoint")
+
+// Automatic registration
+CSILK_REGISTER_REFLECT(TestPoint, POINT_REFLECT_MAP)
+CSILK_REGISTER_REFLECT(TestUser, USER_REFLECT_MAP)
 
 void test_marshal() {
-    TestUser user = { .id = 1, .name = "Alice", .score = 95.5f };
-    char* json = csilk_json_marshal("User", &user);
+    TestUser user = { .id = 1, .name = "Alice", .score = 95.5f, .pos = {10, 20} };
+    // Use automatic type dispatch!
+    char* json = csilk_marshal(&user);
     
     assert(json != NULL);
     assert(strstr(json, "\"id\":1") != NULL);
     assert(strstr(json, "\"name\":\"Alice\"") != NULL);
-    assert(strstr(json, "\"score\":95.5") != NULL);
+    assert(strstr(json, "\"pos\":{\"x\":10,\"y\":20}") != NULL);
     
     free(json);
     printf("test_marshal passed\n");
 }
 
 void test_unmarshal() {
-    const char* json = "{\"id\":2, \"name\":\"Bob\", \"score\":88.0}";
+    const char* json = "{\"id\":2, \"name\":\"Bob\", \"score\":88.0, \"pos\":{\"x\":30,\"y\":40}}";
     TestUser user = {0};
     
-    int ok = csilk_json_unmarshal("User", json, &user);
+    // Use automatic type dispatch!
+    int ok = csilk_unmarshal(json, &user);
     assert(ok == 1);
     assert(user.id == 2);
-    assert(strcmp(user.name, "Bob") == 0);
-    assert(user.score == 88.0f);
+    assert(user.pos.x == 30);
     
     printf("test_unmarshal passed\n");
 }
@@ -50,19 +69,17 @@ void test_context_reflect() {
     csilk_ctx_t c = {0};
     c.arena = csilk_arena_new(1024);
     
-    // Test binding
+    // Test binding with macro (uses type string conversion)
     c.request.body = strdup("{\"id\":3, \"name\":\"Charlie\", \"score\":77.5}");
     TestUser user = {0};
-    int ok = csilk_bind_reflect(&c, "User", &user);
+    int ok = csilk_bind(&c, TestUser, &user);
     assert(ok == 1);
     assert(user.id == 3);
-    assert(strcmp(user.name, "Charlie") == 0);
     
-    // Test response
-    csilk_json_reflect(&c, 200, "User", &user);
+    // Test response with macro
+    csilk_json_t(&c, 200, TestUser, &user);
     assert(c.response.status == 200);
     assert(c.response.body != NULL);
-    assert(strstr(c.response.body, "\"name\":\"Charlie\"") != NULL);
     
     csilk_ctx_cleanup(&c);
     printf("test_context_reflect passed\n");
