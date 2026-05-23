@@ -625,6 +625,30 @@ void csilk_ws_handshake(csilk_ctx_t* c);
  * @param opcode Opcode (1 for text, 2 for binary). */
 void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
+/** @brief Send a WebSocket close frame with optional status code and reason.
+ *  Initiates the close handshake per RFC 6455 Section 5.5.1.
+ * @param c The request context.
+ * @param status_code Status code (e.g., 1000 for normal, 0 to omit).
+ * @param reason Optional close reason string (can be NULL). */
+void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason);
+
+/* --- Streaming Response (Chunked Transfer Encoding) --- */
+
+/** @brief Write data to the response stream using chunked transfer encoding.
+ *  The first call sends HTTP response headers (with Transfer-Encoding: chunked),
+ *  then subsequent calls write chunked frames.  The handler MUST set
+ *  is_async = 1 before calling this function and NOT call csilk_string/json/etc.
+ * @param c The request context.
+ * @param data Data to write as the next chunk.
+ * @param len Length of data. */
+void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
+
+/** @brief Finalize a streaming response by sending the terminal chunk.
+ *  After this call the connection is either kept alive or closed depending
+ *  on the HTTP keep-alive header.
+ * @param c The request context. */
+void csilk_response_end(csilk_ctx_t* c);
+
 /* --- Server-Sent Events (SSE) --- */
 
 /** @brief Initialize an SSE connection.

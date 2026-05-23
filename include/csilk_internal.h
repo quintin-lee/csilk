@@ -42,6 +42,7 @@ struct csilk_ctx_s {
   void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
   uv_work_t work_req;       /**< Worker request for async operations. */
   int is_async;             /**< Flag if the response will be sent asynchronously. */
+  int response_started;     /**< Flag if response headers have been sent. */
 };
 
 /** @brief SHA1 hashing context. */

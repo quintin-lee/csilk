@@ -13,6 +13,7 @@
 
 #include "csilk.h"
 #include "csilk_internal.h"
+#include <uv.h>
 
 /** @brief Hash a header key string into a bucket index.
  * Uses djb2 hash with case-insensitive folding.
@@ -199,6 +200,7 @@ void csilk_ctx_cleanup(csilk_ctx_t *c) {
   c->is_websocket = 0;
   c->is_sse = 0;
   c->is_async = 0;
+  c->response_started = 0;
   c->handler_index = -1;
 }
 
@@ -499,4 +501,153 @@ void csilk_parse_query(csilk_ctx_t *c, const char *query_string) {
       pos = NULL;
   }
   free(qs);
+}
+
+/** @brief Streaming write completion callback.
+ *  @param req Write request.
+ *  @param status Write status. */
+static void on_stream_write(uv_write_t* req, int status) {
+    if (status < 0) {
+        fprintf(stderr, "Stream write error %s\n", uv_strerror(status));
+    }
+    if (req->data) free(req->data);
+    free(req);
+}
+
+/** @brief Send HTTP response headers with Transfer-Encoding: chunked.
+ *  This is used by csilk_response_write on the first call.
+ *  @param c Request context.
+ *  @return 0 on success, -1 on error. */
+static int send_chunked_headers(csilk_ctx_t* c) {
+    if (!c || !c->_internal_client) return -1;
+
+    int status = c->response.status ? c->response.status : 200;
+    const char* status_text = status == 200 ? "OK" :
+                              status == 201 ? "Created" :
+                              status == 400 ? "Bad Request" :
+                              status == 401 ? "Unauthorized" :
+                              status == 403 ? "Forbidden" :
+                              status == 404 ? "Not Found" :
+                              status == 500 ? "Internal Server Error" : "OK";
+
+    size_t custom_headers_len = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+        }
+    }
+
+    int header_len = snprintf(NULL, 0,
+        "HTTP/1.1 %d %s\r\n"
+        "Transfer-Encoding: chunked\r\n"
+        "Connection: keep-alive\r\n",
+        status, status_text);
+    if (header_len < 0) return -1;
+
+    size_t response_len = (size_t)header_len + custom_headers_len + 2;
+    uv_write_t* req = malloc(sizeof(uv_write_t));
+    if (!req) return -1;
+
+    char* write_base = malloc(response_len + 1);
+    if (!write_base) {
+        free(req);
+        return -1;
+    }
+
+    int pos = snprintf(write_base, response_len + 1,
+        "HTTP/1.1 %d %s\r\n"
+        "Transfer-Encoding: chunked\r\n"
+        "Connection: keep-alive\r\n",
+        status, status_text);
+
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
+                           "%s: %s\r\n", h->key, h->value);
+        }
+    }
+
+    snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+
+    uv_buf_t buf = uv_buf_init(write_base, (size_t)pos + 2);
+    req->data = write_base;
+    uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+    uv_write(req, stream, &buf, 1, on_stream_write);
+    c->response_started = 1;
+    return 0;
+}
+
+/** @brief Write a chunked frame in the format: hex-size\r\ndata\r\n.
+ *  @param stream The uv stream to write to.
+ *  @param data Chunk data.
+ *  @param len Data length. */
+static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data, size_t len) {
+    char size_buf[32];
+    int size_len = snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);
+    if (size_len <= 0) return;
+
+    size_t total = (size_t)size_len + len + 2;
+    char* buf = malloc(total);
+    if (!buf) return;
+
+    memcpy(buf, size_buf, (size_t)size_len);
+    if (len > 0 && data) {
+        memcpy(buf + (size_t)size_len, data, len);
+    }
+    buf[(size_t)size_len + len] = '\r';
+    buf[(size_t)size_len + len + 1] = '\n';
+
+    uv_write_t* req = malloc(sizeof(uv_write_t));
+    if (!req) {
+        free(buf);
+        return;
+    }
+
+    uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)total);
+    req->data = buf;
+    uv_write(req, stream, &uv_buf, 1, on_stream_write);
+}
+
+/** @brief Write data to streaming response using chunked encoding. */
+void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len) {
+    if (!c || !c->_internal_client) return;
+
+    uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+
+    if (!c->response_started) {
+        if (send_chunked_headers(c) != 0) return;
+        c->response_started = 1;
+    }
+
+    if (len == 0) return;
+    write_chunk_frame(stream, data, len);
+}
+
+/** @brief Finalize streaming response by sending the terminal chunk. */
+void csilk_response_end(csilk_ctx_t* c) {
+    if (!c || !c->_internal_client) return;
+
+    uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+
+    if (!c->response_started) {
+        send_chunked_headers(c);
+    }
+
+    /* Terminal chunk: 0\r\n\r\n */
+    const char* term = "0\r\n\r\n";
+    uv_write_t* req = malloc(sizeof(uv_write_t));
+    if (!req) return;
+
+    char* buf = malloc(5);
+    if (!buf) {
+        free(req);
+        return;
+    }
+    memcpy(buf, term, 5);
+
+    uv_buf_t uv_buf = uv_buf_init(buf, 5);
+    req->data = buf;
+    uv_write(req, stream, &uv_buf, 1, on_stream_write);
+
+    csilk_ctx_cleanup(c);
 }
