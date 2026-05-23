@@ -32,7 +32,10 @@ int main() {
 
     csilk_config_t cfg;
     printf("Testing Extended YAML config loading...\n");
-    assert(csilk_load_config("test_config_ext.yaml", &cfg) == 0);
+    {
+        int ret = csilk_load_config("test_config_ext.yaml", &cfg);
+        assert(ret == 0);
+    }
 
     assert(cfg.port == 9090);
     assert(cfg.server.idle_timeout_ms == 10000);
@@ -49,14 +52,9 @@ int main() {
     assert(strcmp(cfg.static_files.root_dir, "./public") == 0);
     assert(strcmp(cfg.static_files.prefix, "/static") == 0);
 
-    // Default value check
     assert(cfg.server.listen_backlog == 128);
 
-    // Cleanup
-    free((void*)cfg.logger.file_path);
-    free((void*)cfg.cors.config.allow_origin);
-    free(cfg.static_files.root_dir);
-    free(cfg.static_files.prefix);
+    csilk_config_free(&cfg);
     remove("test_config_ext.yaml");
 
     printf("test_config_ext: PASS\n");
