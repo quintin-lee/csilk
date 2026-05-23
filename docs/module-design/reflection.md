@@ -48,7 +48,7 @@ sequenceDiagram
     participant Reflect
     participant Struct as User struct
 
-    Client->>Server: POST /users\nBody: {"id": 1, "name": "Alice"}
+    Client->>Server: POST /users (JSON body: {"id":1,"name":"Alice"})
     Server->>CTX: on_body() accumulates body
     Server->>CTX: on_message_complete()
 

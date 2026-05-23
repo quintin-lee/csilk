@@ -55,7 +55,7 @@ sequenceDiagram
     participant CTX as csilk_ctx_t
     participant WS as WebSocket Engine
 
-    Client->>Server: GET /ws\nUpgrade: websocket\nSec-WebSocket-Key: dGhlIHNhb...
+    Client->>Server: GET /ws (WebSocket upgrade request)
 
     Note over Server: Regular HTTP parsing
 
@@ -125,12 +125,13 @@ sequenceDiagram
 
     loop Event Stream
         CTX->>SSE: csilk_sse_send(ctx, "message", "data here")
-        SSE->>Server: write_chunk_frame("event: message\ndata: data here\n\n")
+        SSE->>Server: write_chunk_frame (SSE event message)
         Server-->>Client: HTTP chunk
+
     end
 
     CTX->>SSE: csilk_sse_close(ctx)
-    SSE->>Server: write_chunk_frame("0\r\n\r\n")
+    SSE->>Server: write_chunk_frame (terminal chunk)
     Server-->>Client: Terminal chunk
 ```
 
@@ -144,7 +145,7 @@ sequenceDiagram
     participant MP as Multipart Middleware
     participant Handler as Part Callback
 
-    Client->>Server: POST /upload\nContent-Type: multipart/form-data; boundary=abc123
+    Client->>Server: POST /upload (multipart, boundary=abc123)
 
     Server->>CTX: Router matches /upload
     CTX->>MP: csilk_multipart_parse(ctx, part_handler)
@@ -172,7 +173,7 @@ sequenceDiagram
     participant TP as libuv Thread Pool
     participant Zlib
 
-    Client->>Server: GET /data\nAccept-Encoding: gzip
+    Client->>Server: GET /data (with Accept-Encoding: gzip)
 
     Note over Server: Middleware captures response
 
