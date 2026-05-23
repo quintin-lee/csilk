@@ -335,3 +335,22 @@ void csilk_json_error(csilk_ctx_t* c, int status, const char* message) {
   cJSON_AddStringToObject(err, "error", message ? message : "Unknown error");
   csilk_json(c, status, err);
 }
+
+int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr) {
+  if (!c || !c->request.body || !type_name || !ptr) return 0;
+  return csilk_json_unmarshal(type_name, c->request.body, ptr);
+}
+
+void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr) {
+  if (!c || !type_name || !ptr) return;
+  char* json_str = csilk_json_marshal(type_name, ptr);
+  if (json_str) {
+    c->response.status = status;
+    csilk_set_header(c, "Content-Type", "application/json");
+    if (c->response.body && c->response.body_is_managed) {
+      free((void*)c->response.body);
+    }
+    c->response.body = json_str;
+    c->response.body_is_managed = 1;
+  }
+}
