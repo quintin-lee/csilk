@@ -1,8 +1,10 @@
 /**
- * csilk easy API demo — minimal example server.
+ * @file example_app.c
+ * @brief Minimal example using the high-level csilk_app_t API.
  *
- * Build:  make  (the executable is built as `example_app`)
- * Run:    ./build/example_app
+ * Demonstrates csilk_app_new, csilk_app_use, csilk_app_get, csilk_app_post,
+ * csilk_json, csilk_sse, and csilk_app_static APIs.
+ * @copyright MIT License
  */
 
 #include <stdio.h>

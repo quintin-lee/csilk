@@ -1,7 +1,7 @@
 /**
  * @file static.c
  * @brief Static file serving middleware implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <fcntl.h>
@@ -27,9 +27,6 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
-/** @brief Static file serving middleware.
- * @param c The request context.
- * @param root_dir The root directory for static files. */
 void csilk_static(csilk_ctx_t* c, const char* root_dir) {
   char full_path[PATH_MAX];
   char resolved_root[PATH_MAX];

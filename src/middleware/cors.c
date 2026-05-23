@@ -1,7 +1,7 @@
 /**
  * @file cors.c
  * @brief CORS middleware implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdio.h>
@@ -9,11 +9,6 @@
 
 #include "csilk.h"
 
-/** @brief CORS middleware handler.
- * Sets Access-Control-* response headers based on configuration.
- * Handles CORS preflight (OPTIONS) requests.
- * @param c The request context.
- * @param config CORS configuration. */
 void csilk_cors_middleware(csilk_ctx_t* c, csilk_cors_config_t config) {
   csilk_set_header(c, "Access-Control-Allow-Origin", config.allow_origin);
   csilk_set_header(c, "Access-Control-Allow-Methods", config.allow_methods);

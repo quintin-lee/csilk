@@ -1,6 +1,8 @@
 /**
  * @file logger.c
- * @brief Thread-safe logging with rotation and source location.
+ * @brief Thread-safe logging implementation with file rotation and ANSI color support.
+ * @copyright MIT License
+ * @version 0.2.0
  */
 
 #include <stdio.h>

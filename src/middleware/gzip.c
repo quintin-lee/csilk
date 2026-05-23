@@ -1,7 +1,7 @@
 /**
  * @file gzip.c
- * @brief Gzip compression middleware implementation.
- * MIT License
+ * @brief Gzip response compression middleware implementation.
+ * @copyright MIT License
  */
 
 #include <stdint.h>

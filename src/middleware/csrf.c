@@ -1,7 +1,7 @@
 /**
  * @file csrf.c
  * @brief Stateless CSRF protection middleware implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdio.h>
@@ -9,10 +9,6 @@
 #include <stdlib.h>
 #include "csilk.h"
 
-/** @brief Stateless CSRF protection middleware.
- * Checks the X-CSRF-Token header for non-safe methods (POST, PUT, DELETE, PATCH).
- * GET, HEAD, and OPTIONS are allowed without a token.
- * @param c The request context. */
 void csilk_csrf_middleware(csilk_ctx_t* c) {
     if (c->request.method && (strcmp(c->request.method, "GET") == 0 || 
                              strcmp(c->request.method, "HEAD") == 0 ||

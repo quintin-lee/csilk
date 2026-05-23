@@ -17,7 +17,7 @@
  * @endcode
  *
  * @version 0.2.0
- * MIT License
+ * @copyright MIT License
  */
 
 #ifndef CSILK_APP_H

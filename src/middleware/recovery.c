@@ -1,7 +1,7 @@
 /**
  * @file recovery.c
- * @brief Recovery middleware implementation.
- * MIT License
+ * @brief Panic recovery middleware implementation.
+ * @copyright MIT License
  */
 
 #include <setjmp.h>
@@ -10,8 +10,6 @@
 
 #include "csilk.h"
 
-/** @brief Recovery middleware handler.
- * @param c The request context. */
 void csilk_recovery_handler(csilk_ctx_t* c) {
   if (setjmp(c->jump_buffer) == 0) {
     c->has_jump_buffer = 1;
@@ -24,8 +22,6 @@ void csilk_recovery_handler(csilk_ctx_t* c) {
   }
 }
 
-/** @brief Panic in the handler.
- * @param c The request context. */
 void csilk_panic(csilk_ctx_t* c) {
   if (c->has_jump_buffer) {
     longjmp(c->jump_buffer, 1);

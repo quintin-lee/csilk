@@ -4,6 +4,8 @@
  *
  * Wraps router, server, config, logging and built-in middleware into
  * a single "app" handle with a clean, Express-like API.
+ * @copyright MIT License
+ * @version 0.2.0
  */
 
 #include <stdio.h>
@@ -16,26 +18,26 @@
 #define CSILK_MAX_STATIC  8
 #define CSILK_DFL_PORT    8080
 
-/* ---- group cache ---- */
+/** @brief Cached route group lookup entry. */
 typedef struct {
-    char           prefix[128];
-    csilk_group_t* group;
+    char           prefix[128]; /**< URL path prefix. */
+    csilk_group_t* group;       /**< Cached group handle. */
 } cached_group_t;
 
-/* ---- static-file route descriptor ---- */
+/** @brief Descriptor for a static file serving route. */
 typedef struct {
-    char url_prefix[128];
-    char root_dir[256];
+    char url_prefix[128]; /**< URL path prefix for static files. */
+    char root_dir[256];   /**< Local filesystem directory path. */
 } static_route_t;
 
-/* ---- app struct ---- */
+/** @brief Main application structure containing config, router, server, and groups. */
 struct csilk_app_s {
-    csilk_config_t   config;
-    csilk_router_t*  router;
-    csilk_server_t*  server;
-    csilk_group_t*   root_group;
-    cached_group_t   groups[CSILK_MAX_GROUPS];
-    int              group_count;
+    csilk_config_t   config;                    /**< Application configuration. */
+    csilk_router_t*  router;                    /**< Router instance. */
+    csilk_server_t*  server;                    /**< Server instance. */
+    csilk_group_t*   root_group;                /**< Root route group. */
+    cached_group_t   groups[CSILK_MAX_GROUPS];  /**< Cached group table. */
+    int              group_count;               /**< Number of cached groups. */
 };
 
 /* ---- global static-route table ---- */
@@ -46,6 +48,10 @@ static int             g_static_n = 0;
  * internal helpers
  * =================================================================== */
 
+/** @brief Find an existing group by prefix, or create a new one.
+ * @param app Application handle.
+ * @param prefix URL path prefix.
+ * @return Route group instance, or NULL on failure. */
 static csilk_group_t* find_or_create_group(csilk_app_t* app,
                                             const char* prefix) {
     if (!prefix || !*prefix || !strcmp(prefix, "/")) {
@@ -74,7 +80,9 @@ static csilk_group_t* find_or_create_group(csilk_app_t* app,
     return g;
 }
 
-/* ---- static-file handler (global) ---- */
+/** @brief Internal static file serving handler.
+ * Dispatches to csilk_static based on URL prefix.
+ * @param c The request context. */
 static void static_serve(csilk_ctx_t* c) {
     const char* path = c->request.path;
     for (int i = 0; i < g_static_n; i++) {

@@ -1,7 +1,7 @@
 /**
  * @file multipart.c
- * @brief Multipart/form-data parsing implementation.
- * MIT License
+ * @brief Multipart/form-data request body parsing implementation.
+ * @copyright MIT License
  */
 
 #include <stdint.h>

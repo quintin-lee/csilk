@@ -1,7 +1,7 @@
 /**
  * @file ratelimit.c
  * @brief Simple IP-based rate limiting middleware implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdio.h>
@@ -16,6 +16,7 @@
 /** @brief Rate limiting window size in seconds. */
 #define WINDOW_SIZE 60
 
+/** @brief Rate-limit tracking entry for a single IP address. */
 typedef struct {
     char ip[46];       /**< Client IP address string. */
     int count;         /**< Request count in current window. */
@@ -31,10 +32,6 @@ static void init_ratelimit_mutex() {
     uv_mutex_init(&ratelimit_mutex);
 }
 
-/** @brief Simple IP-based rate limiting middleware.
- * Limits the number of requests per IP within a rolling time window.
- * @param c The request context.
- * @param limit Maximum requests allowed per window. */
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
     uv_once(&ratelimit_once, init_ratelimit_mutex);
 

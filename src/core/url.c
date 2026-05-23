@@ -1,5 +1,5 @@
 /**
- * @file url_parser.c
+ * @file url.c
  * @brief URL parsing implementation.
  * MIT License
  */

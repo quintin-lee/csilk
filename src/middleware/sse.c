@@ -1,7 +1,7 @@
 /**
  * @file sse.c
  * @brief Server-Sent Events (SSE) implementation.
- * MIT License
+ * @copyright MIT License
  */
 
 #include <stdint.h>

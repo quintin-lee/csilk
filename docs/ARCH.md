@@ -1,5 +1,7 @@
 # csilk 架构白皮书
 
+> **Last updated**: 2026-05-23 | **Version**: 0.2.0
+
 ## 1. 核心架构设计
 
 csilk 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 语言 Gin 框架的 **洋葱模型 (Onion Model)** 中间件机制。

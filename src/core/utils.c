@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 
+/** @brief SHA1 hashing context (local definition for WebSocket handshake). */
 typedef struct {
     uint32_t state[5];   /**< Intermediate hash state. */
     uint32_t count[2];   /**< Message length counter. */
