@@ -10,6 +10,9 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
 - 🍪 Cookie parsing and setting (with Max-Age, Secure, HttpOnly, etc.)
 - 🔌 WebSocket support (RFC 6455 handshake, frame send/receive)
+- 📡 Server-Sent Events (SSE) with csilk_sse_init/send/close
+- 📦 Gzip response compression middleware
+- 📤 Multipart/form-data file upload parsing
 - 🔍 URL parsing and query string handling
 - ⚡ Keep-alive connection support
 - 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
@@ -195,9 +198,12 @@ src/
       ├── auth.c      # Token-based authentication
       ├── cors.c      # Cross-Origin Resource Sharing
       ├── csrf.c      # CSRF protection
+      ├── gzip.c      # Gzip response compression
       ├── logger.c    # Request logging
+      ├── multipart.c # Multipart/form-data parsing
       ├── ratelimit.c # IP-based rate limiting
       ├── recovery.c  # Panic recovery
+      ├── sse.c       # Server-Sent Events
       └── static.c    # Static file serving
 
 include/              # Public headers

@@ -55,7 +55,7 @@
 - [x] **`csilk_ws_send` 无测试** — 已添加 NULL 安全测试
 - [x] **`test_ws.c` 覆盖不足** — 新增 unmasked frames, fragmented, binary, medium/large payload, ping/pong/close 测试
 - [x] **`test_cookie.c` 覆盖不足** — 新增删除 Max-Age=0, 长 value, 空 header, 畸形数据测试
-- [x] **集成测试中 `|| true` 吞失败** — 改用 `continue-on-error: true`
+- [x] **集成测试中 `|| true` 吞失败** — 所有 31 个集成测试已通过，移除 `continue-on-error` 门禁
 
 ## P6 — 文档与提效
 
