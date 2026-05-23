@@ -85,6 +85,47 @@ const char* gin_get_query(gin_ctx_t* c, const char* key) {
   return NULL;
 }
 
+void gin_set_request_header(gin_ctx_t* c, const char* key, const char* value) {
+  gin_header_t* h = c->request.headers;
+  gin_header_t* prev = NULL;
+
+  while (h) {
+    if (strcasecmp(h->key, key) == 0) {
+      char* new_val = strdup(value);
+      if (!new_val) return;
+      free(h->value);
+      h->value = new_val;
+      return;
+    }
+    prev = h;
+    h = h->next;
+  }
+
+  gin_header_t* new_h = malloc(sizeof(gin_header_t));
+  if (!new_h) return;
+
+  new_h->key = strdup(key);
+  if (!new_h->key) {
+    free(new_h);
+    return;
+  }
+
+  new_h->value = strdup(value);
+  if (!new_h->value) {
+    free(new_h->key);
+    free(new_h);
+    return;
+  }
+
+  new_h->next = NULL;
+
+  if (prev) {
+    prev->next = new_h;
+  } else {
+    c->request.headers = new_h;
+  }
+}
+
 /** @brief Set a response header.
  * @param c The request context.
  * @param key The header key.

@@ -10,6 +10,7 @@
 
 #include <setjmp.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "cJSON.h"
 
@@ -72,7 +73,26 @@ struct gin_ctx_s {
   gin_response_t response;  /**< Response data. */
   gin_param_t params[GIN_MAX_PARAMS]; /**< URL path parameters array. */
   int params_count;         /**< Current number of path parameters. */
+  int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
+  void (*on_ws_message)(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+  void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
 };
+
+/** @brief Get the client's IP address.
+ * @param c The request context.
+ * @return The IP address string, or NULL on error. */
+const char* gin_get_client_ip(gin_ctx_t* c);
+
+/** @brief Handshake and upgrade to WebSocket.
+ * @param c The request context. */
+void gin_ws_handshake(gin_ctx_t* c);
+
+/** @brief Send a WebSocket message.
+ * @param c The request context.
+ * @param payload Data to send.
+ * @param len Data length.
+ * @param opcode Opcode (1 for text, 2 for binary). */
+void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
 /** @brief Move to the next handler in the onion model chain.
  * @param c The request context. */
@@ -112,6 +132,12 @@ const char* gin_get_header(gin_ctx_t* c, const char* key);
  * @param key The query parameter key name.
  * @return The query value string, or NULL if not found. */
 const char* gin_get_query(gin_ctx_t* c, const char* key);
+
+/** @brief Set a request header.
+ * @param c The request context.
+ * @param key The header field name.
+ * @param value The header field value string. */
+void gin_set_request_header(gin_ctx_t* c, const char* key, const char* value);
 
 /** @brief Set a response header.
  * @param c The request context.
@@ -172,6 +198,15 @@ typedef struct {
  * @param c The request context.
  * @param config CORS settings. */
 void gin_cors_middleware(gin_ctx_t* c, gin_cors_config_t config);
+
+/** @brief Simple IP-based rate limiting middleware.
+ * @param c The request context.
+ * @param limit Maximum requests per minute. */
+void gin_rate_limit_middleware(gin_ctx_t* c, int limit);
+
+/** @brief Simple stateless CSRF protection middleware.
+ * @param c The request context. */
+void gin_csrf_middleware(gin_ctx_t* c);
 
 /** @brief Auth validator callback. */
 typedef int (*gin_auth_validator_t)(const char* token);

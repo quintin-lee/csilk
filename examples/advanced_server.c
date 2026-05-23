@@ -52,6 +52,21 @@ void post_data_handler(gin_ctx_t* c) {
     cJSON_Delete(json);
 }
 
+// 4. WebSocket 处理器
+void ws_on_message(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
+    printf("WebSocket Message: %s\n", (char*)payload);
+    char reply[256];
+    snprintf(reply, sizeof(reply), "Server received: %s", (char*)payload);
+    gin_ws_send(c, (uint8_t*)reply, strlen(reply), opcode);
+}
+
+void ws_handler(gin_ctx_t* c) {
+    gin_ws_handshake(c);
+    if (c->is_websocket) {
+        c->on_ws_message = ws_on_message;
+    }
+}
+
 int main() {
     // 初始化路由
     gin_router_t* router = gin_router_new();
@@ -64,6 +79,9 @@ int main() {
     gin_GET(root, "/ping", (gin_handler_t)[](gin_ctx_t* c){
         gin_string(c, 200, "pong");
     });
+
+    // WebSocket 路由
+    gin_GET(root, "/ws", ws_handler);
 
     // API 组：使用自定义 Auth 中间件
     gin_group_t* api = gin_group_group(root, "/api/v1");

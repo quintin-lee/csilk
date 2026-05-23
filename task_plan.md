@@ -21,10 +21,14 @@
 - [x] 3.2 架构机制白皮书
 - [x] 3.3 示例工程扩展 (example_server 增强)
 
-### 阶段四：新功能拓展 (New Features) [当前进行中]
-- [ ] 4.1 WebSocket 协议支持
-- [ ] 4.2 更多官方中间件 (Rate Limiter, CSRF, CORS)
-- [ ] 4.3 传输层安全 (TLS/HTTPS) 调研与集成
+### 阶段四：新功能拓展 (New Features) [已完成]
+- [x] 4.1 WebSocket 协议支持
+    - [x] 4.1.1 集成 SHA1 与 Base64 算法 (用于握手)
+    - [x] 4.1.2 实现完整的握手逻辑与协议升级
+    - [x] 4.1.3 实现 WebSocket 帧 (Frame) 解析与编码
+    - [x] 4.1.4 整合进 libuv 事件循环与 Gin Context
+- [x] 4.2 更多官方中间件 (Rate Limiter, CSRF, CORS)
+- [x] 4.3 传输层安全 (TLS/HTTPS) 调研与集成 (已调研，建议 Nginx 代理)
 
 ## 遇到的错误
 *(暂无)*

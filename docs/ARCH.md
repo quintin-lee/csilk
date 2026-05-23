@@ -36,9 +36,30 @@ Server-C 采用了经典的 **Reactor 事件驱动模型**，结合了类似 Go 
 - **优化**: 节点子节点采用固定数组布局（`GIN_MAX_CHILDREN`），利用 CPU L1/L2 缓存局部性，进一步提升匹配性能。
 - **动态特性**: 原生支持 `:param` 命名参数和 `*wildcard` 通配符。
 
-## 4. 开发者指南
+## 4. WebSocket 支持
 
-### 4.1 编写中间件
+Server-C 原生支持 WebSocket 协议升级：
+- **握手逻辑**: 实现了符合 RFC 6455 的 SHA1 + Base64 握手算法。
+- **协议接管**: 升级成功后，框架会自动将 libuv 的读回调从 HTTP 解析器切换到 WebSocket 帧解析器。
+- **异步接口**: 提供 `gin_ws_send` 异步发送帧，并通过 `on_ws_message` 回调处理接收到的数据。
+
+## 5. 开发者指南
+
+### 5.1 编写 WebSocket 处理器
+```c
+void ws_on_message(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
+    gin_ws_send(c, (uint8_t*)"Hello Client", 12, 1);
+}
+
+void ws_handler(gin_ctx_t* c) {
+    gin_ws_handshake(c);
+    if (c->is_websocket) {
+        c->on_ws_message = ws_on_message;
+    }
+}
+```
+
+### 5.2 编写中间件
 ```c
 void my_middleware(gin_ctx_t* c) {
     // 前置逻辑：如检查 Token
