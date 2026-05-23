@@ -79,7 +79,7 @@ sequenceDiagram
     participant Router as csilk_router_t
     participant Group as csilk_group_t
     participant Server as csilk_server_t
-    participant Loop as libuv Event Loop
+    participant EvLoop as libuv Event Loop
 
     Main->>Router: csilk_router_new()
     Main->>Group: csilk_group_new(router, "/api")
@@ -88,8 +88,8 @@ sequenceDiagram
     Main->>Server: csilk_server_use(server, cors_middleware)
     Main->>Server: csilk_server_set_config(server, config)
     Main->>Server: csilk_server_run(server, 8080)
-    Server->>Loop: uv_run() blocks main thread
-    Note over Loop: Accepting connections...
+    Server->>EvLoop: uv_run() blocks main thread
+    Note over EvLoop: Accepting connections...
 ```
 
 ## Running Tests
