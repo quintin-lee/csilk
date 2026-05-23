@@ -92,7 +92,6 @@ static int log_text(csilk_log_level_t lv, const char* file, int line,
                      ts, level_names[lv], fn, line, func);
     n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
     n += fprintf(g_logger.fp, "\n");
-    fflush(g_logger.fp);
     return n;
 }
 
@@ -143,7 +142,6 @@ static int log_json(csilk_log_level_t lv, const char* file, int line,
         n = fprintf(g_logger.fp, "%s\n", line_str);
         free(line_str);
     }
-    fflush(g_logger.fp);
     cJSON_Delete(root);
     return n;
 }
