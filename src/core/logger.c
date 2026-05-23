@@ -39,21 +39,6 @@ typedef struct csilk_log_entry_s {
 
 CSILK_REGISTER_REFLECT(csilk_log_entry_t, LOG_ENTRY_MAP)
 
-/* ---- dynamic extra-fields struct (for csilk_log_with) ---- */
-
-#define LOG_EXTRA_MAX 16
-
-typedef struct csilk_log_extra_s {
-    char keys[LOG_EXTRA_MAX][32];
-    char vals[LOG_EXTRA_MAX][128];
-    int32_t count;
-} csilk_log_extra_t;
-
-#define LOG_EXTRA_MAP(X) \
-    X(csilk_log_extra_t, count, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)
-
-CSILK_REGISTER_REFLECT(csilk_log_extra_t, LOG_EXTRA_MAP)
-
 /* ---- internal logger state ---- */
 
 typedef struct {
