@@ -31,7 +31,8 @@ csilk_arena_t* csilk_arena_new(size_t default_chunk_size) {
 }
 
 void* csilk_arena_alloc(csilk_arena_t* arena, size_t size) {
-    // Alignment to 8 bytes
+    if (size > SIZE_MAX - 7) return NULL;
+
     size = (size + 7) & ~7;
 
     if (arena->head && (arena->head->size - arena->head->used) >= size) {

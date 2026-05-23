@@ -57,6 +57,8 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcod
     if (len > 125 && len <= 65535) header_len += 2;
     else if (len > 65535) header_len += 8;
 
+    if (len > SIZE_MAX - header_len) return;
+
     uint8_t* frame = malloc(header_len + len);
     if (!frame) return;
 

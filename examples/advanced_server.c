@@ -127,6 +127,8 @@ int main() {
     
     /* cleanup */
     csilk_server_free(server);
+    csilk_group_free(api);
+    csilk_group_free(root);
     csilk_router_free(router);
     
     return 0;

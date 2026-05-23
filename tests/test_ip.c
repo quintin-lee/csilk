@@ -21,29 +21,25 @@ void test_get_client_ip_no_client() {
   printf("csilk_get_client_ip no client passed!\n");
 }
 
-void test_get_client_ip_with_client() {
-  printf("Testing csilk_get_client_ip with _internal_client set...\n");
+void test_get_client_ip_no_connection() {
+  printf("Testing csilk_get_client_ip with no active connection...\n");
 
   csilk_ctx_t ctx;
   memset(&ctx, 0, sizeof(csilk_ctx_t));
   ctx.arena = csilk_arena_new(1024);
 
-  ctx._internal_client = (void*)0x1;
-  csilk_arena_free(ctx.arena);
-
-  ctx.arena = csilk_arena_new(1024);
-  ctx._internal_client = NULL;
+  /* _internal_client is NULL (from memset), so IP should be NULL */
   const char* ip = csilk_get_client_ip(&ctx);
   assert(ip == NULL);
 
   csilk_arena_free(ctx.arena);
-  printf("csilk_get_client_ip with internal client passed!\n");
+  printf("csilk_get_client_ip no connection passed!\n");
 }
 
 int main() {
   test_get_client_ip_null_ctx();
   test_get_client_ip_no_client();
-  test_get_client_ip_with_client();
+  test_get_client_ip_no_connection();
   printf("All client IP tests passed!\n");
   return 0;
 }

@@ -35,6 +35,8 @@ struct csilk_server_s {
   csilk_server_config_t config;   /**< Server configuration. */
   csilk_handler_t middlewares[32]; /**< Global middlewares. */
   int middleware_count;          /**< Number of global middlewares. */
+  int max_connections;           /**< Max concurrent connections (0=unlimited). */
+  int active_connections;        /**< Current connection count. */
 };
 
 /** @brief Client connection structure. */
@@ -66,6 +68,8 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
+    if (client->server) client->server->active_connections--;
+    client->ctx._internal_client = NULL;
     csilk_ctx_cleanup(&client->ctx);
     free(client->ctx.response.headers);
     free(client->current_header_field);
@@ -81,6 +85,7 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
+    client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
     if (!uv_is_closing((uv_handle_t*)&client->timer)) {
       uv_close((uv_handle_t*)&client->timer, on_timer_close);
@@ -218,6 +223,11 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
     client->ctx.request.body_len += length;
     new_body[client->ctx.request.body_len] = '\0';
     client->ctx.request.body = new_body;
+  } else {
+    free(client->ctx.request.body);
+    client->ctx.request.body = NULL;
+    client->ctx.request.body_len = 0;
+    return HPE_USER;
   }
   return 0;
 }
@@ -401,6 +411,17 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   }
 
   csilk_server_t* server = (csilk_server_t*)server_stream->data;
+
+  if (server->max_connections > 0 &&
+      server->active_connections >= server->max_connections) {
+    /* accept and immediately close to drain the backlog */
+    uv_tcp_t tmp;
+    uv_tcp_init(server->loop, &tmp);
+    if (uv_accept(server_stream, (uv_stream_t*)&tmp) == 0)
+      uv_close((uv_handle_t*)&tmp, NULL);
+    return;
+  }
+
   csilk_client_t* client = calloc(1, sizeof(csilk_client_t));
   if (!client) return;
 
@@ -415,6 +436,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   client->ctx._internal_client = client;
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
+    server->active_connections++;
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
     uv_timer_init(server->loop, &client->timer);
@@ -517,10 +539,11 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
-void csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
-  if (server && server->middleware_count < 32) {
-    server->middlewares[server->middleware_count++] = handler;
-  }
+int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
+  if (!server || !handler) return -1;
+  if (server->middleware_count >= 32) return -1;
+  server->middlewares[server->middleware_count++] = handler;
+  return 0;
 }
 
 void csilk_server_free(csilk_server_t* server) {
@@ -553,6 +576,13 @@ void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t confi
   server->config = config;
 }
 
+int csilk_server_set_max_connections(csilk_server_t* server, int max) {
+  if (!server) return -1;
+  int prev = server->max_connections;
+  server->max_connections = max;
+  return prev;
+}
+
 int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
 
@@ -561,7 +591,11 @@ int csilk_server_run(csilk_server_t* server, int port) {
   server->server_handle.data = server;
 
   // Initialize async handle for thread-safe stop
-  uv_async_init(server->loop, &server->async_handle, on_stop_async);
+  r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
+  if (r < 0) {
+    uv_close((uv_handle_t*)&server->server_handle, NULL);
+    return -1;
+  }
   server->async_handle.data = server;
 
   // Apply TCP settings
@@ -582,9 +616,20 @@ int csilk_server_run(csilk_server_t* server, int port) {
                 on_new_connection);
   if (r < 0) return -1;
 
-  uv_signal_init(server->loop, &server->sig_handle);
+  r = uv_signal_init(server->loop, &server->sig_handle);
+  if (r < 0) {
+    uv_close((uv_handle_t*)&server->async_handle, NULL);
+    uv_close((uv_handle_t*)&server->server_handle, NULL);
+    return -1;
+  }
   server->sig_handle.data = server;
-  uv_signal_start(&server->sig_handle, on_signal, SIGINT);
+  r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
+  if (r < 0) {
+    uv_close((uv_handle_t*)&server->sig_handle, NULL);
+    uv_close((uv_handle_t*)&server->async_handle, NULL);
+    uv_close((uv_handle_t*)&server->server_handle, NULL);
+    return -1;
+  }
 
   printf("Server listening on port %d\n", port);
   fflush(stdout);

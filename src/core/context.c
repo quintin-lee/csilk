@@ -409,3 +409,20 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const
     c->response.body_is_managed = 1;
   }
 }
+
+void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
+  if (!c || !location) return;
+  c->response.status = status;
+  csilk_set_header(c, "Location", location);
+
+  const char* body;
+  switch (status) {
+    case 301: body = "Moved Permanently"; break;
+    case 302: body = "Found";             break;
+    case 303: body = "See Other";         break;
+    case 307: body = "Temporary Redirect";break;
+    case 308: body = "Permanent Redirect";break;
+    default:  body = "Redirect";          break;
+  }
+  csilk_string(c, status, body);
+}

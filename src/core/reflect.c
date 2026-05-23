@@ -7,31 +7,50 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <uv.h>
 #include "csilk_reflect.h"
 
 #define MAX_REG_STRUCTS 256
 
 static csilk_reflect_entry_t g_registry[MAX_REG_STRUCTS];
 static size_t g_registry_count = 0;
+static uv_mutex_t g_registry_mutex;
+static int g_registry_mutex_init = 0;
+
+static void registry_lock(void) {
+    if (!g_registry_mutex_init) {
+        uv_mutex_init(&g_registry_mutex);
+        g_registry_mutex_init = 1;
+    }
+    uv_mutex_lock(&g_registry_mutex);
+}
+
+static void registry_unlock(void) {
+    uv_mutex_unlock(&g_registry_mutex);
+}
 
 void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
                           size_t count) {
+  registry_lock();
   if (g_registry_count < MAX_REG_STRUCTS) {
     g_registry[g_registry_count].name = name;
     g_registry[g_registry_count].fields = fields;
     g_registry[g_registry_count].count = count;
     g_registry_count++;
   }
+  registry_unlock();
 }
 
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
   if (!name) return NULL;
+  registry_lock();
   for (size_t i = 0; i < g_registry_count; i++) {
     if (strcmp(g_registry[i].name, name) == 0) {
+      registry_unlock();
       return &g_registry[i];
     }
   }
+  registry_unlock();
   return NULL;
 }
 

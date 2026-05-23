@@ -25,7 +25,7 @@ void csilk_sha1_init(csilk_sha1_ctx* context);
  * @param context SHA1 context.
  * @param data Input data bytes.
  * @param len Length of input data. */
-void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, uint32_t len);
+void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len);
 
 /** @brief Finalize SHA1 hash and produce the digest.
  * @param context SHA1 context.
