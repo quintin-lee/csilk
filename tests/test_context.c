@@ -92,6 +92,7 @@ void test_context_arena() {
     assert(strcmp(s, "arena string") == 0);
     
     csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     printf("test_context_arena passed\n");
 }
 

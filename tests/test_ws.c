@@ -225,6 +225,37 @@ static void test_parse_frame_large_payload() {
     printf("Large payload parse passed!\n");
 }
 
+static void test_ws_close_normal() {
+    printf("Testing WebSocket close normal...\n");
+    csilk_ctx_t ctx = {0};
+    ctx.arena = csilk_arena_new(1024);
+
+    csilk_ws_close(&ctx, 1000, "normal closure");
+    /* The frame should have been written, no crash */
+
+    csilk_ctx_cleanup(&ctx);
+    csilk_arena_free(ctx.arena);
+    printf("WebSocket close normal passed!\n");
+}
+
+static void test_ws_close_no_reason() {
+    printf("Testing WebSocket close without reason...\n");
+    csilk_ctx_t ctx = {0};
+    ctx.arena = csilk_arena_new(1024);
+
+    csilk_ws_close(&ctx, 1000, NULL);
+
+    csilk_ctx_cleanup(&ctx);
+    csilk_arena_free(ctx.arena);
+    printf("WebSocket close no reason passed!\n");
+}
+
+static void test_ws_close_null() {
+    printf("Testing WebSocket close NULL context...\n");
+    csilk_ws_close(NULL, 1000, "test");
+    printf("WebSocket close null passed!\n");
+}
+
 int main() {
     test_handshake();
     test_handshake_missing_key();
@@ -237,6 +268,9 @@ int main() {
     test_parse_frame_truncated();
     test_ws_send_null();
     test_parse_frame_large_payload();
+    test_ws_close_normal();
+    test_ws_close_no_reason();
+    test_ws_close_null();
     printf("test_ws: ALL PASSED\n");
     return 0;
 }

@@ -45,13 +45,6 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
     if (*pos == '\n') pos++;
 
     while (pos < data + data_len) {
-        if (pos + delim_len > data + data_len) break;
-        if (strncmp(pos, delimiter, delim_len) != 0) break;
-
-        pos += delim_len;
-        if (pos < data + data_len && *pos == '\r') pos++;
-        if (pos < data + data_len && *pos == '\n') pos++;
-
         csilk_multipart_part_t part;
         memset(&part, 0, sizeof(part));
 
@@ -94,8 +87,11 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
                     memcpy(part.content_type, pos, ct_len);
                     part.content_type[ct_len] = '\0';
                 }
-                if (ct_end) pos = ct_end;
-                else pos += ct_len;
+                if (ct_end) {
+                    pos = ct_end + 2;
+                } else {
+                    pos += ct_len;
+                }
                 continue;
             }
 
@@ -135,7 +131,12 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
 
         pos = body_end;
         if (pos < data + data_len - 2 && strncmp(pos, "\r\n", 2) == 0) pos += 2;
+        if (pos + delim_len > data + data_len) break;
+        if (strncmp(pos, delimiter, delim_len) != 0) break;
         if (pos + end_delim_len <= data + data_len &&
             strncmp(pos + delim_len, "--", 2) == 0) break;
+        pos += delim_len;
+        if (*pos == '\r') pos++;
+        if (*pos == '\n') pos++;
     }
 }

@@ -52,6 +52,7 @@ void test_static_serves_file() {
 
     printf("test_static_serves_file: PASS\n");
     csilk_ctx_cleanup(&ctx);
+    csilk_arena_free(ctx.arena);
     cleanup_test_dir();
 }
 
@@ -71,6 +72,7 @@ void test_static_traversal_blocked() {
 
     printf("test_static_traversal_blocked: PASS\n");
     csilk_ctx_cleanup(&ctx);
+    csilk_arena_free(ctx.arena);
 }
 
 int main() {

@@ -85,6 +85,7 @@ void test_context_reflect() {
     assert(c.response.body != NULL);
     
     csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     printf("test_context_reflect passed\n");
 }
 

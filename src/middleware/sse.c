@@ -23,7 +23,7 @@ static void on_sse_write(uv_write_t* req, int status) {
 
 /** @brief Initialize an SSE connection with proper headers and status. */
 void csilk_sse_init(csilk_ctx_t* c) {
-    if (!c || !c->_internal_client) return;
+    if (!c) return;
 
     csilk_set_header(c, "Content-Type", "text/event-stream");
     csilk_set_header(c, "Cache-Control", "no-cache");
@@ -32,6 +32,8 @@ void csilk_sse_init(csilk_ctx_t* c) {
 
     c->response.status = 200;
     c->is_websocket = 1;
+
+    if (!c->_internal_client) return;
 
     const char* hdr = "HTTP/1.1 200 OK\r\n"
                       "Content-Type: text/event-stream\r\n"

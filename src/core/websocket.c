@@ -91,7 +91,59 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcod
     }
 }
 
-/** @brief Parse and dispatch an incoming WebSocket frame. */
+/** @brief Write completion callback for close frame.
+ *  @param req Write request.
+ *  @param status Write status. */
+static void on_close_write(uv_write_t* req, int status) {
+    if (status < 0) {
+        CSILK_LOG_E("WS close write error: %s", uv_strerror(status));
+    }
+    if (req->data) free(req->data);
+    free(req);
+}
+
+/** @brief Send a WebSocket close frame per RFC 6455 Section 5.5.1.
+ *  @param c The request context.
+ *  @param status_code Status code (e.g., 1000 for normal closure, 0 to omit).
+ *  @param reason Optional close reason string (can be NULL). */
+void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
+    if (!c || !c->_internal_client) return;
+
+    size_t reason_len = reason ? strlen(reason) : 0;
+    size_t payload_len = (status_code > 0) ? (2 + reason_len) : reason_len;
+
+    size_t header_len = 2;
+    if (payload_len > 125) return;
+
+    size_t frame_len = header_len + payload_len;
+    uint8_t* frame = malloc(frame_len);
+    if (!frame) return;
+
+    frame[0] = 0x88;
+    frame[1] = (uint8_t)payload_len;
+
+    size_t offset = 2;
+    if (status_code > 0) {
+        frame[offset++] = (uint8_t)((status_code >> 8) & 0xFF);
+        frame[offset++] = (uint8_t)(status_code & 0xFF);
+    }
+    if (reason && reason_len > 0) {
+        memcpy(frame + offset, reason, reason_len);
+    }
+
+    uv_write_t* write_req = malloc(sizeof(uv_write_t));
+    if (write_req) {
+        uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)frame_len);
+        write_req->data = frame;
+        uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+        uv_write(write_req, stream, &buf, 1, on_close_write);
+    } else {
+        free(frame);
+    }
+}
+
+/** @brief Parse and dispatch an incoming WebSocket frame.
+ *  Handles close frames (opcode 8) by auto-responding with a close frame. */
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
     if (nread < 2) return;
     
@@ -132,6 +184,22 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
     }
     payload[payload_len] = '\0';
     
+    if (opcode == 0x08) {
+        uint16_t close_code = 1005;
+        if (payload_len >= 2) {
+            close_code = (uint16_t)((payload[0] << 8) | payload[1]);
+        }
+        csilk_ws_close(c, close_code, NULL);
+        if (c->_internal_client) {
+            uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+            if (!uv_is_closing((uv_handle_t*)stream)) {
+                uv_close((uv_handle_t*)stream, NULL);
+            }
+        }
+        free(payload);
+        return;
+    }
+
     if (c->on_ws_message) {
         c->on_ws_message(c, payload, (size_t)payload_len, opcode);
     }
