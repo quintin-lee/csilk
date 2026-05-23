@@ -1,3 +1,12 @@
+/**
+ * @file example_server.c
+ * @brief Full-featured example server using the low-level core API.
+ *
+ * Demonstrates router, groups, middleware, WebSocket, SSE, multipart upload,
+ * cookie handling, gzip compression, and YAML config loading.
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

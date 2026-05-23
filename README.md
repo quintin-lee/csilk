@@ -2,6 +2,7 @@
 
 A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, and cJSON.
 
+
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
@@ -60,9 +61,14 @@ cmake ..
 # Build
 make
 
-# Note: By default, csilk builds as a static library.
+# By default, csilk builds as a static library.
 # To build as a shared library, use:
 # cmake .. -DBUILD_SHARED_LIBS=ON
+#
+# Other available options:
+#   -DUSE_ASAN=ON          Enable AddressSanitizer (default OFF)
+#   -DCSILK_BUILD_SHARED=ON Build shared library (default OFF)
+#   -DUSE_FUZZER=ON        Enable libFuzzer (default OFF)
 
 # Optional: Run tests
 make run_tests     # Runs all tests via ctest
@@ -231,6 +237,31 @@ The project includes a comprehensive test suite. After building, run individual 
 ./tests/test_server
 # ... and others
 ```
+
+### Features Legend
+
+| Emoji | Meaning |
+|-------|---------|
+| 🚀 | Performance / Async I/O |
+| 🔧 | Middleware / Tooling |
+| 🌐 | Networking / Routing |
+| 📦 | JSON / Data serialization |
+| 🍪 | Cookie management |
+| 🔌 | WebSocket support |
+| 📡 | Server-Sent Events (SSE) |
+| 📤 | File upload / Multipart |
+| 🔍 | URL / Query parsing |
+| ⚡ | Connection keep-alive |
+| 🛡️ | Error handling / Security |
+| 📋 | Configuration (YAML) |
+| 🏗️ | Memory management (Arena) |
+| 🗂️ | Reflection engine |
+| 🔐 | CSRF / CORS / Rate limiting |
+| 📝 | Documentation (Doxygen) |
+| 🧵 | Thread-safe logging |
+| 🔍 | Timeouts / Limits |
+| 🎯 | Per-route middleware |
+| 🌲 | Radix Tree router |
 
 ## License
 

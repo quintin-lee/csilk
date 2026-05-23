@@ -1,13 +1,19 @@
+/**
+ * @file advanced_server.c
+ * @brief Advanced server example with route groups, WebSocket, and auth middleware.
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "csilk.h"
 
-// 1. 定义业务模型
+/** @brief Example user model struct. */
 typedef struct {
-    int id;
-    char name[100];
+    int id;           /**< User ID number. */
+    char name[100];   /**< User display name. */
 } user_t;
 
 // 2. 自定义中间件：认证

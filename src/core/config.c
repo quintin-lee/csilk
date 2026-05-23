@@ -1,6 +1,7 @@
 /**
  * @file config.c
- * @brief YAML configuration loader implementation.
+ * @brief YAML configuration loader and validator implementation.
+ * @copyright MIT License
  */
 
 #include <stdio.h>

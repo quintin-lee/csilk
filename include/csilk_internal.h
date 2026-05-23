@@ -1,7 +1,7 @@
 /**
  * @file csilk_internal.h
  * @brief Internal header for SHA1, Base64, and WebSocket frame parsing.
- * MIT License
+ * @copyright MIT License
  */
 
 #ifndef CSILK_INTERNAL_H

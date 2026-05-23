@@ -1,7 +1,7 @@
 /**
  * @file logger.c
- * @brief Logging middleware implementation.
- * MIT License
+ * @brief Request logging middleware implementation.
+ * @copyright MIT License
  */
 
 #include <stdio.h>
@@ -9,8 +9,6 @@
 
 #include "csilk.h"
 
-/** @brief Logging middleware handler.
- * @param c The request context. */
 void csilk_logger_handler(csilk_ctx_t* c) {
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);

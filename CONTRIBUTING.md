@@ -22,7 +22,7 @@ Thank you for your interest in contributing to csilk! We welcome all contributio
 - **C11**: Use standard C11 features. Avoid platform-specific extensions unless necessary (and provide fallbacks).
 - **Style**: We use `clang-format` to maintain consistent code style. Run `make format` before committing.
 - **Memory Safety**: Always check memory allocation results. Use the request-scoped `arena` whenever possible for temporary data.
-- **Documentation**: Document all new public APIs in `include/csilk.h` using Doxygen comments.
+- **Documentation**: Document all new public APIs and internal functions using Doxygen comments (`/** ... */` style). Public APIs go in `include/csilk.h`, implementation details in source files.
 
 ## Pull Request Process
 

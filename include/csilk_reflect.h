@@ -1,7 +1,7 @@
 /**
  * @file csilk_reflect.h
  * @brief Csilk reflection and JSON binding engine.
- * MIT License
+ * @copyright MIT License
  */
 
 #ifndef CSILK_REFLECT_H
@@ -14,17 +14,23 @@
 
 /** @brief Supported field types for reflection. */
 typedef enum {
-    CSILK_TYPE_INT8,   CSILK_TYPE_UINT8,
-    CSILK_TYPE_INT16,  CSILK_TYPE_UINT16,
-    CSILK_TYPE_INT32,  CSILK_TYPE_UINT32,
-    CSILK_TYPE_INT64,  CSILK_TYPE_UINT64,
-    CSILK_TYPE_FLOAT,  CSILK_TYPE_DOUBLE,
-    CSILK_TYPE_BOOL,
+    CSILK_TYPE_INT8,   /**< 8-bit signed integer */
+    CSILK_TYPE_UINT8,  /**< 8-bit unsigned integer */
+    CSILK_TYPE_INT16,  /**< 16-bit signed integer */
+    CSILK_TYPE_UINT16, /**< 16-bit unsigned integer */
+    CSILK_TYPE_INT32,  /**< 32-bit signed integer */
+    CSILK_TYPE_UINT32, /**< 32-bit unsigned integer */
+    CSILK_TYPE_INT64,  /**< 64-bit signed integer */
+    CSILK_TYPE_UINT64, /**< 64-bit unsigned integer */
+    CSILK_TYPE_FLOAT,  /**< Single-precision floating point */
+    CSILK_TYPE_DOUBLE, /**< Double-precision floating point */
+    CSILK_TYPE_BOOL,   /**< Boolean value */
     CSILK_TYPE_STRING, /**< Supports char[] or char* */
     CSILK_TYPE_STRUCT  /**< Supports nested structs or pointers to structs */
 } csilk_field_type_t;
 
 typedef struct csilk_field_desc_s csilk_field_desc_t;
+/** @brief Descriptor for a single struct field in the reflection system. */
 struct csilk_field_desc_s {
     const char *json_key;               /**< JSON key name. */
     csilk_field_type_t type;            /**< Data type. */
@@ -37,9 +43,9 @@ struct csilk_field_desc_s {
 
 /** @brief Type registration structure. */
 typedef struct {
-    const char *name;
-    const csilk_field_desc_t *fields;
-    size_t count;
+    const char *name;               /**< Type name string. */
+    const csilk_field_desc_t *fields; /**< Array of field descriptors. */
+    size_t count;                   /**< Number of fields in the array. */
 } csilk_reflect_entry_t;
 
 /** @brief Register a type manually. */

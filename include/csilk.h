@@ -2,7 +2,7 @@
  * @file csilk.h
  * @brief High-performance C web framework inspired by Csilk (Golang).
  * @version 0.2.0
- * MIT License
+ * @copyright MIT License
  */
 
 #ifndef CSILK_H

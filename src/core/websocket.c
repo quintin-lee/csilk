@@ -1,7 +1,7 @@
 /**
  * @file websocket.c
- * @brief WebSocket handshake, send, and frame parsing implementation.
- * MIT License
+ * @brief WebSocket handshake, frame encoding, and frame parsing implementation.
+ * @copyright MIT License
  */
 
 #include <stdio.h>

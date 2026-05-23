@@ -12,16 +12,18 @@
 #include "csilk_reflect.h"
 
 // Define test structures with explicit tags for _Generic
+/** @brief Test structure for 2D point reflection tests. */
 typedef struct TestPoint_s {
-    int16_t x;
-    int16_t y;
+    int16_t x; /**< X coordinate. */
+    int16_t y; /**< Y coordinate. */
 } TestPoint;
 
+/** @brief Test structure for user data reflection tests. */
 typedef struct TestUser_s {
-    int32_t id;
-    char name[32];
-    float score;
-    TestPoint pos;
+    int32_t id;       /**< User ID. */
+    char name[32];    /**< User name string. */
+    float score;      /**< User score value. */
+    TestPoint pos;    /**< Position (nested TestPoint). */
 } TestUser;
 
 #define POINT_REFLECT_MAP(X) \
