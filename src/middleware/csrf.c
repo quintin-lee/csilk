@@ -28,10 +28,9 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
         return;
     }
 
-    // For demonstration, we check against a static secret or cookie
-    // Real-world: compare token with session-stored token
-    const char* cookie = csilk_get_header(c, "Cookie");
-    if (cookie && strstr(cookie, token)) {
+    // Fix: Use csilk_get_cookie for exact matching instead of strstr
+    const char* cookie_token = csilk_get_cookie(c, "csrf_token");
+    if (cookie_token && strcmp(cookie_token, token) == 0) {
         csilk_next(c);
     } else {
         csilk_json_error(c, 403, "Forbidden: Invalid CSRF token");

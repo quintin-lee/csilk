@@ -10,7 +10,8 @@
 void test_static_serves_file() {
   csilk_ctx_t ctx;
   memset(&ctx, 0, sizeof(csilk_ctx_t));
-  ctx.request.path = "/test.html";
+  ctx.arena = csilk_arena_new(1024);
+  ctx.request.path = strdup("/test.html");
 
   // Create temp directory and file
   mkdir("test_dir", 0777);
@@ -31,7 +32,8 @@ void test_static_serves_file() {
 void test_static_traversal_blocked() {
   csilk_ctx_t ctx;
   memset(&ctx, 0, sizeof(csilk_ctx_t));
-  ctx.request.path = "/../../etc/passwd";
+  ctx.arena = csilk_arena_new(1024);
+  ctx.request.path = strdup("/../../etc/passwd");
 
   csilk_static(&ctx, ".");
 

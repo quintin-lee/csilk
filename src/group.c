@@ -124,34 +124,42 @@ static int gather_handlers(csilk_group_t* group, csilk_handler_t** handlers,
 
 void csilk_group_add_route(csilk_group_t* group, const char* method,
                          const char* path, csilk_handler_t handler) {
-  if (!group) return;
+    csilk_handler_t handlers[] = {handler};
+    csilk_group_add_handlers(group, method, path, handlers, 1);
+}
+
+void csilk_group_add_handlers(csilk_group_t* group, const char* method,
+                            const char* path, csilk_handler_t* handlers,
+                            size_t count) {
+  if (!group || !handlers || count == 0) return;
 
   char* full_path = join_path(group->prefix, path);
   if (!full_path) return;
 
-  csilk_handler_t* handlers = NULL;
-  size_t count = 0;
+  csilk_handler_t* combined_handlers = NULL;
+  size_t combined_count = 0;
 
-  if (gather_handlers(group, &handlers, &count) != 0) {
+  if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
     free(full_path);
-    free(handlers);
+    free(combined_handlers);
     return;
   }
 
   csilk_handler_t* new_handlers =
-      realloc(handlers, (count + 1) * sizeof(csilk_handler_t));
+      realloc(combined_handlers, (combined_count + count) * sizeof(csilk_handler_t));
   if (!new_handlers) {
     free(full_path);
-    free(handlers);
+    free(combined_handlers);
     return;
   }
-  handlers = new_handlers;
-  handlers[count++] = handler;
+  combined_handlers = new_handlers;
+  memcpy(combined_handlers + combined_count, handlers, count * sizeof(csilk_handler_t));
+  combined_count += count;
 
-  csilk_router_add(group->router, method, full_path, handlers, count);
+  csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
 
   free(full_path);
-  free(handlers);
+  free(combined_handlers);
 }
 
 void csilk_group_free(csilk_group_t* group) {

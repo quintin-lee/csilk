@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "csilk.h"
 
@@ -62,9 +63,40 @@ void test_context_response() {
   printf("test_context_response passed\n");
 }
 
+void test_context_storage() {
+    csilk_ctx_t c = {0};
+    int val = 42;
+    csilk_set(&c, "test_key", &val);
+    
+    void* retrieved = csilk_get(&c, "test_key");
+    assert(retrieved != NULL);
+    assert(*(int*)retrieved == 42);
+    
+    // Overwrite
+    int val2 = 100;
+    csilk_set(&c, "test_key", &val2);
+    assert(*(int*)csilk_get(&c, "test_key") == 100);
+    
+    csilk_ctx_cleanup(&c);
+    printf("test_context_storage passed\n");
+}
+
+void test_context_arena() {
+    csilk_ctx_t c = {0};
+    c.arena = csilk_arena_new(1024);
+    
+    char* s = csilk_arena_strdup(c.arena, "arena string");
+    assert(strcmp(s, "arena string") == 0);
+    
+    csilk_ctx_cleanup(&c);
+    printf("test_context_arena passed\n");
+}
+
 int main() {
   test_basic_chaining();
   test_abort();
   test_context_response();
+  test_context_storage();
+  test_context_arena();
   return 0;
 }

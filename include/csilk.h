@@ -16,7 +16,7 @@
 #include "csilk_reflect.h"
 
 /** @brief Csilk framework version. */
-#define CSILK_VERSION "0.1.0"
+#define CSILK_VERSION "0.2.0"
 /** @brief Maximum number of URL parameters. */
 #define CSILK_MAX_PARAMS 20
 
@@ -75,8 +75,23 @@ struct csilk_ctx_s {
   int params_count;         /**< Current number of path parameters. */
   int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
   void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode); /**< WebSocket message callback. */
+#define CSILK_MAX_STORAGE 16
+  struct { char* key; void* value; } storage[CSILK_MAX_STORAGE]; /**< Key-value storage. */
+  int storage_count;        /**< Number of items in storage. */
   void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
 };
+
+/** @brief Store a value in the context.
+ * @param c The request context.
+ * @param key Item key name.
+ * @param value Pointer to data. */
+void csilk_set(csilk_ctx_t* c, const char* key, void* value);
+
+/** @brief Retrieve a value from the context.
+ * @param c The request context.
+ * @param key Item key name.
+ * @return Pointer to data, or NULL if not found. */
+void* csilk_get(csilk_ctx_t* c, const char* key);
 
 /** @brief Move to the next handler in the onion model chain.
  * @param c The request context. */
@@ -201,7 +216,7 @@ int csilk_log_init(csilk_log_config_t config);
  * @param func Function name (__func__).
  * @param fmt Printf-style format string.
  * @param ... Format arguments. */
-void _gin_log_internal(csilk_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...);
+void _csilk_log_internal(csilk_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
 void csilk_log_close();
@@ -210,17 +225,17 @@ void csilk_log_close();
  * Convenience macros that capture source location.
  * @{ */
 /** @brief Log a TRACE-level message. */
-#define CSILK_LOG_T(...) _gin_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_T(...) _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a DEBUG-level message. */
-#define CSILK_LOG_D(...) _gin_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_D(...) _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an INFO-level message. */
-#define CSILK_LOG_I(...) _gin_log_internal(CSILK_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_I(...) _csilk_log_internal(CSILK_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a WARN-level message. */
-#define CSILK_LOG_W(...) _gin_log_internal(CSILK_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_W(...) _csilk_log_internal(CSILK_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an ERROR-level message. */
-#define CSILK_LOG_E(...) _gin_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_E(...) _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a FATAL-level message. */
-#define CSILK_LOG_F(...) _gin_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_F(...) _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @} */
 
 /** @brief Logging middleware handler.
@@ -286,6 +301,10 @@ typedef struct {
  * @param config Pointer to config struct to populate.
  * @return 0 on success, -1 on failure. */
 int csilk_load_config(const char* yaml_path, csilk_config_t* config);
+
+/** @brief Free all dynamically allocated strings in the configuration.
+ * @param config Pointer to the config struct. */
+void csilk_config_free(csilk_config_t* config);
 
 /** @brief Auth validator callback. */
 typedef int (*csilk_auth_validator_t)(const char* token);
@@ -442,6 +461,16 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
 void csilk_group_add_route(csilk_group_t* group, const char* method,
                          const char* path, csilk_handler_t handler);
 
+/** @brief Add a route with multiple handlers (middleware + handler).
+ * @param group Route group.
+ * @param method HTTP method.
+ * @param path URL pattern.
+ * @param handlers Array of handler functions.
+ * @param count Number of handlers in the array. */
+void csilk_group_add_handlers(csilk_group_t* group, const char* method,
+                            const char* path, csilk_handler_t* handlers,
+                            size_t count);
+
 /** @brief Deallocate a route group.
  * @param group Group instance. */
 void csilk_group_free(csilk_group_t* group);
@@ -490,6 +519,11 @@ typedef struct csilk_server_s csilk_server_t;
  * @param router The router to handle routing logic.
  * @return New server instance. */
 csilk_server_t* csilk_server_new(csilk_router_t* router);
+
+/** @brief Add global middleware to the server.
+ * @param server Server instance.
+ * @param handler Middleware function. */
+void csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
 
 /** @brief Deallocate server resources.
  * @param server Server instance. */

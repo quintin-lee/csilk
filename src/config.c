@@ -69,6 +69,7 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
                     } else if (strcmp(current_section, "server") == 0) {
                         if (strcmp(current_key, "idle_timeout_ms") == 0) config->server.idle_timeout_ms = atoi(val);
                         else if (strcmp(current_key, "max_body_size") == 0) config->server.max_body_size = (size_t)atoll(val);
+                        else if (strcmp(current_key, "max_header_size") == 0) config->server.max_header_size = (size_t)atoll(val);
                         else if (strcmp(current_key, "listen_backlog") == 0) config->server.listen_backlog = atoi(val);
                         else if (strcmp(current_key, "tcp_nodelay") == 0) config->server.tcp_nodelay = atoi(val);
                         else if (strcmp(current_key, "tcp_keepalive") == 0) config->server.tcp_keepalive = atoi(val);
@@ -143,4 +144,35 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
     yaml_parser_delete(&parser);
     fclose(fh);
     return error ? -1 : 0;
+}
+
+void csilk_config_free(csilk_config_t* config) {
+    if (!config) return;
+
+    if (config->logger.file_path) {
+        free((void*)config->logger.file_path);
+        config->logger.file_path = NULL;
+    }
+
+    if (config->cors.config.allow_origin) {
+        free((void*)config->cors.config.allow_origin);
+        config->cors.config.allow_origin = NULL;
+    }
+    if (config->cors.config.allow_methods) {
+        free((void*)config->cors.config.allow_methods);
+        config->cors.config.allow_methods = NULL;
+    }
+    if (config->cors.config.allow_headers) {
+        free((void*)config->cors.config.allow_headers);
+        config->cors.config.allow_headers = NULL;
+    }
+
+    if (config->static_files.root_dir) {
+        free(config->static_files.root_dir);
+        config->static_files.root_dir = NULL;
+    }
+    if (config->static_files.prefix) {
+        free(config->static_files.prefix);
+        config->static_files.prefix = NULL;
+    }
 }

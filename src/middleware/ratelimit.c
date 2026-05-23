@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+#include <uv.h>
 #include "csilk.h"
 
 /** @brief Maximum number of IP addresses to track. */
@@ -23,12 +24,20 @@ typedef struct {
 
 static ip_entry_t ip_table[MAX_IP_ENTRIES];
 static int ip_count = 0;
+static uv_mutex_t ratelimit_mutex;
+static uv_once_t ratelimit_once = UV_ONCE_INIT;
+
+static void init_ratelimit_mutex() {
+    uv_mutex_init(&ratelimit_mutex);
+}
 
 /** @brief Simple IP-based rate limiting middleware.
  * Limits the number of requests per IP within a rolling time window.
  * @param c The request context.
  * @param limit Maximum requests allowed per window. */
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
+    uv_once(&ratelimit_once, init_ratelimit_mutex);
+
     const char* ip = csilk_get_client_ip(c);
     if (!ip) {
         csilk_next(c);
@@ -37,6 +46,8 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
 
     time_t now = time(NULL);
     ip_entry_t* entry = NULL;
+
+    uv_mutex_lock(&ratelimit_mutex);
 
     // Search for IP
     for (int i = 0; i < ip_count; i++) {
@@ -49,11 +60,13 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
     if (!entry) {
         if (ip_count < MAX_IP_ENTRIES) {
             entry = &ip_table[ip_count++];
-            strncpy(entry->ip, ip, sizeof(entry->ip));
+            strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
+            entry->ip[sizeof(entry->ip) - 1] = '\0';
             entry->count = 0;
             entry->last_reset = now;
         } else {
             // Table full, just allow for now (or implement eviction)
+            uv_mutex_unlock(&ratelimit_mutex);
             csilk_next(c);
             return;
         }
@@ -67,7 +80,10 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
         entry->count++;
     }
 
-    if (entry->count > limit) {
+    int current_count = entry->count;
+    uv_mutex_unlock(&ratelimit_mutex);
+
+    if (current_count > limit) {
         csilk_set_header(c, "Retry-After", "60");
         csilk_json_error(c, 429, "Too Many Requests");
         csilk_abort(c);

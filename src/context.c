@@ -183,6 +183,11 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
     c->request.body = NULL;
   }
 
+  if (c->request.path) {
+    free(c->request.path);
+    c->request.path = NULL;
+  }
+
   free_headers(c->request.headers);
   c->request.headers = NULL;
   free_headers(c->request.query_params);
@@ -194,6 +199,36 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
     free((void*)c->response.body);
     c->response.body = NULL;
   }
+
+  for (int i = 0; i < c->storage_count; i++) {
+      free(c->storage[i].key);
+  }
+  c->storage_count = 0;
+}
+
+void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
+    if (!c || !key) return;
+    for (int i = 0; i < c->storage_count; i++) {
+        if (strcmp(c->storage[i].key, key) == 0) {
+            c->storage[i].value = value;
+            return;
+        }
+    }
+    if (c->storage_count < CSILK_MAX_STORAGE) {
+        c->storage[c->storage_count].key = strdup(key);
+        c->storage[c->storage_count].value = value;
+        c->storage_count++;
+    }
+}
+
+void* csilk_get(csilk_ctx_t* c, const char* key) {
+    if (!c || !key) return NULL;
+    for (int i = 0; i < c->storage_count; i++) {
+        if (strcmp(c->storage[i].key, key) == 0) {
+            return c->storage[i].value;
+        }
+    }
+    return NULL;
 }
 
 cJSON* csilk_bind_json(csilk_ctx_t* c) {
@@ -285,34 +320,41 @@ void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value) {
 void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
                     int max_age, const char* path, const char* domain,
                     int secure, int http_only) {
-  char buf[1024];
-  int pos = snprintf(buf, sizeof(buf), "%s=%s", name, value);
+  size_t buf_size = strlen(name) + strlen(value) + 256; // 256 for attributes
+  if (path) buf_size += strlen(path);
+  if (domain) buf_size += strlen(domain);
+
+  char* buf = malloc(buf_size);
+  if (!buf) return;
+
+  int pos = snprintf(buf, buf_size, "%s=%s", name, value);
 
   if (max_age > 0) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Max-Age=%d", max_age);
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=%d", max_age);
   } else if (max_age < 0) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Max-Age=0");
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=0");
   }
 
   if (path) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Path=%s", path);
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=%s", path);
   } else {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Path=/");
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=/");
   }
 
   if (domain) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Domain=%s", domain);
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Domain=%s", domain);
   }
 
   if (secure) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; Secure");
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Secure");
   }
 
   if (http_only) {
-    pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "; HttpOnly");
+    pos += snprintf(buf + pos, buf_size - (size_t)pos, "; HttpOnly");
   }
 
   csilk_add_header(c, "Set-Cookie", buf);
+  free(buf);
 }
 
 void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
@@ -320,6 +362,13 @@ void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
 
   c->response.status = status;
   csilk_set_header(c, "Content-Type", "application/json");
+
+  if (c->response.body && c->response.body_is_managed) {
+    free((void*)c->response.body);
+    c->response.body = NULL;
+    c->response.body_is_managed = 0;
+  }
+
   char* body = cJSON_PrintUnformatted(json);
   if (body) {
     c->response.body = body;

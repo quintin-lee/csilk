@@ -147,13 +147,25 @@ int main(int argc, char* argv[]) {
     csilk_router_t* router = csilk_router_new();
     if (!router) {
         CSILK_LOG_E("Failed to create router");
+        csilk_config_free(&cfg);
         return 1;
     }
     
-    // Global middleware group
+    // Create server first to use csilk_server_use
+    csilk_server_t* server = csilk_server_new(router);
+    if (!server) {
+        CSILK_LOG_E("Failed to create server");
+        csilk_router_free(router);
+        csilk_config_free(&cfg);
+        return 1;
+    }
+
+    // Register global middlewares
+    csilk_server_use(server, csilk_recovery_handler);
+    csilk_server_use(server, csilk_logger_handler);
+
+    // Global middleware group (prefix-less)
     csilk_group_t* root = csilk_group_new(router, "");
-    csilk_group_use(root, csilk_recovery_handler);
-    csilk_group_use(root, csilk_logger_handler);
 
     if (cfg.rate_limit.enable) {
         CSILK_LOG_I("Rate limiting enabled: %d req/min", cfg.rate_limit.requests_per_minute);
@@ -228,6 +240,7 @@ int main(int argc, char* argv[]) {
     csilk_group_free(protected_group);
     csilk_group_free(root);
     csilk_router_free(router);
+    csilk_config_free(&cfg);
     
     return result;
 }
