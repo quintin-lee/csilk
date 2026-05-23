@@ -233,6 +233,19 @@ void csilk_set_on_ws_message(csilk_ctx_t *c,
     c->on_ws_message = cb;
 }
 
+/** @brief Redirect to another URL with custom status. */
+void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
+    if (!c || !location) return;
+    csilk_set_header(c, "Location", location);
+    csilk_string(c, status, "Redirecting...");
+    csilk_abort(c);
+}
+
+/** @brief Redirect to another URL (default 302). */
+void csilk_redirect_simple(csilk_ctx_t* c, const char* url) {
+    csilk_redirect(c, 302, url);
+}
+
 /** @brief Store a value in the context storage. */
 void csilk_set(csilk_ctx_t *c, const char *key, void *value) {
   if (!c || !key || !c->arena)
@@ -444,37 +457,6 @@ void csilk_json_reflect(csilk_ctx_t *c, int status, const char *type_name,
     c->response.body_len = strlen(json_str);
     c->response.body_is_managed = 1;
   }
-}
-
-/** @brief Send an HTTP redirect response. */
-void csilk_redirect(csilk_ctx_t *c, int status, const char *location) {
-  if (!c || !location)
-    return;
-  c->response.status = status;
-  csilk_set_header(c, "Location", location);
-
-  const char *body;
-  switch (status) {
-  case 301:
-    body = "Moved Permanently";
-    break;
-  case 302:
-    body = "Found";
-    break;
-  case 303:
-    body = "See Other";
-    break;
-  case 307:
-    body = "Temporary Redirect";
-    break;
-  case 308:
-    body = "Permanent Redirect";
-    break;
-  default:
-    body = "Redirect";
-    break;
-  }
-  csilk_string(c, status, body);
 }
 
 /** @brief Parse a raw query string into the context's query_params map. */
