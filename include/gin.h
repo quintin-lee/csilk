@@ -182,10 +182,12 @@ void gin_panic(gin_ctx_t* c);
 
 /** @brief Logging levels. */
 typedef enum {
+  GIN_LOG_TRACE,
   GIN_LOG_DEBUG,
   GIN_LOG_INFO,
   GIN_LOG_WARN,
-  GIN_LOG_ERROR
+  GIN_LOG_ERROR,
+  GIN_LOG_FATAL
 } gin_log_level_t;
 
 /** @brief Logger configuration. */
@@ -210,10 +212,12 @@ void gin_log_close();
 /** @name Logging Macros
  * Convenience macros that capture source location.
  * @{ */
+#define GIN_LOG_T(...) _gin_log_internal(GIN_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define GIN_LOG_D(...) _gin_log_internal(GIN_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define GIN_LOG_I(...) _gin_log_internal(GIN_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define GIN_LOG_W(...) _gin_log_internal(GIN_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define GIN_LOG_E(...) _gin_log_internal(GIN_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define GIN_LOG_F(...) _gin_log_internal(GIN_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @} */
 
 /** @brief Logging middleware handler.
