@@ -1,4 +1,4 @@
 var files_dup =
 [
-    [ "include", "dir_d44c64559bbebec7f509842c48db8b23.html", "dir_d44c64559bbebec7f509842c48db8b23" ]
+    [ "example_server.c", "example__server_8c.html", "example__server_8c" ]
 ];

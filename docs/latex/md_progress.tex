@@ -1,0 +1,25 @@
+\chapter{会话日志 }
+\hypertarget{md_progress}{}\label{md_progress}\index{会话日志@{会话日志}}
+\label{md_progress_autotoc_md11}%
+\Hypertarget{md_progress_autotoc_md11}%
+\hypertarget{md_progress_autotoc_md12}{}\doxysection{\texorpdfstring{\+[2026-\/05-\/23]\+ 框架演进计划启动}{\+[2026-\/05-\/23]\+ 框架演进计划启动}}\label{md_progress_autotoc_md12}
+
+\begin{DoxyItemize}
+\item {\bfseries{动作}}:\+ 确认框架整体战略为“稳扎稳打：性能与稳定性优先”。
+\item {\bfseries{动作}}:\+ 创建并初始化 {\ttfamily \doxylink{task__plan_8md}{task\+\_\+plan.\+md}}, {\ttfamily \doxylink{findings_8md}{findings.\+md}}, {\ttfamily \doxylink{progress_8md}{progress.\+md}} 文件系统记忆。
+\item {\bfseries{下一步}}:\+ 开始执行阶段一，分析现有测试覆盖率并补充 {\ttfamily router.\+c} 和 {\ttfamily url\+\_\+parser.\+c} 的单元测试。
+\end{DoxyItemize}\hypertarget{md_progress_autotoc_md13}{}\doxysection{\texorpdfstring{\+[2026-\/05-\/23]\+ 阶段一完成}{\+[2026-\/05-\/23]\+ 阶段一完成}}\label{md_progress_autotoc_md13}
+
+\begin{DoxyItemize}
+\item {\bfseries{动作}}:\+ 补充边界测试提高覆盖率。
+\item {\bfseries{动作}}:\+ 修复 ASan 检测出的多处核心内存泄漏和段错误（gin\+\_\+string, libuv 句柄泄漏等）。
+\item {\bfseries{动作}}:\+ 集成了基于 lib\+Fuzzer 的 {\ttfamily fuzz\+\_\+test.\+c} 并在 CMake 中配置。
+\item {\bfseries{动作}}:\+ 添加 Git\+Hub Actions CI 配置文件。
+\end{DoxyItemize}\hypertarget{md_progress_autotoc_md14}{}\doxysection{\texorpdfstring{\+[2026-\/05-\/23]\+ 阶段二完成}{\+[2026-\/05-\/23]\+ 阶段二完成}}\label{md_progress_autotoc_md14}
+
+\begin{DoxyItemize}
+\item {\bfseries{动作}}:\+ 引入了请求级内存池 Arena，实现了 {\ttfamily gin\+\_\+string} 的自动化内存管理。
+\item {\bfseries{动作}}:\+ 将 Radix Tree 重构为固定数组子节点布局，提升了缓存局部性。
+\item {\bfseries{动作}}:\+ 修复了路由 handler 数组的生命周期问题，通过深拷贝确保了内存安全。
+\item {\bfseries{动作}}:\+ 优化了 {\ttfamily gin\+\_\+recovery\+\_\+handler} 的 jump\+\_\+buffer 生命周期范围。 
+\end{DoxyItemize}

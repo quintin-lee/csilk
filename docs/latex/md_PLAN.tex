@@ -1,0 +1,124 @@
+\chapter{c-\/gin-\/framework 完善计划 }
+\hypertarget{md_PLAN}{}\label{md_PLAN}\index{c-\/gin-\/framework 完善计划@{c-\/gin-\/framework 完善计划}}
+\label{md_PLAN_autotoc_md3}%
+\Hypertarget{md_PLAN_autotoc_md3}%
+\hypertarget{md_PLAN_autotoc_md4}{}\doxysection{\texorpdfstring{P0 -\/ 严重缺陷 (已修复 ✓)}{P0 -\/ 严重缺陷 (已修复 ✓)}}\label{md_PLAN_autotoc_md4}
+
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{修复响应头被忽略的 bug}} — {\ttfamily gin\+\_\+set\+\_\+header()} 设置的响应头在 {\ttfamily on\+\_\+message\+\_\+complete} 中从未被序列化到 HTTP 响应中，所有自定义响应头实际上被静默忽略
+\begin{DoxyItemize}
+\item 修改:\+ {\ttfamily src/\+server.\+c:\+on\+\_\+message\+\_\+complete()} — 遍历 {\ttfamily ctx.\+response.\+headers} 链表并写入响应
+\end{DoxyItemize}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{修复 README 示例语法错误}} — README 中使用 {\ttfamily \texorpdfstring{$^\wedge$}{\string^}(gin\+\_\+ctx\+\_\+t\texorpdfstring{$\ast$}{*} ctx) \{ ... \}} 的 block 语法在 C11 中非法，应改为标准函数指针语法
+\begin{DoxyItemize}
+\item 修改:\+ {\ttfamily \doxylink{README_8md}{README.\+md}} — 所有示例改用标准 C 函数，匹配实际 API
+\end{DoxyItemize}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{修复 llhttp ABI 不匹配}} — 系统安装 llhttp 9.\+3 而 Fetch\+Content 拉取 9.\+2，导致 {\ttfamily on\+\_\+protocol} 字段偏移差异使 {\ttfamily on\+\_\+url} 回调失效
+\begin{DoxyItemize}
+\item 修改:\+ {\ttfamily CMake\+Lists.\+txt} — 改用系统 llhttp 库，消除 ABI 冲突
+\end{DoxyItemize}
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md5}{}\doxysection{\texorpdfstring{P1 -\/ 核心功能增强}{P1 -\/ 核心功能增强}}\label{md_PLAN_autotoc_md5}
+
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{优雅关闭}} — 添加 {\ttfamily SIGINT}/\+{\ttfamily SIGTERM} 信号处理 + {\ttfamily gin\+\_\+server\+\_\+stop()} 线程安全停止
+\begin{DoxyItemize}
+\item 新增:\+ {\ttfamily src/\+server.\+c} — {\ttfamily on\+\_\+signal()}, {\ttfamily on\+\_\+async\+\_\+stop()} 回调, {\ttfamily gin\+\_\+server\+\_\+stop()} 公共 API
+\item 新增:\+ {\ttfamily include/\+gin.\+h} — {\ttfamily gin\+\_\+server\+\_\+stop()} 声明
+\end{DoxyItemize}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{超时与限制可配置}} — 将硬编码的 idle timeout(5s)、body 大小限制(1\+MB)、listen backlog(128) 改为通过 {\ttfamily gin\+\_\+server\+\_\+config\+\_\+t} 结构体可配置
+\begin{DoxyItemize}
+\item 新增:\+ {\ttfamily include/\+gin.\+h} — {\ttfamily gin\+\_\+server\+\_\+config\+\_\+t} 结构体, {\ttfamily gin\+\_\+server\+\_\+set\+\_\+config()} 声明
+\item 修改:\+ {\ttfamily src/\+server.\+c} — 所有硬编码常量替换为 {\ttfamily server-\/\texorpdfstring{$>$}{>}config.\texorpdfstring{$\ast$}{*}}
+\end{DoxyItemize}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{CORS 中间件}} — 实现标准 CORS 中间件，支持可配置的 Origin/\+\+Methods/\+\+Headers/\+\+Credentials/\+\+Max-\/\+Age
+\begin{DoxyItemize}
+\item 新增:\+ {\ttfamily src/\+middleware/\+cors.\+c} — {\ttfamily gin\+\_\+cors\+\_\+middleware()} 实现
+\item 新增:\+ {\ttfamily include/\+gin.\+h} — {\ttfamily gin\+\_\+cors\+\_\+config\+\_\+t}, {\ttfamily gin\+\_\+cors\+\_\+middleware()} 声明
+\end{DoxyItemize}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\bfseries{丰富 JSON API}} — 添加 {\ttfamily gin\+\_\+bind\+\_\+json\+\_\+err()} (带错误反馈) 和 {\ttfamily gin\+\_\+json\+\_\+error()} (JSON 错误响应)
+\begin{DoxyItemize}
+\item 新增:\+ {\ttfamily src/\+context.\+c} — {\ttfamily gin\+\_\+bind\+\_\+json\+\_\+err()}, {\ttfamily gin\+\_\+json\+\_\+error()}
+\item 新增:\+ {\ttfamily include/\+gin.\+h} — 对应声明
+\end{DoxyItemize}
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md6}{}\doxysection{\texorpdfstring{P2 -\/ 测试体系}{P2 -\/ 测试体系}}\label{md_PLAN_autotoc_md6}
+
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{集成测试框架}} — 引入 CTest/\+\+CMocka/\+\+Criterion，替换现有的 raw assert 和手动打印
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{补全 keep-\/alive 测试}} — {\ttfamily test\+\_\+keepalive.\+c} 目前是空的 TODO 桩
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{补全集成/\+\+E2E 测试}} — 目前的测试大多 mock 内部结构，仅有 {\ttfamily test\+\_\+timeout} 做了真实的 server-\/client 交互
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{边界与负面测试}} — 添加对畸形 URL、超长路径、header 注入、body 边界情况的测试
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyChecked] {\ttfamily run\+\_\+tests} 目标不完整 — CMake 定义了 {\ttfamily run\+\_\+tests} 但只编译 {\ttfamily test\+\_\+main.\+c} 一个桩文件，没有集成 ctest
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md7}{}\doxysection{\texorpdfstring{P3 -\/ 构建与工具链}{P3 -\/ 构建与工具链}}\label{md_PLAN_autotoc_md7}
+
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{CI/\+\+CD 配置}} — 添加 Git\+Hub Actions (.github/\+workflows/\+)，实现自动构建和测试
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{安装目标}} — CMake\+Lists.\+txt 添加 {\ttfamily install()} 命令支持库和头文件的安装
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{静态库构建}} — 支持 {\ttfamily BUILD\+\_\+\+SHARED\+\_\+\+LIBS} 选项，构建 {\ttfamily .a} 静态库
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{clang-\/tidy 集成}} — 在构建中加入静态分析
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md8}{}\doxysection{\texorpdfstring{P4 -\/ 安全加固}{P4 -\/ 安全加固}}\label{md_PLAN_autotoc_md8}
+
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{静态文件路径遍历防护增强}} — 当前只拦截 {\ttfamily ..}，应使用 {\ttfamily realpath()} 规范化路径后再校验前缀，防止编码绕过
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{请求头大小限制}} — 添加对请求头的总大小限制，防止内存攻击
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{内存分配安全检查}} — 检查所有 {\ttfamily malloc}/\+{\ttfamily realloc}/\+{\ttfamily strdup} 的返回值，失败时优雅返回错误而非崩溃
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md9}{}\doxysection{\texorpdfstring{P5 -\/ 新功能 (可选)}{P5 -\/ 新功能 (可选)}}\label{md_PLAN_autotoc_md9}
+
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{Cookie 支持}} — {\ttfamily gin\+\_\+get\+\_\+cookie()} /\+ {\ttfamily gin\+\_\+set\+\_\+cookie()} API
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{文件上传}} — multipart/\+form-\/data 解析
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{gzip 压缩}} — 响应体压缩中间件
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{限流中间件}} — 基于 IP 或路由的速率限制
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{Web\+Socket 支持}}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{HTTPS/\+\+TLS 支持}}
+\end{DoxyItemize}\hypertarget{md_PLAN_autotoc_md10}{}\doxysection{\texorpdfstring{P6 -\/ 文档完善}{P6 -\/ 文档完善}}\label{md_PLAN_autotoc_md10}
+
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{添加 CHANGELOG.\+md}}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{添加 CONTRIBUTING.\+md}}
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{补充 Doxygen 注释}} — 多个内部函数缺少文档
+\end{DoxyItemize}
+\begin{DoxyItemize}
+\item[\DoxyUnchecked] {\bfseries{架构设计文档}} — 说明 radix trie、handler chain、event loop 集成的设计原理 
+\end{DoxyItemize}
