@@ -67,11 +67,13 @@ if(NOT LLHTTP_LIB)
     GIT_REPOSITORY https://github.com/nodejs/llhttp.git
     GIT_TAG        release/v9.4.1
   )
+  set(LLHTTP_BUILD_STATIC_LIBS ON)
   FetchContent_MakeAvailable(llhttp)
-  set(LLHTTP_LIB llhttp)
-  # Ensure llhttp headers are findable (the target may not export include dirs)
+  # llhttp v9.4+ creates llhttp_shared / llhttp_static; alias llhttp::llhttp
+  # points to whichever was defined last (static when both are built).
+  set(LLHTTP_LIB llhttp::llhttp)
   if(llhttp_SOURCE_DIR)
-    include_directories(${llhttp_SOURCE_DIR})
+    include_directories(${llhttp_SOURCE_DIR}/include)
   endif()
 else()
   message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
