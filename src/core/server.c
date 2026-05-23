@@ -71,6 +71,10 @@ static void on_timer_close(uv_handle_t* handle) {
     if (client->server) client->server->active_connections--;
     client->ctx._internal_client = NULL;
     csilk_ctx_cleanup(&client->ctx);
+    if (client->ctx.arena) {
+        csilk_arena_free(client->ctx.arena);
+        client->ctx.arena = NULL;
+    }
     free(client->ctx.response.headers);
     free(client->current_header_field);
     free(client->current_header_value);
@@ -87,6 +91,10 @@ static void on_close(uv_handle_t* handle) {
   if (client) {
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
+    if (client->ctx.arena) {
+        csilk_arena_free(client->ctx.arena);
+        client->ctx.arena = NULL;
+    }
     if (!uv_is_closing((uv_handle_t*)&client->timer)) {
       uv_close((uv_handle_t*)&client->timer, on_timer_close);
     }
@@ -396,6 +404,7 @@ static int on_message_complete(llhttp_t* p) {
       }
   }
 
+  csilk_ctx_cleanup(&client->ctx);
   return 0;
 }
 
