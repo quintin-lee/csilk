@@ -169,6 +169,29 @@ cJSON* gin_bind_json(gin_ctx_t* c) {
   return cJSON_Parse(c->request.body);
 }
 
+/** @brief Bind request body to JSON with error feedback.
+ * @param c The request context.
+ * @param error Optional pointer to store error message (NULL if no error).
+ * @return A cJSON pointer, or NULL on failure (check *error for details). */
+cJSON* gin_bind_json_err(gin_ctx_t* c, const char** error) {
+  if (error) *error = NULL;
+  if (!c) {
+    if (error) *error = "Null context";
+    return NULL;
+  }
+  if (!c->request.body) {
+    if (error) *error = "No request body";
+    return NULL;
+  }
+  cJSON* json = cJSON_Parse(c->request.body);
+  if (!json) {
+    if (error) *error = cJSON_GetErrorPtr();
+    if (error && !*error) *error = "Invalid JSON";
+    return NULL;
+  }
+  return json;
+}
+
 /** @brief Set JSON response body and status.
  * @param c The request context.
  * @param status The HTTP status code.
@@ -181,4 +204,16 @@ void gin_json(gin_ctx_t* c, int status, cJSON* json) {
   c->response.body = cJSON_PrintUnformatted(json);
   c->response.body_is_managed = 1;
   cJSON_Delete(json);
+}
+
+/** @brief Set a JSON error response with message.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param message The error message string. */
+void gin_json_error(gin_ctx_t* c, int status, const char* message) {
+  if (!c) return;
+  cJSON* err = cJSON_CreateObject();
+  if (!err) return;
+  cJSON_AddStringToObject(err, "error", message ? message : "Unknown error");
+  gin_json(c, status, err);
 }

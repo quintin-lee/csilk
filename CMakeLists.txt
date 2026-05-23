@@ -47,13 +47,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libuv)
 
-# Fetch llhttp
-FetchContent_Declare(
-  llhttp
-  GIT_REPOSITORY https://github.com/nodejs/llhttp.git
-  GIT_TAG        release/v9.2.1
-)
-FetchContent_MakeAvailable(llhttp)
+# Fetch llhttp - replaced with system library to avoid ABI mismatch
+# System has libllhttp.so.9.3 at /usr/lib/libllhttp.so with headers at /usr/include/llhttp.h
+# If system llhttp is not available, uncomment the following to fetch from source:
+# FetchContent_Declare(
+#   llhttp
+#   GIT_REPOSITORY https://github.com/nodejs/llhttp.git
+#   GIT_TAG        release/v9.2.1
+# )
+# FetchContent_MakeAvailable(llhttp)
 
 # Fetch cJSON
 FetchContent_Declare(
@@ -78,11 +80,19 @@ set(GIN_SOURCES
     src/middleware/recovery.c
     src/middleware/auth.c
     src/middleware/static.c
+    src/middleware/cors.c
 )
+
+# Find system llhttp (prefer system library to match installed headers)
+find_library(LLHTTP_LIB NAMES llhttp libllhttp REQUIRED)
+if(NOT LLHTTP_LIB)
+  message(FATAL_ERROR "llhttp library not found. Install libllhttp-dev or adjust FetchContent in CMakeLists.txt")
+endif()
+message(STATUS "Found llhttp: ${LLHTTP_LIB}")
 
 # Build library
 add_library(gin ${GIN_SOURCES})
-target_link_libraries(gin uv llhttp cjson)
+target_link_libraries(gin uv ${LLHTTP_LIB} cjson)
 
 # Test executables
 add_executable(test_logger tests/test_logger.c)
@@ -126,6 +136,9 @@ target_link_libraries(test_keepalive gin)
 
 add_executable(test_timeout tests/test_timeout.c)
 target_link_libraries(test_timeout gin)
+
+add_executable(test_integration tests/test_integration.c)
+target_link_libraries(test_integration gin)
 
 # Example server
 add_executable(example_server example_server.c)
