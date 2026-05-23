@@ -21,7 +21,7 @@
 - [x] 3.2 架构机制白皮书
 - [x] 3.3 示例工程扩展 (example_server 增强)
 
-### 阶段四：新功能拓展 (New Features)
+### 阶段四：新功能拓展 (New Features) [当前进行中]
 - [ ] 4.1 WebSocket 协议支持
 - [ ] 4.2 更多官方中间件 (Rate Limiter, CSRF, CORS)
 - [ ] 4.3 传输层安全 (TLS/HTTPS) 调研与集成

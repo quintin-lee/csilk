@@ -9,3 +9,7 @@
 - **gin_string**: 修复了局部栈分配导致的 stack-use-after-return。
 - **libuv 句柄**: 修复了 timer handle 未关闭导致的 heap-use-after-free。
 - **url_parser**: 修复了 client->current_url 和 request.path 的内存泄漏。
+
+## WebSocket 实现调研
+- WebSocket 需要接管 libuv 的 `uv_read_start`。当 HTTP 解析器发现 `Upgrade: websocket` 时，应停止 llhttp 解析，转而由 WebSocket 帧解析器处理后续数据。
+- 需要增加 Base64 和 SHA1 的依赖用于握手协议。
