@@ -15,6 +15,7 @@
 
 #include "csilk.h"
 #include "csilk_internal.h"
+#include "csilk_internal.h"
 
 /** @brief Internal helper to get MIME type from file path.
  * @param path The file path.
@@ -32,6 +33,7 @@ static const char* get_mime_type(const char* path) {
 static void static_work_cb(uv_work_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   const char* root_dir = (const char*)csilk_get(c, "static_root");
+  const char* prefix = (const char*)csilk_get(c, "static_prefix");
   char full_path[PATH_MAX];
   char resolved_root[PATH_MAX];
   char resolved_file[PATH_MAX];
@@ -42,7 +44,13 @@ static void static_work_cb(uv_work_t* req) {
     return;
   }
 
-  snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, c->request.path);
+  const char* relative_path = csilk_get_path(c);
+  if (prefix && strncmp(relative_path, prefix, strlen(prefix)) == 0) {
+      relative_path += strlen(prefix);
+      if (*relative_path == '/') relative_path++;
+  }
+
+  snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, relative_path);
 
   // Resolve full_path to absolute path
   if (realpath(full_path, resolved_file) == NULL) {

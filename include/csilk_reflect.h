@@ -48,6 +48,9 @@ typedef struct {
     size_t count;                   /**< Number of fields in the array. */
 } csilk_reflect_entry_t;
 
+/** @brief Initialize the reflection system (mutexes, etc). Safe to call multiple times. */
+void csilk_reflect_init(void);
+
 /** @brief Register a type manually. */
 void csilk_reflect_register(const char *name, const csilk_field_desc_t *fields, size_t count);
 

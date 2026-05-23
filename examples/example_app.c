@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 /**
  * @file example_app.c
  * @brief Minimal example using the high-level csilk_app_t API.

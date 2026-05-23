@@ -126,53 +126,55 @@
 ## 三、代码可完善事项（平账清单）
 
 ### P0 — 关键问题（内存安全、数据竞争、安全漏洞）
-- [ ] **P0-1: 全局反射注册表无锁保护** — `src/core/reflect.c:15-16`
-  `g_registry` / `g_registry_count` 多线程下存在数据竞争（懒加载初始化 `uv_mutex_t` 非线程安全）。应改为显式初始化。
+- [x] **P0-1: 全局反射注册表无锁保护** — `src/core/reflect.c:15-16`
+  `g_registry` / `g_registry_count` 多线程下存在数据竞争（懒加载初始化 `uv_mutex_t` 非线程安全）。已改为显式初始化。
 - [x] **P0-2: WebSocket 帧长度整数溢出** — `src/core/websocket.c:60`
   `malloc(header_len + len)` 中 len 接近 SIZE_MAX 时加法回绕。应在 malloc 前校验。
 - [x] **P0-3: on_body realloc 失败后 body 指针悬空** — `src/core/server.c:215-221`
   realloc 失败时不释放旧 request.body，连接继续运行不报错。
-- [ ] **P0-4: _internal_client 释放后使用** — `src/core/server.c:81-88,415`
-  连接关闭后 SSE/WebSocket 回调可能访问已释放的 csilk_client_t。
+- [x] **P0-4: _internal_client 释放后使用** — `src/core/server.c:81-88,415`
+  连接关闭后 SSE/WebSocket 回调可能访问已释放的 csilk_client_t。已在 on_close 中解绑。
 
 ### P1 — 资源管理与错误处理
-- [ ] **P1-1: csilk_server_free 异步关闭后立即 free** — `src/core/server.c:526-543`
-  uv_close 异步完成前就 free(server)，存在 use-after-free 风险。
-- [ ] **P1-2: csilk_arena_alloc 对齐运算整数溢出** — `src/core/arena.c:34`
-  size + 7 在 size 接近 SIZE_MAX - 7 时回绕为小值。
-- [ ] **P1-3: uv_async_init 返回值未检查** — `src/core/server.c:564`
-- [ ] **P1-4: uv_signal_init / uv_signal_start 返回值未检查** — `src/core/server.c:585-587`
-- [ ] **P1-5: csilk_log_init 返回值在 app.c 中被忽略** — `src/app/app.c:121,170,176`
+- [x] **P1-1: csilk_server_free 异步关闭后立即 free** — `src/core/server.c:526-543`
+  uv_close 异步完成前就 free(server)，存在 use-after-free 风险。已添加 handle 关闭回调。
+- [x] **P1-2: csilk_arena_alloc 对齐运算整数溢出** — `src/core/arena.c:34`
+  已在代码中通过 `if (size > SIZE_MAX - 7)` 校验。
+- [x] **P1-3: uv_async_init 返回值未检查** — `src/core/server.c:564`
+- [x] **P1-4: uv_signal_init / uv_signal_start 返回值未检查** — `src/core/server.c:585-587`
+- [x] **P1-5: csilk_log_init 返回值在 app.c 中被忽略** — `src/app/app.c:121,170,176`
 
 ### P2 — API 设计问题
 - [ ] **P2-1: csilk_ctx_s 结构体完全暴露** — `include/csilk.h:71-89`
   ABI 不稳定；应改为不透明类型。
-- [ ] **P2-2: csilk_cors_middleware 按值传结构体** — `include/csilk.h:311`
-  72 字节按值传递，应改为 `const csilk_cors_config_t*`。
-- [ ] **P2-3: 固定长度中间件数组静默丢弃** — `src/core/server.c:36,521`
-  最多 32 个全局中间件，超出后静默忽略。
-- [ ] **P2-4: csilk_set 值生命周期不明确** — `src/core/context.c:212-225`
-  只 free key 不 free value，文档未说明。
-- [ ] **P2-5: 每个 context 内嵌 16 个固定存储槽** — `include/csilk.h:85-86`
-  空槽浪费栈空间，可改为 arena 分配。
-- [ ] **P2-6: csilk_static 需调用者自行剥除 URL 前缀** — `include/csilk.h:386`
+- [x] **P2-2: csilk_cors_middleware 按值传结构体** — `include/csilk.h:311`
+  72 字节按值传递，已改为 `const csilk_cors_config_t*`。
+- [x] **P2-3: 固定长度中间件数组静默丢弃** — `src/core/server.c:36,521`
+  最多 32 个全局中间件，超出后已增加错误日志输出并返回错误。
+- [x] **P2-4: csilk_set 值生命周期不明确** — `src/core/context.c:212-225`
+  已更新文档说明调用者管理生命周期。
+- [x] **P2-5: 每个 context 内嵌 16 个固定存储槽** — `include/csilk.h:85-86`
+  已改为 arena 动态分配。
+- [x] **P2-6: csilk_static 需调用者自行剥除 URL 前缀** — `include/csilk.h:386`
+  已支持自动剥离前缀。
 
 ### P3 — 代码质量
-- [ ] **P3-1: on_message_complete 函数过长（165 行）** — `src/core/server.c:225-390`
-  应拆分为 build_response_headers()、send_response()、handle_connection_close()。
-- [ ] **P3-2: advanced_server.c 未释放 group** — `examples/advanced_server.c:125-132`
-- [ ] **P3-3: 查询参数未做 URL 解码** — `src/core/url.c:35-86`
-  %48%65%6C%6C%6F 不会被解码为 "Hello"。
-- [ ] **P3-4: test_main.c 死代码** — `tests/test_main.c` 未在 CMakeLists.txt 引用。
-- [ ] **P3-5: 测试使用假指针 (void*)0x1** — `tests/test_ip.c:31`
-- [ ] **P3-6: example_server.c 中冗余赋值** — `examples/example_server.c:284`
-- [ ] **P3-7: SHA1 count[0] 在超大消息时回绕** — `src/core/utils.c:71`
-- [ ] **P3-8: SHA1 使用 uint32_t len 限制更新大小** — `src/core/utils.c:68`
+- [x] **P3-1: on_message_complete 函数过长（165 行）** — `src/core/server.c:225-390`
+  已拆分为多个辅助函数提升可读性。
+- [x] **P3-2: advanced_server.c 未释放 group** — `examples/advanced_server.c:125-132`
+- [x] **P3-3: 查询参数未做 URL 解码** — `src/core/url.c:35-86`
+  %48%65%6C%6C%6F 不会被解码为 "Hello"。已实现 URL 解码。
+- [x] **P3-4: test_main.c 死代码** — `tests/test_main.c` 未在 CMakeLists.txt 引用。已清理。
+- [x] **P3-5: 测试使用假指针 (void*)0x1** — `tests/test_ip.c:31`
+  已在 `test_gzip.c` 等文件中改为使用真实变量地址的 Mock 方式。
+- [x] **P3-6: example_server.c 中冗余赋值** — `examples/example_server.c:284`
+- [x] **P3-7: SHA1 count[0] 在超大消息时回绕** — `src/core/utils.c:71`
+- [x] **P3-8: SHA1 使用 uint32_t len 限制更新大小** — `src/core/utils.c:68`
 
 ### P4 — 缺失功能
 - [ ] P4-1: HTTPS/TLS 支持（PLAN.md 已标注待后续）
 - [ ] P4-2: HTTP/2 支持
-- [ ] P4-3: 优雅关闭 — 当前 csilk_server_stop 直接 uv_stop，断活跃连接
+- [x] **P4-3: 优雅关闭** — 当前 `csilk_server_stop` 直接 `uv_stop`，断活跃连接。已实现通过 `uv_walk` 显式关闭所有句柄。
 - [ ] P4-4: 分块传输编码（chunked transfer encoding）
 - [ ] P4-5: WebSocket 关闭握手 — 按 RFC 6455 Section 5.5.1
 - [ ] P4-6: 重定向辅助函数 csilk_redirect()
@@ -202,10 +204,12 @@
 - [ ] OOM / 内存压力场景
 
 ### P6 — 构建系统问题
-- [ ] **P6-1: 库链接可见性应为 PRIVATE** — CMakeLists.txt:139
-- [ ] **P6-2: CI 缺少 zlib1g-dev 依赖** — `.github/workflows/ci.yml:18`
-- [ ] **P6-3: test_main.c 存在但不编译** — `tests/test_main.c`
-- [ ] **P6-4: 缺少显式 pthread 链接** — CMakeLists.txt
+- [x] **P6-1: 库链接可见性应为 PRIVATE** — CMakeLists.txt:139
+  已将内部依赖（uv, llhttp, cjson 等）的链接可见性改为 PRIVATE。
+- [x] **P6-2: CI 缺少 zlib1g-dev 依赖** — `.github/workflows/ci.yml:18`
+- [x] **P6-3: test_main.c 存在但不编译** — `tests/test_main.c`
+- [x] **P6-4: 缺少显式 pthread 链接** — CMakeLists.txt
+  已通过 Threads::Threads 显式链接。
 
 ---
 

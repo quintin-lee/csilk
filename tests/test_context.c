@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -65,6 +66,7 @@ void test_context_response() {
 
 void test_context_storage() {
     csilk_ctx_t c = {0};
+    c.arena = csilk_arena_new(1024);
     int val = 42;
     csilk_set(&c, "test_key", &val);
     
@@ -78,6 +80,7 @@ void test_context_storage() {
     assert(*(int*)csilk_get(&c, "test_key") == 100);
     
     csilk_ctx_cleanup(&c);
+    csilk_arena_free(c.arena);
     printf("test_context_storage passed\n");
 }
 

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Route group structure. */
 struct csilk_group_s {

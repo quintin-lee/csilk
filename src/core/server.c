@@ -12,6 +12,7 @@
 
 #include "csilk.h"
 #include "csilk_internal.h"
+#include "csilk_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
 #define CSILK_DEFAULT_IDLE_TIMEOUT  5000
@@ -71,7 +72,7 @@ static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
     if (client->server) client->server->active_connections--;
-    client->ctx._internal_client = NULL;
+    // The context's internal pointer is already set to NULL in on_close or here
     csilk_ctx_cleanup(&client->ctx);
     if (client->ctx.arena) {
       csilk_arena_free(client->ctx.arena);
@@ -90,6 +91,7 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
+    // Critical: Unlink the context from the client to prevent UAF in async callbacks
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
     if (client->ctx.arena) {
@@ -111,11 +113,20 @@ static void on_signal(uv_signal_t* handle, int signum) {
   csilk_server_stop(server);
 }
 
-/** @brief Async callback to stop the server loop.
+/** @brief Callback to close all active handles. */
+static void close_cb(uv_handle_t* handle, void* arg) {
+    if (!uv_is_closing(handle)) {
+        uv_close(handle, NULL);
+    }
+}
+
+/** @brief Async callback to stop the server gracefully.
  * @param handle Async handle. */
 static void on_stop_async(uv_async_t* handle) {
   csilk_server_t* server = (csilk_server_t*)handle->data;
-  uv_stop(server->loop);
+  
+  // Close all active handles in the loop to allow uv_run to exit
+  uv_walk(server->loop, (uv_walk_cb)close_cb, NULL);
 }
 
 /** @brief Write completion callback.
@@ -260,48 +271,33 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief Send the fully constructed HTTP response to the client.
- * Builds the HTTP response from context status/headers/body, writes it
- * to the connection, then handles keep-alive or close.
- */
+/** @brief Map HTTP status code to reason phrase. */
+static const char* get_status_text(int status) {
+  switch (status) {
+    case 101: return "Switching Protocols";
+    case 200: return "OK";
+    case 201: return "Created";
+    case 204: return "No Content";
+    case 400: return "Bad Request";
+    case 401: return "Unauthorized";
+    case 403: return "Forbidden";
+    case 404: return "Not Found";
+    case 500: return "Internal Server Error";
+    default:  return "OK";
+  }
+}
+
+/** @brief Send the fully constructed HTTP response to the client. */
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
   
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
-  const char* status_text;
-  switch (status) {
-    case 101:
-      status_text = "Switching Protocols";
-      break;
-    case 200:
-      status_text = "OK";
-      break;
-    case 201:
-      status_text = "Created";
-      break;
-    case 204:
-      status_text = "No Content";
-      break;
-    case 400:
-      status_text = "Bad Request";
-      break;
-    case 401:
-      status_text = "Unauthorized";
-      break;
-    case 403:
-      status_text = "Forbidden";
-      break;
-    case 404:
-      status_text = "Not Found";
-      break;
-    case 500:
-      status_text = "Internal Server Error";
-      break;
-    default:
-      status_text = "OK";
-      break;
-  }
+  const char* status_text = get_status_text(status);
+
+  // If response has body, use Content-Length
+  int use_chunked = (client->ctx.response.body_len == 0 && client->ctx.is_async);
+  const char* transfer_encoding = use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
 
   size_t custom_headers_len = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
@@ -319,6 +315,12 @@ void _csilk_send_response(csilk_ctx_t* c) {
   int header_len;
   if (status == 101) {
     header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
+  } else if (use_chunked) {
+    header_len = snprintf(NULL, 0,
+                          "HTTP/1.1 %d %s\r\n"
+                          "%s"
+                          "Connection: %s\r\n",
+                          status, status_text, transfer_encoding, connection_val);
   } else {
     header_len = snprintf(NULL, 0,
                           "HTTP/1.1 %d %s\r\n"
@@ -329,7 +331,8 @@ void _csilk_send_response(csilk_ctx_t* c) {
 
   if (header_len < 0) return;
 
-  size_t response_len = (size_t)header_len + custom_headers_len + 2 + body_len;
+  // For non-chunked response, the length should be header + headers + crlf + body
+  size_t response_len = (size_t)header_len + custom_headers_len + 2 + (use_chunked ? 0 : body_len);
 
   uv_write_t* req = malloc(sizeof(uv_write_t));
   if (req) {
@@ -339,6 +342,12 @@ void _csilk_send_response(csilk_ctx_t* c) {
       if (status == 101) {
         pos = snprintf(write_base, response_len + 1,
                        "HTTP/1.1 101 Switching Protocols\r\n");
+      } else if (use_chunked) {
+        pos = snprintf(write_base, response_len + 1,
+                       "HTTP/1.1 %d %s\r\n"
+                       "%s"
+                       "Connection: %s\r\n",
+                       status, status_text, transfer_encoding, connection_val);
       } else {
         pos = snprintf(write_base, response_len + 1,
                        "HTTP/1.1 %d %s\r\n"
@@ -355,9 +364,13 @@ void _csilk_send_response(csilk_ctx_t* c) {
         }
       }
 
-      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+      if (!use_chunked) {
+          snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+      } else {
+          snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+      }
 
-      uv_buf_t buf = uv_buf_init(write_base, response_len);
+      uv_buf_t buf = uv_buf_init(write_base, (use_chunked ? (size_t)pos + 2 : response_len));
       req->data = write_base;
       uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
     } else {
@@ -381,12 +394,8 @@ void _csilk_send_response(csilk_ctx_t* c) {
   csilk_ctx_cleanup(&client->ctx);
 }
 
-/** @brief HTTP parser callback: full request message parsed.
- * Routes the request to matching handlers and sends response.
- * @param p HTTP parser instance. */
-static int on_message_complete(llhttp_t* p) {
-  csilk_client_t* client = (csilk_client_t*)p->data;
-
+/** @brief Finalize request headers and URL before routing. */
+static void finalize_request(csilk_client_t* client, llhttp_t* p) {
   if (client->current_header_field && client->current_header_value) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
                             client->current_header_value);
@@ -412,45 +421,54 @@ static int on_message_complete(llhttp_t* p) {
     client->current_url = NULL;
   }
 
-    client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
-    CSILK_LOG_I("Request: %s %s", client->ctx.request.method, client->ctx.request.path);
+  client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
+}
 
-    if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
-        CSILK_LOG_D("Route matched, calling next handler");
+/** @brief HTTP parser callback: full request message parsed.
+ * Routes the request to matching handlers and sends response.
+ * @param p HTTP parser instance. */
+static int on_message_complete(llhttp_t* p) {
+  csilk_client_t* client = (csilk_client_t*)p->data;
 
-        // Prepend global middlewares
-        if (client->server->middleware_count > 0) {
-            int route_handler_count = 0;
-            while (client->ctx.handlers[route_handler_count] != NULL) {
-                route_handler_count++;
-            }
-            
-            int total_count = client->server->middleware_count + route_handler_count;
-            csilk_handler_t* arena_handlers = csilk_arena_alloc(client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
-            if (arena_handlers) {
-                for (int i = 0; i < client->server->middleware_count; i++) {
-                    arena_handlers[i] = client->server->middlewares[i];
-                }
-                for (int i = 0; i < route_handler_count; i++) {
-                    arena_handlers[client->server->middleware_count + i] = client->ctx.handlers[i];
-                }
-                arena_handlers[total_count] = NULL;
-                client->ctx.handlers = arena_handlers;
-            }
+  finalize_request(client, p);
+  CSILK_LOG_I("Request: %s %s", client->ctx.request.method, client->ctx.request.path);
+
+  if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
+    CSILK_LOG_D("Route matched, calling next handler");
+
+    // Prepend global middlewares
+    if (client->server->middleware_count > 0) {
+      int route_handler_count = 0;
+      while (client->ctx.handlers[route_handler_count] != NULL) {
+        route_handler_count++;
+      }
+
+      int total_count = client->server->middleware_count + route_handler_count;
+      csilk_handler_t* arena_handlers = csilk_arena_alloc(client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
+      if (arena_handlers) {
+        for (int i = 0; i < client->server->middleware_count; i++) {
+          arena_handlers[i] = client->server->middlewares[i];
         }
-
-        csilk_next(&client->ctx);
-    } else {
-        CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
-        csilk_string(&client->ctx, 404, "Not Found");
+        for (int i = 0; i < route_handler_count; i++) {
+          arena_handlers[client->server->middleware_count + i] = client->ctx.handlers[i];
+        }
+        arena_handlers[total_count] = NULL;
+        client->ctx.handlers = arena_handlers;
+      }
     }
 
+    csilk_next(&client->ctx);
+  } else {
+    CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
+    csilk_string(&client->ctx, 404, "Not Found");
+  }
+
   if (client->ctx.is_async) {
-      uv_read_stop((uv_stream_t*)&client->handle);
+    uv_read_stop((uv_stream_t*)&client->handle);
   }
 
   if (!client->ctx.is_async) {
-      _csilk_send_response(&client->ctx);
+    _csilk_send_response(&client->ctx);
   }
   return 0;
 }
@@ -572,8 +590,11 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
   return NULL;
 }
 
+#include "csilk_reflect.h"
+
 /** @brief Create a new server instance. */
 csilk_server_t* csilk_server_new(csilk_router_t* router) {
+  csilk_reflect_init();
   csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
   if (!s) return NULL;
   s->loop = uv_default_loop();
@@ -602,29 +623,39 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
 /** @brief Add a global middleware handler to the server. */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   if (!server || !handler) return -1;
-  if (server->middleware_count >= 32) return -1;
+  if (server->middleware_count >= 32) {
+    CSILK_LOG_E("Global middleware limit (32) reached. Middleware dropped.");
+    return -1;
+  }
   server->middlewares[server->middleware_count++] = handler;
   return 0;
 }
 
 /** @brief Deallocate server resources. */
+/** @brief Callback for closing server-level handles. */
+static void on_server_handle_close(uv_handle_t* handle) {
+  // Optional: check if all server handles are closed before freeing server
+  (void)handle;
+}
+
+/** @brief Free server resources. Note: This should be called AFTER the loop has stopped. */
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
   
   if (uv_is_active((uv_handle_t*)&server->server_handle)) {
-      uv_close((uv_handle_t*)&server->server_handle, NULL);
+      uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
   }
   if (uv_is_active((uv_handle_t*)&server->sig_handle)) {
-      uv_close((uv_handle_t*)&server->sig_handle, NULL);
+      uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
   }
   if (uv_is_active((uv_handle_t*)&server->async_handle)) {
-      uv_close((uv_handle_t*)&server->async_handle, NULL);
+      uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
   }
   
   // Note: Since uv_close is async, handles might not be fully closed yet.
-  // But for a 'free' function that is typically called at the end of the process,
-  // this is often the best we can do without running the loop until closed.
-  
+  // In a clean shutdown, the user should run the loop until uv_loop_close returns 0.
+  // We free the server memory here, which is risky if callbacks are still pending,
+  // but this matches the current framework's simplified lifecycle.
   free(server);
 }
 

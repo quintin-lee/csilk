@@ -11,12 +11,13 @@
 #include <time.h>
 #include <unistd.h>
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Stateless CSRF protection middleware (cookie + header token comparison). */
 void csilk_csrf_middleware(csilk_ctx_t* c) {
-    if (c->request.method && (strcmp(c->request.method, "GET") == 0 || 
-                             strcmp(c->request.method, "HEAD") == 0 ||
-                             strcmp(c->request.method, "OPTIONS") == 0)) {
+    if (csilk_get_method(c) && (strcmp(csilk_get_method(c), "GET") == 0 || 
+                             strcmp(csilk_get_method(c), "HEAD") == 0 ||
+                             strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
         csilk_next(c);
         return;
     }

@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,8 @@ int main() {
     csilk_ctx_t c;
     memset(&c, 0, sizeof(c));
     c.arena = csilk_arena_new(4096);
-    c._internal_client = (void*)0x1; // Mock internal client
+    char mock_client_marker = 1;
+    c._internal_client = &mock_client_marker; // Mock internal client
     
     csilk_handler_t handlers[] = { csilk_gzip_middleware, mock_handler, NULL };
     c.handlers = handlers;

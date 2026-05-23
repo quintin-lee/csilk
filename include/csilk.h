@@ -74,32 +74,43 @@ typedef struct {
 /** @brief Opaque arena allocator type. */
 typedef struct csilk_arena_s csilk_arena_t;
 
-/** @brief Main Request Context.
- * Holds all information about the current HTTP request/response.
- */
-struct csilk_ctx_s {
-  int handler_index;        /**< Index of current handler in the chain. */
-  csilk_handler_t* handlers;  /**< NULL terminated array of handlers. */
-  int aborted;              /**< Flag if execution was aborted. */
-  jmp_buf jump_buffer;      /**< Buffer for recovery (panic handling). */
-  int has_jump_buffer;      /**< Flag if jump_buffer is active. */
-  csilk_arena_t* arena;       /**< Request-scoped arena allocator. */
-  csilk_request_t request;    /**< Request data. */
-  csilk_response_t response;  /**< Response data. */
-  csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters array. */
-  int params_count;         /**< Current number of path parameters. */
-  int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
-  int is_sse;               /**< Flag if connection is Server-Sent Events. */
-  void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode); /**< WebSocket message callback. */
-#define CSILK_MAX_STORAGE 16
-  struct { char* key; void* value; } storage[CSILK_MAX_STORAGE]; /**< Key-value storage. */
-  int storage_count;        /**< Number of items in storage. */
-  void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
-  uv_work_t work_req;       /**< Worker request for async operations. */
-  int is_async;             /**< Flag if the response will be sent asynchronously. */
-};
+/** @brief Main Request Context (Opaque). */
+typedef struct csilk_ctx_s csilk_ctx_t;
+
+/** @brief Handler function signature. */
+typedef void (*csilk_handler_t)(csilk_ctx_t* c);
+
+/** @brief Get the request HTTP method (e.g., "GET"). */
+const char* csilk_get_method(csilk_ctx_t* c);
+
+/** @brief Get the request URL path. */
+const char* csilk_get_path(csilk_ctx_t* c);
+
+/** @brief Get the request body and its length. 
+ * @param c The request context.
+ * @param out_len Optional pointer to store body length.
+ * @return Pointer to raw body data (NULL if no body). */
+const char* csilk_get_body(csilk_ctx_t* c, size_t* out_len);
+
+/** @brief Get the request body length. */
+size_t csilk_get_body_len(csilk_ctx_t* c);
+
+/** @brief Check if the connection has been upgraded to WebSocket. */
+int csilk_is_websocket(csilk_ctx_t* c);
+
+/** @brief Check if the connection is a Server-Sent Events stream. */
+int csilk_is_sse(csilk_ctx_t* c);
+
+/** @brief Check if the handler chain has been aborted. */
+int csilk_is_aborted(csilk_ctx_t* c);
+
+/** @brief Set the callback for incoming WebSocket messages. */
+void csilk_set_on_ws_message(csilk_ctx_t* c, void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
 
 /** @brief Store a value in the context.
+ * The key is duplicated and stored in the request arena.
+ * Note: The context does NOT take ownership of the value pointer; 
+ * the caller is responsible for the value's lifetime.
  * @param c The request context.
  * @param key Item key name.
  * @param value Pointer to data. */
