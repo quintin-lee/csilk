@@ -38,18 +38,16 @@ int gin_load_config(const char* yaml_path, gin_config_t* config) {
 
     char* current_key = NULL;
     char* current_section = NULL;
-    char* sub_section = NULL;
 
     // Default values
+    memset(config, 0, sizeof(gin_config_t));
     config->port = 8080;
     config->server.idle_timeout_ms = 5000;
     config->server.max_body_size = 1024 * 1024;
     config->server.listen_backlog = 128;
+    config->server.tcp_nodelay = 1;
     config->logger.level = GIN_LOG_INFO;
-    config->logger.file_path = NULL;
-    config->logger.max_file_size = 0;
     config->logger.use_colors = -1;
-    config->cors.enable = 0;
 
     int done = 0;
     while (!done) {
@@ -68,6 +66,8 @@ int gin_load_config(const char* yaml_path, gin_config_t* config) {
                         if (strcmp(current_key, "idle_timeout_ms") == 0) config->server.idle_timeout_ms = atoi(val);
                         else if (strcmp(current_key, "max_body_size") == 0) config->server.max_body_size = (size_t)atoll(val);
                         else if (strcmp(current_key, "listen_backlog") == 0) config->server.listen_backlog = atoi(val);
+                        else if (strcmp(current_key, "tcp_nodelay") == 0) config->server.tcp_nodelay = atoi(val);
+                        else if (strcmp(current_key, "tcp_keepalive") == 0) config->server.tcp_keepalive = atoi(val);
                     } else if (strcmp(current_section, "logger") == 0) {
                         if (strcmp(current_key, "level") == 0) config->logger.level = string_to_log_level(val);
                         else if (strcmp(current_key, "file_path") == 0) config->logger.file_path = strdup(val);
@@ -80,6 +80,13 @@ int gin_load_config(const char* yaml_path, gin_config_t* config) {
                         else if (strcmp(current_key, "allow_headers") == 0) config->cors.config.allow_headers = strdup(val);
                         else if (strcmp(current_key, "allow_credentials") == 0) config->cors.config.allow_credentials = atoi(val);
                         else if (strcmp(current_key, "max_age") == 0) config->cors.config.max_age = atoi(val);
+                    } else if (strcmp(current_section, "rate_limit") == 0) {
+                        if (strcmp(current_key, "enable") == 0) config->rate_limit.enable = atoi(val);
+                        else if (strcmp(current_key, "requests_per_minute") == 0) config->rate_limit.requests_per_minute = atoi(val);
+                    } else if (strcmp(current_section, "static_files") == 0) {
+                        if (strcmp(current_key, "enable") == 0) config->static_files.enable = atoi(val);
+                        else if (strcmp(current_key, "root_dir") == 0) config->static_files.root_dir = strdup(val);
+                        else if (strcmp(current_key, "prefix") == 0) config->static_files.prefix = strdup(val);
                     }
                     
                     free(current_key);

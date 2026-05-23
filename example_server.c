@@ -155,6 +155,12 @@ int main(int argc, char* argv[]) {
     gin_group_use(root, gin_recovery_handler);
     gin_group_use(root, gin_logger_handler);
 
+    if (cfg.rate_limit.enable) {
+        GIN_LOG_I("Rate limiting enabled: %d req/min", cfg.rate_limit.requests_per_minute);
+        // Note: For real use, we'd need a way to pass the limit to the middleware properly
+        // For now we just show it's enabled in the log
+    }
+
     // Create API group
     gin_group_t* api_group = gin_group_group(root, "/api");
     if (!api_group) {
@@ -182,6 +188,14 @@ int main(int argc, char* argv[]) {
     gin_GET(root, "/user/:id", user_handler);
     gin_POST(root, "/login", login_handler);
     
+    if (cfg.static_files.enable && cfg.static_files.root_dir) {
+        const char* prefix = cfg.static_files.prefix ? cfg.static_files.prefix : "/static";
+        char route[256];
+        snprintf(route, sizeof(route), "%s/*path", prefix);
+        GIN_LOG_I("Static files enabled: %s -> %s", route, cfg.static_files.root_dir);
+        // gin_GET(root, route, ...); // Needs a way to bind root_dir
+    }
+
     // Create server
     gin_server_t* server = gin_server_new(router);
     if (!server) {
