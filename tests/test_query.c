@@ -31,6 +31,7 @@ void test_split_url() {
 
 void test_parse_query() {
   csilk_ctx_t ctx = {0};
+  ctx.arena = csilk_arena_new(1024);
 
   csilk_parse_query(&ctx, "a=1&b=2&c=hello");
 
@@ -45,19 +46,25 @@ void test_parse_query() {
   assert(d == NULL);
 
   csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
   printf("test_parse_query passed\n");
 }
 
 void test_empty_query() {
   csilk_ctx_t ctx = {0};
+  ctx.arena = csilk_arena_new(1024);
+
   csilk_parse_query(&ctx, "");
-  assert(ctx.request.query_params == NULL);
+  // query_params is a struct, no longer NULLable. 
+  // We check if getting a key returns NULL.
+  assert(csilk_get_query(&ctx, "any") == NULL);
 
   csilk_parse_query(&ctx, "key_no_val");
   const char* val = csilk_get_query(&ctx, "key_no_val");
   assert(val != NULL && strcmp(val, "") == 0);
 
   csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
   printf("test_empty_query passed\n");
 }
 
@@ -70,10 +77,11 @@ void test_boundary_query() {
   assert(query == NULL);
 
   csilk_ctx_t ctx = {0};
+  ctx.arena = csilk_arena_new(1024);
   
   // NULL query string
   csilk_parse_query(&ctx, NULL);
-  assert(ctx.request.query_params == NULL);
+  assert(csilk_get_query(&ctx, "any") == NULL);
 
   // Consecutive ampersands
   csilk_parse_query(&ctx, "a=1&&b=2&");
@@ -86,6 +94,7 @@ void test_boundary_query() {
   assert(strcmp(csilk_get_query(&ctx, "d"), "") == 0);
 
   csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
   printf("test_boundary_query passed\n");
 }
 

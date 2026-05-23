@@ -4,6 +4,7 @@
  * @copyright MIT License
  */
 
+#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,62 @@
 #include <strings.h>
 
 #include "csilk.h"
+
+static uint32_t hash_key(const char* key) {
+  uint32_t hash = 5381;
+  int c;
+  while ((c = (unsigned char)*key++)) {
+    hash = ((hash << 5) + hash) + tolower(c);
+  }
+  return hash % CSILK_HEADER_BUCKETS;
+}
+
+static const char* map_get(csilk_header_map_t* map, const char* key) {
+  uint32_t bucket = hash_key(key);
+  csilk_header_t* h = map->buckets[bucket];
+  while (h) {
+    if (strcasecmp(h->key, key) == 0) {
+      return h->value;
+    }
+    h = h->next;
+  }
+  return NULL;
+}
+
+static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
+                    const char* value) {
+  if (!c->arena) return;
+  uint32_t bucket = hash_key(key);
+  csilk_header_t* h = map->buckets[bucket];
+  while (h) {
+    if (strcasecmp(h->key, key) == 0) {
+      h->value = csilk_arena_strdup(c->arena, value);
+      return;
+    }
+    h = h->next;
+  }
+
+  csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
+  if (new_h) {
+    new_h->key = csilk_arena_strdup(c->arena, key);
+    new_h->value = csilk_arena_strdup(c->arena, value);
+    new_h->next = map->buckets[bucket];
+    map->buckets[bucket] = new_h;
+  }
+}
+
+static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
+                    const char* value) {
+  if (!c->arena) return;
+  uint32_t bucket = hash_key(key);
+  csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
+  if (new_h) {
+    new_h->key = csilk_arena_strdup(c->arena, key);
+    new_h->value = csilk_arena_strdup(c->arena, value);
+    new_h->next = map->buckets[bucket];
+    map->buckets[bucket] = new_h;
+  }
+}
 
 void csilk_next(csilk_ctx_t* c) {
   if (c->aborted) return;
@@ -52,124 +109,25 @@ const char* csilk_get_param(csilk_ctx_t* c, const char* key) {
 }
 
 const char* csilk_get_header(csilk_ctx_t* c, const char* key) {
-  csilk_header_t* h = c->request.headers;
-  while (h) {
-    if (strcasecmp(h->key, key) == 0) {
-      return h->value;
-    }
-    h = h->next;
-  }
-  return NULL;
+  return map_get(&c->request.headers, key);
 }
 
 const char* csilk_get_query(csilk_ctx_t* c, const char* key) {
-  csilk_header_t* h = c->request.query_params;
-  while (h) {
-    if (strcmp(h->key, key) == 0) {
-      return h->value;
-    }
-    h = h->next;
-  }
-  return NULL;
+  return map_get(&c->request.query_params, key);
 }
 
-void csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value) {
-  csilk_header_t* h = c->request.headers;
-  csilk_header_t* prev = NULL;
-
-  while (h) {
-    if (strcasecmp(h->key, key) == 0) {
-      char* new_val = strdup(value);
-      if (!new_val) return;
-      free(h->value);
-      h->value = new_val;
-      return;
-    }
-    prev = h;
-    h = h->next;
-  }
-
-  csilk_header_t* new_h = malloc(sizeof(csilk_header_t));
-  if (!new_h) return;
-
-  new_h->key = strdup(key);
-  if (!new_h->key) {
-    free(new_h);
-    return;
-  }
-
-  new_h->value = strdup(value);
-  if (!new_h->value) {
-    free(new_h->key);
-    free(new_h);
-    return;
-  }
-
-  new_h->next = NULL;
-
-  if (prev) {
-    prev->next = new_h;
-  } else {
-    c->request.headers = new_h;
-  }
+void csilk_set_request_header(csilk_ctx_t* c, const char* key,
+                              const char* value) {
+  map_set(c, &c->request.headers, key, value);
 }
 
 void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value) {
-  csilk_header_t* h = c->response.headers;
-  csilk_header_t* prev = NULL;
-
-  while (h) {
-    if (strcasecmp(h->key, key) == 0) {
-      char* new_val = strdup(value);
-      if (!new_val) return;
-      free(h->value);
-      h->value = new_val;
-      return;
-    }
-    prev = h;
-    h = h->next;
-  }
-
-  csilk_header_t* new_h = malloc(sizeof(csilk_header_t));
-  if (!new_h) return;
-
-  new_h->key = strdup(key);
-  if (!new_h->key) {
-    free(new_h);
-    return;
-  }
-
-  new_h->value = strdup(value);
-  if (!new_h->value) {
-    free(new_h->key);
-    free(new_h);
-    return;
-  }
-
-  new_h->next = NULL;
-
-  if (prev) {
-    prev->next = new_h;
-  } else {
-    c->response.headers = new_h;
-  }
-}
-
-/** @brief Internal helper to free header list.
- * @param h The head of the header list. */
-static void free_headers(csilk_header_t* h) {
-  while (h) {
-    csilk_header_t* next = h->next;
-    free(h->key);
-    free(h->value);
-    free(h);
-    h = next;
-  }
+  map_set(c, &c->response.headers, key, value);
 }
 
 void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (!c) return;
-  
+
   if (c->arena) {
     csilk_arena_reset(c->arena);
   }
@@ -190,12 +148,9 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
     c->request.path = NULL;
   }
 
-  free_headers(c->request.headers);
-  c->request.headers = NULL;
-  free_headers(c->request.query_params);
-  c->request.query_params = NULL;
-  free_headers(c->response.headers);
-  c->response.headers = NULL;
+  memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
+  memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
+  memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
 
   if (c->response.body && c->response.body_is_managed) {
     free((void*)c->response.body);
@@ -203,34 +158,34 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   }
 
   for (int i = 0; i < c->storage_count; i++) {
-      free(c->storage[i].key);
+    free(c->storage[i].key);
   }
   c->storage_count = 0;
 }
 
 void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
-    if (!c || !key) return;
-    for (int i = 0; i < c->storage_count; i++) {
-        if (strcmp(c->storage[i].key, key) == 0) {
-            c->storage[i].value = value;
-            return;
-        }
+  if (!c || !key) return;
+  for (int i = 0; i < c->storage_count; i++) {
+    if (strcmp(c->storage[i].key, key) == 0) {
+      c->storage[i].value = value;
+      return;
     }
-    if (c->storage_count < CSILK_MAX_STORAGE) {
-        c->storage[c->storage_count].key = strdup(key);
-        c->storage[c->storage_count].value = value;
-        c->storage_count++;
-    }
+  }
+  if (c->storage_count < CSILK_MAX_STORAGE) {
+    c->storage[c->storage_count].key = strdup(key);
+    c->storage[c->storage_count].value = value;
+    c->storage_count++;
+  }
 }
 
 void* csilk_get(csilk_ctx_t* c, const char* key) {
-    if (!c || !key) return NULL;
-    for (int i = 0; i < c->storage_count; i++) {
-        if (strcmp(c->storage[i].key, key) == 0) {
-            return c->storage[i].value;
-        }
+  if (!c || !key) return NULL;
+  for (int i = 0; i < c->storage_count; i++) {
+    if (strcmp(c->storage[i].key, key) == 0) {
+      return c->storage[i].value;
     }
-    return NULL;
+  }
+  return NULL;
 }
 
 cJSON* csilk_bind_json(csilk_ctx_t* c) {
@@ -274,7 +229,8 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
     if (eq) {
       *eq = '\0';
       if (strcmp(cookie, name) == 0) {
-        // Found it! Use arena to store the result so it survives the function call
+        // Found it! Use arena to store the result so it survives the function
+        // call
         result = csilk_arena_strdup(c->arena, eq + 1);
         break;
       }
@@ -287,47 +243,18 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
 }
 
 void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value) {
-  csilk_header_t* h = c->response.headers;
-  csilk_header_t* prev = NULL;
-
-  while (h) {
-    prev = h;
-    h = h->next;
-  }
-
-  csilk_header_t* new_h = malloc(sizeof(csilk_header_t));
-  if (!new_h) return;
-
-  new_h->key = strdup(key);
-  if (!new_h->key) {
-    free(new_h);
-    return;
-  }
-
-  new_h->value = strdup(value);
-  if (!new_h->value) {
-    free(new_h->key);
-    free(new_h);
-    return;
-  }
-
-  new_h->next = NULL;
-
-  if (prev) {
-    prev->next = new_h;
-  } else {
-    c->response.headers = new_h;
-  }
+  map_add(c, &c->response.headers, key, value);
 }
 
 void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
-                    int max_age, const char* path, const char* domain,
-                    int secure, int http_only) {
+                      int max_age, const char* path, const char* domain,
+                      int secure, int http_only) {
+  if (!c->arena) return;
   size_t buf_size = strlen(name) + strlen(value) + 256; // 256 for attributes
   if (path) buf_size += strlen(path);
   if (domain) buf_size += strlen(domain);
 
-  char* buf = malloc(buf_size);
+  char* buf = csilk_arena_alloc(c->arena, buf_size);
   if (!buf) return;
 
   int pos = snprintf(buf, buf_size, "%s=%s", name, value);
@@ -357,7 +284,6 @@ void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
   }
 
   csilk_add_header(c, "Set-Cookie", buf);
-  free(buf);
 }
 
 void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
@@ -424,4 +350,36 @@ void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
     default:  body = "Redirect";          break;
   }
   csilk_string(c, status, body);
+}
+
+void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
+  if (!query_string || *query_string == '\0' || !c->arena) return;
+
+  char* qs = strdup(query_string);
+  if (!qs) return;
+
+  char* pos = qs;
+  while (pos && *pos) {
+    char* amp = strchr(pos, '&');
+    if (amp) *amp = '\0';
+
+    char* eq = strchr(pos, '=');
+    char* key = pos;
+    char* value = "";
+
+    if (eq) {
+      *eq = '\0';
+      value = eq + 1;
+    }
+
+    if (*key != '\0') {
+      map_add(c, &c->request.query_params, key, value);
+    }
+
+    if (amp)
+      pos = amp + 1;
+    else
+      pos = NULL;
+  }
+  free(qs);
 }

@@ -30,12 +30,20 @@ typedef struct csilk_ctx_s csilk_ctx_t;
 /** @brief Handler function pointer type. */
 typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
-/** @brief HTTP Header structure (linked list). */
+/** @brief HTTP Header structure (linked list node for hash table). */
 typedef struct csilk_header_s {
   char* key;                /**< Header field name. */
   char* value;              /**< Header field value. */
-  struct csilk_header_s* next; /**< Pointer to next header. */
+  struct csilk_header_s* next; /**< Pointer to next header in bucket. */
 } csilk_header_t;
+
+/** @brief Number of buckets in header hash table. */
+#define CSILK_HEADER_BUCKETS 16
+
+/** @brief Header hash table structure. */
+typedef struct csilk_header_map_s {
+  csilk_header_t* buckets[CSILK_HEADER_BUCKETS];
+} csilk_header_map_t;
 
 /** @brief HTTP Request structure. */
 typedef struct {
@@ -43,8 +51,8 @@ typedef struct {
   char* path;               /**< Decoded URL path. */
   char* body;               /**< Raw request body. */
   size_t body_len;          /**< Length of the request body. */
-  csilk_header_t* headers;    /**< Linked list of request headers. */
-  csilk_header_t* query_params; /**< Parsed query parameters. */
+  csilk_header_map_t headers;    /**< Hash map of request headers. */
+  csilk_header_map_t query_params; /**< Hash map of query parameters. */
 } csilk_request_t;
 
 /** @brief HTTP Response structure. */
@@ -52,7 +60,7 @@ typedef struct {
   int status;               /**< HTTP status code. */
   const char* body;         /**< Response body content. */
   size_t body_len;          /**< Length of the response body. */
-  csilk_header_t* headers;    /**< Linked list of response headers. */
+  csilk_header_map_t headers;    /**< Hash map of response headers. */
   int body_is_managed;      /**< Flag if body is managed by free(). */
 } csilk_response_t;
 
