@@ -356,6 +356,9 @@ int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr);
  * @param ptr Pointer to the struct. */
 void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr);
 
+#define csilk_bind(c, type, ptr) csilk_bind_reflect(c, #type, ptr)
+#define csilk_json_t(c, status, type, ptr) csilk_json_reflect(c, status, #type, ptr)
+
 /** @brief Get the client's IP address.
  * @param c The request context.
  * @return The IP address string, or NULL on error. */

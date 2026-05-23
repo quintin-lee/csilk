@@ -32,8 +32,7 @@ struct csilk_field_desc_s {
     size_t size;                        /**< Size of one element. */
     size_t array_length;                /**< 0 for scalar, >0 for array. */
     bool is_pointer;                    /**< True if char* or Struct*. */
-    const csilk_field_desc_t *nested;   /**< Metadata for nested structs. */
-    size_t nested_count;                /**< Number of fields in nested struct. */
+    const char *nested_type_name;       /**< Type name for nested structs (lazy lookup). */
 };
 
 /** @brief Type registration structure. */
@@ -55,20 +54,37 @@ char* csilk_json_marshal(const char *type_name, const void *ptr);
 /** @brief High-level: JSON string to Struct. */
 int csilk_json_unmarshal(const char *type_name, const char *json_str, void *ptr);
 
+/* --- Automatic Type Dispatch (C11 _Generic) --- */
+
+/** @brief User-extensible type map. Define this before including csilk_reflect.h to add types. */
+#ifndef CSILK_USER_TYPE_MAP
+#define CSILK_USER_TYPE_MAP
+#endif
+
+#define csilk_type_name(x) _Generic((x), \
+    char*: "string", \
+    const char*: "string" \
+    CSILK_USER_TYPE_MAP \
+    , default: "unknown" \
+)
+
+#define csilk_marshal(ptr) csilk_json_marshal(csilk_type_name(*(ptr)), ptr)
+#define csilk_unmarshal(json, ptr) csilk_json_unmarshal(csilk_type_name(*(ptr)), json, ptr)
+
 /* --- Macro Magic for Automatic Registration --- */
 
-#define CSILK_META_EXPAND(struct_type, field, type_enum, size, arr_len, is_ptr, nested, nested_count) \
-    { #field, type_enum, offsetof(struct_type, field), size, arr_len, is_ptr, (const csilk_field_desc_t*)nested, nested_count },
+#define CSILK_META_EXPAND(struct_type, field, type_enum, size, arr_len, is_ptr, nested_name) \
+    { #field, type_enum, offsetof(struct_type, field), size, arr_len, is_ptr, nested_name },
 
 /** @brief Automatically register a reflectable struct at startup. */
-#define CSILK_REGISTER_REFLECT(struct_type, name_str, map_macro) \
+#define CSILK_REGISTER_REFLECT(struct_type, map_macro) \
     static csilk_field_desc_t struct_type##_meta[] = { \
         map_macro(CSILK_META_EXPAND) \
-        {NULL, 0, 0, 0, 0, false, NULL, 0} \
+        {NULL, 0, 0, 0, 0, false, NULL} \
     }; \
     static void __attribute__((constructor)) auto_reg_##struct_type(void) { \
         size_t count = (sizeof(struct_type##_meta) / sizeof(csilk_field_desc_t)) - 1; \
-        csilk_reflect_register(name_str, struct_type##_meta, count); \
+        csilk_reflect_register(#struct_type, struct_type##_meta, count); \
     }
 
 #endif
