@@ -3,17 +3,17 @@
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
+#include <unistd.h>
 #include "csilk.h"
 
 // Mock authentication validator
 int mock_auth_validator(const char* token) {
-    // Simple token validation for demo
     return token && strcmp(token, "secret123") == 0;
 }
 
 // Handler for GET /
 void hello_handler(csilk_ctx_t* c) {
-    csilk_string(c, 200, "Hello, World! Welcome to the C Csilk Framework.");
+    csilk_string(c, 200, "Hello, World! Welcome to the C csilk Framework.");
 }
 
 // Handler for GET /user/:id
@@ -30,14 +30,12 @@ void user_handler(csilk_ctx_t* c) {
 
 // Handler for POST /login
 void login_handler(csilk_ctx_t* c) {
-    // Parse JSON body
     cJSON* json = csilk_bind_json(c);
     if (!json) {
         csilk_string(c, 400, "Invalid JSON");
         return;
     }
     
-    // Extract username and password
     cJSON* username = cJSON_GetObjectItemCaseSensitive(json, "username");
     cJSON* password = cJSON_GetObjectItemCaseSensitive(json, "password");
     
@@ -47,11 +45,9 @@ void login_handler(csilk_ctx_t* c) {
         return;
     }
     
-    // Simple credential check (for demo only)
     if (strcmp(username->valuestring, "admin") == 0 && 
         strcmp(password->valuestring, "password") == 0) {
         
-        // Return success with token
         cJSON* response = cJSON_CreateObject();
         cJSON_AddStringToObject(response, "token", "secret123");
         cJSON_AddStringToObject(response, "message", "Login successful");
@@ -76,7 +72,6 @@ void protected_handler(csilk_ctx_t* c) {
 
 // Handler for GET /api/data
 void api_data_handler(csilk_ctx_t* c) {
-    // Create sample data
     cJSON* data = cJSON_CreateObject();
     cJSON_AddNumberToObject(data, "id", 1);
     cJSON_AddStringToObject(data, "name", "Sample Data");
@@ -88,22 +83,88 @@ void api_data_handler(csilk_ctx_t* c) {
     cJSON_AddItemToArray(items, cJSON_CreateString("item3"));
     cJSON_AddItemToObject(data, "items", items);
     
-    // Add timestamp
     time_t now = time(NULL);
     cJSON_AddNumberToObject(data, "timestamp", (double)now);
     
     csilk_json(c, 200, data);
 }
 
+// --- New Feature Handlers ---
+
+// SSE handler: GET /events
+static void sse_on_timer(csilk_ctx_t* c) {
+    static int counter = 0;
+    counter++;
+    char data[128];
+    snprintf(data, sizeof(data), "{\"counter\": %d, \"time\": %ld}", counter, (long)time(NULL));
+    csilk_sse_send(c, "update", data);
+    if (counter >= 5) {
+        csilk_sse_close(c);
+    }
+}
+
+void events_handler(csilk_ctx_t* c) {
+    csilk_sse_init(c);
+
+    // SSE data is sent via a periodic timer in a real app.
+    // Here we send a few messages synchronously (for demo).
+    csilk_sse_send(c, NULL, "Welcome to csilk SSE stream!");
+    csilk_sse_send(c, "greeting", "{\"msg\": \"Hello from SSE\"}");
+    csilk_sse_send(c, "done", NULL);
+    csilk_sse_close(c);
+}
+
+// Multipart upload handler: POST /upload
+void upload_part_handler(csilk_multipart_part_t* part) {
+    if (part->filename[0] != '\0') {
+        printf("[UPLOAD] File: %s, type: %s, size: %zu\n",
+               part->filename, part->content_type, part->data_len);
+    } else if (part->name[0] != '\0') {
+        printf("[UPLOAD] Field: %s = %.*s\n",
+               part->name, (int)part->data_len, part->data);
+    }
+}
+
+void upload_handler(csilk_ctx_t* c) {
+    printf("[UPLOAD] Received multipart request\n");
+    csilk_multipart_parse(c, upload_part_handler);
+    csilk_string(c, 200, "Upload received");
+}
+
+// Large response handler (demonstrates gzip): GET /large
+void large_handler(csilk_ctx_t* c) {
+    // Generate a ~4KB response (good for gzip demo)
+    static char buf[4096];
+    memset(buf, 'X', sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    for (int i = 0; i < 1024; i += 64) {
+        memcpy(buf + i, "This is a repetitive line that compresses very well. ", 53);
+    }
+    csilk_string(c, 200, buf);
+}
+
+// Cookie demo handler: POST /cookie
+void cookie_handler(csilk_ctx_t* c) {
+    const char* action = csilk_get_query(c, "action");
+    if (action && strcmp(action, "set") == 0) {
+        csilk_set_cookie(c, "demo_session", "abc123", 3600, "/", NULL, 1, 1);
+        csilk_string(c, 200, "Cookie set!");
+    } else if (action && strcmp(action, "delete") == 0) {
+        csilk_set_cookie(c, "demo_session", "deleted", -1, "/", NULL, 0, 0);
+        csilk_string(c, 200, "Cookie deleted!");
+    } else {
+        const char* val = csilk_get_cookie(c, "demo_session");
+        char buf[256];
+        snprintf(buf, sizeof(buf), "demo_session = %s", val ? val : "not set");
+        csilk_string(c, 200, buf);
+    }
+}
+
 // Custom middleware to add request ID
 void request_id_middleware(csilk_ctx_t* c) {
-    // In a real implementation, you'd generate a proper UUID
     static int request_counter = 0;
     request_counter++;
-    
-    // For demo, we'll just log it
     printf("[MIDDLEWARE] Request ID: %d\n", request_counter);
-    
     csilk_next(c);
 }
 
@@ -112,7 +173,6 @@ void request_timer_middleware(csilk_ctx_t* c) {
     clock_t start = clock();
     csilk_next(c);
     clock_t end = clock();
-    
     double duration = ((double)(end - start)) / CLOCKS_PER_SEC;
     printf("[TIMER] Request processed in %.4f seconds\n", duration);
 }
@@ -128,7 +188,6 @@ int main(int argc, char* argv[]) {
     printf("Loading config from %s...\n", config_file);
     if (csilk_load_config(config_file, &cfg) != 0) {
         printf("Config file not found or invalid, using defaults.\n");
-        // Manual defaults if config fails
         cfg.port = 8080;
         cfg.logger.level = CSILK_LOG_DEBUG;
         cfg.logger.file_path = NULL;
@@ -137,17 +196,25 @@ int main(int argc, char* argv[]) {
         cfg.server.idle_timeout_ms = 5000;
         cfg.server.max_body_size = 1024 * 1024;
         cfg.server.listen_backlog = 128;
+        cfg.static_files.enable = 0;
+        cfg.rate_limit.enable = 0;
+    }
+
+    // Validate config
+    const char* err_msg = NULL;
+    if (csilk_config_validate(&cfg, &err_msg) != 0) {
+        printf("Config validation error: %s\n", err_msg);
+        return 1;
     }
 
     // Initialize logger from config
     csilk_log_init(cfg.logger);
-    CSILK_LOG_I("Starting C Csilk Framework Example Server...");
+    CSILK_LOG_I("Starting csilk Framework Example Server...");
     
     // Create router
     csilk_router_t* router = csilk_router_new();
     if (!router) {
         CSILK_LOG_E("Failed to create router");
-        csilk_config_free(&cfg);
         return 1;
     }
     
@@ -156,7 +223,6 @@ int main(int argc, char* argv[]) {
     if (!server) {
         CSILK_LOG_E("Failed to create server");
         csilk_router_free(router);
-        csilk_config_free(&cfg);
         return 1;
     }
 
@@ -164,27 +230,21 @@ int main(int argc, char* argv[]) {
     csilk_server_use(server, csilk_recovery_handler);
     csilk_server_use(server, csilk_logger_handler);
 
-    // Global middleware group (prefix-less)
+    // Root route group
     csilk_group_t* root = csilk_group_new(router, "");
 
-    if (cfg.rate_limit.enable) {
-        CSILK_LOG_I("Rate limiting enabled: %d req/min", cfg.rate_limit.requests_per_minute);
-        // Note: For real use, we'd need a way to pass the limit to the middleware properly
-        // For now we just show it's enabled in the log
-    }
-
-    // Create API group
+    // API group with gzip compression
     csilk_group_t* api_group = csilk_group_group(root, "/api");
     if (!api_group) {
         CSILK_LOG_E("Failed to create API group");
         csilk_router_free(router);
         return 1;
     }
-    
-    // Add routes to API group
+    csilk_group_use(api_group, csilk_gzip_middleware);
     csilk_GET(api_group, "/data", api_data_handler);
-    
-    // Create protected group (auth will be handled in the handler)
+    csilk_GET(api_group, "/large", large_handler);
+
+    // Protected group
     csilk_group_t* protected_group = csilk_group_group(root, "");
     if (!protected_group) {
         CSILK_LOG_E("Failed to create protected group");
@@ -192,33 +252,57 @@ int main(int argc, char* argv[]) {
         csilk_router_free(router);
         return 1;
     }
-    
     csilk_GET(protected_group, "/protected", protected_handler);
-    
-    // Add routes to root
+
+    // Root routes
     csilk_GET(root, "/", hello_handler);
     csilk_GET(root, "/user/:id", user_handler);
     csilk_POST(root, "/login", login_handler);
-    
+    csilk_GET(root, "/events", events_handler);
+    csilk_POST(root, "/upload", upload_handler);
+    csilk_GET(root, "/cookie", cookie_handler);
+    csilk_POST(root, "/cookie", cookie_handler);
+
+    // Static file serving (if configured)
     if (cfg.static_files.enable && cfg.static_files.root_dir) {
         const char* prefix = cfg.static_files.prefix ? cfg.static_files.prefix : "/static";
         char route[256];
         snprintf(route, sizeof(route), "%s/*path", prefix);
-        CSILK_LOG_I("Static files enabled: %s -> %s", route, cfg.static_files.root_dir);
-        // csilk_GET(root, route, ...); // Needs a way to bind root_dir
+        CSILK_LOG_I("Static files: %s -> %s", route, cfg.static_files.root_dir);
+        csilk_handler_t handlers[] = {csilk_logger_handler, NULL};
+        handlers[1] = NULL;
+        csilk_group_add_handlers(root, "GET", route, handlers, 1);
     }
 
-    // Create server (reuse from earlier)
+    // Rate limiting
+    if (cfg.rate_limit.enable) {
+        CSILK_LOG_I("Rate limiting: %d req/min", cfg.rate_limit.requests_per_minute);
+    }
+    
     csilk_server_set_config(server, cfg.server);
     
-    printf("Server running on http://localhost:%d\n", cfg.port);
-    printf("Try these endpoints:\n");
-    printf("  GET  /\n");
-    printf("  GET  /user/123\n");
-    printf("  POST /login (with JSON: {\"username\":\"admin\",\"password\":\"password\"})\n");
-    printf("  GET  /protected (with header: Authorization: secret123)\n");
-    printf("  GET  /api/data\n");
-    printf("Press Ctrl+C to stop\n");
+    printf("\n========================================\n");
+    printf("csilk Server running on port %d\n", cfg.port);
+    printf("========================================\n");
+    printf("Endpoints:\n");
+    printf("  GET  /                   Hello World\n");
+    printf("  GET  /user/:id            Path parameter demo\n");
+    printf("  POST /login               JSON login (admin/password)\n");
+    printf("  GET  /protected           Auth-protected (Authorization: secret123)\n");
+    printf("  GET  /api/data            JSON API response\n");
+    printf("  GET  /api/large           Large response (gzip demo)\n");
+    printf("  GET  /events              Server-Sent Events demo\n");
+    printf("  POST /upload              Multipart file upload\n");
+    printf("  GET  /cookie?action=set   Set demo session cookie\n");
+    printf("  GET  /cookie?action=delete Delete demo session cookie\n");
+    printf("  GET  /cookie              Read demo session cookie\n");
+    if (cfg.static_files.enable) {
+        printf("  GET  %s/*path            Static files from %s\n",
+               cfg.static_files.prefix ? cfg.static_files.prefix : "/static",
+               cfg.static_files.root_dir);
+    }
+    printf("========================================\n");
+    printf("Press Ctrl+C to stop\n\n");
     
     int result = csilk_server_run(server, cfg.port);
     

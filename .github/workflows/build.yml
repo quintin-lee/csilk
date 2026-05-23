@@ -35,4 +35,3 @@ jobs:
 
       - name: Run integration tests
         run: ctest --test-dir build -R test_integration --output-on-failure
-        continue-on-error: true
