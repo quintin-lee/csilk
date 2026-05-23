@@ -10,28 +10,44 @@ int main() {
         "server:\n"
         "  idle_timeout_ms: 10000\n"
         "  max_body_size: 2048\n"
+        "  tcp_nodelay: 0\n"
+        "  tcp_keepalive: 60\n"
         "logger:\n"
         "  level: DEBUG\n"
         "  file_path: test_cfg.log\n"
         "cors:\n"
         "  enable: 1\n"
-        "  allow_origin: '*'\n";
+        "  allow_origin: '*'\n"
+        "rate_limit:\n"
+        "  enable: 1\n"
+        "  requests_per_minute: 50\n"
+        "static_files:\n"
+        "  enable: 1\n"
+        "  root_dir: ./public\n"
+        "  prefix: /static\n";
 
-    FILE* f = fopen("test_config.yaml", "w");
+    FILE* f = fopen("test_config_ext.yaml", "w");
     fputs(yaml_content, f);
     fclose(f);
 
     gin_config_t cfg;
-    printf("Testing YAML config loading...\n");
-    assert(gin_load_config("test_config.yaml", &cfg) == 0);
+    printf("Testing Extended YAML config loading...\n");
+    assert(gin_load_config("test_config_ext.yaml", &cfg) == 0);
 
     assert(cfg.port == 9090);
     assert(cfg.server.idle_timeout_ms == 10000);
     assert(cfg.server.max_body_size == 2048);
+    assert(cfg.server.tcp_nodelay == 0);
+    assert(cfg.server.tcp_keepalive == 60);
     assert(cfg.logger.level == GIN_LOG_DEBUG);
     assert(strcmp(cfg.logger.file_path, "test_cfg.log") == 0);
     assert(cfg.cors.enable == 1);
     assert(strcmp(cfg.cors.config.allow_origin, "*") == 0);
+    assert(cfg.rate_limit.enable == 1);
+    assert(cfg.rate_limit.requests_per_minute == 50);
+    assert(cfg.static_files.enable == 1);
+    assert(strcmp(cfg.static_files.root_dir, "./public") == 0);
+    assert(strcmp(cfg.static_files.prefix, "/static") == 0);
 
     // Default value check
     assert(cfg.server.listen_backlog == 128);
@@ -39,8 +55,10 @@ int main() {
     // Cleanup
     free((void*)cfg.logger.file_path);
     free((void*)cfg.cors.config.allow_origin);
-    remove("test_config.yaml");
+    free(cfg.static_files.root_dir);
+    free(cfg.static_files.prefix);
+    remove("test_config_ext.yaml");
 
-    printf("test_config: PASS\n");
+    printf("test_config_ext: PASS\n");
     return 0;
 }

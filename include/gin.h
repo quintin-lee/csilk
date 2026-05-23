@@ -237,6 +237,8 @@ typedef struct gin_server_config_s {
   unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms). */
   size_t max_body_size;            /**< Maximum request body size. */
   int listen_backlog;              /**< TCP listen backlog. */
+  int tcp_nodelay;                 /**< Enable TCP_NODELAY. */
+  int tcp_keepalive;               /**< Enable TCP keep-alive (seconds, 0 to disable). */
 } gin_server_config_t;
 
 /** @brief Global Configuration structure. */
@@ -248,6 +250,15 @@ typedef struct {
       int enable;               /**< Enable CORS. */
       gin_cors_config_t config; /**< CORS config. */
   } cors;
+  struct {
+      int enable;               /**< Enable rate limiting. */
+      int requests_per_minute;  /**< Limit per IP. */
+  } rate_limit;
+  struct {
+      int enable;               /**< Enable static file serving. */
+      char* root_dir;           /**< Local directory path. */
+      char* prefix;             /**< URL prefix (e.g., "/static"). */
+  } static_files;
 } gin_config_t;
 
 /** @brief Load configuration from a YAML file.

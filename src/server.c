@@ -491,6 +491,14 @@ int gin_server_run(gin_server_t* server, int port) {
   if (r < 0) return -1;
   server->server_handle.data = server;
 
+  // Apply TCP settings
+  if (server->config.tcp_nodelay) {
+      uv_tcp_nodelay(&server->server_handle, 1);
+  }
+  if (server->config.tcp_keepalive > 0) {
+      uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
+  }
+
   struct sockaddr_in addr;
   uv_ip4_addr("0.0.0.0", port, &addr);
 
