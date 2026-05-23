@@ -36,5 +36,11 @@
 - [x] 5.3 优化时间戳生成效率与格式化定制
 - [ ] 5.4 增加 JSON 结构化日志输出支持 (可选)
 
+### 阶段六：YAML 配置文件支持 (YAML Config Support) [已完成]
+- [x] 6.1 集成 libyaml 依赖与 CMake 配置
+- [x] 6.2 定义统一配置结构体 \`gin_config_t\` 与 API
+- [x] 6.3 实现基于事件流的 YAML 解析引擎 (\`src/config.c\`)
+- [x] 6.4 更新示例工程支持 \`config.yaml\` 加载
+
 ## 遇到的错误
 *(暂无)*
