@@ -1,0 +1,9 @@
+port: 8080
+server:
+  worker_threads: 4
+  listen_backlog: 128
+logger:
+  level: INFO
+middleware:
+  enable_logger: 1
+  enable_recovery: 1
