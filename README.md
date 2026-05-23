@@ -89,7 +89,9 @@ make format  # Requires clang-format
 
 API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk.h`, `include/csilk_internal.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` and `src/middleware/` also carry complete Doxygen documentation.
 
-To generate HTML documentation:
+Online documentation is available at: **[https://quintin-lee.github.io/csilk/](https://quintin-lee.github.io/csilk/)**
+
+To generate HTML documentation locally:
 
 ```bash
 cd build && cmake .. && make docs     # Or: doxygen Doxyfile
