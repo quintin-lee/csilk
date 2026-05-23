@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void test_arena_new_free() {
   printf("Testing csilk_arena_new and csilk_arena_free...\n");
@@ -113,7 +113,7 @@ void test_arena_reset() {
   void* p1 = csilk_arena_alloc(arena, 100);
   csilk_arena_reset(arena);
   void* p2 = csilk_arena_alloc(arena, 100);
-  assert(p1 == p2); // Should reuse the same memory
+  assert(p1 == p2);  // Should reuse the same memory
   csilk_arena_free(arena);
   printf("csilk_arena_reset passed!\n");
 }

@@ -1,8 +1,8 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void test_server_init() {
   printf("Testing server initialization...\n");

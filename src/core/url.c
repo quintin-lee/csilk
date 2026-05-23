@@ -4,9 +4,10 @@
  * @copyright MIT License
  */
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+
 #include "csilk.h"
 #include "csilk_internal.h"
 

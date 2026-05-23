@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 int middleware1_called = 0;
 int middleware2_called = 0;

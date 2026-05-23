@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void handler_ping(csilk_ctx_t* c) { (void)c; }
 void handler_user(csilk_ctx_t* c) { (void)c; }
@@ -80,14 +80,14 @@ int main() {
     int matched;
     matched = csilk_router_match_ctx(NULL, NULL);
     assert(!matched);
-    
+
     csilk_ctx_t ctx = {0};
     matched = csilk_router_match_ctx(r, &ctx);
-    assert(!matched); // missing method and path
-    
+    assert(!matched);  // missing method and path
+
     ctx.request.method = "GET";
     matched = csilk_router_match_ctx(r, &ctx);
-    assert(!matched); // missing path
+    assert(!matched);  // missing path
   }
 
   csilk_router_free(r);

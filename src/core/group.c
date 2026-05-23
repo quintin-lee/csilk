@@ -12,11 +12,11 @@
 
 /** @brief Route group structure. */
 struct csilk_group_s {
-  char* prefix;                  /**< URL prefix for this group. */
-  csilk_router_t* router;          /**< Associated router instance. */
-  csilk_handler_t* middlewares;    /**< Middleware handlers array. */
-  size_t middleware_count;       /**< Number of middleware handlers. */
-  csilk_group_t* parent;           /**< Parent group (NULL for root). */
+  char* prefix;                 /**< URL prefix for this group. */
+  csilk_router_t* router;       /**< Associated router instance. */
+  csilk_handler_t* middlewares; /**< Middleware handlers array. */
+  size_t middleware_count;      /**< Number of middleware handlers. */
+  csilk_group_t* parent;        /**< Parent group (NULL for root). */
 };
 
 /** @brief Internal helper to join URL paths.
@@ -113,8 +113,9 @@ static int gather_handlers(csilk_group_t* group, csilk_handler_t** handlers,
   }
 
   if (group->middleware_count > 0) {
-    csilk_handler_t* new_handlers = realloc(
-        *handlers, (*count + group->middleware_count) * sizeof(csilk_handler_t));
+    csilk_handler_t* new_handlers =
+        realloc(*handlers,
+                (*count + group->middleware_count) * sizeof(csilk_handler_t));
     if (!new_handlers) {
       return -1;
     }
@@ -128,15 +129,16 @@ static int gather_handlers(csilk_group_t* group, csilk_handler_t** handlers,
 
 /** @brief Add a route with a single handler to the group. */
 void csilk_group_add_route(csilk_group_t* group, const char* method,
-                         const char* path, csilk_handler_t handler) {
-    csilk_handler_t handlers[] = {handler};
-    csilk_group_add_handlers(group, method, path, handlers, 1);
+                           const char* path, csilk_handler_t handler) {
+  csilk_handler_t handlers[] = {handler};
+  csilk_group_add_handlers(group, method, path, handlers, 1);
 }
 
-/** @brief Add a route with multiple handlers (middleware chain) to the group. */
+/** @brief Add a route with multiple handlers (middleware chain) to the group.
+ */
 void csilk_group_add_handlers(csilk_group_t* group, const char* method,
-                            const char* path, csilk_handler_t* handlers,
-                            size_t count) {
+                              const char* path, csilk_handler_t* handlers,
+                              size_t count) {
   if (!group || !handlers || count == 0) return;
 
   char* full_path = join_path(group->prefix, path);
@@ -151,18 +153,20 @@ void csilk_group_add_handlers(csilk_group_t* group, const char* method,
     return;
   }
 
-  csilk_handler_t* new_handlers =
-      realloc(combined_handlers, (combined_count + count) * sizeof(csilk_handler_t));
+  csilk_handler_t* new_handlers = realloc(
+      combined_handlers, (combined_count + count) * sizeof(csilk_handler_t));
   if (!new_handlers) {
     free(full_path);
     free(combined_handlers);
     return;
   }
   combined_handlers = new_handlers;
-  memcpy(combined_handlers + combined_count, handlers, count * sizeof(csilk_handler_t));
+  memcpy(combined_handlers + combined_count, handlers,
+         count * sizeof(csilk_handler_t));
   combined_count += count;
 
-  csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
+  csilk_router_add(group->router, method, full_path, combined_handlers,
+                   combined_count);
 
   free(full_path);
   free(combined_handlers);

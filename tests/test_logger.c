@@ -1,12 +1,12 @@
-#include "csilk_internal.h"
 #include <assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 // Mock handler
 void dummy_handler(csilk_ctx_t* c) { c->response.status = CSILK_STATUS_OK; }
@@ -15,22 +15,21 @@ void dummy_handler(csilk_ctx_t* c) { c->response.status = CSILK_STATUS_OK; }
 #define LOGS_PER_THREAD 10
 
 void* thread_func(void* arg) {
-    int id = *(int*)arg;
-    for (int i = 0; i < LOGS_PER_THREAD; i++) {
-        CSILK_LOG_I("Thread %d: log message %d", id, i);
-        usleep(1000); // 1ms
-    }
-    return NULL;
+  int id = *(int*)arg;
+  for (int i = 0; i < LOGS_PER_THREAD; i++) {
+    CSILK_LOG_I("Thread %d: log message %d", id, i);
+    usleep(1000);  // 1ms
+  }
+  return NULL;
 }
 
 int main() {
   printf("Initializing logger...\n");
   csilk_log_config_t cfg = {
-      .level = CSILK_LOG_TRACE, // Set to TRACE to see all
+      .level = CSILK_LOG_TRACE,  // Set to TRACE to see all
       .file_path = NULL,
       .max_file_size = 0,
-      .use_colors = -1
-  };
+      .use_colors = -1};
   assert(csilk_log_init(cfg) == 0);
 
   // 1. Test all levels
@@ -48,7 +47,7 @@ int main() {
   c.request.path = "/test";
   csilk_handler_t handlers[] = {csilk_logger_handler, dummy_handler, NULL};
   c.handlers = handlers;
-  c.handler_index = -1; // csilk_next increments this
+  c.handler_index = -1;  // csilk_next increments this
 
   printf("Testing middleware logging...\n");
   csilk_next(&c);
@@ -60,36 +59,35 @@ int main() {
   int thread_ids[NUM_THREADS];
 
   for (int i = 0; i < NUM_THREADS; i++) {
-      thread_ids[i] = i;
-      pthread_create(&threads[i], NULL, thread_func, &thread_ids[i]);
+    thread_ids[i] = i;
+    pthread_create(&threads[i], NULL, thread_func, &thread_ids[i]);
   }
 
   for (int i = 0; i < NUM_THREADS; i++) {
-      pthread_join(threads[i], NULL);
+    pthread_join(threads[i], NULL);
   }
 
   // 3. Test logging to file & rotation
   printf("Testing file logging & rotation...\n");
-  csilk_log_close(); 
+  csilk_log_close();
   const char* log_file = "test.log";
-  
+
   csilk_log_config_t rot_cfg = {
       .level = CSILK_LOG_INFO,
       .file_path = log_file,
-      .max_file_size = 100, // Very small for rotation test
-      .use_colors = 0
-  };
+      .max_file_size = 100,  // Very small for rotation test
+      .use_colors = 0};
   assert(csilk_log_init(rot_cfg) == 0);
-  
+
   CSILK_LOG_I("Message 1: This is a test message to trigger rotation.");
   CSILK_LOG_I("Message 2: This should be in a rotated file if size exceeded.");
-  
+
   csilk_log_close();
 
   // Verify file existence
   struct stat st;
   assert(stat(log_file, &st) == 0);
-  assert(stat("test.log.1", &st) == 0); // Rotation should have happened
+  assert(stat("test.log.1", &st) == 0);  // Rotation should have happened
 
   remove(log_file);
   remove("test.log.1");

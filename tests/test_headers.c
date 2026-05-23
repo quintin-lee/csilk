@@ -1,10 +1,10 @@
-#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 void test_get_header() {
   printf("Testing csilk_get_header...\n");
@@ -36,21 +36,25 @@ void test_set_header() {
   c.arena = csilk_arena_new(1024);
 
   csilk_set_header(&c, "Server", "Csilk/0.1.0");
-  const char* val = csilk_get_header(&c, "Server"); // Note: get_header works on request.headers in current API? 
+  const char* val = csilk_get_header(
+      &c,
+      "Server");  // Note: get_header works on request.headers in current API?
   // Wait, let's check csilk_get_header implementation.
-  // It uses map_get(&c->request.headers, key). 
-  // We should have a way to get response headers too, but public API usually only provides get_header for request.
-  
-  // For testing purposes, let's look at the map directly or just use internal knowledge.
-  // In context.c, map_get is static. 
-  // I should probably add a way to verify response headers in tests.
-  
+  // It uses map_get(&c->request.headers, key).
+  // We should have a way to get response headers too, but public API usually
+  // only provides get_header for request.
+
+  // For testing purposes, let's look at the map directly or just use internal
+  // knowledge. In context.c, map_get is static. I should probably add a way to
+  // verify response headers in tests.
+
   // Actually, for this test, I'll just check if it was set in the response map.
   int found = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     csilk_header_t* h = c.response.headers.buckets[i];
     while (h) {
-      if (strcasecmp(h->key, "Server") == 0 && strcmp(h->value, "Csilk/0.1.0") == 0) {
+      if (strcasecmp(h->key, "Server") == 0 &&
+          strcmp(h->value, "Csilk/0.1.0") == 0) {
         found = 1;
         break;
       }
@@ -65,7 +69,8 @@ void test_set_header() {
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     csilk_header_t* h = c.response.headers.buckets[i];
     while (h) {
-      if (strcasecmp(h->key, "Server") == 0 && strcmp(h->value, "Csilk/1.0.0") == 0) {
+      if (strcasecmp(h->key, "Server") == 0 &&
+          strcmp(h->value, "Csilk/1.0.0") == 0) {
         found = 1;
         break;
       }
@@ -94,7 +99,8 @@ void test_add_header() {
     csilk_header_t* h = c.response.headers.buckets[i];
     while (h) {
       if (strcasecmp(h->key, "Set-Cookie") == 0) cookie_count++;
-      if (strcasecmp(h->key, "X-Custom") == 0 && strcmp(h->value, "value") == 0) custom_found = 1;
+      if (strcasecmp(h->key, "X-Custom") == 0 && strcmp(h->value, "value") == 0)
+        custom_found = 1;
       h = h->next;
     }
   }

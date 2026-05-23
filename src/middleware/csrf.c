@@ -4,67 +4,69 @@
  * @copyright MIT License
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Stateless CSRF protection middleware (cookie + header token comparison). */
+/** @brief Stateless CSRF protection middleware (cookie + header token
+ * comparison). */
 void csilk_csrf_middleware(csilk_ctx_t* c) {
-    if (csilk_get_method(c) && (strcmp(csilk_get_method(c), "GET") == 0 || 
-                             strcmp(csilk_get_method(c), "HEAD") == 0 ||
-                             strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
-        csilk_next(c);
-        return;
-    }
+  if (csilk_get_method(c) && (strcmp(csilk_get_method(c), "GET") == 0 ||
+                              strcmp(csilk_get_method(c), "HEAD") == 0 ||
+                              strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
+    csilk_next(c);
+    return;
+  }
 
-    const char* token = csilk_get_header(c, "X-CSRF-Token");
-    if (!token) {
-        csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: CSRF token missing");
-        csilk_abort(c);
-        return;
-    }
+  const char* token = csilk_get_header(c, "X-CSRF-Token");
+  if (!token) {
+    csilk_json_error(c, CSILK_STATUS_FORBIDDEN,
+                     "Forbidden: CSRF token missing");
+    csilk_abort(c);
+    return;
+  }
 
-    // Fix: Use csilk_get_cookie for exact matching instead of strstr
-    const char* cookie_token = csilk_get_cookie(c, "csrf_token");
-    if (cookie_token && strcmp(cookie_token, token) == 0) {
-        csilk_next(c);
-    } else {
-        csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: Invalid CSRF token");
-        csilk_abort(c);
-    }
+  // Fix: Use csilk_get_cookie for exact matching instead of strstr
+  const char* cookie_token = csilk_get_cookie(c, "csrf_token");
+  if (cookie_token && strcmp(cookie_token, token) == 0) {
+    csilk_next(c);
+  } else {
+    csilk_json_error(c, CSILK_STATUS_FORBIDDEN,
+                     "Forbidden: Invalid CSRF token");
+    csilk_abort(c);
+  }
 }
 
 /** @brief Generate a cryptographically random CSRF token. */
 int csilk_csrf_generate_token(char* buf, size_t buf_size) {
-    if (!buf || buf_size < 33) return -1;
+  if (!buf || buf_size < 33) return -1;
 
-    /* use /dev/urandom for cryptographically random bytes */
-    FILE* fp = fopen("/dev/urandom", "rb");
-    if (!fp) {
-        /* fallback: use time+pid as weak entropy (better than nothing) */
-        unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid();
-        snprintf(buf, buf_size, "%08x%08x%08x%08x",
-                 rand_r(&seed), rand_r(&seed),
-                 rand_r(&seed), rand_r(&seed));
-    } else {
-        uint8_t random[16];
-        if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
-            fclose(fp);
-            return -1;
-        }
-        fclose(fp);
-        snprintf(buf, buf_size,
-                 "%02x%02x%02x%02x%02x%02x%02x%02x"
-                 "%02x%02x%02x%02x%02x%02x%02x%02x",
-                 random[0], random[1], random[2], random[3],
-                 random[4], random[5], random[6], random[7],
-                 random[8], random[9], random[10], random[11],
-                 random[12], random[13], random[14], random[15]);
+  /* use /dev/urandom for cryptographically random bytes */
+  FILE* fp = fopen("/dev/urandom", "rb");
+  if (!fp) {
+    /* fallback: use time+pid as weak entropy (better than nothing) */
+    unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid();
+    snprintf(buf, buf_size, "%08x%08x%08x%08x", rand_r(&seed), rand_r(&seed),
+             rand_r(&seed), rand_r(&seed));
+  } else {
+    uint8_t random[16];
+    if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
+      fclose(fp);
+      return -1;
     }
-    return 0;
+    fclose(fp);
+    snprintf(buf, buf_size,
+             "%02x%02x%02x%02x%02x%02x%02x%02x"
+             "%02x%02x%02x%02x%02x%02x%02x%02x",
+             random[0], random[1], random[2], random[3], random[4], random[5],
+             random[6], random[7], random[8], random[9], random[10], random[11],
+             random[12], random[13], random[14], random[15]);
+  }
+  return 0;
 }

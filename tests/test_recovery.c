@@ -1,8 +1,8 @@
-#include "csilk_internal.h"
 #include <setjmp.h>
 #include <stdio.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 // Define a test that triggers a panic
 void panic_handler(csilk_ctx_t* c) { csilk_panic(c); }
@@ -15,7 +15,7 @@ int main() {
   c.aborted = 0;
   c.handler_index = -1;
   csilk_handler_t handlers[] = {csilk_recovery_handler, panic_handler,
-                              normal_handler, NULL};
+                                normal_handler, NULL};
   c.handlers = handlers;
 
   printf("Testing recovery...\n");

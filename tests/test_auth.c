@@ -1,9 +1,9 @@
-#include "csilk_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 // Define auth failure helper (based on typical csilk behavior)
 void csilk_abort_with_status(csilk_ctx_t* c, int status) {
