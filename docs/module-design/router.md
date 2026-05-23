@@ -62,7 +62,7 @@ sequenceDiagram
         Root->>Root: Search children for STATIC "api"
         alt Not found
             Root->>Node: node_new("api", STATIC)
-            Root->>Root: children[--] = new_node
+            Root->>Root: children[idx] = new_node
         end
         Router->>Node: find_or_create("v1", STATIC)
         Node->>Node: Search children for STATIC "v1"
@@ -88,7 +88,7 @@ sequenceDiagram
     participant C as csilk_ctx_t
     participant R as match_node()
     participant N as Router Node
-    participant P as Path: /users/42/profile
+    participant P as "Path: /users/42/profile"
 
     C->>R: match_node(root, "GET", "/users/42/profile", ctx)
 

@@ -66,7 +66,7 @@ stateDiagram-v2
         [*] --> handler1: Handler 1 (e.g. Recovery)
         handler1 --> handler2: csilk_next()
         handler2 --> handler3: csilk_next()
-        handler3 --> handlerN: tsilk_next()
+        handler3 --> handlerN: csilk_next()
         handlerN --> [*]
         --
         [*] --> Panic: longjmp (csilk_panic)
