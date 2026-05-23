@@ -49,6 +49,7 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
     config->server.max_body_size = 1024 * 1024;
     config->server.listen_backlog = 128;
     config->server.tcp_nodelay = 1;
+    config->server.worker_threads = 1;
     config->logger.level = CSILK_LOG_INFO;
     config->logger.use_colors = -1;
 
@@ -74,6 +75,7 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
                         else if (strcmp(current_key, "listen_backlog") == 0) config->server.listen_backlog = atoi(val);
                         else if (strcmp(current_key, "tcp_nodelay") == 0) config->server.tcp_nodelay = atoi(val);
                         else if (strcmp(current_key, "tcp_keepalive") == 0) config->server.tcp_keepalive = atoi(val);
+                        else if (strcmp(current_key, "worker_threads") == 0) config->server.worker_threads = atoi(val);
                     } else if (strcmp(current_section, "logger") == 0) {
                         if (strcmp(current_key, "level") == 0) config->logger.level = string_to_log_level(val);
                         else if (strcmp(current_key, "file_path") == 0) {
@@ -217,6 +219,10 @@ int csilk_config_validate(const csilk_config_t* config, const char** error_msg) 
     }
     if (config->server.listen_backlog < 1) {
         if (error_msg) *error_msg = "listen_backlog must be >= 1";
+        return -1;
+    }
+    if (config->server.worker_threads < 1) {
+        if (error_msg) *error_msg = "worker_threads must be >= 1";
         return -1;
     }
     if (config->rate_limit.enable && config->rate_limit.requests_per_minute < 1) {

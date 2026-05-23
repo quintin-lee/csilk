@@ -441,7 +441,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
       server->active_connections >= server->max_connections) {
     /* accept and immediately close to drain the backlog */
     uv_tcp_t tmp;
-    uv_tcp_init(server->loop, &tmp);
+    uv_tcp_init(server_stream->loop, &tmp);
     if (uv_accept(server_stream, (uv_stream_t*)&tmp) == 0)
       uv_close((uv_handle_t*)&tmp, NULL);
     return;
@@ -451,7 +451,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (!client) return;
 
   client->server = server;
-  int r = uv_tcp_init(server->loop, &client->handle);
+  int r = uv_tcp_init(server_stream->loop, &client->handle);
   if (r < 0) {
     fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
     free(client);
@@ -467,7 +467,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     server->active_connections++;
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
-    uv_timer_init(server->loop, &client->timer);
+    uv_timer_init(server_stream->loop, &client->timer);
     client->timer.data = client;
     
     // Initialize arena for the request
@@ -611,12 +611,76 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
   return prev;
 }
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#include <netinet/in.h>
+#endif
+
+typedef struct {
+  csilk_server_t* server;
+  int port;
+} worker_data_t;
+
+static void worker_thread(void* arg) {
+  worker_data_t* data = (worker_data_t*)arg;
+  csilk_server_t* server = data->server;
+  int port = data->port;
+  free(data);
+
+  uv_loop_t loop;
+  uv_loop_init(&loop);
+
+  uv_tcp_t server_handle;
+  uv_tcp_init(&loop, &server_handle);
+  server_handle.data = server;
+
+#ifndef _WIN32
+  int fd;
+  if (uv_fileno((const uv_handle_t*)&server_handle, &fd) == 0) {
+      int on = 1;
+      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+  }
+#endif
+
+  struct sockaddr_in addr;
+  uv_ip4_addr("0.0.0.0", port, &addr);
+
+  int r = uv_tcp_bind(&server_handle, (const struct sockaddr*)&addr, 0);
+  if (r < 0) {
+    fprintf(stderr, "Worker bind error: %s\n", uv_strerror(r));
+    return;
+  }
+
+  r = uv_listen((uv_stream_t*)&server_handle, server->config.listen_backlog,
+                on_new_connection);
+  if (r < 0) {
+    fprintf(stderr, "Worker listen error: %s\n", uv_strerror(r));
+    return;
+  }
+
+  uv_run(&loop, UV_RUN_DEFAULT);
+  uv_loop_close(&loop);
+}
+
 int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
+
+  int workers = server->config.worker_threads;
+  if (workers <= 0) workers = 1;
 
   int r = uv_tcp_init(server->loop, &server->server_handle);
   if (r < 0) return -1;
   server->server_handle.data = server;
+
+#ifndef _WIN32
+  if (workers > 1) {
+      int fd;
+      if (uv_fileno((const uv_handle_t*)&server->server_handle, &fd) == 0) {
+          int on = 1;
+          setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+      }
+  }
+#endif
 
   // Initialize async handle for thread-safe stop
   r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
@@ -640,6 +704,16 @@ int csilk_server_run(csilk_server_t* server, int port) {
   r = uv_listen((uv_stream_t*)&server->server_handle, server->config.listen_backlog,
                 on_new_connection);
   if (r < 0) return -1;
+
+  if (workers > 1) {
+    for (int i = 0; i < workers - 1; i++) {
+      worker_data_t* data = malloc(sizeof(worker_data_t));
+      data->server = server;
+      data->port = port;
+      uv_thread_t tid;
+      uv_thread_create(&tid, worker_thread, data);
+    }
+  }
 
   r = uv_signal_init(server->loop, &server->sig_handle);
   if (r < 0) {
