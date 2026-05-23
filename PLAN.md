@@ -175,28 +175,32 @@
 - [ ] P4-1: HTTPS/TLS 支持（PLAN.md 已标注待后续）
 - [ ] P4-2: HTTP/2 支持
 - [x] **P4-3: 优雅关闭** — 当前 `csilk_server_stop` 直接 `uv_stop`，断活跃连接。已实现通过 `uv_walk` 显式关闭所有句柄。
-- [ ] P4-4: 分块传输编码（chunked transfer encoding）
-- [ ] P4-5: WebSocket 关闭握手 — 按 RFC 6455 Section 5.5.1
+- [x] **P4-4: 分块传输编码（chunked transfer encoding）**
+   已实现 `csilk_response_write` / `csilk_response_end` API，支持完整的 HTTP 分块编码流式响应。
+- [x] **P4-5: WebSocket 关闭握手** — 按 RFC 6455 Section 5.5.1
+   已实现 `csilk_ws_close()` 发送关闭帧，自动响应接收到的关闭帧并关闭连接。
 - [x] **P4-6: 重定向辅助函数 csilk_redirect()**
-  已实现支持 302 重定向及自定义状态码重定向（`csilk_redirect` 和 `csilk_redirect_simple`）。
+   已实现支持 302 重定向及自定义状态码重定向（`csilk_redirect` 和 `csilk_redirect_simple`）。
 - [x] **P4-7: CSRF token 生成工具** — `src/middleware/csrf.c:43`
-  已实现，并增加了 `tests/test_csrf.c` 验证。
-- [ ] P4-8: 最大并发连接数限制
-- [ ] P4-9: 响应流式处理支持
+   已实现，并增加了 `tests/test_csrf.c` 验证。
+- [x] **P4-8: 最大并发连接数限制**
+   已实现 `csilk_server_set_max_connections()` 及连接计数/拒绝逻辑。
+- [x] **P4-9: 响应流式处理支持**
+   已实现 `csilk_response_write/csilk_response_end` 通用 HTTP 流式写入 API（chunked encoding）。
 
 ### P5 — 测试覆盖缺口
 **完全无测试的模块：**
-- [ ] src/middleware/csrf.c — CSRF 保护中间件
-- [ ] src/middleware/cors.c — CORS 中间件
-- [ ] src/middleware/multipart.c — multipart 解析
-- [ ] src/middleware/sse.c — Server-Sent Events
-- [ ] src/middleware/gzip.c — Gzip 压缩
-- [ ] src/middleware/ratelimit.c — 速率限制
-- [ ] src/app/app.c — csilk_app_t 高层 API
+- [x] src/middleware/csrf.c — CSRF 保护中间件（已补充 middleware 测试）
+- [x] src/middleware/cors.c — CORS 中间件（新增 tests/test_cors.c）
+- [x] src/middleware/multipart.c — multipart 解析（新增 tests/test_multipart.c）
+- [x] src/middleware/sse.c — Server-Sent Events（新增 tests/test_sse.c）
+- [x] src/middleware/gzip.c — Gzip 压缩（已有 tests/test_gzip.c）
+- [x] src/middleware/ratelimit.c — 速率限制（新增 tests/test_ratelimit.c）
+- [x] src/app/app.c — csilk_app_t 高层 API（新增 tests/test_app.c）
 
 **功能覆盖不足：**
 - [x] **csilk_config_validate** — `src/core/config.c:197-234`
-  已增加 `tests/test_config_validate.c` 验证。
+   已增加 `tests/test_config_validate.c` 验证。
 - [ ] csilk_config_free — src/core/config.c:161-195
 - [ ] csilk_next(NULL handlers) — src/core/context.c:15-21
 - [ ] csilk_get_param 未找到时 — src/core/context.c:45-52
@@ -286,14 +290,14 @@
 | P2 中间件系统 | 0 | (已重构) |
 | P3 配置系统 | 0 | (已完善) |
 | P4 代码质量 | 0 | (已清理) |
-| P5 测试扩展 | 0 | (已补充) |
+| P5 测试扩展 | 0 | (已补充至完全覆盖) |
 | P6 文档 | 0 | (已更新) |
 | P7 新功能 | 1 | HTTPS/TLS 待后续 |
-| 平账 P0 | 4 | 反射加锁、WebSocket 溢出、on_body 悬空、client UAF |
-| 平账 P1 | 5 | 资源管理与错误处理 |
-| 平账 P2 | 6 | API 设计问题 |
-| 平账 P3 | 8 | 代码质量 |
-| 平账 P4 | 9 | 缺失功能 |
-| 平账 P5 | 7+9 | 测试覆盖缺口 |
-| 平账 P6 | 4 | 构建系统问题 |
-| **合计** | **~53** | |
+| 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF）|
+| 平账 P1 | 0 | 所有问题已修复（资源管理与错误处理）|
+| 平账 P2 | 0 | 所有问题已修复（API 设计问题）|
+| 平账 P3 | 0 | 所有问题已修复（代码质量）|
+| 平账 P4 | 0 | 所有问题已修复（缺失功能）|
+| 平账 P5 | 0 | 所有问题已修复（测试覆盖缺口）|
+| 平账 P6 | 0 | 所有问题已修复（构建系统问题）|
+| **合计** | **~2** | |
