@@ -68,6 +68,9 @@ void ws_handler(gin_ctx_t* c) {
 }
 
 int main() {
+    // Initialize logger
+    gin_log_init(GIN_LOG_DEBUG, NULL);
+
     // 初始化路由
     gin_router_t* router = gin_router_new();
     

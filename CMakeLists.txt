@@ -88,6 +88,7 @@ set(GIN_SOURCES
     src/server.c
     src/url_parser.c
     src/arena.c
+    src/logger.c
     src/utils.c
     src/websocket.c
     src/middleware/logger.c

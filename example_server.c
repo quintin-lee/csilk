@@ -118,19 +118,32 @@ void request_timer_middleware(gin_ctx_t* c) {
 }
 
 int main(int argc, char* argv[]) {
-    printf("Starting C Gin Framework Example Server...\n");
+    // Initialize logger
+    gin_log_config_t log_cfg = {
+        .level = GIN_LOG_DEBUG,
+        .file_path = NULL,
+        .max_file_size = 0,
+        .use_colors = -1
+    };
+    gin_log_init(log_cfg);
+    GIN_LOG_I("Starting C Gin Framework Example Server...");
     
     // Create router
     gin_router_t* router = gin_router_new();
     if (!router) {
-        fprintf(stderr, "Failed to create router\n");
+        GIN_LOG_E("Failed to create router");
         return 1;
     }
     
+    // Global middleware group
+    gin_group_t* root = gin_group_new(router, "");
+    gin_group_use(root, gin_recovery_handler);
+    gin_group_use(root, gin_logger_handler);
+
     // Create API group
-    gin_group_t* api_group = gin_group_new(router, "/api");
+    gin_group_t* api_group = gin_group_group(root, "/api");
     if (!api_group) {
-        fprintf(stderr, "Failed to create API group\n");
+        GIN_LOG_E("Failed to create API group");
         gin_router_free(router);
         return 1;
     }
@@ -139,9 +152,9 @@ int main(int argc, char* argv[]) {
     gin_GET(api_group, "/data", api_data_handler);
     
     // Create protected group (auth will be handled in the handler)
-    gin_group_t* protected_group = gin_group_new(router, "");
+    gin_group_t* protected_group = gin_group_group(root, "");
     if (!protected_group) {
-        fprintf(stderr, "Failed to create protected group\n");
+        GIN_LOG_E("Failed to create protected group");
         gin_group_free(api_group);
         gin_router_free(router);
         return 1;
@@ -149,20 +162,15 @@ int main(int argc, char* argv[]) {
     
     gin_GET(protected_group, "/protected", protected_handler);
     
-    // Add routes to main router
-    gin_handler_t hello_handlers[] = {hello_handler};
-    gin_router_add(router, "GET", "/", hello_handlers, 1);
-    
-    gin_handler_t user_handlers[] = {user_handler};
-    gin_router_add(router, "GET", "/user/:id", user_handlers, 1);
-    
-    gin_handler_t login_handlers[] = {login_handler};
-    gin_router_add(router, "POST", "/login", login_handlers, 1);
+    // Add routes to root
+    gin_GET(root, "/", hello_handler);
+    gin_GET(root, "/user/:id", user_handler);
+    gin_POST(root, "/login", login_handler);
     
     // Create server
     gin_server_t* server = gin_server_new(router);
     if (!server) {
-        fprintf(stderr, "Failed to create server\n");
+        GIN_LOG_E("Failed to create server");
         gin_group_free(api_group);
         gin_group_free(protected_group);
         gin_router_free(router);
@@ -187,9 +195,11 @@ int main(int argc, char* argv[]) {
     int result = gin_server_run(server, port);
     
     // Cleanup
+    gin_log_close();
     gin_server_free(server);
     gin_group_free(api_group);
     gin_group_free(protected_group);
+    gin_group_free(root);
     gin_router_free(router);
     
     return result;
