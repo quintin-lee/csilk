@@ -15,7 +15,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang libllhttp-dev libyaml-dev
+        sudo apt-get install -y cmake clang libyaml-dev
         
     - name: Configure CMake
       run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON
@@ -34,7 +34,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang libllhttp-dev libyaml-dev
+        sudo apt-get install -y cmake clang libyaml-dev
         
     - name: Configure CMake
       run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON -DUSE_FUZZER=ON

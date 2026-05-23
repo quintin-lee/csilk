@@ -71,7 +71,8 @@ int csilk_log_init(csilk_log_config_t config) {
     return 0;
 }
 
-void _gin_log_internal(csilk_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...) {
+void _csilk_log_internal(csilk_log_level_t level, const char* file, int line,
+                       const char* func, const char* fmt, ...) {
     if (!g_logger.initialized || level < g_logger.config.level) return;
 
     uv_mutex_lock(&g_logger.mutex);

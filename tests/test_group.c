@@ -42,7 +42,7 @@ int main() {
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/api/v1/ping";
+    ctx.request.path = strdup("/api/v1/ping");
 
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
@@ -74,7 +74,7 @@ int main() {
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/api/v2/hello";
+    ctx.request.path = strdup("/api/v2/hello");
 
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);

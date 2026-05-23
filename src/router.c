@@ -84,10 +84,10 @@ static char* get_next_segment(const char** p) {
 
   size_t len = (size_t)(*p - start);
   char* seg = malloc(len + 1);
-  if (seg) {
-    memcpy(seg, start, len);
-    seg[len] = '\0';
-  }
+  if (!seg) return NULL;
+
+  memcpy(seg, start, len);
+  seg[len] = '\0';
   return seg;
 }
 
@@ -134,7 +134,9 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
     if (!found) {
       if (curr->children_count < CSILK_MAX_CHILDREN) {
         found = node_new(seg_name, type);
-        curr->children[curr->children_count++] = found;
+        if (found) {
+            curr->children[curr->children_count++] = found;
+        }
       }
     }
     free(seg);

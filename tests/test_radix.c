@@ -24,18 +24,19 @@ int main() {
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/api/ping";
+    ctx.request.path = strdup("/api/ping");
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_ping);
     assert(ctx.params_count == 0);
+    csilk_ctx_cleanup(&ctx);
   }
 
   // Test Param
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/users/123";
+    ctx.request.path = strdup("/users/123");
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_user);
@@ -51,7 +52,7 @@ int main() {
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/static/js/app.js";
+    ctx.request.path = strdup("/static/js/app.js");
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_static);
@@ -67,9 +68,10 @@ int main() {
   {
     csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
-    ctx.request.path = "/unknown";
+    ctx.request.path = strdup("/unknown");
     int matched = csilk_router_match_ctx(r, &ctx);
     assert(!matched);
+    csilk_ctx_cleanup(&ctx);
   }
 
   // Test Boundary / NULL

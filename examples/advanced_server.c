@@ -67,9 +67,23 @@ void ws_handler(csilk_ctx_t* c) {
     }
 }
 
+void ping_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "pong");
+}
+
+void static_handler(csilk_ctx_t* c) {
+    csilk_static(c, "./public");
+}
+
 int main() {
     // Initialize logger
-    csilk_log_init(CSILK_LOG_DEBUG, NULL);
+    csilk_log_config_t log_cfg = {
+        .level = CSILK_LOG_DEBUG,
+        .file_path = NULL,
+        .max_file_size = 0,
+        .use_colors = -1
+    };
+    csilk_log_init(log_cfg);
 
     // 初始化路由
     csilk_router_t* router = csilk_router_new();
@@ -79,9 +93,7 @@ int main() {
     csilk_group_use(root, csilk_recovery_handler);
     csilk_group_use(root, csilk_logger_handler);
     
-    csilk_GET(root, "/ping", (csilk_handler_t)[](csilk_ctx_t* c){
-        csilk_string(c, 200, "pong");
-    });
+    csilk_GET(root, "/ping", ping_handler);
 
     // WebSocket 路由
     csilk_GET(root, "/ws", ws_handler);
@@ -94,9 +106,7 @@ int main() {
     csilk_POST(api, "/data", post_data_handler);
 
     // 静态文件服务
-    csilk_GET(root, "/static/*path", (csilk_handler_t)[](csilk_ctx_t* c){
-        csilk_static(c, "./public");
-    });
+    csilk_GET(root, "/static/*path", static_handler);
 
     // 启动服务器
     printf("Server-C Advanced Example starting on port 8080...\n");

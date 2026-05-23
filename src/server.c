@@ -21,6 +21,8 @@
 #define CSILK_DEFAULT_MAX_HEADER_SIZE (64UL * 1024UL)
 /** @brief Default TCP listen backlog. */
 #define CSILK_DEFAULT_LISTEN_BACKLOG 128
+/** @brief Default request arena chunk size. */
+#define CSILK_DEFAULT_ARENA_SIZE 4096
 
 /** @brief Server structure. */
 struct csilk_server_s {
@@ -31,6 +33,8 @@ struct csilk_server_s {
   uv_async_t async_handle;      /**< Async handle for cross-thread wakeup. */
   llhttp_settings_t settings;   /**< HTTP parser callback settings. */
   csilk_server_config_t config;   /**< Server configuration. */
+  csilk_handler_t middlewares[32]; /**< Global middlewares. */
+  int middleware_count;          /**< Number of global middlewares. */
 };
 
 /** @brief Client connection structure. */
@@ -62,9 +66,6 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
-    if (client->ctx.request.path) {
-      free((void*)client->ctx.request.path);
-    }
     csilk_ctx_cleanup(&client->ctx);
     free(client->ctx.response.headers);
     free(client->current_header_field);
@@ -137,10 +138,11 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_url) free(client->current_url);
   client->current_url = malloc(length + 1);
-  if (client->current_url) {
-    memcpy(client->current_url, at, length);
-    client->current_url[length] = '\0';
+  if (!client->current_url) {
+    return HPE_USER;
   }
+  memcpy(client->current_url, at, length);
+  client->current_url[length] = '\0';
   return 0;
 }
 
@@ -166,10 +168,11 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   }
 
   client->current_header_field = malloc(length + 1);
-  if (client->current_header_field) {
-    memcpy(client->current_header_field, at, length);
-    client->current_header_field[length] = '\0';
+  if (!client->current_header_field) {
+    return HPE_USER;
   }
+  memcpy(client->current_header_field, at, length);
+  client->current_header_field[length] = '\0';
   return 0;
 }
 
@@ -182,11 +185,12 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
 
   size_t prev_len = client->current_header_value ? strlen(client->current_header_value) : 0;
   char* new_val = realloc(client->current_header_value, prev_len + length + 1);
-  if (new_val) {
-    memcpy(new_val + prev_len, at, length);
-    new_val[prev_len + length] = '\0';
-    client->current_header_value = new_val;
+  if (!new_val) {
+    return HPE_USER;
   }
+  client->current_header_value = new_val;
+  memcpy(client->current_header_value + prev_len, at, length);
+  client->current_header_value[prev_len + length] = '\0';
   return 0;
 }
 
@@ -247,16 +251,35 @@ static int on_message_complete(llhttp_t* p) {
   }
 
     client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
-    printf("Request: %s %s\n", client->ctx.request.method, client->ctx.request.path);
-    fflush(stdout);
+    CSILK_LOG_I("Request: %s %s", client->ctx.request.method, client->ctx.request.path);
 
     if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
-        printf("Route matched, calling next handler\n");
-        fflush(stdout);
+        CSILK_LOG_D("Route matched, calling next handler");
+
+        // Prepend global middlewares
+        if (client->server->middleware_count > 0) {
+            int route_handler_count = 0;
+            while (client->ctx.handlers[route_handler_count] != NULL) {
+                route_handler_count++;
+            }
+            
+            int total_count = client->server->middleware_count + route_handler_count;
+            csilk_handler_t* arena_handlers = csilk_arena_alloc(client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
+            if (arena_handlers) {
+                for (int i = 0; i < client->server->middleware_count; i++) {
+                    arena_handlers[i] = client->server->middlewares[i];
+                }
+                for (int i = 0; i < route_handler_count; i++) {
+                    arena_handlers[client->server->middleware_count + i] = client->ctx.handlers[i];
+                }
+                arena_handlers[total_count] = NULL;
+                client->ctx.handlers = arena_handlers;
+            }
+        }
+
         csilk_next(&client->ctx);
     } else {
-        printf("Route not found\n");
-        fflush(stdout);
+        CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
         csilk_string(&client->ctx, 404, "Not Found");
     }
 
@@ -399,7 +422,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->timer.data = client;
     
     // Initialize arena for the request
-    client->ctx.arena = csilk_arena_new(4096);
+    client->ctx.arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
 
     r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
     if (r < 0) {
@@ -458,13 +481,13 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
   struct sockaddr_storage addr;
   int len = sizeof(addr);
   if (uv_tcp_getpeername(&client->handle, (struct sockaddr*)&addr, &len) == 0) {
-      static char ip[46];
+      char ip[46];
       if (addr.ss_family == AF_INET) {
           uv_ip4_name((struct sockaddr_in*)&addr, ip, sizeof(ip));
       } else {
           uv_ip6_name((struct sockaddr_in6*)&addr, ip, sizeof(ip));
       }
-      return ip;
+      return csilk_arena_strdup(c->arena, ip);
   }
   return NULL;
 }
@@ -495,8 +518,29 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
+void csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
+  if (server && server->middleware_count < 32) {
+    server->middlewares[server->middleware_count++] = handler;
+  }
+}
+
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
+  
+  if (uv_is_active((uv_handle_t*)&server->server_handle)) {
+      uv_close((uv_handle_t*)&server->server_handle, NULL);
+  }
+  if (uv_is_active((uv_handle_t*)&server->sig_handle)) {
+      uv_close((uv_handle_t*)&server->sig_handle, NULL);
+  }
+  if (uv_is_active((uv_handle_t*)&server->async_handle)) {
+      uv_close((uv_handle_t*)&server->async_handle, NULL);
+  }
+  
+  // Note: Since uv_close is async, handles might not be fully closed yet.
+  // But for a 'free' function that is typically called at the end of the process,
+  // this is often the best we can do without running the loop until closed.
+  
   free(server);
 }
 

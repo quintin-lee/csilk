@@ -69,9 +69,6 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, uint32_t le
     j = context->count[0];
     if ((context->count[0] += len) < j) context->count[1]++;
     
-    if (context->buffer[0] != 0 || context->count[0] > len) {
-        // Simple implementation: handle buffering
-    }
     // Actually, let's use a simpler way to handle multi-block
     uint32_t left = (j % 64);
     uint32_t fill = 64 - left;

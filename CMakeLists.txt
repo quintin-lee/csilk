@@ -58,15 +58,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libuv)
 
-# Fetch llhttp - replaced with system library to avoid ABI mismatch
-# System has libllhttp.so.9.3 at /usr/lib/libllhttp.so with headers at /usr/include/llhttp.h
-# If system llhttp is not available, uncomment the following to fetch from source:
-# FetchContent_Declare(
-#   llhttp
-#   GIT_REPOSITORY https://github.com/nodejs/llhttp.git
-#   GIT_TAG        release/v9.2.1
-# )
-# FetchContent_MakeAvailable(llhttp)
+# Prefer system llhttp; fallback to FetchContent from source
+find_library(LLHTTP_LIB NAMES llhttp libllhttp)
+if(NOT LLHTTP_LIB)
+  message(STATUS "System llhttp not found — fetching from source")
+  FetchContent_Declare(
+    llhttp
+    GIT_REPOSITORY https://github.com/nodejs/llhttp.git
+    GIT_TAG        release/v9.4.1
+  )
+  FetchContent_MakeAvailable(llhttp)
+  set(LLHTTP_LIB llhttp)
+else()
+  message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
+endif()
 
 # Fetch cJSON
 FetchContent_Declare(
@@ -102,13 +107,6 @@ set(CSILK_SOURCES
     src/middleware/csrf.c
 )
 
-# Find system llhttp (prefer system library to match installed headers)
-find_library(LLHTTP_LIB NAMES llhttp libllhttp REQUIRED)
-if(NOT LLHTTP_LIB)
-  message(FATAL_ERROR "llhttp library not found. Install libllhttp-dev or adjust FetchContent in CMakeLists.txt")
-endif()
-message(STATUS "Found llhttp: ${LLHTTP_LIB}")
-
 # Find system libyaml
 find_library(YAML_LIB NAMES yaml libyaml REQUIRED)
 if(NOT YAML_LIB)
@@ -116,8 +114,11 @@ if(NOT YAML_LIB)
 endif()
 message(STATUS "Found libyaml: ${YAML_LIB}")
 
-# Build library (static by default; set -DBUILD_SHARED_LIBS=ON for shared)
-add_library(csilk ${CSILK_SOURCES})
+# Option to also build as shared library
+option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
+
+# Build static library
+add_library(csilk STATIC ${CSILK_SOURCES})
 target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -127,7 +128,25 @@ set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
     VERSION "0.1.0"
     SOVERSION "0"
+    OUTPUT_NAME csilk
 )
+
+# Build shared library if requested
+if(CSILK_BUILD_SHARED)
+    add_library(csilk_shared SHARED ${CSILK_SOURCES})
+    target_link_libraries(csilk_shared PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
+    target_include_directories(csilk_shared PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    )
+    set_target_properties(csilk_shared PROPERTIES
+        PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
+        VERSION "0.1.0"
+        SOVERSION "0"
+        OUTPUT_NAME csilk
+    )
+    message(STATUS "Shared library build enabled: libcsilk.so")
+endif()
 
 # Helper to add a test executable and register with CTest
 function(add_csilk_test name source)
@@ -186,10 +205,17 @@ add_custom_target(run_tests
 include(GNUInstallDirs)
 install(TARGETS csilk
     EXPORT csilk-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+
+if(CSILK_BUILD_SHARED)
+    install(TARGETS csilk_shared
+        EXPORT csilk-targets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
