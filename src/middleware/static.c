@@ -5,6 +5,7 @@
  */
 
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,9 +31,9 @@ static const char* get_mime_type(const char* path) {
  * @param c The request context.
  * @param root_dir The root directory for static files. */
 void csilk_static(csilk_ctx_t* c, const char* root_dir) {
-  char full_path[1024];
-  char resolved_root[1024];
-  char resolved_file[1024];
+  char full_path[PATH_MAX];
+  char resolved_root[PATH_MAX];
+  char resolved_file[PATH_MAX];
 
   // Resolve root_dir to absolute path
   if (realpath(root_dir, resolved_root) == NULL) {
