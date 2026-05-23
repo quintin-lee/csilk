@@ -78,22 +78,6 @@ struct gin_ctx_s {
   void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
 };
 
-/** @brief Get the client's IP address.
- * @param c The request context.
- * @return The IP address string, or NULL on error. */
-const char* gin_get_client_ip(gin_ctx_t* c);
-
-/** @brief Handshake and upgrade to WebSocket.
- * @param c The request context. */
-void gin_ws_handshake(gin_ctx_t* c);
-
-/** @brief Send a WebSocket message.
- * @param c The request context.
- * @param payload Data to send.
- * @param len Data length.
- * @param opcode Opcode (1 for text, 2 for binary). */
-void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
-
 /** @brief Move to the next handler in the onion model chain.
  * @param c The request context. */
 void gin_next(gin_ctx_t* c);
@@ -248,6 +232,30 @@ void gin_rate_limit_middleware(gin_ctx_t* c, int limit);
  * @param c The request context. */
 void gin_csrf_middleware(gin_ctx_t* c);
 
+/** @brief Server configuration options. */
+typedef struct gin_server_config_s {
+  unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms). */
+  size_t max_body_size;            /**< Maximum request body size. */
+  int listen_backlog;              /**< TCP listen backlog. */
+} gin_server_config_t;
+
+/** @brief Global Configuration structure. */
+typedef struct {
+  int port;                     /**< Server port. */
+  gin_server_config_t server;   /**< Server low-level config. */
+  gin_log_config_t logger;      /**< Logger config. */
+  struct {
+      int enable;               /**< Enable CORS. */
+      gin_cors_config_t config; /**< CORS config. */
+  } cors;
+} gin_config_t;
+
+/** @brief Load configuration from a YAML file.
+ * @param yaml_path Path to the YAML file.
+ * @param config Pointer to config struct to populate.
+ * @return 0 on success, -1 on failure. */
+int gin_load_config(const char* yaml_path, gin_config_t* config);
+
 /** @brief Auth validator callback. */
 typedef int (*gin_auth_validator_t)(const char* token);
 
@@ -283,6 +291,11 @@ void gin_json(gin_ctx_t* c, int status, cJSON* json);
  * @param status HTTP status code.
  * @param message Error description string. */
 void gin_json_error(gin_ctx_t* c, int status, const char* message);
+
+/** @brief Get the client's IP address.
+ * @param c The request context.
+ * @return The IP address string, or NULL on error. */
+const char* gin_get_client_ip(gin_ctx_t* c);
 
 /** @brief Internal: Split URL into path and query string.
  * @param url Full URL.
@@ -385,12 +398,16 @@ void gin_group_free(gin_group_t* group);
   gin_group_add_route(group, "HEAD", path, handler)
 /** @} */
 
-/** @brief Server configuration options. */
-typedef struct gin_server_config_s {
-  unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms). */
-  size_t max_body_size;            /**< Maximum request body size. */
-  int listen_backlog;              /**< TCP listen backlog. */
-} gin_server_config_t;
+/** @brief Handshake and upgrade to WebSocket.
+ * @param c The request context. */
+void gin_ws_handshake(gin_ctx_t* c);
+
+/** @brief Send a WebSocket message.
+ * @param c The request context.
+ * @param payload Data to send.
+ * @param len Data length.
+ * @param opcode Opcode (1 for text, 2 for binary). */
+void gin_ws_send(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
 /** @brief Main Server structure. */
 typedef struct gin_server_s gin_server_t;

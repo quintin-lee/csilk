@@ -118,14 +118,29 @@ void request_timer_middleware(gin_ctx_t* c) {
 }
 
 int main(int argc, char* argv[]) {
-    // Initialize logger
-    gin_log_config_t log_cfg = {
-        .level = GIN_LOG_DEBUG,
-        .file_path = NULL,
-        .max_file_size = 0,
-        .use_colors = -1
-    };
-    gin_log_init(log_cfg);
+    gin_config_t cfg;
+    const char* config_file = "config.yaml";
+    
+    if (argc > 1) {
+        config_file = argv[1];
+    }
+
+    printf("Loading config from %s...\n", config_file);
+    if (gin_load_config(config_file, &cfg) != 0) {
+        printf("Config file not found or invalid, using defaults.\n");
+        // Manual defaults if config fails
+        cfg.port = 8080;
+        cfg.logger.level = GIN_LOG_DEBUG;
+        cfg.logger.file_path = NULL;
+        cfg.logger.max_file_size = 0;
+        cfg.logger.use_colors = -1;
+        cfg.server.idle_timeout_ms = 5000;
+        cfg.server.max_body_size = 1024 * 1024;
+        cfg.server.listen_backlog = 128;
+    }
+
+    // Initialize logger from config
+    gin_log_init(cfg.logger);
     GIN_LOG_I("Starting C Gin Framework Example Server...");
     
     // Create router
@@ -173,17 +188,15 @@ int main(int argc, char* argv[]) {
         GIN_LOG_E("Failed to create server");
         gin_group_free(api_group);
         gin_group_free(protected_group);
+        gin_group_free(root);
         gin_router_free(router);
         return 1;
     }
+
+    // Apply server config
+    gin_server_set_config(server, cfg.server);
     
-    // Run server on port 8080, or use port from command line argument
-    int port = 8080;
-    if (argc > 1) {
-        port = atoi(argv[1]);
-        if (port <= 0) port = 8080;
-    }
-    printf("Server running on http://localhost:%d\n", port);
+    printf("Server running on http://localhost:%d\n", cfg.port);
     printf("Try these endpoints:\n");
     printf("  GET  /\n");
     printf("  GET  /user/123\n");
@@ -192,7 +205,7 @@ int main(int argc, char* argv[]) {
     printf("  GET  /api/data\n");
     printf("Press Ctrl+C to stop\n");
     
-    int result = gin_server_run(server, port);
+    int result = gin_server_run(server, cfg.port);
     
     // Cleanup
     gin_log_close();

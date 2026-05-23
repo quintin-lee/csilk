@@ -89,6 +89,7 @@ set(GIN_SOURCES
     src/url_parser.c
     src/arena.c
     src/logger.c
+    src/config.c
     src/utils.c
     src/websocket.c
     src/middleware/logger.c
@@ -107,9 +108,16 @@ if(NOT LLHTTP_LIB)
 endif()
 message(STATUS "Found llhttp: ${LLHTTP_LIB}")
 
+# Find system libyaml
+find_library(YAML_LIB NAMES yaml libyaml REQUIRED)
+if(NOT YAML_LIB)
+  message(FATAL_ERROR "libyaml library not found. Install libyaml-dev")
+endif()
+message(STATUS "Found libyaml: ${YAML_LIB}")
+
 # Build library (static by default; set -DBUILD_SHARED_LIBS=ON for shared)
 add_library(gin ${GIN_SOURCES})
-target_link_libraries(gin PUBLIC uv ${LLHTTP_LIB} cjson)
+target_link_libraries(gin PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
 target_include_directories(gin PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -141,6 +149,7 @@ add_gin_test(test_json tests/test_json.c)
 add_gin_test(test_recovery tests/test_recovery.c)
 add_gin_test(test_auth tests/test_auth.c)
 add_gin_test(test_ws tests/test_ws.c)
+add_gin_test(test_config tests/test_config.c)
 add_gin_test(test_keepalive tests/test_keepalive.c)
 add_gin_test(test_edge tests/test_edge.c)
 add_gin_test(test_timeout tests/test_timeout.c)
