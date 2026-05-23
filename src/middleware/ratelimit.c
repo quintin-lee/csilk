@@ -1,21 +1,33 @@
+/**
+ * @file ratelimit.c
+ * @brief Simple IP-based rate limiting middleware implementation.
+ * MIT License
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
 #include "gin.h"
 
+/** @brief Maximum number of IP addresses to track. */
 #define MAX_IP_ENTRIES 1024
-#define WINDOW_SIZE 60 // 1 minute
+/** @brief Rate limiting window size in seconds. */
+#define WINDOW_SIZE 60
 
 typedef struct {
-    char ip[46];
-    int count;
-    time_t last_reset;
+    char ip[46];       /**< Client IP address string. */
+    int count;         /**< Request count in current window. */
+    time_t last_reset; /**< Timestamp when the window started. */
 } ip_entry_t;
 
 static ip_entry_t ip_table[MAX_IP_ENTRIES];
 static int ip_count = 0;
 
+/** @brief Simple IP-based rate limiting middleware.
+ * Limits the number of requests per IP within a rolling time window.
+ * @param c The request context.
+ * @param limit Maximum requests allowed per window. */
 void gin_rate_limit_middleware(gin_ctx_t* c, int limit) {
     const char* ip = gin_get_client_ip(c);
     if (!ip) {

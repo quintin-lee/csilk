@@ -1,7 +1,7 @@
 /**
  * @file server.c
  * @brief Server implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <llhttp.h>
@@ -13,32 +13,34 @@
 #include "gin.h"
 #include "gin_internal.h"
 
-/** @brief Default server config. */
+/** @brief Default idle timeout in milliseconds. */
 #define GIN_DEFAULT_IDLE_TIMEOUT  5000
+/** @brief Default maximum request body size in bytes. */
 #define GIN_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
+/** @brief Default TCP listen backlog. */
 #define GIN_DEFAULT_LISTEN_BACKLOG 128
 
 /** @brief Server structure. */
 struct gin_server_s {
-  uv_loop_t* loop;
-  gin_router_t* router;
-  uv_tcp_t server_handle;
-  uv_signal_t sig_handle;
-  uv_async_t async_handle;
-  llhttp_settings_t settings;
-  gin_server_config_t config;
+  uv_loop_t* loop;              /**< libuv event loop. */
+  gin_router_t* router;         /**< Associated router instance. */
+  uv_tcp_t server_handle;       /**< TCP server handle. */
+  uv_signal_t sig_handle;        /**< SIGINT signal handler. */
+  uv_async_t async_handle;      /**< Async handle for cross-thread wakeup. */
+  llhttp_settings_t settings;   /**< HTTP parser callback settings. */
+  gin_server_config_t config;   /**< Server configuration. */
 };
 
 /** @brief Client connection structure. */
 typedef struct {
-  uv_tcp_t handle;
-  uv_timer_t timer;
-  llhttp_t parser;
-  gin_server_t* server;
-  gin_ctx_t ctx;
-  char* current_url;
-  char* current_header_field;
-  char* current_header_value;
+  uv_tcp_t handle;                   /**< libuv TCP stream handle. */
+  uv_timer_t timer;                  /**< Connection idle timer. */
+  llhttp_t parser;                   /**< HTTP request parser. */
+  gin_server_t* server;              /**< Owning server instance. */
+  gin_ctx_t ctx;                     /**< Request context for this connection. */
+  char* current_url;                 /**< Current URL being parsed. */
+  char* current_header_field;        /**< Temporary header field name. */
+  char* current_header_value;        /**< Temporary header field value. */
 } gin_client_t;
 
 /** @brief Buffer allocation callback.
@@ -431,9 +433,6 @@ const char* gin_get_client_ip(gin_ctx_t* c) {
   return NULL;
 }
 
-/** @brief Create a new server.
- * @param router The router to be used by the server.
- * @return A new gin_server_t instance. */
 gin_server_t* gin_server_new(gin_router_t* router) {
   gin_server_t* s = calloc(1, sizeof(gin_server_t));
   if (!s) return NULL;
@@ -458,32 +457,21 @@ gin_server_t* gin_server_new(gin_router_t* router) {
   return s;
 }
 
-/** @brief Free the server.
- * @param server The server to free. */
 void gin_server_free(gin_server_t* server) {
   if (!server) return;
   free(server);
 }
 
-/** @brief Stop the server gracefully.
- * @param server The server to stop. */
 void gin_server_stop(gin_server_t* server) {
   if (!server) return;
   uv_stop(server->loop);
 }
 
-/** @brief Configure server parameters.
- * @param server The server.
- * @param config The config struct. */
 void gin_server_set_config(gin_server_t* server, gin_server_config_t config) {
   if (!server) return;
   server->config = config;
 }
 
-/** @brief Run the server.
- * @param server The server.
- * @param port The port to listen on.
- * @return 0 on success, -1 on failure. */
 int gin_server_run(gin_server_t* server, int port) {
   if (!server) return -1;
 

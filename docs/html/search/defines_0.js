@@ -1,0 +1,22 @@
+var searchData=
+[
+  ['gin_5fdefault_5fidle_5ftimeout_0',['GIN_DEFAULT_IDLE_TIMEOUT',['../server_8c.html#a6a3e05334511d2963ab23174cb91fa79',1,'server.c']]],
+  ['gin_5fdefault_5flisten_5fbacklog_1',['GIN_DEFAULT_LISTEN_BACKLOG',['../server_8c.html#a62f3560045829fc1a2803ffb5bb1592f',1,'server.c']]],
+  ['gin_5fdefault_5fmax_5fbody_5fsize_2',['GIN_DEFAULT_MAX_BODY_SIZE',['../server_8c.html#afb4808d2dac9e7f05112c7eaed101302',1,'server.c']]],
+  ['gin_5fdelete_3',['gin_DELETE',['../gin_8h.html#a18953d05f7977ac19de392b6484661ab',1,'gin.h']]],
+  ['gin_5fget_4',['gin_GET',['../gin_8h.html#aed5fd93e334ff1836577ec84bdb7417b',1,'gin.h']]],
+  ['gin_5fhead_5',['gin_HEAD',['../gin_8h.html#a36693d181f665626a00f32229d5a4485',1,'gin.h']]],
+  ['gin_5flog_5fd_6',['GIN_LOG_D',['../gin_8h.html#a37fbb55e2d17feabc6070f68739bf784',1,'gin.h']]],
+  ['gin_5flog_5fe_7',['GIN_LOG_E',['../gin_8h.html#ab4db4b3b04e7b4f0c71e0556deb17a1d',1,'gin.h']]],
+  ['gin_5flog_5ff_8',['GIN_LOG_F',['../gin_8h.html#a0824ef8af53535e38e503644e6bbc081',1,'gin.h']]],
+  ['gin_5flog_5fi_9',['GIN_LOG_I',['../gin_8h.html#ac9ae6c6fa15502cc3539a555c4fe9547',1,'gin.h']]],
+  ['gin_5flog_5ft_10',['GIN_LOG_T',['../gin_8h.html#aafc55e5a5a9a9a38e4700234f99729c5',1,'gin.h']]],
+  ['gin_5flog_5fw_11',['GIN_LOG_W',['../gin_8h.html#a55e7861bb194c1bacaaffb8d42cf2567',1,'gin.h']]],
+  ['gin_5fmax_5fchildren_12',['GIN_MAX_CHILDREN',['../router_8c.html#a9fd1d94f2edbc89b9579d9da4db94268',1,'router.c']]],
+  ['gin_5fmax_5fparams_13',['GIN_MAX_PARAMS',['../gin_8h.html#ab3c65ea9623b23f7d58e1bcbb78e5515',1,'gin.h']]],
+  ['gin_5foptions_14',['gin_OPTIONS',['../gin_8h.html#a2acf0181c8e5f5bf347b2c1669887a3c',1,'gin.h']]],
+  ['gin_5fpatch_15',['gin_PATCH',['../gin_8h.html#a05eb45c082b87cd46177e4ff015231af',1,'gin.h']]],
+  ['gin_5fpost_16',['gin_POST',['../gin_8h.html#a2dc06b04d177cb4762ab2890d176c9cf',1,'gin.h']]],
+  ['gin_5fput_17',['gin_PUT',['../gin_8h.html#a66c4b15f62e823f4436876350580e045',1,'gin.h']]],
+  ['gin_5fversion_18',['GIN_VERSION',['../gin_8h.html#ad31ddf3896afd105634ac3cff9900679',1,'gin.h']]]
+];

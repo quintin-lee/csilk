@@ -1,7 +1,7 @@
 /**
  * @file auth.c
  * @brief Authentication middleware implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <string.h>

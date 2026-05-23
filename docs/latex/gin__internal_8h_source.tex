@@ -1,0 +1,31 @@
+\doxysection{gin\+\_\+internal.\+h}
+\hypertarget{gin__internal_8h_source}{}\label{gin__internal_8h_source}\index{include/gin\_internal.h@{include/gin\_internal.h}}
+\doxymbox{\hyperlink{gin__internal_8h}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00006\ }
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#ifndef\ GIN\_INTERNAL\_H}}
+\DoxyCodeLine{00008\ \textcolor{preprocessor}{\#define\ GIN\_INTERNAL\_H}}
+\DoxyCodeLine{00009\ }
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <stdint.h>}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <stddef.h>}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00014\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00015\ \ \ \ \ uint32\_t\ \doxymbox{\hyperlink{structgin__sha1__ctx_a37709422e866bf466ec86f6e8b37cb08}{state}}[5];\ \ \ }
+\DoxyCodeLine{00016\ \ \ \ \ uint32\_t\ \doxymbox{\hyperlink{structgin__sha1__ctx_ab552983fef2e3904520fe0d8a891ffea}{count}}[2];\ \ \ }
+\DoxyCodeLine{00017\ \ \ \ \ uint8\_t\ \doxymbox{\hyperlink{structgin__sha1__ctx_a78c08c85f4c47e081841fbf1a9ae7388}{buffer}}[64];\ \ \ }
+\DoxyCodeLine{00018\ \}\ \doxymbox{\hyperlink{structgin__sha1__ctx}{gin\_sha1\_ctx}};}
+\DoxyCodeLine{00019\ }
+\DoxyCodeLine{00022\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin__internal_8h_a390977ad55c5bb9e69b3deb0f95388ff}{gin\_sha1\_init}}(\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\_sha1\_ctx}}*\ context);}
+\DoxyCodeLine{00023\ }
+\DoxyCodeLine{00028\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin__internal_8h_abd7779f32ff374d6c36d959990403c8c}{gin\_sha1\_update}}(\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\_sha1\_ctx}}*\ context,\ \textcolor{keyword}{const}\ uint8\_t*\ data,\ uint32\_t\ len);}
+\DoxyCodeLine{00029\ }
+\DoxyCodeLine{00033\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin__internal_8h_ae4549cc6de928be723492356ebcbb4b3}{gin\_sha1\_final}}(\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\_sha1\_ctx}}*\ context,\ uint8\_t\ digest[20]);}
+\DoxyCodeLine{00034\ }
+\DoxyCodeLine{00039\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin__internal_8h_abe7613793f89afaa293b207183bbf4a1}{gin\_base64\_encode}}(\textcolor{keyword}{const}\ uint8\_t*\ src,\ \textcolor{keywordtype}{size\_t}\ len,\ \textcolor{keywordtype}{char}*\ out);}
+\DoxyCodeLine{00040\ }
+\DoxyCodeLine{00045\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{gin__internal_8h_a6bde09e3ce51012dc4ef8b4fb9058dc5}{gin\_ws\_parse\_frame}}(\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\_ctx\_t}}*\ c,\ \textcolor{keyword}{const}\ uint8\_t*\ buf,\ \textcolor{keywordtype}{size\_t}\ nread);}
+\DoxyCodeLine{00046\ }
+\DoxyCodeLine{00047\ \textcolor{preprocessor}{\#endif}}
+
+\end{DoxyCode}

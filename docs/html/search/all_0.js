@@ -1,6 +1,5 @@
 var searchData=
 [
-  ['05_2023_20框架演进计划启动_0',['[2026-05-23] 框架演进计划启动',['../md_progress.html#autotoc_md12',1,'']]],
-  ['05_2023_20阶段一完成_1',['[2026-05-23] 阶段一完成',['../md_progress.html#autotoc_md13',1,'']]],
-  ['05_2023_20阶段二完成_2',['[2026-05-23] 阶段二完成',['../md_progress.html#autotoc_md14',1,'']]]
+  ['_5fgin_5flog_5finternal_0',['_gin_log_internal',['../gin_8h.html#a5321a3d676521280ee7f8a4211d29d67',1,'_gin_log_internal(gin_log_level_t level, const char *file, int line, const char *func, const char *fmt,...):&#160;logger.c'],['../logger_8c.html#a5321a3d676521280ee7f8a4211d29d67',1,'_gin_log_internal(gin_log_level_t level, const char *file, int line, const char *func, const char *fmt,...):&#160;logger.c']]],
+  ['_5finternal_5fclient_1',['_internal_client',['../structgin__ctx__s.html#a4d0b967d56ddd1c61268752c2fdce8c2',1,'gin_ctx_s']]]
 ];

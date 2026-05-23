@@ -5,12 +5,14 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
-- 🔧 Middleware support (logger, recovery, auth, static files)
-- 🌐 RESTful API routing with parameter handling
+- 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
+- 🌐 RESTful API routing with parameter handling and route groups
 - 📦 JSON support via cJSON
+- 🔌 WebSocket support
 - 🔍 URL parsing and query string handling
 - ⚡ Keep-alive connection support
 - 🛡️ Graceful error handling
+- 📝 Complete Doxygen documentation for all public APIs and internals
 
 ## Dependencies
 
@@ -55,6 +57,27 @@ make docs  # Requires Doxygen
 # Optional: Format code
 make format  # Requires clang-format
 ```
+
+## Documentation
+
+API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/gin.h`, `include/gin_internal.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` and `src/middleware/` also carry complete Doxygen documentation.
+
+To generate HTML documentation:
+
+```bash
+cd build && cmake .. && make docs     # Or: doxygen Doxyfile
+```
+
+Open `docs/html/index.html` in your browser to browse the API reference.
+
+### Documentation Coverage
+
+| Component | Status |
+|-----------|--------|
+| `include/gin.h` (public API) | Fully documented |
+| `include/gin_internal.h` (internal API) | Fully documented |
+| `src/` (core implementation) | Fully documented |
+| `src/middleware/` (middleware) | Fully documented |
 
 ## Usage
 
@@ -141,19 +164,28 @@ gin_group_use(group, gin_recovery_handler);
 ```
 src/
   ├── context.c       # Request/response context
-  ├── router.c        # Routing implementation
+  ├── router.c        # Routing implementation (Radix Tree)
   ├── group.c         # Route groups
-  ├── server.c        # HTTP server implementation
+  ├── server.c        # HTTP server implementation (libuv + llhttp)
+  ├── arena.c         # Arena memory allocator
+  ├── config.c        # YAML configuration loader
+  ├── logger.c        # Thread-safe logging with rotation
+  ├── utils.c         # SHA1 hashing and Base64 encoding
   ├── url_parser.c    # URL parsing utilities
+  ├── websocket.c     # WebSocket handshake and frame handling
   └── middleware/     # Built-in middleware
-      ├── logger.c
-      ├── recovery.c
-      ├── auth.c
-      └── static.c
+      ├── auth.c      # Token-based authentication
+      ├── cors.c      # Cross-Origin Resource Sharing
+      ├── csrf.c      # CSRF protection
+      ├── logger.c    # Request logging
+      ├── ratelimit.c # IP-based rate limiting
+      ├── recovery.c  # Panic recovery
+      └── static.c    # Static file serving
 
 include/              # Public headers
 tests/                # Unit tests
-example_server.c      # Example server implementation
+examples/             # Advanced usage examples
+example_server.c      # Simple example server
 ```
 
 ## Testing

@@ -9,7 +9,9 @@
 #include <yaml.h>
 #include "gin.h"
 
-// Internal helper for string to log level
+/** @brief Convert a string to a log level enum value.
+ * @param s Log level string (case-insensitive).
+ * @return Corresponding gin_log_level_t value, defaults to GIN_LOG_INFO. */
 static gin_log_level_t string_to_log_level(const char* s) {
     if (strcasecmp(s, "TRACE") == 0) return GIN_LOG_TRACE;
     if (strcasecmp(s, "DEBUG") == 0) return GIN_LOG_DEBUG;

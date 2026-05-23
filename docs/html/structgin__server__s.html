@@ -91,20 +91,130 @@ $(function(){initNavTree('structgin__server__s.html','','structgin__server__s-me
   <div class="headertitle"><div class="title">gin_server_s Struct Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Server structure.  
+ <a href="#details">More...</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:aa232324eb9b1dbb99e8b177d5f8093da" id="r_aa232324eb9b1dbb99e8b177d5f8093da"><td class="memItemLeft"><a id="aa232324eb9b1dbb99e8b177d5f8093da" name="aa232324eb9b1dbb99e8b177d5f8093da"></a>
-uv_loop_t *&#160;</td><td class="memItemRight"><b>loop</b></td></tr>
-<tr class="memitem:a3f54a981e43b8522fee49437ee486beb" id="r_a3f54a981e43b8522fee49437ee486beb"><td class="memItemLeft"><a id="a3f54a981e43b8522fee49437ee486beb" name="a3f54a981e43b8522fee49437ee486beb"></a>
-gin_router_t *&#160;</td><td class="memItemRight"><b>router</b></td></tr>
-<tr class="memitem:a5959678784e76267c9c0bf8334e379dc" id="r_a5959678784e76267c9c0bf8334e379dc"><td class="memItemLeft"><a id="a5959678784e76267c9c0bf8334e379dc" name="a5959678784e76267c9c0bf8334e379dc"></a>
-uv_tcp_t&#160;</td><td class="memItemRight"><b>server_handle</b></td></tr>
-<tr class="memitem:a360d681fb78b9162aa4842c4379dc8c0" id="r_a360d681fb78b9162aa4842c4379dc8c0"><td class="memItemLeft"><a id="a360d681fb78b9162aa4842c4379dc8c0" name="a360d681fb78b9162aa4842c4379dc8c0"></a>
-llhttp_settings_t&#160;</td><td class="memItemRight"><b>settings</b></td></tr>
+<tr class="memitem:aa232324eb9b1dbb99e8b177d5f8093da" id="r_aa232324eb9b1dbb99e8b177d5f8093da"><td class="memItemLeft">uv_loop_t *&#160;</td><td class="memItemRight"><a class="el" href="#aa232324eb9b1dbb99e8b177d5f8093da">loop</a></td></tr>
+<tr class="memitem:a3f54a981e43b8522fee49437ee486beb" id="r_a3f54a981e43b8522fee49437ee486beb"><td class="memItemLeft"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a3f54a981e43b8522fee49437ee486beb">router</a></td></tr>
+<tr class="memitem:a5959678784e76267c9c0bf8334e379dc" id="r_a5959678784e76267c9c0bf8334e379dc"><td class="memItemLeft">uv_tcp_t&#160;</td><td class="memItemRight"><a class="el" href="#a5959678784e76267c9c0bf8334e379dc">server_handle</a></td></tr>
+<tr class="memitem:ad440bd08c82470cd4184578ba7602296" id="r_ad440bd08c82470cd4184578ba7602296"><td class="memItemLeft">uv_signal_t&#160;</td><td class="memItemRight"><a class="el" href="#ad440bd08c82470cd4184578ba7602296">sig_handle</a></td></tr>
+<tr class="memitem:a4bdc1c89b88235dd92fdb84e8cd3b94b" id="r_a4bdc1c89b88235dd92fdb84e8cd3b94b"><td class="memItemLeft">uv_async_t&#160;</td><td class="memItemRight"><a class="el" href="#a4bdc1c89b88235dd92fdb84e8cd3b94b">async_handle</a></td></tr>
+<tr class="memitem:a360d681fb78b9162aa4842c4379dc8c0" id="r_a360d681fb78b9162aa4842c4379dc8c0"><td class="memItemLeft">llhttp_settings_t&#160;</td><td class="memItemRight"><a class="el" href="#a360d681fb78b9162aa4842c4379dc8c0">settings</a></td></tr>
+<tr class="memitem:ad0291b0967186fe76aa4ccd6af59e35b" id="r_ad0291b0967186fe76aa4ccd6af59e35b"><td class="memItemLeft"><a class="el" href="gin_8h.html#a81c4eec790cdadc96b2499054441cde1">gin_server_config_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#ad0291b0967186fe76aa4ccd6af59e35b">config</a></td></tr>
 </table>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Server structure. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="a4bdc1c89b88235dd92fdb84e8cd3b94b" name="a4bdc1c89b88235dd92fdb84e8cd3b94b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4bdc1c89b88235dd92fdb84e8cd3b94b">&#9670;&#160;</a></span>async_handle</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_async_t gin_server_s::async_handle</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Async handle for cross-thread wakeup. </p>
+
+</div>
+</div>
+<a id="ad0291b0967186fe76aa4ccd6af59e35b" name="ad0291b0967186fe76aa4ccd6af59e35b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad0291b0967186fe76aa4ccd6af59e35b">&#9670;&#160;</a></span>config</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="gin_8h.html#a81c4eec790cdadc96b2499054441cde1">gin_server_config_t</a> gin_server_s::config</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Server configuration. </p>
+
+</div>
+</div>
+<a id="aa232324eb9b1dbb99e8b177d5f8093da" name="aa232324eb9b1dbb99e8b177d5f8093da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa232324eb9b1dbb99e8b177d5f8093da">&#9670;&#160;</a></span>loop</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_loop_t* gin_server_s::loop</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>libuv event loop. </p>
+
+</div>
+</div>
+<a id="a3f54a981e43b8522fee49437ee486beb" name="a3f54a981e43b8522fee49437ee486beb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f54a981e43b8522fee49437ee486beb">&#9670;&#160;</a></span>router</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557">gin_router_t</a>* gin_server_s::router</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Associated router instance. </p>
+
+</div>
+</div>
+<a id="a5959678784e76267c9c0bf8334e379dc" name="a5959678784e76267c9c0bf8334e379dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5959678784e76267c9c0bf8334e379dc">&#9670;&#160;</a></span>server_handle</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_tcp_t gin_server_s::server_handle</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>TCP server handle. </p>
+
+</div>
+</div>
+<a id="a360d681fb78b9162aa4842c4379dc8c0" name="a360d681fb78b9162aa4842c4379dc8c0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a360d681fb78b9162aa4842c4379dc8c0">&#9670;&#160;</a></span>settings</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">llhttp_settings_t gin_server_s::settings</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>HTTP parser callback settings. </p>
+
+</div>
+</div>
+<a id="ad440bd08c82470cd4184578ba7602296" name="ad440bd08c82470cd4184578ba7602296"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad440bd08c82470cd4184578ba7602296">&#9670;&#160;</a></span>sig_handle</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_signal_t gin_server_s::sig_handle</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>SIGINT signal handler. </p>
+
+</div>
+</div>
 <hr/>The documentation for this struct was generated from the following file:<ul>
-<li>src/<b>server.c</b></li>
+<li>src/<a class="el" href="server_8c.html">server.c</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

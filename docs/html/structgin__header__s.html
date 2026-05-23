@@ -91,16 +91,66 @@ $(function(){initNavTree('structgin__header__s.html','','structgin__header__s-me
   <div class="headertitle"><div class="title">gin_header_s Struct Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>HTTP Header structure (linked list).  
+ <a href="#details">More...</a></p>
+
+<p><code>#include &lt;<a class="el" href="gin_8h_source.html">gin.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:a95ea331fa294c46689d9fee1b3bf1306" id="r_a95ea331fa294c46689d9fee1b3bf1306"><td class="memItemLeft"><a id="a95ea331fa294c46689d9fee1b3bf1306" name="a95ea331fa294c46689d9fee1b3bf1306"></a>
-char *&#160;</td><td class="memItemRight"><b>key</b></td></tr>
-<tr class="memitem:ac77fb3066031e0b16f42d76cf2f03f52" id="r_ac77fb3066031e0b16f42d76cf2f03f52"><td class="memItemLeft"><a id="ac77fb3066031e0b16f42d76cf2f03f52" name="ac77fb3066031e0b16f42d76cf2f03f52"></a>
-char *&#160;</td><td class="memItemRight"><b>value</b></td></tr>
-<tr class="memitem:ac267ddadad37778a3b11d9bd038c56c5" id="r_ac267ddadad37778a3b11d9bd038c56c5"><td class="memItemLeft"><a id="ac267ddadad37778a3b11d9bd038c56c5" name="ac267ddadad37778a3b11d9bd038c56c5"></a>
-struct <a class="el" href="structgin__header__s.html">gin_header_s</a> *&#160;</td><td class="memItemRight"><b>next</b></td></tr>
+<tr class="memitem:a95ea331fa294c46689d9fee1b3bf1306" id="r_a95ea331fa294c46689d9fee1b3bf1306"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#a95ea331fa294c46689d9fee1b3bf1306">key</a></td></tr>
+<tr class="memitem:ac77fb3066031e0b16f42d76cf2f03f52" id="r_ac77fb3066031e0b16f42d76cf2f03f52"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#ac77fb3066031e0b16f42d76cf2f03f52">value</a></td></tr>
+<tr class="memitem:ac267ddadad37778a3b11d9bd038c56c5" id="r_ac267ddadad37778a3b11d9bd038c56c5"><td class="memItemLeft">struct <a class="el" href="structgin__header__s.html">gin_header_s</a> *&#160;</td><td class="memItemRight"><a class="el" href="#ac267ddadad37778a3b11d9bd038c56c5">next</a></td></tr>
 </table>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>HTTP Header structure (linked list). </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="a95ea331fa294c46689d9fee1b3bf1306" name="a95ea331fa294c46689d9fee1b3bf1306"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a95ea331fa294c46689d9fee1b3bf1306">&#9670;&#160;</a></span>key</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_header_s::key</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Header field name. </p>
+
+</div>
+</div>
+<a id="ac267ddadad37778a3b11d9bd038c56c5" name="ac267ddadad37778a3b11d9bd038c56c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac267ddadad37778a3b11d9bd038c56c5">&#9670;&#160;</a></span>next</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct <a class="el" href="structgin__header__s.html">gin_header_s</a>* gin_header_s::next</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Pointer to next header. </p>
+
+</div>
+</div>
+<a id="ac77fb3066031e0b16f42d76cf2f03f52" name="ac77fb3066031e0b16f42d76cf2f03f52"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac77fb3066031e0b16f42d76cf2f03f52">&#9670;&#160;</a></span>value</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_header_s::value</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Header field value. </p>
+
+</div>
+</div>
 <hr/>The documentation for this struct was generated from the following file:<ul>
 <li>include/<a class="el" href="gin_8h_source.html">gin.h</a></li>
 </ul>

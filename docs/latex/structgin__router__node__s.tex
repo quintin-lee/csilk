@@ -1,25 +1,63 @@
 \doxysection{gin\+\_\+router\+\_\+node\+\_\+s Struct Reference}
 \hypertarget{structgin__router__node__s}{}\label{structgin__router__node__s}\index{gin\_router\_node\_s@{gin\_router\_node\_s}}
+
+
+Node in the router trie.  
+
+
 \doxysubsubsection*{Public Attributes}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{structgin__router__node__s_a9bad980ed1f961fca2b5c8610b0fdf3b}\label{structgin__router__node__s_a9bad980ed1f961fca2b5c8610b0fdf3b} 
-char \texorpdfstring{$\ast$}{*} {\bfseries segment}
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__router__node__s_a9bad980ed1f961fca2b5c8610b0fdf3b}{segment}}
 \item 
-\Hypertarget{structgin__router__node__s_ac84a9a91f4a5fc08b6d7476f55023766}\label{structgin__router__node__s_ac84a9a91f4a5fc08b6d7476f55023766} 
-gin\+\_\+node\+\_\+type\+\_\+t {\bfseries type}
+\doxymbox{\hyperlink{router_8c_a3081553e206b13d2b821e32c76294c88}{gin\+\_\+node\+\_\+type\+\_\+t}} \doxymbox{\hyperlink{structgin__router__node__s_ac84a9a91f4a5fc08b6d7476f55023766}{type}}
 \item 
-\Hypertarget{structgin__router__node__s_a468a2a6ec12eaa18da7d78291e26c321}\label{structgin__router__node__s_a468a2a6ec12eaa18da7d78291e26c321} 
-gin\+\_\+method\+\_\+handler\+\_\+t \texorpdfstring{$\ast$}{*} {\bfseries handlers}
+\doxymbox{\hyperlink{router_8c_a89290ab4c76f70e91667ce1b3b920a78}{gin\+\_\+method\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__router__node__s_a468a2a6ec12eaa18da7d78291e26c321}{handlers}}
 \item 
-\Hypertarget{structgin__router__node__s_a2363db4a3c0a8f5db8dbabc4ee41642a}\label{structgin__router__node__s_a2363db4a3c0a8f5db8dbabc4ee41642a} 
-struct \doxymbox{\hyperlink{structgin__router__node__s}{gin\+\_\+router\+\_\+node\+\_\+s}} \texorpdfstring{$\ast$}{*} {\bfseries children}
+struct \doxymbox{\hyperlink{structgin__router__node__s}{gin\+\_\+router\+\_\+node\+\_\+s}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__router__node__s_a927c32d2df39b939fdc2a306928b4905}{children}} \+[\doxymbox{\hyperlink{router_8c_a9fd1d94f2edbc89b9579d9da4db94268}{GIN\+\_\+\+MAX\+\_\+\+CHILDREN}}]\+
 \item 
-\Hypertarget{structgin__router__node__s_a702e6b191354f0e98115f0442f04104f}\label{structgin__router__node__s_a702e6b191354f0e98115f0442f04104f} 
-struct \doxymbox{\hyperlink{structgin__router__node__s}{gin\+\_\+router\+\_\+node\+\_\+s}} \texorpdfstring{$\ast$}{*} {\bfseries sibling}
+int \doxymbox{\hyperlink{structgin__router__node__s_aa3a505fecf711b5e8b2335a58f517c6b}{children\+\_\+count}}
 \end{DoxyCompactItemize}
 
 
+\doxysubsection{Detailed Description}
+Node in the router trie. 
+
+\label{doc-variable-members}
+\Hypertarget{structgin__router__node__s_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structgin__router__node__s_a927c32d2df39b939fdc2a306928b4905}\index{gin\_router\_node\_s@{gin\_router\_node\_s}!children@{children}}
+\index{children@{children}!gin\_router\_node\_s@{gin\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{children}{children}}
+{\footnotesize\ttfamily \label{structgin__router__node__s_a927c32d2df39b939fdc2a306928b4905} 
+struct \doxymbox{\hyperlink{structgin__router__node__s}{gin\+\_\+router\+\_\+node\+\_\+s}}\texorpdfstring{$\ast$}{*} gin\+\_\+router\+\_\+node\+\_\+s::\+children\+[\doxymbox{\hyperlink{router_8c_a9fd1d94f2edbc89b9579d9da4db94268}{GIN\+\_\+\+MAX\+\_\+\+CHILDREN}}]\+}
+
+Child nodes array. \Hypertarget{structgin__router__node__s_aa3a505fecf711b5e8b2335a58f517c6b}\index{gin\_router\_node\_s@{gin\_router\_node\_s}!children\_count@{children\_count}}
+\index{children\_count@{children\_count}!gin\_router\_node\_s@{gin\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{children\_count}{children\_count}}
+{\footnotesize\ttfamily \label{structgin__router__node__s_aa3a505fecf711b5e8b2335a58f517c6b} 
+int gin\+\_\+router\+\_\+node\+\_\+s::\+children\+\_\+count}
+
+Number of child nodes. \Hypertarget{structgin__router__node__s_a468a2a6ec12eaa18da7d78291e26c321}\index{gin\_router\_node\_s@{gin\_router\_node\_s}!handlers@{handlers}}
+\index{handlers@{handlers}!gin\_router\_node\_s@{gin\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{handlers}{handlers}}
+{\footnotesize\ttfamily \label{structgin__router__node__s_a468a2a6ec12eaa18da7d78291e26c321} 
+\doxymbox{\hyperlink{router_8c_a89290ab4c76f70e91667ce1b3b920a78}{gin\+\_\+method\+\_\+handler\+\_\+t}}\texorpdfstring{$\ast$}{*} gin\+\_\+router\+\_\+node\+\_\+s::\+handlers}
+
+Method handlers for this node. \Hypertarget{structgin__router__node__s_a9bad980ed1f961fca2b5c8610b0fdf3b}\index{gin\_router\_node\_s@{gin\_router\_node\_s}!segment@{segment}}
+\index{segment@{segment}!gin\_router\_node\_s@{gin\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{segment}{segment}}
+{\footnotesize\ttfamily \label{structgin__router__node__s_a9bad980ed1f961fca2b5c8610b0fdf3b} 
+char\texorpdfstring{$\ast$}{*} gin\+\_\+router\+\_\+node\+\_\+s::\+segment}
+
+URL path segment. \Hypertarget{structgin__router__node__s_ac84a9a91f4a5fc08b6d7476f55023766}\index{gin\_router\_node\_s@{gin\_router\_node\_s}!type@{type}}
+\index{type@{type}!gin\_router\_node\_s@{gin\_router\_node\_s}}
+\doxysubsubsection{\texorpdfstring{type}{type}}
+{\footnotesize\ttfamily \label{structgin__router__node__s_ac84a9a91f4a5fc08b6d7476f55023766} 
+\doxymbox{\hyperlink{router_8c_a3081553e206b13d2b821e32c76294c88}{gin\+\_\+node\+\_\+type\+\_\+t}} gin\+\_\+router\+\_\+node\+\_\+s::\+type}
+
+Type of node (static/\+param/\+wildcard). 
+
 The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
 \item 
-src/\+router.\+c\end{DoxyCompactItemize}
+src/\+\doxymbox{\hyperlink{router_8c}{router.\+c}}\end{DoxyCompactItemize}

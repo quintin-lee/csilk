@@ -1,0 +1,154 @@
+\doxysection{src/\+router.c File Reference}
+\hypertarget{router_8c}{}\label{router_8c}\index{src/router.c@{src/router.c}}
+
+
+Router implementation. MIT License.  
+
+
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structgin__method__handler__s}{gin\+\_\+method\+\_\+handler\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em Method-\/specific handler mapping. \end{DoxyCompactList}\item 
+struct \doxymbox{\hyperlink{structgin__router__node__s}{gin\+\_\+router\+\_\+node\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em Node in the router trie. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{router_8c_a9fd1d94f2edbc89b9579d9da4db94268}\label{router_8c_a9fd1d94f2edbc89b9579d9da4db94268} 
+\+\#define {\bfseries GIN\+\_\+\+MAX\+\_\+\+CHILDREN}~128
+\begin{DoxyCompactList}\small\item\em Maximum number of children per router tree node. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Typedefs}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{router_8c_a89290ab4c76f70e91667ce1b3b920a78}\label{router_8c_a89290ab4c76f70e91667ce1b3b920a78} 
+typedef struct \doxymbox{\hyperlink{structgin__method__handler__s}{gin\+\_\+method\+\_\+handler\+\_\+s}} {\bfseries gin\+\_\+method\+\_\+handler\+\_\+t}
+\begin{DoxyCompactList}\small\item\em Method-\/specific handler mapping. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Enumerations}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{router_8c_a3081553e206b13d2b821e32c76294c88}\label{router_8c_a3081553e206b13d2b821e32c76294c88} 
+enum \doxymbox{\hyperlink{router_8c_a3081553e206b13d2b821e32c76294c88}{gin\+\_\+node\+\_\+type\+\_\+t}} \{ {\bfseries GIN\+\_\+\+NODE\+\_\+\+STATIC}
+, {\bfseries GIN\+\_\+\+NODE\+\_\+\+PARAM}
+, {\bfseries GIN\+\_\+\+NODE\+\_\+\+WILDCARD}
+ \}
+\begin{DoxyCompactList}\small\item\em Node type for router trie. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{router_8c_a08fa8a437528249c2604309c82815ca2}{gin\+\_\+router\+\_\+new}} ()
+\begin{DoxyCompactList}\small\item\em Create a new router instance. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{router_8c_a3ff9e6478b310dd449cafc4c68288c80}{gin\+\_\+router\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}r)
+\begin{DoxyCompactList}\small\item\em Deallocate router and all its nodes. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{router_8c_ab7a13815e9fca25f52ca8d0d689dea2a}{gin\+\_\+router\+\_\+add}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}r, const char \texorpdfstring{$\ast$}{*}method, const char \texorpdfstring{$\ast$}{*}path, \doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*}handlers, size\+\_\+t handler\+\_\+count)
+\begin{DoxyCompactList}\small\item\em Add a route with handlers to the router. \end{DoxyCompactList}\item 
+\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{router_8c_a86babfb2a97d59562e56c6c48c365c1c}{gin\+\_\+router\+\_\+match}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}r, const char \texorpdfstring{$\ast$}{*}method, const char \texorpdfstring{$\ast$}{*}path)
+\begin{DoxyCompactList}\small\item\em Match a raw path to handlers (standalone). \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{router_8c_ac9403f0ba783ae3c7b6319bcd49dc3ec}{gin\+\_\+router\+\_\+match\+\_\+ctx}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}r, \doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Match current request context to router. Updates path parameters in context on success. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Router implementation. MIT License. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{router_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{router_8c_ab7a13815e9fca25f52ca8d0d689dea2a}\index{router.c@{router.c}!gin\_router\_add@{gin\_router\_add}}
+\index{gin\_router\_add@{gin\_router\_add}!router.c@{router.c}}
+\doxysubsubsection{\texorpdfstring{gin\_router\_add()}{gin\_router\_add()}}
+{\footnotesize\ttfamily \label{router_8c_ab7a13815e9fca25f52ca8d0d689dea2a} 
+void gin\+\_\+router\+\_\+add (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{r}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{method}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{path}{, }\item[{\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{handlers}{, }\item[{size\+\_\+t}]{handler\+\_\+count}{}\end{DoxyParamCaption})}
+
+
+
+Add a route with handlers to the router. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em r} & Router instance. \\
+\hline
+{\em method} & HTTP method string. \\
+\hline
+{\em path} & URL pattern (supports :\+param and \texorpdfstring{$\ast$}{*}wildcard). \\
+\hline
+{\em handlers} & Array of handler functions. \\
+\hline
+{\em handler\+\_\+count} & Number of handlers in the array. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{router_8c_a3ff9e6478b310dd449cafc4c68288c80}\index{router.c@{router.c}!gin\_router\_free@{gin\_router\_free}}
+\index{gin\_router\_free@{gin\_router\_free}!router.c@{router.c}}
+\doxysubsubsection{\texorpdfstring{gin\_router\_free()}{gin\_router\_free()}}
+{\footnotesize\ttfamily \label{router_8c_a3ff9e6478b310dd449cafc4c68288c80} 
+void gin\+\_\+router\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{r}{}\end{DoxyParamCaption})}
+
+
+
+Deallocate router and all its nodes. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em r} & Router instance. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{router_8c_a86babfb2a97d59562e56c6c48c365c1c}\index{router.c@{router.c}!gin\_router\_match@{gin\_router\_match}}
+\index{gin\_router\_match@{gin\_router\_match}!router.c@{router.c}}
+\doxysubsubsection{\texorpdfstring{gin\_router\_match()}{gin\_router\_match()}}
+{\footnotesize\ttfamily \label{router_8c_a86babfb2a97d59562e56c6c48c365c1c} 
+\doxymbox{\hyperlink{gin_8h_a32bd3f9dd28912a03796327bac3cd742}{gin\+\_\+handler\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+router\+\_\+match (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{r}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{method}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{path}{}\end{DoxyParamCaption})}
+
+
+
+Match a raw path to handlers (standalone). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em r} & Router instance. \\
+\hline
+{\em method} & HTTP method string. \\
+\hline
+{\em path} & URL path string. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Pointer to handler array, or NULL if not found. 
+\end{DoxyReturn}
+\Hypertarget{router_8c_ac9403f0ba783ae3c7b6319bcd49dc3ec}\index{router.c@{router.c}!gin\_router\_match\_ctx@{gin\_router\_match\_ctx}}
+\index{gin\_router\_match\_ctx@{gin\_router\_match\_ctx}!router.c@{router.c}}
+\doxysubsubsection{\texorpdfstring{gin\_router\_match\_ctx()}{gin\_router\_match\_ctx()}}
+{\footnotesize\ttfamily \label{router_8c_ac9403f0ba783ae3c7b6319bcd49dc3ec} 
+int gin\+\_\+router\+\_\+match\+\_\+ctx (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{r}{, }\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Match current request context to router. Updates path parameters in context on success. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em r} & Router instance. \\
+\hline
+{\em c} & Request context. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+1 on success, 0 on failure. 
+\end{DoxyReturn}
+\Hypertarget{router_8c_a08fa8a437528249c2604309c82815ca2}\index{router.c@{router.c}!gin\_router\_new@{gin\_router\_new}}
+\index{gin\_router\_new@{gin\_router\_new}!router.c@{router.c}}
+\doxysubsubsection{\texorpdfstring{gin\_router\_new()}{gin\_router\_new()}}
+{\footnotesize\ttfamily \label{router_8c_a08fa8a437528249c2604309c82815ca2} 
+\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+router\+\_\+new (\begin{DoxyParamCaption}{}{}\end{DoxyParamCaption})}
+
+
+
+Create a new router instance. 
+
+\begin{DoxyReturn}{Returns}
+Pointer to the new router. 
+\end{DoxyReturn}

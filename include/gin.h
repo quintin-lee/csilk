@@ -2,7 +2,7 @@
  * @file gin.h
  * @brief High-performance C web framework inspired by Gin (Golang).
  * @version 0.1.0
- * @license MIT
+ * MIT License
  */
 
 #ifndef GIN_H
@@ -19,18 +19,17 @@
 /** @brief Maximum number of URL parameters. */
 #define GIN_MAX_PARAMS 20
 
-/** @forward_declaration Request context. */
+/** @brief Opaque request context type. */
 typedef struct gin_ctx_s gin_ctx_t;
 /** @brief Handler function pointer type. */
 typedef void (*gin_handler_t)(gin_ctx_t* c);
 
 /** @brief HTTP Header structure (linked list). */
-typedef struct gin_header_s gin_header_t;
-struct gin_header_s {
+typedef struct gin_header_s {
   char* key;                /**< Header field name. */
   char* value;              /**< Header field value. */
   struct gin_header_s* next; /**< Pointer to next header. */
-};
+} gin_header_t;
 
 /** @brief HTTP Request structure. */
 typedef struct {
@@ -56,7 +55,7 @@ typedef struct {
   char* value;              /**< Actual parameter value from URL. */
 } gin_param_t;
 
-/** @forward_declaration Arena allocator. */
+/** @brief Opaque arena allocator type. */
 typedef struct gin_arena_s gin_arena_t;
 
 /** @brief Main Request Context.
@@ -74,7 +73,7 @@ struct gin_ctx_s {
   gin_param_t params[GIN_MAX_PARAMS]; /**< URL path parameters array. */
   int params_count;         /**< Current number of path parameters. */
   int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
-  void (*on_ws_message)(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+  void (*on_ws_message)(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode); /**< WebSocket message callback. */
   void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
 };
 
@@ -141,7 +140,8 @@ gin_arena_t* gin_arena_new(size_t default_chunk_size);
 /** @brief Allocate memory from the arena.
  * Memory will be freed automatically in gin_ctx_cleanup.
  * @param arena The arena instance.
- * @param size Number of bytes to allocate. */
+ * @param size Number of bytes to allocate.
+ * @return Pointer to allocated memory, or NULL on failure. */
 void* gin_arena_alloc(gin_arena_t* arena, size_t size);
 
 /** @brief Duplicate a string using the arena allocator.
@@ -166,12 +166,12 @@ void gin_panic(gin_ctx_t* c);
 
 /** @brief Logging levels. */
 typedef enum {
-  GIN_LOG_TRACE,
-  GIN_LOG_DEBUG,
-  GIN_LOG_INFO,
-  GIN_LOG_WARN,
-  GIN_LOG_ERROR,
-  GIN_LOG_FATAL
+  GIN_LOG_TRACE,  /**< Trace-level logging. */
+  GIN_LOG_DEBUG,  /**< Debug-level logging. */
+  GIN_LOG_INFO,   /**< Informational logging. */
+  GIN_LOG_WARN,   /**< Warning-level logging. */
+  GIN_LOG_ERROR,  /**< Error-level logging. */
+  GIN_LOG_FATAL   /**< Fatal error logging. */
 } gin_log_level_t;
 
 /** @brief Logger configuration. */
@@ -187,7 +187,13 @@ typedef struct {
  * @return 0 on success, -1 on failure. */
 int gin_log_init(gin_log_config_t config);
 
-/** @brief Internal log function (use macros instead). */
+/** @brief Internal log function (use macros instead).
+ * @param level Log severity level.
+ * @param file Source file name (__FILE__).
+ * @param line Source line number (__LINE__).
+ * @param func Function name (__func__).
+ * @param fmt Printf-style format string.
+ * @param ... Format arguments. */
 void _gin_log_internal(gin_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
@@ -196,11 +202,17 @@ void gin_log_close();
 /** @name Logging Macros
  * Convenience macros that capture source location.
  * @{ */
+/** @brief Log a TRACE-level message. */
 #define GIN_LOG_T(...) _gin_log_internal(GIN_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @brief Log a DEBUG-level message. */
 #define GIN_LOG_D(...) _gin_log_internal(GIN_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @brief Log an INFO-level message. */
 #define GIN_LOG_I(...) _gin_log_internal(GIN_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @brief Log a WARN-level message. */
 #define GIN_LOG_W(...) _gin_log_internal(GIN_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @brief Log an ERROR-level message. */
 #define GIN_LOG_E(...) _gin_log_internal(GIN_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @brief Log a FATAL-level message. */
 #define GIN_LOG_F(...) _gin_log_internal(GIN_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @} */
 
@@ -249,16 +261,16 @@ typedef struct {
   struct {
       int enable;               /**< Enable CORS. */
       gin_cors_config_t config; /**< CORS config. */
-  } cors;
+  } cors;                       /**< CORS settings. */
   struct {
       int enable;               /**< Enable rate limiting. */
       int requests_per_minute;  /**< Limit per IP. */
-  } rate_limit;
+  } rate_limit;                 /**< Rate limit settings. */
   struct {
       int enable;               /**< Enable static file serving. */
       char* root_dir;           /**< Local directory path. */
       char* prefix;             /**< URL prefix (e.g., "/static"). */
-  } static_files;
+  } static_files;               /**< Static file settings. */
 } gin_config_t;
 
 /** @brief Load configuration from a YAML file.
@@ -393,18 +405,25 @@ void gin_group_free(gin_group_t* group);
 /** @name Group Route Macros
  * Convenience macros for adding routes to groups.
  * @{ */
+/** @brief Register a GET route on the group. */
 #define gin_GET(group, path, handler) \
   gin_group_add_route(group, "GET", path, handler)
+/** @brief Register a POST route on the group. */
 #define gin_POST(group, path, handler) \
   gin_group_add_route(group, "POST", path, handler)
+/** @brief Register a PUT route on the group. */
 #define gin_PUT(group, path, handler) \
   gin_group_add_route(group, "PUT", path, handler)
+/** @brief Register a DELETE route on the group. */
 #define gin_DELETE(group, path, handler) \
   gin_group_add_route(group, "DELETE", path, handler)
+/** @brief Register a PATCH route on the group. */
 #define gin_PATCH(group, path, handler) \
   gin_group_add_route(group, "PATCH", path, handler)
+/** @brief Register an OPTIONS route on the group. */
 #define gin_OPTIONS(group, path, handler) \
   gin_group_add_route(group, "OPTIONS", path, handler)
+/** @brief Register a HEAD route on the group. */
 #define gin_HEAD(group, path, handler) \
   gin_group_add_route(group, "HEAD", path, handler)
 /** @} */

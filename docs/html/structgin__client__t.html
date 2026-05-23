@@ -91,26 +91,146 @@ $(function(){initNavTree('structgin__client__t.html','','structgin__client__t-me
   <div class="headertitle"><div class="title">gin_client_t Struct Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Client connection structure.  
+ <a href="#details">More...</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:a1691c73abb87a7bc4eb7cb09c8bccf67" id="r_a1691c73abb87a7bc4eb7cb09c8bccf67"><td class="memItemLeft"><a id="a1691c73abb87a7bc4eb7cb09c8bccf67" name="a1691c73abb87a7bc4eb7cb09c8bccf67"></a>
-uv_tcp_t&#160;</td><td class="memItemRight"><b>handle</b></td></tr>
-<tr class="memitem:a97b5eda9bd3217a5da6bc78fa37dbb20" id="r_a97b5eda9bd3217a5da6bc78fa37dbb20"><td class="memItemLeft"><a id="a97b5eda9bd3217a5da6bc78fa37dbb20" name="a97b5eda9bd3217a5da6bc78fa37dbb20"></a>
-llhttp_t&#160;</td><td class="memItemRight"><b>parser</b></td></tr>
-<tr class="memitem:a1fbdf934c61a2b12655483437fc1264c" id="r_a1fbdf934c61a2b12655483437fc1264c"><td class="memItemLeft"><a id="a1fbdf934c61a2b12655483437fc1264c" name="a1fbdf934c61a2b12655483437fc1264c"></a>
-gin_server_t *&#160;</td><td class="memItemRight"><b>server</b></td></tr>
-<tr class="memitem:a6c917f0b5eb09c8987e97e0bc29ec8bd" id="r_a6c917f0b5eb09c8987e97e0bc29ec8bd"><td class="memItemLeft"><a id="a6c917f0b5eb09c8987e97e0bc29ec8bd" name="a6c917f0b5eb09c8987e97e0bc29ec8bd"></a>
-gin_ctx_t&#160;</td><td class="memItemRight"><b>ctx</b></td></tr>
-<tr class="memitem:ac7e4301cadf451a7ec0bc37e8c99e508" id="r_ac7e4301cadf451a7ec0bc37e8c99e508"><td class="memItemLeft"><a id="ac7e4301cadf451a7ec0bc37e8c99e508" name="ac7e4301cadf451a7ec0bc37e8c99e508"></a>
-char *&#160;</td><td class="memItemRight"><b>current_url</b></td></tr>
-<tr class="memitem:a94147968fdfaaa4399b25a67b6571c4b" id="r_a94147968fdfaaa4399b25a67b6571c4b"><td class="memItemLeft"><a id="a94147968fdfaaa4399b25a67b6571c4b" name="a94147968fdfaaa4399b25a67b6571c4b"></a>
-char *&#160;</td><td class="memItemRight"><b>current_header_field</b></td></tr>
-<tr class="memitem:a06eba6705ba259abce34ff7841ccc183" id="r_a06eba6705ba259abce34ff7841ccc183"><td class="memItemLeft"><a id="a06eba6705ba259abce34ff7841ccc183" name="a06eba6705ba259abce34ff7841ccc183"></a>
-char *&#160;</td><td class="memItemRight"><b>current_header_value</b></td></tr>
+<tr class="memitem:a1691c73abb87a7bc4eb7cb09c8bccf67" id="r_a1691c73abb87a7bc4eb7cb09c8bccf67"><td class="memItemLeft">uv_tcp_t&#160;</td><td class="memItemRight"><a class="el" href="#a1691c73abb87a7bc4eb7cb09c8bccf67">handle</a></td></tr>
+<tr class="memitem:ae44b8ceb06b1021bd79367b44082e679" id="r_ae44b8ceb06b1021bd79367b44082e679"><td class="memItemLeft">uv_timer_t&#160;</td><td class="memItemRight"><a class="el" href="#ae44b8ceb06b1021bd79367b44082e679">timer</a></td></tr>
+<tr class="memitem:a97b5eda9bd3217a5da6bc78fa37dbb20" id="r_a97b5eda9bd3217a5da6bc78fa37dbb20"><td class="memItemLeft">llhttp_t&#160;</td><td class="memItemRight"><a class="el" href="#a97b5eda9bd3217a5da6bc78fa37dbb20">parser</a></td></tr>
+<tr class="memitem:a1fbdf934c61a2b12655483437fc1264c" id="r_a1fbdf934c61a2b12655483437fc1264c"><td class="memItemLeft"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a> *&#160;</td><td class="memItemRight"><a class="el" href="#a1fbdf934c61a2b12655483437fc1264c">server</a></td></tr>
+<tr class="memitem:a6c917f0b5eb09c8987e97e0bc29ec8bd" id="r_a6c917f0b5eb09c8987e97e0bc29ec8bd"><td class="memItemLeft"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a>&#160;</td><td class="memItemRight"><a class="el" href="#a6c917f0b5eb09c8987e97e0bc29ec8bd">ctx</a></td></tr>
+<tr class="memitem:ac7e4301cadf451a7ec0bc37e8c99e508" id="r_ac7e4301cadf451a7ec0bc37e8c99e508"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#ac7e4301cadf451a7ec0bc37e8c99e508">current_url</a></td></tr>
+<tr class="memitem:a94147968fdfaaa4399b25a67b6571c4b" id="r_a94147968fdfaaa4399b25a67b6571c4b"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#a94147968fdfaaa4399b25a67b6571c4b">current_header_field</a></td></tr>
+<tr class="memitem:a06eba6705ba259abce34ff7841ccc183" id="r_a06eba6705ba259abce34ff7841ccc183"><td class="memItemLeft">char *&#160;</td><td class="memItemRight"><a class="el" href="#a06eba6705ba259abce34ff7841ccc183">current_header_value</a></td></tr>
 </table>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Client connection structure. </p>
+</div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="a6c917f0b5eb09c8987e97e0bc29ec8bd" name="a6c917f0b5eb09c8987e97e0bc29ec8bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c917f0b5eb09c8987e97e0bc29ec8bd">&#9670;&#160;</a></span>ctx</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> gin_client_t::ctx</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Request context for this connection. </p>
+
+</div>
+</div>
+<a id="a94147968fdfaaa4399b25a67b6571c4b" name="a94147968fdfaaa4399b25a67b6571c4b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a94147968fdfaaa4399b25a67b6571c4b">&#9670;&#160;</a></span>current_header_field</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_client_t::current_header_field</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Temporary header field name. </p>
+
+</div>
+</div>
+<a id="a06eba6705ba259abce34ff7841ccc183" name="a06eba6705ba259abce34ff7841ccc183"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a06eba6705ba259abce34ff7841ccc183">&#9670;&#160;</a></span>current_header_value</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_client_t::current_header_value</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Temporary header field value. </p>
+
+</div>
+</div>
+<a id="ac7e4301cadf451a7ec0bc37e8c99e508" name="ac7e4301cadf451a7ec0bc37e8c99e508"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac7e4301cadf451a7ec0bc37e8c99e508">&#9670;&#160;</a></span>current_url</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">char* gin_client_t::current_url</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Current URL being parsed. </p>
+
+</div>
+</div>
+<a id="a1691c73abb87a7bc4eb7cb09c8bccf67" name="a1691c73abb87a7bc4eb7cb09c8bccf67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1691c73abb87a7bc4eb7cb09c8bccf67">&#9670;&#160;</a></span>handle</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_tcp_t gin_client_t::handle</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>libuv TCP stream handle. </p>
+
+</div>
+</div>
+<a id="a97b5eda9bd3217a5da6bc78fa37dbb20" name="a97b5eda9bd3217a5da6bc78fa37dbb20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a97b5eda9bd3217a5da6bc78fa37dbb20">&#9670;&#160;</a></span>parser</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">llhttp_t gin_client_t::parser</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>HTTP request parser. </p>
+
+</div>
+</div>
+<a id="a1fbdf934c61a2b12655483437fc1264c" name="a1fbdf934c61a2b12655483437fc1264c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1fbdf934c61a2b12655483437fc1264c">&#9670;&#160;</a></span>server</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="gin_8h.html#a7d2c38004d205cac5306815e3d0f0011">gin_server_t</a>* gin_client_t::server</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Owning server instance. </p>
+
+</div>
+</div>
+<a id="ae44b8ceb06b1021bd79367b44082e679" name="ae44b8ceb06b1021bd79367b44082e679"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae44b8ceb06b1021bd79367b44082e679">&#9670;&#160;</a></span>timer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">uv_timer_t gin_client_t::timer</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Connection idle timer. </p>
+
+</div>
+</div>
 <hr/>The documentation for this struct was generated from the following file:<ul>
-<li>src/<b>server.c</b></li>
+<li>src/<a class="el" href="server_8c.html">server.c</a></li>
 </ul>
 </div><!-- contents -->
 </div><!-- doc-content -->

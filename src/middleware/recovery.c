@@ -1,7 +1,7 @@
 /**
  * @file recovery.c
  * @brief Recovery middleware implementation.
- * @license MIT
+ * MIT License
  */
 
 #include <setjmp.h>

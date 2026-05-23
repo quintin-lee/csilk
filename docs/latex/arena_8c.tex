@@ -1,0 +1,120 @@
+\doxysection{src/\+arena.c File Reference}
+\hypertarget{arena_8c}{}\label{arena_8c}\index{src/arena.c@{src/arena.c}}
+
+
+Arena allocator implementation for request-\/scoped memory.  
+
+
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdint.\+h$>$}\newline
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structgin__arena__chunk__s}{gin\+\_\+arena\+\_\+chunk\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em A single chunk in the arena linked list. \end{DoxyCompactList}\item 
+struct \doxymbox{\hyperlink{structgin__arena__s}{gin\+\_\+arena\+\_\+s}}
+\begin{DoxyCompactList}\small\item\em Arena allocator for request-\/scoped memory. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Typedefs}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{arena_8c_a0e387d1fcf915a343650beedbf0c87be}\label{arena_8c_a0e387d1fcf915a343650beedbf0c87be} 
+typedef struct \doxymbox{\hyperlink{structgin__arena__chunk__s}{gin\+\_\+arena\+\_\+chunk\+\_\+s}} {\bfseries gin\+\_\+arena\+\_\+chunk\+\_\+t}
+\begin{DoxyCompactList}\small\item\em A single chunk in the arena linked list. \end{DoxyCompactList}\item 
+\Hypertarget{arena_8c_a7316f19211bdb24e0290cd5648defb14}\label{arena_8c_a7316f19211bdb24e0290cd5648defb14} 
+typedef struct \doxymbox{\hyperlink{structgin__arena__s}{gin\+\_\+arena\+\_\+s}} {\bfseries gin\+\_\+arena\+\_\+t}
+\begin{DoxyCompactList}\small\item\em Arena allocator for request-\/scoped memory. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_acb4964d4b63a5e672384173abf388499}{gin\+\_\+arena\+\_\+new}} (size\+\_\+t default\+\_\+chunk\+\_\+size)
+\begin{DoxyCompactList}\small\item\em Create a new request-\/scoped arena allocator. \end{DoxyCompactList}\item 
+void \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a969e673816347275f8a2ac8200995941}{gin\+\_\+arena\+\_\+alloc}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, size\+\_\+t size)
+\begin{DoxyCompactList}\small\item\em Allocate memory from the arena. Memory will be freed automatically in gin\+\_\+ctx\+\_\+cleanup. \end{DoxyCompactList}\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60}{gin\+\_\+arena\+\_\+strdup}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, const char \texorpdfstring{$\ast$}{*}s)
+\begin{DoxyCompactList}\small\item\em Duplicate a string using the arena allocator. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{arena_8c_a9da4a728adda81dc62e5609af3d16d39}{gin\+\_\+arena\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena)
+\begin{DoxyCompactList}\small\item\em Explicitly free the arena and all its chunks. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Arena allocator implementation for request-\/scoped memory. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{arena_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{arena_8c_a969e673816347275f8a2ac8200995941}\index{arena.c@{arena.c}!gin\_arena\_alloc@{gin\_arena\_alloc}}
+\index{gin\_arena\_alloc@{gin\_arena\_alloc}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{gin\_arena\_alloc()}{gin\_arena\_alloc()}}
+{\footnotesize\ttfamily \label{arena_8c_a969e673816347275f8a2ac8200995941} 
+void \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+alloc (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{size\+\_\+t}]{size}{}\end{DoxyParamCaption})}
+
+
+
+Allocate memory from the arena. Memory will be freed automatically in gin\+\_\+ctx\+\_\+cleanup. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em arena} & The arena instance. \\
+\hline
+{\em size} & Number of bytes to allocate. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Pointer to allocated memory, or NULL on failure. 
+\end{DoxyReturn}
+\Hypertarget{arena_8c_a9da4a728adda81dc62e5609af3d16d39}\index{arena.c@{arena.c}!gin\_arena\_free@{gin\_arena\_free}}
+\index{gin\_arena\_free@{gin\_arena\_free}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{gin\_arena\_free()}{gin\_arena\_free()}}
+{\footnotesize\ttfamily \label{arena_8c_a9da4a728adda81dc62e5609af3d16d39} 
+void gin\+\_\+arena\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{}\end{DoxyParamCaption})}
+
+
+
+Explicitly free the arena and all its chunks. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em arena} & The arena instance. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{arena_8c_acb4964d4b63a5e672384173abf388499}\index{arena.c@{arena.c}!gin\_arena\_new@{gin\_arena\_new}}
+\index{gin\_arena\_new@{gin\_arena\_new}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{gin\_arena\_new()}{gin\_arena\_new()}}
+{\footnotesize\ttfamily \label{arena_8c_acb4964d4b63a5e672384173abf388499} 
+\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+new (\begin{DoxyParamCaption}\item[{size\+\_\+t}]{default\+\_\+chunk\+\_\+size}{}\end{DoxyParamCaption})}
+
+
+
+Create a new request-\/scoped arena allocator. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em default\+\_\+chunk\+\_\+size} & Initial size of the arena memory chunk. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Pointer to the new arena instance. 
+\end{DoxyReturn}
+\Hypertarget{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60}\index{arena.c@{arena.c}!gin\_arena\_strdup@{gin\_arena\_strdup}}
+\index{gin\_arena\_strdup@{gin\_arena\_strdup}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{gin\_arena\_strdup()}{gin\_arena\_strdup()}}
+{\footnotesize\ttfamily \label{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60} 
+char \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+strdup (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{s}{}\end{DoxyParamCaption})}
+
+
+
+Duplicate a string using the arena allocator. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em arena} & The arena instance. \\
+\hline
+{\em s} & Source string. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Allocated copy of the string. 
+\end{DoxyReturn}

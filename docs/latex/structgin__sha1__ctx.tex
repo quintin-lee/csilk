@@ -1,0 +1,52 @@
+\doxysection{gin\+\_\+sha1\+\_\+ctx Struct Reference}
+\hypertarget{structgin__sha1__ctx}{}\label{structgin__sha1__ctx}\index{gin\_sha1\_ctx@{gin\_sha1\_ctx}}
+
+
+SHA1 hashing context.  
+
+
+
+
+{\ttfamily \+\#include $<$gin\+\_\+internal.\+h$>$}
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+uint32\+\_\+t \doxymbox{\hyperlink{structgin__sha1__ctx_a37709422e866bf466ec86f6e8b37cb08}{state}} \+[5]\+
+\item 
+uint32\+\_\+t \doxymbox{\hyperlink{structgin__sha1__ctx_ab552983fef2e3904520fe0d8a891ffea}{count}} \+[2]\+
+\item 
+uint8\+\_\+t \doxymbox{\hyperlink{structgin__sha1__ctx_a78c08c85f4c47e081841fbf1a9ae7388}{buffer}} \+[64]\+
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+SHA1 hashing context. 
+
+\label{doc-variable-members}
+\Hypertarget{structgin__sha1__ctx_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structgin__sha1__ctx_a78c08c85f4c47e081841fbf1a9ae7388}\index{gin\_sha1\_ctx@{gin\_sha1\_ctx}!buffer@{buffer}}
+\index{buffer@{buffer}!gin\_sha1\_ctx@{gin\_sha1\_ctx}}
+\doxysubsubsection{\texorpdfstring{buffer}{buffer}}
+{\footnotesize\ttfamily \label{structgin__sha1__ctx_a78c08c85f4c47e081841fbf1a9ae7388} 
+uint8\+\_\+t gin\+\_\+sha1\+\_\+ctx::\+buffer}
+
+Data block buffer. \Hypertarget{structgin__sha1__ctx_ab552983fef2e3904520fe0d8a891ffea}\index{gin\_sha1\_ctx@{gin\_sha1\_ctx}!count@{count}}
+\index{count@{count}!gin\_sha1\_ctx@{gin\_sha1\_ctx}}
+\doxysubsubsection{\texorpdfstring{count}{count}}
+{\footnotesize\ttfamily \label{structgin__sha1__ctx_ab552983fef2e3904520fe0d8a891ffea} 
+uint32\+\_\+t gin\+\_\+sha1\+\_\+ctx::\+count}
+
+Message length counter. \Hypertarget{structgin__sha1__ctx_a37709422e866bf466ec86f6e8b37cb08}\index{gin\_sha1\_ctx@{gin\_sha1\_ctx}!state@{state}}
+\index{state@{state}!gin\_sha1\_ctx@{gin\_sha1\_ctx}}
+\doxysubsubsection{\texorpdfstring{state}{state}}
+{\footnotesize\ttfamily \label{structgin__sha1__ctx_a37709422e866bf466ec86f6e8b37cb08} 
+uint32\+\_\+t gin\+\_\+sha1\+\_\+ctx::\+state}
+
+Intermediate hash state. 
+
+The documentation for this struct was generated from the following files:\+\begin{DoxyCompactItemize}
+\item 
+include/\+\doxymbox{\hyperlink{gin__internal_8h}{gin\+\_\+internal.\+h}}\item 
+src/\+\doxymbox{\hyperlink{utils_8c}{utils.\+c}}\end{DoxyCompactItemize}

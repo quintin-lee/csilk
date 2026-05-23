@@ -1,0 +1,94 @@
+\doxysection{src/\+websocket.c File Reference}
+\hypertarget{websocket_8c}{}\label{websocket_8c}\index{src/websocket.c@{src/websocket.c}}
+
+
+Web\+Socket handshake, send, and frame parsing implementation. MIT License.  
+
+
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdint.\+h$>$}\newline
+{\ttfamily \+\#include $<$uv.\+h$>$}\newline
+{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+{\ttfamily \+\#include "{}gin\+\_\+internal.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{websocket_8c_a19b2fa8561bcd550d68b56b81d783e98}\label{websocket_8c_a19b2fa8561bcd550d68b56b81d783e98} 
+\+\#define {\bfseries WS\+\_\+\+GUID}~"{}258EAFA5-\/E914-\/47DA-\/95CA-\/C5\+AB0\+DC85\+B11"{}
+\begin{DoxyCompactList}\small\item\em Web\+Socket GUID for handshake key generation (RFC 6455). \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \doxymbox{\hyperlink{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f}{gin\+\_\+ws\+\_\+handshake}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Handshake and upgrade to Web\+Socket. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3}{gin\+\_\+ws\+\_\+send}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}payload, size\+\_\+t len, int opcode)
+\begin{DoxyCompactList}\small\item\em Send a Web\+Socket message. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5}{gin\+\_\+ws\+\_\+parse\+\_\+frame}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}buf, size\+\_\+t nread)
+\begin{DoxyCompactList}\small\item\em Parse incoming Web\+Socket frame data. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Web\+Socket handshake, send, and frame parsing implementation. MIT License. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{websocket_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f}\index{websocket.c@{websocket.c}!gin\_ws\_handshake@{gin\_ws\_handshake}}
+\index{gin\_ws\_handshake@{gin\_ws\_handshake}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{gin\_ws\_handshake()}{gin\_ws\_handshake()}}
+{\footnotesize\ttfamily \label{websocket_8c_ada33ef3140c39e2c0e384576700b2a3f} 
+void gin\+\_\+ws\+\_\+handshake (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Handshake and upgrade to Web\+Socket. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5}\index{websocket.c@{websocket.c}!gin\_ws\_parse\_frame@{gin\_ws\_parse\_frame}}
+\index{gin\_ws\_parse\_frame@{gin\_ws\_parse\_frame}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{gin\_ws\_parse\_frame()}{gin\_ws\_parse\_frame()}}
+{\footnotesize\ttfamily \label{websocket_8c_a6bde09e3ce51012dc4ef8b4fb9058dc5} 
+void gin\+\_\+ws\+\_\+parse\+\_\+frame (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{nread}{}\end{DoxyParamCaption})}
+
+
+
+Parse incoming Web\+Socket frame data. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & Request context. \\
+\hline
+{\em buf} & Raw input buffer. \\
+\hline
+{\em nread} & Number of bytes read. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3}\index{websocket.c@{websocket.c}!gin\_ws\_send@{gin\_ws\_send}}
+\index{gin\_ws\_send@{gin\_ws\_send}!websocket.c@{websocket.c}}
+\doxysubsubsection{\texorpdfstring{gin\_ws\_send()}{gin\_ws\_send()}}
+{\footnotesize\ttfamily \label{websocket_8c_af934d67bb8c6aaf8bbae38507d7476c3} 
+void gin\+\_\+ws\+\_\+send (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{payload}{, }\item[{size\+\_\+t}]{len}{, }\item[{int}]{opcode}{}\end{DoxyParamCaption})}
+
+
+
+Send a Web\+Socket message. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em payload} & Data to send. \\
+\hline
+{\em len} & Data length. \\
+\hline
+{\em opcode} & Opcode (1 for text, 2 for binary). \\
+\hline
+\end{DoxyParams}

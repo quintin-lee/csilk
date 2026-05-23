@@ -1,0 +1,308 @@
+\doxysection{src/\+context.c File Reference}
+\hypertarget{context_8c}{}\label{context_8c}\index{src/context.c@{src/context.c}}
+
+
+Request/\+response context implementation. MIT License.  
+
+
+{\ttfamily \+\#include $<$stddef.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$strings.\+h$>$}\newline
+{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \doxymbox{\hyperlink{context_8c_ad79d5936263e13caed04963a05012910}{gin\+\_\+next}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Move to the next handler in the onion model chain. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_ac3a63b18c413eac7e9171294dfb5d255}{gin\+\_\+abort}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Abort the handler chain execution immediately. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_a84494dbc8883822907df23d287dd4978}{gin\+\_\+status}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, int status)
+\begin{DoxyCompactList}\small\item\em Set the response status code. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_af4ca536f047ff81ce7cf844cf5ac92d1}{gin\+\_\+string}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, int status, const char \texorpdfstring{$\ast$}{*}msg)
+\begin{DoxyCompactList}\small\item\em Set response body and status code (Plain text/\+\+String). Memory is managed by the request arena. \end{DoxyCompactList}\item 
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{context_8c_ad9c3055553cbaeec7479d38f86e0fb12}{gin\+\_\+get\+\_\+param}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}key)
+\begin{DoxyCompactList}\small\item\em Get a URL path parameter by key. \end{DoxyCompactList}\item 
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{context_8c_a0807a0488575d9d1efeeb728f4df24e6}{gin\+\_\+get\+\_\+header}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}key)
+\begin{DoxyCompactList}\small\item\em Get a request header by key. Case-\/insensitive lookup. \end{DoxyCompactList}\item 
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{context_8c_a5c84cd149a073eeac82e39e48ae6a75b}{gin\+\_\+get\+\_\+query}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}key)
+\begin{DoxyCompactList}\small\item\em Get a query parameter by key. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_a36783625e91a03472ee1ed5c050d1f11}{gin\+\_\+set\+\_\+request\+\_\+header}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}key, const char \texorpdfstring{$\ast$}{*}value)
+\begin{DoxyCompactList}\small\item\em Set a request header. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_a5d8d58e7649dc971fca83a8d49937bf0}{gin\+\_\+set\+\_\+header}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}key, const char \texorpdfstring{$\ast$}{*}value)
+\begin{DoxyCompactList}\small\item\em Set a response header. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_a9772a7ae03b20f9403f3f945f439b4f7}{gin\+\_\+ctx\+\_\+cleanup}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Clean up all context-\/related resources (arena, headers, etc.). \end{DoxyCompactList}\item 
+c\+JSON \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{context_8c_a2cd07543e0bc93cb0ddac468e7bc90f2}{gin\+\_\+bind\+\_\+json}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+\begin{DoxyCompactList}\small\item\em Bind request body to a c\+JSON object. \end{DoxyCompactList}\item 
+c\+JSON \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{context_8c_ad853c90565b37f0940e8a549dc1d31f2}{gin\+\_\+bind\+\_\+json\+\_\+err}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}error)
+\begin{DoxyCompactList}\small\item\em Bind request body to c\+JSON with error feedback. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_ab2accc0a4f8455ac23cfea33e7eb71d7}{gin\+\_\+json}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, int status, c\+JSON \texorpdfstring{$\ast$}{*}json)
+\begin{DoxyCompactList}\small\item\em Send a JSON response. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{context_8c_ad60115d18ed95af3a62acfde2e3b56b7}{gin\+\_\+json\+\_\+error}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, int status, const char \texorpdfstring{$\ast$}{*}message)
+\begin{DoxyCompactList}\small\item\em Send a JSON formatted error response. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Request/\+response context implementation. MIT License. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{context_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{context_8c_ac3a63b18c413eac7e9171294dfb5d255}\index{context.c@{context.c}!gin\_abort@{gin\_abort}}
+\index{gin\_abort@{gin\_abort}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_abort()}{gin\_abort()}}
+{\footnotesize\ttfamily \label{context_8c_ac3a63b18c413eac7e9171294dfb5d255} 
+void gin\+\_\+abort (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Abort the handler chain execution immediately. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_a2cd07543e0bc93cb0ddac468e7bc90f2}\index{context.c@{context.c}!gin\_bind\_json@{gin\_bind\_json}}
+\index{gin\_bind\_json@{gin\_bind\_json}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_bind\_json()}{gin\_bind\_json()}}
+{\footnotesize\ttfamily \label{context_8c_a2cd07543e0bc93cb0ddac468e7bc90f2} 
+c\+JSON \texorpdfstring{$\ast$}{*} gin\+\_\+bind\+\_\+json (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Bind request body to a c\+JSON object. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Parsed c\+JSON pointer, or NULL if parsing fails. 
+\end{DoxyReturn}
+\Hypertarget{context_8c_ad853c90565b37f0940e8a549dc1d31f2}\index{context.c@{context.c}!gin\_bind\_json\_err@{gin\_bind\_json\_err}}
+\index{gin\_bind\_json\_err@{gin\_bind\_json\_err}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_bind\_json\_err()}{gin\_bind\_json\_err()}}
+{\footnotesize\ttfamily \label{context_8c_ad853c90565b37f0940e8a549dc1d31f2} 
+c\+JSON \texorpdfstring{$\ast$}{*} gin\+\_\+bind\+\_\+json\+\_\+err (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{error}{}\end{DoxyParamCaption})}
+
+
+
+Bind request body to c\+JSON with error feedback. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em error} & Pointer to store error string if parsing fails. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+Parsed c\+JSON pointer, or NULL on error. 
+\end{DoxyReturn}
+\Hypertarget{context_8c_a9772a7ae03b20f9403f3f945f439b4f7}\index{context.c@{context.c}!gin\_ctx\_cleanup@{gin\_ctx\_cleanup}}
+\index{gin\_ctx\_cleanup@{gin\_ctx\_cleanup}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_ctx\_cleanup()}{gin\_ctx\_cleanup()}}
+{\footnotesize\ttfamily \label{context_8c_a9772a7ae03b20f9403f3f945f439b4f7} 
+void gin\+\_\+ctx\+\_\+cleanup (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Clean up all context-\/related resources (arena, headers, etc.). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_a0807a0488575d9d1efeeb728f4df24e6}\index{context.c@{context.c}!gin\_get\_header@{gin\_get\_header}}
+\index{gin\_get\_header@{gin\_get\_header}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_get\_header()}{gin\_get\_header()}}
+{\footnotesize\ttfamily \label{context_8c_a0807a0488575d9d1efeeb728f4df24e6} 
+const char \texorpdfstring{$\ast$}{*} gin\+\_\+get\+\_\+header (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{key}{}\end{DoxyParamCaption})}
+
+
+
+Get a request header by key. Case-\/insensitive lookup. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em key} & The header field name. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+The header value string, or NULL if not found. 
+\end{DoxyReturn}
+\Hypertarget{context_8c_ad9c3055553cbaeec7479d38f86e0fb12}\index{context.c@{context.c}!gin\_get\_param@{gin\_get\_param}}
+\index{gin\_get\_param@{gin\_get\_param}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_get\_param()}{gin\_get\_param()}}
+{\footnotesize\ttfamily \label{context_8c_ad9c3055553cbaeec7479d38f86e0fb12} 
+const char \texorpdfstring{$\ast$}{*} gin\+\_\+get\+\_\+param (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{key}{}\end{DoxyParamCaption})}
+
+
+
+Get a URL path parameter by key. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em key} & The parameter key name. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+The parameter value string, or NULL if not found. 
+\end{DoxyReturn}
+\Hypertarget{context_8c_a5c84cd149a073eeac82e39e48ae6a75b}\index{context.c@{context.c}!gin\_get\_query@{gin\_get\_query}}
+\index{gin\_get\_query@{gin\_get\_query}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_get\_query()}{gin\_get\_query()}}
+{\footnotesize\ttfamily \label{context_8c_a5c84cd149a073eeac82e39e48ae6a75b} 
+const char \texorpdfstring{$\ast$}{*} gin\+\_\+get\+\_\+query (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{key}{}\end{DoxyParamCaption})}
+
+
+
+Get a query parameter by key. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em key} & The query parameter key name. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+The query value string, or NULL if not found. 
+\end{DoxyReturn}
+\Hypertarget{context_8c_ab2accc0a4f8455ac23cfea33e7eb71d7}\index{context.c@{context.c}!gin\_json@{gin\_json}}
+\index{gin\_json@{gin\_json}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_json()}{gin\_json()}}
+{\footnotesize\ttfamily \label{context_8c_ab2accc0a4f8455ac23cfea33e7eb71d7} 
+void gin\+\_\+json (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{int}]{status}{, }\item[{c\+JSON \texorpdfstring{$\ast$}{*}}]{json}{}\end{DoxyParamCaption})}
+
+
+
+Send a JSON response. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em status} & HTTP status code. \\
+\hline
+{\em json} & c\+JSON object (will be deleted by this function). \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_ad60115d18ed95af3a62acfde2e3b56b7}\index{context.c@{context.c}!gin\_json\_error@{gin\_json\_error}}
+\index{gin\_json\_error@{gin\_json\_error}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_json\_error()}{gin\_json\_error()}}
+{\footnotesize\ttfamily \label{context_8c_ad60115d18ed95af3a62acfde2e3b56b7} 
+void gin\+\_\+json\+\_\+error (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{int}]{status}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{message}{}\end{DoxyParamCaption})}
+
+
+
+Send a JSON formatted error response. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em status} & HTTP status code. \\
+\hline
+{\em message} & Error description string. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_ad79d5936263e13caed04963a05012910}\index{context.c@{context.c}!gin\_next@{gin\_next}}
+\index{gin\_next@{gin\_next}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_next()}{gin\_next()}}
+{\footnotesize\ttfamily \label{context_8c_ad79d5936263e13caed04963a05012910} 
+void gin\+\_\+next (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+
+
+
+Move to the next handler in the onion model chain. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_a5d8d58e7649dc971fca83a8d49937bf0}\index{context.c@{context.c}!gin\_set\_header@{gin\_set\_header}}
+\index{gin\_set\_header@{gin\_set\_header}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_set\_header()}{gin\_set\_header()}}
+{\footnotesize\ttfamily \label{context_8c_a5d8d58e7649dc971fca83a8d49937bf0} 
+void gin\+\_\+set\+\_\+header (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{key}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{value}{}\end{DoxyParamCaption})}
+
+
+
+Set a response header. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em key} & The header field name. \\
+\hline
+{\em value} & The header field value string. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_a36783625e91a03472ee1ed5c050d1f11}\index{context.c@{context.c}!gin\_set\_request\_header@{gin\_set\_request\_header}}
+\index{gin\_set\_request\_header@{gin\_set\_request\_header}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_set\_request\_header()}{gin\_set\_request\_header()}}
+{\footnotesize\ttfamily \label{context_8c_a36783625e91a03472ee1ed5c050d1f11} 
+void gin\+\_\+set\+\_\+request\+\_\+header (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{key}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{value}{}\end{DoxyParamCaption})}
+
+
+
+Set a request header. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em key} & The header field name. \\
+\hline
+{\em value} & The header field value string. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_a84494dbc8883822907df23d287dd4978}\index{context.c@{context.c}!gin\_status@{gin\_status}}
+\index{gin\_status@{gin\_status}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_status()}{gin\_status()}}
+{\footnotesize\ttfamily \label{context_8c_a84494dbc8883822907df23d287dd4978} 
+void gin\+\_\+status (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{int}]{status}{}\end{DoxyParamCaption})}
+
+
+
+Set the response status code. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em status} & The HTTP status code (e.\+g., 200, 404). \\
+\hline
+\end{DoxyParams}
+\Hypertarget{context_8c_af4ca536f047ff81ce7cf844cf5ac92d1}\index{context.c@{context.c}!gin\_string@{gin\_string}}
+\index{gin\_string@{gin\_string}!context.c@{context.c}}
+\doxysubsubsection{\texorpdfstring{gin\_string()}{gin\_string()}}
+{\footnotesize\ttfamily \label{context_8c_af4ca536f047ff81ce7cf844cf5ac92d1} 
+void gin\+\_\+string (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{int}]{status}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{msg}{}\end{DoxyParamCaption})}
+
+
+
+Set response body and status code (Plain text/\+\+String). Memory is managed by the request arena. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em c} & The request context. \\
+\hline
+{\em status} & The HTTP status code. \\
+\hline
+{\em msg} & The response body message string. \\
+\hline
+\end{DoxyParams}

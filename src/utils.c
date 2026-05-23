@@ -1,15 +1,25 @@
+/**
+ * @file utils.c
+ * @brief SHA1 hashing and Base64 encoding utilities.
+ * MIT License
+ */
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
 typedef struct {
-    uint32_t state[5];
-    uint32_t count[2];
-    uint8_t buffer[64];
+    uint32_t state[5];   /**< Intermediate hash state. */
+    uint32_t count[2];   /**< Message length counter. */
+    uint8_t buffer[64];   /**< Data block buffer. */
 } gin_sha1_ctx;
 
+/** @brief Rotate-left bitwise operation. */
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
+/** @brief Core SHA1 transform function.
+ * @param state In/out hash state array.
+ * @param buffer 64-byte block to process. */
 static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
     uint32_t a, b, c, d, e;
     uint32_t w[80];
@@ -93,7 +103,7 @@ void gin_sha1_final(gin_sha1_ctx* context, uint8_t digest[20]) {
     for (int i = 0; i < 20; i++) digest[i] = (uint8_t)((context->state[i >> 2] >> (24 - (i & 3) * 8)) & 0xFF);
 }
 
-// --- Base64 ---
+/** @brief Base64 encoding lookup table. */
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 void gin_base64_encode(const uint8_t* src, size_t len, char* out) {

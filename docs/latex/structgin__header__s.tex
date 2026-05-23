@@ -1,19 +1,51 @@
 \doxysection{gin\+\_\+header\+\_\+s Struct Reference}
 \hypertarget{structgin__header__s}{}\label{structgin__header__s}\index{gin\_header\_s@{gin\_header\_s}}
+
+
+HTTP Header structure (linked list).  
+
+
+
+
+{\ttfamily \+\#include $<$gin.\+h$>$}
+
 \doxysubsubsection*{Public Attributes}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306}\label{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306} 
-char \texorpdfstring{$\ast$}{*} {\bfseries key}
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306}{key}}
 \item 
-\Hypertarget{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52}\label{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52} 
-char \texorpdfstring{$\ast$}{*} {\bfseries value}
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52}{value}}
 \item 
-\Hypertarget{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5}\label{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5} 
-struct \doxymbox{\hyperlink{structgin__header__s}{gin\+\_\+header\+\_\+s}} \texorpdfstring{$\ast$}{*} {\bfseries next}
+struct \doxymbox{\hyperlink{structgin__header__s}{gin\+\_\+header\+\_\+s}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5}{next}}
 \end{DoxyCompactItemize}
 
 
+\doxysubsection{Detailed Description}
+HTTP Header structure (linked list). 
+
+\label{doc-variable-members}
+\Hypertarget{structgin__header__s_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306}\index{gin\_header\_s@{gin\_header\_s}!key@{key}}
+\index{key@{key}!gin\_header\_s@{gin\_header\_s}}
+\doxysubsubsection{\texorpdfstring{key}{key}}
+{\footnotesize\ttfamily \label{structgin__header__s_a95ea331fa294c46689d9fee1b3bf1306} 
+char\texorpdfstring{$\ast$}{*} gin\+\_\+header\+\_\+s::\+key}
+
+Header field name. \Hypertarget{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5}\index{gin\_header\_s@{gin\_header\_s}!next@{next}}
+\index{next@{next}!gin\_header\_s@{gin\_header\_s}}
+\doxysubsubsection{\texorpdfstring{next}{next}}
+{\footnotesize\ttfamily \label{structgin__header__s_ac267ddadad37778a3b11d9bd038c56c5} 
+struct \doxymbox{\hyperlink{structgin__header__s}{gin\+\_\+header\+\_\+s}}\texorpdfstring{$\ast$}{*} gin\+\_\+header\+\_\+s::\+next}
+
+Pointer to next header. \Hypertarget{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52}\index{gin\_header\_s@{gin\_header\_s}!value@{value}}
+\index{value@{value}!gin\_header\_s@{gin\_header\_s}}
+\doxysubsubsection{\texorpdfstring{value}{value}}
+{\footnotesize\ttfamily \label{structgin__header__s_ac77fb3066031e0b16f42d76cf2f03f52} 
+char\texorpdfstring{$\ast$}{*} gin\+\_\+header\+\_\+s::\+value}
+
+Header field value. 
+
 The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
 \item 
-include/\+gin.\+h\end{DoxyCompactItemize}
+include/\+\doxymbox{\hyperlink{gin_8h}{gin.\+h}}\end{DoxyCompactItemize}

@@ -7,16 +7,18 @@
 #include <string.h>
 #include <stdint.h>
 
+/** @brief A single chunk in the arena linked list. */
 typedef struct gin_arena_chunk_s {
-    struct gin_arena_chunk_s* next;
-    size_t size;
-    size_t used;
-    uint8_t data[];
+    struct gin_arena_chunk_s* next; /**< Pointer to next chunk. */
+    size_t size;                    /**< Total size of this chunk. */
+    size_t used;                    /**< Bytes used in this chunk. */
+    uint8_t data[];                 /**< Flexible array for chunk data. */
 } gin_arena_chunk_t;
 
+/** @brief Arena allocator for request-scoped memory. */
 typedef struct gin_arena_s {
-    gin_arena_chunk_t* head;
-    size_t default_chunk_size;
+    gin_arena_chunk_t* head;       /**< Head of chunk linked list. */
+    size_t default_chunk_size;     /**< Default size for new chunks. */
 } gin_arena_t;
 
 gin_arena_t* gin_arena_new(size_t default_chunk_size) {

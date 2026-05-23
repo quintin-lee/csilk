@@ -1,15 +1,21 @@
+/**
+ * @file group.c
+ * @brief Route group implementation.
+ * MIT License
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "gin.h"
 
-/** @brief Group structure. */
+/** @brief Route group structure. */
 struct gin_group_s {
-  char* prefix;
-  gin_router_t* router;
-  gin_handler_t* middlewares;
-  size_t middleware_count;
-  gin_group_t* parent;
+  char* prefix;                  /**< URL prefix for this group. */
+  gin_router_t* router;          /**< Associated router instance. */
+  gin_handler_t* middlewares;    /**< Middleware handlers array. */
+  size_t middleware_count;       /**< Number of middleware handlers. */
+  gin_group_t* parent;           /**< Parent group (NULL for root). */
 };
 
 /** @brief Internal helper to join URL paths.
@@ -44,10 +50,6 @@ static char* join_path(const char* p1, const char* p2) {
   return res;
 }
 
-/** @brief Create a new group.
- * @param router The router.
- * @param prefix The group prefix.
- * @return A new gin_group_t instance. */
 gin_group_t* gin_group_new(gin_router_t* router, const char* prefix) {
   gin_group_t* group = calloc(1, sizeof(gin_group_t));
   if (!group) return NULL;
@@ -61,10 +63,6 @@ gin_group_t* gin_group_new(gin_router_t* router, const char* prefix) {
   return group;
 }
 
-/** @brief Create a sub-group.
- * @param parent The parent group.
- * @param prefix The sub-group prefix.
- * @return A new gin_group_t instance. */
 gin_group_t* gin_group_group(gin_group_t* parent, const char* prefix) {
   if (!parent) return NULL;
 
@@ -82,9 +80,6 @@ gin_group_t* gin_group_group(gin_group_t* parent, const char* prefix) {
   return group;
 }
 
-/** @brief Use middleware in the group.
- * @param group The group.
- * @param handler The middleware handler. */
 void gin_group_use(gin_group_t* group, gin_handler_t handler) {
   if (!group) return;
   gin_handler_t* new_middlewares =
@@ -123,11 +118,6 @@ static int gather_handlers(gin_group_t* group, gin_handler_t** handlers,
   return 0;
 }
 
-/** @brief Add a route to the group.
- * @param group The group.
- * @param method The HTTP method.
- * @param path The route path.
- * @param handler The handler. */
 void gin_group_add_route(gin_group_t* group, const char* method,
                          const char* path, gin_handler_t handler) {
   if (!group) return;
@@ -160,8 +150,6 @@ void gin_group_add_route(gin_group_t* group, const char* method,
   free(handlers);
 }
 
-/** @brief Free the group.
- * @param group The group to free. */
 void gin_group_free(gin_group_t* group) {
   if (!group) return;
   free(group->prefix);

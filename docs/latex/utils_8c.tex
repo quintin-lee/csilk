@@ -1,0 +1,131 @@
+\doxysection{src/\+utils.c File Reference}
+\hypertarget{utils_8c}{}\label{utils_8c}\index{src/utils.c@{src/utils.c}}
+
+
+SHA1 hashing and Base64 encoding utilities. MIT License.  
+
+
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdint.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+\doxysubsubsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}}
+\begin{DoxyCompactList}\small\item\em SHA1 hashing context. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\+\#define \doxymbox{\hyperlink{utils_8c_af1373930110e4f86cb1f4bc6d44a66ee}{rol}}(value,  bits)
+\begin{DoxyCompactList}\small\item\em Rotate-\/left bitwise operation. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \doxymbox{\hyperlink{utils_8c_a390977ad55c5bb9e69b3deb0f95388ff}{gin\+\_\+sha1\+\_\+init}} (\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}context)
+\begin{DoxyCompactList}\small\item\em Initialize a SHA1 context. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{utils_8c_abd7779f32ff374d6c36d959990403c8c}{gin\+\_\+sha1\+\_\+update}} (\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}context, const uint8\+\_\+t \texorpdfstring{$\ast$}{*}data, uint32\+\_\+t len)
+\begin{DoxyCompactList}\small\item\em Feed data into the SHA1 hashing context. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{utils_8c_ae4549cc6de928be723492356ebcbb4b3}{gin\+\_\+sha1\+\_\+final}} (\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}context, uint8\+\_\+t digest\+[20]\+)
+\begin{DoxyCompactList}\small\item\em Finalize SHA1 hash and produce the digest. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{utils_8c_abe7613793f89afaa293b207183bbf4a1}{gin\+\_\+base64\+\_\+encode}} (const uint8\+\_\+t \texorpdfstring{$\ast$}{*}src, size\+\_\+t len, char \texorpdfstring{$\ast$}{*}out)
+\begin{DoxyCompactList}\small\item\em Encode raw bytes as Base64 string. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+SHA1 hashing and Base64 encoding utilities. MIT License. 
+
+
+
+\label{doc-define-members}
+\Hypertarget{utils_8c_doc-define-members}
+\doxysubsection{Macro Definition Documentation}
+\Hypertarget{utils_8c_af1373930110e4f86cb1f4bc6d44a66ee}\index{utils.c@{utils.c}!rol@{rol}}
+\index{rol@{rol}!utils.c@{utils.c}}
+\doxysubsubsection{\texorpdfstring{rol}{rol}}
+{\footnotesize\ttfamily \label{utils_8c_af1373930110e4f86cb1f4bc6d44a66ee} 
+\+\#define rol(\begin{DoxyParamCaption}\item[{}]{value}{, }\item[{}]{bits}{}\end{DoxyParamCaption})}
+
+{\bfseries Value:\+}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{(((value)\ <<\ (bits))\ |\ ((value)\ >>\ (32\ -\/\ (bits))))}
+
+\end{DoxyCode}
+
+
+Rotate-\/left bitwise operation. 
+
+
+
+\label{doc-func-members}
+\Hypertarget{utils_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{utils_8c_abe7613793f89afaa293b207183bbf4a1}\index{utils.c@{utils.c}!gin\_base64\_encode@{gin\_base64\_encode}}
+\index{gin\_base64\_encode@{gin\_base64\_encode}!utils.c@{utils.c}}
+\doxysubsubsection{\texorpdfstring{gin\_base64\_encode()}{gin\_base64\_encode()}}
+{\footnotesize\ttfamily \label{utils_8c_abe7613793f89afaa293b207183bbf4a1} 
+void gin\+\_\+base64\+\_\+encode (\begin{DoxyParamCaption}\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{src}{, }\item[{size\+\_\+t}]{len}{, }\item[{char \texorpdfstring{$\ast$}{*}}]{out}{}\end{DoxyParamCaption})}
+
+
+
+Encode raw bytes as Base64 string. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em src} & Source byte buffer. \\
+\hline
+{\em len} & Length of source data. \\
+\hline
+{\em out} & Output buffer (must be at least ((len+2)/\+3)\texorpdfstring{$\ast$}{*}4+1 bytes). \\
+\hline
+\end{DoxyParams}
+\Hypertarget{utils_8c_ae4549cc6de928be723492356ebcbb4b3}\index{utils.c@{utils.c}!gin\_sha1\_final@{gin\_sha1\_final}}
+\index{gin\_sha1\_final@{gin\_sha1\_final}!utils.c@{utils.c}}
+\doxysubsubsection{\texorpdfstring{gin\_sha1\_final()}{gin\_sha1\_final()}}
+{\footnotesize\ttfamily \label{utils_8c_ae4549cc6de928be723492356ebcbb4b3} 
+void gin\+\_\+sha1\+\_\+final (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}}]{context}{, }\item[{uint8\+\_\+t}]{digest}{\+[20]\+}\end{DoxyParamCaption})}
+
+
+
+Finalize SHA1 hash and produce the digest. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em context} & SHA1 context. \\
+\hline
+{\em digest} & Output buffer for 20-\/byte hash. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{utils_8c_a390977ad55c5bb9e69b3deb0f95388ff}\index{utils.c@{utils.c}!gin\_sha1\_init@{gin\_sha1\_init}}
+\index{gin\_sha1\_init@{gin\_sha1\_init}!utils.c@{utils.c}}
+\doxysubsubsection{\texorpdfstring{gin\_sha1\_init()}{gin\_sha1\_init()}}
+{\footnotesize\ttfamily \label{utils_8c_a390977ad55c5bb9e69b3deb0f95388ff} 
+void gin\+\_\+sha1\+\_\+init (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}}]{context}{}\end{DoxyParamCaption})}
+
+
+
+Initialize a SHA1 context. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em context} & SHA1 context to initialize. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{utils_8c_abd7779f32ff374d6c36d959990403c8c}\index{utils.c@{utils.c}!gin\_sha1\_update@{gin\_sha1\_update}}
+\index{gin\_sha1\_update@{gin\_sha1\_update}!utils.c@{utils.c}}
+\doxysubsubsection{\texorpdfstring{gin\_sha1\_update()}{gin\_sha1\_update()}}
+{\footnotesize\ttfamily \label{utils_8c_abd7779f32ff374d6c36d959990403c8c} 
+void gin\+\_\+sha1\+\_\+update (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{structgin__sha1__ctx}{gin\+\_\+sha1\+\_\+ctx}} \texorpdfstring{$\ast$}{*}}]{context}{, }\item[{const uint8\+\_\+t \texorpdfstring{$\ast$}{*}}]{data}{, }\item[{uint32\+\_\+t}]{len}{}\end{DoxyParamCaption})}
+
+
+
+Feed data into the SHA1 hashing context. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em context} & SHA1 context. \\
+\hline
+{\em data} & Input data bytes. \\
+\hline
+{\em len} & Length of input data. \\
+\hline
+\end{DoxyParams}
