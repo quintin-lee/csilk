@@ -1,8 +1,8 @@
 /**
  * csilk easy API demo — minimal example server.
  *
- * Build:  make  (the executable is built as `example_easy`)
- * Run:    ./build/example_easy
+ * Build:  make  (the executable is built as `example_app`)
+ * Run:    ./build/example_app
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 #include "csilk.h"
-#include "csilk_easy.h"
+#include "csilk_app.h"
 
 /* ---- handlers ---- */
 

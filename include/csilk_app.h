@@ -1,5 +1,5 @@
 /**
- * @file csilk_easy.h
+ * @file csilk_app.h
  * @brief High-level convenience API for the csilk framework.
  *
  * Provides a simplified "app" abstraction that wraps router, server,
@@ -20,8 +20,8 @@
  * MIT License
  */
 
-#ifndef CSILK_EASY_H
-#define CSILK_EASY_H
+#ifndef CSILK_APP_H
+#define CSILK_APP_H
 
 #include "csilk.h"
 
@@ -151,4 +151,4 @@ csilk_router_t* csilk_app_router(csilk_app_t* app);
  * @return Server handle. */
 csilk_server_t* csilk_app_server(csilk_app_t* app);
 
-#endif /* CSILK_EASY_H */
+#endif /* CSILK_APP_H */

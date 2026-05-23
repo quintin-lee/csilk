@@ -93,18 +93,18 @@ include_directories(${cjson_SOURCE_DIR})
 
 # Source files
 set(CSILK_SOURCES
-    src/context.c
-    src/router.c
-    src/group.c
-    src/server.c
-    src/url_parser.c
-    src/arena.c
-    src/logger.c
-    src/csilk_easy.c
-    src/config.c
-    src/reflect.c
-    src/utils.c
-    src/websocket.c
+    src/core/context.c
+    src/core/router.c
+    src/core/group.c
+    src/core/server.c
+    src/core/url.c
+    src/core/arena.c
+    src/core/logger.c
+    src/app/app.c
+    src/core/config.c
+    src/core/reflect.c
+    src/core/utils.c
+    src/core/websocket.c
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c
@@ -215,8 +215,8 @@ add_executable(example_server example_server.c)
 target_link_libraries(example_server csilk)
 
 # Easy API example
-add_executable(example_easy example_easy.c)
-target_link_libraries(example_easy csilk)
+add_executable(example_app example_app.c)
+target_link_libraries(example_app csilk)
 
 # Add run_tests custom target
 add_custom_target(run_tests

@@ -184,16 +184,20 @@ csilk_group_use(group, csilk_recovery_handler);
 
 ```
 src/
-  ├── context.c       # Request/response context
-  ├── router.c        # Routing implementation (Radix Tree)
-  ├── group.c         # Route groups
-  ├── server.c        # HTTP server implementation (libuv + llhttp)
-  ├── arena.c         # Arena memory allocator
-  ├── config.c        # YAML configuration loader
-  ├── logger.c        # Thread-safe logging with rotation
-  ├── utils.c         # SHA1 hashing and Base64 encoding
-  ├── url_parser.c    # URL parsing utilities
-  ├── websocket.c     # WebSocket handshake and frame handling
+  ├── core/          # Core engine
+  │   ├── context.c       # Request/response context
+  │   ├── router.c        # Routing implementation (Radix Tree)
+  │   ├── group.c         # Route groups
+  │   ├── server.c        # HTTP server implementation (libuv + llhttp)
+  │   ├── arena.c         # Arena memory allocator
+  │   ├── config.c        # YAML configuration loader + validation
+  │   ├── logger.c        # Thread-safe logging with rotation
+  │   ├── url.c           # URL / query string parsing
+  │   ├── utils.c         # SHA1 hashing and Base64 encoding
+  │   ├── websocket.c     # WebSocket handshake and frame handling
+  │   └── reflect.c       # Reflection engine (JSON <-> struct)
+  ├── app/            # High-level app wrapper
+  │   └── app.c           # csilk_app_t — Express-like convenience API
   └── middleware/     # Built-in middleware
       ├── auth.c      # Token-based authentication
       ├── cors.c      # Cross-Origin Resource Sharing
@@ -207,9 +211,14 @@ src/
       └── static.c    # Static file serving
 
 include/              # Public headers
+  ├── csilk.h             # Main framework header
+  ├── csilk_app.h         # csilk_app_t convenience API
+  ├── csilk_internal.h    # Internal utilities
+  └── csilk_reflect.h     # Reflection engine
 tests/                # Unit tests
 examples/             # Advanced usage examples
-example_server.c      # Simple example server
+example_server.c      # Full-featured demo server
+example_app.c         # Minimal app API demo
 ```
 
 ## Testing
