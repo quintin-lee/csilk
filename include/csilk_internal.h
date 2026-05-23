@@ -44,4 +44,8 @@ void csilk_base64_encode(const uint8_t* src, size_t len, char* out);
  * @param nread Number of bytes read. */
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread);
 
+/** @brief Internal: Trigger response sending (used for async offloading).
+ * @param c Request context. */
+void _csilk_send_response(csilk_ctx_t* c);
+
 #endif

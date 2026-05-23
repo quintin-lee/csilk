@@ -14,6 +14,7 @@
 #include <uv.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Internal helper to get MIME type from file path.
  * @param path The file path.
@@ -27,7 +28,9 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
-void csilk_static(csilk_ctx_t* c, const char* root_dir) {
+static void static_work_cb(uv_work_t* req) {
+  csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+  const char* root_dir = (const char*)csilk_get(c, "static_root");
   char full_path[PATH_MAX];
   char resolved_root[PATH_MAX];
   char resolved_file[PATH_MAX];
@@ -94,9 +97,25 @@ void csilk_static(csilk_ctx_t* c, const char* root_dir) {
   }
   c->response.body = buffer;
   c->response.body_is_managed = 1;
+  c->response.body_len = size;
 
   uv_fs_close(NULL, &open_req, fd, NULL);
   uv_fs_req_cleanup(&open_req);
   uv_fs_req_cleanup(&stat_req);
   uv_fs_req_cleanup(&read_req);
+}
+
+static void static_after_work_cb(uv_work_t* req, int status) {
+  (void)status;
+  csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+  if (c->_internal_client) {
+    _csilk_send_response(c);
+  }
+}
+
+void csilk_static(csilk_ctx_t* c, const char* root_dir) {
+  c->is_async = 1;
+  c->work_req.data = c;
+  csilk_set(c, "static_root", (void*)root_dir);
+  uv_queue_work(uv_default_loop(), &c->work_req, static_work_cb, static_after_work_cb);
 }

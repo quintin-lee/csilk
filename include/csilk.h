@@ -19,6 +19,7 @@
 
 #include "cJSON.h"
 #include "csilk_reflect.h"
+#include <uv.h>
 
 /** @brief Csilk framework version. */
 #define CSILK_VERSION "0.2.0"
@@ -94,6 +95,8 @@ struct csilk_ctx_s {
   struct { char* key; void* value; } storage[CSILK_MAX_STORAGE]; /**< Key-value storage. */
   int storage_count;        /**< Number of items in storage. */
   void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
+  uv_work_t work_req;       /**< Worker request for async operations. */
+  int is_async;             /**< Flag if the response will be sent asynchronously. */
 };
 
 /** @brief Store a value in the context.

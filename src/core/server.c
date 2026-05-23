@@ -239,6 +239,122 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
+void _csilk_send_response(csilk_ctx_t* c) {
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+  if (!client) return;
+  
+  int status = client->ctx.response.status ? client->ctx.response.status : 200;
+  const char* status_text;
+  switch (status) {
+    case 101:
+      status_text = "Switching Protocols";
+      break;
+    case 200:
+      status_text = "OK";
+      break;
+    case 201:
+      status_text = "Created";
+      break;
+    case 204:
+      status_text = "No Content";
+      break;
+    case 400:
+      status_text = "Bad Request";
+      break;
+    case 401:
+      status_text = "Unauthorized";
+      break;
+    case 403:
+      status_text = "Forbidden";
+      break;
+    case 404:
+      status_text = "Not Found";
+      break;
+    case 500:
+      status_text = "Internal Server Error";
+      break;
+    default:
+      status_text = "OK";
+      break;
+  }
+
+  size_t custom_headers_len = 0;
+  for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+    for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h; h = h->next) {
+      custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+    }
+  }
+
+  size_t body_len = client->ctx.response.body_len;
+  const char* body = client->ctx.response.body ? client->ctx.response.body : "";
+
+  int keep_alive = llhttp_should_keep_alive(&client->parser);
+  const char* connection_val = keep_alive ? "keep-alive" : "close";
+
+  int header_len;
+  if (status == 101) {
+    header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
+  } else {
+    header_len = snprintf(NULL, 0,
+                          "HTTP/1.1 %d %s\r\n"
+                          "Content-Length: %zu\r\n"
+                          "Connection: %s\r\n",
+                          status, status_text, body_len, connection_val);
+  }
+
+  if (header_len < 0) return;
+
+  size_t response_len = (size_t)header_len + custom_headers_len + 2 + body_len;
+
+  uv_write_t* req = malloc(sizeof(uv_write_t));
+  if (req) {
+    char* write_base = malloc(response_len + 1);
+    if (write_base) {
+      int pos;
+      if (status == 101) {
+        pos = snprintf(write_base, response_len + 1,
+                       "HTTP/1.1 101 Switching Protocols\r\n");
+      } else {
+        pos = snprintf(write_base, response_len + 1,
+                       "HTTP/1.1 %d %s\r\n"
+                       "Content-Length: %zu\r\n"
+                       "Connection: %s\r\n",
+                       status, status_text, body_len, connection_val);
+      }
+
+      for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
+             h = h->next) {
+          pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
+                          "%s: %s\r\n", h->key, h->value);
+        }
+      }
+
+      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+
+      uv_buf_t buf = uv_buf_init(write_base, response_len);
+      req->data = write_base;
+      uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+    } else {
+      free(req);
+    }
+  }
+
+  if (client->ctx.is_websocket) {
+      // WebSocket or SSE connection: keep alive without idle timer
+  } else {
+      if (keep_alive) {
+        uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
+      } else {
+        if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+          uv_close((uv_handle_t*)&client->handle, on_close);
+        }
+      }
+  }
+
+  csilk_ctx_cleanup(&client->ctx);
+}
+
 static int on_message_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
 
@@ -300,116 +416,9 @@ static int on_message_complete(llhttp_t* p) {
         csilk_string(&client->ctx, 404, "Not Found");
     }
 
-  int status = client->ctx.response.status ? client->ctx.response.status : 200;
-  const char* status_text;
-  switch (status) {
-    case 101:
-      status_text = "Switching Protocols";
-      break;
-    case 200:
-      status_text = "OK";
-      break;
-    case 201:
-      status_text = "Created";
-      break;
-    case 204:
-      status_text = "No Content";
-      break;
-    case 400:
-      status_text = "Bad Request";
-      break;
-    case 401:
-      status_text = "Unauthorized";
-      break;
-    case 403:
-      status_text = "Forbidden";
-      break;
-    case 404:
-      status_text = "Not Found";
-      break;
-    case 500:
-      status_text = "Internal Server Error";
-      break;
-    default:
-      status_text = "OK";
-      break;
+  if (!client->ctx.is_async) {
+      _csilk_send_response(&client->ctx);
   }
-
-  size_t custom_headers_len = 0;
-  for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-    for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h; h = h->next) {
-      custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
-    }
-  }
-
-  size_t body_len = client->ctx.response.body_len;
-  const char* body = client->ctx.response.body ? client->ctx.response.body : "";
-
-  int keep_alive = llhttp_should_keep_alive(p);
-  const char* connection_val = keep_alive ? "keep-alive" : "close";
-
-  int header_len;
-  if (status == 101) {
-    header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
-  } else {
-    header_len = snprintf(NULL, 0,
-                          "HTTP/1.1 %d %s\r\n"
-                          "Content-Length: %zu\r\n"
-                          "Connection: %s\r\n",
-                          status, status_text, body_len, connection_val);
-  }
-
-  if (header_len < 0) return 0;
-
-  size_t response_len = (size_t)header_len + custom_headers_len + 2 + body_len;
-
-  uv_write_t* req = malloc(sizeof(uv_write_t));
-  if (req) {
-    char* write_base = malloc(response_len + 1);
-    if (write_base) {
-      int pos;
-      if (status == 101) {
-        pos = snprintf(write_base, response_len + 1,
-                       "HTTP/1.1 101 Switching Protocols\r\n");
-      } else {
-        pos = snprintf(write_base, response_len + 1,
-                       "HTTP/1.1 %d %s\r\n"
-                       "Content-Length: %zu\r\n"
-                       "Connection: %s\r\n",
-                       status, status_text, body_len, connection_val);
-      }
-
-      for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-        for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
-             h = h->next) {
-          pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
-                          "%s: %s\r\n", h->key, h->value);
-        }
-      }
-
-      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
-
-      uv_buf_t buf = uv_buf_init(write_base, response_len);
-      req->data = write_base;
-      uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
-    } else {
-      free(req);
-    }
-  }
-
-  if (client->ctx.is_websocket) {
-      // WebSocket or SSE connection: keep alive without idle timer
-  } else {
-      if (keep_alive) {
-        uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
-      } else {
-        if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-          uv_close((uv_handle_t*)&client->handle, on_close);
-        }
-      }
-  }
-
-  csilk_ctx_cleanup(&client->ctx);
   return 0;
 }
 
