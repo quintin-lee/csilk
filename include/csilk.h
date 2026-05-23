@@ -46,6 +46,7 @@ typedef struct {
 typedef struct {
   int status;               /**< HTTP status code. */
   const char* body;         /**< Response body content. */
+  size_t body_len;          /**< Length of the response body. */
   csilk_header_t* headers;    /**< Linked list of response headers. */
   int body_is_managed;      /**< Flag if body is managed by free(). */
 } csilk_response_t;
@@ -74,6 +75,7 @@ struct csilk_ctx_s {
   csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters array. */
   int params_count;         /**< Current number of path parameters. */
   int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
+  int is_sse;               /**< Flag if connection is Server-Sent Events. */
   void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode); /**< WebSocket message callback. */
 #define CSILK_MAX_STORAGE 16
   struct { char* key; void* value; } storage[CSILK_MAX_STORAGE]; /**< Key-value storage. */
@@ -294,6 +296,13 @@ typedef struct {
       char* root_dir;           /**< Local directory path. */
       char* prefix;             /**< URL prefix (e.g., "/static"). */
   } static_files;               /**< Static file settings. */
+  struct {
+      int enable_logger;        /**< Enable request logging middleware. */
+      int enable_recovery;      /**< Enable panic recovery middleware. */
+      int enable_csrf;          /**< Enable CSRF protection middleware. */
+      int enable_auth;          /**< Enable auth middleware. */
+      char* auth_token;         /**< Auth token for auth middleware (optional). */
+  } middleware;                 /**< Middleware settings. */
 } csilk_config_t;
 
 /** @brief Load configuration from a YAML file.
@@ -301,6 +310,12 @@ typedef struct {
  * @param config Pointer to config struct to populate.
  * @return 0 on success, -1 on failure. */
 int csilk_load_config(const char* yaml_path, csilk_config_t* config);
+
+/** @brief Validate configuration values for semantic correctness.
+ * @param config Pointer to config struct.
+ * @param error_msg Optional pointer to store error string (static, do not free).
+ * @return 0 if valid, -1 if invalid with error_msg set. */
+int csilk_config_validate(const csilk_config_t* config, const char** error_msg);
 
 /** @brief Free all dynamically allocated strings in the configuration.
  * @param config Pointer to the config struct. */
@@ -511,6 +526,55 @@ void csilk_ws_handshake(csilk_ctx_t* c);
  * @param len Data length.
  * @param opcode Opcode (1 for text, 2 for binary). */
 void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+
+/* --- Server-Sent Events (SSE) --- */
+
+/** @brief Initialize an SSE connection.
+ * Sends HTTP 200 response with text/event-stream headers.
+ * Call this at the beginning of your SSE handler.
+ * @param c The request context. */
+void csilk_sse_init(csilk_ctx_t* c);
+
+/** @brief Send an SSE event.
+ * @param c The request context.
+ * @param event Optional event type (NULL to omit).
+ * @param data Event data string (NULL to send comment only). */
+void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data);
+
+/** @brief Close the SSE connection.
+ * @param c The request context. */
+void csilk_sse_close(csilk_ctx_t* c);
+
+/* --- Gzip Compression Middleware --- */
+
+/** @brief Gzip response compression middleware.
+ * Compresses response body if client accepts gzip encoding.
+ * Must be used as a group-level middleware wrapping the handler.
+ * @param c The request context. */
+void csilk_gzip_middleware(csilk_ctx_t* c);
+
+/* --- Multipart Form Data --- */
+
+/** @brief A single part from a multipart/form-data request. */
+typedef struct csilk_multipart_part_s {
+    char name[128];            /**< Form field name. */
+    char filename[256];        /**< Original filename (empty if not a file). */
+    char content_type[64];     /**< Content-Type of the part. */
+    uint8_t* data;             /**< Pointer to part body data. */
+    size_t data_len;           /**< Length of part body data. */
+    csilk_ctx_t* ctx;          /**< Owning request context. */
+} csilk_multipart_part_t;
+
+/** @brief Multipart handler callback.
+ * Called for each part found in the multipart body.
+ * @param part The parsed multipart part. */
+typedef void (*csilk_multipart_handler_t)(csilk_multipart_part_t* part);
+
+/** @brief Parse multipart/form-data request body.
+ * Iterates through all parts and calls handler for each.
+ * @param c The request context.
+ * @param handler Callback for each part. */
+void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler);
 
 /** @brief Main Server structure. */
 typedef struct csilk_server_s csilk_server_t;

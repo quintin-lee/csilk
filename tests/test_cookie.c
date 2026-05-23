@@ -71,9 +71,100 @@ void test_multiple_cookies() {
     printf("test_multiple_cookies passed\n");
 }
 
+void test_cookie_delete() {
+  printf("Testing cookie delete (Max-Age=0)...\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  csilk_set_cookie(&c, "session", "old", -1, "/", NULL, 0, 0);
+
+  assert(c.response.headers != NULL);
+  assert(strcmp(c.response.headers->key, "Set-Cookie") == 0);
+  assert(strstr(c.response.headers->value, "session=old") != NULL);
+  assert(strstr(c.response.headers->value, "Max-Age=0") != NULL);
+
+  csilk_ctx_cleanup(&c);
+  printf("test_cookie_delete passed\n");
+}
+
+void test_long_cookie_value() {
+  printf("Testing long cookie value...\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  char long_val[512];
+  memset(long_val, 'x', sizeof(long_val) - 1);
+  long_val[sizeof(long_val) - 1] = '\0';
+
+  csilk_set_cookie(&c, "data", long_val, 3600, "/", NULL, 0, 0);
+
+  assert(c.response.headers != NULL);
+  assert(strcmp(c.response.headers->key, "Set-Cookie") == 0);
+  assert(strstr(c.response.headers->value, "data=") != NULL);
+
+  csilk_ctx_cleanup(&c);
+  printf("test_long_cookie_value passed\n");
+}
+
+void test_empty_cookie_header() {
+  printf("Testing empty Cookie header...\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  const char* result = csilk_get_cookie(&c, "any");
+  assert(result == NULL);
+
+  csilk_set_request_header(&c, "Cookie", "");
+
+  result = csilk_get_cookie(&c, "any");
+  assert(result == NULL);
+
+  csilk_ctx_cleanup(&c);
+  printf("test_empty_cookie_header passed\n");
+}
+
+void test_cookie_with_spaces() {
+  printf("Testing cookie with spaces...\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  csilk_set_request_header(&c, "Cookie", " key1 = val1 ; key2 = val2 ");
+
+  const char* v1 = csilk_get_cookie(&c, "key1");
+  assert(v1 == NULL || strcmp(v1, "val1") == 0);
+
+  csilk_ctx_cleanup(&c);
+  printf("test_cookie_with_spaces passed\n");
+}
+
+void test_malformed_cookie() {
+  printf("Testing malformed Cookie header...\n");
+  csilk_ctx_t c = {0};
+  c.arena = csilk_arena_new(1024);
+
+  csilk_set_request_header(&c, "Cookie", "malformed; no=value=sign=here");
+
+  csilk_ctx_cleanup(&c);
+  printf("test_malformed_cookie passed\n");
+}
+
+void test_get_cookie_with_nulls() {
+  printf("Testing csilk_get_cookie with NULL context...\n");
+  const char* result = csilk_get_cookie(NULL, "test");
+  assert(result == NULL);
+  printf("test_get_cookie_with_nulls passed\n");
+}
+
 int main() {
     test_set_cookie();
     test_get_cookie();
     test_multiple_cookies();
+    test_cookie_delete();
+    test_long_cookie_value();
+    test_empty_cookie_header();
+    test_cookie_with_spaces();
+    test_malformed_cookie();
+    test_get_cookie_with_nulls();
+    printf("All cookie tests passed!\n");
     return 0;
 }

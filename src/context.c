@@ -26,15 +26,18 @@ void csilk_status(csilk_ctx_t* c, int status) { c->response.status = status; }
 
 void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
   c->response.status = status;
+  size_t msg_len = msg ? strlen(msg) : 0;
   if (c->arena) {
     c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : NULL;
-    c->response.body_is_managed = 0; // Managed by arena
+    c->response.body_len = msg_len;
+    c->response.body_is_managed = 0;
   } else {
     if (c->response.body && c->response.body_is_managed) {
       free((void*)c->response.body);
     }
     char* body = msg ? strdup(msg) : NULL;
     c->response.body = body;
+    c->response.body_len = body ? msg_len : 0;
     c->response.body_is_managed = body ? 1 : 0;
   }
 }
@@ -256,6 +259,7 @@ cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error) {
 }
 
 const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
+  if (!c || !name || !c->arena) return NULL;
   const char* cookie_header = csilk_get_header(c, "Cookie");
   if (!cookie_header) return NULL;
 
@@ -372,6 +376,7 @@ void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
   char* body = cJSON_PrintUnformatted(json);
   if (body) {
     c->response.body = body;
+    c->response.body_len = strlen(body);
     c->response.body_is_managed = 1;
   }
   cJSON_Delete(json);
@@ -400,6 +405,7 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const
       free((void*)c->response.body);
     }
     c->response.body = json_str;
+    c->response.body_len = strlen(json_str);
     c->response.body_is_managed = 1;
   }
 }

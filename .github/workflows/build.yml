@@ -33,5 +33,6 @@ jobs:
       - name: Run unit tests
         run: ctest --test-dir build -E test_integration --output-on-failure
 
-      - name: Run integration tests (allow failure)
-        run: ctest --test-dir build -R test_integration --output-on-failure || true
+      - name: Run integration tests
+        run: ctest --test-dir build -R test_integration --output-on-failure
+        continue-on-error: true

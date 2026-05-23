@@ -111,6 +111,9 @@ set(CSILK_SOURCES
     src/middleware/cors.c
     src/middleware/ratelimit.c
     src/middleware/csrf.c
+    src/middleware/sse.c
+    src/middleware/gzip.c
+    src/middleware/multipart.c
 )
 
 # Find system libyaml
@@ -120,12 +123,19 @@ if(NOT YAML_LIB)
 endif()
 message(STATUS "Found libyaml: ${YAML_LIB}")
 
+# Find system zlib
+find_library(ZLIB_LIB NAMES z libz REQUIRED)
+if(NOT ZLIB_LIB)
+  message(FATAL_ERROR "zlib library not found. Install zlib1g-dev")
+endif()
+message(STATUS "Found zlib: ${ZLIB_LIB}")
+
 # Option to also build as shared library
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
+target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB} ${ZLIB_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -140,7 +150,7 @@ set_target_properties(csilk PROPERTIES
 # Build shared library if requested
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
-    target_link_libraries(csilk_shared PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
+    target_link_libraries(csilk_shared PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB} ${ZLIB_LIB})
     target_include_directories(csilk_shared PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
@@ -181,6 +191,8 @@ add_csilk_test(test_reflect tests/test_reflect.c)
 add_csilk_test(test_keepalive tests/test_keepalive.c)
 add_csilk_test(test_edge tests/test_edge.c)
 add_csilk_test(test_timeout tests/test_timeout.c)
+add_csilk_test(test_arena tests/test_arena.c)
+add_csilk_test(test_ip tests/test_ip.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
 option(USE_FUZZER "Enable libFuzzer" OFF)
@@ -203,7 +215,7 @@ target_link_libraries(example_server csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_cookie test_reflect test_keepalive test_edge test_timeout test_integration
+    DEPENDS csilk test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_ip test_integration
     COMMENT "Running all tests with ctest"
 )
 

@@ -323,8 +323,7 @@ static int on_message_complete(llhttp_t* p) {
     custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
   }
 
-  size_t body_len =
-      client->ctx.response.body ? strlen(client->ctx.response.body) : 0;
+  size_t body_len = client->ctx.response.body_len;
   const char* body = client->ctx.response.body ? client->ctx.response.body : "";
 
   int keep_alive = llhttp_should_keep_alive(p);
@@ -376,7 +375,7 @@ static int on_message_complete(llhttp_t* p) {
   }
 
   if (client->ctx.is_websocket) {
-      // Switched!
+      // WebSocket or SSE connection: keep alive without idle timer
   } else {
       if (keep_alive) {
         uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
