@@ -23,8 +23,12 @@ struct csilk_group_s {
  * @param p2 The second path component.
  * @return A newly allocated joined path string. */
 static char* join_path(const char* p1, const char* p2) {
-  if (!p1 || *p1 == '\0') return strdup(p2 ? p2 : "/");
-  if (!p2 || *p2 == '\0') return strdup(p1);
+  if (!p1 || *p1 == '\0') {
+    return strdup(p2 ? p2 : "/");
+  }
+  if (!p2 || *p2 == '\0') {
+    return strdup(p1);
+  }
 
   size_t l1 = strlen(p1);
   while (l1 > 0 && p1[l1 - 1] == '/') l1--;

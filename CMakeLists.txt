@@ -150,6 +150,7 @@ add_csilk_test(test_recovery tests/test_recovery.c)
 add_csilk_test(test_auth tests/test_auth.c)
 add_csilk_test(test_ws tests/test_ws.c)
 add_csilk_test(test_config tests/test_config.c)
+add_csilk_test(test_cookie tests/test_cookie.c)
 add_csilk_test(test_keepalive tests/test_keepalive.c)
 add_csilk_test(test_edge tests/test_edge.c)
 add_csilk_test(test_timeout tests/test_timeout.c)
@@ -171,6 +172,13 @@ add_test(NAME test_integration COMMAND test_integration)
 # Example server
 add_executable(example_server example_server.c)
 target_link_libraries(example_server csilk)
+
+# Add run_tests custom target
+add_custom_target(run_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    DEPENDS csilk test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_cookie test_keepalive test_edge test_timeout test_integration
+    COMMENT "Running all tests with ctest"
+)
 
 # Install targets
 include(GNUInstallDirs)

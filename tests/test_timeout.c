@@ -21,7 +21,12 @@ void* run_server(void* arg) {
     csilk_GET(group, "/idle", idle_handler);
 
     g_server = csilk_server_new(router);
-    csilk_server_config_t cfg = { .idle_timeout_ms = 300, .max_body_size = 1048576, .listen_backlog = 128 };
+    csilk_server_config_t cfg = {
+        .idle_timeout_ms = 300,
+        .max_body_size = 1048576,
+        .max_header_size = 65536,
+        .listen_backlog = 128
+    };
     csilk_server_set_config(g_server, cfg);
     csilk_server_run(g_server, 8080);
     csilk_server_free(g_server);

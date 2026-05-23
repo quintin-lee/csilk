@@ -43,6 +43,10 @@ static csilk_router_node_t* node_new(const char* segment, csilk_node_type_t type
   csilk_router_node_t* node = calloc(1, sizeof(csilk_router_node_t));
   if (!node) return NULL;
   node->segment = strdup(segment);
+  if (!node->segment) {
+    free(node);
+    return NULL;
+  }
   node->type = type;
   return node;
 }
@@ -150,11 +154,18 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
   mh = malloc(sizeof(csilk_method_handler_t));
   if (mh) {
     mh->method = strdup(method);
-    mh->handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
-    if (mh->handlers) {
-      memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
-      mh->handlers[handler_count] = NULL;
+    if (!mh->method) {
+      free(mh);
+      return;
     }
+    mh->handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
+    if (!mh->handlers) {
+      free(mh->method);
+      free(mh);
+      return;
+    }
+    memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
+    mh->handlers[handler_count] = NULL;
     mh->next = curr->handlers;
     curr->handlers = mh;
   }
@@ -189,22 +200,38 @@ static csilk_handler_t* match_node(csilk_router_node_t* node, const char* method
         result = match_node(child, method, p, ctx);
       }
     } else if (child->type == CSILK_NODE_PARAM) {
+      int param_added = 0;
       if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-        ctx->params[ctx->params_count].key = strdup(child->segment);
-        ctx->params[ctx->params_count].value = strdup(seg);
-        ctx->params_count++;
+        char* key = strdup(child->segment);
+        char* val = strdup(seg);
+        if (key && val) {
+          ctx->params[ctx->params_count].key = key;
+          ctx->params[ctx->params_count].value = val;
+          ctx->params_count++;
+          param_added = 1;
+        } else {
+          free(key);
+          free(val);
+        }
       }
       result = match_node(child, method, p, ctx);
-      if (!result && ctx) {
+      if (!result && param_added) {
         ctx->params_count--;
         free(ctx->params[ctx->params_count].key);
         free(ctx->params[ctx->params_count].value);
       }
     } else if (child->type == CSILK_NODE_WILDCARD) {
       if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-        ctx->params[ctx->params_count].key = strdup(child->segment);
-        ctx->params[ctx->params_count].value = strdup(path + 1);
-        ctx->params_count++;
+        char* key = strdup(child->segment);
+        char* val = strdup(path + 1);
+        if (key && val) {
+          ctx->params[ctx->params_count].key = key;
+          ctx->params[ctx->params_count].value = val;
+          ctx->params_count++;
+        } else {
+          free(key);
+          free(val);
+        }
       }
       csilk_method_handler_t* mh = child->handlers;
       while (mh) {
