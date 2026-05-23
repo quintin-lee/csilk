@@ -155,12 +155,19 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (c->response.body && c->response.body_is_managed) {
     free((void*)c->response.body);
     c->response.body = NULL;
+    c->response.body_is_managed = 0;
   }
 
   for (int i = 0; i < c->storage_count; i++) {
     free(c->storage[i].key);
   }
   c->storage_count = 0;
+
+  c->aborted = 0;
+  c->is_websocket = 0;
+  c->is_sse = 0;
+  c->is_async = 0;
+  c->handler_index = -1;
 }
 
 void csilk_set(csilk_ctx_t* c, const char* key, void* value) {

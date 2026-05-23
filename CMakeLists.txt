@@ -176,6 +176,7 @@ function(add_csilk_test name source)
 endfunction()
 
 # Unit tests
+add_csilk_test(test_gzip tests/test_gzip.c)
 add_csilk_test(test_logger tests/test_logger.c)
 add_csilk_test(test_static tests/test_static.c)
 add_csilk_test(test_context tests/test_context.c)
@@ -223,7 +224,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_ip test_integration
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_ip test_integration
     COMMENT "Running all tests with ctest"
 )
 
