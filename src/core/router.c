@@ -91,6 +91,7 @@ static char* get_next_segment(const char** p) {
   return seg;
 }
 
+/** @brief Create a new router instance with an empty root node. */
 csilk_router_t* csilk_router_new() {
   csilk_router_t* r = malloc(sizeof(csilk_router_t));
   if (!r) return NULL;
@@ -98,12 +99,14 @@ csilk_router_t* csilk_router_new() {
   return r;
 }
 
+/** @brief Deallocate a router and all its nodes. */
 void csilk_router_free(csilk_router_t* r) {
   if (!r) return;
   node_free(r->root);
   free(r);
 }
 
+/** @brief Register a route with method, path pattern, and handler chain. */
 void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
                     csilk_handler_t* handlers, size_t handler_count) {
   if (!r || !r->root || !method || !path || !handlers) return;
@@ -251,12 +254,14 @@ static csilk_handler_t* match_node(csilk_router_node_t* node, const char* method
   return result;
 }
 
+/** @brief Match a method+path against the routing table (standalone, no context). */
 csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
                                 const char* path) {
   if (!r || !r->root || !method || !path) return NULL;
   return match_node(r->root, method, path, NULL);
 }
 
+/** @brief Match current request context against the routing table, populating params. */
 int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c) {
   if (!r || !c || !r->root || !c->request.method || !c->request.path) return 0;
   c->params_count = 0;

@@ -20,6 +20,7 @@
 
 /* ---- reflectable log-entry struct ---- */
 
+/** @brief Structured log entry for JSON serialization via reflection. */
 typedef struct csilk_log_entry_s {
     int64_t  time_epoch;   /**< unix timestamp */
     char     level[8];     /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
@@ -41,12 +42,13 @@ CSILK_REGISTER_REFLECT(csilk_log_entry_t, LOG_ENTRY_MAP)
 
 /* ---- internal logger state ---- */
 
+/** @brief Internal logger state (singleton). */
 typedef struct {
-    csilk_log_config_t config;
-    FILE*              fp;
-    size_t             current_size;
-    uv_mutex_t         mutex;
-    int                initialized;
+    csilk_log_config_t config; /**< Logger configuration. */
+    FILE*              fp;     /**< Output file pointer. */
+    size_t             current_size; /**< Current log file size. */
+    uv_mutex_t         mutex;  /**< Mutex for thread-safe logging. */
+    int                initialized; /**< Whether logger is initialized. */
 } csilk_logger_t;
 
 static csilk_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
@@ -60,6 +62,7 @@ static const char* level_colors[] = {
 
 /* ---- rotation ---- */
 
+/** @brief Rotate log file by renaming to .1 suffix. */
 static void rotate_log_files(void) {
     if (!g_logger.config.file_path) return;
     fclose(g_logger.fp);
@@ -72,6 +75,14 @@ static void rotate_log_files(void) {
 
 /* ---- text-format output ---- */
 
+/** @brief Format and write a plain-text log line.
+ * @param lv Log level.
+ * @param file Source file.
+ * @param line Source line.
+ * @param func Function name.
+ * @param msg Log message.
+ * @param msg_len Message length.
+ * @return Number of bytes written. */
 static int log_text(csilk_log_level_t lv, const char* file, int line,
                     const char* func, const char* msg, int msg_len) {
     const char* fn = strrchr(file, '/');
@@ -97,6 +108,14 @@ static int log_text(csilk_log_level_t lv, const char* file, int line,
 
 /* ---- JSON-format output (uses reflect) ---- */
 
+/** @brief Build a cJSON object from log entry fields.
+ * @param lv Log level.
+ * @param file Source file.
+ * @param line Source line.
+ * @param func Function name.
+ * @param msg Log message.
+ * @param msg_len Message length.
+ * @return cJSON object, or NULL on failure. */
 static cJSON* build_json_entry(csilk_log_level_t lv, const char* file,
                                 int line, const char* func,
                                 const char* msg, int msg_len) {
@@ -120,6 +139,15 @@ static cJSON* build_json_entry(csilk_log_level_t lv, const char* file,
     return cJSON_Parse(csilk_json_marshal("csilk_log_entry_t", &entry));
 }
 
+/** @brief Format and write a JSON-structured log line.
+ * @param lv Log level.
+ * @param file Source file.
+ * @param line Source line.
+ * @param func Function name.
+ * @param extra Extra cJSON fields (takes ownership).
+ * @param msg Log message.
+ * @param msg_len Message length.
+ * @return Number of bytes written. */
 static int log_json(csilk_log_level_t lv, const char* file, int line,
                     const char* func, cJSON* extra,
                     const char* msg, int msg_len) {
@@ -150,6 +178,7 @@ static int log_json(csilk_log_level_t lv, const char* file, int line,
  * public API
  * ================================================================ */
 
+/** @brief Initialize the global logger with the given configuration. */
 int csilk_log_init(csilk_log_config_t config) {
     if (g_logger.initialized) csilk_log_close();
     g_logger.config = config;
@@ -173,6 +202,7 @@ int csilk_log_init(csilk_log_config_t config) {
     return 0;
 }
 
+/** @brief Internal: format and emit a log message (use macros instead). */
 void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
                          const char* func, const char* fmt, ...) {
     if (!g_logger.initialized || lv < g_logger.config.level) return;
@@ -197,6 +227,7 @@ void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
     uv_mutex_unlock(&g_logger.mutex);
 }
 
+/** @brief Internal: emit a structured JSON log entry with extra fields. */
 void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
                            const char* func, cJSON* extra,
                            const char* fmt, ...) {
@@ -226,10 +257,12 @@ void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
     uv_mutex_unlock(&g_logger.mutex);
 }
 
+/** @brief Check whether the logger is in JSON format mode. */
 int csilk_log_is_json(void) {
     return g_logger.initialized && g_logger.config.json_format;
 }
 
+/** @brief Build a simple key-value cJSON object for structured logging. */
 cJSON* csilk_log_make_kv(const char* key, ...) {
     cJSON* obj = cJSON_CreateObject();
     if (!obj) return NULL;
@@ -245,6 +278,7 @@ cJSON* csilk_log_make_kv(const char* key, ...) {
     return obj;
 }
 
+/** @brief Close the global logger and release resources. */
 void csilk_log_close(void) {
     if (!g_logger.initialized) return;
     uv_mutex_lock(&g_logger.mutex);

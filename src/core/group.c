@@ -54,6 +54,7 @@ static char* join_path(const char* p1, const char* p2) {
   return res;
 }
 
+/** @brief Create a new root route group. */
 csilk_group_t* csilk_group_new(csilk_router_t* router, const char* prefix) {
   csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
   if (!group) return NULL;
@@ -67,6 +68,7 @@ csilk_group_t* csilk_group_new(csilk_router_t* router, const char* prefix) {
   return group;
 }
 
+/** @brief Create a child subgroup under an existing group. */
 csilk_group_t* csilk_group_group(csilk_group_t* parent, const char* prefix) {
   if (!parent) return NULL;
 
@@ -84,6 +86,7 @@ csilk_group_t* csilk_group_group(csilk_group_t* parent, const char* prefix) {
   return group;
 }
 
+/** @brief Add a middleware handler to the group. */
 void csilk_group_use(csilk_group_t* group, csilk_handler_t handler) {
   if (!group) return;
   csilk_handler_t* new_middlewares =
@@ -122,12 +125,14 @@ static int gather_handlers(csilk_group_t* group, csilk_handler_t** handlers,
   return 0;
 }
 
+/** @brief Add a route with a single handler to the group. */
 void csilk_group_add_route(csilk_group_t* group, const char* method,
                          const char* path, csilk_handler_t handler) {
     csilk_handler_t handlers[] = {handler};
     csilk_group_add_handlers(group, method, path, handlers, 1);
 }
 
+/** @brief Add a route with multiple handlers (middleware chain) to the group. */
 void csilk_group_add_handlers(csilk_group_t* group, const char* method,
                             const char* path, csilk_handler_t* handlers,
                             size_t count) {
@@ -162,6 +167,7 @@ void csilk_group_add_handlers(csilk_group_t* group, const char* method,
   free(combined_handlers);
 }
 
+/** @brief Deallocate a route group. */
 void csilk_group_free(csilk_group_t* group) {
   if (!group) return;
   free(group->prefix);

@@ -22,6 +22,7 @@ typedef struct csilk_arena_s {
     size_t default_chunk_size;     /**< Default size for new chunks. */
 } csilk_arena_t;
 
+/** @brief Create a new arena allocator. */
 csilk_arena_t* csilk_arena_new(size_t default_chunk_size) {
     csilk_arena_t* arena = malloc(sizeof(csilk_arena_t));
     if (!arena) return NULL;
@@ -30,6 +31,7 @@ csilk_arena_t* csilk_arena_new(size_t default_chunk_size) {
     return arena;
 }
 
+/** @brief Allocate aligned memory from the arena. */
 void* csilk_arena_alloc(csilk_arena_t* arena, size_t size) {
     if (size > SIZE_MAX - 7) return NULL;
 
@@ -52,6 +54,7 @@ void* csilk_arena_alloc(csilk_arena_t* arena, size_t size) {
     return chunk->data;
 }
 
+/** @brief Duplicate a string using the arena allocator. */
 char* csilk_arena_strdup(csilk_arena_t* arena, const char* s) {
     if (!s) return NULL;
     size_t len = strlen(s);
@@ -62,6 +65,7 @@ char* csilk_arena_strdup(csilk_arena_t* arena, const char* s) {
     return news;
 }
 
+/** @brief Free all arena chunks and the arena itself. */
 void csilk_arena_free(csilk_arena_t* arena) {
     if (!arena) return;
     csilk_arena_chunk_t* curr = arena->head;
@@ -73,6 +77,7 @@ void csilk_arena_free(csilk_arena_t* arena) {
     free(arena);
 }
 
+/** @brief Reset arena for reuse without freeing chunks. */
 void csilk_arena_reset(csilk_arena_t* arena) {
     if (!arena) return;
     csilk_arena_chunk_t* curr = arena->head;

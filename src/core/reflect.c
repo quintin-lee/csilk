@@ -17,6 +17,7 @@ static size_t g_registry_count = 0;
 static uv_mutex_t g_registry_mutex;
 static int g_registry_mutex_init = 0;
 
+/** @brief Lock the reflection registry mutex (lazy init). */
 static void registry_lock(void) {
     if (!g_registry_mutex_init) {
         uv_mutex_init(&g_registry_mutex);
@@ -25,10 +26,12 @@ static void registry_lock(void) {
     uv_mutex_lock(&g_registry_mutex);
 }
 
+/** @brief Unlock the reflection registry mutex. */
 static void registry_unlock(void) {
     uv_mutex_unlock(&g_registry_mutex);
 }
 
+/** @brief Register a type with the reflection engine. */
 void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
                           size_t count) {
   registry_lock();
@@ -41,6 +44,7 @@ void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
   registry_unlock();
 }
 
+/** @brief Find a registered type descriptor by name. */
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
   if (!name) return NULL;
   registry_lock();
@@ -59,6 +63,10 @@ static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                    const csilk_field_desc_t* descs,
                                    size_t field_count);
 
+/** @brief Serialize a single field value to a cJSON node.
+ * @param addr Field address.
+ * @param desc Field descriptor.
+ * @return cJSON node, or NULL on failure. */
 static cJSON* serialize_scalar(const void* addr, const csilk_field_desc_t* desc) {
   switch (desc->type) {
     case CSILK_TYPE_INT8:   return cJSON_CreateNumber(*(const int8_t*)addr);
@@ -92,6 +100,11 @@ static cJSON* serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
   return cJSON_CreateNull();
 }
 
+/** @brief Walk struct fields and build cJSON object recursively.
+ * @param obj Target cJSON object.
+ * @param struct_ptr Source struct.
+ * @param descs Field descriptors.
+ * @param field_count Number of fields. */
 static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                    const csilk_field_desc_t* descs,
                                    size_t field_count) {
@@ -119,6 +132,10 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
                                    const csilk_field_desc_t* descs,
                                    size_t field_count);
 
+/** @brief Deserialize a cJSON value into a struct field.
+ * @param item Source cJSON.
+ * @param addr Field address.
+ * @param desc Field descriptor. */
 static void deserialize_scalar(const cJSON* item, void* addr,
                              const csilk_field_desc_t* desc) {
   if (!item || cJSON_IsNull(item)) return;
@@ -168,6 +185,11 @@ static void deserialize_scalar(const cJSON* item, void* addr,
   }
 }
 
+/** @brief Walk cJSON object and populate struct fields recursively.
+ * @param obj Source cJSON.
+ * @param struct_ptr Target struct.
+ * @param descs Field descriptors.
+ * @param field_count Number of fields. */
 static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
                                    const csilk_field_desc_t* descs,
                                    size_t field_count) {
@@ -192,6 +214,7 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
   }
 }
 
+/** @brief Serialize a registered struct to a JSON string. */
 char* csilk_json_marshal(const char* type_name, const void* ptr) {
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
   if (!entry) return NULL;
@@ -205,6 +228,7 @@ char* csilk_json_marshal(const char* type_name, const void* ptr) {
   return out;
 }
 
+/** @brief Deserialize a JSON string into a registered struct. */
 int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr) {
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
   if (!entry || !json_str) return 0;

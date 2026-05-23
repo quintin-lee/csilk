@@ -8,6 +8,7 @@
 #include <string.h>
 #include "csilk.h"
 
+/** @brief Split a URL into path and query string components. */
 void csilk_split_url(const char* url, char** path, char** query) {
   *path = NULL;
   *query = NULL;

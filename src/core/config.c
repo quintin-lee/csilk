@@ -23,6 +23,7 @@ static csilk_log_level_t string_to_log_level(const char* s) {
     return CSILK_LOG_INFO;
 }
 
+/** @brief Load and parse configuration from a YAML file. */
 int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
     if (!yaml_path || !config) return -1;
 
@@ -160,6 +161,7 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
     return error ? -1 : 0;
 }
 
+/** @brief Free all dynamically allocated strings in the configuration. */
 void csilk_config_free(csilk_config_t* config) {
     if (!config) return;
 
@@ -196,6 +198,7 @@ void csilk_config_free(csilk_config_t* config) {
     }
 }
 
+/** @brief Validate configuration values for semantic correctness. */
 int csilk_config_validate(const csilk_config_t* config, const char** error_msg) {
     if (!config) {
         if (error_msg) *error_msg = "Null config";

@@ -103,8 +103,6 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 
 | Component | Status |
 |-----------|--------|
-| Component | Status |
-|-----------|--------|
 | `include/csilk.h` (public API) | Fully documented |
 | `include/csilk_app.h` (app API) | Fully documented |
 | `include/csilk_internal.h` (internal API) | Fully documented |

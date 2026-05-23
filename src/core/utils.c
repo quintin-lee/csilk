@@ -56,6 +56,7 @@ static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
     state[0] += a; state[1] += b; state[2] += c; state[3] += d; state[4] += e;
 }
 
+/** @brief Initialize a SHA1 hashing context. */
 void csilk_sha1_init(csilk_sha1_ctx* context) {
     context->state[0] = 0x67452301;
     context->state[1] = 0xEFCDAB89;
@@ -65,6 +66,7 @@ void csilk_sha1_init(csilk_sha1_ctx* context) {
     context->count[0] = context->count[1] = 0;
 }
 
+/** @brief Feed data into the SHA1 hashing context. */
 void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len) {
     uint32_t i, j;
     j = context->count[0];
@@ -87,6 +89,7 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
     memcpy(context->buffer + j, data + i_sz, len - i_sz);
 }
 
+/** @brief Finalize SHA1 hash and produce the 20-byte digest. */
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
     uint8_t finalcount[8];
     uint64_t total_bits = (uint64_t)context->count[0] * 8;
@@ -104,6 +107,7 @@ void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
 /** @brief Base64 encoding lookup table. */
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/** @brief Encode raw bytes as a Base64 string (RFC 4648). */
 void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
     size_t i, j;
     for (i = 0, j = 0; i < len; i += 3) {

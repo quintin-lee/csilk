@@ -11,6 +11,7 @@
 #include <uv.h>
 #include "csilk.h"
 
+/** @brief SSE write completion callback. @param req Write request. @param status Write status. */
 static void on_sse_write(uv_write_t* req, int status) {
     if (status < 0) {
         CSILK_LOG_E("SSE write error: %s", uv_strerror(status));
@@ -19,6 +20,7 @@ static void on_sse_write(uv_write_t* req, int status) {
     free(req);
 }
 
+/** @brief Initialize an SSE connection with proper headers and status. */
 void csilk_sse_init(csilk_ctx_t* c) {
     if (!c || !c->_internal_client) return;
 
@@ -54,6 +56,7 @@ void csilk_sse_init(csilk_ctx_t* c) {
     uv_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
+/** @brief Send an SSE event (optional event type + data). */
 void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data) {
     if (!c || !c->_internal_client) return;
 
@@ -84,6 +87,7 @@ void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data) {
     uv_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
+/** @brief Close the SSE connection. */
 void csilk_sse_close(csilk_ctx_t* c) {
     if (!c || !c->_internal_client) return;
     uv_stream_t* stream = (uv_stream_t*)c->_internal_client;

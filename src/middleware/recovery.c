@@ -10,6 +10,7 @@
 
 #include "csilk.h"
 
+/** @brief Panic recovery middleware — catches longjmp panics and returns 500. */
 void csilk_recovery_handler(csilk_ctx_t* c) {
   if (setjmp(c->jump_buffer) == 0) {
     c->has_jump_buffer = 1;
@@ -22,6 +23,7 @@ void csilk_recovery_handler(csilk_ctx_t* c) {
   }
 }
 
+/** @brief Trigger a panic (longjmp to recovery handler) or abort if no recovery registered. */
 void csilk_panic(csilk_ctx_t* c) {
   if (c->has_jump_buffer) {
     longjmp(c->jump_buffer, 1);

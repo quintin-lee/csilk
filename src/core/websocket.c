@@ -15,6 +15,7 @@
 /** @brief WebSocket GUID for handshake key generation (RFC 6455). */
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+/** @brief Perform WebSocket upgrade handshake (RFC 6455). */
 void csilk_ws_handshake(csilk_ctx_t* c) {
     const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
     if (!key) {
@@ -50,6 +51,7 @@ static void on_ws_write(uv_write_t* req, int status) {
     free(req);
 }
 
+/** @brief Send a WebSocket data frame (text or binary). */
 void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     if (!c || !c->_internal_client) return;
 
@@ -89,6 +91,7 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcod
     }
 }
 
+/** @brief Parse and dispatch an incoming WebSocket frame. */
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
     if (nread < 2) return;
     

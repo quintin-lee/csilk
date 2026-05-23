@@ -8,6 +8,7 @@
 #include <string.h>
 #include "csilk.h"
 
+/** @brief CORS middleware — sets cross-origin headers and handles preflight. */
 void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
   if (!c || !config) return;
 

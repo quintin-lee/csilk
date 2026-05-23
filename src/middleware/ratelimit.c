@@ -28,10 +28,12 @@ static int ip_count = 0;
 static uv_mutex_t ratelimit_mutex;
 static uv_once_t ratelimit_once = UV_ONCE_INIT;
 
+/** @brief Initialize the rate-limiting mutex (called once via uv_once). */
 static void init_ratelimit_mutex() {
     uv_mutex_init(&ratelimit_mutex);
 }
 
+/** @brief IP-based rate limiting middleware with sliding window. */
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
     uv_once(&ratelimit_once, init_ratelimit_mutex);
 
