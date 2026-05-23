@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include "cJSON.h"
+#include "csilk_reflect.h"
 
 /** @brief Csilk framework version. */
 #define CSILK_VERSION "0.1.0"
@@ -340,6 +341,20 @@ void csilk_json(csilk_ctx_t* c, int status, cJSON* json);
  * @param status HTTP status code.
  * @param message Error description string. */
 void csilk_json_error(csilk_ctx_t* c, int status, const char* message);
+
+/** @brief Bind request body to a registered struct via reflection.
+ * @param c The request context.
+ * @param type_name Registered type name.
+ * @param ptr Pointer to the struct to populate.
+ * @return 1 on success, 0 on failure. */
+int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr);
+
+/** @brief Send a JSON response from a registered struct via reflection.
+ * @param c The request context.
+ * @param status HTTP status code.
+ * @param type_name Registered type name.
+ * @param ptr Pointer to the struct. */
+void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr);
 
 /** @brief Get the client's IP address.
  * @param c The request context.
