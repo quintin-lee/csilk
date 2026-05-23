@@ -254,7 +254,7 @@ sequenceDiagram
     participant Server
     participant HTTP as llhttp
     participant WS as WebSocket Engine
-    participant Loop as libuv
+    participant EvLoop as libuv
 
     Client->>Server: HTTP GET /ws\nUpgrade: websocket\nSec-WebSocket-Key: abc123...
 
@@ -269,7 +269,7 @@ sequenceDiagram
     Server->>Client: HTTP/1.1 101 Switching Protocols\nUpgrade: websocket\nSec-WebSocket-Accept: ...
 
     Note over Server: Connection stays open, parser switches mode
-    Note over Loop: on_read() now routes to csilk_ws_parse_frame()
+    Note over EvLoop: on_read() now routes to csilk_ws_parse_frame()
 
     Client->>Server: WS Frame (text: "hello")
     Server->>WS: csilk_ws_parse_frame(ctx, buf, len)
@@ -279,7 +279,7 @@ sequenceDiagram
 
     Client->>Server: WS Close Frame (opcode 0x08)
     Server->>WS: Auto-respond with close frame
-    Server->>Loop: uv_close() connection
+    Server->>EvLoop: uv_close() connection
 ```
 
 ### 4.2 Protocol Specification
