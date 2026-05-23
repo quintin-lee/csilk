@@ -1,15 +1,15 @@
 var searchData=
 [
-  ['gin_5farena_5fchunk_5ft_0',['gin_arena_chunk_t',['../arena_8c.html#a0e387d1fcf915a343650beedbf0c87be',1,'arena.c']]],
-  ['gin_5farena_5ft_1',['gin_arena_t',['../gin_8h.html#a7316f19211bdb24e0290cd5648defb14',1,'gin_arena_t:&#160;gin.h'],['../arena_8c.html#a7316f19211bdb24e0290cd5648defb14',1,'gin_arena_t:&#160;arena.c']]],
-  ['gin_5fauth_5fvalidator_5ft_2',['gin_auth_validator_t',['../gin_8h.html#a7192a9ac2b67ffb436b5ce70ffae8c55',1,'gin.h']]],
-  ['gin_5fctx_5ft_3',['gin_ctx_t',['../gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b',1,'gin.h']]],
-  ['gin_5fgroup_5ft_4',['gin_group_t',['../gin_8h.html#afd512684205cd95459f1f028a278dff8',1,'gin.h']]],
-  ['gin_5fhandler_5ft_5',['gin_handler_t',['../gin_8h.html#a32bd3f9dd28912a03796327bac3cd742',1,'gin.h']]],
-  ['gin_5fheader_5ft_6',['gin_header_t',['../gin_8h.html#a40cb184503dd65c99f1b663b193f277b',1,'gin.h']]],
-  ['gin_5fmethod_5fhandler_5ft_7',['gin_method_handler_t',['../router_8c.html#a89290ab4c76f70e91667ce1b3b920a78',1,'router.c']]],
-  ['gin_5frouter_5fnode_5ft_8',['gin_router_node_t',['../gin_8h.html#a7f6e2ea6ce6149d5c4daad6279bcff7c',1,'gin.h']]],
-  ['gin_5frouter_5ft_9',['gin_router_t',['../gin_8h.html#a619d4ad6a98c5f6af61c1845a1c25557',1,'gin.h']]],
-  ['gin_5fserver_5fconfig_5ft_10',['gin_server_config_t',['../gin_8h.html#a81c4eec790cdadc96b2499054441cde1',1,'gin.h']]],
-  ['gin_5fserver_5ft_11',['gin_server_t',['../gin_8h.html#a7d2c38004d205cac5306815e3d0f0011',1,'gin.h']]]
+  ['csilk_5farena_5fchunk_5ft_0',['csilk_arena_chunk_t',['../arena_8c.html#acda88d4862b606be4e9253369f3caa43',1,'arena.c']]],
+  ['csilk_5farena_5ft_1',['csilk_arena_t',['../csilk_8h.html#a4c82f272a928a557d06f96ebda5a8132',1,'csilk_arena_t:&#160;csilk.h'],['../arena_8c.html#a4c82f272a928a557d06f96ebda5a8132',1,'csilk_arena_t:&#160;arena.c']]],
+  ['csilk_5fauth_5fvalidator_5ft_2',['csilk_auth_validator_t',['../csilk_8h.html#ab3a67ebfe3ccadff243103f3e408014e',1,'csilk.h']]],
+  ['csilk_5fctx_5ft_3',['csilk_ctx_t',['../csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2',1,'csilk.h']]],
+  ['csilk_5fgroup_5ft_4',['csilk_group_t',['../csilk_8h.html#a03b023441651158cc44c0a564f0f6cbd',1,'csilk.h']]],
+  ['csilk_5fhandler_5ft_5',['csilk_handler_t',['../csilk_8h.html#a6a0546a31c9dce966b294198210689b3',1,'csilk.h']]],
+  ['csilk_5fheader_5ft_6',['csilk_header_t',['../csilk_8h.html#a415c0359beaef1c5055ff15c2779ad39',1,'csilk.h']]],
+  ['csilk_5fmethod_5fhandler_5ft_7',['csilk_method_handler_t',['../router_8c.html#adb2d20e956447b92ef816c5bd8b654ac',1,'router.c']]],
+  ['csilk_5frouter_5fnode_5ft_8',['csilk_router_node_t',['../csilk_8h.html#a3ab5eec5d2860821fffbec1392be4d34',1,'csilk.h']]],
+  ['csilk_5frouter_5ft_9',['csilk_router_t',['../csilk_8h.html#a85c477ce92b8be8ddd93963e3fd07625',1,'csilk.h']]],
+  ['csilk_5fserver_5fconfig_5ft_10',['csilk_server_config_t',['../csilk_8h.html#aa52f4a7293fca2294706ce9f9c67356f',1,'csilk.h']]],
+  ['csilk_5fserver_5ft_11',['csilk_server_t',['../csilk_8h.html#a63d9079307207ca79acec1968f71c6a4',1,'csilk.h']]]
 ];

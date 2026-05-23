@@ -3,24 +3,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 void test_split_url() {
   char *path, *query;
 
-  gin_split_url("/api/ping?a=1", &path, &query);
+  csilk_split_url("/api/ping?a=1", &path, &query);
   assert(strcmp(path, "/api/ping") == 0);
   assert(strcmp(query, "a=1") == 0);
   free(path);
   free(query);
 
-  gin_split_url("/noquery", &path, &query);
+  csilk_split_url("/noquery", &path, &query);
   assert(strcmp(path, "/noquery") == 0);
   assert(query == NULL);
   free(path);
   free(query);
 
-  gin_split_url("?onlyquery=test", &path, &query);
+  csilk_split_url("?onlyquery=test", &path, &query);
   assert(strcmp(path, "") == 0);
   assert(strcmp(query, "onlyquery=test") == 0);
   free(path);
@@ -30,34 +30,34 @@ void test_split_url() {
 }
 
 void test_parse_query() {
-  gin_ctx_t ctx = {0};
+  csilk_ctx_t ctx = {0};
 
-  gin_parse_query(&ctx, "a=1&b=2&c=hello");
+  csilk_parse_query(&ctx, "a=1&b=2&c=hello");
 
-  const char* a = gin_get_query(&ctx, "a");
-  const char* b = gin_get_query(&ctx, "b");
-  const char* c = gin_get_query(&ctx, "c");
-  const char* d = gin_get_query(&ctx, "d");
+  const char* a = csilk_get_query(&ctx, "a");
+  const char* b = csilk_get_query(&ctx, "b");
+  const char* c = csilk_get_query(&ctx, "c");
+  const char* d = csilk_get_query(&ctx, "d");
 
   assert(a != NULL && strcmp(a, "1") == 0);
   assert(b != NULL && strcmp(b, "2") == 0);
   assert(c != NULL && strcmp(c, "hello") == 0);
   assert(d == NULL);
 
-  gin_ctx_cleanup(&ctx);
+  csilk_ctx_cleanup(&ctx);
   printf("test_parse_query passed\n");
 }
 
 void test_empty_query() {
-  gin_ctx_t ctx = {0};
-  gin_parse_query(&ctx, "");
+  csilk_ctx_t ctx = {0};
+  csilk_parse_query(&ctx, "");
   assert(ctx.request.query_params == NULL);
 
-  gin_parse_query(&ctx, "key_no_val");
-  const char* val = gin_get_query(&ctx, "key_no_val");
+  csilk_parse_query(&ctx, "key_no_val");
+  const char* val = csilk_get_query(&ctx, "key_no_val");
   assert(val != NULL && strcmp(val, "") == 0);
 
-  gin_ctx_cleanup(&ctx);
+  csilk_ctx_cleanup(&ctx);
   printf("test_empty_query passed\n");
 }
 
@@ -65,27 +65,27 @@ void test_boundary_query() {
   char *path, *query;
   
   // NULL url
-  gin_split_url(NULL, &path, &query);
+  csilk_split_url(NULL, &path, &query);
   assert(path == NULL);
   assert(query == NULL);
 
-  gin_ctx_t ctx = {0};
+  csilk_ctx_t ctx = {0};
   
   // NULL query string
-  gin_parse_query(&ctx, NULL);
+  csilk_parse_query(&ctx, NULL);
   assert(ctx.request.query_params == NULL);
 
   // Consecutive ampersands
-  gin_parse_query(&ctx, "a=1&&b=2&");
-  assert(strcmp(gin_get_query(&ctx, "a"), "1") == 0);
-  assert(strcmp(gin_get_query(&ctx, "b"), "2") == 0);
+  csilk_parse_query(&ctx, "a=1&&b=2&");
+  assert(strcmp(csilk_get_query(&ctx, "a"), "1") == 0);
+  assert(strcmp(csilk_get_query(&ctx, "b"), "2") == 0);
 
   // Empty values
-  gin_parse_query(&ctx, "c=&d");
-  assert(strcmp(gin_get_query(&ctx, "c"), "") == 0);
-  assert(strcmp(gin_get_query(&ctx, "d"), "") == 0);
+  csilk_parse_query(&ctx, "c=&d");
+  assert(strcmp(csilk_get_query(&ctx, "c"), "") == 0);
+  assert(strcmp(csilk_get_query(&ctx, "d"), "") == 0);
 
-  gin_ctx_cleanup(&ctx);
+  csilk_ctx_cleanup(&ctx);
   printf("test_boundary_query passed\n");
 }
 

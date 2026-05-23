@@ -5,10 +5,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 // Mock handler
-void dummy_handler(gin_ctx_t* c) { c->response.status = 200; }
+void dummy_handler(csilk_ctx_t* c) { c->response.status = 200; }
 
 #define NUM_THREADS 5
 #define LOGS_PER_THREAD 10
@@ -16,7 +16,7 @@ void dummy_handler(gin_ctx_t* c) { c->response.status = 200; }
 void* thread_func(void* arg) {
     int id = *(int*)arg;
     for (int i = 0; i < LOGS_PER_THREAD; i++) {
-        GIN_LOG_I("Thread %d: log message %d", id, i);
+        CSILK_LOG_I("Thread %d: log message %d", id, i);
         usleep(1000); // 1ms
     }
     return NULL;
@@ -24,33 +24,33 @@ void* thread_func(void* arg) {
 
 int main() {
   printf("Initializing logger...\n");
-  gin_log_config_t cfg = {
-      .level = GIN_LOG_TRACE, // Set to TRACE to see all
+  csilk_log_config_t cfg = {
+      .level = CSILK_LOG_TRACE, // Set to TRACE to see all
       .file_path = NULL,
       .max_file_size = 0,
       .use_colors = -1
   };
-  assert(gin_log_init(cfg) == 0);
+  assert(csilk_log_init(cfg) == 0);
 
   // 1. Test all levels
   printf("Testing all log levels...\n");
-  GIN_LOG_T("This is a TRACE message");
-  GIN_LOG_D("This is a DEBUG message");
-  GIN_LOG_I("This is an INFO message");
-  GIN_LOG_W("This is a WARN message");
-  GIN_LOG_E("This is an ERROR message");
-  GIN_LOG_F("This is a FATAL message");
+  CSILK_LOG_T("This is a TRACE message");
+  CSILK_LOG_D("This is a DEBUG message");
+  CSILK_LOG_I("This is an INFO message");
+  CSILK_LOG_W("This is a WARN message");
+  CSILK_LOG_E("This is an ERROR message");
+  CSILK_LOG_F("This is a FATAL message");
 
   // 2. Test basic middleware logging
-  gin_ctx_t c = {0};
+  csilk_ctx_t c = {0};
   c.request.method = "GET";
   c.request.path = "/test";
-  gin_handler_t handlers[] = {gin_logger_handler, dummy_handler, NULL};
+  csilk_handler_t handlers[] = {csilk_logger_handler, dummy_handler, NULL};
   c.handlers = handlers;
-  c.handler_index = -1; // gin_next increments this
+  c.handler_index = -1; // csilk_next increments this
 
   printf("Testing middleware logging...\n");
-  gin_next(&c);
+  csilk_next(&c);
   assert(c.response.status == 200);
 
   // 2. Test multi-threaded logging
@@ -69,21 +69,21 @@ int main() {
 
   // 3. Test logging to file & rotation
   printf("Testing file logging & rotation...\n");
-  gin_log_close(); 
+  csilk_log_close(); 
   const char* log_file = "test.log";
   
-  gin_log_config_t rot_cfg = {
-      .level = GIN_LOG_INFO,
+  csilk_log_config_t rot_cfg = {
+      .level = CSILK_LOG_INFO,
       .file_path = log_file,
       .max_file_size = 100, // Very small for rotation test
       .use_colors = 0
   };
-  assert(gin_log_init(rot_cfg) == 0);
+  assert(csilk_log_init(rot_cfg) == 0);
   
-  GIN_LOG_I("Message 1: This is a test message to trigger rotation.");
-  GIN_LOG_I("Message 2: This should be in a rotated file if size exceeded.");
+  CSILK_LOG_I("Message 1: This is a test message to trigger rotation.");
+  CSILK_LOG_I("Message 2: This should be in a rotated file if size exceeded.");
   
-  gin_log_close();
+  csilk_log_close();
 
   // Verify file existence
   struct stat st;

@@ -6,9 +6,9 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "gin.h"
+#include "csilk.h"
 
-void gin_split_url(const char* url, char** path, char** query) {
+void csilk_split_url(const char* url, char** path, char** query) {
   *path = NULL;
   *query = NULL;
   if (!url) return;
@@ -27,13 +27,13 @@ void gin_split_url(const char* url, char** path, char** query) {
   }
 }
 
-void gin_parse_query(gin_ctx_t* c, const char* query_string) {
+void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
   if (!query_string || *query_string == '\0') return;
 
   char* qs = strdup(query_string);
   if (!qs) return;
 
-  gin_header_t** tail = &c->request.query_params;
+  csilk_header_t** tail = &c->request.query_params;
   // Fast-forward to end if already populated
   while (*tail) {
     tail = &((*tail)->next);
@@ -55,7 +55,7 @@ void gin_parse_query(gin_ctx_t* c, const char* query_string) {
 
     // Only add if key is not empty (ignores =val and &&)
     if (*key != '\0') {
-      gin_header_t* new_q = malloc(sizeof(gin_header_t));
+      csilk_header_t* new_q = malloc(sizeof(csilk_header_t));
       if (new_q) {
         new_q->key = strdup(key);
         new_q->value = strdup(value);

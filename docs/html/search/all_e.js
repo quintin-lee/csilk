@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['next_0',['next',['../structgin__header__s.html#ac267ddadad37778a3b11d9bd038c56c5',1,'gin_header_s::next'],['../structgin__arena__chunk__s.html#a04945e5074d96343d7598c1af31302a5',1,'gin_arena_chunk_s::next'],['../structgin__method__handler__s.html#ade3c3f1aa048d92dcc9ff5d174a9df74',1,'gin_method_handler_s::next']]]
+  ['next_0',['next',['../structcsilk__header__s.html#ad9db146e8523b7ea695f6776b14a2814',1,'csilk_header_s::next'],['../structcsilk__arena__chunk__s.html#a4751553b7db182e2d777ded16b35d14d',1,'csilk_arena_chunk_s::next'],['../structcsilk__method__handler__s.html#a4c699df0a68228adb0e3f4cabf3e1924',1,'csilk_method_handler_s::next']]]
 ];

@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "gin.h"
+#include "csilk.h"
 
 int main() {
     const char* yaml_content = 
@@ -30,16 +30,16 @@ int main() {
     fputs(yaml_content, f);
     fclose(f);
 
-    gin_config_t cfg;
+    csilk_config_t cfg;
     printf("Testing Extended YAML config loading...\n");
-    assert(gin_load_config("test_config_ext.yaml", &cfg) == 0);
+    assert(csilk_load_config("test_config_ext.yaml", &cfg) == 0);
 
     assert(cfg.port == 9090);
     assert(cfg.server.idle_timeout_ms == 10000);
     assert(cfg.server.max_body_size == 2048);
     assert(cfg.server.tcp_nodelay == 0);
     assert(cfg.server.tcp_keepalive == 60);
-    assert(cfg.logger.level == GIN_LOG_DEBUG);
+    assert(cfg.logger.level == CSILK_LOG_DEBUG);
     assert(strcmp(cfg.logger.file_path, "test_cfg.log") == 0);
     assert(cfg.cors.enable == 1);
     assert(strcmp(cfg.cors.config.allow_origin, "*") == 0);

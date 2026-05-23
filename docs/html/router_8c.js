@@ -1,13 +1,13 @@
 var router_8c =
 [
-    [ "gin_method_handler_s", "structgin__method__handler__s.html", "structgin__method__handler__s" ],
-    [ "gin_router_node_s", "structgin__router__node__s.html", "structgin__router__node__s" ],
-    [ "GIN_MAX_CHILDREN", "router_8c.html#a9fd1d94f2edbc89b9579d9da4db94268", null ],
-    [ "gin_method_handler_t", "router_8c.html#a89290ab4c76f70e91667ce1b3b920a78", null ],
-    [ "gin_node_type_t", "router_8c.html#a3081553e206b13d2b821e32c76294c88", null ],
-    [ "gin_router_add", "router_8c.html#ab7a13815e9fca25f52ca8d0d689dea2a", null ],
-    [ "gin_router_free", "router_8c.html#a3ff9e6478b310dd449cafc4c68288c80", null ],
-    [ "gin_router_match", "router_8c.html#a86babfb2a97d59562e56c6c48c365c1c", null ],
-    [ "gin_router_match_ctx", "router_8c.html#ac9403f0ba783ae3c7b6319bcd49dc3ec", null ],
-    [ "gin_router_new", "router_8c.html#a08fa8a437528249c2604309c82815ca2", null ]
+    [ "csilk_method_handler_s", "structcsilk__method__handler__s.html", "structcsilk__method__handler__s" ],
+    [ "csilk_router_node_s", "structcsilk__router__node__s.html", "structcsilk__router__node__s" ],
+    [ "CSILK_MAX_CHILDREN", "router_8c.html#a877f7d4f7121e085fee6ffa7ea03b349", null ],
+    [ "csilk_method_handler_t", "router_8c.html#adb2d20e956447b92ef816c5bd8b654ac", null ],
+    [ "csilk_node_type_t", "router_8c.html#afc495bda9eb413a8ad6a261e32abe963", null ],
+    [ "csilk_router_add", "router_8c.html#acc8e828f3547a4dac6361c2652e412e9", null ],
+    [ "csilk_router_free", "router_8c.html#ae9756acbad60e4b8d7d610c9b9bd9bcd", null ],
+    [ "csilk_router_match", "router_8c.html#a0a929b9c038ce4db8b2201294c96dc05", null ],
+    [ "csilk_router_match_ctx", "router_8c.html#a5ea77ec8751abea03449cb1e76d8756e", null ],
+    [ "csilk_router_new", "router_8c.html#a0e48c6c6307f42a3f1f8f0903936bb6d", null ]
 ];

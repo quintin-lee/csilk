@@ -6,38 +6,38 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include "gin.h"
+#include "csilk.h"
 
 #define PORT 8096
 #define BUFSIZE 4096
 
 static volatile int server_ready = 0;
-static gin_server_t* g_server = NULL;
+static csilk_server_t* g_server = NULL;
 
-static void hello_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "Hello");
+static void hello_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "Hello");
 }
 
-static void echo_handler(gin_ctx_t* c) {
-    const char* name = gin_get_query(c, "name");
+static void echo_handler(csilk_ctx_t* c) {
+    const char* name = csilk_get_query(c, "name");
     char resp[256];
     snprintf(resp, sizeof(resp), "Echo: %s", name ? name : "none");
-    gin_string(c, 200, resp);
+    csilk_string(c, 200, resp);
 }
 
 static void* run_server(void* arg) {
     (void)arg;
-    gin_router_t* router = gin_router_new();
-    gin_handler_t h1[] = {hello_handler};
-    gin_router_add(router, "GET", "/", h1, 1);
-    gin_handler_t h2[] = {echo_handler};
-    gin_router_add(router, "GET", "/echo", h2, 1);
+    csilk_router_t* router = csilk_router_new();
+    csilk_handler_t h1[] = {hello_handler};
+    csilk_router_add(router, "GET", "/", h1, 1);
+    csilk_handler_t h2[] = {echo_handler};
+    csilk_router_add(router, "GET", "/echo", h2, 1);
 
-    g_server = gin_server_new(router);
+    g_server = csilk_server_new(router);
     server_ready = 1;
-    gin_server_run(g_server, PORT);
-    gin_server_free(g_server);
-    gin_router_free(router);
+    csilk_server_run(g_server, PORT);
+    csilk_server_free(g_server);
+    csilk_router_free(router);
     return NULL;
 }
 
@@ -98,7 +98,7 @@ int main() {
     int sock = connect_server();
     if (sock < 0) {
         printf("FAIL: connect\n");
-        gin_server_stop(g_server);
+        csilk_server_stop(g_server);
         pthread_join(thread, NULL);
         return 1;
     }
@@ -107,7 +107,7 @@ int main() {
     if (send_req(sock, req1) < 0) {
         printf("FAIL: send req1\n");
         close(sock);
-        gin_server_stop(g_server);
+        csilk_server_stop(g_server);
         pthread_join(thread, NULL);
         return 1;
     }
@@ -123,7 +123,7 @@ int main() {
     if (send_req(sock, req2) < 0) {
         printf("FAIL: send req2\n");
         close(sock);
-        gin_server_stop(g_server);
+        csilk_server_stop(g_server);
         pthread_join(thread, NULL);
         return 1;
     }
@@ -136,7 +136,7 @@ int main() {
     if (ok2) passed++; else failed++;
 
     close(sock);
-    gin_server_stop(g_server);
+    csilk_server_stop(g_server);
     pthread_join(thread, NULL);
 
     printf("Keep-alive test: %d passed, %d failed\n", passed, failed);

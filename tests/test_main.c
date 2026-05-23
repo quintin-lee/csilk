@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "gin.h"
+#include "csilk.h"
 
 int main() {
   printf("Tests running...\n");

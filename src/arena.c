@@ -8,28 +8,28 @@
 #include <stdint.h>
 
 /** @brief A single chunk in the arena linked list. */
-typedef struct gin_arena_chunk_s {
-    struct gin_arena_chunk_s* next; /**< Pointer to next chunk. */
+typedef struct csilk_arena_chunk_s {
+    struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
     size_t size;                    /**< Total size of this chunk. */
     size_t used;                    /**< Bytes used in this chunk. */
     uint8_t data[];                 /**< Flexible array for chunk data. */
-} gin_arena_chunk_t;
+} csilk_arena_chunk_t;
 
 /** @brief Arena allocator for request-scoped memory. */
-typedef struct gin_arena_s {
-    gin_arena_chunk_t* head;       /**< Head of chunk linked list. */
+typedef struct csilk_arena_s {
+    csilk_arena_chunk_t* head;       /**< Head of chunk linked list. */
     size_t default_chunk_size;     /**< Default size for new chunks. */
-} gin_arena_t;
+} csilk_arena_t;
 
-gin_arena_t* gin_arena_new(size_t default_chunk_size) {
-    gin_arena_t* arena = malloc(sizeof(gin_arena_t));
+csilk_arena_t* csilk_arena_new(size_t default_chunk_size) {
+    csilk_arena_t* arena = malloc(sizeof(csilk_arena_t));
     if (!arena) return NULL;
     arena->head = NULL;
     arena->default_chunk_size = default_chunk_size;
     return arena;
 }
 
-void* gin_arena_alloc(gin_arena_t* arena, size_t size) {
+void* csilk_arena_alloc(csilk_arena_t* arena, size_t size) {
     // Alignment to 8 bytes
     size = (size + 7) & ~7;
 
@@ -40,7 +40,7 @@ void* gin_arena_alloc(gin_arena_t* arena, size_t size) {
     }
 
     size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
-    gin_arena_chunk_t* chunk = malloc(sizeof(gin_arena_chunk_t) + chunk_size);
+    csilk_arena_chunk_t* chunk = malloc(sizeof(csilk_arena_chunk_t) + chunk_size);
     if (!chunk) return NULL;
 
     chunk->size = chunk_size;
@@ -50,21 +50,21 @@ void* gin_arena_alloc(gin_arena_t* arena, size_t size) {
     return chunk->data;
 }
 
-char* gin_arena_strdup(gin_arena_t* arena, const char* s) {
+char* csilk_arena_strdup(csilk_arena_t* arena, const char* s) {
     if (!s) return NULL;
     size_t len = strlen(s);
-    char* news = gin_arena_alloc(arena, len + 1);
+    char* news = csilk_arena_alloc(arena, len + 1);
     if (news) {
         memcpy(news, s, len + 1);
     }
     return news;
 }
 
-void gin_arena_free(gin_arena_t* arena) {
+void csilk_arena_free(csilk_arena_t* arena) {
     if (!arena) return;
-    gin_arena_chunk_t* curr = arena->head;
+    csilk_arena_chunk_t* curr = arena->head;
     while (curr) {
-        gin_arena_chunk_t* next = curr->next;
+        csilk_arena_chunk_t* next = curr->next;
         free(curr);
         curr = next;
     }

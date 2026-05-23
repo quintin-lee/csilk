@@ -6,27 +6,27 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include "gin.h"
+#include "csilk.h"
 
-static gin_server_t* g_server = NULL;
+static csilk_server_t* g_server = NULL;
 
-void idle_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "ok");
+void idle_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "ok");
 }
 
 void* run_server(void* arg) {
     (void)arg;
-    gin_router_t* router = gin_router_new();
-    gin_group_t* group = gin_group_new(router, "/");
-    gin_GET(group, "/idle", idle_handler);
+    csilk_router_t* router = csilk_router_new();
+    csilk_group_t* group = csilk_group_new(router, "/");
+    csilk_GET(group, "/idle", idle_handler);
 
-    g_server = gin_server_new(router);
-    gin_server_config_t cfg = { .idle_timeout_ms = 300, .max_body_size = 1048576, .listen_backlog = 128 };
-    gin_server_set_config(g_server, cfg);
-    gin_server_run(g_server, 8080);
-    gin_server_free(g_server);
-    gin_group_free(group);
-    gin_router_free(router);
+    g_server = csilk_server_new(router);
+    csilk_server_config_t cfg = { .idle_timeout_ms = 300, .max_body_size = 1048576, .listen_backlog = 128 };
+    csilk_server_set_config(g_server, cfg);
+    csilk_server_run(g_server, 8080);
+    csilk_server_free(g_server);
+    csilk_group_free(group);
+    csilk_router_free(router);
     return NULL;
 }
 
@@ -43,7 +43,7 @@ int main() {
     if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("connect");
         printf("FAIL: connect\n");
-        gin_server_stop(g_server);
+        csilk_server_stop(g_server);
         pthread_join(thread, NULL);
         return 1;
     }
@@ -69,7 +69,7 @@ int main() {
     }
 
     close(sock);
-    gin_server_stop(g_server);
+    csilk_server_stop(g_server);
     pthread_join(thread, NULL);
     return passed ? 0 : 1;
 }

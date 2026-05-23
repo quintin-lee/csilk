@@ -7,13 +7,13 @@ URL parsing implementation. MIT License.
 
 {\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
 {\ttfamily \+\#include $<$string.\+h$>$}\newline
-{\ttfamily \+\#include "{}gin.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk.\+h"{}}\newline
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-void \doxymbox{\hyperlink{url__parser_8c_aa278141b01e136adb61c654ac03ee290}{gin\+\_\+split\+\_\+url}} (const char \texorpdfstring{$\ast$}{*}url, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}path, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}query)
+void \doxymbox{\hyperlink{url__parser_8c_a25832a499ec1b2c9deb9c611ddfc0964}{csilk\+\_\+split\+\_\+url}} (const char \texorpdfstring{$\ast$}{*}url, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}path, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}query)
 \begin{DoxyCompactList}\small\item\em Internal:\+ Split URL into path and query string. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{url__parser_8c_a5623f5e24f24781b151a866e86aedf2e}{gin\+\_\+parse\+\_\+query}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}query\+\_\+string)
+void \doxymbox{\hyperlink{url__parser_8c_a9902001a7f6d76cc8c7297c5e6360aac}{csilk\+\_\+parse\+\_\+query}} (\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c, const char \texorpdfstring{$\ast$}{*}query\+\_\+string)
 \begin{DoxyCompactList}\small\item\em Internal:\+ Parse a raw query string into context. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
 
@@ -25,11 +25,11 @@ URL parsing implementation. MIT License.
 \label{doc-func-members}
 \Hypertarget{url__parser_8c_doc-func-members}
 \doxysubsection{Function Documentation}
-\Hypertarget{url__parser_8c_a5623f5e24f24781b151a866e86aedf2e}\index{url\_parser.c@{url\_parser.c}!gin\_parse\_query@{gin\_parse\_query}}
-\index{gin\_parse\_query@{gin\_parse\_query}!url\_parser.c@{url\_parser.c}}
-\doxysubsubsection{\texorpdfstring{gin\_parse\_query()}{gin\_parse\_query()}}
-{\footnotesize\ttfamily \label{url__parser_8c_a5623f5e24f24781b151a866e86aedf2e} 
-void gin\+\_\+parse\+\_\+query (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{query\+\_\+string}{}\end{DoxyParamCaption})}
+\Hypertarget{url__parser_8c_a9902001a7f6d76cc8c7297c5e6360aac}\index{url\_parser.c@{url\_parser.c}!csilk\_parse\_query@{csilk\_parse\_query}}
+\index{csilk\_parse\_query@{csilk\_parse\_query}!url\_parser.c@{url\_parser.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_parse\_query()}{csilk\_parse\_query()}}
+{\footnotesize\ttfamily \label{url__parser_8c_a9902001a7f6d76cc8c7297c5e6360aac} 
+void csilk\+\_\+parse\+\_\+query (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{query\+\_\+string}{}\end{DoxyParamCaption})}
 
 
 
@@ -42,11 +42,11 @@ Internal:\+ Parse a raw query string into context.
 {\em query\+\_\+string} & Raw query string (after \textquotesingle{}?\textquotesingle{}). \\
 \hline
 \end{DoxyParams}
-\Hypertarget{url__parser_8c_aa278141b01e136adb61c654ac03ee290}\index{url\_parser.c@{url\_parser.c}!gin\_split\_url@{gin\_split\_url}}
-\index{gin\_split\_url@{gin\_split\_url}!url\_parser.c@{url\_parser.c}}
-\doxysubsubsection{\texorpdfstring{gin\_split\_url()}{gin\_split\_url()}}
-{\footnotesize\ttfamily \label{url__parser_8c_aa278141b01e136adb61c654ac03ee290} 
-void gin\+\_\+split\+\_\+url (\begin{DoxyParamCaption}\item[{const char \texorpdfstring{$\ast$}{*}}]{url}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{path}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{query}{}\end{DoxyParamCaption})}
+\Hypertarget{url__parser_8c_a25832a499ec1b2c9deb9c611ddfc0964}\index{url\_parser.c@{url\_parser.c}!csilk\_split\_url@{csilk\_split\_url}}
+\index{csilk\_split\_url@{csilk\_split\_url}!url\_parser.c@{url\_parser.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_split\_url()}{csilk\_split\_url()}}
+{\footnotesize\ttfamily \label{url__parser_8c_a25832a499ec1b2c9deb9c611ddfc0964} 
+void csilk\+\_\+split\+\_\+url (\begin{DoxyParamCaption}\item[{const char \texorpdfstring{$\ast$}{*}}]{url}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{path}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{query}{}\end{DoxyParamCaption})}
 
 
 

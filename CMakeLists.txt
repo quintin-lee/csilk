@@ -1,6 +1,6 @@
 # CMakeLists.txt
 cmake_minimum_required(VERSION 3.11)
-project(c_gin_framework C)
+project(c_csilk_framework C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -81,7 +81,7 @@ include_directories(include)
 include_directories(${cjson_SOURCE_DIR})
 
 # Source files
-set(GIN_SOURCES
+set(CSILK_SOURCES
     src/context.c
     src/router.c
     src/group.c
@@ -116,43 +116,43 @@ endif()
 message(STATUS "Found libyaml: ${YAML_LIB}")
 
 # Build library (static by default; set -DBUILD_SHARED_LIBS=ON for shared)
-add_library(gin ${GIN_SOURCES})
-target_link_libraries(gin PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
-target_include_directories(gin PUBLIC
+add_library(csilk ${CSILK_SOURCES})
+target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson ${YAML_LIB})
+target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-set_target_properties(gin PROPERTIES
-    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/gin.h"
+set_target_properties(csilk PROPERTIES
+    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
     VERSION "0.1.0"
     SOVERSION "0"
 )
 
 # Helper to add a test executable and register with CTest
-function(add_gin_test name source)
+function(add_csilk_test name source)
   add_executable(${name} ${source})
-  target_link_libraries(${name} gin)
+  target_link_libraries(${name} csilk)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 # Unit tests
-add_gin_test(test_logger tests/test_logger.c)
-add_gin_test(test_static tests/test_static.c)
-add_gin_test(test_context tests/test_context.c)
-add_gin_test(test_router tests/test_router.c)
-add_gin_test(test_radix tests/test_radix.c)
-add_gin_test(test_group tests/test_group.c)
-add_gin_test(test_headers tests/test_headers.c)
-add_gin_test(test_server tests/test_server.c)
-add_gin_test(test_query tests/test_query.c)
-add_gin_test(test_json tests/test_json.c)
-add_gin_test(test_recovery tests/test_recovery.c)
-add_gin_test(test_auth tests/test_auth.c)
-add_gin_test(test_ws tests/test_ws.c)
-add_gin_test(test_config tests/test_config.c)
-add_gin_test(test_keepalive tests/test_keepalive.c)
-add_gin_test(test_edge tests/test_edge.c)
-add_gin_test(test_timeout tests/test_timeout.c)
+add_csilk_test(test_logger tests/test_logger.c)
+add_csilk_test(test_static tests/test_static.c)
+add_csilk_test(test_context tests/test_context.c)
+add_csilk_test(test_router tests/test_router.c)
+add_csilk_test(test_radix tests/test_radix.c)
+add_csilk_test(test_group tests/test_group.c)
+add_csilk_test(test_headers tests/test_headers.c)
+add_csilk_test(test_server tests/test_server.c)
+add_csilk_test(test_query tests/test_query.c)
+add_csilk_test(test_json tests/test_json.c)
+add_csilk_test(test_recovery tests/test_recovery.c)
+add_csilk_test(test_auth tests/test_auth.c)
+add_csilk_test(test_ws tests/test_ws.c)
+add_csilk_test(test_config tests/test_config.c)
+add_csilk_test(test_keepalive tests/test_keepalive.c)
+add_csilk_test(test_edge tests/test_edge.c)
+add_csilk_test(test_timeout tests/test_timeout.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
 option(USE_FUZZER "Enable libFuzzer" OFF)
@@ -160,22 +160,22 @@ if(USE_FUZZER)
     add_executable(fuzz_test tests/fuzz_test.c)
     target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer)
     target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
-    target_link_libraries(fuzz_test gin)
+    target_link_libraries(fuzz_test csilk)
 endif()
 
 # Integration tests (may have pre-existing failures, not run by default)
 add_executable(test_integration tests/test_integration.c)
-target_link_libraries(test_integration gin)
+target_link_libraries(test_integration csilk)
 add_test(NAME test_integration COMMAND test_integration)
 
 # Example server
 add_executable(example_server example_server.c)
-target_link_libraries(example_server gin)
+target_link_libraries(example_server csilk)
 
 # Install targets
 include(GNUInstallDirs)
-install(TARGETS gin
-    EXPORT gin-targets
+install(TARGETS csilk
+    EXPORT csilk-targets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -183,10 +183,10 @@ install(TARGETS gin
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(EXPORT gin-targets
-    FILE gin-config.cmake
-    NAMESPACE gin::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/gin
+install(EXPORT csilk-targets
+    FILE csilk-config.cmake
+    NAMESPACE csilk::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/csilk
 )
 
 # clang-tidy
@@ -197,7 +197,7 @@ if(CLANG_TIDY_EXECUTABLE)
             --quiet
             --checks="-*,clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
             --warnings-as-errors="*"
-            ${GIN_SOURCES}
+            ${CSILK_SOURCES}
             -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
             -I${cjson_SOURCE_DIR}
             -I${cjson_BINARY_DIR}
@@ -210,7 +210,7 @@ else()
 endif()
 
 # CPack packaging
-set(CPACK_PACKAGE_NAME "c-gin-framework")
+set(CPACK_PACKAGE_NAME "csilk")
 set(CPACK_PACKAGE_VERSION "0.1.0")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Gin")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Csilk")
 include(CPack)

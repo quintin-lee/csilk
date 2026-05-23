@@ -3,29 +3,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "gin.h"
+#include "csilk.h"
 
-void handler_ping(gin_ctx_t* c) { (void)c; }
-void handler_user(gin_ctx_t* c) { (void)c; }
-void handler_static(gin_ctx_t* c) { (void)c; }
+void handler_ping(csilk_ctx_t* c) { (void)c; }
+void handler_user(csilk_ctx_t* c) { (void)c; }
+void handler_static(csilk_ctx_t* c) { (void)c; }
 
 int main() {
-  gin_router_t* r = gin_router_new();
+  csilk_router_t* r = csilk_router_new();
 
-  gin_handler_t h_ping[] = {handler_ping};
-  gin_handler_t h_user[] = {handler_user};
-  gin_handler_t h_static[] = {handler_static};
+  csilk_handler_t h_ping[] = {handler_ping};
+  csilk_handler_t h_user[] = {handler_user};
+  csilk_handler_t h_static[] = {handler_static};
 
-  gin_router_add(r, "GET", "/api/ping", h_ping, 1);
-  gin_router_add(r, "GET", "/users/:id", h_user, 1);
-  gin_router_add(r, "GET", "/static/*path", h_static, 1);
+  csilk_router_add(r, "GET", "/api/ping", h_ping, 1);
+  csilk_router_add(r, "GET", "/users/:id", h_user, 1);
+  csilk_router_add(r, "GET", "/static/*path", h_static, 1);
 
   // Test Static
   {
-    gin_ctx_t ctx = {0};
+    csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
     ctx.request.path = "/api/ping";
-    int matched = gin_router_match_ctx(r, &ctx);
+    int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_ping);
     assert(ctx.params_count == 0);
@@ -33,61 +33,61 @@ int main() {
 
   // Test Param
   {
-    gin_ctx_t ctx = {0};
+    csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
     ctx.request.path = "/users/123";
-    int matched = gin_router_match_ctx(r, &ctx);
+    int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_user);
     assert(ctx.params_count == 1);
     assert(strcmp(ctx.params[0].key, "id") == 0);
     assert(strcmp(ctx.params[0].value, "123") == 0);
-    assert(strcmp(gin_get_param(&ctx, "id"), "123") == 0);
+    assert(strcmp(csilk_get_param(&ctx, "id"), "123") == 0);
 
-    gin_ctx_cleanup(&ctx);
+    csilk_ctx_cleanup(&ctx);
   }
 
   // Test Wildcard
   {
-    gin_ctx_t ctx = {0};
+    csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
     ctx.request.path = "/static/js/app.js";
-    int matched = gin_router_match_ctx(r, &ctx);
+    int matched = csilk_router_match_ctx(r, &ctx);
     assert(matched);
     assert(ctx.handlers[0] == handler_static);
     assert(ctx.params_count == 1);
     assert(strcmp(ctx.params[0].key, "path") == 0);
     assert(strcmp(ctx.params[0].value, "js/app.js") == 0);
-    assert(strcmp(gin_get_param(&ctx, "path"), "js/app.js") == 0);
+    assert(strcmp(csilk_get_param(&ctx, "path"), "js/app.js") == 0);
 
-    gin_ctx_cleanup(&ctx);
+    csilk_ctx_cleanup(&ctx);
   }
 
   // Test No Match
   {
-    gin_ctx_t ctx = {0};
+    csilk_ctx_t ctx = {0};
     ctx.request.method = "GET";
     ctx.request.path = "/unknown";
-    int matched = gin_router_match_ctx(r, &ctx);
+    int matched = csilk_router_match_ctx(r, &ctx);
     assert(!matched);
   }
 
   // Test Boundary / NULL
   {
     int matched;
-    matched = gin_router_match_ctx(NULL, NULL);
+    matched = csilk_router_match_ctx(NULL, NULL);
     assert(!matched);
     
-    gin_ctx_t ctx = {0};
-    matched = gin_router_match_ctx(r, &ctx);
+    csilk_ctx_t ctx = {0};
+    matched = csilk_router_match_ctx(r, &ctx);
     assert(!matched); // missing method and path
     
     ctx.request.method = "GET";
-    matched = gin_router_match_ctx(r, &ctx);
+    matched = csilk_router_match_ctx(r, &ctx);
     assert(!matched); // missing path
   }
 
-  gin_router_free(r);
+  csilk_router_free(r);
   printf("test_radix: PASS\n");
   return 0;
 }

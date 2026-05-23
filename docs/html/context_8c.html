@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.16.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gin: src/context.c File Reference</title>
+<title>Csilk: src/context.c File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -26,7 +26,7 @@
  <tbody>
  <tr id="projectrow">
   <td id="projectalign">
-   <div id="projectname">Gin
+   <div id="projectname">Csilk
    </div>
   </td>
  </tr>
@@ -98,52 +98,52 @@ $(function(){initNavTree('context_8c.html','',''); });
 <code>#include &lt;stdlib.h&gt;</code><br />
 <code>#include &lt;string.h&gt;</code><br />
 <code>#include &lt;strings.h&gt;</code><br />
-<code>#include &quot;<a class="el" href="gin_8h_source.html">gin.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="csilk_8h_source.html">csilk.h</a>&quot;</code><br />
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ad79d5936263e13caed04963a05012910" id="r_ad79d5936263e13caed04963a05012910"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad79d5936263e13caed04963a05012910">gin_next</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:ad79d5936263e13caed04963a05012910"><td class="mdescLeft">&#160;</td><td class="mdescRight">Move to the next handler in the onion model chain.  <br /></td></tr>
-<tr class="memitem:ac3a63b18c413eac7e9171294dfb5d255" id="r_ac3a63b18c413eac7e9171294dfb5d255"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ac3a63b18c413eac7e9171294dfb5d255">gin_abort</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:ac3a63b18c413eac7e9171294dfb5d255"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abort the handler chain execution immediately.  <br /></td></tr>
-<tr class="memitem:a84494dbc8883822907df23d287dd4978" id="r_a84494dbc8883822907df23d287dd4978"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a84494dbc8883822907df23d287dd4978">gin_status</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, int status)</td></tr>
-<tr class="memdesc:a84494dbc8883822907df23d287dd4978"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the response status code.  <br /></td></tr>
-<tr class="memitem:af4ca536f047ff81ce7cf844cf5ac92d1" id="r_af4ca536f047ff81ce7cf844cf5ac92d1"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af4ca536f047ff81ce7cf844cf5ac92d1">gin_string</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, int status, const char *msg)</td></tr>
-<tr class="memdesc:af4ca536f047ff81ce7cf844cf5ac92d1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set response body and status code (Plain text/String). Memory is managed by the request arena.  <br /></td></tr>
-<tr class="memitem:ad9c3055553cbaeec7479d38f86e0fb12" id="r_ad9c3055553cbaeec7479d38f86e0fb12"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ad9c3055553cbaeec7479d38f86e0fb12">gin_get_param</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *key)</td></tr>
-<tr class="memdesc:ad9c3055553cbaeec7479d38f86e0fb12"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a URL path parameter by key.  <br /></td></tr>
-<tr class="memitem:a0807a0488575d9d1efeeb728f4df24e6" id="r_a0807a0488575d9d1efeeb728f4df24e6"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a0807a0488575d9d1efeeb728f4df24e6">gin_get_header</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *key)</td></tr>
-<tr class="memdesc:a0807a0488575d9d1efeeb728f4df24e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a request header by key. Case-insensitive lookup.  <br /></td></tr>
-<tr class="memitem:a5c84cd149a073eeac82e39e48ae6a75b" id="r_a5c84cd149a073eeac82e39e48ae6a75b"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a5c84cd149a073eeac82e39e48ae6a75b">gin_get_query</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *key)</td></tr>
-<tr class="memdesc:a5c84cd149a073eeac82e39e48ae6a75b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a query parameter by key.  <br /></td></tr>
-<tr class="memitem:a36783625e91a03472ee1ed5c050d1f11" id="r_a36783625e91a03472ee1ed5c050d1f11"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a36783625e91a03472ee1ed5c050d1f11">gin_set_request_header</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *key, const char *value)</td></tr>
-<tr class="memdesc:a36783625e91a03472ee1ed5c050d1f11"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a request header.  <br /></td></tr>
-<tr class="memitem:a5d8d58e7649dc971fca83a8d49937bf0" id="r_a5d8d58e7649dc971fca83a8d49937bf0"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a5d8d58e7649dc971fca83a8d49937bf0">gin_set_header</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char *key, const char *value)</td></tr>
-<tr class="memdesc:a5d8d58e7649dc971fca83a8d49937bf0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a response header.  <br /></td></tr>
-<tr class="memitem:a9772a7ae03b20f9403f3f945f439b4f7" id="r_a9772a7ae03b20f9403f3f945f439b4f7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a9772a7ae03b20f9403f3f945f439b4f7">gin_ctx_cleanup</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:a9772a7ae03b20f9403f3f945f439b4f7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clean up all context-related resources (arena, headers, etc.).  <br /></td></tr>
-<tr class="memitem:a2cd07543e0bc93cb0ddac468e7bc90f2" id="r_a2cd07543e0bc93cb0ddac468e7bc90f2"><td class="memItemLeft">cJSON *&#160;</td><td class="memItemRight"><a class="el" href="#a2cd07543e0bc93cb0ddac468e7bc90f2">gin_bind_json</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c)</td></tr>
-<tr class="memdesc:a2cd07543e0bc93cb0ddac468e7bc90f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bind request body to a cJSON object.  <br /></td></tr>
-<tr class="memitem:ad853c90565b37f0940e8a549dc1d31f2" id="r_ad853c90565b37f0940e8a549dc1d31f2"><td class="memItemLeft">cJSON *&#160;</td><td class="memItemRight"><a class="el" href="#ad853c90565b37f0940e8a549dc1d31f2">gin_bind_json_err</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, const char **error)</td></tr>
-<tr class="memdesc:ad853c90565b37f0940e8a549dc1d31f2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bind request body to cJSON with error feedback.  <br /></td></tr>
-<tr class="memitem:ab2accc0a4f8455ac23cfea33e7eb71d7" id="r_ab2accc0a4f8455ac23cfea33e7eb71d7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ab2accc0a4f8455ac23cfea33e7eb71d7">gin_json</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, int status, cJSON *json)</td></tr>
-<tr class="memdesc:ab2accc0a4f8455ac23cfea33e7eb71d7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a JSON response.  <br /></td></tr>
-<tr class="memitem:ad60115d18ed95af3a62acfde2e3b56b7" id="r_ad60115d18ed95af3a62acfde2e3b56b7"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#ad60115d18ed95af3a62acfde2e3b56b7">gin_json_error</a> (<a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *c, int status, const char *message)</td></tr>
-<tr class="memdesc:ad60115d18ed95af3a62acfde2e3b56b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a JSON formatted error response.  <br /></td></tr>
+<tr class="memitem:a851120064d005cacc4a7bc19b7e22add" id="r_a851120064d005cacc4a7bc19b7e22add"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a851120064d005cacc4a7bc19b7e22add">csilk_next</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:a851120064d005cacc4a7bc19b7e22add"><td class="mdescLeft">&#160;</td><td class="mdescRight">Move to the next handler in the onion model chain.  <br /></td></tr>
+<tr class="memitem:a50de8529a9311bde5e9f9d77b3e5c6af" id="r_a50de8529a9311bde5e9f9d77b3e5c6af"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a50de8529a9311bde5e9f9d77b3e5c6af">csilk_abort</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:a50de8529a9311bde5e9f9d77b3e5c6af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abort the handler chain execution immediately.  <br /></td></tr>
+<tr class="memitem:a18bbcf7464f59f12e04b32f9107948dd" id="r_a18bbcf7464f59f12e04b32f9107948dd"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a18bbcf7464f59f12e04b32f9107948dd">csilk_status</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, int status)</td></tr>
+<tr class="memdesc:a18bbcf7464f59f12e04b32f9107948dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the response status code.  <br /></td></tr>
+<tr class="memitem:a113fe4b7d2f1916e9d7d4b29feee1b6d" id="r_a113fe4b7d2f1916e9d7d4b29feee1b6d"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a113fe4b7d2f1916e9d7d4b29feee1b6d">csilk_string</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, int status, const char *msg)</td></tr>
+<tr class="memdesc:a113fe4b7d2f1916e9d7d4b29feee1b6d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set response body and status code (Plain text/String). Memory is managed by the request arena.  <br /></td></tr>
+<tr class="memitem:ade414a647535f850f83333f6b1aa085f" id="r_ade414a647535f850f83333f6b1aa085f"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#ade414a647535f850f83333f6b1aa085f">csilk_get_param</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *key)</td></tr>
+<tr class="memdesc:ade414a647535f850f83333f6b1aa085f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a URL path parameter by key.  <br /></td></tr>
+<tr class="memitem:a51294e84ef930f1ae6f830b4d7fa4467" id="r_a51294e84ef930f1ae6f830b4d7fa4467"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a51294e84ef930f1ae6f830b4d7fa4467">csilk_get_header</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *key)</td></tr>
+<tr class="memdesc:a51294e84ef930f1ae6f830b4d7fa4467"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a request header by key. Case-insensitive lookup.  <br /></td></tr>
+<tr class="memitem:a3b335d998c3d06fe52363c30f40ddcb4" id="r_a3b335d998c3d06fe52363c30f40ddcb4"><td class="memItemLeft">const char *&#160;</td><td class="memItemRight"><a class="el" href="#a3b335d998c3d06fe52363c30f40ddcb4">csilk_get_query</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *key)</td></tr>
+<tr class="memdesc:a3b335d998c3d06fe52363c30f40ddcb4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get a query parameter by key.  <br /></td></tr>
+<tr class="memitem:a3efd2a5414bed596236f6d2d516a4276" id="r_a3efd2a5414bed596236f6d2d516a4276"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a3efd2a5414bed596236f6d2d516a4276">csilk_set_request_header</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *key, const char *value)</td></tr>
+<tr class="memdesc:a3efd2a5414bed596236f6d2d516a4276"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a request header.  <br /></td></tr>
+<tr class="memitem:aa25201b48463f0b3aa5ddbe1481e06fb" id="r_aa25201b48463f0b3aa5ddbe1481e06fb"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa25201b48463f0b3aa5ddbe1481e06fb">csilk_set_header</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char *key, const char *value)</td></tr>
+<tr class="memdesc:aa25201b48463f0b3aa5ddbe1481e06fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a response header.  <br /></td></tr>
+<tr class="memitem:af3a5c122e2ec6a9e890a3708b253530e" id="r_af3a5c122e2ec6a9e890a3708b253530e"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#af3a5c122e2ec6a9e890a3708b253530e">csilk_ctx_cleanup</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:af3a5c122e2ec6a9e890a3708b253530e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clean up all context-related resources (arena, headers, etc.).  <br /></td></tr>
+<tr class="memitem:a188cdb74dc3de59746cb87cdac44695b" id="r_a188cdb74dc3de59746cb87cdac44695b"><td class="memItemLeft">cJSON *&#160;</td><td class="memItemRight"><a class="el" href="#a188cdb74dc3de59746cb87cdac44695b">csilk_bind_json</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c)</td></tr>
+<tr class="memdesc:a188cdb74dc3de59746cb87cdac44695b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bind request body to a cJSON object.  <br /></td></tr>
+<tr class="memitem:aa67c3314e2b0df05d401c220e52f72eb" id="r_aa67c3314e2b0df05d401c220e52f72eb"><td class="memItemLeft">cJSON *&#160;</td><td class="memItemRight"><a class="el" href="#aa67c3314e2b0df05d401c220e52f72eb">csilk_bind_json_err</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, const char **error)</td></tr>
+<tr class="memdesc:aa67c3314e2b0df05d401c220e52f72eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bind request body to cJSON with error feedback.  <br /></td></tr>
+<tr class="memitem:a6254d024b54c277c5a173a6676febd46" id="r_a6254d024b54c277c5a173a6676febd46"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#a6254d024b54c277c5a173a6676febd46">csilk_json</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, int status, cJSON *json)</td></tr>
+<tr class="memdesc:a6254d024b54c277c5a173a6676febd46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a JSON response.  <br /></td></tr>
+<tr class="memitem:aa43e4ac340b10b2a562a0275ab97b580" id="r_aa43e4ac340b10b2a562a0275ab97b580"><td class="memItemLeft">void&#160;</td><td class="memItemRight"><a class="el" href="#aa43e4ac340b10b2a562a0275ab97b580">csilk_json_error</a> (<a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *c, int status, const char *message)</td></tr>
+<tr class="memdesc:aa43e4ac340b10b2a562a0275ab97b580"><td class="mdescLeft">&#160;</td><td class="mdescRight">Send a JSON formatted error response.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Request/response context implementation. MIT License. </p>
 </div><a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Function Documentation</h2>
-<a id="ac3a63b18c413eac7e9171294dfb5d255" name="ac3a63b18c413eac7e9171294dfb5d255"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac3a63b18c413eac7e9171294dfb5d255">&#9670;&#160;</a></span>gin_abort()</h2>
+<a id="a50de8529a9311bde5e9f9d77b3e5c6af" name="a50de8529a9311bde5e9f9d77b3e5c6af"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50de8529a9311bde5e9f9d77b3e5c6af">&#9670;&#160;</a></span>csilk_abort()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_abort </td>
+          <td class="memname">void csilk_abort </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -159,16 +159,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a2cd07543e0bc93cb0ddac468e7bc90f2" name="a2cd07543e0bc93cb0ddac468e7bc90f2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2cd07543e0bc93cb0ddac468e7bc90f2">&#9670;&#160;</a></span>gin_bind_json()</h2>
+<a id="a188cdb74dc3de59746cb87cdac44695b" name="a188cdb74dc3de59746cb87cdac44695b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a188cdb74dc3de59746cb87cdac44695b">&#9670;&#160;</a></span>csilk_bind_json()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cJSON * gin_bind_json </td>
+          <td class="memname">cJSON * csilk_bind_json </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -185,16 +185,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ad853c90565b37f0940e8a549dc1d31f2" name="ad853c90565b37f0940e8a549dc1d31f2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad853c90565b37f0940e8a549dc1d31f2">&#9670;&#160;</a></span>gin_bind_json_err()</h2>
+<a id="aa67c3314e2b0df05d401c220e52f72eb" name="aa67c3314e2b0df05d401c220e52f72eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa67c3314e2b0df05d401c220e52f72eb">&#9670;&#160;</a></span>csilk_bind_json_err()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">cJSON * gin_bind_json_err </td>
+          <td class="memname">cJSON * csilk_bind_json_err </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -216,16 +216,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a9772a7ae03b20f9403f3f945f439b4f7" name="a9772a7ae03b20f9403f3f945f439b4f7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9772a7ae03b20f9403f3f945f439b4f7">&#9670;&#160;</a></span>gin_ctx_cleanup()</h2>
+<a id="af3a5c122e2ec6a9e890a3708b253530e" name="af3a5c122e2ec6a9e890a3708b253530e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3a5c122e2ec6a9e890a3708b253530e">&#9670;&#160;</a></span>csilk_ctx_cleanup()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_ctx_cleanup </td>
+          <td class="memname">void csilk_ctx_cleanup </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -241,16 +241,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a0807a0488575d9d1efeeb728f4df24e6" name="a0807a0488575d9d1efeeb728f4df24e6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0807a0488575d9d1efeeb728f4df24e6">&#9670;&#160;</a></span>gin_get_header()</h2>
+<a id="a51294e84ef930f1ae6f830b4d7fa4467" name="a51294e84ef930f1ae6f830b4d7fa4467"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51294e84ef930f1ae6f830b4d7fa4467">&#9670;&#160;</a></span>csilk_get_header()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char * gin_get_header </td>
+          <td class="memname">const char * csilk_get_header </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -272,16 +272,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ad9c3055553cbaeec7479d38f86e0fb12" name="ad9c3055553cbaeec7479d38f86e0fb12"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad9c3055553cbaeec7479d38f86e0fb12">&#9670;&#160;</a></span>gin_get_param()</h2>
+<a id="ade414a647535f850f83333f6b1aa085f" name="ade414a647535f850f83333f6b1aa085f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade414a647535f850f83333f6b1aa085f">&#9670;&#160;</a></span>csilk_get_param()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char * gin_get_param </td>
+          <td class="memname">const char * csilk_get_param </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -303,16 +303,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a5c84cd149a073eeac82e39e48ae6a75b" name="a5c84cd149a073eeac82e39e48ae6a75b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5c84cd149a073eeac82e39e48ae6a75b">&#9670;&#160;</a></span>gin_get_query()</h2>
+<a id="a3b335d998c3d06fe52363c30f40ddcb4" name="a3b335d998c3d06fe52363c30f40ddcb4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b335d998c3d06fe52363c30f40ddcb4">&#9670;&#160;</a></span>csilk_get_query()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char * gin_get_query </td>
+          <td class="memname">const char * csilk_get_query </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -334,16 +334,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ab2accc0a4f8455ac23cfea33e7eb71d7" name="ab2accc0a4f8455ac23cfea33e7eb71d7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab2accc0a4f8455ac23cfea33e7eb71d7">&#9670;&#160;</a></span>gin_json()</h2>
+<a id="a6254d024b54c277c5a173a6676febd46" name="a6254d024b54c277c5a173a6676febd46"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6254d024b54c277c5a173a6676febd46">&#9670;&#160;</a></span>csilk_json()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_json </td>
+          <td class="memname">void csilk_json </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -370,16 +370,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ad60115d18ed95af3a62acfde2e3b56b7" name="ad60115d18ed95af3a62acfde2e3b56b7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad60115d18ed95af3a62acfde2e3b56b7">&#9670;&#160;</a></span>gin_json_error()</h2>
+<a id="aa43e4ac340b10b2a562a0275ab97b580" name="aa43e4ac340b10b2a562a0275ab97b580"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa43e4ac340b10b2a562a0275ab97b580">&#9670;&#160;</a></span>csilk_json_error()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_json_error </td>
+          <td class="memname">void csilk_json_error </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -406,16 +406,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ad79d5936263e13caed04963a05012910" name="ad79d5936263e13caed04963a05012910"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad79d5936263e13caed04963a05012910">&#9670;&#160;</a></span>gin_next()</h2>
+<a id="a851120064d005cacc4a7bc19b7e22add" name="a851120064d005cacc4a7bc19b7e22add"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a851120064d005cacc4a7bc19b7e22add">&#9670;&#160;</a></span>csilk_next()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_next </td>
+          <td class="memname">void csilk_next </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
@@ -431,16 +431,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a5d8d58e7649dc971fca83a8d49937bf0" name="a5d8d58e7649dc971fca83a8d49937bf0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5d8d58e7649dc971fca83a8d49937bf0">&#9670;&#160;</a></span>gin_set_header()</h2>
+<a id="aa25201b48463f0b3aa5ddbe1481e06fb" name="aa25201b48463f0b3aa5ddbe1481e06fb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa25201b48463f0b3aa5ddbe1481e06fb">&#9670;&#160;</a></span>csilk_set_header()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_set_header </td>
+          <td class="memname">void csilk_set_header </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -467,16 +467,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a36783625e91a03472ee1ed5c050d1f11" name="a36783625e91a03472ee1ed5c050d1f11"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a36783625e91a03472ee1ed5c050d1f11">&#9670;&#160;</a></span>gin_set_request_header()</h2>
+<a id="a3efd2a5414bed596236f6d2d516a4276" name="a3efd2a5414bed596236f6d2d516a4276"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3efd2a5414bed596236f6d2d516a4276">&#9670;&#160;</a></span>csilk_set_request_header()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_set_request_header </td>
+          <td class="memname">void csilk_set_request_header </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -503,16 +503,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a84494dbc8883822907df23d287dd4978" name="a84494dbc8883822907df23d287dd4978"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a84494dbc8883822907df23d287dd4978">&#9670;&#160;</a></span>gin_status()</h2>
+<a id="a18bbcf7464f59f12e04b32f9107948dd" name="a18bbcf7464f59f12e04b32f9107948dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a18bbcf7464f59f12e04b32f9107948dd">&#9670;&#160;</a></span>csilk_status()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_status </td>
+          <td class="memname">void csilk_status </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -533,16 +533,16 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="af4ca536f047ff81ce7cf844cf5ac92d1" name="af4ca536f047ff81ce7cf844cf5ac92d1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af4ca536f047ff81ce7cf844cf5ac92d1">&#9670;&#160;</a></span>gin_string()</h2>
+<a id="a113fe4b7d2f1916e9d7d4b29feee1b6d" name="a113fe4b7d2f1916e9d7d4b29feee1b6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a113fe4b7d2f1916e9d7d4b29feee1b6d">&#9670;&#160;</a></span>csilk_string()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void gin_string </td>
+          <td class="memname">void csilk_string </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="gin_8h.html#ac612e14e2b9341a0ffc5662f7815113b">gin_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
+          <td class="paramtype"><a class="el" href="csilk_8h.html#a4c4f23f6a0fbf5af4c6dd448f22ec3c2">csilk_ctx_t</a> *</td>          <td class="paramname"><span class="paramname"><em>c</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

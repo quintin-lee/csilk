@@ -1,0 +1,87 @@
+\doxysection{csilk\+\_\+client\+\_\+t Struct Reference}
+\hypertarget{structcsilk__client__t}{}\label{structcsilk__client__t}\index{csilk\_client\_t@{csilk\_client\_t}}
+
+
+Client connection structure.  
+
+
+\doxysubsubsection*{Public Attributes}
+\begin{DoxyCompactItemize}
+\item 
+uv\+\_\+tcp\+\_\+t \doxymbox{\hyperlink{structcsilk__client__t_a865e597507fa56ee0e7153b023af3581}{handle}}
+\item 
+uv\+\_\+timer\+\_\+t \doxymbox{\hyperlink{structcsilk__client__t_a5ba1ddd2c006fa0b2d32a925b2ab5b2f}{timer}}
+\item 
+llhttp\+\_\+t \doxymbox{\hyperlink{structcsilk__client__t_aa5a9a044e7e7e19e70fba1faed05a0bf}{parser}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__client__t_abdf56c0ccb99017112f0615978c6197b}{server}}
+\item 
+\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \doxymbox{\hyperlink{structcsilk__client__t_a59fe43ddc766f5afafc17b0f753595f2}{ctx}}
+\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__client__t_a89221c643a35517503d28fb29da502a5}{current\+\_\+url}}
+\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__client__t_a62f465f18805553fd8e5f99750e0de30}{current\+\_\+header\+\_\+field}}
+\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{structcsilk__client__t_a1d440f269fce6999daf963f5d6682d12}{current\+\_\+header\+\_\+value}}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Client connection structure. 
+
+\label{doc-variable-members}
+\Hypertarget{structcsilk__client__t_doc-variable-members}
+\doxysubsection{Member Data Documentation}
+\Hypertarget{structcsilk__client__t_a59fe43ddc766f5afafc17b0f753595f2}\index{csilk\_client\_t@{csilk\_client\_t}!ctx@{ctx}}
+\index{ctx@{ctx}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{ctx}{ctx}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a59fe43ddc766f5afafc17b0f753595f2} 
+\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} csilk\+\_\+client\+\_\+t::\+ctx}
+
+Request context for this connection. \Hypertarget{structcsilk__client__t_a62f465f18805553fd8e5f99750e0de30}\index{csilk\_client\_t@{csilk\_client\_t}!current\_header\_field@{current\_header\_field}}
+\index{current\_header\_field@{current\_header\_field}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{current\_header\_field}{current\_header\_field}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a62f465f18805553fd8e5f99750e0de30} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+client\+\_\+t::\+current\+\_\+header\+\_\+field}
+
+Temporary header field name. \Hypertarget{structcsilk__client__t_a1d440f269fce6999daf963f5d6682d12}\index{csilk\_client\_t@{csilk\_client\_t}!current\_header\_value@{current\_header\_value}}
+\index{current\_header\_value@{current\_header\_value}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{current\_header\_value}{current\_header\_value}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a1d440f269fce6999daf963f5d6682d12} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+client\+\_\+t::\+current\+\_\+header\+\_\+value}
+
+Temporary header field value. \Hypertarget{structcsilk__client__t_a89221c643a35517503d28fb29da502a5}\index{csilk\_client\_t@{csilk\_client\_t}!current\_url@{current\_url}}
+\index{current\_url@{current\_url}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{current\_url}{current\_url}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a89221c643a35517503d28fb29da502a5} 
+char\texorpdfstring{$\ast$}{*} csilk\+\_\+client\+\_\+t::\+current\+\_\+url}
+
+Current URL being parsed. \Hypertarget{structcsilk__client__t_a865e597507fa56ee0e7153b023af3581}\index{csilk\_client\_t@{csilk\_client\_t}!handle@{handle}}
+\index{handle@{handle}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{handle}{handle}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a865e597507fa56ee0e7153b023af3581} 
+uv\+\_\+tcp\+\_\+t csilk\+\_\+client\+\_\+t::\+handle}
+
+libuv TCP stream handle. \Hypertarget{structcsilk__client__t_aa5a9a044e7e7e19e70fba1faed05a0bf}\index{csilk\_client\_t@{csilk\_client\_t}!parser@{parser}}
+\index{parser@{parser}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{parser}{parser}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_aa5a9a044e7e7e19e70fba1faed05a0bf} 
+llhttp\+\_\+t csilk\+\_\+client\+\_\+t::\+parser}
+
+HTTP request parser. \Hypertarget{structcsilk__client__t_abdf56c0ccb99017112f0615978c6197b}\index{csilk\_client\_t@{csilk\_client\_t}!server@{server}}
+\index{server@{server}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{server}{server}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_abdf56c0ccb99017112f0615978c6197b} 
+\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}}\texorpdfstring{$\ast$}{*} csilk\+\_\+client\+\_\+t::\+server}
+
+Owning server instance. \Hypertarget{structcsilk__client__t_a5ba1ddd2c006fa0b2d32a925b2ab5b2f}\index{csilk\_client\_t@{csilk\_client\_t}!timer@{timer}}
+\index{timer@{timer}!csilk\_client\_t@{csilk\_client\_t}}
+\doxysubsubsection{\texorpdfstring{timer}{timer}}
+{\footnotesize\ttfamily \label{structcsilk__client__t_a5ba1ddd2c006fa0b2d32a925b2ab5b2f} 
+uv\+\_\+timer\+\_\+t csilk\+\_\+client\+\_\+t::\+timer}
+
+Connection idle timer. 
+
+The documentation for this struct was generated from the following file:\+\begin{DoxyCompactItemize}
+\item 
+src/\+\doxymbox{\hyperlink{server_8c}{server.\+c}}\end{DoxyCompactItemize}

@@ -7,25 +7,25 @@
 
 ## [2026-05-23] 阶段一完成
 - **动作**: 补充边界测试提高覆盖率。
-- **动作**: 修复 ASan 检测出的多处核心内存泄漏和段错误（gin_string, libuv 句柄泄漏等）。
+- **动作**: 修复 ASan 检测出的多处核心内存泄漏和段错误（csilk_string, libuv 句柄泄漏等）。
 - **动作**: 集成了基于 libFuzzer 的 `fuzz_test.c` 并在 CMake 中配置。
 - **动作**: 添加 GitHub Actions CI 配置文件。
 
 ## [2026-05-23] 阶段二完成
-- **动作**: 引入了请求级内存池 Arena，实现了 `gin_string` 的自动化内存管理。
+- **动作**: 引入了请求级内存池 Arena，实现了 `csilk_string` 的自动化内存管理。
 - **动作**: 将 Radix Tree 重构为固定数组子节点布局，提升了缓存局部性。
 - **动作**: 修复了路由 handler 数组的生命周期问题，通过深拷贝确保了内存安全。
-- **动作**: 优化了 `gin_recovery_handler` 的 jump_buffer 生命周期范围。
+- **动作**: 优化了 `csilk_recovery_handler` 的 jump_buffer 生命周期范围。
 
 ## [2026-05-23] 阶段五（日志系统）初步完成
-- **动作**: 引入了日志宏 `GIN_LOG_I` 等，支持自动捕获源码文件名、行号及函数名。
+- **动作**: 引入了日志宏 `CSILK_LOG_I` 等，支持自动捕获源码文件名、行号及函数名。
 - **动作**: 实现了基于文件大小的自动滚动功能 (Log Rotation)。
 - **动作**: 优化了日志输出格式，支持彩色终端。
 - **动作**: 重写了 `test_logger.c` 验证并发安全与滚动功能。
 
 ## [2026-05-23] 阶段六（YAML 配置）完成
 - **动作**: 集成了 libyaml 依赖。
-- **动作**: 定义了统一配置结构 `gin_config_t`，涵盖 Server、Logger 和 CORS。
+- **动作**: 定义了统一配置结构 `csilk_config_t`，涵盖 Server、Logger 和 CORS。
 - **动作**: 实现了基于事件流的高效 YAML 解析引擎。
 - **动作**: 更新了 `example_server.c` 支持配置文件启动。
 - **动作**: 增加了 `test_config.c` 验证解析准确性。

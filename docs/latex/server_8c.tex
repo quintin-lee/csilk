@@ -10,41 +10,41 @@ Server implementation. MIT License.
 {\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
 {\ttfamily \+\#include $<$string.\+h$>$}\newline
 {\ttfamily \+\#include $<$uv.\+h$>$}\newline
-{\ttfamily \+\#include "{}gin.\+h"{}}\newline
-{\ttfamily \+\#include "{}gin\+\_\+internal.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk.\+h"{}}\newline
+{\ttfamily \+\#include "{}csilk\+\_\+internal.\+h"{}}\newline
 \doxysubsubsection*{Classes}
 \begin{DoxyCompactItemize}
 \item 
-struct \doxymbox{\hyperlink{structgin__server__s}{gin\+\_\+server\+\_\+s}}
+struct \doxymbox{\hyperlink{structcsilk__server__s}{csilk\+\_\+server\+\_\+s}}
 \begin{DoxyCompactList}\small\item\em Server structure. \end{DoxyCompactList}\item 
-struct \doxymbox{\hyperlink{structgin__client__t}{gin\+\_\+client\+\_\+t}}
+struct \doxymbox{\hyperlink{structcsilk__client__t}{csilk\+\_\+client\+\_\+t}}
 \begin{DoxyCompactList}\small\item\em Client connection structure. \end{DoxyCompactList}\end{DoxyCompactItemize}
 \doxysubsubsection*{Macros}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{server_8c_a6a3e05334511d2963ab23174cb91fa79}\label{server_8c_a6a3e05334511d2963ab23174cb91fa79} 
-\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+IDLE\+\_\+\+TIMEOUT}~5000
+\Hypertarget{server_8c_a46bf93487221401dea41ef0c5e5c3422}\label{server_8c_a46bf93487221401dea41ef0c5e5c3422} 
+\+\#define {\bfseries CSILK\+\_\+\+DEFAULT\+\_\+\+IDLE\+\_\+\+TIMEOUT}~5000
 \begin{DoxyCompactList}\small\item\em Default idle timeout in milliseconds. \end{DoxyCompactList}\item 
-\Hypertarget{server_8c_afb4808d2dac9e7f05112c7eaed101302}\label{server_8c_afb4808d2dac9e7f05112c7eaed101302} 
-\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+MAX\+\_\+\+BODY\+\_\+\+SIZE}~(1024UL \texorpdfstring{$\ast$}{*} 1024UL)
+\Hypertarget{server_8c_a935234dd749d79f6234417ca729353e1}\label{server_8c_a935234dd749d79f6234417ca729353e1} 
+\+\#define {\bfseries CSILK\+\_\+\+DEFAULT\+\_\+\+MAX\+\_\+\+BODY\+\_\+\+SIZE}~(1024UL \texorpdfstring{$\ast$}{*} 1024UL)
 \begin{DoxyCompactList}\small\item\em Default maximum request body size in bytes. \end{DoxyCompactList}\item 
-\Hypertarget{server_8c_a62f3560045829fc1a2803ffb5bb1592f}\label{server_8c_a62f3560045829fc1a2803ffb5bb1592f} 
-\+\#define {\bfseries GIN\+\_\+\+DEFAULT\+\_\+\+LISTEN\+\_\+\+BACKLOG}~128
+\Hypertarget{server_8c_aa4686bc32034d0b3dab2648063014ae0}\label{server_8c_aa4686bc32034d0b3dab2648063014ae0} 
+\+\#define {\bfseries CSILK\+\_\+\+DEFAULT\+\_\+\+LISTEN\+\_\+\+BACKLOG}~128
 \begin{DoxyCompactList}\small\item\em Default TCP listen backlog. \end{DoxyCompactList}\end{DoxyCompactItemize}
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_ab99514b14d04a0f47619bb2a87ee11a4}{gin\+\_\+get\+\_\+client\+\_\+ip}} (\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
+const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_a785b897c0d473dccc071582fd023d24c}{csilk\+\_\+get\+\_\+client\+\_\+ip}} (\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}c)
 \begin{DoxyCompactList}\small\item\em Get the client\textquotesingle{}s IP address. \end{DoxyCompactList}\item 
-\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0}{gin\+\_\+server\+\_\+new}} (\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}router)
+\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{server_8c_a7228ef4a25b554253a912ddee907fdfa}{csilk\+\_\+server\+\_\+new}} (\doxymbox{\hyperlink{csilk_8h_a85c477ce92b8be8ddd93963e3fd07625}{csilk\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}router)
 \begin{DoxyCompactList}\small\item\em Create a new server instance. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e}{gin\+\_\+server\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
+void \doxymbox{\hyperlink{server_8c_a23c26f61cb7c291838293488b5a84c63}{csilk\+\_\+server\+\_\+free}} (\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
 \begin{DoxyCompactList}\small\item\em Deallocate server resources. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{server_8c_a64aafd1e18741af32c27fc754e8136ad}{gin\+\_\+server\+\_\+stop}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
+void \doxymbox{\hyperlink{server_8c_a288fd37994637aa7508870ef639eefd8}{csilk\+\_\+server\+\_\+stop}} (\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server)
 \begin{DoxyCompactList}\small\item\em Signal the server to stop gracefully. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{server_8c_a27a082aa71463c314c5b397ee18340f9}{gin\+\_\+server\+\_\+set\+\_\+config}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, \doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}} config)
+void \doxymbox{\hyperlink{server_8c_a9f2aab4fba3b2fe1ca79944b584049f1}{csilk\+\_\+server\+\_\+set\+\_\+config}} (\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, \doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}} config)
 \begin{DoxyCompactList}\small\item\em Apply server configuration. \end{DoxyCompactList}\item 
-int \doxymbox{\hyperlink{server_8c_a74a3074c236cee75dba25439c1bba39d}{gin\+\_\+server\+\_\+run}} (\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, int port)
+int \doxymbox{\hyperlink{server_8c_ab49f6cc94839809723a16b10cf66ba51}{csilk\+\_\+server\+\_\+run}} (\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}server, int port)
 \begin{DoxyCompactList}\small\item\em Run the server event loop. Blocks until server is stopped or error occurs. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
 
@@ -56,11 +56,11 @@ Server implementation. MIT License.
 \label{doc-func-members}
 \Hypertarget{server_8c_doc-func-members}
 \doxysubsection{Function Documentation}
-\Hypertarget{server_8c_ab99514b14d04a0f47619bb2a87ee11a4}\index{server.c@{server.c}!gin\_get\_client\_ip@{gin\_get\_client\_ip}}
-\index{gin\_get\_client\_ip@{gin\_get\_client\_ip}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_get\_client\_ip()}{gin\_get\_client\_ip()}}
-{\footnotesize\ttfamily \label{server_8c_ab99514b14d04a0f47619bb2a87ee11a4} 
-const char \texorpdfstring{$\ast$}{*} gin\+\_\+get\+\_\+client\+\_\+ip (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_ac612e14e2b9341a0ffc5662f7815113b}{gin\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_a785b897c0d473dccc071582fd023d24c}\index{server.c@{server.c}!csilk\_get\_client\_ip@{csilk\_get\_client\_ip}}
+\index{csilk\_get\_client\_ip@{csilk\_get\_client\_ip}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_get\_client\_ip()}{csilk\_get\_client\_ip()}}
+{\footnotesize\ttfamily \label{server_8c_a785b897c0d473dccc071582fd023d24c} 
+const char \texorpdfstring{$\ast$}{*} csilk\+\_\+get\+\_\+client\+\_\+ip (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c4f23f6a0fbf5af4c6dd448f22ec3c2}{csilk\+\_\+ctx\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{c}{}\end{DoxyParamCaption})}
 
 
 
@@ -74,11 +74,11 @@ Get the client\textquotesingle{}s IP address.
 \begin{DoxyReturn}{Returns}
 The IP address string, or NULL on error. 
 \end{DoxyReturn}
-\Hypertarget{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e}\index{server.c@{server.c}!gin\_server\_free@{gin\_server\_free}}
-\index{gin\_server\_free@{gin\_server\_free}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_server\_free()}{gin\_server\_free()}}
-{\footnotesize\ttfamily \label{server_8c_a3a9c27ab89a4eaa12fb641af27d2957e} 
-void gin\+\_\+server\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_a23c26f61cb7c291838293488b5a84c63}\index{server.c@{server.c}!csilk\_server\_free@{csilk\_server\_free}}
+\index{csilk\_server\_free@{csilk\_server\_free}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_server\_free()}{csilk\_server\_free()}}
+{\footnotesize\ttfamily \label{server_8c_a23c26f61cb7c291838293488b5a84c63} 
+void csilk\+\_\+server\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
 
 
 
@@ -89,11 +89,11 @@ Deallocate server resources.
 {\em server} & Server instance. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0}\index{server.c@{server.c}!gin\_server\_new@{gin\_server\_new}}
-\index{gin\_server\_new@{gin\_server\_new}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_server\_new()}{gin\_server\_new()}}
-{\footnotesize\ttfamily \label{server_8c_af0cefe967a6e8e077fd0ca6e51b869d0} 
-\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+server\+\_\+new (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a619d4ad6a98c5f6af61c1845a1c25557}{gin\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{router}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_a7228ef4a25b554253a912ddee907fdfa}\index{server.c@{server.c}!csilk\_server\_new@{csilk\_server\_new}}
+\index{csilk\_server\_new@{csilk\_server\_new}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_server\_new()}{csilk\_server\_new()}}
+{\footnotesize\ttfamily \label{server_8c_a7228ef4a25b554253a912ddee907fdfa} 
+\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*} csilk\+\_\+server\+\_\+new (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a85c477ce92b8be8ddd93963e3fd07625}{csilk\+\_\+router\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{router}{}\end{DoxyParamCaption})}
 
 
 
@@ -107,11 +107,11 @@ Create a new server instance.
 \begin{DoxyReturn}{Returns}
 New server instance. 
 \end{DoxyReturn}
-\Hypertarget{server_8c_a74a3074c236cee75dba25439c1bba39d}\index{server.c@{server.c}!gin\_server\_run@{gin\_server\_run}}
-\index{gin\_server\_run@{gin\_server\_run}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_server\_run()}{gin\_server\_run()}}
-{\footnotesize\ttfamily \label{server_8c_a74a3074c236cee75dba25439c1bba39d} 
-int gin\+\_\+server\+\_\+run (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{int}]{port}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_ab49f6cc94839809723a16b10cf66ba51}\index{server.c@{server.c}!csilk\_server\_run@{csilk\_server\_run}}
+\index{csilk\_server\_run@{csilk\_server\_run}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_server\_run()}{csilk\_server\_run()}}
+{\footnotesize\ttfamily \label{server_8c_ab49f6cc94839809723a16b10cf66ba51} 
+int csilk\+\_\+server\+\_\+run (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{int}]{port}{}\end{DoxyParamCaption})}
 
 
 
@@ -127,11 +127,11 @@ Run the server event loop. Blocks until server is stopped or error occurs.
 \begin{DoxyReturn}{Returns}
 0 on success, -\/1 on failure. 
 \end{DoxyReturn}
-\Hypertarget{server_8c_a27a082aa71463c314c5b397ee18340f9}\index{server.c@{server.c}!gin\_server\_set\_config@{gin\_server\_set\_config}}
-\index{gin\_server\_set\_config@{gin\_server\_set\_config}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_server\_set\_config()}{gin\_server\_set\_config()}}
-{\footnotesize\ttfamily \label{server_8c_a27a082aa71463c314c5b397ee18340f9} 
-void gin\+\_\+server\+\_\+set\+\_\+config (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{\doxymbox{\hyperlink{gin_8h_a81c4eec790cdadc96b2499054441cde1}{gin\+\_\+server\+\_\+config\+\_\+t}}}]{config}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_a9f2aab4fba3b2fe1ca79944b584049f1}\index{server.c@{server.c}!csilk\_server\_set\_config@{csilk\_server\_set\_config}}
+\index{csilk\_server\_set\_config@{csilk\_server\_set\_config}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_server\_set\_config()}{csilk\_server\_set\_config()}}
+{\footnotesize\ttfamily \label{server_8c_a9f2aab4fba3b2fe1ca79944b584049f1} 
+void csilk\+\_\+server\+\_\+set\+\_\+config (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{, }\item[{\doxymbox{\hyperlink{csilk_8h_aa52f4a7293fca2294706ce9f9c67356f}{csilk\+\_\+server\+\_\+config\+\_\+t}}}]{config}{}\end{DoxyParamCaption})}
 
 
 
@@ -144,11 +144,11 @@ Apply server configuration.
 {\em config} & Configuration struct. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{server_8c_a64aafd1e18741af32c27fc754e8136ad}\index{server.c@{server.c}!gin\_server\_stop@{gin\_server\_stop}}
-\index{gin\_server\_stop@{gin\_server\_stop}!server.c@{server.c}}
-\doxysubsubsection{\texorpdfstring{gin\_server\_stop()}{gin\_server\_stop()}}
-{\footnotesize\ttfamily \label{server_8c_a64aafd1e18741af32c27fc754e8136ad} 
-void gin\+\_\+server\+\_\+stop (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7d2c38004d205cac5306815e3d0f0011}{gin\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
+\Hypertarget{server_8c_a288fd37994637aa7508870ef639eefd8}\index{server.c@{server.c}!csilk\_server\_stop@{csilk\_server\_stop}}
+\index{csilk\_server\_stop@{csilk\_server\_stop}!server.c@{server.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_server\_stop()}{csilk\_server\_stop()}}
+{\footnotesize\ttfamily \label{server_8c_a288fd37994637aa7508870ef639eefd8} 
+void csilk\+\_\+server\+\_\+stop (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a63d9079307207ca79acec1968f71c6a4}{csilk\+\_\+server\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{server}{}\end{DoxyParamCaption})}
 
 
 

@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "gin.h"
+#include "csilk.h"
 
-// Fuzz test for gin_split_url, gin_parse_query, and routing
+// Fuzz test for csilk_split_url, csilk_parse_query, and routing
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (size == 0) return 0;
@@ -15,36 +15,36 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     memcpy(input, data, size);
     input[size] = '\0';
 
-    // 1. Fuzz gin_split_url
+    // 1. Fuzz csilk_split_url
     char *path = NULL;
     char *query = NULL;
-    gin_split_url(input, &path, &query);
+    csilk_split_url(input, &path, &query);
 
-    gin_ctx_t ctx = {0};
+    csilk_ctx_t ctx = {0};
 
-    // 2. Fuzz gin_parse_query
+    // 2. Fuzz csilk_parse_query
     if (query) {
-        gin_parse_query(&ctx, query);
+        csilk_parse_query(&ctx, query);
     }
 
     // 3. Fuzz routing
-    gin_router_t *router = gin_router_new();
+    csilk_router_t *router = csilk_router_new();
     if (router) {
-        gin_handler_t handlers[] = {NULL};
-        gin_router_add(router, "GET", "/api/:id/users/*action", handlers, 1);
-        gin_router_add(router, "POST", "/api/ping", handlers, 1);
+        csilk_handler_t handlers[] = {NULL};
+        csilk_router_add(router, "GET", "/api/:id/users/*action", handlers, 1);
+        csilk_router_add(router, "POST", "/api/ping", handlers, 1);
 
         if (path) {
             ctx.request.method = "GET";
             ctx.request.path = path;
-            gin_router_match_ctx(router, &ctx);
+            csilk_router_match_ctx(router, &ctx);
         }
-        gin_router_free(router);
+        csilk_router_free(router);
     }
 
     if (path) free(path);
     if (query) free(query);
-    gin_ctx_cleanup(&ctx);
+    csilk_ctx_cleanup(&ctx);
     free(input);
 
     return 0;

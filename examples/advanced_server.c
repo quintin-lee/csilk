@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "gin.h"
+#include "csilk.h"
 
 // 1. 定义业务模型
 typedef struct {
@@ -11,32 +11,32 @@ typedef struct {
 } user_t;
 
 // 2. 自定义中间件：认证
-void auth_required(gin_ctx_t* c) {
-    const char* token = gin_get_header(c, "Authorization");
+void auth_required(csilk_ctx_t* c) {
+    const char* token = csilk_get_header(c, "Authorization");
     if (token && strcmp(token, "secret-token") == 0) {
-        gin_next(c);
+        csilk_next(c);
     } else {
-        gin_json_error(c, 401, "Unauthorized: Invalid or missing token");
-        gin_abort(c);
+        csilk_json_error(c, 401, "Unauthorized: Invalid or missing token");
+        csilk_abort(c);
     }
 }
 
 // 3. 业务处理器
-void get_user_handler(gin_ctx_t* c) {
-    const char* id = gin_get_param(c, "id");
+void get_user_handler(csilk_ctx_t* c) {
+    const char* id = csilk_get_param(c, "id");
     
     cJSON* user = cJSON_CreateObject();
     cJSON_AddNumberToObject(user, "id", atoi(id));
     cJSON_AddStringToObject(user, "name", "John Doe");
     cJSON_AddStringToObject(user, "email", "john@example.com");
     
-    gin_json(c, 200, user);
+    csilk_json(c, 200, user);
 }
 
-void post_data_handler(gin_ctx_t* c) {
-    cJSON* json = gin_bind_json(c);
+void post_data_handler(csilk_ctx_t* c) {
+    cJSON* json = csilk_bind_json(c);
     if (!json) {
-        gin_json_error(c, 400, "Bad Request: Invalid JSON");
+        csilk_json_error(c, 400, "Bad Request: Invalid JSON");
         return;
     }
     
@@ -48,20 +48,20 @@ void post_data_handler(gin_ctx_t* c) {
     cJSON_AddStringToObject(resp, "status", "received");
     cJSON_AddItemToObject(resp, "data", cJSON_Duplicate(json, 1));
     
-    gin_json(c, 201, resp);
+    csilk_json(c, 201, resp);
     cJSON_Delete(json);
 }
 
 // 4. WebSocket 处理器
-void ws_on_message(gin_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
+void ws_on_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     printf("WebSocket Message: %s\n", (char*)payload);
     char reply[256];
     snprintf(reply, sizeof(reply), "Server received: %s", (char*)payload);
-    gin_ws_send(c, (uint8_t*)reply, strlen(reply), opcode);
+    csilk_ws_send(c, (uint8_t*)reply, strlen(reply), opcode);
 }
 
-void ws_handler(gin_ctx_t* c) {
-    gin_ws_handshake(c);
+void ws_handler(csilk_ctx_t* c) {
+    csilk_ws_handshake(c);
     if (c->is_websocket) {
         c->on_ws_message = ws_on_message;
     }
@@ -69,45 +69,45 @@ void ws_handler(gin_ctx_t* c) {
 
 int main() {
     // Initialize logger
-    gin_log_init(GIN_LOG_DEBUG, NULL);
+    csilk_log_init(CSILK_LOG_DEBUG, NULL);
 
     // 初始化路由
-    gin_router_t* router = gin_router_new();
+    csilk_router_t* router = csilk_router_new();
     
     // 根组：使用 Recovery 和 Logger 基础中间件
-    gin_group_t* root = gin_group_new(router, "");
-    gin_group_use(root, gin_recovery_handler);
-    gin_group_use(root, gin_logger_handler);
+    csilk_group_t* root = csilk_group_new(router, "");
+    csilk_group_use(root, csilk_recovery_handler);
+    csilk_group_use(root, csilk_logger_handler);
     
-    gin_GET(root, "/ping", (gin_handler_t)[](gin_ctx_t* c){
-        gin_string(c, 200, "pong");
+    csilk_GET(root, "/ping", (csilk_handler_t)[](csilk_ctx_t* c){
+        csilk_string(c, 200, "pong");
     });
 
     // WebSocket 路由
-    gin_GET(root, "/ws", ws_handler);
+    csilk_GET(root, "/ws", ws_handler);
 
     // API 组：使用自定义 Auth 中间件
-    gin_group_t* api = gin_group_group(root, "/api/v1");
-    gin_group_use(api, auth_required);
+    csilk_group_t* api = csilk_group_group(root, "/api/v1");
+    csilk_group_use(api, auth_required);
     
-    gin_GET(api, "/users/:id", get_user_handler);
-    gin_POST(api, "/data", post_data_handler);
+    csilk_GET(api, "/users/:id", get_user_handler);
+    csilk_POST(api, "/data", post_data_handler);
 
     // 静态文件服务
-    gin_GET(root, "/static/*path", (gin_handler_t)[](gin_ctx_t* c){
-        gin_static(c, "./public");
+    csilk_GET(root, "/static/*path", (csilk_handler_t)[](csilk_ctx_t* c){
+        csilk_static(c, "./public");
     });
 
     // 启动服务器
     printf("Server-C Advanced Example starting on port 8080...\n");
     printf("Test with: curl -H 'Authorization: secret-token' http://localhost:8080/api/v1/users/42\n");
     
-    gin_server_t* server = gin_server_new(router);
-    gin_server_run(server, 8080);
+    csilk_server_t* server = csilk_server_new(router);
+    csilk_server_run(server, 8080);
     
     // 资源清理
-    gin_server_free(server);
-    gin_router_free(router);
+    csilk_server_free(server);
+    csilk_router_free(router);
     
     return 0;
 }

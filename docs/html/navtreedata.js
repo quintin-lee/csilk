@@ -24,7 +24,7 @@
 */
 var NAVTREE =
 [
-  [ "Gin", "index.html", [
+  [ "Csilk", "index.html", [
     [ "Classes", "annotated.html", [
       [ "Class List", "annotated.html", "annotated_dup" ],
       [ "Class Index", "classes.html", null ],
@@ -50,7 +50,7 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "annotated.html",
-"structgin__router__node__s.html#a927c32d2df39b939fdc2a306928b4905"
+"structcsilk__router__node__s.html#a0f8fd7521c0ded7754e7b95a7827b036"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';

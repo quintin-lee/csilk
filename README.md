@@ -1,6 +1,6 @@
-# c-gin-framework
+# csilk
 
-A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, and cJSON.
+A lightweight, high-performance HTTP web framework written in C, inspired by Csilk (Golang) and built on top of libuv, llhttp, and cJSON.
 
 ## Features
 
@@ -34,8 +34,8 @@ These dependencies are automatically fetched during build via CMake's FetchConte
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/c-gin-framework.git
-cd c-gin-framework
+git clone https://github.com/yourusername/csilk.git
+cd csilk
 
 # Create a build directory
 mkdir build && cd build
@@ -60,7 +60,7 @@ make format  # Requires clang-format
 
 ## Documentation
 
-API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/gin.h`, `include/gin_internal.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` and `src/middleware/` also carry complete Doxygen documentation.
+API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk.h`, `include/csilk_internal.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` and `src/middleware/` also carry complete Doxygen documentation.
 
 To generate HTML documentation:
 
@@ -74,8 +74,8 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 
 | Component | Status |
 |-----------|--------|
-| `include/gin.h` (public API) | Fully documented |
-| `include/gin_internal.h` (internal API) | Fully documented |
+| `include/csilk.h` (public API) | Fully documented |
+| `include/csilk_internal.h` (internal API) | Fully documented |
 | `src/` (core implementation) | Fully documented |
 | `src/middleware/` (middleware) | Fully documented |
 
@@ -84,34 +84,34 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 ### Simple Server Example
 
 ```c
-#include "gin.h"
+#include "csilk.h"
 
-void hello_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "Hello World!");
+void hello_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "Hello World!");
 }
 
-void ping_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "pong");
+void ping_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "pong");
 }
 
 int main() {
     // Create router
-    gin_router_t* router = gin_router_new();
+    csilk_router_t* router = csilk_router_new();
 
     // Define routes
-    gin_handler_t hello_handlers[] = {hello_handler};
-    gin_router_add(router, "GET", "/", hello_handlers, 1);
+    csilk_handler_t hello_handlers[] = {hello_handler};
+    csilk_router_add(router, "GET", "/", hello_handlers, 1);
 
-    gin_handler_t ping_handlers[] = {ping_handler};
-    gin_router_add(router, "GET", "/ping", ping_handlers, 1);
+    csilk_handler_t ping_handlers[] = {ping_handler};
+    csilk_router_add(router, "GET", "/ping", ping_handlers, 1);
 
     // Create and run server
-    gin_server_t* server = gin_server_new(router);
-    gin_server_run(server, 8080);
+    csilk_server_t* server = csilk_server_new(router);
+    csilk_server_run(server, 8080);
 
     // Cleanup (never reached in this example)
-    gin_server_free(server);
-    gin_router_free(router);
+    csilk_server_free(server);
+    csilk_router_free(router);
 
     return 0;
 }
@@ -121,18 +121,18 @@ int main() {
 
 ```c
 // Define handlers
-void data_handler(gin_ctx_t* c) {
-    gin_string(c, 200, "data response");
+void data_handler(csilk_ctx_t* c) {
+    csilk_string(c, 200, "data response");
 }
 
 int main() {
-    gin_router_t* router = gin_router_new();
+    csilk_router_t* router = csilk_router_new();
 
     // Create a route group with "/api" prefix
-    gin_group_t* api = gin_group_new(router, "/api");
+    csilk_group_t* api = csilk_group_new(router, "/api");
 
     // Use convenience macros to add routes
-    gin_GET(api, "/data", data_handler);
+    csilk_GET(api, "/data", data_handler);
     // -> matches GET /api/data
 
     // ...
@@ -142,21 +142,21 @@ int main() {
 ### Middleware Usage
 
 ```c
-void my_middleware(gin_ctx_t* c) {
+void my_middleware(csilk_ctx_t* c) {
     // Custom logic before next handler
-    gin_next(c);
+    csilk_next(c);
 }
 
 // Built-in middleware handlers:
-//   gin_logger_handler   - Request logging
-//   gin_recovery_handler - Panic recovery (500 on panic)
-//   gin_auth_middleware  - Token authentication (with validator callback)
-//   gin_static           - Static file serving (with root directory)
+//   csilk_logger_handler   - Request logging
+//   csilk_recovery_handler - Panic recovery (500 on panic)
+//   csilk_auth_middleware  - Token authentication (with validator callback)
+//   csilk_static           - Static file serving (with root directory)
 
 // Middleware is applied to route groups:
-gin_group_t* group = gin_group_new(router, "/api");
-gin_group_use(group, gin_logger_handler);
-gin_group_use(group, gin_recovery_handler);
+csilk_group_t* group = csilk_group_new(router, "/api");
+csilk_group_use(group, csilk_logger_handler);
+csilk_group_use(group, csilk_recovery_handler);
 ```
 
 ## Project Structure
@@ -205,5 +205,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Inspired by [Gin](https://github.com/gin-gonic/gin) web framework
+- Inspired by [Csilk](https://github.com/gin-gonic/gin) web framework
 - Built upon excellent C libraries: libuv, llhttp, and cJSON

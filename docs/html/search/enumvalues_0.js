@@ -1,9 +1,9 @@
 var searchData=
 [
-  ['gin_5flog_5fdebug_0',['GIN_LOG_DEBUG',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6ea30a87eeb0dd65f3941d5203c8a6e01cc',1,'gin.h']]],
-  ['gin_5flog_5ferror_1',['GIN_LOG_ERROR',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6ea0a2ee67c1f81f04e78d15ef1ac74a5af',1,'gin.h']]],
-  ['gin_5flog_5ffatal_2',['GIN_LOG_FATAL',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6eae7454425ad624d101890a2d3da7371bb',1,'gin.h']]],
-  ['gin_5flog_5finfo_3',['GIN_LOG_INFO',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6ea1230686b625e72ed7d421f0e87b4547d',1,'gin.h']]],
-  ['gin_5flog_5ftrace_4',['GIN_LOG_TRACE',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6eaeaeb45e5fd58b23771907656dd6718c3',1,'gin.h']]],
-  ['gin_5flog_5fwarn_5',['GIN_LOG_WARN',['../gin_8h.html#abf23a7bba24c8c4dbb9865c959705f6eab24eda29f6d51d94d26c5d0c8742d7b0',1,'gin.h']]]
+  ['csilk_5flog_5fdebug_0',['CSILK_LOG_DEBUG',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a8df2ae1ecd65163bb1443ced1f1992d3',1,'csilk.h']]],
+  ['csilk_5flog_5ferror_1',['CSILK_LOG_ERROR',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a6b6db1b99a2696e7f52ce79aa40a55ba',1,'csilk.h']]],
+  ['csilk_5flog_5ffatal_2',['CSILK_LOG_FATAL',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a168aafa225d9212aff0625220e3500c6',1,'csilk.h']]],
+  ['csilk_5flog_5finfo_3',['CSILK_LOG_INFO',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a35efa47fa7d19eb5476820ed5b0eb1ba',1,'csilk.h']]],
+  ['csilk_5flog_5ftrace_4',['CSILK_LOG_TRACE',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a231088afb06dc1cd6e28f09838371dd9',1,'csilk.h']]],
+  ['csilk_5flog_5fwarn_5',['CSILK_LOG_WARN',['../csilk_8h.html#ab3f37cbd51892721b84e3558cdd9c066a6c81ea664a9c0ba3c036d6e08dc0cb23',1,'csilk.h']]]
 ];

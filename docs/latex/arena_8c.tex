@@ -11,29 +11,29 @@ Arena allocator implementation for request-\/scoped memory.
 \doxysubsubsection*{Classes}
 \begin{DoxyCompactItemize}
 \item 
-struct \doxymbox{\hyperlink{structgin__arena__chunk__s}{gin\+\_\+arena\+\_\+chunk\+\_\+s}}
+struct \doxymbox{\hyperlink{structcsilk__arena__chunk__s}{csilk\+\_\+arena\+\_\+chunk\+\_\+s}}
 \begin{DoxyCompactList}\small\item\em A single chunk in the arena linked list. \end{DoxyCompactList}\item 
-struct \doxymbox{\hyperlink{structgin__arena__s}{gin\+\_\+arena\+\_\+s}}
+struct \doxymbox{\hyperlink{structcsilk__arena__s}{csilk\+\_\+arena\+\_\+s}}
 \begin{DoxyCompactList}\small\item\em Arena allocator for request-\/scoped memory. \end{DoxyCompactList}\end{DoxyCompactItemize}
 \doxysubsubsection*{Typedefs}
 \begin{DoxyCompactItemize}
 \item 
-\Hypertarget{arena_8c_a0e387d1fcf915a343650beedbf0c87be}\label{arena_8c_a0e387d1fcf915a343650beedbf0c87be} 
-typedef struct \doxymbox{\hyperlink{structgin__arena__chunk__s}{gin\+\_\+arena\+\_\+chunk\+\_\+s}} {\bfseries gin\+\_\+arena\+\_\+chunk\+\_\+t}
+\Hypertarget{arena_8c_acda88d4862b606be4e9253369f3caa43}\label{arena_8c_acda88d4862b606be4e9253369f3caa43} 
+typedef struct \doxymbox{\hyperlink{structcsilk__arena__chunk__s}{csilk\+\_\+arena\+\_\+chunk\+\_\+s}} {\bfseries csilk\+\_\+arena\+\_\+chunk\+\_\+t}
 \begin{DoxyCompactList}\small\item\em A single chunk in the arena linked list. \end{DoxyCompactList}\item 
-\Hypertarget{arena_8c_a7316f19211bdb24e0290cd5648defb14}\label{arena_8c_a7316f19211bdb24e0290cd5648defb14} 
-typedef struct \doxymbox{\hyperlink{structgin__arena__s}{gin\+\_\+arena\+\_\+s}} {\bfseries gin\+\_\+arena\+\_\+t}
+\Hypertarget{arena_8c_a4c82f272a928a557d06f96ebda5a8132}\label{arena_8c_a4c82f272a928a557d06f96ebda5a8132} 
+typedef struct \doxymbox{\hyperlink{structcsilk__arena__s}{csilk\+\_\+arena\+\_\+s}} {\bfseries csilk\+\_\+arena\+\_\+t}
 \begin{DoxyCompactList}\small\item\em Arena allocator for request-\/scoped memory. \end{DoxyCompactList}\end{DoxyCompactItemize}
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_acb4964d4b63a5e672384173abf388499}{gin\+\_\+arena\+\_\+new}} (size\+\_\+t default\+\_\+chunk\+\_\+size)
+\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a4c7e2153ab6ce2a88da286fd05d9b982}{csilk\+\_\+arena\+\_\+new}} (size\+\_\+t default\+\_\+chunk\+\_\+size)
 \begin{DoxyCompactList}\small\item\em Create a new request-\/scoped arena allocator. \end{DoxyCompactList}\item 
-void \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a969e673816347275f8a2ac8200995941}{gin\+\_\+arena\+\_\+alloc}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, size\+\_\+t size)
-\begin{DoxyCompactList}\small\item\em Allocate memory from the arena. Memory will be freed automatically in gin\+\_\+ctx\+\_\+cleanup. \end{DoxyCompactList}\item 
-char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60}{gin\+\_\+arena\+\_\+strdup}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, const char \texorpdfstring{$\ast$}{*}s)
+void \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a49b75df85a290af0de78263759b159f3}{csilk\+\_\+arena\+\_\+alloc}} (\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, size\+\_\+t size)
+\begin{DoxyCompactList}\small\item\em Allocate memory from the arena. Memory will be freed automatically in csilk\+\_\+ctx\+\_\+cleanup. \end{DoxyCompactList}\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{arena_8c_a21d180c8408830473e1e171e7d9946f1}{csilk\+\_\+arena\+\_\+strdup}} (\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena, const char \texorpdfstring{$\ast$}{*}s)
 \begin{DoxyCompactList}\small\item\em Duplicate a string using the arena allocator. \end{DoxyCompactList}\item 
-void \doxymbox{\hyperlink{arena_8c_a9da4a728adda81dc62e5609af3d16d39}{gin\+\_\+arena\+\_\+free}} (\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena)
+void \doxymbox{\hyperlink{arena_8c_ab9c1243f1af7ac40688acbf1b23fcde1}{csilk\+\_\+arena\+\_\+free}} (\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}arena)
 \begin{DoxyCompactList}\small\item\em Explicitly free the arena and all its chunks. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
 
@@ -45,15 +45,15 @@ Arena allocator implementation for request-\/scoped memory.
 \label{doc-func-members}
 \Hypertarget{arena_8c_doc-func-members}
 \doxysubsection{Function Documentation}
-\Hypertarget{arena_8c_a969e673816347275f8a2ac8200995941}\index{arena.c@{arena.c}!gin\_arena\_alloc@{gin\_arena\_alloc}}
-\index{gin\_arena\_alloc@{gin\_arena\_alloc}!arena.c@{arena.c}}
-\doxysubsubsection{\texorpdfstring{gin\_arena\_alloc()}{gin\_arena\_alloc()}}
-{\footnotesize\ttfamily \label{arena_8c_a969e673816347275f8a2ac8200995941} 
-void \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+alloc (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{size\+\_\+t}]{size}{}\end{DoxyParamCaption})}
+\Hypertarget{arena_8c_a49b75df85a290af0de78263759b159f3}\index{arena.c@{arena.c}!csilk\_arena\_alloc@{csilk\_arena\_alloc}}
+\index{csilk\_arena\_alloc@{csilk\_arena\_alloc}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_arena\_alloc()}{csilk\_arena\_alloc()}}
+{\footnotesize\ttfamily \label{arena_8c_a49b75df85a290af0de78263759b159f3} 
+void \texorpdfstring{$\ast$}{*} csilk\+\_\+arena\+\_\+alloc (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{size\+\_\+t}]{size}{}\end{DoxyParamCaption})}
 
 
 
-Allocate memory from the arena. Memory will be freed automatically in gin\+\_\+ctx\+\_\+cleanup. 
+Allocate memory from the arena. Memory will be freed automatically in csilk\+\_\+ctx\+\_\+cleanup. 
 
 
 \begin{DoxyParams}{Parameters}
@@ -65,11 +65,11 @@ Allocate memory from the arena. Memory will be freed automatically in gin\+\_\+c
 \begin{DoxyReturn}{Returns}
 Pointer to allocated memory, or NULL on failure. 
 \end{DoxyReturn}
-\Hypertarget{arena_8c_a9da4a728adda81dc62e5609af3d16d39}\index{arena.c@{arena.c}!gin\_arena\_free@{gin\_arena\_free}}
-\index{gin\_arena\_free@{gin\_arena\_free}!arena.c@{arena.c}}
-\doxysubsubsection{\texorpdfstring{gin\_arena\_free()}{gin\_arena\_free()}}
-{\footnotesize\ttfamily \label{arena_8c_a9da4a728adda81dc62e5609af3d16d39} 
-void gin\+\_\+arena\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{}\end{DoxyParamCaption})}
+\Hypertarget{arena_8c_ab9c1243f1af7ac40688acbf1b23fcde1}\index{arena.c@{arena.c}!csilk\_arena\_free@{csilk\_arena\_free}}
+\index{csilk\_arena\_free@{csilk\_arena\_free}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_arena\_free()}{csilk\_arena\_free()}}
+{\footnotesize\ttfamily \label{arena_8c_ab9c1243f1af7ac40688acbf1b23fcde1} 
+void csilk\+\_\+arena\+\_\+free (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{}\end{DoxyParamCaption})}
 
 
 
@@ -80,11 +80,11 @@ Explicitly free the arena and all its chunks.
 {\em arena} & The arena instance. \\
 \hline
 \end{DoxyParams}
-\Hypertarget{arena_8c_acb4964d4b63a5e672384173abf388499}\index{arena.c@{arena.c}!gin\_arena\_new@{gin\_arena\_new}}
-\index{gin\_arena\_new@{gin\_arena\_new}!arena.c@{arena.c}}
-\doxysubsubsection{\texorpdfstring{gin\_arena\_new()}{gin\_arena\_new()}}
-{\footnotesize\ttfamily \label{arena_8c_acb4964d4b63a5e672384173abf388499} 
-\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+new (\begin{DoxyParamCaption}\item[{size\+\_\+t}]{default\+\_\+chunk\+\_\+size}{}\end{DoxyParamCaption})}
+\Hypertarget{arena_8c_a4c7e2153ab6ce2a88da286fd05d9b982}\index{arena.c@{arena.c}!csilk\_arena\_new@{csilk\_arena\_new}}
+\index{csilk\_arena\_new@{csilk\_arena\_new}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_arena\_new()}{csilk\_arena\_new()}}
+{\footnotesize\ttfamily \label{arena_8c_a4c7e2153ab6ce2a88da286fd05d9b982} 
+\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*} csilk\+\_\+arena\+\_\+new (\begin{DoxyParamCaption}\item[{size\+\_\+t}]{default\+\_\+chunk\+\_\+size}{}\end{DoxyParamCaption})}
 
 
 
@@ -98,11 +98,11 @@ Create a new request-\/scoped arena allocator.
 \begin{DoxyReturn}{Returns}
 Pointer to the new arena instance. 
 \end{DoxyReturn}
-\Hypertarget{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60}\index{arena.c@{arena.c}!gin\_arena\_strdup@{gin\_arena\_strdup}}
-\index{gin\_arena\_strdup@{gin\_arena\_strdup}!arena.c@{arena.c}}
-\doxysubsubsection{\texorpdfstring{gin\_arena\_strdup()}{gin\_arena\_strdup()}}
-{\footnotesize\ttfamily \label{arena_8c_a098b57a2fccc272848bdcc8eb9c7de60} 
-char \texorpdfstring{$\ast$}{*} gin\+\_\+arena\+\_\+strdup (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{gin_8h_a7316f19211bdb24e0290cd5648defb14}{gin\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{s}{}\end{DoxyParamCaption})}
+\Hypertarget{arena_8c_a21d180c8408830473e1e171e7d9946f1}\index{arena.c@{arena.c}!csilk\_arena\_strdup@{csilk\_arena\_strdup}}
+\index{csilk\_arena\_strdup@{csilk\_arena\_strdup}!arena.c@{arena.c}}
+\doxysubsubsection{\texorpdfstring{csilk\_arena\_strdup()}{csilk\_arena\_strdup()}}
+{\footnotesize\ttfamily \label{arena_8c_a21d180c8408830473e1e171e7d9946f1} 
+char \texorpdfstring{$\ast$}{*} csilk\+\_\+arena\+\_\+strdup (\begin{DoxyParamCaption}\item[{\doxymbox{\hyperlink{csilk_8h_a4c82f272a928a557d06f96ebda5a8132}{csilk\+\_\+arena\+\_\+t}} \texorpdfstring{$\ast$}{*}}]{arena}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{s}{}\end{DoxyParamCaption})}
 
 
 
