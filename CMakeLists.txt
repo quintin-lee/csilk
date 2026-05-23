@@ -4,6 +4,9 @@ project(c_gin_framework C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
+enable_testing()
 
 # 查找 clang-format
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
@@ -90,59 +93,92 @@ if(NOT LLHTTP_LIB)
 endif()
 message(STATUS "Found llhttp: ${LLHTTP_LIB}")
 
-# Build library
+# Build library (static by default; set -DBUILD_SHARED_LIBS=ON for shared)
 add_library(gin ${GIN_SOURCES})
-target_link_libraries(gin uv ${LLHTTP_LIB} cjson)
+target_link_libraries(gin PUBLIC uv ${LLHTTP_LIB} cjson)
+target_include_directories(gin PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+set_target_properties(gin PROPERTIES
+    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/gin.h"
+    VERSION "0.1.0"
+    SOVERSION "0"
+)
 
-# Test executables
-add_executable(test_logger tests/test_logger.c)
-target_link_libraries(test_logger gin)
+# Helper to add a test executable and register with CTest
+function(add_gin_test name source)
+  add_executable(${name} ${source})
+  target_link_libraries(${name} gin)
+  add_test(NAME ${name} COMMAND ${name})
+endfunction()
 
-add_executable(test_static tests/test_static.c)
-target_link_libraries(test_static gin)
+# Unit tests
+add_gin_test(test_logger tests/test_logger.c)
+add_gin_test(test_static tests/test_static.c)
+add_gin_test(test_context tests/test_context.c)
+add_gin_test(test_router tests/test_router.c)
+add_gin_test(test_radix tests/test_radix.c)
+add_gin_test(test_group tests/test_group.c)
+add_gin_test(test_headers tests/test_headers.c)
+add_gin_test(test_server tests/test_server.c)
+add_gin_test(test_query tests/test_query.c)
+add_gin_test(test_json tests/test_json.c)
+add_gin_test(test_recovery tests/test_recovery.c)
+add_gin_test(test_auth tests/test_auth.c)
+add_gin_test(test_keepalive tests/test_keepalive.c)
+add_gin_test(test_edge tests/test_edge.c)
+add_gin_test(test_timeout tests/test_timeout.c)
+set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
-add_executable(test_context tests/test_context.c)
-target_link_libraries(test_context gin)
-
-add_executable(test_router tests/test_router.c)
-target_link_libraries(test_router gin)
-
-add_executable(test_radix tests/test_radix.c)
-target_link_libraries(test_radix gin)
-
-add_executable(test_group tests/test_group.c)
-target_link_libraries(test_group gin)
-
-add_executable(test_headers tests/test_headers.c)
-target_link_libraries(test_headers gin)
-
-add_executable(test_server tests/test_server.c)
-target_link_libraries(test_server gin)
-
-add_executable(test_query tests/test_query.c)
-target_link_libraries(test_query gin)
-
-add_executable(test_json tests/test_json.c)
-target_link_libraries(test_json gin)
-
-add_executable(test_recovery tests/test_recovery.c)
-target_link_libraries(test_recovery gin)
-
-add_executable(test_auth tests/test_auth.c)
-target_link_libraries(test_auth gin)
-
-add_executable(test_keepalive tests/test_keepalive.c)
-target_link_libraries(test_keepalive gin)
-
-add_executable(test_timeout tests/test_timeout.c)
-target_link_libraries(test_timeout gin)
-
+# Integration tests (may have pre-existing failures, not run by default)
 add_executable(test_integration tests/test_integration.c)
 target_link_libraries(test_integration gin)
+add_test(NAME test_integration COMMAND test_integration)
 
 # Example server
 add_executable(example_server example_server.c)
 target_link_libraries(example_server gin)
 
-# For now, just a dummy executable to ensure build works.
-add_executable(run_tests tests/test_main.c)
+# Install targets
+include(GNUInstallDirs)
+install(TARGETS gin
+    EXPORT gin-targets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(EXPORT gin-targets
+    FILE gin-config.cmake
+    NAMESPACE gin::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/gin
+)
+
+# clang-tidy
+find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
+if(CLANG_TIDY_EXECUTABLE)
+    add_custom_target(tidy
+        COMMAND ${CLANG_TIDY_EXECUTABLE}
+            --quiet
+            --checks="-*,clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
+            --warnings-as-errors="*"
+            ${GIN_SOURCES}
+            -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
+            -I${cjson_SOURCE_DIR}
+            -I${cjson_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-tidy on source files"
+    )
+    message(STATUS "Found clang-tidy: ${CLANG_TIDY_EXECUTABLE}")
+else()
+    message(STATUS "clang-tidy not found — skipping")
+endif()
+
+# CPack packaging
+set(CPACK_PACKAGE_NAME "c-gin-framework")
+set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Gin")
+include(CPack)

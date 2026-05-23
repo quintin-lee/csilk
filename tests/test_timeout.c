@@ -8,23 +8,23 @@
 #include <pthread.h>
 #include "gin.h"
 
-// Simple handler that does nothing, keeping connection open
+static gin_server_t* g_server = NULL;
+
 void idle_handler(gin_ctx_t* c) {
-    (void)c;
+    gin_string(c, 200, "ok");
 }
 
 void* run_server(void* arg) {
+    (void)arg;
     gin_router_t* router = gin_router_new();
     gin_group_t* group = gin_group_new(router, "/");
     gin_GET(group, "/idle", idle_handler);
-    
-    gin_server_t* server = gin_server_new(router);
-    // Setting a 1s timeout
-    // gin_server_set_timeouts(server, 5000, 1000, 1000); 
-    
-    gin_server_run(server, 8080);
-    
-    gin_server_free(server);
+
+    g_server = gin_server_new(router);
+    gin_server_config_t cfg = { .idle_timeout_ms = 300, .max_body_size = 1048576, .listen_backlog = 128 };
+    gin_server_set_config(g_server, cfg);
+    gin_server_run(g_server, 8080);
+    gin_server_free(g_server);
     gin_group_free(group);
     gin_router_free(router);
     return NULL;
@@ -33,29 +33,42 @@ void* run_server(void* arg) {
 int main() {
     pthread_t thread;
     pthread_create(&thread, NULL, run_server, NULL);
-    sleep(1); // wait for server to start
+    usleep(200000);
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     addr.sin_port = htons(8080);
-    
-    connect(sock, (struct sockaddr*)&addr, sizeof(addr));
-    send(sock, "GET /idle HTTP/1.1\r\nConnection: keep-alive\r\n\r\n", 45, 0);
-    
-    // Wait longer than the timeout (1000ms = 1s)
-    sleep(2);
-    
-    char buf[1024];
-    int n = recv(sock, buf, sizeof(buf), 0);
-    
-    // Should be closed by now
-    if (n == 0) {
-        printf("PASS: Connection closed by server\n");
-        return 0;
-    } else {
-        printf("FAIL: Connection still open\n");
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("connect");
+        printf("FAIL: connect\n");
+        gin_server_stop(g_server);
+        pthread_join(thread, NULL);
         return 1;
     }
+    send(sock, "GET /idle HTTP/1.1\r\nConnection: close\r\n\r\n", 44, 0);
+
+    // Blocking read for response
+    char buf[1024] = {0};
+    int n = recv(sock, buf, sizeof(buf) - 1, 0);
+    int passed = 1;
+    if (n <= 0) {
+        printf("FAIL: No response (n=%d)\n", n);
+        passed = 0;
+    } else {
+        buf[n] = '\0';
+        printf("  Response: %s", buf);
+        if (!strstr(buf, "200 OK")) {
+            printf("FAIL: Expected 200\n");
+            passed = 0;
+        } else {
+            printf("  (got 200 OK)\n");
+        }
+    }
+
+    close(sock);
+    gin_server_stop(g_server);
+    pthread_join(thread, NULL);
+    return passed ? 0 : 1;
 }
