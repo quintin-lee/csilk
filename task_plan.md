@@ -11,10 +11,10 @@
 - [x] 1.3 Fuzzing 模糊测试：针对 HTTP 报文解析逻辑及路由匹配逻辑进行模糊测试
 - [x] 1.4 CI/CD 自动化：配置自动化运行构建、测试和内存检查
 
-### 阶段二：架构与性能深度调优 (Architecture & Performance Tuning) [当前进行中]
-- [ ] 2.1 请求级内存池 (Memory Pool)：降低 `malloc` 碎片与锁竞争
-- [ ] 2.2 路由树局部性优化与 Fast-path
-- [ ] 2.3 异常流优化：优化 `setjmp/longjmp` 的 recovery 开销
+### 阶段二：架构与性能深度调优 (Architecture & Performance Tuning) [已完成]
+- [x] 2.1 请求级内存池 (Memory Pool)：降低 `malloc` 碎片与锁竞争
+- [x] 2.2 路由树局部性优化与 Fast-path
+- [x] 2.3 异常流优化：优化 `setjmp/longjmp` 的 recovery 开销
 
 ### 阶段三：文档与开发者体验 (Documentation & DX)
 - [ ] 3.1 规范化注释与 Doxygen API 文档

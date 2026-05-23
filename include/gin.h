@@ -42,12 +42,15 @@ typedef struct {
   char* value;
 } gin_param_t;
 
+typedef struct gin_arena_s gin_arena_t;
+
 struct gin_ctx_s {
   int handler_index;
   gin_handler_t* handlers;  // NULL terminated array
   int aborted;
   jmp_buf jump_buffer;
   int has_jump_buffer;
+  gin_arena_t* arena;
   gin_request_t request;
   gin_response_t response;
   gin_param_t params[GIN_MAX_PARAMS];
@@ -92,6 +95,12 @@ void gin_set_header(gin_ctx_t* c, const char* key, const char* value);
 /** @brief Clean up context resources.
  * @param c The request context. */
 void gin_ctx_cleanup(gin_ctx_t* c);
+
+// Arena allocator (Internal/Request-scoped)
+gin_arena_t* gin_arena_new(size_t default_chunk_size);
+void* gin_arena_alloc(gin_arena_t* arena, size_t size);
+char* gin_arena_strdup(gin_arena_t* arena, const char* s);
+void gin_arena_free(gin_arena_t* arena);
 
 /** @brief Recovery middleware handler.
  * @param c The request context. */

@@ -87,6 +87,7 @@ set(GIN_SOURCES
     src/group.c
     src/server.c
     src/url_parser.c
+    src/arena.c
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c

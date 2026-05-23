@@ -16,8 +16,10 @@ void gin_recovery_handler(gin_ctx_t* c) {
   if (setjmp(c->jump_buffer) == 0) {
     c->has_jump_buffer = 1;
     gin_next(c);
+    c->has_jump_buffer = 0; // Reset after normal flow
   } else {
     // Panic occurred, send 500
+    c->has_jump_buffer = 0; // Ensure reset on panic path too
     gin_string(c, 500, "Internal Server Error");
   }
 }
