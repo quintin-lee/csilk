@@ -348,6 +348,7 @@ typedef struct csilk_server_config_s {
   int listen_backlog;              /**< TCP listen backlog. */
   int tcp_nodelay;                 /**< Enable TCP_NODELAY. */
   int tcp_keepalive;               /**< Enable TCP keep-alive (seconds, 0 to disable). */
+  int worker_threads;              /**< Number of worker threads (SO_REUSEPORT). */
 } csilk_server_config_t;
 
 /** @brief Global Configuration structure. */
