@@ -88,11 +88,15 @@ set(GIN_SOURCES
     src/server.c
     src/url_parser.c
     src/arena.c
+    src/utils.c
+    src/websocket.c
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c
     src/middleware/static.c
     src/middleware/cors.c
+    src/middleware/ratelimit.c
+    src/middleware/csrf.c
 )
 
 # Find system llhttp (prefer system library to match installed headers)
@@ -135,6 +139,7 @@ add_gin_test(test_query tests/test_query.c)
 add_gin_test(test_json tests/test_json.c)
 add_gin_test(test_recovery tests/test_recovery.c)
 add_gin_test(test_auth tests/test_auth.c)
+add_gin_test(test_ws tests/test_ws.c)
 add_gin_test(test_keepalive tests/test_keepalive.c)
 add_gin_test(test_edge tests/test_edge.c)
 add_gin_test(test_timeout tests/test_timeout.c)
