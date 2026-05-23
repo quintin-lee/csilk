@@ -180,6 +180,42 @@ void gin_recovery_handler(gin_ctx_t* c);
  * @param c The request context. */
 void gin_panic(gin_ctx_t* c);
 
+/** @brief Logging levels. */
+typedef enum {
+  GIN_LOG_DEBUG,
+  GIN_LOG_INFO,
+  GIN_LOG_WARN,
+  GIN_LOG_ERROR
+} gin_log_level_t;
+
+/** @brief Logger configuration. */
+typedef struct {
+  gin_log_level_t level;    /**< Minimum logging level. */
+  const char* file_path;    /**< Log file path (NULL for stdout). */
+  size_t max_file_size;     /**< Max size before rotation (bytes, 0 to disable). */
+  int use_colors;           /**< Enable ANSI colors (auto-detected if -1). */
+} gin_log_config_t;
+
+/** @brief Initialize the global logger with config.
+ * @param config Logger configuration.
+ * @return 0 on success, -1 on failure. */
+int gin_log_init(gin_log_config_t config);
+
+/** @brief Internal log function (use macros instead). */
+void _gin_log_internal(gin_log_level_t level, const char* file, int line, const char* func, const char* fmt, ...);
+
+/** @brief Close the global logger. */
+void gin_log_close();
+
+/** @name Logging Macros
+ * Convenience macros that capture source location.
+ * @{ */
+#define GIN_LOG_D(...) _gin_log_internal(GIN_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define GIN_LOG_I(...) _gin_log_internal(GIN_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define GIN_LOG_W(...) _gin_log_internal(GIN_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define GIN_LOG_E(...) _gin_log_internal(GIN_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+/** @} */
+
 /** @brief Logging middleware handler.
  * Logs request method, path, and processing time.
  * @param c The request context. */

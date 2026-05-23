@@ -21,7 +21,8 @@ void gin_logger_handler(gin_ctx_t* c) {
   double duration =
       (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
-  // Assuming gin_ctx_t has method, path, and response status
-  printf("[GIN] %s %s %d %.6f s\n", c->request.method, c->request.path,
+  GIN_LOG_I("[HTTP] %s %s %d %.6f s", 
+         c->request.method ? c->request.method : "UNKNOWN", 
+         c->request.path ? c->request.path : "UNKNOWN",
          c->response.status, duration);
 }
