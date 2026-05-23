@@ -12,12 +12,13 @@
 #include <strings.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Hash a header key string into a bucket index.
  * Uses djb2 hash with case-insensitive folding.
  * @param key Header key string.
  * @return Bucket index (0..CSILK_HEADER_BUCKETS-1). */
-static uint32_t hash_key(const char* key) {
+static uint32_t hash_key(const char *key) {
   uint32_t hash = 5381;
   int c;
   while ((c = (unsigned char)*key++)) {
@@ -30,9 +31,9 @@ static uint32_t hash_key(const char* key) {
  * @param map Header hash map.
  * @param key Header key to find.
  * @return Value string, or NULL if not found. */
-static const char* map_get(csilk_header_map_t* map, const char* key) {
+static const char *map_get(csilk_header_map_t *map, const char *key) {
   uint32_t bucket = hash_key(key);
-  csilk_header_t* h = map->buckets[bucket];
+  csilk_header_t *h = map->buckets[bucket];
   while (h) {
     if (strcasecmp(h->key, key) == 0) {
       return h->value;
@@ -47,11 +48,12 @@ static const char* map_get(csilk_header_map_t* map, const char* key) {
  * @param map Header hash map (request or response).
  * @param key Header key.
  * @param value Header value. */
-static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
-                    const char* value) {
-  if (!c->arena) return;
+static void map_set(csilk_ctx_t *c, csilk_header_map_t *map, const char *key,
+                    const char *value) {
+  if (!c->arena)
+    return;
   uint32_t bucket = hash_key(key);
-  csilk_header_t* h = map->buckets[bucket];
+  csilk_header_t *h = map->buckets[bucket];
   while (h) {
     if (strcasecmp(h->key, key) == 0) {
       h->value = csilk_arena_strdup(c->arena, value);
@@ -60,7 +62,7 @@ static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
     h = h->next;
   }
 
-  csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
+  csilk_header_t *new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
   if (new_h) {
     new_h->key = csilk_arena_strdup(c->arena, key);
     new_h->value = csilk_arena_strdup(c->arena, value);
@@ -74,11 +76,12 @@ static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
  * @param map Header hash map.
  * @param key Header key.
  * @param value Header value. */
-static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
-                    const char* value) {
-  if (!c->arena) return;
+static void map_add(csilk_ctx_t *c, csilk_header_map_t *map, const char *key,
+                    const char *value) {
+  if (!c->arena)
+    return;
   uint32_t bucket = hash_key(key);
-  csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
+  csilk_header_t *new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
   if (new_h) {
     new_h->key = csilk_arena_strdup(c->arena, key);
     new_h->value = csilk_arena_strdup(c->arena, value);
@@ -88,8 +91,9 @@ static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
 }
 
 /** @brief Advance to the next handler in the chain. */
-void csilk_next(csilk_ctx_t* c) {
-  if (c->aborted) return;
+void csilk_next(csilk_ctx_t *c) {
+  if (c->aborted)
+    return;
   c->handler_index++;
   if (c->handlers[c->handler_index] != NULL) {
     c->handlers[c->handler_index](c);
@@ -97,14 +101,14 @@ void csilk_next(csilk_ctx_t* c) {
 }
 
 /** @brief Abort the handler chain immediately. */
-void csilk_abort(csilk_ctx_t* c) { c->aborted = 1; }
+void csilk_abort(csilk_ctx_t *c) { c->aborted = 1; }
 
 /** @brief Set the HTTP response status code. */
-void csilk_status(csilk_ctx_t* c, int status) { c->response.status = status; }
+void csilk_status(csilk_ctx_t *c, int status) { c->response.status = status; }
 
 /** @brief Set response body as plain text with status code.
  * Memory handled by arena if available, else strdup. */
-void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
+void csilk_string(csilk_ctx_t *c, int status, const char *msg) {
   c->response.status = status;
   size_t msg_len = msg ? strlen(msg) : 0;
   if (c->arena) {
@@ -113,9 +117,9 @@ void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
     c->response.body_is_managed = 0;
   } else {
     if (c->response.body && c->response.body_is_managed) {
-      free((void*)c->response.body);
+      free((void *)c->response.body);
     }
-    char* body = msg ? strdup(msg) : NULL;
+    char *body = msg ? strdup(msg) : NULL;
     c->response.body = body;
     c->response.body_len = body ? msg_len : 0;
     c->response.body_is_managed = body ? 1 : 0;
@@ -123,7 +127,7 @@ void csilk_string(csilk_ctx_t* c, int status, const char* msg) {
 }
 
 /** @brief Get a URL path parameter by name. */
-const char* csilk_get_param(csilk_ctx_t* c, const char* key) {
+const char *csilk_get_param(csilk_ctx_t *c, const char *key) {
   for (int i = 0; i < c->params_count; i++) {
     if (strcmp(c->params[i].key, key) == 0) {
       return c->params[i].value;
@@ -133,30 +137,31 @@ const char* csilk_get_param(csilk_ctx_t* c, const char* key) {
 }
 
 /** @brief Get a request header value (case-insensitive). */
-const char* csilk_get_header(csilk_ctx_t* c, const char* key) {
+const char *csilk_get_header(csilk_ctx_t *c, const char *key) {
   return map_get(&c->request.headers, key);
 }
 
 /** @brief Get a query parameter value. */
-const char* csilk_get_query(csilk_ctx_t* c, const char* key) {
+const char *csilk_get_query(csilk_ctx_t *c, const char *key) {
   return map_get(&c->request.query_params, key);
 }
 
 /** @brief Set a request header (overwrites existing). */
-void csilk_set_request_header(csilk_ctx_t* c, const char* key,
-                              const char* value) {
+void csilk_set_request_header(csilk_ctx_t *c, const char *key,
+                              const char *value) {
   map_set(c, &c->request.headers, key, value);
 }
 
 /** @brief Set a response header (overwrites existing). */
-void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value) {
+void csilk_set_header(csilk_ctx_t *c, const char *key, const char *value) {
   map_set(c, &c->response.headers, key, value);
 }
 
 /** @brief Clean up request context resources between requests.
  * Resets arena, frees params/body/path, clears headers and storage. */
-void csilk_ctx_cleanup(csilk_ctx_t* c) {
-  if (!c) return;
+void csilk_ctx_cleanup(csilk_ctx_t *c) {
+  if (!c)
+    return;
 
   if (c->arena) {
     csilk_arena_reset(c->arena);
@@ -183,15 +188,12 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
 
   if (c->response.body && c->response.body_is_managed) {
-    free((void*)c->response.body);
+    free((void *)c->response.body);
     c->response.body = NULL;
     c->response.body_is_managed = 0;
   }
 
-  for (int i = 0; i < c->storage_count; i++) {
-    free(c->storage[i].key);
-  }
-  c->storage_count = 0;
+  c->storage_head = NULL;
 
   c->aborted = 0;
   c->is_websocket = 0;
@@ -200,74 +202,125 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->handler_index = -1;
 }
 
+const char *csilk_get_method(csilk_ctx_t *c) {
+  return c ? c->request.method : NULL;
+}
+
+const char *csilk_get_path(csilk_ctx_t *c) {
+  return c ? c->request.path : NULL;
+}
+
+const char *csilk_get_body(csilk_ctx_t *c, size_t *out_len) {
+  if (out_len)
+    *out_len = c ? c->request.body_len : 0;
+  return c ? c->request.body : NULL;
+}
+
+size_t csilk_get_body_len(csilk_ctx_t *c) {
+  return c ? c->request.body_len : 0;
+}
+
+int csilk_is_websocket(csilk_ctx_t *c) { return c ? c->is_websocket : 0; }
+
+int csilk_is_sse(csilk_ctx_t *c) { return c ? c->is_sse : 0; }
+
+int csilk_is_aborted(csilk_ctx_t *c) { return c ? c->aborted : 0; }
+
+void csilk_set_on_ws_message(csilk_ctx_t *c,
+                             void (*cb)(csilk_ctx_t *c, const uint8_t *payload,
+                                        size_t len, int opcode)) {
+  if (c)
+    c->on_ws_message = cb;
+}
+
 /** @brief Store a value in the context storage. */
-void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
-  if (!c || !key) return;
-  for (int i = 0; i < c->storage_count; i++) {
-    if (strcmp(c->storage[i].key, key) == 0) {
-      c->storage[i].value = value;
+void csilk_set(csilk_ctx_t *c, const char *key, void *value) {
+  if (!c || !key || !c->arena)
+    return;
+
+  csilk_storage_item_t *item = c->storage_head;
+  while (item) {
+    if (strcmp(item->key, key) == 0) {
+      item->value = value;
       return;
     }
+    item = item->next;
   }
-  if (c->storage_count < CSILK_MAX_STORAGE) {
-    c->storage[c->storage_count].key = strdup(key);
-    c->storage[c->storage_count].value = value;
-    c->storage_count++;
+
+  csilk_storage_item_t *new_item =
+      csilk_arena_alloc(c->arena, sizeof(csilk_storage_item_t));
+  if (new_item) {
+    new_item->key = csilk_arena_strdup(c->arena, key);
+    new_item->value = value;
+    new_item->next = c->storage_head;
+    c->storage_head = new_item;
   }
 }
 
 /** @brief Retrieve a value from the context storage. */
-void* csilk_get(csilk_ctx_t* c, const char* key) {
-  if (!c || !key) return NULL;
-  for (int i = 0; i < c->storage_count; i++) {
-    if (strcmp(c->storage[i].key, key) == 0) {
-      return c->storage[i].value;
+void *csilk_get(csilk_ctx_t *c, const char *key) {
+  if (!c || !key)
+    return NULL;
+  csilk_storage_item_t *item = c->storage_head;
+  while (item) {
+    if (strcmp(item->key, key) == 0) {
+      return item->value;
     }
+    item = item->next;
   }
   return NULL;
 }
 
 /** @brief Parse request body as JSON. */
-cJSON* csilk_bind_json(csilk_ctx_t* c) {
-  if (!c || !c->request.body) return NULL;
+cJSON *csilk_bind_json(csilk_ctx_t *c) {
+  if (!c || !c->request.body)
+    return NULL;
   return cJSON_Parse(c->request.body);
 }
 
 /** @brief Parse request body as JSON with detailed error feedback. */
-cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error) {
-  if (error) *error = NULL;
+cJSON *csilk_bind_json_err(csilk_ctx_t *c, const char **error) {
+  if (error)
+    *error = NULL;
   if (!c) {
-    if (error) *error = "Null context";
+    if (error)
+      *error = "Null context";
     return NULL;
   }
   if (!c->request.body) {
-    if (error) *error = "No request body";
+    if (error)
+      *error = "No request body";
     return NULL;
   }
-  cJSON* json = cJSON_Parse(c->request.body);
+  cJSON *json = cJSON_Parse(c->request.body);
   if (!json) {
-    if (error) *error = cJSON_GetErrorPtr();
-    if (error && !*error) *error = "Invalid JSON";
+    if (error)
+      *error = cJSON_GetErrorPtr();
+    if (error && !*error)
+      *error = "Invalid JSON";
     return NULL;
   }
   return json;
 }
 
 /** @brief Get a cookie value by name. */
-const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
-  if (!c || !name || !c->arena) return NULL;
-  const char* cookie_header = csilk_get_header(c, "Cookie");
-  if (!cookie_header) return NULL;
+const char *csilk_get_cookie(csilk_ctx_t *c, const char *name) {
+  if (!c || !name || !c->arena)
+    return NULL;
+  const char *cookie_header = csilk_get_header(c, "Cookie");
+  if (!cookie_header)
+    return NULL;
 
-  char* cookies = strdup(cookie_header);
-  if (!cookies) return NULL;
+  char *cookies = strdup(cookie_header);
+  if (!cookies)
+    return NULL;
 
-  char* saveptr;
-  char* cookie = strtok_r(cookies, "; ", &saveptr);
-  const char* result = NULL;
+  char *saveptr;
+  char *cookie = strtok_r(cookies, "; ", &saveptr);
+  const char *result = NULL;
 
   while (cookie) {
-    char* eq = strchr(cookie, '=');
+    char *eq = strchr(cookie, '=');
     if (eq) {
       *eq = '\0';
       if (strcmp(cookie, name) == 0) {
@@ -285,21 +338,25 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
 }
 
 /** @brief Add a response header (allows multiple values for same key). */
-void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value) {
+void csilk_add_header(csilk_ctx_t *c, const char *key, const char *value) {
   map_add(c, &c->response.headers, key, value);
 }
 
 /** @brief Set a cookie in the response. */
-void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
-                      int max_age, const char* path, const char* domain,
+void csilk_set_cookie(csilk_ctx_t *c, const char *name, const char *value,
+                      int max_age, const char *path, const char *domain,
                       int secure, int http_only) {
-  if (!c->arena) return;
+  if (!c->arena)
+    return;
   size_t buf_size = strlen(name) + strlen(value) + 256; // 256 for attributes
-  if (path) buf_size += strlen(path);
-  if (domain) buf_size += strlen(domain);
+  if (path)
+    buf_size += strlen(path);
+  if (domain)
+    buf_size += strlen(domain);
 
-  char* buf = csilk_arena_alloc(c->arena, buf_size);
-  if (!buf) return;
+  char *buf = csilk_arena_alloc(c->arena, buf_size);
+  if (!buf)
+    return;
 
   int pos = snprintf(buf, buf_size, "%s=%s", name, value);
 
@@ -331,19 +388,20 @@ void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
 }
 
 /** @brief Send a JSON response (cJSON object is freed by this call). */
-void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
-  if (!c || !json) return;
+void csilk_json(csilk_ctx_t *c, int status, cJSON *json) {
+  if (!c || !json)
+    return;
 
   c->response.status = status;
   csilk_set_header(c, "Content-Type", "application/json");
 
   if (c->response.body && c->response.body_is_managed) {
-    free((void*)c->response.body);
+    free((void *)c->response.body);
     c->response.body = NULL;
     c->response.body_is_managed = 0;
   }
 
-  char* body = cJSON_PrintUnformatted(json);
+  char *body = cJSON_PrintUnformatted(json);
   if (body) {
     c->response.body = body;
     c->response.body_len = strlen(body);
@@ -353,29 +411,34 @@ void csilk_json(csilk_ctx_t* c, int status, cJSON* json) {
 }
 
 /** @brief Send a JSON error response with "error" field. */
-void csilk_json_error(csilk_ctx_t* c, int status, const char* message) {
-  if (!c) return;
-  cJSON* err = cJSON_CreateObject();
-  if (!err) return;
+void csilk_json_error(csilk_ctx_t *c, int status, const char *message) {
+  if (!c)
+    return;
+  cJSON *err = cJSON_CreateObject();
+  if (!err)
+    return;
   cJSON_AddStringToObject(err, "error", message ? message : "Unknown error");
   csilk_json(c, status, err);
 }
 
 /** @brief Bind request body JSON to a registered struct via reflection. */
-int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr) {
-  if (!c || !c->request.body || !type_name || !ptr) return 0;
+int csilk_bind_reflect(csilk_ctx_t *c, const char *type_name, void *ptr) {
+  if (!c || !c->request.body || !type_name || !ptr)
+    return 0;
   return csilk_json_unmarshal(type_name, c->request.body, ptr);
 }
 
 /** @brief Send a JSON response from a registered struct via reflection. */
-void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr) {
-  if (!c || !type_name || !ptr) return;
-  char* json_str = csilk_json_marshal(type_name, ptr);
+void csilk_json_reflect(csilk_ctx_t *c, int status, const char *type_name,
+                        const void *ptr) {
+  if (!c || !type_name || !ptr)
+    return;
+  char *json_str = csilk_json_marshal(type_name, ptr);
   if (json_str) {
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
     if (c->response.body && c->response.body_is_managed) {
-      free((void*)c->response.body);
+      free((void *)c->response.body);
     }
     c->response.body = json_str;
     c->response.body_len = strlen(json_str);
@@ -384,45 +447,67 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const
 }
 
 /** @brief Send an HTTP redirect response. */
-void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
-  if (!c || !location) return;
+void csilk_redirect(csilk_ctx_t *c, int status, const char *location) {
+  if (!c || !location)
+    return;
   c->response.status = status;
   csilk_set_header(c, "Location", location);
 
-  const char* body;
+  const char *body;
   switch (status) {
-    case 301: body = "Moved Permanently"; break;
-    case 302: body = "Found";             break;
-    case 303: body = "See Other";         break;
-    case 307: body = "Temporary Redirect";break;
-    case 308: body = "Permanent Redirect";break;
-    default:  body = "Redirect";          break;
+  case 301:
+    body = "Moved Permanently";
+    break;
+  case 302:
+    body = "Found";
+    break;
+  case 303:
+    body = "See Other";
+    break;
+  case 307:
+    body = "Temporary Redirect";
+    break;
+  case 308:
+    body = "Permanent Redirect";
+    break;
+  default:
+    body = "Redirect";
+    break;
   }
   csilk_string(c, status, body);
 }
 
 /** @brief Parse a raw query string into the context's query_params map. */
-void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
-  if (!query_string || *query_string == '\0' || !c->arena) return;
+void csilk_parse_query(csilk_ctx_t *c, const char *query_string) {
+  if (!query_string || *query_string == '\0' || !c->arena)
+    return;
 
-  char* qs = strdup(query_string);
-  if (!qs) return;
+  char *qs = strdup(query_string);
+  if (!qs)
+    return;
 
-  char* pos = qs;
+  char *pos = qs;
   while (pos && *pos) {
-    char* amp = strchr(pos, '&');
-    if (amp) *amp = '\0';
+    char *amp = strchr(pos, '&');
+    if (amp)
+      *amp = '\0';
 
-    char* eq = strchr(pos, '=');
-    char* key = pos;
-    char* value = "";
+    char *eq = strchr(pos, '=');
+    char *key = pos;
+    char *value = NULL;
 
     if (eq) {
       *eq = '\0';
       value = eq + 1;
+    } else {
+      value = "";
     }
 
     if (*key != '\0') {
+      csilk_url_decode(key);
+      if (value && *value != '\0') {
+        csilk_url_decode(value);
+      }
       map_add(c, &c->request.query_params, key, value);
     }
 

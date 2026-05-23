@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 /**
  * @file advanced_server.c
  * @brief Advanced server example with route groups, WebSocket, and auth middleware.
@@ -130,6 +131,7 @@ int main() {
     csilk_group_free(api);
     csilk_group_free(root);
     csilk_router_free(router);
+    csilk_config_free(&cfg);
     
     return 0;
 }

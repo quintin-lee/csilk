@@ -84,10 +84,11 @@ static csilk_group_t* find_or_create_group(csilk_app_t* app,
  * Dispatches to csilk_static based on URL prefix.
  * @param c The request context. */
 static void static_serve(csilk_ctx_t* c) {
-    const char* path = c->request.path;
+    const char* path = csilk_get_path(c);
     for (int i = 0; i < g_static_n; i++) {
         size_t plen = strlen(g_static[i].url_prefix);
         if (!strncmp(path, g_static[i].url_prefix, plen)) {
+            csilk_set(c, "static_prefix", (void*)g_static[i].url_prefix);
             csilk_static(c, g_static[i].root_dir);
             return;
         }
@@ -119,7 +120,9 @@ csilk_app_t* csilk_app_new(const char* config_path) {
         app->config.server.tcp_nodelay     = 1;
     }
 
-    csilk_log_init(app->config.logger);
+    if (csilk_log_init(app->config.logger) != 0) {
+        goto fail;
+    }
 
     app->router     = csilk_router_new();
     app->server     = csilk_server_new(app->router);
@@ -161,7 +164,7 @@ void csilk_app_free(csilk_app_t* app) {
 void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t lv) {
     if (!app) return;
     app->config.logger.level = lv;
-    csilk_log_init(app->config.logger);
+    (void)csilk_log_init(app->config.logger);
 }
 
 /** @brief Enable file logging with optional rotation size. */
@@ -171,14 +174,14 @@ void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
         free((void*)app->config.logger.file_path);
     app->config.logger.file_path    = path ? strdup(path) : NULL;
     app->config.logger.max_file_size = max_sz;
-    csilk_log_init(app->config.logger);
+    (void)csilk_log_init(app->config.logger);
 }
 
 /** @brief Enable or disable JSON structured log output. */
 void csilk_app_log_json(csilk_app_t* app, int enable) {
     if (!app) return;
     app->config.logger.json_format = enable;
-    csilk_log_init(app->config.logger);
+    (void)csilk_log_init(app->config.logger);
 }
 
 /* ---- middleware ---- */

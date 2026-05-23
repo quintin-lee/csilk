@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -137,6 +138,8 @@ int main() {
 
     close(sock);
     csilk_server_stop(g_server);
+    // Give the server thread a moment to process the stop async and close handles
+    usleep(200000); 
     pthread_join(thread, NULL);
 
     printf("Keep-alive test: %d passed, %d failed\n", passed, failed);

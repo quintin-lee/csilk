@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <uv.h>
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Maximum number of IP addresses to track. */
 #define MAX_IP_ENTRIES 1024

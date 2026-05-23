@@ -68,8 +68,8 @@ void csilk_sha1_init(csilk_sha1_ctx* context) {
 
 /** @brief Feed data into the SHA1 hashing context. */
 void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len) {
-    uint32_t i, j;
-    j = context->count[0];
+    uint32_t j = context->count[0];
+    // context->count stores bytes, not bits, in the original implementation
     if ((context->count[0] += (uint32_t)len) < j) context->count[1]++;
     
     j %= 64;
@@ -92,7 +92,7 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
 /** @brief Finalize SHA1 hash and produce the 20-byte digest. */
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
     uint8_t finalcount[8];
-    uint64_t total_bits = (uint64_t)context->count[0] * 8;
+    uint64_t total_bits = ((uint64_t)context->count[1] << 32 | context->count[0]) * 8;
     for (int i = 0; i < 8; i++) finalcount[i] = (uint8_t)((total_bits >> (56 - i * 8)) & 0xFF);
     
     uint32_t left = (context->count[0] % 64);

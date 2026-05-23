@@ -11,6 +11,7 @@
 #include <zlib.h>
 #include "csilk.h"
 #include "csilk_internal.h"
+#include "csilk_internal.h"
 
 #define CSILK_GZIP_CHUNK 16384
 #define CSILK_GZIP_MIN_LENGTH 1024

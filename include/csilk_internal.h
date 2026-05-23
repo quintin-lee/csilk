@@ -9,6 +9,40 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <setjmp.h>
+#include <uv.h>
+
+#include "csilk.h"
+
+/** @brief Item in context's custom key-value storage. */
+typedef struct csilk_storage_item_s {
+  char* key;               /**< Item key name. */
+  void* value;             /**< Pointer to user data. */
+  struct csilk_storage_item_s* next; /**< Next item in the linked list. */
+} csilk_storage_item_t;
+
+/** @brief Main Request Context.
+ * Holds all information about the current HTTP request/response.
+ */
+struct csilk_ctx_s {
+  int handler_index;        /**< Index of current handler in the chain. */
+  csilk_handler_t* handlers;  /**< NULL terminated array of handlers. */
+  int aborted;              /**< Flag if execution was aborted. */
+  jmp_buf jump_buffer;      /**< Buffer for recovery (panic handling). */
+  int has_jump_buffer;      /**< Flag if jump_buffer is active. */
+  csilk_arena_t* arena;       /**< Request-scoped arena allocator. */
+  csilk_request_t request;    /**< Request data. */
+  csilk_response_t response;  /**< Response data. */
+  csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters array. */
+  int params_count;         /**< Current number of path parameters. */
+  int is_websocket;         /**< Flag if connection is upgraded to WebSocket. */
+  int is_sse;               /**< Flag if connection is Server-Sent Events. */
+  void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode); /**< WebSocket message callback. */
+  csilk_storage_item_t* storage_head; /**< Head of key-value storage list. */
+  void* _internal_client;   /**< Internal client pointer (DO NOT USE). */
+  uv_work_t work_req;       /**< Worker request for async operations. */
+  int is_async;             /**< Flag if the response will be sent asynchronously. */
+};
 
 /** @brief SHA1 hashing context. */
 typedef struct {
@@ -47,5 +81,10 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread);
 /** @brief Internal: Trigger response sending (used for async offloading).
  * @param c Request context. */
 void _csilk_send_response(csilk_ctx_t* c);
+
+/** @brief URL decode a string in-place.
+ * @param str The string to decode.
+ * @return The length of the decoded string. */
+size_t csilk_url_decode(char* str);
 
 #endif

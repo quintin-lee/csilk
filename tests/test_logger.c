@@ -1,3 +1,4 @@
+#include "csilk_internal.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

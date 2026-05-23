@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Panic recovery middleware — catches longjmp panics and returns 500. */
 void csilk_recovery_handler(csilk_ctx_t* c) {

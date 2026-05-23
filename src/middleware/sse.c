@@ -10,6 +10,7 @@
 #include <string.h>
 #include <uv.h>
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief SSE write completion callback. @param req Write request. @param status Write status. */
 static void on_sse_write(uv_write_t* req, int status) {

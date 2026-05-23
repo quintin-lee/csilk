@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "csilk.h"
+#include "csilk_internal.h"
 
 /** @brief Maximum number of children per router tree node. */
 #define CSILK_MAX_CHILDREN 128

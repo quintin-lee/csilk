@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 #include "csilk.h"
+#include "csilk_internal.h"
 #include "csilk_reflect.h"
 
 /* ---- reflectable request-log struct ---- */
@@ -46,8 +47,8 @@ void csilk_logger_handler(csilk_ctx_t* c) {
     double duration =
         (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
-    const char* method = c->request.method ? c->request.method : "UNKNOWN";
-    const char* path   = c->request.path   ? c->request.path   : "UNKNOWN";
+    const char* method = csilk_get_method(c) ? csilk_get_method(c) : "UNKNOWN";
+    const char* path   = csilk_get_path(c)   ? csilk_get_path(c)   : "UNKNOWN";
 
     if (csilk_log_is_json()) {
         csilk_req_log_t rl;

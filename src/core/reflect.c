@@ -17,11 +17,18 @@ static size_t g_registry_count = 0;
 static uv_mutex_t g_registry_mutex;
 static int g_registry_mutex_init = 0;
 
-/** @brief Lock the reflection registry mutex (lazy init). */
-static void registry_lock(void) {
+/** @brief Initialize the reflection system. */
+void csilk_reflect_init(void) {
     if (!g_registry_mutex_init) {
         uv_mutex_init(&g_registry_mutex);
         g_registry_mutex_init = 1;
+    }
+}
+
+/** @brief Lock the reflection registry mutex. */
+static void registry_lock(void) {
+    if (!g_registry_mutex_init) {
+        csilk_reflect_init();
     }
     uv_mutex_lock(&g_registry_mutex);
 }

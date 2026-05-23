@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "csilk.h"
+#include "csilk_internal.h"
 
 #define CSILK_MAX_PART_HEADERS 32
 #define CSILK_MAX_PART_NAME 128
@@ -16,7 +17,7 @@
 
 /** @brief Parse multipart/form-data request body and invoke handler for each part. */
 void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
-    if (!c || !c->request.body || !handler) return;
+    if (!c || !csilk_get_body(c, NULL) || !handler) return;
 
     const char* content_type = csilk_get_header(c, "Content-Type");
     if (!content_type) return;
@@ -33,8 +34,8 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
 
     size_t end_delim_len = delim_len + 2; // --boundary--
 
-    const char* data = c->request.body;
-    size_t data_len = c->request.body_len;
+    const char* data = csilk_get_body(c, NULL);
+    size_t data_len = csilk_get_body_len(c);
 
     const char* pos = data;
 
