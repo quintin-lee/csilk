@@ -12,12 +12,20 @@
 
 #include "gin.h"
 
+/** @brief Default server config. */
+#define GIN_DEFAULT_IDLE_TIMEOUT  5000
+#define GIN_DEFAULT_MAX_BODY_SIZE (1024 * 1024)
+#define GIN_DEFAULT_LISTEN_BACKLOG 128
+
 /** @brief Server structure. */
 struct gin_server_s {
   uv_loop_t* loop;
   gin_router_t* router;
   uv_tcp_t server_handle;
+  uv_signal_t sig_handle;
+  uv_async_t async_handle;
   llhttp_settings_t settings;
+  gin_server_config_t config;
 };
 
 /** @brief Client connection structure. */
@@ -38,13 +46,9 @@ typedef struct {
  * @param buf Pointer to the buffer. */
 static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
                          uv_buf_t* buf) {
-    (void)handle;
-    buf->base = malloc(suggested_size);
-    if (buf->base == NULL) {
-        buf->len = 0;
-    } else {
-        buf->len = suggested_size;
-    }
+  (void)handle;
+  buf->base = (char*)malloc(suggested_size);
+  buf->len = suggested_size;
 }
 
 /**
@@ -61,17 +65,47 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
  */
 static void on_close(uv_handle_t* handle) {
   gin_client_t* client = (gin_client_t*)handle->data;
-  gin_ctx_cleanup(&client->ctx);
-  if (client->current_url) {
-    free(client->current_url);
-  }
-  if (client->current_header_field) {
+  if (client) {
+    uv_timer_stop(&client->timer);
+    gin_ctx_cleanup(&client->ctx);
+    free(client->ctx.response.headers);
     free(client->current_header_field);
-  }
-  if (client->current_header_value) {
     free(client->current_header_value);
+    free(client);
   }
-  free(client);
+}
+
+/**
+ * @brief Signal handler for graceful shutdown.
+ * @param handle Signal handle.
+ * @param signum Signal number.
+ */
+static void on_signal(uv_signal_t* handle, int signum) {
+  gin_server_t* server = (gin_server_t*)handle->data;
+  printf("\nReceived signal %d, shutting down...\n", signum);
+  fflush(stdout);
+  uv_signal_stop(handle);
+  if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
+    uv_close((uv_handle_t*)&server->server_handle, NULL);
+  }
+  if (!uv_is_closing((uv_handle_t*)&server->async_handle)) {
+    uv_close((uv_handle_t*)&server->async_handle, NULL);
+  }
+}
+
+/**
+ * @brief Async callback for thread-safe shutdown.
+ * @param handle Async handle.
+ */
+static void on_async_stop(uv_async_t* handle) {
+  gin_server_t* server = (gin_server_t*)handle->data;
+  if (!uv_is_closing((uv_handle_t*)&server->sig_handle)) {
+    uv_close((uv_handle_t*)&server->sig_handle, NULL);
+  }
+  if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
+    uv_close((uv_handle_t*)&server->server_handle, NULL);
+  }
+  uv_close((uv_handle_t*)handle, NULL);
 }
 
 /**
@@ -207,7 +241,7 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
  */
 static int on_body(llhttp_t* p, const char* at, size_t length) {
   gin_client_t* client = (gin_client_t*)p->data;
-  if (client->ctx.request.body_len + length > 1024 * 1024) {
+  if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
     return HPE_USER;
   }
 
@@ -252,13 +286,19 @@ static int on_message_complete(llhttp_t* p) {
     client->current_header_value = NULL;
   }
 
-  client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
+    client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
+    printf("Request: %s %s\n", client->ctx.request.method, client->ctx.request.path);
+    fflush(stdout);
 
-  if (gin_router_match_ctx(client->server->router, &client->ctx)) {
-    gin_next(&client->ctx);
-  } else {
-    gin_string(&client->ctx, 404, "Not Found");
-  }
+    if (gin_router_match_ctx(client->server->router, &client->ctx)) {
+        printf("Route matched, calling next handler\n");
+        fflush(stdout);
+        gin_next(&client->ctx);
+    } else {
+        printf("Route not found\n");
+        fflush(stdout);
+        gin_string(&client->ctx, 404, "Not Found");
+    }
 
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
   const char* status_text = "OK";
@@ -292,38 +332,46 @@ static int on_message_complete(llhttp_t* p) {
       break;
   }
 
+  size_t custom_headers_len = 0;
+  for (gin_header_t* h = client->ctx.response.headers; h; h = h->next) {
+    custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+  }
+
   size_t body_len =
       client->ctx.response.body ? strlen(client->ctx.response.body) : 0;
   const char* body = client->ctx.response.body ? client->ctx.response.body : "";
 
   int keep_alive = llhttp_should_keep_alive(p);
+  const char* connection_val = keep_alive ? "keep-alive" : "close";
 
-  int len = snprintf(NULL, 0,
+  int header_len = snprintf(NULL, 0,
                      "HTTP/1.1 %d %s\r\n"
                      "Content-Length: %zu\r\n"
-                     "Connection: %s\r\n"
-                     "\r\n"
-                     "%s",
-                     status, status_text, body_len,
-                     keep_alive ? "keep-alive" : "close", body);
+                     "Connection: %s\r\n",
+                     status, status_text, body_len, connection_val);
 
-  if (len < 0) {
-    return 0;
-  }
+  if (header_len < 0) return 0;
+
+  size_t response_len = (size_t)header_len + custom_headers_len + 2 + body_len;
 
   uv_write_t* req = malloc(sizeof(uv_write_t));
   if (req) {
-    char* write_base = malloc(len + 1);
+    char* write_base = malloc(response_len + 1);
     if (write_base) {
-      snprintf(write_base, len + 1,
+      int pos = snprintf(write_base, response_len + 1,
                "HTTP/1.1 %d %s\r\n"
                "Content-Length: %zu\r\n"
-               "Connection: %s\r\n"
-               "\r\n"
-               "%s",
-               status, status_text, body_len,
-               keep_alive ? "keep-alive" : "close", body);
-      uv_buf_t buf = uv_buf_init(write_base, len);
+               "Connection: %s\r\n",
+               status, status_text, body_len, connection_val);
+
+      for (gin_header_t* h = client->ctx.response.headers; h; h = h->next) {
+        pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
+                        "%s: %s\r\n", h->key, h->value);
+      }
+
+      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+
+      uv_buf_t buf = uv_buf_init(write_base, response_len);
       req->data = write_base;
       uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
     } else {
@@ -332,8 +380,7 @@ static int on_message_complete(llhttp_t* p) {
   }
 
   if (keep_alive) {
-    llhttp_reset(p);
-    uv_timer_start(&client->timer, on_timeout, 5000, 0);
+    uv_timer_start(&client->timer, on_timeout, client->server->config.idle_timeout_ms, 0);
   } else {
     if (!uv_is_closing((uv_handle_t*)&client->handle)) {
       uv_close((uv_handle_t*)&client->handle, on_close);
@@ -358,7 +405,6 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (!client) return;
 
   client->server = server;
-  client->parser.data = client;
   int r = uv_tcp_init(server->loop, &client->handle);
   if (r < 0) {
     fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
@@ -369,6 +415,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
+    client->parser.data = client;
     uv_timer_init(server->loop, &client->timer);
     client->timer.data = client;
 
@@ -393,10 +440,12 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   gin_client_t* client = (gin_client_t*)stream->data;
   uv_timer_stop(&client->timer);
-
   if (nread > 0) {
     enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
-    if (err != HPE_OK) {
+    if (err == HPE_CLOSED_CONNECTION) {
+      llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
+      client->parser.data = client;
+    } else if (err != HPE_OK) {
       fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
               client->parser.reason);
       if (!uv_is_closing((uv_handle_t*)stream)) {
@@ -435,6 +484,10 @@ gin_server_t* gin_server_new(gin_router_t* router) {
   s->settings.on_header_value = on_header_value;
   s->settings.on_body = on_body;
   s->settings.on_message_complete = on_message_complete;
+  s->config.idle_timeout_ms = GIN_DEFAULT_IDLE_TIMEOUT;
+  s->config.max_body_size = GIN_DEFAULT_MAX_BODY_SIZE;
+  s->config.listen_backlog = GIN_DEFAULT_LISTEN_BACKLOG;
+  s->sig_handle.data = s;
   return s;
 }
 
@@ -450,36 +503,68 @@ void gin_server_free(gin_server_t* server) {
   }
 }
 
+/** @brief Stop the server gracefully (thread-safe).
+ * @param server The server to stop. */
+void gin_server_stop(gin_server_t* server) {
+  if (!server) return;
+  uv_async_send(&server->async_handle);
+}
+
+/** @brief Configure server parameters.
+ * @param server The server.
+ * @param config The config struct. */
+void gin_server_set_config(gin_server_t* server, gin_server_config_t config) {
+  if (!server) return;
+  if (config.idle_timeout_ms > 0)    server->config.idle_timeout_ms = config.idle_timeout_ms;
+  if (config.max_body_size > 0)      server->config.max_body_size = config.max_body_size;
+  if (config.listen_backlog > 0)     server->config.listen_backlog = config.listen_backlog;
+}
+
 /** @brief Run the server.
  * @param server The server.
  * @param port The port to listen on.
  * @return 0 on success, -1 on failure. */
 int gin_server_run(gin_server_t* server, int port) {
-  int r = uv_tcp_init(server->loop, &server->server_handle);
-  if (r < 0) {
-    fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
-    return r;
-  }
-  server->server_handle.data = server;
+    int r = uv_tcp_init(server->loop, &server->server_handle);
+    if (r < 0) {
+        fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
+        return r;
+    }
+    server->server_handle.data = server;
 
-  struct sockaddr_in addr;
-  r = uv_ip4_addr("0.0.0.0", port, &addr);
-  if (r < 0) {
-    fprintf(stderr, "uv_ip4_addr error %s\n", uv_strerror(r));
-    return r;
-  }
+    struct sockaddr_in addr;
+    r = uv_ip4_addr("0.0.0.0", port, &addr);
+    if (r < 0) {
+        fprintf(stderr, "uv_ip4_addr error %s\n", uv_strerror(r));
+        return r;
+    }
 
-  r = uv_tcp_bind(&server->server_handle, (const struct sockaddr*)&addr, 0);
-  if (r < 0) {
-    fprintf(stderr, "uv_tcp_bind error %s\n", uv_strerror(r));
-    return r;
-  }
+    r = uv_tcp_bind(&server->server_handle, (const struct sockaddr*)&addr, 0);
+    if (r < 0) {
+        fprintf(stderr, "uv_tcp_bind error %s\n", uv_strerror(r));
+        return r;
+    }
 
-  r = uv_listen((uv_stream_t*)&server->server_handle, 128, on_new_connection);
-  if (r < 0) {
-    fprintf(stderr, "uv_listen error %s\n", uv_strerror(r));
-    return r;
-  }
+    r = uv_listen((uv_stream_t*)&server->server_handle, server->config.listen_backlog, on_new_connection);
+    if (r < 0) {
+        fprintf(stderr, "uv_listen error %s\n", uv_strerror(r));
+        return r;
+    }
 
-  return uv_run(server->loop, UV_RUN_DEFAULT);
+    server->async_handle.data = server;
+    uv_async_init(server->loop, &server->async_handle, on_async_stop);
+
+    uv_signal_init(server->loop, &server->sig_handle);
+    uv_signal_start(&server->sig_handle, on_signal, SIGINT);
+    uv_signal_start(&server->sig_handle, on_signal, SIGTERM);
+
+    printf("Server listening on port %d\n", port);
+    fflush(stdout);
+
+    r = uv_run(server->loop, UV_RUN_DEFAULT);
+    
+    printf("Server stopped with result: %d\n", r);
+    fflush(stdout);
+    
+    return r;
 }

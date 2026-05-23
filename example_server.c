@@ -56,7 +56,6 @@ void login_handler(gin_ctx_t* c) {
         cJSON_AddStringToObject(response, "token", "secret123");
         cJSON_AddStringToObject(response, "message", "Login successful");
         gin_json(c, 200, response);
-        cJSON_Delete(response);
     } else {
         gin_string(c, 401, "Invalid credentials");
     }
@@ -94,7 +93,6 @@ void api_data_handler(gin_ctx_t* c) {
     cJSON_AddNumberToObject(data, "timestamp", (double)now);
     
     gin_json(c, 200, data);
-    cJSON_Delete(data);
 }
 
 // Custom middleware to add request ID
@@ -119,7 +117,7 @@ void request_timer_middleware(gin_ctx_t* c) {
     printf("[TIMER] Request processed in %.4f seconds\n", duration);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     printf("Starting C Gin Framework Example Server...\n");
     
     // Create router
@@ -140,7 +138,7 @@ int main() {
     // Add routes to API group
     gin_GET(api_group, "/data", api_data_handler);
     
-    // Create protected group with auth middleware
+    // Create protected group (auth will be handled in the handler)
     gin_group_t* protected_group = gin_group_new(router, "");
     if (!protected_group) {
         fprintf(stderr, "Failed to create protected group\n");
@@ -148,11 +146,6 @@ int main() {
         gin_router_free(router);
         return 1;
     }
-    
-    // Apply auth middleware to protected group
-    gin_group_use(protected_group, (gin_handler_t)gin_auth_middleware);
-    // Note: In a real implementation, we'd need to properly curry the validator function
-    // For this demo, we'll handle auth directly in the handler
     
     gin_GET(protected_group, "/protected", protected_handler);
     
@@ -176,8 +169,13 @@ int main() {
         return 1;
     }
     
-    // Run server on port 8080
-    printf("Server running on http://localhost:8080\n");
+    // Run server on port 8080, or use port from command line argument
+    int port = 8080;
+    if (argc > 1) {
+        port = atoi(argv[1]);
+        if (port <= 0) port = 8080;
+    }
+    printf("Server running on http://localhost:%d\n", port);
     printf("Try these endpoints:\n");
     printf("  GET  /\n");
     printf("  GET  /user/123\n");
@@ -186,7 +184,7 @@ int main() {
     printf("  GET  /api/data\n");
     printf("Press Ctrl+C to stop\n");
     
-    int result = gin_server_run(server, 8080);
+    int result = gin_server_run(server, port);
     
     // Cleanup
     gin_server_free(server);

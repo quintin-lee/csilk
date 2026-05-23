@@ -104,6 +104,18 @@ void gin_panic(gin_ctx_t* c);
  * @param c The request context. */
 void gin_logger_handler(gin_ctx_t* c);
 
+typedef struct {
+  const char* allow_origin;
+  const char* allow_methods;
+  const char* allow_headers;
+  int allow_credentials;
+  int max_age;
+} gin_cors_config_t;
+/** @brief CORS middleware.
+ * @param c The request context.
+ * @param config CORS configuration. */
+void gin_cors_middleware(gin_ctx_t* c, gin_cors_config_t config);
+
 typedef int (*gin_auth_validator_t)(const char* token);
 /** @brief Authentication middleware.
  * @param c The request context.
@@ -118,11 +130,21 @@ void gin_static(gin_ctx_t* c, const char* root_dir);
  * @param c The request context.
  * @return A cJSON pointer representing the parsed body, or NULL. */
 cJSON* gin_bind_json(gin_ctx_t* c);
+/** @brief Bind request body to JSON with error feedback.
+ * @param c The request context.
+ * @param error Optional pointer to store error message.
+ * @return A cJSON pointer, or NULL on failure (check *error). */
+cJSON* gin_bind_json_err(gin_ctx_t* c, const char** error);
 /** @brief Set JSON response body and status.
  * @param c The request context.
  * @param status The HTTP status code.
  * @param json The cJSON pointer to send as response. */
 void gin_json(gin_ctx_t* c, int status, cJSON* json);
+/** @brief Set a JSON error response with message.
+ * @param c The request context.
+ * @param status The HTTP status code.
+ * @param message The error message. */
+void gin_json_error(gin_ctx_t* c, int status, const char* message);
 
 /** @brief Internal helper to split URL path and query.
  * @param url The URL string.
@@ -209,6 +231,12 @@ void gin_group_free(gin_group_t* group);
 #define gin_HEAD(group, path, handler) \
   gin_group_add_route(group, "HEAD", path, handler)
 
+typedef struct gin_server_config_s {
+  unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms), default 5000 */
+  size_t max_body_size;            /**< Max request body size (bytes), default 1048576 */
+  int listen_backlog;              /**< TCP listen backlog, default 128 */
+} gin_server_config_t;
+
 typedef struct gin_server_s gin_server_t;
 /** @brief Create a new server.
  * @param router The router to be used by the server.
@@ -217,6 +245,13 @@ gin_server_t* gin_server_new(gin_router_t* router);
 /** @brief Free the server.
  * @param server The server to free. */
 void gin_server_free(gin_server_t* server);
+/** @brief Stop the server gracefully.
+ * @param server The server to stop. */
+void gin_server_stop(gin_server_t* server);
+/** @brief Configure server parameters.
+ * @param server The server.
+ * @param config The config struct. */
+void gin_server_set_config(gin_server_t* server, gin_server_config_t config);
 /** @brief Run the server.
  * @param server The server.
  * @param port The port to listen on.
