@@ -1,6 +1,8 @@
 /**
  * @file logger.c
  * @brief Thread-safe logging with JSON structured output, file rotation, ANSI colors.
+ *
+ * Uses the csilk reflection engine for JSON serialization of log entries.
  * @copyright MIT License
  * @version 0.2.0
  */
@@ -14,6 +16,45 @@
 #include <sys/stat.h>
 #include <uv.h>
 #include "csilk.h"
+#include "csilk_reflect.h"
+
+/* ---- reflectable log-entry struct ---- */
+
+typedef struct csilk_log_entry_s {
+    int64_t  time_epoch;   /**< unix timestamp */
+    char     level[8];     /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
+    char     file[64];     /**< source filename */
+    int32_t  line;         /**< source line number */
+    char     func[64];     /**< function name */
+    char     msg[1024];    /**< log message */
+} csilk_log_entry_t;
+
+#define LOG_ENTRY_MAP(X) \
+    X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64,  sizeof(int64_t),  0, false, NULL) \
+    X(csilk_log_entry_t, level,      CSILK_TYPE_STRING, 8,               0, false, NULL) \
+    X(csilk_log_entry_t, file,       CSILK_TYPE_STRING, 64,              0, false, NULL) \
+    X(csilk_log_entry_t, line,       CSILK_TYPE_INT32,  sizeof(int32_t), 0, false, NULL) \
+    X(csilk_log_entry_t, func,       CSILK_TYPE_STRING, 64,              0, false, NULL) \
+    X(csilk_log_entry_t, msg,        CSILK_TYPE_STRING, 1024,            0, false, NULL)
+
+CSILK_REGISTER_REFLECT(csilk_log_entry_t, LOG_ENTRY_MAP)
+
+/* ---- dynamic extra-fields struct (for csilk_log_with) ---- */
+
+#define LOG_EXTRA_MAX 16
+
+typedef struct csilk_log_extra_s {
+    char keys[LOG_EXTRA_MAX][32];
+    char vals[LOG_EXTRA_MAX][128];
+    int32_t count;
+} csilk_log_extra_t;
+
+#define LOG_EXTRA_MAP(X) \
+    X(csilk_log_extra_t, count, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)
+
+CSILK_REGISTER_REFLECT(csilk_log_extra_t, LOG_EXTRA_MAP)
+
+/* ---- internal logger state ---- */
 
 typedef struct {
     csilk_log_config_t config;
@@ -25,88 +66,90 @@ typedef struct {
 
 static csilk_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
 
-static const char* level_strings[] = {
+static const char* level_names[] = {
     "TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"
 };
 static const char* level_colors[] = {
     "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m"
 };
 
-/* ---- helper: print a JSON-safe escaped string ---- */
-static int fwrite_json_str(FILE* fp, const char* s) {
-    int n = 0;
-    n += fputc('"', fp);
-    for (; s && *s; s++) {
-        switch (*s) {
-        case '"':  n += fprintf(fp, "\\\""); break;
-        case '\\': n += fprintf(fp, "\\\\"); break;
-        case '\n': n += fprintf(fp, "\\n");  break;
-        case '\r': n += fprintf(fp, "\\r");  break;
-        case '\t': n += fprintf(fp, "\\t");  break;
-        default:   n += fputc(*s, fp);       break;
-        }
-    }
-    n += fputc('"', fp);
-    return n;
+/* ---- rotation ---- */
+
+static void rotate_log_files(void) {
+    if (!g_logger.config.file_path) return;
+    fclose(g_logger.fp);
+    char old[512];
+    snprintf(old, sizeof(old), "%s.1", g_logger.config.file_path);
+    rename(g_logger.config.file_path, old);
+    g_logger.fp = fopen(g_logger.config.file_path, "a");
+    g_logger.current_size = 0;
 }
 
-/* ---- internal: write text-format log line ---- */
-static int log_write_text(csilk_log_level_t level, const char* file, int line,
-                          const char* func, const char* msg, int msg_len) {
-    const char* filename = strrchr(file, '/');
-    filename = filename ? filename + 1 : file;
+/* ---- text-format output ---- */
 
-    char time_buf[32];
+static int log_text(csilk_log_level_t lv, const char* file, int line,
+                    const char* func, const char* msg, int msg_len) {
+    const char* fn = strrchr(file, '/');
+    fn = fn ? fn + 1 : file;
+
+    char ts[32];
     time_t now = time(NULL);
-    struct tm tm_info;
-    localtime_r(&now, &tm_info);
-    strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_info);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm);
 
     int n = 0;
-    if (g_logger.config.use_colors) {
+    if (g_logger.config.use_colors)
         n += fprintf(g_logger.fp, "%s %s%s\x1b[0m [%s:%d] %s(): ",
-                     time_buf, level_colors[level], level_strings[level],
-                     filename, line, func);
-    } else {
+                     ts, level_colors[lv], level_names[lv], fn, line, func);
+    else
         n += fprintf(g_logger.fp, "%s %s [%s:%d] %s(): ",
-                     time_buf, level_strings[level],
-                     filename, line, func);
-    }
+                     ts, level_names[lv], fn, line, func);
     n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
     n += fprintf(g_logger.fp, "\n");
     fflush(g_logger.fp);
     return n;
 }
 
-/* ---- internal: write JSON-format log line ---- */
-static int log_write_json(csilk_log_level_t level, const char* file, int line,
-                          const char* func, cJSON* extra,
-                          const char* msg, int msg_len) {
-    const char* filename = strrchr(file, '/');
-    filename = filename ? filename + 1 : file;
+/* ---- JSON-format output (uses reflect) ---- */
 
-    cJSON* root = extra ? extra : cJSON_CreateObject();
+static cJSON* build_json_entry(csilk_log_level_t lv, const char* file,
+                                int line, const char* func,
+                                const char* msg, int msg_len) {
+    const char* fn = strrchr(file, '/');
+    fn = fn ? fn + 1 : file;
+
+    csilk_log_entry_t entry;
+    memset(&entry, 0, sizeof(entry));
+    entry.time_epoch = (int64_t)time(NULL);
+    snprintf(entry.level, sizeof(entry.level), "%s", level_names[lv]);
+    snprintf(entry.file,  sizeof(entry.file),  "%s", fn);
+    entry.line = (int32_t)line;
+    snprintf(entry.func,  sizeof(entry.func),  "%s", func);
+    if (msg && msg_len > 0) {
+        size_t cp = (size_t)msg_len < sizeof(entry.msg) - 1
+                        ? (size_t)msg_len : sizeof(entry.msg) - 1;
+        memcpy(entry.msg, msg, cp);
+        entry.msg[cp] = '\0';
+    }
+
+    return cJSON_Parse(csilk_json_marshal("csilk_log_entry_t", &entry));
+}
+
+static int log_json(csilk_log_level_t lv, const char* file, int line,
+                    const char* func, cJSON* extra,
+                    const char* msg, int msg_len) {
+    cJSON* root = build_json_entry(lv, file, line, func, msg, msg_len);
     if (!root) return 0;
 
-    char ts[32];
-    time_t now = time(NULL);
-    struct tm tm_info;
-    localtime_r(&now, &tm_info);
-    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", &tm_info);
-
-    cJSON_AddStringToObject(root, "time",  ts);
-    cJSON_AddStringToObject(root, "level", level_strings[level]);
-    cJSON_AddStringToObject(root, "file",  filename);
-    cJSON_AddNumberToObject(root, "line",  (double)line);
-    cJSON_AddStringToObject(root, "func",  func);
-    if (msg && msg_len > 0) {
-        char* msg_buf = malloc((size_t)(msg_len + 1));
-        if (msg_buf) {
-            memcpy(msg_buf, msg, (size_t)msg_len);
-            msg_buf[msg_len] = '\0';
-            cJSON_AddStringToObject(root, "msg", msg_buf);
-            free(msg_buf);
+    if (extra) {
+        cJSON* child = extra->child;
+        while (child) {
+            cJSON* dupe = cJSON_Duplicate(child, 1);
+            if (dupe) cJSON_AddItemToObject(root, child->string, dupe);
+            child = child->next;
         }
+        cJSON_Delete(extra);
     }
 
     char* line_str = cJSON_PrintUnformatted(root);
@@ -118,17 +161,6 @@ static int log_write_json(csilk_log_level_t level, const char* file, int line,
     fflush(g_logger.fp);
     cJSON_Delete(root);
     return n;
-}
-
-/* ---- rotation ---- */
-static void rotate_log_files(void) {
-    if (!g_logger.config.file_path) return;
-    fclose(g_logger.fp);
-    char old[512];
-    snprintf(old, sizeof(old), "%s.1", g_logger.config.file_path);
-    rename(g_logger.config.file_path, old);
-    g_logger.fp = fopen(g_logger.config.file_path, "a");
-    g_logger.current_size = 0;
 }
 
 /* ================================================================
@@ -158,67 +190,56 @@ int csilk_log_init(csilk_log_config_t config) {
     return 0;
 }
 
-void _csilk_log_internal(csilk_log_level_t level, const char* file, int line,
+void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
                          const char* func, const char* fmt, ...) {
-    if (!g_logger.initialized || level < g_logger.config.level) return;
+    if (!g_logger.initialized || lv < g_logger.config.level) return;
 
     va_list args;
     va_start(args, fmt);
-    char msg_buf[4096];
-    int msg_len = vsnprintf(msg_buf, sizeof(msg_buf), fmt, args);
+    char buf[4096];
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    if (msg_len < 0) msg_len = 0;
-    if (msg_len >= (int)sizeof(msg_buf)) msg_len = (int)sizeof(msg_buf) - 1;
+    if (len < 0) len = 0;
+    if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
 
     uv_mutex_lock(&g_logger.mutex);
-
-    if (g_logger.config.max_file_size > 0 &&
-        g_logger.current_size >= g_logger.config.max_file_size)
+    if (g_logger.config.max_file_size > 0 && g_logger.current_size >= g_logger.config.max_file_size)
         rotate_log_files();
 
-    int n;
-    if (g_logger.config.json_format) {
-        n = log_write_json(level, file, line, func, NULL, msg_buf, msg_len);
-    } else {
-        n = log_write_text(level, file, line, func, msg_buf, msg_len);
-    }
+    int n = g_logger.config.json_format
+        ? log_json(lv, file, line, func, NULL, buf, len)
+        : log_text(lv, file, line, func, buf, len);
 
-    if (g_logger.config.file_path)
-        g_logger.current_size += (size_t)n;
-
+    if (g_logger.config.file_path) g_logger.current_size += (size_t)n;
     uv_mutex_unlock(&g_logger.mutex);
 }
 
-void _csilk_log_structured(csilk_log_level_t level, const char* file, int line,
+void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
                            const char* func, cJSON* extra,
                            const char* fmt, ...) {
-    if (!g_logger.initialized || level < g_logger.config.level) return;
+    if (!g_logger.initialized || lv < g_logger.config.level) return;
 
     va_list args;
     va_start(args, fmt);
-    char msg_buf[4096];
-    int msg_len = vsnprintf(msg_buf, sizeof(msg_buf), fmt, args);
+    char buf[4096];
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    if (msg_len < 0) msg_len = 0;
-    if (msg_len >= (int)sizeof(msg_buf)) msg_len = (int)sizeof(msg_buf) - 1;
+    if (len < 0) len = 0;
+    if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
 
     uv_mutex_lock(&g_logger.mutex);
-
-    if (g_logger.config.max_file_size > 0 &&
-        g_logger.current_size >= g_logger.config.max_file_size)
+    if (g_logger.config.max_file_size > 0 && g_logger.current_size >= g_logger.config.max_file_size)
         rotate_log_files();
 
     int n;
     if (g_logger.config.json_format) {
-        n = log_write_json(level, file, line, func, extra, msg_buf, msg_len);
+        n = log_json(lv, file, line, func, extra, buf, len);
     } else {
         if (extra) cJSON_Delete(extra);
-        n = log_write_text(level, file, line, func, msg_buf, msg_len);
+        n = log_text(lv, file, line, func, buf, len);
     }
 
-    if (g_logger.config.file_path)
-        g_logger.current_size += (size_t)n;
-
+    if (g_logger.config.file_path) g_logger.current_size += (size_t)n;
     uv_mutex_unlock(&g_logger.mutex);
 }
 
@@ -229,7 +250,6 @@ int csilk_log_is_json(void) {
 cJSON* csilk_log_make_kv(const char* key, ...) {
     cJSON* obj = cJSON_CreateObject();
     if (!obj) return NULL;
-
     va_list args;
     va_start(args, key);
     const char* k = key;
