@@ -16,10 +16,10 @@
 - [x] 2.2 路由树局部性优化与 Fast-path
 - [x] 2.3 异常流优化：优化 `setjmp/longjmp` 的 recovery 开销
 
-### 阶段三：文档与开发者体验 (Documentation & DX)
-- [ ] 3.1 规范化注释与 Doxygen API 文档
-- [ ] 3.2 架构机制白皮书
-- [ ] 3.3 示例工程扩展 (example_server 增强)
+### 阶段三：文档与开发者体验 (Documentation & DX) [已完成]
+- [x] 3.1 规范化注释与 Doxygen API 文档
+- [x] 3.2 架构机制白皮书
+- [x] 3.3 示例工程扩展 (example_server 增强)
 
 ### 阶段四：新功能拓展 (New Features)
 - [ ] 4.1 WebSocket 协议支持
