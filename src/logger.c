@@ -23,8 +23,8 @@ typedef struct {
 
 static gin_logger_t g_logger = { {0}, NULL, 0, {0}, 0 };
 
-static const char* level_strings[] = { "DEBUG", "INFO ", "WARN ", "ERROR" };
-static const char* level_colors[] = { "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m" };
+static const char* level_strings[] = { "TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL" };
+static const char* level_colors[] = { "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m" };
 
 // Internal helper for rotation
 static void rotate_log_files() {

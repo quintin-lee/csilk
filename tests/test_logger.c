@@ -25,14 +25,23 @@ void* thread_func(void* arg) {
 int main() {
   printf("Initializing logger...\n");
   gin_log_config_t cfg = {
-      .level = GIN_LOG_DEBUG,
+      .level = GIN_LOG_TRACE, // Set to TRACE to see all
       .file_path = NULL,
       .max_file_size = 0,
       .use_colors = -1
   };
   assert(gin_log_init(cfg) == 0);
 
-  // 1. Test basic middleware logging
+  // 1. Test all levels
+  printf("Testing all log levels...\n");
+  GIN_LOG_T("This is a TRACE message");
+  GIN_LOG_D("This is a DEBUG message");
+  GIN_LOG_I("This is an INFO message");
+  GIN_LOG_W("This is a WARN message");
+  GIN_LOG_E("This is an ERROR message");
+  GIN_LOG_F("This is a FATAL message");
+
+  // 2. Test basic middleware logging
   gin_ctx_t c = {0};
   c.request.method = "GET";
   c.request.path = "/test";
