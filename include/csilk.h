@@ -709,6 +709,22 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
 void csilk_group_add_route(csilk_group_t* group, const char* method,
                            const char* path, csilk_handler_t handler);
 
+/** @brief Register a route handler with OpenAPI metadata.
+ * @param group Route group.
+ * @param method HTTP method.
+ * @param path URL pattern.
+ * @param handler Route handler function.
+ * @param input_type Registered type name for request body (NULL if none).
+ * @param output_type Registered type name for response (NULL if none).
+ * @param summary Short operation summary (NULL if none).
+ * @param description Detailed operation description (NULL if none). */
+void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
+                                    const char* path, csilk_handler_t handler,
+                                    const char* input_type,
+                                    const char* output_type,
+                                    const char* summary,
+                                    const char* description);
+
 /** @brief Add a route with multiple handlers (middleware + handler).
  * @param group Route group.
  * @param method HTTP method.

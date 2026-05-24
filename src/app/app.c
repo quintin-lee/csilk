@@ -267,6 +267,19 @@ void csilk_app_add_route(csilk_app_t* app, const char* method, const char* path,
   csilk_group_add_route(g, method, path, h);
 }
 
+/** @brief Register a route with OpenAPI metadata (input/output types). */
+void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
+                                  const char* path, csilk_handler_t handler,
+                                  const char* input_type,
+                                  const char* output_type, const char* summary,
+                                  const char* description) {
+  if (!app || !method || !path || !handler) return;
+  csilk_group_t* g = app->root_group;
+  if (!g) return;
+  csilk_group_add_route_extended(g, method, path, handler, input_type,
+                                 output_type, summary, description);
+}
+
 /** @brief Register a route with multiple handlers (middleware chain). */
 void csilk_app_add_handlers(csilk_app_t* app, const char* method,
                             const char* path, csilk_handler_t* handlers,
