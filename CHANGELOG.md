@@ -5,27 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-05-23
+## [0.2.1] - 2026-05-24
 
 ### Added
-- **Cookie Support**: Added `csilk_get_cookie` and `csilk_set_cookie` APIs for native cookie handling.
-- **Multiple Headers**: Added `csilk_add_header` to support multiple response headers with the same key (e.g., `Set-Cookie`).
-- **Build System**: Added `run_tests` custom target to CMake for easier test execution.
-- **Documentation**: Added `CHANGELOG.md` and `CONTRIBUTING.md`.
+- **Form URL-encoded Parser**: Added `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
+- **Session Support**: Cookie-based in-memory session management with `csilk_session_init/start/set/get/destroy` API (P5-2).
+- **HTTP Range Requests**: Static file middleware now supports `Range` header with 206 Partial Content responses (P5-3).
+- **Request Validation Middleware**: `csilk_validate()` with REQUIRED/INT/STRING/EMAIL flags and min/max range validation (P5-4).
+- **Connection Object Pool**: Reuses `csilk_client_t` objects via free list to reduce allocation overhead (P3-5).
+- **URL Decoding**: Implemented `csilk_url_decode()` for percent-decoding query parameters.
+- **SHA1/Base64 Known-Answer Tests**: 14 test cases covering RFC 3174 and RFC 4648 vectors.
+- **WebSocket Integration Test**: Verified 101 Switching Protocols + `Sec-WebSocket-Accept` header.
+- **Streaming Response Integration Test**: Verified chunked encoding with `csilk_response_write/end`.
+- **Redirect Tests**: Enhanced with `csilk_redirect_simple`, 301/302/307 status codes, null-safety edge cases.
 
 ### Changed
-- **Documentation**: Comprehensive Doxygen comment overhaul across all source files — standardized `@copyright` annotations, added missing function-level `@brief`/`@param`/`@return` tags, and updated file headers for consistency.
-- **Doxyfile**: Enhanced configuration with `GENERATE_TREEVIEW`, `FULL_SIDEBAR`, `EXAMPLE_PATH`, and expanded `INPUT` to include all documentation files.
-- **README**: Updated documentation coverage table to reflect all components.
-- **Security**: Hardened static file serving middleware with `realpath()` to prevent path traversal.
-- **Resilience**: Implemented total request header size limit (`max_header_size`) to prevent memory-based attacks.
-- **Stability**: Performed comprehensive memory allocation audit, ensuring all `malloc`/`calloc`/`strdup`/`realloc` calls are checked for success.
-- **Concurrency**: Improved server shutdown mechanism using `uv_async_t` for thread-safe stopping.
+- **Connection Pool**: Pool size of 32 clients; pool drained in `csilk_server_free`.
+- **Streaming Response**: `csilk_response_write/end` now sets `is_async` flag to prevent double-write; chunked headers respect client `Connection: close` header.
+- **Static Middleware**: Added `Accept-Ranges: bytes` header on all static responses.
+- **Streaming Cleanup**: Terminal chunk write callback closes connection instead of leaving cleanup to timer (fixes use-after-free).
 
 ### Fixed
-- Fixed a bug where multiple request headers were not correctly parsed and committed in `src/server.c`.
-- Fixed test suite failures in `test_recovery`, `test_timeout`, and `test_integration`.
-- Fixed memory corruption issues caused by uninitialized context fields in tests.
+- Fixed `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
+- Fixed memory leak in static middleware: `body_is_managed = 1` for full file buffer ensures cleanup.
+- Fixed `csilk_ctx_cleanup` + timer interaction in streaming response lifecycle.
+- Fixed 3 `csilK_` typos in server.c (pool_get/pool_put parameter types) and session.c (typedef).
+
+## [0.2.0] - 2026-05-23
 
 ## [0.1.0] - 2026-05-15
 

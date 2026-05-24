@@ -1,7 +1,7 @@
 # csilk 编码规范（面向 AI 代码生成/修改）
 
 > **目标**: 确保 AI 模型生成或修改的代码与项目现有风格、模式和约束完全一致。
-> **版本**: 0.2.0 | 最后更新: 2026-05-23
+> **版本**: 0.2.1 | 最后更新: 2026-05-24
 
 ---
 
@@ -15,7 +15,7 @@ include/csilk_reflect.h   # 反射引擎（struct <-> JSON）
 src/core/                 # 核心引擎（server/router/context/arena/logger/config/reflect/websocket/url/utils）
 src/app/app.c             # 高层 app 封装
 src/middleware/            # 10 个内置中间件
-tests/                    # 单元测试（21+ 个测试文件）
+tests/                    # 单元测试（37+ 个测试文件）
 examples/                 # 示例程序
 ```
 
