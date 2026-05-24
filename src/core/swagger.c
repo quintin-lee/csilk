@@ -1,3 +1,15 @@
+/**
+ * @file swagger.c
+ * @brief OpenAPI 3.0 specification generator and Swagger UI serving.
+ *
+ * Dynamically generates an OpenAPI 3.0 JSON document by traversing
+ * all registered routes and using the reflection system to produce
+ * JSON schemas for request/response types. Also serves the embedded
+ * Swagger UI HTML page and the raw OpenAPI JSON endpoint.
+ *
+ * @copyright MIT License
+ */
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
