@@ -244,6 +244,7 @@ target_link_libraries(test_oom csilk pthread)
 add_test(NAME test_oom COMMAND test_oom)
 
 add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
+add_csilk_test(test_https tests/test_https.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
 option(USE_FUZZER "Enable libFuzzer" OFF)
@@ -270,7 +271,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_storage test_extra test_async_keepalive test_integration test_swagger
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_storage test_extra test_async_keepalive test_https test_integration test_swagger
     COMMENT "Running all tests with ctest"
 )
 

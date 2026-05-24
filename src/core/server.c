@@ -294,6 +294,7 @@ static void on_write(uv_write_t* req, int status) {
 static void on_idle_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+    CSILK_LOG_D("Closing connection: idle timeout");
     uv_close((uv_handle_t*)&client->handle, on_close);
   }
 }
@@ -303,6 +304,7 @@ static void on_idle_timeout(uv_timer_t* handle) {
 static void on_read_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+    CSILK_LOG_D("Closing connection: read timeout");
     uv_close((uv_handle_t*)&client->handle, on_close);
   }
 }
@@ -1327,19 +1329,29 @@ static void process_tls_read(csilk_client_t* client) {
     } else {
       enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
       if (err != HPE_OK) {
-        if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-          uv_close((uv_handle_t*)&client->handle, on_close);
+        if (err == HPE_CLOSED_CONNECTION) {
+          llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
+          client->parser.data = client;
+        } else {
+          fprintf(stderr, "TLS Parse error: %s %s\n", llhttp_errno_name(err),
+                  client->parser.reason);
+          if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+            uv_close((uv_handle_t*)&client->handle, on_close);
+          }
+          break;
         }
-        break;
       }
     }
   }
 
-  int err = SSL_get_error(client->ssl, n);
-  if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_ZERO_RETURN) {
-    CSILK_LOG_E("TLS Read error: %d", err);
-    if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-      uv_close((uv_handle_t*)&client->handle, on_close);
+  if (n <= 0) {
+    int err = SSL_get_error(client->ssl, n);
+    if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
+        err != SSL_ERROR_ZERO_RETURN) {
+      CSILK_LOG_E("TLS Read error: %d", err);
+      if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+        uv_close((uv_handle_t*)&client->handle, on_close);
+      }
     }
   }
 
