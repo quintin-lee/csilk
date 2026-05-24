@@ -67,11 +67,16 @@ typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 typedef struct csilk_header_s {
   char* key;                   /**< Header field name. */
   char* value;                 /**< Header field value. */
+  size_t key_len;              /**< Cached strlen(key). */
+  size_t value_len;            /**< Cached strlen(value). */
   struct csilk_header_s* next; /**< Pointer to next header in bucket. */
 } csilk_header_t;
 
-/** @brief Number of buckets in header hash table. */
-#define CSILK_HEADER_BUCKETS 16
+/** @brief Number of buckets in header hash table.
+ * Override at compile-time with -DCSILK_HEADER_BUCKETS=N for your workload. */
+#ifndef CSILK_HEADER_BUCKETS
+#define CSILK_HEADER_BUCKETS 64
+#endif
 
 /** @brief Header hash table structure. */
 typedef struct csilk_header_map_s {
@@ -880,6 +885,13 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
  *                 Pass NULL to restore default behavior. */
 void csilk_server_set_not_found_handler(csilk_server_t* server,
                                         csilk_handler_t handler);
+
+/** @brief Enable SPA fallback: unmatched GET requests serve index.html
+ * from doc_root. Overrides any custom 404 handler.
+ * @param server Server instance.
+ * @param doc_root Directory containing index.html (string is copied). */
+void csilk_server_set_spa_fallback(csilk_server_t* server,
+                                   const char* doc_root);
 
 /** @brief Deallocate server resources.
  * @param server Server instance. */

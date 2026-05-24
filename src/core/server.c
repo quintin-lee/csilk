@@ -4,6 +4,7 @@
  * @copyright MIT License
  */
 
+#include <limits.h>
 #include <llhttp.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -44,6 +45,7 @@ struct csilk_server_s {
   int worker_count;         /**< Number of worker threads created. */
   csilk_handler_t
       not_found_handler; /**< Custom 404 handler (NULL = default). */
+  char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
 };
 
 /** @brief Client connection structure. */
@@ -427,7 +429,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
          h = h->next) {
-      custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+      custom_headers_len += h->key_len + 2 + h->value_len + 2;
     }
   }
 
@@ -487,8 +489,14 @@ void _csilk_send_response(csilk_ctx_t* c) {
       for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
         for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
              h = h->next) {
-          pos += snprintf(write_base + pos, response_len + 1 - (size_t)pos,
-                          "%s: %s\r\n", h->key, h->value);
+          memcpy(write_base + pos, h->key, h->key_len);
+          pos += (int)h->key_len;
+          write_base[pos++] = ':';
+          write_base[pos++] = ' ';
+          memcpy(write_base + pos, h->value, h->value_len);
+          pos += (int)h->value_len;
+          write_base[pos++] = '\r';
+          write_base[pos++] = '\n';
         }
       }
 
@@ -792,11 +800,69 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
+/** @brief Built-in SPA fallback handler — serves index.html for unmatched
+ * GET requests. */
+static void spa_fallback_handler(csilk_ctx_t* c) {
+  const char* method = csilk_get_method(c);
+  if (!method || strcmp(method, "GET") != 0) {
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    return;
+  }
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+  if (!client || !client->server || !client->server->spa_doc_root) {
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    return;
+  }
+  char path[PATH_MAX];
+  snprintf(path, sizeof(path), "%s/index.html", client->server->spa_doc_root);
+
+  FILE* f = fopen(path, "rb");
+  if (!f) {
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    return;
+  }
+  fseek(f, 0, SEEK_END);
+  long fsize = ftell(f);
+  if (fsize <= 0) {
+    fclose(f);
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    return;
+  }
+  rewind(f);
+  char* body = malloc((size_t)fsize + 1);
+  if (!body) {
+    fclose(f);
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
+    return;
+  }
+  size_t nread = fread(body, 1, (size_t)fsize, f);
+  fclose(f);
+  body[nread] = '\0';
+
+  csilk_set_header(c, "Content-Type", "text/html");
+  c->response.body = body;
+  c->response.body_len = nread;
+  c->response.body_is_managed = 1;
+  csilk_status(c, CSILK_STATUS_OK);
+}
+
 /** @brief Set a custom handler for unmatched routes (404). */
 void csilk_server_set_not_found_handler(csilk_server_t* server,
                                         csilk_handler_t handler) {
   if (!server) return;
   server->not_found_handler = handler;
+}
+
+/** @brief Enable SPA fallback: unmatched GET requests serve index.html.
+ * Overrides any custom 404 handler.
+ * @param server Server instance.
+ * @param doc_root Directory containing index.html. */
+void csilk_server_set_spa_fallback(csilk_server_t* server,
+                                   const char* doc_root) {
+  if (!server || !doc_root) return;
+  free(server->spa_doc_root);
+  server->spa_doc_root = strdup(doc_root);
+  if (server->spa_doc_root) server->not_found_handler = spa_fallback_handler;
 }
 
 /** @brief Add a global middleware handler to the server. */
@@ -827,6 +893,7 @@ void csilk_server_free(csilk_server_t* server) {
     server->worker_tids = NULL;
   }
 
+  free(server->spa_doc_root);
   free(server);
 }
 
