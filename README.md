@@ -6,13 +6,17 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
+- 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
+- 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
+- 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
+- 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
 - 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
 - 🍪 Cookie parsing and setting (with Max-Age, Secure, HttpOnly, etc.)
 - 🔌 WebSocket support (RFC 6455 handshake, frame send/receive)
 - 📡 Server-Sent Events (SSE) with csilk_sse_init/send/close
-- 📦 Gzip response compression middleware
+- 📦 Gzip response compression middleware (with intelligent skipping for media)
 - 📤 Multipart/form-data file upload parsing
 - 🔍 URL parsing and query string handling
 - ⚡ Keep-alive connection support
@@ -24,22 +28,31 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📝 Complete Doxygen documentation for all public APIs and internals
 - 🧵 Thread-safe logging with file rotation and ANSI colors
 - 🔍 Configurable connection timeout and body/header size limits
- - 🎯 Global (server-level) and per-route middleware support
- - 🌲 Radix Tree router with :param and *wildcard matching
- - 📝 Form URL-encoded body parsing (`application/x-www-form-urlencoded`)
- - 🍪 Session management with cookie-based session IDs
- - 🔀 HTTP redirect helper (`csilk_redirect`)
- - 📄 HTTP Range request support (206 Partial Content) for static files
- - ✅ Request parameter validation middleware (required, int, string, email)
+- 🎯 Global (server-level) and per-route middleware support
+- 🌲 Radix Tree router with :param and *wildcard matching
+- 📝 Form URL-encoded body parsing (`application/x-www-form-urlencoded`)
+- 🍪 Session management with **thread-safe mutex protection**
+- 🔀 HTTP redirect helper (`csilk_redirect`)
+- 📄 HTTP Range request support (206 Partial Content) for static files
+- ✅ Request parameter validation middleware (required, int, string, email)
+- 🆔 **Request ID middleware** for end-to-end tracing (X-Request-Id)
+- 🩺 **Built-in Health Check** handler (/healthz)
+- 📦 **Opaque Context API** for ABI stability
 
 ## Dependencies
 
 - [libuv](https://github.com/libuv/libuv) - Asynchronous I/O library
 - [llhttp](https://github.com/nodejs/llhttp) - HTTP parser
 - [cJSON](https://github.com/DaveGamble/cJSON) - JSON parser
-- [libyaml](https://github.com/yaml/libyaml) - YAML parser (system library, install with `apt install libyaml-dev`)
+- [libyaml](https://github.com/yaml/libyaml) - YAML parser
+- [OpenSSL](https://www.openssl.org/) - TLS/SSL and Cryptographic library (Required for HTTPS and JWT)
 
-libuv and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml must be installed as a system dependency.
+libuv and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml and OpenSSL must be installed as system dependencies.
+
+### Installation (Debian/Ubuntu)
+```bash
+sudo apt install libyaml-dev libssl-dev
+```
 
 ## Building
 
@@ -195,6 +208,41 @@ void my_middleware(csilk_ctx_t* c) {
 csilk_group_t* group = csilk_group_new(router, "/api");
 csilk_group_use(group, csilk_logger_handler);
 csilk_group_use(group, csilk_recovery_handler);
+```
+
+### HTTPS & JWT Example
+
+```c
+#include "csilk.h"
+
+void secure_handler(csilk_ctx_t* c) {
+    cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+    const char* user = cJSON_GetObjectItem(payload, "sub")->valuestring;
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Hello secure user: %s", user);
+    csilk_string(c, 200, msg);
+}
+
+int main() {
+    csilk_router_t* router = csilk_router_new();
+    csilk_group_t* api = csilk_group_new(router, "/api");
+    
+    // Apply JWT middleware to /api group
+    csilk_group_use(api, (csilk_handler_t)csilk_jwt_middleware, "secret_key");
+    csilk_GET(api, "/profile", secure_handler);
+
+    csilk_server_t* server = csilk_server_new(router);
+    
+    // Configure HTTPS
+    csilk_server_config_t config = {0};
+    config.enable_tls = 1;
+    config.tls_cert_file = "cert.pem";
+    config.tls_key_file = "key.pem";
+    csilk_server_set_config(server, &config);
+
+    csilk_server_run(server, 443);
+    return 0;
+}
 ```
 
 ## Project Structure
