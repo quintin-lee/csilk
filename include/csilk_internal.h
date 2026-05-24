@@ -38,11 +38,55 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data,
  * @param digest Output buffer for 20-byte hash. */
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]);
 
+/** @brief SHA256 hashing context. */
+typedef struct {
+  uint32_t state[8];  /**< Intermediate hash state. */
+  uint64_t count;     /**< Message length in bits. */
+  uint8_t buffer[64]; /**< Data block buffer. */
+} csilk_sha256_ctx;
+
+/** @brief Initialize a SHA256 context.
+ * @param context SHA256 context. */
+void csilk_sha256_init(csilk_sha256_ctx* context);
+
+/** @brief Feed data into the SHA256 context.
+ * @param context SHA256 context.
+ * @param data Input data.
+ * @param len Data length. */
+void csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data,
+                         size_t len);
+
+/** @brief Finalize SHA256 hash and produce digest.
+ * @param context SHA256 context.
+ * @param digest Output buffer (32 bytes). */
+void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]);
+
+/** @brief Compute HMAC-SHA256.
+ * @param key Secret key.
+ * @param key_len Key length.
+ * @param data Input data.
+ * @param data_len Data length.
+ * @param out Output buffer (32 bytes). */
+void csilk_hmac_sha256(const uint8_t* key, size_t key_len, const uint8_t* data,
+                       size_t data_len, uint8_t out[32]);
+
 /** @brief Encode raw bytes as Base64 string.
  * @param src Source byte buffer.
  * @param len Length of source data.
  * @param out Output buffer (must be at least ((len+2)/3)*4+1 bytes). */
 void csilk_base64_encode(const uint8_t* src, size_t len, char* out);
+
+/** @brief Encode raw bytes as Base64URL string (RFC 4648).
+ * @param src Source byte buffer.
+ * @param len Length of source data.
+ * @param out Output buffer. */
+void csilk_base64url_encode(const uint8_t* src, size_t len, char* out);
+
+/** @brief Decode a Base64URL string.
+ * @param src Base64URL string.
+ * @param out Output buffer.
+ * @return Decoded length, or -1 on error. */
+int csilk_base64url_decode(const char* src, uint8_t* out);
 
 /** @brief Parse incoming WebSocket frame data.
  * @param c Request context.
