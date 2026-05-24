@@ -384,3 +384,20 @@ void csilk_generate_uuid(char* buf) {
       random[6], random[7], random[8], random[9], random[10], random[11],
       random[12], random[13], random[14], random[15]);
 }
+
+void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                        const uint8_t* data, size_t data_len, uint8_t out[32]) {
+  if (c && c->crypto_driver && c->crypto_driver->hmac_sha256) {
+    c->crypto_driver->hmac_sha256(key, key_len, data, data_len, out);
+  } else {
+    csilk_hmac_sha256(key, key_len, data, data_len, out);
+  }
+}
+
+void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]) {
+  if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
+    c->crypto_driver->generate_uuid(buf);
+  } else {
+    csilk_generate_uuid(buf);
+  }
+}

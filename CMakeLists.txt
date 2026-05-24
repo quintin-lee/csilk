@@ -236,6 +236,8 @@ add_csilk_test(test_swagger tests/test_swagger.c)
 add_csilk_test(test_session tests/test_session.c)
 add_csilk_test(test_validate tests/test_validate.c)
 add_csilk_test(test_jwt tests/test_jwt.c)
+add_csilk_test(test_hooks tests/test_hooks.c)
+add_csilk_test(test_crypto_driver tests/test_crypto_driver.c)
 add_csilk_test(test_storage tests/test_storage.c)
 add_csilk_test(test_extra tests/test_extra.c)
 add_executable(test_oom tests/test_oom.c)
@@ -271,7 +273,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_storage test_extra test_async_keepalive test_https test_integration test_swagger
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_extra test_async_keepalive test_https test_integration test_swagger
     COMMENT "Running all tests with ctest"
 )
 

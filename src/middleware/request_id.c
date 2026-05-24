@@ -16,7 +16,7 @@ void csilk_request_id_middleware(csilk_ctx_t* c) {
 
   /* Generate UUID if not already set */
   if (c->request_id[0] == '\0') {
-    csilk_generate_uuid(c->request_id);
+    _csilk_generate_uuid(c, c->request_id);
   }
 
   /* Set X-Request-Id response header */

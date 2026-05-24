@@ -121,6 +121,12 @@
 - **状态**: [x] 已实现 (v0.3.0)
 - **方案**: 新增 `csilk_jwt_middleware` 支持 HS256 签名、过期校验及 Payload 自动存储，扩展了核心 Crypto 工具库（HMAC-SHA256, Base64URL）。
 
+### P3-9: 缺少扩展 Hooks 与驱动接口
+- **状态**: [x] 已实现 (v0.3.0)
+- **方案**: 
+  - **Hook 系统**: 实现了覆盖服务器启停、连接建立/关闭、请求开始/结束的生命周期 Hooks。
+  - **Crypto 驱动**: 引入了 `csilk_crypto_driver_t` 接口，允许第三方无缝接入自定义的加密、哈希及 UUID 生成算法。
+
 ### P3-4: Health check 端点缺失
 - **状态**: [x] 已实现
 - **方案**: 新增 `csilk_health_check_handler` 提供 `/healthz` 支持。
