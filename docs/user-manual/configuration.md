@@ -1,132 +1,82 @@
-# Configuration
+# Configuration Guide
 
-The server supports YAML configuration for defining server settings, logging, and middleware parameters. Configuration is loaded at startup via libyaml.
+csilk supports flexible configuration via YAML files or direct C structure manipulation.
 
-## Configuration System
+## YAML Configuration Schema
 
-```mermaid
-flowchart TB
-    subgraph Input
-        YAML["config.yaml"]
-    end
-
-    subgraph Loader
-        P["csilk_load_config(path, &config)"]
-        V["csilk_config_validate(&config, err_msg)"]
-    end
-
-    subgraph "csilk_config_t"
-        S["server:\n  idle_timeout_ms: 5000\n  max_body_size: 1048576\n  max_header_size: 65536\n  max_connections: 10000\n  listen_backlog: 128\n  tcp_nodelay: true\n  tcp_keepalive: 60\n  worker_threads: 4"]
-
-        L["log:\n  level: info\n  file: /var/log/csilk.log\n  json: true\n  rotate_size_mb: 100"]
-
-        MW["middleware:\n  cors: { ... }\n  rate_limit: { ... }\n  static_files: { ... }"]
-    end
-
-    subgraph Apply
-        SRV["csilk_server_set_config()"]
-        LOG["csilk_log_init()"]
-        USE["csilk_server_use() for middleware"]
-    end
-
-    YAML --> P
-    P --> S
-    P --> L
-    P --> MW
-    S --> V
-    V --> SRV
-    L --> LOG
-    MW --> USE
-```
-
-## Configuration Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant Main
-    participant App as csilk_app_t
-    participant Config
-    participant Server
-    participant Log
-
-    Main->>App: csilk_app_new("config_multi.yaml")
-    App->>Config: csilk_load_config(path, &config)
-    Config->>Config: Open YAML file
-    Config->>Config: Parse: libyaml state machine
-    Config->>Config: Fill csilk_config_t struct
-
-    Config->>Config: csilk_config_validate(&config, err)
-    Config->>Config: Check required fields
-    Config->>Config: Check value ranges
-    Config-->>App: 0 (success) or -1 (error)
-
-    App->>Server: csilk_server_new(router)
-    App->>Log: csilk_log_init(config.log)
-
-    User->>App: csilk_app_apply_config(app)
-    App->>Server: csilk_server_set_config(server, config.server)
-    App->>Server: csilk_server_set_max_connections(server, config.max_connections)
-    App->>App: For each middleware config, apply to server
-
-    User->>App: csilk_app_run(app, 8080)
-```
-
-## Full Configuration Schema
+The server can load a `config.yaml` file automatically or manually.
 
 ```yaml
-# Server settings
 server:
-  idle_timeout_ms: 5000       # Connection idle timeout (ms)
-  max_body_size: 1048576      # Max request body (1MB default)
-  max_header_size: 65536      # Max request headers (64KB default)
-  max_connections: 10000      # Max concurrent connections (0 = unlimited)
-  listen_backlog: 128         # TCP listen backlog
-  tcp_nodelay: true           # Disable Nagle's algorithm
-  tcp_keepalive: 60           # TCP keepalive interval (seconds)
-  worker_threads: 4           # Number of worker threads (0 = 1)
+  port: 8080
+  listen_backlog: 128
+  max_connections: 0      # 0 = unlimited
+  worker_threads: 4       # Multi-core SO_REUSEPORT
+  tcp_nodelay: true
+  idle_timeout_ms: 30000
+  read_timeout_ms: 5000
+  write_timeout_ms: 5000
+  request_timeout_ms: 10000
+  max_header_size: 8192
+  max_body_size: 1048576  # 1MB
+  
+  # TLS/HTTPS settings (OpenSSL required)
+  enable_tls: true
+  tls_cert_file: "certs/server.crt"
+  tls_key_file: "certs/server.key"
+  tls_ca_file: "certs/ca.crt"
+  tls_verify_peer: false
 
-# Logging settings
-log:
-  level: info                 # trace, debug, info, warn, error, fatal
-  file: "/var/log/csilk.log"  # Log file path (NULL = stdout)
-  json: true                  # JSON format output
-  rotate_size_mb: 100         # Max log file size before rotation
+logger:
+  level: "INFO"           # DEBUG, INFO, WARN, ERROR
+  file_path: "logs/app.log"
+  max_file_size: 10485760 # 10MB
+  max_backup_files: 5
 
-# CORS middleware
-middleware:
-  cors:
-    enabled: true
-    allow_origins: ["http://localhost:3000"]
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    max_age: 3600
+cors:
+  allow_origin: "*"
+  allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+  allow_headers: "Content-Type,Authorization"
 
-  # Rate limit middleware
-  rate_limit:
-    enabled: true
-    requests_per_second: 100
-    burst: 200
+rate_limit:
+  requests_per_second: 100
+  burst: 50
 
-  # Static file middleware
-  static_files:
-    enabled: true
-    root_dir: "./public"
-    cache_time: 3600
+static_files:
+  root_dir: "./public"
+  enable_gzip: true
 ```
 
-## Configuration Data Flow
+## Programmatic Configuration (C API)
 
-```mermaid
-flowchart LR
-    subgraph "YAML Parser (libyaml)"
-        S1["yaml_parser_t"]
-        S2["Event Stream:\nSTREAM_START\nDOCUMENT_START\nMAPPING_START\n  SCALAR: 'server'\n  MAPPING_START\n    SCALAR: 'port'\n    SCALAR: '8080'\n  MAPPING_END\nMAPPING_END\nDOCUMENT_END\nSTREAM_END"]
-        S3["csilk_config_t struct"]
-    end
+### 1. High-Level App Config
 
-    YML["config.yaml\n{server: {port: 8080}}"] --> S1
-    S1 --> S2
-    S2 --> S3
-    S3 --> VAL["config_validate()\nCheck: port > 0 && port < 65536\nCheck: timeout > 0"]
-    VAL --> APPLY["Applied to csilk_server_s"]
+```c
+csilk_app_config_t config = {
+    .port = 8443,
+    .log_level = CSILK_LOG_DEBUG,
+    .worker_threads = 2
+};
+csilk_app_t* app = csilk_app_new(&config);
+```
+
+### 2. Low-Level Server Config
+
+```c
+csilk_server_config_t cfg = {0};
+cfg.enable_tls = 1;
+cfg.tls_cert_file = "cert.pem";
+cfg.tls_key_file = "key.pem";
+
+csilk_server_set_config(server, &cfg);
+```
+
+## Loading from File
+
+```c
+csilk_config_t* cfg = csilk_config_load("config.yaml");
+if (cfg) {
+    csilk_server_apply_config(server, cfg);
+    csilk_config_free(cfg);
+}
 ```

@@ -19,6 +19,7 @@ graph TB
         subgraph "Request Processing"
             CTX["Context (csilk_ctx_t)"]
             ARENA["Arena Allocator"]
+            HOOKS["Hook System"]
         end
         subgraph "Routing"
             RTR["Router (Radix Tree)"]
@@ -27,6 +28,7 @@ graph TB
         subgraph "Network & Protocol"
             SRV["Server (libuv TCP)"]
             HTTP["llhttp Parser"]
+            TLS["OpenSSL (TLS/SSL)"]
             WS["WebSocket Engine"]
         end
     end
@@ -36,6 +38,7 @@ graph TB
         CJ["cJSON"]
         YAML["libyaml"]
         ZLIB["zlib"]
+        SSL["OpenSSL"]
     end
 
     H --> CTX
@@ -44,11 +47,13 @@ graph TB
     SRV --> RTR
     SRV --> CTX
     SRV --> HTTP
+    SRV --> TLS
     SRV --> WS
     GRP --> RTR
     CTX --> ARENA
     SRV --> UV
     HTTP --> UV
+    TLS --> SSL
     WS --> UV
     SRV --> CJ
     SRV --> YAML
@@ -57,17 +62,16 @@ graph TB
 
 ## Core Design Principles
 
-### 1. Reactor Event-Driven Model
+### 1. Reactor Event-Driven Model with TLS Abstraction
 
-csilk uses libuv's event loop as its execution core. All I/O is non-blocking:
+csilk uses libuv's event loop as its execution core. All I/O is non-blocking. With v0.4.0, a TLS abstraction layer via OpenSSL BIOs is integrated:
 
-- **Client connections** -> `on_new_connection` callback
-- **Data reception** -> `on_read` callback
-- **HTTP parsing** -> llhttp callbacks (6 state-machine callbacks)
-- **Response writes** -> `on_write` callback
-- **Idle timeouts** -> `on_timeout` callback
+- **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute`
+- **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
 
-### 2. Onion Middleware Model
+### 2. Onion Middleware & Hook System
+
+#### Onion Middleware Model
 
 Middleware forms a concentric "onion" where each layer wraps the next:
 
@@ -89,7 +93,24 @@ flowchart LR
     I --> J["HTTP Response"]
 ```
 
-### 3. Arena Memory Management
+#### Hook System
+
+In addition to the Onion model, a **Hook System** allows listening to global events without intercepting the request flow:
+- `CSILK_HOOK_SERVER_START / STOP`
+- `CSILK_HOOK_CONN_OPEN / CLOSE`
+- `CSILK_HOOK_REQUEST_BEGIN / END`
+
+### 3. Opaque Context & ABI Stability
+
+Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
+
+### 4. Pluggable Drivers
+
+The framework now supports pluggable drivers for core services:
+- **Storage Driver**: Customize how `csilk_set/get` values are stored (e.g., Redis for distributed sessions).
+- **Crypto Driver**: Replace default hashing (SHA256, HMAC) and UUID generation with custom or hardware-accelerated implementations.
+
+### 5. Arena Memory Management
 
 Per-connection Arena Allocator eliminates malloc/free overhead:
 
@@ -115,7 +136,7 @@ flowchart TB
     F2 --> FREE
 ```
 
-### 4. Radix Tree Routing
+### 6. Radix Tree Routing
 
 Prefix tree routing with O(path_length) matching:
 
@@ -150,7 +171,7 @@ graph TB
     K -.- S5["/static/css/app.css"]
 ```
 
-### 5. Multi-Worker SO_REUSEPORT
+### 7. Multi-Worker SO_REUSEPORT
 
 For multi-core utilization, csilk supports worker threads each with their own event loop:
 
@@ -188,6 +209,7 @@ flowchart TB
 sequenceDiagram
     participant Client
     participant UV as libuv Event Loop
+    participant SSL as OpenSSL (TLS)
     participant HTTP as llhttp Parser
     participant Server as csilk_server_t
     participant Router as Radix Tree Router
@@ -198,9 +220,18 @@ sequenceDiagram
     Client->>UV: TCP SYN
     UV->>Server: on_new_connection()
     Server->>Arena: csilk_arena_new(4096)
-    Server->>UV: uv_read_start()
-    UV->>Server: on_read(buf)
+    
+    alt is_tls
+        Server->>SSL: SSL_do_handshake()
+    end
 
+    Server->>UV: uv_read_start()
+    UV->>Server: on_read(encrypted_buf)
+    
+    alt is_tls
+        Server->>SSL: SSL_read()
+    end
+    
     loop HTTP Parsing
         Server->>HTTP: llhttp_execute()
         HTTP-->>Server: on_url()
@@ -229,6 +260,9 @@ sequenceDiagram
     else synchronous
         MW->>Server: csilk_string/json is set
         Server->>Response: _csilk_send_response()
+        alt is_tls
+            Server->>SSL: SSL_write()
+        end
     end
 
     Server->>Arena: csilk_arena_reset()
@@ -237,20 +271,18 @@ sequenceDiagram
 
 ## Key Data Structures
 
-### csilk_ctx_t (per-request context)
+### csilk_ctx_t (Opaque Pointer)
+The internal structure (hidden from public API) includes:
 ```c
 struct csilk_ctx_s {
   int handler_index;              // Current position in handler chain
   csilk_handler_t* handlers;      // NULL-terminated handler array
-  int aborted;                    // Chain execution aborted
-  jmp_buf jump_buffer;            // For panic recovery (setjmp/longjmp)
   csilk_arena_t* arena;           // Per-connection arena allocator
   csilk_request_t request;        // Incoming request data
   csilk_response_t response;      // Outgoing response data
-  csilk_param_t params[20];       // URL path parameters
-  int is_websocket;               // WebSocket upgrade flag
-  int is_sse;                     // SSE initialization flag
-  void (*on_ws_message)(...);     // WebSocket message callback
+  char request_id[37];            // Unique Trace ID (UUID v4)
+  csilk_storage_driver_t* storage_driver; // Custom storage backend
+  csilk_crypto_driver_t* crypto_driver;   // Custom crypto backend
 };
 ```
 
@@ -258,14 +290,10 @@ struct csilk_ctx_s {
 ```c
 struct csilk_server_s {
   uv_loop_t* loop;                // libuv event loop
-  csilk_router_t* router;         // Route table
-  uv_tcp_t server_handle;         // TCP server
-  llhttp_settings_t settings;     // HTTP parser callbacks
-  csilk_server_config_t config;   // Server configuration
-  csilk_handler_t middlewares[32]; // Global middleware chain (max 32)
-  int middleware_count;
-  int max_connections;            // Connection limit (0 = unlimited)
-  int active_connections;         // Current connection count
+  csilk_server_config_t config;   // Server configuration (including TLS)
+  SSL_CTX* ssl_ctx;               // OpenSSL context
+  csilk_hook_node_t* hooks[HOOK_COUNT]; // Registered event listeners
+  atomic_int active_connections;  // Thread-safe connection count
 };
 ```
 

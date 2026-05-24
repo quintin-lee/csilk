@@ -94,7 +94,7 @@ void timing_middleware(csilk_ctx_t* c) {
     CSILK_LOG_I("%s %s → %d (%llums)",
         csilk_get_method(c),
         csilk_get_path(c),
-        c->response.status,
+        csilk_get_status(c),
         elapsed);
 }
 ```
@@ -109,6 +109,37 @@ void security_headers_middleware(csilk_ctx_t* c) {
     csilk_set_header(c, "X-Content-Type-Options", "nosniff");
     csilk_set_header(c, "X-Frame-Options", "DENY");
     csilk_set_header(c, "X-XSS-Protection", "1; mode=block");
+}
+```
+
+### 4. JWT Authorization Example
+
+```c
+void protected_resource_handler(csilk_ctx_t* c) {
+    // Built-in JWT middleware already verified the token and stored payload
+    cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+    if (payload) {
+        const char* user = cJSON_GetObjectItem(payload, "sub")->valuestring;
+        CSILK_LOG_I("Access by user: %s", user);
+    }
+    csilk_string(c, 200, "Protected data");
+}
+
+// In main:
+// csilk_group_use(api, (csilk_handler_t)csilk_jwt_middleware, "secret");
+```
+
+### 5. Request Tracing with Request ID
+
+```c
+void trace_middleware(csilk_ctx_t* c) {
+    const char* req_id = csilk_get_request_id(c);
+    
+    // Add request ID to all logs via context-aware logging (future feature)
+    // Or just manually:
+    CSILK_LOG_I("[%s] Started request", req_id);
+    
+    csilk_next(c);
 }
 ```
 
