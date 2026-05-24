@@ -42,11 +42,15 @@ struct csilk_server_s {
 /** @brief Client connection structure. */
 typedef struct {
   uv_tcp_t handle;            /**< libuv TCP stream handle. */
-  uv_timer_t timer;           /**< Connection idle timer. */
+  uv_timer_t timer;           /**< Connection idle (keep-alive) timer. */
+  uv_timer_t read_timer;      /**< Read timeout timer. */
+  uv_timer_t write_timer;     /**< Write timeout timer. */
+  int close_pending;          /**< Pending close refs before freeing client. */
   llhttp_t parser;            /**< HTTP request parser. */
   csilk_server_t* server;     /**< Owning server instance. */
   csilk_ctx_t ctx;            /**< Request context for this connection. */
   size_t total_header_size;   /**< Total size of headers parsed so far. */
+  size_t header_count;        /**< Number of headers parsed so far. */
   char* current_url;          /**< Current URL being parsed. */
   char* current_header_field; /**< Temporary header field name. */
   char* current_header_value; /**< Temporary header field value. */
@@ -65,23 +69,23 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 
-/** @brief Timer close callback.
- * @param handle Handle to close. */
+/** @brief Close handler for timer handles — frees client on last close. */
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
-  if (client) {
-    if (client->server) client->server->active_connections--;
-    // The context's internal pointer is already set to NULL in on_close or here
-    csilk_ctx_cleanup(&client->ctx);
-    if (client->ctx.arena) {
-      csilk_arena_free(client->ctx.arena);
-      client->ctx.arena = NULL;
-    }
-    free(client->current_header_field);
-    free(client->current_header_value);
-    free(client->current_url);
-    free(client);
+  if (!client) return;
+  client->close_pending--;
+  if (client->close_pending > 0) return;
+
+  if (client->server) client->server->active_connections--;
+  csilk_ctx_cleanup(&client->ctx);
+  if (client->ctx.arena) {
+    csilk_arena_free(client->ctx.arena);
+    client->ctx.arena = NULL;
   }
+  free(client->current_header_field);
+  free(client->current_header_value);
+  free(client->current_url);
+  free(client);
 }
 
 /** @brief Close handler for client connections.
@@ -90,16 +94,34 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
-    // Critical: Unlink the context from the client to prevent UAF in async
-    // callbacks
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
-    if (client->ctx.arena) {
-      csilk_arena_free(client->ctx.arena);
-      client->ctx.arena = NULL;
+    uv_timer_stop(&client->read_timer);
+    uv_timer_stop(&client->write_timer);
+
+    client->close_pending = 3;
+    uv_handle_t* timers[] = {(uv_handle_t*)&client->timer,
+                             (uv_handle_t*)&client->read_timer,
+                             (uv_handle_t*)&client->write_timer};
+    for (int i = 0; i < 3; i++) {
+      if (uv_is_closing(timers[i])) {
+        client->close_pending--;
+      } else {
+        timers[i]->data = client;
+        uv_close(timers[i], on_timer_close);
+      }
     }
-    if (!uv_is_closing((uv_handle_t*)&client->timer)) {
-      uv_close((uv_handle_t*)&client->timer, on_timer_close);
+    if (client->close_pending <= 0) {
+      if (client->server) client->server->active_connections--;
+      csilk_ctx_cleanup(&client->ctx);
+      if (client->ctx.arena) {
+        csilk_arena_free(client->ctx.arena);
+        client->ctx.arena = NULL;
+      }
+      free(client->current_header_field);
+      free(client->current_header_value);
+      free(client->current_url);
+      free(client);
     }
   }
 }
@@ -136,15 +158,41 @@ static void on_write(uv_write_t* req, int status) {
   if (status < 0) {
     fprintf(stderr, "Write error %s\n", uv_strerror(status));
   }
+  // Stop write timeout (response flushed)
+  if (req->handle) {
+    csilk_client_t* client = (csilk_client_t*)req->handle->data;
+    if (client) {
+      uv_timer_stop(&client->write_timer);
+    }
+  }
   if (req->data) {
     free(req->data);
   }
   free(req);
 }
 
-/** @brief Timeout callback.
+/** @brief Idle timeout callback — closes connection on keep-alive idle.
  * @param handle Timer handle. */
-static void on_timeout(uv_timer_t* handle) {
+static void on_idle_timeout(uv_timer_t* handle) {
+  csilk_client_t* client = (csilk_client_t*)handle->data;
+  if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+    uv_close((uv_handle_t*)&client->handle, on_close);
+  }
+}
+
+/** @brief Read timeout callback — no data received within read_timeout_ms.
+ * @param handle Timer handle. */
+static void on_read_timeout(uv_timer_t* handle) {
+  csilk_client_t* client = (csilk_client_t*)handle->data;
+  if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+    uv_close((uv_handle_t*)&client->handle, on_close);
+  }
+}
+
+/** @brief Write timeout callback — response not flushed within
+ * write_timeout_ms.
+ * @param handle Timer handle. */
+static void on_write_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
     uv_close((uv_handle_t*)&client->handle, on_close);
@@ -156,7 +204,7 @@ static void on_timeout(uv_timer_t* handle) {
 static int on_message_begin(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size = 0;
-  // Reset other request-specific fields if necessary
+  client->header_count = 0;
   return 0;
 }
 
@@ -166,6 +214,10 @@ static int on_message_begin(llhttp_t* p) {
  * @param length Length of URL data. */
 static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
+  size_t max_url = client->server->config.max_url_size;
+  if (max_url > 0 && length > max_url) {
+    return HPE_USER;
+  }
   if (client->current_url) free(client->current_url);
   client->current_url = malloc(length + 1);
   if (!client->current_url) {
@@ -184,6 +236,11 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
   if (client->total_header_size > client->server->config.max_header_size) {
+    return HPE_USER;
+  }
+  client->header_count++;
+  if (client->server->config.max_headers_count > 0 &&
+      client->header_count > client->server->config.max_headers_count) {
     return HPE_USER;
   }
 
@@ -399,11 +456,20 @@ void _csilk_send_response(csilk_ctx_t* c) {
     }
   }
 
+  // Stop read timeout (request is complete)
+  uv_timer_stop(&client->read_timer);
+
+  // Start write timeout
+  if (client->server->config.write_timeout_ms > 0) {
+    uv_timer_start(&client->write_timer, on_write_timeout,
+                   client->server->config.write_timeout_ms, 0);
+  }
+
   if (client->ctx.is_websocket) {
     // WebSocket or SSE connection: keep alive without idle timer
   } else {
     if (keep_alive) {
-      uv_timer_start(&client->timer, on_timeout,
+      uv_timer_start(&client->timer, on_idle_timeout,
                      client->server->config.idle_timeout_ms, 0);
       uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
     } else {
@@ -510,8 +576,9 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 
   csilk_server_t* server = (csilk_server_t*)server_stream->data;
 
-  if (server->max_connections > 0 &&
-      server->active_connections >= server->max_connections) {
+  int max_conn = server->config.max_connections;
+  if (max_conn == 0) max_conn = server->max_connections;
+  if (max_conn > 0 && server->active_connections >= max_conn) {
     /* accept and immediately close to drain the backlog */
     uv_tcp_t tmp;
     uv_tcp_init(server_stream->loop, &tmp);
@@ -542,6 +609,16 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->parser.data = client;
     uv_timer_init(server_stream->loop, &client->timer);
     client->timer.data = client;
+    uv_timer_init(server_stream->loop, &client->read_timer);
+    client->read_timer.data = client;
+    uv_timer_init(server_stream->loop, &client->write_timer);
+    client->write_timer.data = client;
+
+    // Start read timeout and request timeout timers
+    if (server->config.read_timeout_ms > 0) {
+      uv_timer_start(&client->read_timer, on_read_timeout,
+                     server->config.read_timeout_ms, 0);
+    }
 
     // Initialize arena for the request
     client->ctx.arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
@@ -567,6 +644,11 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   csilk_client_t* client = (csilk_client_t*)stream->data;
   uv_timer_stop(&client->timer);
+  // Reset read timeout on data arrival
+  if (client->server->config.read_timeout_ms > 0) {
+    uv_timer_start(&client->read_timer, on_read_timeout,
+                   client->server->config.read_timeout_ms, 0);
+  }
   if (nread > 0) {
     if (client->ctx.is_websocket) {
       csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base,
