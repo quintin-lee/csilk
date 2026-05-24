@@ -1,6 +1,6 @@
 # Doxyfile 1.12.0
 PROJECT_NAME           = "Csilk"
-PROJECT_NUMBER         = 0.2.0
+PROJECT_NUMBER         = 0.2.1
 PROJECT_BRIEF          = "A lightweight, high-performance C HTTP web framework"
 OUTPUT_DIRECTORY       = docs
 INPUT                  = include src README.md CHANGELOG.md CONTRIBUTING.md docs/ARCH.md examples/example_app.c examples/example_server.c examples/advanced_server.c

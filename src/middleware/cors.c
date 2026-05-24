@@ -18,6 +18,9 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
   }
 
   csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
+  if (strcmp(config->allow_origin, "*") != 0) {
+    csilk_set_header(c, "Vary", "Origin");
+  }
   csilk_set_header(c, "Access-Control-Allow-Methods", config->allow_methods);
   csilk_set_header(c, "Access-Control-Allow-Headers", config->allow_headers);
 
