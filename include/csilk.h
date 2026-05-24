@@ -537,7 +537,18 @@ int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr);
 void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
                         const void* ptr);
 
+/** @brief Convenience macro for binding JSON body to a reflected struct.
+ *  Wraps csilk_bind_reflect, automatically stringifying the type name.
+ *  @param c The request context.
+ *  @param type The struct type (used with #type to get the name).
+ *  @param ptr Pointer to the struct instance. */
 #define csilk_bind(c, type, ptr) csilk_bind_reflect(c, #type, ptr)
+/** @brief Convenience macro for sending a reflected struct as JSON response.
+ *  Wraps csilk_json_reflect, automatically stringifying the type name.
+ *  @param c The request context.
+ *  @param status HTTP status code.
+ *  @param type The struct type (used with #type to get the name).
+ *  @param ptr Pointer to the struct instance. */
 #define csilk_json_t(c, status, type, ptr) \
   csilk_json_reflect(c, status, #type, ptr)
 

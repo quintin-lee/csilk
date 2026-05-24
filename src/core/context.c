@@ -201,29 +201,54 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->current_handler = NULL;  // Reset current handler tracking
 }
 
+/** @brief Get the HTTP method of the current request.
+ *  @param c The request context.
+ *  @return The method string (e.g., "GET", "POST"), or NULL. */
 const char* csilk_get_method(csilk_ctx_t* c) {
   return c ? c->request.method : NULL;
 }
 
+/** @brief Get the URL path of the current request.
+ *  @param c The request context.
+ *  @return The path string, or NULL. */
 const char* csilk_get_path(csilk_ctx_t* c) {
   return c ? c->request.path : NULL;
 }
 
+/** @brief Get the request body.
+ *  @param c The request context.
+ *  @param out_len Optional pointer to store the body length.
+ *  @return Pointer to the body data, or NULL. */
 const char* csilk_get_body(csilk_ctx_t* c, size_t* out_len) {
   if (out_len) *out_len = c ? c->request.body_len : 0;
   return c ? c->request.body : NULL;
 }
 
+/** @brief Get the length of the request body.
+ *  @param c The request context.
+ *  @return Body length in bytes. */
 size_t csilk_get_body_len(csilk_ctx_t* c) {
   return c ? c->request.body_len : 0;
 }
 
+/** @brief Check if the current request is a WebSocket upgrade.
+ *  @param c The request context.
+ *  @return 1 if WebSocket, 0 otherwise. */
 int csilk_is_websocket(csilk_ctx_t* c) { return c ? c->is_websocket : 0; }
 
+/** @brief Check if the current request is an SSE connection.
+ *  @param c The request context.
+ *  @return 1 if SSE, 0 otherwise. */
 int csilk_is_sse(csilk_ctx_t* c) { return c ? c->is_sse : 0; }
 
+/** @brief Check if the client has disconnected (aborted).
+ *  @param c The request context.
+ *  @return 1 if aborted, 0 otherwise. */
 int csilk_is_aborted(csilk_ctx_t* c) { return c ? c->aborted : 0; }
 
+/** @brief Set a callback for incoming WebSocket messages.
+ *  @param c The request context.
+ *  @param cb Callback function invoked on each WebSocket frame. */
 void csilk_set_on_ws_message(csilk_ctx_t* c,
                              void (*cb)(csilk_ctx_t* c, const uint8_t* payload,
                                         size_t len, int opcode)) {
