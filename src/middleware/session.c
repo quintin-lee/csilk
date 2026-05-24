@@ -51,7 +51,9 @@ static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
 #define SESSION_TTL 3600
 
 /** @brief Generate a cryptographically random session ID. */
-static void generate_session_id(char id[37]) { csilk_generate_uuid(id); }
+static void generate_session_id(csilk_ctx_t* c, char id[37]) {
+  _csilk_generate_uuid(c, id);
+}
 
 /** @brief Find a session by ID in the global store. */
 static csilk_session_t* find_session(const char* id) {
@@ -139,7 +141,7 @@ void csilk_session_start(csilk_ctx_t* c) {
     session = calloc(1, sizeof(csilk_session_t));
     if (!session) return;
 
-    generate_session_id(session->id);
+    generate_session_id(c, session->id);
     session->expires_at = time(NULL) + SESSION_TTL;
 
     add_session_locked(session);

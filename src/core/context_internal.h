@@ -56,6 +56,7 @@ struct csilk_ctx_s {
   void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len,
                         int opcode);      /**< WebSocket message callback. */
   csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
+  csilk_crypto_driver_t* crypto_driver;   /**< Context crypto driver. */
   csilk_storage_item_t* storage_head; /**< Head of key-value storage list. */
   void* _internal_client; /**< Internal client pointer (DO NOT USE). */
   uv_work_t work_req;     /**< Worker request for async operations. */

@@ -33,6 +33,12 @@
 /** @brief Forward declaration for client connection structure. */
 typedef struct csilk_client_s csilk_client_t;
 
+/** @brief Hook handler node in a linked list. */
+typedef struct csilk_hook_node_s {
+  void* handler;
+  struct csilk_hook_node_s* next;
+} csilk_hook_node_t;
+
 /** @brief Server structure. */
 struct csilk_server_s {
   uv_loop_t* loop;                 /**< libuv event loop. */
@@ -52,8 +58,10 @@ struct csilk_server_s {
   csilk_handler_t
       not_found_handler; /**< Custom 404 handler (NULL = default). */
   char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
-  csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
-  SSL_CTX* ssl_ctx;                       /**< OpenSSL context. */
+  csilk_storage_driver_t* storage_driver;     /**< Context storage driver. */
+  csilk_crypto_driver_t* crypto_driver;       /**< Crypto algorithm driver. */
+  SSL_CTX* ssl_ctx;                           /**< OpenSSL context. */
+  csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
   csilk_client_t* active_clients;  /**< Head of active connections list. */
   uv_mutex_t clients_mutex;        /**< Mutex for active clients list. */
   csilk_client_t* client_pool[32]; /**< Connection object free list. */
@@ -104,6 +112,8 @@ static void cleanup_tls(csilk_server_t* s);
 static int setup_client_tls(csilk_client_t* client);
 static void process_tls_read(csilk_client_t* client);
 static void flush_tls_write(csilk_client_t* client);
+static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
+                          csilk_hook_type_t type);
 
 /** @brief Get a client from the connection pool (or allocate new). */
 static csilk_client_t* pool_get(csilk_server_t* server) {
@@ -184,6 +194,7 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
+    trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
     client_list_remove(client->server, client);
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
@@ -233,6 +244,8 @@ static void on_signal(uv_signal_t* handle, int signum) {
  * @param handle Async handle. */
 static void on_stop_async(uv_async_t* handle) {
   csilk_server_t* server = (csilk_server_t*)handle->data;
+
+  trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
 
   // Close the server listen handle (stop accepting new connections)
   if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
@@ -655,6 +668,8 @@ void _csilk_send_response(csilk_ctx_t* c) {
     }
   }
 
+  trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
+
   csilk_ctx_cleanup(&client->ctx);
 }
 
@@ -699,6 +714,8 @@ static int on_message_complete(llhttp_t* p) {
   finalize_request(client, p);
   CSILK_LOG_I("Request: %s %s", client->ctx.request.method,
               client->ctx.request.path);
+
+  trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_BEGIN);
 
   if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
     CSILK_LOG_D("Route matched, calling next handler");
@@ -782,6 +799,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   client->handle.data = client;
   client->ctx._internal_client = client;
   client->ctx.storage_driver = server->storage_driver;
+  client->ctx.crypto_driver = server->crypto_driver;
   client_list_add(server, client);
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
@@ -791,6 +809,8 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     atomic_fetch_add(&server->active_connections, 1);
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
+
+    trigger_hooks(server, &client->ctx, CSILK_HOOK_CONN_OPEN);
 
     if (server->ssl_ctx) {
       if (setup_client_tls(client) < 0) {
@@ -1030,6 +1050,16 @@ void csilk_server_free(csilk_server_t* server) {
   }
 
   cleanup_tls(server);
+
+  for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
+    csilk_hook_node_t* curr = server->hooks[i];
+    while (curr) {
+      csilk_hook_node_t* next = curr->next;
+      free(curr);
+      curr = next;
+    }
+  }
+
   uv_mutex_destroy(&server->clients_mutex);
   free(server);
 }
@@ -1059,6 +1089,41 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
 void csilk_server_set_storage_driver(csilk_server_t* server,
                                      csilk_storage_driver_t* driver) {
   if (server) server->storage_driver = driver;
+}
+
+/** @brief Set the global crypto driver for the server. */
+void csilk_server_set_crypto_driver(csilk_server_t* server,
+                                    csilk_crypto_driver_t* driver) {
+  if (server) server->crypto_driver = driver;
+}
+
+/** @brief Register a server-level hook. */
+void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
+                           void* handler) {
+  if (!s || type < 0 || type >= CSILK_HOOK_COUNT || !handler) return;
+
+  csilk_hook_node_t* node = malloc(sizeof(csilk_hook_node_t));
+  if (!node) return;
+
+  node->handler = handler;
+  node->next = s->hooks[type];
+  s->hooks[type] = node;
+}
+
+/** @brief Internal: Trigger all handlers for a given hook type. */
+static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
+                          csilk_hook_type_t type) {
+  if (!s || type < 0 || type >= CSILK_HOOK_COUNT) return;
+
+  csilk_hook_node_t* curr = s->hooks[type];
+  while (curr) {
+    if (type <= CSILK_HOOK_SERVER_STOP) {
+      ((csilk_server_hook_handler_t)curr->handler)(s);
+    } else {
+      if (c) ((csilk_ctx_hook_handler_t)curr->handler)(c);
+    }
+    curr = curr->next;
+  }
 }
 
 #ifndef _WIN32
@@ -1225,6 +1290,8 @@ int csilk_server_run(csilk_server_t* server, int port) {
 
   CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port,
               workers);
+
+  trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
   return uv_run(server->loop, UV_RUN_DEFAULT);
 }

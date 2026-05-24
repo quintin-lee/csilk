@@ -969,16 +969,18 @@ void csilk_sse_close(csilk_ctx_t* c);
 /* --- JWT Authentication Middleware --- */
 
 /** @brief Generate a JWT token (HS256).
+ * @param c Request context (for crypto driver access).
  * @param payload JSON object containing claims (e.g., {"sub": "123"}).
  * @param secret Secret key for signing.
  * @return Generated token string (must be freed by caller). */
-char* csilk_jwt_generate(cJSON* payload, const char* secret);
+char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
 
 /** @brief Verify and parse a JWT token.
+ * @param c Request context (for crypto driver access).
  * @param token JWT token string.
  * @param secret Secret key for verification.
  * @return Parsed payload JSON object, or NULL if invalid. */
-cJSON* csilk_jwt_verify(const char* token, const char* secret);
+cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
 
 /** @brief JWT middleware handler.
  * Extracts Bearer token from Authorization header and verifies it.
@@ -1021,6 +1023,54 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler);
 
 /** @brief Main Server structure. */
 typedef struct csilk_server_s csilk_server_t;
+
+/* --- Hook System --- */
+
+/** @brief Hook types for server and request lifecycle. */
+typedef enum {
+  CSILK_HOOK_SERVER_START,  /**< Called just before the server starts. */
+  CSILK_HOOK_SERVER_STOP,   /**< Called when the server is stopping. */
+  CSILK_HOOK_CONN_OPEN,     /**< Called when a new client connects. */
+  CSILK_HOOK_CONN_CLOSE,    /**< Called when a client disconnects. */
+  CSILK_HOOK_REQUEST_BEGIN, /**< Called when a request is fully parsed. */
+  CSILK_HOOK_REQUEST_END,   /**< Called when a response is finished. */
+  CSILK_HOOK_COUNT          /**< Total number of hook types. */
+} csilk_hook_type_t;
+
+/** @brief Callback for server-level hooks.
+ * @param s The server instance. */
+typedef void (*csilk_server_hook_handler_t)(csilk_server_t* s);
+
+/** @brief Callback for context-level hooks.
+ * @param c The request context. */
+typedef void (*csilk_ctx_hook_handler_t)(csilk_ctx_t* c);
+
+/** @brief Register a server-level hook.
+ * @param s The server instance.
+ * @param type The hook type.
+ * @param handler The callback function. */
+void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
+                           void* handler);
+
+/* --- Crypto Driver Interface --- */
+
+/** @brief Pluggable cryptographic algorithm driver.
+ * Allows replacing default SHA256/HMAC/UUID implementations. */
+typedef struct {
+  /** @brief Compute SHA256 hash. */
+  void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
+  /** @brief Compute HMAC-SHA256. */
+  void (*hmac_sha256)(const uint8_t* key, size_t key_len, const uint8_t* data,
+                      size_t data_len, uint8_t out[32]);
+  /** @brief Generate a random UUID v4 string. */
+  void (*generate_uuid)(char buf[37]);
+} csilk_crypto_driver_t;
+
+/** @brief Set the global crypto driver for the server.
+ * @param s The server instance.
+ * @param driver Pointer to the crypto driver (NULL for default). */
+void csilk_server_set_crypto_driver(csilk_server_t* s,
+                                    csilk_crypto_driver_t* driver);
 
 /** @brief Create a new server instance.
  * @param router The router to handle routing logic.

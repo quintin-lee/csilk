@@ -16,7 +16,7 @@
 /** @brief Header for HS256 JWT. */
 static const char* JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
 
-char* csilk_jwt_generate(cJSON* payload, const char* secret) {
+char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret) {
   if (!payload || !secret) return NULL;
 
   char* header_b64 = NULL;
@@ -59,8 +59,8 @@ char* csilk_jwt_generate(cJSON* payload, const char* secret) {
 
   // 4. Sign
   uint8_t sig[32];
-  csilk_hmac_sha256((const uint8_t*)secret, strlen(secret),
-                    (const uint8_t*)sign_input, strlen(sign_input), sig);
+  _csilk_hmac_sha256(c, (const uint8_t*)secret, strlen(secret),
+                     (const uint8_t*)sign_input, strlen(sign_input), sig);
 
   char sig_b64[45];  // 32 bytes -> 43 chars + padding + null
   csilk_base64url_encode(sig, 32, sig_b64);
@@ -78,7 +78,7 @@ char* csilk_jwt_generate(cJSON* payload, const char* secret) {
   return token;
 }
 
-cJSON* csilk_jwt_verify(const char* token, const char* secret) {
+cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret) {
   if (!token || !secret) return NULL;
 
   const char* dot1 = strchr(token, '.');
@@ -93,8 +93,8 @@ cJSON* csilk_jwt_verify(const char* token, const char* secret) {
   // 1. Verify signature
   size_t sign_input_len = (size_t)(dot2 - token);
   uint8_t sig_actual[32];
-  csilk_hmac_sha256((const uint8_t*)secret, strlen(secret),
-                    (const uint8_t*)token, sign_input_len, sig_actual);
+  _csilk_hmac_sha256(c, (const uint8_t*)secret, strlen(secret),
+                     (const uint8_t*)token, sign_input_len, sig_actual);
 
   char sig_expected_b64[45];
   csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
@@ -140,7 +140,7 @@ void csilk_jwt_middleware(csilk_ctx_t* c, const char* secret) {
   }
 
   const char* token = auth_header + 7;
-  cJSON* payload = csilk_jwt_verify(token, secret);
+  cJSON* payload = csilk_jwt_verify(c, token, secret);
   if (!payload) {
     csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Invalid or expired token");
     csilk_abort(c);

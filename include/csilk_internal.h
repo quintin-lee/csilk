@@ -104,6 +104,13 @@ __attribute__((weak)) void _csilk_send_response(csilk_ctx_t* c);
  * @param len Data length. */
 void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len);
 
+/** @brief Internal: Compute HMAC-SHA256 (uses driver if set). */
+void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                        const uint8_t* data, size_t data_len, uint8_t out[32]);
+
+/** @brief Internal: Generate UUID v4 (uses driver if set). */
+void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
+
 /** @brief URL decode a string in-place.
  * @param str The string to decode.
  * @return The length of the decoded string. */
