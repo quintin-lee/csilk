@@ -5,7 +5,7 @@
  *
  * Uses the csilk reflection engine for JSON serialization of log entries.
  * @copyright MIT License
- * @version 0.2.0
+ * @version 0.2.1
  */
 
 #include <stdarg.h>

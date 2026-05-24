@@ -16,7 +16,7 @@
  *   csilk_app_free(app);
  * @endcode
  *
- * @version 0.2.0
+ * @version 0.2.1
  * @copyright MIT License
  */
 

@@ -5,7 +5,7 @@
  * Wraps router, server, config, logging and built-in middleware into
  * a single "app" handle with a clean, Express-like API.
  * @copyright MIT License
- * @version 0.2.0
+ * @version 0.2.1
  */
 
 #include <stdio.h>
