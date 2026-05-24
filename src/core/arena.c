@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk_internal.h"
+
 /** @brief A single chunk in the arena linked list. */
 typedef struct csilk_arena_chunk_s {
   struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */

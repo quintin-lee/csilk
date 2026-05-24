@@ -10,6 +10,11 @@
 
 #include "csilk_internal.h"
 
+#ifdef TEST_OOM
+int g_oom_fail_after = -1;
+int g_oom_count = 0;
+#endif
+
 /** @brief Rotate-left bitwise operation. */
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
@@ -140,4 +145,31 @@ void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
       out[j++] = '=';
   }
   out[j] = '\0';
+}
+
+/** @brief Generate a random UUID v4 string (8-4-4-4-12).
+ * @param buf Output buffer (at least 37 bytes). */
+void csilk_generate_uuid(char* buf) {
+  uint8_t random[16];
+  FILE* f = fopen("/dev/urandom", "rb");
+  if (f) {
+    if (fread(random, 1, 16, f) != 16) {
+      /* Fallback to rand if urandom fails */
+      for (int i = 0; i < 16; i++) random[i] = rand() & 0xFF;
+    }
+    fclose(f);
+  } else {
+    for (int i = 0; i < 16; i++) random[i] = rand() & 0xFF;
+  }
+
+  /* Set version (4) and variant (10xx) */
+  random[6] = (random[6] & 0x0F) | 0x40;
+  random[8] = (random[8] & 0x3F) | 0x80;
+
+  sprintf(
+      buf,
+      "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+      random[0], random[1], random[2], random[3], random[4], random[5],
+      random[6], random[7], random[8], random[9], random[10], random[11],
+      random[12], random[13], random[14], random[15]);
 }

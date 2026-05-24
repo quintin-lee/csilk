@@ -13,6 +13,7 @@
 #include <uv.h>
 
 #include "csilk.h"
+#include "csilk_test.h"
 
 /** @brief Method-specific handler mapping with metadata for OpenAPI generation.
  */
@@ -66,6 +67,7 @@ struct csilk_ctx_s {
   /** For OpenAPI spec generation - tracks current method handler */
   csilk_method_handler_t*
       current_handler; /**< Current method handler being executed. */
+  char request_id[37]; /**< Unique request ID (UUID-like). */
 };
 
 /** @brief SHA1 hashing context. */
@@ -111,5 +113,9 @@ void _csilk_send_response(csilk_ctx_t* c);
  * @param str The string to decode.
  * @return The length of the decoded string. */
 size_t csilk_url_decode(char* str);
+
+/** @brief Generate a random UUID v4 string.
+ * @param buf Output buffer (at least 37 bytes). */
+void csilk_generate_uuid(char* buf);
 
 #endif
