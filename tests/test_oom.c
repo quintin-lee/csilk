@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 

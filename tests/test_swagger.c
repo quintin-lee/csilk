@@ -4,6 +4,7 @@
 #include <string.h>
 #include <strings.h>
 
+#include "context_internal.h"
 #include "csilk_internal.h"
 #include "csilk_reflect.h"
 

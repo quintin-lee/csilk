@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "context_internal.h"
 #include "csilk_internal.h"
 
 // Extend type map BEFORE including csilk.h/csilk_reflect.h

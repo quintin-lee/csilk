@@ -62,6 +62,17 @@
 
 /** @brief Opaque request context type. */
 typedef struct csilk_ctx_s csilk_ctx_t;
+
+/** @brief Storage driver interface for context key-value storage. */
+typedef struct {
+  /** @brief Store a value by key. */
+  void (*set)(csilk_ctx_t* c, const char* key, void* value);
+  /** @brief Retrieve a value by key. */
+  void* (*get)(csilk_ctx_t* c, const char* key);
+  /** @brief Clear all stored items (called during ctx cleanup). */
+  void (*clear)(csilk_ctx_t* c);
+} csilk_storage_driver_t;
+
 /** @brief Handler function pointer type. */
 typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
@@ -142,6 +153,46 @@ int csilk_is_aborted(csilk_ctx_t* c);
 void csilk_set_on_ws_message(csilk_ctx_t* c,
                              void (*cb)(csilk_ctx_t* c, const uint8_t* payload,
                                         size_t len, int opcode));
+
+/** @brief Get the unique request ID.
+ * @param c The request context.
+ * @return The request ID string (UUID format). */
+const char* csilk_get_request_id(csilk_ctx_t* c);
+
+/** @brief Get the arena allocator associated with the context.
+ * @param c The request context.
+ * @return Pointer to the arena allocator. */
+csilk_arena_t* csilk_get_arena(csilk_ctx_t* c);
+
+/** @brief Get the response status code.
+ * @param c The request context.
+ * @return The HTTP status code. */
+int csilk_get_status(csilk_ctx_t* c);
+
+/** @brief Set whether the response will be sent asynchronously.
+ * @param c The request context.
+ * @param is_async 1 to enable async mode, 0 to disable. */
+void csilk_set_async(csilk_ctx_t* c, int is_async);
+
+/** @brief Check if the response is in async mode.
+ * @param c The request context.
+ * @return 1 if async, 0 otherwise. */
+int csilk_is_async(csilk_ctx_t* c);
+
+/** @brief Get the response body.
+ * @param c The request context.
+ * @param out_len Optional pointer to store body length.
+ * @return Pointer to the response body data. */
+const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
+
+/** @brief Set the response body directly.
+ * Useful for middleware to modify the response (e.g., compression).
+ * @param c The request context.
+ * @param body Pointer to body data.
+ * @param len Body length.
+ * @param managed If 1, the framework will free() the body when finished. */
+void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len,
+                             int managed);
 
 /** @brief Redirect to another URL with custom status.
  * @param c The request context.
@@ -986,6 +1037,12 @@ void csilk_server_set_config(csilk_server_t* server,
  * @param max Maximum connections (0 = unlimited).
  * @return Previous limit value. */
 int csilk_server_set_max_connections(csilk_server_t* server, int max);
+
+/** @brief Set the storage driver for context key-value storage.
+ * @param server Server instance.
+ * @param driver Pointer to the storage driver (NULL for default in-memory). */
+void csilk_server_set_storage_driver(csilk_server_t* server,
+                                     csilk_storage_driver_t* driver);
 
 /** @brief Run the server event loop.
  * Blocks until server is stopped or error occurs.
