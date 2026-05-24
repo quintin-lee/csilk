@@ -23,11 +23,14 @@ void test_jwt_core() {
 
   const char* secret = "secret";
 
-  char* token = csilk_jwt_generate(payload, secret);
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+
+  char* token = csilk_jwt_generate(&c, payload, secret);
   assert(token != NULL);
   printf("Generated Token: %s\n", token);
 
-  cJSON* verified_payload = csilk_jwt_verify(token, secret);
+  cJSON* verified_payload = csilk_jwt_verify(&c, token, secret);
   assert(verified_payload != NULL);
 
   assert(cJSON_HasObjectItem(verified_payload, "sub"));
@@ -35,12 +38,12 @@ void test_jwt_core() {
                 "1234567890") == 0);
 
   // Test invalid secret
-  cJSON* invalid_payload = csilk_jwt_verify(token, "wrong_secret");
+  cJSON* invalid_payload = csilk_jwt_verify(&c, token, "wrong_secret");
   assert(invalid_payload == NULL);
 
   // Test tampered token
   token[strlen(token) - 1] ^= 0xFF;  // Flip a bit in signature
-  cJSON* tampered_payload = csilk_jwt_verify(token, secret);
+  cJSON* tampered_payload = csilk_jwt_verify(&c, token, secret);
   assert(tampered_payload == NULL);
 
   free(token);
@@ -65,7 +68,7 @@ void test_jwt_middleware() {
   const char* secret = "supersecret";
   cJSON* payload = cJSON_CreateObject();
   cJSON_AddStringToObject(payload, "user", "admin");
-  char* token = csilk_jwt_generate(payload, secret);
+  char* token = csilk_jwt_generate(&c, payload, secret);
 
   char auth_header[512];
   sprintf(auth_header, "Bearer %s", token);
@@ -122,7 +125,7 @@ void test_jwt_expiration() {
   cJSON_AddNumberToObject(payload, "exp",
                           (double)time(NULL) - 10);  // Expired 10s ago
 
-  char* token = csilk_jwt_generate(payload, secret);
+  char* token = csilk_jwt_generate(&c, payload, secret);
   char auth_header[512];
   sprintf(auth_header, "Bearer %s", token);
 
