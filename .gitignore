@@ -25,3 +25,6 @@ build_rel*/
 # Test executables in project root
 test_async_keepalive
 
+findings.md
+progress.md
+task_plan.md
