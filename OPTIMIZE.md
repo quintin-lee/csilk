@@ -2,7 +2,7 @@
 
 > 基于现有 PLAN.md 已完成工作之上的下一阶段优化计划
 > 生成日期: 2026-05-24 | 基于 commit `7fc37cc`
-> 最后更新: 2026-05-24 | P0-P3 全部修复，53 测试全通过 | P4 进行中
+> 最后更新: 2026-05-24 | P0-P3 全部修复，55 测试全通过 | P4 进行中 | P5-1/2/3 已完成
 
 ---
 
@@ -174,16 +174,16 @@
 ### P5-1: 表单 URL 编码解析
 - **现状**: 仅支持 JSON 和 multipart/form-data
 - **方案**: 添加 `application/x-www-form-urlencoded` 解析器至 context 或新中间件
-- **预估**: ~100 行
+- **状态**: [x] 已实现
 
 ### P5-2: 内置 Session 支持
-- **方案**: 简单内存 Session 存储（哈希表），支持 `csilk_session_get/set` API，可选 cookie-based session ID
-- **预估**: ~200 行
+- **方案**: 简单内存 Session 存储（链表），支持 `csilk_session_get/set` API，cookie-based session ID
+- **状态**: [x] 已实现
 
 ### P5-3: HTTP Range 请求支持（静态文件断点续传）
 - **位置**: `src/middleware/static.c`
 - **方案**: 解析 `Range` 头，返回 206 Partial Content + `Content-Range` 头
-- **预估**: ~80 行
+- **状态**: [x] 已实现
 
 ### P5-4: 请求参数验证中间件
 - **方案**: 声明式字段校验（required, min, max, regex 等），类似 validator 库
@@ -250,7 +250,8 @@
 | P1 — 架构与稳定性 | 0 | 全部修复 ✅ |
 | P2 — API 体验 | 0 | 全部修复 ✅ |
 | P3 — 性能优化 | 0 | 全部修复 ✅ |
-| P4 — 测试覆盖 | 5 项 | URL decode ✅ / SHA1+Base64 ✅ / streaming/redirect/WS close/OOM ⏳ |
+| P4 — 测试覆盖 | 5 项 | URL decode ✅ / SHA1+Base64 ✅ / redirect ✅ / streaming/WS close/OOM ⏳ |
+| P5 — 新功能 | 5 | form urlencoded ✅ / session ✅ / range ✅ / validator ⏳ / OPTIONS ⏳ |
 | P5 — 新功能 | 5 | form urlencoded/session/range/validator/OPTIONS 预检 |
-| P6 — 代码质量 | 1 | 分号 ✅ / handler_index ✅ / truncation ⏳ / llhttp ✅ / SHA1 ✅ |
-| **合计** | **~13** | Sprint 1-2 已完成 20+ 项 |
+| P6 — 代码质量 | 0 | 全部修复 ✅ |
+| **合计** | **~5** | P0-P3 全部修复，P4 部分完成，P5 已实现 3/5 |
