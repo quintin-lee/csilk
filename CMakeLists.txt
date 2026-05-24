@@ -152,7 +152,7 @@ target_compile_definitions(csilk PRIVATE
 )
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "0.1.0"
+    VERSION "0.2.1"
     SOVERSION "0"
     OUTPUT_NAME csilk
 )
@@ -167,7 +167,7 @@ if(CSILK_BUILD_SHARED)
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-        VERSION "0.1.0"
+        VERSION "0.2.1"
         SOVERSION "0"
         OUTPUT_NAME csilk
     )
@@ -296,6 +296,6 @@ endif()
 
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "0.2.1")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Csilk")
 include(CPack)

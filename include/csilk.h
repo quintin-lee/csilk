@@ -6,7 +6,7 @@
  * for the csilk HTTP web framework, including the request context,
  * router, server, middleware, WebSocket, SSE, and utility APIs.
  * Inspired by Gin (Golang).
- * @version 0.2.0
+ * @version 0.2.1
  * @copyright MIT License
  */
 
@@ -22,7 +22,7 @@
 #include "csilk_reflect.h"
 
 /** @brief Csilk framework version. */
-#define CSILK_VERSION "0.2.0"
+#define CSILK_VERSION "0.2.1"
 /** @brief Maximum number of URL parameters. */
 #define CSILK_MAX_PARAMS 20
 
