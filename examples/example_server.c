@@ -16,6 +16,67 @@
 #include <unistd.h>
 
 #include "csilk.h"
+#include "csilk_reflect.h"
+
+// --- OpenAPI Demo: Reflected Structs ---
+
+/** @brief Login request body type for reflection. */
+typedef struct {
+  char username[64];
+  char password[64];
+} login_request_t;
+
+/** @brief Login response body type for reflection. */
+typedef struct {
+  char token[128];
+  char message[256];
+} login_response_t;
+
+/** @brief User profile type for reflection. */
+typedef struct {
+  int id;
+  char name[128];
+  double score;
+  bool active;
+} user_profile_t;
+
+// Field descriptor macros for the above structs
+#define LOGIN_REQUEST_MAP(_, ...)                            \
+  _(login_request_t, username, CSILK_TYPE_STRING,            \
+    sizeof(((login_request_t*)0)->username), 0, false, NULL) \
+  _(login_request_t, password, CSILK_TYPE_STRING,            \
+    sizeof(((login_request_t*)0)->password), 0, false, NULL)
+
+#define LOGIN_RESPONSE_MAP(_, ...)                         \
+  _(login_response_t, token, CSILK_TYPE_STRING,            \
+    sizeof(((login_response_t*)0)->token), 0, false, NULL) \
+  _(login_response_t, message, CSILK_TYPE_STRING,          \
+    sizeof(((login_response_t*)0)->message), 0, false, NULL)
+
+#define USER_PROFILE_MAP(_, ...)                                              \
+  _(user_profile_t, id, CSILK_TYPE_INT32, sizeof(int), 0, false, NULL)        \
+  _(user_profile_t, name, CSILK_TYPE_STRING,                                  \
+    sizeof(((user_profile_t*)0)->name), 0, false, NULL)                       \
+  _(user_profile_t, score, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, NULL) \
+  _(user_profile_t, active, CSILK_TYPE_BOOL, sizeof(bool), 0, false, NULL)
+
+// Auto-register structs with reflection at startup
+CSILK_REGISTER_REFLECT(login_request_t, LOGIN_REQUEST_MAP)
+CSILK_REGISTER_REFLECT(login_response_t, LOGIN_RESPONSE_MAP)
+CSILK_REGISTER_REFLECT(user_profile_t, USER_PROFILE_MAP)
+
+/** @brief Global router reference for OpenAPI handler. */
+static csilk_router_t* g_router = NULL;
+
+/** @brief OpenAPI spec handler - serves the generated spec at runtime. */
+void openapi_spec_handler(csilk_ctx_t* c) {
+  if (g_router) {
+    csilk_serve_openapi(c, g_router, "csilk Demo API", "1.0.0",
+                        "Example API demonstrating csilk framework features");
+  } else {
+    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Router not available");
+  }
+}
 
 /** @brief Mock authentication validator — accepts only "secret123". */
 int mock_auth_validator(const char* token) {
@@ -236,6 +297,7 @@ int main(int argc, char* argv[]) {
     CSILK_LOG_E("Failed to create router");
     return 1;
   }
+  g_router = router;  // For OpenAPI handler
 
   // Create server first to use csilk_server_use
   csilk_server_t* server = csilk_server_new(router);
@@ -273,14 +335,30 @@ int main(int argc, char* argv[]) {
   }
   csilk_GET(protected_group, "/protected", protected_handler);
 
-  // Root routes
+  // Root routes with OpenAPI metadata
   csilk_GET(root, "/", hello_handler);
   csilk_GET(root, "/user/:id", user_handler);
-  csilk_POST(root, "/login", login_handler);
+
+  // Register POST /login with input/output types for OpenAPI
+  csilk_handler_t login_handlers[] = {login_handler};
+  csilk_router_add_extended(
+      router, "POST", "/login", login_handlers, 1, "/login",
+      "login_request_t",   // input_type
+      "login_response_t",  // output_type
+      "User Login",        // summary
+      "Authenticate with username/password and receive a token");
+
   csilk_GET(root, "/events", events_handler);
   csilk_POST(root, "/upload", upload_handler);
   csilk_GET(root, "/cookie", cookie_handler);
   csilk_POST(root, "/cookie", cookie_handler);
+
+  // OpenAPI spec endpoint (use raw router_add to avoid registration)
+  csilk_handler_t openapi_handlers[] = {openapi_spec_handler};
+  csilk_router_add_extended(
+      router, "GET", "/openapi.json", openapi_handlers, 1, "/openapi.json",
+      NULL, NULL, "OpenAPI Specification",
+      "Returns the OpenAPI 3.0 JSON specification for this API");
 
   // Static file serving (if configured)
   if (cfg.static_files.enable && cfg.static_files.root_dir) {

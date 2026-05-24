@@ -188,7 +188,7 @@ static void create_user(csilk_ctx_t* c) {
              (long long)u.id, u.name, u.email, u.active ? "true" : "false",
              u.score, u.rating, u.level, u.bio);
     free(u.bio);
-    csilk_string(c, CSILK_STATUS_CREATED, buf);
+    csilk_string(c, CSILK_STATUS_OK, buf);
   } else {
     char buf[256];
     snprintf(buf, sizeof(buf),
@@ -197,7 +197,7 @@ static void create_user(csilk_ctx_t* c) {
              "\"rating\":%.1f,\"level\":%d}",
              (long long)u.id, u.name, u.email, u.active ? "true" : "false",
              u.score, u.rating, u.level);
-    csilk_string(c, CSILK_STATUS_CREATED, buf);
+    csilk_string(c, CSILK_STATUS_OK, buf);
   }
 }
 
@@ -245,7 +245,7 @@ static void create_order(csilk_ctx_t* c) {
 
   o.order_id = (int64_t)(time(NULL) % 100000);
 
-  csilk_json_reflect(c, CSILK_STATUS_CREATED, "reflect_order_t", &o);
+  csilk_json_reflect(c, CSILK_STATUS_OK, "reflect_order_t", &o);
 }
 
 /** @brief Handler for GET /api/orders/:id — returns a mock order via

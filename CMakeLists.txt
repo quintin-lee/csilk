@@ -115,6 +115,7 @@ set(CSILK_SOURCES
     src/middleware/sse.c
     src/middleware/gzip.c
     src/middleware/multipart.c
+    src/core/swagger.c
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -143,6 +144,9 @@ target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson Threads::Threads PRIVA
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(csilk PRIVATE
+    CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
 )
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
@@ -207,6 +211,7 @@ add_csilk_test(test_multipart tests/test_multipart.c)
 add_csilk_test(test_sse tests/test_sse.c)
 add_csilk_test(test_ratelimit tests/test_ratelimit.c)
 add_csilk_test(test_app tests/test_app.c)
+add_csilk_test(test_swagger tests/test_swagger.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
 option(USE_FUZZER "Enable libFuzzer" OFF)
@@ -233,7 +238,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_integration
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_integration test_swagger
     COMMENT "Running all tests with ctest"
 )
 
@@ -254,6 +259,7 @@ if(CSILK_BUILD_SHARED)
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY share/swagger-ui/ DESTINATION ${CMAKE_INSTALL_DATADIR}/csilk/swagger-ui)
 
 install(EXPORT csilk-targets
     FILE csilk-config.cmake
