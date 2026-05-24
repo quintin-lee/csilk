@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+#include <uv.h>
 
 #include "csilk.h"
 #include "csilk_internal.h"
@@ -23,14 +25,48 @@ typedef struct csilk_session_s {
 /** @brief Global session store. */
 static csilk_session_t* session_store = NULL;
 
+/** @brief Session store mutex. */
+static uv_mutex_t session_mutex;
+
+/** @brief Mutex initialization guard. */
+static uv_once_t session_mutex_once = UV_ONCE_INIT;
+
+/** @brief Initialize the session store mutex. */
+static void init_session_mutex(void) { uv_mutex_init(&session_mutex); }
+
+/** @brief Lock the session store. */
+static void session_lock(void) {
+  uv_once(&session_mutex_once, init_session_mutex);
+  uv_mutex_lock(&session_mutex);
+}
+
+/** @brief Unlock the session store. */
+static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
+
 /** @brief Session cookie name. */
 #define SESSION_COOKIE "csilk_session"
 
 /** @brief Default session TTL (seconds). */
 #define SESSION_TTL 3600
 
-/** @brief Generate a random 32-character hex session ID. */
+/** @brief Generate a cryptographically random 32-character hex session ID. */
 static void generate_session_id(char id[33]) {
+  unsigned char buf[16];
+  FILE* f = fopen("/dev/urandom", "rb");
+  if (f) {
+    size_t n = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+    if (n == sizeof(buf)) {
+      for (int i = 0; i < 16; i++) {
+        id[i * 2] = "0123456789abcdef"[buf[i] >> 4];
+        id[i * 2 + 1] = "0123456789abcdef"[buf[i] & 0xf];
+      }
+      id[32] = '\0';
+      return;
+    }
+  }
+  /* Fallback: use rand() + pid + time */
+  srand((unsigned)(time(NULL) ^ getpid()));
   const char hex[] = "0123456789abcdef";
   for (int i = 0; i < 32; i++) {
     id[i] = hex[rand() % 16];
@@ -48,9 +84,42 @@ static csilk_session_t* find_session(const char* id) {
   return NULL;
 }
 
+/** @brief Find a session by ID (with lock held). */
+static csilk_session_t* find_session_locked(const char* id) {
+  session_lock();
+  csilk_session_t* s = find_session(id);
+  session_unlock();
+  return s;
+}
+
+/** @brief Add a session to the store (with lock held). */
+static void add_session_locked(csilk_session_t* session) {
+  session_lock();
+  session->next = session_store;
+  session_store = session;
+  session_unlock();
+}
+
+/** @brief Remove a session from the store (with lock held). */
+static void remove_session_locked(csilk_session_t* session) {
+  session_lock();
+  csilk_session_t** prev = &session_store;
+  csilk_session_t* s = session_store;
+  while (s) {
+    if (s == session) {
+      *prev = s->next;
+      break;
+    }
+    prev = &s->next;
+    s = s->next;
+  }
+  session_unlock();
+}
+
 /** @brief Remove expired sessions from the global store. */
 static void cleanup_expired(void) {
   time_t now = time(NULL);
+  session_lock();
   csilk_session_t** prev = &session_store;
   csilk_session_t* s = session_store;
   while (s) {
@@ -70,6 +139,7 @@ static void cleanup_expired(void) {
       s = s->next;
     }
   }
+  session_unlock();
 }
 
 /** @brief Initialize the session system. */
@@ -83,7 +153,7 @@ void csilk_session_start(csilk_ctx_t* c) {
   csilk_session_t* session = NULL;
 
   if (sid) {
-    session = find_session(sid);
+    session = find_session_locked(sid);
   }
 
   if (!session) {
@@ -93,8 +163,7 @@ void csilk_session_start(csilk_ctx_t* c) {
     generate_session_id(session->id);
     session->expires_at = time(NULL) + SESSION_TTL;
 
-    session->next = session_store;
-    session_store = session;
+    add_session_locked(session);
 
     csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0,
                      1);
@@ -152,24 +221,16 @@ void csilk_session_destroy(csilk_ctx_t* c) {
   csilk_session_t* session = csilk_get(c, "_session");
   if (!session) return;
 
-  csilk_session_t** prev = &session_store;
-  csilk_session_t* s = session_store;
-  while (s) {
-    if (s == session) {
-      csilk_session_data_t* d = s->data;
-      while (d) {
-        csilk_session_data_t* next = d->next;
-        free(d->key);
-        free(d);
-        d = next;
-      }
-      *prev = s->next;
-      free(s);
-      break;
-    }
-    prev = &s->next;
-    s = s->next;
+  remove_session_locked(session);
+
+  csilk_session_data_t* d = session->data;
+  while (d) {
+    csilk_session_data_t* next = d->next;
+    free(d->key);
+    free(d);
+    d = next;
   }
+  free(session);
 
   csilk_set(c, "_session", NULL);
   csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);

@@ -204,7 +204,8 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->is_async = 0;
   c->response_started = 0;
   c->handler_index = -1;
-  c->current_handler = NULL;  // Reset current handler tracking
+  c->current_handler = NULL;
+  c->on_ws_message = NULL;
 }
 
 /** @brief Get the HTTP method of the current request.
@@ -264,8 +265,9 @@ void csilk_set_on_ws_message(csilk_ctx_t* c,
 /** @brief Redirect to another URL with custom status. */
 void csilk_redirect(csilk_ctx_t* c, int status, const char* location) {
   if (!c || !location) return;
+  if (status < 300 || status > 308) status = CSILK_STATUS_FOUND;
   csilk_set_header(c, "Location", location);
-  csilk_string(c, status, "Redirecting...");
+  c->response.status = status;
   csilk_abort(c);
 }
 
@@ -613,7 +615,7 @@ static int send_chunked_headers(csilk_ctx_t* c) {
   size_t custom_headers_len = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-      custom_headers_len += strlen(h->key) + 2 + strlen(h->value) + 2;
+      custom_headers_len += h->key_len + 2 + h->value_len + 2;
     }
   }
 

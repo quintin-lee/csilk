@@ -219,6 +219,7 @@ add_csilk_test(test_app tests/test_app.c)
 add_csilk_test(test_swagger tests/test_swagger.c)
 add_csilk_test(test_session tests/test_session.c)
 add_csilk_test(test_validate tests/test_validate.c)
+add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
 option(USE_FUZZER "Enable libFuzzer" OFF)
@@ -229,7 +230,7 @@ if(USE_FUZZER)
     target_link_libraries(fuzz_test csilk)
 endif()
 
-# Integration tests (may have pre-existing failures, not run by default)
+# Integration tests
 add_executable(test_integration tests/test_integration.c)
 target_link_libraries(test_integration csilk)
 add_test(NAME test_integration COMMAND test_integration)
@@ -245,7 +246,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_integration test_swagger
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_async_keepalive test_integration test_swagger
     COMMENT "Running all tests with ctest"
 )
 

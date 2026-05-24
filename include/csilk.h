@@ -114,12 +114,6 @@ typedef struct {
 /** @brief Opaque arena allocator type. */
 typedef struct csilk_arena_s csilk_arena_t;
 
-/** @brief Main Request Context (Opaque). */
-typedef struct csilk_ctx_s csilk_ctx_t;
-
-/** @brief Handler function signature. */
-typedef void (*csilk_handler_t)(csilk_ctx_t* c);
-
 /** @brief Get the request HTTP method (e.g., "GET"). */
 const char* csilk_get_method(csilk_ctx_t* c);
 
