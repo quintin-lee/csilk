@@ -2,7 +2,7 @@
 
 > 基于现有 PLAN.md 已完成工作之上的下一阶段优化计划
 > 生成日期: 2026-05-24 | 基于 commit `7fc37cc`
-> 最后更新: 2026-05-24 | 已修复大部分 Sprint 1-2 项目，51 测试全通过
+> 最后更新: 2026-05-24 | P0-P3 全部修复，53 测试全通过 | P4 进行中
 
 ---
 
@@ -107,31 +107,31 @@
 - **位置**: `src/core/server.c:283`
 - **问题**: llhttp 分片回调中每次 append 都做 `realloc(prev_len + length)`，O(n^2)。
 - **方案**: 维护 `capacity` 和 `len`，按 2 倍指数增长预分配。
-- **预估**: ~15 行
+- **状态**: [x] 已修复
 
 ### P3-2: 响应头大小计算避免重复 snprintf
 - **位置**: `src/core/server.c:389-433`
 - **问题**: `_csilk_send_response` 先 `snprintf(NULL, 0, ...)` 计算大小，再 `snprintf(buf, ...)` 格式化，字符串格式化走了两遍。
 - **方案**: 在 header 结构体中缓存 key/value 长度，一次计算即可确定总大小。
-- **预估**: ~20 行
+- **状态**: [x] 已修复
 
 ### P3-3: Cookie/Query 解析避免 strdup
 - **位置**: `src/core/context.c:339,479`
 - **问题**: `csilk_get_cookie` 和 `csilk_parse_query` 使用 `strdup` 复制整个字符串，可用 arena 替代。
 - **方案**: 改为 `csilk_arena_strdup(c->arena, ...)` 避免堆分配。
-- **预估**: ~5 行
+- **状态**: [x] 已修复
 
 ### P3-4: `csilk_group_use` realloc 每次增长 1 个元素
 - **位置**: `src/core/group.c:93-99`
 - **问题**: 每添加一个 middleware 做一次 realloc。
 - **方案**: 指数增长策略（capacity 翻倍）。
-- **预估**: ~10 行
+- **状态**: [x] 已修复
 
 ### P3-5: 连接对象池化
-- **位置**: `src/core/server.c:595-637`
+- **位置**: `src/core/server.c`
 - **问题**: 每次新连接 `calloc` 一个 `csilk_client_t`，断开时 free。高并发场景有分配开销。
-- **方案**: 使用空闲链表复用 `csilk_client_t` 对象。
-- **预估**: ~40 行
+- **方案**: 使用 free list 复用 `csilk_client_t` 对象。
+- **状态**: [x] 已修复
 
 ---
 
@@ -153,11 +153,19 @@
 
 - **URL 解码测试**: `%48%65%6C%6C%6F` → "Hello", 非法序列, 空字符串
 - **SHA1/Base64 已知向量测试**: RFC 3174 / RFC 4648 标准向量
-- **Streaming 响应测试**: `csilk_response_write/end` 分块写入
-- **Redirect 测试**: `csilk_redirect` / `csilk_redirect_simple`
-- **WebSocket 关闭握手测试**: 验证 RFC 6455 双向关闭帧
-- **重定向测试**: 301/302/307 状态码 + Location 头
-- **OOM 模拟**: 使用 `#ifdef TEST_OOM` hook 模拟 malloc 失败
+- **Streaming 响应测试**: `csilk_response_write/end` 分块写入 ⏳
+- **Redirect 测试**: `csilk_redirect` / `csilk_redirect_simple` ⏳
+- **WebSocket 关闭握手测试**: 验证 RFC 6455 双向关闭帧 ⏳
+- **重定向测试**: 301/302/307 状态码 + Location 头 ⏳
+- **OOM 模拟**: 使用 `#ifdef TEST_OOM` hook 模拟 malloc 失败 ⏳
+
+### 状态转换
+
+| 测试文件 | 状态 |
+|---------|:----:|
+| `test_url_decode` | ✅ 12 cases |
+| `test_utils` (SHA1+Base64) | ✅ 14 cases |
+| `test_ws` | ✅ 已有 (15 cases) |
 
 ---
 
@@ -240,9 +248,9 @@
 |-----|:------:|------|
 | P0 — 数据竞争与内存安全 | 0 | 全部修复 ✅ |
 | P1 — 架构与稳定性 | 0 | 全部修复 ✅ |
-| P2 — API 体验 | 2 | 404 handler ✅ / SPA ⏳ / header 桶 ⏳ / 指针传参 ✅ / 静态路由限制 ✅ |
-| P3 — 性能优化 | 5 | header 指数增长/snprintf 去重/arena 替代 strdup/group realloc/连接池 |
-| P4 — 测试覆盖 | ~15 项 | test_auth/test_ratelimit 已增强 ✅ / 更多测试待补充 |
+| P2 — API 体验 | 0 | 全部修复 ✅ |
+| P3 — 性能优化 | 0 | 全部修复 ✅ |
+| P4 — 测试覆盖 | 5 项 | URL decode ✅ / SHA1+Base64 ✅ / streaming/redirect/WS close/OOM ⏳ |
 | P5 — 新功能 | 5 | form urlencoded/session/range/validator/OPTIONS 预检 |
 | P6 — 代码质量 | 1 | 分号 ✅ / handler_index ✅ / truncation ⏳ / llhttp ✅ / SHA1 ✅ |
 | **合计** | **~13** | Sprint 1-2 已完成 20+ 项 |
