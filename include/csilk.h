@@ -411,11 +411,20 @@ int csilk_csrf_generate_token(char* buf, size_t buf_size);
 
 /** @brief Server configuration options. */
 typedef struct csilk_server_config_s {
-  unsigned int idle_timeout_ms; /**< Connection idle timeout (ms). */
-  size_t max_body_size;         /**< Maximum request body size. */
-  size_t max_header_size;       /**< Maximum total request headers size. */
-  int listen_backlog;           /**< TCP listen backlog. */
-  int tcp_nodelay;              /**< Enable TCP_NODELAY. */
+  unsigned int idle_timeout_ms; /**< Keep-alive idle timeout (ms). */
+  unsigned int
+      read_timeout_ms; /**< Max time to read a request (ms, 0=disabled). */
+  unsigned int
+      write_timeout_ms; /**< Max time to write a response (ms, 0=disabled). */
+  unsigned int request_timeout_ms; /**< Max time for full request/response cycle
+                                      (ms, 0=disabled). */
+  size_t max_body_size;            /**< Maximum request body size. */
+  size_t max_header_size;          /**< Maximum total request headers size. */
+  size_t max_url_size;             /**< Maximum URL length (0=disabled). */
+  size_t max_headers_count; /**< Maximum number of headers (0=disabled). */
+  int max_connections;      /**< Max concurrent connections (0=unlimited). */
+  int listen_backlog;       /**< TCP listen backlog. */
+  int tcp_nodelay;          /**< Enable TCP_NODELAY. */
   int tcp_keepalive;  /**< Enable TCP keep-alive (seconds, 0 to disable). */
   int worker_threads; /**< Number of worker threads (SO_REUSEPORT). */
 } csilk_server_config_t;

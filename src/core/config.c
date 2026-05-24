@@ -48,7 +48,12 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
   memset(config, 0, sizeof(csilk_config_t));
   config->port = 8080;
   config->server.idle_timeout_ms = 5000;
+  config->server.read_timeout_ms = 30000;
+  config->server.write_timeout_ms = 30000;
   config->server.max_body_size = 1024 * 1024;
+  config->server.max_header_size = 64 * 1024;
+  config->server.max_url_size = 8192;
+  config->server.max_headers_count = 100;
   config->server.listen_backlog = 128;
   config->server.tcp_nodelay = 1;
   config->server.worker_threads = 1;
@@ -73,10 +78,22 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
           } else if (strcmp(current_section, "server") == 0) {
             if (strcmp(current_key, "idle_timeout_ms") == 0)
               config->server.idle_timeout_ms = atoi(val);
+            else if (strcmp(current_key, "read_timeout_ms") == 0)
+              config->server.read_timeout_ms = atoi(val);
+            else if (strcmp(current_key, "write_timeout_ms") == 0)
+              config->server.write_timeout_ms = atoi(val);
+            else if (strcmp(current_key, "request_timeout_ms") == 0)
+              config->server.request_timeout_ms = atoi(val);
             else if (strcmp(current_key, "max_body_size") == 0)
               config->server.max_body_size = (size_t)atoll(val);
             else if (strcmp(current_key, "max_header_size") == 0)
               config->server.max_header_size = (size_t)atoll(val);
+            else if (strcmp(current_key, "max_url_size") == 0)
+              config->server.max_url_size = (size_t)atoll(val);
+            else if (strcmp(current_key, "max_headers_count") == 0)
+              config->server.max_headers_count = (size_t)atoll(val);
+            else if (strcmp(current_key, "max_connections") == 0)
+              config->server.max_connections = atoi(val);
             else if (strcmp(current_key, "listen_backlog") == 0)
               config->server.listen_backlog = atoi(val);
             else if (strcmp(current_key, "tcp_nodelay") == 0)
@@ -229,6 +246,10 @@ int csilk_config_validate(const csilk_config_t* config,
   }
   if (config->server.idle_timeout_ms < 0) {
     if (error_msg) *error_msg = "idle_timeout_ms must be >= 0";
+    return -1;
+  }
+  if (config->server.max_connections < 0) {
+    if (error_msg) *error_msg = "max_connections must be >= 0";
     return -1;
   }
   if (config->server.max_body_size == 0) {
