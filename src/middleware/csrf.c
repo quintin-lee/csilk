@@ -20,6 +20,14 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
   if (csilk_get_method(c) && (strcmp(csilk_get_method(c), "GET") == 0 ||
                               strcmp(csilk_get_method(c), "HEAD") == 0 ||
                               strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
+    // Set CSRF cookie on safe methods so frontend can read it
+    const char* existing = csilk_get_cookie(c, "csrf_token");
+    if (!existing) {
+      char token_buf[33];
+      if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
+        csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 0, 1);
+      }
+    }
     csilk_next(c);
     return;
   }
@@ -32,7 +40,6 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
     return;
   }
 
-  // Fix: Use csilk_get_cookie for exact matching instead of strstr
   const char* cookie_token = csilk_get_cookie(c, "csrf_token");
   if (cookie_token && strcmp(cookie_token, token) == 0) {
     csilk_next(c);

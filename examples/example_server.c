@@ -377,7 +377,7 @@ int main(int argc, char* argv[]) {
                 cfg.rate_limit.requests_per_minute);
   }
 
-  csilk_server_set_config(server, cfg.server);
+  csilk_server_set_config(server, &cfg.server);
 
   printf("\n========================================\n");
   printf("csilk Server running on port %d\n", cfg.port);

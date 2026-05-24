@@ -5,6 +5,8 @@
  */
 
 #include <llhttp.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,8 +37,13 @@ struct csilk_server_s {
   csilk_server_config_t config;    /**< Server configuration. */
   csilk_handler_t middlewares[32]; /**< Global middlewares. */
   int middleware_count;            /**< Number of global middlewares. */
-  int max_connections;    /**< Max concurrent connections (0=unlimited). */
-  int active_connections; /**< Current connection count. */
+  int max_connections; /**< Max concurrent connections (0=unlimited). */
+  atomic_int active_connections; /**< Current connection count (atomic). */
+  /* close tracking for async shutdown — see csilk_server_free */
+  uv_thread_t* worker_tids; /**< Worker thread IDs (NULL if single-thread). */
+  int worker_count;         /**< Number of worker threads created. */
+  csilk_handler_t
+      not_found_handler; /**< Custom 404 handler (NULL = default). */
 };
 
 /** @brief Client connection structure. */
@@ -45,6 +52,7 @@ typedef struct {
   uv_timer_t timer;           /**< Connection idle (keep-alive) timer. */
   uv_timer_t read_timer;      /**< Read timeout timer. */
   uv_timer_t write_timer;     /**< Write timeout timer. */
+  uv_timer_t request_timer;   /**< Request timeout timer. */
   int close_pending;          /**< Pending close refs before freeing client. */
   llhttp_t parser;            /**< HTTP request parser. */
   csilk_server_t* server;     /**< Owning server instance. */
@@ -68,6 +76,7 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
+static void on_server_handle_close(uv_handle_t* handle);
 
 /** @brief Close handler for timer handles — frees client on last close. */
 static void on_timer_close(uv_handle_t* handle) {
@@ -76,7 +85,7 @@ static void on_timer_close(uv_handle_t* handle) {
   client->close_pending--;
   if (client->close_pending > 0) return;
 
-  if (client->server) client->server->active_connections--;
+  if (client->server) atomic_fetch_sub(&client->server->active_connections, 1);
   csilk_ctx_cleanup(&client->ctx);
   if (client->ctx.arena) {
     csilk_arena_free(client->ctx.arena);
@@ -98,11 +107,13 @@ static void on_close(uv_handle_t* handle) {
     uv_timer_stop(&client->timer);
     uv_timer_stop(&client->read_timer);
     uv_timer_stop(&client->write_timer);
+    uv_timer_stop(&client->request_timer);
 
-    client->close_pending = 3;
+    client->close_pending = 4;
     uv_handle_t* timers[] = {(uv_handle_t*)&client->timer,
                              (uv_handle_t*)&client->read_timer,
-                             (uv_handle_t*)&client->write_timer};
+                             (uv_handle_t*)&client->write_timer,
+                             (uv_handle_t*)&client->request_timer};
     for (int i = 0; i < 3; i++) {
       if (uv_is_closing(timers[i])) {
         client->close_pending--;
@@ -112,7 +123,8 @@ static void on_close(uv_handle_t* handle) {
       }
     }
     if (client->close_pending <= 0) {
-      if (client->server) client->server->active_connections--;
+      if (client->server)
+        atomic_fetch_sub(&client->server->active_connections, 1);
       csilk_ctx_cleanup(&client->ctx);
       if (client->ctx.arena) {
         csilk_arena_free(client->ctx.arena);
@@ -135,20 +147,26 @@ static void on_signal(uv_signal_t* handle, int signum) {
   csilk_server_stop(server);
 }
 
-/** @brief Callback to close all active handles. */
-static void close_cb(uv_handle_t* handle, void* arg) {
-  if (!uv_is_closing(handle)) {
-    uv_close(handle, NULL);
-  }
-}
-
 /** @brief Async callback to stop the server gracefully.
+ * Closes server-level handles and lets client connections drain naturally.
  * @param handle Async handle. */
 static void on_stop_async(uv_async_t* handle) {
   csilk_server_t* server = (csilk_server_t*)handle->data;
 
-  // Close all active handles in the loop to allow uv_run to exit
-  uv_walk(server->loop, (uv_walk_cb)close_cb, NULL);
+  // Close the server listen handle (stop accepting new connections)
+  if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
+    uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
+  }
+
+  // Close signal and async handles
+  if (uv_is_active((uv_handle_t*)&server->sig_handle) &&
+      !uv_is_closing((uv_handle_t*)&server->sig_handle)) {
+    uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
+  }
+  if (uv_is_active((uv_handle_t*)&server->async_handle) &&
+      !uv_is_closing((uv_handle_t*)&server->async_handle)) {
+    uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
+  }
 }
 
 /** @brief Write completion callback.
@@ -205,6 +223,13 @@ static int on_message_begin(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size = 0;
   client->header_count = 0;
+
+  // Restart request timeout for this new request (keep-alive)
+  if (client->server->config.request_timeout_ms > 0) {
+    uv_timer_stop(&client->request_timer);
+    uv_timer_start(&client->request_timer, on_read_timeout,
+                   client->server->config.request_timeout_ms, 0);
+  }
   return 0;
 }
 
@@ -282,6 +307,9 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
       client->current_header_value ? strlen(client->current_header_value) : 0;
   char* new_val = realloc(client->current_header_value, prev_len + length + 1);
   if (!new_val) {
+    free(client->current_header_value);
+    client->current_header_value = NULL;
+    client->total_header_size = 0;
     return HPE_USER;
   }
   client->current_header_value = new_val;
@@ -361,6 +389,9 @@ static const char* get_status_text(int status) {
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
+
+  // Stop request timeout timer (response is being sent)
+  uv_timer_stop(&client->request_timer);
 
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
   const char* status_text = get_status_text(status);
@@ -551,7 +582,11 @@ static int on_message_complete(llhttp_t* p) {
     csilk_next(&client->ctx);
   } else {
     CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
-    csilk_string(&client->ctx, CSILK_STATUS_NOT_FOUND, "Not Found");
+    if (client->server->not_found_handler) {
+      client->server->not_found_handler(&client->ctx);
+    } else {
+      csilk_string(&client->ctx, CSILK_STATUS_NOT_FOUND, "Not Found");
+    }
   }
 
   if (client->ctx.is_async) {
@@ -578,7 +613,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 
   int max_conn = server->config.max_connections;
   if (max_conn == 0) max_conn = server->max_connections;
-  if (max_conn > 0 && server->active_connections >= max_conn) {
+  if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
     /* accept and immediately close to drain the backlog */
     uv_tcp_t tmp;
     uv_tcp_init(server_stream->loop, &tmp);
@@ -604,7 +639,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     if (server->config.tcp_nodelay) {
       uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
     }
-    server->active_connections++;
+    atomic_fetch_add(&server->active_connections, 1);
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
     uv_timer_init(server_stream->loop, &client->timer);
@@ -613,11 +648,17 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     client->read_timer.data = client;
     uv_timer_init(server_stream->loop, &client->write_timer);
     client->write_timer.data = client;
+    uv_timer_init(server_stream->loop, &client->request_timer);
+    client->request_timer.data = client;
 
     // Start read timeout and request timeout timers
     if (server->config.read_timeout_ms > 0) {
       uv_timer_start(&client->read_timer, on_read_timeout,
                      server->config.read_timeout_ms, 0);
+    }
+    if (server->config.request_timeout_ms > 0) {
+      uv_timer_start(&client->request_timer, on_read_timeout,
+                     server->config.request_timeout_ms, 0);
     }
 
     // Initialize arena for the request
@@ -728,6 +769,13 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
+/** @brief Set a custom handler for unmatched routes (404). */
+void csilk_server_set_not_found_handler(csilk_server_t* server,
+                                        csilk_handler_t handler) {
+  if (!server) return;
+  server->not_found_handler = handler;
+}
+
 /** @brief Add a global middleware handler to the server. */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   if (!server || !handler) return -1;
@@ -739,33 +787,23 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   return 0;
 }
 
-/** @brief Deallocate server resources. */
-/** @brief Callback for closing server-level handles. */
-static void on_server_handle_close(uv_handle_t* handle) {
-  // Optional: check if all server handles are closed before freeing server
-  (void)handle;
-}
+/** @brief Callback for closing server-level handles — no-op. */
+static void on_server_handle_close(uv_handle_t* handle) { (void)handle; }
 
-/** @brief Free server resources. Note: This should be called AFTER the loop has
- * stopped. */
+/** @brief Free server resources. Should be called after the loop has stopped.
+ */
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
 
-  if (uv_is_active((uv_handle_t*)&server->server_handle)) {
-    uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
-  }
-  if (uv_is_active((uv_handle_t*)&server->sig_handle)) {
-    uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
-  }
-  if (uv_is_active((uv_handle_t*)&server->async_handle)) {
-    uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
+  // Join worker threads (they will exit when their loops stop)
+  if (server->worker_tids) {
+    for (int i = 0; i < server->worker_count; i++) {
+      uv_thread_join(&server->worker_tids[i]);
+    }
+    free(server->worker_tids);
+    server->worker_tids = NULL;
   }
 
-  // Note: Since uv_close is async, handles might not be fully closed yet.
-  // In a clean shutdown, the user should run the loop until uv_loop_close
-  // returns 0. We free the server memory here, which is risky if callbacks are
-  // still pending, but this matches the current framework's simplified
-  // lifecycle.
   free(server);
 }
 
@@ -777,9 +815,9 @@ void csilk_server_stop(csilk_server_t* server) {
 
 /** @brief Apply server configuration. */
 void csilk_server_set_config(csilk_server_t* server,
-                             csilk_server_config_t config) {
-  if (!server) return;
-  server->config = config;
+                             const csilk_server_config_t* config) {
+  if (!server || !config) return;
+  server->config = *config;
 }
 
 /** @brief Set the maximum number of concurrent client connections. */
@@ -793,7 +831,15 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
 #ifndef _WIN32
 #include <netinet/in.h>
 #include <sys/socket.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <unistd.h>
 #endif
+#endif
+
+static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
+                           int backlog, bool reuseport);
 
 /** @brief Worker thread initialization data for multi-loop mode. */
 typedef struct {
@@ -814,35 +860,75 @@ static void worker_thread(void* arg) {
   uv_loop_init(&loop);
 
   uv_tcp_t server_handle;
-  uv_tcp_init(&loop, &server_handle);
   server_handle.data = server;
 
-#ifndef _WIN32
-  int fd;
-  if (uv_fileno((const uv_handle_t*)&server_handle, &fd) == 0) {
-    int on = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-  }
-#endif
-
-  struct sockaddr_in addr;
-  uv_ip4_addr("0.0.0.0", port, &addr);
-
-  int r = uv_tcp_bind(&server_handle, (const struct sockaddr*)&addr, 0);
-  if (r < 0) {
-    fprintf(stderr, "Worker bind error: %s\n", uv_strerror(r));
-    return;
-  }
-
-  r = uv_listen((uv_stream_t*)&server_handle, server->config.listen_backlog,
-                on_new_connection);
-  if (r < 0) {
-    fprintf(stderr, "Worker listen error: %s\n", uv_strerror(r));
+  if (bind_and_listen(&loop, &server_handle, port,
+                      server->config.listen_backlog, true) < 0) {
+    uv_loop_close(&loop);
     return;
   }
 
   uv_run(&loop, UV_RUN_DEFAULT);
   uv_loop_close(&loop);
+}
+
+// UV_HANDLE_BOUND lives in libuv's private uv-common.h; define it here
+// so we can set it after uv_tcp_open for the SO_REUSEPORT path.
+#ifndef UV_HANDLE_BOUND
+#define UV_HANDLE_BOUND 0x00002000
+#endif
+
+/** @brief Create, bind, and listen a TCP socket with SO_REUSEPORT support.
+ * On non-Windows with reuseport=true, creates socket manually so
+ * SO_REUSEPORT is set before bind (required by kernel).
+ * @param loop Event loop to attach to.
+ * @param out_handle [out] Initialized TCP handle (must not be freed by caller).
+ * @param port Port number.
+ * @param backlog Listen backlog depth.
+ * @param reuseport Enable SO_REUSEPORT for multi-worker sharing.
+ * @return 0 on success, -1 on error. */
+static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
+                           int backlog, bool reuseport) {
+#ifndef _WIN32
+  if (reuseport) {
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (fd < 0) return -1;
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+    struct sockaddr_in addr;
+    uv_ip4_addr("0.0.0.0", port, &addr);
+    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+      close(fd);
+      return -1;
+    }
+    if (listen(fd, backlog) < 0) {
+      close(fd);
+      return -1;
+    }
+    int r = uv_tcp_init(loop, out_handle);
+    if (r < 0) {
+      close(fd);
+      return -1;
+    }
+    r = uv_tcp_open(out_handle, (uv_os_sock_t)fd);
+    if (r < 0) {
+      close(fd);
+      return -1;
+    }
+    // uv_tcp_open does not set UV_HANDLE_BOUND; uv_listen requires
+    // it, so set it manually before calling uv_listen.
+    out_handle->flags |= UV_HANDLE_BOUND;
+    return uv_listen((uv_stream_t*)out_handle, backlog, on_new_connection);
+  }
+#endif
+  int r = uv_tcp_init(loop, out_handle);
+  if (r < 0) return -1;
+  struct sockaddr_in addr;
+  uv_ip4_addr("0.0.0.0", port, &addr);
+  r = uv_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
+  if (r < 0) return -1;
+  return uv_listen((uv_stream_t*)out_handle, backlog, on_new_connection);
 }
 
 /** @brief Run the server event loop.
@@ -853,50 +939,31 @@ int csilk_server_run(csilk_server_t* server, int port) {
   int workers = server->config.worker_threads;
   if (workers <= 0) workers = 1;
 
-  int r = uv_tcp_init(server->loop, &server->server_handle);
+  // Initialize async handle for thread-safe stop
+  int r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
+  if (r < 0) return -1;
+  server->async_handle.data = server;
+
+  r = bind_and_listen(server->loop, &server->server_handle, port,
+                      server->config.listen_backlog, workers > 1);
   if (r < 0) return -1;
   server->server_handle.data = server;
 
-#ifndef _WIN32
-  if (workers > 1) {
-    int fd;
-    if (uv_fileno((const uv_handle_t*)&server->server_handle, &fd) == 0) {
-      int on = 1;
-      setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-    }
-  }
-#endif
-
-  // Initialize async handle for thread-safe stop
-  r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
-  if (r < 0) {
-    uv_close((uv_handle_t*)&server->server_handle, NULL);
-    return -1;
-  }
-  server->async_handle.data = server;
-
-  // Apply TCP settings
   if (server->config.tcp_keepalive > 0) {
     uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
   }
 
-  struct sockaddr_in addr;
-  uv_ip4_addr("0.0.0.0", port, &addr);
-
-  r = uv_tcp_bind(&server->server_handle, (const struct sockaddr*)&addr, 0);
-  if (r < 0) return -1;
-
-  r = uv_listen((uv_stream_t*)&server->server_handle,
-                server->config.listen_backlog, on_new_connection);
-  if (r < 0) return -1;
-
   if (workers > 1) {
-    for (int i = 0; i < workers - 1; i++) {
-      worker_data_t* data = malloc(sizeof(worker_data_t));
-      data->server = server;
-      data->port = port;
-      uv_thread_t tid;
-      uv_thread_create(&tid, worker_thread, data);
+    server->worker_tids = malloc((size_t)(workers - 1) * sizeof(uv_thread_t));
+    if (server->worker_tids) {
+      server->worker_count = workers - 1;
+      for (int i = 0; i < workers - 1; i++) {
+        worker_data_t* data = malloc(sizeof(worker_data_t));
+        if (!data) continue;
+        data->server = server;
+        data->port = port;
+        uv_thread_create(&server->worker_tids[i], worker_thread, data);
+      }
     }
   }
 

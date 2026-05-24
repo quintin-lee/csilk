@@ -140,7 +140,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv ${LLHTTP_LIB} cjson Threads::Threads PRIVATE ${YAML_LIB} ${ZLIB_LIB})
+target_link_libraries(csilk PUBLIC uv cjson Threads::Threads PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

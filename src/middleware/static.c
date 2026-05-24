@@ -42,7 +42,6 @@ static void static_work_cb(uv_work_t* req) {
   if (realpath(root_dir, resolved_root) == NULL) {
     csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
                  "Internal Server Error");
-    ;
     return;
   }
 
@@ -57,7 +56,6 @@ static void static_work_cb(uv_work_t* req) {
   // Resolve full_path to absolute path
   if (realpath(full_path, resolved_file) == NULL) {
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-    ;
     return;
   }
 
@@ -71,7 +69,6 @@ static void static_work_cb(uv_work_t* req) {
   int fd = uv_fs_open(NULL, &open_req, resolved_file, O_RDONLY, 0, NULL);
   if (fd < 0) {
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-    ;
     return;
   }
 
@@ -86,7 +83,6 @@ static void static_work_cb(uv_work_t* req) {
     uv_fs_req_cleanup(&stat_req);
     csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
                  "Internal Server Error");
-    ;
     return;
   }
 
@@ -101,7 +97,6 @@ static void static_work_cb(uv_work_t* req) {
     uv_fs_req_cleanup(&read_req);
     csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
                  "Internal Server Error");
-    ;
     return;
   }
   buffer[size] = '\0';

@@ -24,6 +24,7 @@ static void test_ratelimit_basic() {
   handler_called = 0;
   csilk_rate_limit_middleware(&ctx, 100);
   assert(handler_called == 1);
+  assert(ctx.aborted == 0);
 
   csilk_ctx_cleanup(&ctx);
   csilk_arena_free(ctx.arena);

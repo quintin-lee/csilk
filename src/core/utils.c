@@ -8,12 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/** @brief SHA1 hashing context (local definition for WebSocket handshake). */
-typedef struct {
-  uint32_t state[5];  /**< Intermediate hash state. */
-  uint32_t count[2];  /**< Message length counter. */
-  uint8_t buffer[64]; /**< Data block buffer. */
-} csilk_sha1_ctx;
+#include "csilk_internal.h"
 
 /** @brief Rotate-left bitwise operation. */
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))

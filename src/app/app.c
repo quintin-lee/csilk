@@ -16,7 +16,7 @@
 #include "csilk_app.h"
 
 #define CSILK_MAX_GROUPS 32
-#define CSILK_MAX_STATIC 8
+#define CSILK_MAX_STATIC 32
 #define CSILK_DFL_PORT 8080
 
 /** @brief Cached route group lookup entry. */
@@ -33,11 +33,33 @@ typedef struct {
 
 /** @brief Router reference for the built-in OpenAPI handler. */
 static csilk_router_t* s_openapi_router = NULL;
+static uv_mutex_t s_app_mutex;
+static uv_once_t s_app_mutex_once = UV_ONCE_INIT;
+
+/** @brief Initialize the app-level mutex once. */
+static void init_app_mutex(void) { uv_mutex_init(&s_app_mutex); }
+
+/** @brief Lock the app mutex for reading s_openapi_router. */
+static csilk_router_t* get_openapi_router(void) {
+  uv_mutex_lock(&s_app_mutex);
+  csilk_router_t* r = s_openapi_router;
+  uv_mutex_unlock(&s_app_mutex);
+  return r;
+}
+
+/** @brief Set the OpenAPI router under lock. */
+static void set_openapi_router(csilk_router_t* r) {
+  uv_mutex_lock(&s_app_mutex);
+  s_openapi_router = r;
+  uv_mutex_unlock(&s_app_mutex);
+}
 
 /** @brief Built-in handler for /openapi.json endpoint. */
 static void openapi_handler(csilk_ctx_t* c) {
-  if (s_openapi_router) {
-    csilk_serve_openapi(c, s_openapi_router, "csilk API", CSILK_VERSION,
+  csilk_router_t* router = get_openapi_router();
+
+  if (router) {
+    csilk_serve_openapi(c, router, "csilk API", CSILK_VERSION,
                         "Auto-generated OpenAPI 3.0 specification");
   } else {
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
@@ -46,7 +68,9 @@ static void openapi_handler(csilk_ctx_t* c) {
 
 /** @brief Built-in handler for /docs endpoint - serves the Swagger UI page. */
 static void docs_handler(csilk_ctx_t* c) {
-  if (!s_openapi_router) {
+  csilk_router_t* router = get_openapi_router();
+
+  if (!router) {
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
     return;
   }
@@ -105,14 +129,21 @@ static csilk_group_t* find_or_create_group(csilk_app_t* app,
  * @param c The request context. */
 static void static_serve(csilk_ctx_t* c) {
   const char* path = csilk_get_path(c);
-  for (int i = 0; i < g_static_n; i++) {
+
+  uv_mutex_lock(&s_app_mutex);
+  int n = g_static_n;
+  for (int i = 0; i < n; i++) {
     size_t plen = strlen(g_static[i].url_prefix);
     if (!strncmp(path, g_static[i].url_prefix, plen)) {
-      csilk_set(c, "static_prefix", (void*)g_static[i].url_prefix);
-      csilk_static(c, g_static[i].root_dir);
+      const char* prefix = g_static[i].url_prefix;
+      const char* root = g_static[i].root_dir;
+      uv_mutex_unlock(&s_app_mutex);
+      csilk_set(c, "static_prefix", (void*)prefix);
+      csilk_static(c, root);
       return;
     }
   }
+  uv_mutex_unlock(&s_app_mutex);
   csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 }
 
@@ -125,6 +156,7 @@ csilk_app_t* csilk_app_new(const char* config_path) {
   csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
   if (!app) return NULL;
 
+  uv_once(&s_app_mutex_once, init_app_mutex);
   memset(&app->config, 0, sizeof(app->config));
 
   if (config_path && csilk_load_config(config_path, &app->config) == 0) {
@@ -152,7 +184,7 @@ csilk_app_t* csilk_app_new(const char* config_path) {
   app->server = csilk_server_new(app->router);
   if (!app->router || !app->server) goto fail;
 
-  csilk_server_set_config(app->server, app->config.server);
+  csilk_server_set_config(app->server, &app->config.server);
   csilk_server_use(app->server, csilk_recovery_handler);
   csilk_server_use(app->server, csilk_logger_handler);
 
@@ -160,7 +192,7 @@ csilk_app_t* csilk_app_new(const char* config_path) {
   if (!app->root_group) goto fail;
 
   /* Register built-in /openapi.json and /docs endpoints */
-  s_openapi_router = app->router;
+  set_openapi_router(app->router);
   {
     csilk_handler_t openapi_h[] = {openapi_handler};
     csilk_router_add_extended(
@@ -256,7 +288,7 @@ void csilk_app_apply_config(csilk_app_t* app) {
 /** @brief Enable or disable the built-in /openapi.json endpoint. */
 void csilk_app_enable_openapi(csilk_app_t* app, int enable) {
   (void)app;
-  s_openapi_router = enable ? app->router : NULL;
+  set_openapi_router(enable ? app->router : NULL);
   CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
@@ -300,13 +332,22 @@ void csilk_app_add_handlers(csilk_app_t* app, const char* method,
 void csilk_app_static(csilk_app_t* app, const char* prefix,
                       const char* root_dir) {
   if (!app || !prefix || !root_dir) return;
-  if (g_static_n >= CSILK_MAX_STATIC) return;
+
+  uv_once(&s_app_mutex_once, init_app_mutex);
+  uv_mutex_lock(&s_app_mutex);
+  if (g_static_n >= CSILK_MAX_STATIC) {
+    uv_mutex_unlock(&s_app_mutex);
+    CSILK_LOG_E("Static route limit (%d) reached. Route dropped: %s",
+                CSILK_MAX_STATIC, prefix);
+    return;
+  }
 
   int idx = g_static_n++;
   snprintf(g_static[idx].url_prefix, sizeof(g_static[idx].url_prefix), "%s",
            prefix);
   snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s",
            root_dir);
+  uv_mutex_unlock(&s_app_mutex);
 
   char wild[] = "/*path";
   char idxrt[] = "/";
@@ -327,7 +368,7 @@ void csilk_app_static(csilk_app_t* app, const char* prefix,
 void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c) {
   if (!app || !app->server) return;
   app->config.server = c;
-  csilk_server_set_config(app->server, c);
+  csilk_server_set_config(app->server, &app->config.server);
 }
 
 /** @brief Get a copy of the current application configuration. */
