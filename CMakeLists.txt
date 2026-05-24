@@ -108,6 +108,7 @@ set(CSILK_SOURCES
     src/core/url.c
     src/core/arena.c
     src/core/logger.c
+    src/core/db.c
     src/app/app.c
     src/core/config.c
     src/core/reflect.c
@@ -128,6 +129,7 @@ set(CSILK_SOURCES
     src/middleware/session.c
     src/middleware/validate.c
     src/core/swagger.c
+    src/drivers/sqlite.c
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -156,7 +158,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/core>
@@ -175,7 +177,7 @@ set_target_properties(csilk PROPERTIES
 # Build shared library if requested
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
-    target_link_libraries(csilk_shared PUBLIC uv ${LLHTTP_LIB} cjson Threads::Threads PRIVATE ${YAML_LIB} ${ZLIB_LIB})
+    target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
     target_include_directories(csilk_shared PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/core>
@@ -186,6 +188,9 @@ if(CSILK_BUILD_SHARED)
         VERSION "0.2.1"
         SOVERSION "0"
         OUTPUT_NAME csilk
+    )
+    target_compile_definitions(csilk_shared PRIVATE
+        CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
     )
     message(STATUS "Shared library build enabled: libcsilk.so")
 endif()

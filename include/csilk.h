@@ -19,6 +19,7 @@
 #include <uv.h>
 
 #include "cJSON.h"
+#include "csilk_db.h"
 #include "csilk_reflect.h"
 
 /** @brief Csilk framework version. */
@@ -1129,5 +1130,39 @@ void csilk_server_set_storage_driver(csilk_server_t* server,
  * @param port Port number to listen on.
  * @return 0 on success, -1 on failure. */
 int csilk_server_run(csilk_server_t* server, int port);
+
+/* --- Database Interface --- */
+
+/** @brief Initialize the database system (registers built-in drivers). */
+void csilk_db_init(void);
+
+/** @brief Create a new database pool.
+ * @param driver_name Driver name (e.g., "sqlite").
+ * @param dsn Data source name.
+ * @return New pool, or NULL on failure. */
+csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
+
+/** @brief Free a database pool. */
+void csilk_db_pool_free(csilk_db_pool_t* pool);
+
+/** @brief Execute a query and return JSON result.
+ * @param pool Connection pool.
+ * @param sql SQL statement.
+ * @return cJSON array, or NULL on failure. Caller must free. */
+cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
+
+/** @brief Execute a statement.
+ * @param pool Connection pool.
+ * @param sql SQL statement.
+ * @return 0 on success, -1 on failure. */
+int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
+
+/** @brief Query with parameters.
+ * @param pool Connection pool.
+ * @param sql SQL with ? placeholders.
+ * @param params Parameter values (NULL-terminated).
+ * @return cJSON array, or NULL on failure. */
+cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
+                                 const char** params);
 
 #endif /* CSILK_H */
