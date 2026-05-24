@@ -16,7 +16,7 @@ typedef struct csilk_session_data_s {
 
 /** @brief Session structure. */
 typedef struct csilk_session_s {
-  char id[33];
+  char id[37];
   csilk_session_data_t* data;
   time_t expires_at;
   struct csilk_session_s* next;
@@ -49,30 +49,8 @@ static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
 /** @brief Default session TTL (seconds). */
 #define SESSION_TTL 3600
 
-/** @brief Generate a cryptographically random 32-character hex session ID. */
-static void generate_session_id(char id[33]) {
-  unsigned char buf[16];
-  FILE* f = fopen("/dev/urandom", "rb");
-  if (f) {
-    size_t n = fread(buf, 1, sizeof(buf), f);
-    fclose(f);
-    if (n == sizeof(buf)) {
-      for (int i = 0; i < 16; i++) {
-        id[i * 2] = "0123456789abcdef"[buf[i] >> 4];
-        id[i * 2 + 1] = "0123456789abcdef"[buf[i] & 0xf];
-      }
-      id[32] = '\0';
-      return;
-    }
-  }
-  /* Fallback: use rand() + pid + time */
-  srand((unsigned)(time(NULL) ^ getpid()));
-  const char hex[] = "0123456789abcdef";
-  for (int i = 0; i < 32; i++) {
-    id[i] = hex[rand() % 16];
-  }
-  id[32] = '\0';
-}
+/** @brief Generate a cryptographically random session ID. */
+static void generate_session_id(char id[37]) { csilk_generate_uuid(id); }
 
 /** @brief Find a session by ID in the global store. */
 static csilk_session_t* find_session(const char* id) {

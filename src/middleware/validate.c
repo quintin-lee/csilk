@@ -18,11 +18,23 @@ static const char* str_find(const char* s, char c) {
 /** @brief Check if a string looks like a valid email address. */
 static int is_valid_email(const char* s) {
   if (!s || !*s) return 0;
-  const char* at = str_find(s, '@');
-  if (!at || at == s || at[1] == '\0') return 0;
-  const char* dot = str_find(at + 1, '.');
-  if (!dot || dot == at + 1 || dot[1] == '\0') return 0;
-  if (dot - at < 2) return 0;
+  int at_count = 0;
+  const char* at_ptr = NULL;
+
+  for (const char* p = s; *p; p++) {
+    if (*p == '@') {
+      at_count++;
+      at_ptr = p;
+    } else if (isspace((unsigned char)*p)) {
+      return 0;
+    }
+  }
+
+  if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') return 0;
+
+  const char* dot = strrchr(at_ptr + 1, '.');
+  if (!dot || dot == at_ptr + 1 || dot[1] == '\0') return 0;
+
   return 1;
 }
 

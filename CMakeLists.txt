@@ -16,6 +16,13 @@ if(USE_ASAN)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
 endif()
 
+# Option to enable OOM testing
+option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
+if(ENABLE_OOM_TEST)
+    message(STATUS "OOM testing enabled")
+    add_definitions(-DTEST_OOM)
+endif()
+
 # 查找 clang-format
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
@@ -115,6 +122,7 @@ set(CSILK_SOURCES
     src/middleware/sse.c
     src/middleware/gzip.c
     src/middleware/multipart.c
+    src/middleware/request_id.c
     src/middleware/session.c
     src/middleware/validate.c
     src/core/swagger.c
@@ -219,6 +227,12 @@ add_csilk_test(test_app tests/test_app.c)
 add_csilk_test(test_swagger tests/test_swagger.c)
 add_csilk_test(test_session tests/test_session.c)
 add_csilk_test(test_validate tests/test_validate.c)
+add_csilk_test(test_extra tests/test_extra.c)
+add_executable(test_oom tests/test_oom.c)
+target_compile_definitions(test_oom PRIVATE TEST_OOM)
+target_link_libraries(test_oom csilk pthread)
+add_test(NAME test_oom COMMAND test_oom)
+
 add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
 set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
@@ -246,7 +260,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_async_keepalive test_integration test_swagger
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_async_keepalive test_extra test_integration test_swagger
     COMMENT "Running all tests with ctest"
 )
 

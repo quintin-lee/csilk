@@ -92,6 +92,21 @@ void csilk_gzip_middleware(csilk_ctx_t* c) {
 
   if (!c->response.body || c->response.body_len == 0) return;
 
+  /* Skip if already encoded */
+  if (csilk_get_header(c, "Content-Encoding")) return;
+
+  /* Skip non-compressible content types */
+  const char* content_type = csilk_get_header(c, "Content-Type");
+  if (content_type) {
+    if (strstr(content_type, "image/") || strstr(content_type, "video/") ||
+        strstr(content_type, "audio/") ||
+        strstr(content_type, "application/pdf") ||
+        strstr(content_type, "application/zip") ||
+        strstr(content_type, "application/x-gzip")) {
+      return;
+    }
+  }
+
   const char* accept_encoding = csilk_get_header(c, "Accept-Encoding");
   if (!accept_encoding || !strstr(accept_encoding, "gzip")) return;
 

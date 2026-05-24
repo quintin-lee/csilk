@@ -144,6 +144,11 @@ const char* csilk_get_header(csilk_ctx_t* c, const char* key) {
   return map_get(&c->request.headers, key);
 }
 
+/** @brief Get a response header value (case-insensitive). */
+const char* csilk_get_response_header(csilk_ctx_t* c, const char* key) {
+  return map_get(&c->response.headers, key);
+}
+
 /** @brief Get a query parameter value. */
 const char* csilk_get_query(csilk_ctx_t* c, const char* key) {
   return map_get(&c->request.query_params, key);
@@ -206,6 +211,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->handler_index = -1;
   c->current_handler = NULL;
   c->on_ws_message = NULL;
+  memset(c->request_id, 0, sizeof(c->request_id));
 }
 
 /** @brief Get the HTTP method of the current request.
@@ -281,12 +287,20 @@ void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
   if (!c || !key || !c->arena) return;
 
   csilk_storage_item_t* item = c->storage_head;
+  int count = 0;
   while (item) {
     if (strcmp(item->key, key) == 0) {
       item->value = value;
       return;
     }
+    count++;
     item = item->next;
+  }
+
+  /* Limit storage items to prevent excessive allocation in a single request */
+  if (count >= 64) {
+    CSILK_LOG_E("Context storage limit reached (64 items) for key: %s", key);
+    return;
   }
 
   csilk_storage_item_t* new_item =
@@ -670,7 +684,6 @@ static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data,
   if (size_len <= 0) return;
 
   size_t total = (size_t)size_len + len + 2;
-  if (total > UINT_MAX) return;
   char* buf = malloc(total);
   if (!buf) return;
 
@@ -687,9 +700,21 @@ static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data,
     return;
   }
 
-  uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)total);
+  /* Split into multiple buffers if total > UINT_MAX, although unlikely on
+   * modern systems */
+  uv_buf_t uv_bufs[2];
+  int buf_count = 1;
+  if (total > 0xFFFFFFFFU) {
+    uv_bufs[0] = uv_buf_init(buf, 0xFFFFFFFFU);
+    uv_bufs[1] =
+        uv_buf_init(buf + 0xFFFFFFFFU, (unsigned int)(total - 0xFFFFFFFFU));
+    buf_count = 2;
+  } else {
+    uv_bufs[0] = uv_buf_init(buf, (unsigned int)total);
+  }
+
   req->data = buf;
-  uv_write(req, stream, &uv_buf, 1, on_stream_write);
+  uv_write(req, stream, uv_bufs, buf_count, on_stream_write);
 }
 
 /** @brief Write data to streaming response using chunked encoding. */

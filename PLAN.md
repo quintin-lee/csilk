@@ -42,7 +42,6 @@
 - [x] 6.2 定义统一配置结构体 csilk_config_t 与 API
 - [x] 6.3 实现基于事件流的 YAML 解析引擎 (src/config.c)
 - [x] 6.4 更新示例工程支持 config.yaml 加载
-
 ### 阶段七：性能极致调优
 - [x] 7.1 引入 uv_queue_work 线程池卸载 gzip/静态文件等阻塞操作
 - [x] 7.2 Header 存储改为 Arena 分配 + 哈希表 (64 buckets)
@@ -51,6 +50,15 @@
 - [x] 7.5 SO_REUSEPORT + 多事件循环实例利用多核 (基于配置 worker_threads)
 - [x] 7.6 修复 TCP_NODELAY 应用到 client socket 的问题
 
+### 阶段八：工程化拓展与健壮性
+- [x] 8.1 多线程 Session 安全 (Mutex 加锁)
+- [x] 8.2 追踪中间件：Request ID (UUID v4) 支持
+- [x] 8.3 标准化端点：内置 Health Check (/healthz)
+- [x] 8.4 异常模拟：引入 OOM (Out Of Memory) 模拟测试框架
+- [x] 8.5 响应优化：Gzip 智能跳过已编码或非文本内容
+- [x] 8.6 安全增强：安全随机 Session ID 与严谨 Email 验证
+- [x] 8.7 鲁棒性：处理超过 4GB 的分块数据写入
+
 ---
 
 ## 二、优先级任务清单
@@ -58,18 +66,16 @@
 ### P0 — 严重缺陷（数据竞争与安全）
 - [x] 限流中间件数据竞争 — 静态哈希表 ip_table/ip_count 无锁保护
 - [x] csilk_get_client_ip 静态缓冲区竞态 — static char ip[46] 共享缓冲区
-- [x] csilk_ctx_cleanup 未释放 request.path
-- [x] Config 中 strdup 的字符串永不释放 — logger.file_path, cors.allow_origin* 等
-- [x] advanced_server.c 编译失败 — csilk_log_init API 签名变更
+- [x] Session 全局链表无锁保护 — 已引入 uv_mutex_t
+- [x] Request ID 生成与追踪 — 已实现 X-Request-Id
 
 ### P1 — 内存安全与资源泄漏
 - [x] csilk_server_free 未释放 libuv 资源
 - [x] csilk_json 重复调用泄漏前 body
-- [x] csilk_set_cookie snprintf 溢出风险 (char buf[1024])
-- [x] on_url / on_header_field unchecked malloc
-- [x] get_next_segment unchecked malloc
-- [x] on_header_value realloc 失败泄漏旧指针
+- [x] write_chunk_frame 静默丢弃超大数据 — 已支持 >4GB 分块
+- [x] OOM 覆盖不足 — 已引入 TEST_OOM 框架与专项测试
 
+...
 ### P2 — 中间件系统重构
 - [x] 参数化中间件通过 Context Storage 支持 (csilk_set/csilk_get)
 - [x] 新增全局 (server-level) 中间件 — csilk_server_use

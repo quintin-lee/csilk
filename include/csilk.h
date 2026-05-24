@@ -202,6 +202,13 @@ const char* csilk_get_param(csilk_ctx_t* c, const char* key);
  * @return The header value string, or NULL if not found. */
 const char* csilk_get_header(csilk_ctx_t* c, const char* key);
 
+/** @brief Get a response header by key.
+ * Case-insensitive lookup.
+ * @param c The request context.
+ * @param key The header field name.
+ * @return The header value string, or NULL if not found. */
+const char* csilk_get_response_header(csilk_ctx_t* c, const char* key);
+
 /** @brief Get a query parameter by key.
  * @param c The request context.
  * @param key The query parameter key name.
@@ -392,6 +399,16 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  * Logs request method, path, and processing time.
  * @param c The request context. */
 void csilk_logger_handler(csilk_ctx_t* c);
+
+/** @brief Request ID middleware.
+ * Generates a unique ID for each request and sets X-Request-Id header.
+ * @param c The request context. */
+void csilk_request_id_middleware(csilk_ctx_t* c);
+
+/** @brief Built-in Health Check handler.
+ * Returns a simple JSON response {"status": "up"}.
+ * @param c The request context. */
+void csilk_health_check_handler(csilk_ctx_t* c);
 
 /** @brief CORS middleware configuration. */
 typedef struct {
