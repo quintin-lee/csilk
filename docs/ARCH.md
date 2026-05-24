@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper
 
-> **Last updated**: 2026-05-23 | **Version**: 0.2.0
+> **Last updated**: 2026-05-24 | **Version**: 0.2.1
 
 ## 1. Core Architecture Design
 

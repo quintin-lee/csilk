@@ -24,8 +24,13 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📝 Complete Doxygen documentation for all public APIs and internals
 - 🧵 Thread-safe logging with file rotation and ANSI colors
 - 🔍 Configurable connection timeout and body/header size limits
-- 🎯 Global (server-level) and per-route middleware support
-- 🌲 Radix Tree router with :param and *wildcard matching
+ - 🎯 Global (server-level) and per-route middleware support
+ - 🌲 Radix Tree router with :param and *wildcard matching
+ - 📝 Form URL-encoded body parsing (`application/x-www-form-urlencoded`)
+ - 🍪 Session management with cookie-based session IDs
+ - 🔀 HTTP redirect helper (`csilk_redirect`)
+ - 📄 HTTP Range request support (206 Partial Content) for static files
+ - ✅ Request parameter validation middleware (required, int, string, email)
 
 ## Dependencies
 
@@ -219,8 +224,10 @@ src/
       ├── multipart.c # Multipart/form-data parsing
       ├── ratelimit.c # IP-based rate limiting
       ├── recovery.c  # Panic recovery
+      ├── session.c   # Cookie-based session management
       ├── sse.c       # Server-Sent Events
-      └── static.c    # Static file serving
+      ├── static.c    # Static file serving (with Range/206 support)
+      └── validate.c  # Request parameter validation
 
 include/              # Public headers
   ├── csilk.h             # Main framework header
@@ -269,6 +276,11 @@ The project includes a comprehensive test suite. After building, run individual 
 | 🔍 | Timeouts / Limits |
 | 🎯 | Per-route middleware |
 | 🌲 | Radix Tree router |
+| 📝 | Form URL-encoded parsing |
+| 🍪 | Session management |
+| 🔀 | HTTP redirect |
+| 📄 | HTTP Range / 206 Partial Content |
+| ✅ | Parameter validation |
 
 ## License
 
