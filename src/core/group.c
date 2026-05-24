@@ -11,11 +11,14 @@
 #include "csilk_internal.h"
 
 /** @brief Route group structure. */
+#define CSILK_GROUP_MW_INIT_CAP 4
+
 struct csilk_group_s {
   char* prefix;                 /**< URL prefix for this group. */
   csilk_router_t* router;       /**< Associated router instance. */
   csilk_handler_t* middlewares; /**< Middleware handlers array. */
   size_t middleware_count;      /**< Number of middleware handlers. */
+  size_t middleware_capacity;   /**< Allocated capacity of middlewares. */
   csilk_group_t* parent;        /**< Parent group (NULL for root). */
 };
 
@@ -90,13 +93,16 @@ csilk_group_t* csilk_group_group(csilk_group_t* parent, const char* prefix) {
 /** @brief Add a middleware handler to the group. */
 void csilk_group_use(csilk_group_t* group, csilk_handler_t handler) {
   if (!group) return;
-  csilk_handler_t* new_middlewares =
-      realloc(group->middlewares,
-              (group->middleware_count + 1) * sizeof(csilk_handler_t));
-  if (new_middlewares) {
-    group->middlewares = new_middlewares;
-    group->middlewares[group->middleware_count++] = handler;
+  if (group->middleware_count >= group->middleware_capacity) {
+    size_t new_cap = group->middleware_capacity ? group->middleware_capacity * 2
+                                                : CSILK_GROUP_MW_INIT_CAP;
+    csilk_handler_t* new_mw =
+        realloc(group->middlewares, new_cap * sizeof(csilk_handler_t));
+    if (!new_mw) return;
+    group->middlewares = new_mw;
+    group->middleware_capacity = new_cap;
   }
+  group->middlewares[group->middleware_count++] = handler;
 }
 
 /** @brief Internal helper to gather all middleware handlers in the chain.

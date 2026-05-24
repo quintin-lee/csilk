@@ -336,29 +336,23 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name) {
   const char* cookie_header = csilk_get_header(c, "Cookie");
   if (!cookie_header) return NULL;
 
-  char* cookies = strdup(cookie_header);
+  char* cookies = csilk_arena_strdup(c->arena, cookie_header);
   if (!cookies) return NULL;
 
   char* saveptr;
   char* cookie = strtok_r(cookies, "; ", &saveptr);
-  const char* result = NULL;
 
   while (cookie) {
     char* eq = strchr(cookie, '=');
     if (eq) {
       *eq = '\0';
-      if (strcmp(cookie, name) == 0) {
-        // Found it! Use arena to store the result so it survives the function
-        // call
-        result = csilk_arena_strdup(c->arena, eq + 1);
-        break;
-      }
+      if (strcmp(cookie, name) == 0)
+        return csilk_arena_strdup(c->arena, eq + 1);
     }
     cookie = strtok_r(NULL, "; ", &saveptr);
   }
 
-  free(cookies);
-  return result;
+  return NULL;
 }
 
 /** @brief Add a response header (allows multiple values for same key). */
@@ -476,7 +470,7 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
 void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
   if (!query_string || *query_string == '\0' || !c->arena) return;
 
-  char* qs = strdup(query_string);
+  char* qs = csilk_arena_strdup(c->arena, query_string);
   if (!qs) return;
 
   char* pos = qs;
@@ -508,7 +502,6 @@ void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
     else
       pos = NULL;
   }
-  free(qs);
 }
 
 /** @brief Streaming write completion callback.
@@ -598,6 +591,7 @@ static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data,
   if (size_len <= 0) return;
 
   size_t total = (size_t)size_len + len + 2;
+  if (total > UINT_MAX) return;
   char* buf = malloc(total);
   if (!buf) return;
 

@@ -48,20 +48,23 @@ struct csilk_server_s {
 
 /** @brief Client connection structure. */
 typedef struct {
-  uv_tcp_t handle;            /**< libuv TCP stream handle. */
-  uv_timer_t timer;           /**< Connection idle (keep-alive) timer. */
-  uv_timer_t read_timer;      /**< Read timeout timer. */
-  uv_timer_t write_timer;     /**< Write timeout timer. */
-  uv_timer_t request_timer;   /**< Request timeout timer. */
-  int close_pending;          /**< Pending close refs before freeing client. */
-  llhttp_t parser;            /**< HTTP request parser. */
-  csilk_server_t* server;     /**< Owning server instance. */
-  csilk_ctx_t ctx;            /**< Request context for this connection. */
-  size_t total_header_size;   /**< Total size of headers parsed so far. */
-  size_t header_count;        /**< Number of headers parsed so far. */
-  char* current_url;          /**< Current URL being parsed. */
-  char* current_header_field; /**< Temporary header field name. */
-  char* current_header_value; /**< Temporary header field value. */
+  uv_tcp_t handle;             /**< libuv TCP stream handle. */
+  uv_timer_t timer;            /**< Connection idle (keep-alive) timer. */
+  uv_timer_t read_timer;       /**< Read timeout timer. */
+  uv_timer_t write_timer;      /**< Write timeout timer. */
+  uv_timer_t request_timer;    /**< Request timeout timer. */
+  int close_pending;           /**< Pending close refs before freeing client. */
+  llhttp_t parser;             /**< HTTP request parser. */
+  csilk_server_t* server;      /**< Owning server instance. */
+  csilk_ctx_t ctx;             /**< Request context for this connection. */
+  size_t total_header_size;    /**< Total size of headers parsed so far. */
+  size_t header_count;         /**< Number of headers parsed so far. */
+  size_t current_url_capacity; /**< Allocated size of current_url. */
+  size_t header_field_capacity; /**< Allocated size of current_header_field. */
+  size_t header_value_capacity; /**< Allocated size of current_header_value. */
+  char* current_url;            /**< Current URL being parsed. */
+  char* current_header_field;   /**< Temporary header field name. */
+  char* current_header_value;   /**< Temporary header field value. */
 } csilk_client_t;
 
 /** @brief Buffer allocation callback.
@@ -273,14 +276,15 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
                              client->current_header_value);
     free(client->current_header_field);
-    free(client->current_header_value);
     client->current_header_field = NULL;
+    client->header_field_capacity = 0;
+    free(client->current_header_value);
     client->current_header_value = NULL;
+    client->header_value_capacity = 0;
   } else if (client->current_header_field) {
-    // We had a field but no value yet? Should not happen in valid HTTP
-    // but we free it to be safe.
     free(client->current_header_field);
     client->current_header_field = NULL;
+    client->header_field_capacity = 0;
   }
 
   client->current_header_field = malloc(length + 1);
@@ -296,6 +300,18 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
  * @param p HTTP parser instance.
  * @param at Pointer to header value data.
  * @param length Length of header value data. */
+/** @brief Grow a buffer to at least `needed` bytes using exponential doubling.
+ */
+static char* buf_grow(char* buf, size_t* cap, size_t needed) {
+  if (needed <= *cap) return buf;
+  size_t new_cap = *cap ? *cap : 32;
+  while (new_cap < needed) new_cap *= 2;
+  char* new_buf = realloc(buf, new_cap);
+  if (!new_buf) return NULL;
+  *cap = new_cap;
+  return new_buf;
+}
+
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
@@ -305,10 +321,13 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
 
   size_t prev_len =
       client->current_header_value ? strlen(client->current_header_value) : 0;
-  char* new_val = realloc(client->current_header_value, prev_len + length + 1);
+  size_t needed = prev_len + length + 1;
+  char* new_val = buf_grow(client->current_header_value,
+                           &client->header_value_capacity, needed);
   if (!new_val) {
     free(client->current_header_value);
     client->current_header_value = NULL;
+    client->header_value_capacity = 0;
     client->total_header_size = 0;
     return HPE_USER;
   }
@@ -326,9 +345,11 @@ static int on_headers_complete(llhttp_t* p) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
                              client->current_header_value);
     free(client->current_header_field);
-    free(client->current_header_value);
     client->current_header_field = NULL;
+    client->header_field_capacity = 0;
+    free(client->current_header_value);
     client->current_header_value = NULL;
+    client->header_value_capacity = 0;
   }
   return 0;
 }
@@ -519,9 +540,11 @@ static void finalize_request(csilk_client_t* client, llhttp_t* p) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
                              client->current_header_value);
     free(client->current_header_field);
-    free(client->current_header_value);
     client->current_header_field = NULL;
+    client->header_field_capacity = 0;
+    free(client->current_header_value);
     client->current_header_value = NULL;
+    client->header_value_capacity = 0;
   }
 
   if (client->current_url) {
