@@ -75,8 +75,128 @@ void test_static_traversal_blocked() {
   csilk_arena_free(ctx.arena);
 }
 
+void test_static_range_first_5() {
+  cleanup_test_dir();
+
+  csilk_ctx_t ctx;
+  memset(&ctx, 0, sizeof(csilk_ctx_t));
+  ctx.arena = csilk_arena_new(1024);
+  assert(ctx.arena != NULL);
+  ctx.request.path = strdup("/test.html");
+  assert(ctx.request.path != NULL);
+
+  if (mkdir(TEST_DIR, 0777) != 0) {
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  FILE* f = fopen(TEST_DIR "/test.html", "w");
+  if (!f) {
+    rmdir(TEST_DIR);
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  fprintf(f, "Hello World, this is a test file!");
+  fclose(f);
+
+  csilk_set_request_header(&ctx, "Range", "bytes=0-4");
+  csilk_static(&ctx, TEST_DIR);
+  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+  assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
+  assert(ctx.response.body != NULL);
+  assert(ctx.response.body_len == 5);
+  assert(strncmp(ctx.response.body, "Hello", 5) == 0);
+
+  printf("test_static_range_first_5: PASS\n");
+  csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
+  cleanup_test_dir();
+}
+
+void test_static_range_middle() {
+  cleanup_test_dir();
+
+  csilk_ctx_t ctx;
+  memset(&ctx, 0, sizeof(csilk_ctx_t));
+  ctx.arena = csilk_arena_new(1024);
+  assert(ctx.arena != NULL);
+  ctx.request.path = strdup("/test.html");
+  assert(ctx.request.path != NULL);
+
+  if (mkdir(TEST_DIR, 0777) != 0) {
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  FILE* f = fopen(TEST_DIR "/test.html", "w");
+  if (!f) {
+    rmdir(TEST_DIR);
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  fprintf(f, "Hello World, this is a test file!");
+  fclose(f);
+
+  csilk_set_request_header(&ctx, "Range", "bytes=6-10");
+  csilk_static(&ctx, TEST_DIR);
+  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+  assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
+  assert(ctx.response.body != NULL);
+  assert(ctx.response.body_len == 5);
+  assert(strncmp(ctx.response.body, "World", 5) == 0);
+
+  printf("test_static_range_middle: PASS\n");
+  csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
+  cleanup_test_dir();
+}
+
+void test_static_range_invalid() {
+  cleanup_test_dir();
+
+  csilk_ctx_t ctx;
+  memset(&ctx, 0, sizeof(csilk_ctx_t));
+  ctx.arena = csilk_arena_new(1024);
+  assert(ctx.arena != NULL);
+  ctx.request.path = strdup("/test.html");
+  assert(ctx.request.path != NULL);
+
+  if (mkdir(TEST_DIR, 0777) != 0) {
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  FILE* f = fopen(TEST_DIR "/test.html", "w");
+  if (!f) {
+    rmdir(TEST_DIR);
+    csilk_ctx_cleanup(&ctx);
+    return;
+  }
+
+  fprintf(f, "Hello World");
+  fclose(f);
+
+  csilk_set_request_header(&ctx, "Range", "bytes=999-1000");
+  csilk_static(&ctx, TEST_DIR);
+  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+  assert(ctx.response.status == CSILK_STATUS_RANGE_NOT_SATISFIABLE);
+
+  printf("test_static_range_invalid: PASS\n");
+  csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
+  cleanup_test_dir();
+}
+
 int main() {
   test_static_serves_file();
   test_static_traversal_blocked();
+  test_static_range_first_5();
+  test_static_range_middle();
+  test_static_range_invalid();
   return 0;
 }
