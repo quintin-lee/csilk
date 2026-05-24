@@ -92,6 +92,10 @@
 - **状态**: [x] 已实现
 - **方案**: 新增 `csilk_request_id_middleware` 自动生成追踪 ID 并写入 `X-Request-Id`。
 
+### P3-7: JWT 认证中间件缺失
+- **状态**: [x] 已实现 (v0.3.0)
+- **方案**: 新增 `csilk_jwt_middleware` 支持 HS256 签名、过期校验及 Payload 自动存储，扩展了核心 Crypto 工具库（HMAC-SHA256, Base64URL）。
+
 ### P3-4: Health check 端点缺失
 - **状态**: [x] 已实现
 - **方案**: 新增 `csilk_health_check_handler` 提供 `/healthz` 支持。

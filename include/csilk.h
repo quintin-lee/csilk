@@ -959,6 +959,28 @@ void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data);
  * @param c The request context. */
 void csilk_sse_close(csilk_ctx_t* c);
 
+/* --- JWT Authentication Middleware --- */
+
+/** @brief Generate a JWT token (HS256).
+ * @param payload JSON object containing claims (e.g., {"sub": "123"}).
+ * @param secret Secret key for signing.
+ * @return Generated token string (must be freed by caller). */
+char* csilk_jwt_generate(cJSON* payload, const char* secret);
+
+/** @brief Verify and parse a JWT token.
+ * @param token JWT token string.
+ * @param secret Secret key for verification.
+ * @return Parsed payload JSON object, or NULL if invalid. */
+cJSON* csilk_jwt_verify(const char* token, const char* secret);
+
+/** @brief JWT middleware handler.
+ * Extracts Bearer token from Authorization header and verifies it.
+ * If valid, stores payload in context storage ("jwt_payload") and continues.
+ * If invalid, returns 401 Unauthorized.
+ * @param c The request context.
+ * @param secret Secret key for verification. */
+void csilk_jwt_middleware(csilk_ctx_t* c, const char* secret);
+
 /* --- Gzip Compression Middleware --- */
 
 /** @brief Gzip response compression middleware.
