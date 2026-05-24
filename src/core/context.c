@@ -571,6 +571,24 @@ static void on_stream_write(uv_write_t* req, int status) {
   free(req);
 }
 
+/** @brief Check if the client requested connection close. */
+static int client_wants_close(csilk_ctx_t* c) {
+  const char* connection = csilk_get_header(c, "Connection");
+  return connection && strcasecmp(connection, "close") == 0;
+}
+
+/** @brief Write completion callback for terminal chunk — closes connection. */
+static void on_stream_end_write(uv_write_t* req, int status) {
+  if (status < 0) {
+    fprintf(stderr, "Stream end write error %s\n", uv_strerror(status));
+  }
+  if (req->data) free(req->data);
+  if (req->handle) {
+    uv_close((uv_handle_t*)req->handle, NULL);
+  }
+  free(req);
+}
+
 /** @brief Send HTTP response headers with Transfer-Encoding: chunked.
  *  This is used by csilk_response_write on the first call.
  *  @param c Request context.
@@ -589,6 +607,9 @@ static int send_chunked_headers(csilk_ctx_t* c) {
       : status == CSILK_STATUS_INTERNAL_SERVER_ERROR ? "Internal Server Error"
                                                      : "OK";
 
+  int want_close = client_wants_close(c);
+  const char* conn_val = want_close ? "close" : "keep-alive";
+
   size_t custom_headers_len = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
@@ -599,8 +620,8 @@ static int send_chunked_headers(csilk_ctx_t* c) {
   int header_len = snprintf(NULL, 0,
                             "HTTP/1.1 %d %s\r\n"
                             "Transfer-Encoding: chunked\r\n"
-                            "Connection: keep-alive\r\n",
-                            status, status_text);
+                            "Connection: %s\r\n",
+                            status, status_text, conn_val);
   if (header_len < 0) return -1;
 
   size_t response_len = (size_t)header_len + custom_headers_len + 2;
@@ -616,8 +637,8 @@ static int send_chunked_headers(csilk_ctx_t* c) {
   int pos = snprintf(write_base, response_len + 1,
                      "HTTP/1.1 %d %s\r\n"
                      "Transfer-Encoding: chunked\r\n"
-                     "Connection: keep-alive\r\n",
-                     status, status_text);
+                     "Connection: %s\r\n",
+                     status, status_text, conn_val);
 
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
@@ -678,6 +699,7 @@ void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   if (!c->response_started) {
     if (send_chunked_headers(c) != 0) return;
     c->response_started = 1;
+    c->is_async = 1;
   }
 
   if (len == 0) return;
@@ -692,6 +714,7 @@ void csilk_response_end(csilk_ctx_t* c) {
 
   if (!c->response_started) {
     send_chunked_headers(c);
+    c->is_async = 1;
   }
 
   /* Terminal chunk: 0\r\n\r\n */
@@ -708,7 +731,5 @@ void csilk_response_end(csilk_ctx_t* c) {
 
   uv_buf_t uv_buf = uv_buf_init(buf, 5);
   req->data = buf;
-  uv_write(req, stream, &uv_buf, 1, on_stream_write);
-
-  csilk_ctx_cleanup(c);
+  uv_write(req, stream, &uv_buf, 1, on_stream_end_write);
 }

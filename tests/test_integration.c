@@ -69,6 +69,14 @@ static int send_request(int sock, const char* req) {
 }
 
 /* ---- Handlers ---- */
+static void stream_handler(csilk_ctx_t* c) {
+  csilk_response_write(c, (uint8_t*)"Hello ", 6);
+  csilk_response_write(c, (uint8_t*)"World", 5);
+  csilk_response_end(c);
+}
+
+static void ws_handler(csilk_ctx_t* c) { csilk_ws_handshake(c); }
+
 static void hello_handler(csilk_ctx_t* c) {
   csilk_string(c, CSILK_STATUS_OK, "Hello, World!");
 }
@@ -160,6 +168,10 @@ static void* run_server(void* arg) {
   csilk_router_add(router, "GET", "/protected", h4, 1);
   csilk_handler_t h5[] = {echo_handler};
   csilk_router_add(router, "GET", "/echo", h5, 1);
+  csilk_handler_t h6[] = {ws_handler};
+  csilk_router_add(router, "GET", "/ws", h6, 1);
+  csilk_handler_t h7[] = {stream_handler};
+  csilk_router_add(router, "GET", "/stream", h7, 1);
 
   csilk_server_t* server = csilk_server_new(router);
   server_ready = 1;
@@ -402,6 +414,65 @@ static void test_post_invalid_json() {
               expect_status(buf, CSILK_STATUS_BAD_REQUEST));
 }
 
+static void test_streaming_response() {
+  int sock = connect_server();
+  if (sock < 0) {
+    test_result("GET /stream (connect)", 0);
+    return;
+  }
+  const char* req =
+      "GET /stream HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+  send_request(sock, req);
+
+  /* Read until terminal chunk or EOF */
+  char full[8192] = {0};
+  int total = 0;
+  while (total < (int)sizeof(full) - 1) {
+    fd_set fds;
+    struct timeval tv = {1, 0};
+    FD_ZERO(&fds);
+    FD_SET(sock, &fds);
+    int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+    if (ret <= 0) break;
+    int n = recv(sock, full + total, (int)sizeof(full) - 1 - total, 0);
+    if (n <= 0) break;
+    total += n;
+    full[total] = '\0';
+    if (strstr(full, "0\r\n\r\n")) break;
+  }
+  close(sock);
+  test_result("GET /stream (response received)", total > 0);
+  test_result("GET /stream (chunked encoding)",
+              strstr(full, "Transfer-Encoding: chunked") != NULL);
+  test_result("GET /stream (chunk 1)", strstr(full, "6\r\nHello ") != NULL);
+  test_result("GET /stream (chunk 2)", strstr(full, "5\r\nWorld") != NULL);
+  test_result("GET /stream (final chunk)", strstr(full, "0\r\n\r\n") != NULL);
+}
+
+static void test_websocket_handshake() {
+  int sock = connect_server();
+  if (sock < 0) {
+    test_result("WS handshake (connect)", 0);
+    return;
+  }
+  const char* req =
+      "GET /ws HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\n"
+      "Connection: Upgrade\r\n"
+      "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+      "Sec-WebSocket-Version: 13\r\n\r\n";
+  send_request(sock, req);
+  char buf[4096] = {0};
+  int n = recv_response(sock, buf, sizeof(buf));
+  test_result("WS handshake (response received)", n > 0);
+  test_result("WS handshake (status 101)",
+              expect_status(buf, CSILK_STATUS_SWITCHING_PROTOCOLS));
+  test_result("WS handshake (Upgrade: websocket)",
+              strstr(buf, "Upgrade: websocket") != NULL);
+  test_result("WS handshake (Sec-WebSocket-Accept)",
+              strstr(buf, "Sec-WebSocket-Accept:") != NULL);
+  close(sock);
+}
+
 int main() {
   printf("=== Integration Tests ===\n\n");
 
@@ -423,6 +494,8 @@ int main() {
   test_get_not_found();
   test_get_echo();
   test_keepalive();
+  test_streaming_response();
+  test_websocket_handshake();
 
   printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed,
          g_tests_failed);
