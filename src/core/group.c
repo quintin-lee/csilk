@@ -134,6 +134,46 @@ void csilk_group_add_route(csilk_group_t* group, const char* method,
   csilk_group_add_handlers(group, method, path, handlers, 1);
 }
 
+/** @brief Add a route with OpenAPI metadata (input/output types). */
+void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
+                                    const char* path, csilk_handler_t handler,
+                                    const char* input_type,
+                                    const char* output_type,
+                                    const char* summary,
+                                    const char* description) {
+  if (!group || !method || !path || !handler) return;
+
+  char* full_path = join_path(group->prefix, path);
+  if (!full_path) return;
+
+  csilk_handler_t* combined_handlers = NULL;
+  size_t combined_count = 0;
+
+  if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
+    free(full_path);
+    free(combined_handlers);
+    return;
+  }
+
+  csilk_handler_t* new_handlers = realloc(
+      combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
+  if (!new_handlers) {
+    free(full_path);
+    free(combined_handlers);
+    return;
+  }
+  combined_handlers = new_handlers;
+  combined_handlers[combined_count] = handler;
+  combined_count++;
+
+  csilk_router_add_extended(group->router, method, full_path, combined_handlers,
+                            combined_count, full_path, input_type, output_type,
+                            summary, description);
+
+  free(full_path);
+  free(combined_handlers);
+}
+
 /** @brief Add a route with multiple handlers (middleware chain) to the group.
  */
 void csilk_group_add_handlers(csilk_group_t* group, const char* method,
