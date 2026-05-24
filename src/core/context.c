@@ -187,6 +187,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
 
   memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
   memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
+  memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
   memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
 
   if (c->response.body && c->response.body_is_managed) {
@@ -507,6 +508,56 @@ void csilk_parse_query(csilk_ctx_t* c, const char* query_string) {
     else
       pos = NULL;
   }
+}
+
+/** @brief Parse the request body as application/x-www-form-urlencoded. */
+void csilk_parse_form_urlencoded(csilk_ctx_t* c) {
+  if (!c || !c->arena) return;
+  const char* body = csilk_get_body(c, NULL);
+  if (!body || *body == '\0') return;
+
+  const char* ct = csilk_get_header(c, "Content-Type");
+  if (!ct) return;
+  if (strncmp(ct, "application/x-www-form-urlencoded", 33) != 0) return;
+
+  char* qs = csilk_arena_strdup(c->arena, body);
+  if (!qs) return;
+
+  char* pos = qs;
+  while (pos && *pos) {
+    char* amp = strchr(pos, '&');
+    if (amp) *amp = '\0';
+
+    char* eq = strchr(pos, '=');
+    char* key = pos;
+    char* value = NULL;
+
+    if (eq) {
+      *eq = '\0';
+      value = eq + 1;
+    } else {
+      value = "";
+    }
+
+    if (*key != '\0') {
+      csilk_url_decode(key);
+      if (value && *value != '\0') {
+        csilk_url_decode(value);
+      }
+      map_add(c, &c->request.form_params, key, value);
+    }
+
+    if (amp)
+      pos = amp + 1;
+    else
+      pos = NULL;
+  }
+}
+
+/** @brief Get a form urlencoded field by key. */
+const char* csilk_get_form_field(csilk_ctx_t* c, const char* key) {
+  if (!c || !key) return NULL;
+  return map_get(&c->request.form_params, key);
 }
 
 /** @brief Streaming write completion callback.

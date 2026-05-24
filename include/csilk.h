@@ -91,6 +91,7 @@ typedef struct {
   size_t body_len;                 /**< Length of the request body. */
   csilk_header_map_t headers;      /**< Hash map of request headers. */
   csilk_header_map_t query_params; /**< Hash map of query parameters. */
+  csilk_header_map_t form_params;  /**< Hash map of form urlencoded fields. */
 } csilk_request_t;
 
 /** @brief HTTP Response structure. */
@@ -210,6 +211,17 @@ const char* csilk_get_header(csilk_ctx_t* c, const char* key);
  * @param key The query parameter key name.
  * @return The query value string, or NULL if not found. */
 const char* csilk_get_query(csilk_ctx_t* c, const char* key);
+
+/** @brief Parse the request body as application/x-www-form-urlencoded.
+ * Parsed fields are accessible via csilk_get_form_field().
+ * @param c The request context. */
+void csilk_parse_form_urlencoded(csilk_ctx_t* c);
+
+/** @brief Get a form urlencoded field value by key.
+ * @param c The request context.
+ * @param key The form field key name.
+ * @return The field value string, or NULL if not found. */
+const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);
 
 /** @brief Set a request header.
  * @param c The request context.
