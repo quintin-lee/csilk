@@ -19,6 +19,7 @@ typedef struct csilk_db_driver_s csilk_db_driver_t;
 typedef struct {
   csilk_db_driver_t* driver;
   void* connection;
+  uv_mutex_t mutex;
 } csilk_db_pool_t;
 
 /** @brief Query result row. */

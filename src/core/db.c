@@ -12,49 +12,26 @@
 #include "csilk.h"
 #include "csilk_db.h"
 
+/** @brief Mutex for driver registry. */
+static uv_mutex_t registry_mutex;
+static int registry_initialized = 0;
+
 /** @brief Initialize the database system (call once on startup).
  * Registers built-in drivers including SQLite3. */
-void csilk_db_init(void) { csilk_db_sqlite_init(); }
+void csilk_db_init(void) {
+  if (__sync_val_compare_and_swap(&registry_initialized, 0, 1) == 0) {
+    uv_mutex_init(&registry_mutex);
+  }
+  csilk_db_sqlite_init();
+}
 
 /** @brief Registered drivers. */
 static csilk_db_driver_t* drivers[16];
 static int driver_count = 0;
 
-/** @brief Create a new database pool. */
-csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn) {
-  if (!driver_name) return NULL;
-
-  csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
-  if (!driver) {
-    fprintf(stderr, "csilk_db: driver '%s' not found\n", driver_name);
-    return NULL;
-  }
-
-  csilk_db_pool_t* pool = calloc(1, sizeof(csilk_db_pool_t));
-  if (!pool) return NULL;
-
-  pool->driver = driver;
-  if (driver->connect(pool, dsn) != 0) {
-    free(pool);
-    return NULL;
-  }
-
-  return pool;
-}
-
-/** @brief Free a database pool. */
-void csilk_db_pool_free(csilk_db_pool_t* pool) {
-  if (!pool) return;
-  if (pool->driver && pool->driver->disconnect) {
-    pool->driver->disconnect(pool);
-  }
-  free(pool);
-}
-
-/** @brief Execute a query and return JSON result. */
-cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql) {
-  if (!pool || !pool->driver || !pool->driver->query) return NULL;
-
+/** @brief Internal query helper (assumes mutex already locked). */
+static cJSON* csilk_db_query_json_locked(csilk_db_pool_t* pool,
+                                         const char* sql) {
   csilk_db_result_t result = {0};
   if (pool->driver->query(pool, sql, &result) != 0) {
     return NULL;
@@ -89,10 +66,57 @@ cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql) {
   return array;
 }
 
+/** @brief Create a new database pool. */
+csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn) {
+  if (!driver_name) return NULL;
+
+  csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
+  if (!driver) {
+    fprintf(stderr, "csilk_db: driver '%s' not found\n", driver_name);
+    return NULL;
+  }
+
+  csilk_db_pool_t* pool = calloc(1, sizeof(csilk_db_pool_t));
+  if (!pool) return NULL;
+
+  uv_mutex_init(&pool->mutex);
+  pool->driver = driver;
+  if (driver->connect(pool, dsn) != 0) {
+    uv_mutex_destroy(&pool->mutex);
+    free(pool);
+    return NULL;
+  }
+
+  return pool;
+}
+
+/** @brief Free a database pool. */
+void csilk_db_pool_free(csilk_db_pool_t* pool) {
+  if (!pool) return;
+  if (pool->driver && pool->driver->disconnect) {
+    pool->driver->disconnect(pool);
+  }
+  uv_mutex_destroy(&pool->mutex);
+  free(pool);
+}
+
+/** @brief Execute a query and return JSON result. */
+cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql) {
+  if (!pool || !pool->driver || !pool->driver->query) return NULL;
+
+  uv_mutex_lock(&pool->mutex);
+  cJSON* result = csilk_db_query_json_locked(pool, sql);
+  uv_mutex_unlock(&pool->mutex);
+  return result;
+}
+
 /** @brief Execute a statement. */
 int csilk_db_exec(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->driver || !pool->driver->exec) return -1;
-  return pool->driver->exec(pool, sql);
+  uv_mutex_lock(&pool->mutex);
+  int rc = pool->driver->exec(pool, sql);
+  uv_mutex_unlock(&pool->mutex);
+  return rc;
 }
 
 /** @brief Query with parameters. */
@@ -133,7 +157,9 @@ cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
   }
   full_sql[pos] = '\0';
 
-  cJSON* result = csilk_db_query_json(pool, full_sql);
+  uv_mutex_lock(&pool->mutex);
+  cJSON* result = csilk_db_query_json_locked(pool, full_sql);
+  uv_mutex_unlock(&pool->mutex);
   free(full_sql);
   return result;
 }
@@ -142,18 +168,23 @@ cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
 int csilk_db_register_driver(const char* name, csilk_db_driver_t* driver) {
   if (!name || !driver || driver_count >= 16) return -1;
 
+  uv_mutex_lock(&registry_mutex);
   driver->name = name;
   drivers[driver_count++] = driver;
+  uv_mutex_unlock(&registry_mutex);
   return 0;
 }
 
 /** @brief Get a driver by name. */
 csilk_db_driver_t* csilk_db_get_driver(const char* name) {
   if (!name) return NULL;
+  uv_mutex_lock(&registry_mutex);
   for (int i = 0; i < driver_count; i++) {
     if (strcmp(drivers[i]->name, name) == 0) {
+      uv_mutex_unlock(&registry_mutex);
       return drivers[i];
     }
   }
+  uv_mutex_unlock(&registry_mutex);
   return NULL;
 }
