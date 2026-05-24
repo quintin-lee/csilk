@@ -25,7 +25,7 @@ jobs:
             clang-tidy libyaml-dev zlib1g-dev
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_OOM_TEST=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
