@@ -734,8 +734,7 @@ static int send_chunked_headers(csilk_ctx_t* c) {
  *  @param stream The uv stream to write to.
  *  @param data Chunk data.
  *  @param len Data length. */
-static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data,
-                              size_t len) {
+static void write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   char size_buf[32];
   int size_len = snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);
   if (size_len <= 0) return;
@@ -751,27 +750,8 @@ static void write_chunk_frame(uv_stream_t* stream, const uint8_t* data,
   buf[(size_t)size_len + len] = '\r';
   buf[(size_t)size_len + len + 1] = '\n';
 
-  uv_write_t* req = malloc(sizeof(uv_write_t));
-  if (!req) {
-    free(buf);
-    return;
-  }
-
-  /* Split into multiple buffers if total > UINT_MAX, although unlikely on
-   * modern systems */
-  uv_buf_t uv_bufs[2];
-  int buf_count = 1;
-  if (total > 0xFFFFFFFFU) {
-    uv_bufs[0] = uv_buf_init(buf, 0xFFFFFFFFU);
-    uv_bufs[1] =
-        uv_buf_init(buf + 0xFFFFFFFFU, (unsigned int)(total - 0xFFFFFFFFU));
-    buf_count = 2;
-  } else {
-    uv_bufs[0] = uv_buf_init(buf, (unsigned int)total);
-  }
-
-  req->data = buf;
-  uv_write(req, stream, uv_bufs, buf_count, on_stream_write);
+  _csilk_send_data(c, (const uint8_t*)buf, total);
+  free(buf);
 }
 
 /** @brief Write data to streaming response using chunked encoding. */
@@ -787,7 +767,7 @@ void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   }
 
   if (len == 0) return;
-  write_chunk_frame(stream, data, len);
+  write_chunk_frame(c, data, len);
 }
 
 /** @brief Finalize streaming response by sending the terminal chunk. */
@@ -802,18 +782,5 @@ void csilk_response_end(csilk_ctx_t* c) {
   }
 
   /* Terminal chunk: 0\r\n\r\n */
-  const char* term = "0\r\n\r\n";
-  uv_write_t* req = malloc(sizeof(uv_write_t));
-  if (!req) return;
-
-  char* buf = malloc(5);
-  if (!buf) {
-    free(req);
-    return;
-  }
-  memcpy(buf, term, 5);
-
-  uv_buf_t uv_buf = uv_buf_init(buf, 5);
-  req->data = buf;
-  uv_write(req, stream, &uv_buf, 1, on_stream_end_write);
+  _csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
 }

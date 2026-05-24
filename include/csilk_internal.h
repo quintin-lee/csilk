@@ -96,7 +96,13 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread);
 
 /** @brief Internal: Trigger response sending (used for async offloading).
  * @param c Request context. */
-void _csilk_send_response(csilk_ctx_t* c);
+__attribute__((weak)) void _csilk_send_response(csilk_ctx_t* c);
+
+/** @brief Internal: Send data through TLS if enabled, or direct.
+ * @param c Request context.
+ * @param data Data to send.
+ * @param len Data length. */
+void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len);
 
 /** @brief URL decode a string in-place.
  * @param str The string to decode.

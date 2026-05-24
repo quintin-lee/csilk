@@ -147,12 +147,16 @@ if(NOT ZLIB_LIB)
 endif()
 message(STATUS "Found zlib: ${ZLIB_LIB}")
 
+# Find OpenSSL
+find_package(OpenSSL REQUIRED)
+message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
+
 # Option to also build as shared library
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv cjson Threads::Threads PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/core>
