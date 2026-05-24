@@ -25,7 +25,7 @@ void* run_server(void* arg) {
                                .max_body_size = 1048576,
                                .max_header_size = 65536,
                                .listen_backlog = 128};
-  csilk_server_set_config(g_server, cfg);
+  csilk_server_set_config(g_server, &cfg);
   csilk_server_run(g_server, 8080);
   csilk_server_free(g_server);
   csilk_group_free(group);

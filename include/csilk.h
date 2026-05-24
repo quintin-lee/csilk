@@ -874,6 +874,13 @@ csilk_server_t* csilk_server_new(csilk_router_t* router);
  * @return 0 on success, -1 if handler array is full. */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
 
+/** @brief Set a custom handler for unmatched routes (404).
+ * @param server Server instance.
+ * @param handler Handler function (receives context with 404 already set).
+ *                 Pass NULL to restore default behavior. */
+void csilk_server_set_not_found_handler(csilk_server_t* server,
+                                        csilk_handler_t handler);
+
 /** @brief Deallocate server resources.
  * @param server Server instance. */
 void csilk_server_free(csilk_server_t* server);
@@ -884,9 +891,9 @@ void csilk_server_stop(csilk_server_t* server);
 
 /** @brief Apply server configuration.
  * @param server Server instance.
- * @param config Configuration struct. */
+ * @param config Configuration struct (pointer, for efficiency). */
 void csilk_server_set_config(csilk_server_t* server,
-                             csilk_server_config_t config);
+                             const csilk_server_config_t* config);
 
 /** @brief Set the maximum number of concurrent client connections.
  * @param server Server instance.

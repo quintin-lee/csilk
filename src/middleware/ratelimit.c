@@ -17,21 +17,53 @@
 #define MAX_IP_ENTRIES 1024
 /** @brief Rate limiting window size in seconds. */
 #define WINDOW_SIZE 60
+/** @brief How often (in seconds) to evict stale entries. */
+#define EVICT_INTERVAL 300
 
 /** @brief Rate-limit tracking entry for a single IP address. */
 typedef struct {
   char ip[46];       /**< Client IP address string. */
   int count;         /**< Request count in current window. */
   time_t last_reset; /**< Timestamp when the window started. */
+  time_t last_seen;  /**< Timestamp of last request (for LRU eviction). */
 } ip_entry_t;
 
 static ip_entry_t ip_table[MAX_IP_ENTRIES];
 static int ip_count = 0;
+static time_t last_evict = 0;
 static uv_mutex_t ratelimit_mutex;
 static uv_once_t ratelimit_once = UV_ONCE_INIT;
 
 /** @brief Initialize the rate-limiting mutex (called once via uv_once). */
 static void init_ratelimit_mutex() { uv_mutex_init(&ratelimit_mutex); }
+
+/** @brief Evict stale entries (entries older than WINDOW_SIZE since last_seen).
+ */
+static void evict_stale_entries(time_t now) {
+  int write_idx = 0;
+  for (int read_idx = 0; read_idx < ip_count; read_idx++) {
+    if (now - ip_table[read_idx].last_seen <= WINDOW_SIZE) {
+      if (write_idx != read_idx) {
+        ip_table[write_idx] = ip_table[read_idx];
+      }
+      write_idx++;
+    }
+  }
+  ip_count = write_idx;
+}
+
+/** @brief Evict the single oldest entry (LRU). */
+static void evict_oldest_entry(void) {
+  if (ip_count <= 0) return;
+  int oldest = 0;
+  for (int i = 1; i < ip_count; i++) {
+    if (ip_table[i].last_seen < ip_table[oldest].last_seen) {
+      oldest = i;
+    }
+  }
+  ip_table[oldest] = ip_table[ip_count - 1];
+  ip_count--;
+}
 
 /** @brief IP-based rate limiting middleware with sliding window. */
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
@@ -47,6 +79,12 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
   ip_entry_t* entry = NULL;
 
   uv_mutex_lock(&ratelimit_mutex);
+
+  // Periodic eviction of stale entries
+  if (now - last_evict > EVICT_INTERVAL) {
+    evict_stale_entries(now);
+    last_evict = now;
+  }
 
   // Search for IP
   for (int i = 0; i < ip_count; i++) {
@@ -64,10 +102,13 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
       entry->count = 0;
       entry->last_reset = now;
     } else {
-      // Table full, just allow for now (or implement eviction)
-      uv_mutex_unlock(&ratelimit_mutex);
-      csilk_next(c);
-      return;
+      // Table full: evict oldest entry
+      evict_oldest_entry();
+      entry = &ip_table[ip_count++];
+      strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
+      entry->ip[sizeof(entry->ip) - 1] = '\0';
+      entry->count = 0;
+      entry->last_reset = now;
     }
   }
 
@@ -78,6 +119,7 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
   } else {
     entry->count++;
   }
+  entry->last_seen = now;
 
   int current_count = entry->count;
   uv_mutex_unlock(&ratelimit_mutex);
