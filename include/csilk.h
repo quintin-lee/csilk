@@ -508,6 +508,13 @@ typedef struct csilk_server_config_s {
   int tcp_nodelay;          /**< Enable TCP_NODELAY. */
   int tcp_keepalive;  /**< Enable TCP keep-alive (seconds, 0 to disable). */
   int worker_threads; /**< Number of worker threads (SO_REUSEPORT). */
+
+  /* TLS configuration */
+  int enable_tls;      /**< Enable HTTPS/TLS. */
+  char* tls_cert_file; /**< Path to SSL certificate file. */
+  char* tls_key_file;  /**< Path to SSL private key file. */
+  char* tls_ca_file;   /**< Path to CA bundle file (optional). */
+  int tls_verify_peer; /**< Require client certificate. */
 } csilk_server_config_t;
 
 /** @brief Global Configuration structure. */

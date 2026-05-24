@@ -6,6 +6,8 @@
 
 #include <limits.h>
 #include <llhttp.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -51,6 +53,7 @@ struct csilk_server_s {
       not_found_handler; /**< Custom 404 handler (NULL = default). */
   char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
   csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
+  SSL_CTX* ssl_ctx;                       /**< OpenSSL context. */
   csilk_client_t* active_clients;  /**< Head of active connections list. */
   uv_mutex_t clients_mutex;        /**< Mutex for active clients list. */
   csilk_client_t* client_pool[32]; /**< Connection object free list. */
@@ -76,6 +79,9 @@ struct csilk_client_s {
   char* current_url;            /**< Current URL being parsed. */
   char* current_header_field;   /**< Temporary header field name. */
   char* current_header_value;   /**< Temporary header field value. */
+  SSL* ssl;                     /**< OpenSSL session object. */
+  BIO* read_bio;                /**< BIO for reading encrypted data. */
+  BIO* write_bio;               /**< BIO for writing encrypted data. */
   struct csilk_client_s* next;  /**< Next client in active list. */
   struct csilk_client_s* prev;  /**< Previous client in active list. */
 };
@@ -93,6 +99,11 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 static void on_server_handle_close(uv_handle_t* handle);
+static void init_tls(csilk_server_t* s);
+static void cleanup_tls(csilk_server_t* s);
+static int setup_client_tls(csilk_client_t* client);
+static void process_tls_read(csilk_client_t* client);
+static void flush_tls_write(csilk_client_t* client);
 
 /** @brief Get a client from the connection pool (or allocate new). */
 static csilk_client_t* pool_get(csilk_server_t* server) {
@@ -104,6 +115,12 @@ static csilk_client_t* pool_get(csilk_server_t* server) {
 
 /** @brief Return a client to the connection pool (or free if pool full). */
 static void pool_put(csilk_server_t* server, csilk_client_t* client) {
+  if (client->ssl) {
+    SSL_free(client->ssl);
+    client->ssl = NULL;
+    client->read_bio = NULL;   // Frees with SSL_free
+    client->write_bio = NULL;  // Frees with SSL_free
+  }
   memset(client, 0, sizeof(*client));
   if (server->client_pool_count < 32) {
     server->client_pool[server->client_pool_count++] = client;
@@ -487,6 +504,31 @@ static const char* get_status_text(int status) {
 }
 
 /** @brief Send the fully constructed HTTP response to the client. */
+void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len) {
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+  if (!client) return;
+
+  if (client->ssl) {
+    SSL_write(client->ssl, data, (int)len);
+    flush_tls_write(client);
+    return;
+  }
+
+  uv_write_t* req = malloc(sizeof(uv_write_t));
+  if (!req) return;
+
+  char* buf_copy = malloc(len);
+  if (!buf_copy) {
+    free(req);
+    return;
+  }
+  memcpy(buf_copy, data, len);
+
+  uv_buf_t buf = uv_buf_init(buf_copy, (unsigned int)len);
+  req->data = buf_copy;
+  uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+}
+
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
@@ -542,56 +584,50 @@ void _csilk_send_response(csilk_ctx_t* c) {
   size_t response_len = (size_t)header_len + custom_headers_len + 2 +
                         (use_chunked ? 0 : body_len);
 
-  uv_write_t* req = malloc(sizeof(uv_write_t));
-  if (req) {
-    char* write_base = malloc(response_len + 1);
-    if (write_base) {
-      int pos;
-      if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-        pos = snprintf(write_base, response_len + 1,
-                       "HTTP/1.1 101 Switching Protocols\r\n");
-      } else if (use_chunked) {
-        pos = snprintf(write_base, response_len + 1,
-                       "HTTP/1.1 %d %s\r\n"
-                       "%s"
-                       "Connection: %s\r\n",
-                       status, status_text, transfer_encoding, connection_val);
-      } else {
-        pos = snprintf(write_base, response_len + 1,
-                       "HTTP/1.1 %d %s\r\n"
-                       "Content-Length: %zu\r\n"
-                       "Connection: %s\r\n",
-                       status, status_text, body_len, connection_val);
-      }
-
-      for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-        for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
-             h = h->next) {
-          memcpy(write_base + pos, h->key, h->key_len);
-          pos += (int)h->key_len;
-          write_base[pos++] = ':';
-          write_base[pos++] = ' ';
-          memcpy(write_base + pos, h->value, h->value_len);
-          pos += (int)h->value_len;
-          write_base[pos++] = '\r';
-          write_base[pos++] = '\n';
-        }
-      }
-
-      if (!use_chunked) {
-        snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s",
-                 body);
-      } else {
-        snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
-      }
-
-      uv_buf_t buf = uv_buf_init(
-          write_base, (use_chunked ? (size_t)pos + 2 : response_len));
-      req->data = write_base;
-      uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+  char* write_base = malloc(response_len + 1);
+  if (write_base) {
+    int pos;
+    if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
+      pos = snprintf(write_base, response_len + 1,
+                     "HTTP/1.1 101 Switching Protocols\r\n");
+    } else if (use_chunked) {
+      pos = snprintf(write_base, response_len + 1,
+                     "HTTP/1.1 %d %s\r\n"
+                     "%s"
+                     "Connection: %s\r\n",
+                     status, status_text, transfer_encoding, connection_val);
     } else {
-      free(req);
+      pos = snprintf(write_base, response_len + 1,
+                     "HTTP/1.1 %d %s\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: %s\r\n",
+                     status, status_text, body_len, connection_val);
     }
+
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+      for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
+           h = h->next) {
+        memcpy(write_base + pos, h->key, h->key_len);
+        pos += (int)h->key_len;
+        write_base[pos++] = ':';
+        write_base[pos++] = ' ';
+        memcpy(write_base + pos, h->value, h->value_len);
+        pos += (int)h->value_len;
+        write_base[pos++] = '\r';
+        write_base[pos++] = '\n';
+      }
+    }
+
+    if (!use_chunked) {
+      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s",
+               body);
+    } else {
+      snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+    }
+
+    _csilk_send_data(c, (const uint8_t*)write_base,
+                     (use_chunked ? (size_t)pos + 2 : response_len));
+    free(write_base);
   }
 
   // Stop read timeout (request is complete)
@@ -753,6 +789,14 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     atomic_fetch_add(&server->active_connections, 1);
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;
+
+    if (server->ssl_ctx) {
+      if (setup_client_tls(client) < 0) {
+        uv_close((uv_handle_t*)&client->handle, on_close);
+        return;
+      }
+    }
+
     uv_timer_init(server_stream->loop, &client->timer);
     client->timer.data = client;
     uv_timer_init(server_stream->loop, &client->read_timer);
@@ -802,7 +846,10 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                    client->server->config.read_timeout_ms, 0);
   }
   if (nread > 0) {
-    if (client->ctx.is_websocket) {
+    if (client->ssl) {
+      BIO_write(client->read_bio, buf->base, (int)nread);
+      process_tls_read(client);
+    } else if (client->ctx.is_websocket) {
       csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf->base,
                            (size_t)nread);
     } else {
@@ -980,6 +1027,7 @@ void csilk_server_free(csilk_server_t* server) {
     free(server->client_pool[i]);
   }
 
+  cleanup_tls(server);
   uv_mutex_destroy(&server->clients_mutex);
   free(server);
 }
@@ -1119,6 +1167,14 @@ static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
 int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
 
+  if (server->config.enable_tls) {
+    init_tls(server);
+    if (!server->ssl_ctx) {
+      CSILK_LOG_E("Failed to initialize TLS context");
+      return -1;
+    }
+  }
+
   int workers = server->config.worker_threads;
   if (workers <= 0) workers = 1;
 
@@ -1169,4 +1225,144 @@ int csilk_server_run(csilk_server_t* server, int port) {
               workers);
 
   return uv_run(server->loop, UV_RUN_DEFAULT);
+}
+
+/* --- TLS Helper Implementations --- */
+
+static void init_tls(csilk_server_t* s) {
+  SSL_load_error_strings();
+  OpenSSL_add_ssl_algorithms();
+
+  const SSL_METHOD* method = TLS_server_method();
+  s->ssl_ctx = SSL_CTX_new(method);
+  if (!s->ssl_ctx) {
+    ERR_print_errors_fp(stderr);
+    return;
+  }
+
+  if (s->config.tls_cert_file && s->config.tls_key_file) {
+    if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx,
+                                           s->config.tls_cert_file) <= 0) {
+      ERR_print_errors_fp(stderr);
+      goto error;
+    }
+    if (SSL_CTX_use_PrivateKey_file(s->ssl_ctx, s->config.tls_key_file,
+                                    SSL_FILETYPE_PEM) <= 0) {
+      ERR_print_errors_fp(stderr);
+      goto error;
+    }
+  } else {
+    CSILK_LOG_E("TLS enabled but cert/key files missing");
+    goto error;
+  }
+
+  if (s->config.tls_ca_file) {
+    if (SSL_CTX_load_verify_locations(s->ssl_ctx, s->config.tls_ca_file,
+                                      NULL) <= 0) {
+      ERR_print_errors_fp(stderr);
+    }
+  }
+
+  if (s->config.tls_verify_peer) {
+    SSL_CTX_set_verify(s->ssl_ctx,
+                       SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+  }
+
+  return;
+
+error:
+  SSL_CTX_free(s->ssl_ctx);
+  s->ssl_ctx = NULL;
+}
+
+static void cleanup_tls(csilk_server_t* s) {
+  if (s->ssl_ctx) {
+    SSL_CTX_free(s->ssl_ctx);
+    s->ssl_ctx = NULL;
+  }
+  EVP_cleanup();
+}
+
+static int setup_client_tls(csilk_client_t* client) {
+  client->ssl = SSL_new(client->server->ssl_ctx);
+  if (!client->ssl) return -1;
+
+  client->read_bio = BIO_new(BIO_s_mem());
+  client->write_bio = BIO_new(BIO_s_mem());
+  if (!client->read_bio || !client->write_bio) {
+    SSL_free(client->ssl);
+    client->ssl = NULL;
+    return -1;
+  }
+
+  SSL_set_bio(client->ssl, client->read_bio, client->write_bio);
+  SSL_set_accept_state(client->ssl);
+
+  // Try to start handshake
+  process_tls_read(client);
+  return 0;
+}
+
+static void process_tls_read(csilk_client_t* client) {
+  char buf[4096];
+  int n;
+
+  if (!SSL_is_init_finished(client->ssl)) {
+    int r = SSL_do_handshake(client->ssl);
+    flush_tls_write(client);
+    if (r <= 0) {
+      int err = SSL_get_error(client->ssl, r);
+      if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+        CSILK_LOG_E("TLS Handshake error: %d", err);
+        uv_close((uv_handle_t*)&client->handle, on_close);
+      }
+      return;
+    }
+    // Handshake finished, might have data in read BIO
+  }
+
+  while ((n = SSL_read(client->ssl, buf, sizeof(buf))) > 0) {
+    if (client->ctx.is_websocket) {
+      csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
+    } else {
+      enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
+      if (err != HPE_OK) {
+        if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+          uv_close((uv_handle_t*)&client->handle, on_close);
+        }
+        break;
+      }
+    }
+  }
+
+  int err = SSL_get_error(client->ssl, n);
+  if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_ZERO_RETURN) {
+    CSILK_LOG_E("TLS Read error: %d", err);
+    if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+      uv_close((uv_handle_t*)&client->handle, on_close);
+    }
+  }
+
+  flush_tls_write(client);
+}
+
+static void flush_tls_write(csilk_client_t* client) {
+  char buf[4096];
+  int n;
+
+  while ((n = BIO_read(client->write_bio, buf, sizeof(buf))) > 0) {
+    uv_write_t* req = malloc(sizeof(uv_write_t));
+    if (!req) break;
+
+    char* data = malloc((size_t)n);
+    if (!data) {
+      free(req);
+      break;
+    }
+    memcpy(data, buf, (size_t)n);
+
+    uv_buf_t uv_buf = uv_buf_init(data, (unsigned int)n);
+    req->data = data;
+    uv_write(req, (uv_stream_t*)&client->handle, &uv_buf, 1, on_write);
+  }
 }
