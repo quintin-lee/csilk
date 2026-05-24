@@ -177,6 +177,7 @@ static void create_user(csilk_ctx_t* c) {
   }
 
   u.id = (int64_t)(time(NULL) % 100000);
+  csilk_set_header(c, "Content-Type", "application/json");
 
   if (u.bio) {
     char buf[320];
