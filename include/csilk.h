@@ -538,6 +538,30 @@ void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
                       int max_age, const char* path, const char* domain,
                       int secure, int http_only);
 
+/** @brief Initialize the session system (call once on startup). */
+void csilk_session_init(void);
+
+/** @brief Start or resume a session for the current request.
+ * Creates a new session cookie if none exists.
+ * @param c The request context. */
+void csilk_session_start(csilk_ctx_t* c);
+
+/** @brief Store a value in the session.
+ * @param c The request context.
+ * @param key The key name.
+ * @param value Pointer to the value to store. */
+void csilk_session_set(csilk_ctx_t* c, const char* key, void* value);
+
+/** @brief Retrieve a value from the session.
+ * @param c The request context.
+ * @param key The key name.
+ * @return The stored value pointer, or NULL. */
+void* csilk_session_get(csilk_ctx_t* c, const char* key);
+
+/** @brief Destroy the current session and clear the cookie.
+ * @param c The request context. */
+void csilk_session_destroy(csilk_ctx_t* c);
+
 /** @brief Send a JSON response.
  * @param c The request context.
  * @param status HTTP status code.
