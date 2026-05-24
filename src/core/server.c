@@ -27,6 +27,9 @@
 /** @brief Default request arena chunk size. */
 #define CSILK_DEFAULT_ARENA_SIZE 4096
 
+/** @brief Forward declaration for client connection structure. */
+typedef struct csilk_client_s csilk_client_t;
+
 /** @brief Server structure. */
 struct csilk_server_s {
   uv_loop_t* loop;                 /**< libuv event loop. */
@@ -46,10 +49,12 @@ struct csilk_server_s {
   csilk_handler_t
       not_found_handler; /**< Custom 404 handler (NULL = default). */
   char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
+  csilk_client_t* client_pool[32]; /**< Connection object free list. */
+  int client_pool_count;           /**< Number of free clients in pool. */
 };
 
 /** @brief Client connection structure. */
-typedef struct {
+struct csilk_client_s {
   uv_tcp_t handle;             /**< libuv TCP stream handle. */
   uv_timer_t timer;            /**< Connection idle (keep-alive) timer. */
   uv_timer_t read_timer;       /**< Read timeout timer. */
@@ -67,7 +72,7 @@ typedef struct {
   char* current_url;            /**< Current URL being parsed. */
   char* current_header_field;   /**< Temporary header field name. */
   char* current_header_value;   /**< Temporary header field value. */
-} csilk_client_t;
+};
 
 /** @brief Buffer allocation callback.
  * @param handle UV handle.
@@ -83,6 +88,24 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 static void on_server_handle_close(uv_handle_t* handle);
 
+/** @brief Get a client from the connection pool (or allocate new). */
+static csilk_client_t* pool_get(csilk_server_t* server) {
+  if (server->client_pool_count > 0) {
+    return server->client_pool[--server->client_pool_count];
+  }
+  return calloc(1, sizeof(csilk_client_t));
+}
+
+/** @brief Return a client to the connection pool (or free if pool full). */
+static void pool_put(csilk_server_t* server, csilk_client_t* client) {
+  memset(client, 0, sizeof(*client));
+  if (server->client_pool_count < 32) {
+    server->client_pool[server->client_pool_count++] = client;
+  } else {
+    free(client);
+  }
+}
+
 /** @brief Close handler for timer handles — frees client on last close. */
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
@@ -94,12 +117,12 @@ static void on_timer_close(uv_handle_t* handle) {
   csilk_ctx_cleanup(&client->ctx);
   if (client->ctx.arena) {
     csilk_arena_free(client->ctx.arena);
-    client->ctx.arena = NULL;
   }
   free(client->current_header_field);
   free(client->current_header_value);
   free(client->current_url);
-  free(client);
+  csilk_server_t* srv = client->server;
+  pool_put(srv, client);
 }
 
 /** @brief Close handler for client connections.
@@ -128,17 +151,16 @@ static void on_close(uv_handle_t* handle) {
       }
     }
     if (client->close_pending <= 0) {
-      if (client->server)
-        atomic_fetch_sub(&client->server->active_connections, 1);
+      csilk_server_t* srv = client->server;
+      if (srv) atomic_fetch_sub(&srv->active_connections, 1);
       csilk_ctx_cleanup(&client->ctx);
       if (client->ctx.arena) {
         csilk_arena_free(client->ctx.arena);
-        client->ctx.arena = NULL;
       }
       free(client->current_header_field);
       free(client->current_header_value);
       free(client->current_url);
-      free(client);
+      pool_put(srv, client);
     }
   }
 }
@@ -653,14 +675,14 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
     return;
   }
 
-  csilk_client_t* client = calloc(1, sizeof(csilk_client_t));
+  csilk_client_t* client = pool_get(server);
   if (!client) return;
 
   client->server = server;
   int r = uv_tcp_init(server_stream->loop, &client->handle);
   if (r < 0) {
     fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
-    free(client);
+    pool_put(server, client);
     return;
   }
   client->handle.data = client;
@@ -894,6 +916,9 @@ void csilk_server_free(csilk_server_t* server) {
   }
 
   free(server->spa_doc_root);
+  for (int i = 0; i < server->client_pool_count; i++) {
+    free(server->client_pool[i]);
+  }
   free(server);
 }
 
