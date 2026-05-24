@@ -562,6 +562,31 @@ void* csilk_session_get(csilk_ctx_t* c, const char* key);
  * @param c The request context. */
 void csilk_session_destroy(csilk_ctx_t* c);
 
+/** @name Validation flags
+ *  @{ */
+#define CSILK_VALID_REQUIRED (1 << 0) /**< Field is required. */
+#define CSILK_VALID_INT (1 << 1)      /**< Must be a valid integer. */
+#define CSILK_VALID_STRING (1 << 2)   /**< Must be a string. */
+#define CSILK_VALID_EMAIL (1 << 3)    /**< Must be a valid email format. */
+/** @} */
+
+/** @brief Single validation rule for request parameter validation. */
+typedef struct csilk_valid_rule_s {
+  const char* field; /**< Field name to validate. */
+  int flags;         /**< Bitwise OR of CSILK_VALID_* flags. */
+  int min;           /**< Minimum length (string) or value (int). */
+  int max;           /**< Maximum length (string) or value (int). */
+  const char*
+      source; /**< "query", "form", "header", "cookie", or NULL for auto. */
+} csilk_valid_rule_t;
+
+/** @brief Validate request parameters against a set of rules.
+ * Returns the field name of the first validation failure, or NULL on success.
+ * @param c The request context.
+ * @param rules NULL-terminated array of validation rules.
+ * @return NULL on success, or pointer to the failing field name. */
+const char* csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules);
+
 /** @brief Send a JSON response.
  * @param c The request context.
  * @param status HTTP status code.
