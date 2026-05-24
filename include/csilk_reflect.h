@@ -62,6 +62,23 @@ void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
 /** @brief Find a registered type by name. */
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name);
 
+/** @brief Callback type for csilk_reflect_foreach.
+ *  @param name The registered type name.
+ *  @param entry The type descriptor.
+ *  @param user_data Opaque pointer passed through from csilk_reflect_foreach.
+ */
+typedef void (*csilk_reflect_foreach_cb)(const char* name,
+                                         const csilk_reflect_entry_t* entry,
+                                         void* user_data);
+
+/** @brief Iterate all registered reflection types.
+ *  Calls @p cb for each registered type. Safe to call before or after
+ *  route registration; types registered via CSILK_REGISTER_REFLECT
+ *  are available via constructor functions at startup.
+ *  @param cb Callback invoked for each type.
+ *  @param user_data Opaque pointer forwarded to the callback. */
+void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data);
+
 /** @brief High-level: Struct to JSON string. */
 char* csilk_json_marshal(const char* type_name, const void* ptr);
 

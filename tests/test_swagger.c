@@ -483,6 +483,33 @@ void test_serve_swagger_ui_null_ctx() {
   printf("test_serve_swagger_ui_null_ctx PASSED\n");
 }
 
+void test_auto_register_all_types() {
+  csilk_router_t* r = csilk_router_new();
+  assert(r);
+
+  // Create a route WITHOUT type references - types are registered
+  // via CSILK_REGISTER_REFLECT (Product, LoginReq, LoginResp from top of file)
+  csilk_handler_t h[] = {dummy_handler};
+  csilk_router_add(r, "GET", "/foo", h, 1);
+
+  cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+  assert(spec);
+
+  cJSON* schemas =
+      cJSON_GetObjectItem(cJSON_GetObjectItem(spec, "components"), "schemas");
+  assert(schemas);
+
+  // All reflected types should auto-appear in components/schemas
+  // even though no route references them
+  assert(cJSON_GetObjectItem(schemas, "Product"));
+  assert(cJSON_GetObjectItem(schemas, "LoginReq"));
+  assert(cJSON_GetObjectItem(schemas, "LoginResp"));
+
+  cJSON_Delete(spec);
+  csilk_router_free(r);
+  printf("test_auto_register_all_types PASSED\n");
+}
+
 void test_empty_router() {
   csilk_router_t* r = csilk_router_new();
   assert(r);
@@ -522,6 +549,7 @@ int main() {
   test_serve_swagger_ui();
   test_serve_swagger_ui_null_ctx();
   test_empty_router();
+  test_auto_register_all_types();
 
   printf("\nAll swagger tests PASSED\n");
   return 0;

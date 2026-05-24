@@ -64,6 +64,28 @@ const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
   return NULL;
 }
 
+/** @brief Iterate all registered reflection types.
+ *  Collects type names while locked, then invokes callbacks outside the lock
+ *  to avoid deadlocks when callbacks call back into reflection APIs. */
+void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data) {
+  if (!cb) return;
+  const char* names[MAX_REG_STRUCTS];
+  size_t count = 0;
+
+  registry_lock();
+  for (size_t i = 0; i < g_registry_count; i++) {
+    names[count++] = g_registry[i].name;
+  }
+  registry_unlock();
+
+  for (size_t i = 0; i < count; i++) {
+    const csilk_reflect_entry_t* entry = csilk_reflect_find(names[i]);
+    if (entry) {
+      cb(names[i], entry, user_data);
+    }
+  }
+}
+
 static cJSON* serialize_scalar(const void* addr,
                                const csilk_field_desc_t* desc);
 static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,

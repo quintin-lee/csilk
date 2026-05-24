@@ -155,6 +155,14 @@ static void add_schema(cJSON* schemas, const char* type_name) {
   }
 }
 
+/** @brief Callback for csilk_reflect_foreach: auto-register a schema. */
+static void auto_register_schema(const char* name,
+                                 const csilk_reflect_entry_t* entry,
+                                 void* user_data) {
+  (void)entry;
+  add_schema((cJSON*)user_data, name);
+}
+
 /** @brief Generate OpenAPI 3.0 specification JSON from the router.
  *  Traverses all registered routes and uses the reflection system
  *  to generate schemas for request/response types. */
@@ -382,6 +390,13 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
                                 "Internal Server Error");
       }
     }
+  }
+
+  // Auto-register schemas for ALL reflected types, even those not
+  // explicitly linked to any route. This ensures that any type registered
+  // via CSILK_REGISTER_REFLECT appears in components/schemas.
+  if (schemas) {
+    csilk_reflect_foreach(auto_register_schema, schemas);
   }
 
   cJSON_Delete(routes);
