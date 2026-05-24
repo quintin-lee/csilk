@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "context_internal.h"
 #include "csilk_internal.h"
 
 /** @brief A single chunk in the arena linked list. */

@@ -1,3 +1,4 @@
+#include "context_internal.h"
 #include "csilk_internal.h"
 /**
  * @file example_server.c

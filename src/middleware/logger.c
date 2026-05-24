@@ -12,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 #include "csilk_reflect.h"

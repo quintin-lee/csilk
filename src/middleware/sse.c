@@ -10,6 +10,7 @@
 #include <string.h>
 #include <uv.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 
@@ -33,7 +34,7 @@ void csilk_sse_init(csilk_ctx_t* c) {
   csilk_set_header(c, "X-Accel-Buffering", "no");
 
   c->response.status = CSILK_STATUS_OK;
-  c->is_websocket = 1;
+  c->is_sse = 1;
 
   if (!c->_internal_client) return;
 

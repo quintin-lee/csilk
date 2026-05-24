@@ -13,6 +13,7 @@
 #include <string.h>
 #include <uv.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 
@@ -49,6 +50,9 @@ struct csilk_server_s {
   csilk_handler_t
       not_found_handler; /**< Custom 404 handler (NULL = default). */
   char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
+  csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
+  csilk_client_t* active_clients;  /**< Head of active connections list. */
+  uv_mutex_t clients_mutex;        /**< Mutex for active clients list. */
   csilk_client_t* client_pool[32]; /**< Connection object free list. */
   int client_pool_count;           /**< Number of free clients in pool. */
 };
@@ -72,6 +76,8 @@ struct csilk_client_s {
   char* current_url;            /**< Current URL being parsed. */
   char* current_header_field;   /**< Temporary header field name. */
   char* current_header_value;   /**< Temporary header field value. */
+  struct csilk_client_s* next;  /**< Next client in active list. */
+  struct csilk_client_s* prev;  /**< Previous client in active list. */
 };
 
 /** @brief Buffer allocation callback.
@@ -106,6 +112,36 @@ static void pool_put(csilk_server_t* server, csilk_client_t* client) {
   }
 }
 
+static void client_list_add(csilk_server_t* server, csilk_client_t* client) {
+  uv_mutex_lock(&server->clients_mutex);
+  client->next = server->active_clients;
+  client->prev = NULL;
+  if (server->active_clients) {
+    server->active_clients->prev = client;
+  }
+  server->active_clients = client;
+  uv_mutex_unlock(&server->clients_mutex);
+}
+
+static void client_list_remove_internal(csilk_server_t* server,
+                                        csilk_client_t* client) {
+  if (client->prev) {
+    client->prev->next = client->next;
+  } else if (server->active_clients == client) {
+    server->active_clients = client->next;
+  }
+  if (client->next) {
+    client->next->prev = client->prev;
+  }
+  client->next = client->prev = NULL;
+}
+
+static void client_list_remove(csilk_server_t* server, csilk_client_t* client) {
+  uv_mutex_lock(&server->clients_mutex);
+  client_list_remove_internal(server, client);
+  uv_mutex_unlock(&server->clients_mutex);
+}
+
 /** @brief Close handler for timer handles — frees client on last close. */
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
@@ -131,6 +167,7 @@ static void on_timer_close(uv_handle_t* handle) {
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (client) {
+    client_list_remove(client->server, client);
     client->ctx._internal_client = NULL;
     uv_timer_stop(&client->timer);
     uv_timer_stop(&client->read_timer);
@@ -184,6 +221,25 @@ static void on_stop_async(uv_async_t* handle) {
   if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
     uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
   }
+
+  // Signal all active clients
+  uv_mutex_lock(&server->clients_mutex);
+  csilk_client_t* client = server->active_clients;
+  while (client) {
+    if (client->ctx.is_websocket) {
+      csilk_ws_close(&client->ctx, 1001, "Server stopping");
+    } else if (client->ctx.is_sse) {
+      csilk_sse_send(&client->ctx, "close", "Server stopping");
+      csilk_sse_close(&client->ctx);
+    } else {
+      // Normal HTTP: just close if not already closing
+      if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+        uv_close((uv_handle_t*)&client->handle, on_close);
+      }
+    }
+    client = client->next;
+  }
+  uv_mutex_unlock(&server->clients_mutex);
 
   // Close signal and async handles
   if (uv_is_active((uv_handle_t*)&server->sig_handle) &&
@@ -687,6 +743,8 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   }
   client->handle.data = client;
   client->ctx._internal_client = client;
+  client->ctx.storage_driver = server->storage_driver;
+  client_list_add(server, client);
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
     if (server->config.tcp_nodelay) {
@@ -819,6 +877,8 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
   s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
+  uv_mutex_init(&s->clients_mutex);
+
   return s;
 }
 
@@ -919,6 +979,8 @@ void csilk_server_free(csilk_server_t* server) {
   for (int i = 0; i < server->client_pool_count; i++) {
     free(server->client_pool[i]);
   }
+
+  uv_mutex_destroy(&server->clients_mutex);
   free(server);
 }
 
@@ -941,6 +1003,12 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
   int prev = server->max_connections;
   server->max_connections = max;
   return prev;
+}
+
+/** @brief Set the storage driver for context key-value storage. */
+void csilk_server_set_storage_driver(csilk_server_t* server,
+                                     csilk_storage_driver_t* driver) {
+  if (server) server->storage_driver = driver;
 }
 
 #ifndef _WIN32

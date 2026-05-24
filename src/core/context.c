@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <uv.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 
@@ -201,6 +202,9 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
     c->response.body_is_managed = 0;
   }
 
+  if (c->storage_driver && c->storage_driver->clear) {
+    c->storage_driver->clear(c);
+  }
   c->storage_head = NULL;
 
   c->aborted = 0;
@@ -254,6 +258,47 @@ int csilk_is_websocket(csilk_ctx_t* c) { return c ? c->is_websocket : 0; }
  *  @return 1 if SSE, 0 otherwise. */
 int csilk_is_sse(csilk_ctx_t* c) { return c ? c->is_sse : 0; }
 
+/** @brief Get the unique request ID. */
+const char* csilk_get_request_id(csilk_ctx_t* c) {
+  return c ? c->request_id : NULL;
+}
+
+/** @brief Get the arena allocator associated with the context. */
+csilk_arena_t* csilk_get_arena(csilk_ctx_t* c) { return c ? c->arena : NULL; }
+
+/** @brief Get the response status code. */
+int csilk_get_status(csilk_ctx_t* c) { return c ? c->response.status : 0; }
+
+/** @brief Set whether the response will be sent asynchronously. */
+void csilk_set_async(csilk_ctx_t* c, int is_async) {
+  if (c) c->is_async = is_async;
+}
+
+/** @brief Check if the response is in async mode. */
+int csilk_is_async(csilk_ctx_t* c) { return c ? c->is_async : 0; }
+
+/** @brief Get the response body. */
+const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len) {
+  if (!c) {
+    if (out_len) *out_len = 0;
+    return NULL;
+  }
+  if (out_len) *out_len = c->response.body_len;
+  return c->response.body;
+}
+
+/** @brief Set the response body directly. */
+void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len,
+                             int managed) {
+  if (!c) return;
+  if (c->response.body && c->response.body_is_managed) {
+    free((void*)c->response.body);
+  }
+  c->response.body = body;
+  c->response.body_len = len;
+  c->response.body_is_managed = managed;
+}
+
 /** @brief Check if the client has disconnected (aborted).
  *  @param c The request context.
  *  @return 1 if aborted, 0 otherwise. */
@@ -284,7 +329,14 @@ void csilk_redirect_simple(csilk_ctx_t* c, const char* url) {
 
 /** @brief Store a value in the context storage. */
 void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
-  if (!c || !key || !c->arena) return;
+  if (!c || !key) return;
+
+  if (c->storage_driver && c->storage_driver->set) {
+    c->storage_driver->set(c, key, value);
+    return;
+  }
+
+  if (!c->arena) return;
 
   csilk_storage_item_t* item = c->storage_head;
   int count = 0;
@@ -316,6 +368,11 @@ void csilk_set(csilk_ctx_t* c, const char* key, void* value) {
 /** @brief Retrieve a value from the context storage. */
 void* csilk_get(csilk_ctx_t* c, const char* key) {
   if (!c || !key) return NULL;
+
+  if (c->storage_driver && c->storage_driver->get) {
+    return c->storage_driver->get(c, key);
+  }
+
   csilk_storage_item_t* item = c->storage_head;
   while (item) {
     if (strcmp(item->key, key) == 0) {

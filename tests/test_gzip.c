@@ -4,6 +4,7 @@
 #include <string.h>
 #include <zlib.h>
 
+#include "context_internal.h"
 #include "csilk.h"
 #include "csilk_internal.h"
 
