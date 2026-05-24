@@ -31,6 +31,28 @@ typedef struct {
   char root_dir[256];   /**< Local filesystem directory path. */
 } static_route_t;
 
+/** @brief Router reference for the built-in OpenAPI handler. */
+static csilk_router_t* s_openapi_router = NULL;
+
+/** @brief Built-in handler for /openapi.json endpoint. */
+static void openapi_handler(csilk_ctx_t* c) {
+  if (s_openapi_router) {
+    csilk_serve_openapi(c, s_openapi_router, "csilk API", CSILK_VERSION,
+                        "Auto-generated OpenAPI 3.0 specification");
+  } else {
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+  }
+}
+
+/** @brief Built-in handler for /docs endpoint - serves the Swagger UI page. */
+static void docs_handler(csilk_ctx_t* c) {
+  if (!s_openapi_router) {
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    return;
+  }
+  csilk_serve_swagger_ui(c);
+}
+
 /** @brief Main application structure containing config, router, server, and
  * groups. */
 struct csilk_app_s {
@@ -133,6 +155,22 @@ csilk_app_t* csilk_app_new(const char* config_path) {
   app->root_group = csilk_group_new(app->router, "");
   if (!app->root_group) goto fail;
 
+  /* Register built-in /openapi.json and /docs endpoints */
+  s_openapi_router = app->router;
+  {
+    csilk_handler_t openapi_h[] = {openapi_handler};
+    csilk_router_add_extended(
+        app->router, "GET", "/openapi.json", openapi_h, 1, "/openapi.json",
+        NULL, NULL, "OpenAPI Specification",
+        "Returns the OpenAPI 3.0 JSON specification for this API");
+  }
+  {
+    csilk_handler_t docs_h[] = {docs_handler};
+    csilk_router_add(app->router, "GET", "/docs", docs_h, 1);
+  }
+  /* Register static /csilk-docs/ serving the bundled Swagger UI files */
+  csilk_app_static(app, "/csilk-docs", CSILK_SWAGGER_UI_DIR);
+
   CSILK_LOG_I("csilk app initialized");
   return app;
 
@@ -209,6 +247,15 @@ void csilk_app_apply_config(csilk_app_t* app) {
   }
 }
 
+/* ---- OpenAPI / Swagger ---- */
+
+/** @brief Enable or disable the built-in /openapi.json endpoint. */
+void csilk_app_enable_openapi(csilk_app_t* app, int enable) {
+  (void)app;
+  s_openapi_router = enable ? app->router : NULL;
+  CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
+}
+
 /* ---- routes ---- */
 
 /** @brief Register a route with a single handler. */
@@ -244,9 +291,8 @@ void csilk_app_static(csilk_app_t* app, const char* prefix,
   snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s",
            root_dir);
 
-  char wild[256], idxrt[256];
-  snprintf(wild, sizeof(wild), "%s/*path", prefix);
-  snprintf(idxrt, sizeof(idxrt), "%s/", prefix);
+  char wild[] = "/*path";
+  char idxrt[] = "/";
 
   csilk_group_t* g = find_or_create_group(app, prefix);
   if (!g) return;

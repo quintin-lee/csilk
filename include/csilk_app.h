@@ -70,7 +70,7 @@ void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
  * @param prefix URL path prefix (e.g., "/api").
  * @param h Middleware handler function. */
 void csilk_app_use_group(csilk_app_t* app, const char* prefix,
-                          csilk_handler_t h);
+                         csilk_handler_t h);
 
 /** @brief Auto-apply built-in middleware based on current config.
  * Enables: logger, recovery, CORS, CSRF, rate-limit, auth, gzip
@@ -85,8 +85,8 @@ void csilk_app_apply_config(csilk_app_t* app);
  * @param method HTTP method string (e.g., "GET").
  * @param path URL pattern (supports :param and *wildcard).
  * @param handler Route handler function. */
-void csilk_app_add_route(csilk_app_t* app, const char* method,
-                          const char* path, csilk_handler_t handler);
+void csilk_app_add_route(csilk_app_t* app, const char* method, const char* path,
+                         csilk_handler_t handler);
 
 /** @brief Register a route with multiple handlers (middleware + handler).
  * @param app Application handle.
@@ -95,24 +95,24 @@ void csilk_app_add_route(csilk_app_t* app, const char* method,
  * @param handlers Array of handler functions.
  * @param n Number of handlers. */
 void csilk_app_add_handlers(csilk_app_t* app, const char* method,
-                             const char* path, csilk_handler_t* handlers,
-                             size_t n);
+                            const char* path, csilk_handler_t* handlers,
+                            size_t n);
 
 /* Convenience route macros */
 #define csilk_app_get(app, path, handler) \
-    csilk_app_add_route(app, "GET", path, handler)
+  csilk_app_add_route(app, "GET", path, handler)
 #define csilk_app_post(app, path, handler) \
-    csilk_app_add_route(app, "POST", path, handler)
+  csilk_app_add_route(app, "POST", path, handler)
 #define csilk_app_put(app, path, handler) \
-    csilk_app_add_route(app, "PUT", path, handler)
+  csilk_app_add_route(app, "PUT", path, handler)
 #define csilk_app_delete(app, path, handler) \
-    csilk_app_add_route(app, "DELETE", path, handler)
+  csilk_app_add_route(app, "DELETE", path, handler)
 #define csilk_app_patch(app, path, handler) \
-    csilk_app_add_route(app, "PATCH", path, handler)
+  csilk_app_add_route(app, "PATCH", path, handler)
 #define csilk_app_options(app, path, handler) \
-    csilk_app_add_route(app, "OPTIONS", path, handler)
+  csilk_app_add_route(app, "OPTIONS", path, handler)
 #define csilk_app_head(app, path, handler) \
-    csilk_app_add_route(app, "HEAD", path, handler)
+  csilk_app_add_route(app, "HEAD", path, handler)
 
 /* ---- Static Files ---- */
 
@@ -121,7 +121,7 @@ void csilk_app_add_handlers(csilk_app_t* app, const char* method,
  * @param prefix URL path prefix (e.g., "/static").
  * @param root_dir Local directory to serve files from. */
 void csilk_app_static(csilk_app_t* app, const char* prefix,
-                       const char* root_dir);
+                      const char* root_dir);
 
 /* ---- Configuration ---- */
 
@@ -135,6 +135,14 @@ void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c);
  * @return Copy of internal config (caller must csilk_config_free it),
  *         or NULL on error. */
 csilk_config_t* csilk_app_config(csilk_app_t* app);
+
+/* ---- OpenAPI / Swagger ---- */
+
+/** @brief Enable or disable the built-in /openapi.json endpoint.
+ *  The endpoint is enabled by default when the app is created.
+ * @param app Application handle.
+ * @param enable 1 to enable, 0 to disable (handler returns 404). */
+void csilk_app_enable_openapi(csilk_app_t* app, int enable);
 
 /* ---- Run ---- */
 

@@ -16,10 +16,10 @@
 #include <setjmp.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <uv.h>
 
 #include "cJSON.h"
 #include "csilk_reflect.h"
-#include <uv.h>
 
 /** @brief Csilk framework version. */
 #define CSILK_VERSION "0.2.0"
@@ -29,33 +29,33 @@
 /** @name HTTP Status Codes
  *  Standardized macros for common HTTP response status codes.
  *  @{ */
-#define CSILK_STATUS_CONTINUE                      100
-#define CSILK_STATUS_SWITCHING_PROTOCOLS           101
-#define CSILK_STATUS_OK                            200
-#define CSILK_STATUS_CREATED                       201
-#define CSILK_STATUS_NO_CONTENT                    204
-#define CSILK_STATUS_MOVED_PERMANENTLY             301
-#define CSILK_STATUS_FOUND                         302
-#define CSILK_STATUS_NOT_MODIFIED                  304
-#define CSILK_STATUS_TEMPORARY_REDIRECT            307
-#define CSILK_STATUS_BAD_REQUEST                   400
-#define CSILK_STATUS_UNAUTHORIZED                  401
-#define CSILK_STATUS_PAYMENT_REQUIRED              402
-#define CSILK_STATUS_FORBIDDEN                     403
-#define CSILK_STATUS_NOT_FOUND                     404
-#define CSILK_STATUS_METHOD_NOT_ALLOWED            405
-#define CSILK_STATUS_REQUEST_TIMEOUT               408
-#define CSILK_STATUS_CONFLICT                      409
-#define CSILK_STATUS_GONE                          410
-#define CSILK_STATUS_PAYLOAD_TOO_LARGE             413
-#define CSILK_STATUS_URI_TOO_LONG                  414
-#define CSILK_STATUS_UNSUPPORTED_MEDIA_TYPE        415
-#define CSILK_STATUS_TOO_MANY_REQUESTS             429
-#define CSILK_STATUS_INTERNAL_SERVER_ERROR         500
-#define CSILK_STATUS_NOT_IMPLEMENTED               501
-#define CSILK_STATUS_BAD_GATEWAY                   502
-#define CSILK_STATUS_SERVICE_UNAVAILABLE           503
-#define CSILK_STATUS_GATEWAY_TIMEOUT               504
+#define CSILK_STATUS_CONTINUE 100
+#define CSILK_STATUS_SWITCHING_PROTOCOLS 101
+#define CSILK_STATUS_OK 200
+#define CSILK_STATUS_CREATED 201
+#define CSILK_STATUS_NO_CONTENT 204
+#define CSILK_STATUS_MOVED_PERMANENTLY 301
+#define CSILK_STATUS_FOUND 302
+#define CSILK_STATUS_NOT_MODIFIED 304
+#define CSILK_STATUS_TEMPORARY_REDIRECT 307
+#define CSILK_STATUS_BAD_REQUEST 400
+#define CSILK_STATUS_UNAUTHORIZED 401
+#define CSILK_STATUS_PAYMENT_REQUIRED 402
+#define CSILK_STATUS_FORBIDDEN 403
+#define CSILK_STATUS_NOT_FOUND 404
+#define CSILK_STATUS_METHOD_NOT_ALLOWED 405
+#define CSILK_STATUS_REQUEST_TIMEOUT 408
+#define CSILK_STATUS_CONFLICT 409
+#define CSILK_STATUS_GONE 410
+#define CSILK_STATUS_PAYLOAD_TOO_LARGE 413
+#define CSILK_STATUS_URI_TOO_LONG 414
+#define CSILK_STATUS_UNSUPPORTED_MEDIA_TYPE 415
+#define CSILK_STATUS_TOO_MANY_REQUESTS 429
+#define CSILK_STATUS_INTERNAL_SERVER_ERROR 500
+#define CSILK_STATUS_NOT_IMPLEMENTED 501
+#define CSILK_STATUS_BAD_GATEWAY 502
+#define CSILK_STATUS_SERVICE_UNAVAILABLE 503
+#define CSILK_STATUS_GATEWAY_TIMEOUT 504
 /** @} */
 
 /** @brief Opaque request context type. */
@@ -65,8 +65,8 @@ typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
 /** @brief HTTP Header structure (linked list node for hash table). */
 typedef struct csilk_header_s {
-  char* key;                /**< Header field name. */
-  char* value;              /**< Header field value. */
+  char* key;                   /**< Header field name. */
+  char* value;                 /**< Header field value. */
   struct csilk_header_s* next; /**< Pointer to next header in bucket. */
 } csilk_header_t;
 
@@ -80,27 +80,27 @@ typedef struct csilk_header_map_s {
 
 /** @brief HTTP Request structure. */
 typedef struct {
-  char* method;             /**< HTTP method (e.g., "GET"). */
-  char* path;               /**< Decoded URL path. */
-  char* body;               /**< Raw request body. */
-  size_t body_len;          /**< Length of the request body. */
-  csilk_header_map_t headers;    /**< Hash map of request headers. */
+  char* method;                    /**< HTTP method (e.g., "GET"). */
+  char* path;                      /**< Decoded URL path. */
+  char* body;                      /**< Raw request body. */
+  size_t body_len;                 /**< Length of the request body. */
+  csilk_header_map_t headers;      /**< Hash map of request headers. */
   csilk_header_map_t query_params; /**< Hash map of query parameters. */
 } csilk_request_t;
 
 /** @brief HTTP Response structure. */
 typedef struct {
-  int status;               /**< HTTP status code. */
-  const char* body;         /**< Response body content. */
-  size_t body_len;          /**< Length of the response body. */
-  csilk_header_map_t headers;    /**< Hash map of response headers. */
-  int body_is_managed;      /**< Flag if body is managed by free(). */
+  int status;                 /**< HTTP status code. */
+  const char* body;           /**< Response body content. */
+  size_t body_len;            /**< Length of the response body. */
+  csilk_header_map_t headers; /**< Hash map of response headers. */
+  int body_is_managed;        /**< Flag if body is managed by free(). */
 } csilk_response_t;
 
 /** @brief URL path parameter. */
 typedef struct {
-  char* key;                /**< Parameter key (from route, e.g., "id"). */
-  char* value;              /**< Actual parameter value from URL. */
+  char* key;   /**< Parameter key (from route, e.g., "id"). */
+  char* value; /**< Actual parameter value from URL. */
 } csilk_param_t;
 
 /** @brief Opaque arena allocator type. */
@@ -118,7 +118,7 @@ const char* csilk_get_method(csilk_ctx_t* c);
 /** @brief Get the request URL path. */
 const char* csilk_get_path(csilk_ctx_t* c);
 
-/** @brief Get the request body and its length. 
+/** @brief Get the request body and its length.
  * @param c The request context.
  * @param out_len Optional pointer to store body length.
  * @return Pointer to raw body data (NULL if no body). */
@@ -137,7 +137,9 @@ int csilk_is_sse(csilk_ctx_t* c);
 int csilk_is_aborted(csilk_ctx_t* c);
 
 /** @brief Set the callback for incoming WebSocket messages. */
-void csilk_set_on_ws_message(csilk_ctx_t* c, void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
+void csilk_set_on_ws_message(csilk_ctx_t* c,
+                             void (*cb)(csilk_ctx_t* c, const uint8_t* payload,
+                                        size_t len, int opcode));
 
 /** @brief Redirect to another URL with custom status.
  * @param c The request context.
@@ -152,7 +154,7 @@ void csilk_redirect_simple(csilk_ctx_t* c, const char* location);
 
 /** @brief Store a value in the context.
  * The key is duplicated and stored in the request arena.
- * Note: The context does NOT take ownership of the value pointer; 
+ * Note: The context does NOT take ownership of the value pointer;
  * the caller is responsible for the value's lifetime.
  * @param c The request context.
  * @param key Item key name.
@@ -208,7 +210,8 @@ const char* csilk_get_query(csilk_ctx_t* c, const char* key);
  * @param c The request context.
  * @param key The header field name.
  * @param value The header field value string. */
-void csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value);
+void csilk_set_request_header(csilk_ctx_t* c, const char* key,
+                              const char* value);
 
 /** @brief Set a response header (overwrites if exists).
  * @param c The request context.
@@ -264,21 +267,21 @@ void csilk_panic(csilk_ctx_t* c);
 
 /** @brief Logging levels. */
 typedef enum {
-  CSILK_LOG_TRACE,  /**< Trace-level logging. */
-  CSILK_LOG_DEBUG,  /**< Debug-level logging. */
-  CSILK_LOG_INFO,   /**< Informational logging. */
-  CSILK_LOG_WARN,   /**< Warning-level logging. */
-  CSILK_LOG_ERROR,  /**< Error-level logging. */
-  CSILK_LOG_FATAL   /**< Fatal error logging. */
+  CSILK_LOG_TRACE, /**< Trace-level logging. */
+  CSILK_LOG_DEBUG, /**< Debug-level logging. */
+  CSILK_LOG_INFO,  /**< Informational logging. */
+  CSILK_LOG_WARN,  /**< Warning-level logging. */
+  CSILK_LOG_ERROR, /**< Error-level logging. */
+  CSILK_LOG_FATAL  /**< Fatal error logging. */
 } csilk_log_level_t;
 
 /** @brief Logger configuration. */
 typedef struct {
-  csilk_log_level_t level;    /**< Minimum logging level. */
-  const char* file_path;    /**< Log file path (NULL for stdout). */
-  size_t max_file_size;     /**< Max size before rotation (bytes, 0 to disable). */
-  int use_colors;           /**< Enable ANSI colors (auto-detected if -1). */
-  int json_format;          /**< Enable JSON structured log output. */
+  csilk_log_level_t level; /**< Minimum logging level. */
+  const char* file_path;   /**< Log file path (NULL for stdout). */
+  size_t max_file_size; /**< Max size before rotation (bytes, 0 to disable). */
+  int use_colors;       /**< Enable ANSI colors (auto-detected if -1). */
+  int json_format;      /**< Enable JSON structured log output. */
 } csilk_log_config_t;
 
 /** @brief Initialize the global logger with config.
@@ -293,16 +296,17 @@ int csilk_log_init(csilk_log_config_t config);
  * @param func Function name (__func__).
  * @param fmt Printf-style format string.
  * @param ... Format arguments. */
-void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...);
+void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
+                         const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
 void csilk_log_close();
 
 /** @brief Log a structured JSON message with extra key-value fields.
  *
- * Produces a JSON log line with the standard fields (time/level/file/line/func/msg)
- * plus any fields in @p extra.  If json_format is off this behaves like a
- * normal log line (extra fields are ignored).
+ * Produces a JSON log line with the standard fields
+ * (time/level/file/line/func/msg) plus any fields in @p extra.  If json_format
+ * is off this behaves like a normal log line (extra fields are ignored).
  *
  * @param lv    Log severity level.
  * @param file    Source file name (__FILE__).
@@ -313,8 +317,8 @@ void csilk_log_close();
  * @param fmt     Printf-style format string for the log message.
  * @param ...     Format arguments. */
 void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
-                           const char* func, cJSON* extra,
-                           const char* fmt, ...);
+                           const char* func, cJSON* extra, const char* fmt,
+                           ...);
 
 /** @brief Check whether the logger is in JSON format mode.
  * @return 1 if json_format is enabled, 0 otherwise. */
@@ -340,24 +344,35 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  * Convenience macros that capture source location.
  * @{ */
 /** @brief Log a TRACE-level message. */
-#define CSILK_LOG_T(...) _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_T(...)                                             \
+  _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, \
+                      __VA_ARGS__)
 /** @brief Log a DEBUG-level message. */
-#define CSILK_LOG_D(...) _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_D(...)                                             \
+  _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, \
+                      __VA_ARGS__)
 /** @brief Log an INFO-level message. */
-#define CSILK_LOG_I(...) _csilk_log_internal(CSILK_LOG_INFO,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_I(...) \
+  _csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a WARN-level message. */
-#define CSILK_LOG_W(...) _csilk_log_internal(CSILK_LOG_WARN,  __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_W(...) \
+  _csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an ERROR-level message. */
-#define CSILK_LOG_E(...) _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_E(...)                                             \
+  _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, \
+                      __VA_ARGS__)
 /** @brief Log a FATAL-level message. */
-#define CSILK_LOG_F(...) _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_F(...)                                             \
+  _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, \
+                      __VA_ARGS__)
 
-/** @brief Log a structured JSON message (only meaningful when json_format is on).
+/** @brief Log a structured JSON message (only meaningful when json_format is
+ * on).
  * @param level Log level.
  * @param extra  cJSON* with extra fields (can be NULL).
  * @param ...    printf-style format and args for the message string. */
 #define CSILK_LOG_STRUCT(level, extra, ...) \
-    _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
+  _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
 /** @} */
 
 /** @brief Logging middleware handler.
@@ -367,11 +382,11 @@ void csilk_logger_handler(csilk_ctx_t* c);
 
 /** @brief CORS middleware configuration. */
 typedef struct {
-  const char* allow_origin;      /**< Access-Control-Allow-Origin. */
-  const char* allow_methods;     /**< Access-Control-Allow-Methods. */
-  const char* allow_headers;     /**< Access-Control-Allow-Headers. */
-  int allow_credentials;         /**< Access-Control-Allow-Credentials. */
-  int max_age;                   /**< Access-Control-Max-Age. */
+  const char* allow_origin;  /**< Access-Control-Allow-Origin. */
+  const char* allow_methods; /**< Access-Control-Allow-Methods. */
+  const char* allow_headers; /**< Access-Control-Allow-Headers. */
+  int allow_credentials;     /**< Access-Control-Allow-Credentials. */
+  int max_age;               /**< Access-Control-Max-Age. */
 } csilk_cors_config_t;
 
 /** @brief Enable CORS with specified configuration.
@@ -396,40 +411,40 @@ int csilk_csrf_generate_token(char* buf, size_t buf_size);
 
 /** @brief Server configuration options. */
 typedef struct csilk_server_config_s {
-  unsigned int idle_timeout_ms;    /**< Connection idle timeout (ms). */
-  size_t max_body_size;            /**< Maximum request body size. */
-  size_t max_header_size;          /**< Maximum total request headers size. */
-  int listen_backlog;              /**< TCP listen backlog. */
-  int tcp_nodelay;                 /**< Enable TCP_NODELAY. */
-  int tcp_keepalive;               /**< Enable TCP keep-alive (seconds, 0 to disable). */
-  int worker_threads;              /**< Number of worker threads (SO_REUSEPORT). */
+  unsigned int idle_timeout_ms; /**< Connection idle timeout (ms). */
+  size_t max_body_size;         /**< Maximum request body size. */
+  size_t max_header_size;       /**< Maximum total request headers size. */
+  int listen_backlog;           /**< TCP listen backlog. */
+  int tcp_nodelay;              /**< Enable TCP_NODELAY. */
+  int tcp_keepalive;  /**< Enable TCP keep-alive (seconds, 0 to disable). */
+  int worker_threads; /**< Number of worker threads (SO_REUSEPORT). */
 } csilk_server_config_t;
 
 /** @brief Global Configuration structure. */
 typedef struct {
   int port;                     /**< Server port. */
-  csilk_server_config_t server;   /**< Server low-level config. */
-  csilk_log_config_t logger;      /**< Logger config. */
+  csilk_server_config_t server; /**< Server low-level config. */
+  csilk_log_config_t logger;    /**< Logger config. */
   struct {
-      int enable;               /**< Enable CORS. */
-      csilk_cors_config_t config; /**< CORS config. */
+    int enable;                 /**< Enable CORS. */
+    csilk_cors_config_t config; /**< CORS config. */
   } cors;                       /**< CORS settings. */
   struct {
-      int enable;               /**< Enable rate limiting. */
-      int requests_per_minute;  /**< Limit per IP. */
-  } rate_limit;                 /**< Rate limit settings. */
+    int enable;              /**< Enable rate limiting. */
+    int requests_per_minute; /**< Limit per IP. */
+  } rate_limit;              /**< Rate limit settings. */
   struct {
-      int enable;               /**< Enable static file serving. */
-      char* root_dir;           /**< Local directory path. */
-      char* prefix;             /**< URL prefix (e.g., "/static"). */
-  } static_files;               /**< Static file settings. */
+    int enable;     /**< Enable static file serving. */
+    char* root_dir; /**< Local directory path. */
+    char* prefix;   /**< URL prefix (e.g., "/static"). */
+  } static_files;   /**< Static file settings. */
   struct {
-      int enable_logger;        /**< Enable request logging middleware. */
-      int enable_recovery;      /**< Enable panic recovery middleware. */
-      int enable_csrf;          /**< Enable CSRF protection middleware. */
-      int enable_auth;          /**< Enable auth middleware. */
-      char* auth_token;         /**< Auth token for auth middleware (optional). */
-  } middleware;                 /**< Middleware settings. */
+    int enable_logger;   /**< Enable request logging middleware. */
+    int enable_recovery; /**< Enable panic recovery middleware. */
+    int enable_csrf;     /**< Enable CSRF protection middleware. */
+    int enable_auth;     /**< Enable auth middleware. */
+    char* auth_token;    /**< Auth token for auth middleware (optional). */
+  } middleware;          /**< Middleware settings. */
 } csilk_config_t;
 
 /** @brief Load configuration from a YAML file.
@@ -440,7 +455,8 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config);
 
 /** @brief Validate configuration values for semantic correctness.
  * @param config Pointer to config struct.
- * @param error_msg Optional pointer to store error string (static, do not free).
+ * @param error_msg Optional pointer to store error string (static, do not
+ * free).
  * @return 0 if valid, -1 if invalid with error_msg set. */
 int csilk_config_validate(const csilk_config_t* config, const char** error_msg);
 
@@ -491,8 +507,8 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name);
  * @param secure Flag for Secure attribute.
  * @param http_only Flag for HttpOnly attribute. */
 void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
-                    int max_age, const char* path, const char* domain,
-                    int secure, int http_only);
+                      int max_age, const char* path, const char* domain,
+                      int secure, int http_only);
 
 /** @brief Send a JSON response.
  * @param c The request context.
@@ -518,10 +534,12 @@ int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr);
  * @param status HTTP status code.
  * @param type_name Registered type name.
  * @param ptr Pointer to the struct. */
-void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr);
+void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
+                        const void* ptr);
 
 #define csilk_bind(c, type, ptr) csilk_bind_reflect(c, #type, ptr)
-#define csilk_json_t(c, status, type, ptr) csilk_json_reflect(c, status, #type, ptr)
+#define csilk_json_t(c, status, type, ptr) \
+  csilk_json_reflect(c, status, #type, ptr)
 
 /** @brief Get the client's IP address.
  * @param c The request context.
@@ -543,7 +561,7 @@ void csilk_parse_query(csilk_ctx_t* c, const char* query_string);
 typedef struct csilk_router_node_s csilk_router_node_t;
 /** @brief Main Router structure. */
 typedef struct csilk_router_s {
-  csilk_router_node_t* root;      /**< Root node of the Radix Tree. */
+  csilk_router_node_t* root; /**< Root node of the Radix Tree. */
 } csilk_router_t;
 
 /** @brief Route group structure. */
@@ -560,7 +578,7 @@ csilk_router_t* csilk_router_new();
  * @param handlers Array of handler functions.
  * @param handler_count Number of handlers in the array. */
 void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
-                    csilk_handler_t* handlers, size_t handler_count);
+                      csilk_handler_t* handlers, size_t handler_count);
 
 /** @brief Match a raw path to handlers (standalone).
  * @param r Router instance.
@@ -568,7 +586,7 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
  * @param path URL path string.
  * @return Pointer to handler array, or NULL if not found. */
 csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
-                                const char* path);
+                                    const char* path);
 
 /** @brief Match current request context to router.
  * Updates path parameters in context on success.
@@ -580,6 +598,80 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c);
 /** @brief Deallocate router and all its nodes.
  * @param r Router instance. */
 void csilk_router_free(csilk_router_t* r);
+
+/** @brief Collect all registered routes from the router tree.
+ * @param r Router instance.
+ * @return A cJSON array of route objects (method, path, input_type,
+ * output_type, summary, description). Caller must free with cJSON_Delete(). */
+cJSON* csilk_router_collect_routes(csilk_router_t* r);
+
+/** @brief Generate OpenAPI/Swagger 3.0 specification JSON from the router.
+ *  Traverses all registered routes and uses the reflection system to generate
+ *  JSON schemas for request/response types.
+ * @param router The router instance.
+ * @param title API title for the OpenAPI info section.
+ * @param version API version for the OpenAPI info section.
+ * @param description API description for the OpenAPI info section (optional).
+ * @return A cJSON object representing the OpenAPI spec. Caller must free with
+ * cJSON_Delete(). */
+cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
+                                   const char* version,
+                                   const char* description);
+
+/** @brief Register a route with full metadata for OpenAPI spec generation.
+ *  Extended version of csilk_router_add that also accepts metadata for
+ *  automatic OpenAPI/Reflection documentation generation.
+ * @param r Router instance.
+ * @param method HTTP method string.
+ * @param path URL pattern (supports :param and *wildcard).
+ * @param handlers Array of handler functions.
+ * @param handler_count Number of handlers in the array.
+ * @param path_pattern The actual path pattern string (for metadata).
+ * @param input_type Registered type name for request body binding (optional).
+ * @param output_type Registered type name for response generation (optional).
+ * @param summary Short summary of the operation (optional).
+ * @param description Detailed description of the operation (optional). */
+void csilk_router_add_extended(csilk_router_t* r, const char* method,
+                               const char* path, csilk_handler_t* handlers,
+                               size_t handler_count, const char* path_pattern,
+                               const char* input_type, const char* output_type,
+                               const char* summary, const char* description);
+
+/** @brief Convenience macro to register a route with input/output type
+ * metadata. */
+#define CSILK_ROUTE(r, method, path, handlers, handler_count, input_type,   \
+                    output_type, summary, desc)                             \
+  csilk_router_add_extended(r, method, path, handlers, handler_count, path, \
+                            input_type, output_type, summary, desc)
+
+/** @brief Serve the OpenAPI JSON spec as a response in a handler.
+ *  Call this from within a handler function to serve the spec.
+ *
+ *  @code
+ *  void openapi_handler(csilk_ctx_t* c) {
+ *      csilk_serve_openapi(c, router, "My API", "1.0.0", "API Description");
+ *  }
+ *  @endcode
+ *
+ *  @param c The request context.
+ *  @param r The router instance.
+ *  @param title API title.
+ *  @param version API version.
+ *  @param description API description (optional). */
+void csilk_serve_openapi(csilk_ctx_t* c, csilk_router_t* r, const char* title,
+                         const char* version, const char* description);
+
+/** @brief Serve the embedded Swagger UI page that loads /openapi.json.
+ *  Provides an interactive browser-based API documentation UI.
+ *
+ *  @code
+ *  void docs_handler(csilk_ctx_t* c) {
+ *      csilk_serve_swagger_ui(c);
+ *  }
+ *  @endcode
+ *
+ *  @param c The request context. */
+void csilk_serve_swagger_ui(csilk_ctx_t* c);
 
 /** @brief Create a new root group.
  * @param router Associated router.
@@ -604,7 +696,7 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
  * @param path URL pattern.
  * @param handler Route handler function. */
 void csilk_group_add_route(csilk_group_t* group, const char* method,
-                         const char* path, csilk_handler_t handler);
+                           const char* path, csilk_handler_t handler);
 
 /** @brief Add a route with multiple handlers (middleware + handler).
  * @param group Route group.
@@ -613,8 +705,8 @@ void csilk_group_add_route(csilk_group_t* group, const char* method,
  * @param handlers Array of handler functions.
  * @param count Number of handlers in the array. */
 void csilk_group_add_handlers(csilk_group_t* group, const char* method,
-                            const char* path, csilk_handler_t* handlers,
-                            size_t count);
+                              const char* path, csilk_handler_t* handlers,
+                              size_t count);
 
 /** @brief Deallocate a route group.
  * @param group Group instance. */
@@ -655,7 +747,8 @@ void csilk_ws_handshake(csilk_ctx_t* c);
  * @param payload Data to send.
  * @param len Data length.
  * @param opcode Opcode (1 for text, 2 for binary). */
-void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len,
+                   int opcode);
 
 /** @brief Send a WebSocket close frame with optional status code and reason.
  *  Initiates the close handshake per RFC 6455 Section 5.5.1.
@@ -667,9 +760,10 @@ void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason);
 /* --- Streaming Response (Chunked Transfer Encoding) --- */
 
 /** @brief Write data to the response stream using chunked transfer encoding.
- *  The first call sends HTTP response headers (with Transfer-Encoding: chunked),
- *  then subsequent calls write chunked frames.  The handler MUST set
- *  is_async = 1 before calling this function and NOT call csilk_string/json/etc.
+ *  The first call sends HTTP response headers (with Transfer-Encoding:
+ * chunked), then subsequent calls write chunked frames.  The handler MUST set
+ *  is_async = 1 before calling this function and NOT call
+ * csilk_string/json/etc.
  * @param c The request context.
  * @param data Data to write as the next chunk.
  * @param len Length of data. */
@@ -711,12 +805,12 @@ void csilk_gzip_middleware(csilk_ctx_t* c);
 
 /** @brief A single part from a multipart/form-data request. */
 typedef struct csilk_multipart_part_s {
-    char name[128];            /**< Form field name. */
-    char filename[256];        /**< Original filename (empty if not a file). */
-    char content_type[64];     /**< Content-Type of the part. */
-    uint8_t* data;             /**< Pointer to part body data. */
-    size_t data_len;           /**< Length of part body data. */
-    csilk_ctx_t* ctx;          /**< Owning request context. */
+  char name[128];        /**< Form field name. */
+  char filename[256];    /**< Original filename (empty if not a file). */
+  char content_type[64]; /**< Content-Type of the part. */
+  uint8_t* data;         /**< Pointer to part body data. */
+  size_t data_len;       /**< Length of part body data. */
+  csilk_ctx_t* ctx;      /**< Owning request context. */
 } csilk_multipart_part_t;
 
 /** @brief Multipart handler callback.
@@ -755,7 +849,8 @@ void csilk_server_stop(csilk_server_t* server);
 /** @brief Apply server configuration.
  * @param server Server instance.
  * @param config Configuration struct. */
-void csilk_server_set_config(csilk_server_t* server, csilk_server_config_t config);
+void csilk_server_set_config(csilk_server_t* server,
+                             csilk_server_config_t config);
 
 /** @brief Set the maximum number of concurrent client connections.
  * @param server Server instance.

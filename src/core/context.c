@@ -156,7 +156,7 @@ void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value) {
 }
 
 /** @brief Clean up request context resources between requests.
- * Resets arena, frees params/body/path, clears headers and storage. */
+ *  Resets arena, frees params/body/path, clears headers and storage. */
 void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (!c) return;
 
@@ -198,6 +198,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
   c->is_async = 0;
   c->response_started = 0;
   c->handler_index = -1;
+  c->current_handler = NULL;  // Reset current handler tracking
 }
 
 const char* csilk_get_method(csilk_ctx_t* c) {
@@ -412,16 +413,27 @@ void csilk_json_error(csilk_ctx_t* c, int status, const char* message) {
   csilk_json(c, status, err);
 }
 
-/** @brief Bind request body JSON to a registered struct via reflection. */
+/** @brief Bind request body JSON to a registered struct via reflection.
+ *  If type_name is NULL, uses the current handler's input_type if available. */
 int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr) {
-  if (!c || !c->request.body || !type_name || !ptr) return 0;
+  if (!c || !c->request.body || !ptr) return 0;
+  if (!type_name && c->current_handler) {
+    type_name = c->current_handler->input_type;
+  }
+  if (!type_name) return 0;
   return csilk_json_unmarshal(type_name, c->request.body, ptr);
 }
 
-/** @brief Send a JSON response from a registered struct via reflection. */
+/** @brief Send a JSON response from a registered struct via reflection.
+ *  If type_name is NULL, uses the current handler's output_type if available.
+ */
 void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
                         const void* ptr) {
-  if (!c || !type_name || !ptr) return;
+  if (!c || !ptr) return;
+  if (!type_name && c->current_handler) {
+    type_name = c->current_handler->output_type;
+  }
+  if (!type_name) return;
   char* json_str = csilk_json_marshal(type_name, ptr);
   if (json_str) {
     c->response.status = status;

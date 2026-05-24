@@ -20,13 +20,6 @@ typedef enum {
   CSILK_NODE_WILDCARD
 } csilk_node_type_t;
 
-/** @brief Method-specific handler mapping. */
-typedef struct csilk_method_handler_s {
-  char* method;              /**< HTTP method string. */
-  csilk_handler_t* handlers; /**< Array of handlers for this method. */
-  struct csilk_method_handler_s* next; /**< Next method handler in list. */
-} csilk_method_handler_t;
-
 /** @brief Node in the router trie. */
 struct csilk_router_node_s {
   char* segment;          /**< URL path segment. */
@@ -64,6 +57,7 @@ static void node_free(csilk_router_node_t* node) {
     csilk_method_handler_t* next = mh->next;
     free(mh->method);
     free(mh->handlers);
+    free(mh->path);
     free(mh);
     mh = next;
   }
@@ -109,9 +103,64 @@ void csilk_router_free(csilk_router_t* r) {
   free(r);
 }
 
-/** @brief Register a route with method, path pattern, and handler chain. */
-void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
-                      csilk_handler_t* handlers, size_t handler_count) {
+/** @brief Recursively collect all routes from the router tree. */
+static void node_collect_routes(csilk_router_node_t* node, cJSON* routes) {
+  if (!node) return;
+
+  // Collect routes for this node
+  csilk_method_handler_t* mh = node->handlers;
+  while (mh) {
+    cJSON* route = cJSON_CreateObject();
+    if (route) {
+      cJSON_AddStringToObject(route, "method", mh->method);
+      cJSON_AddStringToObject(route, "path", mh->path ? mh->path : "");
+      cJSON_AddStringToObject(route, "input_type",
+                              mh->input_type ? mh->input_type : "");
+      cJSON_AddStringToObject(route, "output_type",
+                              mh->output_type ? mh->output_type : "");
+      cJSON_AddStringToObject(route, "summary", mh->summary ? mh->summary : "");
+      cJSON_AddStringToObject(route, "description",
+                              mh->description ? mh->description : "");
+      cJSON_AddItemToArray(routes, route);
+    }
+    mh = mh->next;
+  }
+
+  // Recurse into children
+  for (int i = 0; i < node->children_count; i++) {
+    node_collect_routes(node->children[i], routes);
+  }
+}
+
+/** @brief Collect all registered routes from the router tree.
+ * @param r Router instance.
+ * @return A cJSON array of route objects, each with method, path, input_type,
+ * output_type, etc. Caller must free with cJSON_Delete(). */
+cJSON* csilk_router_collect_routes(csilk_router_t* r) {
+  if (!r || !r->root) return NULL;
+  cJSON* array = cJSON_CreateArray();
+  if (!array) return NULL;
+  node_collect_routes(r->root, array);
+  return array;
+}
+
+/** @brief Register a route with method, path pattern, and handler chain.
+ *  @param r Router instance.
+ *  @param method HTTP method string.
+ *  @param path URL pattern (supports :param and *wildcard).
+ *  @param handlers Array of handler functions.
+ *  @param handler_count Number of handlers in the array.
+ *  @param path_pattern The actual path pattern string (for metadata).
+ *  @param input_type Registered type name for request body binding (optional).
+ *  @param output_type Registered type name for response generation (optional).
+ *  @param summary Short summary of the operation (optional).
+ *  @param description Detailed description of the operation (optional).
+ */
+void csilk_router_add_extended(csilk_router_t* r, const char* method,
+                               const char* path, csilk_handler_t* handlers,
+                               size_t handler_count, const char* path_pattern,
+                               const char* input_type, const char* output_type,
+                               const char* summary, const char* description) {
   if (!r || !r->root || !method || !path || !handlers) return;
   csilk_router_node_t* curr = r->root;
   const char* p = path;
@@ -174,9 +223,22 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
     }
     memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
     mh->handlers[handler_count] = NULL;
+    mh->path = path_pattern ? strdup(path_pattern) : NULL;
+    mh->input_type = input_type;
+    mh->output_type = output_type;
+    mh->summary = summary;
+    mh->description = description;
     mh->next = curr->handlers;
     curr->handlers = mh;
   }
+}
+
+/** @brief Register a route with method, path pattern, and handler chain. */
+void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
+                      csilk_handler_t* handlers, size_t handler_count) {
+  // Call extended version with NULL metadata
+  csilk_router_add_extended(r, method, path, handlers, handler_count, path,
+                            NULL, NULL, NULL, NULL);
 }
 
 /** @brief Match a node against path segments.
@@ -184,14 +246,19 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
  * @param method The HTTP method.
  * @param path The remaining path.
  * @param ctx The request context (optional).
+ * @param out_mh Output pointer for matched method handler (optional).
  * @return Array of handlers, or NULL if no match. */
 static csilk_handler_t* match_node(csilk_router_node_t* node,
                                    const char* method, const char* path,
-                                   csilk_ctx_t* ctx) {
+                                   csilk_ctx_t* ctx,
+                                   csilk_method_handler_t** out_mh) {
   if (!path || *path == '\0' || strcmp(path, "/") == 0) {
     csilk_method_handler_t* mh = node->handlers;
     while (mh) {
-      if (strcmp(mh->method, method) == 0) return mh->handlers;
+      if (strcmp(mh->method, method) == 0) {
+        if (out_mh) *out_mh = mh;
+        return mh->handlers;
+      }
       mh = mh->next;
     }
     return NULL;
@@ -206,7 +273,7 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
     csilk_router_node_t* child = node->children[i];
     if (child->type == CSILK_NODE_STATIC) {
       if (strcmp(child->segment, seg) == 0) {
-        result = match_node(child, method, p, ctx);
+        result = match_node(child, method, p, ctx, out_mh);
       }
     } else if (child->type == CSILK_NODE_PARAM) {
       int param_added = 0;
@@ -223,7 +290,7 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
           free(val);
         }
       }
-      result = match_node(child, method, p, ctx);
+      result = match_node(child, method, p, ctx, out_mh);
       if (!result && param_added) {
         ctx->params_count--;
         free(ctx->params[ctx->params_count].key);
@@ -245,6 +312,7 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
       csilk_method_handler_t* mh = child->handlers;
       while (mh) {
         if (strcmp(mh->method, method) == 0) {
+          if (out_mh) *out_mh = mh;
           result = mh->handlers;
           break;
         }
@@ -263,7 +331,7 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
 csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
                                     const char* path) {
   if (!r || !r->root || !method || !path) return NULL;
-  return match_node(r->root, method, path, NULL);
+  return match_node(r->root, method, path, NULL, NULL);
 }
 
 /** @brief Match current request context against the routing table, populating
@@ -271,11 +339,13 @@ csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
 int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c) {
   if (!r || !c || !r->root || !c->request.method || !c->request.path) return 0;
   c->params_count = 0;
+  csilk_method_handler_t* mh = NULL;
   csilk_handler_t* handlers =
-      match_node(r->root, c->request.method, c->request.path, c);
+      match_node(r->root, c->request.method, c->request.path, c, &mh);
   if (handlers) {
     c->handlers = handlers;
     c->handler_index = -1;
+    c->current_handler = mh;
     return 1;
   }
   return 0;
