@@ -317,35 +317,12 @@ int main(void) {
   csilk_app_get(app, "/echo", echo);
   csilk_app_get(app, "/stream", sse_handler);
 
-  /* reflection-based routes (with OpenAPI metadata for Swagger UI) */
-  {
-    csilk_handler_t hs[] = {create_user};
-    csilk_router_add_extended(
-        csilk_app_router(app), "POST", "/api/users", hs, 1, "/api/users",
-        "reflect_user_t", "reflect_user_t", "Create user",
-        "Creates a user with nested address, flags array, and bio");
-  }
-  {
-    csilk_handler_t hs[] = {get_user};
-    csilk_router_add_extended(
-        csilk_app_router(app), "GET", "/api/users/:id", hs, 1, "/api/users/:id",
-        NULL, "reflect_user_t", "Get user profile",
-        "Returns a user profile with nested address and array fields");
-  }
-  {
-    csilk_handler_t hs[] = {create_order};
-    csilk_router_add_extended(
-        csilk_app_router(app), "POST", "/api/orders", hs, 1, "/api/orders",
-        "reflect_order_t", "reflect_order_t", "Create order",
-        "Creates an order with line items, customer email, and notes");
-  }
-  {
-    csilk_handler_t hs[] = {get_order};
-    csilk_router_add_extended(
-        csilk_app_router(app), "GET", "/api/orders/:id", hs, 1,
-        "/api/orders/:id", NULL, "reflect_order_t", "Get order",
-        "Returns an order with items array, totals, and notes");
-  }
+  /* reflection-based routes — types registered via CSILK_REGISTER_REFLECT
+   * are automatically available in the OpenAPI spec (components/schemas). */
+  csilk_app_post(app, "/api/users", create_user);
+  csilk_app_get(app, "/api/users/:id", get_user);
+  csilk_app_post(app, "/api/orders", create_order);
+  csilk_app_get(app, "/api/orders/:id", get_order);
 
   /* group-level middleware */
   csilk_app_use_group(app, "/api", csilk_gzip_middleware);
