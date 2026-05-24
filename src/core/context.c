@@ -57,6 +57,7 @@ static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
   while (h) {
     if (strcasecmp(h->key, key) == 0) {
       h->value = csilk_arena_strdup(c->arena, value);
+      h->value_len = strlen(h->value);
       return;
     }
     h = h->next;
@@ -65,7 +66,9 @@ static void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
   csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
   if (new_h) {
     new_h->key = csilk_arena_strdup(c->arena, key);
+    new_h->key_len = strlen(new_h->key);
     new_h->value = csilk_arena_strdup(c->arena, value);
+    new_h->value_len = strlen(new_h->value);
     new_h->next = map->buckets[bucket];
     map->buckets[bucket] = new_h;
   }
@@ -83,7 +86,9 @@ static void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key,
   csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
   if (new_h) {
     new_h->key = csilk_arena_strdup(c->arena, key);
+    new_h->key_len = strlen(new_h->key);
     new_h->value = csilk_arena_strdup(c->arena, value);
+    new_h->value_len = strlen(new_h->value);
     new_h->next = map->buckets[bucket];
     map->buckets[bucket] = new_h;
   }
