@@ -1,0 +1,13 @@
+Running 5s test @ http://localhost:8080/openapi.json
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     6.25ms    2.20ms  50.13ms   88.48%
+    Req/Sec     4.06k   557.84     4.87k    77.50%
+  Latency Distribution
+     50%    5.91ms
+     75%    6.63ms
+     90%    7.54ms
+     99%   15.55ms
+  80979 requests in 5.01s, 328.06MB read
+Requests/sec:  16152.08
+Transfer/sec:     65.44MB

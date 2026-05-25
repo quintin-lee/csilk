@@ -1,0 +1,13 @@
+Running 5s test @ http://localhost:8080/
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   802.44us  827.20us  17.22ms   89.25%
+    Req/Sec    34.26k     5.33k   46.26k    67.00%
+  Latency Distribution
+     50%  516.00us
+     75%    0.91ms
+     90%    1.70ms
+     99%    4.25ms
+  682359 requests in 5.01s, 71.58MB read
+Requests/sec: 136120.34
+Transfer/sec:     14.28MB

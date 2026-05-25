@@ -280,6 +280,7 @@ add_test(NAME test_integration COMMAND test_integration)
 # Example server
 add_executable(example_server examples/example_server.c)
 target_link_libraries(example_server csilk)
+configure_file(${CMAKE_SOURCE_DIR}/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
 
 # Easy API example
 add_executable(example_app examples/example_app.c)
