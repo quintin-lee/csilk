@@ -48,8 +48,8 @@ void test_static_serves_file() {
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
   assert(ctx.response.status == CSILK_STATUS_OK);
-  assert(ctx.response.body != NULL);
-  assert(strcmp(ctx.response.body, "<html><body>Hello</body></html>") == 0);
+  assert(ctx.file_fd >= 0);
+  assert(ctx.file_size > 0);
 
   printf("test_static_serves_file: PASS\n");
   csilk_ctx_cleanup(&ctx);
@@ -106,9 +106,9 @@ void test_static_range_first_5() {
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
   assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
-  assert(ctx.response.body != NULL);
-  assert(ctx.response.body_len == 5);
-  assert(strncmp(ctx.response.body, "Hello", 5) == 0);
+  assert(ctx.file_fd >= 0);
+  assert(ctx.file_size == 5);
+  assert(ctx.file_offset == 0);
 
   printf("test_static_range_first_5: PASS\n");
   csilk_ctx_cleanup(&ctx);
@@ -146,9 +146,9 @@ void test_static_range_middle() {
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
   assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
-  assert(ctx.response.body != NULL);
-  assert(ctx.response.body_len == 5);
-  assert(strncmp(ctx.response.body, "World", 5) == 0);
+  assert(ctx.file_fd >= 0);
+  assert(ctx.file_size == 5);
+  assert(ctx.file_offset == 6);
 
   printf("test_static_range_middle: PASS\n");
   csilk_ctx_cleanup(&ctx);

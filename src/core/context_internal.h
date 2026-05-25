@@ -63,6 +63,11 @@ struct csilk_ctx_s {
   int is_async; /**< Flag if the response will be sent asynchronously. */
   int response_started; /**< Flag if response headers have been sent. */
 
+  /* For zero-copy file serving */
+  int file_fd;         /**< File descriptor for sendfile. */
+  size_t file_offset;  /**< Starting offset in the file. */
+  size_t file_size;    /**< Total size of the file. */
+
   /** For OpenAPI spec generation - tracks current method handler */
   csilk_method_handler_t*
       current_handler; /**< Current method handler being executed. */
