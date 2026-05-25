@@ -1170,46 +1170,103 @@ cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
                                  const char** params);
 
 /** @brief Prometheus metrics middleware.
- *  @param c The request context.
- *  @param arg Optional argument (unused). */
+ *
+ * This middleware tracks request-level metrics including QPS, response latency
+ * distributions, and HTTP status code counts. It should be added to the server's
+ * middleware chain to enable observability.
+ *
+ * @param c The request context.
+ * @param arg Optional configuration argument (currently unused). */
 void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
 
 /** @brief Handler for /metrics endpoint.
- *  Returns metrics in Prometheus text format.
- *  @param c The request context. */
+ *
+ * Generates and returns current server metrics in the standard Prometheus
+ * text-based exposition format.
+ *
+ * @param c The request context. */
 void csilk_metrics_handler(csilk_ctx_t* c);
 
-/** @brief Opaque Message Queue instance. */
+/** @brief Opaque Message Queue instance.
+ *
+ * Manages the internal event bus, supporting asynchronous, thread-safe
+ * message publishing and subscription. */
 typedef struct csilk_mq_s csilk_mq_t;
 
-/** @brief Get the Message Queue instance attached to the server. */
+/** @brief Get the Message Queue instance attached to the server.
+ *
+ * @param server Pointer to the csilk server instance.
+ * @return Pointer to the server's mq instance, or NULL if not initialized. */
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
 
-/** @brief Opaque Message Queue context for middleware. */
+/** @brief Opaque Message Queue context for middleware and handlers.
+ *
+ * Passed to subscribers and MQ middleware to access message topic and payload. */
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
 
-/** @brief Message Queue handler signature. */
+/** @brief Message Queue handler signature.
+ *
+ * @param ctx Pointer to the MQ context containing message details. */
 typedef void (*csilk_mq_handler_t)(csilk_mq_ctx_t* ctx);
 
-/** @brief Proceed to the next middleware or subscriber. */
+/** @brief Proceed to the next middleware or subscriber in the chain.
+ *
+ * Similar to csilk_next, this allows passing control to the next handler
+ * for the current topic.
+ *
+ * @param ctx The MQ context. */
 void csilk_mq_next(csilk_mq_ctx_t* ctx);
 
-/** @brief Abort the middleware chain. */
+/** @brief Abort the middleware chain for the current message.
+ *
+ * Stops execution of subsequent handlers for the current message processing.
+ *
+ * @param ctx The MQ context. */
 void csilk_mq_abort(csilk_mq_ctx_t* ctx);
 
-/** @brief Get the topic of the current message. */
+/** @brief Get the topic of the current message.
+ *
+ * @param ctx The MQ context.
+ * @return The topic string. The pointer is valid for the duration of the handler. */
 const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx);
 
-/** @brief Get the payload of the current message. */
+/** @brief Get the payload of the current message.
+ *
+ * @param ctx The MQ context.
+ * @param[out] len Optional pointer to receive the payload length.
+ * @return Pointer to the message payload. Valid for the duration of the handler. */
 const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len);
 
-/** @brief Register middleware for a topic (or NULL for global). */
+/** @brief Register middleware for a topic.
+ *
+ * Middleware is executed before subscribers. Global middleware can be registered
+ * by passing NULL as the topic.
+ *
+ * @param mq The MQ instance.
+ * @param topic The topic name to intercept, or NULL for all topics.
+ * @param middleware The handler function to register. */
 void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware);
 
-/** @brief Register a subscriber for a topic. */
+/** @brief Register a subscriber for a topic.
+ *
+ * Subscribers are called after all applicable middleware for the topic.
+ *
+ * @param mq The MQ instance.
+ * @param topic The topic name to subscribe to.
+ * @param subscriber The handler function to register. */
 void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber);
 
-/** @brief Publish a message to a topic (Thread-safe, Asynchronous). */
+/** @brief Publish a message to a topic.
+ *
+ * This operation is **thread-safe** and **asynchronous**. It utilizes libuv
+ * internal signaling to safely bridge messages from worker threads into the
+ * main event loop for processing.
+ *
+ * @param mq The MQ instance.
+ * @param topic The target topic name.
+ * @param payload Pointer to the data to publish (copied internally).
+ * @param len Length of the payload.
+ * @return 0 on success, non-zero error code otherwise. */
 int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 #endif /* CSILK_H */
