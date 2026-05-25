@@ -10,6 +10,8 @@
 
 /* --- Context API --- */
 
+/** @brief Proceed to the next middleware or subscriber in the MQ chain.
+ * @param ctx The MQ context. */
 void csilk_mq_next(csilk_mq_ctx_t* ctx) {
   if (!ctx || ctx->aborted) return;
   ctx->handler_index++;
@@ -18,14 +20,23 @@ void csilk_mq_next(csilk_mq_ctx_t* ctx) {
   }
 }
 
+/** @brief Abort the current MQ middleware chain.
+ * @param ctx The MQ context. */
 void csilk_mq_abort(csilk_mq_ctx_t* ctx) {
   if (ctx) ctx->aborted = 1;
 }
 
+/** @brief Get the topic of the current message in the MQ context.
+ * @param ctx The MQ context.
+ * @return The topic string, or NULL if unavailable. */
 const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx) {
   return (ctx && ctx->msg) ? ctx->msg->topic : NULL;
 }
 
+/** @brief Get the payload of the current message in the MQ context.
+ * @param ctx The MQ context.
+ * @param[out] len Optional pointer to receive payload length.
+ * @return Pointer to message payload, or NULL if unavailable. */
 const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len) {
   if (!ctx || !ctx->msg) return NULL;
   if (len) *len = ctx->msg->len;
@@ -34,8 +45,13 @@ const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len) {
 
 /* --- Setup API --- */
 
+/** @brief libuv async callback for processing queued MQ messages.
+ * @param handle libuv async handle. */
 static void on_mq_async(uv_async_t* handle);
 
+/** @brief Internal: Create a new Message Queue instance.
+ * @param loop libuv event loop.
+ * @return New MQ instance, or NULL on failure. */
 csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
   csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
   if (!mq) return NULL;
@@ -45,6 +61,10 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
   return mq;
 }
 
+/** @brief Find or create a topic structure.
+ * @param mq The MQ instance.
+ * @param name Topic name.
+ * @return Pointer to topic structure, or NULL on failure. */
 static csilk_mq_topic_t* get_or_create_topic(csilk_mq_t* mq, const char* name) {
   for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
     if (strcmp(t->name, name) == 0) return t;
@@ -57,6 +77,10 @@ static csilk_mq_topic_t* get_or_create_topic(csilk_mq_t* mq, const char* name) {
   return t;
 }
 
+/** @brief Register middleware for a topic.
+ * @param mq The MQ instance.
+ * @param topic Topic name, or NULL for global middleware.
+ * @param middleware Handler function. */
 void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware) {
   if (!mq || !middleware) return;
   if (!topic) {
@@ -79,6 +103,10 @@ void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middlewa
   }
 }
 
+/** @brief Register a subscriber for a topic.
+ * @param mq The MQ instance.
+ * @param topic Topic name.
+ * @param subscriber Handler function. */
 void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber) {
   /* Subscribers are essentially handlers appended to the chain */
   csilk_mq_use(mq, topic, subscriber);
@@ -86,6 +114,12 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t su
 
 /* --- Publishing and Async Dispatch --- */
 
+/** @brief Publish a message to a topic (Thread-safe).
+ * @param mq The MQ instance.
+ * @param topic Target topic name.
+ * @param payload Data payload.
+ * @param len Payload length.
+ * @return 0 on success, -1 on failure. */
 int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len) {
   if (!mq || !topic) return -1;
   csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
@@ -111,6 +145,8 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, siz
   return 0;
 }
 
+/** @brief Async callback to process all queued MQ messages.
+ * @param handle libuv async handle. */
 static void on_mq_async(uv_async_t* handle) {
   csilk_mq_t* mq = (csilk_mq_t*)handle->data;
   
@@ -148,6 +184,8 @@ static void on_mq_async(uv_async_t* handle) {
   }
 }
 
+/** @brief libuv close callback for the MQ async handle.
+ * @param handle libuv handle. */
 static void on_mq_close(uv_handle_t* handle) {
   csilk_mq_t* mq = (csilk_mq_t*)handle->data;
   if (!mq) return;
@@ -180,6 +218,8 @@ static void on_mq_close(uv_handle_t* handle) {
   free(mq);
 }
 
+/** @brief Internal: Free Message Queue instance and its resources.
+ * @param mq The MQ instance. */
 void _csilk_mq_free(csilk_mq_t* mq) {
   if (!mq) return;
   if (!uv_is_closing((uv_handle_t*)&mq->async_handle)) {
