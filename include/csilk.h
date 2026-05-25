@@ -1116,7 +1116,7 @@ void csilk_server_stop(csilk_server_t* server);
 void csilk_server_set_config(csilk_server_t* server,
                              const csilk_server_config_t* config);
 
-/** @brief Set the maximum number of concurrent client connections.
+/** @brief Get the maximum number of concurrent client connections.
  * @param server Server instance.
  * @param max Maximum connections (0 = unlimited).
  * @return Previous limit value. */
@@ -1181,6 +1181,9 @@ void csilk_metrics_handler(csilk_ctx_t* c);
 
 /** @brief Opaque Message Queue instance. */
 typedef struct csilk_mq_s csilk_mq_t;
+
+/** @brief Get the Message Queue instance attached to the server. */
+csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
 
 /** @brief Opaque Message Queue context for middleware. */
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
