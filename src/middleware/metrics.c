@@ -45,7 +45,8 @@ void csilk_metrics_handler(csilk_ctx_t* c) {
            "# HELP http_requests_total Total number of HTTP requests\n"
            "# TYPE http_requests_total counter\n"
            "http_requests_total %llu\n"
-           "# HELP http_request_duration_microseconds Total duration of HTTP requests in microseconds\n"
+           "# HELP http_request_duration_microseconds Total duration of HTTP "
+           "requests in microseconds\n"
            "# TYPE http_request_duration_microseconds counter\n"
            "http_request_duration_microseconds %llu\n",
            (unsigned long long)total_requests,
