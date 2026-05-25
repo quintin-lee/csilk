@@ -6,6 +6,7 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
+- 🚀 **Zero-copy Static File Serving** via `sendfile` integration
 - 📬 **Internal Event Bus** - Asynchronous, thread-safe Message Queue with middleware and subscriber support
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration

@@ -42,7 +42,14 @@ CSILK_REGISTER_REFLECT(csilk_req_log_t, REQ_LOG_MAP)
 /* ---- middleware handler ---- */
 
 /** @brief Request logging middleware — logs method, path, status, and duration.
- */
+ *
+ * Records the start time of the request using a high-resolution monotonic clock,
+ * proceeds to the next handler, and then calculates the total elapsed time.
+ * It automatically selects between plain-text logging and structured JSON
+ * logging based on the global logger configuration.
+ *
+ * If JSON mode is active, it marshals the request details into a structured
+ * object using the reflection engine. */
 void csilk_logger_handler(csilk_ctx_t* c) {
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);

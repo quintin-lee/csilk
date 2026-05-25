@@ -10,7 +10,12 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Request ID middleware handler. */
+/** @brief Request ID middleware handler.
+ *
+ * Ensures every request has a unique UUID v4 identifier. If the request
+ * does not already have one, a new UUID is generated and stored in the context.
+ * The identifier is then added to the "X-Request-Id" response header and
+ * set in the thread-local logger state for tracing. */
 void csilk_request_id_middleware(csilk_ctx_t* c) {
   if (!c) return;
 
@@ -28,7 +33,9 @@ void csilk_request_id_middleware(csilk_ctx_t* c) {
   csilk_next(c);
 }
 
-/** @brief Built-in Health Check handler. */
+/** @brief Built-in Health Check handler.
+ *
+ * Returns a simple JSON response indicating the server status is "up". */
 void csilk_health_check_handler(csilk_ctx_t* c) {
   if (!c) return;
 

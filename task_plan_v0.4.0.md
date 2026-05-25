@@ -29,7 +29,7 @@
 
 ### 阶段 4：高级 I/O 优化
 - [ ] 评估并原型化 HTTP/2 (基于 nghttp2) 支持 `id: task_h2_proto`
-- [ ] 在支持的平台上实现 `sendfile` 零拷贝静态文件传输 `id: task_zero_copy`
+- [x] 在支持的平台上实现 `sendfile` 零拷贝静态文件传输 `id: task_zero_copy`
 - [ ] 优化 Header 哈希表冲突率及 Arena 复用效率 `id: task_io_perf_tune`
 
 ## 状态

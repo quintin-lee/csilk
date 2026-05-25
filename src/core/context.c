@@ -241,10 +241,7 @@ const char* csilk_get_path(csilk_ctx_t* c) {
   return c ? c->request.path : NULL;
 }
 
-/** @brief Get the request body.
- *  @param c The request context.
- *  @param out_len Optional pointer to store the body length.
- *  @return Pointer to the body data, or NULL. */
+/** @brief Get the request body data. */
 const char* csilk_get_body(csilk_ctx_t* c, size_t* out_len) {
   if (out_len) *out_len = c ? c->request.body_len : 0;
   return c ? c->request.body : NULL;
@@ -739,10 +736,7 @@ static int send_chunked_headers(csilk_ctx_t* c) {
   return 0;
 }
 
-/** @brief Write a chunked frame in the format: hex-size\r\ndata\r\n.
- *  @param c The request context.
- *  @param data Chunk data.
- *  @param len Data length. */
+/** @brief Write a chunked frame in the format: [hex-size] CRLF [data] CRLF. */
 static void write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   char size_buf[32];
   int size_len = snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);

@@ -189,7 +189,15 @@ static int log_json(csilk_log_level_t lv, const char* file, int line,
  * public API
  * ================================================================ */
 
-/** @brief Initialize the global logger with the given configuration. */
+/* ================================================================
+ * public API
+ * ================================================================ */
+
+/** @brief Initialize the global logger with the given configuration.
+ *
+ * Configures the output destination (stdout or file), logging level,
+ * formatting (plain text or structured JSON), and file rotation policies.
+ * This function is thread-safe and can be called to reconfigure the logger. */
 int csilk_log_init(csilk_log_config_t config) {
   if (g_logger.initialized) csilk_log_close();
   g_logger.config = config;
@@ -213,7 +221,11 @@ int csilk_log_init(csilk_log_config_t config) {
   return 0;
 }
 
-/** @brief Internal: format and emit a log message (use macros instead). */
+/** @brief Internal: format and emit a log message.
+ *
+ * **Note**: Use the CSILK_LOG_* macros instead of calling this directly.
+ * Handles timestamping, level filtering, thread-local request ID insertion,
+ * and file rotation. */
 void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
                          const char* func, const char* fmt, ...) {
   if (!g_logger.initialized || lv < g_logger.config.level) return;
@@ -239,7 +251,10 @@ void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
   uv_mutex_unlock(&g_logger.mutex);
 }
 
-/** @brief Internal: emit a structured JSON log entry with extra fields. */
+/** @brief Internal: emit a structured JSON log entry with extra fields.
+ *
+ * **Note**: Use the CSILK_LOG_KV macro instead of calling this directly.
+ * Merges extra JSON fields into the structured log entry. */
 void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
                            const char* func, cJSON* extra, const char* fmt,
                            ...) {
@@ -270,12 +285,16 @@ void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
   uv_mutex_unlock(&g_logger.mutex);
 }
 
-/** @brief Check whether the logger is in JSON format mode. */
+/** @brief Check whether the logger is configured for structured JSON output. */
 int csilk_log_is_json(void) {
   return g_logger.initialized && g_logger.config.json_format;
 }
 
-/** @brief Set the Request ID for the current thread. */
+/** @brief Set the Request ID for the current thread.
+ *
+ * Stores the request ID in thread-local storage, allowing subsequent log
+ * calls on the same thread to automatically include it without passing
+ * the context explicitly. */
 void csilk_log_set_request_id(const char* request_id) {
   if (request_id) {
     strncpy(tl_request_id, request_id, sizeof(tl_request_id) - 1);
@@ -285,7 +304,10 @@ void csilk_log_set_request_id(const char* request_id) {
   }
 }
 
-/** @brief Build a simple key-value cJSON object for structured logging. */
+/** @brief Build a key-value cJSON object for structured logging.
+ *
+ * Helper to create a flat JSON object from a NULL-terminated list of strings.
+ * Used primarily with CSILK_LOG_KV. */
 cJSON* csilk_log_make_kv(const char* key, ...) {
   cJSON* obj = cJSON_CreateObject();
   if (!obj) return NULL;
@@ -301,7 +323,9 @@ cJSON* csilk_log_make_kv(const char* key, ...) {
   return obj;
 }
 
-/** @brief Close the global logger and release resources. */
+/** @brief Close the global logger and release resources.
+ *
+ * Closes file handles and destroys mutexes. Safe to call multiple times. */
 void csilk_log_close(void) {
   if (!g_logger.initialized) return;
   uv_mutex_lock(&g_logger.mutex);
