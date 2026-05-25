@@ -106,6 +106,8 @@ static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
+static void on_idle_timeout(uv_timer_t* handle);
+static void on_write_timeout(uv_timer_t* handle);
 static void on_server_handle_close(uv_handle_t* handle);
 static void init_tls(csilk_server_t* s);
 static void cleanup_tls(csilk_server_t* s);
@@ -117,10 +119,16 @@ static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
 
 /** @brief Get a client from the connection pool (or allocate new). */
 static csilk_client_t* pool_get(csilk_server_t* server) {
+  csilk_client_t* client;
   if (server->client_pool_count > 0) {
-    return server->client_pool[--server->client_pool_count];
+    client = server->client_pool[--server->client_pool_count];
+  } else {
+    client = calloc(1, sizeof(csilk_client_t));
   }
-  return calloc(1, sizeof(csilk_client_t));
+  if (client) {
+    client->ctx.file_fd = -1;
+  }
+  return client;
 }
 
 /** @brief Return a client to the connection pool (or free if pool full). */
@@ -285,20 +293,77 @@ static void on_stop_async(uv_async_t* handle) {
 /** @brief Write completion callback.
  * @param req Write request.
  * @param status Write status. */
+static void on_sendfile_complete(uv_fs_t* req) {
+  csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+  uv_fs_req_cleanup(req);
+  free(req);
+
+  if (!client) return;
+
+  /* Finalize request handling (duplicated from _csilk_send_response) */
+  int keep_alive = llhttp_should_keep_alive(&client->parser);
+
+  if (client->server->config.write_timeout_ms > 0) {
+    uv_timer_stop(&client->write_timer);
+  }
+
+  if (keep_alive) {
+    uv_timer_start(&client->timer, on_idle_timeout,
+                   client->server->config.idle_timeout_ms, 0);
+    uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+  } else {
+    if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+      uv_close((uv_handle_t*)&client->handle, on_close);
+    }
+  }
+
+  trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
+  csilk_ctx_cleanup(&client->ctx);
+}
+
 static void on_write(uv_write_t* req, int status) {
   if (status < 0) {
     fprintf(stderr, "Write error %s\n", uv_strerror(status));
   }
   // Stop write timeout (response flushed)
+  csilk_client_t* client = NULL;
   if (req->handle) {
-    csilk_client_t* client = (csilk_client_t*)req->handle->data;
+    client = (csilk_client_t*)req->handle->data;
     if (client) {
       uv_timer_stop(&client->write_timer);
     }
   }
+
   if (req->data) {
     free(req->data);
   }
+
+  if (client && client->ctx.file_fd >= 0) {
+    uv_os_fd_t sock_fd;
+    if (uv_fileno((const uv_handle_t*)&client->handle, &sock_fd) == 0) {
+      uv_fs_t* fs_req = malloc(sizeof(uv_fs_t));
+      if (fs_req) {
+        fs_req->data = &client->ctx;
+        int fd = client->ctx.file_fd;
+        size_t offset = client->ctx.file_offset;
+        size_t size = client->ctx.file_size;
+        client->ctx.file_fd = -1; /* Prevent recursion */
+
+        int r = uv_fs_sendfile(uv_default_loop(), fs_req, sock_fd, fd, offset,
+                               size, on_sendfile_complete);
+        if (r < 0) {
+          /* Fallback or error */
+          free(fs_req);
+          /* Should we close? */
+        } else {
+          free(req);
+          return; /* Wait for sendfile to complete before freeing context */
+        }
+      }
+    }
+  }
+
   free(req);
 }
 
@@ -555,8 +620,9 @@ void _csilk_send_response(csilk_ctx_t* c) {
   const char* status_text = get_status_text(status);
 
   // If response has body, use Content-Length
+  int is_file = (c->file_fd >= 0 && !client->ssl);
   int use_chunked =
-      (client->ctx.response.body_len == 0 && client->ctx.is_async);
+      (client->ctx.response.body_len == 0 && client->ctx.is_async && !is_file);
   const char* transfer_encoding =
       use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
 
@@ -568,7 +634,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
     }
   }
 
-  size_t body_len = client->ctx.response.body_len;
+  size_t body_len = is_file ? c->file_size : client->ctx.response.body_len;
   const char* body = client->ctx.response.body ? client->ctx.response.body : "";
 
   int keep_alive = llhttp_should_keep_alive(&client->parser);
@@ -597,7 +663,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
   // For non-chunked response, the length should be header + headers + crlf +
   // body
   size_t response_len = (size_t)header_len + custom_headers_len + 2 +
-                        (use_chunked ? 0 : body_len);
+                        (use_chunked || is_file ? 0 : body_len);
 
   char* write_base = malloc(response_len + 1);
   if (write_base) {
@@ -633,7 +699,7 @@ void _csilk_send_response(csilk_ctx_t* c) {
       }
     }
 
-    if (!use_chunked) {
+    if (!use_chunked && !is_file) {
       snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s",
                body);
     } else {
@@ -641,8 +707,13 @@ void _csilk_send_response(csilk_ctx_t* c) {
     }
 
     _csilk_send_data(c, (const uint8_t*)write_base,
-                     (use_chunked ? (size_t)pos + 2 : response_len));
+                     (use_chunked || is_file ? (size_t)pos + 2 : response_len));
     free(write_base);
+  }
+
+  if (is_file) {
+    /* Defer finalization to on_sendfile_complete */
+    return;
   }
 
   // Stop read timeout (request is complete)

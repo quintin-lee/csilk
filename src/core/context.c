@@ -202,6 +202,15 @@ void csilk_ctx_cleanup(csilk_ctx_t* c) {
     c->response.body_is_managed = 0;
   }
 
+  if (c->file_fd >= 0) {
+    uv_fs_t close_req;
+    uv_fs_close(NULL, &close_req, c->file_fd, NULL);
+    uv_fs_req_cleanup(&close_req);
+    c->file_fd = -1;
+  }
+  c->file_offset = 0;
+  c->file_size = 0;
+
   if (c->storage_driver && c->storage_driver->clear) {
     c->storage_driver->clear(c);
   }
