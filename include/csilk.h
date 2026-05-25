@@ -1224,6 +1224,20 @@ void csilk_mq_next(csilk_mq_ctx_t* ctx);
  * @param ctx The MQ context. */
 void csilk_mq_abort(csilk_mq_ctx_t* ctx);
 
+/** @brief Signature for background worker function. */
+typedef void (*csilk_mq_worker_t)(const char* topic, const void* payload,
+                                  size_t len);
+
+/** @brief Offload message processing to a background thread.
+ *
+ * This function hands off the current message to a background worker thread.
+ * Control is immediately returned to the main loop (via internal call to
+ * csilk_mq_next). The worker function will be executed in libuv's thread pool.
+ *
+ * @param ctx The MQ context.
+ * @param worker The background worker function to execute. */
+void csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker);
+
 /** @brief Get the topic of the current message.
  *
  * @param ctx The MQ context.

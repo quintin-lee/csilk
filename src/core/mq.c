@@ -44,6 +44,56 @@ const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len) {
   return ctx->msg->payload;
 }
 
+/* --- Offload API --- */
+
+/** @brief Worker thread callback.
+ * @param req libuv work request. */
+static void worker_cb(uv_work_t* req) {
+  csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+  wctx->handler(wctx->topic, wctx->payload, wctx->len);
+}
+
+/** @brief After work callback, executed on main loop thread.
+ * @param req libuv work request.
+ * @param status libuv status. */
+static void worker_after_cb(uv_work_t* req, int status) {
+  (void)status;
+  csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+  free(wctx->topic);
+  free(wctx->payload);
+  free(wctx);
+}
+
+/** @brief Offload message processing to a background thread.
+ * @param ctx MQ context.
+ * @param worker Worker function. */
+void csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker) {
+  if (!ctx || !ctx->msg || !worker) return;
+  csilk_mq_work_ctx_t* wctx = calloc(1, sizeof(csilk_mq_work_ctx_t));
+  if (!wctx) return;
+  wctx->req.data = wctx;
+  wctx->handler = worker;
+  wctx->topic = strdup(ctx->msg->topic);
+  if (!wctx->topic) {
+    free(wctx);
+    return;
+  }
+  if (ctx->msg->len > 0 && ctx->msg->payload) {
+    wctx->payload = malloc(ctx->msg->len);
+    if (wctx->payload) {
+      memcpy(wctx->payload, ctx->msg->payload, ctx->msg->len);
+      wctx->len = ctx->msg->len;
+    } else {
+      free(wctx->topic);
+      free(wctx);
+      return;
+    }
+  }
+  uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb,
+                worker_after_cb);
+  csilk_mq_next(ctx);
+}
+
 /* --- Setup API --- */
 
 /** @brief libuv async callback for processing queued MQ messages.
