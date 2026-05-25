@@ -87,6 +87,7 @@ else()
 endif()
 
 # Fetch cJSON
+set(ENABLE_CJSON_TEST OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   cjson
   GIT_REPOSITORY https://github.com/DaveGamble/cJSON.git
