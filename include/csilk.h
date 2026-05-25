@@ -1179,4 +1179,34 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
  *  @param c The request context. */
 void csilk_metrics_handler(csilk_ctx_t* c);
 
+/** @brief Opaque Message Queue instance. */
+typedef struct csilk_mq_s csilk_mq_t;
+
+/** @brief Opaque Message Queue context for middleware. */
+typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
+
+/** @brief Message Queue handler signature. */
+typedef void (*csilk_mq_handler_t)(csilk_mq_ctx_t* ctx);
+
+/** @brief Proceed to the next middleware or subscriber. */
+void csilk_mq_next(csilk_mq_ctx_t* ctx);
+
+/** @brief Abort the middleware chain. */
+void csilk_mq_abort(csilk_mq_ctx_t* ctx);
+
+/** @brief Get the topic of the current message. */
+const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx);
+
+/** @brief Get the payload of the current message. */
+const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len);
+
+/** @brief Register middleware for a topic (or NULL for global). */
+void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware);
+
+/** @brief Register a subscriber for a topic. */
+void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber);
+
+/** @brief Publish a message to a topic (Thread-safe, Asynchronous). */
+int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
+
 #endif /* CSILK_H */
