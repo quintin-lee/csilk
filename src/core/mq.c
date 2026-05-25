@@ -144,9 +144,42 @@ static void on_mq_async(uv_async_t* handle) {
   }
 }
 
+static void on_mq_close(uv_handle_t* handle) {
+  csilk_mq_t* mq = (csilk_mq_t*)handle->data;
+  if (!mq) return;
+
+  uv_mutex_destroy(&mq->queue_mutex);
+
+  /* Free queue */
+  csilk_mq_msg_t* msg = mq->queue_head;
+  while (msg) {
+    csilk_mq_msg_t* next = msg->next;
+    free(msg->topic);
+    free(msg->payload);
+    free(msg);
+    msg = next;
+  }
+
+  /* Free topics */
+  csilk_mq_topic_t* topic = mq->topics;
+  while (topic) {
+    csilk_mq_topic_t* next = topic->next;
+    free(topic->name);
+    free(topic->handlers);
+    free(topic);
+    topic = next;
+  }
+
+  /* Free global middlewares */
+  free(mq->global_middlewares);
+
+  free(mq);
+}
+
 void _csilk_mq_free(csilk_mq_t* mq) {
   if (!mq) return;
-  uv_close((uv_handle_t*)&mq->async_handle, NULL);
-  /* Note: Memory cleanup should happen after uv_close callback in a production implementation, 
-     but for this task we follow the provided minimal logic. */
+  if (!uv_is_closing((uv_handle_t*)&mq->async_handle)) {
+    mq->async_handle.data = mq;
+    uv_close((uv_handle_t*)&mq->async_handle, on_mq_close);
+  }
 }
