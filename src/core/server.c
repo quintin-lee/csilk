@@ -297,9 +297,8 @@ static void on_stop_async(uv_async_t* handle) {
   }
 }
 
-/** @brief Write completion callback.
- * @param req Write request.
- * @param status Write status. */
+/** @brief Sendfile completion callback.
+ * @param req libuv filesystem request. */
 static void on_sendfile_complete(uv_fs_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
@@ -482,12 +481,11 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief HTTP parser callback: header value received.
- * @param p HTTP parser instance.
- * @param at Pointer to header value data.
- * @param length Length of header value data. */
 /** @brief Grow a buffer to at least `needed` bytes using exponential doubling.
- */
+ * @param buf Current buffer pointer.
+ * @param cap Pointer to current capacity (updated on grow).
+ * @param needed Minimum required bytes.
+ * @return New buffer pointer, or NULL on allocation failure. */
 static char* buf_grow(char* buf, size_t* cap, size_t needed) {
   if (needed <= *cap) return buf;
   size_t new_cap = *cap ? *cap : 32;

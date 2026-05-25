@@ -96,7 +96,7 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread);
 
 /** @brief Internal: Trigger response sending (used for async offloading).
  * @param c Request context. */
-__attribute__((weak)) void _csilk_send_response(csilk_ctx_t* c);
+void _csilk_send_response(csilk_ctx_t* c) __attribute__((weak));
 
 /** @brief Internal: Send data through TLS if enabled, or direct.
  * @param c Request context.
@@ -104,11 +104,19 @@ __attribute__((weak)) void _csilk_send_response(csilk_ctx_t* c);
  * @param len Data length. */
 void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len);
 
-/** @brief Internal: Compute HMAC-SHA256 (uses driver if set). */
+/** @brief Internal: Compute HMAC-SHA256 (uses driver if set).
+ * @param c Request context.
+ * @param key Key for HMAC.
+ * @param key_len Length of the key.
+ * @param data Data to hash.
+ * @param data_len Length of data.
+ * @param out Output buffer for 32-byte hash. */
 void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
                         const uint8_t* data, size_t data_len, uint8_t out[32]);
 
-/** @brief Internal: Generate UUID v4 (uses driver if set). */
+/** @brief Internal: Generate UUID v4 (uses driver if set).
+ * @param c Request context.
+ * @param buf Output buffer for 37-byte string. */
 void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
 
 /** @brief URL decode a string in-place.

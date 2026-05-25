@@ -203,8 +203,8 @@ void csilk_redirect(csilk_ctx_t* c, int status, const char* location);
 
 /** @brief Redirect to another URL (302 Found).
  * @param c The request context.
- * @param location The destination URL. */
-void csilk_redirect_simple(csilk_ctx_t* c, const char* location);
+ * @param url The destination URL. */
+void csilk_redirect_simple(csilk_ctx_t* c, const char* url);
 
 /** @brief Store a value in the context.
  * The key is duplicated and stored in the request arena.
