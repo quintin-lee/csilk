@@ -166,6 +166,14 @@ struct csilk_mq_ctx_s {
   int aborted;
 };
 
+typedef struct {
+  uv_work_t req;
+  csilk_mq_worker_t handler; /* Use worker signature */
+  char* topic;
+  void* payload;
+  size_t len;
+} csilk_mq_work_ctx_t;
+
 /** @brief Internal Init and Free */
 csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
 void _csilk_mq_free(csilk_mq_t* mq);
