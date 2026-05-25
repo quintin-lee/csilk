@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <fnmatch.h>
 #include "csilk.h"
 #include "csilk_internal.h"
 
@@ -160,17 +161,29 @@ static void on_mq_async(uv_async_t* handle) {
     csilk_mq_msg_t* msg = head;
     head = head->next;
     
-    csilk_mq_topic_t* target = NULL;
+    /* Count total matching handlers */
+    size_t total_handlers = mq->global_mw_count;
     for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
-      if (strcmp(t->name, msg->topic) == 0) { target = t; break; }
+      if (fnmatch(t->name, msg->topic, 0) == 0) {
+        total_handlers += t->handler_count;
+      }
     }
     
-    if (target || mq->global_mw_count > 0) {
-      size_t total_handlers = mq->global_mw_count + (target ? target->handler_count : 0);
+    if (total_handlers > 0) {
       csilk_mq_handler_t* chain = malloc(total_handlers * sizeof(csilk_mq_handler_t));
       if (chain) {
-        if (mq->global_mw_count > 0) memcpy(chain, mq->global_middlewares, mq->global_mw_count * sizeof(csilk_mq_handler_t));
-        if (target && target->handler_count > 0) memcpy(chain + mq->global_mw_count, target->handlers, target->handler_count * sizeof(csilk_mq_handler_t));
+        size_t idx = 0;
+        if (mq->global_mw_count > 0) {
+          memcpy(chain, mq->global_middlewares, mq->global_mw_count * sizeof(csilk_mq_handler_t));
+          idx += mq->global_mw_count;
+        }
+        
+        for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+          if (fnmatch(t->name, msg->topic, 0) == 0 && t->handler_count > 0) {
+            memcpy(chain + idx, t->handlers, t->handler_count * sizeof(csilk_mq_handler_t));
+            idx += t->handler_count;
+          }
+        }
         
         csilk_mq_ctx_t ctx = { mq, msg, chain, total_handlers, -1, 0 };
         csilk_mq_next(&ctx);
