@@ -2,7 +2,7 @@
 
 > 基于现有 PLAN.md 已完成工作之上的下一阶段优化计划
 > 生成日期: 2026-05-24 | 基于 commit `7fc37cc`
-> 最后更新: 2026-05-24 | P0-P3 全部修复，56 测试全通过 | P4 已完成 | P5 已实现 4/5
+> 最后更新: 2026-05-25 | P0-P4 全部修复，66 测试全通过 | P5 已完成 | P6 已修复 | Prometheus Metrics 已集成 | Zero-copy 已实现
 
 ---
 
@@ -155,9 +155,9 @@
 - **SHA1/Base64 已知向量测试**: RFC 3174 / RFC 4648 标准向量 ✅
 - **Streaming 响应测试**: `csilk_response_write/end` 分块写入 ✅
 - **Redirect 测试**: `csilk_redirect` / `csilk_redirect_simple` ✅
-- **WebSocket 关闭握手测试**: 验证 RFC 6455 双向关闭帧 ⏳
+- **WebSocket 关闭握手测试**: 验证 RFC 6455 双向关闭帧 ✅
 - **重定向测试**: 301/302/307 状态码 + Location 头 ✅
-- **OOM 模拟**: 使用 `#ifdef TEST_OOM` hook 模拟 malloc 失败 ⏳
+- **OOM 模拟**: 使用 `#ifdef TEST_OOM` hook 模拟 malloc 失败 ✅
 
 ### 状态转换
 
@@ -165,13 +165,15 @@
 |---------|:----:|
 | `test_url_decode` | ✅ 12 cases |
 | `test_utils` (SHA1+Base64) | ✅ 14 cases |
-| `test_ws` | ✅ 已有 (14 cases) |
+| `test_ws` | ✅ 已有 (15 cases) |
 | `test_redirect` | ✅ 增强 (4 测试) |
 | `test_form` | ✅ 8 cases |
 | `test_session` | ✅ 5 cases |
 | `test_validate` | ✅ 6 cases |
-| `test_static` (Range) | ✅ 3 cases |
+| `test_static` (Range + Zero-copy) | ✅ 3 cases |
 | `test_integration` | ✅ 40 tests (含 WS handshake + streaming) |
+| `test_metrics` | ✅ 1 case |
+| `test_oom` | ✅ 4 cases |
 
 ---
 
