@@ -115,6 +115,7 @@ set(CSILK_SOURCES
     src/core/reflect.c
     src/core/utils.c
     src/core/websocket.c
+    src/core/mq.c
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c
