@@ -1,3 +1,7 @@
+/** @file mq.c
+ * @brief Internal Event Bus (Message Queue) implementation.
+ * @copyright MIT License
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

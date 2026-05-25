@@ -29,8 +29,11 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
-/** @brief libuv work callback: read static file from disk (offloaded from event
- * loop). @param req libuv work request. */
+/** @brief Setup a 206 Partial Content response for a file range.
+ * @param c The request context.
+ * @param fd File descriptor.
+ * @param size Total file size.
+ * @param mime_type Content-Type string. */
 static void set_range_response(csilk_ctx_t* c, int fd, size_t size,
                                const char* mime_type) {
   const char* range_hdr = csilk_get_header(c, "Range");

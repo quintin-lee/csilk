@@ -740,7 +740,7 @@ static int send_chunked_headers(csilk_ctx_t* c) {
 }
 
 /** @brief Write a chunked frame in the format: hex-size\r\ndata\r\n.
- *  @param stream The uv stream to write to.
+ *  @param c The request context.
  *  @param data Chunk data.
  *  @param len Data length. */
 static void write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len) {
