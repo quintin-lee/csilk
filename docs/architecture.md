@@ -62,9 +62,9 @@ graph TB
 
 ## Core Design Principles
 
-### 1. Reactor Event-Driven Model with TLS Abstraction
+### 1. Reactor Event-Driven Model with Native TLS
 
-csilk uses libuv's event loop as its execution core. All I/O is non-blocking. With v0.4.0, a TLS abstraction layer via OpenSSL BIOs is integrated:
+csilk uses libuv's event loop as its execution core. All I/O is non-blocking. Since v0.4.0, native TLS support is integrated via OpenSSL BIOs:
 
 - **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute`
 - **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
@@ -102,7 +102,7 @@ In addition to the Onion model, a **Hook System** allows listening to global eve
 
 ### 3. Opaque Context & ABI Stability
 
-Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
+Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
 
 ### 4. Pluggable Drivers
 

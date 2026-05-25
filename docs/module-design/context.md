@@ -15,7 +15,7 @@ graph TB
             RM["method (GET/POST/etc)"]
             RP["path (/api/v1/users)"]
             RB["body + body_len"]
-            RH["headers (hash map, 16 buckets)"]
+            RH["headers (hash map, 64 buckets)"]
             RQ["query_params (hash map)"]
         end
 

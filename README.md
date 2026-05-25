@@ -282,11 +282,16 @@ src/
       ├── static.c    # Static file serving (with Range/206 support)
       └── validate.c  # Request parameter validation
 
-include/              # Public headers
+include/              # Public + internal headers
   ├── csilk.h             # Main framework header
   ├── csilk_app.h         # csilk_app_t convenience API
-  ├── csilk_internal.h    # Internal utilities
-  └── csilk_reflect.h     # Reflection engine
+  ├── csilk_db.h          # Database driver interface
+  ├── csilk_internal.h    # Internal utilities + struct definitions
+  ├── csilk_reflect.h     # Reflection engine
+  ├── csilk_test.h        # OOM simulation test framework
+  └── context_internal.h  # Opaque csilk_ctx_s struct
+src/
+  ├── core/          # Core engine
 tests/                # Unit tests
 examples/             # Advanced usage examples
 examples/example_server.c      # Full-featured demo server

@@ -2,7 +2,7 @@
 
 > 基于现有 PLAN.md 已完成工作之上的下一阶段优化计划
 > 生成日期: 2026-05-24 | 基于 commit `7fc37cc`
-> 最后更新: 2026-05-25 | P0-P4 全部修复，66 测试全通过 | P5 已完成 | P6 已修复 | Prometheus Metrics 已集成 | Zero-copy 已实现
+> 最后更新: 2026-05-25 | P0-P6 全部修复，52 测试全部通过 | 全量 Doxygen 文档完成
 
 ---
 
@@ -247,7 +247,7 @@
 | **Sprint 3** | P3: 性能优化 | 2-3 天 | header realloc, snprintf, arena, 连接池 |
 | | P4: 测试覆盖 | 2-3 天 | 补充 10+ 测试文件 |
 | **Sprint 4** | P5: 新功能 | 3-5 天 | form urlencoded, session, range, validator |
-| **持续** | 文档同步 | 持续 | 更新 README / ARCH.md / Doxygen |
+| **持续** | 文档同步 | ✅ 已完成 | README / ARCH.md / Doxygen 全量更新完成 |
 
 ---
 

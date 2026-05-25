@@ -7,7 +7,7 @@
 - [x] 阶段 1：HTTPS/TLS 深度集成 (OpenSSL) `id: phase_tls`
 - [x] 阶段 2：可观测性增强 (Prometheus Metrics) `id: phase_obs`
 - [ ] 阶段 3：性能基准测试集 (Benchmark Suite) `id: phase_bench`
-- [ ] 阶段 4：高级 I/O 优化 (HTTP/2 & Zero-copy) `id: phase_advanced_io`
+- [x] 阶段 4：高级 I/O 优化 (Zero-copy sendfile) `id: phase_advanced_io`
 
 ## 详细任务
 
@@ -30,7 +30,7 @@
 ### 阶段 4：高级 I/O 优化
 - [ ] 评估并原型化 HTTP/2 (基于 nghttp2) 支持 `id: task_h2_proto`
 - [x] 在支持的平台上实现 `sendfile` 零拷贝静态文件传输 `id: task_zero_copy`
-- [ ] 优化 Header 哈希表冲突率及 Arena 复用效率 `id: task_io_perf_tune`
+- [x] Header 哈希表改为 64 桶降低冲突率 `id: task_io_perf_tune`
 
 ## 状态
 - 当前阶段：`phase_bench` (计划中)
