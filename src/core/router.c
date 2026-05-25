@@ -21,7 +21,13 @@ typedef enum {
   CSILK_NODE_WILDCARD
 } csilk_node_type_t;
 
-/** @brief Node in the router trie. */
+/** @brief Node in the router trie — represents a URL path segment.
+ *
+ * The router uses a radix tree (trie) structure where each node represents
+ * a path segment. Nodes can be static (e.g., "users"), parameterized
+ * (e.g., ":id"), or wildcard (e.g., "*"). Each node stores handlers for
+ * matching HTTP methods at that path.
+ */
 struct csilk_router_node_s {
   char* segment;          /**< URL path segment. */
   csilk_node_type_t type; /**< Type of node (static/param/wildcard). */

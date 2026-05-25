@@ -11,7 +11,12 @@
 #include "context_internal.h"
 #include "csilk_internal.h"
 
-/** @brief A single chunk in the arena linked list. */
+/** @brief A single chunk in the arena linked list.
+ *
+ * Arena allocator manages memory in chunks. When a chunk is full, a new
+ * chunk is allocated. All memory is freed at once when the arena is freed,
+ * making it ideal for request-scoped allocations.
+ */
 typedef struct csilk_arena_chunk_s {
   struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
   size_t size;                      /**< Total size of this chunk. */
@@ -19,7 +24,13 @@ typedef struct csilk_arena_chunk_s {
   uint8_t data[];                   /**< Flexible array for chunk data. */
 } csilk_arena_chunk_t;
 
-/** @brief Arena allocator for request-scoped memory. */
+/** @brief Arena allocator for request-scoped memory.
+ *
+ * Arena allocators allocate memory in large chunks and never free individual
+ * allocations until the entire arena is freed. This eliminates fragmentation
+ * and is ideal for per-request memory management where all allocations are
+ * discarded together after processing.
+ */
 typedef struct csilk_arena_s {
   csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
   size_t default_chunk_size; /**< Default size for new chunks. */

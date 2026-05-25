@@ -39,7 +39,12 @@ typedef struct csilk_hook_node_s {
   struct csilk_hook_node_s* next;
 } csilk_hook_node_t;
 
-/** @brief Server structure. */
+/** @brief Server structure — holds the core server state.
+ *
+ * Manages the libuv event loop, HTTP listener, configuration, global
+ * middleware chain, hook registrations, and client connection pooling.
+ * Thread-safe for multi-threaded operation via atomic counters and mutexes.
+ */
 struct csilk_server_s {
   uv_loop_t* loop;                 /**< libuv event loop. */
   csilk_router_t* router;          /**< Associated router instance. */
@@ -69,7 +74,12 @@ struct csilk_server_s {
   int client_pool_count;           /**< Number of free clients in pool. */
 };
 
-/** @brief Client connection structure. */
+/** @brief Client connection structure — represents a single TCP connection.
+ *
+ * Holds the libuv stream handle, HTTP parser state, timers for keep-alive
+ * and timeouts, TLS context (if HTTPS), and the request/response context.
+ * Clients are pooled and reused for performance.
+ */
 struct csilk_client_s {
   uv_tcp_t handle;             /**< libuv TCP stream handle. */
   uv_timer_t timer;            /**< Connection idle (keep-alive) timer. */
