@@ -98,7 +98,19 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
   uv_mutex_init(&mq->queue_mutex);
   uv_async_init(loop, &mq->async_handle, on_mq_async);
   mq->async_handle.data = mq;
+
+  mq->wal_fd = -1;
+  mq->wal_path = NULL;
+  uv_mutex_init(&mq->wal_mutex);
+
   return mq;
+}
+
+/** @brief Enable persistence for the Message Queue. */
+int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path) {
+  if (!mq || !wal_path) return -1;
+  /* Implementation will follow in subsequent tasks */
+  return 0;
 }
 
 /** @brief Find or create a topic structure.
@@ -232,6 +244,10 @@ static void on_mq_close(uv_handle_t* handle) {
   if (!mq) return;
 
   uv_mutex_destroy(&mq->queue_mutex);
+  uv_mutex_destroy(&mq->wal_mutex);
+  if (mq->wal_path) free(mq->wal_path);
+  /* Note: wal_fd should be closed if opened, but it's not opened yet in this task.
+     Future tasks will handle closing it properly. */
 
   /* Free queue */
   csilk_mq_msg_t* msg = mq->queue_head;

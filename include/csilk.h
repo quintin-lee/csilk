@@ -1283,4 +1283,14 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t su
  * @return 0 on success, non-zero error code otherwise. */
 int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
+/** @brief Enable persistence for the Message Queue.
+ *
+ *  When persistence is enabled, all published messages will be appended to a
+ *  Write-Ahead Log (WAL) file before being processed by the event loop.
+ *
+ *  @param mq The MQ instance.
+ *  @param wal_path Path to the log file (e.g., "mq.wal").
+ *  @return 0 on success, non-zero on error. */
+int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path);
+
 #endif /* CSILK_H */

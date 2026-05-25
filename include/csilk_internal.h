@@ -155,6 +155,11 @@ struct csilk_mq_s {
   csilk_mq_handler_t* global_middlewares;
   size_t global_mw_count;
   size_t global_mw_capacity;
+
+  /* Persistence (WAL) */
+  uv_file wal_fd;
+  char* wal_path;
+  uv_mutex_t wal_mutex;
 };
 
 struct csilk_mq_ctx_s {
