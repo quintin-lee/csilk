@@ -19,7 +19,14 @@
 
 /* ---- reflectable request-log struct ---- */
 
-/** @brief Request log entry for JSON structured logging. */
+/**
+ * @brief Request log entry for JSON structured logging.
+ *
+ * This struct captures the essential fields of an HTTP request for log
+ * output. It is registered with the CSILK reflection engine (via
+ * CSILK_REGISTER_REFLECT) so it can be automatically marshalled to JSON
+ * for structured log entries.
+ */
 typedef struct csilk_req_log_s {
   char method[8];       /**< HTTP method */
   char path[256];       /**< Request path */
@@ -41,15 +48,30 @@ CSILK_REGISTER_REFLECT(csilk_req_log_t, REQ_LOG_MAP)
 
 /* ---- middleware handler ---- */
 
-/** @brief Request logging middleware — logs method, path, status, and duration.
+/**
+ * @brief Request logging middleware — logs method, path, status, and duration.
  *
- * Records the start time of the request using a high-resolution monotonic clock,
- * proceeds to the next handler, and then calculates the total elapsed time.
- * It automatically selects between plain-text logging and structured JSON
- * logging based on the global logger configuration.
+ * Records the start time of the request using a high-resolution monotonic
+ * clock (CLOCK_MONOTONIC), proceeds to the next handler via csilk_next(),
+ * and then calculates the total elapsed time. It automatically selects
+ * between plain-text logging and structured JSON logging based on the
+ * global logger configuration.
  *
- * If JSON mode is active, it marshals the request details into a structured
- * object using the reflection engine. */
+ * In JSON mode, the request details are marshalled into a csilk_req_log_t
+ * struct and logged via the reflection-based JSON logger. In text mode, a
+ * simple "[HTTP] METHOD PATH STATUS DURATION" line is emitted.
+ *
+ * If a request ID is set on the context, it is propagated to the logger's
+ * thread-local state for correlating log entries.
+ *
+ * @param c  The request context.
+ *
+ * @note This middleware should be one of the first in the pipeline so that
+ *       the timing covers the entire request lifecycle.
+ * @warning csilk_next() is called BEFORE the log output; the response
+ *          status must therefore be set by downstream handlers before
+ *          returning.
+ */
 void csilk_logger_handler(csilk_ctx_t* c) {
   struct timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);

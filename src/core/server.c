@@ -105,10 +105,14 @@ struct csilk_client_s {
   struct csilk_client_s* prev;  /**< Previous client in active list. */
 };
 
-/** @brief Buffer allocation callback.
- * @param handle UV handle.
- * @param suggested_size Suggested buffer size.
- * @param buf Pointer to the buffer. */
+/** @brief libuv buffer allocation callback — allocates a receive buffer.
+ *
+ * Allocates a buffer of the suggested size using malloc. The buffer is freed
+ * by libuv after the read callback is invoked.
+ *
+ * @param handle          The libuv handle that will read into the buffer.
+ * @param suggested_size  Recommended buffer size from libuv.
+ * @param buf             [out] Pointer to the uv_buf_t to populate. */
 static void alloc_buffer(uv_handle_t* handle, size_t suggested_size,
                          uv_buf_t* buf) {
   (void)handle;
@@ -128,7 +132,15 @@ static void flush_tls_write(csilk_client_t* client);
 static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
                           csilk_hook_type_t type);
 
-/** @brief Get a client from the connection pool (or allocate new). */
+/** @brief Get a client connection object from the server's free pool or
+ * allocate a new one.
+ *
+ * Reuses a previously freed client if available (up to 32 pooled entries),
+ * otherwise allocates a new zero-initialized csilk_client_t. The returned
+ * client's file_fd is initialized to -1.
+ *
+ * @param server The server instance.
+ * @return A csilk_client_t ready for use, or NULL on allocation failure. */
 static csilk_client_t* pool_get(csilk_server_t* server) {
   csilk_client_t* client;
   if (server->client_pool_count > 0) {
@@ -142,7 +154,14 @@ static csilk_client_t* pool_get(csilk_server_t* server) {
   return client;
 }
 
-/** @brief Return a client to the connection pool (or free if pool full). */
+/** @brief Return a client connection to the server's free pool for reuse.
+ *
+ * If the client has an SSL session, it is freed first. The client struct is
+ * zeroed. If the pool has fewer than 32 entries, the client is saved for
+ * reuse; otherwise it is freed.
+ *
+ * @param server The server instance.
+ * @param client The client to return (must not be used after this call). */
 static void pool_put(csilk_server_t* server, csilk_client_t* client) {
   if (client->ssl) {
     SSL_free(client->ssl);
@@ -158,6 +177,12 @@ static void pool_put(csilk_server_t* server, csilk_client_t* client) {
   }
 }
 
+/** @brief Insert a client at the head of the server's active client list.
+ *
+ * Thread-safe: acquires the clients_mutex before modification.
+ *
+ * @param server The server instance.
+ * @param client The client to add (must not already be in a list). */
 static void client_list_add(csilk_server_t* server, csilk_client_t* client) {
   uv_mutex_lock(&server->clients_mutex);
   client->next = server->active_clients;
@@ -169,6 +194,13 @@ static void client_list_add(csilk_server_t* server, csilk_client_t* client) {
   uv_mutex_unlock(&server->clients_mutex);
 }
 
+/** @brief Remove a client from the active list (no locking).
+ *
+ * Unlinks the client from the doubly-linked list and clears its prev/next
+ * pointers. Caller must hold clients_mutex.
+ *
+ * @param server The server instance.
+ * @param client The client to remove. */
 static void client_list_remove_internal(csilk_server_t* server,
                                         csilk_client_t* client) {
   if (client->prev) {
@@ -182,13 +214,26 @@ static void client_list_remove_internal(csilk_server_t* server,
   client->next = client->prev = NULL;
 }
 
+/** @brief Remove a client from the active list (thread-safe).
+ *
+ * Acquires clients_mutex, then delegates to client_list_remove_internal().
+ *
+ * @param server The server instance.
+ * @param client The client to remove. */
 static void client_list_remove(csilk_server_t* server, csilk_client_t* client) {
   uv_mutex_lock(&server->clients_mutex);
   client_list_remove_internal(server, client);
   uv_mutex_unlock(&server->clients_mutex);
 }
 
-/** @brief Close handler for timer handles — frees client on last close. */
+/** @brief libuv close callback for client timer handles.
+ *
+ * Decrements the close_pending counter. When all four timers are closed
+ * (close_pending reaches 0), the client is fully cleaned up: the arena is
+ * freed, temporary fields are freed, and the client is returned to the pool.
+ *
+ * @param handle The timer handle being closed (data points to csilk_client_t).
+ */
 static void on_timer_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!client) return;
@@ -207,8 +252,15 @@ static void on_timer_close(uv_handle_t* handle) {
   pool_put(srv, client);
 }
 
-/** @brief Close handler for client connections.
- * @param handle UV handle associated with client connection.
+/** @brief libuv close callback for client TCP handles — performs full cleanup.
+ *
+ * Triggers the CSILK_HOOK_CONN_CLOSE hook, removes the client from the
+ * active connections list, stops all four timers, and initiates their close
+ * via on_timer_close. When all timers are closed, the client's request
+ * context, arena, and temporary buffers are freed and the client is returned
+ * to the pool.
+ *
+ * @param handle The TCP handle being closed (data points to csilk_client_t).
  */
 static void on_close(uv_handle_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
@@ -249,18 +301,28 @@ static void on_close(uv_handle_t* handle) {
   }
 }
 
-/** @brief Signal handler for graceful shutdown.
- * @param handle Signal handle.
- * @param signum Signal number. */
+/** @brief libuv signal handler for SIGINT — initiates graceful server shutdown.
+ *
+ * Delegates to csilk_server_stop() which sends an async signal to the
+ * event loop to trigger cleanup on the main loop thread.
+ *
+ * @param handle libuv signal handle (data points to csilk_server_t).
+ * @param signum Received signal number (e.g., SIGINT). */
 static void on_signal(uv_signal_t* handle, int signum) {
   (void)signum;
   csilk_server_t* server = (csilk_server_t*)handle->data;
   csilk_server_stop(server);
 }
 
-/** @brief Async callback to stop the server gracefully.
- * Closes server-level handles and lets client connections drain naturally.
- * @param handle Async handle. */
+/** @brief libuv async callback to stop the server gracefully.
+ *
+ * Closes the server listen handle (stops accepting new connections), signals
+ * all active client connections to close (with WebSocket/SSE-specific
+ * handling), closes the signal and async handles, and frees the MQ instance.
+ * Client connections are allowed to drain naturally via their own close
+ * callbacks.
+ *
+ * @param handle libuv async handle (data points to csilk_server_t). */
 static void on_stop_async(uv_async_t* handle) {
   csilk_server_t* server = (csilk_server_t*)handle->data;
 
@@ -307,8 +369,16 @@ static void on_stop_async(uv_async_t* handle) {
   }
 }
 
-/** @brief Sendfile completion callback.
- * @param req libuv filesystem request. */
+/** @brief libuv sendfile completion callback — continues with keep-alive or
+ * close.
+ *
+ * After a file has been sent via sendfile(), cleans up the request context,
+ * determines if the connection should be kept alive based on the HTTP
+ * parser's keep-alive state, and either starts a new read (for keep-alive)
+ * or closes the connection. Fires the CSILK_HOOK_REQUEST_END hook.
+ *
+ * @param req The completed uv_fs_t sendfile request (freed by this callback).
+ */
 static void on_sendfile_complete(uv_fs_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
@@ -338,6 +408,14 @@ static void on_sendfile_complete(uv_fs_t* req) {
   csilk_ctx_cleanup(&client->ctx);
 }
 
+/** @brief libuv write completion callback.
+ *
+ * On success, continues with sendfile if a file descriptor is pending,
+ * otherwise finalizes the request (keep-alive or close). On error, logs
+ * the failure. Frees the write request's data buffer.
+ *
+ * @param req    The completed uv_write_t request.
+ * @param status 0 on success, negative on error. */
 static void on_write(uv_write_t* req, int status) {
   if (status < 0) {
     fprintf(stderr, "Write error %s\n", uv_strerror(status));
@@ -383,8 +461,12 @@ static void on_write(uv_write_t* req, int status) {
   free(req);
 }
 
-/** @brief Idle timeout callback — closes connection on keep-alive idle.
- * @param handle Timer handle. */
+/** @brief libuv timer callback: fired when the connection has been idle
+ * (no active request) beyond keepalive_idle_ms.
+ *
+ * Closes the client connection immediately.
+ *
+ * @param handle The timer handle (castable to client via handle->data). */
 static void on_idle_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -393,8 +475,12 @@ static void on_idle_timeout(uv_timer_t* handle) {
   }
 }
 
-/** @brief Read timeout callback — no data received within read_timeout_ms.
- * @param handle Timer handle. */
+/** @brief libuv timer callback: fired when no request data has been received
+ * within read_timeout_ms.
+ *
+ * Closes the connection immediately.
+ *
+ * @param handle The timer handle (castable to client via handle->data). */
 static void on_read_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -403,9 +489,12 @@ static void on_read_timeout(uv_timer_t* handle) {
   }
 }
 
-/** @brief Write timeout callback — response not flushed within
- * write_timeout_ms.
- * @param handle Timer handle. */
+/** @brief libuv timer callback: fired when the response write has not
+ * completed within write_timeout_ms.
+ *
+ * Closes the connection immediately.
+ *
+ * @param handle The timer handle (castable to client via handle->data). */
 static void on_write_timeout(uv_timer_t* handle) {
   csilk_client_t* client = (csilk_client_t*)handle->data;
   if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -413,8 +502,14 @@ static void on_write_timeout(uv_timer_t* handle) {
   }
 }
 
-/** @brief HTTP parser callback: message begins.
- * @param p HTTP parser instance. */
+/** @brief llhttp callback: a new HTTP message begins.
+ *
+ * Resets per-request state (total_header_size, header_count, etc. are reset
+ * elsewhere). Clears the thread-local request ID so each request starts fresh.
+ * Stops and restarts the request timeout timer.
+ *
+ * @param p The llhttp parser instance (data points to csilk_client_t).
+ * @return 0 (HPE_OK) to continue parsing. */
 static int on_message_begin(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size = 0;
@@ -431,10 +526,15 @@ static int on_message_begin(llhttp_t* p) {
   return 0;
 }
 
-/** @brief HTTP parser callback: URL received.
- * @param p HTTP parser instance.
- * @param at Pointer to URL data.
- * @param length Length of URL data. */
+/** @brief llhttp callback: URL data received.
+ *
+ * Stores the raw URL string. Checks against max_url_size and returns
+ * HPE_USER if exceeded (aborts parsing).
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to the URL data.
+ * @param length Length of the URL data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if URL exceeds max_url_size. */
 static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   size_t max_url = client->server->config.max_url_size;
@@ -451,10 +551,16 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief HTTP parser callback: header field name received.
- * @param p HTTP parser instance.
- * @param at Pointer to header field data.
- * @param length Length of header field data. */
+/** @brief llhttp callback: header field name received.
+ *
+ * Accumulates header field names. When a previous field+value pair is
+ * complete, stores it in the request context. Enforces max_header_size and
+ * max_headers_count limits (returns HPE_USER on violation).
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to header field data.
+ * @param length Length of the header field data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if size/count limits are exceeded. */
 static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
@@ -491,11 +597,16 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief Grow a buffer to at least `needed` bytes using exponential doubling.
- * @param buf Current buffer pointer.
- * @param cap Pointer to current capacity (updated on grow).
- * @param needed Minimum required bytes.
- * @return New buffer pointer, or NULL on allocation failure. */
+/** @brief Grow a heap-allocated buffer to at least @p needed bytes.
+ *
+ * Uses realloc with capacity doubling for amortized O(1) growth. If @p buf
+ * is NULL and *@p cap is 0, this acts as a malloc. On realloc failure the
+ * original buffer is NOT freed (caller must free it).
+ *
+ * @param buf    Existing allocation (may be NULL).
+ * @param cap    [in,out] Current capacity — updated on success.
+ * @param needed Minimum required size in bytes.
+ * @return Pointer to the resized buffer, or NULL on allocation failure. */
 static char* buf_grow(char* buf, size_t* cap, size_t needed) {
   if (needed <= *cap) return buf;
   size_t new_cap = *cap ? *cap : 32;
@@ -506,6 +617,16 @@ static char* buf_grow(char* buf, size_t* cap, size_t needed) {
   return new_buf;
 }
 
+/** @brief llhttp callback: header value data received.
+ *
+ * Appends to the current header value buffer. Enforces max_header_size
+ * limit (returns HPE_USER if exceeded). On allocation failure, frees the
+ * partial value and returns HPE_USER.
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to header value data.
+ * @param length Length of header value data.
+ * @return 0 (HPE_OK) on success, HPE_USER if size limit or allocation fails. */
 static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
@@ -531,8 +652,12 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief HTTP parser callback: all headers received.
- * @param p HTTP parser instance. */
+/** @brief llhttp callback: all HTTP headers have been received.
+ *
+ * Flushes any remaining header field+value pair into the request context.
+ *
+ * @param p The llhttp parser instance.
+ * @return 0 (HPE_OK) to continue parsing. */
 static int on_headers_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->current_header_field && client->current_header_value) {
@@ -548,10 +673,16 @@ static int on_headers_complete(llhttp_t* p) {
   return 0;
 }
 
-/** @brief HTTP parser callback: body data received.
- * @param p HTTP parser instance.
- * @param at Pointer to body data.
- * @param length Length of body data. */
+/** @brief llhttp callback: body data received.
+ *
+ * Appends body data to the request body buffer (realloc as needed). Enforces
+ * max_body_size limit (returns HPE_USER if exceeded). On realloc failure,
+ * the existing body is freed and HPE_USER is returned.
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to body data.
+ * @param length Length of body data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if the body exceeds max_body_size. */
 static int on_body(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   if (client->ctx.request.body_len + length >
@@ -574,7 +705,13 @@ static int on_body(llhttp_t* p, const char* at, size_t length) {
   return 0;
 }
 
-/** @brief Map HTTP status code to reason phrase. */
+/** @brief Map an HTTP status code to its standard reason phrase.
+ *
+ * Supports common codes: 101, 200, 201, 204, 400, 401, 403, 404, 500.
+ * Unrecognized codes default to "OK".
+ *
+ * @param status HTTP status code.
+ * @return A static string literal with the reason phrase. */
 static const char* get_status_text(int status) {
   switch (status) {
     case CSILK_STATUS_SWITCHING_PROTOCOLS:
@@ -600,7 +737,17 @@ static const char* get_status_text(int status) {
   }
 }
 
-/** @brief Send the fully constructed HTTP response to the client. */
+/** @brief Send raw data to the client (TLS-aware).
+ *
+ * If TLS is active, writes through the SSL session and flushes the write BIO.
+ * Otherwise, allocates a write request, copies the data, and queues the write
+ * via libuv. The data buffer is freed by the write completion callback.
+ *
+ * @param c    The request context.
+ * @param data Data buffer to send.
+ * @param len  Length of data in bytes.
+ * @note This is an internal function used by the framework to send HTTP
+ *       responses, chunked frames, and WebSocket frames. */
 void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
@@ -761,7 +908,14 @@ void _csilk_send_response(csilk_ctx_t* c) {
   csilk_ctx_cleanup(&client->ctx);
 }
 
-/** @brief Finalize request headers and URL before routing. */
+/** @brief Finalize the parsed request data before routing.
+ *
+ * Stores any remaining header field+value pair, splits the URL into path
+ * and query string, URL-decodes the path, parses query parameters into the
+ * context's query_params map, and sets the HTTP method on the context.
+ *
+ * @param client The client connection.
+ * @param p      The llhttp parser instance. */
 static void finalize_request(csilk_client_t* client, llhttp_t* p) {
   if (client->current_header_field && client->current_header_value) {
     csilk_set_request_header(&client->ctx, client->current_header_field,
@@ -793,9 +947,15 @@ static void finalize_request(csilk_client_t* client, llhttp_t* p) {
   client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
 }
 
-/** @brief HTTP parser callback: full request message parsed.
- * Routes the request to matching handlers and sends response.
- * @param p HTTP parser instance. */
+/** @brief llhttp callback: the full HTTP request message has been parsed.
+ *
+ * Finalizes the request (stores remaining headers, decodes URL, parses
+ * query params), triggers request_begin hooks, runs the router to find
+ * matching handlers, executes them sequentially, and sends the response.
+ * Handles errors, CORS preflight, and global middleware chaining.
+ *
+ * @param p The llhttp parser instance.
+ * @return 0 (HPE_OK) on success, non-zero to abort parsing. */
 static int on_message_complete(llhttp_t* p) {
   csilk_client_t* client = (csilk_client_t*)p->data;
 
@@ -851,10 +1011,15 @@ static int on_message_complete(llhttp_t* p) {
   return 0;
 }
 
-/** @brief libuv connection callback: accept new TCP connection.
- * Creates a client context, initializes parser, timer, and starts reading.
- * @param server_stream UV stream handle for the server.
- * @param status Connection status. */
+/** @brief libuv connection callback — accept a new incoming TCP connection.
+ *
+ * Checks the active connection limit (rejecting by accepting and immediately
+ * closing if exceeded), obtains a client from the pool, initializes the TCP
+ * handle, HTTP parser, timers (read timeout, request timeout), arena
+ * allocator, TLS if configured, and starts reading from the socket.
+ *
+ * @param server_stream The listening server stream.
+ * @param status        Connection status (negative on error). */
 static void on_new_connection(uv_stream_t* server_stream, int status) {
   if (status < 0) {
     fprintf(stderr, "New connection error %s\n", uv_strerror(status));
@@ -943,10 +1108,19 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   }
 }
 
-/** @brief Read callback.
- * @param stream Stream.
- * @param nread Number of bytes read.
- * @param buf Buffer read into. */
+/** @brief libuv read callback — processes incoming data from a client
+ * connection.
+ *
+ * Stops the idle timer, resets the read timeout, and dispatches data based
+ * on connection mode:
+ * - TLS: writes to the read BIO and processes TLS handshake/decryption.
+ * - WebSocket: parses WebSocket frames directly.
+ * - HTTP: feeds data to the llhttp parser.
+ * On EOF or read error, closes the connection.
+ *
+ * @param stream The client TCP stream.
+ * @param nread  Number of bytes read (negative for error/EOF).
+ * @param buf    The buffer that was read into (freed by this callback). */
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   csilk_client_t* client = (csilk_client_t*)stream->data;
   uv_timer_stop(&client->timer);
@@ -989,7 +1163,15 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   }
 }
 
-/** @brief Get the client's IP address from the underlying connection. */
+/** @brief Get the remote client's IP address as a string.
+ *
+ * Resolves the client's IP address (IPv4 or IPv6) from the underlying TCP
+ * socket using libuv's getpeername. The result is allocated in arena memory
+ * so it is valid for the duration of the request.
+ *
+ * @param c The request context.
+ * @return A string with the client IP (e.g., "127.0.0.1" or "::1"), or NULL
+ *         if the context is NULL or the address cannot be resolved. */
 const char* csilk_get_client_ip(csilk_ctx_t* c) {
   if (!c || !c->_internal_client) return NULL;
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
@@ -1009,7 +1191,17 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
 
 #include "csilk_reflect.h"
 
-/** @brief Create a new server instance. */
+/** @brief Create a new server instance associated with a router.
+ *
+ * Initializes the reflection system, allocates the server struct, sets up
+ * the libuv default loop, configures the llhttp parser callbacks, applies
+ * default server configuration (timeouts, buffer limits, backlog), creates
+ * a clients mutex, and creates the internal message queue (MQ) instance.
+ *
+ * @param router The router instance to use for request matching.
+ * @return A new csilk_server_t instance, or NULL on allocation failure.
+ * @note The server must be configured (via csilk_server_set_config()) and
+ *       started via csilk_server_run(). Free with csilk_server_free(). */
 csilk_server_t* csilk_server_new(csilk_router_t* router) {
   csilk_reflect_init();
   csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
@@ -1041,8 +1233,16 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
   return s;
 }
 
-/** @brief Built-in SPA fallback handler — serves index.html for unmatched
- * GET requests. */
+/** @brief Built-in SPA (Single Page Application) fallback handler.
+ *
+ * For unmatched GET requests, attempts to serve "index.html" from the
+ * configured SPA doc root. This enables client-side routing for SPAs like
+ * React, Vue, or Angular that handle their own URL routing in the browser.
+ *
+ * @param c The request context.
+ * @note Only applies to GET requests. Non-GET unmatched requests receive a
+ *       standard 404 response. The doc root is set via
+ *       csilk_server_set_spa_fallback(). */
 static void spa_fallback_handler(csilk_ctx_t* c) {
   const char* method = csilk_get_method(c);
   if (!method || strcmp(method, "GET") != 0) {
@@ -1087,15 +1287,30 @@ static void spa_fallback_handler(csilk_ctx_t* c) {
   csilk_status(c, CSILK_STATUS_OK);
 }
 
-/** @brief Set a custom handler for unmatched routes (404). */
+/** @brief Set a custom handler for unmatched routes (404 Not Found).
+ *
+ * Replaces the default "Not Found" plain-text response with a custom handler.
+ * Overridden by csilk_server_set_spa_fallback().
+ *
+ * @param server  The server instance.
+ * @param handler Handler function invoked for unmatched routes. */
 void csilk_server_set_not_found_handler(csilk_server_t* server,
                                         csilk_handler_t handler) {
   if (!server) return;
   server->not_found_handler = handler;
 }
 
-/** @brief Enable SPA fallback: unmatched GET requests serve index.html.
- * Overrides any custom 404 handler. */
+/** @brief Enable SPA fallback: all unmatched GET requests serve index.html from
+ * the given directory.
+ *
+ * Sets the SPA document root and replaces the 404 handler with the built-in
+ * spa_fallback_handler. Overrides any custom 404 handler set via
+ * csilk_server_set_not_found_handler().
+ *
+ * @param server   The server instance.
+ * @param doc_root Absolute or relative filesystem path to the directory
+ *                 containing index.html.
+ * @note The doc_root string is strdup'd internally. Pass NULL to disable. */
 void csilk_server_set_spa_fallback(csilk_server_t* server,
                                    const char* doc_root) {
   if (!server || !doc_root) return;
@@ -1104,7 +1319,15 @@ void csilk_server_set_spa_fallback(csilk_server_t* server,
   if (server->spa_doc_root) server->not_found_handler = spa_fallback_handler;
 }
 
-/** @brief Add a global middleware handler to the server. */
+/** @brief Register a global middleware handler that runs before every request.
+ *
+ * Global middlewares are prepended to the matched route's handler chain.
+ * They run before route-specific middleware and the final handler. There
+ * is a hard limit of 32 global middlewares.
+ *
+ * @param server  The server instance.
+ * @param handler Middleware handler function.
+ * @return 0 on success, -1 if the limit is reached or parameters are NULL. */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   if (!server || !handler) return -1;
   if (server->middleware_count >= 32) {
@@ -1115,11 +1338,24 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler) {
   return 0;
 }
 
-/** @brief Callback for closing server-level handles — no-op. */
+/** @brief libuv close callback for server-level handles during shutdown.
+ *
+ * Currently a no-op placeholder. Called when the server, signal, or async
+ * handles finish closing.
+ *
+ * @param handle The handle being closed (unused). */
 static void on_server_handle_close(uv_handle_t* handle) { (void)handle; }
 
-/** @brief Free server resources. Should be called after the loop has stopped.
- */
+/** @brief Free a server instance and all associated resources.
+ *
+ * Should only be called after the event loop has stopped. Joins any worker
+ * threads, frees the SPA doc root, drains the client pool, cleans up TLS,
+ * frees the message queue, frees all registered hooks, destroys the clients
+ * mutex, and frees the server struct.
+ *
+ * @param server The server to free (may be NULL).
+ * @note Safe to call with NULL. After this call the server pointer is
+ *       invalid. */
 void csilk_server_free(csilk_server_t* server) {
   if (!server) return;
 
@@ -1156,20 +1392,41 @@ void csilk_server_free(csilk_server_t* server) {
   free(server);
 }
 
-/** @brief Signal the server to stop gracefully. */
+/** @brief Signal the server to stop gracefully (thread-safe).
+ *
+ * Sends an async signal to the event loop which triggers on_stop_async() on
+ * the main loop thread. The function returns immediately; the server shuts
+ * down asynchronously.
+ *
+ * @param server The server instance.
+ * @note This is safe to call from any thread, including signal handlers. */
 void csilk_server_stop(csilk_server_t* server) {
   if (!server) return;
   uv_async_send(&server->async_handle);
 }
 
-/** @brief Apply server configuration. */
+/** @brief Apply a server configuration struct, overwriting the current
+ * settings.
+ *
+ * Copies the provided configuration into the server instance. This should
+ * be called before csilk_server_run().
+ *
+ * @param server The server instance.
+ * @param config Pointer to the configuration to apply (copied by value). */
 void csilk_server_set_config(csilk_server_t* server,
                              const csilk_server_config_t* config) {
   if (!server || !config) return;
   server->config = *config;
 }
 
-/** @brief Set the maximum number of concurrent client connections. */
+/** @brief Set the maximum number of concurrent client connections.
+ *
+ * When this limit is reached, new connections are accepted and immediately
+ * closed to drain the listen backlog. A value of 0 means unlimited.
+ *
+ * @param server The server instance.
+ * @param max    Maximum concurrent connections (0 for unlimited).
+ * @return The previous maximum connections value, or -1 if server is NULL. */
 int csilk_server_set_max_connections(csilk_server_t* server, int max) {
   if (!server) return -1;
   int prev = server->max_connections;
@@ -1177,19 +1434,45 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max) {
   return prev;
 }
 
-/** @brief Set the storage driver for context key-value storage. */
+/** @brief Set the pluggable storage driver for context key-value operations.
+ *
+ * When set, calls to csilk_set()/csilk_get() on request contexts belonging
+ * to this server will delegate to the driver instead of using the default
+ * arena-backed linked list.
+ *
+ * @param server The server instance.
+ * @param driver Pointer to the storage driver vtable (may be NULL to reset). */
 void csilk_server_set_storage_driver(csilk_server_t* server,
                                      csilk_storage_driver_t* driver) {
   if (server) server->storage_driver = driver;
 }
 
-/** @brief Set the global crypto driver for the server. */
+/** @brief Set the pluggable cryptographic driver for the server.
+ *
+ * When set, HMAC and UUID operations on request contexts will delegate to
+ * the driver instead of using the built-in software implementations.
+ *
+ * @param server The server instance.
+ * @param driver Pointer to the crypto driver vtable (may be NULL to reset). */
 void csilk_server_set_crypto_driver(csilk_server_t* server,
                                     csilk_crypto_driver_t* driver) {
   if (server) server->crypto_driver = driver;
 }
 
-/** @brief Register a server-level hook. */
+/** @brief Register a lifecycle hook on the server.
+ *
+ * Hooks are invoked at specific points in the request lifecycle
+ * (conn_open, conn_close, request_begin, request_end, server_start,
+ * server_stop). Multiple handlers can be registered for the same hook type;
+ * they are called in reverse order of registration (LIFO).
+ *
+ * @param s       The server instance.
+ * @param type    Hook type (CSILK_HOOK_CONN_OPEN, CSILK_HOOK_REQUEST_BEGIN,
+ *                CSILK_HOOK_CONN_CLOSE, CSILK_HOOK_REQUEST_END,
+ *                CSILK_HOOK_SERVER_START, CSILK_HOOK_SERVER_STOP).
+ * @param handler Function pointer. For server hooks (start/stop), the
+ *                signature is void(*)(csilk_server_t*). For context hooks,
+ *                the signature is void(*)(csilk_ctx_t*). */
 void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
                            void* handler) {
   if (!s || type < 0 || type >= CSILK_HOOK_COUNT || !handler) return;
@@ -1202,7 +1485,15 @@ void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
   s->hooks[type] = node;
 }
 
-/** @brief Internal: Trigger all handlers for a given hook type. */
+/** @brief Internal: invoke all registered handlers for a given hook type.
+ *
+ * Walks the hook's linked list and calls each handler. Server-level hooks
+ * (start/stop) receive the server pointer. Context-level hooks receive the
+ * request context pointer.
+ *
+ * @param s    The server instance.
+ * @param c    The request context (may be NULL for server-level hooks).
+ * @param type Hook type to trigger. */
 static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
                           csilk_hook_type_t type) {
   if (!s || type < 0 || type >= CSILK_HOOK_COUNT) return;
@@ -1231,15 +1522,20 @@ static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c,
 static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
                            int backlog, bool reuseport);
 
-/** @brief Worker thread initialization data for multi-loop mode. */
+/** @brief Per-worker thread initialization data for SO_REUSEPORT multi-loop
+ * mode. */
 typedef struct {
   csilk_server_t* server; /**< Server instance. */
   int port;               /**< Port to listen on. */
 } worker_data_t;
 
-/** @brief Worker thread entry point for multi-loop SO_REUSEPORT mode.
- * Each worker runs its own libuv event loop and accept loop.
- * @param arg Pointer to worker_data_t (freed inside). */
+/** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode.
+ *
+ * Each worker runs its own libuv event loop and accept loop, sharing the
+ * same port via SO_REUSEPORT. The kernel distributes incoming connections
+ * across worker threads. The worker_data_t argument is freed by this function.
+ *
+ * @param arg Pointer to worker_data_t (freed when the function exits). */
 static void worker_thread(void* arg) {
   worker_data_t* data = (worker_data_t*)arg;
   csilk_server_t* server = data->server;
@@ -1268,15 +1564,22 @@ static void worker_thread(void* arg) {
 #define UV_HANDLE_BOUND 0x00002000
 #endif
 
-/** @brief Create, bind, and listen a TCP socket with SO_REUSEPORT support.
- * On non-Windows with reuseport=true, creates socket manually so
- * SO_REUSEPORT is set before bind (required by kernel).
- * @param loop Event loop to attach to.
- * @param out_handle [out] Initialized TCP handle (must not be freed by caller).
- * @param port Port number.
- * @param backlog Listen backlog depth.
- * @param reuseport Enable SO_REUSEPORT for multi-worker sharing.
- * @return 0 on success, -1 on error. */
+/** @brief Create, bind, and listen on a TCP socket with optional SO_REUSEPORT.
+ *
+ * When reuseport is true (and not Windows), creates a raw socket, sets
+ * SO_REUSEADDR and SO_REUSEPORT, binds, and listens before attaching to
+ * libuv via uv_tcp_open(). Otherwise uses the standard libuv bind+listen
+ * path. The UV_HANDLE_BOUND flag must be set manually after uv_tcp_open()
+ * for the reuseport path since uv_tcp_open does not set it.
+ *
+ * @param loop       Event loop to attach the TCP handle to.
+ * @param out_handle [out] Initialized TCP handle (managed by libuv, do not
+ *                  free by caller).
+ * @param port       TCP port number.
+ * @param backlog    Maximum length of the pending connections queue.
+ * @param reuseport  Enable SO_REUSEPORT for multi-process/thread socket
+ * sharing.
+ * @return 0 on success, -1 on socket/bind/listen error. */
 static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
                            int backlog, bool reuseport) {
 #ifndef _WIN32
@@ -1321,8 +1624,21 @@ static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
   return uv_listen((uv_stream_t*)out_handle, backlog, on_new_connection);
 }
 
-/** @brief Run the server event loop.
- * Blocks until server is stopped or error occurs. */
+/** @brief Start the server, bind to the given port, and enter the main event
+ * loop (blocking).
+ *
+ * Initializes TLS if enabled, creates the async handle for cross-thread
+ * stop signals, binds and listens on the port (with SO_REUSEPORT if
+ * worker_threads > 1), spawns additional worker threads if configured,
+ * registers the SIGINT signal handler, fires the server start hook, and
+ * enters the libuv event loop. Blocks until csilk_server_stop() is called
+ * or SIGINT is received.
+ *
+ * @param server The server instance.
+ * @param port   TCP port to bind to.
+ * @return The uv_run() return value on exit, or -1 on initialization failure.
+ * @note When worker_threads > 1, the main thread runs the event loop and
+ *       additional worker threads each run their own independent loop. */
 int csilk_server_run(csilk_server_t* server, int port) {
   if (!server) return -1;
 
@@ -1390,6 +1706,16 @@ int csilk_server_run(csilk_server_t* server, int port) {
 
 /* --- TLS Helper Implementations --- */
 
+/** @brief Initialize the server's TLS/SSL context using OpenSSL.
+ *
+ * Loads error strings, initializes SSL algorithms, creates a TLS server
+ * method context, loads the certificate chain and private key from the
+ * configured file paths, optionally loads a CA file, and optionally enables
+ * peer verification. On any failure, the SSL context is freed and set to
+ * NULL (TLS is effectively disabled).
+ *
+ * @param s The server instance (config must have tls_cert_file and
+ *          tls_key_file set if enable_tls is true). */
 static void init_tls(csilk_server_t* s) {
   SSL_load_error_strings();
   OpenSSL_add_ssl_algorithms();
@@ -1436,6 +1762,11 @@ error:
   s->ssl_ctx = NULL;
 }
 
+/** @brief Clean up the server's TLS/SSL context and global SSL state.
+ *
+ * Frees the SSL_CTX and calls EVP_cleanup() for OpenSSL global cleanup.
+ *
+ * @param s The server instance (may have ssl_ctx == NULL). */
 static void cleanup_tls(csilk_server_t* s) {
   if (s->ssl_ctx) {
     SSL_CTX_free(s->ssl_ctx);
@@ -1444,6 +1775,14 @@ static void cleanup_tls(csilk_server_t* s) {
   EVP_cleanup();
 }
 
+/** @brief Set up TLS for an individual client connection.
+ *
+ * Creates a new SSL session from the server's SSL_CTX, initializes memory
+ * BIOs for reading and writing encrypted data, and starts the TLS handshake
+ * by calling process_tls_read().
+ *
+ * @param client The client connection to set up TLS on.
+ * @return 0 on success, -1 if SSL session creation or BIO setup fails. */
 static int setup_client_tls(csilk_client_t* client) {
   client->ssl = SSL_new(client->server->ssl_ctx);
   if (!client->ssl) return -1;
@@ -1464,6 +1803,15 @@ static int setup_client_tls(csilk_client_t* client) {
   return 0;
 }
 
+/** @brief Process incoming TLS data — complete the handshake or decrypt
+ * application data.
+ *
+ * If the TLS handshake is not yet complete, performs SSL_do_handshake() and
+ * flushes the write BIO. If the handshake is complete, calls SSL_read() in
+ * a loop to decrypt application data and feeds the decrypted data to the
+ * llhttp parser (or WebSocket frame parser).
+ *
+ * @param client The client connection with pending TLS data in the read BIO. */
 static void process_tls_read(csilk_client_t* client) {
   char buf[4096];
   int n;
@@ -1517,6 +1865,13 @@ static void process_tls_read(csilk_client_t* client) {
   flush_tls_write(client);
 }
 
+/** @brief Flush buffered TLS encrypted data to the client socket.
+ *
+ * Reads encrypted data from the write BIO and sends it via libuv write
+ * requests. Must be called after SSL_write() or SSL_do_handshake() to
+ * ensure the encrypted output is actually transmitted.
+ *
+ * @param client The client connection whose write BIO should be drained. */
 static void flush_tls_write(csilk_client_t* client) {
   char buf[4096];
   int n;
@@ -1538,6 +1893,13 @@ static void flush_tls_write(csilk_client_t* client) {
   }
 }
 
+/** @brief Get the internal message queue instance for the server.
+ *
+ * The MQ is created automatically during csilk_server_new(). It can be
+ * used to register topics, subscribers, and publish messages.
+ *
+ * @param server The server instance.
+ * @return Pointer to the MQ instance, or NULL if server is NULL. */
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server) {
   return server ? server->mq : NULL;
 }

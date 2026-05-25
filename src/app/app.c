@@ -19,13 +19,15 @@
 #define CSILK_MAX_STATIC 32
 #define CSILK_DFL_PORT 8080
 
-/** @brief Cached route group lookup entry. */
+/** @brief Internal: cached route group lookup entry for fast prefix-to-group
+ * mapping. */
 typedef struct {
   char prefix[128];     /**< URL path prefix. */
   csilk_group_t* group; /**< Cached group handle. */
 } cached_group_t;
 
-/** @brief Descriptor for a static file serving route. */
+/** @brief Internal: descriptor for a static file serving route mapping URL
+ * prefix to filesystem directory. */
 typedef struct {
   char url_prefix[128]; /**< URL path prefix for static files. */
   char root_dir[256];   /**< Local filesystem directory path. */
@@ -36,10 +38,19 @@ static csilk_router_t* s_openapi_router = NULL;
 static uv_mutex_t s_app_mutex;
 static uv_once_t s_app_mutex_once = UV_ONCE_INIT;
 
-/** @brief Initialize the app-level mutex once. */
+/** @brief Internal: initialize the application-level mutex (called once via
+ * uv_once).
+ *
+ * Creates the mutex that protects the shared OpenAPI router reference and
+ * the static file route table. */
 static void init_app_mutex(void) { uv_mutex_init(&s_app_mutex); }
 
-/** @brief Lock the app mutex for reading s_openapi_router. */
+/** @brief Internal: safely retrieve the current OpenAPI router under the app
+ * mutex.
+ *
+ * @return The current s_openapi_router pointer, or NULL.
+ * @note Thread-safe. The returned pointer should not be stored beyond the
+ *       calling scope as it may change. */
 static csilk_router_t* get_openapi_router(void) {
   uv_mutex_lock(&s_app_mutex);
   csilk_router_t* r = s_openapi_router;
@@ -47,14 +58,23 @@ static csilk_router_t* get_openapi_router(void) {
   return r;
 }
 
-/** @brief Set the OpenAPI router under lock. */
+/** @brief Internal: atomically set the global OpenAPI router reference.
+ *
+ * @param r Router to set (pass NULL to disable the OpenAPI endpoint).
+ * @note Thread-safe. The previous value is simply overwritten. */
 static void set_openapi_router(csilk_router_t* r) {
   uv_mutex_lock(&s_app_mutex);
   s_openapi_router = r;
   uv_mutex_unlock(&s_app_mutex);
 }
 
-/** @brief Built-in handler for /openapi.json endpoint. */
+/** @brief Built-in handler for the /openapi.json endpoint.
+ *
+ * Retrieves the current OpenAPI router and serves the generated OpenAPI 3.0
+ * specification as a JSON response. If the router is NULL (endpoint disabled),
+ * returns 404.
+ *
+ * @param c The request context. */
 static void openapi_handler(csilk_ctx_t* c) {
   csilk_router_t* router = get_openapi_router();
 
@@ -66,7 +86,13 @@ static void openapi_handler(csilk_ctx_t* c) {
   }
 }
 
-/** @brief Built-in handler for /docs endpoint - serves the Swagger UI page. */
+/** @brief Built-in handler for the /docs endpoint — serves the Swagger UI HTML
+ * page.
+ *
+ * Checks that the OpenAPI router is active, then serves the embedded Swagger
+ * UI HTML page which loads /openapi.json at runtime.
+ *
+ * @param c The request context. */
 static void docs_handler(csilk_ctx_t* c) {
   csilk_router_t* router = get_openapi_router();
 
@@ -151,7 +177,19 @@ static void static_serve(csilk_ctx_t* c) {
  * public API
  * =================================================================== */
 
-/** @brief Create a new application with optional YAML configuration. */
+/** @brief Create a new application instance with optional YAML configuration
+ * file.
+ *
+ * Initializes the entire application stack: loads YAML config (or applies
+ * defaults), initializes the logger, creates the router, server, root route
+ * group, and registers built-in middleware (recovery and request logging).
+ * Also registers the /openapi.json, /docs, and /csilk-docs/ endpoints.
+ *
+ * @param config_path Path to a YAML configuration file, or NULL to use
+ *                    defaults (port 8080, info-level logging to stdout).
+ * @return A new csilk_app_t instance, or NULL on initialization failure.
+ * @note The returned app must be freed with csilk_app_free(). On failure,
+ *       any partially allocated resources are cleaned up internally. */
 csilk_app_t* csilk_app_new(const char* config_path) {
   csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
   if (!app) return NULL;
@@ -217,7 +255,16 @@ fail:
   return NULL;
 }
 
-/** @brief Deallocate all application resources. */
+/** @brief Free all application resources: server, router, groups, config, and
+ * logger.
+ *
+ * Closes the logger first, then frees the server (which joins worker threads
+ * and releases connections), frees all cached groups and the root group,
+ * frees the router, frees the config's dynamic strings, and finally frees
+ * the app struct itself.
+ *
+ * @param app The application instance to free (may be NULL).
+ * @note Safe to call with NULL. After this call the app pointer is invalid. */
 void csilk_app_free(csilk_app_t* app) {
   if (!app) return;
   csilk_log_close();
@@ -232,14 +279,28 @@ void csilk_app_free(csilk_app_t* app) {
 
 /* ---- logger ---- */
 
-/** @brief Set the minimum log level. */
-void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t lv) {
+/** @brief Set the minimum log level for the global logger.
+ *
+ * Reinitializes the logger with the updated level. Messages below this
+ * level are filtered out.
+ *
+ * @param app Application instance.
+ * @param level  New minimum log level (e.g., CSILK_LOG_DEBUG). */
+void csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level) {
   if (!app) return;
-  app->config.logger.level = lv;
+  app->config.logger.level = level;
   (void)csilk_log_init(app->config.logger);
 }
 
-/** @brief Enable file logging with optional rotation size. */
+/** @brief Enable logging to a file with an optional rotation threshold.
+ *
+ * Sets the log output to the specified file path. If max_sz > 0, the log
+ * file is rotated (renamed to .1) when it exceeds this size.
+ *
+ * @param app   Application instance.
+ * @param path  File path for log output. Pass NULL to disable file logging
+ *              and revert to stdout.
+ * @param max_sz Maximum file size in bytes before rotation (0 = no limit). */
 void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
   if (!app) return;
   if (app->config.logger.file_path) free((void*)app->config.logger.file_path);
@@ -248,7 +309,14 @@ void csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz) {
   (void)csilk_log_init(app->config.logger);
 }
 
-/** @brief Enable or disable JSON structured log output. */
+/** @brief Enable or disable structured JSON log output format.
+ *
+ * When enabled, log entries are emitted as JSON objects with structured
+ * fields (timestamp, level, file, line, message, request_id). When disabled,
+ * plain text format is used.
+ *
+ * @param app    Application instance.
+ * @param enable 1 for JSON format, 0 for plain text. */
 void csilk_app_log_json(csilk_app_t* app, int enable) {
   if (!app) return;
   app->config.logger.json_format = enable;
@@ -257,13 +325,29 @@ void csilk_app_log_json(csilk_app_t* app, int enable) {
 
 /* ---- middleware ---- */
 
-/** @brief Register a global middleware handler. */
+/** @brief Register a middleware handler that applies to all routes globally.
+ *
+ * Global middleware runs before route-specific middleware and handlers for
+ * every request. Built-in recovery and logger middleware are registered
+ * automatically by csilk_app_new().
+ *
+ * @param app Application instance.
+ * @param h   Middleware handler function.
+ * @note There is a hard limit of 32 global middlewares. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h) {
   if (!app || !app->server) return;
   csilk_server_use(app->server, h);
 }
 
-/** @brief Register a middleware scoped to a URL prefix group. */
+/** @brief Register a middleware handler scoped to a specific URL prefix group.
+ *
+ * Creates (or finds) a route group for the given prefix and adds the
+ * middleware to it. The middleware runs for any route whose path starts
+ * with the given prefix.
+ *
+ * @param app    Application instance.
+ * @param prefix URL prefix (e.g., "/api/admin").
+ * @param h      Middleware handler function. */
 void csilk_app_use_group(csilk_app_t* app, const char* prefix,
                          csilk_handler_t h) {
   if (!app || !prefix) return;
@@ -271,7 +355,13 @@ void csilk_app_use_group(csilk_app_t* app, const char* prefix,
   if (g) csilk_group_use(g, h);
 }
 
-/** @brief Auto-apply built-in middleware based on current configuration. */
+/** @brief Apply configuration-driven middleware settings.
+ *
+ * Reads the current app config and sets up static file serving if
+ * config.static_files.enable is true and root_dir is configured. The
+ * prefix defaults to "/static" if not specified in the config.
+ *
+ * @param app Application instance. */
 void csilk_app_apply_config(csilk_app_t* app) {
   if (!app) return;
   if (app->config.static_files.enable && app->config.static_files.root_dir) {
@@ -285,7 +375,13 @@ void csilk_app_apply_config(csilk_app_t* app) {
 
 /* ---- OpenAPI / Swagger ---- */
 
-/** @brief Enable or disable the built-in /openapi.json endpoint. */
+/** @brief Enable or disable the built-in /openapi.json endpoint.
+ *
+ * When enabled, the router's routes are exposed as an OpenAPI 3.0
+ * specification at /openapi.json. When disabled, the endpoint returns 404.
+ *
+ * @param app    Application instance.
+ * @param enable 1 to enable, 0 to disable. */
 void csilk_app_enable_openapi(csilk_app_t* app, int enable) {
   (void)app;
   set_openapi_router(enable ? app->router : NULL);
@@ -294,16 +390,31 @@ void csilk_app_enable_openapi(csilk_app_t* app, int enable) {
 
 /* ---- routes ---- */
 
-/** @brief Register a route with a single handler. */
+/** @brief Register a route on the root group with a single handler.
+ *
+ * @param app    Application instance.
+ * @param method HTTP method (e.g., "GET", "POST").
+ * @param path   URL path (e.g., "/users").
+ * @param handler Handler function. */
 void csilk_app_add_route(csilk_app_t* app, const char* method, const char* path,
-                         csilk_handler_t h) {
-  if (!app || !method || !path || !h) return;
+                         csilk_handler_t handler) {
+  if (!app || !method || !path || !handler) return;
   csilk_group_t* g = app->root_group;
   if (!g) return;
-  csilk_group_add_route(g, method, path, h);
+  csilk_group_add_route(g, method, path, handler);
 }
 
-/** @brief Register a route with OpenAPI metadata (input/output types). */
+/** @brief Register a route on the root group with a single handler and OpenAPI
+ * metadata.
+ *
+ * @param app         Application instance.
+ * @param method      HTTP method.
+ * @param path        URL path.
+ * @param handler     Handler function.
+ * @param input_type  Registered type name for request body JSON schema.
+ * @param output_type Registered type name for response body JSON schema.
+ * @param summary     Short description for the OpenAPI operation.
+ * @param description Detailed description for the OpenAPI operation. */
 void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
                                   const char* path, csilk_handler_t handler,
                                   const char* input_type,
@@ -316,7 +427,13 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
                                  output_type, summary, description);
 }
 
-/** @brief Register a route with multiple handlers (middleware chain). */
+/** @brief Register a route with a custom handler chain on the root group.
+ *
+ * @param app      Application instance.
+ * @param method   HTTP method.
+ * @param path     URL path.
+ * @param handlers Array of handler functions.
+ * @param n        Number of handlers in the array. */
 void csilk_app_add_handlers(csilk_app_t* app, const char* method,
                             const char* path, csilk_handler_t* handlers,
                             size_t n) {
@@ -328,7 +445,20 @@ void csilk_app_add_handlers(csilk_app_t* app, const char* method,
 
 /* ---- static files ---- */
 
-/** @brief Configure static file serving from a local directory. */
+/** @brief Configure static file serving: map a URL prefix to a local filesystem
+ * directory.
+ *
+ * Registers GET routes for the prefix that serve files from the specified
+ * root directory. Two routes are created: one for the prefix root (e.g.,
+ * "/static/") and one for wildcard paths using the "star" notation.
+ * The wildcard captures the full sub-path after the prefix. There is
+ * a hard limit of CSILK_MAX_STATIC (32) static route mappings.
+ *
+ * @param app      Application instance.
+ * @param prefix   URL path prefix for static files (e.g., "/static").
+ * @param root_dir Local filesystem directory to serve files from.
+ * @note Routes are added using the app's internal static_serve handler which
+ *       dispatches to csilk_static() with the correct root directory. */
 void csilk_app_static(csilk_app_t* app, const char* prefix,
                       const char* root_dir) {
   if (!app || !prefix || !root_dir) return;
@@ -364,14 +494,27 @@ void csilk_app_static(csilk_app_t* app, const char* prefix,
 
 /* ---- config / run / accessors ---- */
 
-/** @brief Apply server-level configuration options. */
+/** @brief Apply server-level configuration to the running server.
+ *
+ * Updates both the app's stored config and applies it to the server
+ * instance. This overrides any previous server config.
+ *
+ * @param app Application instance.
+ * @param c   Server configuration struct. */
 void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c) {
   if (!app || !app->server) return;
   app->config.server = c;
   csilk_server_set_config(app->server, &app->config.server);
 }
 
-/** @brief Get a copy of the current application configuration. */
+/** @brief Get a heap-allocated copy of the current application configuration.
+ *
+ * @param app Application instance.
+ * @return A malloc'd copy of the configuration struct. The caller must free
+ *         it with free(). Returns NULL if app is NULL or allocation fails.
+ * @note The returned copy includes deep copies of any dynamically allocated
+ *       string fields? No — it is a shallow memcpy. Use csilk_config_free()
+ *       only if you modify strings separately. */
 csilk_config_t* csilk_app_config(csilk_app_t* app) {
   if (!app) return NULL;
   csilk_config_t* cp = malloc(sizeof(csilk_config_t));
@@ -379,7 +522,16 @@ csilk_config_t* csilk_app_config(csilk_app_t* app) {
   return cp;
 }
 
-/** @brief Start the server and enter the event loop. */
+/** @brief Start the server and enter the libuv event loop (blocking).
+ *
+ * Listens on the specified port (or the port from config if @p port <= 0),
+ * starts worker threads if configured, and enters the main event loop.
+ * Blocks until the server is stopped (via SIGINT or csilk_server_stop()).
+ *
+ * @param app  Application instance.
+ * @param port TCP port to listen on. Pass 0 or negative to use the port
+ *             from the application config (default 8080).
+ * @return The uv_run() return value on exit, or -1 on error. */
 int csilk_app_run(csilk_app_t* app, int port) {
   if (!app) return -1;
   int p = port > 0 ? port : app->config.port;
@@ -387,12 +539,18 @@ int csilk_app_run(csilk_app_t* app, int port) {
   return csilk_server_run(app->server, p);
 }
 
-/** @brief Get the underlying router handle. */
+/** @brief Get the underlying router handle from the application.
+ *
+ * @param app Application instance.
+ * @return The router pointer, or NULL if app is NULL. */
 csilk_router_t* csilk_app_router(csilk_app_t* app) {
   return app ? app->router : NULL;
 }
 
-/** @brief Get the underlying server handle. */
+/** @brief Get the underlying server handle from the application.
+ *
+ * @param app Application instance.
+ * @return The server pointer, or NULL if app is NULL. */
 csilk_server_t* csilk_app_server(csilk_app_t* app) {
   return app ? app->server : NULL;
 }

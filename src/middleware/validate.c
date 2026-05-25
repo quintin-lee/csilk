@@ -1,6 +1,7 @@
 /**
  * @file validate.c
- * @brief Request parameter validation middleware (required, type checking, email).
+ * @brief Request parameter validation middleware (required, type checking,
+ * email).
  * @copyright MIT License
  */
 #include <ctype.h>
@@ -12,7 +13,15 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Find a character in a string (helper). */
+/**
+ * @brief Find the first occurrence of a character in a string (helper).
+ *
+ * @param s  The string to search (may be NULL).
+ * @param c  The character to locate.
+ *
+ * @return Pointer to the first occurrence of c in s, or NULL if c is not
+ *         found or s is NULL.
+ */
 static const char* str_find(const char* s, char c) {
   while (s && *s) {
     if (*s == c) return s;
@@ -21,7 +30,22 @@ static const char* str_find(const char* s, char c) {
   return NULL;
 }
 
-/** @brief Check if a string looks like a valid email address. */
+/**
+ * @brief Check if a string looks like a valid email address.
+ *
+ * Performs a basic syntactic validation: the string must contain exactly one
+ * '@' character, the local part and domain must be non-empty, and the domain
+ * must contain at least one dot after the '@' with non-empty segments. No
+ * whitespace characters are permitted anywhere in the address.
+ *
+ * @param s  The string to validate. Must be null-terminated.
+ *
+ * @return 1 if the string passes the basic email format check, 0 otherwise.
+ *
+ * @note This is NOT a full RFC 5322 validator. It does not check for
+ *       quoted local parts, IP address literals, IDN, or special characters.
+ *       Use a dedicated validation library for strict email validation.
+ */
 static int is_valid_email(const char* s) {
   if (!s || !*s) return 0;
   int at_count = 0;
@@ -44,7 +68,32 @@ static int is_valid_email(const char* s) {
   return 1;
 }
 
-/** @brief Run all validation rules and return first error, or NULL on success.
+/**
+ * @brief Run all validation rules and return the first error, or NULL on
+ *        success.
+ *
+ * Iterates through an array of validation rules, stopping at the first rule
+ * that fails. Each rule specifies the source of the value (query, form,
+ * header, cookie, or automatic fallback) and the validation flags to apply
+ * (CSILK_VALID_REQUIRED, CSILK_VALID_INT, CSILK_VALID_STRING,
+ * CSILK_VALID_EMAIL).
+ *
+ * For integer validation, an optional [min, max] range can be specified.
+ * For string validation, an optional [min, max] length range can be
+ * specified. Ranges are ignored when min >= max.
+ *
+ * @param c     The request context to extract values from.
+ * @param rules A null-terminated array of csilk_valid_rule_t rules (the
+ *              last entry must have field == NULL). Must not be NULL.
+ *
+ * @return NULL if all rules pass, or a pointer to the field name (string
+ *         from the rule definition) of the first field that fails.
+ *
+ * @note When no explicit source is specified, the function first tries the
+ *       query string, then falls back to the form body.
+ * @warning The returned error pointer points into the rules array; it must
+ *          not be freed or dereferenced after the rules array goes out of
+ *          scope.
  */
 const char* csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules) {
   if (!c || !rules) return NULL;

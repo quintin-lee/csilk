@@ -18,7 +18,14 @@ static size_t g_registry_count = 0;
 static uv_mutex_t g_registry_mutex;
 static int g_registry_mutex_init = 0;
 
-/** @brief Initialize the reflection system. */
+/** @brief Initialize the reflection system (called once at startup).
+ *
+ * Creates the global registry mutex. Idempotent — safe to call multiple times.
+ * Automatically called by csilk_server_new() and other entry points.
+ *
+ * @note The reflection registry is a global array of up to MAX_REG_STRUCTS
+ * (256) entries protected by a mutex. All public reflection functions are
+ *       thread-safe. */
 void csilk_reflect_init(void) {
   if (!g_registry_mutex_init) {
     uv_mutex_init(&g_registry_mutex);
@@ -26,7 +33,10 @@ void csilk_reflect_init(void) {
   }
 }
 
-/** @brief Lock the reflection registry mutex. */
+/** @brief Internal: acquire the global reflection registry mutex.
+ *
+ * Initializes the mutex on first call if not yet initialized.
+ * Blocks until the lock is acquired. */
 static void registry_lock(void) {
   if (!g_registry_mutex_init) {
     csilk_reflect_init();
@@ -34,10 +44,25 @@ static void registry_lock(void) {
   uv_mutex_lock(&g_registry_mutex);
 }
 
-/** @brief Unlock the reflection registry mutex. */
+/** @brief Internal: unlock the global reflection registry mutex.
+ *
+ * Must be called after registry_lock() to release the lock around the
+ * registered types table. */
 static void registry_unlock(void) { uv_mutex_unlock(&g_registry_mutex); }
 
-/** @brief Register a type with the reflection engine. */
+/** @brief Register a struct type with the reflection engine.
+ *
+ * Adds a type name and its field descriptors to the global registry. Once
+ * registered, the type can be serialized/deserialized to/from JSON via
+ * csilk_json_marshal() / csilk_json_unmarshal(). The CSILK_REGISTER_REFLECT()
+ * macro generates the field array and calls this function automatically.
+ *
+ * @param name   Type name string (e.g., "my_request_t"). Must remain valid
+ *               for the lifetime of the registration.
+ * @param fields Array of csilk_field_desc_t describing each struct field.
+ * @param count  Number of fields in the array.
+ * @note Thread-safe. If the registry is full (256 types), the registration
+ *       is silently dropped. Types registered first take precedence. */
 void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
                             size_t count) {
   registry_lock();
@@ -50,7 +75,14 @@ void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
   registry_unlock();
 }
 
-/** @brief Find a registered type descriptor by name. */
+/** @brief Look up a registered type descriptor by name.
+ *
+ * Searches the global registry for a type matching @p name.
+ *
+ * @param name Type name to find (case-sensitive).
+ * @return Pointer to the type's reflection entry, or NULL if not found.
+ * @note Thread-safe. The returned pointer is valid for the lifetime of the
+ *       registration. */
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
   if (!name) return NULL;
   registry_lock();
@@ -64,9 +96,18 @@ const csilk_reflect_entry_t* csilk_reflect_find(const char* name) {
   return NULL;
 }
 
-/** @brief Iterate all registered reflection types.
- *  Collects type names while locked, then invokes callbacks outside the lock
- *  to avoid deadlocks when callbacks call back into reflection APIs. */
+/** @brief Iterate over all registered reflection types and invoke a callback
+ * for each.
+ *
+ * Collects type names into a temporary array while holding the registry lock,
+ * then releases the lock and invokes the callback for each name. This two-phase
+ * approach avoids deadlocks when the callback itself calls back into reflection
+ * APIs (e.g., csilk_reflect_find()).
+ *
+ * @param cb        Callback invoked once per registered type.
+ * @param user_data Opaque pointer passed through to the callback.
+ * @note Thread-safe. The callback receives a const pointer to the entry, but
+ *       this pointer should not be stored beyond the callback invocation. */
 void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data) {
   if (!cb) return;
   const char* names[MAX_REG_STRUCTS];
@@ -92,15 +133,17 @@ static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count);
 
-/** @brief Serialize a single field value to a cJSON node.
+/** @brief Internal: serialize a single struct field value to a cJSON node.
  *
  * Maps C primitive types and nested structs to cJSON values based on the
  * field descriptor. Supports int8/16/32/64, uint8/16/32/64, float, double,
- * bool, string, and nested struct types.
+ * bool, string (fixed-size buffer or pointer), and nested struct types.
+ * For nested structs, recursively calls struct_to_cjson_internal().
  *
- * @param addr Field address in the source struct.
- * @param desc Field descriptor with type and metadata.
- * @return cJSON node, or NULL on failure. */
+ * @param addr Memory address of the field within the source struct.
+ * @param desc Field descriptor specifying type, offset, and metadata.
+ * @return cJSON node (owned by caller), or cJSON_CreateNull() on failure.
+ * @note The caller must free the returned cJSON node with cJSON_Delete(). */
 static cJSON* serialize_scalar(const void* addr,
                                const csilk_field_desc_t* desc) {
   switch (desc->type) {
@@ -149,11 +192,18 @@ static cJSON* serialize_scalar(const void* addr,
   return cJSON_CreateNull();
 }
 
-/** @brief Walk struct fields and build cJSON object recursively.
- * @param obj Target cJSON object.
- * @param struct_ptr Source struct.
- * @param descs Field descriptors.
- * @param field_count Number of fields. */
+/** @brief Internal: walk all fields of a struct and build a cJSON object.
+ *
+ * Iterates over the field descriptors, computes each field's address by
+ * adding the offset to the struct pointer, and serializes each field to
+ * a cJSON node added to the object. Array fields are serialized as cJSON
+ * arrays (one element per array slot). Non-array fields use the field's
+ * json_key as the object key.
+ *
+ * @param obj         Target cJSON object to populate.
+ * @param struct_ptr  Pointer to the source struct (must not be NULL).
+ * @param descs       Array of field descriptors.
+ * @param field_count Number of field descriptors. */
 static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count) {
@@ -181,10 +231,19 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count);
 
-/** @brief Deserialize a cJSON value into a struct field.
- * @param item Source cJSON.
- * @param addr Field address.
- * @param desc Field descriptor. */
+/** @brief Internal: deserialize a cJSON value into a single struct field.
+ *
+ * Maps cJSON types back to C primitives based on the field descriptor.
+ * For CSILK_TYPE_STRING, handles both fixed-size buffers (strncpy) and
+ * pointer fields (malloc + copy). For CSILK_TYPE_STRUCT, recursively
+ * calls cjson_to_struct_internal(). Null JSON values or missing items
+ * cause the field to be skipped (left at its current value).
+ *
+ * @param item Source cJSON node (may be NULL or Null).
+ * @param addr Memory address of the target field.
+ * @param desc Field descriptor with type, size, and pointer flag.
+ * @note For pointer string fields, any existing allocation is freed before
+ *       the new value is assigned. */
 static void deserialize_scalar(const cJSON* item, void* addr,
                                const csilk_field_desc_t* desc) {
   if (!item || cJSON_IsNull(item)) return;
@@ -258,11 +317,17 @@ static void deserialize_scalar(const cJSON* item, void* addr,
   }
 }
 
-/** @brief Walk cJSON object and populate struct fields recursively.
- * @param obj Source cJSON.
- * @param struct_ptr Target struct.
- * @param descs Field descriptors.
- * @param field_count Number of fields. */
+/** @brief Internal: walk a cJSON object and populate a struct's fields.
+ *
+ * For each field descriptor, looks up the matching JSON key in the cJSON
+ * object (case-sensitive using cJSON_GetObjectItemCaseSensitive).
+ * Array fields limit iteration to min(json_array_size, array_length).
+ * Non-matching keys are silently ignored.
+ *
+ * @param obj         Source cJSON object.
+ * @param struct_ptr  Pointer to the target struct.
+ * @param descs       Array of field descriptors.
+ * @param field_count Number of field descriptors. */
 static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count) {
@@ -288,7 +353,7 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
   }
 }
 
-/** @brief Serialize a registered struct to a JSON string. */
+/** @brief Serialize a registered struct to a compact JSON string. */
 char* csilk_json_marshal(const char* type_name, const void* ptr) {
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
   if (!entry) return NULL;
@@ -302,7 +367,7 @@ char* csilk_json_marshal(const char* type_name, const void* ptr) {
   return out;
 }
 
-/** @brief Deserialize a JSON string into a registered struct. */
+/** @brief Deserialize a JSON string into a registered struct instance. */
 int csilk_json_unmarshal(const char* type_name, const char* json_str,
                          void* ptr) {
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);

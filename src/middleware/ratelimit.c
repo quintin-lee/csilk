@@ -14,14 +14,36 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Maximum number of IP addresses to track. */
+/**
+ * @brief Maximum number of distinct IP addresses tracked concurrently.
+ *
+ * When the table is full, the least recently seen entry is evicted to make
+ * room for new clients.
+ */
 #define MAX_IP_ENTRIES 1024
-/** @brief Rate limiting window size in seconds. */
+/**
+ * @brief Rate limiting sliding window size in seconds.
+ *
+ * The request counter for each IP is reset if the last reset timestamp is
+ * older than this many seconds.
+ */
 #define WINDOW_SIZE 60
-/** @brief How often (in seconds) to evict stale entries. */
+/**
+ * @brief Interval (in seconds) at which stale entries are garbage-collected.
+ *
+ * A periodic eviction pass removes entries whose last_seen timestamp is
+ * older than WINDOW_SIZE seconds, preventing the table from filling with
+ * dead entries.
+ */
 #define EVICT_INTERVAL 300
 
-/** @brief Rate-limit tracking entry for a single IP address. */
+/**
+ * @brief Rate-limit tracking entry for a single IP address.
+ *
+ * Each entry stores the IP string, the request count within the current
+ * window, the timestamp when the counting window started, and the timestamp
+ * of the most recent request (used for LRU eviction when the table is full).
+ */
 typedef struct {
   char ip[46];       /**< Client IP address string. */
   int count;         /**< Request count in current window. */
@@ -35,10 +57,22 @@ static time_t last_evict = 0;
 static uv_mutex_t ratelimit_mutex;
 static uv_once_t ratelimit_once = UV_ONCE_INIT;
 
-/** @brief Initialize the rate-limiting mutex (called once via uv_once). */
+/**
+ * @brief Initialize the rate-limiting mutex (called once via uv_once).
+ *
+ * Creates the libuv mutex that protects the shared ip_table and ip_count
+ * from concurrent access across worker threads.
+ */
 static void init_ratelimit_mutex() { uv_mutex_init(&ratelimit_mutex); }
 
-/** @brief Evict stale entries (entries older than WINDOW_SIZE since last_seen).
+/**
+ * @brief Compact the IP table by removing entries whose last_seen timestamp
+ *        is older than WINDOW_SIZE seconds.
+ *
+ * Iterates over the table and compacts it in-place, updating ip_count to
+ * reflect the number of remaining active entries.
+ *
+ * @param now  The current time to compare against last_seen.
  */
 static void evict_stale_entries(time_t now) {
   int write_idx = 0;
@@ -53,7 +87,13 @@ static void evict_stale_entries(time_t now) {
   ip_count = write_idx;
 }
 
-/** @brief Evict the single oldest entry (LRU). */
+/**
+ * @brief Evict the single oldest entry from the IP table (LRU policy).
+ *
+ * Scans the ip_table for the entry with the smallest last_seen value and
+ * replaces it with the last entry in the table, decrementing ip_count.
+ * Called when the table is full and a new IP needs to be tracked.
+ */
 static void evict_oldest_entry(void) {
   if (ip_count <= 0) return;
   int oldest = 0;
@@ -66,7 +106,29 @@ static void evict_oldest_entry(void) {
   ip_count--;
 }
 
-/** @brief IP-based rate limiting middleware with sliding window. */
+/**
+ * @brief IP-based rate limiting middleware with sliding window.
+ *
+ * Tracks request counts per client IP address within a configurable window.
+ * If the number of requests from a given IP exceeds the limit, a 429 Too
+ * Many Requests response is sent (with a Retry-After header) and the
+ * pipeline is aborted.
+ *
+ * The IP table is protected by a libuv mutex for thread safety. Stale
+ * entries are periodically evicted to prevent unbounded memory growth.
+ *
+ * @param c     The request context.
+ * @param limit Maximum number of requests allowed per IP within the
+ *              WINDOW_SIZE (60-second) sliding window.
+ *
+ * @note The mutex is initialized once via uv_once on the first call.
+ * @warning Rate limiting is per-worker-process. In multi-process
+ *          deployments, each process maintains its own independent table
+ *          unless an external store (Redis, etc.) is used instead.
+ * @warning If csilk_get_client_ip() returns NULL (e.g. in tests or certain
+ *          proxy setups), the request is passed through without rate
+ *          limiting.
+ */
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
   uv_once(&ratelimit_once, init_ratelimit_mutex);
 

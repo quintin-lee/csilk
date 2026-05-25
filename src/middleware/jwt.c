@@ -13,9 +13,35 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Header for HS256 JWT. */
+/**
+ * @brief JSON-encoded JWT header used for all tokens.
+ *
+ * The header is fixed to {"alg":"HS256","typ":"JWT"} (HS256 = HMAC-SHA256).
+ * This string is base64url-encoded during token generation.
+ */
 static const char* JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
 
+/**
+ * @brief Generate a signed HS256 JWT token.
+ *
+ * Constructs a JWT with the fixed header `{"alg":"HS256","typ":"JWT"}` and
+ * the caller-supplied cJSON payload. The token is signed using HMAC-SHA256
+ * with the provided secret. Every component (header, payload, signature) is
+ * base64url-encoded per RFC 4648 §5.
+ *
+ * @param c       The request context (used for HMAC operations).
+ * @param payload A cJSON object containing the claims. Must not be NULL.
+ * @param secret  The HMAC-SHA256 signing secret. Must not be NULL.
+ *
+ * @return A newly allocated, null-terminated JWT string in the format
+ *         `header.payload.signature`, or NULL on allocation failure or
+ *         invalid arguments.
+ *
+ * @note The caller is responsible for freeing the returned string with
+ *       free().
+ * @warning The payload is NOT deep-copied during generation. The caller
+ *          retains ownership and should free it after this function returns.
+ */
 char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret) {
   if (!payload || !secret) return NULL;
 
@@ -78,6 +104,29 @@ char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret) {
   return token;
 }
 
+/**
+ * @brief Verify an HS256 JWT token and return its payload.
+ *
+ * Splits the token into its three dot-separated components (header, payload,
+ * signature), recomputes the HMAC-SHA256 signature over the signing input,
+ * and compares it against the provided signature (constant-time not guaranteed
+ * — uses strcmp). On success, the payload is base64url-decoded and parsed
+ * into a cJSON object.
+ *
+ * @param c      The request context (used for HMAC operations).
+ * @param token  The JWT string in the format `header.payload.signature`.
+ * @param secret The HMAC-SHA256 verification secret.
+ *
+ * @return A newly allocated cJSON object representing the payload claims,
+ *         or NULL if the token is malformed, the signature is invalid, or
+ *         memory allocation fails.
+ *
+ * @note The caller owns the returned cJSON object and must free it with
+ *       cJSON_Delete() when no longer needed.
+ * @warning Signature comparison uses strcmp, which is NOT constant-time.
+ *          This may be vulnerable to timing attacks in high-security
+ *          environments.
+ */
 cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret) {
   if (!token || !secret) return NULL;
 
@@ -129,6 +178,25 @@ cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret) {
   return payload;
 }
 
+/**
+ * @brief JWT authentication middleware.
+ *
+ * Extracts the Bearer token from the Authorization header, verifies it via
+ * csilk_jwt_verify(), and checks the "exp" claim if present. On success the
+ * decoded payload is stored in the context under the key "jwt_payload" and
+ * the next handler is called. On failure (missing header, invalid token, or
+ * expired), a 401 Unauthorized response is sent.
+ *
+ * @param c      The request context.
+ * @param secret The HMAC-SHA256 verification secret.
+ *
+ * @note The jwt_payload is stored with csilk_set() and is NOT automatically
+ *       freed by the context cleanup. Downstream handlers should retrieve
+ *       it with csilk_get() and call cJSON_Delete() when done, or register
+ *       a cleanup callback.
+ * @warning This middleware must be registered before any handler that
+ *          accesses the jwt_payload via csilk_get(c, "jwt_payload").
+ */
 void csilk_jwt_middleware(csilk_ctx_t* c, const char* secret) {
   if (!c || !secret) return;
 

@@ -19,8 +19,16 @@
 #include "csilk.h"
 #include "csilk_reflect.h"
 
-/** @brief Convert a csilk path pattern (:param, *wildcard)
- *  to OpenAPI format ({param}, {wildcard+}). */
+/** @brief Convert a csilk path pattern to OpenAPI 3.0 path format.
+ *
+ * Transforms ":param" segments to "{param}" and "*wildcard" segments to
+ * "{wildcard+}" as required by the OpenAPI 3.0 specification.
+ *
+ * @param path     Input path pattern (e.g., "/users/:id/posts/star-path").
+ * @param out      Output buffer for the OpenAPI-formatted path.
+ * @param out_size Size of the output buffer (including null terminator).
+ * @note The output is truncated to fit out_size if the converted path is
+ *       too long. The caller should ensure out_size is large enough. */
 static void path_to_openapi(const char* path, char* out, size_t out_size) {
   if (!path || !out || out_size == 0) return;
   const char* src = path;
@@ -61,7 +69,15 @@ static void path_to_openapi(const char* path, char* out, size_t out_size) {
   *dst = '\0';
 }
 
-/** @brief Convert a reflection field type to OpenAPI schema type string. */
+/** @brief Map a csilk reflection field type to an OpenAPI 3.0 schema type
+ * string.
+ *
+ * Integer types map to "integer", float/double to "number", bool to "boolean",
+ * string to "string", and struct to "object". Any unrecognized type defaults
+ * to "string".
+ *
+ * @param type The csilk_field_type_t enum value.
+ * @return A static string literal suitable for OpenAPI's "type" field. */
 static const char* field_type_to_openapi_type(csilk_field_type_t type) {
   switch (type) {
     case CSILK_TYPE_INT8:
@@ -87,7 +103,19 @@ static const char* field_type_to_openapi_type(csilk_field_type_t type) {
   }
 }
 
-/** @brief Generate an OpenAPI schema for a registered struct type. */
+/** @brief Generate an OpenAPI 3.0 schema object for a registered reflection
+ * type.
+ *
+ * Iterates the type's field descriptors and produces a schema with
+ * "type": "object" and a "properties" map. Each field is mapped to its
+ * OpenAPI type, with nested structs rendered as $ref pointers to
+ * #/components/schemas/<type_name>. Array fields use an "array" type
+ * wrapper with "items".
+ *
+ * @param type_name Registered reflection type name.
+ * @return A cJSON object representing the OpenAPI schema, or NULL if the
+ *         type is not registered or allocation fails.
+ * @note The caller must free the returned cJSON with cJSON_Delete(). */
 static cJSON* generate_schema_for_type(const char* type_name) {
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
   if (!entry) return NULL;
@@ -130,8 +158,15 @@ static cJSON* generate_schema_for_type(const char* type_name) {
   return schema;
 }
 
-/** @brief Add a schema definition to the components/schemas section.
- *  Tracks which schemas have already been added to avoid duplicates. */
+/** @brief Internal: add a schema definition to the components/schemas map.
+ *
+ * If the schema for @p type_name already exists in @p schemas, this is a
+ * no-op (prevents infinite recursion on circular type references). Otherwise
+ * generates the schema, adds it, and recursively registers schemas for any
+ * nested struct fields.
+ *
+ * @param schemas   The "schemas" cJSON object under components.
+ * @param type_name Type name to generate and add. */
 static void add_schema(cJSON* schemas, const char* type_name) {
   if (!schemas || !type_name || *type_name == '\0') return;
 
@@ -155,7 +190,16 @@ static void add_schema(cJSON* schemas, const char* type_name) {
   }
 }
 
-/** @brief Callback for csilk_reflect_foreach: auto-register a schema. */
+/** @brief Internal: callback for csilk_reflect_foreach() to auto-register a
+ * schema.
+ *
+ * Calls add_schema() for every type found during iteration. Used to ensure
+ * all registered types appear in components/schemas even if not explicitly
+ * linked to any route.
+ *
+ * @param name      Type name.
+ * @param entry     Reflection entry (unused).
+ * @param user_data Pointer to the schemas cJSON object. */
 static void auto_register_schema(const char* name,
                                  const csilk_reflect_entry_t* entry,
                                  void* user_data) {
@@ -163,9 +207,28 @@ static void auto_register_schema(const char* name,
   add_schema((cJSON*)user_data, name);
 }
 
-/** @brief Generate OpenAPI 3.0 specification JSON from the router.
- *  Traverses all registered routes and uses the reflection system
- *  to generate schemas for request/response types. */
+/** @brief Generate a complete OpenAPI 3.0 specification document from the
+ * router and reflection registry.
+ *
+ * Builds the full OpenAPI JSON structure including:
+ * - openapi version field ("3.0.3")
+ * - info section (title, version, description)
+ * - paths section (one entry per route, with parameters, requestBody, and
+ * responses)
+ * - components/schemas section (auto-generated from all registered reflection
+ * types)
+ *
+ * Path parameters are extracted from the route patterns and converted to
+ * OpenAPI format. Request/response schemas are generated from input_type
+ * and output_type metadata using the reflection engine.
+ *
+ * @param router      The router instance containing registered routes.
+ * @param title       API title for the info section (pass NULL for default).
+ * @param version     API version string (pass NULL for default "1.0.0").
+ * @param description API description (may be NULL).
+ * @return A cJSON object representing the full OpenAPI document. Caller must
+ *         free with cJSON_Delete(). Returns NULL if router is NULL or
+ *         allocation fails. */
 cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
                                    const char* version,
                                    const char* description) {
@@ -403,9 +466,18 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
   return doc;
 }
 
-/** @brief Serve the OpenAPI JSON spec as a response in a handler.
- *  Call this from within a handler function to serve the generated
- *  OpenAPI 3.0 specification as a JSON response. */
+/** @brief Serve the generated OpenAPI 3.0 spec as a JSON response.
+ *
+ * Intended to be called from within a route handler. Generates the OpenAPI
+ * document via csilk_generate_openapi_json() and sends it as a JSON response.
+ *
+ * @param c           The request context.
+ * @param r           The router instance.
+ * @param title       API title.
+ * @param version     API version.
+ * @param description API description.
+ * @note The response is sent synchronously via csilk_json(). On failure, a
+ *       500 error response is sent. */
 void csilk_serve_openapi(csilk_ctx_t* c, csilk_router_t* r, const char* title,
                          const char* version, const char* description) {
   if (!c || !r) return;

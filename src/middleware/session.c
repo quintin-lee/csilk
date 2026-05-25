@@ -1,6 +1,7 @@
 /**
  * @file session.c
- * @brief Cookie-based session management middleware with thread-safe protection.
+ * @brief Cookie-based session management middleware with thread-safe
+ * protection.
  * @copyright MIT License
  */
 #include <stdlib.h>
@@ -13,14 +14,25 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Session data item (key-value pair). */
+/**
+ * @brief Session data item (key-value pair).
+ *
+ * Each session contains a singly-linked list of these items, each holding
+ * a string key and an opaque void* value.
+ */
 typedef struct csilk_session_data_s {
   char* key;
   void* value;
   struct csilk_session_data_s* next;
 } csilk_session_data_t;
 
-/** @brief Session structure. */
+/**
+ * @brief Session structure.
+ *
+ * Represents an individual session with a UUID-based ID, an expiry timestamp,
+ * a linked list of key-value data items, and a pointer to the next session
+ * in the global store (singly-linked list).
+ */
 typedef struct csilk_session_s {
   char id[37];
   csilk_session_data_t* data;
@@ -28,25 +40,49 @@ typedef struct csilk_session_s {
   struct csilk_session_s* next;
 } csilk_session_t;
 
-/** @brief Global session store. */
+/**
+ * @brief Global session store (singly-linked list of active sessions).
+ *
+ * Protected by a libuv mutex. All read/write access to this pointer must
+ * occur while session_mutex is held.
+ */
 static csilk_session_t* session_store = NULL;
 
-/** @brief Session store mutex. */
+/**
+ * @brief Session store mutex — guards session_store and all linked-list
+ *        operations against concurrent access.
+ */
 static uv_mutex_t session_mutex;
 
-/** @brief Mutex initialization guard. */
+/**
+ * @brief One-time initialization guard for session_mutex.
+ *
+ * Ensures uv_mutex_init is called exactly once across all threads,
+ * regardless of which thread triggers the first session operation.
+ */
 static uv_once_t session_mutex_once = UV_ONCE_INIT;
 
-/** @brief Initialize the session store mutex. */
+/**
+ * @brief Initialize the session store mutex (called once via uv_once).
+ */
 static void init_session_mutex(void) { uv_mutex_init(&session_mutex); }
 
-/** @brief Lock the session store. */
+/**
+ * @brief Lock the session store mutex.
+ *
+ * Ensures the mutex is initialized (via uv_once) before acquiring the lock.
+ * Blocks until the lock is held.
+ */
 static void session_lock(void) {
   uv_once(&session_mutex_once, init_session_mutex);
   uv_mutex_lock(&session_mutex);
 }
 
-/** @brief Unlock the session store. */
+/**
+ * @brief Unlock the session store mutex.
+ *
+ * Releases the lock previously acquired by session_lock().
+ */
 static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
 
 /** @brief Session cookie name. */
@@ -55,12 +91,32 @@ static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
 /** @brief Default session TTL (seconds). */
 #define SESSION_TTL 3600
 
-/** @brief Generate a cryptographically random session ID. */
+/**
+ * @brief Generate a cryptographically random session ID.
+ *
+ * Delegates to _csilk_generate_uuid() to produce a UUID v4 string and
+ * writes it into the provided 37-character buffer.
+ *
+ * @param c   The request context.
+ * @param id  Output buffer of at least 37 bytes to receive the
+ *            null-terminated UUID string.
+ */
 static void generate_session_id(csilk_ctx_t* c, char id[37]) {
   _csilk_generate_uuid(c, id);
 }
 
-/** @brief Find a session by ID in the global store. */
+/**
+ * @brief Find a session by ID in the global store.
+ *
+ * Performs a linear search of the singly-linked session list.
+ *
+ * @param id  The session ID string to search for.
+ *
+ * @return Pointer to the csilk_session_t if found, NULL otherwise.
+ *
+ * @note This function does NOT acquire the mutex. The caller must hold
+ *       session_mutex when calling this function.
+ */
 static csilk_session_t* find_session(const char* id) {
   csilk_session_t* s = session_store;
   while (s) {
@@ -70,7 +126,16 @@ static csilk_session_t* find_session(const char* id) {
   return NULL;
 }
 
-/** @brief Find a session by ID (with lock held). */
+/**
+ * @brief Find a session by ID (acquires and releases the mutex).
+ *
+ * Convenience wrapper around find_session() that handles locking for
+ * single-lookup callers.
+ *
+ * @param id  The session ID string to search for.
+ *
+ * @return Pointer to the csilk_session_t if found, NULL otherwise.
+ */
 static csilk_session_t* find_session_locked(const char* id) {
   session_lock();
   csilk_session_t* s = find_session(id);
@@ -78,7 +143,13 @@ static csilk_session_t* find_session_locked(const char* id) {
   return s;
 }
 
-/** @brief Add a session to the store (with lock held). */
+/**
+ * @brief Add a session to the store (acquires and releases the mutex).
+ *
+ * Prepends the session to the global singly-linked list of active sessions.
+ *
+ * @param session  The session to add. Must not be NULL.
+ */
 static void add_session_locked(csilk_session_t* session) {
   session_lock();
   session->next = session_store;
@@ -86,7 +157,16 @@ static void add_session_locked(csilk_session_t* session) {
   session_unlock();
 }
 
-/** @brief Remove a session from the store (with lock held). */
+/**
+ * @brief Remove a session from the store (acquires and releases the mutex).
+ *
+ * Unlinks the session from the global singly-linked list of active sessions.
+ * Does NOT free the session or its data — the caller must do that after
+ * removal.
+ *
+ * @param session  The session to remove. Must be a valid pointer currently
+ *                 in the store.
+ */
 static void remove_session_locked(csilk_session_t* session) {
   session_lock();
   csilk_session_t** prev = &session_store;
@@ -102,7 +182,15 @@ static void remove_session_locked(csilk_session_t* session) {
   session_unlock();
 }
 
-/** @brief Remove expired sessions from the global store. */
+/**
+ * @brief Remove expired sessions from the global store.
+ *
+ * Iterates over the session list and removes (frees) every session whose
+ * expires_at timestamp is <= the current time. Also frees all key-value
+ * data items belonging to each expired session.
+ *
+ * @note Acquires and releases session_mutex during the sweep.
+ */
 static void cleanup_expired(void) {
   time_t now = time(NULL);
   session_lock();
@@ -128,10 +216,31 @@ static void cleanup_expired(void) {
   session_unlock();
 }
 
-/** @brief Initialize the session system. */
+/**
+ * @brief Initialize the session system.
+ *
+ * Performs an immediate cleanup of any expired sessions from the store.
+ * This should be called once during server startup.
+ */
 void csilk_session_init(void) { cleanup_expired(); }
 
-/** @brief Start or resume a session for the current request. */
+/**
+ * @brief Start or resume a session for the current request.
+ *
+ * Looks for an existing session cookie named "csilk_session". If a valid
+ * session is found, its expiry is extended by SESSION_TTL seconds. If not,
+ * a new session is created with a fresh UUID, stored in the global list,
+ * and a session cookie is set on the response. The session pointer is stored
+ * in the context under the key "_session".
+ *
+ * @param c  The request context.
+ *
+ * @note Must be called after csilk_request_id_middleware (or equivalent)
+ *       so that _csilk_generate_uuid is available.
+ * @warning The session's data items are NOT automatically serialized to
+ *          persistent storage. All sessions are in-memory and are lost on
+ *          process restart.
+ */
 void csilk_session_start(csilk_ctx_t* c) {
   if (!c) return;
 
@@ -160,7 +269,23 @@ void csilk_session_start(csilk_ctx_t* c) {
   csilk_set(c, "_session", session);
 }
 
-/** @brief Store a value in the session. */
+/**
+ * @brief Store a value in the session.
+ *
+ * If the key already exists in the current session, its value is replaced.
+ * Otherwise, a new key-value pair is prepended to the session's data list.
+ *
+ * @param c     The request context (used to look up the session via
+ *              csilk_get(c, "_session")).
+ * @param key   Null-terminated key string. Must not be NULL.
+ * @param value Opaque pointer to the value to store. May be NULL.
+ *
+ * @note The key is duplicated via strdup(). The value pointer is stored
+ *       as-is — the caller is responsible for managing its lifetime.
+ * @warning This function does NOT acquire the session mutex. It operates
+ *          on the session pointer stored in the per-request context, which
+ *          is already exclusively owned by the current request handler.
+ */
 void csilk_session_set(csilk_ctx_t* c, const char* key, void* value) {
   if (!c || !key) return;
 
@@ -185,7 +310,18 @@ void csilk_session_set(csilk_ctx_t* c, const char* key, void* value) {
   session->data = new_d;
 }
 
-/** @brief Retrieve a value from the session. */
+/**
+ * @brief Retrieve a value from the session.
+ *
+ * Searches the current session's data list for the given key and returns
+ * its associated value.
+ *
+ * @param c   The request context (used to look up the session).
+ * @param key Null-terminated key string. Must not be NULL.
+ *
+ * @return The value pointer previously stored with csilk_session_set(), or
+ *         NULL if the key is not found or no session is active.
+ */
 void* csilk_session_get(csilk_ctx_t* c, const char* key) {
   if (!c || !key) return NULL;
 
@@ -200,7 +336,16 @@ void* csilk_session_get(csilk_ctx_t* c, const char* key) {
   return NULL;
 }
 
-/** @brief Destroy the current session. */
+/**
+ * @brief Destroy the current session.
+ *
+ * Removes the session from the global store, frees all its key-value data
+ * items and the session struct itself, clears the "_session" context entry,
+ * and sets an empty session cookie with a negative max-age to instruct the
+ * client to delete it.
+ *
+ * @param c  The request context.
+ */
 void csilk_session_destroy(csilk_ctx_t* c) {
   if (!c) return;
 

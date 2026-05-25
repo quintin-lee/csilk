@@ -11,9 +11,15 @@
 
 #include "csilk.h"
 
-/** @brief Convert a string to a log level enum value.
- * @param s Log level string (case-insensitive).
- * @return Corresponding csilk_log_level_t value, defaults to CSILK_LOG_INFO. */
+/** @brief Convert a case-insensitive log level string to its enum value.
+ *
+ * Matches the input string against known level names ("TRACE", "DEBUG",
+ * "INFO", "WARN", "ERROR", "FATAL"). Comparison is case-insensitive.
+ *
+ * @param s Log level string (e.g., "DEBUG", "debug", "Debug").
+ * @return Corresponding csilk_log_level_t value.
+ * @note Returns CSILK_LOG_INFO for unrecognized strings — no error is raised.
+ */
 static csilk_log_level_t string_to_log_level(const char* s) {
   if (strcasecmp(s, "TRACE") == 0) return CSILK_LOG_TRACE;
   if (strcasecmp(s, "DEBUG") == 0) return CSILK_LOG_DEBUG;
@@ -24,7 +30,21 @@ static csilk_log_level_t string_to_log_level(const char* s) {
   return CSILK_LOG_INFO;
 }
 
-/** @brief Load and parse configuration from a YAML file. */
+/** @brief Load and parse server configuration from a YAML file.
+ *
+ * Opens the specified YAML file, parses its contents, and populates the
+ * provided csilk_config_t structure. The parser recognizes top-level keys
+ * ("port") and section keys ("server", "logger", "cors", "rate_limit",
+ * "static_files", "middleware"). All fields not present in the YAML retain
+ * their default values (initialized at the start of this function).
+ *
+ * @param yaml_path Absolute or relative path to the YAML configuration file.
+ * @param config    [out] Pre-allocated config structure to populate.
+ * @return 0 on success, -1 on I/O error, parse error, or NULL input.
+ * @note Dynamically allocated strings (file_path, allow_origin, etc.) are
+ *       strdup'd and must be freed later with csilk_config_free().
+ * @note The config structure is memset to zero first, then defaults are set.
+ *       Callers that have already populated fields will lose them. */
 int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
   if (!yaml_path || !config) return -1;
 
@@ -196,7 +216,15 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
   return error ? -1 : 0;
 }
 
-/** @brief Free all dynamically allocated strings in the configuration. */
+/** @brief Free all dynamically allocated strings within a configuration.
+ *
+ * Releases memory for logger.file_path, cors allow_origin/methods/headers,
+ * static_files root_dir/prefix, and middleware.auth_token. Each pointer is
+ * set to NULL after being freed, making repeated calls safe.
+ *
+ * @param config Configuration structure whose strings will be freed.
+ * @note Does NOT free the config struct itself — only its internal heap
+ *       allocations. Safe to call with NULL. */
 void csilk_config_free(csilk_config_t* config) {
   if (!config) return;
 
@@ -233,7 +261,19 @@ void csilk_config_free(csilk_config_t* config) {
   }
 }
 
-/** @brief Validate configuration values for semantic correctness. */
+/** @brief Validate configuration values for semantic correctness.
+ *
+ * Checks that port is in range [1, 65535], timeouts are non-negative,
+ * max_body_size and max_header_size are positive, listen_backlog and
+ * worker_threads are >= 1, and that optional features (rate_limit,
+ * static_files, auth middleware) have their required sub-fields set when
+ * enabled. Returns the first validation error found.
+ *
+ * @param config    Configuration to validate.
+ * @param error_msg [out] Optional pointer to receive a human-readable error
+ *                  string. The error string is a static literal; do not free
+ * it.
+ * @return 0 if valid, -1 if validation fails (error_msg is set on failure). */
 int csilk_config_validate(const csilk_config_t* config,
                           const char** error_msg) {
   if (!config) {
