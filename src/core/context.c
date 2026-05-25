@@ -17,7 +17,10 @@
 #include "csilk_internal.h"
 
 /** @brief Hash a header key string into a bucket index.
- * Uses djb2 hash with case-insensitive folding.
+ *
+ * Uses the djb2 hash algorithm with case-insensitive character folding.
+ * This ensures that "Content-Type" and "content-type" hash to the same bucket.
+ *
  * @param key Header key string.
  * @return Bucket index (0..CSILK_HEADER_BUCKETS-1). */
 static uint32_t hash_key(const char* key) {
@@ -167,7 +170,13 @@ void csilk_set_header(csilk_ctx_t* c, const char* key, const char* value) {
 }
 
 /** @brief Clean up request context resources between requests.
- *  Resets arena, frees params/body/path, clears headers and storage. */
+ *
+ * Resets the arena allocator for reuse, frees URL path parameters, request
+ * body, and path strings. Clears all header maps (request, response, query,
+ * form). Cleans up storage items and resets all state flags for the next
+ * request. Called after each HTTP request is fully processed.
+ *
+ * @param c The request context. */
 void csilk_ctx_cleanup(csilk_ctx_t* c) {
   if (!c) return;
 

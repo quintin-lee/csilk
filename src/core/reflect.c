@@ -93,8 +93,13 @@ static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                      size_t field_count);
 
 /** @brief Serialize a single field value to a cJSON node.
- * @param addr Field address.
- * @param desc Field descriptor.
+ *
+ * Maps C primitive types and nested structs to cJSON values based on the
+ * field descriptor. Supports int8/16/32/64, uint8/16/32/64, float, double,
+ * bool, string, and nested struct types.
+ *
+ * @param addr Field address in the source struct.
+ * @param desc Field descriptor with type and metadata.
  * @return cJSON node, or NULL on failure. */
 static cJSON* serialize_scalar(const void* addr,
                                const csilk_field_desc_t* desc) {
