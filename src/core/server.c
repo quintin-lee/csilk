@@ -1085,9 +1085,7 @@ void csilk_server_set_not_found_handler(csilk_server_t* server,
 }
 
 /** @brief Enable SPA fallback: unmatched GET requests serve index.html.
- * Overrides any custom 404 handler.
- * @param server Server instance.
- * @param doc_root Directory containing index.html. */
+ * Overrides any custom 404 handler. */
 void csilk_server_set_spa_fallback(csilk_server_t* server,
                                    const char* doc_root) {
   if (!server || !doc_root) return;

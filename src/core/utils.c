@@ -358,8 +358,7 @@ int csilk_base64url_decode(const char* src, uint8_t* out) {
   return decoded_len;
 }
 
-/** @brief Generate a random UUID v4 string (8-4-4-4-12).
- * @param buf Output buffer (at least 37 bytes). */
+/** @brief Generate a random UUID v4 string (8-4-4-4-12). */
 void csilk_generate_uuid(char* buf) {
   uint8_t random[16];
   FILE* f = fopen("/dev/urandom", "rb");

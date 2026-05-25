@@ -417,3 +417,19 @@ http_request_duration_seconds_count 1243
 ```
 
 By integrating `csilk_metrics_middleware` at the start of the middleware chain, every request is automatically timed and recorded.
+
+## 9. Performance Features
+
+### 9.1 Zero-copy Static File Serving
+
+For static files, Csilk implements a zero-copy mechanism using the `sendfile` system call (abstracted via `uv_fs_sendfile`).
+
+- **Mechanism**: When a static file is requested, the server opens the file and stores the file descriptor in the context. Instead of reading the file into a buffer and writing it to the socket, the server calls `uv_fs_sendfile`, which directs the kernel to transfer data directly from the file system cache to the network socket.
+- **Benefits**: Reduces CPU usage and memory bandwidth by eliminating data copying between kernel space and user space.
+
+### 9.2 Request Tracing (Request ID)
+
+The `csilk_request_id_middleware` ensures every request is assigned a unique UUID v4.
+
+- **Propagation**: The ID is injected into the "X-Request-Id" response header and the thread-local logger state.
+- **Correlation**: This allows all log entries generated during the processing of a single request to be correlated, even in a highly concurrent environment.

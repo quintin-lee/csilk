@@ -72,7 +72,7 @@
 - [x] 10.1 HTTPS/TLS 深度集成 — 支持证书配置与加密传输
 - [x] 10.2 Prometheus 可观测性 — 提供标准 /metrics 端点与指标统计
 - [ ] 10.3 自动化性能基准集 — wrk/hey 集成与跨框架对比报告
-- [ ] 10.4 零拷贝优化 — 实现 sendfile 静态文件加速
+- [x] 10.4 零拷贝优化 — 实现 sendfile 静态文件加速
 - [ ] 10.5 HTTP/2 预研 — 评估多路复用集成成本
 
 ---
@@ -306,6 +306,7 @@
 - **动作**: 深度集成 OpenSSL，实现 native HTTPS/TLS 支持。
 - **动作**: 实现 Prometheus Metrics 中间件与 `/metrics` 端点。
 - **动作**: 引入异步、线程安全的 Message Queue (MQ) 模块。
+- **动作**: 实现基于 `sendfile` 的零拷贝静态文件传输优化。
 - **动作**: 完成全量 Doxygen 注释加固与 ARCH.md/README.md 文档更新。
 
 ---

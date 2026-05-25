@@ -134,9 +134,7 @@ static void node_collect_routes(csilk_router_node_t* node, cJSON* routes) {
 }
 
 /** @brief Collect all registered routes from the router tree.
- * @param r Router instance.
- * @return A cJSON array of route objects, each with method, path, input_type,
- * output_type, etc. Caller must free with cJSON_Delete(). */
+ * @return A cJSON array of route objects. Caller must free with cJSON_Delete(). */
 cJSON* csilk_router_collect_routes(csilk_router_t* r) {
   if (!r || !r->root) return NULL;
   cJSON* array = cJSON_CreateArray();
@@ -145,18 +143,7 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r) {
   return array;
 }
 
-/** @brief Register a route with method, path pattern, and handler chain.
- *  @param r Router instance.
- *  @param method HTTP method string.
- *  @param path URL pattern (supports :param and *wildcard).
- *  @param handlers Array of handler functions.
- *  @param handler_count Number of handlers in the array.
- *  @param path_pattern The actual path pattern string (for metadata).
- *  @param input_type Registered type name for request body binding (optional).
- *  @param output_type Registered type name for response generation (optional).
- *  @param summary Short summary of the operation (optional).
- *  @param description Detailed description of the operation (optional).
- */
+/** @brief Register a route with method, path pattern, and handler chain. */
 void csilk_router_add_extended(csilk_router_t* r, const char* method,
                                const char* path, csilk_handler_t* handlers,
                                size_t handler_count, const char* path_pattern,

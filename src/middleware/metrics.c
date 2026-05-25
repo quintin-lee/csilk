@@ -18,8 +18,10 @@ static _Atomic uint64_t http_requests_total = 0;
 static _Atomic uint64_t http_request_duration_microseconds = 0;
 
 /** @brief Prometheus metrics middleware.
- *  Measures request duration and increments global counters.
- */
+ *
+ * Measures the duration of the entire request handling chain and increments
+ * global counters for request totals and cumulative latency. It uses atomic
+ * operations to ensure thread-safety across multiple workers. */
 void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg) {
   (void)arg;
   uint64_t start = uv_hrtime();
@@ -34,8 +36,9 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg) {
 }
 
 /** @brief Handler for /metrics endpoint.
- *  Returns metrics in Prometheus text format.
- */
+ *
+ * Collects global metrics and generates a response in the standard Prometheus
+ * text-based exposition format. Includes HELP and TYPE metadata for counters. */
 void csilk_metrics_handler(csilk_ctx_t* c) {
   uint64_t total_requests = atomic_load(&http_requests_total);
   uint64_t total_duration = atomic_load(&http_request_duration_microseconds);

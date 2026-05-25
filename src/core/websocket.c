@@ -108,10 +108,7 @@ static void on_close_write(uv_write_t* req, int status) {
   free(req);
 }
 
-/** @brief Send a WebSocket close frame per RFC 6455 Section 5.5.1.
- *  @param c The request context.
- *  @param status_code Status code (e.g., 1000 for normal closure, 0 to omit).
- *  @param reason Optional close reason string (can be NULL). */
+/** @brief Send a WebSocket close frame per RFC 6455 Section 5.5.1. */
 void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
   if (!c || !c->_internal_client) return;
 
