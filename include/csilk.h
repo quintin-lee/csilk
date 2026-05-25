@@ -1165,4 +1165,14 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
 cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
                                  const char** params);
 
+/** @brief Prometheus metrics middleware.
+ *  @param c The request context.
+ *  @param arg Optional argument (unused). */
+void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
+
+/** @brief Handler for /metrics endpoint.
+ *  Returns metrics in Prometheus text format.
+ *  @param c The request context. */
+void csilk_metrics_handler(csilk_ctx_t* c);
+
 #endif /* CSILK_H */
