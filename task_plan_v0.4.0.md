@@ -33,5 +33,5 @@
 - [ ] 优化 Header 哈希表冲突率及 Arena 复用效率 `id: task_io_perf_tune`
 
 ## 状态
-- 当前阶段：`phase_obs` (计划中)
+- 当前阶段：`phase_bench` (计划中)
 - 状态：`in_progress`
