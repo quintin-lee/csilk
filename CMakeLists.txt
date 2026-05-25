@@ -98,7 +98,6 @@ FetchContent_MakeAvailable(cjson)
 # Include directories
 include_directories(include)
 include_directories(${cjson_SOURCE_DIR})
-include_directories(src/core)
 
 # Source files
 set(CSILK_SOURCES
@@ -164,7 +163,6 @@ add_library(csilk STATIC ${CSILK_SOURCES})
 target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/core>
     $<INSTALL_INTERFACE:include>
 )
 target_compile_definitions(csilk PRIVATE
@@ -183,7 +181,6 @@ if(CSILK_BUILD_SHARED)
     target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
     target_include_directories(csilk_shared PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/core>
         $<INSTALL_INTERFACE:include>
     )
     set_target_properties(csilk_shared PROPERTIES
