@@ -5,7 +5,7 @@
 
 ## 阶段
 - [x] 阶段 1：HTTPS/TLS 深度集成 (OpenSSL) `id: phase_tls`
-- [ ] 阶段 2：可观测性增强 (Prometheus Metrics) `id: phase_obs`
+- [x] 阶段 2：可观测性增强 (Prometheus Metrics) `id: phase_obs`
 - [ ] 阶段 3：性能基准测试集 (Benchmark Suite) `id: phase_bench`
 - [ ] 阶段 4：高级 I/O 优化 (HTTP/2 & Zero-copy) `id: phase_advanced_io`
 
@@ -18,9 +18,9 @@
 - [x] 编写 HTTPS 示例及自动化集成测试 `id: task_tls_test`
 
 ### 阶段 2：可观测性增强
-- [ ] 实现 Prometheus Metrics 中间件，统计 QPS、响应时长分布及状态码 `id: task_metrics_mw`
-- [ ] 提供 `/metrics` 标准爬取端点 `id: task_metrics_endpoint`
-- [ ] 优化结构化日志，支持自动关联 Request ID 与上下文 `id: task_log_correlation`
+- [x] 实现 Prometheus Metrics 中间件，统计 QPS、响应时长分布及状态码 `id: task_metrics_mw`
+- [x] 提供 `/metrics` 标准爬取端点 `id: task_metrics_endpoint`
+- [x] 优化结构化日志，支持自动关联 Request ID 与上下文 `id: task_log_correlation`
 
 ### 阶段 3：性能基准测试集
 - [ ] 建立基于 `wrk` 或 `hey` 的自动化压测脚本 `id: task_bench_scripts`
