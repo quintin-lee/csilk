@@ -255,6 +255,7 @@ add_csilk_test(test_mq tests/test_mq.c)
 add_csilk_test(test_mq_persistence tests/test_mq_persistence.c)
 add_csilk_test(test_mq_wal_write tests/test_mq_wal_write.c)
 add_csilk_test(test_mq_recovery tests/test_mq_recovery.c)
+add_csilk_test(test_mq_wal tests/test_mq_wal.c)
 if(ENABLE_OOM_TEST)
     add_executable(test_oom tests/test_oom.c)
     target_compile_definitions(test_oom PRIVATE TEST_OOM)
@@ -290,7 +291,7 @@ target_link_libraries(example_app csilk)
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_db test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_db test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal
     COMMENT "Running all tests with ctest"
 )
 
