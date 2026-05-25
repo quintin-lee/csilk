@@ -410,6 +410,8 @@ static int on_message_begin(llhttp_t* p) {
     uv_timer_start(&client->request_timer, on_read_timeout,
                    client->server->config.request_timeout_ms, 0);
   }
+
+  csilk_log_set_request_id(NULL);
   return 0;
 }
 

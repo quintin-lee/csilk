@@ -396,6 +396,10 @@ void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
  * @return 1 if json_format is enabled, 0 otherwise. */
 int csilk_log_is_json(void);
 
+/** @brief Set the Request ID for the current thread (for log correlation).
+ * @param request_id The Request ID string, or NULL to clear. */
+void csilk_log_set_request_id(const char* request_id);
+
 /** @brief Create a simple key-value cJSON object for structured logging.
  *
  * Convenience helper that builds a cJSON object from alternating key/value

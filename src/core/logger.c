@@ -26,6 +26,7 @@
 typedef struct csilk_log_entry_s {
   int64_t time_epoch; /**< unix timestamp */
   char level[8];      /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
+  char request_id[37]; /**< unique request id */
   char file[64];      /**< source filename */
   int32_t line;       /**< source line number */
   char func[64];      /**< function name */
@@ -36,6 +37,7 @@ typedef struct csilk_log_entry_s {
   X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64, sizeof(int64_t), 0,  \
     false, NULL)                                                          \
   X(csilk_log_entry_t, level, CSILK_TYPE_STRING, 8, 0, false, NULL)       \
+  X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, 37, 0, false, NULL) \
   X(csilk_log_entry_t, file, CSILK_TYPE_STRING, 64, 0, false, NULL)       \
   X(csilk_log_entry_t, line, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, \
     NULL)                                                                 \
@@ -56,6 +58,8 @@ typedef struct {
 } csilk_logger_t;
 
 static csilk_logger_t g_logger = {{0}, NULL, 0, {0}, 0};
+
+static _Thread_local char tl_request_id[37] = {0};
 
 static const char* level_names[] = {"TRACE", "DEBUG", "INFO ",
                                     "WARN ", "ERROR", "FATAL"};
@@ -103,6 +107,11 @@ static int log_text(csilk_log_level_t lv, const char* file, int line,
   else
     n += fprintf(g_logger.fp, "%s %s [%s:%d] %s(): ", ts, level_names[lv], fn,
                  line, func);
+
+  if (tl_request_id[0] != '\0') {
+    n += fprintf(g_logger.fp, "<%s> ", tl_request_id);
+  }
+
   n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
   n += fprintf(g_logger.fp, "\n");
   return n;
@@ -127,6 +136,7 @@ static cJSON* build_json_entry(csilk_log_level_t lv, const char* file, int line,
   memset(&entry, 0, sizeof(entry));
   entry.time_epoch = (int64_t)time(NULL);
   snprintf(entry.level, sizeof(entry.level), "%s", level_names[lv]);
+  snprintf(entry.request_id, sizeof(entry.request_id), "%s", tl_request_id);
   snprintf(entry.file, sizeof(entry.file), "%s", fn);
   entry.line = (int32_t)line;
   snprintf(entry.func, sizeof(entry.func), "%s", func);
@@ -263,6 +273,16 @@ void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
 /** @brief Check whether the logger is in JSON format mode. */
 int csilk_log_is_json(void) {
   return g_logger.initialized && g_logger.config.json_format;
+}
+
+/** @brief Set the Request ID for the current thread. */
+void csilk_log_set_request_id(const char* request_id) {
+  if (request_id) {
+    strncpy(tl_request_id, request_id, sizeof(tl_request_id) - 1);
+    tl_request_id[sizeof(tl_request_id) - 1] = '\0';
+  } else {
+    tl_request_id[0] = '\0';
+  }
 }
 
 /** @brief Build a simple key-value cJSON object for structured logging. */

@@ -22,6 +22,9 @@ void csilk_request_id_middleware(csilk_ctx_t* c) {
   /* Set X-Request-Id response header */
   csilk_set_header(c, "X-Request-Id", c->request_id);
 
+  /* Set logger contextual request ID */
+  csilk_log_set_request_id(c->request_id);
+
   csilk_next(c);
 }
 
