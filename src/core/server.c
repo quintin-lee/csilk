@@ -61,6 +61,7 @@ struct csilk_server_s {
   csilk_storage_driver_t* storage_driver;     /**< Context storage driver. */
   csilk_crypto_driver_t* crypto_driver;       /**< Crypto algorithm driver. */
   SSL_CTX* ssl_ctx;                           /**< OpenSSL context. */
+  csilk_mq_t* mq;                             /**< Message Queue instance. */
   csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
   csilk_client_t* active_clients;  /**< Head of active connections list. */
   uv_mutex_t clients_mutex;        /**< Mutex for active clients list. */
@@ -1021,6 +1022,8 @@ csilk_server_t* csilk_server_new(csilk_router_t* router) {
 
   uv_mutex_init(&s->clients_mutex);
 
+  s->mq = _csilk_mq_new(s->loop);
+
   return s;
 }
 
@@ -1123,6 +1126,10 @@ void csilk_server_free(csilk_server_t* server) {
   }
 
   cleanup_tls(server);
+
+  if (server->mq) {
+    _csilk_mq_free(server->mq);
+  }
 
   for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
     csilk_hook_node_t* curr = server->hooks[i];
@@ -1517,4 +1524,8 @@ static void flush_tls_write(csilk_client_t* client) {
     req->data = data;
     uv_write(req, (uv_stream_t*)&client->handle, &uv_buf, 1, on_write);
   }
+}
+
+csilk_mq_t* csilk_server_get_mq(csilk_server_t* server) {
+  return server ? server->mq : NULL;
 }
