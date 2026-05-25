@@ -1,22 +1,26 @@
 # csilk 编码规范（面向 AI 代码生成/修改）
 
 > **目标**: 确保 AI 模型生成或修改的代码与项目现有风格、模式和约束完全一致。
-> **版本**: 0.2.1 | 最后更新: 2026-05-24
+> **版本**: 0.2.1 | 最后更新: 2026-05-25
 
 ---
 
 ## 1. 项目架构总览
 
 ```
-include/csilk.h           # 主公共 API（类型、函数声明、宏）
-include/csilk_app.h       # 高层 csilk_app_t API
-include/csilk_internal.h  # SHA1/Base64/WebSocket 内部接口
-include/csilk_reflect.h   # 反射引擎（struct <-> JSON）
-src/core/                 # 核心引擎（server/router/context/arena/logger/config/reflect/websocket/url/utils）
-src/app/app.c             # 高层 app 封装
-src/middleware/            # 10 个内置中间件
-tests/                    # 单元测试（37+ 个测试文件）
-examples/                 # 示例程序
+include/                   # 公共 + 内部头文件
+include/csilk.h            # 主公共 API（类型、函数声明、宏）
+include/csilk_app.h        # 高层 csilk_app_t API
+include/csilk_db.h         # 数据库驱动接口
+include/csilk_internal.h   # 内部接口（SHA1/Base64/WebSocket）
+include/csilk_reflect.h    # 反射引擎（struct <-> JSON）
+include/csilk_test.h       # OOM 模拟测试框架
+include/context_internal.h # 不透明 csilk_ctx_s 结构体
+src/core/                  # 核心引擎（server/router/context/arena/logger/config/reflect/websocket/url/utils/mq）
+src/app/app.c              # 高层 app 封装
+src/middleware/             # 15 个内置中间件
+tests/                     # 单元测试（50+ 个测试文件）
+examples/                  # 示例程序
 ```
 
 ### 关键依赖
@@ -116,7 +120,7 @@ int csilk_some_function(csilk_ctx_t* c, const char* name);
 ```
 
 **规则**:
-- `@param` 和 `@return` 只在**头文件声明处**标注，实现文件(.c)中不重复标注（避免 Doxygen "multiple @param" 警告）
+- `@param` 和 `@return` 只在**头文件声明处**标注，实现文件(.c)中不重复标注（避免 Doxygen "multiple @param" 警告）— 当前已完成全量标准化
 - 实现文件(.c)中若函数有其他需要说明的实现细节，可用 `/** @copydoc csilk_some_function */` 或普通 `/* */` 注释
 - 单行的 Doxygen 注释可以用 `/** @brief ... */` 紧凑格式
 

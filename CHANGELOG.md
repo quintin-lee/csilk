@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-05-24
+## [0.2.1] - 2026-05-25
 
 ### Added
 - **Form URL-encoded Parser**: Added `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Streaming Response**: `csilk_response_write/end` now sets `is_async` flag to prevent double-write; chunked headers respect client `Connection: close` header.
 - **Static Middleware**: Added `Accept-Ranges: bytes` header on all static responses.
 - **Streaming Cleanup**: Terminal chunk write callback closes connection instead of leaving cleanup to timer (fixes use-after-free).
+- **Header Location**: `context_internal.h` moved from `src/core/` to `include/`; `src/core` include path removed from CMakeLists.txt.
+- **Doxygen Documentation**: Completed full Doxygen comments across all 37 source/header files with `@brief`, `@param`, `@return`, `@note` annotations.
 
 ### Fixed
 - Fixed `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
