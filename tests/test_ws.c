@@ -266,6 +266,29 @@ static void test_ws_close_null() {
   printf("WebSocket close null passed!\n");
 }
 
+static void test_ws_close_handshake() {
+  printf("Testing WebSocket close handshake...\n");
+  csilk_ctx_t ctx = {0};
+  ctx.arena = csilk_arena_new(1024);
+
+  /* We need a dummy client to avoid early return in csilk_ws_close */
+  uv_loop_t* loop = uv_default_loop();
+  uv_tcp_t client;
+  uv_tcp_init(loop, &client);
+  ctx._internal_client = &client;
+
+  /* Opcode 8, len 2, code 1000 (0x03E8) */
+  uint8_t close_frame[] = {0x88, 0x02, 0x03, 0xE8};
+  csilk_ws_parse_frame(&ctx, close_frame, sizeof(close_frame));
+
+  /* After parse_frame, uv_close should have been called on the stream */
+  assert(uv_is_closing((uv_handle_t*)&client));
+
+  csilk_ctx_cleanup(&ctx);
+  csilk_arena_free(ctx.arena);
+  printf("WebSocket close handshake test passed!\n");
+}
+
 int main() {
   test_handshake();
   test_handshake_missing_key();
@@ -281,6 +304,7 @@ int main() {
   test_ws_close_normal();
   test_ws_close_no_reason();
   test_ws_close_null();
+  test_ws_close_handshake();
   printf("test_ws: ALL PASSED\n");
   return 0;
 }
