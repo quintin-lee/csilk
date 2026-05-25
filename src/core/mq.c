@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <fnmatch.h>
+#include <fcntl.h>
 #include "csilk.h"
 #include "csilk_internal.h"
 
@@ -109,7 +110,36 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
 /** @brief Enable persistence for the Message Queue. */
 int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path) {
   if (!mq || !wal_path) return -1;
-  /* Implementation will follow in subsequent tasks */
+
+  uv_mutex_lock(&mq->wal_mutex);
+
+  /* Close existing WAL if any */
+  if (mq->wal_fd >= 0) {
+    uv_fs_t close_req;
+    uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, NULL);
+    uv_fs_req_cleanup(&close_req);
+    mq->wal_fd = -1;
+  }
+  if (mq->wal_path) {
+    free(mq->wal_path);
+    mq->wal_path = NULL;
+  }
+
+  uv_fs_t open_req;
+  /* Use synchronous open */
+  int fd = uv_fs_open(mq->async_handle.loop, &open_req, wal_path,
+                      O_CREAT | O_RDWR | O_APPEND, 0644, NULL);
+  uv_fs_req_cleanup(&open_req);
+
+  if (fd < 0) {
+    uv_mutex_unlock(&mq->wal_mutex);
+    return fd;
+  }
+
+  mq->wal_fd = fd;
+  mq->wal_path = strdup(wal_path);
+  uv_mutex_unlock(&mq->wal_mutex);
+
   return 0;
 }
 
@@ -160,19 +190,78 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t su
 
 /* --- Publishing and Async Dispatch --- */
 
+/** @brief Append a message to the Write-Ahead Log.
+ * @param mq The MQ instance.
+ * @param topic Message topic.
+ * @param payload Message payload.
+ * @param len Payload length.
+ * @return 0 on success, -1 on failure. */
+static int _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload,
+                          size_t len) {
+  if (!mq || mq->wal_fd < 0 || !topic) return 0;
+
+  uv_mutex_lock(&mq->wal_mutex);
+
+  uint32_t topic_len = (uint32_t)strlen(topic);
+  uint32_t payload_len = (uint32_t)len;
+  uint32_t checksum = 0;
+
+  /* Simple XOR checksum of topic and payload */
+  for (uint32_t i = 0; i < topic_len; i++) checksum ^= (uint8_t)topic[i];
+  const uint8_t* p = (const uint8_t*)payload;
+  if (p) {
+    for (uint32_t i = 0; i < payload_len; i++) checksum ^= p[i];
+  }
+
+  uv_buf_t bufs[5];
+  bufs[0] = uv_buf_init((char*)&topic_len, 4);
+  bufs[1] = uv_buf_init((char*)topic, topic_len);
+  bufs[2] = uv_buf_init((char*)&payload_len, 4);
+  bufs[3] = uv_buf_init((char*)payload, payload_len);
+  bufs[4] = uv_buf_init((char*)&checksum, 4);
+
+  uv_fs_t write_req;
+  /* Write to the end of file (synchronous) */
+  int result = uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs,
+                           5, -1, NULL);
+  uv_fs_req_cleanup(&write_req);
+
+  if (result >= 0) {
+    uv_fs_t sync_req;
+    uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, NULL);
+    uv_fs_req_cleanup(&sync_req);
+  }
+
+  uv_mutex_unlock(&mq->wal_mutex);
+  return (result >= 0) ? 0 : -1;
+}
+
 /** @brief Publish a message to a topic (Thread-safe). */
-int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len) {
+int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
+                     size_t len) {
   if (!mq || !topic) return -1;
+
+  /* Persistence: Append to WAL before memory queue */
+  if (mq->wal_fd >= 0) {
+    if (_mq_append_wal(mq, topic, payload, len) != 0) {
+      return -1;
+    }
+  }
+
   csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
   if (!msg) return -1;
   msg->topic = strdup(topic);
   if (len > 0 && payload) {
     msg->payload = malloc(len);
-    if (!msg->payload) { free(msg->topic); free(msg); return -1; }
+    if (!msg->payload) {
+      free(msg->topic);
+      free(msg);
+      return -1;
+    }
     memcpy(msg->payload, payload, len);
     msg->len = len;
   }
-  
+
   uv_mutex_lock(&mq->queue_mutex);
   if (mq->queue_tail) {
     mq->queue_tail->next = msg;
@@ -181,7 +270,7 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, siz
   }
   mq->queue_tail = msg;
   uv_mutex_unlock(&mq->queue_mutex);
-  
+
   uv_async_send(&mq->async_handle);
   return 0;
 }
@@ -245,9 +334,13 @@ static void on_mq_close(uv_handle_t* handle) {
 
   uv_mutex_destroy(&mq->queue_mutex);
   uv_mutex_destroy(&mq->wal_mutex);
+
+  if (mq->wal_fd >= 0) {
+    uv_fs_t close_req;
+    uv_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
+    uv_fs_req_cleanup(&close_req);
+  }
   if (mq->wal_path) free(mq->wal_path);
-  /* Note: wal_fd should be closed if opened, but it's not opened yet in this task.
-     Future tasks will handle closing it properly. */
 
   /* Free queue */
   csilk_mq_msg_t* msg = mq->queue_head;
