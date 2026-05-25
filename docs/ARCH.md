@@ -27,11 +27,13 @@ graph TB
             GRP["Group Router<br/>Hierarchical prefix + MW"]
             CTX["csilk_ctx_s<br/>Request/Response State Machine"]
             ARENA["Arena Allocator<br/>Bump allocator per-connection"]
+            MQ["Message Queue<br/>Thread-safe Event Bus"]
         end
 
         subgraph "Middleware Chain"
             REC["Recovery<br/>(setjmp/longjmp)"]
             LOG["Logger<br/>(structured JSON)"]
+            MET["Metrics<br/>(Prometheus/Observability)"]
             AUTH["Auth<br/>(token validation)"]
             CORS["CORS<br/>(cross-origin)"]
             RATE["RateLimit<br/>(sliding window)"]
@@ -289,6 +291,23 @@ sequenceDiagram
 - **Close Handshake**: Auto-detects close frames and responds per RFC 6455 Section 5.5.1
 - **Async API**: `csilk_ws_send()` writes frames asynchronously via `uv_write()`
 
+### 4.3 Internal Event Bus (Message Queue)
+
+Csilk provides a built-in, asynchronous, topic-based Message Queue (`csilk_mq`) that facilitates communication between different parts of the application or bridging external events into the main loop.
+
+```mermaid
+graph LR
+    WT["Worker Thread /<br/>External Event"] -- csilk_mq_publish --> ASYNC["uv_async_t<br/>(Signaling)"]
+    ASYNC -- Loop Awake --> DISPATCH["MQ Dispatcher<br/>(Main Loop)"]
+    DISPATCH --> GMW["Global MQ Middleware"]
+    GMW --> TMW["Topic MQ Middleware"]
+    TMW --> SUB["Subscribers"]
+```
+
+- **Thread-Safety**: `csilk_mq_publish` is safe to call from any thread. It uses `uv_async_send` to notify the main event loop.
+- **Onion Model for Events**: The MQ system implements the same middleware pattern as the HTTP router. You can use `csilk_mq_use` for cross-cutting concerns (logging, validation) and `csilk_mq_subscribe` for final processing.
+- **Low Overhead**: Messages are queued internally and processed in batches when the event loop wakes up, minimizing system call overhead.
+
 ## 5. Document Generation
 
 csilk uses **Doxygen** for API documentation:
@@ -371,3 +390,30 @@ flowchart TB
 ```
 
 Each worker thread runs its own libuv event loop with the same port bound via `SO_REUSEPORT`. The kernel distributes incoming connections across worker threads, enabling multi-core utilization without explicit inter-thread synchronization.
+
+## 8. Observability (Prometheus Metrics)
+
+csilk includes a native metrics module for real-time monitoring of server health and performance.
+
+### 8.1 Metrics Collected
+
+- **`http_requests_total`**: Counter of all processed HTTP requests, partitioned by `method`, `path`, and `status`.
+- **`http_request_duration_seconds`**: Histogram of request latencies, useful for calculating P99/P95 response times.
+- **`http_active_connections`**: Gauge of currently open TCP connections.
+
+### 8.2 Exposition Format
+
+Metrics are exposed via the `/metrics` endpoint (using `csilk_metrics_handler`) in the standard Prometheus text-based format:
+
+```text
+# HELP http_requests_total Total number of HTTP requests.
+# TYPE http_requests_total counter
+http_requests_total{method="GET",path="/api/ping",status="200"} 1243
+# HELP http_request_duration_seconds HTTP request latency histogram.
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{le="0.01"} 1100
+http_request_duration_seconds_sum 45.2
+http_request_duration_seconds_count 1243
+```
+
+By integrating `csilk_metrics_middleware` at the start of the middleware chain, every request is automatically timed and recorded.

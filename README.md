@@ -6,6 +6,8 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
+- 📬 **Internal Event Bus** - Asynchronous, thread-safe Message Queue with middleware and subscriber support
+- 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
@@ -257,6 +259,7 @@ src/
   │   ├── arena.c         # Arena memory allocator
   │   ├── config.c        # YAML configuration loader + validation
   │   ├── logger.c        # Thread-safe logging with rotation
+  │   ├── mq.c            # Internal Event Bus (Message Queue)
   │   ├── url.c           # URL / query string parsing
   │   ├── utils.c         # SHA1 hashing and Base64 encoding
   │   ├── websocket.c     # WebSocket handshake and frame handling
@@ -269,6 +272,7 @@ src/
       ├── csrf.c      # CSRF protection
       ├── gzip.c      # Gzip response compression
       ├── logger.c    # Request logging
+      ├── metrics.c   # Prometheus metrics
       ├── multipart.c # Multipart/form-data parsing
       ├── ratelimit.c # IP-based rate limiting
       ├── recovery.c  # Panic recovery
@@ -305,6 +309,8 @@ The project includes a comprehensive test suite. After building, run individual 
 | Emoji | Meaning |
 |-------|---------|
 | 🚀 | Performance / Async I/O |
+| 📬 | Internal Event Bus (MQ) |
+| 📈 | Prometheus Metrics |
 | 🔧 | Middleware / Tooling |
 | 🌐 | Networking / Routing |
 | 📦 | JSON / Data serialization |
@@ -316,7 +322,7 @@ The project includes a comprehensive test suite. After building, run individual 
 | ⚡ | Connection keep-alive |
 | 🛡️ | Error handling / Security |
 | 📋 | Configuration (YAML) |
-| 🏗️ | Memory management (Arena) |
+| 🏗 | Memory management (Arena) |
 | 🗂️ | Reflection engine |
 | 🔐 | CSRF / CORS / Rate limiting |
 | 📝 | Documentation (Doxygen) |
