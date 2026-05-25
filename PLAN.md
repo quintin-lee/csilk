@@ -66,11 +66,11 @@
 - [x] 9.4 JWT 官方中间件实现 — 基于 HS256 的令牌签发与校验
 - [x] 9.5 扩展 Hook 系统 — 支持生命周期事件监听与第三方接入
 - [x] 9.6 插件化 Crypto 驱动 — 允许注入自定义加密/哈希算法
-- [ ] 9.7 HTTPS/TLS 支持预研与集成 (启动阶段一)
+- [x] 9.7 HTTPS/TLS 支持预研与集成 (启动阶段一)
 
 ### 阶段十：生产加固与性能基准 (v0.4.0)
-- [ ] 10.1 HTTPS/TLS 深度集成 — 支持证书配置与加密传输
-- [ ] 10.2 Prometheus 可观测性 — 提供标准 /metrics 端点与指标统计
+- [x] 10.1 HTTPS/TLS 深度集成 — 支持证书配置与加密传输
+- [x] 10.2 Prometheus 可观测性 — 提供标准 /metrics 端点与指标统计
 - [ ] 10.3 自动化性能基准集 — wrk/hey 集成与跨框架对比报告
 - [ ] 10.4 零拷贝优化 — 实现 sendfile 静态文件加速
 - [ ] 10.5 HTTP/2 预研 — 评估多路复用集成成本
@@ -140,8 +140,10 @@
 ### P7 — 新功能探索
 - [x] 文件上传 — multipart/form-data 解析 (src/middleware/multipart.c)
 - [x] gzip 压缩 — 响应体压缩中间件 (src/middleware/gzip.c)
-- [ ] HTTPS/TLS 支持 — 需深度集成 OpenSSL + libuv，留待后续
+- [x] HTTPS/TLS 支持 — 深度集成 OpenSSL + libuv
 - [x] Server-Sent Events (SSE) — SSE 连接管理和事件推送 (src/middleware/sse.c)
+- [x] Prometheus Metrics — 实现 QPS/延迟统计与 /metrics 端点
+- [x] Message Queue — 实现线程安全异步事件总线
 
 ---
 
@@ -299,6 +301,12 @@
 - **动作**: 新增 P7 功能（Multipart, Gzip, SSE 中间件）。
 - **动作**: 性能阶段七优化完成（uv_queue_work, header 哈希表, arena 复用, SO_REUSEPORT, TCP_NODELAY）。
 - **动作**: 生成 CODEPEC.md（AI 编码规范）和 ANALYSIS.md（问题清单）。
+
+### [2026-05-25] 生产加固阶段 (v0.4.0) 核心功能完成
+- **动作**: 深度集成 OpenSSL，实现 native HTTPS/TLS 支持。
+- **动作**: 实现 Prometheus Metrics 中间件与 `/metrics` 端点。
+- **动作**: 引入异步、线程安全的 Message Queue (MQ) 模块。
+- **动作**: 完成全量 Doxygen 注释加固与 ARCH.md/README.md 文档更新。
 
 ---
 
