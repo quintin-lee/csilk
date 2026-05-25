@@ -1,3 +1,8 @@
+/**
+ * @file session.c
+ * @brief Cookie-based session management middleware with thread-safe protection.
+ * @copyright MIT License
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

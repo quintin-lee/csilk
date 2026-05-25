@@ -1,3 +1,8 @@
+/**
+ * @file validate.c
+ * @brief Request parameter validation middleware (required, type checking, email).
+ * @copyright MIT License
+ */
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
