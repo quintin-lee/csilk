@@ -92,6 +92,13 @@ void csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker) {
  * @param handle libuv async handle. */
 static void on_mq_async(uv_async_t* handle);
 
+/** @brief Internal: Enqueue a message in memory. */
+static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
+                       size_t len);
+
+/** @brief Internal: Recover messages from Write-Ahead Log. */
+static int _mq_recovery(csilk_mq_t* mq);
+
 /** @brief Internal: Create a new Message Queue instance. */
 csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
   csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
@@ -138,6 +145,10 @@ int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path) {
 
   mq->wal_fd = fd;
   mq->wal_path = strdup(wal_path);
+
+  /* Recovery: Load existing messages from WAL */
+  _mq_recovery(mq);
+
   uv_mutex_unlock(&mq->wal_mutex);
 
   return 0;
@@ -236,21 +247,16 @@ static int _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload
   return (result >= 0) ? 0 : -1;
 }
 
-/** @brief Publish a message to a topic (Thread-safe). */
-int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
-                     size_t len) {
-  if (!mq || !topic) return -1;
-
-  /* Persistence: Append to WAL before memory queue */
-  if (mq->wal_fd >= 0) {
-    if (_mq_append_wal(mq, topic, payload, len) != 0) {
-      return -1;
-    }
-  }
-
+/** @brief Internal: Enqueue a message in memory. */
+static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
+                       size_t len) {
   csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
   if (!msg) return -1;
   msg->topic = strdup(topic);
+  if (!msg->topic) {
+    free(msg);
+    return -1;
+  }
   if (len > 0 && payload) {
     msg->payload = malloc(len);
     if (!msg->payload) {
@@ -273,6 +279,124 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
 
   uv_async_send(&mq->async_handle);
   return 0;
+}
+
+/** @brief Internal: Recover messages from Write-Ahead Log.
+ * @param mq The MQ instance.
+ * @return 0 on success, -1 on failure. */
+static int _mq_recovery(csilk_mq_t* mq) {
+  if (!mq || mq->wal_fd < 0) return 0;
+
+  uint64_t offset = 0;
+  while (1) {
+    uint32_t topic_len = 0;
+    uint32_t payload_len = 0;
+    uint32_t checksum = 0;
+    uv_fs_t read_req;
+    int nread;
+
+    /* 1. Read Topic Length */
+    uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
+    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
+                       offset, NULL);
+    uv_fs_req_cleanup(&read_req);
+    if (nread < 4) break; /* EOF or error */
+    offset += 4;
+
+    /* 2. Read Topic Name */
+    char* topic = malloc(topic_len + 1);
+    if (!topic) break;
+    buf = uv_buf_init(topic, topic_len);
+    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
+                       offset, NULL);
+    uv_fs_req_cleanup(&read_req);
+    if (nread < (int)topic_len) {
+      free(topic);
+      break;
+    }
+    topic[topic_len] = '\0';
+    offset += topic_len;
+
+    /* 3. Read Payload Length */
+    buf = uv_buf_init((char*)&payload_len, 4);
+    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
+                       offset, NULL);
+    uv_fs_req_cleanup(&read_req);
+    if (nread < 4) {
+      free(topic);
+      break;
+    }
+    offset += 4;
+
+    /* 4. Read Payload */
+    void* payload = NULL;
+    if (payload_len > 0) {
+      payload = malloc(payload_len);
+      if (!payload) {
+        free(topic);
+        break;
+      }
+      buf = uv_buf_init(payload, payload_len);
+      nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
+                         offset, NULL);
+      uv_fs_req_cleanup(&read_req);
+      if (nread < (int)payload_len) {
+        free(topic);
+        free(payload);
+        break;
+      }
+      offset += payload_len;
+    }
+
+    /* 5. Read Checksum */
+    buf = uv_buf_init((char*)&checksum, 4);
+    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
+                       offset, NULL);
+    uv_fs_req_cleanup(&read_req);
+    if (nread < 4) {
+      free(topic);
+      free(payload);
+      break;
+    }
+    offset += 4;
+
+    /* 6. Validate Checksum */
+    uint32_t calc_checksum = 0;
+    for (uint32_t i = 0; i < topic_len; i++) calc_checksum ^= (uint8_t)topic[i];
+    const uint8_t* p = (const uint8_t*)payload;
+    if (p) {
+      for (uint32_t i = 0; i < payload_len; i++) calc_checksum ^= p[i];
+    }
+
+    if (calc_checksum == checksum) {
+      /* Enqueue in memory without re-appending to WAL */
+      _mq_enqueue(mq, topic, payload, payload_len);
+    } else {
+      free(topic);
+      free(payload);
+      break; /* Stop at first invalid frame */
+    }
+
+    free(topic);
+    free(payload);
+  }
+
+  return 0;
+}
+
+/** @brief Publish a message to a topic (Thread-safe). */
+int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
+                     size_t len) {
+  if (!mq || !topic) return -1;
+
+  /* Persistence: Append to WAL before memory queue */
+  if (mq->wal_fd >= 0) {
+    if (_mq_append_wal(mq, topic, payload, len) != 0) {
+      return -1;
+    }
+  }
+
+  return _mq_enqueue(mq, topic, payload, len);
 }
 
 /** @brief Async callback to process all queued MQ messages.
