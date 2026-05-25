@@ -17,9 +17,17 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Internal helper to get MIME type from file path.
- * @param path The file path.
- * @return The MIME type string. */
+/**
+ * @brief Internal helper to get MIME type from file path.
+ *
+ * Maps the file extension to a MIME type string. Currently supports .html,
+ * .css, and .js. All other extensions (including files without an extension)
+ * return application/octet-stream.
+ *
+ * @param path  The file path to evaluate.
+ *
+ * @return A static string pointer to the MIME type. Must NOT be freed.
+ */
 static const char* get_mime_type(const char* path) {
   const char* ext = strrchr(path, '.');
   if (!ext) return "application/octet-stream";
@@ -29,11 +37,26 @@ static const char* get_mime_type(const char* path) {
   return "application/octet-stream";
 }
 
-/** @brief Setup a 206 Partial Content response for a file range.
- * @param c The request context.
- * @param fd File descriptor.
- * @param size Total file size.
- * @param mime_type Content-Type string. */
+/**
+ * @brief Setup a file response with optional 206 Partial Content for range
+ *        requests.
+ *
+ * Examines the incoming "Range" header. If absent or malformed, the entire
+ * file is served with a 200 OK status. If a valid "bytes=" range is present,
+ * a 206 Partial Content response is configured with the appropriate
+ * Content-Range header.
+ *
+ * In both cases, the file descriptor, offset, and size are stored on the
+ * context for subsequent async sending.
+ *
+ * @param c         The request context.
+ * @param fd        Open file descriptor for the requested file.
+ * @param size      Total file size in bytes.
+ * @param mime_type The MIME type string for Content-Type header.
+ *
+ * @note On range errors (non-numeric range, start > end, or unsatisfiable),
+ *       a 416 Range Not Satisfiable status is set and the FD is closed.
+ */
 static void set_range_response(csilk_ctx_t* c, int fd, size_t size,
                                const char* mime_type) {
   const char* range_hdr = csilk_get_header(c, "Range");
@@ -100,6 +123,24 @@ static void set_range_response(csilk_ctx_t* c, int fd, size_t size,
   c->file_size = range_len;
 }
 
+/**
+ * @brief libuv work callback: resolve and open the requested static file.
+ *
+ * Runs on the libuv thread pool. Resolves the requested path relative to
+ * the configured root directory, performs a path traversal check (ensuring
+ * the resolved path stays within the root), opens the file, stats it,
+ * determines the MIME type, and configures the response (including any
+ * range handling). The actual file content is sent later in
+ * static_after_work_cb via _csilk_send_response.
+ *
+ * @param req  libuv work request. req->data points to the csilk_ctx_t.
+ *             The context must have "static_root" and "static_prefix"
+ *             set via csilk_set().
+ *
+ * @note Path traversal protection uses realpath() to canonicalize both
+ *       root and requested paths, then verifies the requested path starts
+ *       with the root prefix.
+ */
 static void static_work_cb(uv_work_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   const char* root_dir = (const char*)csilk_get(c, "static_root");
@@ -149,8 +190,17 @@ static void static_work_cb(uv_work_t* req) {
   set_range_response(c, fd, size, mime_type);
 }
 
-/** @brief libuv after-work callback: send the static file response. @param req
- * libuv work request. @param status Work status. */
+/**
+ * @brief libuv after-work callback: send the static file response.
+ *
+ * Runs on the event loop after static_work_cb completes. If the client
+ * connection is still alive (_internal_client is non-NULL), it triggers
+ * _csilk_send_response() to transmit the file (using sendfile or chunked
+ * I/O depending on the platform).
+ *
+ * @param req     libuv work request. req->data points to the csilk_ctx_t.
+ * @param status  Work status — 0 on success, negative on cancellation.
+ */
 static void static_after_work_cb(uv_work_t* req, int status) {
   (void)status;
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
@@ -159,7 +209,29 @@ static void static_after_work_cb(uv_work_t* req, int status) {
   }
 }
 
-/** @brief Serve static files from a local directory (async, offloaded). */
+/**
+ * @brief Serve static files from a local directory (async, offloaded).
+ *
+ * Offloads file resolution, path traversal checks, and file open/stat
+ * operations to the libuv thread pool. The response is sent via the
+ * normal _csilk_send_response() path, which sends the file using
+ * platform-specific zero-copy mechanisms (e.g. sendfile on Linux).
+ *
+ * The URL prefix is automatically stripped from the request path before
+ * resolving against root_dir — the "static_prefix" must be set via
+ * csilk_set(c, "static_prefix", prefix_string) before calling this
+ * function.
+ *
+ * @param c        The request context.
+ * @param root_dir Absolute or relative path to the static file root
+ *                 directory. Must not be NULL.
+ *
+ * @note The prefix is configured separately via csilk_set(c, "static_prefix",
+ *       ...) NOT via this function's parameters.
+ * @warning Path traversal attacks are mitigated via realpath() comparison.
+ *          Ensure root_dir does not contain symlinks that could be
+ *          exploited.
+ */
 void csilk_static(csilk_ctx_t* c, const char* root_dir) {
   c->is_async = 1;
   c->work_req.data = c;

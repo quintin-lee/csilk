@@ -11,12 +11,20 @@
 #include "csilk.h"
 #include "csilk_db.h"
 
-/** @brief SQLite connection data. */
+/** @brief Per-connection data for the SQLite driver. */
 typedef struct {
   sqlite3* db;
 } sqlite_conn_t;
 
-/** @brief Connect to SQLite database. */
+/** @brief Open a connection to a SQLite database file.
+ *
+ * Uses sqlite3_open_v2 with read/write+create flags. Stores the connection
+ * handle in the pool. On failure, frees the allocated connection and returns
+ * an error.
+ *
+ * @param pool The database pool to initialize.
+ * @param dsn  Filesystem path to the SQLite database file.
+ * @return 0 on success, -1 if parameters are invalid or open fails. */
 static int sqlite_connect(csilk_db_pool_t* pool, const char* dsn) {
   if (!pool || !dsn) return -1;
 
@@ -36,7 +44,13 @@ static int sqlite_connect(csilk_db_pool_t* pool, const char* dsn) {
   return 0;
 }
 
-/** @brief Disconnect from SQLite. */
+/** @brief Close a SQLite connection and free the pool's connection data.
+ *
+ * Calls sqlite3_close() on the underlying handle, frees the connection struct,
+ * and sets pool->connection to NULL.
+ *
+ * @param pool The database pool to shut down.
+ * @return 0 on success, -1 if pool or its connection is NULL. */
 static int sqlite_disconnect(csilk_db_pool_t* pool) {
   if (!pool || !pool->connection) return -1;
 
@@ -49,7 +63,12 @@ static int sqlite_disconnect(csilk_db_pool_t* pool) {
   return 0;
 }
 
-/** @brief Free result set. */
+/** @brief Free all memory associated with a query result set.
+ *
+ * Iterates rows, column names, and the top-level arrays, freeing each
+ * allocation. Resets row_count and column_count to 0 after cleanup.
+ *
+ * @param result The result set to free (may be NULL). */
 static void sqlite_free_result(csilk_db_result_t* result) {
   if (!result) return;
   for (int i = 0; i < result->row_count; i++) {
@@ -66,7 +85,17 @@ static void sqlite_free_result(csilk_db_result_t* result) {
   result->column_count = 0;
 }
 
-/** @brief Execute a query and return results. */
+/** @brief Execute a SQL query and return the full result set.
+ *
+ * Prepares the statement, retrieves column names, then steps through all
+ * rows, allocating each row's values array. On any allocation failure,
+ * partial results are freed and -1 is returned.
+ *
+ * @param pool   The database pool (must be connected).
+ * @param sql    SQL query string.
+ * @param result [out] Populated result set (must be freed with
+ *               sqlite_free_result).
+ * @return 0 on success, -1 on error. */
 static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
                         csilk_db_result_t* result) {
   if (!pool || !pool->connection || !sql || !result) return -1;
@@ -128,7 +157,13 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
   return 0;
 }
 
-/** @brief Execute a statement. */
+/** @brief Execute a SQL statement that returns no result rows.
+ *
+ * Uses sqlite3_exec() for DDL/INSERT/UPDATE/DELETE statements.
+ *
+ * @param pool The database pool (must be connected).
+ * @param sql  SQL statement string.
+ * @return 0 on success, -1 on error. */
 static int sqlite_exec(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->connection || !sql) return -1;
 
@@ -144,22 +179,34 @@ static int sqlite_exec(csilk_db_pool_t* pool, const char* sql) {
   return 0;
 }
 
-/** @brief Begin transaction. */
+/** @brief Begin a SQLite transaction (delegates to sqlite_exec).
+ *
+ * @param pool The database pool.
+ * @return 0 on success, -1 on error. */
 static int sqlite_transaction_begin(csilk_db_pool_t* pool) {
   return sqlite_exec(pool, "BEGIN TRANSACTION");
 }
 
-/** @brief Commit transaction. */
+/** @brief Commit the current SQLite transaction.
+ *
+ * @param pool The database pool.
+ * @return 0 on success, -1 on error. */
 static int sqlite_transaction_commit(csilk_db_pool_t* pool) {
   return sqlite_exec(pool, "COMMIT");
 }
 
-/** @brief Rollback transaction. */
+/** @brief Rollback the current SQLite transaction.
+ *
+ * @param pool The database pool.
+ * @return 0 on success, -1 on error. */
 static int sqlite_transaction_rollback(csilk_db_pool_t* pool) {
   return sqlite_exec(pool, "ROLLBACK");
 }
 
-/** @brief SQLite driver instance. */
+/** @brief Pre-built driver vtable for the SQLite3 database backend.
+ *
+ * Registered automatically when csilk_db_sqlite_init() is called. Users
+ * can also reference this struct directly to register manually. */
 csilk_db_driver_t csilk_db_sqlite_driver = {
     .name = "sqlite",
     .connect = sqlite_connect,
@@ -172,7 +219,12 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
     .free_result = sqlite_free_result,
 };
 
-/** @brief Initialize SQLite driver (register with framework). */
+/** @brief Initialize and register the SQLite database driver with csilk.
+ *
+ * Call this at startup (e.g., in the app init callback) to make the "sqlite"
+ * driver available for csilk_db_create() calls.
+ *
+ * @note This function is idempotent-safe but typically called once. */
 void csilk_db_sqlite_init(void) {
   csilk_db_register_driver("sqlite", &csilk_db_sqlite_driver);
 }

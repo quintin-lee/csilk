@@ -14,10 +14,26 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief WebSocket GUID for handshake key generation (RFC 6455). */
+/** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
+ *
+ * Appended to the client's Sec-WebSocket-Key before SHA-1 hashing to produce
+ * the Sec-WebSocket-Accept response header. */
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-/** @brief Perform WebSocket upgrade handshake (RFC 6455). */
+/** @brief Perform the WebSocket upgrade handshake per RFC 6455.
+ *
+ * Validates the presence of the Sec-WebSocket-Key header, computes the
+ * expected Sec-WebSocket-Accept response by concatenating the key with the
+ * WebSocket GUID ("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"), SHA-1 hashing
+ * the result, and Base64-encoding the digest. Sets the Upgrade, Connection,
+ * and Sec-WebSocket-Accept response headers, sets status to 101 Switching
+ * Protocols, and marks the context as a WebSocket connection.
+ *
+ * @param c The request context.
+ * @note After a successful handshake, the context's is_websocket flag is set
+ *       and the connection is ready for frame I/O via csilk_ws_send() and
+ *       csilk_ws_parse_frame(). On failure (missing Sec-WebSocket-Key), a
+ *       400 Bad Request JSON error is sent. */
 void csilk_ws_handshake(csilk_ctx_t* c) {
   const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
   if (!key) {
@@ -46,15 +62,34 @@ void csilk_ws_handshake(csilk_ctx_t* c) {
   c->is_websocket = 1;
 }
 
-/** @brief Write completion callback for WebSocket frame writes.
- * @param req Write request.
- * @param status Write status. */
+/** @brief libuv write completion callback for WebSocket frame sends.
+ *
+ * Frees the frame buffer and the write request structure. Errors are
+ * silently ignored.
+ *
+ * @param req    The completed write request (freed by this callback).
+ * @param status UV status code (ignored). */
 static void on_ws_write(uv_write_t* req, int status) {
   if (req->data) free(req->data);
   free(req);
 }
 
-/** @brief Send a WebSocket data frame (text or binary). */
+/** @brief Send a WebSocket data frame (text or binary opcode) per RFC 6455
+ * §5.2.
+ *
+ * Constructs a WebSocket frame with the FIN bit set (final fragment), the
+ * specified opcode (0x01 for text, 0x02 for binary), and no masking
+ * (server-to-client frames are unmasked per RFC 6455). Supports payload
+ * lengths up to 2^64-1 using 7-bit, 16-bit, or 64-bit extended length
+ * fields as appropriate.
+ *
+ * @param c       The request context (must have _internal_client set).
+ * @param payload Frame payload data.
+ * @param len     Payload length in bytes.
+ * @param opcode  WebSocket opcode (0x01 for text, 0x02 for binary).
+ * @note The payload is copied into a heap-allocated frame buffer which is
+ *       freed by the write completion callback. This function returns
+ *       immediately; the write happens asynchronously. */
 void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len,
                    int opcode) {
   if (!c || !c->_internal_client) return;
@@ -97,9 +132,13 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len,
   }
 }
 
-/** @brief Write completion callback for close frame.
- *  @param req Write request.
- *  @param status Write status. */
+/** @brief libuv write completion callback for WebSocket close frames.
+ *
+ * Frees the frame buffer and write request. Logs an error if the write
+ * failed.
+ *
+ * @param req    The completed write request (freed by this callback).
+ * @param status UV status code (negative indicates error, logged to stderr). */
 static void on_close_write(uv_write_t* req, int status) {
   if (status < 0) {
     CSILK_LOG_E("WS close write error: %s", uv_strerror(status));
@@ -108,7 +147,19 @@ static void on_close_write(uv_write_t* req, int status) {
   free(req);
 }
 
-/** @brief Send a WebSocket close frame per RFC 6455 Section 5.5.1. */
+/** @brief Send a WebSocket close frame per RFC 6455 §5.5.1.
+ *
+ * Constructs and sends a close frame with an optional status code and reason
+ * string. The payload is limited to 125 bytes (close frame + reason). After
+ * sending, the connection is NOT immediately closed — the peer is expected
+ * to respond with its own close frame.
+ *
+ * @param c           The request context.
+ * @param status_code WebSocket close status code (e.g., 1000 for normal,
+ *                    1001 for "going away"). Pass 0 to omit the status code.
+ * @param reason      Human-readable reason string (may be NULL).
+ * @note The frame is sent asynchronously. The connection should be closed
+ *       by the caller after receiving the peer's close frame or on timeout. */
 void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
   if (!c || !c->_internal_client) return;
 
@@ -145,8 +196,21 @@ void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
   }
 }
 
-/** @brief Parse and dispatch an incoming WebSocket frame.
- *  Handles close frames (opcode 8) by auto-responding with a close frame. */
+/** @brief Parse and dispatch an incoming WebSocket frame per RFC 6455 §5.2.
+ *
+ * Parses the frame header (FIN, opcode, mask, payload length), extracts
+ * the payload, applies client-to-server masking if present, and dispatches
+ * based on opcode:
+ * - Opcode 0x08 (close): auto-responds with a close frame and closes the
+ *   TCP connection.
+ * - Other data opcodes: invokes the on_ws_message callback if set.
+ *
+ * @param c     The request context.
+ * @param buf   Raw frame data received from the socket.
+ * @param nread Number of bytes available in @p buf.
+ * @note Only complete frames should be passed. Partial frames will be
+ *       silently ignored (insufficient data check returns early).
+ * @note The payload is heap-allocated, unmasked, and freed after dispatch. */
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
   if (nread < 2) return;
 

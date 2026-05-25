@@ -17,7 +17,13 @@
 #define CSILK_GZIP_CHUNK 16384
 #define CSILK_GZIP_MIN_LENGTH 1024
 
-/** @brief State for asynchronous gzip compression offloading. */
+/**
+ * @brief State for asynchronous gzip compression offloading.
+ *
+ * Carries the compressed output buffer, capacity, actual compressed length,
+ * and the zlib return status between the work callback (running on the libuv
+ * thread pool) and the after-work callback (running on the event loop).
+ */
 typedef struct {
   uint8_t* dest;         /**< Compressed output buffer. */
   size_t dest_cap;       /**< Capacity of the output buffer. */
@@ -25,8 +31,18 @@ typedef struct {
   size_t compressed_len; /**< Actual compressed data length. */
 } gzip_async_state_t;
 
-/** @brief libuv work callback: perform gzip compression off the event loop.
- * @param req libuv work request. */
+/**
+ * @brief libuv work callback: perform gzip compression off the event loop.
+ *
+ * Initializes a zlib deflate stream with gzip wrapper (windowBits = 15 + 16),
+ * compresses the response body into a dynamically allocated buffer, then
+ * stores the result in the gzip_async_state_t attached to the context.
+ *
+ * @param req  libuv work request. req->data points to the csilk_ctx_t.
+ *
+ * @note Runs on a libuv thread-pool thread. Must not touch non-thread-safe
+ *       resources.
+ */
 static void gzip_work_cb(uv_work_t* req) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -60,8 +76,21 @@ static void gzip_work_cb(uv_work_t* req) {
   deflateEnd(&strm);
 }
 
-/** @brief libuv after-work callback: apply compressed body and send response.
- * @param req libuv work request. @param status Work status. */
+/**
+ * @brief libuv after-work callback: apply compressed body and send response.
+ *
+ * Runs on the event loop after compression finishes. If compression succeeded
+ * (Z_STREAM_END), it replaces the original response body with the compressed
+ * data, sets Content-Encoding: gzip and Vary: Accept-Encoding headers, then
+ * sends the response. On failure the original uncompressed body is sent
+ * instead.
+ *
+ * @param req     libuv work request. req->data points to the csilk_ctx_t.
+ * @param status  Work status — 0 on success, negative on cancellation.
+ *
+ * @note The original (uncompressed) response body is freed only if it was
+ *       heap-managed (body_is_managed == 1).
+ */
 static void gzip_after_work_cb(uv_work_t* req, int status) {
   csilk_ctx_t* c = (csilk_ctx_t*)req->data;
   gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -85,7 +114,28 @@ static void gzip_after_work_cb(uv_work_t* req, int status) {
   _csilk_send_response(c);
 }
 
-/** @brief Gzip response compression middleware (offloaded to thread pool). */
+/**
+ * @brief Gzip response compression middleware (offloaded to thread pool).
+ *
+ * Calls csilk_next() first, then inspects the response. Compression is
+ * skipped if:
+ *   - The response body is empty,
+ *   - Content-Encoding is already set,
+ *   - The Content-Type is binary / incompressible (image, video, audio,
+ *     pdf, zip, gzip),
+ *   - The client does not advertise gzip in Accept-Encoding,
+ *   - The response body is smaller than CSILK_GZIP_MIN_LENGTH (1 KB).
+ *
+ * When eligible, the response body is made managed (copied if necessary) and
+ * compression is offloaded to the libuv thread pool via a work request.
+ *
+ * @param c  The request context.
+ *
+ * @note This middleware must be registered AFTER handlers that produce the
+ *       response body (since it calls csilk_next() first).
+ * @warning The response body is replaced in-place; subsequent middleware or
+ *          cleanup code must not free the original pointer after compression.
+ */
 void csilk_gzip_middleware(csilk_ctx_t* c) {
   if (!c) return;
 

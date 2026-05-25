@@ -17,8 +17,31 @@
 #define CSILK_MAX_PART_NAME 128
 #define CSILK_MAX_PART_FILENAME 256
 
-/** @brief Parse multipart/form-data request body and invoke handler for each
- * part. */
+/**
+ * @brief Parse a multipart/form-data request body and invoke a handler for
+ *        each part.
+ *
+ * Extracts the boundary string from the Content-Type header, then iterates
+ * through the request body looking for boundary-delimited parts. For each
+ * part, the function parses the Content-Disposition header (extracting name
+ * and optional filename), the optional Content-Type header, and the part
+ * body. A csilk_multipart_part_t struct is populated and passed to the
+ * caller-supplied handler callback.
+ *
+ * @param c       The request context containing the parsed body.
+ * @param handler Callback invoked once per parsed part. Receives a pointer
+ *                to a csilk_multipart_part_t describing the part. Must not
+ *                be NULL.
+ *
+ * @note The part data pointers reference memory within the request body
+ *       buffer directly — they are NOT copies. The handler must not modify
+ *       or store the pointers beyond its invocation.
+ * @warning Part body data is NOT null-terminated. Use part.data_len to
+ *          determine the bounds.
+ * @warning Maximum part name length is 127 bytes, maximum filename length
+ *          is 255 bytes, and maximum part headers per section is 32. Parts
+ *          exceeding these limits will be silently truncated.
+ */
 void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
   if (!c || !csilk_get_body(c, NULL) || !handler) return;
 

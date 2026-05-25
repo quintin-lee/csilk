@@ -11,7 +11,26 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief CORS middleware — sets cross-origin headers and handles preflight. */
+/**
+ * @brief CORS middleware — sets cross-origin headers and handles preflight
+ *        requests.
+ *
+ * Applies the configured Access-Control-* headers to every response. When the
+ * Vary: Origin header is set for non-wildcard origins. If the incoming request
+ * is an OPTIONS preflight (indicated by Access-Control-Request-Method), the
+ * middleware short-circuits with a 204 No Content response instead of
+ * forwarding to downstream handlers.
+ *
+ * @param c       The request context.
+ * @param config  Pointer to a CORS configuration struct specifying allowed
+ *                origins, methods, headers, credentials, and max-age. Must
+ *                remain valid for the duration of the call.
+ *
+ * @note This middleware always calls csilk_next() for non-preflight requests
+ *       after setting response headers.
+ * @warning The config pointer is not deep-copied; the caller must ensure it
+ *          lives long enough for the current request.
+ */
 void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
   if (!c || !config) {
     if (c) csilk_next(c);

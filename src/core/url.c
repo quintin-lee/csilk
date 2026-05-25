@@ -12,7 +12,12 @@
 #include "csilk.h"
 #include "csilk_internal.h"
 
-/** @brief Helper to convert hex character to integer. */
+/** @brief Helper: convert a hexadecimal character to its integer value.
+ *
+ * Handles both uppercase ('A'-'F') and lowercase ('a'-'f') hex digits.
+ *
+ * @param c Hex character ('0'-'9', 'a'-'f', or 'A'-'F').
+ * @return Integer value 0-15, or -1 if @p c is not a valid hex digit. */
 static int hex_to_int(char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -20,7 +25,16 @@ static int hex_to_int(char c) {
   return -1;
 }
 
-/** @brief URL decode a string in-place. */
+/** @brief URL-decode a percent-encoded string in-place.
+ *
+ * Replaces %XX sequences with the corresponding byte value and '+' with
+ * space. The decoding is done in-place so the output is never longer than
+ * the input.
+ *
+ * @param str Null-terminated string to decode (modified in-place).
+ * @return The length of the decoded string (may be shorter than original).
+ * @note If @p str contains invalid % sequences (e.g., "%ZZ"), they are left
+ *       as-is. */
 size_t csilk_url_decode(char* str) {
   if (!str) return 0;
   char* src = str;
@@ -45,7 +59,20 @@ size_t csilk_url_decode(char* str) {
   return dst - str;
 }
 
-/** @brief Split a URL into path and query string components. */
+/** @brief Split a full URL into its path and query string components.
+ *
+ * Finds the first '?' separator. The path portion is URL-decoded and
+ * returned in @p path. The query portion (everything after '?') is
+ * returned raw in @p query (NOT URL-decoded — use csilk_parse_query()
+ * for that). If there is no '?', the entire URL is treated as the path
+ * and @p query is set to NULL.
+ *
+ * @param url   Full URL string (e.g., "/foo/bar?key=val").
+ * @param path  [out] Receives a malloc'd, URL-decoded path string.
+ * @param query [out] Receives a malloc'd raw query string, or NULL if no
+ *              query was present.
+ * @note Both output strings must be freed by the caller with free().
+ *       On allocation failure, both outputs may be NULL. */
 void csilk_split_url(const char* url, char** path, char** query) {
   *path = NULL;
   *query = NULL;

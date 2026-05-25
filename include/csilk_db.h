@@ -1,6 +1,12 @@
 /**
  * @file csilk_db.h
- * @brief Unified database interface for csilk web framework.
+ * @brief Unified pluggable database interface for the csilk web framework.
+ *
+ * Provides an abstract driver model (similar to Go's database/sql) so that
+ * different backends (SQLite, PostgreSQL, MySQL, etc.) can be used through a
+ * common API.  All public database functions are declared here; driver
+ * implementations live in separate compilation units.
+ *
  * @copyright MIT License
  */
 
@@ -12,116 +18,216 @@
 
 #include "csilk.h"
 
-/** @brief Database driver interface. */
+/**
+ * @brief Opaque database driver interface.
+ *
+ * Each supported database backend implements the function table in
+ * csilk_db_driver_s and registers itself with csilk_db_register_driver.
+ */
 typedef struct csilk_db_driver_s csilk_db_driver_t;
 
-/** @brief Database connection pool. */
+/**
+ * @brief A (currently single-connection) database pool.
+ *
+ * Wraps a driver + connection with a mutex for thread-safe access.
+ * All queries and statements go through this pool.
+ *
+ * @note The current implementation holds exactly one connection.  The
+ *       mutex serialises access across libuv worker threads.  A future
+ *       version may support a true connection pool.
+ */
 typedef struct {
-  csilk_db_driver_t* driver;
-  void* connection;
-  uv_mutex_t mutex;
+  csilk_db_driver_t*
+      driver;       /**< Pointer to the registered driver implementation. */
+  void* connection; /**< Opaque driver-specific connection handle. */
+  uv_mutex_t mutex; /**< Mutex for thread-safe connection access. */
 } csilk_db_pool_t;
 
-/** @brief Query result row. */
+/**
+ * @brief A single row of a query result.
+ *
+ * Values are strings (human-readable representations of column data).
+ * NULL database values are represented as NULL pointers in the values array.
+ */
 typedef struct {
-  char** values;
-  int count;
+  char** values; /**< Array of NUL-terminated string values, one per column.
+                    NULL if the SQL value was NULL. */
+  int count;     /**< Number of columns (length of @p values). */
 } csilk_db_row_t;
 
-/** @brief Query result set. */
+/**
+ * @brief A complete query result set.
+ *
+ * Contains all rows, column names, and dimension information.
+ * Allocated by the driver's query function and freed by free_result.
+ */
 typedef struct {
-  csilk_db_row_t** rows;
-  char** column_names;
-  int row_count;
-  int column_count;
+  csilk_db_row_t** rows; /**< Array of row pointers (length @p row_count). */
+  char** column_names;   /**< Array of column name strings (length @p
+                            column_count). */
+  int row_count;         /**< Number of rows in @p rows. */
+  int column_count; /**< Number of columns (length of @p column_names and each
+                       row's @p values). */
 } csilk_db_result_t;
 
-/** @brief Driver function pointers. */
+/**
+ * @brief Virtual function table implemented by each database driver.
+ *
+ * All function pointers must be non-NULL except where noted.
+ */
 struct csilk_db_driver_s {
-  const char* name;
+  const char* name; /**< Driver identifier string (e.g., "sqlite", "postgres").
+                       Matches the name passed to csilk_db_pool_new. */
 
-  /** @brief Connect to database.
-   * @param pool Connection pool.
-   * @param dsn Data source name (e.g., "file:test.db" or
-   * "host=localhost;user=foo").
-   * @return 0 on success, -1 on failure. */
+  /** @brief Open a connection to the database.
+   *  @param pool  Pool whose @p connection field should be populated.
+   *  @param dsn   Driver-specific data source name.
+   *  @return 0 on success, -1 on failure. */
   int (*connect)(csilk_db_pool_t* pool, const char* dsn);
 
-  /** @brief Disconnect from database. */
+  /** @brief Close the database connection.
+   *  @param pool  Pool whose @p connection should be closed and freed.
+   *  @return 0 on success, -1 on failure. */
   int (*disconnect)(csilk_db_pool_t* pool);
 
-  /** @brief Execute a query and return results.
-   * @param pool Connection pool.
-   * @param sql SQL statement.
-   * @param result Output result set.
-   * @return 0 on success, -1 on failure. */
+  /** @brief Execute a SELECT query and produce a result set.
+   *  @param pool   Connection pool (mutex is held by the caller).
+   *  @param sql    SQL query string.
+   *  @param[out] result  Caller-allocated csilk_db_result_t to populate.
+   *                      Set to zero-initialised (the driver allocates rows +
+   *                      strings internally).
+   *  @return 0 on success, -1 on failure. */
   int (*query)(csilk_db_pool_t* pool, const char* sql,
                csilk_db_result_t* result);
 
-  /** @brief Execute a statement (no result rows).
-   * @param pool Connection pool.
-   * @param sql SQL statement.
-   * @return 0 on success, -1 on failure. */
+  /** @brief Execute a statement that returns no result rows.
+   *  @param pool  Connection pool (mutex is held by the caller).
+   *  @param sql   SQL statement (INSERT, UPDATE, DELETE, DDL, etc.).
+   *  @return 0 on success, -1 on failure. */
   int (*exec)(csilk_db_pool_t* pool, const char* sql);
 
-  /** @brief Begin transaction. */
+  /** @brief Begin a database transaction.
+   *  @param pool  Connection pool (mutex is held by the caller).
+   *  @return 0 on success, -1 on failure. */
   int (*transaction_begin)(csilk_db_pool_t* pool);
 
-  /** @brief Commit transaction. */
+  /** @brief Commit the current transaction.
+   *  @param pool  Connection pool (mutex is held by the caller).
+   *  @return 0 on success, -1 on failure. */
   int (*transaction_commit)(csilk_db_pool_t* pool);
 
-  /** @brief Rollback transaction. */
+  /** @brief Roll back the current transaction.
+   *  @param pool  Connection pool (mutex is held by the caller).
+   *  @return 0 on success, -1 on failure. */
   int (*transaction_rollback)(csilk_db_pool_t* pool);
 
-  /** @brief Free result set. */
+  /** @brief Free a result set and all associated memory.
+   *  @param result  Result set to free (must not be NULL). */
   void (*free_result)(csilk_db_result_t* result);
 };
 
-/** @brief Create a new database pool with the given driver.
- * @param driver_name Driver name (e.g., "sqlite").
- * @param dsn Data source name.
- * @return New pool, or NULL on failure. */
+/**
+ * @brief Create a new database pool and connect using the named driver.
+ *
+ * Looks up the driver by @p driver_name (must have been registered via
+ * csilk_db_register_driver or the built-in init), allocates a pool, and
+ * calls the driver's connect function.
+ *
+ * @param driver_name  Driver identifier (e.g., "sqlite").  Must not be NULL.
+ * @param dsn          Data source name (driver-specific format).
+ * @return A new csilk_db_pool_t on success, or NULL if the driver is unknown
+ *         or the connection fails.
+ */
 csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
 
-/** @brief Free a database pool. */
+/**
+ * @brief Destroy a database pool and disconnect.
+ *
+ * Calls the driver's disconnect, frees internal resources, and deallocates
+ * the pool struct.
+ *
+ * @param pool  Pool to destroy.  Must not be NULL.
+ */
 void csilk_db_pool_free(csilk_db_pool_t* pool);
 
-/** @brief Execute a query and return JSON result.
- * @param pool Connection pool.
- * @param sql SQL statement.
- * @return cJSON array, or NULL on failure. Caller must free. */
+/**
+ * @brief Execute a SELECT query and return the rows as a JSON array.
+ *
+ * Internally acquires the pool mutex, calls the driver's query function,
+ * converts each row to a JSON object (keyed by column name), frees the
+ * native result, and returns the cJSON array.
+ *
+ * @param pool  Connection pool.
+ * @param sql   SQL SELECT statement.
+ * @return A cJSON array of row objects, or NULL on failure.  Caller must
+ *         free with cJSON_Delete.
+ */
 cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
-/** @brief Execute a statement.
- * @param pool Connection pool.
- * @param sql SQL statement.
- * @return 0 on success, -1 on failure. */
+/**
+ * @brief Execute a statement that produces no result rows.
+ *
+ * Acquires the pool mutex and calls the driver's exec function.
+ *
+ * @param pool  Connection pool.
+ * @param sql   SQL statement (INSERT, UPDATE, DELETE, DDL).
+ * @return 0 on success, -1 on failure.
+ */
 int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
 
-/** @brief Query with parameters (placeholder: ?).
- * @param pool Connection pool.
- * @param sql SQL with ? placeholders.
- * @param params Parameter values (NULL-terminated).
- * @return cJSON array, or NULL on failure. */
+/**
+ * @brief Execute a parameterised SELECT query with ? placeholders.
+ *
+ * Each ? in @p sql is substituted with the corresponding value from
+ * @p params (escaping is handled by the driver).  Results are returned as
+ * a JSON array.
+ *
+ * @param pool   Connection pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params NULL-terminated array of string values.  The number of
+ *               values must match the number of ? placeholders.
+ * @return A cJSON array of row objects, or NULL on failure.  Caller must
+ *         free with cJSON_Delete.
+ */
 cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
                                  const char** params);
 
-/** @brief Register a database driver.
- * @param name Driver identifier.
- * @param driver Driver implementation.
- * @return 0 on success. */
+/**
+ * @brief Register a database driver implementation.
+ *
+ * Makes the driver available for use with csilk_db_pool_new.  The @p name
+ * must be unique (earlier registrations are not overwritten).
+ *
+ * @param name    Driver identifier string (e.g., "postgres").  Must remain
+ *                valid for the program lifetime.
+ * @param driver  Pointer to a csilk_db_driver_t with all function pointers
+ *                populated.  The struct must remain valid for the program
+ *                lifetime.
+ * @return 0 on success, -1 if a driver with @p name is already registered.
+ */
 int csilk_db_register_driver(const char* name, csilk_db_driver_t* driver);
 
-/** @brief Get a registered driver by name.
- * @param name Driver identifier.
- * @return Driver pointer, or NULL if not found. */
+/**
+ * @brief Look up a registered driver by name.
+ *
+ * @param name  Driver identifier string.
+ * @return Pointer to the registered csilk_db_driver_t, or NULL if not found.
+ */
 csilk_db_driver_t* csilk_db_get_driver(const char* name);
 
-/** @brief Initialize SQLite driver (internal use). */
+/**
+ * @brief Internal: Register the built-in SQLite3 driver.
+ *
+ * Called automatically by csilk_db_init.  Not intended for direct use.
+ */
 void csilk_db_sqlite_init(void);
 
-/** @brief Initialize the database system (call once on startup).
- * Registers built-in drivers including SQLite3. */
+/**
+ * @brief Initialise the database subsystem.
+ *
+ * Registers all built-in drivers (SQLite3, etc.).  Must be called once
+ * before any csilk_db_pool_new call.  Safe to call multiple times.
+ */
 void csilk_db_init(void);
 
 #endif /* CSILK_DB_H */

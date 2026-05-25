@@ -16,12 +16,19 @@ int g_oom_fail_after = -1;
 int g_oom_count = 0;
 #endif
 
-/** @brief Rotate-left bitwise operation. */
+/** @brief 32-bit rotate-left operation (cyclic bit shift). */
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 
-/** @brief Core SHA1 transform function.
- * @param state In/out hash state array.
- * @param buffer 64-byte block to process. */
+/** @brief Internal: process a single 64-byte block through the SHA-1
+ * compression function.
+ *
+ * Performs the SHA-1 round computation on a 512-bit message block, updating
+ * the 5-word hash state. Implements the standard SHA-1 algorithm with
+ * four rounds (20 steps each) using the functions f(), k constants, and
+ * message schedule expansion.
+ *
+ * @param state [in/out] 5-element hash state array (updated in-place).
+ * @param buffer 64-byte (512-bit) message block to process. */
 static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
   uint32_t a, b, c, d, e;
   uint32_t w[80];
@@ -70,7 +77,13 @@ static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
   state[4] += e;
 }
 
-/** @brief Initialize a SHA1 hashing context. */
+/** @brief Initialize a SHA-1 hashing context with the standard initial hash
+ * values.
+ *
+ * Sets the five state words to the SHA-1 initial constants and resets the
+ * bit count to zero. Must be called before the first csilk_sha1_update().
+ *
+ * @param context SHA-1 context to initialize (must not be NULL). */
 void csilk_sha1_init(csilk_sha1_ctx* context) {
   context->state[0] = 0x67452301;
   context->state[1] = 0xEFCDAB89;
@@ -80,7 +93,15 @@ void csilk_sha1_init(csilk_sha1_ctx* context) {
   context->count[0] = context->count[1] = 0;
 }
 
-/** @brief Feed data into the SHA1 hashing context. */
+/** @brief Feed data into the SHA-1 hashing context for incremental hashing.
+ *
+ * Processes the input data in 64-byte blocks, updating the context's state.
+ * Partial blocks are buffered until the next call or csilk_sha1_final().
+ *
+ * @param context SHA-1 context (initialized via csilk_sha1_init()).
+ * @param data    Input data buffer.
+ * @param len     Length of input data in bytes.
+ * @note Can be called multiple times with successive data chunks. */
 void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data,
                        size_t len) {
   uint32_t j = context->count[0];
@@ -104,7 +125,14 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data,
   memcpy(context->buffer + j, data + i_sz, len - i_sz);
 }
 
-/** @brief Finalize SHA1 hash and produce the 20-byte digest. */
+/** @brief Finalize the SHA-1 hash and produce the 20-byte digest.
+ *
+ * Pads the message according to RFC 3174 (SHA-1 specification), appends the
+ * 64-bit message length, and outputs the final hash digest. After this call,
+ * the context should not be used without re-initialization.
+ *
+ * @param context SHA-1 context with accumulated data.
+ * @param digest  [out] 20-byte buffer to receive the hash digest. */
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
   uint8_t finalcount[8];
   uint64_t total_bits =
@@ -189,6 +217,13 @@ static void sha256_transform(uint32_t state[8], const uint8_t data[64]) {
   state[7] += h;
 }
 
+/** @brief Initialize a SHA-256 hashing context with the standard initial hash
+ * values.
+ *
+ * Sets the eight state words to the SHA-256 initial constants and resets
+ * the bit count to zero.
+ *
+ * @param context SHA-256 context to initialize (must not be NULL). */
 void csilk_sha256_init(csilk_sha256_ctx* context) {
   context->state[0] = 0x6a09e667;
   context->state[1] = 0xbb67ae85;
@@ -201,6 +236,14 @@ void csilk_sha256_init(csilk_sha256_ctx* context) {
   context->count = 0;
 }
 
+/** @brief Feed data into the SHA-256 hashing context for incremental hashing.
+ *
+ * Processes the input data in 64-byte blocks, updating the context's state.
+ * Partial blocks are buffered. Tracks the total bit count for final padding.
+ *
+ * @param context SHA-256 context (initialized via csilk_sha256_init()).
+ * @param data    Input data buffer.
+ * @param len     Length of input data in bytes. */
 void csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data,
                          size_t len) {
   uint32_t i, idx = (uint32_t)((context->count >> 3) & 0x3F);
@@ -219,6 +262,13 @@ void csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data,
   memcpy(context->buffer + idx, data + i, len - i);
 }
 
+/** @brief Finalize the SHA-256 hash and produce the 32-byte digest.
+ *
+ * Pads the message according to FIPS 180-4, appends the 64-bit message
+ * length, and outputs the final 256-bit (32-byte) hash digest.
+ *
+ * @param context SHA-256 context with accumulated data.
+ * @param digest  [out] 32-byte buffer to receive the hash digest. */
 void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]) {
   uint8_t finalcount[8];
   for (int i = 0; i < 8; i++)
@@ -235,6 +285,17 @@ void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]) {
         (uint8_t)((context->state[i >> 2] >> (24 - (i & 3) * 8)) & 0xFF);
 }
 
+/** @brief Compute HMAC-SHA256 as defined in RFC 2104.
+ *
+ * If the key is longer than 64 bytes (the SHA-256 block size), it is first
+ * hashed with SHA-256 to produce a 32-byte derived key. The standard
+ * ipad/opad construction is then applied.
+ *
+ * @param key      HMAC secret key.
+ * @param key_len  Key length in bytes.
+ * @param data     Input message data.
+ * @param data_len Message length in bytes.
+ * @param out      [out] 32-byte output buffer for the HMAC digest. */
 void csilk_hmac_sha256(const uint8_t* key, size_t key_len, const uint8_t* data,
                        size_t data_len, uint8_t out[32]) {
   csilk_sha256_ctx ctx;
@@ -269,11 +330,21 @@ void csilk_hmac_sha256(const uint8_t* key, size_t key_len, const uint8_t* data,
   csilk_sha256_final(&ctx, out);
 }
 
-/** @brief Base64 encoding lookup table. */
+/** @brief Standard Base64 alphabet per RFC 4648 (used by b64_encode). */
 static const char b64_table[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/** @brief Encode raw bytes as a Base64 string (RFC 4648). */
+/** @brief Encode raw bytes as a standard Base64 string per RFC 4648.
+ *
+ * Processes input in 3-byte groups, producing 4 Base64 characters each.
+ * Padding with '=' is added if the input length is not a multiple of 3.
+ * The output string is null-terminated.
+ *
+ * @param src Input byte buffer.
+ * @param len Input length in bytes.
+ * @param out [out] Output buffer (must be large enough: 4 * ceil(len/3) + 1).
+ * @note The caller must ensure @p out has sufficient capacity. The worst-case
+ *       output length is ((len + 2) / 3) * 4 + 1. */
 void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
   size_t i, j;
   for (i = 0, j = 0; i < len; i += 3) {
@@ -294,7 +365,18 @@ void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
   out[j] = '\0';
 }
 
-/** @brief Encode raw bytes as a Base64URL string (RFC 4648). */
+/** @brief Encode raw bytes as a Base64URL string per RFC 4648 §5.
+ *
+ * Like csilk_base64_encode() but uses URL-safe characters ('-' instead of '+',
+ * '_' instead of '/') and strips padding '=' characters (the output is
+ * terminated at the first non-encoded character).
+ *
+ * @param src Input byte buffer.
+ * @param len Input length in bytes.
+ * @param out [out] Output buffer (must be large enough for the padded
+ *           Base64 result + 1).
+ * @note The output is NOT padded with '='. The length can be inferred from
+ *       strlen(out). */
 void csilk_base64url_encode(const uint8_t* src, size_t len, char* out) {
   csilk_base64_encode(src, len, out);
   for (char* p = out; *p; p++) {
@@ -309,7 +391,18 @@ void csilk_base64url_encode(const uint8_t* src, size_t len, char* out) {
   }
 }
 
-/** @brief Decode a Base64URL string. */
+/** @brief Decode a Base64URL-encoded string back to raw bytes.
+ *
+ * Converts URL-safe characters back to standard Base64, restores padding,
+ * and decodes using a reverse lookup table. The output buffer receives
+ * the decoded bytes.
+ *
+ * @param src Base64URL-encoded input string (null-terminated).
+ * @param out [out] Output buffer for decoded bytes.
+ * @return The number of decoded bytes on success, or -1 on invalid input
+ *         (non-Base64 characters) or allocation failure.
+ * @note The caller should ensure @p out is large enough (at least
+ *       strlen(src) * 3 / 4 + 1 bytes). */
 int csilk_base64url_decode(const char* src, uint8_t* out) {
   size_t len = strlen(src);
   char* tmp = malloc(len + 5);
@@ -358,7 +451,19 @@ int csilk_base64url_decode(const char* src, uint8_t* out) {
   return decoded_len;
 }
 
-/** @brief Generate a random UUID v4 string (8-4-4-4-12). */
+/** @brief Generate a random UUID version 4 string in the standard 8-4-4-4-12
+ * format.
+ *
+ * Reads 16 random bytes from /dev/urandom. If /dev/urandom is unavailable,
+ * falls back to rand() (which is NOT cryptographically secure). Sets the
+ * UUID version nibble (4) and variant bits (10xx) per RFC 4122.
+ *
+ * @param buf [out] 37-byte buffer to receive the UUID string
+ *            (36 hex chars + 4 hyphens + null terminator).
+ * @note The output format is: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+ * @warning The fallback to rand() is NOT cryptographically secure. On systems
+ *          without /dev/urandom, CSILK_CRYPTO_DRIVER should supply randomness.
+ */
 void csilk_generate_uuid(char* buf) {
   uint8_t random[16];
   FILE* f = fopen("/dev/urandom", "rb");
@@ -384,6 +489,19 @@ void csilk_generate_uuid(char* buf) {
       random[12], random[13], random[14], random[15]);
 }
 
+/** @brief Context-aware HMAC-SHA256 — delegates to the crypto driver if
+ * available.
+ *
+ * If the context has a crypto driver with an hmac_sha256 method, that is
+ * used. Otherwise falls back to the built-in csilk_hmac_sha256()
+ * implementation. This allows pluggable hardware-accelerated crypto.
+ *
+ * @param c        Request context (may be NULL).
+ * @param key      HMAC key.
+ * @param key_len  Key length.
+ * @param data     Input data.
+ * @param data_len Data length.
+ * @param out      [out] 32-byte HMAC output buffer. */
 void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
                         const uint8_t* data, size_t data_len, uint8_t out[32]) {
   if (c && c->crypto_driver && c->crypto_driver->hmac_sha256) {
@@ -393,6 +511,14 @@ void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
   }
 }
 
+/** @brief Context-aware UUID generation — delegates to the crypto driver if
+ * available.
+ *
+ * If the context has a crypto driver with a generate_uuid method, that is
+ * used. Otherwise falls back to the built-in csilk_generate_uuid().
+ *
+ * @param c   Request context (may be NULL).
+ * @param buf [out] 37-byte buffer for the UUID string. */
 void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]) {
   if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
     c->crypto_driver->generate_uuid(buf);

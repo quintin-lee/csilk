@@ -30,48 +30,88 @@ struct csilk_method_handler_s {
 };
 typedef struct csilk_method_handler_s csilk_method_handler_t;
 
-/** @brief Item in context's custom key-value storage. */
+/** @brief A single key-value item in the context's custom storage linked list.
+ *
+ * Items are allocated from the request arena and form a singly-linked list
+ * accessible via csilk_set()/csilk_get(). */
 typedef struct csilk_storage_item_s {
   char* key;                         /**< Item key name. */
   void* value;                       /**< Pointer to user data. */
   struct csilk_storage_item_s* next; /**< Next item in the linked list. */
 } csilk_storage_item_t;
 
-/** @brief Main Request Context.
- *  Holds all information about the current HTTP request/response.
+/** @brief Main Request Context — holds all state for the current HTTP
+ * request/response cycle.
+ *
+ * This structure is the central data object passed through the handler chain.
+ * It contains request data (method, path, headers, body, query params),
+ * response data (status, headers, body), URL path parameters captured during
+ * routing, storage for handler-injected values, arena allocator for
+ * request-scoped memory, and metadata for WebSocket/SSE/async responses.
+ *
+ * The context is reused across keep-alive requests via csilk_ctx_cleanup(),
+ * which resets arena memory and clears per-request state while preserving
+ * the underlying TCP connection state.
  */
 struct csilk_ctx_s {
-  int handler_index;         /**< Index of current handler in the chain. */
-  csilk_handler_t* handlers; /**< NULL terminated array of handlers. */
-  int aborted;               /**< Flag if execution was aborted. */
-  jmp_buf jump_buffer;       /**< Buffer for recovery (panic handling). */
-  int has_jump_buffer;       /**< Flag if jump_buffer is active. */
-  csilk_arena_t* arena;      /**< Request-scoped arena allocator. */
-  csilk_request_t request;   /**< Request data. */
-  csilk_response_t response; /**< Response data. */
-  csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters array. */
-  int params_count; /**< Current number of path parameters. */
-  int is_websocket; /**< Flag if connection is upgraded to WebSocket. */
-  int is_sse;       /**< Flag if connection is Server-Sent Events. */
+  int handler_index; /**< Index of the current handler in the chain; starts at
+                        -1. */
+  csilk_handler_t* handlers; /**< NULL-terminated array of handler function
+                                pointers for the matched route. */
+  int aborted; /**< Non-zero if handler execution was aborted via csilk_abort().
+                */
+  jmp_buf jump_buffer;  /**< setjmp buffer for error recovery (used by
+                           panic/recovery middleware). */
+  int has_jump_buffer;  /**< Non-zero if jump_buffer has been initialized and is
+                           safe to longjmp to. */
+  csilk_arena_t* arena; /**< Request-scoped arena allocator. Memory is reset
+                           between requests. */
+  csilk_request_t request; /**< Parsed HTTP request data (method, path, headers,
+                              body, query). */
+  csilk_response_t response; /**< HTTP response data (status, headers, body) to
+                                be sent to the client. */
+  csilk_param_t
+      params[CSILK_MAX_PARAMS]; /**< URL path parameters captured during routing
+                                   (key/value pairs). */
+  int params_count; /**< Number of path parameters currently in params[] array.
+                     */
+  int is_websocket; /**< Non-zero if the connection has been upgraded to
+                       WebSocket (set by csilk_ws_handshake). */
+  int is_sse; /**< Non-zero if the connection is being used for Server-Sent
+                 Events streaming. */
   void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len,
-                        int opcode);      /**< WebSocket message callback. */
-  csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
-  csilk_crypto_driver_t* crypto_driver;   /**< Context crypto driver. */
-  csilk_storage_item_t* storage_head; /**< Head of key-value storage list. */
-  void* _internal_client; /**< Internal client pointer (DO NOT USE). */
-  uv_work_t work_req;     /**< Worker request for async operations. */
-  int is_async; /**< Flag if the response will be sent asynchronously. */
-  int response_started; /**< Flag if response headers have been sent. */
+                        int opcode); /**< Callback invoked for each incoming
+                                        WebSocket data frame. */
+  csilk_storage_driver_t*
+      storage_driver; /**< Optional pluggable storage backend for
+                         csilk_set()/csilk_get(). */
+  csilk_crypto_driver_t* crypto_driver; /**< Optional pluggable crypto backend
+                                           for HMAC, UUID, etc. */
+  csilk_storage_item_t* storage_head;   /**< Head of the linked list for simple
+                                           arena-backed key-value storage. */
+  void* _internal_client; /**< Opaque pointer to the internal csilk_client_t.
+                             MUST NOT be used directly by handlers. */
+  uv_work_t work_req;     /**< libuv work request structure for offloading async
+                             operations to the thread pool. */
+  int is_async; /**< Non-zero if the response will be sent asynchronously
+                   (framework skips auto-send). */
+  int response_started; /**< Non-zero if chunked response headers have already
+                           been sent to the client. */
 
-  /* For zero-copy file serving */
-  int file_fd;        /**< File descriptor for sendfile. */
-  size_t file_offset; /**< Starting offset in the file. */
-  size_t file_size;   /**< Total size of the file. */
+  /* For zero-copy file serving via sendfile() */
+  int file_fd; /**< File descriptor of the file being sent via sendfile(). -1 if
+                  not in use. */
+  size_t file_offset; /**< Byte offset into the file where sendfile should start
+                         reading. */
+  size_t file_size;   /**< Total number of bytes to send from the file. */
 
-  /** For OpenAPI spec generation - tracks current method handler */
+  /** For OpenAPI spec generation — tracks the current method handler's metadata
+   */
   csilk_method_handler_t*
-      current_handler; /**< Current method handler being executed. */
-  char request_id[37]; /**< Unique request ID (UUID-like). */
+      current_handler; /**< Pointer to the method handler entry for the matched
+                          route (NULL if unmatched). */
+  char request_id[37]; /**< Per-request unique identifier (UUID v4 string, 36
+                          chars + null). */
 };
 
 #endif /* CSILK_CONTEXT_INTERNAL_H */
