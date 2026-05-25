@@ -120,4 +120,46 @@ size_t csilk_url_decode(char* str);
  * @param buf Output buffer (at least 37 bytes). */
 void csilk_generate_uuid(char* buf);
 
+typedef struct csilk_mq_msg_s {
+  char* topic;
+  void* payload;
+  size_t len;
+  struct csilk_mq_msg_s* next;
+} csilk_mq_msg_t;
+
+typedef struct csilk_mq_topic_s {
+  char* name;
+  csilk_mq_handler_t* handlers; /* Middlewares + Subscribers */
+  size_t handler_count;
+  size_t handler_capacity;
+  struct csilk_mq_topic_s* next;
+} csilk_mq_topic_t;
+
+struct csilk_mq_s {
+  uv_async_t async_handle;
+  uv_mutex_t queue_mutex;
+  csilk_mq_msg_t* queue_head;
+  csilk_mq_msg_t* queue_tail;
+
+  csilk_mq_topic_t* topics; /* Linked list of topics */
+
+  /* Global middlewares */
+  csilk_mq_handler_t* global_middlewares;
+  size_t global_mw_count;
+  size_t global_mw_capacity;
+};
+
+struct csilk_mq_ctx_s {
+  csilk_mq_t* mq;
+  csilk_mq_msg_t* msg;
+  csilk_mq_handler_t* handlers;
+  size_t handler_count;
+  int handler_index;
+  int aborted;
+};
+
+/** @brief Internal Init and Free */
+csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
+void _csilk_mq_free(csilk_mq_t* mq);
+
 #endif
