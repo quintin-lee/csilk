@@ -7,18 +7,18 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "context_internal.h"
 #include "csilk.h"
 
-static void dummy_handler(csilk_ctx_t* c) {
-  (void)c;
-}
+static void dummy_handler(csilk_ctx_t* c) { (void)c; }
 
 void test_metrics() {
   printf("Testing Metrics middleware...\n");
-  
-  csilk_handler_t handlers[] = { (csilk_handler_t)csilk_metrics_middleware, dummy_handler, NULL };
-  csilk_ctx_t c = { .handler_index = -1, .handlers = handlers, .aborted = 0 };
+
+  csilk_handler_t handlers[] = {(csilk_handler_t)csilk_metrics_middleware,
+                                dummy_handler, NULL};
+  csilk_ctx_t c = {.handler_index = -1, .handlers = handlers, .aborted = 0};
   c.arena = csilk_arena_new(4096);
 
   /* Simulate a request through middleware */

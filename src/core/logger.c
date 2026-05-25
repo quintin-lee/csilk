@@ -24,13 +24,13 @@
 
 /** @brief Structured log entry for JSON serialization via reflection. */
 typedef struct csilk_log_entry_s {
-  int64_t time_epoch; /**< unix timestamp */
-  char level[8];      /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
+  int64_t time_epoch;  /**< unix timestamp */
+  char level[8];       /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
   char request_id[37]; /**< unique request id */
-  char file[64];      /**< source filename */
-  int32_t line;       /**< source line number */
-  char func[64];      /**< function name */
-  char msg[1024];     /**< log message */
+  char file[64];       /**< source filename */
+  int32_t line;        /**< source line number */
+  char func[64];       /**< function name */
+  char msg[1024];      /**< log message */
 } csilk_log_entry_t;
 
 #define LOG_ENTRY_MAP(X)                                                  \
