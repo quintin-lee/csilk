@@ -28,6 +28,11 @@ static void echo_handler(csilk_ctx_t* c) {
   csilk_string(c, CSILK_STATUS_OK, resp);
 }
 
+static void on_server_start(csilk_ctx_t* c) {
+  (void)c;
+  server_ready = 1;
+}
+
 static void* run_server(void* arg) {
   (void)arg;
   csilk_router_t* router = csilk_router_new();
@@ -37,7 +42,7 @@ static void* run_server(void* arg) {
   csilk_router_add(router, "GET", "/echo", h2, 1);
 
   g_server = csilk_server_new(router);
-  server_ready = 1;
+  csilk_server_add_hook(g_server, CSILK_HOOK_SERVER_START, on_server_start);
   csilk_server_run(g_server, PORT);
   csilk_server_free(g_server);
   csilk_router_free(router);

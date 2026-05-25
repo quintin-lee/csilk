@@ -216,7 +216,7 @@ static void on_close(uv_handle_t* handle) {
                              (uv_handle_t*)&client->read_timer,
                              (uv_handle_t*)&client->write_timer,
                              (uv_handle_t*)&client->request_timer};
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
       if (uv_is_closing(timers[i])) {
         client->close_pending--;
       } else {
@@ -288,6 +288,12 @@ static void on_stop_async(uv_async_t* handle) {
   if (uv_is_active((uv_handle_t*)&server->async_handle) &&
       !uv_is_closing((uv_handle_t*)&server->async_handle)) {
     uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
+  }
+
+  // Close MQ async handle
+  if (server->mq) {
+    _csilk_mq_free(server->mq);
+    server->mq = NULL;
   }
 }
 
