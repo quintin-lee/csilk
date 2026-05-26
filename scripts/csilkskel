@@ -176,6 +176,25 @@ endif()'
     SWAGGER_SETUP='  csilk_app_enable_openapi(app, 1);'
   fi
 
+  AI_HDR=""; AI_SETUP=""; AI_CLEANUP=""
+  if [ "$AI_PROVIDER" != "none" ]; then
+    AI_HDR='#include "csilk/drivers/ai.h"'
+    AI_SETUP='  csilk_ai_t* ai = csilk_ai_new(config->ai.driver, config->ai.api_key, config->ai.base_url);
+  csilk_ai_context_t* ai_ctx = csilk_ai_context_new(10);
+  csilk_set(app, "ai", ai);
+  csilk_set(app, "ai_ctx", ai_ctx);'
+    AI_CLEANUP='  csilk_ai_free(ai);
+  csilk_ai_context_free(ai_ctx);'
+    LAYERED_SOURCES="${LAYERED_SOURCES}\n  src/api/ai_handler.c"
+  fi
+
+  CIPHER_HDR=""; CIPHER_SETUP=""
+  if [ "$USE_CIPHER" = "1" ]; then
+    CIPHER_HDR='#include "csilk/drivers/cipher.h"'
+    CIPHER_SETUP='  extern csilk_cipher_driver_t openssl_cipher_driver;
+  csilk_server_set_cipher_driver(csilk_app_server(app), &openssl_cipher_driver);'
+  fi
+
   MID_SETUP=""
   if [ "$MID_CORS" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, cors_middleware_wrapper);\n"; fi
   if [ "$MID_GZIP" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_gzip_middleware);\n"; fi
@@ -227,7 +246,18 @@ logger:
 middleware:
   enable_logger: 1
   enable_recovery: 1
+  enable_request_id: $([ "$MID_REQUESTID" = "y" ] && echo "1" || echo "0")
 YAML
+
+  if [ "$AI_PROVIDER" != "none" ]; then
+    cat >> config.yaml <<YAML
+ai:
+  driver: ${AI_PROVIDER}
+  model: $([ "$AI_PROVIDER" = "openai" ] && echo "gpt-4o" || echo "llama3")
+  api_key: "\${$(echo ${AI_PROVIDER} | tr '[:lower:]' '[:upper:]')_API_KEY}"
+  base_url: ""
+YAML
+  fi
 
   if [ "$DB" = "sqlite" ]; then
     cat >> config.yaml <<YAML
