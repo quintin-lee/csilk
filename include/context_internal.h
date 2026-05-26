@@ -27,6 +27,12 @@ struct csilk_method_handler_s {
                               (optional). */
   const char* summary;     /**< Short summary of the operation. */
   const char* description; /**< Detailed description of the operation. */
+
+  /** Permission metadata for interface-level access control */
+  const char* perm_required; /**< Permission required for this route (e.g.,
+                                "read", "write"), or NULL if no check. */
+  const char* perm_resource; /**< Resource pattern for permission check (e.g.,
+                                "users:*"), or NULL. */
 };
 typedef struct csilk_method_handler_s csilk_method_handler_t;
 

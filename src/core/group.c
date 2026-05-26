@@ -249,6 +249,52 @@ void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
   free(combined_handlers);
 }
 
+/** @copydoc csilk_group_add_route_extended
+ *  @param perm_required  Permission required for this route, or NULL.
+ *  @param perm_resource  Resource pattern for permission check, or NULL. */
+void csilk_group_add_route_extended_perm(csilk_group_t* group,
+                                         const char* method, const char* path,
+                                         csilk_handler_t handler,
+                                         const char* input_type,
+                                         const char* output_type,
+                                         const char* summary,
+                                         const char* description,
+                                         const char* perm_required,
+                                         const char* perm_resource) {
+  if (!group || !method || !path || !handler) return;
+
+  char* full_path = join_path(group->prefix, path);
+  if (!full_path) return;
+
+  csilk_handler_t* combined_handlers = NULL;
+  size_t combined_count = 0;
+
+  if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
+    free(full_path);
+    free(combined_handlers);
+    return;
+  }
+
+  csilk_handler_t* new_handlers = realloc(
+      combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
+  if (!new_handlers) {
+    free(full_path);
+    free(combined_handlers);
+    return;
+  }
+  combined_handlers = new_handlers;
+  combined_handlers[combined_count] = handler;
+  combined_count++;
+
+  csilk_router_add_extended_perm(group->router, method, full_path,
+                                 combined_handlers, combined_count, full_path,
+                                 input_type, output_type, summary, description,
+                                 perm_required, perm_resource);
+
+  free(full_path);
+  free(combined_handlers);
+}
+
 /** @brief Register a route with a custom chain of handlers (middleware + route
  * handler).
  *

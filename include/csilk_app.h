@@ -113,6 +113,39 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
                                   const char* output_type, const char* summary,
                                   const char* description);
 
+/** @brief Register a route with permission metadata.
+ *  @param app Application handle.
+ *  @param method HTTP method string.
+ *  @param path URL pattern (supports :param and *wildcard).
+ *  @param handler Route handler function.
+ *  @param perm_required Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_app_add_route_perm(csilk_app_t* app, const char* method,
+                              const char* path, csilk_handler_t handler,
+                              const char* perm_required,
+                              const char* perm_resource);
+
+/** @brief Register a route with full metadata including permissions.
+ *  @param app Application handle.
+ *  @param method HTTP method string.
+ *  @param path URL pattern.
+ *  @param handler Route handler function.
+ *  @param input_type Registered type name for request body (NULL if none).
+ *  @param output_type Registered type name for response (NULL if none).
+ *  @param summary Short operation summary (NULL if none).
+ *  @param description Detailed operation description (NULL if none).
+ *  @param perm_required Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
+                                       const char* path,
+                                       csilk_handler_t handler,
+                                       const char* input_type,
+                                       const char* output_type,
+                                       const char* summary,
+                                       const char* description,
+                                       const char* perm_required,
+                                       const char* perm_resource);
+
 /** @brief Convenience macro to register a GET route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -123,6 +156,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_get_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "GET", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a GET route with permission. */
+#define csilk_app_get_perm(app, path, handler, perm, res)                  \
+  csilk_app_add_route_perm(app, "GET", path, handler, perm, res)
 /** @brief Convenience macro to register a POST route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -133,6 +169,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_post_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "POST", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a POST route with permission. */
+#define csilk_app_post_perm(app, path, handler, perm, res)                 \
+  csilk_app_add_route_perm(app, "POST", path, handler, perm, res)
 /** @brief Convenience macro to register a PUT route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -143,6 +182,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_put_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "PUT", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a PUT route with permission. */
+#define csilk_app_put_perm(app, path, handler, perm, res)                   \
+  csilk_app_add_route_perm(app, "PUT", path, handler, perm, res)
 /** @brief Convenience macro to register a DELETE route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -154,6 +196,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_delete_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "DELETE", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a DELETE route with permission. */
+#define csilk_app_delete_perm(app, path, handler, perm, res)                \
+  csilk_app_add_route_perm(app, "DELETE", path, handler, perm, res)
 /** @brief Convenience macro to register a PATCH route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -164,6 +209,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_patch_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "PATCH", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a PATCH route with permission. */
+#define csilk_app_patch_perm(app, path, handler, perm, res)                 \
+  csilk_app_add_route_perm(app, "PATCH", path, handler, perm, res)
 /** @brief Convenience macro to register an OPTIONS route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -175,6 +223,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_options_ext(app, path, handler, in, out, summary, desc) \
   csilk_app_add_route_extended(app, "OPTIONS", path, handler, in, out,    \
                                summary, desc)
+/** @brief Convenience macro to register an OPTIONS route with permission. */
+#define csilk_app_options_perm(app, path, handler, perm, res)               \
+  csilk_app_add_route_perm(app, "OPTIONS", path, handler, perm, res)
 /** @brief Convenience macro to register a HEAD route via the app API.
  *  @param app Application handle.
  *  @param path URL path pattern.
@@ -185,6 +236,9 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 #define csilk_app_head_ext(app, path, handler, in, out, summary, desc)       \
   csilk_app_add_route_extended(app, "HEAD", path, handler, in, out, summary, \
                                desc)
+/** @brief Convenience macro to register a HEAD route with permission. */
+#define csilk_app_head_perm(app, path, handler, perm, res)                   \
+  csilk_app_add_route_perm(app, "HEAD", path, handler, perm, res)
 
 /* ---- Static Files ---- */
 

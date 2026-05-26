@@ -427,6 +427,41 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
                                  output_type, summary, description);
 }
 
+/** @copydoc csilk_app_add_route_extended
+ *  @param perm_required  Permission required for this route, or NULL.
+ *  @param perm_resource  Resource pattern for permission check, or NULL. */
+void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
+                                       const char* path,
+                                       csilk_handler_t handler,
+                                       const char* input_type,
+                                       const char* output_type,
+                                       const char* summary,
+                                       const char* description,
+                                       const char* perm_required,
+                                       const char* perm_resource) {
+  if (!app || !method || !path || !handler) return;
+  csilk_group_t* g = app->root_group;
+  if (!g) return;
+  csilk_group_add_route_extended_perm(g, method, path, handler, input_type,
+                                      output_type, summary, description,
+                                      perm_required, perm_resource);
+}
+
+/** @brief Register a route with permission metadata.
+ *  @param app            Application instance.
+ *  @param method         HTTP method.
+ *  @param path           URL path.
+ *  @param handler        Handler function.
+ *  @param perm_required  Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource  Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_app_add_route_perm(csilk_app_t* app, const char* method,
+                              const char* path, csilk_handler_t handler,
+                              const char* perm_required,
+                              const char* perm_resource) {
+  csilk_app_add_route_extended_perm(app, method, path, handler, NULL, NULL,
+                                    NULL, NULL, perm_required, perm_resource);
+}
+
 /** @brief Register a route with a custom handler chain on the root group.
  *
  * @param app      Application instance.
