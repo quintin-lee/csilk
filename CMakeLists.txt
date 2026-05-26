@@ -95,8 +95,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cjson)
 
+# Find CURL
+find_package(CURL REQUIRED)
+
 include_directories(include)
 include_directories(${cjson_SOURCE_DIR})
+include_directories(${CURL_INCLUDE_DIRS})
 
 # Find MySQL (optional)
 find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
@@ -152,8 +156,10 @@ set(CSILK_SOURCES
     src/middleware/metrics.c
     src/core/swagger.c
     src/core/perm.c
+    src/core/ai.c
     src/drivers/sqlite.c
     src/drivers/perm_simple.c
+    src/drivers/ai_openai.c
 )
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
@@ -190,7 +196,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
 if(MYSQL_LIB)
   target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
 endif()
@@ -292,6 +298,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_csilk_test(test_storage tests/test_storage.c)
   add_csilk_test(test_perm tests/test_perm.c)
   add_csilk_test(test_db tests/test_db.c)
+  add_csilk_test(test_ai tests/test_ai.c)
   add_csilk_test(test_extra tests/test_extra.c)
   add_csilk_test(test_metrics tests/test_metrics.c)
   add_csilk_test(test_mq_integration tests/test_mq_integration.c)
@@ -332,14 +339,23 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # Easy API example
   add_executable(example_app examples/example_app.c)
   target_link_libraries(example_app csilk)
+
+  # AI example
+  add_executable(example_ai examples/example_ai.c)
+  target_link_libraries(example_ai csilk)
+
+  # Database example
+  add_executable(example_db examples/example_db.c)
+  target_link_libraries(example_db csilk)
 endif()
 
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal
     COMMENT "Running all tests with ctest"
 )
+
 
 # Install targets
 include(GNUInstallDirs)
