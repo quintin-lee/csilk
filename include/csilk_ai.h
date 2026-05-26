@@ -45,6 +45,7 @@ typedef struct {
   bool stream;                   /**< Enable streaming mode. */
   csilk_ai_stream_cb on_chunk;   /**< Callback invoked for each chunk in stream mode. */
   void* user_data;               /**< User context for the stream callback. */
+  int timeout_ms;                /**< Request timeout in milliseconds (0 for default). */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
@@ -57,6 +58,22 @@ typedef struct {
   char* error_message;      /**< Detailed error message if call failed (heap-allocated). */
 } csilk_ai_chat_response_t;
 
+/** @brief Response data for embeddings. */
+typedef struct {
+  float* values;            /**< Flattened array of vector values. */
+  size_t dimension;          /**< Dimension of a single vector. */
+  size_t count;              /**< Number of vectors in the array. */
+  int prompt_tokens;
+  int total_tokens;
+  char* error_message;
+} csilk_ai_embeddings_response_t;
+
+/** @brief Callback for asynchronous chat completion. */
+typedef void (*csilk_ai_chat_async_cb)(int status, csilk_ai_chat_response_t* res, void* user_data);
+
+/** @brief Callback for asynchronous embeddings. */
+typedef void (*csilk_ai_embeddings_async_cb)(int status, csilk_ai_embeddings_response_t* res, void* user_data);
+
 /** @brief Driver interface for AI providers. */
 typedef struct {
   const char* name;
@@ -64,6 +81,8 @@ typedef struct {
   void* (*init)(const char* api_key, const char* base_url);
   /** @brief Perform a synchronous chat completion call. */
   int (*chat)(void* state, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res);
+  /** @brief Perform a synchronous embeddings call. */
+  int (*embeddings)(void* state, const char* model, const char** input, size_t count, csilk_ai_embeddings_response_t* res);
   /** @brief Clean up driver-specific state. */
   void (*free)(void* state);
 } csilk_ai_driver_t;
@@ -84,11 +103,30 @@ csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key, const cha
  * @return 0 on success, -1 on failure. */
 int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res);
 
+/** @brief Perform an asynchronous chat completion.
+ * @note Uses the framework's internal thread pool. The callback is invoked on the main loop. */
+void csilk_ai_chat_async(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_async_cb cb, void* user_data);
+
+/** @brief Generate embeddings for the given input strings.
+ * @param ai     AI handle.
+ * @param model  Model name (e.g., "text-embedding-3-small").
+ * @param input  Array of strings to embed.
+ * @param count  Number of strings.
+ * @param res    [out] Embeddings response to populate.
+ * @return 0 on success, -1 on failure. */
+int csilk_ai_embeddings(csilk_ai_t* ai, const char* model, const char** input, size_t count, csilk_ai_embeddings_response_t* res);
+
+/** @brief Generate embeddings asynchronously. */
+void csilk_ai_embeddings_async(csilk_ai_t* ai, const char* model, const char** input, size_t count, csilk_ai_embeddings_async_cb cb, void* user_data);
+
 /** @brief Free an AI handle. */
 void csilk_ai_free(csilk_ai_t* ai);
 
 /** @brief Free a chat response structure. */
 void csilk_ai_chat_response_free(csilk_ai_chat_response_t* res);
+
+/** @brief Free an embeddings response structure. */
+void csilk_ai_embeddings_response_free(csilk_ai_embeddings_response_t* res);
 
 /** @brief Register a new AI driver.
  * @note Not thread-safe during registration. Call at startup. */

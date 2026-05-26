@@ -16,6 +16,17 @@ static void on_stream_chunk(const char *chunk, void *user_data) {
   fflush(stdout);
 }
 
+static void on_async_chat(int status, csilk_ai_chat_response_t* res, void* user_data) {
+  (void)user_data;
+  if (status == 0) {
+    printf("\n[Async Response Received]\n%s\n", res->content);
+  } else {
+    printf("\n[Async chat call failed: %s]\n", res->error_message ? res->error_message : "Unknown error");
+  }
+  csilk_ai_chat_response_free(res);
+  /* In a real app, you might signal completion or cleanup here */
+}
+
 int main() {
   const char* api_key = getenv("AGENT_API_KEY");
   const char* api_base = getenv("AGENT_API_BASE");
@@ -55,7 +66,8 @@ int main() {
     .temperature = 0.7,
     .top_p = 0.9,
     .max_tokens = 512,
-    .user = "csilk-test-user"
+    .user = "csilk-test-user",
+    .timeout_ms = 30000 /* 30s timeout */
   };
 
   csilk_ai_chat_response_t res;
@@ -82,6 +94,38 @@ int main() {
     fprintf(stderr, "Streaming chat call failed: %s\n", 
             res.error_message ? res.error_message : "Unknown error");
     csilk_ai_chat_response_free(&res);
+  }
+
+  /* 3. Asynchronous call */
+  printf("\n--- [3] Asynchronous call (Non-blocking) ---\n");
+  req.stream = false;
+  req.on_chunk = NULL;
+  csilk_ai_chat_async(ai, &req, on_async_chat, NULL);
+  printf("Async request dispatched, main thread continues...\n");
+  
+  /* Simulate doing other work */
+  for (int i = 0; i < 5; i++) {
+    printf("Doing other work... %d\n", i);
+    uv_run(uv_default_loop(), UV_RUN_ONCE);
+  }
+  /* Ensure async callback is triggered */
+  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
+  /* 4. Embeddings */
+  printf("\n--- [4] Embeddings ---\n");
+  const char* emb_input[] = {"Hello world", "Artificial Intelligence is great"};
+  csilk_ai_embeddings_response_t eres;
+  if (csilk_ai_embeddings(ai, "text-embedding-3-small", emb_input, 2, &eres) == 0) {
+    printf("Embeddings generated: count=%zu, dimension=%zu\n", eres.count, eres.dimension);
+    if (eres.count > 0 && eres.dimension > 0) {
+      printf("First 5 values of first vector: [%.4f, %.4f, %.4f, %.4f, %.4f]\n",
+             eres.values[0], eres.values[1], eres.values[2], eres.values[3], eres.values[4]);
+    }
+    csilk_ai_embeddings_response_free(&eres);
+  } else {
+    fprintf(stderr, "Embeddings call failed: %s\n", 
+            eres.error_message ? eres.error_message : "Unknown error");
+    csilk_ai_embeddings_response_free(&eres);
   }
 
   csilk_ai_free(ai);
