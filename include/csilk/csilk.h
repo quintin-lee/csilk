@@ -991,6 +991,16 @@ typedef struct {
     char* auth_token; /**< Expected bearer token when @p enable_auth is 1 (NULL
                          = disabled even if enabled). */
   } middleware;       /**< Built-in middleware toggles. */
+  struct {
+    char* driver;   /**< AI driver name (e.g., "openai", "claude"). */
+    char* model;    /**< AI model identifier (e.g., "gpt-4", "claude-3"). */
+    char* api_key;  /**< API key for the AI service. */
+    char* base_url; /**< Optional base URL for API requests. */
+  } ai;             /**< AI integration settings. */
+  struct {
+    int enable;   /**< Non-zero to enable cipher functionality. */
+    char* driver; /**< Cipher driver name (e.g., "openssl"). */
+  } cipher;       /**< Cipher/cryptography settings. */
 } csilk_config_t;
 
 /**
