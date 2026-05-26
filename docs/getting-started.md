@@ -127,7 +127,7 @@ cd build && ctest --output-on-failure
 ## Minimal Server Program
 
 ```c
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void ping(csilk_ctx_t* c) {
     csilk_string(c, 200, "pong");

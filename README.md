@@ -109,7 +109,7 @@ make format  # Requires clang-format
 
 ## Documentation
 
-API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk.h`, `include/csilk_app.h`, `include/csilk_internal.h`, `include/csilk_reflect.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/core/`, `src/app/`, and `src/middleware/` also carry complete Doxygen documentation with consistent `@copyright` and license annotations.
+API documentation is written using **Doxygen** comments throughout the codebase. All public API functions, types, enums, and macros in the headers (`include/csilk/csilk.h`, `include/csilk/app/app.h`, `include/csilk/core/internal.h`, `include/csilk/reflection/reflect.h`) are fully documented with `@brief`, `@param`, and `@return` tags. Implementation files in `src/` subdirectories also carry complete Doxygen documentation with consistent `@copyright` and license annotations.
 
 Online documentation is available at: **[https://quintin-lee.github.io/csilk/](https://quintin-lee.github.io/csilk/)**
 
@@ -125,12 +125,10 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 
 | Component | Status |
 |-----------|--------|
-| `include/csilk.h` (public API) | Fully documented |
-| `include/csilk_app.h` (app API) | Fully documented |
-| `include/csilk_internal.h` (internal API) | Fully documented |
-| `include/csilk_reflect.h` (reflection API) | Fully documented |
-| `src/core/` (core implementation) | Fully documented |
+| `include/csilk/` (public API hierarchy) | Fully documented |
+| `src/core/` (kernel implementation) | Fully documented |
 | `src/app/` (app layer) | Fully documented |
+| `src/ai/`, `src/data/`, `src/security/` | Fully documented |
 | `src/middleware/` (middleware) | Fully documented |
 | `examples/` (example code) | Fully documented |
 
@@ -139,7 +137,7 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 ### Simple Server Example
 
 ```c
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void hello_handler(csilk_ctx_t* c) {
     csilk_string(c, 200, "Hello World!");
@@ -217,7 +215,7 @@ csilk_group_use(group, csilk_recovery_handler);
 ### HTTPS & JWT Example
 
 ```c
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void secure_handler(csilk_ctx_t* c) {
     cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
@@ -253,53 +251,27 @@ int main() {
 
 ```
 src/
-  ├── core/          # Core engine
-  │   ├── context.c       # Request/response context
-  │   ├── router.c        # Routing implementation (Radix Tree)
-  │   ├── group.c         # Route groups
-  │   ├── server.c        # HTTP server implementation (libuv + llhttp)
-  │   ├── arena.c         # Arena memory allocator
-  │   ├── config.c        # YAML configuration loader + validation
-  │   ├── logger.c        # Thread-safe logging with rotation
-  │   ├── mq.c            # Internal Event Bus (Message Queue)
-  │   ├── ai.c            # AI Unified Interface Engine
-  │   ├── url.c           # URL / query string parsing
-  │   ├── utils.c         # SHA1 hashing and Base64 encoding
-  │   ├── websocket.c     # WebSocket handshake and frame handling
-  │   └── reflect.c       # Reflection engine (JSON <-> struct)
-  ├── app/            # High-level app wrapper
-  │   └── app.c           # csilk_app_t — Express-like convenience API
-  └── middleware/     # Built-in middleware
-      ├── auth.c      # Token-based authentication
-      ├── cors.c      # Cross-Origin Resource Sharing
-      ├── csrf.c      # CSRF protection
-      ├── gzip.c      # Gzip response compression
-      ├── logger.c    # Request logging
-      ├── metrics.c   # Prometheus metrics
-      ├── multipart.c # Multipart/form-data parsing
-      ├── ratelimit.c # IP-based rate limiting
-      ├── recovery.c  # Panic recovery
-      ├── session.c   # Cookie-based session management
-      ├── sse.c       # Server-Sent Events
-      ├── static.c    # Static file serving (with Range/206 support)
-      └── validate.c  # Request parameter validation
+  ├── core/           # Kernel (libuv TCP, Router, Arena, Logger, Config)
+  ├── app/            # Application Layer (app, route groups)
+  ├── ai/             # AI Unified Interface Engine
+  ├── data/           # Database Abstraction Layer
+  ├── messaging/      # Internal Event Bus (Message Queue)
+  ├── security/       # Permission & Security Core
+  ├── reflection/     # Reflection Engine implementation
+  ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
+  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, etc.)
+  └── middleware/     # Built-in middleware (Auth, CORS, Gzip, etc.)
 
-include/              # Public + internal headers
-  ├── csilk.h             # Main framework header
-  ├── csilk_app.h         # csilk_app_t convenience API
-  ├── csilk_ai.h          # AI interface definitions
-  ├── csilk_db.h          # Database driver interface
-  ├── csilk_internal.h    # Internal utilities + struct definitions
-  ├── csilk_reflect.h     # Reflection engine
-  ├── csilk_test.h        # OOM simulation test framework
-  └── context_internal.h  # Opaque csilk_ctx_s struct
-src/
-  ├── core/          # Core engine
-tests/                # Unit tests
-examples/             # Advanced usage examples
-examples/example_server.c      # Full-featured demo server
-examples/example_app.c         # Minimal app API demo
-examples/advanced_server.c     # Advanced config-driven server example
+include/csilk/        # Public Hierarchical Headers
+  ├── core/           # Core internal definitions
+  ├── app/            # App convenience API
+  ├── drivers/        # Driver interfaces (AI, DB, Perm)
+  ├── reflection/     # Reflection engine API
+  ├── test/           # Test utilities
+  └── csilk.h         # Main entry point (includes all modules)
+
+tests/                # Comprehensive Unit Test Suite
+examples/             # Functional usage examples
 ```
 
 ## Testing

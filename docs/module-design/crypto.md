@@ -29,7 +29,7 @@ typedef struct {
 
 ```c
 #include <openssl/hmac.h>
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 // Example: Using OpenSSL's HMAC implementation
 void openssl_hmac(const uint8_t* key, size_t key_len, const uint8_t* data,
