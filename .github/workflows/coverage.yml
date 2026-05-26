@@ -19,6 +19,7 @@ jobs:
           cmake build-essential gcc \
           libyaml-dev zlib1g-dev \
           libcurl4-openssl-dev \
+          libpq-dev \
           lcov
 
     - name: Configure CMake with coverage
