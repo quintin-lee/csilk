@@ -30,6 +30,8 @@ void csilk_db_init(void) {
     uv_mutex_init(&registry_mutex);
   }
   csilk_db_sqlite_init();
+  csilk_db_mysql_init();
+  csilk_db_postgres_init();
 }
 
 /** @brief Statically-sized registry of registered database drivers (max 16). */
