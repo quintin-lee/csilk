@@ -23,10 +23,7 @@ jobs:
           lcov
 
     - name: Configure CMake with coverage
-      run: CC=gcc cmake -B build -S . \
-        -DCMAKE_BUILD_TYPE=Debug \
-        -DUSE_COVERAGE=ON \
-        -DENABLE_OOM_TEST=OFF
+      run: cmake -B build -S . -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF
 
     - name: Build
       run: cmake --build build -j$(nproc)
