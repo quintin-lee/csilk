@@ -29,6 +29,26 @@ typedef struct {
  * @param user_data User-provided context. */
 typedef void (*csilk_ai_stream_cb)(const char* chunk, void* user_data);
 
+/** @brief A function tool definition for the AI model. */
+typedef struct {
+  const char* name;        /**< Function name. */
+  const char* description; /**< Description of what the function does. */
+  void* parameters_json;   /**< JSON Schema of parameters (cJSON*). */
+} csilk_ai_tool_function_t;
+
+/** @brief A tool that can be called by the model. */
+typedef struct {
+  const char* type; /**< Currently only "function" is supported. */
+  csilk_ai_tool_function_t function;
+} csilk_ai_tool_t;
+
+/** @brief a tool call requested by the model. */
+typedef struct {
+  char* id;        /**< Unique call ID. */
+  char* name;      /**< Function name to call. */
+  char* arguments; /**< JSON-formatted arguments string. */
+} csilk_ai_tool_call_t;
+
 /** @brief Request parameters for chat completion. */
 typedef struct {
   const char* model;             /**< Provider-specific model name (e.g., "gpt-4"). */
@@ -46,16 +66,21 @@ typedef struct {
   csilk_ai_stream_cb on_chunk;   /**< Callback invoked for each chunk in stream mode. */
   void* user_data;               /**< User context for the stream callback. */
   int timeout_ms;                /**< Request timeout in milliseconds (0 for default). */
+  csilk_ai_tool_t* tools;        /**< Available tools for the model. */
+  size_t tool_count;             /**< Number of tools. */
+  const char* tool_choice;       /**< "none", "auto", or "required". */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
 typedef struct {
-  char* content;            /**< Generated text content (heap-allocated). */
-  int prompt_tokens;        /**< Tokens used in the prompt. */
-  int completion_tokens;    /**< Tokens used in the generation. */
-  int total_tokens;          /**< Total tokens used. */
-  char* raw_response;       /**< Full raw JSON response (optional, heap-allocated). */
-  char* error_message;      /**< Detailed error message if call failed (heap-allocated). */
+  char* content;              /**< Generated text content (heap-allocated). */
+  csilk_ai_tool_call_t* tool_calls; /**< Array of tool calls (heap-allocated). */
+  size_t tool_call_count;     /**< Number of tool calls. */
+  int prompt_tokens;          /**< Tokens used in the prompt. */
+  int completion_tokens;      /**< Tokens used in the generation. */
+  int total_tokens;            /**< Total tokens used. */
+  char* raw_response;         /**< Full raw JSON response (optional, heap-allocated). */
+  char* error_message;        /**< Detailed error message if call failed (heap-allocated). */
 } csilk_ai_chat_response_t;
 
 /** @brief Response data for embeddings. */
@@ -87,11 +112,19 @@ typedef struct {
   void (*free)(void* state);
 } csilk_ai_driver_t;
 
+/** @brief Helper to manage conversation context and history. */
+typedef struct {
+  csilk_ai_message_t* messages; /**< Array of history messages. */
+  size_t count;                 /**< Number of messages. */
+  size_t capacity;              /**< Allocated capacity. */
+  size_t max_history;           /**< Maximum messages to keep (0 for unlimited). */
+} csilk_ai_context_t;
+
 /* --- Core API --- */
 
 /** @brief Create a new AI instance with a specific driver.
- * @param driver_name "openai" or other registered driver names.
- * @param api_key     API key for the provider.
+ * @param driver_name "openai", "ollama", or other registered driver names.
+ * @param api_key     API key for the provider (may be NULL for Ollama).
  * @param base_url    Optional custom base URL (pass NULL for provider default).
  * @return New AI handle, or NULL if driver not found or init failed. */
 csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url);
@@ -131,5 +164,21 @@ void csilk_ai_embeddings_response_free(csilk_ai_embeddings_response_t* res);
 /** @brief Register a new AI driver.
  * @note Not thread-safe during registration. Call at startup. */
 void csilk_ai_register_driver(const csilk_ai_driver_t* driver);
+
+/* --- Context Helpers --- */
+
+/** @brief Initialize a new conversation context.
+ * @param max_history Maximum number of messages to keep (FIFO sliding window). */
+csilk_ai_context_t* csilk_ai_context_new(size_t max_history);
+
+/** @brief Add a message to the context. 
+ * @note Strings are duplicated internally. */
+void csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* content);
+
+/** @brief Clear all messages from the context. */
+void csilk_ai_context_clear(csilk_ai_context_t* ctx);
+
+/** @brief Free a conversation context. */
+void csilk_ai_context_free(csilk_ai_context_t* ctx);
 
 #endif /* CSILK_AI_H */
