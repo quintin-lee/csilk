@@ -43,6 +43,11 @@ static void openai_free(void* state_ptr) {
   free(state);
 }
 
+struct curl_response {
+  char* body;
+  size_t size;
+};
+
 struct curl_context {
   const csilk_ai_chat_request_t* req;
   csilk_ai_chat_response_t* res;
@@ -51,6 +56,22 @@ struct curl_context {
   char* line_buf;
   size_t line_size;
 };
+
+static size_t write_cb_simple(void* contents, size_t size, size_t nmemb,
+                              void* userp) {
+  size_t realsize = size * nmemb;
+  struct curl_response* res = (struct curl_response*)userp;
+
+  char* ptr = realloc(res->body, res->size + realsize + 1);
+  if (!ptr) return 0;
+
+  res->body = ptr;
+  memcpy(&(res->body[res->size]), contents, realsize);
+  res->size += realsize;
+  res->body[res->size] = 0;
+
+  return realsize;
+}
 
 static void process_stream_line(struct curl_context* ctx, const char* line) {
   if (strncmp(line, "data: ", 5) != 0) return;
@@ -190,6 +211,10 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&ctx);
 
+  if (req->timeout_ms > 0) {
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)req->timeout_ms);
+  }
+
   CURLcode rc = curl_easy_perform(curl);
   free(json_body);
   curl_slist_free_all(headers);
@@ -253,10 +278,99 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
   return res->content ? 0 : -1;
 }
 
+static int openai_embeddings(void* state_ptr, const char* model,
+                             const char** input, size_t count,
+                             csilk_ai_embeddings_response_t* res) {
+  openai_state_t* state = (openai_state_t*)state_ptr;
+  CURL* curl = curl_easy_init();
+  if (!curl) return -1;
+
+  cJSON* root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "model", model);
+  cJSON* in_arr = cJSON_CreateArray();
+  for (size_t i = 0; i < count; i++) {
+    cJSON_AddItemToArray(in_arr, cJSON_CreateString(input[i]));
+  }
+  cJSON_AddItemToObject(root, "input", in_arr);
+
+  char* json_body = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
+
+  char url[512];
+  snprintf(url, sizeof(url), "%s/embeddings", state->base_url);
+
+  struct curl_slist* headers = NULL;
+  char auth_hdr[256];
+  snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s",
+           state->api_key);
+  headers = curl_slist_append(headers, "Content-Type: application/json");
+  headers = curl_slist_append(headers, auth_hdr);
+
+  struct curl_response cr = {0};
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb_simple);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+
+  CURLcode rc = curl_easy_perform(curl);
+  free(json_body);
+  curl_slist_free_all(headers);
+
+  if (rc != CURLE_OK) {
+    char err[256];
+    snprintf(err, sizeof(err), "CURL error: %s", curl_easy_strerror(rc));
+    res->error_message = strdup(err);
+    free(cr.body);
+    curl_easy_cleanup(curl);
+    return -1;
+  }
+
+  cJSON* resp = cJSON_Parse(cr.body);
+  free(cr.body);
+  if (!resp) {
+    res->error_message = strdup("JSON parse error");
+    curl_easy_cleanup(curl);
+    return -1;
+  }
+
+  cJSON* data = cJSON_GetObjectItem(resp, "data");
+  if (cJSON_IsArray(data)) {
+    res->count = cJSON_GetArraySize(data);
+    if (res->count > 0) {
+      cJSON* first = cJSON_GetArrayItem(data, 0);
+      cJSON* vec = cJSON_GetObjectItem(first, "embedding");
+      if (cJSON_IsArray(vec)) {
+        res->dimension = cJSON_GetArraySize(vec);
+        res->values = malloc(sizeof(float) * res->count * res->dimension);
+        for (size_t i = 0; i < res->count; i++) {
+          cJSON* item = cJSON_GetArrayItem(data, i);
+          cJSON* v = cJSON_GetObjectItem(item, "embedding");
+          for (size_t j = 0; j < res->dimension; j++) {
+            res->values[i * res->dimension + j] =
+                (float)cJSON_GetArrayItem(v, j)->valuedouble;
+          }
+        }
+      }
+    }
+  }
+
+  cJSON* usage = cJSON_GetObjectItem(resp, "usage");
+  if (usage) {
+    res->prompt_tokens = cJSON_GetObjectItem(usage, "prompt_tokens")->valueint;
+    res->total_tokens = cJSON_GetObjectItem(usage, "total_tokens")->valueint;
+  }
+
+  cJSON_Delete(resp);
+  curl_easy_cleanup(curl);
+  return 0;
+}
+
 static const csilk_ai_driver_t openai_driver = {
     .name = "openai",
     .init = openai_init,
     .chat = openai_chat,
+    .embeddings = openai_embeddings,
     .free = openai_free,
 };
 
