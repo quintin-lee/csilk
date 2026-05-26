@@ -25,8 +25,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
+          sudo apt-get update
+          sudo apt-get install -y \
             cmake build-essential \
             doxygen graphviz \
             libyaml-dev zlib1g-dev \

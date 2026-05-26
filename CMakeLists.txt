@@ -127,6 +127,11 @@ endif()
 find_library(PQ_LIB NAMES pq libpq)
 if(PQ_LIB)
   message(STATUS "Found PostgreSQL client library: ${PQ_LIB}")
+  find_path(PQ_INCLUDE_DIR libpq-fe.h PATHS /usr/include/postgresql /usr/local/include/postgresql)
+  if(PQ_INCLUDE_DIR)
+    include_directories(${PQ_INCLUDE_DIR})
+    message(STATUS "Found PostgreSQL include dir: ${PQ_INCLUDE_DIR}")
+  endif()
 else()
   message(STATUS "PostgreSQL client library not found — postgres driver will not build")
 endif()
@@ -176,7 +181,7 @@ if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
   add_definitions(-DHAS_MYSQL)
 endif()
 
-if(PQ_LIB)
+if(PQ_LIB AND PQ_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/drivers/postgres.c)
   add_definitions(-DHAS_POSTGRES)
 endif()
@@ -338,6 +343,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_csilk_test(test_app_ext tests/test_app_ext.c)
   add_csilk_test(test_group_ext tests/test_group_ext.c)
   add_csilk_test(test_config_comprehensive tests/test_config_comprehensive.c)
+  add_csilk_test(test_session_ext tests/test_session_ext.c)
 
   add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
   add_csilk_test(test_https tests/test_https.c)
@@ -377,7 +383,7 @@ endif()
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext
     COMMENT "Running all tests with ctest"
 )
 
