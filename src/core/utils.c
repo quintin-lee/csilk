@@ -10,6 +10,7 @@
 
 #include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
+#include "csilk/drivers/cipher.h"
 
 #ifdef TEST_OOM
 int g_oom_fail_after = -1;
@@ -525,4 +526,76 @@ void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]) {
   } else {
     csilk_generate_uuid(buf);
   }
+}
+
+extern csilk_cipher_driver_t csilk_default_cipher_driver;
+
+static csilk_cipher_driver_t* resolve_cipher(csilk_ctx_t* c) {
+  if (c && c->cipher_driver) return c->cipher_driver;
+  return &csilk_default_cipher_driver;
+}
+
+int _csilk_symmetric_encrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                             const uint8_t* plaintext, size_t plaintext_len,
+                             const uint8_t* iv, size_t iv_len,
+                             uint8_t* ciphertext, size_t* ciphertext_len,
+                             uint8_t* tag, size_t tag_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->symmetric_encrypt) return -1;
+  return d->symmetric_encrypt(key, key_len, plaintext, plaintext_len, iv,
+                              iv_len, ciphertext, ciphertext_len, tag, tag_len);
+}
+
+int _csilk_symmetric_decrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                             const uint8_t* ciphertext, size_t ciphertext_len,
+                             const uint8_t* iv, size_t iv_len,
+                             const uint8_t* tag, size_t tag_len,
+                             uint8_t* plaintext, size_t* plaintext_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->symmetric_decrypt) return -1;
+  return d->symmetric_decrypt(key, key_len, ciphertext, ciphertext_len, iv,
+                              iv_len, tag, tag_len, plaintext, plaintext_len);
+}
+
+int _csilk_generate_keypair(csilk_ctx_t* c, char* public_key, size_t* pub_len,
+                            char* private_key, size_t* priv_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->generate_keypair) return -1;
+  return d->generate_keypair(public_key, pub_len, private_key, priv_len);
+}
+
+int _csilk_asymmetric_encrypt(csilk_ctx_t* c, const char* public_key,
+                              size_t pub_len, const uint8_t* plaintext,
+                              size_t plaintext_len, uint8_t* ciphertext,
+                              size_t* ciphertext_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->asymmetric_encrypt) return -1;
+  return d->asymmetric_encrypt(public_key, pub_len, plaintext, plaintext_len,
+                               ciphertext, ciphertext_len);
+}
+
+int _csilk_asymmetric_decrypt(csilk_ctx_t* c, const char* private_key,
+                              size_t priv_len, const uint8_t* ciphertext,
+                              size_t ciphertext_len, uint8_t* plaintext,
+                              size_t* plaintext_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->asymmetric_decrypt) return -1;
+  return d->asymmetric_decrypt(private_key, priv_len, ciphertext,
+                               ciphertext_len, plaintext, plaintext_len);
+}
+
+int _csilk_sign(csilk_ctx_t* c, const char* private_key, size_t priv_len,
+                const uint8_t* data, size_t data_len, uint8_t* signature,
+                size_t* sig_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->sign) return -1;
+  return d->sign(private_key, priv_len, data, data_len, signature, sig_len);
+}
+
+int _csilk_verify(csilk_ctx_t* c, const char* public_key, size_t pub_len,
+                  const uint8_t* data, size_t data_len,
+                  const uint8_t* signature, size_t sig_len) {
+  csilk_cipher_driver_t* d = resolve_cipher(c);
+  if (!d || !d->verify) return -1;
+  return d->verify(public_key, pub_len, data, data_len, signature, sig_len);
 }

@@ -217,6 +217,139 @@ void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
 void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
 
 /**
+ * @brief Internal: Symmetric encrypt using the context's cipher driver
+ * or the built-in OpenSSL AES-256-GCM implementation.
+ *
+ * @param c              Request context (for driver lookup, may be NULL).
+ * @param key            Encryption key (must be 32 bytes for AES-256).
+ * @param key_len        Key length.
+ * @param plaintext      Data to encrypt.
+ * @param plaintext_len  Plaintext length.
+ * @param iv             12-byte initialisation vector (nonce).
+ * @param iv_len         IV length (must be 12 for GCM).
+ * @param[out] ciphertext  Output buffer (must be at least plaintext_len bytes).
+ * @param[in,out] ciphertext_len  In: capacity, Out: actual ciphertext length.
+ * @param[out] tag       16-byte authentication tag buffer.
+ * @param tag_len        Tag buffer size (must be 16).
+ * @return 0 on success, -1 on failure.
+ */
+int _csilk_symmetric_encrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                             const uint8_t* plaintext, size_t plaintext_len,
+                             const uint8_t* iv, size_t iv_len,
+                             uint8_t* ciphertext, size_t* ciphertext_len,
+                             uint8_t* tag, size_t tag_len);
+
+/**
+ * @brief Internal: Symmetric decrypt using the context's cipher driver
+ * or the built-in OpenSSL AES-256-GCM implementation.
+ *
+ * @param c              Request context (for driver lookup, may be NULL).
+ * @param key            Decryption key (must be 32 bytes for AES-256).
+ * @param key_len        Key length.
+ * @param ciphertext     Data to decrypt.
+ * @param ciphertext_len Ciphertext length.
+ * @param iv             12-byte initialisation vector (nonce).
+ * @param iv_len         IV length (must be 12 for GCM).
+ * @param tag            16-byte authentication tag.
+ * @param tag_len        Tag length (must be 16).
+ * @param[out] plaintext   Output buffer (must be at least ciphertext_len
+ * bytes).
+ * @param[in,out] plaintext_len  In: capacity, Out: actual plaintext length.
+ * @return 0 on success, -1 on failure (including tag mismatch).
+ */
+int _csilk_symmetric_decrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
+                             const uint8_t* ciphertext, size_t ciphertext_len,
+                             const uint8_t* iv, size_t iv_len,
+                             const uint8_t* tag, size_t tag_len,
+                             uint8_t* plaintext, size_t* plaintext_len);
+
+/**
+ * @brief Internal: Generate an RSA-2048 key pair using the context's cipher
+ * driver or the built-in OpenSSL implementation.
+ *
+ * Keys are output as PEM-encoded strings.
+ *
+ * @param c            Request context (for driver lookup, may be NULL).
+ * @param[out] public_key   PEM public key buffer.
+ * @param[in,out] pub_len   In: capacity, Out: actual PEM length (incl. NUL).
+ * @param[out] private_key  PEM private key buffer.
+ * @param[in,out] priv_len  In: capacity, Out: actual PEM length (incl. NUL).
+ * @return 0 on success, -1 on failure.
+ */
+int _csilk_generate_keypair(csilk_ctx_t* c, char* public_key, size_t* pub_len,
+                            char* private_key, size_t* priv_len);
+
+/**
+ * @brief Internal: Asymmetric encrypt using the context's cipher driver
+ * or the built-in OpenSSL RSA-OAEP implementation.
+ *
+ * @param c              Request context (for driver lookup, may be NULL).
+ * @param public_key     PEM-encoded RSA public key.
+ * @param pub_len        Public key length.
+ * @param plaintext      Data to encrypt (max ~190 bytes for RSA-2048).
+ * @param plaintext_len  Plaintext length.
+ * @param[out] ciphertext  256-byte output buffer.
+ * @param[in,out] ciphertext_len  In: capacity, Out: actual length.
+ * @return 0 on success, -1 on failure.
+ */
+int _csilk_asymmetric_encrypt(csilk_ctx_t* c, const char* public_key,
+                              size_t pub_len, const uint8_t* plaintext,
+                              size_t plaintext_len, uint8_t* ciphertext,
+                              size_t* ciphertext_len);
+
+/**
+ * @brief Internal: Asymmetric decrypt using the context's cipher driver
+ * or the built-in OpenSSL RSA-OAEP implementation.
+ *
+ * @param c              Request context (for driver lookup, may be NULL).
+ * @param private_key    PEM-encoded RSA private key.
+ * @param priv_len       Private key length.
+ * @param ciphertext     Data to decrypt (typically 256 bytes for RSA-2048).
+ * @param ciphertext_len Ciphertext length.
+ * @param[out] plaintext   Output buffer.
+ * @param[in,out] plaintext_len  In: capacity, Out: actual length.
+ * @return 0 on success, -1 on failure.
+ */
+int _csilk_asymmetric_decrypt(csilk_ctx_t* c, const char* private_key,
+                              size_t priv_len, const uint8_t* ciphertext,
+                              size_t ciphertext_len, uint8_t* plaintext,
+                              size_t* plaintext_len);
+
+/**
+ * @brief Internal: Sign data using the context's cipher driver
+ * or the built-in OpenSSL RSA-PSS implementation.
+ *
+ * @param c            Request context (for driver lookup, may be NULL).
+ * @param private_key  PEM-encoded RSA private key.
+ * @param priv_len     Private key length.
+ * @param data         Data to sign.
+ * @param data_len     Data length.
+ * @param[out] signature  256-byte signature buffer.
+ * @param[in,out] sig_len  In: capacity, Out: actual signature length.
+ * @return 0 on success, -1 on failure.
+ */
+int _csilk_sign(csilk_ctx_t* c, const char* private_key, size_t priv_len,
+                const uint8_t* data, size_t data_len, uint8_t* signature,
+                size_t* sig_len);
+
+/**
+ * @brief Internal: Verify a signature using the context's cipher driver
+ * or the built-in OpenSSL RSA-PSS implementation.
+ *
+ * @param c           Request context (for driver lookup, may be NULL).
+ * @param public_key  PEM-encoded RSA public key.
+ * @param pub_len     Public key length.
+ * @param data        Original signed data.
+ * @param data_len    Data length.
+ * @param signature   Signature to verify.
+ * @param sig_len     Signature length.
+ * @return 0 on valid signature, -1 on invalid or error.
+ */
+int _csilk_verify(csilk_ctx_t* c, const char* public_key, size_t pub_len,
+                  const uint8_t* data, size_t data_len,
+                  const uint8_t* signature, size_t sig_len);
+
+/**
  * @brief URL-decode a percent-encoded string in-place.
  *
  * Converts %XX sequences to their byte values and '+' to space.

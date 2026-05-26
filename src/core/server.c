@@ -16,8 +16,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief Default idle timeout in milliseconds. */
 #define CSILK_DEFAULT_IDLE_TIMEOUT 5000
@@ -65,6 +65,7 @@ struct csilk_server_s {
   char* spa_doc_root;    /**< SPA fallback doc root (NULL = disabled). */
   csilk_storage_driver_t* storage_driver;     /**< Context storage driver. */
   csilk_crypto_driver_t* crypto_driver;       /**< Crypto algorithm driver. */
+  csilk_cipher_driver_t* cipher_driver;       /**< Cipher algorithm driver. */
   SSL_CTX* ssl_ctx;                           /**< OpenSSL context. */
   csilk_mq_t* mq;                             /**< Message Queue instance. */
   csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
@@ -1053,6 +1054,7 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
   client->ctx._internal_client = client;
   client->ctx.storage_driver = server->storage_driver;
   client->ctx.crypto_driver = server->crypto_driver;
+  client->ctx.cipher_driver = server->cipher_driver;
   client_list_add(server, client);
 
   if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
@@ -1457,6 +1459,11 @@ void csilk_server_set_storage_driver(csilk_server_t* server,
 void csilk_server_set_crypto_driver(csilk_server_t* server,
                                     csilk_crypto_driver_t* driver) {
   if (server) server->crypto_driver = driver;
+}
+
+void csilk_server_set_cipher_driver(csilk_server_t* server,
+                                    csilk_cipher_driver_t* driver) {
+  if (server) server->cipher_driver = driver;
 }
 
 /** @brief Register a lifecycle hook on the server.

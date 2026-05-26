@@ -92,7 +92,9 @@ struct csilk_ctx_s {
       storage_driver; /**< Optional pluggable storage backend for
                          csilk_set()/csilk_get(). */
   csilk_crypto_driver_t* crypto_driver; /**< Optional pluggable crypto backend
-                                           for HMAC, UUID, etc. */
+                                            for HMAC, UUID, etc. */
+  csilk_cipher_driver_t* cipher_driver; /**< Optional pluggable cipher backend
+                                           for AES/RSA encrypt/decrypt/sign. */
   csilk_storage_item_t* storage_head;   /**< Head of the linked list for simple
                                            arena-backed key-value storage. */
   void* _internal_client; /**< Opaque pointer to the internal csilk_client_t.
