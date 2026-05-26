@@ -67,7 +67,7 @@ To enable automatic deduction for user-defined structs, extend the `CSILK_USER_T
 ```c
 #undef CSILK_USER_TYPE_MAP
 #define CSILK_USER_TYPE_MAP , struct User_s: "User"
-#include "csilk.h"
+#include "csilk/csilk.h"
 ```
 
 ## Top-Level Basic Type Reflection
@@ -156,34 +156,35 @@ sequenceDiagram
 
 | Field Type | C Type | JSON Type |
 |-----------|--------|-----------|
-| `CSILK_FIELD_INT8` | `int8_t` | Number |
-| `CSILK_FIELD_INT16` | `int16_t` | Number |
-| `CSILK_FIELD_INT32` | `int32_t` | Number |
-| `CSILK_FIELD_INT64` | `int64_t` | Number |
-| `CSILK_FIELD_FLOAT` | `float` | Number |
-| `CSILK_FIELD_DOUBLE` | `double` | Number |
-| `CSILK_FIELD_BOOL` | `int` (0/1) | Boolean |
-| `CSILK_FIELD_STRING` | `char[N]` | String |
-| `CSILK_FIELD_STRUCT` | nested struct | Object |
-| `CSILK_FIELD_ARRAY` | array | Array |
+| `CSILK_TYPE_INT8` | `int8_t` | Number |
+| `CSILK_TYPE_INT16` | `int16_t` | Number |
+| `CSILK_TYPE_INT32` | `int32_t` | Number |
+| `CSILK_TYPE_INT64` | `int64_t` | Number |
+| `CSILK_TYPE_FLOAT` | `float` | Number |
+| `CSILK_TYPE_DOUBLE` | `double` | Number |
+| `CSILK_TYPE_BOOL` | `bool` | Boolean |
+| `CSILK_TYPE_STRING` | `char[N]` or `char*` | String |
+| `CSILK_TYPE_STRUCT` | nested struct | Object |
 
 ## Registration Example
 
 ```c
+#include "csilk/csilk.h"
+
 // Define struct
 typedef struct {
     int64_t id;
     char name[64];
     char email[128];
-    int active;
+    bool active;
 } User;
 
 // Define field descriptions macro
-#define USER_FIELDS \
-    CSILK_FIELD(id, CSILK_FIELD_INT64, 0) \
-    CSILK_FIELD(name, CSILK_FIELD_STRING, sizeof(((User*)0)->name)) \
-    CSILK_FIELD(email, CSILK_FIELD_STRING, sizeof(((User*)0)->email)) \
-    CSILK_FIELD(active, CSILK_FIELD_BOOL, 0)
+#define USER_FIELDS(_) \
+    _(User, id, CSILK_TYPE_INT64, 0, 0, false, NULL) \
+    _(User, name, CSILK_TYPE_STRING, 64, 0, false, NULL) \
+    _(User, email, CSILK_TYPE_STRING, 128, 0, false, NULL) \
+    _(User, active, CSILK_TYPE_BOOL, 0, 0, false, NULL)
 
 // Register type (done once at startup)
 CSILK_REGISTER_REFLECT(User, USER_FIELDS);

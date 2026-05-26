@@ -49,7 +49,7 @@ void csilk_jwt_middleware(csilk_ctx_t* c, const char* secret);
 ## Integration Example
 
 ```c
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 // 1. Issuing a token (e.g., on login)
 void login_handler(csilk_ctx_t* c) {

@@ -90,7 +90,7 @@ graph TB
 ## Quick Start
 
 ```c
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void hello(csilk_ctx_t* c) {
     csilk_string(c, 200, "Hello World!");

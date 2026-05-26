@@ -6,7 +6,7 @@ The AI module provides a provider-agnostic abstraction for integrating Large Lan
 
 ```mermaid
 flowchart TB
-    subgraph "Public API (csilk_ai.h)"
+    subgraph "Public API (csilk/drivers/ai.h)"
         NEW["csilk_ai_new(driver, key, base_url)"]
         CHAT["csilk_ai_chat(ai, req, res)"]
         ASYNC["csilk_ai_chat_async(ai, req, cb)"]
