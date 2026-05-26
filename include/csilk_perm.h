@@ -35,4 +35,6 @@ void csilk_perm_simple_init(void);
 int csilk_perm_simple_allow(const char* role, const char* permission,
                             const char* resource);
 
+void csilk_perm_simple_clear(void);
+
 #endif
