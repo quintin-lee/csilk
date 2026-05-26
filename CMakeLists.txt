@@ -152,7 +152,9 @@ set(CSILK_SOURCES
     src/middleware/validate.c
     src/middleware/metrics.c
     src/core/swagger.c
+    src/core/perm.c
     src/drivers/sqlite.c
+    src/drivers/perm_simple.c
 )
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)

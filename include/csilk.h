@@ -20,6 +20,7 @@
 
 #include "cJSON.h"
 #include "csilk_db.h"
+#include "csilk_perm.h"
 #include "csilk_reflect.h"
 
 /**
