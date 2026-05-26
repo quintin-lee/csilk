@@ -270,6 +270,9 @@ if(NOT csilk_FOUND)
   endif()
 endif()
 
+# ── find CURL ──
+find_package(CURL REQUIRED)
+
 # ── sources ──
 set(SOURCES
 ${LAYERED_SOURCES}
@@ -277,12 +280,13 @@ ${LAYERED_SOURCES}
 
 # ── executable ──
 add_executable(${PROJECT_NAME} \${SOURCES})
-target_link_libraries(${PROJECT_NAME} PRIVATE \${CSILK_LIB}\${LINK_DB})
+target_link_libraries(${PROJECT_NAME} PRIVATE \${CSILK_LIB}\${LINK_DB} \${CURL_LIBRARIES})
 target_include_directories(${PROJECT_NAME} PRIVATE 
   src
   src/api
   src/service
   src/model
+  \${CURL_INCLUDE_DIRS}
 )
 
 # ── handle dependencies include paths ──
