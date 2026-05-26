@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-CSILK_VERSION="825fa6955e503aadb5f82668b3ce27a5d9f67387"
+CSILK_VERSION="f1950d5"
+AI_PROVIDER="none"
+USE_CIPHER="0"
+MID_REQUESTID="n"
 
 # Auto-detect repo URL from the local csilk checkout (if script is run from within the repo)
 LOCAL_REMOTE=$(git config --get remote.origin.url 2>/dev/null || true)
@@ -75,15 +78,17 @@ Options:
 -p, --port PORT       Port number (default: 8080)
 --api-style STYLE     API style: app, core (default: app)
 --db DB               Database: sqlite, mysql, postgres, none (default: sqlite)
+--ai PROVIDER         AI driver: none, openai, ollama (default: none)
+--cipher              Enable OpenSSL cipher driver
 --auth AUTH           Auth: none, jwt, token (default: none)
 --use-perm            Enable permission system
 --use-swagger         Enable Swagger/OpenAPI
---middleware LIST     Comma-separated list (cors,gzip,ratelimit,session)
+--middleware LIST     Comma-separated list (cors,gzip,ratelimit,session,requestid)
 --git                 Initialize git repository
 --non-interactive     Skip prompts and use defaults for missing values
 
 Example:
-csilkskel -n myapp -p 9090 --db mysql --middleware cors,gzip --git
+csilkskel -n myapp -p 9090 --db mysql --ai openai --cipher --middleware cors,gzip,requestid --git
 EOF
 }
 
@@ -176,6 +181,7 @@ endif()'
   if [ "$MID_GZIP" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_gzip_middleware);\n"; fi
   if [ "$MID_RATELIMIT" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, ratelimit_middleware_wrapper);\n"; fi
   if [ "$MID_SESSION" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_session_start);\n"; fi
+  if [ "$MID_REQUESTID" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_request_id_middleware);\n"; fi
 
   # Layered Sources
   LAYERED_SOURCES="  src/main.c
@@ -652,6 +658,8 @@ OUT_DIR=""
 PORT=""
 API_STYLE=""
 DB=""
+AI_PROVIDER=""
+USE_CIPHER=""
 AUTH=""
 USE_PERM=""
 USE_SWAGGER=""
@@ -659,6 +667,7 @@ MID_CORS="n"
 MID_GZIP="n"
 MID_RATELIMIT="n"
 MID_SESSION="n"
+MID_REQUESTID="n"
 DO_GIT=""
 NON_INTERACTIVE=0
 
@@ -671,6 +680,8 @@ while [[ "$#" -gt 0 ]]; do
     -p|--port) PORT="$2"; shift ;;
     --api-style) API_STYLE="$2"; shift ;;
     --db) DB="$2"; shift ;;
+    --ai) AI_PROVIDER="$2"; shift ;;
+    --cipher) USE_CIPHER="1" ;;
     --auth) AUTH="$2"; shift ;;
     --use-perm) USE_PERM="1" ;;
     --use-swagger) USE_SWAGGER="1" ;;
@@ -683,6 +694,7 @@ while [[ "$#" -gt 0 ]]; do
           gzip) MID_GZIP="y" ;;
           ratelimit) MID_RATELIMIT="y" ;;
           session) MID_SESSION="y" ;;
+          requestid) MID_REQUESTID="y" ;;
         esac
       done
       shift
@@ -725,6 +737,20 @@ none|No database')
   fi
 fi
 
+if [ -z "$AI_PROVIDER" ]; then
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then AI_PROVIDER="none"; else
+    AI_PROVIDER=$(pick "AI provider:" "none" 'none|No AI support
+openai|OpenAI
+ollama|Ollama (local)')
+  fi
+fi
+
+if [ -z "$USE_CIPHER" ]; then
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then USE_CIPHER="0"; else
+    USE_CIPHER=$(ask_yes "Enable OpenSSL cipher driver" "n" && echo "1" || echo "0")
+  fi
+fi
+
 if [ -z "$AUTH" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then AUTH="none"; else
     AUTH=$(pick "Authentication:" "none" 'none|No authentication
@@ -746,9 +772,9 @@ if [ -z "$USE_SWAGGER" ]; then
 fi
 
 if [ "$NON_INTERACTIVE" -eq 0 ]; then
-  if [ "$MID_CORS" = "n" ] && [ "$MID_GZIP" = "n" ] && [ "$MID_RATELIMIT" = "n" ] && [ "$MID_SESSION" = "n" ]; then
+  if [ "$MID_CORS" = "n" ] && [ "$MID_GZIP" = "n" ] && [ "$MID_RATELIMIT" = "n" ] && [ "$MID_SESSION" = "n" ] && [ "$MID_REQUESTID" = "n" ]; then
     echo -e "  ${BOLD}Extra middleware${NC} (comma-separated, e.g. cors,gzip):"
-    printf "    cors, gzip, ratelimit, session\n" >&2
+    printf "    cors, gzip, ratelimit, session, requestid\n" >&2
     printf "  choices [none]: " >&2
     IFS=',' read -r -a mid_choices
     for m in "${mid_choices[@]}"; do
@@ -758,6 +784,7 @@ if [ "$NON_INTERACTIVE" -eq 0 ]; then
         gzip) MID_GZIP="y" ;;
         ratelimit) MID_RATELIMIT="y" ;;
         session) MID_SESSION="y" ;;
+        requestid) MID_REQUESTID="y" ;;
         none|"") ;;
       esac
     done
