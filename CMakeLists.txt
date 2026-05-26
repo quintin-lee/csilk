@@ -16,6 +16,14 @@ if(USE_ASAN)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
 endif()
 
+option(USE_COVERAGE "Enable code coverage with gcov" OFF)
+if(USE_COVERAGE)
+    message(STATUS "Code coverage enabled")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -O0 -g")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --coverage")
+endif()
+
 # Option to enable OOM testing
 option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
 if(ENABLE_OOM_TEST)
@@ -317,6 +325,20 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       add_test(NAME test_oom COMMAND test_oom)
   endif()
 
+  # Extended coverage tests
+  add_csilk_test(test_context_ext tests/test_context_ext.c)
+  add_csilk_test(test_url_ext tests/test_url_ext.c)
+  add_csilk_test(test_utils_ext tests/test_utils_ext.c)
+  add_csilk_test(test_cors_ext tests/test_cors_ext.c)
+  add_csilk_test(test_recovery_ext tests/test_recovery_ext.c)
+  add_csilk_test(test_request_id tests/test_request_id.c)
+  add_csilk_test(test_csrf_ext tests/test_csrf_ext.c)
+  add_csilk_test(test_perm_ext tests/test_perm_ext.c)
+  add_csilk_test(test_logger_ext tests/test_logger_ext.c)
+  add_csilk_test(test_app_ext tests/test_app_ext.c)
+  add_csilk_test(test_group_ext tests/test_group_ext.c)
+  add_csilk_test(test_config_comprehensive tests/test_config_comprehensive.c)
+
   add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
   add_csilk_test(test_https tests/test_https.c)
   set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
@@ -355,9 +377,47 @@ endif()
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_swagger test_metrics test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive
     COMMENT "Running all tests with ctest"
 )
+
+if(USE_COVERAGE)
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if(GCOVR_EXECUTABLE)
+        add_custom_target(coverage
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
+                --filter "src/"
+                --exclude "tests/"
+                --exclude "examples/"
+                --exclude "build_release/"
+                --html-details ${CMAKE_BINARY_DIR}/coverage/index.html
+                --xml ${CMAKE_BINARY_DIR}/coverage/coverage.xml
+                --print-summary
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            DEPENDS run_tests
+            COMMENT "Generating code coverage report"
+        )
+        add_custom_target(coverage_summary
+            COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
+                --filter "src/"
+                --exclude "tests/"
+                --exclude "examples/"
+                --exclude "build_release/"
+                --print-summary
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            DEPENDS run_tests
+            COMMENT "Printing coverage summary"
+        )
+    else()
+        message(WARNING "gcovr not found — install with 'pip install gcovr' for coverage reports")
+        add_custom_target(coverage
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "gcovr not found — tests run without coverage report"
+        )
+    endif()
+endif()
 
 
 # Install targets

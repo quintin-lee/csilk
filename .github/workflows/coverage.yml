@@ -1,0 +1,55 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq \
+          cmake build-essential gcc \
+          libyaml-dev zlib1g-dev \
+          lcov
+
+    - name: Configure CMake with coverage
+      run: CC=gcc cmake -B build -S . \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DUSE_COVERAGE=ON \
+        -DENABLE_OOM_TEST=OFF
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure
+
+    - name: Generate coverage report
+      run: |
+        cd build
+        lcov --capture --directory . \
+          --output-file coverage_raw.info \
+          --rc geninfo_auto_base=1 \
+          --no-external
+        lcov --extract coverage_raw.info \
+          "${GITHUB_WORKSPACE}/src/**/*.c" \
+          --output-file coverage.info \
+          --rc geninfo_auto_base=1
+        genhtml coverage.info \
+          --output-directory coverage \
+          --rc geninfo_auto_base=1
+        lcov --list coverage.info
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: build/coverage/

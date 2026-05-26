@@ -19,10 +19,16 @@
 #include <uv.h>
 
 #include "cJSON.h"
+
+/* Forward declarations to break circular dependency:
+   csilk/drivers/db.h includes csilk.h, so types defined in db.h
+   must be forward-declared here before the include. */
+typedef struct csilk_db_pool_s csilk_db_pool_t;
+
+#include "csilk/drivers/ai.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/perm.h"
 #include "csilk/reflection/reflect.h"
-#include "csilk/drivers/ai.h"
 
 /**
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
@@ -390,6 +396,8 @@ int csilk_is_async(csilk_ctx_t* c);
  */
 void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len,
                              int managed);
+
+const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
 /**
  * @brief Send an HTTP redirect response with a custom status code.
@@ -1494,17 +1502,12 @@ void csilk_router_add_perm(csilk_router_t* r, const char* method,
  *  @param description   Detailed description (NULL to omit).
  *  @param perm_required Permission identifier (e.g., "read"), or NULL.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
-void csilk_router_add_extended_perm(csilk_router_t* r, const char* method,
-                                    const char* path,
-                                    csilk_handler_t* handlers,
-                                    size_t handler_count,
-                                    const char* path_pattern,
-                                    const char* input_type,
-                                    const char* output_type,
-                                    const char* summary,
-                                    const char* description,
-                                    const char* perm_required,
-                                    const char* perm_resource);
+void csilk_router_add_extended_perm(
+    csilk_router_t* r, const char* method, const char* path,
+    csilk_handler_t* handlers, size_t handler_count, const char* path_pattern,
+    const char* input_type, const char* output_type, const char* summary,
+    const char* description, const char* perm_required,
+    const char* perm_resource);
 
 /**
  * @brief Convenience macro to register a route with metadata.
