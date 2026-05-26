@@ -29,7 +29,8 @@ jobs:
           sudo apt-get install -y -qq \
             cmake build-essential \
             doxygen graphviz \
-            libyaml-dev zlib1g-dev
+            libyaml-dev zlib1g-dev \
+            libcurl4-openssl-dev
 
       - name: Configure CMake (for clang-assisted parsing)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
