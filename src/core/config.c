@@ -180,6 +180,27 @@ int csilk_load_config(const char* yaml_path, csilk_config_t* config) {
               config->middleware.auth_token = strdup(val);
               if (!config->middleware.auth_token) error = 1;
             }
+          } else if (strcmp(current_section, "ai") == 0) {
+            if (strcmp(current_key, "driver") == 0) {
+              config->ai.driver = strdup(val);
+              if (!config->ai.driver) error = 1;
+            } else if (strcmp(current_key, "model") == 0) {
+              config->ai.model = strdup(val);
+              if (!config->ai.model) error = 1;
+            } else if (strcmp(current_key, "api_key") == 0) {
+              config->ai.api_key = strdup(val);
+              if (!config->ai.api_key) error = 1;
+            } else if (strcmp(current_key, "base_url") == 0) {
+              config->ai.base_url = strdup(val);
+              if (!config->ai.base_url) error = 1;
+            }
+          } else if (strcmp(current_section, "cipher") == 0) {
+            if (strcmp(current_key, "enable") == 0)
+              config->cipher.enable = atoi(val);
+            else if (strcmp(current_key, "driver") == 0) {
+              config->cipher.driver = strdup(val);
+              if (!config->cipher.driver) error = 1;
+            }
           }
 
           free(current_key);
@@ -259,6 +280,28 @@ void csilk_config_free(csilk_config_t* config) {
     free(config->middleware.auth_token);
     config->middleware.auth_token = NULL;
   }
+
+  if (config->ai.driver) {
+    free(config->ai.driver);
+    config->ai.driver = NULL;
+  }
+  if (config->ai.model) {
+    free(config->ai.model);
+    config->ai.model = NULL;
+  }
+  if (config->ai.api_key) {
+    free(config->ai.api_key);
+    config->ai.api_key = NULL;
+  }
+  if (config->ai.base_url) {
+    free(config->ai.base_url);
+    config->ai.base_url = NULL;
+  }
+
+  if (config->cipher.driver) {
+    free(config->cipher.driver);
+    config->cipher.driver = NULL;
+  }
 }
 
 /** @brief Validate configuration values for semantic correctness.
@@ -325,6 +368,12 @@ int csilk_config_validate(const csilk_config_t* config,
        strlen(config->middleware.auth_token) == 0)) {
     if (error_msg)
       *error_msg = "auth_token must be set when auth middleware is enabled";
+    return -1;
+  }
+  if (config->cipher.enable &&
+      (!config->cipher.driver || strlen(config->cipher.driver) == 0)) {
+    if (error_msg)
+      *error_msg = "cipher.driver must be set when cipher is enabled";
     return -1;
   }
   return 0;
