@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 static int received_count = 0;
 static char* received_payloads[3] = {NULL, NULL, NULL};

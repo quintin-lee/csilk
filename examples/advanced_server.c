@@ -1,5 +1,5 @@
-#include "context_internal.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/core/internal.h"
 /**
  * @file advanced_server.c
  * @brief Advanced server example with route groups, WebSocket, and auth
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 /** @brief Example user model struct. */
 typedef struct {

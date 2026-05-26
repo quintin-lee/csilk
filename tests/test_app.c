@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_app.h"
+#include "csilk/csilk.h"
+#include "csilk/app/app.h"
 
 static void test_app_new_free() {
   printf("Testing csilk_app_new and csilk_app_free...\n");

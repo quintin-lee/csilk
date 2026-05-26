@@ -10,7 +10,7 @@
 #include <setjmp.h>
 #include <uv.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 /** @brief Method-specific handler mapping with metadata for OpenAPI generation.
  */

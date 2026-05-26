@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_db.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/db.h"
 
 /** @brief Mutex protecting the driver registry during registration/lookup. */
 static uv_mutex_t registry_mutex;

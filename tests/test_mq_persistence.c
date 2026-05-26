@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void test_mq_persistence_api() {
   printf("Testing MQ Persistence API declaration...\n");

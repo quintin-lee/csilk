@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_db.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/db.h"
 
 typedef struct {
   MYSQL* db;

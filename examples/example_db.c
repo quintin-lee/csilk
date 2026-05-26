@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_db.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/db.h"
 
 /** @brief Drop and create users table. */
 static int setup_db(csilk_db_pool_t* pool) {

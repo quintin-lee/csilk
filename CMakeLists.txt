@@ -127,18 +127,18 @@ endif()
 set(CSILK_SOURCES
     src/core/context.c
     src/core/router.c
-    src/core/group.c
+    src/app/group.c
     src/core/server.c
     src/core/url.c
     src/core/arena.c
     src/core/logger.c
-    src/core/db.c
+    src/data/db.c
     src/app/app.c
     src/core/config.c
-    src/core/reflect.c
+    src/reflection/reflect.c
     src/core/utils.c
-    src/core/websocket.c
-    src/core/mq.c
+    src/protocols/websocket.c
+    src/messaging/mq.c
     src/middleware/logger.c
     src/middleware/recovery.c
     src/middleware/auth.c
@@ -154,9 +154,9 @@ set(CSILK_SOURCES
     src/middleware/session.c
     src/middleware/validate.c
     src/middleware/metrics.c
-    src/core/swagger.c
-    src/core/perm.c
-    src/core/ai.c
+    src/protocols/swagger.c
+    src/security/perm.c
+    src/ai/ai.c
     src/drivers/sqlite.c
     src/drivers/perm_simple.c
     src/drivers/ai_openai.c

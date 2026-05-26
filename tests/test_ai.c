@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_ai.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/ai.h"
 
 void test_ai_init() {
   printf("Testing AI initialization...\n");

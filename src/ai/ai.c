@@ -9,7 +9,7 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk_ai.h"
+#include "csilk/drivers/ai.h"
 
 #define MAX_DRIVERS 8
 

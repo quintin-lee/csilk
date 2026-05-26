@@ -7,9 +7,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
  * @brief CORS middleware — sets cross-origin headers and handles preflight

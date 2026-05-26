@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
 
 static int set_called = 0;
 static int get_called = 0;

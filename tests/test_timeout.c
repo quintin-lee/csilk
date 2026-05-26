@@ -7,9 +7,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 static csilk_server_t* g_server = NULL;
 

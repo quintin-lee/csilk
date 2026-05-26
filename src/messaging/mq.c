@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /* --- Context API --- */
 

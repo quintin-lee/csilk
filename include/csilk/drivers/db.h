@@ -16,7 +16,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Opaque database driver interface.

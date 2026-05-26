@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "csilk_ai.h"
+#include "csilk/drivers/ai.h"
 
 typedef struct {
   char* base_url;

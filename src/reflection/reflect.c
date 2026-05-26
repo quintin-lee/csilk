@@ -9,7 +9,7 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk_reflect.h"
+#include "csilk/reflection/reflect.h"
 
 #define MAX_REG_STRUCTS 256
 

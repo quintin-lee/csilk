@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_ai.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/ai.h"
 
 static void on_stream_chunk(const char *chunk, void *user_data) {
   (void)user_data;

@@ -17,8 +17,8 @@
 #include <unistd.h>
 #include <uv.h>
 
-#include "csilk.h"
-#include "csilk_reflect.h"
+#include "csilk/csilk.h"
+#include "csilk/reflection/reflect.h"
 
 /* ---- reflectable log-entry struct ---- */
 

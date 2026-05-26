@@ -30,10 +30,10 @@ typedef struct TestArray_s {
 #define CSILK_USER_TYPE_MAP \
   , struct TestUser_s : "TestUser", struct TestPoint_s : "TestPoint", struct TestArray_s : "TestArray"
 
-#include "csilk.h"
-#include "csilk_reflect.h"
-#include "context_internal.h"
-#include "csilk_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/reflection/reflect.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/core/internal.h"
 
 #define POINT_REFLECT_MAP(X)                                         \
   X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL) \

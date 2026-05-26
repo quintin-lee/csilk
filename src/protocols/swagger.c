@@ -16,8 +16,8 @@
 #include <string.h>
 #include <strings.h>
 
-#include "csilk.h"
-#include "csilk_reflect.h"
+#include "csilk/csilk.h"
+#include "csilk/reflection/reflect.h"
 
 /** @brief Convert a csilk path pattern to OpenAPI 3.0 path format.
  *

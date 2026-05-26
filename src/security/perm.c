@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_perm.h"
-#include "context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/perm.h"
+#include "csilk/core/context_internal.h"
 
 static csilk_perm_driver_t* drivers[16];
 static int driver_count = 0;

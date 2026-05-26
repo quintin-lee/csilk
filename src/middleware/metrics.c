@@ -9,7 +9,7 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Global atomic counter for total HTTP requests processed.

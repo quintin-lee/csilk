@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 // Helper to add request header
 void add_request_header(csilk_ctx_t* c, const char* key, const char* value) {
@@ -27,7 +27,7 @@ int main() {
   /* We need a hack here because we're manually setting up ctx without
      csilk_server. In a real opaque world, we'd have csilk_ctx_new(). For now,
      we'll keep context_internal.h for tests that manual set up ctx. */
-#include "context_internal.h"
+#include "csilk/core/context_internal.h"
   c.arena = arena;
 
   // Test 1: No header

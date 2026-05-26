@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 #define CSILK_MAX_PART_HEADERS 32
 #define CSILK_MAX_PART_NAME 128

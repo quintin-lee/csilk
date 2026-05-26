@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/core/internal.h"
 
 #ifdef TEST_OOM
 int g_oom_fail_after = -1;
