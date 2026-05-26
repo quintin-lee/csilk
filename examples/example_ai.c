@@ -5,51 +5,82 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "csilk.h"
 #include "csilk_ai.h"
 
+static void on_stream_chunk(const char *chunk, void *user_data) {
+  (void)user_data;
+  printf("%s", chunk);
+  fflush(stdout);
+}
+
 int main() {
-  const char* api_key = getenv("OPENAI_API_KEY");
+  const char* api_key = getenv("AGENT_API_KEY");
+  const char* api_base = getenv("AGENT_API_BASE");
+  const char* model_name = getenv("AGENT_MODEL_NAME");
+
   if (!api_key) {
-    printf("Please set OPENAI_API_KEY environment variable to run this example.\n");
+    printf("Please set AGENT_API_KEY environment variable to run this example.\n");
     return 0;
   }
 
-  /* Create an OpenAI AI instance */
-  csilk_ai_t* ai = csilk_ai_new("openai", api_key, NULL);
+  if (!model_name) {
+    model_name = "gpt-3.5-turbo";
+  }
+
+  /* Create an OpenAI-compatible AI instance */
+  printf("Initializing AI driver...\n");
+  printf("  Base URL: %s\n", api_base ? api_base : "https://api.openai.com/v1");
+  printf("  Model:    %s\n\n", model_name);
+
+  csilk_ai_t* ai = csilk_ai_new("openai", api_key, api_base);
   if (!ai) {
-    fprintf(stderr, "Failed to initialize OpenAI driver\n");
+    fprintf(stderr, "Failed to initialize AI driver\n");
     return 1;
   }
 
   /* Prepare a chat request */
   csilk_ai_message_t messages[] = {
     {"system", "You are a helpful assistant."},
-    {"user", "Hello! Can you introduce the csilk C web framework in one sentence?"}
+    {"user", "介绍一下自己，并用一句话总结 C 语言的优势。"}
   };
 
+  /* 1. Non-streaming call with enriched parameters */
   csilk_ai_chat_request_t req = {
-    .model = "gpt-3.5-turbo",
+    .model = model_name,
     .messages = messages,
     .message_count = 2,
     .temperature = 0.7,
-    .max_tokens = 100
+    .top_p = 0.9,
+    .max_tokens = 512,
+    .user = "csilk-test-user"
   };
 
-  /* Perform the chat completion */
   csilk_ai_chat_response_t res;
-  printf("Calling OpenAI API...\n");
+  printf("--- [1] Non-streaming call ---\n");
   if (csilk_ai_chat(ai, &req, &res) == 0) {
-    printf("\nAI Response:\n%s\n", res.content);
-    printf("\nUsage: prompt=%d, completion=%d, total=%d\n", 
+    printf("AI Response:\n%s\n", res.content);
+    printf("\nUsage: prompt=%d, completion=%d, total=%d\n\n", 
            res.prompt_tokens, res.completion_tokens, res.total_tokens);
-    
     csilk_ai_chat_response_free(&res);
   } else {
-    fprintf(stderr, "AI chat call failed\n");
+    fprintf(stderr, "Non-streaming chat call failed\n");
+  }
+
+  /* 2. Streaming call */
+  req.stream = true;
+  req.on_chunk = on_stream_chunk;
+  printf("--- [2] Streaming call ---\n");
+  if (csilk_ai_chat(ai, &req, &res) == 0) {
+    printf("\n\n(Full content captured: %zu bytes)\n", strlen(res.content));
+    csilk_ai_chat_response_free(&res);
+  } else {
+    fprintf(stderr, "Streaming chat call failed\n");
   }
 
   csilk_ai_free(ai);
   return 0;
 }
+
