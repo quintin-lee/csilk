@@ -43,22 +43,86 @@ static void openai_free(void* state_ptr) {
   free(state);
 }
 
-struct curl_response {
+struct curl_context {
+  const csilk_ai_chat_request_t* req;
+  csilk_ai_chat_response_t* res;
   char* body;
   size_t size;
+  char* line_buf;
+  size_t line_size;
 };
+
+static void process_stream_line(struct curl_context* ctx, const char* line) {
+  if (strncmp(line, "data: ", 5) != 0) return;
+  const char* data = line + 6;
+  if (strcmp(data, "[DONE]") == 0) return;
+
+  cJSON* root = cJSON_Parse(data);
+  if (!root) return;
+
+  cJSON* choices = cJSON_GetObjectItem(root, "choices");
+  if (cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
+    cJSON* first = cJSON_GetArrayItem(choices, 0);
+    cJSON* delta = cJSON_GetObjectItem(first, "delta");
+    cJSON* content = cJSON_GetObjectItem(delta, "content");
+    if (cJSON_IsString(content)) {
+      /* Append to full content */
+      size_t clen = strlen(content->valuestring);
+      size_t current_len = ctx->res->content ? strlen(ctx->res->content) : 0;
+      char* new_content = realloc(ctx->res->content, current_len + clen + 1);
+      if (new_content) {
+        ctx->res->content = new_content;
+        memcpy(ctx->res->content + current_len, content->valuestring, clen);
+        ctx->res->content[current_len + clen] = '\0';
+      }
+
+      /* Call user callback */
+      if (ctx->req->on_chunk) {
+        ctx->req->on_chunk(content->valuestring, ctx->req->user_data);
+      }
+    }
+  }
+  cJSON_Delete(root);
+}
 
 static size_t write_cb(void* contents, size_t size, size_t nmemb, void* userp) {
   size_t realsize = size * nmemb;
-  struct curl_response* res = (struct curl_response*)userp;
+  struct curl_context* ctx = (struct curl_context*)userp;
 
-  char* ptr = realloc(res->body, res->size + realsize + 1);
-  if (!ptr) return 0;
+  if (ctx->req->stream) {
+    /* Process SSE stream */
+    char* ptr = realloc(ctx->line_buf, ctx->line_size + realsize + 1);
+    if (!ptr) return 0;
+    ctx->line_buf = ptr;
+    memcpy(ctx->line_buf + ctx->line_size, contents, realsize);
+    ctx->line_size += realsize;
+    ctx->line_buf[ctx->line_size] = '\0';
 
-  res->body = ptr;
-  memcpy(&(res->body[res->size]), contents, realsize);
-  res->size += realsize;
-  res->body[res->size] = 0;
+    char* line_start = ctx->line_buf;
+    char* newline;
+    while ((newline = strchr(line_start, '\n')) != NULL) {
+      *newline = '\0';
+      process_stream_line(ctx, line_start);
+      line_start = newline + 1;
+    }
+
+    /* Keep remaining partial line */
+    size_t processed = (size_t)(line_start - ctx->line_buf);
+    size_t remaining = ctx->line_size - processed;
+    if (remaining > 0) {
+      memmove(ctx->line_buf, line_start, remaining);
+    }
+    ctx->line_size = remaining;
+    ctx->line_buf[ctx->line_size] = '\0';
+  } else {
+    /* Regular non-stream accumulation */
+    char* ptr = realloc(ctx->body, ctx->size + realsize + 1);
+    if (!ptr) return 0;
+    ctx->body = ptr;
+    memcpy(&(ctx->body[ctx->size]), contents, realsize);
+    ctx->size += realsize;
+    ctx->body[ctx->size] = 0;
+  }
 
   return realsize;
 }
@@ -71,8 +135,9 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
 
   /* Build JSON request body */
   cJSON* root = cJSON_CreateObject();
-  cJSON_AddStringToObject(root, "model", req->model ? req->model : "gpt-3.5-turbo");
-  
+  cJSON_AddStringToObject(root, "model",
+                          req->model ? req->model : "gpt-3.5-turbo");
+
   cJSON* msgs = cJSON_CreateArray();
   for (size_t i = 0; i < req->message_count; i++) {
     cJSON* m = cJSON_CreateObject();
@@ -82,9 +147,25 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
   }
   cJSON_AddItemToObject(root, "messages", msgs);
 
-  if (req->temperature > 0) cJSON_AddNumberToObject(root, "temperature", req->temperature);
-  if (req->max_tokens > 0) cJSON_AddNumberToObject(root, "max_tokens", req->max_tokens);
+  if (req->temperature > 0)
+    cJSON_AddNumberToObject(root, "temperature", req->temperature);
+  if (req->top_p > 0) cJSON_AddNumberToObject(root, "top_p", req->top_p);
+  if (req->presence_penalty != 0)
+    cJSON_AddNumberToObject(root, "presence_penalty", req->presence_penalty);
+  if (req->frequency_penalty != 0)
+    cJSON_AddNumberToObject(root, "frequency_penalty", req->frequency_penalty);
+  if (req->max_tokens > 0)
+    cJSON_AddNumberToObject(root, "max_tokens", req->max_tokens);
+  if (req->user) cJSON_AddStringToObject(root, "user", req->user);
   if (req->stream) cJSON_AddBoolToObject(root, "stream", true);
+
+  if (req->stop_count > 0) {
+    cJSON* stop = cJSON_CreateArray();
+    for (size_t i = 0; i < req->stop_count; i++) {
+      cJSON_AddItemToArray(stop, cJSON_CreateString(req->stop[i]));
+    }
+    cJSON_AddItemToObject(root, "stop", stop);
+  }
 
   char* json_body = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
@@ -94,31 +175,58 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
 
   struct curl_slist* headers = NULL;
   char auth_hdr[256];
-  snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s", state->api_key);
+  snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s",
+           state->api_key);
   headers = curl_slist_append(headers, "Content-Type: application/json");
   headers = curl_slist_append(headers, auth_hdr);
 
-  struct curl_response cr = {0};
+  struct curl_context ctx = {0};
+  ctx.req = req;
+  ctx.res = res;
+
   curl_easy_setopt(curl, CURLOPT_URL, url);
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&ctx);
 
   CURLcode rc = curl_easy_perform(curl);
   free(json_body);
   curl_slist_free_all(headers);
+  free(ctx.line_buf);
 
   if (rc != CURLE_OK) {
-    free(cr.body);
+    char err_buf[256];
+    snprintf(err_buf, sizeof(err_buf), "CURL error (%d): %s", rc,
+             curl_easy_strerror(rc));
+    res->error_message = strdup(err_buf);
+    free(ctx.body);
     curl_easy_cleanup(curl);
     return -1;
   }
 
-  /* Parse response */
-  cJSON* resp_root = cJSON_Parse(cr.body);
+  long http_code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+  if (http_code >= 400) {
+    char err_buf[512];
+    snprintf(err_buf, sizeof(err_buf), "HTTP error %ld: %s", http_code,
+             ctx.body ? ctx.body : "(no response body)");
+    res->error_message = strdup(err_buf);
+    free(ctx.body);
+    curl_easy_cleanup(curl);
+    return -1;
+  }
+
+  if (req->stream) {
+    /* Final chunk build complete in write_cb */
+    curl_easy_cleanup(curl);
+    return res->content ? 0 : -1;
+  }
+
+  /* Parse full response for non-stream */
+  cJSON* resp_root = cJSON_Parse(ctx.body);
   if (resp_root) {
-    res->raw_response = cr.body;
+    res->raw_response = ctx.body;
     cJSON* choices = cJSON_GetObjectItem(resp_root, "choices");
     if (cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
       cJSON* first = cJSON_GetArrayItem(choices, 0);
@@ -130,13 +238,15 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
     }
     cJSON* usage = cJSON_GetObjectItem(resp_root, "usage");
     if (usage) {
-      res->prompt_tokens = cJSON_GetObjectItem(usage, "prompt_tokens")->valueint;
-      res->completion_tokens = cJSON_GetObjectItem(usage, "completion_tokens")->valueint;
+      res->prompt_tokens =
+          cJSON_GetObjectItem(usage, "prompt_tokens")->valueint;
+      res->completion_tokens =
+          cJSON_GetObjectItem(usage, "completion_tokens")->valueint;
       res->total_tokens = cJSON_GetObjectItem(usage, "total_tokens")->valueint;
     }
     cJSON_Delete(resp_root);
   } else {
-    free(cr.body);
+    free(ctx.body);
   }
 
   curl_easy_cleanup(curl);

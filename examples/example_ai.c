@@ -66,7 +66,9 @@ int main() {
            res.prompt_tokens, res.completion_tokens, res.total_tokens);
     csilk_ai_chat_response_free(&res);
   } else {
-    fprintf(stderr, "Non-streaming chat call failed\n");
+    fprintf(stderr, "Non-streaming chat call failed: %s\n", 
+            res.error_message ? res.error_message : "Unknown error");
+    csilk_ai_chat_response_free(&res);
   }
 
   /* 2. Streaming call */
@@ -77,7 +79,9 @@ int main() {
     printf("\n\n(Full content captured: %zu bytes)\n", strlen(res.content));
     csilk_ai_chat_response_free(&res);
   } else {
-    fprintf(stderr, "Streaming chat call failed\n");
+    fprintf(stderr, "Streaming chat call failed: %s\n", 
+            res.error_message ? res.error_message : "Unknown error");
+    csilk_ai_chat_response_free(&res);
   }
 
   csilk_ai_free(ai);

@@ -24,14 +24,27 @@ typedef struct {
   const char* content; /**< Message text content. */
 } csilk_ai_message_t;
 
+/** @brief Callback for streaming mode. 
+ * @param chunk The text content delta.
+ * @param user_data User-provided context. */
+typedef void (*csilk_ai_stream_cb)(const char* chunk, void* user_data);
+
 /** @brief Request parameters for chat completion. */
 typedef struct {
   const char* model;             /**< Provider-specific model name (e.g., "gpt-4"). */
   csilk_ai_message_t* messages;  /**< Array of conversation messages. */
   size_t message_count;          /**< Number of messages in the array. */
-  double temperature;            /**< Sampling temperature (0.0 to 2.0). Default 1.0. */
-  int max_tokens;                /**< Maximum tokens to generate (0 for provider default). */
-  bool stream;                   /**< Enable streaming mode (if supported by driver). */
+  double temperature;            /**< Sampling temperature (0.0 to 2.0). */
+  double top_p;                  /**< Nucleus sampling probability. */
+  double presence_penalty;       /**< Penalty for new topics (-2.0 to 2.0). */
+  double frequency_penalty;      /**< Penalty for repetitive tokens (-2.0 to 2.0). */
+  int max_tokens;                /**< Maximum tokens to generate. */
+  const char** stop;             /**< Array of stop sequences. */
+  size_t stop_count;             /**< Number of stop sequences. */
+  const char* user;              /**< Unique identifier for the end-user. */
+  bool stream;                   /**< Enable streaming mode. */
+  csilk_ai_stream_cb on_chunk;   /**< Callback invoked for each chunk in stream mode. */
+  void* user_data;               /**< User context for the stream callback. */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
@@ -41,6 +54,7 @@ typedef struct {
   int completion_tokens;    /**< Tokens used in the generation. */
   int total_tokens;          /**< Total tokens used. */
   char* raw_response;       /**< Full raw JSON response (optional, heap-allocated). */
+  char* error_message;      /**< Detailed error message if call failed (heap-allocated). */
 } csilk_ai_chat_response_t;
 
 /** @brief Driver interface for AI providers. */

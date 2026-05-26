@@ -81,4 +81,5 @@ void csilk_ai_chat_response_free(csilk_ai_chat_response_t* res) {
   if (!res) return;
   free(res->content);
   free(res->raw_response);
+  free(res->error_message);
 }
