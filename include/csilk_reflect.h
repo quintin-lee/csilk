@@ -165,17 +165,17 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  * are performed where possible.
  *
  * @param type_name  Registered type name of the target struct.
- * @param json_str   NUL-terminated JSON string to parse.
+ * @param  json_str   NUL-terminated JSON string to parse.
  * @param[out] ptr   Pointer to the struct instance to populate (must
  *                   already be allocated and zero-initialised).
- * @return 0 on success, -1 on parse error or type mismatch.
+ * @return 1 on success, 0 on parse error or type mismatch.
  */
-int csilk_json_unmarshal(const char* type_name, const char* json_str,
+ int csilk_json_unmarshal(const char* type_name, const char* json_str,
                          void* ptr);
 
-/* --- Automatic Type Dispatch (C11 _Generic) --- */
+ /* --- Automatic Type Dispatch (C11 _Generic) --- */
 
-/**
+ /**
  * @brief User-extensible type-name mapping.
  *
  * Define CSILK_USER_TYPE_MAP before including csilk_reflect.h to add custom
@@ -184,28 +184,42 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
  *
  * @code
  *   #define CSILK_USER_TYPE_MAP \
- *       int: "int",             \
+ *       int: "int32",           \
  *       double: "double"
  * @endcode
  */
-#ifndef CSILK_USER_TYPE_MAP
-#define CSILK_USER_TYPE_MAP
-#endif
+ #ifndef CSILK_USER_TYPE_MAP
+ #define CSILK_USER_TYPE_MAP
+ #endif
 
-/**
+ /**
  * @brief Map a C expression's type to its reflected string name.
  *
  * Uses C11 _Generic dispatch.  Extend with CSILK_USER_TYPE_MAP for
  * user-defined types.
  *
  * @param x  Expression whose static type determines the returned name.
- * @return A string literal naming the type (e.g., "string", "int").
+ * @return A string literal naming the type (e.g., "string", "int32").
  */
-#define csilk_type_name(x)                       \
-  _Generic((x),                                  \
-      char*: "string",                           \
-      const char*: "string" CSILK_USER_TYPE_MAP, \
+ #define csilk_type_name(x)                          \
+  _Generic((x),                                     \
+      _Bool: "bool",                                \
+      signed char: "int8",                          \
+      unsigned char: "uint8",                       \
+      short: "int16",                               \
+      unsigned short: "uint16",                     \
+      int: "int32",                                 \
+      unsigned int: "uint32",                       \
+      long: "int64",                                \
+      unsigned long: "uint64",                      \
+      long long: "int64",                           \
+      unsigned long long: "uint64",                 \
+      float: "float",                               \
+      double: "double",                             \
+      char*: "string",                              \
+      const char*: "string" CSILK_USER_TYPE_MAP,    \
       default: "unknown")
+
 
 /**
  * @brief Convenience macro to serialise a reflected struct to a JSON string.

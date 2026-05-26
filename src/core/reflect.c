@@ -210,7 +210,7 @@ static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
   for (size_t i = 0; i < field_count; i++) {
     const char* field_addr = (const char*)struct_ptr + descs[i].offset;
 
-    if (descs[i].array_length > 0 && descs[i].type != CSILK_TYPE_STRING) {
+    if (descs[i].array_length > 0) {
       cJSON* arr = cJSON_CreateArray();
       if (!arr) continue;
       for (size_t j = 0; j < descs[i].array_length; j++) {
@@ -337,7 +337,7 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
 
     char* field_addr = (char*)struct_ptr + descs[i].offset;
 
-    if (descs[i].array_length > 0 && descs[i].type != CSILK_TYPE_STRING) {
+    if (descs[i].array_length > 0) {
       if (!cJSON_IsArray(item)) continue;
       size_t arr_size = cJSON_GetArraySize(item);
       size_t limit =
@@ -353,8 +353,74 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
   }
 }
 
-/** @brief Serialize a registered struct to a compact JSON string. */
+static int get_basic_type(const char* type_name, csilk_field_desc_t* out_desc) {
+  memset(out_desc, 0, sizeof(*out_desc));
+  if (strcmp(type_name, "bool") == 0) {
+    out_desc->type = CSILK_TYPE_BOOL;
+    return 1;
+  }
+  if (strcmp(type_name, "int8") == 0) {
+    out_desc->type = CSILK_TYPE_INT8;
+    return 1;
+  }
+  if (strcmp(type_name, "uint8") == 0) {
+    out_desc->type = CSILK_TYPE_UINT8;
+    return 1;
+  }
+  if (strcmp(type_name, "int16") == 0) {
+    out_desc->type = CSILK_TYPE_INT16;
+    return 1;
+  }
+  if (strcmp(type_name, "uint16") == 0) {
+    out_desc->type = CSILK_TYPE_UINT16;
+    return 1;
+  }
+  if (strcmp(type_name, "int32") == 0) {
+    out_desc->type = CSILK_TYPE_INT32;
+    return 1;
+  }
+  if (strcmp(type_name, "uint32") == 0) {
+    out_desc->type = CSILK_TYPE_UINT32;
+    return 1;
+  }
+  if (strcmp(type_name, "int64") == 0) {
+    out_desc->type = CSILK_TYPE_INT64;
+    return 1;
+  }
+  if (strcmp(type_name, "uint64") == 0) {
+    out_desc->type = CSILK_TYPE_UINT64;
+    return 1;
+  }
+  if (strcmp(type_name, "float") == 0) {
+    out_desc->type = CSILK_TYPE_FLOAT;
+    return 1;
+  }
+  if (strcmp(type_name, "double") == 0) {
+    out_desc->type = CSILK_TYPE_DOUBLE;
+    return 1;
+  }
+  if (strcmp(type_name, "string") == 0) {
+    out_desc->type = CSILK_TYPE_STRING;
+    out_desc->is_pointer = true;
+    return 1;
+  }
+  return 0;
+}
+
+/** @brief Serialize a registered struct or basic type to a compact JSON string.
+ */
 char* csilk_json_marshal(const char* type_name, const void* ptr) {
+  if (!type_name || !ptr) return NULL;
+
+  csilk_field_desc_t basic_desc;
+  if (get_basic_type(type_name, &basic_desc)) {
+    cJSON* node = serialize_scalar(ptr, &basic_desc);
+    if (!node) return NULL;
+    char* out = cJSON_PrintUnformatted(node);
+    cJSON_Delete(node);
+    return out;
+  }
+
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
   if (!entry) return NULL;
 
@@ -367,11 +433,23 @@ char* csilk_json_marshal(const char* type_name, const void* ptr) {
   return out;
 }
 
-/** @brief Deserialize a JSON string into a registered struct instance. */
+/** @brief Deserialize a JSON string into a registered struct or basic type
+ * instance. */
 int csilk_json_unmarshal(const char* type_name, const char* json_str,
                          void* ptr) {
+  if (!type_name || !json_str || !ptr) return 0;
+
+  csilk_field_desc_t basic_desc;
+  if (get_basic_type(type_name, &basic_desc)) {
+    cJSON* root = cJSON_Parse(json_str);
+    if (!root) return 0;
+    deserialize_scalar(root, ptr, &basic_desc);
+    cJSON_Delete(root);
+    return 1;
+  }
+
   const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
-  if (!entry || !json_str) return 0;
+  if (!entry) return 0;
 
   cJSON* root = cJSON_Parse(json_str);
   if (!root) return 0;
