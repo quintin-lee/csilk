@@ -1,3 +1,5 @@
+#ifdef HAS_POSTGRES
+
 #include <libpq-fe.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,26 +92,45 @@ static int postgres_query(csilk_db_pool_t* pool, const char* sql,
 
   result->column_count = nfields;
   result->column_names = calloc(nfields, sizeof(char*));
-  if (!result->column_names && nfields > 0) { PQclear(pg_res); return -1; }
+  if (!result->column_names && nfields > 0) {
+    PQclear(pg_res);
+    return -1;
+  }
   for (int i = 0; i < nfields; i++) {
     result->column_names[i] = strdup(PQfname(pg_res, i));
   }
 
   for (int i = 0; i < ntuples; i++) {
     csilk_db_row_t* drow = calloc(1, sizeof(csilk_db_row_t));
-    if (!drow) { PQclear(pg_res); postgres_free_result(result); return -1; }
+    if (!drow) {
+      PQclear(pg_res);
+      postgres_free_result(result);
+      return -1;
+    }
 
     drow->count = nfields;
     drow->values = calloc(nfields, sizeof(char*));
-    if (!drow->values) { free(drow); PQclear(pg_res); postgres_free_result(result); return -1; }
+    if (!drow->values) {
+      free(drow);
+      PQclear(pg_res);
+      postgres_free_result(result);
+      return -1;
+    }
 
     for (int j = 0; j < nfields; j++) {
-      drow->values[j] = PQgetisnull(pg_res, i, j) ? NULL : strdup(PQgetvalue(pg_res, i, j));
+      drow->values[j] =
+          PQgetisnull(pg_res, i, j) ? NULL : strdup(PQgetvalue(pg_res, i, j));
     }
 
     csilk_db_row_t** new_rows = realloc(
         result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-    if (!new_rows) { free(drow->values); free(drow); PQclear(pg_res); postgres_free_result(result); return -1; }
+    if (!new_rows) {
+      free(drow->values);
+      free(drow);
+      PQclear(pg_res);
+      postgres_free_result(result);
+      return -1;
+    }
     result->rows = new_rows;
     result->rows[result->row_count++] = drow;
   }
@@ -165,3 +186,5 @@ csilk_db_driver_t csilk_db_postgres_driver = {
 void csilk_db_postgres_init(void) {
   csilk_db_register_driver("postgres", &csilk_db_postgres_driver);
 }
+
+#endif /* HAS_POSTGRES */

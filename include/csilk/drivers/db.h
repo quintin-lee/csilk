@@ -228,7 +228,9 @@ void csilk_db_sqlite_init(void);
  * Called automatically by csilk_db_init.  Requires libmysqlclient.
  * Not intended for direct use.
  */
+#ifdef HAS_MYSQL
 void csilk_db_mysql_init(void);
+#endif
 
 /**
  * @brief Internal: Register the built-in PostgreSQL driver.
@@ -236,7 +238,9 @@ void csilk_db_mysql_init(void);
  * Called automatically by csilk_db_init.  Requires libpq.
  * Not intended for direct use.
  */
+#ifdef HAS_POSTGRES
 void csilk_db_postgres_init(void);
+#endif
 
 /**
  * @brief Initialise the database subsystem.

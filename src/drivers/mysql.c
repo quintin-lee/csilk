@@ -1,3 +1,5 @@
+#ifdef HAS_MYSQL
+
 #include <mysql/mysql.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,16 +27,24 @@ static void mysql_parse_dsn(const char* dsn, char** host, int* port,
   while (token) {
     while (*token == ' ') token++;
     char* eq = strchr(token, '=');
-    if (!eq) { token = strtok(NULL, ";"); continue; }
+    if (!eq) {
+      token = strtok(NULL, ";");
+      continue;
+    }
     *eq = '\0';
     const char* key = token;
     const char* val = eq + 1;
 
-    if (strcmp(key, "host") == 0) *host = strdup(val);
-    else if (strcmp(key, "port") == 0) *port = atoi(val);
-    else if (strcmp(key, "user") == 0) *user = strdup(val);
-    else if (strcmp(key, "password") == 0) *password = strdup(val);
-    else if (strcmp(key, "dbname") == 0) *dbname = strdup(val);
+    if (strcmp(key, "host") == 0)
+      *host = strdup(val);
+    else if (strcmp(key, "port") == 0)
+      *port = atoi(val);
+    else if (strcmp(key, "user") == 0)
+      *user = strdup(val);
+    else if (strcmp(key, "password") == 0)
+      *password = strdup(val);
+    else if (strcmp(key, "dbname") == 0)
+      *dbname = strdup(val);
 
     token = strtok(NULL, ";");
   }
@@ -58,8 +68,8 @@ static int mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn) {
   int port = 3306;
   mysql_parse_dsn(dsn, &host, &port, &user, &password, &dbname);
 
-  MYSQL* ret = mysql_real_connect(conn->db, host, user, password, dbname,
-                                  port, NULL, 0);
+  MYSQL* ret =
+      mysql_real_connect(conn->db, host, user, password, dbname, port, NULL, 0);
   free(host);
   free(user);
   free(password);
@@ -107,7 +117,7 @@ static void mysql_free_csilk_result(csilk_db_result_t* result) {
 }
 
 static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
-                       csilk_db_result_t* result) {
+                           csilk_db_result_t* result) {
   if (!pool || !pool->connection || !sql || !result) return -1;
 
   mysql_conn_t* conn = (mysql_conn_t*)pool->connection;
@@ -128,7 +138,10 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
 
   result->column_count = (int)num_fields;
   result->column_names = calloc(num_fields, sizeof(char*));
-  if (!result->column_names) { mysql_free_result(mysql_res); return -1; }
+  if (!result->column_names) {
+    mysql_free_result(mysql_res);
+    return -1;
+  }
   for (unsigned int i = 0; i < num_fields; i++) {
     result->column_names[i] = strdup(fields[i].name);
   }
@@ -138,11 +151,20 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
     unsigned long* lengths = mysql_fetch_lengths(mysql_res);
 
     csilk_db_row_t* drow = calloc(1, sizeof(csilk_db_row_t));
-    if (!drow) { mysql_free_result(mysql_res); mysql_free_csilk_result(result); return -1; }
+    if (!drow) {
+      mysql_free_result(mysql_res);
+      mysql_free_csilk_result(result);
+      return -1;
+    }
 
     drow->count = (int)num_fields;
     drow->values = calloc(num_fields, sizeof(char*));
-    if (!drow->values) { free(drow); mysql_free_result(mysql_res); mysql_free_csilk_result(result); return -1; }
+    if (!drow->values) {
+      free(drow);
+      mysql_free_result(mysql_res);
+      mysql_free_csilk_result(result);
+      return -1;
+    }
 
     for (unsigned int i = 0; i < num_fields; i++) {
       drow->values[i] = row[i] ? strndup(row[i], lengths[i]) : NULL;
@@ -150,7 +172,13 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
 
     csilk_db_row_t** new_rows = realloc(
         result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-    if (!new_rows) { free(drow->values); free(drow); mysql_free_result(mysql_res); mysql_free_csilk_result(result); return -1; }
+    if (!new_rows) {
+      free(drow->values);
+      free(drow);
+      mysql_free_result(mysql_res);
+      mysql_free_csilk_result(result);
+      return -1;
+    }
     result->rows = new_rows;
     result->rows[result->row_count++] = drow;
   }
@@ -165,8 +193,7 @@ static int mysql_drv_exec(csilk_db_pool_t* pool, const char* sql) {
   mysql_conn_t* conn = (mysql_conn_t*)pool->connection;
 
   if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
-    fprintf(stderr, "csilk_db_mysql: exec failed: %s\n",
-            mysql_error(conn->db));
+    fprintf(stderr, "csilk_db_mysql: exec failed: %s\n", mysql_error(conn->db));
     return -1;
   }
 
@@ -203,3 +230,5 @@ csilk_db_driver_t csilk_db_mysql_driver = {
 void csilk_db_mysql_init(void) {
   csilk_db_register_driver("mysql", &csilk_db_mysql_driver);
 }
+
+#endif /* HAS_MYSQL */

@@ -4,13 +4,14 @@
  * @copyright MIT License
  */
 
+#include "csilk/drivers/db.h"
+
 #include <cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/drivers/db.h"
 
 /** @brief Mutex protecting the driver registry during registration/lookup. */
 static uv_mutex_t registry_mutex;
@@ -30,8 +31,12 @@ void csilk_db_init(void) {
     uv_mutex_init(&registry_mutex);
   }
   csilk_db_sqlite_init();
+#ifdef HAS_MYSQL
   csilk_db_mysql_init();
+#endif
+#ifdef HAS_POSTGRES
   csilk_db_postgres_init();
+#endif
 }
 
 /** @brief Statically-sized registry of registered database drivers (max 16). */
