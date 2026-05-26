@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void test_config_validate() {
   csilk_config_t cfg;

@@ -6,9 +6,9 @@
 #include <unistd.h>
 #include <uv.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 #define TEST_DIR "test_dir_static"
 

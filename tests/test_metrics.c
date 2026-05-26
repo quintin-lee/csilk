@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
 
 static void dummy_handler(csilk_ctx_t* c) { (void)c; }
 

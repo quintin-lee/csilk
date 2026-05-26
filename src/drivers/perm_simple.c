@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_perm.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/perm.h"
 
 #define MAX_RULES 128
 

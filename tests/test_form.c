@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 static void test_basic_form() {
   csilk_ctx_t c = {0};

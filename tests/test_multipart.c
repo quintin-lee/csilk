@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 static int part_count = 0;
 static char last_name[128];

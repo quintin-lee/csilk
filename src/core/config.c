@@ -9,7 +9,7 @@
 #include <string.h>
 #include <yaml.h>
 
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 /** @brief Convert a case-insensitive log level string to its enum value.
  *

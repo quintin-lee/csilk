@@ -1,5 +1,5 @@
-#include "context_internal.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/core/internal.h"
 /**
  * @file example_app.c
  * @brief Example using the high-level csilk_app_t API.
@@ -15,9 +15,9 @@
 #include <string.h>
 #include <time.h>
 
-#include "csilk.h"
-#include "csilk_app.h"
-#include "csilk_reflect.h"
+#include "csilk/csilk.h"
+#include "csilk/app/app.h"
+#include "csilk/reflection/reflect.h"
 
 /* =================================================================
  *  Complex Reflection Structs

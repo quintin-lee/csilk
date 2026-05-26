@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /** @brief Route group — holds a URL prefix, middleware chain, and optional
  * parent group for nesting. */

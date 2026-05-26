@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 void test_server_init() {
   printf("Testing server initialization...\n");

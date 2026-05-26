@@ -1,9 +1,9 @@
 #include <setjmp.h>
 #include <stdio.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 // Define a test that triggers a panic
 void panic_handler(csilk_ctx_t* c) { csilk_panic(c); }

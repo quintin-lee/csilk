@@ -15,9 +15,9 @@
 #include <string.h>
 #include <uv.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
 #define CSILK_DEFAULT_IDLE_TIMEOUT 5000
@@ -1189,7 +1189,7 @@ const char* csilk_get_client_ip(csilk_ctx_t* c) {
   return NULL;
 }
 
-#include "csilk_reflect.h"
+#include "csilk/reflection/reflect.h"
 
 /** @brief Create a new server instance associated with a router.
  *

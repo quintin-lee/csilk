@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_perm.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/perm.h"
 
 static int custom_check_called = 0;
 

@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_app.h"
+#include "csilk/csilk.h"
+#include "csilk/app/app.h"
 
 #define CSILK_MAX_GROUPS 32
 #define CSILK_MAX_STATIC 32

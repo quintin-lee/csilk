@@ -17,8 +17,8 @@
 #include <stdint.h>
 #include <uv.h>
 
-#include "csilk.h"
-#include "csilk_test.h"
+#include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 /**
  * @brief SHA-1 hashing context.

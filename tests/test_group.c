@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 int middleware1_called = 0;
 int middleware2_called = 0;

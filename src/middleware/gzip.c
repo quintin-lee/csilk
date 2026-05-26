@@ -10,9 +10,9 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 #define CSILK_GZIP_CHUNK 16384
 #define CSILK_GZIP_MIN_LENGTH 1024

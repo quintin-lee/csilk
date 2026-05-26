@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 static const char* get_resp_header(csilk_ctx_t* c, const char* key) {
   uint32_t hash = 5381;

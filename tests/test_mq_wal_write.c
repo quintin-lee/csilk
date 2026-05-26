@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdint.h>
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 void test_mq_wal_write() {
   printf("Testing MQ WAL Write...\n");

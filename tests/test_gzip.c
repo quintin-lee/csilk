@@ -4,9 +4,9 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 // Mock _csilk_send_response to capture the result
 static int response_sent = 0;

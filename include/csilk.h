@@ -19,10 +19,10 @@
 #include <uv.h>
 
 #include "cJSON.h"
-#include "csilk_db.h"
-#include "csilk_perm.h"
-#include "csilk_reflect.h"
-#include "csilk_ai.h"
+#include "csilk/drivers/db.h"
+#include "csilk/drivers/perm.h"
+#include "csilk/reflection/reflect.h"
+#include "csilk/drivers/ai.h"
 
 /**
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).

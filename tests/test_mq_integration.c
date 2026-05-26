@@ -1,4 +1,4 @@
-#include "csilk.h"
+#include "csilk/csilk.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk.h"
-#include "csilk_db.h"
+#include "csilk/csilk.h"
+#include "csilk/drivers/db.h"
 
 void test_db_init(void) {
   csilk_db_init();

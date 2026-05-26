@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "csilk.h"
+#include "csilk/csilk.h"
 
 static int global_mw_called = 0;
 static int topic_mw_called = 0;

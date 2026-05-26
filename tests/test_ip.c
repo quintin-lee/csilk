@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 void test_get_client_ip_null_ctx() {
   printf("Testing csilk_get_client_ip with NULL context...\n");

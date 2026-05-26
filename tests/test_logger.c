@@ -5,9 +5,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "context_internal.h"
-#include "csilk.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 // Mock handler
 void dummy_handler(csilk_ctx_t* c) { c->response.status = CSILK_STATUS_OK; }

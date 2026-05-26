@@ -1,5 +1,5 @@
-#include "context_internal.h"
-#include "csilk_internal.h"
+#include "csilk/core/context_internal.h"
+#include "csilk/core/internal.h"
 /**
  * @file example_server.c
  * @brief Full-featured example server using the low-level core API.
@@ -16,8 +16,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "csilk.h"
-#include "csilk_reflect.h"
+#include "csilk/csilk.h"
+#include "csilk/reflection/reflect.h"
 
 // --- OpenAPI Demo: Reflected Structs ---
 
