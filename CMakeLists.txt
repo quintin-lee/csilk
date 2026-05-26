@@ -165,10 +165,12 @@ set(CSILK_SOURCES
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/drivers/mysql.c)
+  add_definitions(-DHAS_MYSQL)
 endif()
 
 if(PQ_LIB)
   list(APPEND CSILK_SOURCES src/drivers/postgres.c)
+  add_definitions(-DHAS_POSTGRES)
 endif()
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
