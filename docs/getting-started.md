@@ -61,7 +61,33 @@ make -j$(nproc)
 | `USE_ASAN` | OFF | Enable AddressSanitizer |
 | `USE_FUZZER` | OFF | Build fuzz test harness |
 
+## Create a New Project
+
+Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project with a professional, layered architecture and built-in Swagger UI.
+
+```bash
+# Clone the repository
+git clone https://github.com/username/csilk.git
+cd csilk
+
+# Generate a new project
+bash scripts/csilkskel -n my-service
+
+# Build and run the new project
+cd my-service
+mkdir build && cd build
+cmake ..
+make
+./my-service
+```
+
+The generated project includes:
+- **Layered Architecture**: Dedicated directories for API handlers, service logic, and data models.
+- **Interactive Documentation**: Built-in Swagger UI available at `http://localhost:8080/`.
+- **Reflection Example**: A complete User service demonstrating automatic JSON binding.
+
 ## Run Example
+...
 
 ```bash
 # Low-level API demo

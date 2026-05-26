@@ -34,7 +34,55 @@ flowchart TB
         REGISTER --> REG
         MACRO["CSILK_REGISTER_REFLECT(UserType, USER_FIELDS)\n(convenience macro)"]
         MACRO --> REG
+        AUTO["csilk_type_name(x)\n(C11 _Generic deduction)"]
+        AUTO --> M1
+        AUTO --> U1
     end
+```
+
+## Automatic Type Deduction (C11 _Generic)
+
+Csilk uses C11 `_Generic` to automatically determine the type name string at compile time. This allows for a much cleaner API:
+
+```c
+// Instead of:
+csilk_json_marshal("User", &user);
+
+// You can use:
+csilk_marshal(&user); // Macro deduces "User"
+```
+
+### Supported Basic Types
+
+The following types are supported natively by `csilk_type_name` and the reflection engine:
+- `bool`
+- `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`
+- `float`, `double`
+- `string` (`char*` or `const char*`)
+
+### Custom Type Mapping
+
+To enable automatic deduction for user-defined structs, extend the `CSILK_USER_TYPE_MAP` **before** including `csilk.h`:
+
+```c
+#undef CSILK_USER_TYPE_MAP
+#define CSILK_USER_TYPE_MAP , struct User_s: "User"
+#include "csilk.h"
+```
+
+## Top-Level Basic Type Reflection
+
+The engine supports reflecting basic types directly without a surrounding struct:
+
+```c
+int count = 42;
+char* json = csilk_marshal(&count); // Result: "42"
+
+bool active = true;
+char* json_b = csilk_marshal(&active); // Result: "true"
+
+char* msg = "hello";
+char* json_s = csilk_marshal(&msg); // Result: "\"hello\""
 ```
 
 ## Data Flow: JSON Binding

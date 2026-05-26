@@ -35,22 +35,27 @@ graph TB
         WS["WebSocket"]
         CFG["Config (YAML)"]
         RF["Reflection Engine"]
-    end
+        AI["AI Unified Engine"]
+        end
 
-    subgraph Dependencies
+        subgraph Dependencies
         UV["libuv (async I/O)"]
         LL["llhttp (HTTP parser)"]
         JSON["cJSON"]
         YAML["libyaml"]
         Z["zlib"]
-    end
+        CURL["libcurl"]
+        end
+        ...
+        S --> CFG
+        S --> UV
+        S --> LL
+        RF --> JSON
+        AI --> CURL
+        AI --> JSON
+        GZ --> Z
+        C --> JSON
 
-    H --> C
-    APP --> S
-    APP --> G
-    REC --> C
-    LOG --> C
-    AUTH --> C
     CORS --> C
     RT --> C
     CSRF --> C
@@ -78,7 +83,7 @@ graph TB
 | [Getting Started](getting-started.md) | Build, install, and run your first server |
 | [Architecture](architecture.md) | High-level architecture and design principles |
 | [ARCH Whitepaper](ARCH.md) | Detailed architecture whitepaper |
-| [Module Design](module-design/) | Deep dives into core module internals |
+| [Module Design](module-design/) | Deep dives into core module internals: [AI](module-design/ai.md), [Reflection](module-design/reflection.md), [Context](module-design/context.md), [Router](module-design/router.md), [Middleware](module-design/middleware.md), [Crypto](module-design/crypto.md), [Hooks](module-design/hooks.md) |
 | [User Manual](user-manual/) | Configuration, middleware, and advanced usage |
 | [API Reference](html/index.html) | Doxygen-generated API documentation |
 
