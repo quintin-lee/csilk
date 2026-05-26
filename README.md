@@ -26,7 +26,8 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
 - 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)
 - 🏗️ Arena allocator for request-scoped memory management
-- 🗂️ Reflection engine for automatic struct <-> JSON conversion
+- 🤖 **Unified AI Interface** - Provider-agnostic API for Chat, Embeddings, and Tool Calling (OpenAI & Ollama)
+- 🗂️ Reflection engine for automatic struct <-> JSON conversion (including basic types and arrays)
 - 🔐 Built-in CSRF protection, CORS, and rate limiting
 - 📝 Complete Doxygen documentation for all public APIs and internals
 - 🧵 Thread-safe logging with file rotation and ANSI colors
@@ -261,6 +262,7 @@ src/
   │   ├── config.c        # YAML configuration loader + validation
   │   ├── logger.c        # Thread-safe logging with rotation
   │   ├── mq.c            # Internal Event Bus (Message Queue)
+  │   ├── ai.c            # AI Unified Interface Engine
   │   ├── url.c           # URL / query string parsing
   │   ├── utils.c         # SHA1 hashing and Base64 encoding
   │   ├── websocket.c     # WebSocket handshake and frame handling
@@ -285,6 +287,7 @@ src/
 include/              # Public + internal headers
   ├── csilk.h             # Main framework header
   ├── csilk_app.h         # csilk_app_t convenience API
+  ├── csilk_ai.h          # AI interface definitions
   ├── csilk_db.h          # Database driver interface
   ├── csilk_internal.h    # Internal utilities + struct definitions
   ├── csilk_reflect.h     # Reflection engine
@@ -330,6 +333,7 @@ The project includes a comprehensive test suite. After building, run individual 
 | 📋 | Configuration (YAML) |
 | 🏗 | Memory management (Arena) |
 | 🗂️ | Reflection engine |
+| 🤖 | AI Unified Interface |
 | 🔐 | CSRF / CORS / Rate limiting |
 | 📝 | Documentation (Doxygen) |
 | 🧵 | Thread-safe logging |

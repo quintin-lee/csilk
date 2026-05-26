@@ -21,6 +21,11 @@ graph TB
             ARENA["Arena Allocator"]
             HOOKS["Hook System"]
         end
+        subgraph "AI & Data"
+            AI["AI Unified Engine"]
+            DB["DB Abstraction"]
+            REFL["Reflection Engine"]
+        end
         subgraph "Routing"
             RTR["Router (Radix Tree)"]
             GRP["Group (Hierarchical)"]
@@ -39,6 +44,7 @@ graph TB
         YAML["libyaml"]
         ZLIB["zlib"]
         SSL["OpenSSL"]
+        CURL["libcurl"]
     end
 
     H --> CTX
@@ -49,6 +55,8 @@ graph TB
     SRV --> HTTP
     SRV --> TLS
     SRV --> WS
+    AI --> CURL
+    AI --> CJ
     GRP --> RTR
     CTX --> ARENA
     SRV --> UV
@@ -313,11 +321,16 @@ graph TB
         server.c --> config.c["config.c<br/>YAML Config"]
         server.c --> logger.c["logger.c<br/>Structured Logging"]
         server.c --> reflect.c["reflect.c<br/>JSON <-> C Struct"]
+        ai.c["ai.c<br/>Unified AI Engine"] --> ai_openai.c["ai_openai.c<br/>OpenAI Driver"]
+        ai.c --> ai_ollama.c["ai_ollama.c<br/>Ollama Driver"]
         utils.c["utils.c<br/>SHA1 + Base64"]
     end
+    ...
+    config.c --> libyaml[libyaml]
+    gzip.c --> zlib[zlib]
+    ai_openai.c --> libcurl[libcurl]
+    ai_ollama.c --> libcurl[libcurl]
 
-    subgraph src/middleware/
-        recovery.c --> context.c
         logger_mw.c["logger.c"] --> context.c
         auth.c --> context.c
         cors.c --> context.c
