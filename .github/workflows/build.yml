@@ -22,7 +22,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             cmake build-essential \
-            clang-tidy libyaml-dev zlib1g-dev
+            clang-tidy libyaml-dev zlib1g-dev \
+            libcurl4-openssl-dev
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_OOM_TEST=ON
