@@ -227,6 +227,132 @@ void test_perm_init_idempotent(void) {
   printf("test_perm_init_idempotent passed\n");
 }
 
+static void dummy_handler(csilk_ctx_t* c) {
+  (void)c;
+}
+
+void test_perm_router_route_perm(void) {
+  csilk_router_t* r = csilk_router_new();
+  assert(r);
+
+  csilk_handler_t h[] = {dummy_handler};
+  csilk_router_add_perm(r, "GET", "/admin/users", h, 1, "admin", "users:*");
+
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+  c.request.method = "GET";
+  c.request.path = "/admin/users";
+
+  int matched = csilk_router_match_ctx(r, &c);
+  assert(matched);
+  assert(c.current_handler != NULL);
+  assert(c.current_handler->perm_required != NULL);
+  assert(strcmp(c.current_handler->perm_required, "admin") == 0);
+  assert(c.current_handler->perm_resource != NULL);
+  assert(strcmp(c.current_handler->perm_resource, "users:*") == 0);
+
+  csilk_router_free(r);
+  printf("test_perm_router_route_perm passed\n");
+}
+
+void test_perm_router_route_extended_perm(void) {
+  csilk_router_t* r = csilk_router_new();
+  assert(r);
+
+  csilk_handler_t h[] = {dummy_handler};
+  csilk_router_add_extended_perm(r, "POST", "/articles", h, 1, "/articles",
+                                 "CreateReq", "ArticleResp", "Create article",
+                                 "Creates a new article", "write",
+                                 "articles:*");
+
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+  c.request.method = "POST";
+  c.request.path = "/articles";
+
+  int matched = csilk_router_match_ctx(r, &c);
+  assert(matched);
+  assert(c.current_handler != NULL);
+  assert(strcmp(c.current_handler->perm_required, "write") == 0);
+  assert(strcmp(c.current_handler->perm_resource, "articles:*") == 0);
+  assert(strcmp(c.current_handler->input_type, "CreateReq") == 0);
+  assert(strcmp(c.current_handler->output_type, "ArticleResp") == 0);
+  assert(strcmp(c.current_handler->summary, "Create article") == 0);
+  assert(strcmp(c.current_handler->description, "Creates a new article") == 0);
+
+  csilk_router_free(r);
+  printf("test_perm_router_route_extended_perm passed\n");
+}
+
+void test_perm_auto_middleware_allowed(void) {
+  reset_simple();
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+  c.arena = csilk_arena_new(1024);
+
+  csilk_set(&c, "role", (void*)"admin");
+  csilk_perm_simple_allow("admin", "write", "articles:*");
+
+  csilk_method_handler_t mh;
+  memset(&mh, 0, sizeof(mh));
+  mh.perm_required = "write";
+  mh.perm_resource = "articles:42";
+  c.current_handler = &mh;
+
+  csilk_perm_auto_middleware(&c);
+  assert(c.aborted == 0);
+
+  csilk_arena_free(c.arena);
+  printf("test_perm_auto_middleware_allowed passed\n");
+}
+
+void test_perm_auto_middleware_denied(void) {
+  reset_simple();
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+  c.arena = csilk_arena_new(1024);
+
+  csilk_set(&c, "role", (void*)"viewer");
+
+  csilk_method_handler_t mh;
+  memset(&mh, 0, sizeof(mh));
+  mh.perm_required = "delete";
+  mh.perm_resource = "users:1";
+  c.current_handler = &mh;
+
+  csilk_perm_auto_middleware(&c);
+  assert(c.aborted != 0);
+
+  csilk_arena_free(c.arena);
+  printf("test_perm_auto_middleware_denied passed\n");
+}
+
+void test_perm_auto_middleware_no_perm(void) {
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+
+  csilk_method_handler_t mh;
+  memset(&mh, 0, sizeof(mh));
+  mh.perm_required = NULL;
+  c.current_handler = &mh;
+
+  csilk_perm_auto_middleware(&c);
+  assert(c.aborted == 0);
+
+  printf("test_perm_auto_middleware_no_perm passed\n");
+}
+
+void test_perm_auto_middleware_no_handler(void) {
+  csilk_ctx_t c;
+  memset(&c, 0, sizeof(c));
+  c.current_handler = NULL;
+
+  csilk_perm_auto_middleware(&c);
+  assert(c.aborted == 0);
+
+  printf("test_perm_auto_middleware_no_handler passed\n");
+}
+
 int main(void) {
   csilk_perm_init();
 
@@ -243,6 +369,12 @@ int main(void) {
   test_perm_simple_prefix_resource();
   test_perm_custom_driver();
   test_perm_init_idempotent();
+  test_perm_router_route_perm();
+  test_perm_router_route_extended_perm();
+  test_perm_auto_middleware_allowed();
+  test_perm_auto_middleware_denied();
+  test_perm_auto_middleware_no_perm();
+  test_perm_auto_middleware_no_handler();
 
   printf("All perm tests passed\n");
   return 0;

@@ -1467,6 +1467,44 @@ void csilk_router_add_extended(csilk_router_t* r, const char* method,
                                const char* input_type, const char* output_type,
                                const char* summary, const char* description);
 
+/** @brief Register a route with permission metadata.
+ *  @param r             Router instance.
+ *  @param method        HTTP method string.
+ *  @param path          URL pattern.
+ *  @param handlers      Handler function array.
+ *  @param handler_count Number of handlers.
+ *  @param perm_required Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_router_add_perm(csilk_router_t* r, const char* method,
+                           const char* path, csilk_handler_t* handlers,
+                           size_t handler_count, const char* perm_required,
+                           const char* perm_resource);
+
+/** @brief Register a route with full metadata including permissions.
+ *  @param r             Router instance.
+ *  @param method        HTTP method string.
+ *  @param path          URL pattern.
+ *  @param handlers      Handler function array.
+ *  @param handler_count Number of handlers.
+ *  @param path_pattern  Canonical path pattern for docs.
+ *  @param input_type    Registered type name for request-body (NULL if none).
+ *  @param output_type   Registered type name for response (NULL if none).
+ *  @param summary       Short operation summary (NULL to omit).
+ *  @param description   Detailed description (NULL to omit).
+ *  @param perm_required Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_router_add_extended_perm(csilk_router_t* r, const char* method,
+                                    const char* path,
+                                    csilk_handler_t* handlers,
+                                    size_t handler_count,
+                                    const char* path_pattern,
+                                    const char* input_type,
+                                    const char* output_type,
+                                    const char* summary,
+                                    const char* description,
+                                    const char* perm_required,
+                                    const char* perm_resource);
+
 /**
  * @brief Convenience macro to register a route with metadata.
  *
@@ -1587,6 +1625,12 @@ void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
                                     const char* output_type,
                                     const char* summary,
                                     const char* description);
+
+void csilk_group_add_route_extended_perm(
+    csilk_group_t* group, const char* method, const char* path,
+    csilk_handler_t handler, const char* input_type, const char* output_type,
+    const char* summary, const char* description, const char* perm_required,
+    const char* perm_resource);
 
 /**
  * @brief Add a route with an explicit array of handlers.

@@ -216,11 +216,13 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r) {
  * @note The router does NOT support overriding an existing route — duplicate
  *       method+path registrations are silently dropped.
  * @note The handler array is copied; the caller may free it after this call. */
-void csilk_router_add_extended(csilk_router_t* r, const char* method,
-                               const char* path, csilk_handler_t* handlers,
-                               size_t handler_count, const char* path_pattern,
-                               const char* input_type, const char* output_type,
-                               const char* summary, const char* description) {
+static void router_add_full(csilk_router_t* r, const char* method,
+                            const char* path, csilk_handler_t* handlers,
+                            size_t handler_count, const char* path_pattern,
+                            const char* input_type, const char* output_type,
+                            const char* summary, const char* description,
+                            const char* perm_required,
+                            const char* perm_resource) {
   if (!r || !r->root || !method || !path || !handlers) return;
   csilk_router_node_t* curr = r->root;
   const char* p = path;
@@ -288,9 +290,20 @@ void csilk_router_add_extended(csilk_router_t* r, const char* method,
     mh->output_type = output_type;
     mh->summary = summary;
     mh->description = description;
+    mh->perm_required = perm_required;
+    mh->perm_resource = perm_resource;
     mh->next = curr->handlers;
     curr->handlers = mh;
   }
+}
+
+void csilk_router_add_extended(csilk_router_t* r, const char* method,
+                               const char* path, csilk_handler_t* handlers,
+                               size_t handler_count, const char* path_pattern,
+                               const char* input_type, const char* output_type,
+                               const char* summary, const char* description) {
+  router_add_full(r, method, path, handlers, handler_count, path_pattern,
+                  input_type, output_type, summary, description, NULL, NULL);
 }
 
 /** @brief Register a route with method, path pattern, and handler chain (no
@@ -306,9 +319,62 @@ void csilk_router_add_extended(csilk_router_t* r, const char* method,
  * @param handler_count Number of handlers. */
 void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
                       csilk_handler_t* handlers, size_t handler_count) {
-  // Call extended version with NULL metadata
   csilk_router_add_extended(r, method, path, handlers, handler_count, path,
                             NULL, NULL, NULL, NULL);
+}
+
+/** @brief Register a route with permission metadata.
+ *
+ * Same as csilk_router_add but also stores permission requirement for
+ * interface-level access control.  The auto-check middleware
+ * (csilk_perm_auto_middleware) reads these fields at request time.
+ *
+ * @param r             The router instance.
+ * @param method        HTTP method.
+ * @param path          URL path pattern.
+ * @param handlers      Array of handler functions.
+ * @param handler_count Number of handlers.
+ * @param perm_required Permission identifier (e.g., "read", "write"), or NULL.
+ * @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_router_add_perm(csilk_router_t* r, const char* method,
+                           const char* path, csilk_handler_t* handlers,
+                           size_t handler_count, const char* perm_required,
+                           const char* perm_resource) {
+  router_add_full(r, method, path, handlers, handler_count, path, NULL, NULL,
+                  NULL, NULL, perm_required, perm_resource);
+}
+
+/** @brief Register a route with full metadata including permissions.
+ *
+ * Combines csilk_router_add_extended with permission metadata in a single
+ * call.  The permission fields are used by csilk_perm_auto_middleware.
+ *
+ * @param r             The router instance.
+ * @param method        HTTP method.
+ * @param path          URL path pattern.
+ * @param handlers      Array of handler functions.
+ * @param handler_count Number of handlers.
+ * @param path_pattern  Original path pattern for OpenAPI metadata.
+ * @param input_type    Registered type name for request body, or NULL.
+ * @param output_type   Registered type name for response body, or NULL.
+ * @param summary       OpenAPI operation summary, or NULL.
+ * @param description   OpenAPI operation description, or NULL.
+ * @param perm_required Permission identifier (e.g., "read"), or NULL.
+ * @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+void csilk_router_add_extended_perm(csilk_router_t* r, const char* method,
+                                    const char* path,
+                                    csilk_handler_t* handlers,
+                                    size_t handler_count,
+                                    const char* path_pattern,
+                                    const char* input_type,
+                                    const char* output_type,
+                                    const char* summary,
+                                    const char* description,
+                                    const char* perm_required,
+                                    const char* perm_resource) {
+  router_add_full(r, method, path, handlers, handler_count, path_pattern,
+                  input_type, output_type, summary, description, perm_required,
+                  perm_resource);
 }
 
 /** @brief Internal: recursively match a path against the trie from the given

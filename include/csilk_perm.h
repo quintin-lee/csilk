@@ -37,4 +37,6 @@ int csilk_perm_simple_allow(const char* role, const char* permission,
 
 void csilk_perm_simple_clear(void);
 
+void csilk_perm_auto_middleware(csilk_ctx_t* c);
+
 #endif

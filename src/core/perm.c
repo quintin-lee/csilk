@@ -4,6 +4,7 @@
 
 #include "csilk.h"
 #include "csilk_perm.h"
+#include "context_internal.h"
 
 static csilk_perm_driver_t* drivers[16];
 static int driver_count = 0;
@@ -52,4 +53,11 @@ void csilk_perm_require(csilk_ctx_t* c, const char* permission,
     csilk_string(c, CSILK_STATUS_FORBIDDEN, "{\"error\":\"Forbidden\"}");
     csilk_abort(c);
   }
+}
+
+void csilk_perm_auto_middleware(csilk_ctx_t* c) {
+  if (!c || !c->current_handler) return;
+  if (!c->current_handler->perm_required) return;
+  csilk_perm_require(c, c->current_handler->perm_required,
+                     c->current_handler->perm_resource);
 }
