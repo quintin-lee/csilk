@@ -1,0 +1,579 @@
+#!/bin/bash
+set -e
+
+CSILK_VERSION="0.2.1"
+
+# Auto-detect repo URL from the local csilk checkout (if script is run from within the repo)
+LOCAL_REMOTE=$(git config --get remote.origin.url 2>/dev/null || true)
+if echo "$LOCAL_REMOTE" | grep -qE 'github\.com[/:](.+)/(.+)\.git'; then
+  LOCAL_REPO_PATH=$(echo "$LOCAL_REMOTE" | sed -E 's|.*github\.com[/:](.+)/(.+)\.git|\1/\2|')
+  CSILK_REPO_DEFAULT="https://github.com/${LOCAL_REPO_PATH}.git"
+else
+  CSILK_REPO_DEFAULT="https://github.com/quintin-lee/csilk.git"
+fi
+
+print_banner() {
+  cat <<'EOF'
+  ╔══════════════════════════════════════════╗
+  ║           csilk scaffold tool            ║
+  ║     Generate a new csilk project         ║
+  ╚══════════════════════════════════════════╝
+EOF
+}
+
+ask() {
+  local prompt="$1" default="$2" var
+  printf "  %s [%s]: " "$prompt" "$default" >&2
+  read -r var
+  echo "${var:-$default}"
+}
+
+ask_yes() {
+  local prompt="$1" default="$2" ans
+  printf "  %s [%s]: " "$prompt" "$default" >&2
+  read -r ans
+  ans="${ans:-$default}"
+  case "$ans" in
+    [Yy]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pick() {
+  local prompt="$1" default="$2" desc="$3"
+  echo "  $prompt" >&2
+  echo "$desc" | while IFS='|' read -r key label; do
+    [ -n "$key" ] && printf "    %s) %s\n" "$key" "$label" >&2
+  done
+  printf "  choice [%s]: " "$default" >&2
+  read -r ans
+  echo "${ans:-$default}"
+}
+
+PROJECT_NAME=$(ask "Project name" "myapp")
+DIR_NAME="${PROJECT_NAME// /-}"
+DIR_NAME="${DIR_NAME,,}"
+OUT_DIR=$(ask "Output directory" "./$DIR_NAME")
+PORT=$(ask "Port number" "8080")
+API_STYLE=$(pick "API style:" "app" 'app|High-level convenience API (csilk_app_t)
+core|Low-level core API (csilk_router_t + csilk_server_t)')
+DB=$(pick "Database backend:" "sqlite" 'sqlite|SQLite (built-in)
+mysql|MySQL (requires libmysqlclient)
+postgres|PostgreSQL (requires libpq)
+none|No database')
+AUTH=$(pick "Authentication:" "none" 'none|No authentication
+jwt|JWT-based authentication
+token|Bearer token (simple validator callback)')
+USE_PERM=$(ask_yes "Enable permission system" "n" && echo "1" || echo "0")
+USE_SWAGGER=$(ask_yes "Enable Swagger/OpenAPI" "y" && echo "1" || echo "0")
+
+MID_CORS="n"; MID_GZIP="n"; MID_RATELIMIT="n"; MID_SESSION="n"
+echo "  Extra middleware (comma-separated, e.g. cors,gzip):"
+printf "    cors, gzip, ratelimit, session\n" >&2
+printf "  choices [none]: " >&2
+IFS=',' read -r -a mid_choices
+for m in "${mid_choices[@]}"; do
+  m="${m// /}"
+  case "$m" in
+    cors) MID_CORS="y" ;;
+    gzip) MID_GZIP="y" ;;
+    ratelimit) MID_RATELIMIT="y" ;;
+    session) MID_SESSION="y" ;;
+    none|"") ;;
+  esac
+done
+
+DO_GIT=$(ask_yes "Initialize git repository" "y" && echo "1" || echo "0")
+
+mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR/src"
+mkdir -p "$OUT_DIR/public"
+cd "$OUT_DIR"
+
+# ──────────────────────────────────────────────
+# .gitignore
+# ──────────────────────────────────────────────
+cat > .gitignore <<GITIGNORE
+build/
+bin/
+lib/
+*.o
+*.so
+*.a
+compile_commands.json
+.cache/
+.vscode/
+.idea/
+.clangd/
+GITIGNORE
+
+# ──────────────────────────────────────────────
+# config.yaml
+# ──────────────────────────────────────────────
+cat > config.yaml <<YAML
+port: ${PORT}
+server:
+  idle_timeout_ms: 5000
+  read_timeout_ms: 30000
+  write_timeout_ms: 30000
+  max_body_size: 1048576
+  max_header_size: 65536
+  max_url_size: 8192
+  max_headers_count: 100
+  max_connections: 0
+  listen_backlog: 128
+  tcp_nodelay: 1
+  worker_threads: 4
+logger:
+  level: INFO
+middleware:
+  enable_logger: 1
+  enable_recovery: 1
+YAML
+
+if [ "$DB" = "sqlite" ]; then
+  cat >> config.yaml <<YAML
+db:
+  driver: sqlite
+  dsn: ${PROJECT_NAME}.db
+YAML
+fi
+
+# ──────────────────────────────────────────────
+# CMakeLists.txt
+# ──────────────────────────────────────────────
+
+BUILD_DB=""
+LINK_DB=""
+SRC_DB=""
+HDR_DB=""
+SETUP_DB=""
+CLEANUP_DB=""
+USE_DB_EXEC=""
+
+if [ "$DB" = "mysql" ]; then
+  BUILD_DB='find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
+if(NOT MYSQL_LIB)
+  message(FATAL_ERROR "libmysqlclient not found")
+endif()
+find_path(MYSQL_INCLUDE_DIR mysql.h PATHS /usr/include/mysql /usr/local/include/mysql)
+if(MYSQL_INCLUDE_DIR)
+  include_directories(${MYSQL_INCLUDE_DIR})
+endif()'
+  LINK_DB=' ${MYSQL_LIB}'
+  HDR_DB='#include "csilk_db.h"'
+  SETUP_DB='  csilk_db_init();'
+  CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
+  USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("mysql", "host=127.0.0.1;port=3306;user=root;password=secret;dbname='"${PROJECT_NAME}"'");'
+elif [ "$DB" = "postgres" ]; then
+  BUILD_DB='find_library(PQ_LIB NAMES pq libpq)
+if(NOT PQ_LIB)
+  message(FATAL_ERROR "libpq not found")
+endif()'
+  LINK_DB=' ${PQ_LIB}'
+  HDR_DB='#include "csilk_db.h"'
+  SETUP_DB='  csilk_db_init();'
+  CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
+  USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("postgres", "host=127.0.0.1 port=5432 user=postgres password=secret dbname='"${PROJECT_NAME}"'");'
+elif [ "$DB" = "sqlite" ]; then
+  BUILD_DB=''
+  LINK_DB=''
+  HDR_DB='#include "csilk_db.h"'
+  SETUP_DB='  csilk_db_init();'
+  CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
+  USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "'"${PROJECT_NAME}"'.db");'
+else
+  BUILD_DB=''
+  LINK_DB=''
+  HDR_DB=''
+  SETUP_DB=''
+  CLEANUP_DB=''
+  USE_DB_EXEC=''
+fi
+
+AUTH_HDR=""
+AUTH_SETUP=""
+AUTH_MID=""
+if [ "$AUTH" = "jwt" ]; then
+  AUTH_HDR=''
+  AUTH_SETUP=''
+  AUTH_MID='  csilk_app_use(app, csilk_jwt_middleware_auto);'
+  # Note: JWT middleware needs a secret; we'll set it up in handlers
+elif [ "$AUTH" = "token" ]; then
+  AUTH_HDR=''
+  AUTH_SETUP=''
+  AUTH_MID='  csilk_app_use(app, csilk_auth_handler);'
+fi
+
+PERM_HDR=""
+PERM_INIT=""
+PERM_MID=""
+PERM_ROUTES=""
+PERM_RULES=""
+if [ "$USE_PERM" = "1" ]; then
+  PERM_HDR='#include "csilk_perm.h"'
+  PERM_INIT='  csilk_perm_init();
+  csilk_perm_simple_allow("admin", "*", "*");
+  csilk_perm_simple_allow("user", "read", "*");
+  csilk_perm_set_default("simple");'
+  PERM_MID='  csilk_app_use(app, csilk_perm_auto_middleware);'
+  PERM_ROUTES='csilk_app_get_perm(app, "/admin", admin_handler, "admin", "*");'
+  PERM_RULES='csilk_perm_simple_allow("admin", "*", "*");'
+fi
+
+SWAGGER_SETUP=""
+if [ "$USE_SWAGGER" = "1" ]; then
+  SWAGGER_SETUP='  csilk_app_enable_openapi(app, 1);'
+fi
+
+MID_SETUP=""
+if [ "$MID_CORS" = "y" ]; then
+  MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_cors_middleware);
+"
+fi
+if [ "$MID_GZIP" = "y" ]; then
+  MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_gzip_middleware);
+"
+fi
+if [ "$MID_RATELIMIT" = "y" ]; then
+  MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_rate_limit_middleware);
+"
+fi
+if [ "$MID_SESSION" = "y" ]; then
+  MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_session_middleware);
+"
+fi
+
+cat > CMakeLists.txt <<CMAKE
+cmake_minimum_required(VERSION 3.11)
+project(${PROJECT_NAME} C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ── find or fetch csilk ──
+# Option A: system-installed (csilk_DIR or default paths)
+find_package(csilk QUIET
+  HINTS \${CSILK_DIR} /usr/local /usr
+  PATH_SUFFIXES lib/cmake/csilk
+)
+
+if(NOT csilk_FOUND)
+  # Option B: local csilk checkout (recommended during development)
+  #   cmake .. -DCSILK_SOURCE_DIR=/path/to/csilk
+  if(CSILK_SOURCE_DIR)
+    # Reuse pre-fetched dependencies from csilk's own build directory
+    set(_csilk_deps_dir "\${CSILK_SOURCE_DIR}/build/_deps")
+    if(EXISTS "\${_csilk_deps_dir}/libuv-src/CMakeLists.txt")
+      set(FETCHCONTENT_SOURCE_DIR_LIBUV "\${_csilk_deps_dir}/libuv-src" CACHE PATH "" FORCE)
+      message(STATUS "Reusing pre-fetched libuv from \${FETCHCONTENT_SOURCE_DIR_LIBUV}")
+    endif()
+    if(EXISTS "\${_csilk_deps_dir}/cjson-src/CMakeLists.txt")
+      set(FETCHCONTENT_SOURCE_DIR_CJSON "\${_csilk_deps_dir}/cjson-src" CACHE PATH "" FORCE)
+      message(STATUS "Reusing pre-fetched cJSON from \${FETCHCONTENT_SOURCE_DIR_CJSON}")
+    endif()
+    add_subdirectory(\${CSILK_SOURCE_DIR} \${CMAKE_BINARY_DIR}/csilk)
+    set(CSILK_LIB csilk)
+  else()
+    # Option C: fetch from GitHub (requires cjson fix to be on the remote)
+    include(FetchContent)
+    FetchContent_Declare(csilk
+      GIT_REPOSITORY ${CSILK_REPO_DEFAULT}
+      GIT_TAG        v${CSILK_VERSION}
+    )
+    FetchContent_MakeAvailable(csilk)
+    set(CSILK_LIB csilk)
+  endif()
+else()
+  set(CSILK_LIB csilk::csilk)
+endif()
+
+${BUILD_DB}
+
+# ── sources ──
+set(SOURCES
+  src/main.c
+  src/handlers.c
+)
+
+# ── executable ──
+add_executable(\${PROJECT_NAME} \${SOURCES})
+target_link_libraries(\${PROJECT_NAME} PRIVATE \${CSILK_LIB}${LINK_DB})
+target_include_directories(\${PROJECT_NAME} PRIVATE src)
+
+# ── copy config to build dir ──
+configure_file(config.yaml \${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
+CMAKE
+
+# ──────────────────────────────────────────────
+# src/handlers.h
+# ──────────────────────────────────────────────
+cat > src/handlers.h <<HDR
+#ifndef HANDLERS_H
+#define HANDLERS_H
+
+#include "csilk.h"
+
+void ping_handler(csilk_ctx_t* c);
+void hello_handler(csilk_ctx_t* c);
+
+HDR
+
+if [ "$USE_PERM" = "1" ]; then
+  cat >> src/handlers.h <<HDR
+void admin_handler(csilk_ctx_t* c);
+
+HDR
+fi
+
+echo "#endif" >> src/handlers.h
+
+# ──────────────────────────────────────────────
+# src/handlers.c
+# ──────────────────────────────────────────────
+cat > src/handlers.c <<HANDLERS
+#include "handlers.h"
+
+void ping_handler(csilk_ctx_t* c) {
+  csilk_string(c, 200, "pong");
+}
+
+void hello_handler(csilk_ctx_t* c) {
+  csilk_json(c, 200, cJSON_CreateObject());
+}
+HANDLERS
+
+if [ "$USE_PERM" = "1" ]; then
+  cat >> src/handlers.c <<HANDLERS
+
+void admin_handler(csilk_ctx_t* c) {
+  csilk_string(c, 200, "{\"message\":\"Welcome admin\"}");
+}
+HANDLERS
+fi
+
+# ──────────────────────────────────────────────
+# src/main.c
+# ──────────────────────────────────────────────
+cat > src/main.c <<MAIN
+#include "csilk.h"
+MAIN
+
+if [ "$API_STYLE" = "app" ]; then
+  echo '#include "csilk_app.h"' >> src/main.c
+fi
+
+if [ -n "$HDR_DB" ]; then
+  echo "$HDR_DB" >> src/main.c
+fi
+
+if [ -n "$PERM_HDR" ]; then
+  echo "$PERM_HDR" >> src/main.c
+fi
+
+echo '#include "handlers.h"' >> src/main.c
+echo "" >> src/main.c
+
+if [ "$API_STYLE" = "app" ]; then
+  # ── High-level app API ──
+  cat >> src/main.c <<MAIN
+int main(void) {
+MAIN
+
+  if [ -n "$SETUP_DB" ]; then
+    echo "$SETUP_DB" >> src/main.c
+  fi
+
+  if [ -n "$PERM_INIT" ]; then
+    echo "$PERM_INIT" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_app_t* app = csilk_app_new("config.yaml");
+  if (!app) return 1;
+
+  csilk_app_use(app, csilk_recovery_handler);
+  csilk_app_use(app, csilk_logger_handler);
+MAIN
+
+  if [ -n "$AUTH_MID" ]; then
+    echo "$AUTH_MID" >> src/main.c
+  fi
+
+  if [ -n "$PERM_MID" ]; then
+    echo "$PERM_MID" >> src/main.c
+  fi
+
+  echo "$MID_SETUP" >> src/main.c
+
+  if [ -n "$SWAGGER_SETUP" ]; then
+    echo "$SWAGGER_SETUP" >> src/main.c
+  fi
+
+  if [ -n "$USE_DB_EXEC" ]; then
+    echo "  ${USE_DB_EXEC}" >> src/main.c
+    echo '  if (pool) csilk_db_exec(pool, "CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, value TEXT)");' >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_app_get(app, "/ping", ping_handler);
+  csilk_app_get(app, "/hello", hello_handler);
+MAIN
+
+  if [ -n "$PERM_ROUTES" ]; then
+    echo "  $PERM_ROUTES" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+
+  int rc = csilk_app_run(app, ${PORT});
+MAIN
+
+  if [ -n "$CLEANUP_DB" ]; then
+    echo "  $CLEANUP_DB" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_app_free(app);
+  return rc;
+}
+MAIN
+
+else
+  # ── Low-level core API ──
+  cat >> src/main.c <<MAIN
+int main(void) {
+MAIN
+
+  if [ -n "$SETUP_DB" ]; then
+    echo "$SETUP_DB" >> src/main.c
+  fi
+
+  if [ -n "$PERM_INIT" ]; then
+    echo "$PERM_INIT" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_router_t* router = csilk_router_new();
+  if (!router) return 1;
+
+  csilk_server_t* server = csilk_server_new(router);
+  if (!server) { csilk_router_free(router); return 1; }
+
+  csilk_server_use(server, csilk_recovery_handler);
+  csilk_server_use(server, csilk_logger_handler);
+MAIN
+
+  if [ -n "$PERM_MID" ]; then
+    echo "  csilk_server_use(server, csilk_perm_auto_middleware_passthrough);" >> src/main.c
+  fi
+
+  if [ -n "$USE_DB_EXEC" ]; then
+    echo "  ${USE_DB_EXEC}" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_router_add(router, "GET", "/ping", (csilk_handler_t[]){ping_handler, NULL}, 1);
+  csilk_router_add(router, "GET", "/hello", (csilk_handler_t[]){hello_handler, NULL}, 1);
+MAIN
+
+  if [ -n "$PERM_ROUTES" ]; then
+    echo "  csilk_router_add_perm(router, \"GET\", \"/admin\", (csilk_handler_t[]){admin_handler, NULL}, 1, \"admin\", \"*\");" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+
+  csilk_server_run(server, ${PORT});
+MAIN
+
+  if [ -n "$CLEANUP_DB" ]; then
+    echo "  $CLEANUP_DB" >> src/main.c
+  fi
+
+  cat >> src/main.c <<MAIN
+  csilk_server_free(server);
+  csilk_router_free(router);
+  return 0;
+}
+MAIN
+fi
+
+# ──────────────────────────────────────────────
+# public/.gitkeep
+# ──────────────────────────────────────────────
+touch public/.gitkeep
+
+# ──────────────────────────────────────────────
+# README.md
+# ──────────────────────────────────────────────
+cat > README.md <<README
+# ${PROJECT_NAME}
+
+Generated with [csilk](${CSILK_REPO_DEFAULT}) v${CSILK_VERSION}.
+
+## Quick start
+
+\`\`\`bash
+mkdir build && cd build
+cmake ..                # if csilk is installed, or
+cmake .. -DCSILK_SOURCE_DIR=/path/to/csilk   # during development
+make
+./${DIR_NAME}
+\`\`\`
+
+## Prerequisites
+
+- CMake 3.11+
+- C11 compiler
+- libyaml-dev
+- zlib1g-dev
+- OpenSSL
+README
+
+if [ "$DB" = "mysql" ]; then
+  echo "- libmysqlclient-dev" >> README.md
+elif [ "$DB" = "postgres" ]; then
+  echo "- libpq-dev" >> README.md
+fi
+
+cat >> README.md <<README
+
+## Configuration
+
+Edit \`config.yaml\` to adjust server settings, database connection, and
+middleware options.
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /ping | Health check |
+| GET | /hello | Hello endpoint |
+README
+
+if [ "$USE_PERM" = "1" ]; then
+  echo "| GET | /admin | Admin area (requires admin permission) |" >> README.md
+fi
+
+# ──────────────────────────────────────────────
+# Summary
+# ──────────────────────────────────────────────
+cd ..
+
+echo ""
+echo "  Project created: $(pwd)/${DIR_NAME}"
+echo ""
+echo "  To build and run:"
+echo "    cd ${DIR_NAME}"
+echo "    mkdir build && cd build"
+echo "    cmake .. [-DCSILK_SOURCE_DIR=/path/to/csilk] && make"
+echo "    ./${DIR_NAME}"
+echo ""
+
+if [ "$DO_GIT" = "1" ] && command -v git >/dev/null 2>&1; then
+  cd "$DIR_NAME"
+  git init -q
+  git add -A
+  echo "  Git repository initialized."
+  echo ""
+fi

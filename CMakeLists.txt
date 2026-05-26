@@ -95,7 +95,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cjson)
 
-# Include directories
 include_directories(include)
 include_directories(${cjson_SOURCE_DIR})
 
@@ -201,6 +200,7 @@ endif()
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
 )
 target_compile_definitions(csilk PRIVATE
     CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
@@ -225,6 +225,7 @@ if(CSILK_BUILD_SHARED)
     target_include_directories(csilk_shared PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
@@ -246,89 +247,92 @@ function(add_csilk_test name source)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
-# Unit tests
-add_csilk_test(test_gzip tests/test_gzip.c)
-add_csilk_test(test_logger tests/test_logger.c)
-add_csilk_test(test_static tests/test_static.c)
-add_csilk_test(test_context tests/test_context.c)
-add_csilk_test(test_router tests/test_router.c)
-add_csilk_test(test_radix tests/test_radix.c)
-add_csilk_test(test_group tests/test_group.c)
-add_csilk_test(test_headers tests/test_headers.c)
-add_csilk_test(test_server tests/test_server.c)
-add_csilk_test(test_query tests/test_query.c)
-add_csilk_test(test_json tests/test_json.c)
-add_csilk_test(test_recovery tests/test_recovery.c)
-add_csilk_test(test_auth tests/test_auth.c)
-add_csilk_test(test_ws tests/test_ws.c)
-add_csilk_test(test_config tests/test_config.c)
-add_csilk_test(test_config_validate tests/test_config_validate.c)
-add_csilk_test(test_csrf tests/test_csrf.c)
-add_csilk_test(test_redirect tests/test_redirect.c)
-add_csilk_test(test_cookie tests/test_cookie.c)
-add_csilk_test(test_reflect tests/test_reflect.c)
-add_csilk_test(test_keepalive tests/test_keepalive.c)
-add_csilk_test(test_edge tests/test_edge.c)
-add_csilk_test(test_timeout tests/test_timeout.c)
-add_csilk_test(test_arena tests/test_arena.c)
-add_csilk_test(test_url_decode tests/test_url_decode.c)
-add_csilk_test(test_utils tests/test_utils.c)
-add_csilk_test(test_form tests/test_form.c)
-add_csilk_test(test_ip tests/test_ip.c)
-add_csilk_test(test_cors tests/test_cors.c)
-add_csilk_test(test_multipart tests/test_multipart.c)
-add_csilk_test(test_sse tests/test_sse.c)
-add_csilk_test(test_ratelimit tests/test_ratelimit.c)
-add_csilk_test(test_app tests/test_app.c)
-add_csilk_test(test_swagger tests/test_swagger.c)
-add_csilk_test(test_session tests/test_session.c)
-add_csilk_test(test_validate tests/test_validate.c)
-add_csilk_test(test_jwt tests/test_jwt.c)
-add_csilk_test(test_hooks tests/test_hooks.c)
-add_csilk_test(test_crypto_driver tests/test_crypto_driver.c)
-add_csilk_test(test_storage tests/test_storage.c)
-add_csilk_test(test_perm tests/test_perm.c)
-add_csilk_test(test_db tests/test_db.c)
-add_csilk_test(test_extra tests/test_extra.c)
-add_csilk_test(test_metrics tests/test_metrics.c)
-add_csilk_test(test_mq_integration tests/test_mq_integration.c)
-add_csilk_test(test_mq tests/test_mq.c)
-add_csilk_test(test_mq_persistence tests/test_mq_persistence.c)
-add_csilk_test(test_mq_wal_write tests/test_mq_wal_write.c)
-add_csilk_test(test_mq_recovery tests/test_mq_recovery.c)
-add_csilk_test(test_mq_wal tests/test_mq_wal.c)
-if(ENABLE_OOM_TEST)
-    add_executable(test_oom tests/test_oom.c)
-    target_compile_definitions(test_oom PRIVATE TEST_OOM)
-    target_link_libraries(test_oom csilk pthread)
-    add_test(NAME test_oom COMMAND test_oom)
+# Only build tests and examples when csilk is the top-level project
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  # Unit tests
+  add_csilk_test(test_gzip tests/test_gzip.c)
+  add_csilk_test(test_logger tests/test_logger.c)
+  add_csilk_test(test_static tests/test_static.c)
+  add_csilk_test(test_context tests/test_context.c)
+  add_csilk_test(test_router tests/test_router.c)
+  add_csilk_test(test_radix tests/test_radix.c)
+  add_csilk_test(test_group tests/test_group.c)
+  add_csilk_test(test_headers tests/test_headers.c)
+  add_csilk_test(test_server tests/test_server.c)
+  add_csilk_test(test_query tests/test_query.c)
+  add_csilk_test(test_json tests/test_json.c)
+  add_csilk_test(test_recovery tests/test_recovery.c)
+  add_csilk_test(test_auth tests/test_auth.c)
+  add_csilk_test(test_ws tests/test_ws.c)
+  add_csilk_test(test_config tests/test_config.c)
+  add_csilk_test(test_config_validate tests/test_config_validate.c)
+  add_csilk_test(test_csrf tests/test_csrf.c)
+  add_csilk_test(test_redirect tests/test_redirect.c)
+  add_csilk_test(test_cookie tests/test_cookie.c)
+  add_csilk_test(test_reflect tests/test_reflect.c)
+  add_csilk_test(test_keepalive tests/test_keepalive.c)
+  add_csilk_test(test_edge tests/test_edge.c)
+  add_csilk_test(test_timeout tests/test_timeout.c)
+  add_csilk_test(test_arena tests/test_arena.c)
+  add_csilk_test(test_url_decode tests/test_url_decode.c)
+  add_csilk_test(test_utils tests/test_utils.c)
+  add_csilk_test(test_form tests/test_form.c)
+  add_csilk_test(test_ip tests/test_ip.c)
+  add_csilk_test(test_cors tests/test_cors.c)
+  add_csilk_test(test_multipart tests/test_multipart.c)
+  add_csilk_test(test_sse tests/test_sse.c)
+  add_csilk_test(test_ratelimit tests/test_ratelimit.c)
+  add_csilk_test(test_app tests/test_app.c)
+  add_csilk_test(test_swagger tests/test_swagger.c)
+  add_csilk_test(test_session tests/test_session.c)
+  add_csilk_test(test_validate tests/test_validate.c)
+  add_csilk_test(test_jwt tests/test_jwt.c)
+  add_csilk_test(test_hooks tests/test_hooks.c)
+  add_csilk_test(test_crypto_driver tests/test_crypto_driver.c)
+  add_csilk_test(test_storage tests/test_storage.c)
+  add_csilk_test(test_perm tests/test_perm.c)
+  add_csilk_test(test_db tests/test_db.c)
+  add_csilk_test(test_extra tests/test_extra.c)
+  add_csilk_test(test_metrics tests/test_metrics.c)
+  add_csilk_test(test_mq_integration tests/test_mq_integration.c)
+  add_csilk_test(test_mq tests/test_mq.c)
+  add_csilk_test(test_mq_persistence tests/test_mq_persistence.c)
+  add_csilk_test(test_mq_wal_write tests/test_mq_wal_write.c)
+  add_csilk_test(test_mq_recovery tests/test_mq_recovery.c)
+  add_csilk_test(test_mq_wal tests/test_mq_wal.c)
+  if(ENABLE_OOM_TEST)
+      add_executable(test_oom tests/test_oom.c)
+      target_compile_definitions(test_oom PRIVATE TEST_OOM)
+      target_link_libraries(test_oom csilk pthread)
+      add_test(NAME test_oom COMMAND test_oom)
+  endif()
+
+  add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
+  add_csilk_test(test_https tests/test_https.c)
+  set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
+
+  option(USE_FUZZER "Enable libFuzzer" OFF)
+  if(USE_FUZZER)
+      add_executable(fuzz_test tests/fuzz_test.c)
+      target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+      target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+      target_link_libraries(fuzz_test csilk)
+  endif()
+
+  # Integration tests
+  add_executable(test_integration tests/test_integration.c)
+  target_link_libraries(test_integration csilk)
+  add_test(NAME test_integration COMMAND test_integration)
+
+  # Example server
+  add_executable(example_server examples/example_server.c)
+  target_link_libraries(example_server csilk)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
+
+  # Easy API example
+  add_executable(example_app examples/example_app.c)
+  target_link_libraries(example_app csilk)
 endif()
-
-add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
-add_csilk_test(test_https tests/test_https.c)
-set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
-
-option(USE_FUZZER "Enable libFuzzer" OFF)
-if(USE_FUZZER)
-    add_executable(fuzz_test tests/fuzz_test.c)
-    target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer)
-    target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
-    target_link_libraries(fuzz_test csilk)
-endif()
-
-# Integration tests
-add_executable(test_integration tests/test_integration.c)
-target_link_libraries(test_integration csilk)
-add_test(NAME test_integration COMMAND test_integration)
-
-# Example server
-add_executable(example_server examples/example_server.c)
-target_link_libraries(example_server csilk)
-configure_file(${CMAKE_SOURCE_DIR}/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
-
-# Easy API example
-add_executable(example_app examples/example_app.c)
-target_link_libraries(example_app csilk)
 
 # Add run_tests custom target
 add_custom_target(run_tests
@@ -361,6 +365,11 @@ install(EXPORT csilk-targets
     NAMESPACE csilk::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/csilk
 )
+
+# Build-tree export disabled: csilk's FetchContent dependencies (uv, cjson)
+# would also need export sets. Use add_subdirectory with CSILK_SOURCE_DIR
+# or install csilk and use find_package instead.
+# export(EXPORT csilk-targets FILE "${CMAKE_BINARY_DIR}/cmake/csilk-config.cmake" NAMESPACE csilk::)
 
 # clang-tidy
 find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
