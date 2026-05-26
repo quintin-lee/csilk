@@ -26,6 +26,7 @@
 typedef struct csilk_db_pool_s csilk_db_pool_t;
 
 #include "csilk/drivers/ai.h"
+#include "csilk/drivers/cipher.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/perm.h"
 #include "csilk/reflection/reflect.h"
@@ -1989,6 +1990,20 @@ typedef struct {
  */
 void csilk_server_set_crypto_driver(csilk_server_t* server,
                                     csilk_crypto_driver_t* driver);
+
+/**
+ * @brief Set the cipher driver for symmetric/asymmetric encryption.
+ *
+ * Replaces the default OpenSSL-based AES-256-GCM / RSA-OAEP / RSA-PSS
+ * implementations with a user-provided driver.  Pass NULL to restore the
+ * built-in defaults.
+ *
+ * @param server The server instance.
+ * @param driver Pointer to a csilk_cipher_driver_t, or NULL for defaults.
+ *               The driver struct must remain valid for the server's lifetime.
+ */
+void csilk_server_set_cipher_driver(csilk_server_t* server,
+                                    csilk_cipher_driver_t* driver);
 
 /**
  * @brief Create a new server instance.
