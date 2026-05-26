@@ -128,6 +128,63 @@ int main() {
     csilk_ai_embeddings_response_free(&eres);
   }
 
+  /* 5. Tool Calling (Function Calling) */
+  printf("\n--- [5] Tool Calling ---\n");
+  csilk_ai_message_t tool_messages[] = {
+    {"user", "What's the weather like in Shanghai?"}
+  };
+
+  /* Define a tool using cJSON */
+  cJSON* params = cJSON_CreateObject();
+  cJSON_AddStringToObject(params, "type", "object");
+  cJSON* props = cJSON_CreateObject();
+  cJSON* loc = cJSON_CreateObject();
+  cJSON_AddStringToObject(loc, "type", "string");
+  cJSON_AddStringToObject(loc, "description", "The city and state, e.g. San Francisco, CA");
+  cJSON_AddItemToObject(props, "location", loc);
+  cJSON_AddItemToObject(params, "properties", props);
+  cJSON* req_arr = cJSON_CreateArray();
+  cJSON_AddItemToArray(req_arr, cJSON_CreateString("location"));
+  cJSON_AddItemToObject(params, "required", req_arr);
+
+  csilk_ai_tool_t tools[1] = {
+    {
+      .type = "function",
+      .function = {
+        .name = "get_current_weather",
+        .description = "Get the current weather in a given location",
+        .parameters_json = params
+      }
+    }
+  };
+
+  csilk_ai_chat_request_t treq = {
+    .model = model_name,
+    .messages = tool_messages,
+    .message_count = 1,
+    .tools = tools,
+    .tool_count = 1,
+    .tool_choice = "auto"
+  };
+
+  if (csilk_ai_chat(ai, &treq, &res) == 0) {
+    if (res.tool_call_count > 0) {
+      printf("Model requested tool calls:\n");
+      for (size_t i = 0; i < res.tool_call_count; i++) {
+        printf("  - ID: %s\n", res.tool_calls[i].id);
+        printf("    Name: %s\n", res.tool_calls[i].name);
+        printf("    Args: %s\n", res.tool_calls[i].arguments);
+      }
+    } else {
+      printf("AI Response: %s\n", res.content);
+    }
+    csilk_ai_chat_response_free(&res);
+  } else {
+    fprintf(stderr, "Tool calling failed: %s\n", res.error_message ? res.error_message : "Unknown error");
+    csilk_ai_chat_response_free(&res);
+  }
+  cJSON_Delete(params);
+
   csilk_ai_free(ai);
   return 0;
 }

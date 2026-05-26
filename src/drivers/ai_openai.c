@@ -188,6 +188,28 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
     cJSON_AddItemToObject(root, "stop", stop);
   }
 
+  if (req->tool_count > 0) {
+    cJSON* tools = cJSON_CreateArray();
+    for (size_t i = 0; i < req->tool_count; i++) {
+      cJSON* t = cJSON_CreateObject();
+      cJSON_AddStringToObject(t, "type", req->tools[i].type);
+      cJSON* f = cJSON_CreateObject();
+      cJSON_AddStringToObject(f, "name", req->tools[i].function.name);
+      if (req->tools[i].function.description) {
+        cJSON_AddStringToObject(f, "description", req->tools[i].function.description);
+      }
+      if (req->tools[i].function.parameters_json) {
+        cJSON_AddItemToObject(f, "parameters", cJSON_Duplicate((cJSON*)req->tools[i].function.parameters_json, 1));
+      }
+      cJSON_AddItemToObject(t, "function", f);
+      cJSON_AddItemToArray(tools, t);
+    }
+    cJSON_AddItemToObject(root, "tools", tools);
+    if (req->tool_choice) {
+      cJSON_AddStringToObject(root, "tool_choice", req->tool_choice);
+    }
+  }
+
   char* json_body = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
 
@@ -259,6 +281,23 @@ static int openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req,
       cJSON* content = cJSON_GetObjectItem(msg, "content");
       if (cJSON_IsString(content)) {
         res->content = strdup(content->valuestring);
+      }
+      cJSON* tcalls = cJSON_GetObjectItem(msg, "tool_calls");
+      if (cJSON_IsArray(tcalls)) {
+        res->tool_call_count = cJSON_GetArraySize(tcalls);
+        res->tool_calls =
+            calloc(res->tool_call_count, sizeof(csilk_ai_tool_call_t));
+        for (size_t i = 0; i < res->tool_call_count; i++) {
+          cJSON* tc = cJSON_GetArrayItem(tcalls, i);
+          cJSON* fid = cJSON_GetObjectItem(tc, "id");
+          cJSON* func = cJSON_GetObjectItem(tc, "function");
+          cJSON* fname = cJSON_GetObjectItem(func, "name");
+          cJSON* fargs = cJSON_GetObjectItem(func, "arguments");
+
+          if (fid) res->tool_calls[i].id = strdup(fid->valuestring);
+          if (fname) res->tool_calls[i].name = strdup(fname->valuestring);
+          if (fargs) res->tool_calls[i].arguments = strdup(fargs->valuestring);
+        }
       }
     }
     cJSON* usage = cJSON_GetObjectItem(resp_root, "usage");

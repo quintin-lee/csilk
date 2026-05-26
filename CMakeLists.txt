@@ -160,6 +160,7 @@ set(CSILK_SOURCES
     src/drivers/sqlite.c
     src/drivers/perm_simple.c
     src/drivers/ai_openai.c
+    src/drivers/ai_ollama.c
 )
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
