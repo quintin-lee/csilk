@@ -72,3 +72,7 @@ int csilk_perm_simple_allow(const char* role, const char* permission,
   rule_count++;
   return 0;
 }
+
+void csilk_perm_simple_clear(void) {
+  rule_count = 0;
+}
