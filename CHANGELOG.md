@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-05-27
+
+### Added
+- **Symmetric/Asymmetric Cipher Driver**: New `csilk_cipher_driver_t` interface
+  with AES-256-GCM encrypt/decrypt, RSA-2048 key generation, RSA-OAEP
+  encrypt/decrypt, and RSA-PSS sign/verify. Includes a default OpenSSL EVP
+  implementation (`src/crypto/cipher.c`). Pluggable via
+  `csilk_server_set_cipher_driver()` — pass NULL to restore defaults.
+- **Cipher Tests**: 8 test cases covering symmetric roundtrip, wrong tag
+  rejection, bad key rejection, asymmetric roundtrip, sign/verify, custom
+  driver plugin, custom keygen, and NULL context fallback.
+
+### Changed
+- **`csilk_ctx_t`**: Added `cipher_driver` field for per-request cipher access.
+- **Project structure**: Added `src/crypto/` and `include/csilk/drivers/cipher.h`.
+
 ## [0.2.1] - 2026-05-25
 
 ### Added

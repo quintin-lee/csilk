@@ -13,6 +13,7 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
+- 🔐 **Pluggable Cipher Driver** for AES-256-GCM, RSA-OAEP, and RSA-PSS
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
 - 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
@@ -254,6 +255,7 @@ src/
   ├── core/           # Kernel (libuv TCP, Router, Arena, Logger, Config)
   ├── app/            # Application Layer (app, route groups)
   ├── ai/             # AI Unified Interface Engine
+  ├── crypto/         # Cipher Driver (AES, RSA, sign/verify)
   ├── data/           # Database Abstraction Layer
   ├── messaging/      # Internal Event Bus (Message Queue)
   ├── security/       # Permission & Security Core
@@ -265,7 +267,7 @@ src/
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions
   ├── app/            # App convenience API
-  ├── drivers/        # Driver interfaces (AI, DB, Perm)
+  ├── drivers/        # Driver interfaces (AI, Cipher, DB, Perm)
   ├── reflection/     # Reflection engine API
   ├── test/           # Test utilities
   └── csilk.h         # Main entry point (includes all modules)
@@ -302,6 +304,7 @@ The project includes a comprehensive test suite. After building, run individual 
 | 🔍 | URL / Query parsing |
 | ⚡ | Connection keep-alive |
 | 🛡️ | Error handling / Security |
+| 🔐 | Crypto / Cipher drivers |
 | 📋 | Configuration (YAML) |
 | 🏗 | Memory management (Arena) |
 | 🗂️ | Reflection engine |

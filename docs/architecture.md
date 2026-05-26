@@ -290,7 +290,8 @@ struct csilk_ctx_s {
   csilk_response_t response;      // Outgoing response data
   char request_id[37];            // Unique Trace ID (UUID v4)
   csilk_storage_driver_t* storage_driver; // Custom storage backend
-  csilk_crypto_driver_t* crypto_driver;   // Custom crypto backend
+  csilk_crypto_driver_t* crypto_driver;   // Custom crypto backend (hash/HMAC/UUID)
+  csilk_cipher_driver_t* cipher_driver;   // Custom cipher backend (AES/RSA/sign)
 };
 ```
 
