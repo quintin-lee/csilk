@@ -36,7 +36,7 @@ typedef struct csilk_db_driver_s csilk_db_driver_t;
  *       mutex serialises access across libuv worker threads.  A future
  *       version may support a true connection pool.
  */
-typedef struct {
+typedef struct csilk_db_pool_s {
   csilk_db_driver_t*
       driver;       /**< Pointer to the registered driver implementation. */
   void* connection; /**< Opaque driver-specific connection handle. */
