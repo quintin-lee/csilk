@@ -99,6 +99,27 @@ FetchContent_MakeAvailable(cjson)
 include_directories(include)
 include_directories(${cjson_SOURCE_DIR})
 
+# Find MySQL (optional)
+find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
+if(MYSQL_LIB)
+  message(STATUS "Found MySQL client library: ${MYSQL_LIB}")
+  find_path(MYSQL_INCLUDE_DIR mysql.h PATHS /usr/include/mysql /usr/local/include/mysql)
+  if(MYSQL_INCLUDE_DIR)
+    include_directories(${MYSQL_INCLUDE_DIR})
+    message(STATUS "Found MySQL include dir: ${MYSQL_INCLUDE_DIR}")
+  endif()
+else()
+  message(STATUS "MySQL client library not found — mysql driver will not build")
+endif()
+
+# Find PostgreSQL (optional)
+find_library(PQ_LIB NAMES pq libpq)
+if(PQ_LIB)
+  message(STATUS "Found PostgreSQL client library: ${PQ_LIB}")
+else()
+  message(STATUS "PostgreSQL client library not found — postgres driver will not build")
+endif()
+
 # Source files
 set(CSILK_SOURCES
     src/core/context.c
@@ -134,6 +155,14 @@ set(CSILK_SOURCES
     src/drivers/sqlite.c
 )
 
+if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
+  list(APPEND CSILK_SOURCES src/drivers/mysql.c)
+endif()
+
+if(PQ_LIB)
+  list(APPEND CSILK_SOURCES src/drivers/postgres.c)
+endif()
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
@@ -161,6 +190,12 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
 target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+if(MYSQL_LIB)
+  target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
+endif()
+if(PQ_LIB)
+  target_link_libraries(csilk PRIVATE ${PQ_LIB})
+endif()
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -179,6 +214,12 @@ set_target_properties(csilk PROPERTIES
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
     target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+    if(MYSQL_LIB)
+      target_link_libraries(csilk_shared PRIVATE ${MYSQL_LIB})
+    endif()
+    if(PQ_LIB)
+      target_link_libraries(csilk_shared PRIVATE ${PQ_LIB})
+    endif()
     target_include_directories(csilk_shared PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>

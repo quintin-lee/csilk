@@ -223,10 +223,27 @@ csilk_db_driver_t* csilk_db_get_driver(const char* name);
 void csilk_db_sqlite_init(void);
 
 /**
+ * @brief Internal: Register the built-in MySQL driver.
+ *
+ * Called automatically by csilk_db_init.  Requires libmysqlclient.
+ * Not intended for direct use.
+ */
+void csilk_db_mysql_init(void);
+
+/**
+ * @brief Internal: Register the built-in PostgreSQL driver.
+ *
+ * Called automatically by csilk_db_init.  Requires libpq.
+ * Not intended for direct use.
+ */
+void csilk_db_postgres_init(void);
+
+/**
  * @brief Initialise the database subsystem.
  *
- * Registers all built-in drivers (SQLite3, etc.).  Must be called once
- * before any csilk_db_pool_new call.  Safe to call multiple times.
+ * Registers all built-in drivers (SQLite3, MySQL, PostgreSQL, etc.).
+ * Must be called once before any csilk_db_pool_new call.
+ * Safe to call multiple times.
  */
 void csilk_db_init(void);
 
