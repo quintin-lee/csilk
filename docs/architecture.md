@@ -326,12 +326,8 @@ graph TB
         ai.c --> ai_ollama.c["ai_ollama.c<br/>Ollama Driver"]
         utils.c["utils.c<br/>SHA1 + Base64"]
     end
-    ...
-    config.c --> libyaml[libyaml]
-    gzip.c --> zlib[zlib]
-    ai_openai.c --> libcurl[libcurl]
-    ai_ollama.c --> libcurl[libcurl]
 
+    subgraph src/middleware/
         logger_mw.c["logger.c"] --> context.c
         auth.c --> context.c
         cors.c --> context.c
@@ -352,6 +348,4 @@ graph TB
     server.c --> libuv[libuv]
     server.c --> llhttp[llhttp]
     context.c --> cjson[cJSON]
-    config.c --> libyaml[libyaml]
-    gzip.c --> zlib[zlib]
 ```
