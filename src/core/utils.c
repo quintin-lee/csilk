@@ -1,6 +1,19 @@
 /**
  * @file utils.c
- * @brief SHA1 hashing and Base64 encoding utilities.
+ * @brief Core cryptographic and encoding utilities.
+ *
+ * Implements low-level building blocks used throughout the csilk framework:
+ *   - SHA-1   : WebSocket handshake (RFC 6455) — intentionally weak, do NOT
+ *               use for security-critical purposes.
+ *   - SHA-256 : HMAC, JWT signing, session integrity — full FIPS 180-4 impl.
+ *   - HMAC-SHA256 : Keyed-hash message authentication (RFC 2104) for JWT, CSRF.
+ *   - Base64 / Base64URL : Encoding for JWT, WebSocket key, cookie values.
+ *   - UUID v4 : Per-request unique identifiers (RFC 4122, random variant).
+ *   - WebSocket frame parsing: raw frame decode for the ws middleware.
+ *
+ * All functions support the internal dispatch pattern: they can be called
+ * standalone (using built-in software implementations) or delegating through
+ * the context's crypto/cipher driver when one is set.
  * @copyright MIT License
  */
 
@@ -38,6 +51,10 @@ static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
     w[i] = (buffer[i * 4] << 24) | (buffer[i * 4 + 1] << 16) |
            (buffer[i * 4 + 2] << 8) | (buffer[i * 4 + 3]);
   }
+  /* Message schedule expansion for rounds 16-79.
+   * Each new word is the XOR of four earlier words (3, 8, 14, 16 steps back)
+   * rotated left by 1 bit. This linear feedback shift mixer provides
+   * avalanche across all message bits. */
   for (int i = 16; i < 80; i++) {
     w[i] = rol(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
   }
@@ -48,21 +65,35 @@ static void sha1_transform(uint32_t state[5], const uint8_t buffer[64]) {
   d = state[3];
   e = state[4];
 
+  /* SHA-1 main round loop — 4 rounds of 20 steps each (80 total). */
   for (int i = 0; i < 80; i++) {
     uint32_t f, k;
     if (i < 20) {
+      /* Round 1 (0-19): Choose function  — Ch(b,c,d) = (b & c) | (~b & d)
+       * Selects bits from c when b=1, from d when b=0.
+       * k = floor(2^30 * sqrt(2)) = 0x5A827999. */
       f = (b & c) | ((~b) & d);
       k = 0x5A827999;
     } else if (i < 40) {
+      /* Round 2 (20-39): Parity function — Parity(b,c,d) = b ^ c ^ d
+       * Bitwise XOR; linear mixing for diffusion.
+       * k = floor(2^30 * sqrt(3)) = 0x6ED9EBA1. */
       f = b ^ c ^ d;
       k = 0x6ED9EBA1;
     } else if (i < 60) {
+      /* Round 3 (40-59): Majority function — Maj(b,c,d) = (b&c)|(b&d)|(c&d)
+       * Returns the majority value of the three bits (1 if >= 2 bits are 1).
+       * k = floor(2^30 * sqrt(5)) = 0x8F1BBCDC. */
       f = (b & c) | (b & d) | (c & d);
       k = 0x8F1BBCDC;
     } else {
+      /* Round 4 (60-79): Parity function (same as Round 2).
+       * k = floor(2^30 * sqrt(10)) = 0xCA62C1D6. */
       f = b ^ c ^ d;
       k = 0xCA62C1D6;
     }
+    /* Round step: temp = ROTL5(a) + f + e + k + W[i],
+     * then shift (a,b,c,d,e) <- (temp, a, ROTL30(b), c, d). */
     uint32_t temp = rol(a, 5) + f + e + k + w[i];
     e = d;
     d = c;
@@ -154,11 +185,26 @@ void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]) {
 
 /* --- SHA256 Implementation --- */
 
+/* 32-bit rotate-right (circular shift) — inverse of SHA-1's rol. */
 #define ror(value, bits) (((value) >> (bits)) | ((value) << (32 - (bits))))
+
+/* SHA-256 Choose function: Ch(x,y,z) = (x & y) ^ (~x & z)
+ * For each bit position, selects y when x=1, z when x=0. */
 #define ch(x, y, z) (((x) & (y)) ^ (~(x) & (z)))
+
+/* SHA-256 Majority function: Maj(x,y,z) = (x&y) ^ (x&z) ^ (y&z)
+ * Returns 1 when at least two of the three bits are 1. */
 #define maj(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+
+/* SHA-256 uppercase Sigma functions (compression function rounds):
+ * Sigma0(x) = ROTR^2(x) XOR ROTR^13(x) XOR ROTR^22(x) — used in T2.
+ * Sigma1(x) = ROTR^6(x) XOR ROTR^11(x) XOR ROTR^25(x) — used in T1. */
 #define sigma0(x) (ror(x, 2) ^ ror(x, 13) ^ ror(x, 22))
 #define sigma1(x) (ror(x, 6) ^ ror(x, 11) ^ ror(x, 25))
+
+/* SHA-256 lowercase sigma functions (message schedule expansion):
+ * gamma0(x) = ROTR^7(x) XOR ROTR^18(x) XOR SHR^3(x) — for w[i-15].
+ * gamma1(x) = ROTR^17(x) XOR ROTR^19(x) XOR SHR^10(x) — for w[i-2]. */
 #define gamma0(x) (ror(x, 7) ^ ror(x, 18) ^ ((x) >> 3))
 #define gamma1(x) (ror(x, 17) ^ ror(x, 19) ^ ((x) >> 10))
 
@@ -175,13 +221,40 @@ static const uint32_t k256[] = {
     0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 
+/** @brief Process a single 64-byte block through the SHA-256 compression
+ * function (FIPS 180-4 §6.2.2).
+ *
+ * The SHA-256 compression function operates on a 256-bit (8-word) state and
+ * a 512-bit (64-byte) message block:
+ *
+ *   1. Message Schedule (w[0..63]): The first 16 words are the message block
+ *      in big-endian. Words 16-63 are expanded using:
+ *        w[i] = gamma1(w[i-2]) + w[i-7] + gamma0(w[i-15]) + w[i-16]
+ *      where gamma0 and gamma1 are the "lowercase sigma" diffusion functions.
+ *
+ *   2. State initialisation: a..h = state[0..7].
+ *
+ *   3. Compression loop (64 rounds): Each round computes:
+ *        T1 = h + Sigma1(e) + Ch(e,f,g) + K[i] + w[i]
+ *        T2 = Sigma0(a) + Maj(a,b,c)
+ *        a..h = (T1+T2, a, b, c, d+T1, e, f, g)
+ *      The K constants are the first 32 bits of the fractional parts of the
+ *      cube roots of the first 64 primes (nothing-up-my-sleeve numbers).
+ *
+ *   4. State update: state[n] += working variable (a..h).
+ *
+ * @param state [in/out] 8-element hash state (updated in-place).
+ * @param data  64-byte (512-bit) message block to process. */
 static void sha256_transform(uint32_t state[8], const uint8_t data[64]) {
   uint32_t a, b, c, d, e, f, g, h, t1, t2, w[64];
 
+  /* Message schedule: first 16 words = big-endian message block */
   for (int i = 0; i < 16; i++) {
     w[i] = (uint32_t)data[i * 4] << 24 | (uint32_t)data[i * 4 + 1] << 16 |
            (uint32_t)data[i * 4 + 2] << 8 | (uint32_t)data[i * 4 + 3];
   }
+  /* Message schedule expansion (w[16..63]) using the lowercase sigma
+   * functions for diffusion across the entire message. */
   for (int i = 16; i < 64; i++) {
     w[i] = gamma1(w[i - 2]) + w[i - 7] + gamma0(w[i - 15]) + w[i - 16];
   }
@@ -195,6 +268,9 @@ static void sha256_transform(uint32_t state[8], const uint8_t data[64]) {
   g = state[6];
   h = state[7];
 
+  /* 64 rounds of the SHA-256 compression function.
+   * Each round mixes the working variables through Sigma, Ch, Maj, and
+   * the round constant K[i] for both diffusion and Confusion. */
   for (int i = 0; i < 64; i++) {
     t1 = h + sigma1(e) + ch(e, f, g) + k256[i] + w[i];
     t2 = sigma0(a) + maj(a, b, c);
@@ -288,9 +364,20 @@ void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]) {
 
 /** @brief Compute HMAC-SHA256 as defined in RFC 2104.
  *
- * If the key is longer than 64 bytes (the SHA-256 block size), it is first
- * hashed with SHA-256 to produce a 32-byte derived key. The standard
- * ipad/opad construction is then applied.
+ * HMAC (Hash-based Message Authentication Code) provides both data integrity
+ * and authenticity via a shared secret. The construction is:
+ *
+ *   HMAC(K, m) = SHA256((K' XOR opad) || SHA256((K' XOR ipad) || m))
+ *
+ * where:
+ *   - K' is the key, hashed with SHA256 if longer than 64 bytes (block size).
+ *   - ipad = 0x36 repeated 64 times (inner padding).
+ *   - opad = 0x5C repeated 64 times (outer padding).
+ *   - || denotes concatenation.
+ *
+ * The double-hashing protects against length-extension attacks on the
+ * underlying hash function. The ipad/opad XOR ensures that the inner and
+ * outer hashes use distinct keys derived from the same secret.
  *
  * @param key      HMAC secret key.
  * @param key_len  Key length in bytes.
@@ -331,7 +418,12 @@ void csilk_hmac_sha256(const uint8_t* key, size_t key_len, const uint8_t* data,
   csilk_sha256_final(&ctx, out);
 }
 
-/** @brief Standard Base64 alphabet per RFC 4648 (used by b64_encode). */
+/** @brief Standard Base64 alphabet per RFC 4648 §4.
+ *
+ * The alphabet uses 64 ASCII characters: A-Z (indices 0-25), a-z (26-51),
+ * 0-9 (52-61), '+' (62), '/' (63). Each group of 3 input bytes (24 bits)
+ * is encoded as 4 Base64 characters (6 bits each). If the input length is
+ * not a multiple of 3, padding '=' characters are added. */
 static const char b64_table[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -347,11 +439,16 @@ static const char b64_table[] =
  * @note The caller must ensure @p out has sufficient capacity. The worst-case
  *       output length is ((len + 2) / 3) * 4 + 1. */
 void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
+  /* Process input in 3-byte groups (24 bits), producing 4 Base64 chars.
+   * For a partial final group (1 or 2 bytes), missing bytes become '='. */
   size_t i, j;
   for (i = 0, j = 0; i < len; i += 3) {
+    /* Pack up to 3 bytes into a 24-bit value (big-endian).
+     * Missing bytes for the final group are 0. */
     uint32_t v = src[i] << 16;
     if (i + 1 < len) v |= src[i + 1] << 8;
     if (i + 2 < len) v |= src[i + 2];
+    /* Extract four 6-bit indices into the Base64 table */
     out[j++] = b64_table[(v >> 18) & 0x3F];
     out[j++] = b64_table[(v >> 12) & 0x3F];
     if (i + 1 < len)
@@ -366,11 +463,15 @@ void csilk_base64_encode(const uint8_t* src, size_t len, char* out) {
   out[j] = '\0';
 }
 
-/** @brief Encode raw bytes as a Base64URL string per RFC 4648 §5.
+/** @brief Encode raw bytes as a Base64URL string per RFC 4648 §5 (URL-safe).
  *
- * Like csilk_base64_encode() but uses URL-safe characters ('-' instead of '+',
- * '_' instead of '/') and strips padding '=' characters (the output is
- * terminated at the first non-encoded character).
+ * Base64URL is the same as standard Base64 but replaces:
+ *   '+' → '-'  (URL-safe, as '+' is treated as space in URL query strings)
+ *   '/' → '_'  (URL-safe, as '/' has path separator meaning)
+ *   '=' → ''   (omitted — padding is unnecessary because length is inferred)
+ *
+ * The output is produced by first encoding with standard Base64, then
+ * character-substituting and stripping padding.
  *
  * @param src Input byte buffer.
  * @param len Input length in bytes.
@@ -394,9 +495,16 @@ void csilk_base64url_encode(const uint8_t* src, size_t len, char* out) {
 
 /** @brief Decode a Base64URL-encoded string back to raw bytes.
  *
- * Converts URL-safe characters back to standard Base64, restores padding,
- * and decodes using a reverse lookup table. The output buffer receives
- * the decoded bytes.
+ * The decoding process is the inverse of Base64URL encoding:
+ *   1. Replace URL-safe characters ('-', '_') with standard Base64 chars
+ *      ('+', '/').
+ *   2. Restore padding '=' characters so the length is a multiple of 4.
+ *   3. Decode the resulting standard Base64 using a reverse lookup table.
+ *
+ * The reverse lookup maps each Base64 character (A-Z, a-z, 0-9, +, /) back
+ * to its 6-bit value. Characters outside this set (including whitespace)
+ * cause an immediate error return (-1). The '=' padding character terminates
+ * decoding early.
  *
  * @param src Base64URL-encoded input string (null-terminated).
  * @param out [out] Output buffer for decoded bytes.
@@ -420,7 +528,9 @@ int csilk_base64url_decode(const char* src, uint8_t* out) {
   }
   tmp[len] = '\0';
 
-  // Simple Base64 decode logic
+  /* Reverse lookup table: maps ASCII characters to their 6-bit Base64 values.
+   * -1 means invalid (not a Base64 character). The table covers all 256
+   * possible byte values for O(1) lookup without conditional branches. */
   static const int8_t b64_rev_table[256] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -431,6 +541,10 @@ int csilk_base64url_decode(const char* src, uint8_t* out) {
       -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
       41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1};
 
+  /* Bit-stream decoder: accumulates Base64 6-bit groups into a 32-bit buffer,
+   * then extracts full bytes (8 bits) from the buffer as they become available.
+   * This approach naturally handles a final group with fewer than 4 characters
+   * (after padding restoration), because '=' terminates the loop early. */
   int decoded_len = 0;
   uint32_t v = 0;
   int bits = 0;
@@ -455,6 +569,21 @@ int csilk_base64url_decode(const char* src, uint8_t* out) {
 /** @brief Generate a random UUID version 4 string in the standard 8-4-4-4-12
  * format.
  *
+ * UUID v4 (RFC 4122 §4.4) uses random or pseudo-random bytes for all 128 bits,
+ * with specific bits reserved for the version and variant:
+ *
+ *   Field         Bits   Purpose
+ *   time_low       32    Random
+ *   time_mid       16    Random
+ *   time_hi_ver    16    Version (4 bits) + random (12 bits)
+ *   clock_seq_hi   8     Variant (2 bits) + random (6 bits)
+ *   clock_seq_low  8     Random
+ *   node           48    Random
+ *
+ * Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+ *   where '4' indicates RFC 4122 version 4 (random UUID).
+ *   where 'y' has the top 2 bits set to '10' (RFC 4122 variant).
+ *
  * Reads 16 random bytes from /dev/urandom. If /dev/urandom is unavailable,
  * falls back to rand() (which is NOT cryptographically secure). Sets the
  * UUID version nibble (4) and variant bits (10xx) per RFC 4122.
@@ -478,10 +607,16 @@ void csilk_generate_uuid(char* buf) {
     for (int i = 0; i < 16; i++) random[i] = rand() & 0xFF;
   }
 
-  /* Set version (4) and variant (10xx) */
+  /* Per RFC 4122 §4.4:
+   *   - byte 6  (clock_seq_hi_and_reserved): set top 4 bits to 0100 (version 4)
+   *   - byte 8  (time_hi_and_version):       set top 2 bits to 10   (variant 1)
+   *
+   *   random[6] = (random[6] & 0x0F) | 0x40  — clears top 4 bits, sets 0100
+   *   random[8] = (random[8] & 0x3F) | 0x80  — clears top 2 bits, sets 10 */
   random[6] = (random[6] & 0x0F) | 0x40;
   random[8] = (random[8] & 0x3F) | 0x80;
 
+  /* Format as: %08x-%04x-%04x-%04x-%012x */
   sprintf(
       buf,
       "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
@@ -493,11 +628,17 @@ void csilk_generate_uuid(char* buf) {
 /** @brief Context-aware HMAC-SHA256 — delegates to the crypto driver if
  * available.
  *
- * If the context has a crypto driver with an hmac_sha256 method, that is
- * used. Otherwise falls back to the built-in csilk_hmac_sha256()
- * implementation. This allows pluggable hardware-accelerated crypto.
+ * This is the "late-bound" version of csilk_hmac_sha256(). It checks whether
+ * the request context has a crypto driver installed (e.g., OpenSSL, mbedTLS,
+ * or a hardware security module). If so, the driver's accelerated HMAC is
+ * used. Otherwise, the built-in software implementation serves as the
+ * portable fallback.
  *
- * @param c        Request context (may be NULL).
+ * This pattern allows the application to use pluggable crypto backends
+ * without changing caller code. The default built-in implementation is
+ * always available for environments without hardware crypto.
+ *
+ * @param c        Request context (may be NULL — falls back to built-in).
  * @param key      HMAC key.
  * @param key_len  Key length.
  * @param data     Input data.
@@ -515,10 +656,15 @@ void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
 /** @brief Context-aware UUID generation — delegates to the crypto driver if
  * available.
  *
- * If the context has a crypto driver with a generate_uuid method, that is
- * used. Otherwise falls back to the built-in csilk_generate_uuid().
+ * This is the late-bound UUID generator. If the context has a crypto driver
+ * with a cryptographically secure generate_uuid method (e.g., reading from
+ * a hardware RNG or via OpenSSL), that is used. Otherwise falls back to the
+ * built-in csilk_generate_uuid() which reads /dev/urandom.
  *
- * @param c   Request context (may be NULL).
+ * The delegation pattern ensures callers always get the best available
+ * randomness source without explicit driver management.
+ *
+ * @param c   Request context (may be NULL — falls back to built-in).
  * @param buf [out] 37-byte buffer for the UUID string. */
 void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]) {
   if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {

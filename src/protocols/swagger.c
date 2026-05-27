@@ -2,10 +2,25 @@
  * @file swagger.c
  * @brief OpenAPI 3.0 specification generator and Swagger UI serving.
  *
- * Dynamically generates an OpenAPI 3.0 JSON document by traversing
- * all registered routes and using the reflection system to produce
- * JSON schemas for request/response types. Also serves the embedded
- * Swagger UI HTML page and the raw OpenAPI JSON endpoint.
+ * Architecture:
+ *   The OpenAPI document builder (csilk_generate_openapi_json) works in three
+ *   phases: (1) traversing the route table to populate the "paths" section with
+ *   endpoint descriptions, parameters, request bodies, and responses; (2)
+ * calling add_schema() on each unique input/output type to populate
+ * "components/schemas" with JSON Schema objects derived from the reflection
+ * registry; (3) scanning all registered reflection types via
+ * csilk_reflect_foreach() to ensure even orphan types appear in the spec.
+ *
+ *   Path patterns from the router (":param", "*glob") are converted to OpenAPI
+ *   3.0 syntax ("{param}", "{glob+}") by path_to_openapi().  Schema generation
+ *   uses generate_schema_for_type() to walk each reflection type's field
+ * descriptors and emit "type" + "properties" maps, with nested structs emitting
+ * "$ref" references.  Circular type references are handled by add_schema()'s
+ * cycle detection (checks type presence before recursing).
+ *
+ *   The Swagger UI page is compiled into the binary as a static string and
+ * served at a designated route by csilk_serve_swagger_ui().  It loads the
+ * /openapi.json endpoint at runtime.
  *
  * @copyright MIT License
  */
@@ -35,6 +50,14 @@ static void path_to_openapi(const char* path, char* out, size_t out_size) {
   char* dst = out;
   size_t remaining = out_size - 1;
 
+  /*
+   * Walk the path character-by-character, converting router parameter syntax
+   * to OpenAPI 3.0 path template syntax:
+   *   Router ":param"    → OpenAPI "{param}"     (named path segment)
+   *   Router "*wildcard" → OpenAPI "{wildcard+}" (catch-all, greedy suffix)
+   *
+   * Example: "/users/:id/posts/*rest" → "/users/{id}/posts/{rest+}"
+   */
   while (*src && remaining > 0) {
     if (*src == ':') {
       src++;
@@ -130,6 +153,25 @@ static cJSON* generate_schema_for_type(const char* type_name) {
     return NULL;
   }
 
+  /*
+   * Walk each field descriptor registered for this reflection type and
+   * produce a JSON Schema property entry:
+   *
+   *   1. Map csilk_field_type_t → OpenAPI type string via
+   * field_type_to_openapi_type(). Integer types → "integer", float/double →
+   * "number", bool → "boolean", string → "string", struct → "object".
+   *
+   *   2. Nested struct (CSILK_TYPE_STRUCT): emit a "$ref" pointer to the
+   *      named component schema instead of inlining the object.  This keeps
+   *      the spec DRY and enables recursive/circular type references.
+   *      Example: {"$ref": "#/components/schemas/User"}.
+   *
+   *   3. Array fields (array_length > 0): wrap the property schema in an
+   *      "array" type wrapper with "items".  Example:
+   *      {"type": "array", "items": {"$ref": "#/components/schemas/Tag"}}.
+   *
+   *   4. Scalars: emit {"type": "<openapi-type>"} directly.
+   */
   for (size_t i = 0; i < entry->count; i++) {
     const csilk_field_desc_t* field = &entry->fields[i];
     cJSON* prop = cJSON_CreateObject();
@@ -170,7 +212,17 @@ static cJSON* generate_schema_for_type(const char* type_name) {
 static void add_schema(cJSON* schemas, const char* type_name) {
   if (!schemas || !type_name || *type_name == '\0') return;
 
-  // Check if already exists (prevents infinite recursion on circular refs)
+  /*
+   * Cycle detection: if this type's schema is already in the schemas object,
+   * return immediately.  This prevents infinite recursion on circular type
+   * references (e.g., type A has a field of type B, and type B has a field
+   * of type A).
+   *
+   * The schemas cJSON object doubles as a "visited" set: we insert the
+   * schema upfront (cJSON_AddItemToObject) before recursing into nested
+   * types, so a re-encounter is caught immediately.  The "$ref" pointer
+   * in the parent schema correctly references the already-inserted entry.
+   */
   if (cJSON_GetObjectItem(schemas, type_name)) return;
 
   cJSON* schema = generate_schema_for_type(type_name);
@@ -267,6 +319,25 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
     return NULL;
   }
 
+  /*
+   * Phase 1 — Build the "paths" section by iterating every registered route.
+   * Each route from csilk_router_collect_routes() carries method, path,
+   * input_type, output_type, summary, and description as cJSON properties.
+   *
+   * Steps per route:
+   *   a) Convert router-style path (":param") to OpenAPI syntax ("{param}").
+   *   b) Get or create the path-level object in the "paths" map (multiple
+   *      methods may share the same path, e.g. GET /users and POST /users).
+   *   c) Add a method-level operation object ("get", "post", etc.) with
+   *      summary, description, and operationId.
+   *   d) Extract path parameters (":param" and "*wildcard") from the raw
+   *      path pattern and emit them as OpenAPI parameter objects with
+   *      "in": "path", "required": true.
+   *   e) If the route has an input_type, add a "requestBody" with a "$ref"
+   *      to the component schema and also register that schema.
+   *   f) Add a "200" response with the output type's schema "$ref", and
+   *      generic "400" and "500" error responses.
+   */
   cJSON* route;
   cJSON_ArrayForEach(route, routes) {
     cJSON* method_item = cJSON_GetObjectItem(route, "method");
@@ -455,9 +526,16 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
     }
   }
 
-  // Auto-register schemas for ALL reflected types, even those not
-  // explicitly linked to any route. This ensures that any type registered
-  // via CSILK_REGISTER_REFLECT appears in components/schemas.
+  /*
+   * Phase 2 — Orphan type registration: scan every registered reflection
+   * type and add it to components/schemas if not already present.  This
+   * catches types that are never directly referenced by any route's
+   * input_type or output_type but are needed as nested/sub-types (e.g.,
+   * a shared Address struct referenced by both User and Order schemas).
+   *
+   * add_schema() skips duplicates internally (cycle detection), so types
+   * already registered during Phase 1 are safe no-ops.
+   */
   if (schemas) {
     csilk_reflect_foreach(auto_register_schema, schemas);
   }
@@ -495,9 +573,22 @@ void csilk_serve_openapi(csilk_ctx_t* c, csilk_router_t* r, const char* title,
  *  Embedded Swagger UI page
  * ========================================================================= */
 
-/** @brief Compiled-in Swagger UI HTML page that loads assets locally
- *  from /csilk-docs/ (served by the framework as static files from
- *  the official Swagger UI distribution bundled with the project). */
+/** @brief Compiled-in Swagger UI HTML page.
+ *
+ * This HTML string is embedded directly into the binary and served at a
+ * designated route by csilk_serve_swagger_ui().  It initializes the Swagger
+ * UI JavaScript bundle to render an interactive API reference.
+ *
+ * Loading strategy:
+ *   - CSS/JS assets are hosted at "/csilk-docs/" — these are static files
+ *     from the official Swagger UI distribution bundled with the server
+ *     (either as separate files or embedded via a build step).
+ *   - The spec URL is "/openapi.json", served by csilk_serve_openapi().
+ *     This decouples UI from spec generation: the UI HTML is loaded once,
+ *     and the spec is fetched on page load, always reflecting the latest
+ *     routes and types without a server restart.
+ *   - SwaggerUIBundle + SwaggerUIStandalonePreset provide the full "Try it
+ *     out" feature, response preview, and schema exploration. */
 static const char swagger_ui_html[] =
     "<!-- HTML for static distribution bundle build -->\n"
     "<!DOCTYPE html>\n"

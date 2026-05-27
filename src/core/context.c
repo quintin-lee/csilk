@@ -1,6 +1,27 @@
 /**
  * @file context.c
  * @brief Request/response context implementation.
+ *
+ * Provides the per-request csilk_ctx_t lifecycle: header hash-map operations
+ * (djb2-based, case-insensitive), request/body management, response status
+ * and body setup, query parameter parsing, async/chunked response support,
+ * and context cleanup.
+ *
+ * Key design points:
+ *   - Headers are stored in a fixed-size hash map (CSILK_HEADER_BUCKETS)
+ *     with linked-list chaining. Allocations come from the request arena
+ *     for zero-fragmentation cleanup.
+ *   - The context carries an arena (bump allocator) for all request-scoped
+ *     allocations — path strings, query params, handler chains, header
+ *     entries. The entire arena is freed in one shot at request end.
+ *   - Query parameters are parsed from the URL query string on demand
+ *     and split into key=value pairs.
+ *   - Async mode is signalled via ctx->is_async: when true, the response
+ *     is NOT sent in on_message_complete; the handler must call
+ *     csilk_send() or csilk_stream() explicitly.
+ *   - The context also holds driver pointers (storage, crypto, cipher)
+ *     inherited from the server at connection time.
+ *
  * @copyright MIT License
  */
 
@@ -13,8 +34,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief Hash a header key string into a bucket index using djb2.
  *

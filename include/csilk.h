@@ -392,6 +392,18 @@ int csilk_is_async(csilk_ctx_t* c);
 void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len,
                              int managed);
 
+/**
+ * @brief Get the current response body and its length.
+ *
+ * Returns the response body as set by csilk_string, csilk_json, or
+ * csilk_set_response_body.  Useful in after-response middleware (e.g.,
+ * logging or post-processing the body).
+ *
+ * @param c         The request context.
+ * @param[out] out_len  Optional pointer to receive the body length in bytes.
+ * @return Pointer to the response body, or NULL if no body has been set.
+ *         The pointer is valid until the response is sent.
+ */
 const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
 /**
@@ -1347,7 +1359,18 @@ typedef struct csilk_router_node_s csilk_router_node_t;
  * @brief The main HTTP router.
  *
  * Wraps a radix-tree root node and provides methods to register routes,
- * match incoming requests, and generate OpenAPI specs.
+ * match incoming requests, and generate OpenAPI specs.  Routing is based
+ * on a compressed radix tree (Patricia trie) for O(k) path matching where
+ * k is the URL path length.  Dynamic segments (:param) and wildcards
+ * (*param) are supported.
+ *
+ * ## Lifecycle
+ *   - Create via csilk_router_new().
+ *   - Register routes via csilk_router_add() — must happen before the
+ *     server starts.
+ *   - Call csilk_router_match_ctx() per request (done internally by
+ *     the server).
+ *   - Destroy via csilk_router_free().
  *
  * @note Not thread-safe for mutation after the server starts.  All routes
  *       must be registered before csilk_server_run.
@@ -1635,6 +1658,21 @@ void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
                                     const char* summary,
                                     const char* description);
 
+/** @brief Add a route with full OpenAPI metadata and permission requirements to
+ *         a group.
+ *  @param group          The route group.
+ *  @param method         HTTP method string.
+ *  @param path           Path relative to the group prefix.
+ *  @param handler        The route handler function.
+ *  @param input_type     Registered type name for request-body binding (NULL if
+ *                        none).
+ *  @param output_type    Registered type name for response serialisation (NULL
+ *                        if none).
+ *  @param summary        Short operation summary for OpenAPI (NULL to omit).
+ *  @param description    Detailed operation description for OpenAPI (NULL to
+ *                        omit).
+ *  @param perm_required  Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource  Resource pattern (e.g., "users:*"), or NULL. */
 void csilk_group_add_route_extended_perm(
     csilk_group_t* group, const char* method, const char* path,
     csilk_handler_t handler, const char* input_type, const char* output_type,
@@ -1961,6 +1999,8 @@ void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
  * Allows users to replace the default software implementations of SHA256,
  * HMAC-SHA256, and UUID generation (e.g., with hardware-accelerated or
  * FIPS-compliant versions).  All function pointers must be non-NULL.
+ * Set via csilk_server_set_crypto_driver and propagated to all request
+ * contexts.  Functions are called synchronously on the event-loop thread.
  */
 typedef struct {
   /** @brief Compute the SHA-256 hash of a buffer.
@@ -1968,7 +2008,7 @@ typedef struct {
    *  @param len   Input length.
    *  @param[out] out  32-byte hash output. */
   void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
-  /** @brief Compute HMAC-SHA256.
+  /** @brief Compute HMAC-SHA256 (RFC 2104).
    *  @param key       HMAC key.
    *  @param key_len   Key length.
    *  @param data      Input data.
@@ -1977,8 +2017,10 @@ typedef struct {
   void (*hmac_sha256)(const uint8_t* key, size_t key_len, const uint8_t* data,
                       size_t data_len, uint8_t out[32]);
   /** @brief Generate a random version-4 UUID string.
+   *  Uses /dev/urandom or driver-specific entropy source.
    *  @param[out] buf  Output buffer of at least 37 bytes.  Populated with a
-   *                   NUL-terminated UUID string. */
+   *                   NUL-terminated UUID string
+   *                   (e.g., "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"). */
   void (*generate_uuid)(char buf[37]);
 } csilk_crypto_driver_t;
 
@@ -2221,8 +2263,15 @@ void csilk_metrics_handler(csilk_ctx_t* c);
  *
  * Provides an in-process pub/sub system built on libuv async handles.
  * Thread-safe publishing allows worker threads to send messages to the
- * main event loop.  Supports middleware chains, persistence via WAL, and
- * background offloading.
+ * main event loop.  The full lifecycle is:
+ *   1. Retrieve via csilk_server_get_mq (created lazily).
+ *   2. Register middleware (csilk_mq_use) and subscribers (csilk_mq_subscribe).
+ *   3. Publish from any thread (csilk_mq_publish — payload is copied).
+ *   4. Optionally enable WAL persistence (csilk_mq_set_persistence).
+ *   5. Destroyed automatically when the server is freed.
+ *
+ * Supports middleware chains, persistence via WAL, and background
+ * offloading to libuv's thread pool.
  */
 typedef struct csilk_mq_s csilk_mq_t;
 

@@ -46,10 +46,17 @@ static _Atomic uint64_t http_request_duration_microseconds = 0;
  */
 void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg) {
   (void)arg;
+  /* Record start time before dispatching to downstream handlers.
+     uv_hrtime() provides a high-resolution monotonic clock (typically
+     CLOCK_MONOTONIC_RAW on Linux, or equivalent on other platforms). */
   uint64_t start = uv_hrtime();
 
   csilk_next(c);
 
+  /* Compute elapsed time and update global atomic counters.
+     Atomic operations ensure visibility across threads without a mutex.
+     The counters may have minor skew under extreme contention but are
+     accurate enough for monitoring and alerting. */
   uint64_t duration_ns = uv_hrtime() - start;
   uint64_t duration_us = duration_ns / 1000;
 

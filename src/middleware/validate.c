@@ -10,8 +10,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Find the first occurrence of a character in a string (helper).
@@ -48,6 +48,13 @@ static const char* str_find(const char* s, char c) {
  */
 static int is_valid_email(const char* s) {
   if (!s || !*s) return 0;
+  /* Basic email syntax check:
+     1. Exactly one '@' character.
+     2. No whitespace allowed (RFC 5321 §4.1.2).
+     3. Local part and domain must both be non-empty.
+     4. Domain must contain at least one dot with non-empty TLD segment.
+     This is intentionally simple — does NOT validate quoted locals,
+     IP literals, or special characters per RFC 5322. */
   int at_count = 0;
   const char* at_ptr = NULL;
 
@@ -56,12 +63,14 @@ static int is_valid_email(const char* s) {
       at_count++;
       at_ptr = p;
     } else if (isspace((unsigned char)*p)) {
-      return 0;
+      return 0; /* No whitespace in email addresses. */
     }
   }
 
+  /* Must have exactly one '@' and both sides must be non-empty. */
   if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') return 0;
 
+  /* Domain must contain at least one '.' with non-empty TLD. */
   const char* dot = strrchr(at_ptr + 1, '.');
   if (!dot || dot == at_ptr + 1 || dot[1] == '\0') return 0;
 
@@ -110,6 +119,9 @@ const char* csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules) {
     } else if (r->source && strcmp(r->source, "cookie") == 0) {
       value = csilk_get_cookie(c, r->field);
     } else {
+      /* Default source: check query string first, fall back to form body.
+         This allows e.g. GET ?name=value and POST form fields to be
+         validated with the same rule. */
       value = csilk_get_query(c, r->field);
       if (!value) value = csilk_get_form_field(c, r->field);
     }

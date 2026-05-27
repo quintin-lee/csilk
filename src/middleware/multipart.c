@@ -10,8 +10,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #define CSILK_MAX_PART_HEADERS 32
 #define CSILK_MAX_PART_NAME 128
@@ -66,15 +66,22 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
 
   const char* pos = data;
 
+  /* Expect the first boundary marker at the very start of the body.
+     RFC 2046 §5.1.1: the body must begin with "--boundary\r\n". */
   if (strncmp(pos, delimiter, delim_len) != 0) return;
   pos += delim_len;
   if (*pos == '\r') pos++;
   if (*pos == '\n') pos++;
 
+  /* Iterate over each part in the multipart body.
+     Each part consists of headers (terminated by \r\n\r\n) followed by
+     the part body, then the next boundary delimiter. */
   while (pos < data + data_len) {
     csilk_multipart_part_t part;
     memset(&part, 0, sizeof(part));
 
+    /* Parse part headers: Content-Disposition (name + optional filename),
+       Content-Type, and any additional headers up to the blank line. */
     while (pos < data + data_len && *pos != '\r') {
       if (strncmp(pos, "Content-Disposition:", 20) == 0) {
         pos += 20;
@@ -129,8 +136,13 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler) {
         break;
     }
 
+    /* Blank line marks the end of headers (RFC 5322 §2.1). */
     if (pos < data + data_len && strncmp(pos, "\r\n", 2) == 0) pos += 2;
 
+    /* Locate the part body: scan forward for the next boundary delimiter.
+       The boundary is preceded by "\n" (and optionally "\r") which must be
+       excluded from the part data. If no boundary is found, the rest of the
+       body is treated as the final part. */
     const char* body_start = pos;
 
     const char* body_end = NULL;

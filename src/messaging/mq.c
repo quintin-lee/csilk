@@ -1,5 +1,34 @@
 /** @file mq.c
  * @brief Internal Event Bus (Message Queue) implementation.
+ *
+ * ## Architecture
+ * The MQ is a publish-subscribe event bus built on libuv async handles.
+ * It supports topic-based routing with glob patterns (via fnmatch),
+ * middleware chains, thread-safe publishing from any thread, optional
+ * persistence via Write-Ahead Log (WAL), and background thread offloading.
+ *
+ * ## Dispatch model
+ * Messages flow through a handler chain assembled dynamically at dispatch
+ * time (see on_mq_async). The chain order is:
+ *   1. Global middleware (registered with topic=NULL) — runs for ALL topics.
+ *   2. Topic-specific handlers — matched by fnmatch(topic_pattern, msg_topic).
+ *   3. Subscribers (just handlers registered via csilk_mq_subscribe).
+ *
+ * Each handler calls csilk_mq_next() to advance the chain, or csilk_mq_abort()
+ * to short-circuit.
+ *
+ * ## Thread safety
+ * Publishing (csilk_mq_publish) is thread-safe and lock-free on the fast path:
+ * the message is copied, appended to a mutex-guarded linked list, and an
+ * async signal (uv_async_send) wakes the main loop thread to drain the queue.
+ *
+ * ## Persistence (WAL)
+ * When enabled via csilk_mq_set_persistence(), every published message is
+ * first written to a binary WAL file before being enqueued in memory.
+ * On next startup, _mq_recovery() replays the WAL to restore undelivered
+ * messages. The WAL format is:
+ * [topic_len:4][topic:N][payload_len:4][payload:M][xor_checksum:4].
+ *
  * @copyright MIT License
  */
 #include <fcntl.h>
@@ -8,16 +37,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /* --- Context API --- */
 
 /** @brief Advance to the next middleware or subscriber in the MQ handler chain.
  *
- * Increments the handler index and calls the next handler in the chain.
- * If the chain has been aborted (via csilk_mq_abort()) or there are no more
- * handlers, this is a no-op.
+ * ## Execution model
+ * Handlers form a linear chain: [global_mw..., topic_mw..., subscriber...].
+ * Each handler calls csilk_mq_next() to yield control to the next one.
+ * This is a non-recursive, non-reentrant manual trampoline — the chain
+ * is driven by the handlers themselves, not by a central loop.
+ *
+ * If ctx->aborted is set (by a previous csilk_mq_abort() call), this is a
+ * no-op. Out-of-bounds handler_index is also silently ignored (end of chain).
  *
  * @param ctx Message queue context.
  * @note Typically called by middleware to pass control to the next handler
@@ -96,11 +130,17 @@ static void worker_after_cb(uv_work_t* req, int status) {
 
 /** @brief Offload message processing to a libuv thread pool worker.
  *
- * Creates a work context containing copies of the topic and payload, then
- * queues the work via uv_queue_work(). After the worker completes on a
- * background thread, control returns to the main loop thread via
- * worker_after_cb (which cleans up). After offloading, csilk_mq_next() is
- * called to continue the handler chain.
+ * ## Mechanism
+ * 1. Deep-copy topic (strdup) and payload (malloc+memcpy) into a work ctx.
+ * 2. Queue the work via uv_queue_work() — runs worker_cb on a libuv thread
+ *    pool thread.
+ * 3. worker_after_cb fires on the main loop thread: frees the work ctx.
+ * 4. Call csilk_mq_next() immediately *on the main thread* to continue the
+ *    handler chain, without waiting for the background worker.
+ *
+ * The deep copy avoids shared mutable state between the background thread
+ * and the event loop. The caller's handler chain continues in parallel with
+ * the offloaded work — there is no result channel.
  *
  * @param ctx    Message queue context.
  * @param worker Worker function that will receive topic, payload, and length
@@ -164,9 +204,16 @@ static int _mq_recovery(csilk_mq_t* mq);
 
 /** @brief Internal: Create a new Message Queue instance.
  *
- * Allocates and initializes an MQ structure with a queue mutex, a libuv
- * async handle (for cross-thread signaling), and initializes WAL fields.
- * The async handle's callback (on_mq_async) processes queued messages.
+ * ## Initialization
+ * 1. calloc the MQ struct (zero-initialized — all counts/capacities = 0).
+ * 2. Initialize the queue mutex (protects the in-memory message linked list).
+ * 3. Initialize the async handle bound to the given loop. The async handle's
+ *    callback (on_mq_async) is triggered by uv_async_send() whenever a new
+ *    message is enqueued from any thread.
+ * 4. Mark WAL as closed (wal_fd = -1), init the WAL mutex.
+ *
+ * The MQ starts with no topics, no handlers, and no WAL — everything is
+ * populated lazily.
  *
  * @param loop libuv event loop to associate the async handle with.
  * @return A new csilk_mq_t instance, or NULL on allocation failure.
@@ -188,11 +235,17 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
 
 /** @brief Enable persistent message delivery using a Write-Ahead Log (WAL).
  *
- * Opens (or creates) the given WAL file and registers it with the MQ.
- * When persistence is active, every published message is first appended to
- * the WAL before being enqueued in memory. On startup or after a crash,
- * existing messages in the WAL are recovered and re-enqueued automatically.
- * If a WAL was previously set, it is closed first.
+ * ## WAL handshake
+ * 1. Lock wal_mutex (held for the entire setup + recovery).
+ * 2. Close any previously-opened WAL file + free old wal_path.
+ * 3. Open (or create) the WAL file at wal_path with O_CREAT | O_RDWR |
+ * O_APPEND.
+ * 4. Store fd and path in the MQ struct.
+ * 5. Call _mq_recovery() to replay any existing messages from the WAL file
+ *    into the in-memory queue. This ensures messages survive process restarts.
+ *
+ * After this call, every csilk_mq_publish() appends to the WAL before
+ * enqueuing in memory.
  *
  * @param mq       The MQ instance.
  * @param wal_path File path for the WAL. The file is created if it does not
@@ -257,10 +310,14 @@ static csilk_mq_topic_t* get_or_create_topic(csilk_mq_t* mq, const char* name) {
 
 /** @brief Register a middleware handler for a specific topic (or globally).
  *
- * If @p topic is NULL, the middleware is registered globally and applies to
- * ALL topics. Otherwise, it is registered for the specific topic. Middleware
- * handlers run before topic subscribers in the order they were registered.
- * Global middlewares run before topic-specific ones.
+ * ## Global vs topic-specific
+ * - topic == NULL: handler is appended to mq->global_middlewares[].
+ *   These run for EVERY message, regardless of topic, and execute first.
+ * - topic != NULL: handler is appended to that topic's handlers[] array.
+ *   The topic is created lazily via get_or_create_topic().
+ *   These run only when fnmatch(topic_name, msg_topic) matches.
+ *
+ * Both arrays grow by doubling (initial cap = 4) when full.
  *
  * @param mq        The MQ instance.
  * @param topic     Topic name (e.g., "user.created"), or NULL for global.
@@ -311,10 +368,17 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic,
 
 /** @brief Internal: append a message frame to the Write-Ahead Log file.
  *
- * Writes a 5-part frame to the WAL: topic length (4 bytes), topic data
- * (N bytes), payload length (4 bytes), payload data (M bytes), and a
- * simple XOR checksum (4 bytes). After writing, the file is fsynced to
- * ensure durability.
+ * ## WAL frame format (total frame size = 4 + N + 4 + M + 4)
+ * ```
+ *   [topic_len    : uint32_t, 4 bytes]  — byte length of topic string
+ *   [topic_data   : uint8_t[], N bytes]  — topic UTF-8 bytes (no NUL)
+ *   [payload_len  : uint32_t, 4 bytes]  — byte length of payload
+ *   [payload_data : uint8_t[], M bytes]  — raw payload bytes
+ *   [checksum     : uint32_t, 4 bytes]  — XOR over topic + payload
+ * ```
+ *
+ * After writing all 5 parts via a single uv_fs_write() scatter-gather I/O
+ * (5 uv_buf_t entries), the file is fsynced for crash durability.
  *
  * @param mq      The MQ instance (must have wal_fd >= 0).
  * @param topic   Message topic string.
@@ -366,9 +430,17 @@ static int _mq_append_wal(csilk_mq_t* mq, const char* topic,
 
 /** @brief Internal: enqueue a message in the in-memory linked list.
  *
- * Allocates a new csilk_mq_msg_t, copies the topic (via strdup) and payload
- * (via malloc+memcpy), appends it to the tail of the queue under the queue
- * mutex, and sends an async signal to wake up the event loop.
+ * ## Enqueue algorithm
+ * 1. Allocate and populate a new csilk_mq_msg_t (deep-copy topic + payload).
+ * 2. Lock queue_mutex.
+ * 3. Append to the tail of the singly-linked list:
+ *      - If queue_tail != NULL: queue_tail->next = msg
+ *      - Else: queue_head = msg
+ *    Update queue_tail to msg.
+ * 4. Unlock, call uv_async_send() to wake the event loop.
+ *
+ * uv_async_send() is signal-safe and thread-safe — it can be called from
+ * any thread. If the loop is already awake, it's a no-op (libuv coalesces).
  *
  * @param mq      The MQ instance.
  * @param topic   Message topic.
@@ -412,10 +484,24 @@ static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
 
 /** @brief Internal: recover messages from the Write-Ahead Log on startup.
  *
- * Reads the WAL file sequentially, parsing each frame (topic_len, topic,
- * payload_len, payload, checksum), validating the XOR checksum, and
- * re-enqueueing valid messages into the in-memory queue without re-appending
- * to the WAL. Stops at the first invalid frame (corruption or EOF).
+ * ## Recovery algorithm (WAL replay)
+ * Reads the WAL file sequentially from offset 0 using positional reads
+ * (uv_fs_read with offset parameter). For each frame:
+ *
+ *   1. Read 4 bytes → topic_len. If < 4 bytes: EOF or corruption → stop.
+ *   2. Read topic_len bytes → topic name. If short read → stop.
+ *   3. Read 4 bytes → payload_len. If < 4 bytes → stop.
+ *   4. Read payload_len bytes → payload. If short read → stop.
+ *   5. Read 4 bytes → stored checksum. If < 4 bytes → stop.
+ *   6. Compute XOR checksum over topic + payload.
+ *   7. If checksum matches: enqueue the message in memory (_mq_enqueue),
+ *      WITHOUT re-appending to the WAL.
+ *   8. If checksum mismatches: free, stop (treat as corruption boundary).
+ *
+ * ## Why stop at corruption?
+ * The WAL is append-only with no frame-length prefix. If a frame is corrupt,
+ * the next frame boundary is unknowable — we stop to avoid misinterpreting
+ * garbage as valid data.
  *
  * @param mq The MQ instance (must have wal_fd >= 0).
  * @return 0 on success (or if no WAL), -1 on allocation failure.
@@ -524,9 +610,15 @@ static int _mq_recovery(csilk_mq_t* mq) {
 
 /** @brief Publish a message to a topic (thread-safe, optionally persistent).
  *
- * If WAL persistence is enabled, appends the message to the WAL first.
- * Then enqueues the message in the in-memory queue. Processing happens
- * asynchronously on the main event loop thread via on_mq_async().
+ * ## Write-ahead: WAL then memory
+ * The two operations are NOT atomic (WAL can succeed, memory enqueue can
+ * fail). This is a deliberate trade-off:
+ *   - If WAL succeeds but enqueue fails: message is safe on disk but lost
+ *     in memory — it will be recovered on next restart.
+ *   - If WAL fails: the message is dropped entirely (return -1).
+ *
+ * Processing is asynchronous — the caller receives no delivery confirmation.
+ * The message is deep-copied at both stages.
  *
  * @param mq      The MQ instance.
  * @param topic   Target topic name (cannot be NULL).
@@ -551,11 +643,27 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
 
 /** @brief libuv async callback — dequeue and process all pending messages.
  *
- * Drains the entire message queue under the queue mutex, then dispatches
- * each message through its matching handler chain. For each message, global
- * middlewares run first, followed by topic-specific handlers matched by
- * fnmatch(). The handler chain is allocated on the heap and freed after
- * dispatch.
+ * ## Dispatch algorithm (per message)
+ * This is the core of the MQ — it runs on the main event loop thread.
+ *
+ *   1. Atomically swap the queue head to NULL under mutex (drain all).
+ *   2. Walk the linked list of messages.
+ *   3. For each message:
+ *      a. Count total handlers: global_mw_count + sum of handler_count for
+ *         every topic where fnmatch(topic->name, msg->topic) == 0.
+ *      b. Allocate a contiguous handler chain array of that size.
+ *      c. Bulk-copy global middlewares into the chain.
+ *      d. For each matching topic: bulk-copy its handlers.
+ *      e. Create a csilk_mq_ctx_t with {mq, msg, chain, count, -1, 0}.
+ *      f. Kick off the chain with csilk_mq_next(&ctx) — handler at
+ *         index 0 runs, which typically calls csilk_mq_next() again.
+ *      g. Free the chain array (the context is stack-allocated).
+ *   4. Free the message (topic, payload, struct).
+ *
+ * ## Topic matching via fnmatch
+ * fnmatch(3) implements POSIX shell glob patterns: '*' matches any
+ * sequence, '?' matches any single char, '[abc]' matches character sets.
+ * This allows patterns like "user.*" or "system.event.?".
  *
  * @param handle libuv async handle (data points to csilk_mq_t). */
 static void on_mq_async(uv_async_t* handle) {
@@ -613,10 +721,16 @@ static void on_mq_async(uv_async_t* handle) {
 /** @brief libuv close callback — final cleanup when the MQ async handle is
  * closed.
  *
- * Destroys mutexes, closes the WAL file (if open), frees the WAL path,
- * drains and frees the in-memory message queue, frees all topic structures
- * and their handlers, frees global middlewares, and finally frees the MQ
- * struct itself.
+ * ## Teardown order
+ *   1. Destroy mutexes (queue_mutex, wal_mutex) — no more concurrent access.
+ *   2. Close WAL file (uv_fs_close), free wal_path.
+ *   3. Drain and free the in-memory message linked list.
+ *   4. Free all topic structures: topic name, handler arrays, structs.
+ *   5. Free global middlewares array.
+ *   6. Free the MQ struct itself.
+ *
+ * This is guaranteed to run on the libuv event loop thread (uv_close
+ * callback), so it is safe to destroy mutexes here.
  *
  * @param handle libuv handle being closed (data points to csilk_mq_t). */
 static void on_mq_close(uv_handle_t* handle) {

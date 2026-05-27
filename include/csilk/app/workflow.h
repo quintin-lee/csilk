@@ -3,7 +3,34 @@
  * @brief AI Workflow engine for the csilk framework.
  *
  * Provides a graph-based orchestration engine for AI pipelines and agents.
- * Supports sequential, parallel, and agentic loops.
+ * Supports sequential execution, parallel fan-out (via multi-input join
+ * policies), conditional routing, agentic loops with feedback edges, and
+ * built-in AI node handlers with LLM tool calling.
+ *
+ * ## Graph Model
+ * The workflow is a directed acyclic (or cyclic) graph of nodes.  Each node
+ * is a handler function (or a built-in AI node) that receives data from its
+ * predecessors and emits data to its successors.  Edges can be:
+ *   - Sequential (csilk_wf_bind): default routing, always fires.
+ *   - Conditional (csilk_wf_on): fires only when output matches a string.
+ *   - Loop-back (csilk_wf_on_loop): cycles but does NOT increment the target's
+ *     incoming-edge counter (avoiding deadlock in AND-join logic).
+ *   - Error fallback (csilk_wf_on_error): fires on handler failure.
+ *   - Dynamic (csilk_wf_route): programmatic router callback decides the next
+ *     node at runtime.
+ *
+ * ## Execution
+ * csilk_wf_run starts execution asynchronously.  Entry nodes (nodes with 0
+ * incoming edges or explicitly marked) fire immediately.  Results propagate
+ * through the graph via the event loop.  WAL persistence enables crash
+ * recovery via csilk_wf_resume.
+ *
+ * ## Thread Safety
+ * Workflow definitions are read-only during execution (all mutation must
+ * happen before csilk_wf_run).  The runtime is single-threaded on the
+ * libuv event loop.
+ *
+ * @copyright MIT License
  */
 
 #ifndef CSILK_WORKFLOW_H
@@ -27,30 +54,42 @@ typedef enum {
 
 /**
  * @brief Generic data container for passing messages between workflow nodes.
+ *
+ * Every node receives a csilk_data_t as input and returns one as output.
+ * The @p type string allows downstream nodes to switch behaviour based on
+ * content type.  The optional @p free_fn callback lets the workflow engine
+ * clean up heap-allocated values when the data is no longer needed.
+ * The @p meta field is a catch-all for extra information (e.g., AI token
+ * counts, timing metrics) and is NOT freed by the engine.
  */
 typedef struct csilk_data_s {
-  char* type;               /**< MIME-like type identifier. */
-  void* value;              /**< Opaque data pointer. */
-  void (*free_fn)(void*);   /**< Optional callback to free the value. */
-  void* meta;               /**< Optional metadata (e.g., AI token usage). */
+  char* type;             /**< MIME-like type identifier (e.g., "text/plain",
+                             "application/json"). */
+  void* value;            /**< Opaque data pointer.  Ownership semantics
+                             depend on @p free_fn. */
+  void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
+                             when the data is consumed.  NULL means the
+                             engine does NOT take ownership. */
+  void* meta;             /**< Optional metadata pointer (not freed by the
+                             engine).  Common use: AI token usage stats. */
 } csilk_data_t;
 
 /** @brief Trace record for a single node execution. */
 typedef struct {
   char* node_id;
-  uint64_t start_time;      /**< Microseconds (uv_hrtime) */
-  uint64_t end_time;        /**< Microseconds */
-  char* input_dump;         /**< String representation of input */
-  char* output_dump;        /**< String representation of output */
-  char* model;              /**< AI model used (if applicable) */
+  uint64_t start_time; /**< Microseconds (uv_hrtime) */
+  uint64_t end_time;   /**< Microseconds */
+  char* input_dump;    /**< String representation of input */
+  char* output_dump;   /**< String representation of output */
+  char* model;         /**< AI model used (if applicable) */
   int prompt_tokens;
   int completion_tokens;
-  char* error;              /**< Error message if failed */
+  char* error; /**< Error message if failed */
 } csilk_wf_trace_node_t;
 
 /** @brief Complete execution trace of a workflow. */
 typedef struct {
-  char* exec_id;            /**< Unique execution ID */
+  char* exec_id; /**< Unique execution ID */
   uint64_t start_time;
   uint64_t end_time;
   csilk_wf_trace_node_t** nodes;
@@ -68,9 +107,9 @@ typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
  * @brief Configuration for built-in AI nodes.
  */
 typedef struct {
-  const char* model;       /**< AI model identifier. */
-  const char* system_msg;  /**< Optional system prompt. */
-  const char* prompt;      /**< User prompt (supports {{node.value}} templates). */
+  const char* model;      /**< AI model identifier. */
+  const char* system_msg; /**< Optional system prompt. */
+  const char* prompt; /**< User prompt (supports {{node.value}} templates). */
   double temperature;
   int max_tokens;
 } csilk_ai_config_t;
@@ -241,7 +280,8 @@ void csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router);
  * @param node   Node handle.
  * @param policy AND (default) or OR.
  */
-void csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy);
+void csilk_wf_node_set_join(csilk_wf_node_t* node,
+                            csilk_wf_join_policy_t policy);
 
 /**
  * @brief Set a timeout for a specific node.

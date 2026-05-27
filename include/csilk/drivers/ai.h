@@ -1,10 +1,24 @@
 /**
- * @file csilk_ai.h
- * @brief Unified interface for AI/LLM service integration.
+ * @file ai.h
+ * @brief Unified pluggable interface for AI/LLM service integration.
  *
  * Provides a provider-agnostic abstraction for chat completions, embeddings,
- * and other AI services. Supports pluggable drivers (e.g., OpenAI, Claude, 
- * local LLMs).
+ * streaming, and tool/function calling.  Supports multiple backend drivers
+ * (OpenAI, Claude, Ollama, etc.) registered via csilk_ai_register_driver.
+ *
+ * ## Architecture
+ * The AI layer has three tiers:
+ *   1. **Driver** — a csilk_ai_driver_t vtable implementing the actual
+ *      HTTP/REST calls to a specific provider.
+ *   2. **Instance** — created by csilk_ai_new(), wraps a driver + API config.
+ *   3. **Context** — csilk_ai_context_t manages conversation history with
+ *      a sliding-window FIFO (for maintaining chat context across turns).
+ *
+ * ## Thread Safety
+ * The driver functions are synchronous by default.  Asynchronous variants
+ * (csilk_ai_chat_async) offload work to libuv's thread pool and invoke
+ * the callback on the main event loop, making them safe for use from
+ * request handlers.
  *
  * @copyright MIT License
  */
@@ -12,19 +26,19 @@
 #ifndef CSILK_AI_H
 #define CSILK_AI_H
 
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /** @brief Opaque handle for an AI provider instance. */
 typedef struct csilk_ai_s csilk_ai_t;
 
 /** @brief A single message in a chat conversation. */
 typedef struct {
-  const char* role;    /**< Message role (e.g., "system", "user", "assistant"). */
+  const char* role; /**< Message role (e.g., "system", "user", "assistant"). */
   const char* content; /**< Message text content. */
 } csilk_ai_message_t;
 
-/** @brief Callback for streaming mode. 
+/** @brief Callback for streaming mode.
  * @param chunk The text content delta.
  * @param user_data User-provided context. */
 typedef void (*csilk_ai_stream_cb)(const char* chunk, void* user_data);
@@ -51,64 +65,93 @@ typedef struct {
 
 /** @brief Request parameters for chat completion. */
 typedef struct {
-  const char* model;             /**< Provider-specific model name (e.g., "gpt-4"). */
-  csilk_ai_message_t* messages;  /**< Array of conversation messages. */
-  size_t message_count;          /**< Number of messages in the array. */
-  double temperature;            /**< Sampling temperature (0.0 to 2.0). */
-  double top_p;                  /**< Nucleus sampling probability. */
-  double presence_penalty;       /**< Penalty for new topics (-2.0 to 2.0). */
-  double frequency_penalty;      /**< Penalty for repetitive tokens (-2.0 to 2.0). */
-  int max_tokens;                /**< Maximum tokens to generate. */
-  const char** stop;             /**< Array of stop sequences. */
-  size_t stop_count;             /**< Number of stop sequences. */
-  const char* user;              /**< Unique identifier for the end-user. */
-  bool stream;                   /**< Enable streaming mode. */
-  csilk_ai_stream_cb on_chunk;   /**< Callback invoked for each chunk in stream mode. */
-  void* user_data;               /**< User context for the stream callback. */
-  int timeout_ms;                /**< Request timeout in milliseconds (0 for default). */
-  csilk_ai_tool_t* tools;        /**< Available tools for the model. */
-  size_t tool_count;             /**< Number of tools. */
-  const char* tool_choice;       /**< "none", "auto", or "required". */
+  const char* model; /**< Provider-specific model name (e.g., "gpt-4"). */
+  csilk_ai_message_t* messages; /**< Array of conversation messages. */
+  size_t message_count;         /**< Number of messages in the array. */
+  double temperature;           /**< Sampling temperature (0.0 to 2.0). */
+  double top_p;                 /**< Nucleus sampling probability. */
+  double presence_penalty;      /**< Penalty for new topics (-2.0 to 2.0). */
+  double frequency_penalty; /**< Penalty for repetitive tokens (-2.0 to 2.0). */
+  int max_tokens;           /**< Maximum tokens to generate. */
+  const char** stop;        /**< Array of stop sequences. */
+  size_t stop_count;        /**< Number of stop sequences. */
+  const char* user;         /**< Unique identifier for the end-user. */
+  bool stream;              /**< Enable streaming mode. */
+  csilk_ai_stream_cb
+      on_chunk;    /**< Callback invoked for each chunk in stream mode. */
+  void* user_data; /**< User context for the stream callback. */
+  int timeout_ms;  /**< Request timeout in milliseconds (0 for default). */
+  csilk_ai_tool_t* tools;  /**< Available tools for the model. */
+  size_t tool_count;       /**< Number of tools. */
+  const char* tool_choice; /**< "none", "auto", or "required". */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
 typedef struct {
-  char* content;              /**< Generated text content (heap-allocated). */
-  csilk_ai_tool_call_t* tool_calls; /**< Array of tool calls (heap-allocated). */
-  size_t tool_call_count;     /**< Number of tool calls. */
-  int prompt_tokens;          /**< Tokens used in the prompt. */
-  int completion_tokens;      /**< Tokens used in the generation. */
-  int total_tokens;            /**< Total tokens used. */
-  char* raw_response;         /**< Full raw JSON response (optional, heap-allocated). */
-  char* error_message;        /**< Detailed error message if call failed (heap-allocated). */
+  char* content; /**< Generated text content (heap-allocated). */
+  csilk_ai_tool_call_t*
+      tool_calls;         /**< Array of tool calls (heap-allocated). */
+  size_t tool_call_count; /**< Number of tool calls. */
+  int prompt_tokens;      /**< Tokens used in the prompt. */
+  int completion_tokens;  /**< Tokens used in the generation. */
+  int total_tokens;       /**< Total tokens used. */
+  char* raw_response; /**< Full raw JSON response (optional, heap-allocated). */
+  char* error_message; /**< Detailed error message if call failed
+                          (heap-allocated). */
 } csilk_ai_chat_response_t;
 
 /** @brief Response data for embeddings. */
 typedef struct {
-  float* values;            /**< Flattened array of vector values. */
-  size_t dimension;          /**< Dimension of a single vector. */
-  size_t count;              /**< Number of vectors in the array. */
+  float* values;    /**< Flattened array of vector values. */
+  size_t dimension; /**< Dimension of a single vector. */
+  size_t count;     /**< Number of vectors in the array. */
   int prompt_tokens;
   int total_tokens;
   char* error_message;
 } csilk_ai_embeddings_response_t;
 
 /** @brief Callback for asynchronous chat completion. */
-typedef void (*csilk_ai_chat_async_cb)(int status, csilk_ai_chat_response_t* res, void* user_data);
+typedef void (*csilk_ai_chat_async_cb)(int status,
+                                       csilk_ai_chat_response_t* res,
+                                       void* user_data);
 
 /** @brief Callback for asynchronous embeddings. */
-typedef void (*csilk_ai_embeddings_async_cb)(int status, csilk_ai_embeddings_response_t* res, void* user_data);
+typedef void (*csilk_ai_embeddings_async_cb)(
+    int status, csilk_ai_embeddings_response_t* res, void* user_data);
 
-/** @brief Driver interface for AI providers. */
+/**
+ * @brief Virtual function table implemented by each AI provider backend.
+ *
+ * Each registered driver (OpenAI, Claude, Ollama, etc.) provides these four
+ * functions.  The @p init function returns a driver-specific state handle
+ * that is passed to all subsequent calls.
+ */
 typedef struct {
-  const char* name;
-  /** @brief Initialize the driver-specific state. */
+  const char* name; /**< Driver identifier (e.g., "openai", "ollama"). Must
+                       match the name passed to csilk_ai_new. */
+  /** @brief Initialize driver-specific state (e.g., HTTP client, auth tokens).
+   *  @param api_key  API key (may be NULL for providers that don't need one).
+   *  @param base_url Optional custom endpoint URL (NULL for provider default).
+   *  @return Opaque driver state handle, or NULL on failure. */
   void* (*init)(const char* api_key, const char* base_url);
-  /** @brief Perform a synchronous chat completion call. */
-  int (*chat)(void* state, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res);
-  /** @brief Perform a synchronous embeddings call. */
-  int (*embeddings)(void* state, const char* model, const char** input, size_t count, csilk_ai_embeddings_response_t* res);
-  /** @brief Clean up driver-specific state. */
+  /** @brief Perform a synchronous chat completion call.
+   *  @param state Driver state from init().
+   *  @param req   Request parameters (model, messages, temperature, tools...).
+   *  @param res   [out] Populated response (content, token counts, tool calls).
+   *  @return 0 on success, -1 on failure. */
+  int (*chat)(void* state, const csilk_ai_chat_request_t* req,
+              csilk_ai_chat_response_t* res);
+  /** @brief Perform a synchronous embeddings call.
+   *  @param state Driver state from init().
+   *  @param model Model name for embeddings.
+   *  @param input Array of input strings to embed.
+   *  @param count Number of input strings.
+   *  @param res   [out] Populated embeddings response.
+   *  @return 0 on success, -1 on failure. */
+  int (*embeddings)(void* state, const char* model, const char** input,
+                    size_t count, csilk_ai_embeddings_response_t* res);
+  /** @brief Clean up all driver-specific state.
+   *  @param state Driver state to free (from init()). */
   void (*free)(void* state);
 } csilk_ai_driver_t;
 
@@ -117,7 +160,7 @@ typedef struct {
   csilk_ai_message_t* messages; /**< Array of history messages. */
   size_t count;                 /**< Number of messages. */
   size_t capacity;              /**< Allocated capacity. */
-  size_t max_history;           /**< Maximum messages to keep (0 for unlimited). */
+  size_t max_history; /**< Maximum messages to keep (0 for unlimited). */
 } csilk_ai_context_t;
 
 /* --- Core API --- */
@@ -127,18 +170,22 @@ typedef struct {
  * @param api_key     API key for the provider (may be NULL for Ollama).
  * @param base_url    Optional custom base URL (pass NULL for provider default).
  * @return New AI handle, or NULL if driver not found or init failed. */
-csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url);
+csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key,
+                         const char* base_url);
 
 /** @brief Perform a chat completion.
  * @param ai  AI handle.
  * @param req Chat request parameters.
  * @param res [out] Chat response to populate.
  * @return 0 on success, -1 on failure. */
-int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res);
+int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
+                  csilk_ai_chat_response_t* res);
 
 /** @brief Perform an asynchronous chat completion.
- * @note Uses the framework's internal thread pool. The callback is invoked on the main loop. */
-void csilk_ai_chat_async(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_async_cb cb, void* user_data);
+ * @note Uses the framework's internal thread pool. The callback is invoked on
+ * the main loop. */
+void csilk_ai_chat_async(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
+                         csilk_ai_chat_async_cb cb, void* user_data);
 
 /** @brief Generate embeddings for the given input strings.
  * @param ai     AI handle.
@@ -147,10 +194,14 @@ void csilk_ai_chat_async(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csi
  * @param count  Number of strings.
  * @param res    [out] Embeddings response to populate.
  * @return 0 on success, -1 on failure. */
-int csilk_ai_embeddings(csilk_ai_t* ai, const char* model, const char** input, size_t count, csilk_ai_embeddings_response_t* res);
+int csilk_ai_embeddings(csilk_ai_t* ai, const char* model, const char** input,
+                        size_t count, csilk_ai_embeddings_response_t* res);
 
 /** @brief Generate embeddings asynchronously. */
-void csilk_ai_embeddings_async(csilk_ai_t* ai, const char* model, const char** input, size_t count, csilk_ai_embeddings_async_cb cb, void* user_data);
+void csilk_ai_embeddings_async(csilk_ai_t* ai, const char* model,
+                               const char** input, size_t count,
+                               csilk_ai_embeddings_async_cb cb,
+                               void* user_data);
 
 /** @brief Free an AI handle. */
 void csilk_ai_free(csilk_ai_t* ai);
@@ -168,12 +219,14 @@ void csilk_ai_register_driver(const csilk_ai_driver_t* driver);
 /* --- Context Helpers --- */
 
 /** @brief Initialize a new conversation context.
- * @param max_history Maximum number of messages to keep (FIFO sliding window). */
+ * @param max_history Maximum number of messages to keep (FIFO sliding window).
+ */
 csilk_ai_context_t* csilk_ai_context_new(size_t max_history);
 
-/** @brief Add a message to the context. 
+/** @brief Add a message to the context.
  * @note Strings are duplicated internally. */
-void csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* content);
+void csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role,
+                          const char* content);
 
 /** @brief Clear all messages from the context. */
 void csilk_ai_context_clear(csilk_ai_context_t* ctx);

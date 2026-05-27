@@ -7,8 +7,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Request ID middleware handler.
@@ -31,15 +31,17 @@
 void csilk_request_id_middleware(csilk_ctx_t* c) {
   if (!c) return;
 
-  /* Generate UUID if not already set */
+  /* Generate a UUID v4 if the request does not already carry one.
+     The UUID is stored in the context's request_id field (36 chars + null)
+     and reused across the entire request lifecycle. */
   if (c->request_id[0] == '\0') {
     _csilk_generate_uuid(c, c->request_id);
   }
 
-  /* Set X-Request-Id response header */
+  /* Propagate as response header for client-side request tracking
+     and as a thread-local logger context for log correlation. */
   csilk_set_header(c, "X-Request-Id", c->request_id);
 
-  /* Set logger contextual request ID */
   csilk_log_set_request_id(c->request_id);
 
   csilk_next(c);

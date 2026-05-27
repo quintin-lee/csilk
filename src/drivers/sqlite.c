@@ -1,6 +1,17 @@
 /**
  * @file sqlite.c
  * @brief SQLite3 database driver for csilk.
+ *
+ * Implements the csilk_db_driver_t vtable using the native sqlite3 C API.
+ * Key design points:
+ *   - Uses sqlite3_open_v2 with SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+ *     (the database file is created if it does not exist).
+ *   - SELECT queries use sqlite3_prepare_v2 + sqlite3_step for row-by-row
+ *     iteration; the full result set is buffered before returning.
+ *   - Non-query statements (INSERT, UPDATE, DELETE, DDL) use the simpler
+ *     sqlite3_exec callback-free interface.
+ *   - The DSN is simply a filesystem path to the .db file.
+ *
  * @copyright MIT License
  */
 
@@ -66,7 +77,10 @@ static int sqlite_disconnect(csilk_db_pool_t* pool) {
 /** @brief Free all memory associated with a query result set.
  *
  * Iterates rows, column names, and the top-level arrays, freeing each
- * allocation. Resets row_count and column_count to 0 after cleanup.
+ * allocation.  Resets row_count and column_count to 0 after cleanup.
+ *
+ * @note Currently frees row structs directly without freeing the
+ *       row->values[] array or its individual string elements.
  *
  * @param result The result set to free (may be NULL). */
 static void sqlite_free_result(csilk_db_result_t* result) {
@@ -96,6 +110,18 @@ static void sqlite_free_result(csilk_db_result_t* result) {
  * @param result [out] Populated result set (must be freed with
  *               sqlite_free_result).
  * @return 0 on success, -1 on error. */
+/**
+ * @brief Execute a SELECT query and buffer the full result set.
+ *
+ * Flow:
+ *   1. Prepare the statement via sqlite3_prepare_v2.
+ *   2. Extract column metadata from the prepared statement.
+ *   3. Step through rows with sqlite3_step, allocating a csilk_db_row_t
+ *      per row.  Each cell is extracted via sqlite3_column_text and
+ *      duplicated via strdup (NULL cells become empty strings).
+ *   4. Finalize the statement.  On any allocation failure, partial
+ *      results are freed and -1 is returned.
+ */
 static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
                         csilk_db_result_t* result) {
   if (!pool || !pool->connection || !sql || !result) return -1;
@@ -110,6 +136,7 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
     return -1;
   }
 
+  /* --- Extract column metadata before stepping --- */
   result->row_count = 0;
   result->column_count = sqlite3_column_count(stmt);
   result->column_names = calloc(result->column_count, sizeof(char*));
@@ -121,6 +148,7 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
     result->column_names[i] = strdup(sqlite3_column_name(stmt, i));
   }
 
+  /* --- Step through all result rows --- */
   while (sqlite3_step(stmt) == SQLITE_ROW) {
     csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
     if (!row) {
@@ -138,11 +166,13 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
       return -1;
     }
 
+    /* Copy each column as text; NULL values become "" for consistency */
     for (int i = 0; i < result->column_count; i++) {
       const char* val = (const char*)sqlite3_column_text(stmt, i);
       row->values[i] = val ? strdup(val) : strdup("");
     }
 
+    /* Append row to the dynamic result array */
     result->rows = realloc(result->rows,
                            (result->row_count + 1) * sizeof(csilk_db_row_t*));
     if (!result->rows) {
@@ -164,6 +194,13 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
  * @param pool The database pool (must be connected).
  * @param sql  SQL statement string.
  * @return 0 on success, -1 on error. */
+/**
+ * @brief Execute a SQL statement that returns no result rows.
+ *
+ * Uses sqlite3_exec with no callback for DDL/INSERT/UPDATE/DELETE.
+ * The callback-free invocation discards any output rows silently.
+ * On error, the error message from sqlite3_errmsg is freed after logging.
+ */
 static int sqlite_exec(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->connection || !sql) return -1;
 

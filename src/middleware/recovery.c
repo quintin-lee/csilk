@@ -9,8 +9,8 @@
 #include <stdlib.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Panic recovery middleware — catches longjmp panics and returns 500.
@@ -33,13 +33,17 @@
  *          a primary error-handling mechanism.
  */
 void csilk_recovery_handler(csilk_ctx_t* c) {
+  /* Install a recovery landing point. If csilk_panic() is called by any
+     downstream handler, execution resumes here with setjmp returning
+     non-zero (the value passed to longjmp). */
   if (setjmp(c->jump_buffer) == 0) {
     c->has_jump_buffer = 1;
     csilk_next(c);
-    c->has_jump_buffer = 0;  // Reset after normal flow
+    c->has_jump_buffer = 0; /* Normal path: clear the flag. */
   } else {
-    // Panic occurred, send 500
-    c->has_jump_buffer = 0;  // Ensure reset on panic path too
+    /* Panic path: a downstream handler called csilk_panic().
+       Send a generic 500 to avoid leaking internal state. */
+    c->has_jump_buffer = 0;
     csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
                  "Internal Server Error");
   }

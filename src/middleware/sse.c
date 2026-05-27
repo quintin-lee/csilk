@@ -11,8 +11,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief SSE write completion callback.
@@ -110,6 +110,12 @@ void csilk_sse_init(csilk_ctx_t* c) {
 void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data) {
   if (!c || !c->_internal_client) return;
 
+  /* Format the SSE message per RFC 8895 §2.
+     Each message consists of optional "event:" and "data:" fields,
+     terminated by a blank line. Example:
+       event: update\n
+       data: {"key":"value"}\n
+       \n  */
   size_t event_len = event ? strlen(event) : 0;
   size_t data_len = data ? strlen(data) : 0;
   size_t buf_size =

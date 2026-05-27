@@ -11,10 +11,15 @@
 #include <zlib.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
+/* Chunk size used for deflate output buffer expansion (16 KB).
+   Matches zlib's recommended buffer granularity for streaming. */
 #define CSILK_GZIP_CHUNK 16384
+
+/* Minimum response body length (1 KB) before compression is considered.
+   Skipping tiny payloads avoids wasting CPU on incompressible data. */
 #define CSILK_GZIP_MIN_LENGTH 1024
 
 /**
@@ -139,6 +144,8 @@ static void gzip_after_work_cb(uv_work_t* req, int status) {
 void csilk_gzip_middleware(csilk_ctx_t* c) {
   if (!c) return;
 
+  /* Call csilk_next() first so downstream handlers produce the response body.
+     This middleware runs AFTER the route handler, not before. */
   csilk_next(c);
 
   if (!c->response.body || c->response.body_len == 0) return;
@@ -146,7 +153,8 @@ void csilk_gzip_middleware(csilk_ctx_t* c) {
   /* Skip if already encoded */
   if (csilk_get_header(c, "Content-Encoding")) return;
 
-  /* Skip non-compressible content types */
+  /* Skip non-compressible content types — binary formats (images, video,
+     audio) and already-compressed archives yield negligible gains. */
   const char* content_type = csilk_get_header(c, "Content-Type");
   if (content_type) {
     if (strstr(content_type, "image/") || strstr(content_type, "video/") ||
@@ -158,11 +166,15 @@ void csilk_gzip_middleware(csilk_ctx_t* c) {
     }
   }
 
+  /* Client capability check: only compress if the client advertises support
+     for gzip content-encoding. */
   const char* accept_encoding = csilk_get_header(c, "Accept-Encoding");
   if (!accept_encoding || !strstr(accept_encoding, "gzip")) return;
 
   if (c->response.body_len < CSILK_GZIP_MIN_LENGTH) return;
 
+  /* Ensure body is heap-managed so the after-work callback can free it.
+     Non-managed bodies (e.g., string literals) are copied first. */
   if (c->response.body_is_managed == 0) {
     char* managed = malloc(c->response.body_len);
     if (!managed) return;
@@ -171,6 +183,9 @@ void csilk_gzip_middleware(csilk_ctx_t* c) {
     c->response.body_is_managed = 1;
   }
 
+  /* Offload compression to libuv thread pool so the event loop is not
+     blocked. State is attached to the context via csilk_set() and picked up
+     by gzip_work_cb / gzip_after_work_cb. */
   gzip_async_state_t* state = calloc(1, sizeof(gzip_async_state_t));
   if (!state) return;
 

@@ -1,20 +1,72 @@
 /**
  * @file router.c
- * @brief Router implementation.
+ * @brief Router implementation using a radix tree (trie) for URL path matching.
  * @copyright MIT License
+ *
+ * === Architecture Overview ===
+ *
+ * The router organises registered URL patterns into a compressed trie (radix
+ * tree). Each node represents a single path segment, and the path from root
+ * to a handler-holding node encodes the full route pattern.
+ *
+ * Node types (csilk_node_type_t):
+ *   STATIC   - Matches a literal segment, e.g. "users", "api", "v1".
+ *              Comparison is a simple strcmp against the request segment.
+ *   PARAM    - Matches any single segment; the matched value is captured
+ *              as a named parameter. Identified by a ':' prefix in the
+ *              registered pattern (e.g., "/:id" -> segment="id").
+ *   WILDCARD - Matches the remainder of the path (one or more segments).
+ *              Identified by a '*' prefix (e.g., "/*filepath").
+ *              Once a wildcard node is reached, matching stops and the
+ *              entire tail of the URL is captured as a single parameter.
+ *
+ * Insertion (router_add_full):
+ *   The path is split into segments by '/'. For each segment, the algorithm
+ *   checks whether a child node of the same type and segment name already
+ *   exists. If not, a new node is created and appended. The method handler
+ *   chain is stored at the final (leaf) node.
+ *
+ * Matching (match_node):
+ *   Recursive depth-first search with backtracking. At each node, the next
+ *   segment from the request path is extracted via get_next_segment(). The
+ *   algorithm tries all children in order: STATIC children are compared
+ *   exactly; PARAM children always match (capturing the segment value);
+ *   WILDCARD children match the remaining path and terminate the search.
+ *   When a PARAM branch fails deeper in the tree, the capture is rolled
+ *   back (params_count decremented, memory freed) so sibling STATIC or
+ *   PARAM nodes can be tried. The first successful match is returned.
+ *
+ * Priority / ordering:
+ *   Children are tried in insertion order. STATIC and PARAM nodes at the
+ *   same depth are both explored, but STATIC is attempted first if inserted
+ *   before a corresponding PARAM. For well-defined priority, register STATIC
+ *   routes before PARAM routes at the same level. WILDCARD nodes terminate
+ *   the path and are tried as a fallback.
  */
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief Maximum number of children per router tree node. */
 #define CSILK_MAX_CHILDREN 128
 
-/** @brief Node type for router trie. */
+/** @brief Node type for router trie.
+ *
+ * CSILK_NODE_STATIC  - Matches a literal path segment (e.g., "users").
+ *                      strcmp equality is required for a match.
+ * CSILK_NODE_PARAM   - Matches any single path segment. The segment
+ *                      name (without ':' prefix) becomes the parameter key.
+ *                      e.g., ":id" captures "42" as ctx->params["id"].
+ * CSILK_NODE_WILDCARD - Matches the remainder of the URL path (any
+ *                      number of segments including none). The segment
+ *                      name (without '*' prefix) becomes the parameter key.
+ *                      e.g., "/*path" captures "foo/bar/baz" for request
+ *                      "/foo/bar/baz". Wildcard is terminal and always
+ *                      tried last during matching. */
 typedef enum {
   CSILK_NODE_STATIC,
   CSILK_NODE_PARAM,
@@ -84,11 +136,34 @@ static void node_free(csilk_router_node_t* node) {
   free(node);
 }
 
-/** @brief Helper: extract the next path segment from a URL path string.
+/** @brief Extract the next path segment from a URL path string.
  *
- * Skips leading '/' characters, records the start, advances until the next
- * '/' or end of string, and returns a heap-allocated copy of the segment.
- * The input pointer @p p is advanced past the consumed characters.
+ * get_next_segment is the bridge between the raw URL path and the trie
+ * traversal. It consumes one segment at a time, providing the atomic
+ * unit that each trie node represents.
+ *
+ * Behaviour:
+ *   1. Skip all leading '/' characters — this normalises paths such as
+ *      "//foo//bar" into the same segments as "/foo/bar".
+ *   2. If the remaining string is empty after skipping slashes, return
+ *      NULL (no more segments).
+ *   3. Record the start pointer, then advance until the next '/' or
+ *      end-of-string. The characters in between form one segment.
+ *   4. Allocate and return a heap copy of that segment.
+ *   5. Advance the caller's pointer (@p p) past the consumed segment
+ *      so that repeated calls walk sequentially through the path.
+ *
+ * Example: for path "/users/42/profile"
+ *   Call 1: returns "users",    p -> "/42/profile"
+ *   Call 2: returns "42",       p -> "/profile"
+ *   Call 3: returns "profile",  p -> ""
+ *   Call 4: returns NULL
+ *
+ * Edge cases:
+ *   - Leading slashes are always skipped, so path "/" yields NULL
+ *     (zero segments), matching the root node.
+ *   - Paths with trailing slashes like "/users/" return "users" then
+ *     NULL — the trailing '/' is consumed but produces no segment.
  *
  * @param p [in/out] Pointer to the current position in the path string.
  *           Updated to point past the extracted segment.
@@ -229,6 +304,14 @@ static void router_add_full(csilk_router_t* r, const char* method,
   char* seg;
 
   while ((seg = get_next_segment(&p)) != NULL) {
+    // Classify the segment based on its first character:
+    //   ':' prefix -> PARAM node (matches any single segment, captured as named
+    //   param)
+    //   '*' prefix -> WILDCARD node (matches all remaining segments, captured
+    //   as named param) otherwise  -> STATIC node (exact literal match
+    //   required)
+    // The prefix character is stripped from seg_name so the node stores
+    // only the "key" portion (e.g., "id" for ":id", "path" for "*path").
     csilk_node_type_t type = CSILK_NODE_STATIC;
     char* seg_name = seg;
     if (seg[0] == ':') {
@@ -259,6 +342,9 @@ static void router_add_full(csilk_router_t* r, const char* method,
     free(seg);
     if (!found) return;  // Should not happen unless CSILK_MAX_CHILDREN exceeded
     curr = found;
+    // WILDCARD segments are terminal — they consume the remainder of the
+    // path registration, so stop segment processing after a wildcard.
+    // Any segments registered after a wildcard in the same path are ignored.
     if (type == CSILK_NODE_WILDCARD) break;
   }
 
@@ -361,29 +447,57 @@ void csilk_router_add_perm(csilk_router_t* r, const char* method,
  * @param description   OpenAPI operation description, or NULL.
  * @param perm_required Permission identifier (e.g., "read"), or NULL.
  * @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
-void csilk_router_add_extended_perm(csilk_router_t* r, const char* method,
-                                    const char* path,
-                                    csilk_handler_t* handlers,
-                                    size_t handler_count,
-                                    const char* path_pattern,
-                                    const char* input_type,
-                                    const char* output_type,
-                                    const char* summary,
-                                    const char* description,
-                                    const char* perm_required,
-                                    const char* perm_resource) {
+void csilk_router_add_extended_perm(
+    csilk_router_t* r, const char* method, const char* path,
+    csilk_handler_t* handlers, size_t handler_count, const char* path_pattern,
+    const char* input_type, const char* output_type, const char* summary,
+    const char* description, const char* perm_required,
+    const char* perm_resource) {
   router_add_full(r, method, path, handlers, handler_count, path_pattern,
                   input_type, output_type, summary, description, perm_required,
                   perm_resource);
 }
 
-/** @brief Internal: recursively match a path against the trie from the given
+/** @brief Recursively match a request path against the trie from the given
  * node.
  *
- * For static child nodes, compares the segment exactly. For parameter nodes
- * (':'), captures the segment value into the context's params array. For
- * wildcard nodes ('*'), captures the remainder of the path and returns the
- * wildcard's handlers directly. Returns the first matching handler chain.
+ * This is the core matching function. It implements a depth-first,
+ * backtracking search over the radix tree:
+ *
+ *   1. Base case: if the remaining path is empty, "/", or NULL, check
+ *      whether the current node has a handler for the given HTTP method.
+ *      If so, return it — this is a successful terminal match.
+ *
+ *   2. Extract the next segment from the request path via get_next_segment().
+ *
+ *   3. Try children in insertion order. For each child:
+ *        - STATIC:   match if child->segment == extracted segment (strcmp).
+ *        - PARAM:    always match; capture segment value into ctx->params.
+ *        - WILDCARD: always match; capture the entire remaining path
+ *                    into ctx->params. Since wildcard consumes everything,
+ *                    check its handlers directly (no further recursion).
+ *
+ *   4. Recurse: if the child matches, call match_node() on it with the
+ *      remaining path pointer (p). Propagate the result back up.
+ *
+ *   5. Backtrack: if recursion returns NULL (no handler found deeper),
+ *      undo any PARAM capture that was made for this branch
+ *      (decrement params_count, free key/value strings). Continue
+ *      to the next sibling child.
+ *
+ *   6. If no child matches or all branches return NULL, free the segment
+ *      and return NULL — no route matched.
+ *
+ * === Why backtracking matters ===
+ * Consider routes:  GET /users/:id   (PARAM)
+ *                   GET /users/me    (STATIC)
+ *            Request: GET /users/me
+ *
+ * The algorithm tries STATIC "me" first (if inserted first). If STATIC
+ * has a handler for GET, it is returned immediately. If STATIC had no
+ * handler, the search backtracks and tries PARAM ":id", which matches
+ * "me" as a parameter. This ensures STATIC routes take priority over
+ * PARAM routes when both could match.
  *
  * @param node   Current trie node to match against.
  * @param method HTTP method to match.
@@ -419,10 +533,19 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
   for (int i = 0; i < node->children_count; i++) {
     csilk_router_node_t* child = node->children[i];
     if (child->type == CSILK_NODE_STATIC) {
+      // STATIC requires an exact strcmp match. If it succeeds, recurse
+      // deeper with the remaining path. If recursion returns NULL (no
+      // handler found down this branch), we fall through to try the
+      // next sibling child.
       if (strcmp(child->segment, seg) == 0) {
         result = match_node(child, method, p, ctx, out_mh);
       }
     } else if (child->type == CSILK_NODE_PARAM) {
+      // PARAM node: always matches the current segment regardless of
+      // its value. Capture the segment into ctx->params using the
+      // child's segment name (without ':' prefix) as the key.
+      // param_added tracks whether we allocated so we can roll back
+      // cleanly if this branch fails (see backtracking below).
       int param_added = 0;
       if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
         char* key = strdup(child->segment);
@@ -437,15 +560,31 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
           free(val);
         }
       }
+      // Recurse deeper with the remaining path
       result = match_node(child, method, p, ctx, out_mh);
+      // Backtracking rollback: if this PARAM branch did not yield a
+      // match anywhere deeper in the tree (result == NULL), undo the
+      // parameter capture before trying sibling STATIC/PARAM children.
+      // Without this rollback, stale parameters from failed branches
+      // would accumulate in ctx->params, corrupting subsequent matches.
       if (!result && param_added) {
         ctx->params_count--;
         free(ctx->params[ctx->params_count].key);
         free(ctx->params[ctx->params_count].value);
       }
     } else if (child->type == CSILK_NODE_WILDCARD) {
+      // WILDCARD node: matches the entire remainder of the URL path
+      // unconditionally. Unlike STATIC and PARAM, wildcards are terminal
+      // — they consume ALL remaining segments without further recursion.
+      // The captured value is the full trailing substring starting from
+      // path[1] (the character after the leading '/' that delimits where
+      // the wildcard-owning segment began).
+      //
+      // Example: route "/assets/*filepath", request "/assets/css/main.css"
+      //   -> captured value = "css/main.css"
       if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
         char* key = strdup(child->segment);
+        // path + 1 skips the leading '/' to yield the true remainder
         char* val = strdup(path + 1);
         if (key && val) {
           ctx->params[ctx->params_count].key = key;
@@ -456,6 +595,7 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
           free(val);
         }
       }
+      // Directly check the wildcard node's handlers — no deeper recursion
       csilk_method_handler_t* mh = child->handlers;
       while (mh) {
         if (strcmp(mh->method, method) == 0) {
@@ -466,6 +606,8 @@ static csilk_handler_t* match_node(csilk_router_node_t* node,
         mh = mh->next;
       }
     }
+    // Propagate the first match up the call stack — do not try sibling
+    // children once a handler has been found anywhere in this branch
     if (result) break;
   }
 

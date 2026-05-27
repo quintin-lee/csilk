@@ -7,8 +7,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Token-based authentication middleware.
@@ -24,11 +24,15 @@
  *
  * @note This middleware does NOT handle token parsing beyond stripping the
  *       "Bearer " prefix — use the JWT middleware for structured token
- *       verification.
+ *       verification. Should be registered early in the pipeline
+ *       (after request_id and session, before route handlers).
  * @warning The validator must be stateless or thread-safe, as it may be
  *          invoked from multiple worker threads concurrently.
  */
 void csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator) {
+  /* Missing header or failing validator both yield 401.
+     The validator receives the full Authorization value including "Bearer "
+     prefix — it must strip it internally if needed. */
   const char* token = csilk_get_header(c, "Authorization");
   if (!token || !validator(token)) {
     csilk_set_header(c, "WWW-Authenticate", "Bearer");

@@ -53,24 +53,33 @@ typedef struct csilk_field_desc_s csilk_field_desc_t;
  *
  * Each field in a registered struct produces one of these descriptors,
  * typically via the CSILK_META_EXPAND macro.  The array of descriptors
- * is NULL-terminated (sentinel entry).
+ * is NULL-terminated (sentinel entry with all-zero fields).
+ *
+ * During marshalling, the engine walks the field descriptor array, reads
+ * @p offset bytes from the struct base, and converts the value according
+ * to @p type.  During unmarshalling, JSON values are type-checked and
+ * written to the same offset.  Nested structs (CSILK_TYPE_STRUCT) are
+ * resolved lazily by name at marshal/unmarshal time, allowing forward
+ * references.
  */
 struct csilk_field_desc_s {
   const char* json_key; /**< JSON key name for this field (used during
-                           marshal/unmarshal). */
+                           marshal/unmarshal; e.g., "user_name"). */
   csilk_field_type_t
       type;      /**< Data type enumerator (see csilk_field_type_t). */
-  size_t offset; /**< Byte offset of this field from the start of the struct
+  size_t offset; /**< Byte offset of this field from the struct base address
                     (computed via offsetof). */
-  size_t size;   /**< Size in bytes of one element (sizeof(field_type)). */
-  size_t array_length; /**< Number of elements for fixed-size arrays (0 =
-                          scalar/pointer). */
+  size_t size;   /**< Size in bytes of one element (sizeof(field_type)).  For
+                    arrays this is the element size, not the total. */
+  size_t array_length; /**< Number of elements for fixed-size C arrays (0 =
+                          scalar fields or pointer fields). */
   bool is_pointer;     /**< True if the field is a pointer type (char* or struct
-                          pointer). */
+                          pointer).  Affects how the field is read/written. */
   const char*
       nested_type_name; /**< For CSILK_TYPE_STRUCT fields, the registered type
-                           name of the nested struct (lazy-resolved).  NULL for
-                           non-struct fields. */
+                           name of the nested struct (resolved lazily at
+                           marshalling time to support forward declarations).
+                           NULL for non-struct fields. */
 };
 
 /**
@@ -170,12 +179,12 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  *                   already be allocated and zero-initialised).
  * @return 1 on success, 0 on parse error or type mismatch.
  */
- int csilk_json_unmarshal(const char* type_name, const char* json_str,
+int csilk_json_unmarshal(const char* type_name, const char* json_str,
                          void* ptr);
 
- /* --- Automatic Type Dispatch (C11 _Generic) --- */
+/* --- Automatic Type Dispatch (C11 _Generic) --- */
 
- /**
+/**
  * @brief User-extensible type-name mapping.
  *
  * Define CSILK_USER_TYPE_MAP before including csilk_reflect.h to add custom
@@ -188,11 +197,11 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  *       double: "double"
  * @endcode
  */
- #ifndef CSILK_USER_TYPE_MAP
- #define CSILK_USER_TYPE_MAP
- #endif
+#ifndef CSILK_USER_TYPE_MAP
+#define CSILK_USER_TYPE_MAP
+#endif
 
- /**
+/**
  * @brief Map a C expression's type to its reflected string name.
  *
  * Uses C11 _Generic dispatch.  Extend with CSILK_USER_TYPE_MAP for
@@ -201,25 +210,24 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  * @param x  Expression whose static type determines the returned name.
  * @return A string literal naming the type (e.g., "string", "int32").
  */
- #define csilk_type_name(x)                          \
-  _Generic((x),                                     \
-      _Bool: "bool",                                \
-      signed char: "int8",                          \
-      unsigned char: "uint8",                       \
-      short: "int16",                               \
-      unsigned short: "uint16",                     \
-      int: "int32",                                 \
-      unsigned int: "uint32",                       \
-      long: "int64",                                \
-      unsigned long: "uint64",                      \
-      long long: "int64",                           \
-      unsigned long long: "uint64",                 \
-      float: "float",                               \
-      double: "double",                             \
-      char*: "string",                              \
-      const char*: "string" CSILK_USER_TYPE_MAP,    \
+#define csilk_type_name(x)                       \
+  _Generic((x),                                  \
+      _Bool: "bool",                             \
+      signed char: "int8",                       \
+      unsigned char: "uint8",                    \
+      short: "int16",                            \
+      unsigned short: "uint16",                  \
+      int: "int32",                              \
+      unsigned int: "uint32",                    \
+      long: "int64",                             \
+      unsigned long: "uint64",                   \
+      long long: "int64",                        \
+      unsigned long long: "uint64",              \
+      float: "float",                            \
+      double: "double",                          \
+      char*: "string",                           \
+      const char*: "string" CSILK_USER_TYPE_MAP, \
       default: "unknown")
-
 
 /**
  * @brief Convenience macro to serialise a reflected struct to a JSON string.
@@ -271,20 +279,30 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  * @brief Automatically register a struct for reflection at program startup.
  *
  * Generates a static array of csilk_field_desc_t from the @p map_macro and
- * registers it via a GCC constructor function (runs before main()).
+ * registers it via a GCC constructor function (runs before main()).  This
+ * means no explicit initialisation call is needed — types are available
+ * as soon as the program starts.
  *
  * @code
+ *   // Define a struct
+ *   typedef struct { int32_t id; char* name; } User;
+ *
+ *   // Map its fields (one _() invocation per field)
  *   #define USER_MAP(_) \
  *       _(User, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL) \
  *       _(User, name, CSILK_TYPE_STRING, sizeof(char*), 0, true, NULL)
+ *
+ *   // Auto-register (this macro invocation must appear at file scope)
  *   CSILK_REGISTER_REFLECT(User, USER_MAP)
  * @endcode
  *
  * @param struct_type  The struct type name (used as the registration key
- *                     and for generating internal names).
+ *                     in the reflection hash map and for generating internal
+ *                     symbol names).
  * @param map_macro    A macro that applies CSILK_META_EXPAND to each field.
- *                     Must produce exactly one CSILK_META_EXPAND(...) call
- *                     per field.
+ *                     Must produce exactly one CSILK_META_EXPAND(struct_type,
+ *                     field, type_enum, size, arr_len, is_ptr, nested_name)
+ *                     call per field.
  */
 #define CSILK_REGISTER_REFLECT(struct_type, map_macro)                    \
   static csilk_field_desc_t struct_type##_meta[] = {                      \
