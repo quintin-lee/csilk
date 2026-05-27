@@ -1,15 +1,48 @@
 /**
  * @file reflect.c
  * @brief Reflection and JSON binding implementation.
+ *
+ * Architecture:
+ *   The reflection system provides runtime type introspection via a global
+ *   registry of struct descriptors.  Each registered type stores an array of
+ *   csilk_field_desc_t entries with field name, type, offset, size, and
+ *   metadata (is_pointer, array_length, nested_type_name).  The registry is
+ *   a fixed-size array (256 entries) protected by a mutex for thread safety.
+ *
+ *   JSON marshalling (struct → JSON, csilk_json_marshal):
+ *     Walk each field descriptor, compute the field's address by adding the
+ *     compile-time offset to the struct base pointer, and serialize the value
+ *     to a cJSON node.  Nested structs trigger recursive serialization via
+ *     a registry lookup of the nested type.  Arrays serialize each element
+ *     by stride (field->size) into a cJSON array.
+ *
+ *   JSON unmarshalling (JSON → struct, csilk_json_unmarshal):
+ *     Parse the JSON string with cJSON_Parse, then for each field descriptor,
+ *     look up the matching JSON key and deserialize the cJSON value into the
+ *     field's memory address.  String fields support both fixed-size buffers
+ *     (strncpy) and heap-allocated pointers (malloc + copy).  Nested structs
+ *     are recursively deserialized with optional auto-allocation for pointer
+ *     fields.
+ *
+ *   Both marshal and unmarshal have a fast path for basic scalar types
+ *   (int, float, bool, string) — if type_name matches a known primitive,
+ *   serialization bypasses the registry entirely.
+ *
+ * Thread safety:
+ *   All public functions lock the registry mutex for read/write access.
+ *   csilk_reflect_foreach() uses two-phase iteration (collect names under
+ *   lock, invoke callbacks outside lock) to avoid deadlock when callbacks
+ *   re-enter the reflection API (e.g., add_schema() in swagger.c).
+ *
  * @copyright MIT License
  */
+
+#include "csilk/reflection/reflect.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
-
-#include "csilk/reflection/reflect.h"
 
 #define MAX_REG_STRUCTS 256
 
@@ -113,12 +146,25 @@ void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data) {
   const char* names[MAX_REG_STRUCTS];
   size_t count = 0;
 
+  /*
+   * Phase 1 — Collect type names under the registry lock: copy all
+   * registered type names into a local stack array while holding the
+   * mutex.  This gives us a consistent snapshot of the registry.  The
+   * lock is released immediately after the copy.
+   */
   registry_lock();
   for (size_t i = 0; i < g_registry_count; i++) {
     names[count++] = g_registry[i].name;
   }
   registry_unlock();
 
+  /*
+   * Phase 2 — Invoke callbacks outside the lock: each callback calls
+   * csilk_reflect_find() internally (which acquires the mutex).  This
+   * two-phase design avoids deadlocks when the callback itself re-enters
+   * the reflection API — e.g., swagger.c's add_schema() calls
+   * csilk_reflect_find() to resolve nested struct types.
+   */
   for (size_t i = 0; i < count; i++) {
     const csilk_reflect_entry_t* entry = csilk_reflect_find(names[i]);
     if (entry) {
@@ -146,6 +192,25 @@ static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
  * @note The caller must free the returned cJSON node with cJSON_Delete(). */
 static cJSON* serialize_scalar(const void* addr,
                                const csilk_field_desc_t* desc) {
+  /*
+   * Dispatch on field type to produce the matching cJSON node:
+   *
+   * Integer/float/double → cJSON_CreateNumber(double).  Note: int64/uint64
+   * are cast to double, which loses precision for values > 2^53.  This is
+   * a known limitation shared by all C JSON libraries using IEEE 754 doubles.
+   *
+   * Bool → cJSON_CreateBool().
+   *
+   * String → two modes via desc->is_pointer:
+   *   - Pointer string: field stores a char*; dereference to get the string.
+   *   - Fixed buffer: field IS the char array; cast addr directly.
+   *   NULL or empty → cJSON_CreateNull().
+   *
+   * Nested struct → look up the type's reflection entry by nested_type_name,
+   *   create a fresh cJSON object, and recurse via struct_to_cjson_internal().
+   *   If desc->is_pointer (struct*), dereference the pointer first.  Returns
+   *   Null if the nested type is not registered or the pointer is NULL.
+   */
   switch (desc->type) {
     case CSILK_TYPE_INT8:
       return cJSON_CreateNumber(*(const int8_t*)addr);
@@ -207,6 +272,22 @@ static cJSON* serialize_scalar(const void* addr,
 static void struct_to_cjson_internal(cJSON* obj, const void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count) {
+  /*
+   * Walk every field descriptor for this struct type.  For each field:
+   *
+   * 1. Compute the field's memory address as: struct_base + compile-time
+   *    offset.  The offset is stored in the field descriptor by the
+   *    CSILK_REGISTER_REFLECT macro using offsetof().  This is purely
+   *    arithmetic — no hash lookups or name resolution at runtime.
+   *
+   * 2. Array fields (array_length > 0): elements are laid out contiguously
+   *    in memory with stride = desc->size (sizeof the element type, including
+   *    padding).  Each element is serialized via serialize_scalar() and
+   *    appended to a cJSON array.
+   *
+   * 3. Non-array fields: serialize directly and add to the cJSON object
+   *    using the field's json_key as the property name.
+   */
   for (size_t i = 0; i < field_count; i++) {
     const char* field_addr = (const char*)struct_ptr + descs[i].offset;
 
@@ -246,6 +327,22 @@ static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
  *       the new value is assigned. */
 static void deserialize_scalar(const cJSON* item, void* addr,
                                const csilk_field_desc_t* desc) {
+  /*
+   * Skip null/missing JSON values — the field retains whatever it currently
+   * holds (typically zero-initialized from calloc).
+   *
+   * Type coercion from cJSON to C primitives:
+   *   - Integer types (int8-uint32): read from item->valueint.
+   *   - Int64/uint64/float/double: read from item->valuedouble to capture
+   *     full numeric range (accepts potential precision loss for i64).
+   *   - Bool: cJSON_IsTrue() handles both True and False.
+   *   - String, pointer mode (desc->is_pointer): free existing allocation
+   *     before malloc + memcpy of new value (avoids leaks on re-parse).
+   *   - String, buffer mode: strncpy with desc->size-1 limit + manual
+   *     null-termination (prevents buffer overrun).
+   *   - Nested struct: if pointer field and nil, auto-allocate with
+   *     calloc(1, desc->size), then recurse via cjson_to_struct_internal().
+   */
   if (!item || cJSON_IsNull(item)) return;
 
   switch (desc->type) {
@@ -331,6 +428,18 @@ static void deserialize_scalar(const cJSON* item, void* addr,
 static void cjson_to_struct_internal(const cJSON* obj, void* struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t field_count) {
+  /*
+   * Walk all field descriptors and match each against a JSON key in the
+   * parsed object.  cJSON_GetObjectItemCaseSensitive() does a string-key
+   * lookup (O(n) in the number of keys for each call).  Keys not present
+   * in the JSON are silently skipped — the struct field retains its
+   * current value (safe for partial updates).
+   *
+   * Array fields: iterate up to min(json_array_length, array_length)
+   * elements to stay within the C buffer's bounds.  Each element is
+   * deserialized at offset field_addr + j * desc->size, matching the
+   * contiguous array layout in memory.
+   */
   for (size_t i = 0; i < field_count; i++) {
     cJSON* item = cJSON_GetObjectItemCaseSensitive(obj, descs[i].json_key);
     if (!item) continue;
@@ -412,6 +521,13 @@ static int get_basic_type(const char* type_name, csilk_field_desc_t* out_desc) {
 char* csilk_json_marshal(const char* type_name, const void* ptr) {
   if (!type_name || !ptr) return NULL;
 
+  /*
+   * Fast path for scalar types: if type_name matches a built-in primitive
+   * (int8, uint8, ..., string, bool), serialize it directly without a
+   * registry lookup.  This avoids the overhead of registering a reflection
+   * entry for single-value responses.  Returns a compact (unformatted) JSON
+   * string.
+   */
   csilk_field_desc_t basic_desc;
   if (get_basic_type(type_name, &basic_desc)) {
     cJSON* node = serialize_scalar(ptr, &basic_desc);
@@ -439,6 +555,12 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
                          void* ptr) {
   if (!type_name || !json_str || !ptr) return 0;
 
+  /*
+   * Fast path for scalar types: matches the fast path in marshal — parse
+   * the JSON string directly to a single cJSON node and deserialize it
+   * into the output pointer without a registry lookup.  Returns 1 on
+   * success (even if the JSON value was null, which is silently skipped).
+   */
   csilk_field_desc_t basic_desc;
   if (get_basic_type(type_name, &basic_desc)) {
     cJSON* root = cJSON_Parse(json_str);

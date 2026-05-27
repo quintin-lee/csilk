@@ -1,6 +1,25 @@
 /**
  * @file websocket.c
  * @brief WebSocket handshake, frame encoding, and frame parsing implementation.
+ *
+ * Architecture:
+ *   The WebSocket implementation follows RFC 6455. The handshake
+ *   (csilk_ws_handshake) performs the HTTP upgrade using SHA-1 + Base64
+ *   on the Sec-WebSocket-Key. Frame encoding (csilk_ws_send) constructs a
+ *   raw WebSocket frame buffer per §5.2 and writes it via libuv. Frame
+ *   parsing (csilk_ws_parse_frame) reads a complete frame from a buffer,
+ *   unmasks client-to-server payloads, and dispatches by opcode. Close
+ *   frames (csilk_ws_close) are encoded with optional status code + reason
+ *   and sent asynchronously; the underlying TCP handle is closed after
+ *   receiving the peer's close frame.
+ *
+ * Wire format (RFC 6455 §5.2, 1 byte = 8 bits):
+ *   Byte 0: [FIN=1][RSV=000][opcode=xxxx]
+ *   Byte 1: [MASK=1][payload len=xxxxxxx]
+ *   Bytes 2+ : Extended payload length (2 or 8 bytes, if len==126 or 127)
+ *   Bytes 2/4/10+: Masking key (4 bytes, if MASK==1)
+ *   Remaining: Payload data (XOR-decoded with masking key if MASK==1)
+ *
  * @copyright MIT License
  */
 
@@ -11,8 +30,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
  *
@@ -105,7 +124,18 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len,
   uint8_t* frame = malloc(header_len + len);
   if (!frame) return;
 
+  /* Byte 0: FIN bit (0x80) OR'd with the opcode nibble (lower 4 bits).
+   *   FIN=1 signals the final fragment of a message (fragmentation not used
+   *   in this implementation).  RSV bits (0x70) remain 0 since no extension
+   *   is negotiated.  Opcode: 0x1 = text, 0x2 = binary, 0x8 = close. */
   frame[0] = 0x80 | (opcode & 0x0F);
+
+  /* Byte 1: MASK=0 (server-to-client frames are unmasked per RFC 6455 §5.1)
+   *   plus payload length in the lower 7 bits.  Extended length encoding:
+   *     len <= 125:   stored directly in byte 1
+   *     126..65535:   byte 1 = 126, next 2 bytes = big-endian len
+   *     > 65535:      byte 1 = 127, next 8 bytes = big-endian len
+   *   This is a variable-length integer encoding (similar to QUIC varint). */
   if (len <= 125) {
     frame[1] = (uint8_t)len;
   } else if (len <= 65535) {
@@ -173,6 +203,18 @@ void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
   uint8_t* frame = malloc(frame_len);
   if (!frame) return;
 
+  /*
+   * Close frame layout (RFC 6455 §5.5.1):
+   *   Byte 0: 0x88 = [FIN=1 (0x80) | opcode=0x8 (close)]
+   *   Byte 1: payload length (≤ 125; control frames are limited to 125 bytes)
+   *   Bytes 2-3: optional 2-byte status code (big-endian), e.g. 1000 = normal
+   *   Bytes 4+:  optional UTF-8 reason text
+   *
+   * The close handshake is bidirectional: the initiator sends a close frame,
+   * the peer MUST respond with its own close frame, after which the TCP
+   * connection may be closed.  We do NOT close the connection here — the
+   * caller does so after receiving the peer's close frame or on timeout.
+   */
   frame[0] = 0x88;
   frame[1] = (uint8_t)payload_len;
 
@@ -214,6 +256,18 @@ void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason) {
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
   if (nread < 2) return;
 
+  /*
+   * Parse the 2-byte frame header:
+   *   buf[0]: FIN (bit 7), RSV (bits 4-6), opcode (bits 0-3)
+   *   buf[1]: MASK (bit 7), payload length (bits 0-6)
+   *
+   * Opcode dispatch (lower nibble):
+   *   0x1 = text, 0x2 = binary, 0x8 = close, 0x9 = ping, 0xA = pong.
+   *   This implementation only handles single-frame messages (FIN=1).
+   *   FIN=0 (= fragmented message with continuation frames) is not supported
+   *   and would be silently mishandled — future work would need to buffer
+   *   continuation frames across multiple calls and reassemble them.
+   */
   // uint8_t fin = (buf[0] >> 7) & 0x01;
   uint8_t opcode = buf[0] & 0x0F;
   uint8_t masked = (buf[1] >> 7) & 0x01;
@@ -244,6 +298,13 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
   if (!payload) return;
   memcpy(payload, buf + offset, payload_len);
 
+  /*
+   * Unmask the payload per RFC 6455 §5.3: each payload byte XOR'd with the
+   * masking key at index (i mod 4).  Clients MUST mask all frames they send;
+   * servers MUST unmask them.  The masking key is a 32-bit random value sent
+   * by the client in the frame header.  XOR is applied byte-by-byte because
+   * the key rotates every 4 bytes regardless of memory alignment.
+   */
   if (masked) {
     for (uint64_t i = 0; i < payload_len; i++) {
       payload[i] ^= mask[i % 4];
@@ -251,6 +312,13 @@ void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread) {
   }
   payload[payload_len] = '\0';
 
+  /*
+   * Opcode 0x8 = connection close (RFC 6455 §5.5.1).  The payload may
+   * contain a 2-byte status code (big-endian uint16) followed by optional
+   * UTF-8 reason text.  Status 1005 ("no status") is used when the payload
+   * has fewer than 2 bytes.  We send our own close frame (echoing the code)
+   * and then close the underlying TCP stream immediately.
+   */
   if (opcode == 0x08) {
     uint16_t close_code = 1005;
     if (payload_len >= 2) {

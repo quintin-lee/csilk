@@ -11,8 +11,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Session data item (key-value pair).
@@ -44,7 +44,9 @@ typedef struct csilk_session_s {
  * @brief Global session store (singly-linked list of active sessions).
  *
  * Protected by a libuv mutex. All read/write access to this pointer must
- * occur while session_mutex is held.
+ * occur while session_mutex is held. The linked-list design is chosen
+ * over a hash table for simplicity; with typical concurrency levels the
+ * O(n) traversal is acceptable for <10K active sessions.
  */
 static csilk_session_t* session_store = NULL;
 
@@ -244,6 +246,8 @@ void csilk_session_init(void) { cleanup_expired(); }
 void csilk_session_start(csilk_ctx_t* c) {
   if (!c) return;
 
+  /* Look for an existing session cookie. If found and valid, resume it.
+     Otherwise create a fresh session with a new UUID. */
   const char* sid = csilk_get_cookie(c, SESSION_COOKIE);
   csilk_session_t* session = NULL;
 
@@ -252,6 +256,9 @@ void csilk_session_start(csilk_ctx_t* c) {
   }
 
   if (!session) {
+    /* No session found — allocate a new one, generate an ID, and insert
+       into the global store. The session cookie (HTTP-only, no JS access)
+       is set with a 24-hour lifetime. */
     session = calloc(1, sizeof(csilk_session_t));
     if (!session) return;
 
@@ -263,9 +270,12 @@ void csilk_session_start(csilk_ctx_t* c) {
     csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0,
                      1);
   } else {
+    /* Existing session: extend the expiry window. */
     session->expires_at = time(NULL) + SESSION_TTL;
   }
 
+  /* Store session pointer in context for downstream handlers to access
+     via csilk_session_get() / csilk_session_set(). */
   csilk_set(c, "_session", session);
 }
 

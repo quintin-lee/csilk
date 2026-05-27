@@ -4,8 +4,24 @@
  *
  * Provides a simplified "app" abstraction that wraps router, server,
  * config, logging, and middleware into a single easy-to-use interface.
+ * The app follows the same patterns as Gin (Golang): a central app object
+ * owns the router, server, and config; middleware is registered globally
+ * or per-group via csilk_app_use; and routes are added with method-specific
+ * macros (csilk_app_get, csilk_app_post, etc.).
  *
- * @code
+ * ## Lifecycle
+ *   1. csilk_app_new(config_path) — creates the app, loads config, initializes
+ *      subsystems (DB, AI, logger).
+ *   2. csilk_app_use / csilk_app_get / csilk_app_post — register middleware and
+ *      routes.
+ *   3. csilk_app_run — starts the libuv event loop (blocks).
+ *   4. csilk_app_free — cleans up all resources.
+ *
+ * ## Thread Safety
+ *   All app-level functions must be called from the main thread during setup
+ *   (before csilk_app_run).  The server itself runs single-threaded on libuv.
+ *
+ * @example
  *   csilk_app_t* app = csilk_app_new("config.yaml");
  *   csilk_app_use(app, csilk_logger_handler);
  *   csilk_app_get(app, "/", hello_handler);
@@ -14,7 +30,6 @@
  *   csilk_app_static(app, "/public", "./static");
  *   csilk_app_run(app, 8080);
  *   csilk_app_free(app);
- * @endcode
  *
  * @version 0.2.1
  * @copyright MIT License
@@ -31,13 +46,23 @@ typedef struct csilk_app_s csilk_app_t;
 /* ---- Lifecycle ---- */
 
 /** @brief Create a new application with optional YAML config.
- * If config_path is NULL or the file doesn't exist, sensible defaults are used.
+ *
+ * Initialises the router, server, logger, database subsystem, and AI
+ * subsystem.  If @p config_path is provided and readable, settings for
+ * CORS, rate-limiting, static files, auth, AI, and cipher are loaded.
+ * If config_path is NULL or the file doesn't exist, sensible defaults
+ * are used (port 8080, stderr logging, all middleware disabled).
+ *
  * @param config_path Path to YAML config file, or NULL for defaults.
  * @return New application handle, or NULL on fatal error. */
 csilk_app_t* csilk_app_new(const char* config_path);
 
 /** @brief Deallocate all application resources.
- * @param app Application handle. */
+ *
+ * Stops the server (if running), frees the router, config, and any
+ * registered middleware.  Safe to call with a NULL @p app.
+ *
+ * @param app Application handle (may be NULL). */
 void csilk_app_free(csilk_app_t* app);
 
 /* ---- Logger ---- */
@@ -61,11 +86,21 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
 /* ---- Middleware ---- */
 
 /** @brief Register a global middleware that runs on every route.
+ *
+ * Middleware is executed in registration order for every request, before
+ * the route-specific handler.  The onion model applies — code before
+ * csilk_next() runs on the way in, code after runs on the way out.
+ *
  * @param app Application handle.
  * @param h Middleware handler function. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
 
 /** @brief Register a middleware that runs only on a specific prefix group.
+ *
+ * Group middleware is prepended to routes whose path matches @p prefix.
+ * For example, a middleware registered with prefix "/api" runs on all
+ * "/api/*" routes but not on "/health".
+ *
  * @param app Application handle.
  * @param prefix URL path prefix (e.g., "/api").
  * @param h Middleware handler function. */
@@ -73,8 +108,12 @@ void csilk_app_use_group(csilk_app_t* app, const char* prefix,
                          csilk_handler_t h);
 
 /** @brief Auto-apply built-in middleware based on current config.
- * Enables: logger, recovery, CORS, CSRF, rate-limit, auth, gzip
- * according to the loaded YAML configuration.
+ *
+ * Reads the loaded YAML configuration and installs the following
+ * middleware when the corresponding config flags are enabled:
+ * logger, recovery, CORS, CSRF, rate-limit, auth, gzip.
+ * Safe to call even without a loaded config — disabled options are no-ops.
+ *
  * @param app Application handle. */
 void csilk_app_apply_config(csilk_app_t* app);
 
@@ -136,15 +175,11 @@ void csilk_app_add_route_perm(csilk_app_t* app, const char* method,
  *  @param description Detailed operation description (NULL if none).
  *  @param perm_required Permission identifier (e.g., "read"), or NULL.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
-void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
-                                       const char* path,
-                                       csilk_handler_t handler,
-                                       const char* input_type,
-                                       const char* output_type,
-                                       const char* summary,
-                                       const char* description,
-                                       const char* perm_required,
-                                       const char* perm_resource);
+void csilk_app_add_route_extended_perm(
+    csilk_app_t* app, const char* method, const char* path,
+    csilk_handler_t handler, const char* input_type, const char* output_type,
+    const char* summary, const char* description, const char* perm_required,
+    const char* perm_resource);
 
 /** @brief Convenience macro to register a GET route via the app API.
  *  @param app Application handle.
@@ -157,7 +192,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "GET", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a GET route with permission. */
-#define csilk_app_get_perm(app, path, handler, perm, res)                  \
+#define csilk_app_get_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "GET", path, handler, perm, res)
 /** @brief Convenience macro to register a POST route via the app API.
  *  @param app Application handle.
@@ -170,7 +205,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "POST", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a POST route with permission. */
-#define csilk_app_post_perm(app, path, handler, perm, res)                 \
+#define csilk_app_post_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "POST", path, handler, perm, res)
 /** @brief Convenience macro to register a PUT route via the app API.
  *  @param app Application handle.
@@ -183,7 +218,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "PUT", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a PUT route with permission. */
-#define csilk_app_put_perm(app, path, handler, perm, res)                   \
+#define csilk_app_put_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "PUT", path, handler, perm, res)
 /** @brief Convenience macro to register a DELETE route via the app API.
  *  @param app Application handle.
@@ -197,7 +232,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "DELETE", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a DELETE route with permission. */
-#define csilk_app_delete_perm(app, path, handler, perm, res)                \
+#define csilk_app_delete_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "DELETE", path, handler, perm, res)
 /** @brief Convenience macro to register a PATCH route via the app API.
  *  @param app Application handle.
@@ -210,7 +245,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "PATCH", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a PATCH route with permission. */
-#define csilk_app_patch_perm(app, path, handler, perm, res)                 \
+#define csilk_app_patch_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "PATCH", path, handler, perm, res)
 /** @brief Convenience macro to register an OPTIONS route via the app API.
  *  @param app Application handle.
@@ -224,7 +259,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "OPTIONS", path, handler, in, out,    \
                                summary, desc)
 /** @brief Convenience macro to register an OPTIONS route with permission. */
-#define csilk_app_options_perm(app, path, handler, perm, res)               \
+#define csilk_app_options_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "OPTIONS", path, handler, perm, res)
 /** @brief Convenience macro to register a HEAD route via the app API.
  *  @param app Application handle.
@@ -237,7 +272,7 @@ void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
   csilk_app_add_route_extended(app, "HEAD", path, handler, in, out, summary, \
                                desc)
 /** @brief Convenience macro to register a HEAD route with permission. */
-#define csilk_app_head_perm(app, path, handler, perm, res)                   \
+#define csilk_app_head_perm(app, path, handler, perm, res) \
   csilk_app_add_route_perm(app, "HEAD", path, handler, perm, res)
 
 /* ---- Static Files ---- */

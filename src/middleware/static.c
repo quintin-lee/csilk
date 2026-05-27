@@ -14,8 +14,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Internal helper to get MIME type from file path.
@@ -155,6 +155,8 @@ static void static_work_cb(uv_work_t* req) {
     return;
   }
 
+  /* Strip the URL prefix (e.g. "/static") from the request path so the
+     remaining path is resolved relative to root_dir. */
   const char* relative_path = csilk_get_path(c);
   if (prefix && strncmp(relative_path, prefix, strlen(prefix)) == 0) {
     relative_path += strlen(prefix);
@@ -163,6 +165,9 @@ static void static_work_cb(uv_work_t* req) {
 
   snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, relative_path);
 
+  /* Path traversal protection: realpath() resolves all symlinks and ".."
+     segments. If the resolved file path does not start with the resolved
+     root directory prefix, the request is outside the allowed tree. */
   if (realpath(full_path, resolved_file) == NULL) {
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
     return;

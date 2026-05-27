@@ -1,11 +1,47 @@
 /**
  * @file logger.c
- * @brief Thread-safe logging with JSON structured output, file rotation, ANSI
- * colors.
+ * @brief Thread-safe structured logger with JSON and human-readable output,
+ *        file rotation, and ANSI color support.
  *
- * Uses the csilk reflection engine for JSON serialization of log entries.
+ * === Design ===
+ *
+ * The logger is a global singleton (g_logger) protected by a mutex for
+ * thread-safe access. Two output modes are available:
+ *
+ *   Text mode (default):
+ *     [2024-01-15 10:30:00] INFO  [file.c:42] function(): <request_id> message
+ *     ANSI color codes are added for each level when use_colors is enabled.
+ *
+ *   JSON mode:
+ *     {"time_epoch":1705312200,"level":"INFO","request_id":"...",
+ *      "file":"file.c","line":42,"func":"function","msg":"..."}
+ *     Uses the csilk reflection engine (CSILK_REGISTER_REFLECT) for automatic
+ *     struct-to-JSON serialization, avoiding manual JSON string building.
+ *
+ * === Thread Safety ===
+ *
+ * All public log macros (CSILK_LOG_I, CSILK_LOG_E, etc.) acquire
+ * g_logger.mutex before writing. The thread-local request ID (tl_request_id)
+ * allows each thread to track its own request context without contention.
+ *
+ * === File Rotation ===
+ *
+ * When max_file_size is set and the current file exceeds it, the logger
+ * renames <path> to <path>.1 (single-backup rotation) and opens a new file.
+ * Rotation happens inline during log write, protected by the mutex.
+ *
+ * === Log Levels ===
+ *
+ *   TRACE (0) - Most verbose, for debugging internals
+ *   DEBUG (1) - Detailed information for developers
+ *   INFO  (2) - Normal operational messages (default)
+ *   WARN  (3) - Unexpected but handled situations
+ *   ERROR (4) - Errors that don't stop the server
+ *   FATAL (5) - Critical errors causing shutdown
+ *
+ * The level filter is checked inside each log macro call before any formatting
+ * or I/O occurs, so disabled levels have near-zero overhead.
  * @copyright MIT License
- * @version 0.2.1
  */
 
 #include <stdarg.h>

@@ -2,35 +2,71 @@
  * @file app.c
  * @brief High-level convenience API — csilk_app_t implementation.
  *
- * Wraps router, server, config, logging and built-in middleware into
- * a single "app" handle with a clean, Express-like API.
+ * ## Architecture
+ * csilk_app_t is the top-level facade. It owns one router, one server, one
+ * root route group, and a config struct. Users interact only through the app
+ * handle; internal wiring (router -> server, group -> router) is hidden.
+ *
+ * ## Bootstrap Sequence
+ * csilk_app_new() runs in this order:
+ *   1. Load YAML config (or apply hard-coded defaults).
+ *   2. Initialize the logger from config.
+ *   3. Create router + server, wire them together.
+ *   4. Register built-in middleware (recovery, request logging) on the server.
+ *   5. Create the root route group.
+ *   6. Register built-in endpoints: /openapi.json, /docs, /csilk-docs/.
+ *
+ * ## Routing & Static Files
+ * Routes are added via the root group (csilk_group_t), which assembles a
+ * combined middleware + handler chain and hands it to the router. Static
+ * file serving uses a separate global table mapping URL prefixes to local
+ * directory roots, dispatched by a single static_serve handler.
+ *
+ * ## OpenAPI / Swagger
+ * The OpenAPI router reference is guarded by a process-level mutex so it can
+ * be toggled on/off safely at runtime. Two built-in handlers serve the spec
+ * JSON and the Swagger UI HTML page.
+ *
  * @copyright MIT License
  * @version 0.2.1
  */
+
+#include "csilk/app/app.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/app/app.h"
 
 #define CSILK_MAX_GROUPS 32
 #define CSILK_MAX_STATIC 32
 #define CSILK_DFL_PORT 8080
 
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
- * mapping. */
+ * mapping.
+ *
+ * Avoids redundant group creation when the same prefix is referenced
+ * multiple times (e.g., csilk_app_use_group then csilk_app_add_route).
+ * The cache is linear-scanned; CSILK_MAX_GROUPS (32) keeps it cheap. */
 typedef struct {
-  char prefix[128];     /**< URL path prefix. */
-  csilk_group_t* group; /**< Cached group handle. */
+  char prefix[128];     /**< URL path prefix — the lookup key. */
+  csilk_group_t* group; /**< Cached group handle — created lazily by
+                         *   find_or_create_group(). Freed once in
+                         *   csilk_app_free(). */
 } cached_group_t;
 
 /** @brief Internal: descriptor for a static file serving route mapping URL
- * prefix to filesystem directory. */
+ * prefix to filesystem directory.
+ *
+ * Stored in a fixed-size global table (g_static[]). The static_serve
+ * handler scans the table on each request to find the matching root_dir
+ * for the requested path. */
 typedef struct {
-  char url_prefix[128]; /**< URL path prefix for static files. */
-  char root_dir[256];   /**< Local filesystem directory path. */
+  char url_prefix[128]; /**< URL path prefix for static files (e.g., "/static").
+                         *   Used as the lookup key in static_serve(). */
+  char root_dir[256];   /**< Local filesystem directory path served for this
+                         *   prefix. Passed to csilk_static() at dispatch time. */
 } static_route_t;
 
 /** @brief Router reference for the built-in OpenAPI handler. */
@@ -104,14 +140,30 @@ static void docs_handler(csilk_ctx_t* c) {
 }
 
 /** @brief Main application structure containing config, router, server, and
- * groups. */
+ * groups.
+ *
+ * Lifecycle: created in csilk_app_new(), destroyed in csilk_app_free().
+ * Ownership: owns everything except the OpenAPI router pointer (global). */
 struct csilk_app_s {
-  csilk_config_t config;                   /**< Application configuration. */
-  csilk_router_t* router;                  /**< Router instance. */
-  csilk_server_t* server;                  /**< Server instance. */
-  csilk_group_t* root_group;               /**< Root route group. */
-  cached_group_t groups[CSILK_MAX_GROUPS]; /**< Cached group table. */
-  int group_count;                         /**< Number of cached groups. */
+  csilk_config_t config;     /**< Application config (port, logger settings,
+                              *   server timeouts, CORS, etc.). Populated from
+                              *   YAML or defaults in csilk_app_new(). */
+  csilk_router_t* router;    /**< Central router — all registered routes
+                              *   (including static-file routes) converge here.
+                              *   Created in csilk_app_new(), freed in
+                              *   csilk_app_free(). */
+  csilk_server_t* server;    /**< libuv-based HTTP server. Wired to the router
+                              *   at creation. Built-in middlewares (recovery,
+                              *   logging) are injected via csilk_server_use(). */
+  csilk_group_t* root_group; /**< Root route group with prefix "". All routes
+                              *   added via csilk_app_add_route*() go through
+                              *   this group. Freed in csilk_app_free(). */
+  cached_group_t groups[CSILK_MAX_GROUPS]; /**< Prefix-to-group cache.
+                                            *   Linear-scanned array; avoids
+                                            *   duplicating groups for the same
+                                            *   prefix string. Indexed by
+                                            *   group_count. */
+  int group_count; /**< Number of valid entries in groups[] (0..32). */
 };
 
 /* ---- global static-route table ---- */
@@ -123,6 +175,16 @@ static int g_static_n = 0;
  * =================================================================== */
 
 /** @brief Find an existing group by prefix, or create a new one.
+ *
+ * ## Lookup strategy
+ * 1. Root prefix ("", "/") — return root_group (lazy-created on first call).
+ * 2. Linear scan groups[] cache — O(n) with n capped at CSILK_MAX_GROUPS (32).
+ * 3. Cache miss — create a child group under root_group via
+ *    csilk_group_group(), store in cache, return.
+ *
+ * Nesting under root_group means any middleware registered on root_group
+ * automatically applies to all subgroup routes (see group.c: gather_handlers).
+ *
  * @param app Application handle.
  * @param prefix URL path prefix.
  * @return Route group instance, or NULL on failure. */
@@ -151,7 +213,19 @@ static csilk_group_t* find_or_create_group(csilk_app_t* app,
 }
 
 /** @brief Internal static file serving handler.
- * Dispatches to csilk_static based on URL prefix.
+ *
+ * ## Dispatch algorithm
+ * 1. Scan the global g_static[] table under the app mutex.
+ * 2. Compare the request path against each url_prefix.
+ * 3. On match: release the mutex, store the matched prefix in the context
+ *    (for csilk_static to use as a path-stripping hint), and call
+ *    csilk_static() with the mapped root_dir.
+ * 4. If no prefix matches, return 404.
+ *
+ * The mutex is released before csilk_static() to avoid holding it during
+ * disk I/O. The prefix match is a simple strncmp — the longest prefix
+ * configured first wins.
+ *
  * @param c The request context. */
 static void static_serve(csilk_ctx_t* c) {
   const char* path = csilk_get_path(c);
@@ -180,10 +254,30 @@ static void static_serve(csilk_ctx_t* c) {
 /** @brief Create a new application instance with optional YAML configuration
  * file.
  *
- * Initializes the entire application stack: loads YAML config (or applies
- * defaults), initializes the logger, creates the router, server, root route
- * group, and registers built-in middleware (recovery and request logging).
- * Also registers the /openapi.json, /docs, and /csilk-docs/ endpoints.
+ * ## Bootstrap sequence (step-by-step)
+ *
+ *   Phase 1 — Config & Logging
+ *   1. Allocate app struct (calloc). Set up the process-level app mutex
+ *      (uv_once, thread-safe for concurrent csilk_app_new calls).
+ *   2. Load YAML config from config_path, or apply hard-coded defaults
+ *      (port 8080, info-level logging, 5 s idle timeout, 30 s I/O timeouts,
+ *       1 MB max body, 64 KB max header, 8 KB max URL, 100 headers, 128
+ *       backlog, TCP_NODELAY on).
+ *   3. Initialize the logger from config.
+ *
+ *   Phase 2 — Core objects
+ *   4. Create router + server, wire them together.
+ *   5. Push built-in middleware onto the server's global middleware chain:
+ *      recovery handler first, then request logger. Order matters — recovery
+ *      must wrap everything.
+ *   6. Create the root route group (prefix "").
+ *
+ *   Phase 3 — Built-in endpoints
+ *   7. Register the global OpenAPI router reference so /openapi.json works.
+ *   8. Register /openapi.json (GET) — reads the router's OpenAPI spec.
+ *   9. Register /docs (GET) — serves embedded Swagger UI HTML.
+ *  10. Register /csdk-docs/ as a static file route pointing to the bundled
+ *      Swagger UI assets.
  *
  * @param config_path Path to a YAML configuration file, or NULL to use
  *                    defaults (port 8080, info-level logging to stdout).
@@ -258,10 +352,17 @@ fail:
 /** @brief Free all application resources: server, router, groups, config, and
  * logger.
  *
- * Closes the logger first, then frees the server (which joins worker threads
- * and releases connections), frees all cached groups and the root group,
- * frees the router, frees the config's dynamic strings, and finally frees
- * the app struct itself.
+ * ## Teardown order (reverse of init)
+ * 1. Close logger — stops accepting log entries.
+ * 2. Free server — joins worker threads, closes connections, stops libuv.
+ * 3. Free cached child groups (groups[] array).
+ * 4. Free root group.
+ * 5. Free router — releases all registered routes and OpenAPI metadata.
+ * 6. Free config — releases dynamically allocated strings (log path, etc.).
+ * 7. Free the app struct itself.
+ *
+ * Server must be freed before the router because the server holds a
+ * reference to the router internally.
  *
  * @param app The application instance to free (may be NULL).
  * @note Safe to call with NULL. After this call the app pointer is invalid. */
@@ -430,15 +531,11 @@ void csilk_app_add_route_extended(csilk_app_t* app, const char* method,
 /** @copydoc csilk_app_add_route_extended
  *  @param perm_required  Permission required for this route, or NULL.
  *  @param perm_resource  Resource pattern for permission check, or NULL. */
-void csilk_app_add_route_extended_perm(csilk_app_t* app, const char* method,
-                                       const char* path,
-                                       csilk_handler_t handler,
-                                       const char* input_type,
-                                       const char* output_type,
-                                       const char* summary,
-                                       const char* description,
-                                       const char* perm_required,
-                                       const char* perm_resource) {
+void csilk_app_add_route_extended_perm(
+    csilk_app_t* app, const char* method, const char* path,
+    csilk_handler_t handler, const char* input_type, const char* output_type,
+    const char* summary, const char* description, const char* perm_required,
+    const char* perm_resource) {
   if (!app || !method || !path || !handler) return;
   csilk_group_t* g = app->root_group;
   if (!g) return;
@@ -483,11 +580,19 @@ void csilk_app_add_handlers(csilk_app_t* app, const char* method,
 /** @brief Configure static file serving: map a URL prefix to a local filesystem
  * directory.
  *
- * Registers GET routes for the prefix that serve files from the specified
- * root directory. Two routes are created: one for the prefix root (e.g.,
- * "/static/") and one for wildcard paths using the "star" notation.
- * The wildcard captures the full sub-path after the prefix. There is
- * a hard limit of CSILK_MAX_STATIC (32) static route mappings.
+ * ## What it does
+ * 1. Acquires the app mutex, checks the g_static[] table capacity (max 32).
+ * 2. Writes url_prefix + root_dir into the next free global slot.
+ * 3. Releases mutex, then registers two GET routes on the group matching
+ *    `prefix`:
+ *      - `/*path` — wildcard route that captures everything after the prefix.
+ *      - `/`      — the prefix root (redirects to the index file).
+ *    Both routes use the same internal static_serve handler, which scans
+ *    g_static[] at request time to find the correct root_dir.
+ *
+ * The dual-route pattern means both `/static/` and `/static/foo/bar.jpg`
+ * work. The `static_prefix` context variable lets csilk_static() strip the
+ * URL prefix from the filesystem path.
  *
  * @param app      Application instance.
  * @param prefix   URL path prefix for static files (e.g., "/static").
@@ -559,9 +664,11 @@ csilk_config_t* csilk_app_config(csilk_app_t* app) {
 
 /** @brief Start the server and enter the libuv event loop (blocking).
  *
- * Listens on the specified port (or the port from config if @p port <= 0),
- * starts worker threads if configured, and enters the main event loop.
- * Blocks until the server is stopped (via SIGINT or csilk_server_stop()).
+ * This is the main entry point into the event-driven I/O loop. It delegates
+ * to csilk_server_run() which:
+ *   1. Creates a TCP listener on the given port.
+ *   2. Spawns worker threads (if thread pool is configured).
+ *   3. Calls uv_run(UV_RUN_DEFAULT) — blocks until the loop stops.
  *
  * @param app  Application instance.
  * @param port TCP port to listen on. Pass 0 or negative to use the port

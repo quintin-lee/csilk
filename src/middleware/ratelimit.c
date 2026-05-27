@@ -11,8 +11,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Maximum number of distinct IP addresses tracked concurrently.
@@ -143,13 +143,16 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
 
   uv_mutex_lock(&ratelimit_mutex);
 
-  // Periodic eviction of stale entries
+  /* Periodic eviction of stale entries prevents the table from filling
+     with one-shot visitors. EVICT_INTERVAL (300 s) is intentionally
+     longer than WINDOW_SIZE (60 s) to avoid excessive compaction. */
   if (now - last_evict > EVICT_INTERVAL) {
     evict_stale_entries(now);
     last_evict = now;
   }
 
-  // Search for IP
+  /* Linear scan for existing IP entry. The table is bounded by
+     MAX_IP_ENTRIES (1024), so O(n) lookup is acceptable. */
   for (int i = 0; i < ip_count; i++) {
     if (strcmp(ip_table[i].ip, ip) == 0) {
       entry = &ip_table[i];
@@ -159,13 +162,14 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
 
   if (!entry) {
     if (ip_count < MAX_IP_ENTRIES) {
+      /* Slot available: create new entry, reset count to 1. */
       entry = &ip_table[ip_count++];
       strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
       entry->ip[sizeof(entry->ip) - 1] = '\0';
       entry->count = 0;
       entry->last_reset = now;
     } else {
-      // Table full: evict oldest entry
+      /* Table full: evict the LRU entry (oldest last_seen). */
       evict_oldest_entry();
       entry = &ip_table[ip_count++];
       strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
@@ -175,7 +179,11 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
     }
   }
 
-  // Check window
+  /* Sliding window algorithm: if the window has expired since the last
+     reset, start a new window with count=1. Otherwise increment the
+     counter within the current window. This is a "fixed-window" variant
+     that slides on the first request after expiry, avoiding the burst
+     at the boundary of pure fixed-window schemes. */
   if (now - entry->last_reset > WINDOW_SIZE) {
     entry->count = 1;
     entry->last_reset = now;

@@ -8,8 +8,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief CORS middleware — sets cross-origin headers and handles preflight
@@ -37,6 +37,8 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
     return;
   }
 
+  /* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
+     so caches do not serve CORS responses across different origins. */
   csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
   if (strcmp(config->allow_origin, "*") != 0) {
     csilk_set_header(c, "Vary", "Origin");
@@ -54,6 +56,9 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config) {
       csilk_set_header(c, "Access-Control-Max-Age", buf);
   }
 
+  /* Preflight detection: OPTIONS + Access-Control-Request-Method indicates
+     a CORS preflight request (Fetch §4.6). Short-circuit with 204 instead
+     of forwarding to the actual route handler. */
   const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
   if (csilk_get_method(c) && strcmp(csilk_get_method(c), "OPTIONS") == 0 &&
       req_method) {

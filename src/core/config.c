@@ -1,6 +1,18 @@
 /**
  * @file config.c
  * @brief YAML configuration loader and validator implementation.
+ *
+ * Parses a YAML configuration file (using libyaml) into a csilk_config_t
+ * struct. The parser is a simple state machine that tracks the current
+ * YAML section and key, then populates the corresponding config field.
+ *
+ * Supported sections: port (top-level), server, logger, cors, rate_limit,
+ * static_files, middleware, ai, cipher.
+ *
+ * The companion csilk_config_validate() checks semantic correctness (port
+ * range, non-negative timeouts, required sub-fields for enabled features).
+ * csilk_config_free() releases all dynamically allocated strings.
+ *
  * @copyright MIT License
  */
 

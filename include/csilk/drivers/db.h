@@ -30,17 +30,26 @@ typedef struct csilk_db_driver_s csilk_db_driver_t;
  * @brief A (currently single-connection) database pool.
  *
  * Wraps a driver + connection with a mutex for thread-safe access.
- * All queries and statements go through this pool.
+ * All queries and statements go through this pool.  The pool is created
+ * via csilk_db_pool_new (which opens the connection) and destroyed via
+ * csilk_db_pool_free (which closes it).
  *
- * @note The current implementation holds exactly one connection.  The
- *       mutex serialises access across libuv worker threads.  A future
- *       version may support a true connection pool.
+ * ## Thread Safety
+ * The pool's mutex serialises all driver operations across libuv worker
+ * threads (uv_queue_work).  Functions like csilk_db_query_json acquire
+ * the mutex automatically.  Do NOT call driver functions directly without
+ * holding the mutex.
+ *
+ * @note The current implementation holds exactly one connection.  A future
+ *       version may support a true connection pool with multiple replicas.
  */
 typedef struct csilk_db_pool_s {
-  csilk_db_driver_t*
-      driver;       /**< Pointer to the registered driver implementation. */
-  void* connection; /**< Opaque driver-specific connection handle. */
-  uv_mutex_t mutex; /**< Mutex for thread-safe connection access. */
+  csilk_db_driver_t* driver; /**< Pointer to the registered driver
+                                implementation (set by csilk_db_pool_new). */
+  void* connection; /**< Opaque driver-specific connection handle (set by
+                       the driver's connect callback). */
+  uv_mutex_t mutex; /**< Mutex serialising access to @p connection across
+                       threads.  Held automatically by pool-level functions. */
 } csilk_db_pool_t;
 
 /**

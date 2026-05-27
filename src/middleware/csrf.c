@@ -12,8 +12,8 @@
 #include <unistd.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Stateless CSRF protection middleware (cookie + header token
@@ -36,6 +36,9 @@
  *          /dev/urandom is accessible.
  */
 void csilk_csrf_middleware(csilk_ctx_t* c) {
+  /* Safe methods (GET, HEAD, OPTIONS) are considered read-only per HTTP spec
+     (RFC 7231 §4.2.1). They set the CSRF cookie so the frontend can obtain
+     the token, but do not require validation. */
   if (csilk_get_method(c) && (strcmp(csilk_get_method(c), "GET") == 0 ||
                               strcmp(csilk_get_method(c), "HEAD") == 0 ||
                               strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
@@ -59,6 +62,10 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
     return;
   }
 
+  /* Double-submit cookie pattern: the server compares a header value against
+     the cookie value. This is stateless (no server-side token storage needed)
+     but relies on the browser's same-origin policy to prevent the attacker
+     from reading/writing the cookie on the target origin. */
   const char* cookie_token = csilk_get_cookie(c, "csrf_token");
   if (cookie_token && strcmp(cookie_token, token) == 0) {
     csilk_next(c);

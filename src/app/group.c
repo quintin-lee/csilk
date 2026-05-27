@@ -1,6 +1,26 @@
 /**
  * @file group.c
- * @brief Route group implementation.
+ * @brief Route group implementation — prefix nesting with inherited middleware.
+ *
+ * ## Architecture
+ * Route groups let users attach middleware + route handlers under a common
+ * URL prefix. Groups form a tree: a root group (prefix "") has zero or more
+ * child subgroups, each with their own prefix segment.
+ *
+ * ## Middleware Chain Assembly
+ * When a route is registered on a group, the framework:
+ *   1. Recursively collects middleware from the group and all its ancestors
+ *      (see gather_handlers()). Parent middleware comes first.
+ *   2. Appends the route-specific handler chain.
+ *   3. Registers the combined chain with the router.
+ *
+ * This means parent-group middleware runs before child-group middleware
+ * for every request matching that prefix.
+ *
+ * ## Prefix Joining
+ * Path components are joined via join_path(), which normalizes slashes:
+ * e.g., parent="/api", child="/v1" → "/api/v1".
+ *
  * @copyright MIT License
  */
 
@@ -8,26 +28,52 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief Route group — holds a URL prefix, middleware chain, and optional
- * parent group for nesting. */
+ * parent group for nesting.
+ *
+ * Groups form a tree via the parent pointer. The full middleware chain
+ * for any route is the concatenation of parent middleware (recursively)
+ * followed by this group's middleware, followed by the route handlers.
+ */
 #define CSILK_GROUP_MW_INIT_CAP 4
 
 struct csilk_group_s {
-  char* prefix;                 /**< URL prefix for this group. */
-  csilk_router_t* router;       /**< Associated router instance. */
-  csilk_handler_t* middlewares; /**< Middleware handlers array. */
-  size_t middleware_count;      /**< Number of middleware handlers. */
-  size_t middleware_capacity;   /**< Allocated capacity of middlewares. */
-  csilk_group_t* parent;        /**< Parent group (NULL for root). */
+  char* prefix;           /**< URL prefix for routes in this group.
+                           *   Combined with parent prefix at creation
+                           *   via join_path(). Freed in csilk_group_free().
+                           *   e.g., parent="/api", child="/v1" → "/api/v1". */
+  csilk_router_t* router; /**< Router where routes are registered. Inherited
+                           *   from parent or set explicitly in
+                           *   csilk_group_new(). Not owned by the group. */
+  csilk_handler_t* middlewares; /**< Dynamically-grown array of middleware
+                                 *   handlers for this group. Grown by
+                                 *   doubling (initial cap = 4). Freed in
+                                 *   csilk_group_free(). */
+  size_t middleware_count;      /**< Current number of middleware handlers. */
+  size_t middleware_capacity;   /**< Allocated capacity (always ≥ count). */
+  csilk_group_t* parent;        /**< Parent group in the nesting tree, or NULL
+                                 *   for root groups. Used by gather_handlers()
+                                 *   to walk up the tree. Not owned. */
 };
 
 /** @brief Internal: join two URL path components with a single '/' separator.
  *
- * Handles leading/trailing slashes on both components to produce a clean
- * concatenated path. For example, join_path("/api/", "/v1") -> "/api/v1".
+ * ## Algorithm
+ * 1. Handle trivial cases: if either component is NULL or empty, return
+ *    a strdup of the other (or "/" if both are empty).
+ * 2. Strip trailing slashes from p1 by decrementing l1.
+ * 3. Strip leading slashes from p2 by advancing p2_start.
+ * 4. Allocate l1 + l2 + 1 (slash) + 1 (null) bytes.
+ * 5. Memcpy p1, then '/', then p2_start.
+ *
+ * Examples:
+ *   join_path("/api/", "/v1")  → "/api/v1"
+ *   join_path("api", "v1")     → "api/v1"
+ *   join_path(NULL, "/users")  → "/users"
+ *   join_path("", "")          → "/"
  *
  * @param p1 First path component (may be empty or NULL).
  * @param p2 Second path component (may be empty or NULL).
@@ -145,9 +191,24 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler) {
 /** @brief Internal: recursively collect all middleware handlers from a group
  *        and its ancestors into a flat array.
  *
- * Traverses the parent chain upward first, then appends the current group's
- * middleware. This ensures parent middleware runs before child middleware.
- * The handlers array is dynamically grown via realloc().
+ * ## How middleware inheritance works
+ *
+ * The recursion goes depth-first to the root, then appends middleware on
+ * the way back up:
+ *
+ *   gather_handlers(child, &arr, &n)
+ *     → gather_handlers(parent, &arr, &n)       // recurse to root first
+ *       → gather_handlers(grandparent, &arr, &n) // root's parent is NULL
+ *         → (no parent — return)
+ *       → memcpy grandparent's middlewares into arr[n..]
+ *       → n += grandparent.middleware_count
+ *     → memcpy parent's middlewares into arr[n..]
+ *     → n += parent.middleware_count
+ *   → memcpy child's middlewares into arr[n..]
+ *   → n += child.middleware_count
+ *
+ * Result: [grandparent_mw..., parent_mw..., child_mw...]
+ * This guarantees parent middleware executes before child middleware.
  *
  * @param group    The leaf group.
  * @param handlers [in/out] Pointer to the handlers array (realloc'd as needed).
@@ -251,16 +312,15 @@ void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
 
 /** @copydoc csilk_group_add_route_extended
  *  @param perm_required  Permission required for this route, or NULL.
- *  @param perm_resource  Resource pattern for permission check, or NULL. */
-void csilk_group_add_route_extended_perm(csilk_group_t* group,
-                                         const char* method, const char* path,
-                                         csilk_handler_t handler,
-                                         const char* input_type,
-                                         const char* output_type,
-                                         const char* summary,
-                                         const char* description,
-                                         const char* perm_required,
-                                         const char* perm_resource) {
+ *  @param perm_resource  Resource pattern for permission check, or NULL.
+ *
+ *  Permission metadata is forwarded to the router which stores it alongside
+ *  the route for authorization middleware to inspect at request time. */
+void csilk_group_add_route_extended_perm(
+    csilk_group_t* group, const char* method, const char* path,
+    csilk_handler_t handler, const char* input_type, const char* output_type,
+    const char* summary, const char* description, const char* perm_required,
+    const char* perm_resource) {
   if (!group || !method || !path || !handler) return;
 
   char* full_path = join_path(group->prefix, path);
@@ -298,11 +358,15 @@ void csilk_group_add_route_extended_perm(csilk_group_t* group,
 /** @brief Register a route with a custom chain of handlers (middleware + route
  * handler).
  *
- * Joins the group prefix with the route path, collects all group middleware
- * (from parent groups as well), appends the provided handlers, and registers
- * the combined chain with the router. The final handler in the chain should
- * typically call csilk_next() to pass control, and the last handler should
- * produce the response.
+ * ## Assembly pipeline
+ *   1. join_path(group->prefix, path) → full_path (e.g., "/api/v1/users").
+ *   2. gather_handlers(group, ...) → flat array of all inherited middleware
+ *      (parent first, then child), grown via realloc.
+ *   3. realloc to append caller's handlers[] to the end.
+ *   4. csilk_router_add(group->router, method, full_path, combined, count).
+ *
+ * The final handler chain stored in the router looks like:
+ *   [parent_mw..., group_mw..., handler_1, ..., handler_n]
  *
  * @param group    The route group.
  * @param method   HTTP method.

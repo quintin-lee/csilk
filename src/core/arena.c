@@ -1,6 +1,24 @@
 /**
  * @file arena.c
- * @brief Arena allocator implementation for request-scoped memory.
+ * @brief Arena (bump) allocator for request-scoped memory management.
+ *
+ * The arena allocator is the cornerstone of csilk's zero-freedown model.
+ * Instead of freeing individual allocations (which causes fragmentation and
+ * overhead), the arena allocates from large contiguous chunks and resets all
+ * memory at once when the request completes.
+ *
+ * Benefits over malloc/free per allocation:
+ *   - O(1) allocation (pointer bump, no free list search)
+ *   - Zero fragmentation within a chunk
+ *   - Cache-friendly (sequential access pattern)
+ *   - Perfect for request-scoped data (headers, params, storage values)
+ *
+ * Chunk structure:
+ *   Each chunk is a linked-list node with a flexible array member (data[])
+ *   containing the usable memory. When the current chunk runs out of space,
+ *   a new chunk (at least default_chunk_size bytes) is prepended to the list.
+ *   This means allocation always happens in the head chunk (most recently
+ *   added), which typically has good cache residency.
  * @copyright MIT License
  */
 

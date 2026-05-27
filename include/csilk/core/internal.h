@@ -1,11 +1,21 @@
 /**
- * @file csilk_internal.h
- * @brief Internal header for SHA1, SHA256, HMAC, Base64, UUID, URL decoding,
- *        WebSocket frame parsing, and the Message Queue implementation.
+ * @file internal.h
+ * @brief Internal framework primitives — crypto, codec, MQ, and dispatch.
  *
- * This header exposes functions and types that are used internally by the
- * csilk framework.  They are not part of the public API and may change
- * without notice.  External consumers should not rely on them.
+ * This header exposes functions and types used internally by the csilk
+ * framework.  They are NOT part of the public API and may change without
+ * notice.  External consumers should not rely on them.
+ *
+ * ## Contents
+ *   - **Hashing**: SHA-1 (WebSocket handshake), SHA-256, HMAC-SHA256.
+ *   - **Encoding**: Base64, Base64URL, URL percent-decoding.
+ *   - **WebSocket**: Frame parsing and dispatch for RFC 6455.
+ *   - **Message Queue**: In-process pub/sub with WAL persistence,
+ *     threading via libuv async handles and mutexes.
+ *   - **Crypto dispatch**: Weak-symbol stubs (_csilk_send_response,
+ *     _csilk_symmetric_encrypt, etc.) that route through the server's
+ *     crypto/cipher driver if one is installed, or fall back to built-in
+ *     software implementations.
  * @copyright MIT License
  */
 
@@ -402,7 +412,20 @@ typedef struct csilk_mq_topic_s {
  * @brief Internal: The Message Queue instance.
  *
  * Manages the message queue, topic registry, global middleware, and optional
- * WAL persistence.  Not intended for direct manipulation by user code.
+ * WAL persistence.  Publishes are thread-safe (guarded by queue_mutex) and
+ * are delivered asynchronously on the main event loop via a uv_async_t handle.
+ *
+ * ## Lifecycle
+ *   1. Created by _csilk_mq_new(loop).
+ *   2. Topics are registered lazily on first subscribe/publish.
+ *   3. Each publish enqueues a message (copied), signals the async handle,
+ *      and optionally appends to the WAL.
+ *   4. On the main loop, mq_dispatch processes the queue: global middleware
+ *      runs first, then topic middleware, then subscribers.
+ *   5. Destroyed by _csilk_mq_free() — drains the queue and frees all
+ * resources.
+ *
+ * Not intended for direct manipulation by user code.
  */
 struct csilk_mq_s {
   uv_async_t async_handle;    /**< libuv async handle for bridging worker-thread

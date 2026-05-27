@@ -1,6 +1,38 @@
 /**
  * @file server.c
- * @brief Server implementation.
+ * @brief Core event-driven HTTP server implementation.
+ *
+ * Architecture overview:
+ *
+ *   This file implements the full lifecycle of a csilk HTTP/TLS server.
+ *   The design is built on three layers:
+ *
+ *   1. Transport layer (libuv): Asynchronous TCP I/O with epoll/kqueue/IO-
+ *      completion-ports. All I/O is non-blocking and event-driven.
+ *
+ *   2. Protocol layer (llhttp): Fast HTTP/1.1 request parsing. Each client
+ *      connection has a dedicated llhttp parser instance. Parsing happens
+ *      incrementally as data arrives in on_read().
+ *
+ *   3. Connection lifecycle:
+ *        accept (on_new_connection)
+ *          -> TLS handshake (if SSL)
+ *          -> HTTP parse (on_read -> llhttp)
+ *          -> request route (on_message_complete -> router)
+ *          -> response (_csilk_send_response)
+ *          -> keep-alive or close
+ *
+ *   Key design decisions:
+ *     - TLS uses BIO pairs (memory BIOs) so encryption/decryption is driven
+ *       by the same on_read callback without changing the I/O model.
+ *     - Client objects are pooled (up to 32) to reduce allocation churn.
+ *     - Connection limits are enforced by accept+immediate-close (drains the
+ *       kernel backlog without blocking).
+ *     - Graceful shutdown is async: csilk_server_stop() sends an async signal
+ *       to the event loop, which closes the listener and all active clients.
+ *     - Multi-worker mode uses SO_REUSEPORT so each thread has its own accept
+ *       loop; the kernel distributes connections across workers.
+ *
  * @copyright MIT License
  */
 
@@ -317,11 +349,20 @@ static void on_signal(uv_signal_t* handle, int signum) {
 
 /** @brief libuv async callback to stop the server gracefully.
  *
- * Closes the server listen handle (stops accepting new connections), signals
- * all active client connections to close (with WebSocket/SSE-specific
- * handling), closes the signal and async handles, and frees the MQ instance.
- * Client connections are allowed to drain naturally via their own close
- * callbacks.
+ * This function performs the full shutdown sequence:
+ *
+ *   1. Fire CSILK_HOOK_SERVER_STOP — so users can flush state.
+ *   2. Close the listener (uv_close) — stops accepting new connections.
+ *   3. Iterate active_clients and close each connection appropriately:
+ *        - WebSocket: send close frame (1001) to notify the peer.
+ *        - SSE: send a "close" event, then close the connection.
+ *        - HTTP: close immediately (existing requests finish via on_close).
+ *   4. Close the SIGINT and async handles.
+ *   5. Free the message queue.
+ *
+ * The actual client struct cleanup happens asynchronously in on_close()
+ * when each TCP handle finishes closing. This avoids blocking the event
+ * loop for connection draining.
  *
  * @param handle libuv async handle (data points to csilk_server_t). */
 static void on_stop_async(uv_async_t* handle) {
@@ -373,10 +414,20 @@ static void on_stop_async(uv_async_t* handle) {
 /** @brief libuv sendfile completion callback — continues with keep-alive or
  * close.
  *
- * After a file has been sent via sendfile(), cleans up the request context,
- * determines if the connection should be kept alive based on the HTTP
- * parser's keep-alive state, and either starts a new read (for keep-alive)
- * or closes the connection. Fires the CSILK_HOOK_REQUEST_END hook.
+ * sendfile() is used for efficient zero-copy file serving (kernel copies
+ * file data directly to the socket without userspace buffering). After
+ * sendfile completes, this callback:
+ *
+ *   1. Cleans up the uv_fs_t request (freed).
+ *   2. Checks whether the connection should be kept alive (HTTP/1.1
+ *      Connection header).
+ *   3. If keep-alive: restarts the idle timer and begins reading again.
+ *   4. If close: initiates uv_close to tear down the connection.
+ *   5. Fires CSILK_HOOK_REQUEST_END and cleans up the request context.
+ *
+ * sendfile is only used for non-TLS connections; TLS connections must
+ * use the buffered write path (SSL_write) because file data must be
+ * encrypted before transmission.
  *
  * @param req The completed uv_fs_t sendfile request (freed by this callback).
  */
@@ -409,11 +460,25 @@ static void on_sendfile_complete(uv_fs_t* req) {
   csilk_ctx_cleanup(&client->ctx);
 }
 
-/** @brief libuv write completion callback.
+/** @brief libuv write completion callback — handles post-write pipeline.
  *
- * On success, continues with sendfile if a file descriptor is pending,
- * otherwise finalizes the request (keep-alive or close). On error, logs
- * the failure. Frees the write request's data buffer.
+ * After a response body (or TLS-encrypted data) has been written to the
+ * socket, this callback orchestrates the next action:
+ *
+ *   1. If the response includes a file descriptor (file_fd >= 0), the
+ *      sendfile pipeline is triggered: uv_fs_sendfile() is called to
+ *      stream file data directly from the kernel page cache to the socket.
+ *      This path is only used for non-TLS connections.
+ *
+ *   2. If no file descriptor is pending, the write request is freed and
+ *      the connection's keep-alive/close decision is handled by the
+ *      caller (_csilk_send_response, which already set up timers).
+ *
+ *   3. On write error, logs the failure and does NOT retry (the caller
+ *      is expected to close the connection via the read callback or timer).
+ *
+ * The write request's data buffer (buf_copy) is freed here because it
+ * was allocated by _csilk_send_data / flush_tls_write.
  *
  * @param req    The completed uv_write_t request.
  * @param status 0 on success, negative on error. */
@@ -774,6 +839,41 @@ void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len) {
   uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
 }
 
+/** @brief Send the assembled HTTP response to the client.
+ *
+ * This is the central response-serialization function. It constructs the
+ * HTTP response bytes in memory and sends them via _csilk_send_data().
+ * The response format is:
+ *
+ *   HTTP/1.1 <status> <reason>\r\n
+ *   [Transfer-Encoding: chunked\r\n]
+ *   Content-Length: <len>\r\n
+ *   Connection: keep-alive|close\r\n
+ *   <custom headers...>\r\n
+ *   \r\n
+ *   <body>
+ *
+ * Response mode selection:
+ *   - Normal (Sync):       Content-Length is set to body_len; body is
+ *                          appended inline after the header block.
+ *   - Chunked (Async):     No Content-Length; Transfer-Encoding: chunked
+ *                          is set. Used when the handler calls csilk_next()
+ *                          with is_async = true, meaning it may write
+ *                          response chunks over time.
+ *   - File (sendfile):     Content-Length is set to file_size; the header
+ *                          is sent via _csilk_send_data, then on_write
+ *                          triggers uv_fs_sendfile for zero-copy file
+ *                          delivery. Only available on non-TLS connections.
+ *   - WebSocket (101):     Minimal header; the caller manages frames via
+ *                          csilk_ws_send(). See is_websocket branch.
+ *
+ * After the response is sent:
+ *   - For sendfile: return early, defer cleanup to on_sendfile_complete.
+ *   - For keep-alive: restart the idle timer, begin reading next request.
+ *   - For close: initiate uv_close.
+ *   - Fire CSILK_HOOK_REQUEST_END, clean up context.
+ *
+ * @param c Request context (must have _internal_client set). */
 void _csilk_send_response(csilk_ctx_t* c) {
   csilk_client_t* client = (csilk_client_t*)c->_internal_client;
   if (!client) return;
@@ -784,13 +884,19 @@ void _csilk_send_response(csilk_ctx_t* c) {
   int status = client->ctx.response.status ? client->ctx.response.status : 200;
   const char* status_text = get_status_text(status);
 
-  // If response has body, use Content-Length
+  // Determine response mode:
+  //   is_file   = true when a file descriptor is available AND the
+  //               connection is not TLS (sendfile does not work with TLS).
+  //   use_chunked = true when the body is empty AND the handler has
+  //               set is_async (the caller will stream chunks later).
+  //   Otherwise, use Content-Length with the body inline.
   int is_file = (c->file_fd >= 0 && !client->ssl);
   int use_chunked =
       (client->ctx.response.body_len == 0 && client->ctx.is_async && !is_file);
   const char* transfer_encoding =
       use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
 
+  // Calculate total size of custom response headers (for buffer allocation)
   size_t custom_headers_len = 0;
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
     for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
@@ -950,10 +1056,32 @@ static void finalize_request(csilk_client_t* client, llhttp_t* p) {
 
 /** @brief llhttp callback: the full HTTP request message has been parsed.
  *
- * Finalizes the request (stores remaining headers, decodes URL, parses
- * query params), triggers request_begin hooks, runs the router to find
- * matching handlers, executes them sequentially, and sends the response.
- * Handles errors, CORS preflight, and global middleware chaining.
+ * This is the main request dispatch point. It executes the following
+ * pipeline for every incoming HTTP request:
+ *
+ *   1. finalize_request(): store remaining headers, split URL into path
+ *      and query, URL-decode the path, parse query parameters.
+ *
+ *   2. trigger_hooks(CSILK_HOOK_REQUEST_BEGIN): user-registered
+ *      request-start hooks (e.g., request logging, rate limiting).
+ *
+ *   3. csilk_router_match_ctx(): walk the radix tree to find a matching
+ *      route. If matched, the handler chain is set on ctx->handlers.
+ *
+ *   4. Global middleware prepend: if the server has global middlewares
+ *      (registered via csilk_server_use()), they are prepended to the
+ *      route-specific handler chain. The combined chain is allocated from
+ *      the arena (no heap fragmentation for per-request allocations).
+ *
+ *   5. csilk_next(): execute the handler chain. Handlers call csilk_next()
+ *      to pass to the next handler, or send a response and mark is_async.
+ *
+ *   6. If no route matched: invoke the 404 handler or send a default
+ *      "Not Found" plain-text response.
+ *
+ *   7. If not async: send the response synchronously via
+ *      _csilk_send_response(). For async handlers, the response is sent
+ *      later when the handler decides to complete.
  *
  * @param p The llhttp parser instance.
  * @return 0 (HPE_OK) on success, non-zero to abort parsing. */
@@ -1014,10 +1142,35 @@ static int on_message_complete(llhttp_t* p) {
 
 /** @brief libuv connection callback — accept a new incoming TCP connection.
  *
- * Checks the active connection limit (rejecting by accepting and immediately
- * closing if exceeded), obtains a client from the pool, initializes the TCP
- * handle, HTTP parser, timers (read timeout, request timeout), arena
- * allocator, TLS if configured, and starts reading from the socket.
+ * This is the entry point for every new TCP connection. The sequence is:
+ *
+ *   1. Connection limiter: if active_connections >= max_connections, accept
+ *      and immediately close (drains the kernel backlog without processing).
+ *
+ *   2. Client acquisition: get a client struct from the pool (pool_get).
+ *      Pool reuse avoids calloc/free churn for every connection.
+ *
+ *   3. TCP handle init: uv_tcp_init + uv_accept to attach the fd.
+ *      TCP_NODELAY is applied if configured (disables Nagle's algorithm).
+ *
+ *   4. Counters: atomic_fetch_add active_connections.
+ *
+ *   5. Parser init: llhttp_init with the server's callback table.
+ *      The parser state machine is reset for each new connection.
+ *
+ *   6. TLS setup: if ssl_ctx is configured, set up BIO pairs and start
+ *      the TLS handshake (setup_client_tls).
+ *
+ *   7. Timer setup: read_timeout and request_timeout are one-shot timers
+ *      that fire if no data arrives within the configured window.
+ *
+ *   8. Arena init: per-connection bump allocator for request-scoped
+ *      allocations (path strings, query params, arena handler chains).
+ *
+ *   9. Read: uv_read_start registers the on_read callback with libuv.
+ *
+ * If any step fails (allocation, accept, init), the client is cleaned up
+ * via close callbacks and returned to the pool.
  *
  * @param server_stream The listening server stream.
  * @param status        Connection status (negative on error). */
@@ -1113,12 +1266,31 @@ static void on_new_connection(uv_stream_t* server_stream, int status) {
 /** @brief libuv read callback — processes incoming data from a client
  * connection.
  *
- * Stops the idle timer, resets the read timeout, and dispatches data based
- * on connection mode:
- * - TLS: writes to the read BIO and processes TLS handshake/decryption.
- * - WebSocket: parses WebSocket frames directly.
- * - HTTP: feeds data to the llhttp parser.
- * On EOF or read error, closes the connection.
+ * This is the heart of the event-driven I/O model. Every byte from every
+ * connection arrives here. The dispatch logic has three paths:
+ *
+ *   TLS path (client->ssl is set):
+ *     Data is written to the read BIO, then process_tls_read() drives the
+ *     TLS handshake (if not yet complete) or decrypts and feeds the result
+ *     to the llhttp parser (or WebSocket frame parser). Encrypted output
+ *     from the write BIO is flushed via flush_tls_write().
+ *
+ *   WebSocket path (client->ctx.is_websocket):
+ *     Data is parsed directly as WebSocket frames by csilk_ws_parse_frame().
+ *     No HTTP parsing occurs on this connection after the upgrade.
+ *
+ *   HTTP path (default):
+ *     Data is fed directly to llhttp_execute(). The callbacks in
+ *     server->settings (on_url, on_header_field, on_body, etc.) incrementally
+ *     build the request struct. When the request is complete,
+ *     on_message_complete fires to dispatch routing.
+ *
+ * On positive nread: feed data to the appropriate handler.
+ * On nread == UV_EOF: peer closed the connection; close the client.
+ * On nread < 0 (error): log and close.
+ *
+ * The idle timer is always stopped when data arrives (keep-alive wait
+ * is reset). The read timeout is restarted.
  *
  * @param stream The client TCP stream.
  * @param nread  Number of bytes read (negative for error/EOF).
@@ -1573,11 +1745,23 @@ static void worker_thread(void* arg) {
 
 /** @brief Create, bind, and listen on a TCP socket with optional SO_REUSEPORT.
  *
- * When reuseport is true (and not Windows), creates a raw socket, sets
- * SO_REUSEADDR and SO_REUSEPORT, binds, and listens before attaching to
- * libuv via uv_tcp_open(). Otherwise uses the standard libuv bind+listen
- * path. The UV_HANDLE_BOUND flag must be set manually after uv_tcp_open()
- * for the reuseport path since uv_tcp_open does not set it.
+ * Two code paths:
+ *
+ *   SO_REUSEPORT path (reuseport=true, non-Windows):
+ *     Creates a raw socket with socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK),
+ *     sets SO_REUSEADDR and SO_REUSEPORT, binds, and listens. The socket
+ *     fd is then handed to libuv via uv_tcp_open(). This is used in
+ *     multi-worker mode so each worker thread has its own accept loop
+ *     sharing the same port. The kernel distributes incoming connections
+ *     across the workers in a round-robin fashion.
+ *
+ *     IMPORTANT: uv_tcp_open() does not set the internal UV_HANDLE_BOUND
+ *     flag. Since uv_listen() checks for this flag, we must set it manually
+ *     (out_handle->flags |= UV_HANDLE_BOUND) before calling uv_listen().
+ *
+ *   Standard path (reuseport=false or Windows):
+ *     Uses libuv's standard uv_tcp_bind() + uv_listen() sequence. This
+ *     works on all platforms but does not support SO_REUSEPORT.
  *
  * @param loop       Event loop to attach the TCP handle to.
  * @param out_handle [out] Initialized TCP handle (managed by libuv, do not
@@ -1634,12 +1818,33 @@ static int bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port,
 /** @brief Start the server, bind to the given port, and enter the main event
  * loop (blocking).
  *
- * Initializes TLS if enabled, creates the async handle for cross-thread
- * stop signals, binds and listens on the port (with SO_REUSEPORT if
- * worker_threads > 1), spawns additional worker threads if configured,
- * registers the SIGINT signal handler, fires the server start hook, and
- * enters the libuv event loop. Blocks until csilk_server_stop() is called
- * or SIGINT is received.
+ * This is the final step in server startup. The full bootstrap sequence:
+ *
+ *   1. TLS init: load SSL_CTX with cert + key (if enable_tls is set).
+ *      If TLS init fails, the server returns -1 (fail-fast).
+ *
+ *   2. Async handle: uv_async_init for cross-thread stop signals.
+ *      csilk_server_stop() calls uv_async_send() which wakes the event
+ *      loop and runs on_stop_async().
+ *
+ *   3. Bind + listen: bind_and_listen() with SO_REUSEPORT if
+ *      worker_threads > 1, otherwise standard single-socket bind.
+ *
+ *   4. TCP keepalive: if configured, enable TCP keepalive probes to
+ *      detect dead peers.
+ *
+ *   5. Worker threads: if worker_threads > 1, spawn N-1 worker threads
+ *      each running their own libuv loop + accept loop (SO_REUSEPORT).
+ *      The main thread also runs its own event loop, so total accept
+ *      loops = worker_threads.
+ *
+ *   6. SIGINT handler: register a libuv signal watcher that calls
+ *      csilk_server_stop() on SIGINT (Ctrl+C).
+ *
+ *   7. Fire CSILK_HOOK_SERVER_START.
+ *
+ *   8. uv_run(): enter the event loop. Blocks until the loop stops
+ *      (via csilk_server_stop() or SIGINT).
  *
  * @param server The server instance.
  * @param port   TCP port to bind to.

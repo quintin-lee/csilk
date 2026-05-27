@@ -1,4 +1,17 @@
 #ifdef HAS_MYSQL
+/**
+ * @file mysql.c
+ * @brief MySQL database driver for the csilk pluggable DB interface.
+ *
+ * Implements the csilk_db_driver_t vtable using libmysqlclient.
+ * Key design points:
+ *   - DSN format: "host=...;port=...;user=...;password=...;dbname=..."
+ *   - Uses mysql_real_connect for TCP connections (no Unix socket support yet).
+ *   - Query results are fully buffered via mysql_store_result.
+ *   - Transactions use raw SQL sentinel strings (BEGIN/COMMIT/ROLLBACK).
+ *
+ * @copyright MIT License
+ */
 
 #include <mysql/mysql.h>
 #include <stdlib.h>
@@ -7,10 +20,26 @@
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 
+/** @brief Per-connection data for the MySQL driver. */
 typedef struct {
-  MYSQL* db;
+  MYSQL* db; /**< libmysqlclient connection handle. */
 } mysql_conn_t;
 
+/**
+ * @brief Parse a semicolon-delimited DSN string into connection parameters.
+ *
+ * Expected format (all fields optional except as noted):
+ *   "host=...;port=...;user=...;password=...;dbname=..."
+ * Port defaults to 3306 if omitted.  Unknown keys are silently ignored.
+ * The input string is duplicated internally for tokenisation.
+ *
+ * @param dsn      Raw DSN string (may be NULL).
+ * @param host     [out] Heap-allocated host string (or NULL).
+ * @param port     [out] Port number (defaults to 3306).
+ * @param user     [out] Heap-allocated username (or NULL).
+ * @param password [out] Heap-allocated password (or NULL).
+ * @param dbname   [out] Heap-allocated database name (or NULL).
+ */
 static void mysql_parse_dsn(const char* dsn, char** host, int* port,
                             char** user, char** password, char** dbname) {
   *host = NULL;
@@ -51,6 +80,13 @@ static void mysql_parse_dsn(const char* dsn, char** host, int* port,
   free(buf);
 }
 
+/**
+ * @brief Open a MySQL connection using the given DSN.
+ *
+ * Allocates a connection struct, initialises the MYSQL handle, parses the DSN,
+ * and calls mysql_real_connect.  On failure the connection and struct are
+ * cleaned up before returning -1.
+ */
 static int mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn) {
   if (!pool || !dsn) return -1;
 
@@ -68,6 +104,7 @@ static int mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn) {
   int port = 3306;
   mysql_parse_dsn(dsn, &host, &port, &user, &password, &dbname);
 
+  /* TCP connection; no client flags set */
   MYSQL* ret =
       mysql_real_connect(conn->db, host, user, password, dbname, port, NULL, 0);
   free(host);
@@ -87,6 +124,9 @@ static int mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn) {
   return 0;
 }
 
+/**
+ * @brief Close the MySQL connection and free the connection struct.
+ */
 static int mysql_drv_disconnect(csilk_db_pool_t* pool) {
   if (!pool || !pool->connection) return -1;
 
@@ -97,6 +137,13 @@ static int mysql_drv_disconnect(csilk_db_pool_t* pool) {
   return 0;
 }
 
+/**
+ * @brief Free all memory associated with a query result set.
+ *
+ * Iterates over rows (freeing each value string, the values array, and the
+ * row struct), then frees column names and the top-level arrays.  Counts
+ * are reset to zero to prevent double-free.
+ */
 static void mysql_free_csilk_result(csilk_db_result_t* result) {
   if (!result) return;
   for (int i = 0; i < result->row_count; i++) {
@@ -116,6 +163,22 @@ static void mysql_free_csilk_result(csilk_db_result_t* result) {
   result->column_count = 0;
 }
 
+/**
+ * @brief Execute a SELECT query and buffer the full result set.
+ *
+ * Flow:
+ *   1. Execute via mysql_real_query.
+ *   2. Buffer the entire result with mysql_store_result (all rows in memory).
+ *      If the query produces no result set (e.g. a non-SELECT), return 0
+ *      with an empty result.
+ *   3. Extract column names from the MYSQL_FIELD metadata.
+ *   4. Iterate mysql_fetch_row, allocating a csilk_db_row_t per row.
+ *      Each cell is duplicated via strndup (respecting binary-safe lengths).
+ *   5. On any allocation failure, partial results are freed immediately.
+ *
+ * @note Uses strndup with mysql_fetch_lengths for binary-safe field copies.
+ *       NULL SQL values remain NULL in the result row.
+ */
 static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
                            csilk_db_result_t* result) {
   if (!pool || !pool->connection || !sql || !result) return -1;
@@ -128,11 +191,13 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
     return -1;
   }
 
+  /* Buffer the entire result set client-side */
   MYSQL_RES* mysql_res = mysql_store_result(conn->db);
   if (!mysql_res) {
     return 0;
   }
 
+  /* --- Extract column metadata --- */
   MYSQL_FIELD* fields = mysql_fetch_fields(mysql_res);
   unsigned int num_fields = mysql_num_fields(mysql_res);
 
@@ -146,6 +211,7 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
     result->column_names[i] = strdup(fields[i].name);
   }
 
+  /* --- Iterate rows --- */
   MYSQL_ROW row;
   while ((row = mysql_fetch_row(mysql_res))) {
     unsigned long* lengths = mysql_fetch_lengths(mysql_res);
@@ -166,10 +232,12 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
       return -1;
     }
 
+    /* Copy each field using the binary-safe length from mysql_fetch_lengths */
     for (unsigned int i = 0; i < num_fields; i++) {
       drow->values[i] = row[i] ? strndup(row[i], lengths[i]) : NULL;
     }
 
+    /* Append row to the result array */
     csilk_db_row_t** new_rows = realloc(
         result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
     if (!new_rows) {
@@ -187,6 +255,13 @@ static int mysql_drv_query(csilk_db_pool_t* pool, const char* sql,
   return 0;
 }
 
+/**
+ * @brief Execute a SQL statement that returns no result rows.
+ *
+ * After execution, any result set is consumed and discarded via
+ * mysql_store_result + mysql_free_result.  This handles cases where
+ * the statement produces rows even though the caller expects none.
+ */
 static int mysql_drv_exec(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->connection || !sql) return -1;
 
@@ -197,24 +272,30 @@ static int mysql_drv_exec(csilk_db_pool_t* pool, const char* sql) {
     return -1;
   }
 
+  /* Drain any remaining result (important for multi-statement or
+   * statements that unexpectedly produce rows) */
   MYSQL_RES* res = mysql_store_result(conn->db);
   if (res) mysql_free_result(res);
 
   return 0;
 }
 
+/** @brief Begin a transaction (sends "BEGIN"). */
 static int mysql_drv_transaction_begin(csilk_db_pool_t* pool) {
   return mysql_drv_exec(pool, "BEGIN");
 }
 
+/** @brief Commit the current transaction (sends "COMMIT"). */
 static int mysql_drv_transaction_commit(csilk_db_pool_t* pool) {
   return mysql_drv_exec(pool, "COMMIT");
 }
 
+/** @brief Rollback the current transaction (sends "ROLLBACK"). */
 static int mysql_drv_transaction_rollback(csilk_db_pool_t* pool) {
   return mysql_drv_exec(pool, "ROLLBACK");
 }
 
+/** @brief Pre-built driver vtable for MySQL. */
 csilk_db_driver_t csilk_db_mysql_driver = {
     .name = "mysql",
     .connect = mysql_drv_connect,
@@ -227,6 +308,10 @@ csilk_db_driver_t csilk_db_mysql_driver = {
     .free_result = mysql_free_csilk_result,
 };
 
+/**
+ * @brief Register the MySQL driver with the database subsystem.
+ * Only compiled when HAS_MYSQL is defined.
+ */
 void csilk_db_mysql_init(void) {
   csilk_db_register_driver("mysql", &csilk_db_mysql_driver);
 }

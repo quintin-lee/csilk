@@ -1,6 +1,15 @@
 /**
  * @file url.c
- * @brief URL parsing implementation.
+ * @brief URL path splitting and percent-decoding utilities.
+ *
+ * Provides the two fundamental URL operations needed by the HTTP server:
+ *   1. csilk_url_decode()   — in-place percent-decoding (%XX -> byte, '+' ->
+ * space)
+ *   2. csilk_split_url()    — separates "path?query" into decoded path + raw
+ * query
+ *
+ * These are used by the HTTP parser during request finalization to populate
+ * the request context's path and query_params fields.
  * @copyright MIT License
  */
 
@@ -9,8 +18,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 /** @brief Helper: convert a hexadecimal character to its integer value.
  *

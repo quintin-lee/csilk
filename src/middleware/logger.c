@@ -13,11 +13,17 @@
 #include <time.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
 
-/* ---- reflectable request-log struct ---- */
+/* ------------------------------------------------------------------ */
+/*  Reflectable request-log struct                                    */
+/*                                                                    */
+/*  The CSILK_REGISTER_REFLECT macro generates JSON marshalling code  */
+/*  at compile time so the struct fields are mapped to JSON keys      */
+/*  automatically, avoiding manual serialisation boilerplate.         */
+/* ------------------------------------------------------------------ */
 
 /**
  * @brief Request log entry for JSON structured logging.

@@ -18,18 +18,23 @@
 
 #define MAX_WORKFLOW_STEPS 1000
 
+/** @brief AI metadata attached to workflow node outputs for token
+ *  tracking and budget enforcement. */
 typedef struct {
-  char* model;
-  int prompt_tokens;
-  int completion_tokens;
+  char* model;           /**< Model name (e.g., "gpt-3.5-turbo"). */
+  int prompt_tokens;     /**< Tokens consumed by the prompt. */
+  int completion_tokens; /**< Tokens consumed by the completion. */
 } csilk_ai_meta_t;
 
+/** @brief A registered workflow tool (function-calling capability exposed
+ *  to AI nodes). Tools are invoked in parallel via the libuv thread pool
+ *  during AI node execution. */
 typedef struct {
-  char* name;
-  char* description;
-  char* parameters_json;
-  csilk_wf_tool_fn fn;
-  void* user_data;
+  char* name;            /**< Tool name (e.g., "get_weather"). */
+  char* description;     /**< Description for the AI model's tool schema. */
+  char* parameters_json; /**< JSON schema string for tool parameters. */
+  csilk_wf_tool_fn fn;   /**< Tool implementation callback. */
+  void* user_data;       /**< Opaque context for the callback. */
 } csilk_wf_tool_entry_t;
 
 typedef struct csilk_wf_edge_s {
@@ -37,84 +42,107 @@ typedef struct csilk_wf_edge_s {
   csilk_wf_node_t* target; /**< Destination node. */
 } csilk_wf_edge_t;
 
+/** @brief A single node in a workflow DAG.
+ *  Each node wraps a handler function with optional edges, error
+ *  handling, dynamic routing, and timeout support. */
 struct csilk_wf_node_s {
-  char* id;
-  int index; /**< Internal index for tracking in context. */
-  csilk_wf_handler_t handler;
-  void* user_data;
+  char* id;  /**< Unique string identifier. */
+  int index; /**< Internal array index for tracking in context. */
+  csilk_wf_handler_t handler; /**< Node execution callback. */
+  void* user_data;            /**< Opaque context for the handler. */
 
-  csilk_wf_edge_t* edges;
-  size_t edge_count;
-  size_t edge_capacity;
+  csilk_wf_edge_t*
+      edges;         /**< Outgoing edges (conditions leading to next nodes). */
+  size_t edge_count; /**< Number of outgoing edges. */
+  size_t edge_capacity; /**< Allocated edge array capacity. */
 
-  int incoming_count; /**< Number of incoming edges. */
-  int is_entry;       /**< Explicitly marked as entry node. */
+  int incoming_count; /**< Number of incoming edges (for join tracking). */
+  int is_entry;       /**< Explicit entry point flag. */
 
-  csilk_wf_node_t* error_target;      /**< Fallback node on failure. */
-  csilk_wf_router_t router_fn;        /**< Dynamic router callback. */
-  csilk_wf_join_policy_t join_policy; /**< AND or OR. */
-  int timeout_ms;                     /**< Node execution timeout. */
+  csilk_wf_node_t*
+      error_target; /**< Fallback node on handler failure (NULL output). */
+  csilk_wf_router_t router_fn; /**< Dynamic router: overrides edges when set. */
+  csilk_wf_join_policy_t
+      join_policy; /**< AND (wait for all) or OR (fire on any). */
+  int timeout_ms;  /**< Per-node execution timeout (0 = no timeout). */
 };
 
+/** @brief Workflow definition: a DAG of processing nodes connected by
+ *  conditional or unconditional edges. Each node runs a handler function
+ *  on the libuv thread pool. Supports persistence via WAL, real-time
+ *  monitoring via WebSocket, tool registration for AI nodes, and budget
+ *  (token/TTL) limits. */
 struct csilk_wf_s {
-  char* name;
-  csilk_wf_node_t** nodes;
-  size_t node_count;
-  size_t node_capacity;
-  uv_loop_t* loop;
-  char* wal_dir; /**< Persistence directory. */
+  char* name;              /**< Human-readable workflow name. */
+  csilk_wf_node_t** nodes; /**< Array of node pointers. */
+  size_t node_count;       /**< Number of registered nodes. */
+  size_t node_capacity;    /**< Allocated node array capacity. */
+  uv_loop_t* loop;         /**< libuv event loop for thread-pool scheduling. */
+  char* wal_dir;           /**< WAL directory path (NULL = no persistence). */
 
-  csilk_wf_tool_entry_t* tools; /**< Registered tools. */
-  size_t tool_count;
-  size_t tool_capacity;
+  csilk_wf_tool_entry_t* tools; /**< Registered tool definitions. */
+  size_t tool_count;            /**< Number of registered tools. */
+  size_t tool_capacity;         /**< Allocated tool array capacity. */
 
-  csilk_ctx_t** monitors; /**< WebSocket connections for monitoring. */
-  size_t monitor_count;
-  size_t monitor_capacity;
-  uv_mutex_t monitor_mutex;
+  csilk_ctx_t** monitors;   /**< WebSocket monitoring connections. */
+  size_t monitor_count;     /**< Number of active monitors. */
+  size_t monitor_capacity;  /**< Allocated monitor array capacity. */
+  uv_mutex_t monitor_mutex; /**< Protects the monitor array. */
 
-  int max_tokens; /**< Maximum total tokens allowed. */
-  int ttl_sec;    /**< Workflow Time-To-Live. */
+  int max_tokens; /**< Maximum total tokens across all AI calls (0 = unlimited).
+                   */
+  int ttl_sec;    /**< Workflow Time-To-Live in seconds (0 = no limit). */
 };
 
+/** @brief Workflow execution context — per-run state tracking all node
+ *  progress, scheduling, memory, and budget enforcement. Created by
+ *  csilk_wf_run_ext_internal() and freed by cleanup_ctx(). */
 struct csilk_wf_ctx_s {
-  csilk_wf_t* wf;
-  csilk_data_t* initial_input;
-  void (*callback)(csilk_data_t*);
-  void (*trace_callback)(csilk_data_t*, csilk_wf_trace_t*);
+  csilk_wf_t* wf;                  /**< The workflow definition. */
+  csilk_data_t* initial_input;     /**< Original input data passed to run(). */
+  void (*callback)(csilk_data_t*); /**< Final result callback. */
+  void (*trace_callback)(csilk_data_t*,
+                         csilk_wf_trace_t*); /**< Traced result callback. */
 
-  int* node_input_counts; /**< Tracking received inputs per node index. */
-  int total_executions;   /**< Safety counter to prevent infinite loops. */
-  int nodes_active;       /**< Number of nodes currently running or queued. */
-  uv_mutex_t mutex;       /**< Protects scheduler state. */
+  int* node_input_counts; /**< Per-node received-input counters for join
+                             tracking. */
+  int total_executions;   /**< Total nodes executed (safety counter for infinite
+                             loops). */
+  int nodes_active; /**< Nodes currently queued or running on thread pool. */
+  uv_mutex_t mutex; /**< Protects scheduler state (counters, flags). */
 
-  csilk_arena_t* arena;   /**< Memory arena for this execution. */
-  uv_mutex_t arena_mutex; /**< Protects arena from parallel allocations. */
+  csilk_arena_t* arena; /**< Memory arena for this execution. */
+  uv_mutex_t
+      arena_mutex; /**< Protects arena allocations (parallel tool calls). */
 
-  csilk_data_t** node_outputs; /**< History of outputs per node index. */
+  csilk_data_t** node_outputs; /**< Per-node output data history. */
 
-  char exec_id[37]; /**< Unique execution identifier. */
-  char* wal_path;   /**< Full path to the WAL file. */
+  char exec_id[37]; /**< UUID execution identifier (36 chars + null). */
+  char* wal_path;   /**< Full path to the WAL file for this execution. */
 
-  csilk_wf_trace_t* trace; /**< Execution history. */
-  uv_mutex_t trace_mutex;  /**< Protects trace appends. */
+  csilk_wf_trace_t* trace; /**< Execution trace (timing, I/O dumps). */
+  uv_mutex_t
+      trace_mutex; /**< Protects trace appends from parallel completions. */
 
-  int total_tokens;  /**< Cumulative tokens used. */
-  int is_terminated; /**< Hard stop flag (e.g., budget exceeded). */
+  int total_tokens;  /**< Cumulative tokens used across AI nodes. */
+  int is_terminated; /**< Hard stop flag (budget exceeded, TTL expired). */
 
-  uv_timer_t ttl_timer; /**< Global TTL timer. */
+  uv_timer_t ttl_timer; /**< Global TTL timer handle. */
   int is_ttl_expired;   /**< TTL expiration flag. */
 };
 
+/** @brief Per-node-execution state passed through libuv work requests.
+ *  Allocated in execute_node(), freed in after_worker_cb(). */
 typedef struct node_work_s {
-  uv_work_t req;
-  csilk_wf_ctx_t* ctx;
-  csilk_wf_node_t* node;
-  csilk_data_t* input;
-  csilk_data_t* output;
-  csilk_wf_trace_node_t* trace_node;
+  uv_work_t req;         /**< libuv work request (must be first for cast). */
+  csilk_wf_ctx_t* ctx;   /**< Workflow execution context. */
+  csilk_wf_node_t* node; /**< The node being executed. */
+  csilk_data_t* input;   /**< Input data to the node's handler. */
+  csilk_data_t* output; /**< Output data from the handler (set by worker_cb). */
+  csilk_wf_trace_node_t*
+      trace_node; /**< Trace record for this node (NULL if not tracing). */
   uv_timer_t node_timer; /**< Per-node timeout timer. */
-  int is_timed_out;      /**< Timeout flag. */
+  int is_timed_out;      /**< Flag set by timer if node exceeds timeout_ms. */
 } node_work_t;
 
 /* --- Internal Helpers --- */
@@ -327,6 +355,21 @@ csilk_data_t* csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type,
   return data;
 }
 
+/** @brief Internal: traverse a cJSON tree following a dot-separated path.
+ *
+ * Algorithm:
+ * 1. Split the path on "." using strtok_r.
+ * 2. For each token, if the current cJSON node is an array, index into
+ *    it using atoi(); otherwise, use cJSON_GetObjectItemCaseSensitive().
+ * 3. If the final value is a string/number/bool, return it as a string
+ *    allocated from the workflow arena. For objects/arrays, return a
+ *    stringified JSON representation.
+ *
+ * @param ctx  Workflow context (for arena allocation).
+ * @param root Root cJSON node to start traversal from.
+ * @param path Dot-separated path (e.g., "user.address.city").
+ * @return A string allocated in ctx->arena, or NULL if the path does not
+ *         exist. The returned string is valid for the workflow's lifetime. */
 static char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root,
                                   const char* path) {
   if (!root || !path) return NULL;
@@ -371,6 +414,29 @@ static char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root,
 
 /* --- Template Engine & AI Node --- */
 
+/** @brief Internal: resolve template expressions in a prompt string.
+ *
+ * Template syntax:
+ *   {{node_id.value}}          -> raw value output from a node
+ *   {{node_id.value.path.to}}  -> JSONPath into a node's JSON output
+ *   {{input.value}}            -> the workflow's initial input
+ *   {{input.value.path.to}}    -> JSONPath into the initial input
+ *
+ * Algorithm:
+ * 1. Iterate over all workflow nodes, searching for {{node_id.value}}
+ *    patterns in the template string.
+ * 2. For each match, look up the node's output. If followed by ".path",
+ *    parse the node output as JSON and traverse with _csilk_json_get_path().
+ *    Otherwise, use the raw output value.
+ * 3. Replace the {{...}} placeholder with the resolved value using arena
+ *    memory.
+ * 4. Repeat for {{input.value}} patterns using the workflow's initial input.
+ *
+ * @param ctx      Workflow execution context.
+ * @param template Template string with {{...}} placeholders.
+ * @return Resolved string allocated in ctx->arena.
+ * @note Unresolvable patterns (missing node output, bad path) are replaced
+ *       with "(null)". */
 static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
   if (!template) return NULL;
   char* res = csilk_wf_strdup(ctx, template);
@@ -472,15 +538,20 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
   return res;
 }
 
+/** @brief Per-tool-call context for parallel tool execution within an
+ *  AI node. Each tool call runs on its own libuv thread-pool worker. */
 typedef struct {
-  csilk_wf_ctx_t* ctx;
-  csilk_ai_tool_call_t* tc;
-  char* result;
-  uv_mutex_t* mutex;
-  uv_cond_t* cond;
-  int* pending;
+  csilk_wf_ctx_t* ctx;      /**< Workflow context (for tool registry lookup). */
+  csilk_ai_tool_call_t* tc; /**< Tool call arguments from the AI response. */
+  char* result;             /**< Tool output string (allocated by tool fn). */
+  uv_mutex_t* mutex;        /**< Shared mutex for the pending counter. */
+  uv_cond_t* cond;          /**< Shared condition variable for completion. */
+  int* pending;             /**< Shared atomic-like pending count. */
 } sub_tool_work_t;
 
+/** @brief libuv thread-pool work callback for tool execution.
+ *  Looks up the tool by name in the workflow's tool registry and
+ *  calls its function with the arguments from the AI tool call. */
 static void sub_worker_cb(uv_work_t* req) {
   sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
   sw->result = NULL;
@@ -493,6 +564,9 @@ static void sub_worker_cb(uv_work_t* req) {
   }
 }
 
+/** @brief libuv after-work callback for tool execution.
+ *  Decrements the shared pending counter and signals the condition
+ *  variable to wake the main AI node handler thread. */
 static void after_sub_worker_cb(uv_work_t* req, int status) {
   (void)status;
   sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
@@ -502,6 +576,29 @@ static void after_sub_worker_cb(uv_work_t* req, int status) {
   uv_mutex_unlock(sw->mutex);
 }
 
+/** @brief Built-in handler for AI workflow nodes.
+ *
+ * Algorithm:
+ * 1. Resolve template expressions in the prompt string.
+ * 2. Create an AI engine instance (OpenAI driver by default) using
+ *    AGENT_API_KEY and AGENT_API_BASE environment variables.
+ * 3. Build tool definitions from the workflow's registered tools.
+ * 4. Construct a message array (optional system message + user prompt).
+ * 5. Enter a request loop (max 10 iterations):
+ *    a. Send a chat completion request with the current message array.
+ *    b. If the response contains tool calls, execute each tool in
+ *       parallel on the libuv thread pool, wait for all to complete
+ *       via a condition variable, append tool results as new messages.
+ *    c. If the response is a direct text completion, extract the content
+ *       and AI metadata (model, token counts), return as csilk_data_t.
+ * 6. Clean up all temporary allocations (messages, tools, AI handle).
+ *
+ * @param ctx       Workflow execution context.
+ * @param input     Ignored (AI prompts come from config templates).
+ * @param user_data Pointer to csilk_ai_config_t with model, prompt, etc.
+ * @return Output data with type "text/plain" and AI metadata, or NULL on
+ *         failure (missing API key, driver init failure, all retries
+ *         exhausted). */
 static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
                                      void* user_data) {
   (void)input;
@@ -652,6 +749,11 @@ void csilk_wf_register_tool(csilk_wf_t* wf, const char* name,
   uv_mutex_unlock(&wf->monitor_mutex);
 }
 
+/** @brief Look up a workflow node by its string ID.
+ *  @param wf The workflow instance.
+ *  @param id Node identifier (set in csilk_wf_add()).
+ *  @return Node pointer, or NULL if not found.
+ *  @note Linear search of the node array — O(n). */
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id) {
   if (!wf || !id) return NULL;
   for (size_t i = 0; i < wf->node_count; i++)
@@ -745,6 +847,13 @@ void csilk_wf_trace_free(csilk_wf_trace_t* trace) {
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input);
 
+/** @brief Internal: free a workflow execution context and all resources.
+ *
+ * Stops and closes the TTL timer if active, destroys all mutexes,
+ * frees the memory arena, node tracking arrays, WAL path, and the
+ * context struct itself.
+ *
+ * @param ctx The execution context to clean up (may be NULL). */
 static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
   if (!ctx) return;
   if (ctx->wf->ttl_sec > 0) {
@@ -763,6 +872,18 @@ static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
   free(ctx);
 }
 
+/** @brief Internal: persist a workflow event to the Write-Ahead Log.
+ *
+ * Packs node_id, data type, and data value into a flat payload buffer
+ * and delegates to _wf_wal_append(). The payload format is:
+ *   [node_id\0][data_type\0][data_value\0]
+ * Fields are NUL-terminated strings for simple parsing during recovery.
+ *
+ * @param ctx     Workflow execution context (must have wal_path set).
+ * @param type    Event type (WF_EV_START, WF_EV_NODE_START, etc.).
+ * @param node_id Originating node ID, or NULL for workflow-level events.
+ * @param data    Associated data (may be NULL for simple events).
+ * @note This is a no-op if ctx has no WAL path configured. */
 static void wal_log_event(csilk_wf_ctx_t* ctx, csilk_wf_event_type_t type,
                           const char* node_id, csilk_data_t* data) {
   if (!ctx->wal_path) return;
@@ -787,6 +908,12 @@ static void wal_log_event(csilk_wf_ctx_t* ctx, csilk_wf_event_type_t type,
   free(payload);
 }
 
+/** @brief libuv thread-pool work callback — executes a workflow node's
+ *  handler on a background thread.
+ *
+ * Broadcasts a "node_start" event to monitors, then calls the node's
+ * handler function. The output is stored in the work request struct
+ * for retrieval by after_worker_cb on the main loop thread. */
 static void worker_cb(uv_work_t* req) {
   node_work_t* work = (node_work_t*)req->data;
   _wf_broadcast(work->ctx->wf, "node_start", work->node->id, NULL);
@@ -794,6 +921,28 @@ static void worker_cb(uv_work_t* req) {
       work->node->handler(work->ctx, work->input, work->node->user_data);
 }
 
+/** @brief libuv after-work callback — processes node completion on the
+ *  main loop thread.
+ *
+ * Algorithm (the central scheduler dispatch in the workflow engine):
+ * 1. Stop the per-node timeout timer if active.
+ * 2. Store the output in ctx->node_outputs and accumulate token usage
+ *    from AI metadata.
+ * 3. Log to WAL (if enabled) and broadcast "node_finish" to monitors.
+ * 4. Record trace data (start/end time, input/output dump, model info).
+ * 5. Check budget (max_tokens): if exceeded, set is_terminated flag and
+ *    terminate the workflow on next idle check.
+ * 6. If output is NULL and error_target is set, route to error node.
+ * 7. If the node has a dynamic router function, call it to determine
+ *    the next node; otherwise, evaluate each outgoing edge:
+ *    - Unconditional edges (condition == NULL) always match.
+ *    - Conditional edges match if output type equals condition string.
+ * 8. For matching edges, check the target's join policy: AND join
+ *    requires all incoming edges to fire before the target is ready;
+ *    OR join fires on any single edge.
+ * 9. If no edges are triggered and no nodes are active, the workflow
+ *    is complete: log WF_EV_END, deliver the final output via callback,
+ *    and clean up the context. */
 static void after_worker_cb(uv_work_t* req, int status) {
   (void)status;
   node_work_t* work = (node_work_t*)req->data;
@@ -942,6 +1091,10 @@ static void after_worker_cb(uv_work_t* req, int status) {
   free(work);
 }
 
+/** @brief libuv timer callback — marks a node as timed out.
+ *  Sets the is_timed_out flag on the node_work_t, which causes
+ *  after_worker_cb to treat the output as NULL even if the handler
+ *  eventually completes. */
 static void on_node_timeout(uv_timer_t* handle) {
   node_work_t* work = (node_work_t*)handle->data;
   work->is_timed_out = 1;
@@ -949,6 +1102,22 @@ static void on_node_timeout(uv_timer_t* handle) {
          work->node->timeout_ms);
 }
 
+/** @brief Internal: enqueue a workflow node for execution on the libuv
+ *  thread pool.
+ *
+ * Algorithm:
+ * 1. Check termination flag (budget exceeded, TTL expired).
+ * 2. Log WF_EV_NODE_START to WAL and broadcast "node_queued" to monitors.
+ * 3. Allocate a node_work_t struct. If tracing is active, create a
+ *    trace node with start time and input dump.
+ * 4. Increment total_executions and nodes_active counters.
+ * 5. If the node has a per-node timeout, initialize and arm a uv_timer.
+ * 6. Queue the work via uv_queue_work(). The node handler runs on a
+ *    background thread; after_worker_cb processes the result.
+ *
+ * @param ctx   Workflow execution context.
+ * @param node  The node to execute.
+ * @param input Input data to pass to the node's handler. */
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input) {
   uv_mutex_lock(&ctx->mutex);
@@ -990,17 +1159,48 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
   uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
+/** @brief Execute a workflow asynchronously.
+ *
+ * Entry points are identified in order:
+ * 1. Nodes explicitly marked with csilk_wf_node_set_entry(node, 1).
+ * 2. Nodes with incoming_count == 0 (no predecessors).
+ * Each entry node receives the input data and runs on the libuv thread
+ * pool. The workflow completes when all paths reach leaf nodes with
+ * no outgoing edges. The final output is delivered via callback.
+ *
+ * @param wf       The workflow definition to run.
+ * @param input    Input data passed to all entry nodes.
+ * @param callback Completion callback receiving the final node's output.
+ *                 Called on the main loop thread. May be NULL for
+ *                 fire-and-forget execution.
+ * @return A UUID execution identifier string, valid until the callback
+ *         fires. Returns NULL if the workflow has no nodes. */
 const char* csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
                          void (*callback)(csilk_data_t* result)) {
   return csilk_wf_run_ext_internal(wf, input, callback, NULL);
 }
 
+/** @brief Run a workflow with execution tracing enabled.
+ *
+ * Same as csilk_wf_run() but provides a detailed execution trace
+ * (per-node timing, input/output dumps, model info, token counts)
+ * to the callback. The trace is valid during the callback and is
+ * freed afterward.
+ *
+ * @param wf      The workflow to execute.
+ * @param input   Input data to pass to entry nodes.
+ * @param callback Completion callback receiving both the final
+ *                output and the execution trace. May be NULL. */
 void csilk_wf_run_traced(csilk_wf_t* wf, csilk_data_t* input,
                          void (*callback)(csilk_data_t* result,
                                           csilk_wf_trace_t* trace)) {
   csilk_wf_run_ext_internal(wf, input, NULL, callback);
 }
 
+/** @brief libuv timer callback — marks the workflow as terminated when the
+ *  global Time-To-Live (TTL) expires.
+ *  Sets both is_terminated and is_ttl_expired flags. Active nodes will
+ *  check is_terminated before queuing new work. */
 static void on_workflow_ttl(uv_timer_t* handle) {
   csilk_wf_ctx_t* ctx = (csilk_wf_ctx_t*)handle->data;
   uv_mutex_lock(&ctx->mutex);
@@ -1010,6 +1210,31 @@ static void on_workflow_ttl(uv_timer_t* handle) {
   printf("[Workflow] TTL Expired for execution %s\n", ctx->exec_id);
 }
 
+/** @brief Internal: common workflow execution entry point for both
+ *  traced and untraced runs.
+ *
+ * Algorithm:
+ * 1. Validate parameters and check for empty workflows.
+ * 2. Allocate a csilk_wf_ctx_t with execution state, memory arena,
+ *    node tracking arrays, and mutexes.
+ * 3. Generate a UUID execution identifier.
+ * 4. If TTL is configured, start the TTL timer.
+ * 5. Broadcast "workflow_start" to WebSocket monitors.
+ * 6. If WAL persistence is enabled, create the WAL file and log
+ *    WF_EV_START.
+ * 7. If tracing is enabled, create the trace context and record
+ *    execution start time.
+ * 8. Start execution at all entry points (explicit entry nodes first,
+ *    then nodes with incoming_count == 0 as fallback).
+ * 9. If no entry nodes are found, call the callback with NULL and
+ *    clean up immediately.
+ *
+ * @param wf       Workflow definition.
+ * @param input    Input data for entry nodes.
+ * @param callback Untraced completion callback (may be NULL).
+ * @param trace_cb Traced completion callback (may be NULL).
+ * @return Execution UUID string, or NULL if the workflow is empty.
+ * @note Exactly one of callback or trace_cb should be non-NULL. */
 static const char* csilk_wf_run_ext_internal(
     csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t*),
     void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*)) {
@@ -1071,6 +1296,27 @@ static const char* csilk_wf_run_ext_internal(
   return ctx->exec_id;
 }
 
+/** @brief Resume a previously interrupted workflow execution from its WAL.
+ *
+ * Algorithm:
+ * 1. Open and read the WAL file for the given execution ID.
+ * 2. Replay each WAL event:
+ *    - WF_EV_NODE_START: mark the node as having started.
+ *    - WF_EV_NODE_FINISH: mark as finished, restore output data,
+ *      increment successor input counts for join tracking.
+ *    - WF_EV_END: mark the workflow as having completed.
+ * 3. If the workflow ended normally, call callback(NULL) and clean up.
+ * 4. Otherwise, determine which nodes need to be (re)executed:
+ *    - Nodes that started but never finished (crashed mid-execution).
+ *    - Nodes whose join threshold is met (all inputs received).
+ * 5. Execute those nodes, continuing execution from the recovery point.
+ *
+ * @param wf       Workflow definition.
+ * @param exec_id  UUID execution identifier (returned by csilk_wf_run()).
+ * @param callback Completion callback for the resumed workflow.
+ * @note Requires WAL persistence to be configured on the workflow.
+ *       This is a best-effort recovery — nodes that were executing
+ *       at crash time are re-executed (at-most-once semantics). */
 void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
                      void (*callback)(csilk_data_t* result)) {
   if (!wf || !exec_id || !wf->wal_dir) return;
