@@ -5,9 +5,8 @@
 
 #include "csilk/app/workflow.h"
 
-csilk_data_t* mock_handler(csilk_data_t* input, void* user_data) {
-    (void)input;
-    (void)user_data;
+csilk_data_t* mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     return NULL;
 }
 

@@ -11,6 +11,20 @@
 
 #include "csilk/csilk.h"
 
+/** @brief Opaque handle for a workflow instance. */
+typedef struct csilk_wf_s csilk_wf_t;
+
+/** @brief Opaque handle for a workflow execution context. */
+typedef struct csilk_wf_ctx_s csilk_wf_ctx_t;
+
+/**
+ * @brief Join policies for nodes with multiple incoming dependencies.
+ */
+typedef enum {
+  CSILK_WF_JOIN_AND, /**< Default: Trigger only when ALL inputs arrive. */
+  CSILK_WF_JOIN_OR   /**< Trigger when ANY input arrives. */
+} csilk_wf_join_policy_t;
+
 /**
  * @brief Generic data container for passing messages between workflow nodes.
  */
@@ -21,15 +35,63 @@ typedef struct csilk_data_s {
 } csilk_data_t;
 
 /**
- * @brief Function signature for a workflow node handler.
+ * @brief Dynamic router function signature.
+ * @param input Data from the node that just finished.
+ * @return ID of the next node to trigger, or NULL for default routing.
  */
-typedef csilk_data_t* (*csilk_wf_handler_t)(csilk_data_t* input, void* user_data);
+typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
+
+/**
+ * @brief Configuration for built-in AI nodes.
+ */
+typedef struct {
+  const char* model;       /**< AI model identifier. */
+  const char* system_msg;  /**< Optional system prompt. */
+  const char* prompt;      /**< User prompt (supports {{node.value}} templates). */
+  double temperature;
+  int max_tokens;
+} csilk_ai_config_t;
+
+/**
+ * @brief Function signature for a workflow node handler.
+ * @param ctx   Execution context (can be used for arena allocation).
+ * @param input Input data from previous node(s).
+ * @param user_data Opaque pointer passed during node creation.
+ */
+typedef csilk_data_t* (*csilk_wf_handler_t)(csilk_wf_ctx_t* ctx,
+                                            csilk_data_t* input,
+                                            void* user_data);
 
 /** @brief Opaque handle for a single node in a workflow. */
 typedef struct csilk_wf_node_s csilk_wf_node_t;
 
-/** @brief Opaque handle for a workflow instance. */
-typedef struct csilk_wf_s csilk_wf_t;
+/* --- Memory Helpers (Arena-backed) --- */
+
+/**
+ * @brief Allocate a new data container managed by the workflow arena.
+ * @param ctx  Execution context.
+ * @param type Data type identifier (copied).
+ * @param value Pointer to the data.
+ * @return New data container.
+ */
+csilk_data_t* csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type,
+                                void* value);
+
+/**
+ * @brief Duplicate a string using the workflow arena.
+ * @param ctx Execution context.
+ * @param s   Source string.
+ * @return Copied string.
+ */
+char* csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s);
+
+/**
+ * @brief Allocate memory from the workflow arena.
+ * @param ctx  Execution context.
+ * @param size Number of bytes.
+ * @return Pointer to allocated memory.
+ */
+void* csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size);
 
 /* --- Lifecycle --- */
 
@@ -56,6 +118,16 @@ void csilk_wf_free(csilk_wf_t* wf);
  */
 csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
                               csilk_wf_handler_t handler, void* user_data);
+
+/**
+ * @brief Add a built-in AI node with template support.
+ * @param wf     Workflow handle.
+ * @param id     Unique ID.
+ * @param config AI configuration (copied internally).
+ * @return Node handle.
+ */
+csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id,
+                                 const csilk_ai_config_t* config);
 
 /**
  * @brief Mark a node as an entry point for the workflow.
@@ -95,6 +167,27 @@ void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
 void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition,
                       csilk_wf_node_t* to);
 
+/**
+ * @brief Add an error fallback route.
+ * @param from   Source node.
+ * @param target Destination node triggered if the source handler fails.
+ */
+void csilk_wf_on_error(csilk_wf_node_t* from, csilk_wf_node_t* target);
+
+/**
+ * @brief Set a dynamic router for a node.
+ * @param node   Node handle.
+ * @param router Function that determines the next node based on output.
+ */
+void csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router);
+
+/**
+ * @brief Set the join policy for a node.
+ * @param node   Node handle.
+ * @param policy AND (default) or OR.
+ */
+void csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy);
+
 /* --- Execution --- */
 
 /**
@@ -105,5 +198,14 @@ void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition,
  */
 void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
                   void (*callback)(csilk_data_t* result));
+
+/* --- Visualization --- */
+
+/**
+ * @brief Export the workflow graph as a Mermaid string.
+ * @param wf Workflow handle.
+ * @return Heap-allocated Mermaid code (caller must free).
+ */
+char* csilk_wf_to_mermaid(csilk_wf_t* wf);
 
 #endif /* CSILK_WORKFLOW_H */

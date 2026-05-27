@@ -9,29 +9,27 @@
 static int g_n1_count = 0;
 static int g_done = 0;
 
-csilk_data_t* n1_handler(csilk_data_t* input, void* user_data) {
-    (void)input; (void)user_data;
+csilk_data_t* n1_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     g_n1_count++;
     printf("N1 executing (count: %d)\n", g_n1_count);
     return NULL;
 }
 
-csilk_data_t* n2_handler(csilk_data_t* input, void* user_data) {
+csilk_data_t* n2_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
     (void)input; (void)user_data;
     printf("N2 (Check) executing\n");
-    csilk_data_t* out = calloc(1, sizeof(csilk_data_t));
     if (g_n1_count < 3) {
-        out->type = strdup("fail");
         printf("N2: fail -> loop back\n");
+        return csilk_wf_data_new(ctx, "fail", NULL);
     } else {
-        out->type = strdup("pass");
         printf("N2: pass -> proceed\n");
+        return csilk_wf_data_new(ctx, "pass", NULL);
     }
-    return out;
 }
 
-csilk_data_t* n3_handler(csilk_data_t* input, void* user_data) {
-    (void)input; (void)user_data;
+csilk_data_t* n3_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     printf("N3 executing\n");
     g_done = 1;
     return NULL;
@@ -43,7 +41,7 @@ void on_agent_complete(csilk_data_t* result) {
 }
 
 void test_workflow_agentic() {
-    printf("Testing agentic workflow loop...\n");
+    printf("Testing agentic workflow loop with Arena...\n");
     g_n1_count = 0; g_done = 0;
     
     csilk_wf_t* wf = csilk_wf_new("agentic_wf");

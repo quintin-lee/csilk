@@ -18,6 +18,7 @@ typedef struct {
 } openai_state_t;
 
 static void* openai_init(const char* api_key, const char* base_url) {
+  if (!api_key) return NULL;
   openai_state_t* state = malloc(sizeof(openai_state_t));
   if (!state) return NULL;
 
