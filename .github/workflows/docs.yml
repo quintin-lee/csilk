@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake build-essential \
+            cmake build-essential curl \
             doxygen graphviz \
             libyaml-dev zlib1g-dev \
             libcurl4-openssl-dev \
@@ -44,6 +44,14 @@ jobs:
 
       - name: Generate Doxygen Documentation
         run: cmake --build build --target docs
+
+      - name: Verify Mermaid JS was downloaded
+        run: |
+          if [ ! -f docs/assets/mermaid.min.js ]; then
+            echo "ERROR: mermaid.min.js not downloaded — diagrams will not render"
+            exit 1
+          fi
+          ls -lh docs/assets/mermaid.min.js docs/html/mermaid.min.js 2>/dev/null || true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
