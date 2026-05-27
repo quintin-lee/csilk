@@ -280,36 +280,146 @@ csilk_data_t* csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* val
   return data;
 }
 
+static char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path) {
+    if (!root || !path) return NULL;
+    
+    cJSON* curr = root;
+    char* path_copy = strdup(path);
+    char* saveptr;
+    char* token = strtok_r(path_copy, ".", &saveptr);
+    
+    while (token && curr) {
+        if (cJSON_IsArray(curr)) {
+            curr = cJSON_GetArrayItem(curr, atoi(token));
+        } else {
+            curr = cJSON_GetObjectItemCaseSensitive(curr, token);
+        }
+        token = strtok_r(NULL, ".", &saveptr);
+    }
+    
+    char* result = NULL;
+    if (curr) {
+        if (cJSON_IsString(curr)) {
+            result = csilk_wf_strdup(ctx, curr->valuestring);
+        } else if (cJSON_IsNumber(curr)) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%g", curr->valuedouble);
+            result = csilk_wf_strdup(ctx, buf);
+        } else if (cJSON_IsBool(curr)) {
+            result = csilk_wf_strdup(ctx, curr->valueint ? "true" : "false");
+        } else if (cJSON_IsNull(curr)) {
+            result = csilk_wf_strdup(ctx, "null");
+        } else {
+            // For objects/arrays, return as stringified JSON
+            char* tmp = cJSON_PrintUnformatted(curr);
+            result = csilk_wf_strdup(ctx, tmp);
+            free(tmp);
+        }
+    }
+    
+    free(path_copy);
+    return result;
+}
+
 /* --- Template Engine & AI Node --- */
 
 static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
   if (!template) return NULL;
   char* res = csilk_wf_strdup(ctx, template);
+  
+  // 1. Handle node references: {{node_id.value}} or {{node_id.value.path.to.field}}
   for (size_t i = 0; i < ctx->wf->node_count; i++) {
     csilk_wf_node_t* n = ctx->wf->nodes[i];
-    char pattern[256]; snprintf(pattern, sizeof(pattern), "{{%s.value}}", n->id);
+    char base_pattern[256];
+    snprintf(base_pattern, sizeof(base_pattern), "{{%s.value", n->id);
+    
     char* pos;
-    while ((pos = strstr(res, pattern)) != NULL) {
+    while ((pos = strstr(res, base_pattern)) != NULL) {
+      char* end = strstr(pos, "}}");
+      if (!end) break;
+      
+      size_t pat_full_len = end - pos + 2;
+      char* replacement = "(null)";
       csilk_data_t* out = ctx->node_outputs[n->index];
-      const char* val_str = (out && out->value) ? (const char*)out->value : "(null)";
-      size_t pat_len = strlen(pattern), val_len = strlen(val_str), res_len = strlen(res);
-      char* new_res = csilk_wf_alloc(ctx, res_len - pat_len + val_len + 1);
+      
+      if (out && out->value) {
+        // Check if there's a path after .value
+        // pos points to "{{node_id.value"
+        // we need to see if it's followed by "." or "}}"
+        char* path_start = pos + strlen(base_pattern);
+        if (*path_start == '.') {
+          // JSONPath!
+          path_start++; // Skip the dot
+          size_t path_len = end - path_start;
+          char* path = malloc(path_len + 1);
+          memcpy(path, path_start, path_len);
+          path[path_len] = '\0';
+          
+          cJSON* json = cJSON_Parse((char*)out->value);
+          if (json) {
+            char* val = _csilk_json_get_path(ctx, json, path);
+            if (val) replacement = val;
+            cJSON_Delete(json);
+          }
+          free(path);
+        } else if (*path_start == '}') {
+          // Pure value
+          replacement = (char*)out->value;
+        }
+      }
+      
+      size_t rep_len = strlen(replacement);
+      size_t res_len = strlen(res);
+      char* new_res = csilk_wf_alloc(ctx, res_len - pat_full_len + rep_len + 1);
       size_t prefix_len = pos - res;
-      memcpy(new_res, res, prefix_len); memcpy(new_res + prefix_len, val_str, val_len);
-      strcpy(new_res + prefix_len + val_len, pos + pat_len);
+      memcpy(new_res, res, prefix_len);
+      memcpy(new_res + prefix_len, replacement, rep_len);
+      strcpy(new_res + prefix_len + rep_len, end + 2);
       res = new_res;
     }
   }
-  char* pos; const char* pattern = "{{input.value}}";
-  while ((pos = strstr(res, pattern)) != NULL) {
-      const char* val_str = (ctx->initial_input && ctx->initial_input->value) ? (const char*)ctx->initial_input->value : "(null)";
-      size_t pat_len = strlen(pattern), val_len = strlen(val_str), res_len = strlen(res);
-      char* new_res = csilk_wf_alloc(ctx, res_len - pat_len + val_len + 1);
+  
+  // 2. Handle initial input: {{input.value}} or {{input.value.path}}
+  const char* in_pattern = "{{input.value";
+  char* pos;
+  while ((pos = strstr(res, in_pattern)) != NULL) {
+      char* end = strstr(pos, "}}");
+      if (!end) break;
+      
+      size_t pat_full_len = end - pos + 2;
+      char* replacement = "(null)";
+      
+      if (ctx->initial_input && ctx->initial_input->value) {
+          char* path_start = pos + strlen(in_pattern);
+          if (*path_start == '.') {
+              path_start++;
+              size_t path_len = end - path_start;
+              char* path = malloc(path_len + 1);
+              memcpy(path, path_start, path_len);
+              path[path_len] = '\0';
+              
+              cJSON* json = cJSON_Parse((char*)ctx->initial_input->value);
+              if (json) {
+                  char* val = _csilk_json_get_path(ctx, json, path);
+                  if (val) replacement = val;
+                  cJSON_Delete(json);
+              }
+              free(path);
+          } else if (*path_start == '}') {
+              replacement = (char*)ctx->initial_input->value;
+          }
+      }
+      
+      size_t rep_len = strlen(replacement);
+      size_t res_len = strlen(res);
+      char* new_res = csilk_wf_alloc(ctx, res_len - pat_full_len + rep_len + 1);
       size_t prefix_len = pos - res;
-      memcpy(new_res, res, prefix_len); memcpy(new_res + prefix_len, val_str, val_len);
-      strcpy(new_res + prefix_len + val_len, pos + pat_len);
+      memcpy(new_res, res, prefix_len);
+      memcpy(new_res + prefix_len, replacement, rep_len);
+      strcpy(new_res + prefix_len + rep_len, end + 2);
       res = new_res;
   }
+  
   return res;
 }
 
