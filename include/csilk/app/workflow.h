@@ -84,6 +84,17 @@ void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to);
 void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
                  csilk_wf_node_t* to);
 
+/**
+ * @brief Add a loop-back / feedback route between nodes.
+ * @param from      Source node.
+ * @param condition Result string that triggers this route.
+ * @param to        Destination node (typically an earlier node).
+ * @note Unlike csilk_wf_on, this does NOT increment the 'to' node's
+ *       incoming dependency count, preventing deadlocks in join logic.
+ */
+void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition,
+                      csilk_wf_node_t* to);
+
 /* --- Execution --- */
 
 /**

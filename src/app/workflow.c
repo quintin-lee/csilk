@@ -113,7 +113,7 @@ void csilk_wf_node_set_entry(csilk_wf_node_t* node, int is_entry) {
   if (node) node->is_entry = is_entry;
 }
 
-static void node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
+static void node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to, int is_loop) {
   if (!from || !to) return;
   
   if (from->edge_count >= from->edge_capacity) {
@@ -127,15 +127,22 @@ static void node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf
   from->edges[from->edge_count].condition = condition ? strdup(condition) : NULL;
   from->edges[from->edge_count].target = to;
   from->edge_count++;
-  to->incoming_count++;
+  
+  if (!is_loop) {
+    to->incoming_count++;
+  }
 }
 
 void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to) {
-  node_add_edge(from, NULL, to);
+  node_add_edge(from, NULL, to, 0);
 }
 
 void csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
-  node_add_edge(from, condition, to);
+  node_add_edge(from, condition, to, 0);
+}
+
+void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
+  node_add_edge(from, condition, to, 1);
 }
 
 /* --- Scheduler Implementation --- */
@@ -180,7 +187,12 @@ static void after_worker_cb(uv_work_t* req, int status) {
       uv_mutex_lock(&ctx->mutex);
       if (ctx->total_executions < MAX_WORKFLOW_STEPS) {
         ctx->node_input_counts[target->index]++;
-        if (ctx->node_input_counts[target->index] >= target->incoming_count) {
+        // If incoming_count is 0 (it's a start node or loopback-only entry),
+        // any signal should trigger it? Or just 1?
+        // Actually, start nodes should probably only trigger once from start,
+        // then again from loops.
+        int threshold = target->incoming_count == 0 ? 1 : target->incoming_count;
+        if (ctx->node_input_counts[target->index] >= threshold) {
           ready = 1;
           ctx->node_input_counts[target->index] = 0; // Reset for loops
         }

@@ -55,7 +55,7 @@ void test_workflow_agentic() {
     csilk_wf_node_set_entry(n1, 1);
     
     csilk_wf_bind(n1, n2);
-    csilk_wf_on(n2, "fail", n1);
+    csilk_wf_on_loop(n2, "fail", n1);
     csilk_wf_on(n2, "pass", n3);
     
     csilk_wf_run(wf, NULL, on_agent_complete);
