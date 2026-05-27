@@ -110,7 +110,7 @@ In addition to the Onion model, a **Hook System** allows listening to global eve
 
 ### 3. Opaque Context & ABI Stability
 
-Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
+Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/csilk/core/context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
 
 ### 4. Pluggable Drivers
 
@@ -310,8 +310,8 @@ struct csilk_server_s {
 
 ```mermaid
 graph TB
-    csilk.h["csilk.h<br/>(Public API)"] --> csilk_internal.h["csilk_internal.h<br/>(Internal API)"]
-    csilk_app.h["csilk_app.h<br/>(High-Level API)"]
+    csilk.h["csilk.h<br/>(Public API)"] --> csilk/core/internal.h["csilk/core/internal.h<br/>(Internal API)"]
+    csilk/app/app.h["csilk/app/app.h<br/>(High-Level API)"]
 
     subgraph src/core/
         server.c["server.c<br/>TCP + HTTP + libuv"] --> router.c["router.c<br/>Radix Tree"]

@@ -22,7 +22,7 @@ Thank you for your interest in contributing to csilk! We welcome all contributio
 - **C11**: Use standard C11 features. Avoid platform-specific extensions unless necessary (and provide fallbacks).
 - **Style**: We use `clang-format` to maintain consistent code style. Run `make format` before committing.
 - **Memory Safety**: Always check memory allocation results. Use the request-scoped `arena` whenever possible for temporary data.
-- **Documentation**: Document all new public APIs and internal functions using Doxygen comments (`/** ... */` style). Public APIs go in `include/csilk.h`, `include/csilk_app.h`, `include/csilk_internal.h`, and `include/csilk_reflect.h` with `@brief`, `@param`, `@return` tags. Implementation files in `src/` should include `@file` and `@brief` at minimum. Use `@copyright MIT License` for license attribution.
+- **Documentation**: Document all new public APIs and internal functions using Doxygen comments (`/** ... */` style). Public APIs go in `include/csilk.h`, `include/csilk/csilk.h`, `include/csilk/app/app.h`, `include/csilk/core/internal.h`, and `include/csilk/reflection/reflect.h` with `@brief`, `@param`, `@return` tags. Implementation files in `src/` should include `@file` and `@brief` at minimum. Use `@copyright MIT License` for license attribution.
 
 ## Pull Request Process
 
