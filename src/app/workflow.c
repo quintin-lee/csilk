@@ -7,12 +7,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct csilk_wf_edge_s {
+  char* condition;           /**< NULL for default/bind. */
+  csilk_wf_node_t* target;   /**< Destination node. */
+} csilk_wf_edge_t;
+
 struct csilk_wf_node_s {
   char* id;
   csilk_wf_handler_t handler;
   void* user_data;
   
-  /* Connections will be added in Task 2 */
+  csilk_wf_edge_t* edges;
+  size_t edge_count;
+  size_t edge_capacity;
 };
 
 struct csilk_wf_s {
@@ -33,6 +40,10 @@ csilk_wf_t* csilk_wf_new(const char* name) {
 static void node_free(csilk_wf_node_t* node) {
   if (!node) return;
   free(node->id);
+  for (size_t i = 0; i < node->edge_count; i++) {
+    free(node->edges[i].condition);
+  }
+  free(node->edges);
   free(node);
 }
 
@@ -67,4 +78,28 @@ csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
 
   wf->nodes[wf->node_count++] = node;
   return node;
+}
+
+static void node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
+  if (!from || !to) return;
+  
+  if (from->edge_count >= from->edge_capacity) {
+    size_t new_cap = from->edge_capacity == 0 ? 4 : from->edge_capacity * 2;
+    csilk_wf_edge_t* new_edges = realloc(from->edges, sizeof(csilk_wf_edge_t) * new_cap);
+    if (!new_edges) return;
+    from->edges = new_edges;
+    from->edge_capacity = new_cap;
+  }
+  
+  from->edges[from->edge_count].condition = condition ? strdup(condition) : NULL;
+  from->edges[from->edge_count].target = to;
+  from->edge_count++;
+}
+
+void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to) {
+  node_add_edge(from, NULL, to);
+}
+
+void csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
+  node_add_edge(from, condition, to);
 }
