@@ -8,19 +8,33 @@
 ## 1. 项目架构总览
 
 ```
-include/                   # 公共 + 内部头文件
-include/csilk.h            # 主公共 API（类型、函数声明、宏）
-include/csilk_app.h        # 高层 csilk_app_t API
-include/csilk_db.h         # 数据库驱动接口
-include/csilk_internal.h   # 内部接口（SHA1/Base64/WebSocket）
-include/csilk_reflect.h    # 反射引擎（struct <-> JSON）
-include/csilk_test.h       # OOM 模拟测试框架
-include/context_internal.h # 不透明 csilk_ctx_s 结构体
-src/core/                  # 核心引擎（server/router/context/arena/logger/config/reflect/websocket/url/utils/mq）
-src/app/app.c              # 高层 app 封装
-src/middleware/             # 15 个内置中间件
-tests/                     # 单元测试（50+ 个测试文件）
-examples/                  # 示例程序
+include/                        # 公共 + 内部头文件
+include/csilk.h                 # 主入口（包含 csilk/csilk.h）
+include/csilk/csilk.h           # 核心公共 API（类型、函数声明、宏）
+include/csilk/app/app.h         # 高层 csilk_app_t API
+include/csilk/app/workflow.h    # 工作流引擎 API
+include/csilk/app/workflow_wal.h # 工作流 WAL 日志
+include/csilk/core/context_internal.h # 不透明 csilk_ctx_s 结构体
+include/csilk/core/internal.h   # 内部接口（SHA1/Base64/WebSocket）
+include/csilk/drivers/ai.h      # AI 驱动接口
+include/csilk/drivers/cipher.h  # 密码驱动接口（AES/RSA）
+include/csilk/drivers/db.h      # 数据库驱动接口
+include/csilk/drivers/perm.h    # 权限驱动接口
+include/csilk/reflection/reflect.h # 反射引擎（struct <-> JSON）
+include/csilk/test/test.h       # OOM 模拟测试框架
+src/core/                       # 核心引擎（server/router/context/arena/logger/config）
+src/app/                        # 高层 app 封装 + 工作流引擎
+src/middleware/                  # 15 个内置中间件
+src/protocols/                  # 协议扩展（WebSocket, Swagger）
+src/messaging/                  # 内部事件总线（Message Queue）
+src/security/                   # 权限与安全核心
+src/reflection/                 # 反射引擎实现
+src/crypto/                     # 密码驱动实现
+src/data/                       # 数据库抽象层
+src/drivers/                    # 具体驱动实现（OpenAI, Ollama, SQLite 等）
+src/ai/                         # AI 统一接口引擎
+tests/                          # 单元测试（80+ 个测试文件）
+examples/                       # 示例程序
 ```
 
 ### 关键依赖

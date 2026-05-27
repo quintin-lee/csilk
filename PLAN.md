@@ -152,7 +152,7 @@
 ### P0 — 关键问题（内存安全、数据竞争、安全漏洞）
 - [x] **P0-1: 全局反射注册表无锁保护** — `src/core/reflect.c:15-16`
   `g_registry` / `g_registry_count` 多线程下存在数据竞争（懒加载初始化 `uv_mutex_t` 非线程安全）。已改为显式初始化。
-- [x] **P0-2: WebSocket 帧长度整数溢出** — `src/core/websocket.c:60`
+- [x] **P0-2: WebSocket 帧长度整数溢出** — `src/protocols/websocket.c:60`
   `malloc(header_len + len)` 中 len 接近 SIZE_MAX 时加法回绕。应在 malloc 前校验。
 - [x] **P0-3: on_body realloc 失败后 body 指针悬空** — `src/core/server.c:215-221`
   realloc 失败时不释放旧 request.body，连接继续运行不报错。

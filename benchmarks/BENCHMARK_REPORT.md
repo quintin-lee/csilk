@@ -1,7 +1,7 @@
 # Csilk Performance Benchmark Report
 
 > **Date**: 2026-05-25
-> **Version**: 0.2.1 (Release mode)
+> **Version**: 0.2.3 (Release mode)
 > **Hardware**: Manjaro Linux, x86_64 (4 workers)
 
 ## Methodology
