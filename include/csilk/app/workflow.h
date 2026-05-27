@@ -243,6 +243,20 @@ void csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router);
  */
 void csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy);
 
+/**
+ * @brief Set a timeout for a specific node.
+ * @param node       Node handle.
+ * @param timeout_ms Timeout in milliseconds (0 for no timeout).
+ */
+void csilk_wf_node_set_timeout(csilk_wf_node_t* node, int timeout_ms);
+
+/**
+ * @brief Set a global TTL for the workflow execution.
+ * @param wf      Workflow handle.
+ * @param ttl_sec TTL in seconds (0 for no limit).
+ */
+void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec);
+
 /* --- Execution --- */
 
 /**
