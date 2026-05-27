@@ -20,6 +20,7 @@
 
 #include "cJSON.h"
 #include "csilk/drivers/ai.h"
+#include "csilk/drivers/cipher.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/perm.h"
 #include "csilk/reflection/reflect.h"
@@ -1993,6 +1994,17 @@ typedef struct {
  */
 void csilk_server_set_crypto_driver(csilk_server_t* server,
                                     csilk_crypto_driver_t* driver);
+
+/**
+ * @brief Set the global cipher algorithm driver for the server.
+ *
+ * Replaces the built-in AES/RSA routines with a user-provided implementation.
+ *
+ * @param server The server instance.
+ * @param driver Pointer to a csilk_cipher_driver_t.
+ */
+void csilk_server_set_cipher_driver(csilk_server_t* server,
+                                    csilk_cipher_driver_t* driver);
 
 /**
  * @brief Create a new server instance.

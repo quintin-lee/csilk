@@ -129,7 +129,7 @@ if(MYSQL_INCLUDE_DIR)
   include_directories(${MYSQL_INCLUDE_DIR})
 endif()'
     LINK_DB=' ${MYSQL_LIB}'
-    HDR_DB='#include "csilk_db.h"'
+    HDR_DB='#include "csilk/drivers/db.h"'
     SETUP_DB='  csilk_db_init();'
     CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
     USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("mysql", "host=127.0.0.1;port=3306;user=root;password=secret;dbname='"${PROJECT_NAME}"'");'
@@ -139,14 +139,14 @@ if(NOT PQ_LIB)
   message(FATAL_ERROR "libpq not found")
 endif()'
     LINK_DB=' ${PQ_LIB}'
-    HDR_DB='#include "csilk_db.h"'
+    HDR_DB='#include "csilk/drivers/db.h"'
     SETUP_DB='  csilk_db_init();'
     CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
     USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("postgres", "host=127.0.0.1 port=5432 user=postgres password=secret dbname='"${PROJECT_NAME}"'");'
   elif [ "$DB" = "sqlite" ]; then
     BUILD_DB=''
     LINK_DB=''
-    HDR_DB='#include "csilk_db.h"'
+    HDR_DB='#include "csilk/drivers/db.h"'
     SETUP_DB='  csilk_db_init();'
     CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
     USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "'"${PROJECT_NAME}"'.db");'
@@ -161,7 +161,7 @@ endif()'
 
   PERM_HDR=""; PERM_INIT=""; PERM_MID=""; PERM_ROUTES=""; PERM_RULES=""
   if [ "$USE_PERM" = "1" ]; then
-    PERM_HDR='#include "csilk_perm.h"'
+    PERM_HDR='#include "csilk/drivers/perm.h"'
     PERM_INIT='  csilk_perm_init();
   csilk_perm_simple_allow("admin", "*", "*");
   csilk_perm_simple_allow("user", "read", "*");
@@ -176,23 +176,43 @@ endif()'
     SWAGGER_SETUP='  csilk_app_enable_openapi(app, 1);'
   fi
 
-  AI_HDR=""; AI_SETUP=""; AI_CLEANUP=""
+  # Layered Sources
+  LAYERED_SOURCES="  src/main.c
+  src/api/user_handler.c
+  src/service/user_service.c
+  src/model/user.c"
+
+  AI_HDR=""; AI_SETUP=""; AI_CLEANUP=""; AI_GLOBALS=""
   if [ "$AI_PROVIDER" != "none" ]; then
     AI_HDR='#include "csilk/drivers/ai.h"'
-    AI_SETUP='  csilk_ai_t* ai = csilk_ai_new(config->ai.driver, config->ai.api_key, config->ai.base_url);
-  csilk_ai_context_t* ai_ctx = csilk_ai_context_new(10);
-  csilk_set(app, "ai", ai);
-  csilk_set(app, "ai_ctx", ai_ctx);'
+    AI_GLOBALS="static csilk_ai_t* ai = NULL;\nstatic csilk_ai_context_t* ai_ctx = NULL;"
+    AI_SETUP='  csilk_config_t* cfg = csilk_app_config(app);
+  if (cfg) {
+    ai = csilk_ai_new(cfg->ai.driver, cfg->ai.api_key, cfg->ai.base_url);
+    if (ai) {
+      ai_ctx = csilk_ai_context_new(10);
+    }
+    csilk_config_free(cfg);
+    free(cfg);
+  }
+
+  /* Middleware to inject AI handles into request context */
+  void ai_injector_middleware(csilk_ctx_t* c) {
+    csilk_set(c, "ai", ai);
+    csilk_set(c, "ai_ctx", ai_ctx);
+  }
+  csilk_app_use(app, ai_injector_middleware);'
     AI_CLEANUP='  csilk_ai_free(ai);
   csilk_ai_context_free(ai_ctx);'
-    LAYERED_SOURCES="${LAYERED_SOURCES}\n  src/api/ai_handler.c"
+    LAYERED_SOURCES="${LAYERED_SOURCES}
+  src/api/ai_handler.c"
   fi
 
   CIPHER_HDR=""; CIPHER_SETUP=""
   if [ "$USE_CIPHER" = "1" ]; then
     CIPHER_HDR='#include "csilk/drivers/cipher.h"'
-    CIPHER_SETUP='  extern csilk_cipher_driver_t openssl_cipher_driver;
-  csilk_server_set_cipher_driver(csilk_app_server(app), &openssl_cipher_driver);'
+    CIPHER_SETUP='  extern csilk_cipher_driver_t csilk_default_cipher_driver;
+  csilk_server_set_cipher_driver(csilk_app_server(app), &csilk_default_cipher_driver);'
   fi
 
   MID_SETUP=""
@@ -201,12 +221,6 @@ endif()'
   if [ "$MID_RATELIMIT" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, ratelimit_middleware_wrapper);\n"; fi
   if [ "$MID_SESSION" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_session_start);\n"; fi
   if [ "$MID_REQUESTID" = "y" ]; then MID_SETUP="${MID_SETUP}  csilk_app_use(app, csilk_request_id_middleware);\n"; fi
-
-  # Layered Sources
-  LAYERED_SOURCES="  src/main.c
-  src/api/user_handler.c
-  src/service/user_service.c
-  src/model/user.c"
 }
 
 generate_gitignore() {
@@ -269,6 +283,13 @@ YAML
 }
 
 generate_cmake() {
+  local OPENSSL_FIND=""
+  local OPENSSL_LINK=""
+  if [ "$USE_CIPHER" = "1" ]; then
+    OPENSSL_FIND="find_package(OpenSSL REQUIRED)"
+    OPENSSL_LINK=" OpenSSL::Crypto"
+  fi
+
   cat > CMakeLists.txt <<CMAKE
 cmake_minimum_required(VERSION 3.11)
 project(${PROJECT_NAME} C)
@@ -306,8 +327,9 @@ if(NOT csilk_FOUND)
   endif()
 endif()
 
-# ── find CURL ──
+# ── find CURL & OpenSSL ──
 find_package(CURL REQUIRED)
+${OPENSSL_FIND}
 
 # ── sources ──
 set(SOURCES
@@ -316,7 +338,7 @@ ${LAYERED_SOURCES}
 
 # ── executable ──
 add_executable(${PROJECT_NAME} \${SOURCES})
-target_link_libraries(${PROJECT_NAME} PRIVATE \${CSILK_LIB}\${LINK_DB} \${CURL_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PRIVATE \${CSILK_LIB}\${LINK_DB}${OPENSSL_LINK} \${CURL_LIBRARIES})
 target_include_directories(${PROJECT_NAME} PRIVATE 
   src
   src/api
@@ -360,11 +382,11 @@ typedef struct {
 } user_t;
 
 /* Map user_t to "user_t" string for reflection auto-dispatch.
-   Must be defined before including csilk_reflect.h/csilk.h */
+   Must be defined before including csilk/reflection/reflect.h/csilk.h */
 #undef CSILK_USER_TYPE_MAP
 #define CSILK_USER_TYPE_MAP , user_t: "user_t"
 
-#include "csilk_reflect.h"
+#include "csilk/reflection/reflect.h"
 
 #define USER_FIELDS(_) \\
     _(user_t, id, CSILK_TYPE_INT32, 0, 0, false, NULL) \\
@@ -487,18 +509,72 @@ void admin_handler(csilk_ctx_t* c) {
 SRC
 }
 
+generate_ai_handler() {
+  cat > src/api/ai_handler.h <<HDR
+#ifndef API_AI_HANDLER_H
+#define API_AI_HANDLER_H
+#include "csilk.h"
+void chat_handler(csilk_ctx_t* c);
+#endif
+HDR
+
+  cat > src/api/ai_handler.c <<SRC
+#include "ai_handler.h"
+#include <stdlib.h>
+
+void chat_handler(csilk_ctx_t* c) {
+    csilk_ai_t* ai = csilk_get(c, "ai");
+    csilk_ai_context_t* ctx = csilk_get(c, "ai_ctx");
+    if (!ai) {
+        csilk_json_error(c, 500, "AI driver not initialized");
+        return;
+    }
+
+    const char* user_msg = csilk_get_query(c, "msg");
+    if (!user_msg) {
+        csilk_json_error(c, 400, "Missing 'msg' query parameter");
+        return;
+    }
+
+    csilk_ai_context_add(ctx, "user", user_msg);
+
+    csilk_ai_chat_request_t req = {
+        .model = "gpt-4o",
+        .messages = ctx->messages,
+        .message_count = ctx->count,
+        .temperature = 0.7
+    };
+
+    csilk_ai_chat_response_t res = {0};
+    if (csilk_ai_chat(ai, &req, &res) == 0) {
+        csilk_ai_context_add(ctx, "assistant", res.content);
+        csilk_json_error(c, 200, res.content); // Simplified for boilerplate
+        csilk_ai_chat_response_free(&res);
+    } else {
+        csilk_json_error(c, 500, "AI chat failed");
+    }
+}
+SRC
+}
+
 generate_main() {
   cat > src/main.c <<MAIN
+#include <stdlib.h>
+#include <string.h>
 #include "user.h"
 #include "csilk.h"
 MAIN
 
   if [ "$API_STYLE" = "app" ]; then
-    echo '#include "csilk_app.h"' >> src/main.c
+    echo '#include "csilk/app/app.h"' >> src/main.c
   fi
 
   if [ -n "$HDR_DB" ]; then echo "$HDR_DB" >> src/main.c; fi
   if [ -n "$PERM_HDR" ]; then echo "$PERM_HDR" >> src/main.c; fi
+  if [ -n "$AI_HDR" ]; then echo "$AI_HDR" >> src/main.c; fi
+  if [ -n "$CIPHER_HDR" ]; then echo "$CIPHER_HDR" >> src/main.c; fi
+  if [ "$AI_PROVIDER" != "none" ]; then echo '#include "ai_handler.h"' >> src/main.c; fi
+  if [ -n "$AI_GLOBALS" ]; then echo -e "\n$AI_GLOBALS" >> src/main.c; fi
   
   cat >> src/main.c <<MAIN
 #include "user_handler.h"
@@ -558,6 +634,11 @@ MAIN
   csilk_app_t* app = csilk_app_new("config.yaml");
   if (!app) return 1;
 
+MAIN
+    if [ -n "$CIPHER_SETUP" ]; then echo "$CIPHER_SETUP" >> src/main.c; fi
+    if [ -n "$AI_SETUP" ]; then echo "$AI_SETUP" >> src/main.c; fi
+
+    cat >> src/main.c <<MAIN
   /* App-specific middleware */
 MAIN
 
@@ -583,9 +664,12 @@ MAIN
                      "Create User", "Creates a new user");
 
 MAIN
-    if [ -n "$PERM_ROUTES" ]; then echo "  $PERM_ROUTES" >> src/main.c; fi
+  if [ "$AI_PROVIDER" != "none" ]; then
+    echo '  csilk_app_get(app, "/api/chat", chat_handler);' >> src/main.c
+  fi
+  if [ -n "$PERM_ROUTES" ]; then echo "  $PERM_ROUTES" >> src/main.c; fi
 
-    cat >> src/main.c <<MAIN
+  cat >> src/main.c <<MAIN
 
   printf("\n  Service started on port ${PORT}\n");
   printf("  Swagger UI: http://localhost:${PORT}/\n");
@@ -594,6 +678,7 @@ MAIN
   int rc = csilk_app_run(app, ${PORT});
 MAIN
     if [ -n "$CLEANUP_DB" ]; then echo "$CLEANUP_DB" >> src/main.c; fi
+    if [ -n "$AI_CLEANUP" ]; then echo "$AI_CLEANUP" >> src/main.c; fi
     cat >> src/main.c <<MAIN
   csilk_app_free(app);
   return rc;
@@ -852,6 +937,9 @@ generate_cmake
 generate_model
 generate_service
 generate_api
+if [ "$AI_PROVIDER" != "none" ]; then
+  generate_ai_handler
+fi
 generate_main
 generate_readme
 
