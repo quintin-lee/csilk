@@ -57,4 +57,22 @@ void csilk_wf_free(csilk_wf_t* wf);
 csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
                               csilk_wf_handler_t handler, void* user_data);
 
+/* --- Connections --- */
+
+/**
+ * @brief Bind two nodes sequentially (default routing).
+ * @param from Source node.
+ * @param to   Destination node.
+ */
+void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to);
+
+/**
+ * @brief Add a conditional route between nodes.
+ * @param from      Source node.
+ * @param condition Result string that triggers this route (e.g., "fail").
+ * @param to        Destination node.
+ */
+void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
+                 csilk_wf_node_t* to);
+
 #endif /* CSILK_WORKFLOW_H */
