@@ -57,6 +57,15 @@ void csilk_wf_free(csilk_wf_t* wf);
 csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
                               csilk_wf_handler_t handler, void* user_data);
 
+/**
+ * @brief Mark a node as an entry point for the workflow.
+ * @param node     Node handle.
+ * @param is_entry Non-zero to mark as entry, 0 to unmark.
+ * @note By default, nodes with 0 incoming edges are entries. Use this
+ *       to explicitly start a node that is also part of a loop.
+ */
+void csilk_wf_node_set_entry(csilk_wf_node_t* node, int is_entry);
+
 /* --- Connections --- */
 
 /**

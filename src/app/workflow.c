@@ -8,6 +8,8 @@
 #include <string.h>
 #include <uv.h>
 
+#define MAX_WORKFLOW_STEPS 1000
+
 typedef struct csilk_wf_edge_s {
   char* condition;           /**< NULL for default/bind. */
   csilk_wf_node_t* target;   /**< Destination node. */
@@ -24,6 +26,7 @@ struct csilk_wf_node_s {
   size_t edge_capacity;
   
   int incoming_count;        /**< Number of incoming edges. */
+  int is_entry;              /**< Explicitly marked as entry node. */
 };
 
 struct csilk_wf_s {
@@ -40,7 +43,8 @@ typedef struct csilk_wf_ctx_s {
   void (*callback)(csilk_data_t*);
   
   int* node_input_counts;    /**< Tracking received inputs per node index. */
-  int nodes_completed;       /**< Total unique nodes that finished (for cleanup). */
+  int total_executions;      /**< Safety counter to prevent infinite loops. */
+  int nodes_active;          /**< Number of nodes currently running or queued. */
   uv_mutex_t mutex;
 } csilk_wf_ctx_t;
 
@@ -105,6 +109,10 @@ csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
   return node;
 }
 
+void csilk_wf_node_set_entry(csilk_wf_node_t* node, int is_entry) {
+  if (node) node->is_entry = is_entry;
+}
+
 static void node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to) {
   if (!from || !to) return;
   
@@ -134,6 +142,13 @@ void csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* 
 
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input);
 
+static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
+  if (!ctx) return;
+  uv_mutex_destroy(&ctx->mutex);
+  free(ctx->node_input_counts);
+  free(ctx);
+}
+
 static void worker_cb(uv_work_t* req) {
   node_work_t* work = (node_work_t*)req->data;
   work->output = work->node->handler(work->input, work->node->user_data);
@@ -146,12 +161,8 @@ static void after_worker_cb(uv_work_t* req, int status) {
   csilk_wf_node_t* node = work->node;
   csilk_data_t* output = work->output;
 
-  uv_mutex_lock(&ctx->mutex);
-  ctx->nodes_completed++;
-  uv_mutex_unlock(&ctx->mutex);
-
   // Find matching outgoing edges
-  int triggered = 0;
+  int triggered_count = 0;
   for (size_t i = 0; i < node->edge_count; i++) {
     csilk_wf_edge_t* edge = &node->edges[i];
     
@@ -167,34 +178,42 @@ static void after_worker_cb(uv_work_t* req, int status) {
       int ready = 0;
       
       uv_mutex_lock(&ctx->mutex);
-      ctx->node_input_counts[target->index]++;
-      if (ctx->node_input_counts[target->index] >= target->incoming_count) {
-        ready = 1;
-        // Optional: reset for loops if we support them later
+      if (ctx->total_executions < MAX_WORKFLOW_STEPS) {
+        ctx->node_input_counts[target->index]++;
+        if (ctx->node_input_counts[target->index] >= target->incoming_count) {
+          ready = 1;
+          ctx->node_input_counts[target->index] = 0; // Reset for loops
+        }
       }
       uv_mutex_unlock(&ctx->mutex);
       
       if (ready) {
         execute_node(ctx, target, output);
+        triggered_count++;
       }
-      triggered = 1;
     }
   }
   
-  // Terminal condition logic: 
-  // If this was a terminal node (no outgoing edges triggered), call final callback.
-  // In a parallel graph, multiple branches might "end". For now, call callback on each.
-  if (!triggered && ctx->callback) {
+  uv_mutex_lock(&ctx->mutex);
+  ctx->nodes_active--;
+  int current_active = ctx->nodes_active;
+  uv_mutex_unlock(&ctx->mutex);
+
+  // If no successors were triggered AND no other nodes are active, we are done.
+  if (triggered_count == 0 && current_active == 0 && ctx->callback) {
     ctx->callback(output);
+    cleanup_ctx(ctx);
   }
   
-  // Cleanup work context
   free(work);
-  
-  // TODO: Cleanup ctx when ALL nodes are finished.
 }
 
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input) {
+  uv_mutex_lock(&ctx->mutex);
+  ctx->total_executions++;
+  ctx->nodes_active++;
+  uv_mutex_unlock(&ctx->mutex);
+
   node_work_t* work = calloc(1, sizeof(node_work_t));
   work->req.data = work;
   work->ctx = ctx;
@@ -219,7 +238,8 @@ void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
   
   int started = 0;
   for (size_t i = 0; i < wf->node_count; i++) {
-    if (wf->nodes[i]->incoming_count == 0) {
+    // Start nodes that are explicitly marked OR have 0 incoming edges.
+    if (wf->nodes[i]->is_entry || wf->nodes[i]->incoming_count == 0) {
       execute_node(ctx, wf->nodes[i], input);
       started = 1;
     }
@@ -227,8 +247,6 @@ void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
   
   if (!started && callback) {
     callback(NULL);
-    uv_mutex_destroy(&ctx->mutex);
-    free(ctx->node_input_counts);
-    free(ctx);
+    cleanup_ctx(ctx);
   }
 }
