@@ -27,6 +27,7 @@ $darkmode
 <link href="$relpath^$stylesheet" rel="stylesheet" type="text/css" />
 $extrastylesheet
 <script type="text/javascript" src="$relpath^mermaid.min.js"></script>
+<script>mermaid.startOnLoad = false;</script>
 <script type="text/javascript">
 //<![CDATA[
 document.addEventListener("DOMContentLoaded", function() {
@@ -51,7 +52,8 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
   if (mermaidBlocks.length > 0) {
-    mermaid.initialize({ startOnLoad: true, theme: document.documentElement.getAttribute("data-color-mode") === "dark" ? "dark" : "default" });
+    mermaid.initialize({ theme: document.documentElement.getAttribute("data-color-mode") === "dark" ? "dark" : "default" });
+    mermaid.run({ nodes: mermaidBlocks }).catch(function(err) { console.error("Mermaid rendering error:", err); });
   }
 });
 //]]>
