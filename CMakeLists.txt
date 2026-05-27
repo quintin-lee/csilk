@@ -176,6 +176,8 @@ set(CSILK_SOURCES
     src/drivers/ai_openai.c
     src/drivers/ai_ollama.c
     src/app/workflow.c
+    src/app/workflow_wal.c
+    src/app/workflow_loader.c
 )
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
@@ -327,6 +329,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_csilk_test(test_workflow_agentic tests/test_workflow_agentic.c)
   add_csilk_test(test_workflow_control tests/test_workflow_control.c)
   add_csilk_test(test_workflow_dx tests/test_workflow_dx.c)
+  add_csilk_test(test_workflow_persistence tests/test_workflow_persistence.c)
+  add_csilk_test(test_workflow_tracing tests/test_workflow_tracing.c)
+  add_csilk_test(test_workflow_loader tests/test_workflow_loader.c)
   add_csilk_test(test_mq_integration tests/test_mq_integration.c)
   add_csilk_test(test_mq tests/test_mq.c)
   add_csilk_test(test_mq_persistence tests/test_mq_persistence.c)
@@ -403,7 +408,7 @@ endif()
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_cipher test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_app_integration test_swagger test_metrics test_workflow_lifecycle test_workflow_graph test_workflow_exec test_workflow_parallel test_workflow_agentic test_workflow_control test_workflow_dx test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext test_server_ext test_ai_ext
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_cipher test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_app_integration test_swagger test_metrics test_workflow_lifecycle test_workflow_graph test_workflow_exec test_workflow_parallel test_workflow_agentic test_workflow_control test_workflow_dx test_workflow_persistence test_workflow_tracing test_workflow_loader test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext test_server_ext test_ai_ext
     COMMENT "Running all tests with ctest"
 )
 

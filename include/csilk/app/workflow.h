@@ -32,7 +32,30 @@ typedef struct csilk_data_s {
   char* type;               /**< MIME-like type identifier. */
   void* value;              /**< Opaque data pointer. */
   void (*free_fn)(void*);   /**< Optional callback to free the value. */
+  void* meta;               /**< Optional metadata (e.g., AI token usage). */
 } csilk_data_t;
+
+/** @brief Trace record for a single node execution. */
+typedef struct {
+  char* node_id;
+  uint64_t start_time;      /**< Microseconds (uv_hrtime) */
+  uint64_t end_time;        /**< Microseconds */
+  char* input_dump;         /**< String representation of input */
+  char* output_dump;        /**< String representation of output */
+  char* model;              /**< AI model used (if applicable) */
+  int prompt_tokens;
+  int completion_tokens;
+  char* error;              /**< Error message if failed */
+} csilk_wf_trace_node_t;
+
+/** @brief Complete execution trace of a workflow. */
+typedef struct {
+  char* exec_id;            /**< Unique execution ID */
+  uint64_t start_time;
+  uint64_t end_time;
+  csilk_wf_trace_node_t** nodes;
+  size_t node_count;
+} csilk_wf_trace_t;
 
 /**
  * @brief Dynamic router function signature.
@@ -130,6 +153,14 @@ csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id,
                                  const csilk_ai_config_t* config);
 
 /**
+ * @brief Get a node by ID.
+ * @param wf Workflow handle.
+ * @param id Node ID.
+ * @return Node handle or NULL if not found.
+ */
+csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id);
+
+/**
  * @brief Mark a node as an entry point for the workflow.
  * @param node     Node handle.
  * @param is_entry Non-zero to mark as entry, 0 to unmark.
@@ -191,13 +222,72 @@ void csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy
 /* --- Execution --- */
 
 /**
+ * @brief Enable WAL persistence for a workflow definition.
+ * @param wf Workflow handle.
+ * @param wal_dir Directory to store execution logs.
+ */
+void csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir);
+
+/**
  * @brief Run the workflow asynchronously.
  * @param wf       Workflow handle.
  * @param input    Initial input data.
  * @param callback Callback invoked when the workflow completes or exits.
+ * @return Unique Execution ID (string). Caller must not free.
  */
-void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
-                  void (*callback)(csilk_data_t* result));
+const char* csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
+                         void (*callback)(csilk_data_t* result));
+
+/**
+ * @brief Resume an interrupted workflow execution from a WAL file.
+ * @param wf Workflow definition.
+ * @param exec_id The execution ID to resume.
+ * @param callback Callback for when the resumed workflow finishes.
+ */
+void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
+                     void (*callback)(csilk_data_t* result));
+
+/**
+ * @brief Run workflow and generate a trace.
+ * @param wf Workflow handle.
+ * @param input Initial input.
+ * @param callback Callback receiving final result and the full trace.
+ */
+void csilk_wf_run_traced(csilk_wf_t* wf, csilk_data_t* input,
+                         void (*callback)(csilk_data_t* result,
+                                          csilk_wf_trace_t* trace));
+
+/**
+ * @brief Convert a trace object to a JSON string.
+ * @return JSON string (caller must free).
+ */
+char* csilk_wf_trace_to_json(const csilk_wf_trace_t* trace);
+
+/**
+ * @brief Free a trace object.
+ */
+void csilk_wf_trace_free(csilk_wf_trace_t* trace);
+
+/* --- Declarative API --- */
+
+/**
+ * @brief Register a global handler for use in declarative workflows.
+ * @param name    Unique name (matches 'handler' key in YAML/JSON).
+ * @param handler Function pointer.
+ */
+void csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler);
+
+/**
+ * @brief Load a workflow definition from a YAML file.
+ * @param path Path to the .yaml or .yml file.
+ * @return Workflow handle, or NULL on failure.
+ */
+csilk_wf_t* csilk_wf_load_yaml(const char* path);
+
+/**
+ * @brief Create a workflow from a JSON string.
+ */
+csilk_wf_t* csilk_wf_from_json(const char* json);
 
 /* --- Visualization --- */
 
