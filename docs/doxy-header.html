@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", function() {
     var firstLine = frag.querySelector("div.line");
     if (!firstLine) return;
     var text = firstLine.textContent.trim();
-    if (/^(graph |flowchart |sequenceDiagram |classDiagram |stateDiagram |gantt |pie |erDiagram |journey |gitgraph |mindmap |timeline |xychart )/.test(text)) {
+    if (/^(graph\b|flowchart\b|sequenceDiagram\b|classDiagram\b|stateDiagram\b|gantt\b|pie\b|erDiagram\b|journey\b|gitgraph\b|mindmap\b|timeline\b|xychart\b)/.test(text)) {
       // Collect all text content, preserving newlines
       var lines = frag.querySelectorAll("div.line");
       var code = "";
