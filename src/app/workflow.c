@@ -438,6 +438,35 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
   return res;
 }
 
+typedef struct {
+    csilk_wf_ctx_t* ctx;
+    csilk_ai_tool_call_t* tc;
+    char* result;
+    uv_mutex_t* mutex;
+    uv_cond_t* cond;
+    int* pending;
+} sub_tool_work_t;
+
+static void sub_worker_cb(uv_work_t* req) {
+    sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
+    sw->result = NULL;
+    for (size_t j = 0; j < sw->ctx->wf->tool_count; j++) {
+        if (strcmp(sw->ctx->wf->tools[j].name, sw->tc->name) == 0) {
+            sw->result = sw->ctx->wf->tools[j].fn(sw->tc->arguments, sw->ctx->wf->tools[j].user_data);
+            break;
+        }
+    }
+}
+
+static void after_sub_worker_cb(uv_work_t* req, int status) {
+    (void)status;
+    sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
+    uv_mutex_lock(sw->mutex);
+    (*sw->pending)--;
+    uv_cond_signal(sw->cond);
+    uv_mutex_unlock(sw->mutex);
+}
+
 static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
   (void)input; csilk_ai_config_t* config = (csilk_ai_config_t*)user_data;
   char* prompt = resolve_templates(ctx, config->prompt);
@@ -464,14 +493,39 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, v
       csilk_ai_chat_response_t res;
       if (csilk_ai_chat(ai, &req, &res) != 0) break;
       if (res.tool_call_count > 0) {
-          if (msg_count + res.tool_call_count + 1 >= msg_capacity) { msg_capacity *= 2; msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity); }
-          msgs[msg_count].role = "assistant"; msgs[msg_count].content = res.content ? strdup(res.content) : strdup(""); msg_count++;
-          for (size_t i = 0; i < res.tool_call_count; i++) {
-              csilk_ai_tool_call_t* tc = &res.tool_calls[i]; char* result_json = NULL;
-              for (size_t j = 0; j < ctx->wf->tool_count; j++) if (strcmp(ctx->wf->tools[j].name, tc->name) == 0) { result_json = ctx->wf->tools[j].fn(tc->arguments, ctx->wf->tools[j].user_data); break; }
-              msgs[msg_count].role = "tool"; msgs[msg_count].content = result_json ? result_json : strdup("{}"); msg_count++;
+          if (msg_count + res.tool_call_count + 1 >= msg_capacity) { 
+              msg_capacity += res.tool_call_count + 16;
+              msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity); 
           }
-          csilk_ai_chat_response_free(&res); continue;
+          msgs[msg_count].role = "assistant"; msgs[msg_count].content = res.content ? strdup(res.content) : strdup(""); msg_count++;
+
+          // Parallel Execution of Tool Calls
+          uv_mutex_t m; uv_cond_t c; int pending = (int)res.tool_call_count;
+          uv_mutex_init(&m); uv_cond_init(&c);
+          sub_tool_work_t* sws = calloc(res.tool_call_count, sizeof(sub_tool_work_t));
+          uv_work_t* reqs = calloc(res.tool_call_count, sizeof(uv_work_t));
+          
+          for (size_t i = 0; i < res.tool_call_count; i++) {
+              sws[i].ctx = ctx; sws[i].tc = &res.tool_calls[i];
+              sws[i].mutex = &m; sws[i].cond = &c; sws[i].pending = &pending;
+              reqs[i].data = &sws[i];
+              uv_queue_work(ctx->wf->loop, &reqs[i], sub_worker_cb, after_sub_worker_cb);
+          }
+          
+          uv_mutex_lock(&m);
+          while (pending > 0) uv_cond_wait(&c, &m);
+          uv_mutex_unlock(&m);
+          
+          for (size_t i = 0; i < res.tool_call_count; i++) {
+              msgs[msg_count].role = "tool";
+              msgs[msg_count].content = sws[i].result ? sws[i].result : strdup("{}");
+              msg_count++;
+          }
+          
+          free(sws); free(reqs);
+          uv_mutex_destroy(&m); uv_cond_destroy(&c);
+          csilk_ai_chat_response_free(&res);
+          continue;
       }
       out = csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, res.content));
       csilk_ai_meta_t* meta = csilk_wf_alloc(ctx, sizeof(csilk_ai_meta_t));
