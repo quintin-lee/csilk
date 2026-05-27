@@ -13,10 +13,14 @@ typedef struct csilk_wf_edge_s {
 
 struct csilk_wf_node_s {
   char* id;
+  int index;
   csilk_wf_handler_t handler;
   void* user_data;
   csilk_wf_edge_t* edges;
   size_t edge_count;
+  size_t edge_capacity;
+  int incoming_count;
+  int is_entry;
 };
 
 csilk_data_t* mock_handler(csilk_data_t* input, void* user_data) {
