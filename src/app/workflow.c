@@ -15,6 +15,7 @@ typedef struct csilk_wf_edge_s {
 
 struct csilk_wf_node_s {
   char* id;
+  int index;                 /**< Internal index for tracking in context. */
   csilk_wf_handler_t handler;
   void* user_data;
   
@@ -38,7 +39,8 @@ typedef struct csilk_wf_ctx_s {
   csilk_data_t* initial_input;
   void (*callback)(csilk_data_t*);
   
-  int* node_input_counts;    /**< Dynamic array tracking received inputs per node. */
+  int* node_input_counts;    /**< Tracking received inputs per node index. */
+  int nodes_completed;       /**< Total unique nodes that finished (for cleanup). */
   uv_mutex_t mutex;
 } csilk_wf_ctx_t;
 
@@ -95,6 +97,7 @@ csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
   if (!node) return NULL;
 
   node->id = strdup(id);
+  node->index = (int)wf->node_count;
   node->handler = handler;
   node->user_data = user_data;
 
@@ -143,16 +146,15 @@ static void after_worker_cb(uv_work_t* req, int status) {
   csilk_wf_node_t* node = work->node;
   csilk_data_t* output = work->output;
 
-  // Cleanup input if needed? For now assume caller manages it or we copy.
-  
+  uv_mutex_lock(&ctx->mutex);
+  ctx->nodes_completed++;
+  uv_mutex_unlock(&ctx->mutex);
+
   // Find matching outgoing edges
   int triggered = 0;
   for (size_t i = 0; i < node->edge_count; i++) {
     csilk_wf_edge_t* edge = &node->edges[i];
     
-    // Match condition
-    // For now, if edge->condition is NULL, it's a default/bind edge.
-    // If edge->condition is set, match against output->type.
     int match = 0;
     if (edge->condition == NULL) {
       match = 1;
@@ -161,25 +163,35 @@ static void after_worker_cb(uv_work_t* req, int status) {
     }
     
     if (match) {
-      execute_node(ctx, edge->target, output);
+      csilk_wf_node_t* target = edge->target;
+      int ready = 0;
+      
+      uv_mutex_lock(&ctx->mutex);
+      ctx->node_input_counts[target->index]++;
+      if (ctx->node_input_counts[target->index] >= target->incoming_count) {
+        ready = 1;
+        // Optional: reset for loops if we support them later
+      }
+      uv_mutex_unlock(&ctx->mutex);
+      
+      if (ready) {
+        execute_node(ctx, target, output);
+      }
       triggered = 1;
     }
   }
   
+  // Terminal condition logic: 
+  // If this was a terminal node (no outgoing edges triggered), call final callback.
+  // In a parallel graph, multiple branches might "end". For now, call callback on each.
   if (!triggered && ctx->callback) {
-    // End of workflow or branch
-    // Simple logic: if no successors were triggered, we might be done.
-    // In a DAG, we should count total nodes completed.
-    // For Task 3, we just call the callback with the final output.
     ctx->callback(output);
-    
-    // Cleanup context (ideally after all branches finish)
-    // uv_mutex_destroy(&ctx->mutex);
-    // free(ctx->node_input_counts);
-    // free(ctx);
   }
   
+  // Cleanup work context
   free(work);
+  
+  // TODO: Cleanup ctx when ALL nodes are finished.
 }
 
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input) {
@@ -194,7 +206,10 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_
 
 void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
                   void (*callback)(csilk_data_t* result)) {
-  if (!wf) return;
+  if (!wf || wf->node_count == 0) {
+    if (callback) callback(NULL);
+    return;
+  }
   
   csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
   ctx->wf = wf;
@@ -202,7 +217,6 @@ void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
   ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
   uv_mutex_init(&ctx->mutex);
   
-  // Find entry nodes (incoming_count == 0)
   int started = 0;
   for (size_t i = 0; i < wf->node_count; i++) {
     if (wf->nodes[i]->incoming_count == 0) {
@@ -213,6 +227,7 @@ void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
   
   if (!started && callback) {
     callback(NULL);
+    uv_mutex_destroy(&ctx->mutex);
     free(ctx->node_input_counts);
     free(ctx);
   }
