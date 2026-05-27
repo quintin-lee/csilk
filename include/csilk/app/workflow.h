@@ -152,6 +152,30 @@ csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
 csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id,
                                  const csilk_ai_config_t* config);
 
+/* --- Tool Calling --- */
+
+/**
+ * @brief Function signature for a workflow tool.
+ * @param args_json JSON string of arguments provided by the LLM.
+ * @param user_data Opaque pointer passed during registration.
+ * @return JSON string or text result (caller will free).
+ */
+typedef char* (*csilk_wf_tool_fn)(const char* args_json, void* user_data);
+
+/**
+ * @brief Register a tool that AI nodes can call.
+ * @param wf Workflow handle.
+ * @param name Function name exposed to the LLM.
+ * @param description Description of what the tool does.
+ * @param parameters_json JSON Schema string for the arguments.
+ * @param fn C function to execute.
+ * @param user_data Context for the function.
+ */
+void csilk_wf_register_tool(csilk_wf_t* wf, const char* name,
+                            const char* description,
+                            const char* parameters_json, csilk_wf_tool_fn fn,
+                            void* user_data);
+
 /**
  * @brief Get a node by ID.
  * @param wf Workflow handle.
