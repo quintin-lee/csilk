@@ -1,6 +1,6 @@
 /**
  * @file workflow.c
- * @brief AI Workflow engine implementation with WAL persistence, Tracing, and Tools.
+ * @brief AI Workflow engine implementation with WAL persistence, Tracing, Tools, Monitoring, and Budgeting.
  */
 
 #include "csilk/app/workflow.h"
@@ -11,6 +11,7 @@
 #include <string.h>
 #include <uv.h>
 #include <stdio.h>
+#include <time.h>
 
 #define MAX_WORKFLOW_STEPS 1000
 
@@ -62,6 +63,13 @@ struct csilk_wf_s {
   csilk_wf_tool_entry_t* tools; /**< Registered tools. */
   size_t tool_count;
   size_t tool_capacity;
+  
+  csilk_ctx_t** monitors;    /**< WebSocket connections for monitoring. */
+  size_t monitor_count;
+  size_t monitor_capacity;
+  uv_mutex_t monitor_mutex;
+  
+  int max_tokens;            /**< Maximum total tokens allowed. */
 };
 
 struct csilk_wf_ctx_s {
@@ -85,6 +93,9 @@ struct csilk_wf_ctx_s {
   
   csilk_wf_trace_t* trace;   /**< Execution history. */
   uv_mutex_t trace_mutex;    /**< Protects trace appends. */
+  
+  int total_tokens;          /**< Cumulative tokens used. */
+  int is_terminated;         /**< Hard stop flag (e.g., budget exceeded). */
 };
 
 typedef struct node_work_s {
@@ -110,6 +121,7 @@ csilk_wf_t* csilk_wf_new(const char* name) {
   if (wf) {
     wf->name = strdup(name);
     wf->loop = uv_default_loop();
+    uv_mutex_init(&wf->monitor_mutex);
   }
   return wf;
 }
@@ -138,6 +150,8 @@ void csilk_wf_free(csilk_wf_t* wf) {
       free(wf->tools[i].parameters_json);
   }
   free(wf->tools);
+  uv_mutex_destroy(&wf->monitor_mutex);
+  free(wf->monitors);
   free(wf);
 }
 
@@ -196,6 +210,45 @@ void csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir) {
   if (!wf) return;
   free(wf->wal_dir);
   wf->wal_dir = wal_dir ? strdup(wal_dir) : NULL;
+}
+
+/* --- Monitoring --- */
+
+void csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c) {
+    if (!wf || !c) return;
+    uv_mutex_lock(&wf->monitor_mutex);
+    if (wf->monitor_count >= wf->monitor_capacity) {
+        size_t new_cap = wf->monitor_capacity == 0 ? 4 : wf->monitor_capacity * 2;
+        csilk_ctx_t** new_monitors = realloc(wf->monitors, sizeof(csilk_ctx_t*) * new_cap);
+        if (new_monitors) {
+            wf->monitors = new_monitors;
+            wf->monitor_capacity = new_cap;
+        }
+    }
+    if (wf->monitor_count < wf->monitor_capacity) {
+        wf->monitors[wf->monitor_count++] = c;
+    }
+    uv_mutex_unlock(&wf->monitor_mutex);
+}
+
+static void _wf_broadcast(csilk_wf_t* wf, const char* event, const char* node_id, const char* payload) {
+    if (!wf || wf->monitor_count == 0) return;
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "event", event);
+    if (node_id) cJSON_AddStringToObject(root, "node_id", node_id);
+    if (payload) cJSON_AddStringToObject(root, "payload", payload);
+    cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+    char* json = cJSON_PrintUnformatted(root);
+    uv_mutex_lock(&wf->monitor_mutex);
+    for (size_t i = 0; i < wf->monitor_count; i++) csilk_ws_send(wf->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+    uv_mutex_unlock(&wf->monitor_mutex);
+    free(json); cJSON_Delete(root);
+}
+
+/* --- Budget --- */
+
+void csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens) {
+    if (wf) wf->max_tokens = max_tokens;
 }
 
 /* --- Memory Helpers --- */
@@ -267,86 +320,44 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, v
   if (!api_key) return NULL;
   csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
   if (!ai) return NULL;
-
-  /* Setup Tools */
   csilk_ai_tool_t* tools = NULL;
   if (ctx->wf->tool_count > 0) {
       tools = calloc(ctx->wf->tool_count, sizeof(csilk_ai_tool_t));
       for (size_t i = 0; i < ctx->wf->tool_count; i++) {
-          tools[i].type = "function";
-          tools[i].function.name = ctx->wf->tools[i].name;
+          tools[i].type = "function"; tools[i].function.name = ctx->wf->tools[i].name;
           tools[i].function.description = ctx->wf->tools[i].description;
-          if (ctx->wf->tools[i].parameters_json) {
-              tools[i].function.parameters_json = cJSON_Parse(ctx->wf->tools[i].parameters_json);
-          }
+          if (ctx->wf->tools[i].parameters_json) tools[i].function.parameters_json = cJSON_Parse(ctx->wf->tools[i].parameters_json);
       }
   }
-
-  size_t msg_capacity = 16;
-  csilk_ai_message_t* msgs = calloc(msg_capacity, sizeof(csilk_ai_message_t));
-  size_t msg_count = 0;
+  size_t msg_capacity = 16; csilk_ai_message_t* msgs = calloc(msg_capacity, sizeof(csilk_ai_message_t)); size_t msg_count = 0;
   if (config->system_msg) { msgs[msg_count].role = "system"; msgs[msg_count].content = strdup(config->system_msg); msg_count++; }
   msgs[msg_count].role = "user"; msgs[msg_count].content = strdup(prompt); msg_count++;
-
-  csilk_data_t* out = NULL;
-  int iterations = 0;
+  csilk_data_t* out = NULL; int iterations = 0;
   while (iterations < 10) {
       iterations++;
-      csilk_ai_chat_request_t req = {
-          .model = config->model ? config->model : "gpt-3.5-turbo",
-          .messages = msgs, .message_count = msg_count,
-          .temperature = config->temperature > 0 ? config->temperature : 0.7,
-          .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
-          .tools = tools, .tool_count = ctx->wf->tool_count
-      };
+      csilk_ai_chat_request_t req = { .model = config->model ? config->model : "gpt-3.5-turbo", .messages = msgs, .message_count = msg_count, .temperature = config->temperature > 0 ? config->temperature : 0.7, .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024, .tools = tools, .tool_count = ctx->wf->tool_count };
       csilk_ai_chat_response_t res;
       if (csilk_ai_chat(ai, &req, &res) != 0) break;
-
       if (res.tool_call_count > 0) {
-          // Add assistant message with tool calls to history
-          if (msg_count + res.tool_call_count + 1 >= msg_capacity) {
-              msg_capacity *= 2; msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity);
-          }
+          if (msg_count + res.tool_call_count + 1 >= msg_capacity) { msg_capacity *= 2; msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity); }
           msgs[msg_count].role = "assistant"; msgs[msg_count].content = res.content ? strdup(res.content) : strdup(""); msg_count++;
-
           for (size_t i = 0; i < res.tool_call_count; i++) {
-              csilk_ai_tool_call_t* tc = &res.tool_calls[i];
-              char* result_json = NULL;
-              for (size_t j = 0; j < ctx->wf->tool_count; j++) {
-                  if (strcmp(ctx->wf->tools[j].name, tc->name) == 0) {
-                      result_json = ctx->wf->tools[j].fn(tc->arguments, ctx->wf->tools[j].user_data);
-                      break;
-                  }
-              }
-              msgs[msg_count].role = "tool"; // Note: OpenAI uses "tool" role and requires tool_call_id
-              // For simplicity in our unified driver, we might need to extend csilk_ai_message_t for tool_call_id
-              // but for now let's just append the content.
-              msgs[msg_count].content = result_json ? result_json : strdup("{}");
-              msg_count++;
+              csilk_ai_tool_call_t* tc = &res.tool_calls[i]; char* result_json = NULL;
+              for (size_t j = 0; j < ctx->wf->tool_count; j++) if (strcmp(ctx->wf->tools[j].name, tc->name) == 0) { result_json = ctx->wf->tools[j].fn(tc->arguments, ctx->wf->tools[j].user_data); break; }
+              msgs[msg_count].role = "tool"; msgs[msg_count].content = result_json ? result_json : strdup("{}"); msg_count++;
           }
-          csilk_ai_chat_response_free(&res);
-          continue; // Loop for next LLM turn
+          csilk_ai_chat_response_free(&res); continue;
       }
-
-      // Final text response
       out = csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, res.content));
       csilk_ai_meta_t* meta = csilk_wf_alloc(ctx, sizeof(csilk_ai_meta_t));
-      meta->model = csilk_wf_strdup(ctx, req.model);
-      meta->prompt_tokens = res.prompt_tokens; meta->completion_tokens = res.completion_tokens;
+      meta->model = csilk_wf_strdup(ctx, req.model); meta->prompt_tokens = res.prompt_tokens; meta->completion_tokens = res.completion_tokens;
       out->meta = meta;
-      csilk_ai_chat_response_free(&res);
-      break;
+      csilk_ai_chat_response_free(&res); break;
   }
-
-  // Cleanup
   for (size_t i = 0; i < msg_count; i++) free((void*)msgs[i].content);
   free(msgs);
-  if (tools) {
-      for (size_t i = 0; i < ctx->wf->tool_count; i++) cJSON_Delete(tools[i].function.parameters_json);
-      free(tools);
-  }
-  csilk_ai_free(ai);
-  return out;
+  if (tools) { for (size_t i = 0; i < ctx->wf->tool_count; i++) cJSON_Delete(tools[i].function.parameters_json); free(tools); }
+  csilk_ai_free(ai); return out;
 }
 
 csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config) {
@@ -361,26 +372,24 @@ csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_
 void csilk_wf_register_tool(csilk_wf_t* wf, const char* name, const char* description,
                             const char* parameters_json, csilk_wf_tool_fn fn, void* user_data) {
     if (!wf || !name || !fn) return;
+    uv_mutex_lock(&wf->monitor_mutex);
     if (wf->tool_count >= wf->tool_capacity) {
         size_t new_cap = wf->tool_capacity == 0 ? 4 : wf->tool_capacity * 2;
         csilk_wf_tool_entry_t* new_tools = realloc(wf->tools, sizeof(csilk_wf_tool_entry_t) * new_cap);
-        if (!new_tools) return;
-        wf->tools = new_tools;
-        wf->tool_capacity = new_cap;
+        if (new_tools) { wf->tools = new_tools; wf->tool_capacity = new_cap; }
     }
-    csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
-    entry->name = strdup(name);
-    entry->description = description ? strdup(description) : NULL;
-    entry->parameters_json = parameters_json ? strdup(parameters_json) : NULL;
-    entry->fn = fn;
-    entry->user_data = user_data;
+    if (wf->tool_count < wf->tool_capacity) {
+        csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
+        entry->name = strdup(name); entry->description = description ? strdup(description) : NULL;
+        entry->parameters_json = parameters_json ? strdup(parameters_json) : NULL;
+        entry->fn = fn; entry->user_data = user_data;
+    }
+    uv_mutex_unlock(&wf->monitor_mutex);
 }
 
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id) {
   if (!wf || !id) return NULL;
-  for (size_t i = 0; i < wf->node_count; i++) {
-    if (strcmp(wf->nodes[i]->id, id) == 0) return wf->nodes[i];
-  }
+  for (size_t i = 0; i < wf->node_count; i++) if (strcmp(wf->nodes[i]->id, id) == 0) return wf->nodes[i];
   return NULL;
 }
 
@@ -442,6 +451,8 @@ void csilk_wf_trace_free(csilk_wf_trace_t* trace) {
 
 /* --- Scheduler Implementation --- */
 
+static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input);
+
 static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
   if (!ctx) return;
   uv_mutex_destroy(&ctx->mutex); uv_mutex_destroy(&ctx->arena_mutex); uv_mutex_destroy(&ctx->trace_mutex);
@@ -465,6 +476,7 @@ static void wal_log_event(csilk_wf_ctx_t* ctx, csilk_wf_event_type_t type, const
 
 static void worker_cb(uv_work_t* req) {
   node_work_t* work = (node_work_t*)req->data;
+  _wf_broadcast(work->ctx->wf, "node_start", work->node->id, NULL);
   work->output = work->node->handler(work->ctx, work->input, work->node->user_data);
 }
 
@@ -472,8 +484,18 @@ static void after_worker_cb(uv_work_t* req, int status) {
   (void)status;
   node_work_t* work = (node_work_t*)req->data;
   csilk_wf_ctx_t* ctx = work->ctx; csilk_wf_node_t* node = work->node; csilk_data_t* output = work->output;
-  uv_mutex_lock(&ctx->mutex); ctx->node_outputs[node->index] = output; uv_mutex_unlock(&ctx->mutex);
+
+  uv_mutex_lock(&ctx->mutex);
+  ctx->node_outputs[node->index] = output;
+  if (output && output->meta) {
+      csilk_ai_meta_t* am = (csilk_ai_meta_t*)output->meta;
+      ctx->total_tokens += am->prompt_tokens + am->completion_tokens;
+  }
+  uv_mutex_unlock(&ctx->mutex);
+
   wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
+  _wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : NULL);
+
   if (work->trace_node) {
       work->trace_node->end_time = uv_hrtime() / 1000;
       if (output) {
@@ -489,11 +511,35 @@ static void after_worker_cb(uv_work_t* req, int status) {
       ctx->trace->nodes[ctx->trace->node_count++] = work->trace_node;
       uv_mutex_unlock(&ctx->trace_mutex);
   }
+
+  uv_mutex_lock(&ctx->mutex);
+  if (ctx->wf->max_tokens > 0 && ctx->total_tokens > ctx->wf->max_tokens) {
+      ctx->is_terminated = 1;
+      printf("[Workflow] Budget exceeded: %d > %d. Terminating.\n", ctx->total_tokens, ctx->wf->max_tokens);
+  }
+  int terminated = ctx->is_terminated;
+  uv_mutex_unlock(&ctx->mutex);
+
+  if (terminated) {
+      uv_mutex_lock(&ctx->mutex);
+      ctx->nodes_active--;
+      int current_active = ctx->nodes_active;
+      uv_mutex_unlock(&ctx->mutex);
+      if (current_active == 0) {
+          if (ctx->trace_callback) ctx->trace_callback(NULL, ctx->trace);
+          else if (ctx->callback) ctx->callback(NULL);
+          if (ctx->trace_callback) ctx->trace = NULL;
+          cleanup_ctx(ctx);
+      }
+      free(work); return;
+  }
+
   if (output == NULL && node->error_target) {
     execute_node(ctx, node->error_target, NULL);
     uv_mutex_lock(&ctx->mutex); ctx->nodes_active--; uv_mutex_unlock(&ctx->mutex);
     free(work); return;
   }
+
   int triggered_count = 0;
   if (node->router_fn) {
     const char* target_id = node->router_fn(output);
@@ -518,9 +564,11 @@ static void after_worker_cb(uv_work_t* req, int status) {
       }
     }
   }
+  
   uv_mutex_lock(&ctx->mutex); ctx->nodes_active--; int current_active = ctx->nodes_active; uv_mutex_unlock(&ctx->mutex);
   if (triggered_count == 0 && current_active == 0) {
     wal_log_event(ctx, WF_EV_END, NULL, NULL);
+    _wf_broadcast(ctx->wf, "workflow_end", NULL, output ? (char*)output->value : NULL);
     if (ctx->trace) ctx->trace->end_time = uv_hrtime() / 1000;
     if (ctx->trace_callback) ctx->trace_callback(output, ctx->trace); else if (ctx->callback) ctx->callback(output);
     if (ctx->trace_callback) ctx->trace = NULL; else if (ctx->trace) { csilk_wf_trace_free(ctx->trace); ctx->trace = NULL; }
@@ -530,7 +578,13 @@ static void after_worker_cb(uv_work_t* req, int status) {
 }
 
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input) {
+  uv_mutex_lock(&ctx->mutex);
+  if (ctx->is_terminated) { uv_mutex_unlock(&ctx->mutex); return; }
+  uv_mutex_unlock(&ctx->mutex);
+
   wal_log_event(ctx, WF_EV_NODE_START, node->id, NULL);
+  _wf_broadcast(ctx->wf, "node_queued", node->id, NULL);
+
   node_work_t* work = calloc(1, sizeof(node_work_t));
   if (ctx->trace) {
       csilk_wf_trace_node_t* tn = calloc(1, sizeof(csilk_wf_trace_node_t));
@@ -558,6 +612,7 @@ static const char* csilk_wf_run_ext_internal(csilk_wf_t* wf, csilk_data_t* input
   ctx->node_input_counts = calloc(wf->node_count, sizeof(int)); ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
   ctx->arena = csilk_arena_new(0); uv_mutex_init(&ctx->mutex); uv_mutex_init(&ctx->arena_mutex); uv_mutex_init(&ctx->trace_mutex);
   csilk_generate_uuid(ctx->exec_id);
+  _wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : NULL);
   if (wf->wal_dir) {
       char path[512]; snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, ctx->exec_id); ctx->wal_path = strdup(path);
       wal_log_event(ctx, WF_EV_START, NULL, input);

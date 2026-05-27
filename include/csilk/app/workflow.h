@@ -322,4 +322,20 @@ csilk_wf_t* csilk_wf_from_json(const char* json);
  */
 char* csilk_wf_to_mermaid(csilk_wf_t* wf);
 
+/* --- Monitoring --- */
+
+/**
+ * @brief Register a WebSocket connection to receive live workflow updates.
+ * @param wf Workflow handle.
+ * @param c  Request context (must be upgraded to WebSocket).
+ */
+void csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c);
+
+/**
+ * @brief Set a maximum token budget for the workflow.
+ * @param wf         Workflow handle.
+ * @param max_tokens Maximum total tokens (prompt + completion) allowed.
+ */
+void csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens);
+
 #endif /* CSILK_WORKFLOW_H */
