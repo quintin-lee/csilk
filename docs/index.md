@@ -46,7 +46,6 @@ graph TB
         Z["zlib"]
         CURL["libcurl"]
         end
-        ...
         S --> CFG
         S --> UV
         S --> LL

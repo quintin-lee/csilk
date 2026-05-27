@@ -17,6 +17,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev libpq-dev
         
+    - name: Validate Mermaid diagrams
+      run: python3 scripts/check_mermaid.py .
+        
     - name: Configure CMake
       run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON -DENABLE_OOM_TEST=ON
       

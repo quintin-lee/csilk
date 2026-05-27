@@ -26,6 +26,9 @@ jobs:
             libcurl4-openssl-dev \
             libpq-dev
 
+      - name: Validate Mermaid diagrams
+        run: python3 scripts/check_mermaid.py .
+
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DENABLE_OOM_TEST=ON
 
