@@ -9,26 +9,20 @@
 static int g_steps_completed = 0;
 static char* g_final_result = NULL;
 
-csilk_data_t* step1_handler(csilk_data_t* input, void* user_data) {
+csilk_data_t* step1_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
     (void)user_data;
     printf("Executing Step 1: %s\n", (char*)input->value);
     g_steps_completed++;
     
-    csilk_data_t* out = calloc(1, sizeof(csilk_data_t));
-    out->type = strdup("text/plain");
-    out->value = strdup("result from step 1");
-    return out;
+    return csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, "result from step 1"));
 }
 
-csilk_data_t* step2_handler(csilk_data_t* input, void* user_data) {
+csilk_data_t* step2_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
     (void)user_data;
     printf("Executing Step 2: %s\n", (char*)input->value);
     g_steps_completed++;
     
-    csilk_data_t* out = calloc(1, sizeof(csilk_data_t));
-    out->type = strdup("text/plain");
-    out->value = strdup("result from step 2");
-    return out;
+    return csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, "result from step 2"));
 }
 
 void on_workflow_complete(csilk_data_t* result) {
@@ -36,16 +30,15 @@ void on_workflow_complete(csilk_data_t* result) {
     if (result) {
         g_final_result = strdup((char*)result->value);
         printf("Final Result: %s\n", g_final_result);
-        
-        // Cleanup result if we are the owner
-        free(result->type);
-        free(result->value);
-        free(result);
+        // No need to free result->value or result here if they are in the arena, 
+        // but the ctx is cleaned up after this.
+        // Wait, the ctx is cleaned up AFTER the callback in after_worker_cb.
+        // So result is valid during the callback.
     }
 }
 
 void test_workflow_exec_sequential() {
-    printf("Testing sequential workflow execution...\n");
+    printf("Testing sequential workflow execution with Arena...\n");
     g_steps_completed = 0;
     if (g_final_result) { free(g_final_result); g_final_result = NULL; }
     
@@ -60,7 +53,6 @@ void test_workflow_exec_sequential() {
     
     csilk_wf_run(wf, &initial_input, on_workflow_complete);
     
-    // Run the event loop
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
     
     assert(g_steps_completed == 2);

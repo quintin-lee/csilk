@@ -11,16 +11,14 @@ static int g_n2a_done = 0;
 static int g_n2b_done = 0;
 static int g_n3_done = 0;
 
-csilk_data_t* start_handler(csilk_data_t* input, void* user_data) {
+csilk_data_t* start_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
     (void)input; (void)user_data;
     printf("Start Node\n");
-    csilk_data_t* out = calloc(1, sizeof(csilk_data_t));
-    out->type = strdup("init");
-    return out;
+    return csilk_wf_data_new(ctx, "init", NULL);
 }
 
-csilk_data_t* n2a_handler(csilk_data_t* input, void* user_data) {
-    (void)input; (void)user_data;
+csilk_data_t* n2a_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     printf("N2a: sleeping...\n");
     usleep(100000); // 100ms
     g_n2a_done = 1;
@@ -28,15 +26,15 @@ csilk_data_t* n2a_handler(csilk_data_t* input, void* user_data) {
     return NULL;
 }
 
-csilk_data_t* n2b_handler(csilk_data_t* input, void* user_data) {
-    (void)input; (void)user_data;
+csilk_data_t* n2b_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     printf("N2b: done\n");
     g_n2b_done = 1;
     return NULL;
 }
 
-csilk_data_t* n3_handler(csilk_data_t* input, void* user_data) {
-    (void)input; (void)user_data;
+csilk_data_t* n3_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    (void)ctx; (void)input; (void)user_data;
     printf("N3 (Join) executing\n");
     assert(g_n2a_done == 1);
     assert(g_n2b_done == 1);
