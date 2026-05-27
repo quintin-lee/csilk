@@ -75,4 +75,15 @@ void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to);
 void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
                  csilk_wf_node_t* to);
 
+/* --- Execution --- */
+
+/**
+ * @brief Run the workflow asynchronously.
+ * @param wf       Workflow handle.
+ * @param input    Initial input data.
+ * @param callback Callback invoked when the workflow completes or exits.
+ */
+void csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
+                  void (*callback)(csilk_data_t* result));
+
 #endif /* CSILK_WORKFLOW_H */
