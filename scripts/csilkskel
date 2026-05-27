@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CSILK_VERSION="f1950d5"
+CSILK_VERSION="175fe90"
 AI_PROVIDER="none"
 USE_CIPHER="0"
 MID_REQUESTID="n"
@@ -702,7 +702,7 @@ MAIN
   csilk_server_use(server, csilk_recovery_handler);
   csilk_server_use(server, csilk_logger_handler);
 MAIN
-    if [ -n "$PERM_MID" ]; then echo "  csilk_server_use(server, csilk_perm_auto_middleware_passthrough);" >> src/main.c; fi
+    if [ -n "$PERM_MID" ]; then echo "  csilk_server_use(server, csilk_perm_auto_middleware);" >> src/main.c; fi
     if [ -n "$USE_DB_EXEC" ]; then echo "${USE_DB_EXEC}" >> src/main.c; fi
 
     cat >> src/main.c <<MAIN
