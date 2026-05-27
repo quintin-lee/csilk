@@ -33,6 +33,9 @@ jobs:
             libcurl4-openssl-dev \
             libpq-dev
 
+      - name: Validate Mermaid diagrams
+        run: python3 scripts/check_mermaid.py .
+
       - name: Configure CMake (for clang-assisted parsing)
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 

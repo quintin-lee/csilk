@@ -55,12 +55,27 @@ endif()
 
 # 查找 doxygen
 find_program(DOXYGEN_EXECUTABLE doxygen)
+find_program(CURL_EXECUTABLE curl)
 if(DOXYGEN_EXECUTABLE)
-    add_custom_target(docs
-        COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating documentation with Doxygen"
-    )
+    set(MERMAID_JS "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/mermaid.min.js")
+    set(MERMAID_URL "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js")
+    if(CURL_EXECUTABLE)
+        add_custom_target(docs
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets"
+            COMMAND ${CURL_EXECUTABLE} -sL -o "${MERMAID_JS}" "${MERMAID_URL}"
+            COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Generating documentation with Doxygen (Mermaid diagrams enabled)"
+        )
+        message(STATUS "Found curl: ${CURL_EXECUTABLE}")
+    else()
+        add_custom_target(docs
+            COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Generating documentation with Doxygen (curl not found, Mermaid may be disabled)"
+        )
+        message(WARNING "curl not found — Mermaid diagrams may not render in Doxygen output")
+    endif()
 endif()
 
 include(FetchContent)

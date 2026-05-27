@@ -1,0 +1,22 @@
+/* Mermaid diagram styling for Doxygen HTML output */
+
+div.mermaid {
+  text-align: center;
+  margin: 1.5em 0;
+  padding: 0.5em;
+  overflow-x: auto;
+}
+
+div.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Dark mode support */
+html[data-color-mode="dark"] div.mermaid {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+html[data-color-mode="dark"] div.mermaid svg {
+  background: transparent;
+}

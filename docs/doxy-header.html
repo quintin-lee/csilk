@@ -1,0 +1,106 @@
+<!-- HTML header for doxygen 1.16.1-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="$langISO">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=11"/>
+<meta name="generator" content="Doxygen $doxygenversion"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!--BEGIN PROJECT_NAME--><title>$projectname: $title</title><!--END PROJECT_NAME-->
+<!--BEGIN !PROJECT_NAME--><title>$title</title><!--END !PROJECT_NAME-->
+<!--BEGIN PROJECT_ICON-->
+<link rel="icon" href="$relpath^$projecticon" type="image/x-icon" />
+<!--END PROJECT_ICON-->
+<link href="$relpath^tabs.css" rel="stylesheet" type="text/css"/>
+<!--BEGIN FULL_SIDEBAR-->
+<script type="text/javascript">var page_layout=1;</script>
+<!--END FULL_SIDEBAR-->
+<script type="text/javascript" src="$relpath^jquery.js"></script>
+<script type="text/javascript" src="$relpath^dynsections.js"></script>
+<!--BEGIN COPY_CLIPBOARD-->
+<script type="text/javascript" src="$relpath^clipboard.js"></script>
+<!--END COPY_CLIPBOARD-->
+$treeview
+$search
+$mathjax
+$darkmode
+<link href="$relpath^$stylesheet" rel="stylesheet" type="text/css" />
+$extrastylesheet
+<script type="text/javascript" src="$relpath^mermaid.min.js"></script>
+<script type="text/javascript">
+//<![CDATA[
+document.addEventListener("DOMContentLoaded", function() {
+  // Doxygen renders ```mermaid blocks as <div class="fragment"><div class="line">...</div></div>
+  // Find all fragment divs whose first line indicates Mermaid content.
+  var fragments = document.querySelectorAll("div.fragment");
+  var mermaidBlocks = [];
+  fragments.forEach(function(frag) {
+    var firstLine = frag.querySelector("div.line");
+    if (!firstLine) return;
+    var text = firstLine.textContent.trim();
+    if (/^(graph |flowchart |sequenceDiagram |classDiagram |stateDiagram |gantt |pie |erDiagram |journey |gitgraph |mindmap |timeline |xychart )/.test(text)) {
+      // Collect all text content, preserving newlines
+      var lines = frag.querySelectorAll("div.line");
+      var code = "";
+      lines.forEach(function(l) { code += l.textContent + "\n"; });
+      var div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = code.trim();
+      frag.parentNode.replaceChild(div, frag);
+      mermaidBlocks.push(div);
+    }
+  });
+  if (mermaidBlocks.length > 0) {
+    mermaid.initialize({ startOnLoad: true, theme: document.documentElement.getAttribute("data-color-mode") === "dark" ? "dark" : "default" });
+  }
+});
+//]]>
+</script>
+</head>
+<body>
+<!--BEGIN FULL_SIDEBAR-->
+<div id="side-nav" class="ui-resizable side-nav-resizable"><!-- do not remove this div, it is closed by doxygen! -->
+<!--END FULL_SIDEBAR-->
+
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+
+<!--BEGIN TITLEAREA-->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr id="projectrow">
+  <!--BEGIN PROJECT_LOGO-->
+  <td id="projectlogo"><img alt="Logo" src="$relpath^$projectlogo"$logosize/></td>
+  <!--END PROJECT_LOGO-->
+  <!--BEGIN PROJECT_NAME-->
+  <td id="projectalign">
+   <div id="projectname">$projectname<!--BEGIN PROJECT_NUMBER--><span id="projectnumber">&#160;$projectnumber</span><!--END PROJECT_NUMBER-->
+   </div>
+   <!--BEGIN PROJECT_BRIEF--><div id="projectbrief">$projectbrief</div><!--END PROJECT_BRIEF-->
+  </td>
+  <!--END PROJECT_NAME-->
+  <!--BEGIN !PROJECT_NAME-->
+   <!--BEGIN PROJECT_BRIEF-->
+    <td>
+    <div id="projectbrief">$projectbrief</div>
+    </td>
+   <!--END PROJECT_BRIEF-->
+  <!--END !PROJECT_NAME-->
+  <!--BEGIN DISABLE_INDEX-->
+   <!--BEGIN SEARCHENGINE-->
+     <!--BEGIN !FULL_SIDEBAR-->
+    <td>$searchbox</td>
+     <!--END !FULL_SIDEBAR-->
+   <!--END SEARCHENGINE-->
+  <!--END DISABLE_INDEX-->
+ </tr>
+  <!--BEGIN SEARCHENGINE-->
+   <!--BEGIN FULL_SIDEBAR-->
+   <tr><td colspan="2">$searchbox</td></tr>
+   <!--END FULL_SIDEBAR-->
+  <!--END SEARCHENGINE-->
+ </tbody>
+</table>
+</div>
+<!--END TITLEAREA-->
+<!-- end header part -->
