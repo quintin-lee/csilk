@@ -1,6 +1,6 @@
 /**
  * @file workflow.c
- * @brief AI Workflow engine implementation with WAL persistence and Tracing.
+ * @brief AI Workflow engine implementation with WAL persistence, Tracing, and Tools.
  */
 
 #include "csilk/app/workflow.h"
@@ -19,6 +19,14 @@ typedef struct {
   int prompt_tokens;
   int completion_tokens;
 } csilk_ai_meta_t;
+
+typedef struct {
+  char* name;
+  char* description;
+  char* parameters_json;
+  csilk_wf_tool_fn fn;
+  void* user_data;
+} csilk_wf_tool_entry_t;
 
 typedef struct csilk_wf_edge_s {
   char* condition;           /**< NULL for default/bind. */
@@ -50,6 +58,10 @@ struct csilk_wf_s {
   size_t node_capacity;
   uv_loop_t* loop;
   char* wal_dir;             /**< Persistence directory. */
+  
+  csilk_wf_tool_entry_t* tools; /**< Registered tools. */
+  size_t tool_count;
+  size_t tool_capacity;
 };
 
 struct csilk_wf_ctx_s {
@@ -120,6 +132,12 @@ void csilk_wf_free(csilk_wf_t* wf) {
     node_free(wf->nodes[i]);
   }
   free(wf->nodes);
+  for (size_t i = 0; i < wf->tool_count; i++) {
+      free(wf->tools[i].name);
+      free(wf->tools[i].description);
+      free(wf->tools[i].parameters_json);
+  }
+  free(wf->tools);
   free(wf);
 }
 
@@ -249,18 +267,83 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, v
   if (!api_key) return NULL;
   csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
   if (!ai) return NULL;
-  csilk_ai_message_t msgs[2]; int msg_count = 0;
-  if (config->system_msg) { msgs[msg_count].role = "system"; msgs[msg_count].content = config->system_msg; msg_count++; }
-  msgs[msg_count].role = "user"; msgs[msg_count].content = prompt; msg_count++;
-  csilk_ai_chat_request_t req = { .model = config->model ? config->model : "gpt-3.5-turbo", .messages = msgs, .message_count = (size_t)msg_count, .temperature = config->temperature > 0 ? config->temperature : 0.7, .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024 };
-  csilk_ai_chat_response_t res; csilk_data_t* out = NULL;
-  if (csilk_ai_chat(ai, &req, &res) == 0) {
+
+  /* Setup Tools */
+  csilk_ai_tool_t* tools = NULL;
+  if (ctx->wf->tool_count > 0) {
+      tools = calloc(ctx->wf->tool_count, sizeof(csilk_ai_tool_t));
+      for (size_t i = 0; i < ctx->wf->tool_count; i++) {
+          tools[i].type = "function";
+          tools[i].function.name = ctx->wf->tools[i].name;
+          tools[i].function.description = ctx->wf->tools[i].description;
+          if (ctx->wf->tools[i].parameters_json) {
+              tools[i].function.parameters_json = cJSON_Parse(ctx->wf->tools[i].parameters_json);
+          }
+      }
+  }
+
+  size_t msg_capacity = 16;
+  csilk_ai_message_t* msgs = calloc(msg_capacity, sizeof(csilk_ai_message_t));
+  size_t msg_count = 0;
+  if (config->system_msg) { msgs[msg_count].role = "system"; msgs[msg_count].content = strdup(config->system_msg); msg_count++; }
+  msgs[msg_count].role = "user"; msgs[msg_count].content = strdup(prompt); msg_count++;
+
+  csilk_data_t* out = NULL;
+  int iterations = 0;
+  while (iterations < 10) {
+      iterations++;
+      csilk_ai_chat_request_t req = {
+          .model = config->model ? config->model : "gpt-3.5-turbo",
+          .messages = msgs, .message_count = msg_count,
+          .temperature = config->temperature > 0 ? config->temperature : 0.7,
+          .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
+          .tools = tools, .tool_count = ctx->wf->tool_count
+      };
+      csilk_ai_chat_response_t res;
+      if (csilk_ai_chat(ai, &req, &res) != 0) break;
+
+      if (res.tool_call_count > 0) {
+          // Add assistant message with tool calls to history
+          if (msg_count + res.tool_call_count + 1 >= msg_capacity) {
+              msg_capacity *= 2; msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity);
+          }
+          msgs[msg_count].role = "assistant"; msgs[msg_count].content = res.content ? strdup(res.content) : strdup(""); msg_count++;
+
+          for (size_t i = 0; i < res.tool_call_count; i++) {
+              csilk_ai_tool_call_t* tc = &res.tool_calls[i];
+              char* result_json = NULL;
+              for (size_t j = 0; j < ctx->wf->tool_count; j++) {
+                  if (strcmp(ctx->wf->tools[j].name, tc->name) == 0) {
+                      result_json = ctx->wf->tools[j].fn(tc->arguments, ctx->wf->tools[j].user_data);
+                      break;
+                  }
+              }
+              msgs[msg_count].role = "tool"; // Note: OpenAI uses "tool" role and requires tool_call_id
+              // For simplicity in our unified driver, we might need to extend csilk_ai_message_t for tool_call_id
+              // but for now let's just append the content.
+              msgs[msg_count].content = result_json ? result_json : strdup("{}");
+              msg_count++;
+          }
+          csilk_ai_chat_response_free(&res);
+          continue; // Loop for next LLM turn
+      }
+
+      // Final text response
       out = csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, res.content));
       csilk_ai_meta_t* meta = csilk_wf_alloc(ctx, sizeof(csilk_ai_meta_t));
       meta->model = csilk_wf_strdup(ctx, req.model);
       meta->prompt_tokens = res.prompt_tokens; meta->completion_tokens = res.completion_tokens;
       out->meta = meta;
       csilk_ai_chat_response_free(&res);
+      break;
+  }
+
+  // Cleanup
+  for (size_t i = 0; i < msg_count; i++) free((void*)msgs[i].content);
+  free(msgs);
+  if (tools) {
+      for (size_t i = 0; i < ctx->wf->tool_count; i++) cJSON_Delete(tools[i].function.parameters_json);
+      free(tools);
   }
   csilk_ai_free(ai);
   return out;
@@ -273,6 +356,24 @@ csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_
   copy->system_msg = config->system_msg ? strdup(config->system_msg) : NULL;
   copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
   return csilk_wf_add(wf, id, ai_node_handler, copy);
+}
+
+void csilk_wf_register_tool(csilk_wf_t* wf, const char* name, const char* description,
+                            const char* parameters_json, csilk_wf_tool_fn fn, void* user_data) {
+    if (!wf || !name || !fn) return;
+    if (wf->tool_count >= wf->tool_capacity) {
+        size_t new_cap = wf->tool_capacity == 0 ? 4 : wf->tool_capacity * 2;
+        csilk_wf_tool_entry_t* new_tools = realloc(wf->tools, sizeof(csilk_wf_tool_entry_t) * new_cap);
+        if (!new_tools) return;
+        wf->tools = new_tools;
+        wf->tool_capacity = new_cap;
+    }
+    csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
+    entry->name = strdup(name);
+    entry->description = description ? strdup(description) : NULL;
+    entry->parameters_json = parameters_json ? strdup(parameters_json) : NULL;
+    entry->fn = fn;
+    entry->user_data = user_data;
 }
 
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id) {
