@@ -62,7 +62,7 @@ if(DOXYGEN_EXECUTABLE)
     if(CURL_EXECUTABLE)
         add_custom_target(docs
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets"
-            COMMAND ${CURL_EXECUTABLE} -sL -o "${MERMAID_JS}" "${MERMAID_URL}"
+            COMMAND ${CURL_EXECUTABLE} -fsSL --connect-timeout 10 --retry 3 -o "${MERMAID_JS}" "${MERMAID_URL}"
             COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Generating documentation with Doxygen (Mermaid diagrams enabled)"
