@@ -507,6 +507,21 @@ else()
     message(STATUS "clang-tidy not found — skipping")
 endif()
 
+# Mermaid diagram validation
+find_program(PYTHON3_EXECUTABLE python3)
+if(PYTHON3_EXECUTABLE)
+    add_custom_target(check-mermaid
+        COMMAND ${PYTHON3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_mermaid.py
+            ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Validating Mermaid diagrams in documentation"
+    )
+    message(STATUS "Found python3: ${PYTHON3_EXECUTABLE}")
+else()
+    message(STATUS "python3 not found — skipping Mermaid validation target")
+endif()
+
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
 set(CPACK_PACKAGE_VERSION "0.2.1")
