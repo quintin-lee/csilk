@@ -69,6 +69,7 @@ struct csilk_wf_node_s {
   char* output_schema; /**< JSON Schema for output validation. */
   int max_retries;     /**< Max automatic retry attempts. */
   int retry_delay_ms;  /**< Delay between retries. */
+  int is_remote;       /**< Offload to remote worker via MQ. */
 };
 
 /** @brief Workflow definition: a DAG of processing nodes connected by
@@ -96,6 +97,12 @@ struct csilk_wf_s {
   int max_tokens; /**< Maximum total tokens across all AI calls (0 = unlimited).
                    */
   int ttl_sec;    /**< Workflow Time-To-Live in seconds (0 = no limit). */
+  csilk_mq_t* mq; /**< Optional MQ for distributed execution. */
+
+  csilk_wf_ctx_t** active_contexts;
+  size_t active_context_count;
+  size_t active_context_capacity;
+  uv_mutex_t ctx_mutex;
 };
 
 /** @brief Workflow execution context — per-run state tracking all node
@@ -157,6 +164,11 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input);
 static void cleanup_ctx(csilk_wf_ctx_t* ctx);
 static void after_worker_cb(uv_work_t* req, int status);
+
+static void register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx);
+static void unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx);
+static csilk_wf_ctx_t* find_active_ctx(csilk_wf_t* wf, const char* exec_id);
+
 static const char* csilk_wf_run_ext_internal(
     csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t*),
     void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*));
@@ -204,6 +216,7 @@ csilk_wf_t* csilk_wf_new(const char* name) {
     wf->name = strdup(name);
     wf->loop = uv_default_loop();
     uv_mutex_init(&wf->monitor_mutex);
+    uv_mutex_init(&wf->ctx_mutex);
   }
   return wf;
 }
@@ -233,13 +246,15 @@ void csilk_wf_free(csilk_wf_t* wf) {
   }
   free(wf->tools);
   uv_mutex_destroy(&wf->monitor_mutex);
+  uv_mutex_destroy(&wf->ctx_mutex);
+  free(wf->active_contexts);
   free(wf->monitors);
   free(wf);
 }
 
 csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
                               csilk_wf_handler_t handler, void* user_data) {
-  if (!wf || !id || !handler) return NULL;
+  if (!wf || !id) return NULL;
   if (wf->node_count >= wf->node_capacity) {
     size_t new_cap = wf->node_capacity == 0 ? 8 : wf->node_capacity * 2;
     csilk_wf_node_t** new_nodes =
@@ -381,6 +396,98 @@ void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
   if (!node) return;
   node->max_retries = max_retries;
   node->retry_delay_ms = retry_delay_ms;
+}
+
+static csilk_data_t* remote_pass_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
+                                         void* user_data) {
+  (void)user_data;
+  return input;
+}
+
+void csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote) {
+  if (!node) return;
+  node->is_remote = is_remote;
+  if (is_remote && node->handler == NULL) {
+    node->handler = remote_pass_handler;
+  }
+}
+
+/* --- Registry for Distributed Workflows --- */
+static csilk_wf_t* g_distributed_wfs[32];
+static size_t g_distributed_wf_count = 0;
+
+static void on_remote_result(csilk_mq_ctx_t* m_ctx) {
+  size_t len;
+  const char* payload = csilk_mq_get_payload(m_ctx, &len);
+  if (!payload) {
+    csilk_mq_next(m_ctx);
+    return;
+  }
+  printf("[Workflow] Received remote result: %s\n", payload);
+
+  cJSON* root = cJSON_Parse(payload);
+  if (!root) {
+    csilk_mq_next(m_ctx);
+    return;
+  }
+
+  cJSON* j_exec_id = cJSON_GetObjectItem(root, "exec_id");
+  cJSON* j_node_id = cJSON_GetObjectItem(root, "node_id");
+  cJSON* j_output = cJSON_GetObjectItem(root, "output");
+
+  if (j_exec_id && cJSON_IsString(j_exec_id) && j_output &&
+      cJSON_IsString(j_output)) {
+    const char* exec_id = j_exec_id->valuestring;
+    const char* node_id = j_node_id ? j_node_id->valuestring : NULL;
+    const char* output_str = j_output->valuestring;
+
+    for (size_t i = 0; i < g_distributed_wf_count; i++) {
+      csilk_wf_t* wf = g_distributed_wfs[i];
+      
+      // 1. Check for Active Context (Hot Resume)
+      csilk_wf_ctx_t* active = find_active_ctx(wf, exec_id);
+      if (active) {
+          printf("[Workflow] Found active execution %s, resuming hot...\n", exec_id);
+          csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
+          // If node_id wasn't provided, we might have to search the context for a paused node
+          
+          if (n) {
+              uv_mutex_lock(&active->mutex);
+              active->node_approved[n->index] = 1;
+              active->nodes_active--; // Decrement the count we added during offload
+              uv_mutex_unlock(&active->mutex);
+              
+              csilk_data_t* out_data = csilk_wf_data_new(active, "application/json", 
+                                                        csilk_wf_strdup(active, output_str));
+              execute_node(active, n, out_data);
+              break;
+          }
+      }
+
+      // 2. Fallback to Cold Resume (WAL)
+      char path[512];
+      snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
+      if (access(path, F_OK) == 0) {
+        printf("[Workflow] Found WAL for %s, signaling continue (cold)...\n", exec_id);
+        csilk_data_t out_data = {"application/json", (void*)output_str, NULL,
+                                 NULL};
+        csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
+        break;
+      }
+    }
+  }
+
+  cJSON_Delete(root);
+  csilk_mq_next(m_ctx);
+}
+
+void csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq) {
+  if (!wf || !mq || !wf->wal_dir) return;
+  wf->mq = mq;
+  if (g_distributed_wf_count < 32) {
+    g_distributed_wfs[g_distributed_wf_count++] = wf;
+  }
+  csilk_mq_subscribe(mq, "csilk.wf.results", on_remote_result);
 }
 
 /* --- Memory Helpers --- */
@@ -953,6 +1060,46 @@ void csilk_wf_trace_free(csilk_wf_trace_t* trace) {
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input);
 
+static void register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx) {
+    uv_mutex_lock(&wf->ctx_mutex);
+    if (wf->active_context_count >= wf->active_context_capacity) {
+        size_t new_cap = wf->active_context_capacity == 0 ? 8 : wf->active_context_capacity * 2;
+        csilk_wf_ctx_t** new_ctxs = realloc(wf->active_contexts, sizeof(csilk_wf_ctx_t*) * new_cap);
+        if (new_ctxs) {
+            wf->active_contexts = new_ctxs;
+            wf->active_context_capacity = new_cap;
+        }
+    }
+    if (wf->active_context_count < wf->active_context_capacity) {
+        wf->active_contexts[wf->active_context_count++] = ctx;
+    }
+    uv_mutex_unlock(&wf->ctx_mutex);
+}
+
+static void unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx) {
+    uv_mutex_lock(&wf->ctx_mutex);
+    for (size_t i = 0; i < wf->active_context_count; i++) {
+        if (wf->active_contexts[i] == ctx) {
+            wf->active_contexts[i] = wf->active_contexts[--wf->active_context_count];
+            break;
+        }
+    }
+    uv_mutex_unlock(&wf->ctx_mutex);
+}
+
+static csilk_wf_ctx_t* find_active_ctx(csilk_wf_t* wf, const char* exec_id) {
+    csilk_wf_ctx_t* found = NULL;
+    uv_mutex_lock(&wf->ctx_mutex);
+    for (size_t i = 0; i < wf->active_context_count; i++) {
+        if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
+            found = wf->active_contexts[i];
+            break;
+        }
+    }
+    uv_mutex_unlock(&wf->ctx_mutex);
+    return found;
+}
+
 /** @brief Internal: free a workflow execution context and all resources.
  *
  * Stops and closes the TTL timer if active, destroys all mutexes,
@@ -962,6 +1109,7 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
  * @param ctx The execution context to clean up (may be NULL). */
 static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
   if (!ctx) return;
+  unregister_active_ctx(ctx->wf, ctx);
   if (ctx->wf->ttl_sec > 0) {
     uv_timer_stop(&ctx->ttl_timer);
     if (!uv_is_closing((uv_handle_t*)&ctx->ttl_timer)) {
@@ -1199,6 +1347,9 @@ static void after_worker_cb(uv_work_t* req, int status) {
       else if (output && output->type &&
                strcmp(output->type, edge->condition) == 0)
         match = 1;
+      
+      printf("[Workflow] Evaluating edge %zu to '%s' (match=%d)\n", i, edge->target->id, match);
+      
       if (match) {
         csilk_wf_node_t* target = edge->target;
         int ready = 0;
@@ -1207,6 +1358,9 @@ static void after_worker_cb(uv_work_t* req, int status) {
           ctx->node_input_counts[target->index]++;
           int threshold =
               target->incoming_count == 0 ? 1 : target->incoming_count;
+          
+          printf("[Workflow] Node '%s' input count: %d/%d\n", target->id, ctx->node_input_counts[target->index], threshold);
+          
           if (ctx->node_input_counts[target->index] >= threshold) {
             ready = 1;
             ctx->node_input_counts[target->index] = 0;
@@ -1214,6 +1368,7 @@ static void after_worker_cb(uv_work_t* req, int status) {
         }
         uv_mutex_unlock(&ctx->mutex);
         if (ready) {
+          printf("[Workflow] Triggering node '%s'\n", target->id);
           execute_node(ctx, target, output);
           triggered_count++;
         }
@@ -1296,6 +1451,33 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
            node->id);
     return;
   }
+
+  // 2. Handle Remote Nodes (MQ Offload)
+  if (node->is_remote && ctx->wf->mq && !ctx->node_approved[node->index]) {
+    ctx->is_paused = 1;
+    // We increment nodes_active even for remote tasks so the workflow doesn't
+    // finish while waiting for MQ. It acts as an "outstanding" task.
+    ctx->nodes_active++;
+    uv_mutex_unlock(&ctx->mutex);
+
+    cJSON* task = cJSON_CreateObject();
+    cJSON_AddStringToObject(task, "exec_id", ctx->exec_id);
+    cJSON_AddStringToObject(task, "node_id", node->id);
+    if (input && input->value)
+      cJSON_AddStringToObject(task, "input", (char*)input->value);
+    char* json = cJSON_PrintUnformatted(task);
+
+    csilk_mq_publish(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
+    wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
+    _wf_broadcast(ctx->wf, "node_remote_queued", node->id, json);
+
+    printf("[Workflow] Execution %s offloaded node '%s' to MQ\n", ctx->exec_id,
+           node->id);
+
+    free(json);
+    cJSON_Delete(task);
+    return;
+  }
   uv_mutex_unlock(&ctx->mutex);
 
   wal_log_event(ctx, WF_EV_NODE_START, node->id, NULL);
@@ -1371,6 +1553,8 @@ static const char* csilk_wf_run_ext_internal(
   uv_mutex_init(&ctx->arena_mutex);
   uv_mutex_init(&ctx->trace_mutex);
   csilk_generate_uuid(ctx->exec_id);
+
+  register_active_ctx(wf, ctx);
 
   if (wf->ttl_sec > 0) {
     uv_timer_init(wf->loop, &ctx->ttl_timer);
