@@ -163,6 +163,41 @@ static const char* csilk_wf_run_ext_internal(
 
 /* --- Lifecycle --- */
 
+#include <sys/stat.h>
+#include <unistd.h>
+
+static void serve_ui_handler(csilk_ctx_t* c) {
+  const char* paths[] = {"share/csilk/workflow_ui.html",
+                         "../share/csilk/workflow_ui.html",
+                         "/usr/local/share/csilk/workflow_ui.html"};
+
+  for (int i = 0; i < 3; i++) {
+    FILE* f = fopen(paths[i], "rb");
+    if (f) {
+      fseek(f, 0, SEEK_END);
+      long sz = ftell(f);
+      fseek(f, 0, SEEK_SET);
+      char* buf = malloc(sz + 1);
+      if (buf) {
+          if (fread(buf, 1, sz, f) == (size_t)sz) {
+              buf[sz] = '\0';
+              csilk_set_header(c, "Content-Type", "text/html");
+              csilk_string(c, 200, buf);
+          }
+          free(buf);
+      }
+      fclose(f);
+      return;
+    }
+  }
+  csilk_string(c, 404, "Workflow UI template not found.");
+}
+
+void csilk_wf_serve_ui(csilk_app_t* app, const char* path) {
+  if (!app || !path) return;
+  csilk_app_get(app, path, serve_ui_handler);
+}
+
 csilk_wf_t* csilk_wf_new(const char* name) {
   csilk_wf_t* wf = calloc(1, sizeof(csilk_wf_t));
   if (wf) {
