@@ -166,3 +166,16 @@ void csilk_arena_reset(csilk_arena_t* arena) {
     curr = curr->next;
   }
 }
+
+void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size,
+                           size_t* total_used) {
+  if (!arena || !total_size || !total_used) return;
+  *total_size = 0;
+  *total_used = 0;
+  csilk_arena_chunk_t* curr = arena->head;
+  while (curr) {
+    *total_size += curr->size;
+    *total_used += curr->used;
+    curr = curr->next;
+  }
+}
