@@ -12,6 +12,7 @@ compile_commands.json
 .vscode/
 .idea/
 .clangd/
+.codegraph/
 
 # Plans and Specs (keeping them in git is fine, but maybe user wants them ignored? No, standard is to keep them)
 

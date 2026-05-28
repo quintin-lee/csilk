@@ -538,7 +538,7 @@ static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
     mq->queue_head = msg;
   }
   mq->queue_tail = msg;
-  
+
   mq->published_total++;
   mq->queue_depth++;
   uv_mutex_unlock(&mq->queue_mutex);
@@ -547,7 +547,6 @@ static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
   uv_async_send(&mq->async_handle);
   return 0;
 }
-
 /** @brief Internal: recover messages from the Write-Ahead Log on startup.
  *
  * ## Recovery algorithm (WAL replay)
@@ -660,23 +659,7 @@ static int _mq_recovery(csilk_mq_t* mq) {
 
     if (calc_checksum == checksum) {
       /* Enqueue in memory without re-appending to WAL */
-      csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
-      if (msg) {
-          msg->topic = strdup(topic);
-          if (payload_len > 0) {
-              msg->payload = malloc(payload_len);
-              memcpy(msg->payload, payload, payload_len);
-              msg->len = payload_len;
-          }
-          uv_mutex_lock(&mq->queue_mutex);
-          if (mq->queue_tail) mq->queue_tail->next = msg;
-          else mq->queue_head = msg;
-          mq->queue_tail = msg;
-          
-          mq->published_total++;
-          mq->queue_depth++;
-          uv_mutex_unlock(&mq->queue_mutex);
-      }
+      _mq_enqueue(mq, topic, payload, payload_len);
     } else {
       free(topic);
       free(payload);
