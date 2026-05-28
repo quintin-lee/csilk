@@ -12,7 +12,7 @@ graph TB
     end
 
     subgraph "Layer 2: Middleware"
-        MW["Recovery | Logger | CORS | Auth\nRateLimit | CSRF | Static | Gzip | SSE | Multipart"]
+        MW["Recovery | Logger | CORS | Auth | JWT\nRateLimit | CSRF | Static | Gzip | SSE | Multipart\nMetrics | RequestID | Validate | Session"]
     end
 
     subgraph "Layer 3: Core"
@@ -23,7 +23,7 @@ graph TB
         end
         subgraph "AI & Data"
             AI["AI Unified Engine"]
-            DB["DB Abstraction"]
+            DB["DB Abstraction (SQLite/MySQL/PG/MongoDB)"]
             REFL["Reflection Engine"]
         end
         subgraph "Routing"
@@ -45,6 +45,14 @@ graph TB
         ZLIB["zlib"]
         SSL["OpenSSL"]
         CURL["libcurl"]
+        MQ["csilk_mq_t\n(Message Queue)"]
+    end
+
+    subgraph "Observability"
+        METRICS["Prometheus /metrics"]
+        ADMIN["Admin Dashboard /admin"]
+        ADMIN_STATS["Admin Stats /admin/stats"]
+        ADMIN_WS["Admin WS /admin/ws"]
     end
 
     H --> CTX
@@ -66,6 +74,10 @@ graph TB
     SRV --> CJ
     SRV --> YAML
     SRV --> ZLIB
+    SRV --> MQ
+    ADMIN --> METRICS
+    ADMIN --> SRV
+    ADMIN --> MQ
 ```
 
 ## Core Design Principles
@@ -303,6 +315,7 @@ struct csilk_server_s {
   SSL_CTX* ssl_ctx;               // OpenSSL context
   csilk_hook_node_t* hooks[HOOK_COUNT]; // Registered event listeners
   atomic_int active_connections;  // Thread-safe connection count
+  csilk_mq_t* mq;                 // Internal event bus
 };
 ```
 
@@ -312,6 +325,7 @@ struct csilk_server_s {
 graph TB
     csilk.h["csilk.h<br/>(Public API)"] --> csilk/core/internal.h["csilk/core/internal.h<br/>(Internal API)"]
     csilk/app/app.h["csilk/app/app.h<br/>(High-Level API)"]
+    csilk/app/admin.h["csilk/app/admin.h<br/>(Admin Dashboard API)"]
 
     subgraph src/core/
         server.c["server.c<br/>TCP + HTTP + libuv"] --> router.c["router.c<br/>Radix Tree"]
@@ -327,9 +341,10 @@ graph TB
         utils.c["utils.c<br/>SHA1 + Base64"]
     end
 
-    subgraph src/middleware/
+    subgraph src/middleware/ (15 modules)
         logger_mw.c["logger.c"] --> context.c
         auth.c --> context.c
+        jwt.c["jwt.c<br/>JWT Auth"] --> context.c
         cors.c --> context.c
         ratelimit.c --> context.c
         csrf.c --> context.c
@@ -337,12 +352,25 @@ graph TB
         gzip.c --> context.c
         sse.c --> context.c
         multipart.c --> context.c
+        metrics.c["metrics.c<br/>Prometheus"] --> context.c
+        request_id.c["request_id.c"] --> context.c
+        session.c["session.c"] --> context.c
+        validate.c["validate.c"] --> context.c
     end
 
     subgraph src/app/
         app.c["app.c<br/>High-Level Wrapper"] --> server.c
         app.c --> router.c
         app.c --> config.c
+        admin.c["admin.c<br/>Dashboard"] --> server.c
+        admin.c --> mq.c["mq.c<br/>Message Queue"]
+    end
+
+    subgraph src/drivers/
+        sqlite.c["sqlite.c"] --> data/db.c
+        mysql.c["mysql.c"] --> data/db.c
+        postgres.c["postgres.c"] --> data/db.c
+        mongodb.c["mongodb.c"] --> data/db.c
     end
 
     server.c --> libuv[libuv]

@@ -9,11 +9,13 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🚀 **Zero-copy Static File Serving** via `sendfile` integration
 - 📬 **Internal Event Bus** - Asynchronous, thread-safe Message Queue with middleware and subscriber support
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
+- 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, and MQ
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
 - 🔐 **Pluggable Cipher Driver** for AES-256-GCM, RSA-OAEP, and RSA-PSS
+- 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
 - 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
@@ -253,7 +255,7 @@ int main() {
 ```
 src/
   ├── core/           # Kernel (libuv TCP, Router, Arena, Logger, Config)
-  ├── app/            # Application Layer (app, route groups)
+  ├── app/            # Application Layer (app, admin dashboard, workflow engine)
   ├── ai/             # AI Unified Interface Engine
   ├── crypto/         # Cipher Driver (AES, RSA, sign/verify)
   ├── data/           # Database Abstraction Layer
@@ -261,18 +263,18 @@ src/
   ├── security/       # Permission & Security Core
   ├── reflection/     # Reflection Engine implementation
   ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
-  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, etc.)
-  └── middleware/     # Built-in middleware (Auth, CORS, Gzip, etc.)
+  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB)
+  └── middleware/     # 15 built-in middleware modules
 
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions
-  ├── app/            # App convenience API
+  ├── app/            # App API, Admin, Workflow, WAL
   ├── drivers/        # Driver interfaces (AI, Cipher, DB, Perm)
   ├── reflection/     # Reflection engine API
-  ├── test/           # Test utilities
+  ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tests/                # Comprehensive Unit Test Suite
+tests/                # 98+ comprehensive unit tests
 examples/             # Functional usage examples
 ```
 

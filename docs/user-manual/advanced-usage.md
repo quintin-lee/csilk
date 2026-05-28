@@ -225,6 +225,52 @@ sequenceDiagram
     Server-->>Client: HTTP Response (file contents)
 ```
 
+## Admin Dashboard
+
+The unified admin dashboard provides real-time monitoring of your csilk application:
+
+```c
+#include "csilk/app/admin.h"
+
+int main() {
+    csilk_app_t* app = csilk_app_new("config.yaml");
+
+    // Register admin dashboard under /admin
+    csilk_admin_serve(app, "/admin");
+
+    csilk_app_run(app, 8080);
+    csilk_app_free(app);
+    return 0;
+}
+```
+
+The dashboard includes:
+- **HTTP Metrics**: QPS, latency histogram, status code distribution, active connections.
+- **Workflow Monitoring**: Live execution graph, node-level timing, token budget tracking.
+- **MQ Monitoring**: Queue depth, message throughput, consumer lag.
+- **Database Telemetry**: Connection pool status, query latency.
+- **AI Telemetry**: Model call count, token usage, error rates.
+- **Process Metrics**: RSS memory, CPU usage, uptime.
+
+## Database Drivers
+
+csilk supports four database backends through a unified driver interface:
+
+```c
+#include "csilk/drivers/db.h"
+
+// Initialize database pool from config
+csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "data/app.db", 10);
+
+// Execute query
+csilk_db_result_t* result = csilk_db_query(pool, "SELECT * FROM users WHERE id = ?", 1);
+if (result && result->row_count > 0) {
+    printf("User: %s\n", result->rows[0][1]); // column 1 = name
+}
+csilk_db_result_free(result);
+csilk_db_pool_free(pool);
+```
+
 ## High-Level App API
 
 The `csilk_app_t` wrapper simplifies server creation:

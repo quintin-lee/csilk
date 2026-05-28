@@ -6,7 +6,7 @@
  * for the csilk HTTP web framework, including the request context,
  * router, server, middleware, WebSocket, SSE, and utility APIs.
  * Inspired by Gin (Golang).
- * @version 0.2.1
+ * @version 0.2.3
  * @copyright MIT License
  */
 
@@ -35,7 +35,7 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
  * Used for identification in logs, headers, and the OpenAPI spec.
  */
-#define CSILK_VERSION "0.2.1"
+#define CSILK_VERSION "0.2.3"
 
 /**
  * @brief Maximum number of URL path parameters that can be extracted from a
@@ -901,17 +901,17 @@ void csilk_csrf_middleware(csilk_ctx_t* c);
  */
 typedef struct {
   uint64_t rate_limit_blocks; /**< Total requests blocked by rate limiter. */
-  uint64_t csrf_violations;    /**< Total CSRF token validation failures. */
-  uint64_t auth_failures;      /**< Total failed authentication attempts. */
+  uint64_t csrf_violations;   /**< Total CSRF token validation failures. */
+  uint64_t auth_failures;     /**< Total failed authentication attempts. */
 } csilk_security_stats_t;
 
 /**
  * @brief OS-level process statistics.
  */
 typedef struct {
-  size_t rss_bytes;          /**< Resident Set Size memory in bytes. */
-  double cpu_user_time_sec;   /**< CPU time spent in user mode. */
-  double cpu_sys_time_sec;    /**< CPU time spent in kernel mode. */
+  size_t rss_bytes;         /**< Resident Set Size memory in bytes. */
+  double cpu_user_time_sec; /**< CPU time spent in user mode. */
+  double cpu_sys_time_sec;  /**< CPU time spent in kernel mode. */
 } csilk_process_stats_t;
 
 void csilk_security_get_stats(csilk_security_stats_t* stats);
@@ -2408,8 +2408,8 @@ typedef struct {
   uint64_t published_total; /**< Total messages published since startup. */
   uint64_t delivered_total; /**< Total messages delivered to subscribers. */
   uint64_t failed_total;    /**< Total messages that failed processing. */
-  uint32_t queue_depth;     /**< Number of messages currently in memory queue. */
-  uint32_t topic_count;     /**< Number of registered topics. */
+  uint32_t queue_depth; /**< Number of messages currently in memory queue. */
+  uint32_t topic_count; /**< Number of registered topics. */
 } csilk_mq_stats_t;
 
 /**

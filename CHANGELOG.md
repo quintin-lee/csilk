@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.3] - 2026-05-27
+## [0.2.3] - 2026-05-28
+
+### Added
+- **Unified Admin Dashboard**: Web-based real-time monitoring dashboard at `/admin` with
+  HTTP metrics, workflow execution graphs, MQ queue status, DB pool telemetry, AI model
+  call tracking, and process metrics. Serves `admin_ui.html` SPA with WebSocket live events.
+- **MongoDB Database Driver**: New `src/drivers/mongodb.c` driver using libmongoc.
+  Supports connection pooling and unified DB query interface.
+- **MQ Message Status Monitoring**: Real-time MQ events, depth tracking, and JSON stats
+  endpoint for admin dashboard integration.
+- **Global AI Telemetry**: `src/ai/ai.c` now tracks model calls, token counts, and latency
+  for admin dashboard consumption.
+- **Global DB Telemetry**: `src/data/db.c` tracks pool size, active connections, and
+  query latency across all database drivers.
 
 ### Fixed
 - **test_workflow_monitor SEGFAULT**: Fixed heap-buffer-overflow caused by
@@ -14,10 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **scaffold `csilk_perm_auto_middleware_passthrough`**: Replaced with
   existing `csilk_perm_auto_middleware` — the former never existed,
   causing compile failure in core API + perm mode.
+- **MQ recovery regression**: Fixed message queue recovery after connection drop.
+- **Admin struct privacy**: Resolved incomplete type for `csilk_ctx_t` in admin module.
+- **Mermaid syntax**: Fixed workflow Mermaid visualization for version 10+ quoting.
+- **test_timeout flakiness**: Fixed port conflict by adding server readiness sync.
 
 ### Changed
 - **Header relocation**: `workflow_wal.h` moved from `src/app/` to
   `include/csilk/app/` to keep all headers under `include/`.
+- **Admin scaffold**: `csilkskel` now includes admin dashboard setup by default.
+- **Version bumped**: 0.2.1 → 0.2.3
 
 ## [0.2.2] - 2026-05-27
 

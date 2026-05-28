@@ -1,17 +1,18 @@
 # csilk 编码规范（面向 AI 代码生成/修改）
 
 > **目标**: 确保 AI 模型生成或修改的代码与项目现有风格、模式和约束完全一致。
-> **版本**: 0.2.1 | 最后更新: 2026-05-25
+> **版本**: 0.2.3 | 最后更新: 2026-05-28
 
 ---
 
 ## 1. 项目架构总览
 
 ```
-include/                        # 公共 + 内部头文件
+include/                        # 公共 + 内部头文件（14 个文件）
 include/csilk.h                 # 主入口（包含 csilk/csilk.h）
 include/csilk/csilk.h           # 核心公共 API（类型、函数声明、宏）
 include/csilk/app/app.h         # 高层 csilk_app_t API
+include/csilk/app/admin.h       # 统一管理面板 API
 include/csilk/app/workflow.h    # 工作流引擎 API
 include/csilk/app/workflow_wal.h # 工作流 WAL 日志
 include/csilk/core/context_internal.h # 不透明 csilk_ctx_s 结构体
@@ -23,17 +24,17 @@ include/csilk/drivers/perm.h    # 权限驱动接口
 include/csilk/reflection/reflect.h # 反射引擎（struct <-> JSON）
 include/csilk/test/test.h       # OOM 模拟测试框架
 src/core/                       # 核心引擎（server/router/context/arena/logger/config）
-src/app/                        # 高层 app 封装 + 工作流引擎
+src/app/                        # 高层 app 封装 + 管理面板 + 工作流引擎
 src/middleware/                  # 15 个内置中间件
 src/protocols/                  # 协议扩展（WebSocket, Swagger）
 src/messaging/                  # 内部事件总线（Message Queue）
 src/security/                   # 权限与安全核心
 src/reflection/                 # 反射引擎实现
-src/crypto/                     # 密码驱动实现
-src/data/                       # 数据库抽象层
-src/drivers/                    # 具体驱动实现（OpenAI, Ollama, SQLite 等）
+src/crypto/                     # 密码驱动实现（AES/RSA 加解密）
+src/data/                       # 数据库抽象层（连接池管理）
+src/drivers/                    # 具体驱动实现（OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB）
 src/ai/                         # AI 统一接口引擎
-tests/                          # 单元测试（80+ 个测试文件）
+tests/                          # 单元测试（98+ 个测试文件）
 examples/                       # 示例程序
 ```
 
@@ -46,6 +47,12 @@ examples/                       # 示例程序
 | cJSON 1.7 | JSON 解析/序列化 | FetchContent |
 | libyaml | YAML 配置解析 | 系统库 |
 | zlib | Gzip 压缩 | 系统库 |
+| OpenSSL | TLS/SSL + JWT + 密码驱动 | 系统库 |
+| libcurl | AI 驱动 HTTP 传输 | 系统库 |
+| sqlite3 | SQLite 数据库驱动 | 系统库 |
+| libmysqlclient | MySQL 数据库驱动（可选） | 系统库 |
+| libpq | PostgreSQL 数据库驱动（可选） | 系统库 |
+| libmongoc | MongoDB 数据库驱动（可选） | 系统库 |
 
 ---
 

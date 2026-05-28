@@ -29,7 +29,7 @@
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
  * Used for identification in logs, headers, and the OpenAPI spec.
  */
-#define CSILK_VERSION "0.2.1"
+#define CSILK_VERSION "0.2.3"
 
 /**
  * @brief Maximum number of URL path parameters that can be extracted from a
