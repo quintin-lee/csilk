@@ -1,6 +1,7 @@
 /**
  * @file admin.h
- * @brief Unified administration and monitoring controller for the csilk framework.
+ * @brief Unified administration and monitoring controller for the csilk
+ * framework.
  *
  * Provides a web-based dashboard for real-time observability of HTTP metrics,
  * AI Workflows, and the Internal Message Queue.
@@ -9,8 +10,8 @@
 #ifndef CSILK_ADMIN_H
 #define CSILK_ADMIN_H
 
-#include "csilk/csilk.h"
 #include "csilk/app/app.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Register administration routes to an application.
@@ -26,5 +27,19 @@
  * @note Requires the server to be running and WebSocket support enabled.
  */
 void csilk_admin_serve(csilk_app_t* app, const char* path);
+
+/**
+ * @brief Register protected administration routes to an application.
+ *
+ * Similar to csilk_admin_serve, but wraps all admin routes in the provided
+ * @p auth_middleware. This ensures that the dashboard, stats, and WebSocket
+ * endpoints are only accessible to authorized users.
+ *
+ * @param app             The application handle.
+ * @param path            The base URL path for the admin panel.
+ * @param auth_middleware The middleware to use for authentication.
+ */
+void csilk_admin_serve_secure(csilk_app_t* app, const char* path,
+                              csilk_handler_t auth_middleware);
 
 #endif /* CSILK_ADMIN_H */
