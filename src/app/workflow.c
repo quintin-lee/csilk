@@ -583,6 +583,16 @@ static void after_sub_worker_cb(uv_work_t* req, int status) {
   uv_mutex_unlock(sw->mutex);
 }
 
+typedef struct {
+  csilk_wf_ctx_t* ctx;
+  const char* node_id;
+} stream_ctx_t;
+
+static void on_ai_stream(const char* chunk, void* user_data) {
+  stream_ctx_t* s_ctx = (stream_ctx_t*)user_data;
+  _wf_broadcast(s_ctx->ctx->wf, "node_stream", s_ctx->node_id, chunk);
+}
+
 /** @brief Built-in handler for AI workflow nodes.
  *
  * Algorithm:
@@ -627,6 +637,16 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
             cJSON_Parse(ctx->wf->tools[i].parameters_json);
     }
   }
+
+  stream_ctx_t s_ctx = {ctx, "unknown"};
+  for (size_t i = 0; i < ctx->wf->node_count; i++) {
+    if (ctx->wf->nodes[i]->handler == ai_node_handler &&
+        ctx->wf->nodes[i]->user_data == user_data) {
+      s_ctx.node_id = ctx->wf->nodes[i]->id;
+      break;
+    }
+  }
+
   size_t msg_capacity = 32;
   csilk_ai_message_t* msgs = calloc(msg_capacity, sizeof(csilk_ai_message_t));
   size_t msg_count = 0;
@@ -649,7 +669,9 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
         .temperature = config->temperature > 0 ? config->temperature : 0.7,
         .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
         .tools = tools,
-        .tool_count = ctx->wf->tool_count};
+        .tool_count = ctx->wf->tool_count,
+        .on_chunk = config->stream ? on_ai_stream : NULL,
+        .user_data = config->stream ? &s_ctx : NULL};
     csilk_ai_chat_response_t res;
     if (csilk_ai_chat(ai, &req, &res) != 0) break;
     if (res.tool_call_count > 0) {

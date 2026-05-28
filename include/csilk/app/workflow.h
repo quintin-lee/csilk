@@ -112,6 +112,7 @@ typedef struct {
   const char* prompt; /**< User prompt (supports {{node.value}} templates). */
   double temperature;
   int max_tokens;
+  int stream;         /**< Enable token streaming to monitors. */
 } csilk_ai_config_t;
 
 /**
