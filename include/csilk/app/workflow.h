@@ -292,6 +292,13 @@ void csilk_wf_node_set_join(csilk_wf_node_t* node,
 void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive);
 
 /**
+ * @brief Set an expected JSON Schema for a node's output.
+ * @param node   Node handle.
+ * @param schema JSON Schema string (NULL to disable).
+ */
+void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema);
+
+/**
  * @brief Signal a paused workflow to continue.
  * @param wf       Workflow definition.
  * @param exec_id  Execution ID of the paused workflow.
