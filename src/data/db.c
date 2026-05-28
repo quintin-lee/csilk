@@ -33,6 +33,8 @@
  * @copyright MIT License
  */
 
+#include "csilk/drivers/db.h"
+
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,7 +42,6 @@
 #include <uv.h>
 
 #include "cJSON.h"
-#include "csilk/drivers/db.h"
 
 /* --- Global DB Metrics --- */
 static atomic_uint_fast64_t db_queries_total = 0;
@@ -310,6 +311,9 @@ void csilk_db_init(void) {
 #endif
 #ifdef HAS_MONGODB
   csilk_db_mongodb_init();
+#endif
+#ifdef HAS_REDIS
+  csilk_db_redis_init();
 #endif
 }
 

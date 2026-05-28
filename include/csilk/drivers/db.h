@@ -22,9 +22,9 @@
  * @brief Database statistics.
  */
 typedef struct {
-  uint64_t queries_total;     /**< Total SELECT queries executed. */
-  uint64_t execs_total;       /**< Total non-query statements (INSERT/UPDATE/etc). */
-  uint64_t errors_total;      /**< Total failed operations. */
+  uint64_t queries_total; /**< Total SELECT queries executed. */
+  uint64_t execs_total;  /**< Total non-query statements (INSERT/UPDATE/etc). */
+  uint64_t errors_total; /**< Total failed operations. */
   uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
 } csilk_db_stats_t;
 
@@ -278,9 +278,19 @@ void csilk_db_mongodb_init(void);
 #endif
 
 /**
+ * @brief Internal: Register the built-in Redis driver.
+ *
+ * Called automatically by csilk_db_init. Requires hiredis.
+ * Not intended for direct use.
+ */
+#ifdef HAS_REDIS
+void csilk_db_redis_init(void);
+#endif
+
+/**
  * @brief Initialise the database subsystem.
  *
- * Registers all built-in drivers (SQLite3, MySQL, PostgreSQL, etc.).
+ * Registers all built-in drivers (SQLite3, MySQL, PostgreSQL, MongoDB, Redis).
  * Must be called once before any csilk_db_pool_new call.
  * Safe to call multiple times.
  */

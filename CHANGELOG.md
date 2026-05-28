@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-05-28
+
+### Added
+- **Redis Database Driver**: New `src/drivers/redis.c` driver using hiredis.
+  Supports connection pooling with password auth and DB index selection.
+  Maps Redis reply types to tabular results: GET→1-row, HGETALL→field/value
+  pairs, KEYS/LRANGE→N-row flat arrays. Transactions via MULTI/EXEC/DISCARD.
+
 ## [0.2.3] - 2026-05-28
 
 ### Added

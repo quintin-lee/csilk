@@ -53,6 +53,7 @@ examples/                       # 示例程序
 | libmysqlclient | MySQL 数据库驱动（可选） | 系统库 |
 | libpq | PostgreSQL 数据库驱动（可选） | 系统库 |
 | libmongoc | MongoDB 数据库驱动（可选） | 系统库 |
+| hiredis | Redis 数据库驱动（可选） | 系统库 |
 
 ---
 
