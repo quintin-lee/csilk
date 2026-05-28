@@ -41,6 +41,9 @@
             <button onclick="switchTab('db')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
                 <i data-lucide="database" class="w-4 h-4"></i> Database
             </button>
+            <button onclick="switchTab('security')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="shield-check" class="w-4 h-4"></i> Security
+            </button>
             <button onclick="switchTab('ai')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
                 <i data-lucide="bot" class="w-4 h-4"></i> AI Engine
             </button>
@@ -95,6 +98,14 @@
             <div id="tab-sys" class="tab-content hidden space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">RSS Memory</p>
+                        <h3 id="sys-stat-rss" class="text-2xl font-bold">0 KB</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">CPU User</p>
+                        <h3 id="sys-stat-cpu-user" class="text-2xl font-bold">0s</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
                         <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Active Conns</p>
                         <h3 id="sys-stat-conn-active" class="text-2xl font-bold">0</h3>
                     </div>
@@ -102,13 +113,33 @@
                         <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Pooled Clients</p>
                         <h3 id="sys-stat-conn-pool" class="text-2xl font-bold">0</h3>
                     </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Size</p>
-                        <h3 id="sys-stat-arena-size" class="text-2xl font-bold">0 KB</h3>
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Allocated</p>
+                        <h3 id="sys-stat-arena-size" class="text-xl font-bold">0 KB</h3>
                     </div>
                     <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Used</p>
-                        <h3 id="sys-stat-arena-used" class="text-2xl font-bold">0 KB</h3>
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Utilization</p>
+                        <h3 id="sys-stat-arena-used" class="text-xl font-bold">0 KB</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Tab -->
+            <div id="tab-security" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 border-t-4 border-t-yellow-500">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Rate Limit Blocks</p>
+                        <h3 id="sec-stat-rl" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 border-t-4 border-t-red-500">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">CSRF Violations</p>
+                        <h3 id="sec-stat-csrf" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 border-t-4 border-t-orange-500">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Auth Failures</p>
+                        <h3 id="sec-stat-auth" class="text-2xl font-bold">0</h3>
                     </div>
                 </div>
             </div>
@@ -303,6 +334,17 @@
                 document.getElementById('sys-stat-conn-pool').innerText = data.sys.pooled_connections;
                 document.getElementById('sys-stat-arena-size').innerText = `${data.sys.arena_size_kb.toFixed(1)} KB`;
                 document.getElementById('sys-stat-arena-used').innerText = `${data.sys.arena_used_kb.toFixed(1)} KB`;
+                
+                if (data.process) {
+                    document.getElementById('sys-stat-rss').innerText = `${(data.process.rss_kb / 1024.0).toFixed(1)} MB`;
+                    document.getElementById('sys-stat-cpu-user').innerText = `${data.process.cpu_user.toFixed(2)}s`;
+                }
+            }
+
+            if (data.security) {
+                document.getElementById('sec-stat-rl').innerText = data.security.rate_limit_blocks;
+                document.getElementById('sec-stat-csrf').innerText = data.security.csrf_violations;
+                document.getElementById('sec-stat-auth').innerText = data.security.auth_failures;
             }
 
             if (data.db) {

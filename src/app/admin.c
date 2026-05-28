@@ -108,6 +108,24 @@ static void admin_stats_handler(csilk_ctx_t* c) {
     cJSON_AddNumberToObject(sys, "arena_used_kb", (double)arena_used / 1024.0);
     cJSON_AddItemToObject(root, "sys", sys);
     
+    // 6. Security Stats
+    csilk_security_stats_t sec_stats;
+    csilk_security_get_stats(&sec_stats);
+    cJSON* sec = cJSON_CreateObject();
+    cJSON_AddNumberToObject(sec, "rate_limit_blocks", (double)sec_stats.rate_limit_blocks);
+    cJSON_AddNumberToObject(sec, "csrf_violations", (double)sec_stats.csrf_violations);
+    cJSON_AddNumberToObject(sec, "auth_failures", (double)sec_stats.auth_failures);
+    cJSON_AddItemToObject(root, "security", sec);
+
+    // 7. Process Stats
+    csilk_process_stats_t proc_stats;
+    csilk_process_get_stats(&proc_stats);
+    cJSON* proc = cJSON_CreateObject();
+    cJSON_AddNumberToObject(proc, "rss_kb", (double)proc_stats.rss_bytes / 1024.0);
+    cJSON_AddNumberToObject(proc, "cpu_user", proc_stats.cpu_user_time_sec);
+    cJSON_AddNumberToObject(proc, "cpu_sys", proc_stats.cpu_sys_time_sec);
+    cJSON_AddItemToObject(root, "process", proc);
+    
     char* json = cJSON_PrintUnformatted(root);
     csilk_set_header(c, "Content-Type", "application/json");
     csilk_string(c, 200, json);

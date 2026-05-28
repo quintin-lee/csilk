@@ -56,6 +56,8 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
 
   const char* token = csilk_get_header(c, "X-CSRF-Token");
   if (!token) {
+    void _csilk_metrics_inc_csrf_violations(void);
+    _csilk_metrics_inc_csrf_violations();
     csilk_json_error(c, CSILK_STATUS_FORBIDDEN,
                      "Forbidden: CSRF token missing");
     csilk_abort(c);
@@ -70,6 +72,8 @@ void csilk_csrf_middleware(csilk_ctx_t* c) {
   if (cookie_token && strcmp(cookie_token, token) == 0) {
     csilk_next(c);
   } else {
+    void _csilk_metrics_inc_csrf_violations(void);
+    _csilk_metrics_inc_csrf_violations();
     csilk_json_error(c, CSILK_STATUS_FORBIDDEN,
                      "Forbidden: Invalid CSRF token");
     csilk_abort(c);

@@ -28,6 +28,43 @@ static _Atomic uint64_t http_requests_total = 0;
  */
 static _Atomic uint64_t http_request_duration_microseconds = 0;
 
+/* --- Global Security Metrics --- */
+static _Atomic uint64_t security_rate_limit_blocks = 0;
+static _Atomic uint64_t security_csrf_violations = 0;
+static _Atomic uint64_t security_auth_failures = 0;
+
+void csilk_security_get_stats(csilk_security_stats_t* stats) {
+  if (!stats) return;
+  stats->rate_limit_blocks = atomic_load(&security_rate_limit_blocks);
+  stats->csrf_violations = atomic_load(&security_csrf_violations);
+  stats->auth_failures = atomic_load(&security_auth_failures);
+}
+
+void csilk_process_get_stats(csilk_process_stats_t* stats) {
+  if (!stats) return;
+  uv_resident_set_memory(&stats->rss_bytes);
+
+  uv_rusage_t usage;
+  if (uv_getrusage(&usage) == 0) {
+    stats->cpu_user_time_sec =
+        (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
+    stats->cpu_sys_time_sec =
+        (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+  }
+}
+
+void _csilk_metrics_inc_rate_limit_blocks(void) {
+  atomic_fetch_add(&security_rate_limit_blocks, 1);
+}
+
+void _csilk_metrics_inc_csrf_violations(void) {
+  atomic_fetch_add(&security_csrf_violations, 1);
+}
+
+void _csilk_metrics_inc_auth_failures(void) {
+  atomic_fetch_add(&security_auth_failures, 1);
+}
+
 /**
  * @brief Prometheus metrics middleware.
  *
