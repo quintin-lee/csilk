@@ -66,6 +66,7 @@ struct csilk_wf_node_s {
       join_policy; /**< AND (wait for all) or OR (fire on any). */
   int timeout_ms;  /**< Per-node execution timeout (0 = no timeout). */
   int is_interactive; /**< Requires manual signal to proceed. */
+  char* output_schema; /**< JSON Schema for output validation. */
 };
 
 /** @brief Workflow definition: a DAG of processing nodes connected by
@@ -328,6 +329,12 @@ void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec) {
 
 void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive) {
   if (node) node->is_interactive = is_interactive;
+}
+
+void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema) {
+    if (!node) return;
+    free(node->output_schema);
+    node->output_schema = schema ? strdup(schema) : NULL;
 }
 
 /* --- Memory Helpers --- */
@@ -976,9 +983,7 @@ static void worker_cb(uv_work_t* req) {
 static void after_worker_cb(uv_work_t* req, int status) {
   (void)status;
   node_work_t* work = (node_work_t*)req->data;
-  csilk_wf_ctx_t* ctx = work->ctx;
-  csilk_wf_node_t* node = work->node;
-  csilk_data_t* output = work->output;
+  csilk_wf_ctx_t* ctx = work->ctx; csilk_wf_node_t* node = work->node; csilk_data_t* output = work->output;
 
   if (node->timeout_ms > 0) {
     uv_timer_stop(&work->node_timer);
@@ -988,7 +993,30 @@ static void after_worker_cb(uv_work_t* req, int status) {
     output = NULL;
   }
 
+  // JSON Schema Validation
+  if (output && output->value && node->output_schema) {
+      cJSON* schema = cJSON_Parse(node->output_schema);
+      cJSON* data = cJSON_Parse((char*)output->value);
+      if (schema && data) {
+          cJSON* required = cJSON_GetObjectItem(schema, "required");
+          if (cJSON_IsArray(required)) {
+              for (int i=0; i < cJSON_GetArraySize(required); i++) {
+                  cJSON* field = cJSON_GetArrayItem(required, i);
+                  if (cJSON_IsString(field) && !cJSON_HasObjectItem(data, field->valuestring)) {
+                      printf("[Workflow] Node '%s' output failed schema: missing required field '%s'\n", node->id, field->valuestring);
+                      output = NULL;
+                      break;
+                  }
+              }
+          }
+      } else if (node->output_schema) {
+          output = NULL; // Invalid JSON or Schema
+      }
+      cJSON_Delete(schema); cJSON_Delete(data);
+  }
+
   uv_mutex_lock(&ctx->mutex);
+
   ctx->node_outputs[node->index] = output;
   if (output && output->meta) {
     csilk_ai_meta_t* am = (csilk_ai_meta_t*)output->meta;
