@@ -71,6 +71,17 @@ static void admin_stats_handler(csilk_ctx_t* c) {
     cJSON_AddNumberToObject(mq, "depth", (double)mq_stats.queue_depth);
     cJSON_AddItemToObject(root, "mq", mq);
     
+    // 3. AI Stats
+    csilk_ai_stats_t ai_stats;
+    csilk_ai_get_stats(&ai_stats);
+    
+    cJSON* ai = cJSON_CreateObject();
+    cJSON_AddNumberToObject(ai, "requests", (double)ai_stats.requests_total);
+    cJSON_AddNumberToObject(ai, "tokens", (double)ai_stats.tokens_total);
+    cJSON_AddNumberToObject(ai, "errors", (double)ai_stats.errors_total);
+    cJSON_AddNumberToObject(ai, "avg_duration", ai_stats.requests_total > 0 ? (double)ai_stats.duration_us_total / ai_stats.requests_total / 1000.0 : 0);
+    cJSON_AddItemToObject(root, "ai", ai);
+    
     char* json = cJSON_PrintUnformatted(root);
     csilk_set_header(c, "Content-Type", "application/json");
     csilk_string(c, 200, json);
@@ -86,8 +97,9 @@ static void admin_ws_handler(csilk_ctx_t* c) {
         csilk_mq_t* mq = csilk_server_get_mq(csilk_ctx_get_server(c));
         csilk_mq_register_monitor(mq, c);
         
-        // In a real implementation, we'd also register this ctx 
-        // to a global "admin_monitors" list to receive ALL workflow events.
+        // Also monitor AI engine
+        csilk_ai_register_monitor(c);
+        
         printf("[Admin] Dashboard connected via WebSocket\n");
     }
 }

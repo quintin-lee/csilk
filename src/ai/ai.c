@@ -21,10 +21,97 @@
 
 #include "csilk/drivers/ai.h"
 
+#include <ctype.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <uv.h>
+
+#include "cJSON.h"
+#include "csilk/csilk.h"
+
+/* --- Global AI Metrics --- */
+static atomic_uint_fast64_t ai_requests_total = 0;
+static atomic_uint_fast64_t ai_tokens_total = 0;
+static atomic_uint_fast64_t ai_prompt_tokens = 0;
+static atomic_uint_fast64_t ai_completion_tokens = 0;
+static atomic_uint_fast64_t ai_errors_total = 0;
+static atomic_uint_fast64_t ai_duration_us_total = 0;
+
+/* --- AI Monitor Registry --- */
+static csilk_ctx_t* g_ai_monitors[16];
+static size_t g_ai_monitor_count = 0;
+static uv_mutex_t g_ai_monitor_mutex;
+static int g_ai_monitor_init = 0;
+
+static void ai_ensure_monitor_init(void) {
+  if (__sync_val_compare_and_swap(&g_ai_monitor_init, 0, 1) == 0) {
+    uv_mutex_init(&g_ai_monitor_mutex);
+  }
+}
+
+static void _ai_broadcast(const char* event, const char* model, int status,
+                          int prompt_tokens, int completion_tokens,
+                          uint64_t duration_us, const char* error) {
+  ai_ensure_monitor_init();
+  if (g_ai_monitor_count == 0) return;
+
+  cJSON* root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "event", event);
+  if (model) cJSON_AddStringToObject(root, "model", model);
+  cJSON_AddNumberToObject(root, "status", status);
+  cJSON_AddNumberToObject(root, "prompt_tokens", (double)prompt_tokens);
+  cJSON_AddNumberToObject(root, "completion_tokens", (double)completion_tokens);
+  cJSON_AddNumberToObject(root, "duration_ms", (double)duration_us / 1000.0);
+  if (error) cJSON_AddStringToObject(root, "error", error);
+  cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+
+  char* json = cJSON_PrintUnformatted(root);
+  uv_mutex_lock(&g_ai_monitor_mutex);
+  for (size_t i = 0; i < g_ai_monitor_count; i++) {
+    csilk_ws_send(g_ai_monitors[i], (uint8_t*)json, strlen(json), 0x1);
+  }
+  uv_mutex_unlock(&g_ai_monitor_mutex);
+  free(json);
+  cJSON_Delete(root);
+}
+
+void csilk_ai_get_stats(csilk_ai_stats_t* stats) {
+  if (!stats) return;
+  stats->requests_total = atomic_load(&ai_requests_total);
+  stats->tokens_total = atomic_load(&ai_tokens_total);
+  stats->prompt_tokens = atomic_load(&ai_prompt_tokens);
+  stats->completion_tokens = atomic_load(&ai_completion_tokens);
+  stats->errors_total = atomic_load(&ai_errors_total);
+  stats->duration_us_total = atomic_load(&ai_duration_us_total);
+}
+
+char* csilk_ai_stats_to_json(const csilk_ai_stats_t* stats) {
+  if (!stats) return NULL;
+  cJSON* root = cJSON_CreateObject();
+  cJSON_AddNumberToObject(root, "requests_total", (double)stats->requests_total);
+  cJSON_AddNumberToObject(root, "tokens_total", (double)stats->tokens_total);
+  cJSON_AddNumberToObject(root, "prompt_tokens", (double)stats->prompt_tokens);
+  cJSON_AddNumberToObject(root, "completion_tokens",
+                          (double)stats->completion_tokens);
+  cJSON_AddNumberToObject(root, "errors_total", (double)stats->errors_total);
+  cJSON_AddNumberToObject(root, "duration_us_total",
+                          (double)stats->duration_us_total);
+  char* json = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
+  return json;
+}
+
+void csilk_ai_register_monitor(void* c) {
+  ai_ensure_monitor_init();
+  uv_mutex_lock(&g_ai_monitor_mutex);
+  if (g_ai_monitor_count < 16) {
+    g_ai_monitors[g_ai_monitor_count++] = (csilk_ctx_t*)c;
+  }
+  uv_mutex_unlock(&g_ai_monitor_mutex);
+}
 
 /** @brief Maximum number of concurrently registered AI drivers. */
 #define MAX_DRIVERS 8
@@ -139,6 +226,9 @@ int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
                   csilk_ai_chat_response_t* res) {
   if (!ai || !req || !res) return -1;
 
+  uint64_t start = uv_hrtime();
+  atomic_fetch_add(&ai_requests_total, 1);
+
   int retries = 0;
   int max_retries = 2;
   int status = -1;
@@ -167,6 +257,20 @@ int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
     }
     break;
   }
+
+  uint64_t duration = (uv_hrtime() - start) / 1000; // us
+  atomic_fetch_add(&ai_duration_us_total, duration);
+
+  if (status == 0) {
+    atomic_fetch_add(&ai_tokens_total, res->total_tokens);
+    atomic_fetch_add(&ai_prompt_tokens, res->prompt_tokens);
+    atomic_fetch_add(&ai_completion_tokens, res->completion_tokens);
+  } else {
+    atomic_fetch_add(&ai_errors_total, 1);
+  }
+
+  _ai_broadcast("ai_chat", req->model, status, res->prompt_tokens,
+                res->completion_tokens, duration, res->error_message);
 
   return status;
 }
@@ -257,12 +361,34 @@ void csilk_ai_chat_async(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
 int csilk_ai_embeddings(csilk_ai_t* ai, const char* model, const char** input,
                         size_t count, csilk_ai_embeddings_response_t* res) {
   if (!ai || !model || !input || !res) return -1;
+
+  uint64_t start = uv_hrtime();
+  atomic_fetch_add(&ai_requests_total, 1);
+
   memset(res, 0, sizeof(*res));
   if (!ai->driver->embeddings) {
     res->error_message = strdup("Driver does not support embeddings");
+    atomic_fetch_add(&ai_errors_total, 1);
+    _ai_broadcast("ai_embeddings", model, -1, 0, 0, 0, res->error_message);
     return -1;
   }
-  return ai->driver->embeddings(ai->driver_state, model, input, count, res);
+
+  int status = ai->driver->embeddings(ai->driver_state, model, input, count, res);
+
+  uint64_t duration = (uv_hrtime() - start) / 1000;
+  atomic_fetch_add(&ai_duration_us_total, duration);
+
+  if (status == 0) {
+    atomic_fetch_add(&ai_tokens_total, res->total_tokens);
+    atomic_fetch_add(&ai_prompt_tokens, res->prompt_tokens);
+  } else {
+    atomic_fetch_add(&ai_errors_total, 1);
+  }
+
+  _ai_broadcast("ai_embeddings", model, status, res->prompt_tokens, 0, duration,
+                res->error_message);
+
+  return status;
 }
 
 /** @brief Per-async-embedding-request context passed between the work
