@@ -15,8 +15,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "csilk/csilk.h"
 #include "csilk/app/app.h"
+#include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
 
 /* =================================================================
