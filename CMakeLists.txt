@@ -36,17 +36,13 @@ find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
     
-    # 查找所有源文件和头文件
-    file(GLOB_RECURSE ALL_SOURCE_FILES
-        "src/*.c" "src/*.h"
-        "include/*.h"
-        "tests/*.c" "tests/*.h"
-    )
-
-    add_custom_target(format
-        COMMAND ${CLANG_FORMAT_EXECUTABLE} -i ${ALL_SOURCE_FILES}
+    add_custom_target(format ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DCLANG_FORMAT=${CLANG_FORMAT_EXECUTABLE}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/format.cmake
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Running clang-format on source files"
+        COMMENT "Formatting C/H files with clang-format..."
     )
 
     # 设置 clang-format 选项
