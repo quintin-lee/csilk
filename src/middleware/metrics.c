@@ -97,3 +97,11 @@ void csilk_metrics_handler(csilk_ctx_t* c) {
   csilk_set_header(c, "Content-Type", "text/plain; version=0.0.4");
   csilk_string(c, CSILK_STATUS_OK, buf);
 }
+
+uint64_t csilk_metrics_get_total_requests(void) {
+  return atomic_load(&http_requests_total);
+}
+
+uint64_t csilk_metrics_get_total_duration(void) {
+  return atomic_load(&http_request_duration_microseconds);
+}
