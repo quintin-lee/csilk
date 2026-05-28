@@ -897,6 +897,27 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
 void csilk_csrf_middleware(csilk_ctx_t* c);
 
 /**
+ * @brief Security layer statistics.
+ */
+typedef struct {
+  uint64_t rate_limit_blocks; /**< Total requests blocked by rate limiter. */
+  uint64_t csrf_violations;    /**< Total CSRF token validation failures. */
+  uint64_t auth_failures;      /**< Total failed authentication attempts. */
+} csilk_security_stats_t;
+
+/**
+ * @brief OS-level process statistics.
+ */
+typedef struct {
+  size_t rss_bytes;          /**< Resident Set Size memory in bytes. */
+  double cpu_user_time_sec;   /**< CPU time spent in user mode. */
+  double cpu_sys_time_sec;    /**< CPU time spent in kernel mode. */
+} csilk_process_stats_t;
+
+void csilk_security_get_stats(csilk_security_stats_t* stats);
+void csilk_process_get_stats(csilk_process_stats_t* stats);
+
+/**
  * @brief Generate a cryptographically random CSRF token.
  *
  * Produces a hex-encoded 32-byte (256-bit) random token.

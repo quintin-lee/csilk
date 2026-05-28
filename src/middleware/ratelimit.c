@@ -196,6 +196,8 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
   uv_mutex_unlock(&ratelimit_mutex);
 
   if (current_count > limit) {
+    void _csilk_metrics_inc_rate_limit_blocks(void);
+    _csilk_metrics_inc_rate_limit_blocks();
     csilk_set_header(c, "Retry-After", "60");
     csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
     csilk_abort(c);
