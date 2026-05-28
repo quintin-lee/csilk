@@ -36,7 +36,7 @@ void test_workflow_mermaid() {
     char* mermaid = csilk_wf_to_mermaid(wf);
     assert(mermaid != NULL);
     assert(strstr(mermaid, "graph TD") != NULL);
-    assert(strstr(mermaid, "n1 --> n2") != NULL);
+    assert(strstr(mermaid, "\"n1\" --> \"n2\"") != NULL);
     
     printf("Mermaid Output:\n%s", mermaid);
     
