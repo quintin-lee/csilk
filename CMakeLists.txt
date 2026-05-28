@@ -426,6 +426,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(example_ai_workflow examples/example_ai_workflow.c)
   target_link_libraries(example_ai_workflow csilk)
 
+  # Workflow UI example
+  add_executable(example_workflow_ui examples/example_workflow_ui.c)
+  target_link_libraries(example_workflow_ui csilk)
+
   # Database example
   add_executable(example_db examples/example_db.c)
   target_link_libraries(example_db csilk)
