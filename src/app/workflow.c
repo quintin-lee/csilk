@@ -67,6 +67,8 @@ struct csilk_wf_node_s {
   int timeout_ms;  /**< Per-node execution timeout (0 = no timeout). */
   int is_interactive; /**< Requires manual signal to proceed. */
   char* output_schema; /**< JSON Schema for output validation. */
+  int max_retries;     /**< Max automatic retry attempts. */
+  int retry_delay_ms;  /**< Delay between retries. */
 };
 
 /** @brief Workflow definition: a DAG of processing nodes connected by
@@ -145,14 +147,16 @@ typedef struct node_work_s {
   csilk_data_t* output; /**< Output data from the handler (set by worker_cb). */
   csilk_wf_trace_node_t*
       trace_node; /**< Trace record for this node (NULL if not tracing). */
-  uv_timer_t node_timer; /**< Per-node timeout timer. */
+  uv_timer_t node_timer; /**< Per-node timeout or retry delay timer. */
   int is_timed_out;      /**< Flag set by timer if node exceeds timeout_ms. */
+  int retry_count;       /**< Current retry attempt. */
 } node_work_t;
 
 /* --- Internal Helpers --- */
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input);
 static void cleanup_ctx(csilk_wf_ctx_t* ctx);
+static void after_worker_cb(uv_work_t* req, int status);
 static const char* csilk_wf_run_ext_internal(
     csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t*),
     void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*));
@@ -332,13 +336,19 @@ void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive) {
 }
 
 void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema) {
-    if (!node) return;
-    free(node->output_schema);
-    node->output_schema = schema ? strdup(schema) : NULL;
+  if (!node) return;
+  free(node->output_schema);
+  node->output_schema = schema ? strdup(schema) : NULL;
+}
+
+void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
+                             int retry_delay_ms) {
+  if (!node) return;
+  node->max_retries = max_retries;
+  node->retry_delay_ms = retry_delay_ms;
 }
 
 /* --- Memory Helpers --- */
-
 void* csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size) {
   if (!ctx) return NULL;
   uv_mutex_lock(&ctx->arena_mutex);
@@ -980,10 +990,19 @@ static void worker_cb(uv_work_t* req) {
  * 9. If no edges are triggered and no nodes are active, the workflow
  *    is complete: log WF_EV_END, deliver the final output via callback,
  *    and clean up the context. */
+static void on_retry_timer(uv_timer_t* handle) {
+    node_work_t* work = (node_work_t*)handle->data;
+    printf("[Workflow] Retrying node '%s' (attempt %d/%d)...\n", 
+           work->node->id, work->retry_count, work->node->max_retries);
+    uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+}
+
 static void after_worker_cb(uv_work_t* req, int status) {
   (void)status;
   node_work_t* work = (node_work_t*)req->data;
-  csilk_wf_ctx_t* ctx = work->ctx; csilk_wf_node_t* node = work->node; csilk_data_t* output = work->output;
+  csilk_wf_ctx_t* ctx = work->ctx;
+  csilk_wf_node_t* node = work->node;
+  csilk_data_t* output = work->output;
 
   if (node->timeout_ms > 0) {
     uv_timer_stop(&work->node_timer);
@@ -993,7 +1012,24 @@ static void after_worker_cb(uv_work_t* req, int status) {
     output = NULL;
   }
 
+  // Handle Retries before error logic
+  if (output == NULL && work->retry_count < node->max_retries) {
+      work->retry_count++;
+      printf("[Workflow] Node '%s' failed, scheduled retry in %dms\n", node->id, node->retry_delay_ms);
+
+      if (node->retry_delay_ms > 0) {
+          uv_timer_init(ctx->wf->loop, &work->node_timer);
+          work->node_timer.data = work;
+          uv_timer_start(&work->node_timer, on_retry_timer, node->retry_delay_ms, 0);
+          return; // Wait for timer
+      } else {
+          uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+          return;
+      }
+  }
+
   // JSON Schema Validation
+
   if (output && output->value && node->output_schema) {
       cJSON* schema = cJSON_Parse(node->output_schema);
       cJSON* data = cJSON_Parse((char*)output->value);
