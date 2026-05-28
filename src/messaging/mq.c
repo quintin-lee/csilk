@@ -56,12 +56,16 @@
  * @param ctx Message queue context.
  * @note Typically called by middleware to pass control to the next handler
  *       or subscriber. */
-void csilk_mq_next(csilk_mq_ctx_t* ctx) {
-  if (!ctx || ctx->aborted) return;
-  ctx->handler_index++;
-  if (ctx->handler_index < (int)ctx->handler_count) {
-    ctx->handlers[ctx->handler_index](ctx);
-  }
+void
+csilk_mq_next(csilk_mq_ctx_t* ctx)
+{
+	if (!ctx || ctx->aborted) {
+		return;
+	}
+	ctx->handler_index++;
+	if (ctx->handler_index < (int)ctx->handler_count) {
+		ctx->handlers[ctx->handler_index](ctx);
+	}
 }
 
 /** @brief Abort the current MQ middleware chain immediately.
@@ -70,8 +74,12 @@ void csilk_mq_next(csilk_mq_ctx_t* ctx) {
  * will be ignored.
  *
  * @param ctx Message queue context (may be NULL). */
-void csilk_mq_abort(csilk_mq_ctx_t* ctx) {
-  if (ctx) ctx->aborted = 1;
+void
+csilk_mq_abort(csilk_mq_ctx_t* ctx)
+{
+	if (ctx) {
+		ctx->aborted = 1;
+	}
 }
 
 /** @brief Get the topic name of the current message in the MQ context.
@@ -79,8 +87,10 @@ void csilk_mq_abort(csilk_mq_ctx_t* ctx) {
  * @param ctx Message queue context.
  * @return The topic string (e.g., "user.created"), or NULL if the context
  *         or message is NULL. */
-const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx) {
-  return (ctx && ctx->msg) ? ctx->msg->topic : NULL;
+const char*
+csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
+{
+	return (ctx && ctx->msg) ? ctx->msg->topic : NULL;
 }
 
 /** @brief Get the payload data and length of the current message.
@@ -91,10 +101,16 @@ const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx) {
  *         message is NULL.
  * @note The returned pointer is valid only for the duration of the handler
  *       callback. If the data is needed later, the handler must copy it. */
-const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len) {
-  if (!ctx || !ctx->msg) return NULL;
-  if (len) *len = ctx->msg->len;
-  return ctx->msg->payload;
+const void*
+csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len)
+{
+	if (!ctx || !ctx->msg) {
+		return NULL;
+	}
+	if (len) {
+		*len = ctx->msg->len;
+	}
+	return ctx->msg->payload;
 }
 
 /* --- Offload API --- */
@@ -106,9 +122,11 @@ const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len) {
  * with the topic, payload, and length.
  *
  * @param req libuv work request (contains csilk_mq_work_ctx_t in data). */
-static void worker_cb(uv_work_t* req) {
-  csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
-  wctx->handler(wctx->topic, wctx->payload, wctx->len);
+static void
+worker_cb(uv_work_t* req)
+{
+	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+	wctx->handler(wctx->topic, wctx->payload, wctx->len);
 }
 
 /** @brief libuv after-work callback — runs on the main loop thread after
@@ -120,12 +138,14 @@ static void worker_cb(uv_work_t* req) {
  *
  * @param req    libuv work request (freed by this callback).
  * @param status libuv status (ignored). */
-static void worker_after_cb(uv_work_t* req, int status) {
-  (void)status;
-  csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
-  free(wctx->topic);
-  free(wctx->payload);
-  free(wctx);
+static void
+worker_after_cb(uv_work_t* req, int status)
+{
+	(void)status;
+	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+	free(wctx->topic);
+	free(wctx->payload);
+	free(wctx);
 }
 
 /** @brief Offload message processing to a libuv thread pool worker.
@@ -147,31 +167,36 @@ static void worker_after_cb(uv_work_t* req, int status) {
  *               on a background thread.
  * @note The payload is deep-copied so the background thread can safely
  *       process it without worrying about mutex locking. */
-void csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker) {
-  if (!ctx || !ctx->msg || !worker) return;
-  csilk_mq_work_ctx_t* wctx = calloc(1, sizeof(csilk_mq_work_ctx_t));
-  if (!wctx) return;
-  wctx->req.data = wctx;
-  wctx->handler = worker;
-  wctx->topic = strdup(ctx->msg->topic);
-  if (!wctx->topic) {
-    free(wctx);
-    return;
-  }
-  if (ctx->msg->len > 0 && ctx->msg->payload) {
-    wctx->payload = malloc(ctx->msg->len);
-    if (wctx->payload) {
-      memcpy(wctx->payload, ctx->msg->payload, ctx->msg->len);
-      wctx->len = ctx->msg->len;
-    } else {
-      free(wctx->topic);
-      free(wctx);
-      return;
-    }
-  }
-  uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb,
-                worker_after_cb);
-  csilk_mq_next(ctx);
+void
+csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
+{
+	if (!ctx || !ctx->msg || !worker) {
+		return;
+	}
+	csilk_mq_work_ctx_t* wctx = calloc(1, sizeof(csilk_mq_work_ctx_t));
+	if (!wctx) {
+		return;
+	}
+	wctx->req.data = wctx;
+	wctx->handler = worker;
+	wctx->topic = strdup(ctx->msg->topic);
+	if (!wctx->topic) {
+		free(wctx);
+		return;
+	}
+	if (ctx->msg->len > 0 && ctx->msg->payload) {
+		wctx->payload = malloc(ctx->msg->len);
+		if (wctx->payload) {
+			memcpy(wctx->payload, ctx->msg->payload, ctx->msg->len);
+			wctx->len = ctx->msg->len;
+		} else {
+			free(wctx->topic);
+			free(wctx);
+			return;
+		}
+	}
+	uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb, worker_after_cb);
+	csilk_mq_next(ctx);
 }
 
 /* --- Setup API --- */
@@ -190,8 +215,7 @@ static void on_mq_async(uv_async_t* handle);
  * @param payload Opaque payload data.
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on allocation failure. */
-static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
-                       size_t len);
+static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /** @brief Internal: Recover messages from the Write-Ahead Log on startup.
  *
@@ -223,80 +247,101 @@ static int _mq_recovery(csilk_mq_t* mq);
 
 #include "cJSON.h"
 
-static void _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic,
-                          size_t len) {
-  if (!mq || mq->monitor_count == 0) return;
-  cJSON* root = cJSON_CreateObject();
-  cJSON_AddStringToObject(root, "event", event);
-  if (topic) cJSON_AddStringToObject(root, "topic", topic);
-  cJSON_AddNumberToObject(root, "payload_len", (double)len);
-  cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
-  char* json = cJSON_PrintUnformatted(root);
+static void
+_mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
+{
+	if (!mq || mq->monitor_count == 0) {
+		return;
+	}
+	cJSON* root = cJSON_CreateObject();
+	cJSON_AddStringToObject(root, "event", event);
+	if (topic) {
+		cJSON_AddStringToObject(root, "topic", topic);
+	}
+	cJSON_AddNumberToObject(root, "payload_len", (double)len);
+	cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+	char* json = cJSON_PrintUnformatted(root);
 
-  uv_mutex_lock(&mq->monitor_mutex);
-  for (size_t i = 0; i < mq->monitor_count; i++) {
-    csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
-  }
-  uv_mutex_unlock(&mq->monitor_mutex);
+	uv_mutex_lock(&mq->monitor_mutex);
+	for (size_t i = 0; i < mq->monitor_count; i++) {
+		csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+	}
+	uv_mutex_unlock(&mq->monitor_mutex);
 
-  free(json);
-  cJSON_Delete(root);
+	free(json);
+	cJSON_Delete(root);
 }
 
-void csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats) {
-  if (!mq || !stats) return;
-  uv_mutex_lock(&mq->queue_mutex);
-  stats->published_total = mq->published_total;
-  stats->delivered_total = mq->delivered_total;
-  stats->failed_total = mq->failed_total;
-  stats->queue_depth = mq->queue_depth;
+void
+csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
+{
+	if (!mq || !stats) {
+		return;
+	}
+	uv_mutex_lock(&mq->queue_mutex);
+	stats->published_total = mq->published_total;
+	stats->delivered_total = mq->delivered_total;
+	stats->failed_total = mq->failed_total;
+	stats->queue_depth = mq->queue_depth;
 
-  uint32_t topics = 0;
-  for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) topics++;
-  stats->topic_count = topics;
-  uv_mutex_unlock(&mq->queue_mutex);
+	uint32_t topics = 0;
+	for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+		topics++;
+	}
+	stats->topic_count = topics;
+	uv_mutex_unlock(&mq->queue_mutex);
 }
 
-char* csilk_mq_stats_to_json(const csilk_mq_stats_t* stats) {
-  if (!stats) return NULL;
-  cJSON* root = cJSON_CreateObject();
-  cJSON_AddNumberToObject(root, "published_total",
-                          (double)stats->published_total);
-  cJSON_AddNumberToObject(root, "delivered_total",
-                          (double)stats->delivered_total);
-  cJSON_AddNumberToObject(root, "failed_total", (double)stats->failed_total);
-  cJSON_AddNumberToObject(root, "queue_depth", (double)stats->queue_depth);
-  cJSON_AddNumberToObject(root, "topic_count", (double)stats->topic_count);
-  char* json = cJSON_Print(root);
-  cJSON_Delete(root);
-  return json;
+char*
+csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
+{
+	if (!stats) {
+		return NULL;
+	}
+	cJSON* root = cJSON_CreateObject();
+	cJSON_AddNumberToObject(root, "published_total", (double)stats->published_total);
+	cJSON_AddNumberToObject(root, "delivered_total", (double)stats->delivered_total);
+	cJSON_AddNumberToObject(root, "failed_total", (double)stats->failed_total);
+	cJSON_AddNumberToObject(root, "queue_depth", (double)stats->queue_depth);
+	cJSON_AddNumberToObject(root, "topic_count", (double)stats->topic_count);
+	char* json = cJSON_Print(root);
+	cJSON_Delete(root);
+	return json;
 }
 
-void csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c) {
-  if (!mq || !c) return;
-  uv_mutex_lock(&mq->monitor_mutex);
-  if (mq->monitor_count >= mq->monitor_capacity) {
-    size_t new_cap = mq->monitor_capacity ? mq->monitor_capacity * 2 : 4;
-    mq->monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
-    mq->monitor_capacity = new_cap;
-  }
-  mq->monitors[mq->monitor_count++] = c;
-  uv_mutex_unlock(&mq->monitor_mutex);
+void
+csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
+{
+	if (!mq || !c) {
+		return;
+	}
+	uv_mutex_lock(&mq->monitor_mutex);
+	if (mq->monitor_count >= mq->monitor_capacity) {
+		size_t new_cap = mq->monitor_capacity ? mq->monitor_capacity * 2 : 4;
+		mq->monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
+		mq->monitor_capacity = new_cap;
+	}
+	mq->monitors[mq->monitor_count++] = c;
+	uv_mutex_unlock(&mq->monitor_mutex);
 }
 
-csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
-  csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
-  if (!mq) return NULL;
-  uv_mutex_init(&mq->queue_mutex);
-  uv_mutex_init(&mq->monitor_mutex);
-  uv_async_init(loop, &mq->async_handle, on_mq_async);
-  mq->async_handle.data = mq;
+csilk_mq_t*
+_csilk_mq_new(uv_loop_t* loop)
+{
+	csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
+	if (!mq) {
+		return NULL;
+	}
+	uv_mutex_init(&mq->queue_mutex);
+	uv_mutex_init(&mq->monitor_mutex);
+	uv_async_init(loop, &mq->async_handle, on_mq_async);
+	mq->async_handle.data = mq;
 
-  mq->wal_fd = -1;
-  mq->wal_path = NULL;
-  uv_mutex_init(&mq->wal_mutex);
+	mq->wal_fd = -1;
+	mq->wal_path = NULL;
+	uv_mutex_init(&mq->wal_mutex);
 
-  return mq;
+	return mq;
 }
 
 /** @brief Enable persistent message delivery using a Write-Ahead Log (WAL).
@@ -319,59 +364,69 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
  * @return 0 on success, -1 if parameters are NULL or the file cannot be opened.
  * @note The WAL uses a simple binary format: [topic_len][topic][payload_len]
  *       [payload][checksum] entries. Checksum is a simple XOR for integrity. */
-int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path) {
-  if (!mq || !wal_path) return -1;
+int
+csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
+{
+	if (!mq || !wal_path) {
+		return -1;
+	}
 
-  uv_mutex_lock(&mq->wal_mutex);
+	uv_mutex_lock(&mq->wal_mutex);
 
-  /* Close existing WAL if any */
-  if (mq->wal_fd >= 0) {
-    uv_fs_t close_req;
-    uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, NULL);
-    uv_fs_req_cleanup(&close_req);
-    mq->wal_fd = -1;
-  }
-  if (mq->wal_path) {
-    free(mq->wal_path);
-    mq->wal_path = NULL;
-  }
+	/* Close existing WAL if any */
+	if (mq->wal_fd >= 0) {
+		uv_fs_t close_req;
+		uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, NULL);
+		uv_fs_req_cleanup(&close_req);
+		mq->wal_fd = -1;
+	}
+	if (mq->wal_path) {
+		free(mq->wal_path);
+		mq->wal_path = NULL;
+	}
 
-  uv_fs_t open_req;
-  /* Use synchronous open */
-  int fd = uv_fs_open(mq->async_handle.loop, &open_req, wal_path,
-                      O_CREAT | O_RDWR | O_APPEND, 0644, NULL);
-  uv_fs_req_cleanup(&open_req);
+	uv_fs_t open_req;
+	/* Use synchronous open */
+	int fd = uv_fs_open(
+	    mq->async_handle.loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, NULL);
+	uv_fs_req_cleanup(&open_req);
 
-  if (fd < 0) {
-    uv_mutex_unlock(&mq->wal_mutex);
-    return fd;
-  }
+	if (fd < 0) {
+		uv_mutex_unlock(&mq->wal_mutex);
+		return fd;
+	}
 
-  mq->wal_fd = fd;
-  mq->wal_path = strdup(wal_path);
+	mq->wal_fd = fd;
+	mq->wal_path = strdup(wal_path);
 
-  /* Recovery: Load existing messages from WAL */
-  _mq_recovery(mq);
+	/* Recovery: Load existing messages from WAL */
+	_mq_recovery(mq);
 
-  uv_mutex_unlock(&mq->wal_mutex);
+	uv_mutex_unlock(&mq->wal_mutex);
 
-  return 0;
+	return 0;
 }
 
 /** @brief Find or create a topic structure.
  * @param mq The MQ instance.
  * @param name Topic name.
  * @return Pointer to topic structure, or NULL on failure. */
-static csilk_mq_topic_t* get_or_create_topic(csilk_mq_t* mq, const char* name) {
-  for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
-    if (strcmp(t->name, name) == 0) return t;
-  }
-  csilk_mq_topic_t* t = calloc(1, sizeof(csilk_mq_topic_t));
-  if (!t) return NULL;
-  t->name = strdup(name);
-  t->next = mq->topics;
-  mq->topics = t;
-  return t;
+static csilk_mq_topic_t*
+get_or_create_topic(csilk_mq_t* mq, const char* name)
+{
+	for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+		if (strcmp(t->name, name) == 0) {
+			return t;
+		}
+	}
+	csilk_mq_topic_t* t = calloc(1, sizeof(csilk_mq_topic_t));
+	if (!t) {
+		return NULL;
+	}
+	t->name = strdup(name);
+	t->next = mq->topics;
+	mq->topics = t;
+	return t;
 }
 
 /** @brief Register a middleware handler for a specific topic (or globally).
@@ -390,29 +445,32 @@ static csilk_mq_topic_t* get_or_create_topic(csilk_mq_t* mq, const char* name) {
  * @param middleware Handler function to invoke during message processing.
  * @note The handler arrays grow dynamically (doubling capacity) as needed.
  *       Topic matching supports glob patterns via fnmatch(). */
-void csilk_mq_use(csilk_mq_t* mq, const char* topic,
-                  csilk_mq_handler_t middleware) {
-  if (!mq || !middleware) return;
-  if (!topic) {
-    if (mq->global_mw_count >= mq->global_mw_capacity) {
-      size_t new_cap = mq->global_mw_capacity ? mq->global_mw_capacity * 2 : 4;
-      mq->global_middlewares =
-          realloc(mq->global_middlewares, new_cap * sizeof(csilk_mq_handler_t));
-      mq->global_mw_capacity = new_cap;
-    }
-    mq->global_middlewares[mq->global_mw_count++] = middleware;
-  } else {
-    csilk_mq_topic_t* t = get_or_create_topic(mq, topic);
-    if (t) {
-      if (t->handler_count >= t->handler_capacity) {
-        size_t new_cap = t->handler_capacity ? t->handler_capacity * 2 : 4;
-        t->handlers =
-            realloc(t->handlers, new_cap * sizeof(csilk_mq_handler_t));
-        t->handler_capacity = new_cap;
-      }
-      t->handlers[t->handler_count++] = middleware;
-    }
-  }
+void
+csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
+{
+	if (!mq || !middleware) {
+		return;
+	}
+	if (!topic) {
+		if (mq->global_mw_count >= mq->global_mw_capacity) {
+			size_t new_cap = mq->global_mw_capacity ? mq->global_mw_capacity * 2 : 4;
+			mq->global_middlewares =
+			    realloc(mq->global_middlewares, new_cap * sizeof(csilk_mq_handler_t));
+			mq->global_mw_capacity = new_cap;
+		}
+		mq->global_middlewares[mq->global_mw_count++] = middleware;
+	} else {
+		csilk_mq_topic_t* t = get_or_create_topic(mq, topic);
+		if (t) {
+			if (t->handler_count >= t->handler_capacity) {
+				size_t new_cap = t->handler_capacity ? t->handler_capacity * 2 : 4;
+				t->handlers =
+				    realloc(t->handlers, new_cap * sizeof(csilk_mq_handler_t));
+				t->handler_capacity = new_cap;
+			}
+			t->handlers[t->handler_count++] = middleware;
+		}
+	}
 }
 
 /** @brief Register a subscriber handler for a topic.
@@ -424,10 +482,11 @@ void csilk_mq_use(csilk_mq_t* mq, const char* topic,
  * @param mq         The MQ instance.
  * @param topic      Topic name to subscribe to.
  * @param subscriber Handler function invoked when a message matches. */
-void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic,
-                        csilk_mq_handler_t subscriber) {
-  /* Subscribers are essentially handlers appended to the chain */
-  csilk_mq_use(mq, topic, subscriber);
+void
+csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber)
+{
+	/* Subscribers are essentially handlers appended to the chain */
+	csilk_mq_use(mq, topic, subscriber);
 }
 
 /* --- Publishing and Async Dispatch --- */
@@ -454,44 +513,50 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic,
  * @note This is a no-op if the MQ has no WAL file (wal_fd < 0).
  * @note The caller should hold wal_mutex, though this function acquires it
  *       internally as well for safety. */
-static int _mq_append_wal(csilk_mq_t* mq, const char* topic,
-                          const void* payload, size_t len) {
-  if (!mq || mq->wal_fd < 0 || !topic) return 0;
+static int
+_mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
+{
+	if (!mq || mq->wal_fd < 0 || !topic) {
+		return 0;
+	}
 
-  uv_mutex_lock(&mq->wal_mutex);
+	uv_mutex_lock(&mq->wal_mutex);
 
-  uint32_t topic_len = (uint32_t)strlen(topic);
-  uint32_t payload_len = (uint32_t)len;
-  uint32_t checksum = 0;
+	uint32_t topic_len = (uint32_t)strlen(topic);
+	uint32_t payload_len = (uint32_t)len;
+	uint32_t checksum = 0;
 
-  /* Simple XOR checksum of topic and payload */
-  for (uint32_t i = 0; i < topic_len; i++) checksum ^= (uint8_t)topic[i];
-  const uint8_t* p = (const uint8_t*)payload;
-  if (p) {
-    for (uint32_t i = 0; i < payload_len; i++) checksum ^= p[i];
-  }
+	/* Simple XOR checksum of topic and payload */
+	for (uint32_t i = 0; i < topic_len; i++) {
+		checksum ^= (uint8_t)topic[i];
+	}
+	const uint8_t* p = (const uint8_t*)payload;
+	if (p) {
+		for (uint32_t i = 0; i < payload_len; i++) {
+			checksum ^= p[i];
+		}
+	}
 
-  uv_buf_t bufs[5];
-  bufs[0] = uv_buf_init((char*)&topic_len, 4);
-  bufs[1] = uv_buf_init((char*)topic, topic_len);
-  bufs[2] = uv_buf_init((char*)&payload_len, 4);
-  bufs[3] = uv_buf_init((char*)payload, payload_len);
-  bufs[4] = uv_buf_init((char*)&checksum, 4);
+	uv_buf_t bufs[5];
+	bufs[0] = uv_buf_init((char*)&topic_len, 4);
+	bufs[1] = uv_buf_init((char*)topic, topic_len);
+	bufs[2] = uv_buf_init((char*)&payload_len, 4);
+	bufs[3] = uv_buf_init((char*)payload, payload_len);
+	bufs[4] = uv_buf_init((char*)&checksum, 4);
 
-  uv_fs_t write_req;
-  /* Write to the end of file (synchronous) */
-  int result = uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs,
-                           5, -1, NULL);
-  uv_fs_req_cleanup(&write_req);
+	uv_fs_t write_req;
+	/* Write to the end of file (synchronous) */
+	int result = uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs, 5, -1, NULL);
+	uv_fs_req_cleanup(&write_req);
 
-  if (result >= 0) {
-    uv_fs_t sync_req;
-    uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, NULL);
-    uv_fs_req_cleanup(&sync_req);
-  }
+	if (result >= 0) {
+		uv_fs_t sync_req;
+		uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, NULL);
+		uv_fs_req_cleanup(&sync_req);
+	}
 
-  uv_mutex_unlock(&mq->wal_mutex);
-  return (result >= 0) ? 0 : -1;
+	uv_mutex_unlock(&mq->wal_mutex);
+	return (result >= 0) ? 0 : -1;
 }
 
 /** @brief Internal: enqueue a message in the in-memory linked list.
@@ -515,41 +580,44 @@ static int _mq_append_wal(csilk_mq_t* mq, const char* topic,
  * @return 0 on success, -1 on allocation failure.
  * @note Thread-safe. The async signal ensures on_mq_async() processes the
  *       message on the main loop thread. */
-static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
-                       size_t len) {
-  csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
-  if (!msg) return -1;
-  msg->topic = strdup(topic);
-  if (!msg->topic) {
-    free(msg);
-    return -1;
-  }
-  if (len > 0 && payload) {
-    msg->payload = malloc(len);
-    if (!msg->payload) {
-      free(msg->topic);
-      free(msg);
-      return -1;
-    }
-    memcpy(msg->payload, payload, len);
-    msg->len = len;
-  }
+static int
+_mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
+{
+	csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
+	if (!msg) {
+		return -1;
+	}
+	msg->topic = strdup(topic);
+	if (!msg->topic) {
+		free(msg);
+		return -1;
+	}
+	if (len > 0 && payload) {
+		msg->payload = malloc(len);
+		if (!msg->payload) {
+			free(msg->topic);
+			free(msg);
+			return -1;
+		}
+		memcpy(msg->payload, payload, len);
+		msg->len = len;
+	}
 
-  uv_mutex_lock(&mq->queue_mutex);
-  if (mq->queue_tail) {
-    mq->queue_tail->next = msg;
-  } else {
-    mq->queue_head = msg;
-  }
-  mq->queue_tail = msg;
+	uv_mutex_lock(&mq->queue_mutex);
+	if (mq->queue_tail) {
+		mq->queue_tail->next = msg;
+	} else {
+		mq->queue_head = msg;
+	}
+	mq->queue_tail = msg;
 
-  mq->published_total++;
-  mq->queue_depth++;
-  uv_mutex_unlock(&mq->queue_mutex);
+	mq->published_total++;
+	mq->queue_depth++;
+	uv_mutex_unlock(&mq->queue_mutex);
 
-  _mq_broadcast(mq, "mq_published", topic, len);
-  uv_async_send(&mq->async_handle);
-  return 0;
+	_mq_broadcast(mq, "mq_published", topic, len);
+	uv_async_send(&mq->async_handle);
+	return 0;
 }
 /** @brief Internal: recover messages from the Write-Ahead Log on startup.
  *
@@ -577,104 +645,116 @@ static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
  * @note The WAL is NOT truncated after recovery — new messages append after
  *       existing ones. A future compaction step could truncate processed
  *       entries. */
-static int _mq_recovery(csilk_mq_t* mq) {
-  if (!mq || mq->wal_fd < 0) return 0;
+static int
+_mq_recovery(csilk_mq_t* mq)
+{
+	if (!mq || mq->wal_fd < 0) {
+		return 0;
+	}
 
-  uint64_t offset = 0;
-  while (1) {
-    uint32_t topic_len = 0;
-    uint32_t payload_len = 0;
-    uint32_t checksum = 0;
-    uv_fs_t read_req;
-    int nread;
+	uint64_t offset = 0;
+	while (1) {
+		uint32_t topic_len = 0;
+		uint32_t payload_len = 0;
+		uint32_t checksum = 0;
+		uv_fs_t read_req;
+		int nread;
 
-    /* 1. Read Topic Length */
-    uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
-    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
-                       offset, NULL);
-    uv_fs_req_cleanup(&read_req);
-    if (nread < 4) break; /* EOF or error */
-    offset += 4;
+		/* 1. Read Topic Length */
+		uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
+		nread =
+		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		uv_fs_req_cleanup(&read_req);
+		if (nread < 4) {
+			break; /* EOF or error */
+		}
+		offset += 4;
 
-    /* 2. Read Topic Name */
-    char* topic = malloc(topic_len + 1);
-    if (!topic) break;
-    buf = uv_buf_init(topic, topic_len);
-    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
-                       offset, NULL);
-    uv_fs_req_cleanup(&read_req);
-    if (nread < (int)topic_len) {
-      free(topic);
-      break;
-    }
-    topic[topic_len] = '\0';
-    offset += topic_len;
+		/* 2. Read Topic Name */
+		char* topic = malloc(topic_len + 1);
+		if (!topic) {
+			break;
+		}
+		buf = uv_buf_init(topic, topic_len);
+		nread =
+		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		uv_fs_req_cleanup(&read_req);
+		if (nread < (int)topic_len) {
+			free(topic);
+			break;
+		}
+		topic[topic_len] = '\0';
+		offset += topic_len;
 
-    /* 3. Read Payload Length */
-    buf = uv_buf_init((char*)&payload_len, 4);
-    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
-                       offset, NULL);
-    uv_fs_req_cleanup(&read_req);
-    if (nread < 4) {
-      free(topic);
-      break;
-    }
-    offset += 4;
+		/* 3. Read Payload Length */
+		buf = uv_buf_init((char*)&payload_len, 4);
+		nread =
+		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		uv_fs_req_cleanup(&read_req);
+		if (nread < 4) {
+			free(topic);
+			break;
+		}
+		offset += 4;
 
-    /* 4. Read Payload */
-    void* payload = NULL;
-    if (payload_len > 0) {
-      payload = malloc(payload_len);
-      if (!payload) {
-        free(topic);
-        break;
-      }
-      buf = uv_buf_init(payload, payload_len);
-      nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
-                         offset, NULL);
-      uv_fs_req_cleanup(&read_req);
-      if (nread < (int)payload_len) {
-        free(topic);
-        free(payload);
-        break;
-      }
-      offset += payload_len;
-    }
+		/* 4. Read Payload */
+		void* payload = NULL;
+		if (payload_len > 0) {
+			payload = malloc(payload_len);
+			if (!payload) {
+				free(topic);
+				break;
+			}
+			buf = uv_buf_init(payload, payload_len);
+			nread = uv_fs_read(
+			    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+			uv_fs_req_cleanup(&read_req);
+			if (nread < (int)payload_len) {
+				free(topic);
+				free(payload);
+				break;
+			}
+			offset += payload_len;
+		}
 
-    /* 5. Read Checksum */
-    buf = uv_buf_init((char*)&checksum, 4);
-    nread = uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1,
-                       offset, NULL);
-    uv_fs_req_cleanup(&read_req);
-    if (nread < 4) {
-      free(topic);
-      free(payload);
-      break;
-    }
-    offset += 4;
+		/* 5. Read Checksum */
+		buf = uv_buf_init((char*)&checksum, 4);
+		nread =
+		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		uv_fs_req_cleanup(&read_req);
+		if (nread < 4) {
+			free(topic);
+			free(payload);
+			break;
+		}
+		offset += 4;
 
-    /* 6. Validate Checksum */
-    uint32_t calc_checksum = 0;
-    for (uint32_t i = 0; i < topic_len; i++) calc_checksum ^= (uint8_t)topic[i];
-    const uint8_t* p = (const uint8_t*)payload;
-    if (p) {
-      for (uint32_t i = 0; i < payload_len; i++) calc_checksum ^= p[i];
-    }
+		/* 6. Validate Checksum */
+		uint32_t calc_checksum = 0;
+		for (uint32_t i = 0; i < topic_len; i++) {
+			calc_checksum ^= (uint8_t)topic[i];
+		}
+		const uint8_t* p = (const uint8_t*)payload;
+		if (p) {
+			for (uint32_t i = 0; i < payload_len; i++) {
+				calc_checksum ^= p[i];
+			}
+		}
 
-    if (calc_checksum == checksum) {
-      /* Enqueue in memory without re-appending to WAL */
-      _mq_enqueue(mq, topic, payload, payload_len);
-    } else {
-      free(topic);
-      free(payload);
-      break; /* Stop at first invalid frame */
-    }
+		if (calc_checksum == checksum) {
+			/* Enqueue in memory without re-appending to WAL */
+			_mq_enqueue(mq, topic, payload, payload_len);
+		} else {
+			free(topic);
+			free(payload);
+			break; /* Stop at first invalid frame */
+		}
 
-    free(topic);
-    free(payload);
-  }
+		free(topic);
+		free(payload);
+	}
 
-  return 0;
+	return 0;
 }
 
 /** @brief Publish a message to a topic (thread-safe, optionally persistent).
@@ -696,18 +776,21 @@ static int _mq_recovery(csilk_mq_t* mq) {
  * @return 0 on success, -1 if the topic is NULL or WAL append fails.
  * @note Thread-safe. The caller may free or reuse @p payload immediately
  *       after this call returns — the data is copied internally. */
-int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
-                     size_t len) {
-  if (!mq || !topic) return -1;
+int
+csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
+{
+	if (!mq || !topic) {
+		return -1;
+	}
 
-  /* Persistence: Append to WAL before memory queue */
-  if (mq->wal_fd >= 0) {
-    if (_mq_append_wal(mq, topic, payload, len) != 0) {
-      return -1;
-    }
-  }
+	/* Persistence: Append to WAL before memory queue */
+	if (mq->wal_fd >= 0) {
+		if (_mq_append_wal(mq, topic, payload, len) != 0) {
+			return -1;
+		}
+	}
 
-  return _mq_enqueue(mq, topic, payload, len);
+	return _mq_enqueue(mq, topic, payload, len);
 }
 
 /** @brief libuv async callback — dequeue and process all pending messages.
@@ -735,63 +818,69 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
  * This allows patterns like "user.*" or "system.event.?".
  *
  * @param handle libuv async handle (data points to csilk_mq_t). */
-static void on_mq_async(uv_async_t* handle) {
-  csilk_mq_t* mq = (csilk_mq_t*)handle->data;
+static void
+on_mq_async(uv_async_t* handle)
+{
+	csilk_mq_t* mq = (csilk_mq_t*)handle->data;
 
-  uv_mutex_lock(&mq->queue_mutex);
-  csilk_mq_msg_t* head = mq->queue_head;
-  mq->queue_head = NULL;
-  mq->queue_tail = NULL;
-  uint32_t count = mq->queue_depth;
-  mq->queue_depth = 0;
-  uv_mutex_unlock(&mq->queue_mutex);
+	uv_mutex_lock(&mq->queue_mutex);
+	csilk_mq_msg_t* head = mq->queue_head;
+	mq->queue_head = NULL;
+	mq->queue_tail = NULL;
+	uint32_t count = mq->queue_depth;
+	mq->queue_depth = 0;
+	uv_mutex_unlock(&mq->queue_mutex);
 
-  while (head) {
-    csilk_mq_msg_t* msg = head;
-    head = head->next;
+	while (head) {
+		csilk_mq_msg_t* msg = head;
+		head = head->next;
 
-    _mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
-    uv_mutex_lock(&mq->queue_mutex);
-    mq->delivered_total++;
-    uv_mutex_unlock(&mq->queue_mutex);
+		_mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
+		uv_mutex_lock(&mq->queue_mutex);
+		mq->delivered_total++;
+		uv_mutex_unlock(&mq->queue_mutex);
 
-    /* Count total matching handlers */
-    size_t total_handlers = mq->global_mw_count;
-    for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
-      if (fnmatch(t->name, msg->topic, 0) == 0) {
-        total_handlers += t->handler_count;
-      }
-    }
+		/* Count total matching handlers */
+		size_t total_handlers = mq->global_mw_count;
+		for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+			if (fnmatch(t->name, msg->topic, 0) == 0) {
+				total_handlers += t->handler_count;
+			}
+		}
 
-    if (total_handlers > 0) {
-      csilk_mq_handler_t* chain =
-          malloc(total_handlers * sizeof(csilk_mq_handler_t));
-      if (chain) {
-        size_t idx = 0;
-        if (mq->global_mw_count > 0) {
-          memcpy(chain, mq->global_middlewares,
-                 mq->global_mw_count * sizeof(csilk_mq_handler_t));
-          idx += mq->global_mw_count;
-        }
+		if (total_handlers > 0) {
+			csilk_mq_handler_t* chain =
+			    malloc(total_handlers * sizeof(csilk_mq_handler_t));
+			if (chain) {
+				size_t idx = 0;
+				if (mq->global_mw_count > 0) {
+					memcpy(chain,
+					       mq->global_middlewares,
+					       mq->global_mw_count * sizeof(csilk_mq_handler_t));
+					idx += mq->global_mw_count;
+				}
 
-        for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
-          if (fnmatch(t->name, msg->topic, 0) == 0 && t->handler_count > 0) {
-            memcpy(chain + idx, t->handlers,
-                   t->handler_count * sizeof(csilk_mq_handler_t));
-            idx += t->handler_count;
-          }
-        }
+				for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+					if (fnmatch(t->name, msg->topic, 0) == 0 &&
+					    t->handler_count > 0) {
+						memcpy(chain + idx,
+						       t->handlers,
+						       t->handler_count *
+							   sizeof(csilk_mq_handler_t));
+						idx += t->handler_count;
+					}
+				}
 
-        csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
-        csilk_mq_next(&ctx);
-        free(chain);
-      }
-    }
+				csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
+				csilk_mq_next(&ctx);
+				free(chain);
+			}
+		}
 
-    free(msg->topic);
-    free(msg->payload);
-    free(msg);
-  }
+		free(msg->topic);
+		free(msg->payload);
+		free(msg);
+	}
 }
 
 /** @brief libuv close callback — final cleanup when the MQ async handle is
@@ -809,44 +898,50 @@ static void on_mq_async(uv_async_t* handle) {
  * callback), so it is safe to destroy mutexes here.
  *
  * @param handle libuv handle being closed (data points to csilk_mq_t). */
-static void on_mq_close(uv_handle_t* handle) {
-  csilk_mq_t* mq = (csilk_mq_t*)handle->data;
-  if (!mq) return;
+static void
+on_mq_close(uv_handle_t* handle)
+{
+	csilk_mq_t* mq = (csilk_mq_t*)handle->data;
+	if (!mq) {
+		return;
+	}
 
-  uv_mutex_destroy(&mq->queue_mutex);
-  uv_mutex_destroy(&mq->wal_mutex);
+	uv_mutex_destroy(&mq->queue_mutex);
+	uv_mutex_destroy(&mq->wal_mutex);
 
-  if (mq->wal_fd >= 0) {
-    uv_fs_t close_req;
-    uv_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
-    uv_fs_req_cleanup(&close_req);
-  }
-  if (mq->wal_path) free(mq->wal_path);
+	if (mq->wal_fd >= 0) {
+		uv_fs_t close_req;
+		uv_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
+		uv_fs_req_cleanup(&close_req);
+	}
+	if (mq->wal_path) {
+		free(mq->wal_path);
+	}
 
-  /* Free queue */
-  csilk_mq_msg_t* msg = mq->queue_head;
-  while (msg) {
-    csilk_mq_msg_t* next = msg->next;
-    free(msg->topic);
-    free(msg->payload);
-    free(msg);
-    msg = next;
-  }
+	/* Free queue */
+	csilk_mq_msg_t* msg = mq->queue_head;
+	while (msg) {
+		csilk_mq_msg_t* next = msg->next;
+		free(msg->topic);
+		free(msg->payload);
+		free(msg);
+		msg = next;
+	}
 
-  /* Free topics */
-  csilk_mq_topic_t* topic = mq->topics;
-  while (topic) {
-    csilk_mq_topic_t* next = topic->next;
-    free(topic->name);
-    free(topic->handlers);
-    free(topic);
-    topic = next;
-  }
+	/* Free topics */
+	csilk_mq_topic_t* topic = mq->topics;
+	while (topic) {
+		csilk_mq_topic_t* next = topic->next;
+		free(topic->name);
+		free(topic->handlers);
+		free(topic);
+		topic = next;
+	}
 
-  /* Free global middlewares */
-  free(mq->global_middlewares);
+	/* Free global middlewares */
+	free(mq->global_middlewares);
 
-  free(mq);
+	free(mq);
 }
 
 /** @brief Internal: initiate asynchronous shutdown and free of a Message Queue.
@@ -858,10 +953,14 @@ static void on_mq_close(uv_handle_t* handle) {
  * @param mq The MQ instance to free (may be NULL).
  * @note This is an async operation — the MQ is not freed immediately.
  *       Safe to call with NULL. */
-void _csilk_mq_free(csilk_mq_t* mq) {
-  if (!mq) return;
-  if (!uv_is_closing((uv_handle_t*)&mq->async_handle)) {
-    mq->async_handle.data = mq;
-    uv_close((uv_handle_t*)&mq->async_handle, on_mq_close);
-  }
+void
+_csilk_mq_free(csilk_mq_t* mq)
+{
+	if (!mq) {
+		return;
+	}
+	if (!uv_is_closing((uv_handle_t*)&mq->async_handle)) {
+		mq->async_handle.data = mq;
+		uv_close((uv_handle_t*)&mq->async_handle, on_mq_close);
+	}
 }

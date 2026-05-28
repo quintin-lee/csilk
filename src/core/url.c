@@ -27,11 +27,19 @@
  *
  * @param c Hex character ('0'-'9', 'a'-'f', or 'A'-'F').
  * @return Integer value 0-15, or -1 if @p c is not a valid hex digit. */
-static int hex_to_int(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
+static int
+hex_to_int(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	return -1;
 }
 
 /** @brief URL-decode a percent-encoded string in-place.
@@ -44,28 +52,32 @@ static int hex_to_int(char c) {
  * @return The length of the decoded string (may be shorter than original).
  * @note If @p str contains invalid % sequences (e.g., "%ZZ"), they are left
  *       as-is. */
-size_t csilk_url_decode(char* str) {
-  if (!str) return 0;
-  char* src = str;
-  char* dst = str;
-  while (*src) {
-    if (*src == '%' && isxdigit(src[1]) && isxdigit(src[2])) {
-      int hi = hex_to_int(src[1]);
-      int lo = hex_to_int(src[2]);
-      if (hi >= 0 && lo >= 0) {
-        *dst++ = (char)((hi << 4) | lo);
-        src += 3;
-        continue;
-      }
-    } else if (*src == '+') {
-      *dst++ = ' ';
-    } else {
-      *dst++ = *src;
-    }
-    src++;
-  }
-  *dst = '\0';
-  return dst - str;
+size_t
+csilk_url_decode(char* str)
+{
+	if (!str) {
+		return 0;
+	}
+	char* src = str;
+	char* dst = str;
+	while (*src) {
+		if (*src == '%' && isxdigit(src[1]) && isxdigit(src[2])) {
+			int hi = hex_to_int(src[1]);
+			int lo = hex_to_int(src[2]);
+			if (hi >= 0 && lo >= 0) {
+				*dst++ = (char)((hi << 4) | lo);
+				src += 3;
+				continue;
+			}
+		} else if (*src == '+') {
+			*dst++ = ' ';
+		} else {
+			*dst++ = *src;
+		}
+		src++;
+	}
+	*dst = '\0';
+	return dst - str;
 }
 
 /** @brief Split a full URL into its path and query string components.
@@ -82,28 +94,36 @@ size_t csilk_url_decode(char* str) {
  *              query was present.
  * @note Both output strings must be freed by the caller with free().
  *       On allocation failure, both outputs may be NULL. */
-void csilk_split_url(const char* url, char** path, char** query) {
-  *path = NULL;
-  *query = NULL;
-  if (!url) return;
+void
+csilk_split_url(const char* url, char** path, char** query)
+{
+	*path = NULL;
+	*query = NULL;
+	if (!url) {
+		return;
+	}
 
-  const char* qmark = strchr(url, '?');
-  if (qmark) {
-    size_t path_len = qmark - url;
-    *path = malloc(path_len + 1);
-    if (!*path) return;
+	const char* qmark = strchr(url, '?');
+	if (qmark) {
+		size_t path_len = qmark - url;
+		*path = malloc(path_len + 1);
+		if (!*path) {
+			return;
+		}
 
-    memcpy(*path, url, path_len);
-    (*path)[path_len] = '\0';
-    csilk_url_decode(*path);
+		memcpy(*path, url, path_len);
+		(*path)[path_len] = '\0';
+		csilk_url_decode(*path);
 
-    *query = strdup(qmark + 1);
-    if (!*query) {
-      free(*path);
-      *path = NULL;
-    }
-  } else {
-    *path = strdup(url);
-    if (*path) csilk_url_decode(*path);
-  }
+		*query = strdup(qmark + 1);
+		if (!*query) {
+			free(*path);
+			*path = NULL;
+		}
+	} else {
+		*path = strdup(url);
+		if (*path) {
+			csilk_url_decode(*path);
+		}
+	}
 }

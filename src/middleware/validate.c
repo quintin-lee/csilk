@@ -22,12 +22,16 @@
  * @return Pointer to the first occurrence of c in s, or NULL if c is not
  *         found or s is NULL.
  */
-static const char* str_find(const char* s, char c) {
-  while (s && *s) {
-    if (*s == c) return s;
-    s++;
-  }
-  return NULL;
+static const char*
+str_find(const char* s, char c)
+{
+	while (s && *s) {
+		if (*s == c) {
+			return s;
+		}
+		s++;
+	}
+	return NULL;
 }
 
 /**
@@ -46,35 +50,43 @@ static const char* str_find(const char* s, char c) {
  *       quoted local parts, IP address literals, IDN, or special characters.
  *       Use a dedicated validation library for strict email validation.
  */
-static int is_valid_email(const char* s) {
-  if (!s || !*s) return 0;
-  /* Basic email syntax check:
+static int
+is_valid_email(const char* s)
+{
+	if (!s || !*s) {
+		return 0;
+	}
+	/* Basic email syntax check:
      1. Exactly one '@' character.
      2. No whitespace allowed (RFC 5321 §4.1.2).
      3. Local part and domain must both be non-empty.
      4. Domain must contain at least one dot with non-empty TLD segment.
      This is intentionally simple — does NOT validate quoted locals,
      IP literals, or special characters per RFC 5322. */
-  int at_count = 0;
-  const char* at_ptr = NULL;
+	int at_count = 0;
+	const char* at_ptr = NULL;
 
-  for (const char* p = s; *p; p++) {
-    if (*p == '@') {
-      at_count++;
-      at_ptr = p;
-    } else if (isspace((unsigned char)*p)) {
-      return 0; /* No whitespace in email addresses. */
-    }
-  }
+	for (const char* p = s; *p; p++) {
+		if (*p == '@') {
+			at_count++;
+			at_ptr = p;
+		} else if (isspace((unsigned char)*p)) {
+			return 0; /* No whitespace in email addresses. */
+		}
+	}
 
-  /* Must have exactly one '@' and both sides must be non-empty. */
-  if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') return 0;
+	/* Must have exactly one '@' and both sides must be non-empty. */
+	if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') {
+		return 0;
+	}
 
-  /* Domain must contain at least one '.' with non-empty TLD. */
-  const char* dot = strrchr(at_ptr + 1, '.');
-  if (!dot || dot == at_ptr + 1 || dot[1] == '\0') return 0;
+	/* Domain must contain at least one '.' with non-empty TLD. */
+	const char* dot = strrchr(at_ptr + 1, '.');
+	if (!dot || dot == at_ptr + 1 || dot[1] == '\0') {
+		return 0;
+	}
 
-  return 1;
+	return 1;
 }
 
 /**
@@ -104,59 +116,79 @@ static int is_valid_email(const char* s) {
  *          not be freed or dereferenced after the rules array goes out of
  *          scope.
  */
-const char* csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules) {
-  if (!c || !rules) return NULL;
+const char*
+csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
+{
+	if (!c || !rules) {
+		return NULL;
+	}
 
-  for (const csilk_valid_rule_t* r = rules; r->field; r++) {
-    const char* value = NULL;
+	for (const csilk_valid_rule_t* r = rules; r->field; r++) {
+		const char* value = NULL;
 
-    if (r->source && strcmp(r->source, "query") == 0) {
-      value = csilk_get_query(c, r->field);
-    } else if (r->source && strcmp(r->source, "form") == 0) {
-      value = csilk_get_form_field(c, r->field);
-    } else if (r->source && strcmp(r->source, "header") == 0) {
-      value = csilk_get_header(c, r->field);
-    } else if (r->source && strcmp(r->source, "cookie") == 0) {
-      value = csilk_get_cookie(c, r->field);
-    } else {
-      /* Default source: check query string first, fall back to form body.
+		if (r->source && strcmp(r->source, "query") == 0) {
+			value = csilk_get_query(c, r->field);
+		} else if (r->source && strcmp(r->source, "form") == 0) {
+			value = csilk_get_form_field(c, r->field);
+		} else if (r->source && strcmp(r->source, "header") == 0) {
+			value = csilk_get_header(c, r->field);
+		} else if (r->source && strcmp(r->source, "cookie") == 0) {
+			value = csilk_get_cookie(c, r->field);
+		} else {
+			/* Default source: check query string first, fall back to form body.
          This allows e.g. GET ?name=value and POST form fields to be
          validated with the same rule. */
-      value = csilk_get_query(c, r->field);
-      if (!value) value = csilk_get_form_field(c, r->field);
-    }
+			value = csilk_get_query(c, r->field);
+			if (!value) {
+				value = csilk_get_form_field(c, r->field);
+			}
+		}
 
-    if (!value && (r->flags & CSILK_VALID_REQUIRED)) {
-      return r->field;
-    }
+		if (!value && (r->flags & CSILK_VALID_REQUIRED)) {
+			return r->field;
+		}
 
-    if (!value) continue;
+		if (!value) {
+			continue;
+		}
 
-    if (r->flags & CSILK_VALID_INT) {
-      const char* p = value;
-      if (*p == '-') p++;
-      if (!*p) return r->field;
-      while (*p) {
-        if (!isdigit((unsigned char)*p)) return r->field;
-        p++;
-      }
-      long num = atol(value);
-      if (r->min < r->max) {
-        if (num < (long)r->min || num > (long)r->max) return r->field;
-      }
-    }
+		if (r->flags & CSILK_VALID_INT) {
+			const char* p = value;
+			if (*p == '-') {
+				p++;
+			}
+			if (!*p) {
+				return r->field;
+			}
+			while (*p) {
+				if (!isdigit((unsigned char)*p)) {
+					return r->field;
+				}
+				p++;
+			}
+			long num = atol(value);
+			if (r->min < r->max) {
+				if (num < (long)r->min || num > (long)r->max) {
+					return r->field;
+				}
+			}
+		}
 
-    if (r->flags & CSILK_VALID_STRING) {
-      size_t slen = strlen(value);
-      if (r->min < r->max) {
-        if ((int)slen < r->min || (int)slen > r->max) return r->field;
-      }
-    }
+		if (r->flags & CSILK_VALID_STRING) {
+			size_t slen = strlen(value);
+			if (r->min < r->max) {
+				if ((int)slen < r->min || (int)slen > r->max) {
+					return r->field;
+				}
+			}
+		}
 
-    if (r->flags & CSILK_VALID_EMAIL) {
-      if (!is_valid_email(value)) return r->field;
-    }
-  }
+		if (r->flags & CSILK_VALID_EMAIL) {
+			if (!is_valid_email(value)) {
+				return r->field;
+			}
+		}
+	}
 
-  return NULL;
+	return NULL;
 }

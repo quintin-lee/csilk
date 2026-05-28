@@ -24,7 +24,7 @@
 
 /** @brief Per-connection data for the SQLite driver. */
 typedef struct {
-  sqlite3* db;
+	sqlite3* db;
 } sqlite_conn_t;
 
 /** @brief Open a connection to a SQLite database file.
@@ -36,23 +36,30 @@ typedef struct {
  * @param pool The database pool to initialize.
  * @param dsn  Filesystem path to the SQLite database file.
  * @return 0 on success, -1 if parameters are invalid or open fails. */
-static int sqlite_connect(csilk_db_pool_t* pool, const char* dsn) {
-  if (!pool || !dsn) return -1;
+static int
+sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
+{
+	if (!pool || !dsn) {
+		return -1;
+	}
 
-  sqlite_conn_t* conn = calloc(1, sizeof(sqlite_conn_t));
-  if (!conn) return -1;
+	sqlite_conn_t* conn = calloc(1, sizeof(sqlite_conn_t));
+	if (!conn) {
+		return -1;
+	}
 
-  int rc = sqlite3_open_v2(dsn, &conn->db,
-                           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
-  if (rc != SQLITE_OK) {
-    fprintf(stderr, "csilk_db_sqlite: cannot open '%s': %s\n", dsn,
-            sqlite3_errmsg(conn->db));
-    free(conn);
-    return -1;
-  }
+	int rc = sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr,
+			"csilk_db_sqlite: cannot open '%s': %s\n",
+			dsn,
+			sqlite3_errmsg(conn->db));
+		free(conn);
+		return -1;
+	}
 
-  pool->connection = conn;
-  return 0;
+	pool->connection = conn;
+	return 0;
 }
 
 /** @brief Close a SQLite connection and free the pool's connection data.
@@ -62,16 +69,20 @@ static int sqlite_connect(csilk_db_pool_t* pool, const char* dsn) {
  *
  * @param pool The database pool to shut down.
  * @return 0 on success, -1 if pool or its connection is NULL. */
-static int sqlite_disconnect(csilk_db_pool_t* pool) {
-  if (!pool || !pool->connection) return -1;
+static int
+sqlite_disconnect(csilk_db_pool_t* pool)
+{
+	if (!pool || !pool->connection) {
+		return -1;
+	}
 
-  sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
-  if (conn->db) {
-    sqlite3_close(conn->db);
-  }
-  free(conn);
-  pool->connection = NULL;
-  return 0;
+	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	if (conn->db) {
+		sqlite3_close(conn->db);
+	}
+	free(conn);
+	pool->connection = NULL;
+	return 0;
 }
 
 /** @brief Free all memory associated with a query result set.
@@ -83,20 +94,24 @@ static int sqlite_disconnect(csilk_db_pool_t* pool) {
  *       row->values[] array or its individual string elements.
  *
  * @param result The result set to free (may be NULL). */
-static void sqlite_free_result(csilk_db_result_t* result) {
-  if (!result) return;
-  for (int i = 0; i < result->row_count; i++) {
-    free(result->rows[i]);
-  }
-  free(result->rows);
-  for (int i = 0; i < result->column_count; i++) {
-    free(result->column_names[i]);
-  }
-  free(result->column_names);
-  result->rows = NULL;
-  result->column_names = NULL;
-  result->row_count = 0;
-  result->column_count = 0;
+static void
+sqlite_free_result(csilk_db_result_t* result)
+{
+	if (!result) {
+		return;
+	}
+	for (int i = 0; i < result->row_count; i++) {
+		free(result->rows[i]);
+	}
+	free(result->rows);
+	for (int i = 0; i < result->column_count; i++) {
+		free(result->column_names[i]);
+	}
+	free(result->column_names);
+	result->rows = NULL;
+	result->column_names = NULL;
+	result->row_count = 0;
+	result->column_count = 0;
 }
 
 /** @brief Execute a SQL query and return the full result set.
@@ -122,69 +137,71 @@ static void sqlite_free_result(csilk_db_result_t* result) {
  *   4. Finalize the statement.  On any allocation failure, partial
  *      results are freed and -1 is returned.
  */
-static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
-                        csilk_db_result_t* result) {
-  if (!pool || !pool->connection || !sql || !result) return -1;
+static int
+sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
+{
+	if (!pool || !pool->connection || !sql || !result) {
+		return -1;
+	}
 
-  sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
 
-  sqlite3_stmt* stmt = NULL;
-  int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, NULL);
-  if (rc != SQLITE_OK) {
-    fprintf(stderr, "csilk_db_sqlite: prepare failed: %s\n",
-            sqlite3_errmsg(conn->db));
-    return -1;
-  }
+	sqlite3_stmt* stmt = NULL;
+	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "csilk_db_sqlite: prepare failed: %s\n", sqlite3_errmsg(conn->db));
+		return -1;
+	}
 
-  /* --- Extract column metadata before stepping --- */
-  result->row_count = 0;
-  result->column_count = sqlite3_column_count(stmt);
-  result->column_names = calloc(result->column_count, sizeof(char*));
-  if (!result->column_names && result->column_count > 0) {
-    sqlite3_finalize(stmt);
-    return -1;
-  }
-  for (int i = 0; i < result->column_count; i++) {
-    result->column_names[i] = strdup(sqlite3_column_name(stmt, i));
-  }
+	/* --- Extract column metadata before stepping --- */
+	result->row_count = 0;
+	result->column_count = sqlite3_column_count(stmt);
+	result->column_names = calloc(result->column_count, sizeof(char*));
+	if (!result->column_names && result->column_count > 0) {
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	for (int i = 0; i < result->column_count; i++) {
+		result->column_names[i] = strdup(sqlite3_column_name(stmt, i));
+	}
 
-  /* --- Step through all result rows --- */
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
-    csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-    if (!row) {
-      sqlite3_finalize(stmt);
-      sqlite_free_result(result);
-      return -1;
-    }
+	/* --- Step through all result rows --- */
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+		if (!row) {
+			sqlite3_finalize(stmt);
+			sqlite_free_result(result);
+			return -1;
+		}
 
-    row->count = result->column_count;
-    row->values = calloc(result->column_count, sizeof(char*));
-    if (!row->values) {
-      free(row);
-      sqlite3_finalize(stmt);
-      sqlite_free_result(result);
-      return -1;
-    }
+		row->count = result->column_count;
+		row->values = calloc(result->column_count, sizeof(char*));
+		if (!row->values) {
+			free(row);
+			sqlite3_finalize(stmt);
+			sqlite_free_result(result);
+			return -1;
+		}
 
-    /* Copy each column as text; NULL values become "" for consistency */
-    for (int i = 0; i < result->column_count; i++) {
-      const char* val = (const char*)sqlite3_column_text(stmt, i);
-      row->values[i] = val ? strdup(val) : strdup("");
-    }
+		/* Copy each column as text; NULL values become "" for consistency */
+		for (int i = 0; i < result->column_count; i++) {
+			const char* val = (const char*)sqlite3_column_text(stmt, i);
+			row->values[i] = val ? strdup(val) : strdup("");
+		}
 
-    /* Append row to the dynamic result array */
-    result->rows = realloc(result->rows,
-                           (result->row_count + 1) * sizeof(csilk_db_row_t*));
-    if (!result->rows) {
-      sqlite3_finalize(stmt);
-      sqlite_free_result(result);
-      return -1;
-    }
-    result->rows[result->row_count++] = row;
-  }
+		/* Append row to the dynamic result array */
+		result->rows =
+		    realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+		if (!result->rows) {
+			sqlite3_finalize(stmt);
+			sqlite_free_result(result);
+			return -1;
+		}
+		result->rows[result->row_count++] = row;
+	}
 
-  sqlite3_finalize(stmt);
-  return 0;
+	sqlite3_finalize(stmt);
+	return 0;
 }
 
 /** @brief Execute a SQL statement that returns no result rows.
@@ -201,43 +218,54 @@ static int sqlite_query(csilk_db_pool_t* pool, const char* sql,
  * The callback-free invocation discards any output rows silently.
  * On error, the error message from sqlite3_errmsg is freed after logging.
  */
-static int sqlite_exec(csilk_db_pool_t* pool, const char* sql) {
-  if (!pool || !pool->connection || !sql) return -1;
+static int
+sqlite_exec(csilk_db_pool_t* pool, const char* sql)
+{
+	if (!pool || !pool->connection || !sql) {
+		return -1;
+	}
 
-  sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
-  char* err = NULL;
-  int rc = sqlite3_exec(conn->db, sql, NULL, NULL, &err);
-  if (rc != SQLITE_OK) {
-    fprintf(stderr, "csilk_db_sqlite: exec failed: %s\n",
-            err ? err : "unknown");
-    if (err) sqlite3_free(err);
-    return -1;
-  }
-  return 0;
+	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	char* err = NULL;
+	int rc = sqlite3_exec(conn->db, sql, NULL, NULL, &err);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "csilk_db_sqlite: exec failed: %s\n", err ? err : "unknown");
+		if (err) {
+			sqlite3_free(err);
+		}
+		return -1;
+	}
+	return 0;
 }
 
 /** @brief Begin a SQLite transaction (delegates to sqlite_exec).
  *
  * @param pool The database pool.
  * @return 0 on success, -1 on error. */
-static int sqlite_transaction_begin(csilk_db_pool_t* pool) {
-  return sqlite_exec(pool, "BEGIN TRANSACTION");
+static int
+sqlite_transaction_begin(csilk_db_pool_t* pool)
+{
+	return sqlite_exec(pool, "BEGIN TRANSACTION");
 }
 
 /** @brief Commit the current SQLite transaction.
  *
  * @param pool The database pool.
  * @return 0 on success, -1 on error. */
-static int sqlite_transaction_commit(csilk_db_pool_t* pool) {
-  return sqlite_exec(pool, "COMMIT");
+static int
+sqlite_transaction_commit(csilk_db_pool_t* pool)
+{
+	return sqlite_exec(pool, "COMMIT");
 }
 
 /** @brief Rollback the current SQLite transaction.
  *
  * @param pool The database pool.
  * @return 0 on success, -1 on error. */
-static int sqlite_transaction_rollback(csilk_db_pool_t* pool) {
-  return sqlite_exec(pool, "ROLLBACK");
+static int
+sqlite_transaction_rollback(csilk_db_pool_t* pool)
+{
+	return sqlite_exec(pool, "ROLLBACK");
 }
 
 /** @brief Pre-built driver vtable for the SQLite3 database backend.
@@ -262,6 +290,8 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
  * driver available for csilk_db_create() calls.
  *
  * @note This function is idempotent-safe but typically called once. */
-void csilk_db_sqlite_init(void) {
-  csilk_db_register_driver("sqlite", &csilk_db_sqlite_driver);
+void
+csilk_db_sqlite_init(void)
+{
+	csilk_db_register_driver("sqlite", &csilk_db_sqlite_driver);
 }

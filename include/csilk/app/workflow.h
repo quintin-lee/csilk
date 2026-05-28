@@ -56,8 +56,8 @@ typedef struct csilk_wf_ctx_s csilk_wf_ctx_t;
  * @brief Join policies for nodes with multiple incoming dependencies.
  */
 typedef enum {
-  CSILK_WF_JOIN_AND, /**< Default: Trigger only when ALL inputs arrive. */
-  CSILK_WF_JOIN_OR   /**< Trigger when ANY input arrives. */
+	CSILK_WF_JOIN_AND, /**< Default: Trigger only when ALL inputs arrive. */
+	CSILK_WF_JOIN_OR   /**< Trigger when ANY input arrives. */
 } csilk_wf_join_policy_t;
 
 /**
@@ -71,37 +71,37 @@ typedef enum {
  * counts, timing metrics) and is NOT freed by the engine.
  */
 typedef struct csilk_data_s {
-  char* type;             /**< MIME-like type identifier (e.g., "text/plain",
+	char* type;		/**< MIME-like type identifier (e.g., "text/plain",
                              "application/json"). */
-  void* value;            /**< Opaque data pointer.  Ownership semantics
+	void* value;		/**< Opaque data pointer.  Ownership semantics
                              depend on @p free_fn. */
-  void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
+	void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
                              when the data is consumed.  NULL means the
                              engine does NOT take ownership. */
-  void* meta;             /**< Optional metadata pointer (not freed by the
+	void* meta;		/**< Optional metadata pointer (not freed by the
                              engine).  Common use: AI token usage stats. */
 } csilk_data_t;
 
 /** @brief Trace record for a single node execution. */
 typedef struct {
-  char* node_id;
-  uint64_t start_time; /**< Microseconds (uv_hrtime) */
-  uint64_t end_time;   /**< Microseconds */
-  char* input_dump;    /**< String representation of input */
-  char* output_dump;   /**< String representation of output */
-  char* model;         /**< AI model used (if applicable) */
-  int prompt_tokens;
-  int completion_tokens;
-  char* error; /**< Error message if failed */
+	char* node_id;
+	uint64_t start_time; /**< Microseconds (uv_hrtime) */
+	uint64_t end_time;   /**< Microseconds */
+	char* input_dump;    /**< String representation of input */
+	char* output_dump;   /**< String representation of output */
+	char* model;	     /**< AI model used (if applicable) */
+	int prompt_tokens;
+	int completion_tokens;
+	char* error; /**< Error message if failed */
 } csilk_wf_trace_node_t;
 
 /** @brief Complete execution trace of a workflow. */
 typedef struct {
-  char* exec_id; /**< Unique execution ID */
-  uint64_t start_time;
-  uint64_t end_time;
-  csilk_wf_trace_node_t** nodes;
-  size_t node_count;
+	char* exec_id; /**< Unique execution ID */
+	uint64_t start_time;
+	uint64_t end_time;
+	csilk_wf_trace_node_t** nodes;
+	size_t node_count;
 } csilk_wf_trace_t;
 
 /**
@@ -115,13 +115,13 @@ typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
  * @brief Configuration for built-in AI nodes.
  */
 typedef struct {
-  const char* model;      /**< AI model identifier. */
-  const char* system_msg; /**< Optional system prompt. */
-  const char* prompt; /**< User prompt (supports {{node.value}} templates). */
-  double temperature;
-  int max_tokens;
-  int stream;               /**< Enable token streaming to monitors. */
-  int max_history_messages; /**< Max messages to keep in history (0 =
+	const char* model;	/**< AI model identifier. */
+	const char* system_msg; /**< Optional system prompt. */
+	const char* prompt;	/**< User prompt (supports {{node.value}} templates). */
+	double temperature;
+	int max_tokens;
+	int stream;		  /**< Enable token streaming to monitors. */
+	int max_history_messages; /**< Max messages to keep in history (0 =
                                unlimited). */
 } csilk_ai_config_t;
 
@@ -132,8 +132,8 @@ typedef struct {
  * @param user_data Opaque pointer passed during node creation.
  */
 typedef csilk_data_t* (*csilk_wf_handler_t)(csilk_wf_ctx_t* ctx,
-                                            csilk_data_t* input,
-                                            void* user_data);
+					    csilk_data_t* input,
+					    void* user_data);
 
 /** @brief Opaque handle for a single node in a workflow. */
 typedef struct csilk_wf_node_s csilk_wf_node_t;
@@ -147,8 +147,7 @@ typedef struct csilk_wf_node_s csilk_wf_node_t;
  * @param value Pointer to the data.
  * @return New data container.
  */
-csilk_data_t* csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type,
-                                void* value);
+csilk_data_t* csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value);
 
 /**
  * @brief Duplicate a string using the workflow arena.
@@ -189,8 +188,8 @@ void csilk_wf_free(csilk_wf_t* wf);
  * @param user_data Opaque pointer passed to the handler.
  * @return Handle to the created node, or NULL on failure.
  */
-csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
-                              csilk_wf_handler_t handler, void* user_data);
+csilk_wf_node_t*
+csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data);
 
 /**
  * @brief Add a built-in AI node with template support.
@@ -199,8 +198,7 @@ csilk_wf_node_t* csilk_wf_add(csilk_wf_t* wf, const char* id,
  * @param config AI configuration (copied internally).
  * @return Node handle.
  */
-csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id,
-                                 const csilk_ai_config_t* config);
+csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config);
 
 /* --- Tool Calling --- */
 
@@ -221,10 +219,12 @@ typedef char* (*csilk_wf_tool_fn)(const char* args_json, void* user_data);
  * @param fn C function to execute.
  * @param user_data Context for the function.
  */
-void csilk_wf_register_tool(csilk_wf_t* wf, const char* name,
-                            const char* description,
-                            const char* parameters_json, csilk_wf_tool_fn fn,
-                            void* user_data);
+void csilk_wf_register_tool(csilk_wf_t* wf,
+			    const char* name,
+			    const char* description,
+			    const char* parameters_json,
+			    csilk_wf_tool_fn fn,
+			    void* user_data);
 
 /**
  * @brief Get a node by ID.
@@ -258,8 +258,7 @@ void csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to);
  * @param condition Result string that triggers this route (e.g., "fail").
  * @param to        Destination node.
  */
-void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
-                 csilk_wf_node_t* to);
+void csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to);
 
 /**
  * @brief Add a loop-back / feedback route between nodes.
@@ -269,8 +268,7 @@ void csilk_wf_on(csilk_wf_node_t* from, const char* condition,
  * @note Unlike csilk_wf_on, this does NOT increment the 'to' node's
  *       incoming dependency count, preventing deadlocks in join logic.
  */
-void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition,
-                      csilk_wf_node_t* to);
+void csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to);
 
 /**
  * @brief Add an error fallback route.
@@ -291,8 +289,7 @@ void csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router);
  * @param node   Node handle.
  * @param policy AND (default) or OR.
  */
-void csilk_wf_node_set_join(csilk_wf_node_t* node,
-                            csilk_wf_join_policy_t policy);
+void csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy);
 
 /**
  * @brief Mark a node as interactive (requires human signal to proceed).
@@ -315,9 +312,10 @@ void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema);
  * @param input    Optional replacement input (e.g., human-edited prompt).
  * @param callback Callback for when the resumed workflow finishes.
  */
-void csilk_wf_signal_continue(csilk_wf_t* wf, const char* exec_id,
-                              csilk_data_t* input,
-                              void (*callback)(csilk_data_t* result));
+void csilk_wf_signal_continue(csilk_wf_t* wf,
+			      const char* exec_id,
+			      csilk_data_t* input,
+			      void (*callback)(csilk_data_t* result));
 
 /**
  * @brief Set a timeout for a specific node.
@@ -339,8 +337,7 @@ void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec);
  * @param max_retries    Maximum number of retry attempts.
  * @param retry_delay_ms Delay before each retry.
  */
-void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
-                             int retry_delay_ms);
+void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries, int retry_delay_ms);
 
 /**
  * @brief Mark a node for remote execution via MQ.
@@ -372,8 +369,8 @@ void csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir);
  * @param callback Callback invoked when the workflow completes or exits.
  * @return Unique Execution ID (string). Caller must not free.
  */
-const char* csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
-                         void (*callback)(csilk_data_t* result));
+const char*
+csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t* result));
 
 /**
  * @brief Resume an interrupted workflow execution from a WAL file.
@@ -381,8 +378,7 @@ const char* csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
  * @param exec_id The execution ID to resume.
  * @param callback Callback for when the resumed workflow finishes.
  */
-void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
-                     void (*callback)(csilk_data_t* result));
+void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data_t* result));
 
 /**
  * @brief Run workflow and generate a trace.
@@ -390,9 +386,9 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
  * @param input Initial input.
  * @param callback Callback receiving final result and the full trace.
  */
-void csilk_wf_run_traced(csilk_wf_t* wf, csilk_data_t* input,
-                         void (*callback)(csilk_data_t* result,
-                                          csilk_wf_trace_t* trace));
+void csilk_wf_run_traced(csilk_wf_t* wf,
+			 csilk_data_t* input,
+			 void (*callback)(csilk_data_t* result, csilk_wf_trace_t* trace));
 
 /**
  * @brief Convert a trace object to a JSON string.

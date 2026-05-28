@@ -10,85 +10,97 @@
 
 // Mock _csilk_send_response to capture the result
 static int response_sent = 0;
-void _csilk_send_response(csilk_ctx_t* c) { response_sent = 1; }
-
-static void mock_handler(csilk_ctx_t* c) {
-  char* body = malloc(2000);
-  memset(body, 'A', 2000);
-  body[1999] = '\0';
-  c->response.body = body;
-  c->response.body_len = 2000;
-  c->response.body_is_managed = 1;
-  c->response.status = CSILK_STATUS_OK;
+void
+_csilk_send_response(csilk_ctx_t* c)
+{
+	response_sent = 1;
 }
 
-int main() {
-  printf("Testing Gzip Middleware (Async)...\n");
+static void
+mock_handler(csilk_ctx_t* c)
+{
+	char* body = malloc(2000);
+	memset(body, 'A', 2000);
+	body[1999] = '\0';
+	c->response.body = body;
+	c->response.body_len = 2000;
+	c->response.body_is_managed = 1;
+	c->response.status = CSILK_STATUS_OK;
+}
 
-  csilk_ctx_t c;
-  memset(&c, 0, sizeof(c));
-  c.arena = csilk_arena_new(4096);
-  char mock_client_marker = 1;
-  c._internal_client = &mock_client_marker;  // Mock internal client
+int
+main()
+{
+	printf("Testing Gzip Middleware (Async)...\n");
 
-  csilk_handler_t handlers[] = {csilk_gzip_middleware, mock_handler, NULL};
-  c.handlers = handlers;
-  c.handler_index = -1;
+	csilk_ctx_t c;
+	memset(&c, 0, sizeof(c));
+	c.arena = csilk_arena_new(4096);
+	char mock_client_marker = 1;
+	c._internal_client = &mock_client_marker; // Mock internal client
 
-  // Simulate request with Accept-Encoding: gzip
-  csilk_set_request_header(&c, "Accept-Encoding", "gzip");
+	csilk_handler_t handlers[] = {csilk_gzip_middleware, mock_handler, NULL};
+	c.handlers = handlers;
+	c.handler_index = -1;
 
-  // Run middleware via next
-  csilk_next(&c);
+	// Simulate request with Accept-Encoding: gzip
+	csilk_set_request_header(&c, "Accept-Encoding", "gzip");
 
-  // Since it's async, we need to run the loop
-  assert(c.is_async == 1);
+	// Run middleware via next
+	csilk_next(&c);
 
-  printf("Waiting for async gzip to complete...\n");
-  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	// Since it's async, we need to run the loop
+	assert(c.is_async == 1);
 
-  assert(response_sent == 1);
+	printf("Waiting for async gzip to complete...\n");
+	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-  const char* content_encoding = NULL;
-  for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-    csilk_header_t* h = c.response.headers.buckets[i];
-    while (h) {
-      if (strcasecmp(h->key, "Content-Encoding") == 0) {
-        content_encoding = h->value;
-        break;
-      }
-      h = h->next;
-    }
-    if (content_encoding) break;
-  }
-  assert(content_encoding != NULL);
-  assert(strcmp(content_encoding, "gzip") == 0);
+	assert(response_sent == 1);
 
-  assert(c.response.body_len < 2000);
-  printf("Compressed size: %zu\n", c.response.body_len);
+	const char* content_encoding = NULL;
+	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+		csilk_header_t* h = c.response.headers.buckets[i];
+		while (h) {
+			if (strcasecmp(h->key, "Content-Encoding") == 0) {
+				content_encoding = h->value;
+				break;
+			}
+			h = h->next;
+		}
+		if (content_encoding) {
+			break;
+		}
+	}
+	assert(content_encoding != NULL);
+	assert(strcmp(content_encoding, "gzip") == 0);
 
-  // Verify it's actually valid gzip
-  z_stream strm;
-  memset(&strm, 0, sizeof(strm));
-  assert(inflateInit2(&strm, 15 + 16) == Z_OK);
+	assert(c.response.body_len < 2000);
+	printf("Compressed size: %zu\n", c.response.body_len);
 
-  char* decompressed = malloc(4096);
-  strm.next_in = (Bytef*)c.response.body;
-  strm.avail_in = (uInt)c.response.body_len;
-  strm.next_out = (Bytef*)decompressed;
-  strm.avail_out = 4096;
+	// Verify it's actually valid gzip
+	z_stream strm;
+	memset(&strm, 0, sizeof(strm));
+	assert(inflateInit2(&strm, 15 + 16) == Z_OK);
 
-  int ret = inflate(&strm, Z_FINISH);
-  assert(ret == Z_STREAM_END);
-  assert(strm.total_out == 2000);
-  for (int i = 0; i < 1999; i++) assert(decompressed[i] == 'A');
+	char* decompressed = malloc(4096);
+	strm.next_in = (Bytef*)c.response.body;
+	strm.avail_in = (uInt)c.response.body_len;
+	strm.next_out = (Bytef*)decompressed;
+	strm.avail_out = 4096;
 
-  inflateEnd(&strm);
-  free(decompressed);
+	int ret = inflate(&strm, Z_FINISH);
+	assert(ret == Z_STREAM_END);
+	assert(strm.total_out == 2000);
+	for (int i = 0; i < 1999; i++) {
+		assert(decompressed[i] == 'A');
+	}
 
-  csilk_ctx_cleanup(&c);
-  csilk_arena_free(c.arena);
+	inflateEnd(&strm);
+	free(decompressed);
 
-  printf("Gzip Middleware test passed!\n");
-  return 0;
+	csilk_ctx_cleanup(&c);
+	csilk_arena_free(c.arena);
+
+	printf("Gzip Middleware test passed!\n");
+	return 0;
 }

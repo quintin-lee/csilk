@@ -68,14 +68,13 @@ static _Atomic uint64_t security_auth_failures = 0;
  * route pattern (e.g., GET 200 /api/users/:id).
  */
 typedef struct {
-  char method[12];        /**< HTTP method (GET, POST, etc.) */
-  char route[128];        /**< Matched route pattern (e.g., "/users/:id") */
-  int status;             /**< HTTP response status code */
-  _Atomic uint64_t count; /**< Total requests for this dimension */
-  _Atomic uint64_t duration_us; /**< Total duration in microseconds */
-  _Atomic uint64_t
-      buckets[CSILK_METRICS_BUCKET_COUNT + 1]; /**< Histogram bucket counts */
-  _Atomic int in_use; /**< Lock-free flag for slot occupation */
+	char method[12];	      /**< HTTP method (GET, POST, etc.) */
+	char route[128];	      /**< Matched route pattern (e.g., "/users/:id") */
+	int status;		      /**< HTTP response status code */
+	_Atomic uint64_t count;	      /**< Total requests for this dimension */
+	_Atomic uint64_t duration_us; /**< Total duration in microseconds */
+	_Atomic uint64_t buckets[CSILK_METRICS_BUCKET_COUNT + 1]; /**< Histogram bucket counts */
+	_Atomic int in_use; /**< Lock-free flag for slot occupation */
 } csilk_route_metric_t;
 
 /**
@@ -98,14 +97,19 @@ static csilk_route_metric_t route_metrics[CSILK_METRICS_MAX_ENTRIES] = {0};
  * @param status The HTTP status code.
  * @return A hash index within [0, CSILK_METRICS_MAX_ENTRIES).
  */
-static uint32_t metrics_hash(const char* method, const char* route,
-                             int status) {
-  uint32_t hash = 5381;
-  int c;
-  while ((c = *method++)) hash = ((hash << 5) + hash) + c;
-  while ((c = *route++)) hash = ((hash << 5) + hash) + c;
-  hash = ((hash << 5) + hash) + status;
-  return hash % CSILK_METRICS_MAX_ENTRIES;
+static uint32_t
+metrics_hash(const char* method, const char* route, int status)
+{
+	uint32_t hash = 5381;
+	int c;
+	while ((c = *method++)) {
+		hash = ((hash << 5) + hash) + c;
+	}
+	while ((c = *route++)) {
+		hash = ((hash << 5) + hash) + c;
+	}
+	hash = ((hash << 5) + hash) + status;
+	return hash % CSILK_METRICS_MAX_ENTRIES;
 }
 
 /**
@@ -118,69 +122,84 @@ static uint32_t metrics_hash(const char* method, const char* route,
  * @param status The status code.
  * @return Pointer to the metric slot, or NULL if the table is saturated.
  */
-static csilk_route_metric_t* get_metric_slot(const char* method,
-                                             const char* route, int status) {
-  uint32_t start_idx = metrics_hash(method, route, status);
+static csilk_route_metric_t*
+get_metric_slot(const char* method, const char* route, int status)
+{
+	uint32_t start_idx = metrics_hash(method, route, status);
 
-  /* Linear probing for open addressing */
-  for (uint32_t i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
-    uint32_t idx = (start_idx + i) % CSILK_METRICS_MAX_ENTRIES;
-    csilk_route_metric_t* slot = &route_metrics[idx];
+	/* Linear probing for open addressing */
+	for (uint32_t i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
+		uint32_t idx = (start_idx + i) % CSILK_METRICS_MAX_ENTRIES;
+		csilk_route_metric_t* slot = &route_metrics[idx];
 
-    /* Attempt to claim the slot if it's currently empty (in_use == 0) */
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
-      /* Success: We claimed a new slot. Initialize its keys. */
-      strncpy(slot->method, method, sizeof(slot->method) - 1);
-      strncpy(slot->route, route, sizeof(slot->route) - 1);
-      slot->status = status;
-      return slot;
-    }
+		/* Attempt to claim the slot if it's currently empty (in_use == 0) */
+		int expected = 0;
+		if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
+			/* Success: We claimed a new slot. Initialize its keys. */
+			strncpy(slot->method, method, sizeof(slot->method) - 1);
+			strncpy(slot->route, route, sizeof(slot->route) - 1);
+			slot->status = status;
+			return slot;
+		}
 
-    /* Slot is already occupied. Check if it matches our keys. */
-    if (slot->status == status && strcmp(slot->method, method) == 0 &&
-        strcmp(slot->route, route) == 0) {
-      return slot;
-    }
-  }
-  return NULL; /* Table is full; telemetry for this combo will be dropped. */
+		/* Slot is already occupied. Check if it matches our keys. */
+		if (slot->status == status && strcmp(slot->method, method) == 0 &&
+		    strcmp(slot->route, route) == 0) {
+			return slot;
+		}
+	}
+	return NULL; /* Table is full; telemetry for this combo will be dropped. */
 }
 
 /* --- Public API: Statistics Collection --- */
 
-void csilk_security_get_stats(csilk_security_stats_t* stats) {
-  if (!stats) return;
-  stats->rate_limit_blocks = atomic_load(&security_rate_limit_blocks);
-  stats->csrf_violations = atomic_load(&security_csrf_violations);
-  stats->auth_failures = atomic_load(&security_auth_failures);
+void
+csilk_security_get_stats(csilk_security_stats_t* stats)
+{
+	if (!stats) {
+		return;
+	}
+	stats->rate_limit_blocks = atomic_load(&security_rate_limit_blocks);
+	stats->csrf_violations = atomic_load(&security_csrf_violations);
+	stats->auth_failures = atomic_load(&security_auth_failures);
 }
 
-void csilk_process_get_stats(csilk_process_stats_t* stats) {
-  if (!stats) return;
+void
+csilk_process_get_stats(csilk_process_stats_t* stats)
+{
+	if (!stats) {
+		return;
+	}
 
-  /* Get resident memory (RSS) from libuv */
-  uv_resident_set_memory(&stats->rss_bytes);
+	/* Get resident memory (RSS) from libuv */
+	uv_resident_set_memory(&stats->rss_bytes);
 
-  /* Get CPU time (User/System) from libuv */
-  uv_rusage_t usage;
-  if (uv_getrusage(&usage) == 0) {
-    stats->cpu_user_time_sec = (double)usage.ru_utime.tv_sec +
-                               (double)usage.ru_utime.tv_usec / 1000000.0;
-    stats->cpu_sys_time_sec = (double)usage.ru_stime.tv_sec +
-                              (double)usage.ru_stime.tv_usec / 1000000.0;
-  }
+	/* Get CPU time (User/System) from libuv */
+	uv_rusage_t usage;
+	if (uv_getrusage(&usage) == 0) {
+		stats->cpu_user_time_sec =
+		    (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
+		stats->cpu_sys_time_sec =
+		    (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+	}
 }
 
-void _csilk_metrics_inc_rate_limit_blocks(void) {
-  atomic_fetch_add(&security_rate_limit_blocks, 1);
+void
+_csilk_metrics_inc_rate_limit_blocks(void)
+{
+	atomic_fetch_add(&security_rate_limit_blocks, 1);
 }
 
-void _csilk_metrics_inc_csrf_violations(void) {
-  atomic_fetch_add(&security_csrf_violations, 1);
+void
+_csilk_metrics_inc_csrf_violations(void)
+{
+	atomic_fetch_add(&security_csrf_violations, 1);
 }
 
-void _csilk_metrics_inc_auth_failures(void) {
-  atomic_fetch_add(&security_auth_failures, 1);
+void
+_csilk_metrics_inc_auth_failures(void)
+{
+	atomic_fetch_add(&security_auth_failures, 1);
 }
 
 /* --- Middleware Implementation --- */
@@ -190,49 +209,51 @@ void _csilk_metrics_inc_auth_failures(void) {
  *
  * Wraps the request execution to measure latency and update atomic counters.
  */
-void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg) {
-  (void)arg;
+void
+csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
+{
+	(void)arg;
 
-  /* Start high-resolution timer */
-  uint64_t start = uv_hrtime();
+	/* Start high-resolution timer */
+	uint64_t start = uv_hrtime();
 
-  /* Proceed with next middleware/handler */
-  csilk_next(c);
+	/* Proceed with next middleware/handler */
+	csilk_next(c);
 
-  /* Calculate duration */
-  uint64_t duration_ns = uv_hrtime() - start;
-  double duration_sec = (double)duration_ns / 1e9;
-  uint64_t duration_us = duration_ns / 1000;
+	/* Calculate duration */
+	uint64_t duration_ns = uv_hrtime() - start;
+	double duration_sec = (double)duration_ns / 1e9;
+	uint64_t duration_us = duration_ns / 1000;
 
-  /* 1. Update Global Aggregate Metrics (Fast path) */
-  atomic_fetch_add(&http_requests_total, 1);
-  atomic_fetch_add(&http_request_duration_microseconds, duration_us);
+	/* 1. Update Global Aggregate Metrics (Fast path) */
+	atomic_fetch_add(&http_requests_total, 1);
+	atomic_fetch_add(&http_request_duration_microseconds, duration_us);
 
-  /* 2. Update Dimensional Route Metrics & Histograms */
-  const char* method = c->request.method ? c->request.method : "UNKNOWN";
+	/* 2. Update Dimensional Route Metrics & Histograms */
+	const char* method = c->request.method ? c->request.method : "UNKNOWN";
 
-  /* Use the static route pattern (e.g., /users/:id) if available, otherwise
+	/* Use the static route pattern (e.g., /users/:id) if available, otherwise
    * fall back. */
-  const char* route = (c->current_handler && c->current_handler->path)
-                          ? c->current_handler->path
-                          : "unmatched";
-  int status = c->response.status;
+	const char* route = (c->current_handler && c->current_handler->path)
+				? c->current_handler->path
+				: "unmatched";
+	int status = c->response.status;
 
-  csilk_route_metric_t* slot = get_metric_slot(method, route, status);
-  if (slot) {
-    /* Atomically update count and duration for this dimension */
-    atomic_fetch_add(&slot->count, 1);
-    atomic_fetch_add(&slot->duration_us, duration_us);
+	csilk_route_metric_t* slot = get_metric_slot(method, route, status);
+	if (slot) {
+		/* Atomically update count and duration for this dimension */
+		atomic_fetch_add(&slot->count, 1);
+		atomic_fetch_add(&slot->duration_us, duration_us);
 
-    /* Update Histogram Buckets (cumulative) */
-    for (int i = 0; i < CSILK_METRICS_BUCKET_COUNT; i++) {
-      if (duration_sec <= CSILK_METRICS_BUCKETS[i]) {
-        atomic_fetch_add(&slot->buckets[i], 1);
-      }
-    }
-    /* The +Inf bucket always increments */
-    atomic_fetch_add(&slot->buckets[CSILK_METRICS_BUCKET_COUNT], 1);
-  }
+		/* Update Histogram Buckets (cumulative) */
+		for (int i = 0; i < CSILK_METRICS_BUCKET_COUNT; i++) {
+			if (duration_sec <= CSILK_METRICS_BUCKETS[i]) {
+				atomic_fetch_add(&slot->buckets[i], 1);
+			}
+		}
+		/* The +Inf bucket always increments */
+		atomic_fetch_add(&slot->buckets[CSILK_METRICS_BUCKET_COUNT], 1);
+	}
 }
 
 /* --- Prometheus Exposition Handler --- */
@@ -242,29 +263,36 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg) {
  *
  * Automatically reallocates the buffer as needed.
  */
-static void append_metric(char** buf, size_t* size, size_t* offset,
-                          const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  int n = vsnprintf(NULL, 0, fmt, args);
-  va_end(args);
+static void
+append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	int n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
 
-  if (n < 0) return;
+	if (n < 0) {
+		return;
+	}
 
-  /* Ensure sufficient space (+1 for null terminator) */
-  if (*offset + n + 1 > *size) {
-    size_t new_size = (*size == 0) ? 4096 : *size * 2;
-    while (*offset + n + 1 > new_size) new_size *= 2;
-    char* new_buf = realloc(*buf, new_size);
-    if (!new_buf) return;
-    *buf = new_buf;
-    *size = new_size;
-  }
+	/* Ensure sufficient space (+1 for null terminator) */
+	if (*offset + n + 1 > *size) {
+		size_t new_size = (*size == 0) ? 4096 : *size * 2;
+		while (*offset + n + 1 > new_size) {
+			new_size *= 2;
+		}
+		char* new_buf = realloc(*buf, new_size);
+		if (!new_buf) {
+			return;
+		}
+		*buf = new_buf;
+		*size = new_size;
+	}
 
-  va_start(args, fmt);
-  vsnprintf(*buf + *offset, *size - *offset, fmt, args);
-  va_end(args);
-  *offset += n;
+	va_start(args, fmt);
+	vsnprintf(*buf + *offset, *size - *offset, fmt, args);
+	va_end(args);
+	*offset += n;
 }
 
 /**
@@ -272,179 +300,257 @@ static void append_metric(char** buf, size_t* size, size_t* offset,
  *
  * Renders full system telemetry in standard Prometheus text-based format.
  */
-void csilk_metrics_handler(csilk_ctx_t* c) {
-  char* buf = NULL;
-  size_t size = 0, offset = 0;
+void
+csilk_metrics_handler(csilk_ctx_t* c)
+{
+	char* buf = NULL;
+	size_t size = 0, offset = 0;
 
-  /* --- Part 1: Aggregated HTTP Metrics (Compatibility) --- */
-  append_metric(&buf, &size, &offset,
-                "# HELP http_requests_total_agg Total number of HTTP requests "
-                "(aggregated)\n");
-  append_metric(&buf, &size, &offset,
-                "# TYPE http_requests_total_agg counter\n");
-  append_metric(&buf, &size, &offset, "http_requests_total_agg %llu\n",
-                (unsigned long long)atomic_load(&http_requests_total));
+	/* --- Part 1: Aggregated HTTP Metrics (Compatibility) --- */
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP http_requests_total_agg Total number of HTTP requests "
+		      "(aggregated)\n");
+	append_metric(&buf, &size, &offset, "# TYPE http_requests_total_agg counter\n");
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "http_requests_total_agg %llu\n",
+		      (unsigned long long)atomic_load(&http_requests_total));
 
-  append_metric(&buf, &size, &offset,
-                "# HELP http_request_duration_microseconds_agg Total duration "
-                "in microseconds (aggregated)\n");
-  append_metric(&buf, &size, &offset,
-                "# TYPE http_request_duration_microseconds_agg counter\n");
-  append_metric(
-      &buf, &size, &offset, "http_request_duration_microseconds_agg %llu\n",
-      (unsigned long long)atomic_load(&http_request_duration_microseconds));
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP http_request_duration_microseconds_agg Total duration "
+		      "in microseconds (aggregated)\n");
+	append_metric(
+	    &buf, &size, &offset, "# TYPE http_request_duration_microseconds_agg counter\n");
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "http_request_duration_microseconds_agg %llu\n",
+		      (unsigned long long)atomic_load(&http_request_duration_microseconds));
 
-  /* --- Part 2: Dimensional HTTP Metrics (Labels + Histogram) --- */
-  append_metric(&buf, &size, &offset,
-                "# HELP http_requests_total Total number of HTTP requests by "
-                "method, status, route\n");
-  append_metric(&buf, &size, &offset, "# TYPE http_requests_total counter\n");
-  append_metric(
-      &buf, &size, &offset,
-      "# HELP http_request_duration_seconds Histogram of request durations\n");
-  append_metric(&buf, &size, &offset,
-                "# TYPE http_request_duration_seconds histogram\n");
+	/* --- Part 2: Dimensional HTTP Metrics (Labels + Histogram) --- */
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP http_requests_total Total number of HTTP requests by "
+		      "method, status, route\n");
+	append_metric(&buf, &size, &offset, "# TYPE http_requests_total counter\n");
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP http_request_duration_seconds Histogram of "
+		      "request durations\n");
+	append_metric(&buf, &size, &offset, "# TYPE http_request_duration_seconds histogram\n");
 
-  for (int i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
-    csilk_route_metric_t* slot = &route_metrics[i];
-    if (atomic_load(&slot->in_use)) {
-      uint64_t count = atomic_load(&slot->count);
-      double dur_sec = (double)atomic_load(&slot->duration_us) / 1e6;
+	for (int i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
+		csilk_route_metric_t* slot = &route_metrics[i];
+		if (atomic_load(&slot->in_use)) {
+			uint64_t count = atomic_load(&slot->count);
+			double dur_sec = (double)atomic_load(&slot->duration_us) / 1e6;
 
-      /* Request Counts */
-      append_metric(&buf, &size, &offset,
-                    "http_requests_total{method=\"%s\",status=\"%d\",route=\"%"
-                    "s\"} %llu\n",
-                    slot->method, slot->status, slot->route,
-                    (unsigned long long)count);
+			/* Request Counts */
+			append_metric(&buf,
+				      &size,
+				      &offset,
+				      "http_requests_total{method=\"%s\","
+				      "status=\"%d\",route=\"%"
+				      "s\"} %llu\n",
+				      slot->method,
+				      slot->status,
+				      slot->route,
+				      (unsigned long long)count);
 
-      /* Histogram Summary (Sum + Count) */
-      append_metric(&buf, &size, &offset,
-                    "http_request_duration_seconds_sum{method=\"%s\",status=\"%"
-                    "d\",route=\"%s\"} %.6f\n",
-                    slot->method, slot->status, slot->route, dur_sec);
-      append_metric(&buf, &size, &offset,
-                    "http_request_duration_seconds_count{method=\"%s\",status="
-                    "\"%d\",route=\"%s\"} %llu\n",
-                    slot->method, slot->status, slot->route,
-                    (unsigned long long)count);
+			/* Histogram Summary (Sum + Count) */
+			append_metric(&buf,
+				      &size,
+				      &offset,
+				      "http_request_duration_seconds_sum{"
+				      "method=\"%s\",status=\"%"
+				      "d\",route=\"%s\"} %.6f\n",
+				      slot->method,
+				      slot->status,
+				      slot->route,
+				      dur_sec);
+			append_metric(&buf,
+				      &size,
+				      &offset,
+				      "http_request_duration_seconds_count{"
+				      "method=\"%s\",status="
+				      "\"%d\",route=\"%s\"} %llu\n",
+				      slot->method,
+				      slot->status,
+				      slot->route,
+				      (unsigned long long)count);
 
-      /* Histogram Buckets */
-      for (int b = 0; b < CSILK_METRICS_BUCKET_COUNT; b++) {
-        append_metric(&buf, &size, &offset,
-                      "http_request_duration_seconds_bucket{method=\"%s\","
-                      "status=\"%d\",route=\"%s\",le=\"%.2f\"} %llu\n",
-                      slot->method, slot->status, slot->route,
-                      CSILK_METRICS_BUCKETS[b],
-                      (unsigned long long)atomic_load(&slot->buckets[b]));
-      }
-      append_metric(&buf, &size, &offset,
-                    "http_request_duration_seconds_bucket{method=\"%s\",status="
-                    "\"%d\",route=\"%s\",le=\"+Inf\"} %llu\n",
-                    slot->method, slot->status, slot->route,
-                    (unsigned long long)atomic_load(
-                        &slot->buckets[CSILK_METRICS_BUCKET_COUNT]));
-    }
-  }
+			/* Histogram Buckets */
+			for (int b = 0; b < CSILK_METRICS_BUCKET_COUNT; b++) {
+				append_metric(&buf,
+					      &size,
+					      &offset,
+					      "http_request_duration_seconds_"
+					      "bucket{method=\"%s\","
+					      "status=\"%d\",route=\"%s\",le="
+					      "\"%.2f\"} %llu\n",
+					      slot->method,
+					      slot->status,
+					      slot->route,
+					      CSILK_METRICS_BUCKETS[b],
+					      (unsigned long long)atomic_load(&slot->buckets[b]));
+			}
+			append_metric(&buf,
+				      &size,
+				      &offset,
+				      "http_request_duration_seconds_bucket{method=\"%"
+				      "s\",status="
+				      "\"%d\",route=\"%s\",le=\"+Inf\"} %llu\n",
+				      slot->method,
+				      slot->status,
+				      slot->route,
+				      (unsigned long long)atomic_load(
+					  &slot->buckets[CSILK_METRICS_BUCKET_COUNT]));
+		}
+	}
 
-  /* --- Part 3: System & Process Telemetry --- */
-  csilk_process_stats_t proc;
-  csilk_process_get_stats(&proc);
-  append_metric(
-      &buf, &size, &offset,
-      "# HELP process_resident_memory_bytes Resident set size in bytes\n");
-  append_metric(&buf, &size, &offset, "process_resident_memory_bytes %zu\n",
-                proc.rss_bytes);
-  append_metric(&buf, &size, &offset,
-                "# HELP process_cpu_seconds_total Total user and system CPU "
-                "time in seconds\n");
-  append_metric(&buf, &size, &offset,
-                "process_cpu_seconds_total{type=\"user\"} %.3f\n",
-                proc.cpu_user_time_sec);
-  append_metric(&buf, &size, &offset,
-                "process_cpu_seconds_total{type=\"sys\"} %.3f\n",
-                proc.cpu_sys_time_sec);
+	/* --- Part 3: System & Process Telemetry --- */
+	csilk_process_stats_t proc;
+	csilk_process_get_stats(&proc);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP process_resident_memory_bytes Resident set size "
+		      "in bytes\n");
+	append_metric(&buf, &size, &offset, "process_resident_memory_bytes %zu\n", proc.rss_bytes);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "# HELP process_cpu_seconds_total Total user and system CPU "
+		      "time in seconds\n");
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "process_cpu_seconds_total{type=\"user\"} %.3f\n",
+		      proc.cpu_user_time_sec);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "process_cpu_seconds_total{type=\"sys\"} %.3f\n",
+		      proc.cpu_sys_time_sec);
 
-  /* --- Part 4: Security & Framework Integrity --- */
-  csilk_security_stats_t sec;
-  csilk_security_get_stats(&sec);
-  append_metric(&buf, &size, &offset,
-                "csilk_security_rate_limit_blocks_total %llu\n",
-                (unsigned long long)sec.rate_limit_blocks);
-  append_metric(&buf, &size, &offset,
-                "csilk_security_csrf_violations_total %llu\n",
-                (unsigned long long)sec.csrf_violations);
-  append_metric(&buf, &size, &offset,
-                "csilk_security_auth_failures_total %llu\n",
-                (unsigned long long)sec.auth_failures);
+	/* --- Part 4: Security & Framework Integrity --- */
+	csilk_security_stats_t sec;
+	csilk_security_get_stats(&sec);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "csilk_security_rate_limit_blocks_total %llu\n",
+		      (unsigned long long)sec.rate_limit_blocks);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "csilk_security_csrf_violations_total %llu\n",
+		      (unsigned long long)sec.csrf_violations);
+	append_metric(&buf,
+		      &size,
+		      &offset,
+		      "csilk_security_auth_failures_total %llu\n",
+		      (unsigned long long)sec.auth_failures);
 
-  /* --- Part 5: Server Internal State --- */
-  int active = 0, pooled = 0;
-  csilk_server_get_stats(csilk_ctx_get_server(c), &active, &pooled);
-  append_metric(&buf, &size, &offset, "csilk_server_active_connections %d\n",
-                active);
-  append_metric(&buf, &size, &offset, "csilk_server_pooled_connections %d\n",
-                pooled);
+	/* --- Part 5: Server Internal State --- */
+	int active = 0, pooled = 0;
+	csilk_server_get_stats(csilk_ctx_get_server(c), &active, &pooled);
+	append_metric(&buf, &size, &offset, "csilk_server_active_connections %d\n", active);
+	append_metric(&buf, &size, &offset, "csilk_server_pooled_connections %d\n", pooled);
 
-  /* --- Part 6: Sub-system Statistics (Optional) --- */
+	/* --- Part 6: Sub-system Statistics (Optional) --- */
 
-  /* MQ Stats */
-  csilk_mq_stats_t mq;
-  csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
-  if (mq.published_total > 0) {
-    append_metric(&buf, &size, &offset,
-                  "csilk_mq_messages_total{action=\"published\"} %llu\n",
-                  (unsigned long long)mq.published_total);
-    append_metric(&buf, &size, &offset,
-                  "csilk_mq_messages_total{action=\"delivered\"} %llu\n",
-                  (unsigned long long)mq.delivered_total);
-    append_metric(&buf, &size, &offset, "csilk_mq_queue_depth %llu\n",
-                  (unsigned long long)mq.queue_depth);
-  }
+	/* MQ Stats */
+	csilk_mq_stats_t mq;
+	csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
+	if (mq.published_total > 0) {
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_mq_messages_total{action=\"published\"} %llu\n",
+			      (unsigned long long)mq.published_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_mq_messages_total{action=\"delivered\"} %llu\n",
+			      (unsigned long long)mq.delivered_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_mq_queue_depth %llu\n",
+			      (unsigned long long)mq.queue_depth);
+	}
 
-  /* AI Stats */
-  csilk_ai_stats_t ai;
-  csilk_ai_get_stats(&ai);
-  if (ai.requests_total > 0) {
-    append_metric(&buf, &size, &offset, "csilk_ai_requests_total %llu\n",
-                  (unsigned long long)ai.requests_total);
-    append_metric(&buf, &size, &offset, "csilk_ai_tokens_total %llu\n",
-                  (unsigned long long)ai.tokens_total);
-    append_metric(&buf, &size, &offset, "csilk_ai_errors_total %llu\n",
-                  (unsigned long long)ai.errors_total);
-  }
+	/* AI Stats */
+	csilk_ai_stats_t ai;
+	csilk_ai_get_stats(&ai);
+	if (ai.requests_total > 0) {
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_ai_requests_total %llu\n",
+			      (unsigned long long)ai.requests_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_ai_tokens_total %llu\n",
+			      (unsigned long long)ai.tokens_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_ai_errors_total %llu\n",
+			      (unsigned long long)ai.errors_total);
+	}
 
-  /* DB Stats */
-  csilk_db_stats_t db;
-  csilk_db_get_stats(&db);
-  if (db.queries_total + db.execs_total > 0) {
-    append_metric(&buf, &size, &offset,
-                  "csilk_db_operations_total{type=\"query\"} %llu\n",
-                  (unsigned long long)db.queries_total);
-    append_metric(&buf, &size, &offset,
-                  "csilk_db_operations_total{type=\"exec\"} %llu\n",
-                  (unsigned long long)db.execs_total);
-    append_metric(&buf, &size, &offset, "csilk_db_errors_total %llu\n",
-                  (unsigned long long)db.errors_total);
-  }
+	/* DB Stats */
+	csilk_db_stats_t db;
+	csilk_db_get_stats(&db);
+	if (db.queries_total + db.execs_total > 0) {
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_db_operations_total{type=\"query\"} %llu\n",
+			      (unsigned long long)db.queries_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_db_operations_total{type=\"exec\"} %llu\n",
+			      (unsigned long long)db.execs_total);
+		append_metric(&buf,
+			      &size,
+			      &offset,
+			      "csilk_db_errors_total %llu\n",
+			      (unsigned long long)db.errors_total);
+	}
 
-  /* Set response headers and body */
-  csilk_set_header(c, "Content-Type", "text/plain; version=0.0.4");
+	/* Set response headers and body */
+	csilk_set_header(c, "Content-Type", "text/plain; version=0.0.4");
 
-  /* Wrap the dynamically allocated buffer in the response.
+	/* Wrap the dynamically allocated buffer in the response.
      The framework will automatically call free() when the response is sent
      because body_is_managed is set to 1. */
-  csilk_response_t* res = &c->response;
-  res->body = buf;
-  res->body_len = offset;
-  res->body_is_managed = 1;
-  res->status = CSILK_STATUS_OK;
+	csilk_response_t* res = &c->response;
+	res->body = buf;
+	res->body_len = offset;
+	res->body_is_managed = 1;
+	res->status = CSILK_STATUS_OK;
 }
 
-uint64_t csilk_metrics_get_total_requests(void) {
-  return atomic_load(&http_requests_total);
+uint64_t
+csilk_metrics_get_total_requests(void)
+{
+	return atomic_load(&http_requests_total);
 }
 
-uint64_t csilk_metrics_get_total_duration(void) {
-  return atomic_load(&http_request_duration_microseconds);
+uint64_t
+csilk_metrics_get_total_duration(void)
+{
+	return atomic_load(&http_request_duration_microseconds);
 }
