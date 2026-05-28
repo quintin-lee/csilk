@@ -252,6 +252,16 @@ void csilk_db_postgres_init(void);
 #endif
 
 /**
+ * @brief Internal: Register the built-in MongoDB driver.
+ *
+ * Called automatically by csilk_db_init. Requires libmongoc.
+ * Not intended for direct use.
+ */
+#ifdef HAS_MONGODB
+void csilk_db_mongodb_init(void);
+#endif
+
+/**
  * @brief Initialise the database subsystem.
  *
  * Registers all built-in drivers (SQLite3, MySQL, PostgreSQL, etc.).
