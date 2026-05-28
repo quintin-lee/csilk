@@ -284,6 +284,24 @@ void csilk_wf_node_set_join(csilk_wf_node_t* node,
                             csilk_wf_join_policy_t policy);
 
 /**
+ * @brief Mark a node as interactive (requires human signal to proceed).
+ * @param node           Node handle.
+ * @param is_interactive Non-zero to enable interactive mode.
+ */
+void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive);
+
+/**
+ * @brief Signal a paused workflow to continue.
+ * @param wf       Workflow definition.
+ * @param exec_id  Execution ID of the paused workflow.
+ * @param input    Optional replacement input (e.g., human-edited prompt).
+ * @param callback Callback for when the resumed workflow finishes.
+ */
+void csilk_wf_signal_continue(csilk_wf_t* wf, const char* exec_id,
+                              csilk_data_t* input,
+                              void (*callback)(csilk_data_t* result));
+
+/**
  * @brief Set a timeout for a specific node.
  * @param node       Node handle.
  * @param timeout_ms Timeout in milliseconds (0 for no timeout).
