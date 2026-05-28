@@ -11,7 +11,10 @@
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 
+#define TEST_PORT 8111
+
 static csilk_server_t* g_server = NULL;
+static volatile int server_ready = 0;
 
 void idle_handler(csilk_ctx_t* c) { csilk_string(c, CSILK_STATUS_OK, "ok"); }
 
@@ -27,7 +30,12 @@ void* run_server(void* arg) {
                                .max_header_size = 65536,
                                .listen_backlog = 128};
   csilk_server_set_config(g_server, &cfg);
-  csilk_server_run(g_server, 8080);
+  
+  __sync_synchronize();
+  server_ready = 1;
+
+  csilk_server_run(g_server, TEST_PORT);
+  
   csilk_server_free(g_server);
   csilk_group_free(group);
   csilk_router_free(router);
@@ -37,13 +45,20 @@ void* run_server(void* arg) {
 int main() {
   pthread_t thread;
   pthread_create(&thread, NULL, run_server, NULL);
-  usleep(200000);
+  
+  // Wait for server to be ready
+  int retries = 0;
+  while (!server_ready && retries < 10) {
+    usleep(50000); // 50ms
+    retries++;
+  }
 
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-  addr.sin_port = htons(8080);
+  addr.sin_port = htons(TEST_PORT);
+  
   if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
     perror("connect");
     printf("FAIL: connect\n");
