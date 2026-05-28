@@ -13,6 +13,7 @@
 
 #include "cJSON.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/context_internal.h"
 
 /* Externs from metrics.c */
 extern uint64_t atomic_load_http_requests(void);
@@ -92,6 +93,20 @@ static void admin_stats_handler(csilk_ctx_t* c) {
     cJSON_AddNumberToObject(db, "errors", (double)db_stats.errors_total);
     cJSON_AddNumberToObject(db, "avg_duration", db_stats.queries_total + db_stats.execs_total > 0 ? (double)db_stats.duration_us_total / (db_stats.queries_total + db_stats.execs_total) / 1000.0 : 0);
     cJSON_AddItemToObject(root, "db", db);
+    
+    // 5. System Stats
+    int active_conn = 0, pooled_conn = 0;
+    csilk_server_get_stats(csilk_ctx_get_server(c), &active_conn, &pooled_conn);
+    
+    size_t arena_size = 0, arena_used = 0;
+    csilk_arena_get_stats(c->arena, &arena_size, &arena_used);
+    
+    cJSON* sys = cJSON_CreateObject();
+    cJSON_AddNumberToObject(sys, "active_connections", (double)active_conn);
+    cJSON_AddNumberToObject(sys, "pooled_connections", (double)pooled_conn);
+    cJSON_AddNumberToObject(sys, "arena_size_kb", (double)arena_size / 1024.0);
+    cJSON_AddNumberToObject(sys, "arena_used_kb", (double)arena_used / 1024.0);
+    cJSON_AddItemToObject(root, "sys", sys);
     
     char* json = cJSON_PrintUnformatted(root);
     csilk_set_header(c, "Content-Type", "application/json");

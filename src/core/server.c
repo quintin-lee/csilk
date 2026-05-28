@@ -1580,6 +1580,13 @@ void csilk_server_stop(csilk_server_t* server) {
   uv_async_send(&server->async_handle);
 }
 
+void csilk_server_get_stats(csilk_server_t* server, int* active_conn,
+                            int* pooled_conn) {
+  if (!server) return;
+  if (active_conn) *active_conn = atomic_load(&server->active_connections);
+  if (pooled_conn) *pooled_conn = server->client_pool_count;
+}
+
 /** @brief Apply a server configuration struct, overwriting the current
  * settings.
  *
