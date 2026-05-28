@@ -65,6 +65,7 @@ struct csilk_wf_node_s {
   csilk_wf_join_policy_t
       join_policy; /**< AND (wait for all) or OR (fire on any). */
   int timeout_ms;  /**< Per-node execution timeout (0 = no timeout). */
+  int is_interactive; /**< Requires manual signal to proceed. */
 };
 
 /** @brief Workflow definition: a DAG of processing nodes connected by
@@ -126,6 +127,8 @@ struct csilk_wf_ctx_s {
 
   int total_tokens;  /**< Cumulative tokens used across AI nodes. */
   int is_terminated; /**< Hard stop flag (budget exceeded, TTL expired). */
+  int is_paused;     /**< Workflow is waiting for human input. */
+  int* node_approved; /**< Tracking approved interactive nodes. */
 
   uv_timer_t ttl_timer; /**< Global TTL timer handle. */
   int is_ttl_expired;   /**< TTL expiration flag. */
@@ -321,6 +324,10 @@ void csilk_wf_node_set_timeout(csilk_wf_node_t* node, int timeout_ms) {
 
 void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec) {
   if (wf) wf->ttl_sec = ttl_sec;
+}
+
+void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive) {
+  if (node) node->is_interactive = is_interactive;
 }
 
 /* --- Memory Helpers --- */
@@ -620,7 +627,7 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
             cJSON_Parse(ctx->wf->tools[i].parameters_json);
     }
   }
-  size_t msg_capacity = 16;
+  size_t msg_capacity = 32;
   csilk_ai_message_t* msgs = calloc(msg_capacity, sizeof(csilk_ai_message_t));
   size_t msg_count = 0;
   if (config->system_msg) {
@@ -867,6 +874,7 @@ static void cleanup_ctx(csilk_wf_ctx_t* ctx) {
   uv_mutex_destroy(&ctx->trace_mutex);
   csilk_arena_free(ctx->arena);
   free(ctx->node_input_counts);
+  free(ctx->node_approved);
   free(ctx->node_outputs);
   free(ctx->wal_path);
   free(ctx);
@@ -1107,12 +1115,16 @@ static void on_node_timeout(uv_timer_t* handle) {
  *
  * Algorithm:
  * 1. Check termination flag (budget exceeded, TTL expired).
- * 2. Log WF_EV_NODE_START to WAL and broadcast "node_queued" to monitors.
- * 3. Allocate a node_work_t struct. If tracing is active, create a
+ * 2. Handle Interactive Nodes: if a node is marked as interactive and
+ *    has not yet been approved in this context, set is_paused flag,
+ *    log WF_EV_PAUSE to WAL, broadcast to monitors, and return without
+ *    executing.
+ * 3. Log WF_EV_NODE_START to WAL and broadcast "node_queued" to monitors.
+ * 4. Allocate a node_work_t struct. If tracing is active, create a
  *    trace node with start time and input dump.
- * 4. Increment total_executions and nodes_active counters.
- * 5. If the node has a per-node timeout, initialize and arm a uv_timer.
- * 6. Queue the work via uv_queue_work(). The node handler runs on a
+ * 5. Increment total_executions and nodes_active counters.
+ * 6. If the node has a per-node timeout, initialize and arm a uv_timer.
+ * 7. Queue the work via uv_queue_work(). The node handler runs on a
  *    background thread; after_worker_cb processes the result.
  *
  * @param ctx   Workflow execution context.
@@ -1123,6 +1135,19 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
   uv_mutex_lock(&ctx->mutex);
   if (ctx->is_terminated) {
     uv_mutex_unlock(&ctx->mutex);
+    return;
+  }
+
+  // 1. Handle Interactive Nodes (Pause)
+  if (node->is_interactive && !ctx->node_approved[node->index]) {
+    ctx->is_paused = 1;
+    uv_mutex_unlock(&ctx->mutex);
+
+    wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
+    _wf_broadcast(ctx->wf, "workflow_paused", node->id,
+                  input ? (char*)input->value : NULL);
+    printf("[Workflow] Execution %s paused at node '%s'\n", ctx->exec_id,
+           node->id);
     return;
   }
   uv_mutex_unlock(&ctx->mutex);
@@ -1159,48 +1184,17 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
   uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
-/** @brief Execute a workflow asynchronously.
- *
- * Entry points are identified in order:
- * 1. Nodes explicitly marked with csilk_wf_node_set_entry(node, 1).
- * 2. Nodes with incoming_count == 0 (no predecessors).
- * Each entry node receives the input data and runs on the libuv thread
- * pool. The workflow completes when all paths reach leaf nodes with
- * no outgoing edges. The final output is delivered via callback.
- *
- * @param wf       The workflow definition to run.
- * @param input    Input data passed to all entry nodes.
- * @param callback Completion callback receiving the final node's output.
- *                 Called on the main loop thread. May be NULL for
- *                 fire-and-forget execution.
- * @return A UUID execution identifier string, valid until the callback
- *         fires. Returns NULL if the workflow has no nodes. */
 const char* csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input,
                          void (*callback)(csilk_data_t* result)) {
   return csilk_wf_run_ext_internal(wf, input, callback, NULL);
 }
 
-/** @brief Run a workflow with execution tracing enabled.
- *
- * Same as csilk_wf_run() but provides a detailed execution trace
- * (per-node timing, input/output dumps, model info, token counts)
- * to the callback. The trace is valid during the callback and is
- * freed afterward.
- *
- * @param wf      The workflow to execute.
- * @param input   Input data to pass to entry nodes.
- * @param callback Completion callback receiving both the final
- *                output and the execution trace. May be NULL. */
 void csilk_wf_run_traced(csilk_wf_t* wf, csilk_data_t* input,
                          void (*callback)(csilk_data_t* result,
                                           csilk_wf_trace_t* trace)) {
   csilk_wf_run_ext_internal(wf, input, NULL, callback);
 }
 
-/** @brief libuv timer callback — marks the workflow as terminated when the
- *  global Time-To-Live (TTL) expires.
- *  Sets both is_terminated and is_ttl_expired flags. Active nodes will
- *  check is_terminated before queuing new work. */
 static void on_workflow_ttl(uv_timer_t* handle) {
   csilk_wf_ctx_t* ctx = (csilk_wf_ctx_t*)handle->data;
   uv_mutex_lock(&ctx->mutex);
@@ -1210,31 +1204,6 @@ static void on_workflow_ttl(uv_timer_t* handle) {
   printf("[Workflow] TTL Expired for execution %s\n", ctx->exec_id);
 }
 
-/** @brief Internal: common workflow execution entry point for both
- *  traced and untraced runs.
- *
- * Algorithm:
- * 1. Validate parameters and check for empty workflows.
- * 2. Allocate a csilk_wf_ctx_t with execution state, memory arena,
- *    node tracking arrays, and mutexes.
- * 3. Generate a UUID execution identifier.
- * 4. If TTL is configured, start the TTL timer.
- * 5. Broadcast "workflow_start" to WebSocket monitors.
- * 6. If WAL persistence is enabled, create the WAL file and log
- *    WF_EV_START.
- * 7. If tracing is enabled, create the trace context and record
- *    execution start time.
- * 8. Start execution at all entry points (explicit entry nodes first,
- *    then nodes with incoming_count == 0 as fallback).
- * 9. If no entry nodes are found, call the callback with NULL and
- *    clean up immediately.
- *
- * @param wf       Workflow definition.
- * @param input    Input data for entry nodes.
- * @param callback Untraced completion callback (may be NULL).
- * @param trace_cb Traced completion callback (may be NULL).
- * @return Execution UUID string, or NULL if the workflow is empty.
- * @note Exactly one of callback or trace_cb should be non-NULL. */
 static const char* csilk_wf_run_ext_internal(
     csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t*),
     void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*)) {
@@ -1249,6 +1218,7 @@ static const char* csilk_wf_run_ext_internal(
   ctx->callback = callback;
   ctx->trace_callback = trace_cb;
   ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
+  ctx->node_approved = calloc(wf->node_count, sizeof(int));
   ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
   ctx->arena = csilk_arena_new(0);
   uv_mutex_init(&ctx->mutex);
@@ -1296,27 +1266,6 @@ static const char* csilk_wf_run_ext_internal(
   return ctx->exec_id;
 }
 
-/** @brief Resume a previously interrupted workflow execution from its WAL.
- *
- * Algorithm:
- * 1. Open and read the WAL file for the given execution ID.
- * 2. Replay each WAL event:
- *    - WF_EV_NODE_START: mark the node as having started.
- *    - WF_EV_NODE_FINISH: mark as finished, restore output data,
- *      increment successor input counts for join tracking.
- *    - WF_EV_END: mark the workflow as having completed.
- * 3. If the workflow ended normally, call callback(NULL) and clean up.
- * 4. Otherwise, determine which nodes need to be (re)executed:
- *    - Nodes that started but never finished (crashed mid-execution).
- *    - Nodes whose join threshold is met (all inputs received).
- * 5. Execute those nodes, continuing execution from the recovery point.
- *
- * @param wf       Workflow definition.
- * @param exec_id  UUID execution identifier (returned by csilk_wf_run()).
- * @param callback Completion callback for the resumed workflow.
- * @note Requires WAL persistence to be configured on the workflow.
- *       This is a best-effort recovery — nodes that were executing
- *       at crash time are re-executed (at-most-once semantics). */
 void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
                      void (*callback)(csilk_data_t* result)) {
   if (!wf || !exec_id || !wf->wal_dir) return;
@@ -1328,6 +1277,7 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
   ctx->wf = wf;
   ctx->callback = callback;
   ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
+  ctx->node_approved = calloc(wf->node_count, sizeof(int));
   ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
   ctx->arena = csilk_arena_new(0);
   uv_mutex_init(&ctx->mutex);
@@ -1370,6 +1320,14 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
           }
         break;
       }
+      case WF_EV_PAUSE: {
+        for (size_t i = 0; i < wf->node_count; i++)
+          if (strcmp(wf->nodes[i]->id, payload) == 0) {
+            ctx->is_paused = 1;
+            break;
+          }
+        break;
+      }
       case WF_EV_END:
         wf_ended = 1;
         break;
@@ -1379,6 +1337,8 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
   fclose(f);
   if (wf_ended) {
     if (callback) callback(NULL);
+    cleanup_ctx(ctx);
+  } else if (ctx->is_paused) {
     cleanup_ctx(ctx);
   } else {
     for (size_t i = 0; i < wf->node_count; i++) {
@@ -1406,4 +1366,76 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id,
   }
   free(node_started);
   free(node_finished);
+}
+
+void csilk_wf_signal_continue(csilk_wf_t* wf, const char* exec_id,
+                              csilk_data_t* input,
+                              void (*callback)(csilk_data_t* result)) {
+  if (!wf || !exec_id || !wf->wal_dir) return;
+
+  char wal_path[512];
+  snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
+  FILE* f = fopen(wal_path, "rb");
+  if (!f) return;
+
+  csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+  ctx->wf = wf;
+  ctx->callback = callback;
+  ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
+  ctx->node_approved = calloc(wf->node_count, sizeof(int));
+  ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
+  ctx->arena = csilk_arena_new(0);
+  uv_mutex_init(&ctx->mutex);
+  uv_mutex_init(&ctx->arena_mutex);
+  uv_mutex_init(&ctx->trace_mutex);
+  strcpy(ctx->exec_id, exec_id);
+  ctx->wal_path = strdup(wal_path);
+
+  char* paused_node_id = NULL;
+
+  csilk_wf_wal_header_t header;
+  while (fread(&header, sizeof(header), 1, f) == 1) {
+    if (header.magic != CSILK_WF_MAGIC) break;
+    char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
+    if (payload && fread(payload, header.payload_len, 1, f) != 1) {
+      free(payload);
+      break;
+    }
+    switch (header.type) {
+      case WF_EV_NODE_FINISH: {
+        char* node_id = payload;
+        char* data_type = node_id + strlen(node_id) + 1;
+        char* data_val = data_type + strlen(data_type) + 1;
+        for (size_t i = 0; i < wf->node_count; i++)
+          if (strcmp(wf->nodes[i]->id, node_id) == 0) {
+            ctx->node_outputs[i] = csilk_wf_data_new(
+                ctx, data_type, csilk_wf_strdup(ctx, data_val));
+            csilk_wf_node_t* n = wf->nodes[i];
+            for (size_t j = 0; j < n->edge_count; j++)
+              ctx->node_input_counts[n->edges[j].target->index]++;
+            break;
+          }
+        break;
+      }
+      case WF_EV_PAUSE:
+        free(paused_node_id);
+        paused_node_id = strdup(payload);
+        break;
+      case WF_EV_END:
+        break;
+    }
+    free(payload);
+  }
+  fclose(f);
+
+  if (paused_node_id) {
+    csilk_wf_node_t* n = csilk_wf_get_node(wf, paused_node_id);
+    if (n) {
+      ctx->node_approved[n->index] = 1;
+      execute_node(ctx, n, input);
+    }
+    free(paused_node_id);
+  } else {
+    cleanup_ctx(ctx);
+  }
 }

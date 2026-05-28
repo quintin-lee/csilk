@@ -38,7 +38,8 @@ typedef enum {
                             and input in payload). */
   WF_EV_NODE_FINISH = 3, /**< A specific node completed (carries node ID and
                             output in payload). */
-  WF_EV_END = 4          /**< Workflow execution completed or was aborted. */
+  WF_EV_PAUSE = 4,       /**< Workflow execution paused for manual input. */
+  WF_EV_END = 5          /**< Workflow execution completed or was aborted. */
 } csilk_wf_event_type_t;
 
 /**
