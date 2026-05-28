@@ -93,6 +93,7 @@ test_jwt_middleware()
 
 	// 2. Failure case: missing header
 	csilk_ctx_cleanup(&c);
+	csilk_arena_free(c.arena);
 	c.arena = csilk_arena_new(1024);
 	c.handlers = handlers;
 	c.handler_index = -1;
@@ -102,6 +103,7 @@ test_jwt_middleware()
 
 	// 3. Failure case: invalid token
 	csilk_ctx_cleanup(&c);
+	csilk_arena_free(c.arena);
 	c.arena = csilk_arena_new(1024);
 	c.handlers = handlers;
 	c.handler_index = -1;

@@ -68,6 +68,7 @@ struct csilk_wf_node_s {
 	int max_retries;		    /**< Max automatic retry attempts. */
 	int retry_delay_ms;		    /**< Delay between retries. */
 	int is_remote;			    /**< Offload to remote worker via MQ. */
+	void (*user_data_free)(void*);	    /**< Called by node_free to free user_data. */
 };
 
 /** @brief Workflow definition: a DAG of processing nodes connected by
@@ -151,6 +152,7 @@ typedef struct node_work_s {
 	uv_timer_t node_timer;		   /**< Per-node timeout or retry delay timer. */
 	int is_timed_out;		   /**< Flag set by timer if node exceeds timeout_ms. */
 	int retry_count;		   /**< Current retry attempt. */
+	int timer_closing;		   /**< Non-zero once uv_close is called on node_timer. */
 } node_work_t;
 
 /* --- Internal Helpers --- */
@@ -224,16 +226,33 @@ csilk_wf_new(const char* name)
 }
 
 static void
+ai_config_free(void* ptr)
+{
+	csilk_ai_config_t* cfg = (csilk_ai_config_t*)ptr;
+	if (!cfg) {
+		return;
+	}
+	free((void*)cfg->model);
+	free((void*)cfg->system_msg);
+	free((void*)cfg->prompt);
+	free(cfg);
+}
+
+static void
 node_free(csilk_wf_node_t* node)
 {
 	if (!node) {
 		return;
 	}
 	free(node->id);
+	free(node->output_schema);
 	for (size_t i = 0; i < node->edge_count; i++) {
 		free(node->edges[i].condition);
 	}
 	free(node->edges);
+	if (node->user_data_free) {
+		node->user_data_free(node->user_data);
+	}
 	free(node);
 }
 
@@ -255,9 +274,12 @@ csilk_wf_free(csilk_wf_t* wf)
 		free(wf->tools[i].parameters_json);
 	}
 	free(wf->tools);
+	for (size_t i = 0; i < wf->active_context_count; i++) {
+		cleanup_ctx(wf->active_contexts[i]);
+	}
+	free(wf->active_contexts);
 	uv_mutex_destroy(&wf->monitor_mutex);
 	uv_mutex_destroy(&wf->ctx_mutex);
-	free(wf->active_contexts);
 	free(wf->monitors);
 	free(wf);
 }
@@ -1187,7 +1209,11 @@ csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 	copy->model = config->model ? strdup(config->model) : NULL;
 	copy->system_msg = config->system_msg ? strdup(config->system_msg) : NULL;
 	copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
-	return csilk_wf_add(wf, id, ai_node_handler, copy);
+	csilk_wf_node_t* node = csilk_wf_add(wf, id, ai_node_handler, copy);
+	if (node) {
+		node->user_data_free = ai_config_free;
+	}
+	return node;
 }
 
 void
@@ -1408,6 +1434,27 @@ find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 	return found;
 }
 
+static void
+cleanup_ctx_now(csilk_wf_ctx_t* ctx)
+{
+	uv_mutex_destroy(&ctx->mutex);
+	uv_mutex_destroy(&ctx->arena_mutex);
+	uv_mutex_destroy(&ctx->trace_mutex);
+	csilk_arena_free(ctx->arena);
+	free(ctx->node_input_counts);
+	free(ctx->node_approved);
+	free(ctx->node_outputs);
+	free(ctx->wal_path);
+	free(ctx);
+}
+
+static void
+on_ttl_timer_close(uv_handle_t* handle)
+{
+	csilk_wf_ctx_t* ctx = (csilk_wf_ctx_t*)handle->data;
+	cleanup_ctx_now(ctx);
+}
+
 /** @brief Internal: free a workflow execution context and all resources.
  *
  * Stops and closes the TTL timer if active, destroys all mutexes,
@@ -1425,18 +1472,12 @@ cleanup_ctx(csilk_wf_ctx_t* ctx)
 	if (ctx->wf->ttl_sec > 0) {
 		uv_timer_stop(&ctx->ttl_timer);
 		if (!uv_is_closing((uv_handle_t*)&ctx->ttl_timer)) {
-			uv_close((uv_handle_t*)&ctx->ttl_timer, NULL);
+			ctx->ttl_timer.data = ctx;
+			uv_close((uv_handle_t*)&ctx->ttl_timer, on_ttl_timer_close);
+			return;
 		}
 	}
-	uv_mutex_destroy(&ctx->mutex);
-	uv_mutex_destroy(&ctx->arena_mutex);
-	uv_mutex_destroy(&ctx->trace_mutex);
-	csilk_arena_free(ctx->arena);
-	free(ctx->node_input_counts);
-	free(ctx->node_approved);
-	free(ctx->node_outputs);
-	free(ctx->wal_path);
-	free(ctx);
+	cleanup_ctx_now(ctx);
 }
 
 /** @brief Internal: persist a workflow event to the Write-Ahead Log.
@@ -1529,6 +1570,26 @@ on_retry_timer(uv_timer_t* handle)
 }
 
 static void
+on_work_timer_close(uv_handle_t* handle)
+{
+	node_work_t* work = (node_work_t*)handle->data;
+	free(work);
+}
+
+static void
+free_work(node_work_t* work)
+{
+	if (work->node->timeout_ms > 0 && !work->timer_closing) {
+		work->timer_closing = 1;
+		uv_timer_stop(&work->node_timer);
+		work->node_timer.data = work;
+		uv_close((uv_handle_t*)&work->node_timer, on_work_timer_close);
+		return;
+	}
+	free(work);
+}
+
+static void
 after_worker_cb(uv_work_t* req, int status)
 {
 	(void)status;
@@ -1536,10 +1597,6 @@ after_worker_cb(uv_work_t* req, int status)
 	csilk_wf_ctx_t* ctx = work->ctx;
 	csilk_wf_node_t* node = work->node;
 	csilk_data_t* output = work->output;
-
-	if (node->timeout_ms > 0) {
-		uv_timer_stop(&work->node_timer);
-	}
 
 	if (work->is_timed_out) {
 		output = NULL;
@@ -1651,7 +1708,7 @@ after_worker_cb(uv_work_t* req, int status)
 			}
 			cleanup_ctx(ctx);
 		}
-		free(work);
+		free_work(work);
 		return;
 	}
 
@@ -1660,7 +1717,7 @@ after_worker_cb(uv_work_t* req, int status)
 		uv_mutex_lock(&ctx->mutex);
 		ctx->nodes_active--;
 		uv_mutex_unlock(&ctx->mutex);
-		free(work);
+		free_work(work);
 		return;
 	}
 
@@ -1747,7 +1804,7 @@ after_worker_cb(uv_work_t* req, int status)
 		}
 		cleanup_ctx(ctx);
 	}
-	free(work);
+	free_work(work);
 }
 
 /** @brief libuv timer callback — marks a node as timed out.

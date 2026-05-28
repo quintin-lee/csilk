@@ -593,13 +593,14 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 		return -1;
 	}
 	if (len > 0 && payload) {
-		msg->payload = malloc(len);
+		msg->payload = malloc(len + 1);
 		if (!msg->payload) {
 			free(msg->topic);
 			free(msg);
 			return -1;
 		}
 		memcpy(msg->payload, payload, len);
+		((char*)msg->payload)[len] = '\0';
 		msg->len = len;
 	}
 

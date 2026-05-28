@@ -10,7 +10,8 @@ test_mq_persistence_api()
 {
 	printf("Testing MQ Persistence API declaration...\n");
 	uv_loop_t* loop = uv_default_loop();
-	csilk_server_t* server = csilk_server_new(csilk_router_new());
+	csilk_router_t* router = csilk_router_new();
+	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
 	/* Test with NULL mq */
@@ -22,6 +23,7 @@ test_mq_persistence_api()
 	assert(rc == 0);
 
 	csilk_server_free(server);
+	csilk_router_free(router);
 	printf("test_mq_persistence_api: PASS\n");
 }
 

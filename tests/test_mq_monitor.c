@@ -7,6 +7,7 @@
 
 #include "cJSON.h"
 #include "csilk/csilk.h"
+#include "csilk/core/context_internal.h"
 
 static int g_done = 0;
 
@@ -31,7 +32,7 @@ test_mq_monitoring_logic()
 	csilk_mq_publish(mq, "test.topic", "world", 5);
 
 	// 2. Register monitor smoke test
-	csilk_ctx_t* mock_ctx = calloc(1, 1024);
+	csilk_ctx_t* mock_ctx = calloc(1, sizeof(csilk_ctx_t));
 	csilk_mq_register_monitor(mq, mock_ctx);
 
 	// 3. Run loop to process messages
