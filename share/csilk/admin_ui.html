@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Csilk Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .node-queued rect { fill: #fde047 !important; stroke: #ca8a04 !important; }
+        .node-running rect { fill: #60a5fa !important; stroke: #2563eb !important; stroke-width: 4px !important; }
+        .node-finished rect { fill: #4ade80 !important; stroke: #16a34a !important; }
+        .node-failed rect { fill: #f87171 !important; stroke: #dc2626 !important; }
+        .sidebar-item-active { @apply bg-slate-700 text-white border-l-4 border-blue-500; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col sticky top-0 h-screen">
+        <div class="p-6 border-b border-slate-700 flex items-center gap-3">
+            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <i data-lucide="activity" class="text-white w-5 h-5"></i>
+            </div>
+            <span class="text-xl font-bold tracking-tight">Csilk Admin</span>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="switchTab('overview')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview
+            </button>
+            <button onclick="switchTab('workflows')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="git-branch" class="w-4 h-4"></i> Workflows
+            </button>
+            <button onclick="switchTab('messaging')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="message-square" class="w-4 h-4"></i> Messaging
+            </button>
+            <button onclick="switchTab('ai')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="bot" class="w-4 h-4"></i> AI Engine
+            </button>
+        </nav>
+        <div class="p-4 border-t border-slate-700 space-y-4">
+            <div class="flex items-center justify-between text-xs text-slate-500">
+                <span>Status</span>
+                <span id="ws-status" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> Offline</span>
+            </div>
+            <button id="connect-btn" class="w-full bg-blue-600 py-2 rounded text-sm font-medium hover:bg-blue-500 transition-colors">Connect</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <header class="h-16 bg-slate-800 border-b border-slate-700 flex items-center px-8 justify-between">
+            <h2 id="tab-title" class="text-lg font-semibold">Dashboard Overview</h2>
+            <div class="flex items-center gap-4">
+                <div class="text-xs bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-slate-400">
+                    Version 0.2.1
+                </div>
+            </div>
+        </header>
+
+        <div id="content-area" class="flex-1 overflow-y-auto p-8">
+            <!-- Overview Tab -->
+            <div id="tab-overview" class="tab-content space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">RPS</p>
+                        <h3 id="stat-rps" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Avg Latency</p>
+                        <h3 id="stat-latency" class="text-2xl font-bold">0 ms</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Total Requests</p>
+                        <h3 id="stat-total-req" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Uptime</p>
+                        <h3 id="stat-uptime" class="text-2xl font-bold">0s</h3>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 h-80">
+                    <canvas id="metrics-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Workflows Tab -->
+            <div id="tab-workflows" class="tab-content hidden h-full flex flex-col gap-6">
+                <div class="flex justify-between items-center">
+                    <select id="wf-selector" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm focus:outline-none">
+                        <option value="">Select Active Workflow...</option>
+                    </select>
+                </div>
+                <div class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-4 flex flex-col">
+                        <div id="mermaid-container" class="flex-1 bg-slate-900 rounded-lg overflow-auto p-4">
+                            <div class="mermaid" id="wf-graph">graph TD\nSELECT[Select a workflow to visualize]</div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 flex flex-col">
+                        <h3 class="text-sm font-semibold mb-4 text-slate-400">Execution Log</h3>
+                        <div id="wf-log" class="flex-1 overflow-y-auto text-[10px] space-y-2 font-mono"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messaging Tab -->
+            <div id="tab-messaging" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">MQ Published</p>
+                        <h3 id="mq-stat-pub" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">MQ Delivered</p>
+                        <h3 id="mq-stat-del" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Queue Depth</p>
+                        <h3 id="mq-stat-depth" class="text-2xl font-bold">0</h3>
+                    </div>
+                </div>
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-700/50 text-slate-400">
+                            <tr>
+                                <th class="p-4">Topic</th>
+                                <th class="p-4">Event</th>
+                                <th class="p-4">Size</th>
+                                <th class="p-4 text-right">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mq-log" class="divide-y divide-slate-700">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AI Engine Tab -->
+            <div id="tab-ai" class="tab-content hidden space-y-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h3 class="text-lg font-bold mb-4">Model Usage</h3>
+                    <div class="h-64 flex items-center justify-center text-slate-500 italic">
+                        Usage breakdown visualization coming soon...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+
+        let currentTab = 'overview';
+        let ws = null;
+        let chart = null;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                if (btn.innerText.toLowerCase().includes(tabId)) {
+                    btn.classList.add('bg-slate-700', 'text-white', 'border-l-4', 'border-blue-500');
+                } else {
+                    btn.classList.remove('bg-slate-700', 'text-white', 'border-l-4', 'border-blue-500');
+                }
+            });
+
+            document.getElementById('tab-title').innerText = tabId.charAt(0).toUpperCase() + tabId.slice(1);
+            currentTab = tabId;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('metrics-chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Requests/s',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#334155' } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function updateMetrics(data) {
+            document.getElementById('stat-total-req').innerText = data.total_requests;
+            document.getElementById('stat-latency').innerText = `${(data.avg_latency || 0).toFixed(2)} ms`;
+            document.getElementById('stat-rps').innerText = data.rps || 0;
+            
+            if (chart) {
+                chart.data.labels.push(new Date().toLocaleTimeString());
+                chart.data.datasets[0].data.push(data.rps);
+                if (chart.data.labels.length > 20) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.update('none');
+            }
+        }
+
+        function handleMQEvent(data) {
+            const tbody = document.getElementById('mq-log');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="p-4 font-mono">${data.topic || '-'}</td>
+                <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] bg-blue-900/30 text-blue-400">${data.event}</span></td>
+                <td class="p-4 text-slate-500">${data.payload_len || 0} B</td>
+                <td class="p-4 text-right text-slate-500">${new Date().toLocaleTimeString()}</td>
+            `;
+            tbody.prepend(tr);
+            if (tbody.children.length > 50) tbody.lastChild.remove();
+
+            if (data.event === 'mq_published') {
+                const el = document.getElementById('mq-stat-pub');
+                el.innerText = parseInt(el.innerText) + 1;
+                document.getElementById('mq-stat-depth').innerText = parseInt(document.getElementById('mq-stat-depth').innerText) + 1;
+            } else if (data.event === 'mq_delivered') {
+                const el = document.getElementById('mq-stat-del');
+                el.innerText = parseInt(el.innerText) + 1;
+                document.getElementById('mq-stat-depth').innerText = Math.max(0, parseInt(document.getElementById('mq-stat-depth').innerText) - 1);
+            }
+        }
+
+        async function handleWorkflowEvent(data) {
+            const selector = document.getElementById('wf-selector');
+            if (data.event === 'workflow_start') {
+                const opt = document.createElement('option');
+                opt.value = data.payload;
+                opt.innerText = `Exec: ${data.payload.slice(0,8)}...`;
+                selector.appendChild(opt);
+            }
+
+            const log = document.getElementById('wf-log');
+            const entry = document.createElement('div');
+            entry.className = "p-1 border-l-2 border-slate-700 pl-2";
+            entry.innerHTML = `<span class="text-slate-500">${new Date().toLocaleTimeString()}</span> <b class="text-blue-400">${data.event}</b> ${data.node_id || ''}`;
+            log.prepend(entry);
+
+            if (data.event === 'workflow_topology' && selector.value === '') {
+                // Initial render if nothing selected
+                renderMermaid(data.payload);
+            }
+        }
+
+        async function renderMermaid(code) {
+            const container = document.getElementById('mermaid-container');
+            container.innerHTML = `<div class="mermaid" id="wf-graph">${code}</div>`;
+            await mermaid.run({ nodes: [document.getElementById('wf-graph')] });
+        }
+
+        document.getElementById('connect-btn').onclick = () => {
+            const url = `ws://${window.location.host}/admin/ws`;
+            ws = new WebSocket(url);
+            ws.onopen = () => {
+                document.getElementById('ws-status').innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Online';
+                document.getElementById('connect-btn').innerText = 'Reconnect';
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'metrics') updateMetrics(data);
+                else if (data.event?.startsWith('mq_')) handleMQEvent(data);
+                else handleWorkflowEvent(data);
+            };
+        };
+
+        // Polling for JSON stats
+        setInterval(async () => {
+            if (currentTab === 'overview') {
+                try {
+                    const res = await fetch('/admin/stats');
+                    const data = await res.json();
+                    updateMetrics(data);
+                } catch(e) {}
+            }
+        }, 2000);
+
+        initChart();
+        switchTab('overview');
+    </script>
+</body>
+</html>

@@ -210,6 +210,7 @@ set(CSILK_SOURCES
     src/app/workflow.c
     src/app/workflow_wal.c
     src/app/workflow_loader.c
+    src/app/admin.c
 )
 
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
@@ -458,6 +459,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   # Workflow UI example
   add_executable(example_workflow_ui examples/example_workflow_ui.c)
   target_link_libraries(example_workflow_ui csilk)
+
+  # Admin Dashboard example
+  add_executable(example_admin_dashboard examples/example_admin_dashboard.c)
+  target_link_libraries(example_admin_dashboard csilk)
 
   # Database example
   add_executable(example_db examples/example_db.c)
