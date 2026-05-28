@@ -15,7 +15,7 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
 - 🔐 **Pluggable Cipher Driver** for AES-256-GCM, RSA-OAEP, and RSA-PSS
-- 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB
+- 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB, Redis
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
 - 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
