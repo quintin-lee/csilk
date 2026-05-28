@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Csilk AI Workflow Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        .node-queued rect { fill: #fde047 !important; stroke: #ca8a04 !important; }
+        .node-running rect { fill: #60a5fa !important; stroke: #2563eb !important; stroke-width: 4px !important; }
+        .node-finished rect { fill: #4ade80 !important; stroke: #16a34a !important; }
+        .node-failed rect { fill: #f87171 !important; stroke: #dc2626 !important; }
+        .node-paused rect { fill: #fb923c !important; stroke: #ea580c !important; }
+        .mermaid { display: flex; justify-content: center; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen">
+    <nav class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50 flex justify-between items-center">
+        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+            Csilk AI Workflow
+        </h1>
+        <div class="flex gap-4 items-center">
+            <input id="ws-url" type="text" placeholder="ws://localhost:8080/monitor" 
+                   class="bg-slate-900 border border-slate-600 rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button id="connect-btn" class="bg-blue-600 hover:bg-blue-500 px-4 py-1 rounded text-sm font-medium transition-colors">
+                Connect
+            </button>
+            <div id="status-indicator" class="w-3 h-3 rounded-full bg-red-500" title="Disconnected"></div>
+        </div>
+    </nav>
+
+    <main class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Topology View -->
+        <section class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl h-[70vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Workflow Topology</h2>
+                <button id="refresh-mermaid" class="text-xs text-blue-400 hover:text-blue-300">Reset View</button>
+            </div>
+            <div id="mermaid-container" class="flex-1 overflow-auto bg-slate-900 rounded-lg p-4">
+                <div class="mermaid" id="wf-graph">
+                    graph TD
+                    START[Waiting for Connection...]
+                </div>
+            </div>
+        </section>
+
+        <!-- Event Log -->
+        <section class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl h-[70vh] flex flex-col">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">Execution Stream</h2>
+            <div id="log-container" class="flex-1 overflow-y-auto space-y-2 text-xs font-mono pr-2">
+                <div class="text-slate-500 italic">No events recorded yet.</div>
+            </div>
+        </section>
+
+        <!-- Node Details -->
+        <section class="lg:col-span-3 bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-2">Live Snapshots</h2>
+            <div id="snapshot-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Snapshots populated here -->
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const logContainer = document.getElementById('log-container');
+        const connectBtn = document.getElementById('connect-btn');
+        const wsUrlInput = document.getElementById('ws-url');
+        const statusIndicator = document.getElementById('status-indicator');
+        const snapshotGrid = document.getElementById('snapshot-grid');
+        
+        let ws = null;
+        let currentTopology = "graph TD\nSTART[Waiting for Connection...]";
+
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        function addLog(msg, type = 'info') {
+            const el = document.createElement('div');
+            el.className = `p-2 rounded border-l-2 ${type === 'error' ? 'bg-red-900/20 border-red-500' : 'bg-slate-900 border-blue-500'}`;
+            el.innerHTML = `<span class="text-slate-500">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            logContainer.prepend(el);
+        }
+
+        function updateNodeUI(nodeId, state) {
+            const svg = document.querySelector('#wf-graph svg');
+            if (!svg) return;
+            
+            const nodes = svg.querySelectorAll('.node');
+            nodes.forEach(n => {
+                const label = n.querySelector('.nodeLabel')?.textContent || '';
+                if (label === nodeId || n.id.includes(nodeId)) {
+                    n.classList.remove('node-queued', 'node-running', 'node-finished', 'node-failed', 'node-paused');
+                    n.classList.add(`node-${state}`);
+                }
+            });
+        }
+
+        function updateSnapshot(nodeId, payload) {
+            let el = document.getElementById(`snapshot-${nodeId}`);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = `snapshot-${nodeId}`;
+                el.className = "bg-slate-900 p-3 rounded-lg border border-slate-700 overflow-hidden";
+                snapshotGrid.appendChild(el);
+            }
+            el.innerHTML = `
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-blue-400">${nodeId}</span>
+                </div>
+                <pre class="text-[10px] whitespace-pre-wrap break-all h-24 overflow-y-auto text-slate-400">${payload || '...'}</pre>
+            `;
+        }
+
+        async function renderTopology(code) {
+            const container = document.getElementById('mermaid-container');
+            container.innerHTML = `<div class="mermaid" id="wf-graph">${code}</div>`;
+            await mermaid.run({
+                nodes: [document.getElementById('wf-graph')]
+            });
+        }
+
+        connectBtn.onclick = () => {
+            if (ws) ws.close();
+            const url = wsUrlInput.value || `ws://${window.location.host}/monitor`;
+            addLog(`Connecting to ${url}...`);
+            
+            ws = new WebSocket(url);
+            ws.onopen = () => {
+                statusIndicator.className = "w-3 h-3 rounded-full bg-green-500";
+                addLog("Connected", "success");
+            };
+            ws.onclose = () => {
+                statusIndicator.className = "w-3 h-3 rounded-full bg-red-500";
+                addLog("Connection lost", "error");
+            };
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    handleEvent(data);
+                } catch(err) {
+                    console.error("Failed to parse WS message:", e.data);
+                }
+            };
+        };
+
+        async function handleEvent(data) {
+            switch(data.event) {
+                case 'workflow_topology':
+                    currentTopology = data.payload;
+                    await renderTopology(currentTopology);
+                    addLog("Workflow topology updated");
+                    break;
+                case 'workflow_start':
+                    addLog(`Workflow <b>${data.payload}</b> started`);
+                    break;
+                case 'node_queued':
+                    updateNodeUI(data.node_id, 'queued');
+                    addLog(`Node <b>${data.node_id}</b> queued`);
+                    break;
+                case 'node_start':
+                    updateNodeUI(data.node_id, 'running');
+                    addLog(`Node <b>${data.node_id}</b> running`);
+                    break;
+                case 'node_finish':
+                    updateNodeUI(data.node_id, 'finished');
+                    addLog(`Node <b>${data.node_id}</b> finished`);
+                    updateSnapshot(data.node_id, data.payload);
+                    break;
+                case 'node_stream':
+                    const pre = document.getElementById(`snapshot-${data.node_id}`)?.querySelector('pre');
+                    if (pre) pre.innerText += data.payload;
+                    break;
+                case 'workflow_paused':
+                    updateNodeUI(data.node_id, 'paused');
+                    addLog(`Node <b>${data.node_id}</b> PAUSED`, 'error');
+                    break;
+                case 'workflow_end':
+                    addLog(`Workflow completed`, 'success');
+                    break;
+            }
+        }
+
+        document.getElementById('refresh-mermaid').onclick = () => renderTopology(currentTopology);
+    </script>
+</body>
+</html>

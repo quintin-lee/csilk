@@ -1380,6 +1380,10 @@ static const char* csilk_wf_run_ext_internal(
 
   _wf_broadcast(wf, "workflow_start", ctx->exec_id,
                 input ? (char*)input->value : NULL);
+
+  char* m_graph = csilk_wf_to_mermaid(wf);
+  _wf_broadcast(wf, "workflow_topology", NULL, m_graph);
+  free(m_graph);
   if (wf->wal_dir) {
     char path[512];
     snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, ctx->exec_id);
