@@ -1,6 +1,6 @@
 # Configuration Guide
 
-csilk supports flexible configuration via YAML files or direct C structure manipulation.
+csilk supports flexible configuration via YAML files or direct C structure manipulation. The configuration covers server, TLS, logger, CORS, rate limiting, static files, AI, database, and admin dashboard settings.
 
 ## YAML Configuration Schema
 
@@ -45,6 +45,23 @@ rate_limit:
 static_files:
   root_dir: "./public"
   enable_gzip: true
+
+ai:
+  default_provider: "openai"        # "openai" or "ollama"
+  openai_base_url: "https://api.openai.com/v1"
+  ollama_base_url: "http://localhost:11434"
+
+database:
+  default_driver: "sqlite"          # "sqlite", "mysql", "postgres", "mongodb"
+  sqlite_path: "data/app.db"
+  mysql_dsn: "user:password@tcp(localhost:3306)/dbname"
+  postgres_dsn: "host=localhost port=5432 dbname=app user=user password=pass"
+  mongodb_uri: "mongodb://localhost:27017"
+  max_pool_size: 10
+
+admin:
+  enabled: true
+  path: "/admin"
 ```
 
 ## Programmatic Configuration (C API)

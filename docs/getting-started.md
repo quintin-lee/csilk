@@ -7,7 +7,10 @@
 - Git
 - libyaml-dev
 - zlib1g-dev (for gzip middleware)
+- libssl-dev (for HTTPS/TLS, JWT, cipher drivers)
+- libcurl-dev (for AI driver HTTP transport)
 - libuv (auto-fetched via CMake if not present)
+- Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers)
 
 ## Build & Dependency Flow
 
@@ -60,10 +63,13 @@ make -j$(nproc)
 | `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
 | `USE_ASAN` | OFF | Enable AddressSanitizer |
 | `USE_FUZZER` | OFF | Build fuzz test harness |
+| `CSILK_USE_MYSQL` | OFF | Enable MySQL database driver |
+| `CSILK_USE_POSTGRES` | OFF | Enable PostgreSQL database driver |
+| `CSILK_USE_MONGODB` | OFF | Enable MongoDB database driver |
 
 ## Create a New Project
 
-Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project with a professional, layered architecture and built-in Swagger UI.
+Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project with a professional, layered architecture and built-in Swagger UI and Admin Dashboard.
 
 ```bash
 # Clone the repository
@@ -84,6 +90,7 @@ make
 The generated project includes:
 - **Layered Architecture**: Dedicated directories for API handlers, service logic, and data models.
 - **Interactive Documentation**: Built-in Swagger UI available at `http://localhost:8080/`.
+- **Admin Dashboard**: Real-time monitoring at `http://localhost:8080/admin/`.
 - **Reflection Example**: A complete User service demonstrating automatic JSON binding.
 
 ## Run Example

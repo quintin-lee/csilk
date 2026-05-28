@@ -1,3 +1,27 @@
+# Middleware Design Overview
+
+csilk ships with **15 built-in middleware modules** covering authentication, security, observability, performance, and developer experience:
+
+| Middleware | File | Description |
+|-----------|------|-------------|
+| Recovery | `src/middleware/recovery.c` | Crash recovery via setjmp/longjmp |
+| Logger | `src/middleware/logger.c` | Structured request logging |
+| Auth | `src/middleware/auth.c` | Token-based authentication |
+| CORS | `src/middleware/cors.c` | Cross-origin resource sharing |
+| CSRF | `src/middleware/csrf.c` | Cross-site request forgery protection |
+| RateLimit | `src/middleware/ratelimit.c` | Sliding window rate limiting |
+| Static | `src/middleware/static.c` | Static file serving with Range support |
+| Gzip | `src/middleware/gzip.c` | Response compression |
+| SSE | `src/middleware/sse.c` | Server-Sent Events |
+| Multipart | `src/middleware/multipart.c` | File upload parsing |
+| JWT | `src/middleware/jwt.c` | JSON Web Token auth (HS256) |
+| Metrics | `src/middleware/metrics.c` | Prometheus metrics |
+| RequestID | `src/middleware/request_id.c` | UUID v4 request tracing |
+| Session | `src/middleware/session.c` | Cookie-based session management |
+| Validate | `src/middleware/validate.c` | Request parameter validation |
+
+---
+
 # JWT Middleware Design
 
 The JWT (JSON Web Token) middleware provides a secure way to handle stateless authentication in csilk. It follows the HS256 (HMAC with SHA-256) signing algorithm.

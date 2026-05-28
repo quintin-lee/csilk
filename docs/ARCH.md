@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper
 
-> **Last updated**: 2026-05-27 | **Version**: 0.2.3
+> **Last updated**: 2026-05-28 | **Version**: 0.2.3
 
 ## 1. Core Architecture Design
 
@@ -311,7 +311,97 @@ graph LR
 - **Onion Model for Events**: The MQ system implements the same middleware pattern as the HTTP router. You can use `csilk_mq_use` for cross-cutting concerns (logging, validation) and `csilk_mq_subscribe` for final processing.
 - **Low Overhead**: Messages are queued internally and processed in batches when the event loop wakes up, minimizing system call overhead.
 
-## 5. Document Generation
+## 5. Pluggable Database Drivers
+
+csilk supports multiple database backends through a unified driver interface (`csilk/drivers/db.h`):
+
+| Driver | Source | Protocol |
+|--------|--------|----------|
+| **SQLite** | `src/drivers/sqlite.c` | Local file (via sqlite3) |
+| **MySQL** | `src/drivers/mysql.c` | TCP socket (via libmysqlclient) |
+| **PostgreSQL** | `src/drivers/postgres.c` | TCP socket (via libpq) |
+| **MongoDB** | `src/drivers/mongodb.c` | TCP socket (via libmongoc) |
+
+The DB abstraction layer (`src/data/db.c`) manages connection pooling and provides a uniform API for queries regardless of backend.
+
+## 6. Observability & Admin Dashboard
+
+### 6.1 Prometheus Metrics
+
+csilk includes a native metrics module for real-time monitoring of server health and performance.
+
+**Metrics Collected:**
+
+- **`http_requests_total`**: Counter of all processed HTTP requests, partitioned by `method`, `path`, and `status`.
+- **`http_request_duration_seconds`**: Histogram of request latencies, useful for calculating P99/P95 response times.
+- **`http_active_connections`**: Gauge of currently open TCP connections.
+
+**Exposition Format:**
+
+Metrics are exposed via the `/metrics` endpoint (using `csilk_metrics_handler`) in the standard Prometheus text-based format.
+
+### 6.2 Unified Admin Dashboard
+
+The admin module (`src/app/admin.c`) provides a real-time web dashboard:
+
+```mermaid
+graph TB
+    subgraph "Admin Dashboard (/admin)"
+        UI["admin_ui.html<br/>Single-page Application"]
+        STATS["GET /admin/stats<br/>JSON metrics snapshot"]
+        WS["GET /admin/ws<br/>WebSocket live events"]
+    end
+
+    subgraph "Data Sources"
+        HTTP_M["HTTP Metrics<br/>(requests, latency)"]
+        WF_M["Workflow Metrics<br/>(executions, tokens)"]
+        MQ_M["MQ Metrics<br/>(messages, queues)"]
+    end
+
+    UI --> STATS
+    UI --> WS
+    STATS --> HTTP_M
+    STATS --> WF_M
+    STATS --> MQ_M
+    WS --> HTTP_M
+    WS --> WF_M
+    WS --> MQ_M
+```
+
+- **HTTP Dashboard**: Real-time QPS, latency histogram, status code distribution, active connections.
+- **Workflow Dashboard**: Live execution graph, node-level timing, token budget tracking.
+- **MQ Dashboard**: Queue depth, message throughput, consumer lag.
+
+### 6.3 Multi-Spectrum Telemetry
+
+```mermaid
+graph LR
+    subgraph "Data Collection"
+        HTTP["HTTP Metrics<br/>(atomic counters)"]
+        WORKFLOW["Workflow Tracing<br/>(nanosecond precision)"]
+        MQ["MQ Monitoring<br/>(queue depth)"]
+        DB["DB Telemetry<br/>(pool status)"]
+        AI["AI Telemetry<br/>(model calls)"]
+        SYS["Process Metrics<br/>(RSS, CPU)"]
+    end
+
+    subgraph "Exposition"
+        PROM["/metrics (Prometheus)"]
+        ADMIN["/admin (Dashboard UI)"]
+        ADMIN_STATS["/admin/stats (JSON)"]
+        ADMIN_WS["/admin/ws (WebSocket)"]
+    end
+
+    HTTP --> PROM
+    HTTP --> ADMIN
+    WORKFLOW --> ADMIN
+    MQ --> ADMIN
+    DB --> ADMIN_STATS
+    AI --> ADMIN_STATS
+    SYS --> ADMIN_STATS
+```
+
+## 7. Document Generation
 
 csilk uses **Doxygen** for API documentation:
 - All public header files (`include/`) include complete `@brief`, `@param`, `@return` annotations
@@ -321,9 +411,9 @@ csilk uses **Doxygen** for API documentation:
 - Documentation generation command: `make docs` (requires Doxygen 1.12+)
 - CI is configured for GitHub Pages auto-deployment of generated HTML documentation
 
-## 6. Developer Guide
+## 8. Developer Guide
 
-### 6.1 Writing WebSocket Handlers
+### 8.1 Writing WebSocket Handlers
 ```c
 void ws_on_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
     csilk_ws_send(c, (uint8_t*)"Hello Client", 12, 1);
@@ -337,7 +427,7 @@ void ws_handler(csilk_ctx_t* c) {
 }
 ```
 
-### 6.2 Writing Middleware
+### 8.2 Writing Middleware
 ```c
 void my_middleware(csilk_ctx_t* c) {
     // Pre-logic: e.g., check Token
@@ -346,7 +436,7 @@ void my_middleware(csilk_ctx_t* c) {
 }
 ```
 
-### 6.3 Starting the Server
+### 8.3 Starting the Server
 ```c
 int main() {
     csilk_router_t* r = csilk_router_new();
@@ -359,7 +449,7 @@ int main() {
 }
 ```
 
-## 7. Multi-Worker Architecture
+## 9. Multi-Worker Architecture
 
 ```mermaid
 flowchart TB
@@ -395,43 +485,16 @@ flowchart TB
 
 Each worker thread runs its own libuv event loop with the same port bound via `SO_REUSEPORT`. The kernel distributes incoming connections across worker threads, enabling multi-core utilization without explicit inter-thread synchronization.
 
-## 8. Observability (Prometheus Metrics)
+## 10. Performance Features
 
-csilk includes a native metrics module for real-time monitoring of server health and performance.
-
-### 8.1 Metrics Collected
-
-- **`http_requests_total`**: Counter of all processed HTTP requests, partitioned by `method`, `path`, and `status`.
-- **`http_request_duration_seconds`**: Histogram of request latencies, useful for calculating P99/P95 response times.
-- **`http_active_connections`**: Gauge of currently open TCP connections.
-
-### 8.2 Exposition Format
-
-Metrics are exposed via the `/metrics` endpoint (using `csilk_metrics_handler`) in the standard Prometheus text-based format:
-
-```text
-# HELP http_requests_total Total number of HTTP requests.
-# TYPE http_requests_total counter
-http_requests_total{method="GET",path="/api/ping",status="200"} 1243
-# HELP http_request_duration_seconds HTTP request latency histogram.
-# TYPE http_request_duration_seconds histogram
-http_request_duration_seconds_bucket{le="0.01"} 1100
-http_request_duration_seconds_sum 45.2
-http_request_duration_seconds_count 1243
-```
-
-By integrating `csilk_metrics_middleware` at the start of the middleware chain, every request is automatically timed and recorded.
-
-## 9. Performance Features
-
-### 9.1 Zero-copy Static File Serving
+### 10.1 Zero-copy Static File Serving
 
 For static files, Csilk implements a zero-copy mechanism using the `sendfile` system call (abstracted via `uv_fs_sendfile`).
 
 - **Mechanism**: When a static file is requested, the server opens the file and stores the file descriptor in the context. Instead of reading the file into a buffer and writing it to the socket, the server calls `uv_fs_sendfile`, which directs the kernel to transfer data directly from the file system cache to the network socket.
 - **Benefits**: Reduces CPU usage and memory bandwidth by eliminating data copying between kernel space and user space.
 
-### 9.2 Request Tracing (Request ID)
+### 10.2 Request Tracing (Request ID)
 
 The `csilk_request_id_middleware` ensures every request is assigned a unique UUID v4.
 

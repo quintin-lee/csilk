@@ -23,7 +23,6 @@ flowchart TB
     subgraph "Drivers (src/drivers/)"
         D1["OpenAI Driver\n(libcurl + cJSON)"]
         D2["Ollama Driver\n(Local AI)"]
-        D3["Anthropic (future)"]
     end
 
     NEW --> REG
@@ -48,6 +47,14 @@ Support for Server-Sent Events (SSE) allows for "typewriter-style" real-time out
 
 ### 4. Function Calling (Tool Use)
 Build autonomous agents by defining C function tools that the model can request to execute. Csilk automatically parses model-requested `tool_calls`.
+
+### 6. AI Telemetry Integration
+
+The AI engine integrates with the admin dashboard for real-time monitoring:
+
+- **Model Call Tracking**: Every `csilk_ai_chat` and `csilk_ai_chat_async` call is recorded with model name, token counts, and latency.
+- **Dashboard Integration**: AI metrics are exposed via the admin dashboard `/admin/stats` JSON endpoint as `ai_requests_total`, `ai_tokens_total`, and `ai_latency_ms`.
+- **Error Tracking**: Failed AI requests are counted and categorized by error type (timeout, rate-limited, invalid response).
 
 ### 5. Automated Robustness
 - **Automatic Retry**: Built-in exponential backoff handles transient network errors (502, 503) and Rate Limiting (429).

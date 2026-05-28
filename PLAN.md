@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-05-25 | 基于 `9ea35c0`
+> 最后更新: 2026-05-28 | 基于 `d0fdf21`
 
 ---
 
@@ -74,6 +74,14 @@
 - [ ] 10.3 自动化性能基准集 — wrk/hey 集成与跨框架对比报告
 - [x] 10.4 零拷贝优化 — 实现 sendfile 静态文件加速
 - [ ] 10.5 HTTP/2 预研 — 评估多路复用集成成本
+
+### 阶段十一：统一可观测性与管理面板 (v0.4.1)
+- [x] 11.1 统一管理面板 — Web 管理界面 (/admin) 整合 HTTP/Workflow/MQ 监控
+- [x] 11.2 MongoDB 数据库驱动集成 — 支持主流 NoSQL 数据库
+- [x] 11.3 全局 AI 遥测 — 模型调用次数、Token 用量、延迟跟踪
+- [x] 11.4 全局 DB 遥测 — 连接池状态、查询延迟跟踪
+- [x] 11.5 MQ 状态监控 — 队列深度、消息吞吐量实时报告
+- [ ] 11.6 性能基准自动化 — 跨框架对比报告
 
 ---
 
@@ -315,6 +323,15 @@
 - **动作**: 将 `context_internal.h` 从 `src/core/` 移至 `include/`，清理 CMakeLists.txt。
 - **动作**: 同步更新所有技术文档（README, ARCH.md, CHANGELOG, CODEPEC, ANALYSIS, OPTIMIZE, PLAN）。
 
+### [2026-05-28] 阶段十一：统一可观测性与管理面板
+- **动作**: 实现统一管理面板 (admin.c) — Web 界面整合 HTTP/Workflow/MQ 监控。
+- **动作**: 集成 MongoDB 数据库驱动 (mongodb.c) — 完整连接池与查询接口。
+- **动作**: 实现全局 AI 遥测 — 模型调用、Token 用量、延迟跟踪。
+- **动作**: 实现全局 DB 遥测 — 连接池状态、查询延迟跟踪。
+- **动作**: 实现 MQ 消息状态监控 — 实时事件、队列深度、JSON 统计。
+- **动作**: 修复 MQ 恢复回归、admin 结构体隐私、Mermaid 语法兼容性。
+- **动作**: 全量文档同步更新（README, ARCH.md, architecture.md, module-design, user-manual, CODEPEC, PLAN）。
+
 ---
 
 ## 六、状态一览
@@ -330,6 +347,7 @@
 | P5 测试扩展 | 6 | 边缘测试缺口（config_free, next(NULL), reflect 等）|
 | P6 文档 | 0 | (全量 Doxygen 完成) |
 | P7 新功能 | 0 | HTTPS/TLS, MQ, Prometheus, Zero-copy 全部完成 |
+| 阶段十一 | 0 | Admin Dashboard, MongoDB, 全光谱遥测完成 |
 | 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF）|
 | 平账 P1 | 0 | 所有问题已修复（资源管理与错误处理）|
 | 平账 P2 | 0 | 所有问题已修复（API 设计问题）|
@@ -337,4 +355,4 @@
 | 平账 P4 | 0 | 所有问题已修复（缺失功能）|
 | 平账 P5 | 6 | 边缘测试缺口待补充 |
 | 平账 P6 | 0 | 所有问题已修复（构建系统问题）|
-| **合计** | **~8** | HTTP/2 预研 + 性能基准 + 6 个边缘测试缺口 |
+| **合计** | **~7** | HTTP/2 预研 + 性能基准 + 6 个边缘测试缺口 |

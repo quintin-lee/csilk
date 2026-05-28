@@ -243,6 +243,13 @@ Export trace to JSON:
 char* json = csilk_wf_trace_to_json(trace);
 ```
 
+### Admin Dashboard Integration
+
+Live workflow execution status is exposed via the unified admin dashboard:
+
+- **GET /admin/stats**: Returns workflow metrics (`workflow_count`, `node_count`, `active_executions`) as JSON.
+- **GET /admin/ws**: WebSocket endpoint broadcasting real-time workflow lifecycle events.
+
 ### WebSocket Monitoring
 
 Live workflow events broadcast via WebSocket:
@@ -370,4 +377,5 @@ The `_wf_wal_append()` function in `workflow_wal.c` uses raw POSIX I/O (`open`/`
 | `src/app/workflow_wal.c` | WAL implementation (44 lines) |
 | `src/app/workflow_loader.c` | Declarative loader (268 lines) |
 | `tests/test_workflow_agentic.c` | Agentic loop test |
+| `tests/test_workflow_monitor.c` | Monitor integration test |
 | `examples/example_ai_workflow.c` | Full workflow example |
