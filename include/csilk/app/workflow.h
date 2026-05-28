@@ -38,6 +38,15 @@
 
 #include "csilk/csilk.h"
 
+#include "csilk/app/app.h"
+
+/**
+ * @brief Register a default route to serve the workflow dashboard.
+ * @param app  Application handle.
+ * @param path URL path (e.g., "/admin/workflow").
+ */
+void csilk_wf_serve_ui(csilk_app_t* app, const char* path);
+
 /** @brief Opaque handle for a workflow instance. */
 typedef struct csilk_wf_s csilk_wf_t;
 
@@ -112,7 +121,9 @@ typedef struct {
   const char* prompt; /**< User prompt (supports {{node.value}} templates). */
   double temperature;
   int max_tokens;
-  int stream;         /**< Enable token streaming to monitors. */
+  int stream;               /**< Enable token streaming to monitors. */
+  int max_history_messages; /**< Max messages to keep in history (0 =
+                               unlimited). */
 } csilk_ai_config_t;
 
 /**
@@ -322,6 +333,15 @@ void csilk_wf_node_set_timeout(csilk_wf_node_t* node, int timeout_ms);
  * @param ttl_sec TTL in seconds (0 for no limit).
  */
 void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec);
+
+/**
+ * @brief Set automatic retry policy for a specific node.
+ * @param node           Node handle.
+ * @param max_retries    Maximum number of retry attempts.
+ * @param retry_delay_ms Delay before each retry.
+ */
+void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
+                             int retry_delay_ms);
 
 /* --- Execution --- */
 
