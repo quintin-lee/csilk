@@ -94,8 +94,11 @@
                 </div>
                 <div class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-4 flex flex-col">
-                        <div id="mermaid-container" class="flex-1 bg-slate-900 rounded-lg overflow-auto p-4">
-                            <div class="mermaid" id="wf-graph">graph TD\nSELECT[Select a workflow to visualize]</div>
+                        <div id="mermaid-container" class="flex-1 bg-slate-900 rounded-lg overflow-auto p-4 flex justify-center items-center">
+                            <div class="mermaid" id="wf-graph">
+                                graph TD
+                                SELECT["Select a workflow to visualize"]
+                            </div>
                         </div>
                     </div>
                     <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 flex flex-col">
@@ -151,11 +154,17 @@
 
     <script>
         lucide.createIcons();
-        mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'dark', 
+            securityLevel: 'loose',
+            logLevel: 'error'
+        });
 
         let currentTab = 'overview';
         let ws = null;
         let chart = null;
+        let currentTopology = 'graph TD\nSELECT["Select a workflow to visualize"]';
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -239,6 +248,20 @@
             }
         }
 
+        function updateNodeUI(nodeId, state) {
+            const svg = document.querySelector('#mermaid-container svg');
+            if (!svg) return;
+            
+            const nodes = svg.querySelectorAll('.node');
+            nodes.forEach(n => {
+                const label = n.querySelector('.nodeLabel')?.textContent || '';
+                if (label === nodeId || n.id.includes(nodeId)) {
+                    n.classList.remove('node-queued', 'node-running', 'node-finished', 'node-failed', 'node-paused');
+                    n.classList.add(`node-${state}`);
+                }
+            });
+        }
+
         async function handleWorkflowEvent(data) {
             const selector = document.getElementById('wf-selector');
             if (data.event === 'workflow_start') {
@@ -254,16 +277,40 @@
             entry.innerHTML = `<span class="text-slate-500">${new Date().toLocaleTimeString()}</span> <b class="text-blue-400">${data.event}</b> ${data.node_id || ''}`;
             log.prepend(entry);
 
-            if (data.event === 'workflow_topology' && selector.value === '') {
-                // Initial render if nothing selected
-                renderMermaid(data.payload);
+            if (data.event === 'workflow_topology') {
+                currentTopology = data.payload;
+                if (selector.value === '') {
+                    await renderMermaid(currentTopology);
+                }
+            }
+            
+            if (data.node_id) {
+                // Determine node state from event
+                let state = null;
+                if (data.event === 'node_queued') state = 'queued';
+                else if (data.event === 'node_start') state = 'running';
+                else if (data.event === 'node_finish') state = 'finished';
+                else if (data.event === 'workflow_paused') state = 'paused';
+                
+                if (state) updateNodeUI(data.node_id, state);
             }
         }
 
         async function renderMermaid(code) {
             const container = document.getElementById('mermaid-container');
-            container.innerHTML = `<div class="mermaid" id="wf-graph">${code}</div>`;
-            await mermaid.run({ nodes: [document.getElementById('wf-graph')] });
+            const tempDiv = document.createElement('div');
+            tempDiv.className = 'mermaid';
+            tempDiv.id = 'wf-graph-dynamic';
+            tempDiv.textContent = code;
+            
+            container.innerHTML = '';
+            container.appendChild(tempDiv);
+            
+            try {
+                await mermaid.run({ nodes: [tempDiv] });
+            } catch (err) {
+                console.error("Mermaid render failed:", err);
+            }
         }
 
         document.getElementById('connect-btn').onclick = () => {
