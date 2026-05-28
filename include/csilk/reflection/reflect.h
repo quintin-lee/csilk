@@ -26,22 +26,22 @@
  * read/write when marshalling to or from JSON.
  */
 typedef enum {
-  CSILK_TYPE_INT8,   /**< 8-bit signed integer (int8_t / char). */
-  CSILK_TYPE_UINT8,  /**< 8-bit unsigned integer (uint8_t / unsigned char). */
-  CSILK_TYPE_INT16,  /**< 16-bit signed integer (int16_t / short). */
-  CSILK_TYPE_UINT16, /**< 16-bit unsigned integer (uint16_t / unsigned short).
+	CSILK_TYPE_INT8,   /**< 8-bit signed integer (int8_t / char). */
+	CSILK_TYPE_UINT8,  /**< 8-bit unsigned integer (uint8_t / unsigned char). */
+	CSILK_TYPE_INT16,  /**< 16-bit signed integer (int16_t / short). */
+	CSILK_TYPE_UINT16, /**< 16-bit unsigned integer (uint16_t / unsigned short).
                       */
-  CSILK_TYPE_INT32,  /**< 32-bit signed integer (int32_t / int). */
-  CSILK_TYPE_UINT32, /**< 32-bit unsigned integer (uint32_t / unsigned int). */
-  CSILK_TYPE_INT64,  /**< 64-bit signed integer (int64_t / long long). */
-  CSILK_TYPE_UINT64, /**< 64-bit unsigned integer (uint64_t / unsigned long
+	CSILK_TYPE_INT32,  /**< 32-bit signed integer (int32_t / int). */
+	CSILK_TYPE_UINT32, /**< 32-bit unsigned integer (uint32_t / unsigned int). */
+	CSILK_TYPE_INT64,  /**< 64-bit signed integer (int64_t / long long). */
+	CSILK_TYPE_UINT64, /**< 64-bit unsigned integer (uint64_t / unsigned long
                         long). */
-  CSILK_TYPE_FLOAT,  /**< Single-precision IEEE 754 float. */
-  CSILK_TYPE_DOUBLE, /**< Double-precision IEEE 754 double. */
-  CSILK_TYPE_BOOL,   /**< Boolean (C99 _Bool / bool). */
-  CSILK_TYPE_STRING, /**< String: supports both char[] fixed buffers and char*
+	CSILK_TYPE_FLOAT,  /**< Single-precision IEEE 754 float. */
+	CSILK_TYPE_DOUBLE, /**< Double-precision IEEE 754 double. */
+	CSILK_TYPE_BOOL,   /**< Boolean (C99 _Bool / bool). */
+	CSILK_TYPE_STRING, /**< String: supports both char[] fixed buffers and char*
                         pointers. */
-  CSILK_TYPE_STRUCT  /**< Nested struct (by value or pointer).  @p
+	CSILK_TYPE_STRUCT  /**< Nested struct (by value or pointer).  @p
                         nested_type_name identifies the type. */
 } csilk_field_type_t;
 
@@ -63,20 +63,18 @@ typedef struct csilk_field_desc_s csilk_field_desc_t;
  * references.
  */
 struct csilk_field_desc_s {
-  const char* json_key; /**< JSON key name for this field (used during
+	const char* json_key;	      /**< JSON key name for this field (used during
                            marshal/unmarshal; e.g., "user_name"). */
-  csilk_field_type_t
-      type;      /**< Data type enumerator (see csilk_field_type_t). */
-  size_t offset; /**< Byte offset of this field from the struct base address
+	csilk_field_type_t type;      /**< Data type enumerator (see csilk_field_type_t). */
+	size_t offset;		      /**< Byte offset of this field from the struct base address
                     (computed via offsetof). */
-  size_t size;   /**< Size in bytes of one element (sizeof(field_type)).  For
+	size_t size;		      /**< Size in bytes of one element (sizeof(field_type)).  For
                     arrays this is the element size, not the total. */
-  size_t array_length; /**< Number of elements for fixed-size C arrays (0 =
+	size_t array_length;	      /**< Number of elements for fixed-size C arrays (0 =
                           scalar fields or pointer fields). */
-  bool is_pointer;     /**< True if the field is a pointer type (char* or struct
+	bool is_pointer;	      /**< True if the field is a pointer type (char* or struct
                           pointer).  Affects how the field is read/written. */
-  const char*
-      nested_type_name; /**< For CSILK_TYPE_STRUCT fields, the registered type
+	const char* nested_type_name; /**< For CSILK_TYPE_STRUCT fields, the registered type
                            name of the nested struct (resolved lazily at
                            marshalling time to support forward declarations).
                            NULL for non-struct fields. */
@@ -89,10 +87,9 @@ struct csilk_field_desc_s {
  * or automatically via the CSILK_REGISTER_REFLECT macro.
  */
 typedef struct {
-  const char* name; /**< Unique type name string (e.g., "User", "Config"). */
-  const csilk_field_desc_t*
-      fields;   /**< NULL-terminated array of field descriptors. */
-  size_t count; /**< Number of valid field descriptors (excluding sentinel). */
+	const char* name;		  /**< Unique type name string (e.g., "User", "Config"). */
+	const csilk_field_desc_t* fields; /**< NULL-terminated array of field descriptors. */
+	size_t count; /**< Number of valid field descriptors (excluding sentinel). */
 } csilk_reflect_entry_t;
 
 /**
@@ -115,8 +112,7 @@ void csilk_reflect_init(void);
  * @param count   Number of valid entries in @p fields (excluding the
  *                NULL-sentinel terminator).
  */
-void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields,
-                            size_t count);
+void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, size_t count);
 
 /**
  * @brief Look up a registered type by name.
@@ -137,8 +133,8 @@ const csilk_reflect_entry_t* csilk_reflect_find(const char* name);
  * @param user_data Opaque pointer forwarded from csilk_reflect_foreach.
  */
 typedef void (*csilk_reflect_foreach_cb)(const char* name,
-                                         const csilk_reflect_entry_t* entry,
-                                         void* user_data);
+					 const csilk_reflect_entry_t* entry,
+					 void* user_data);
 
 /**
  * @brief Iterate over all registered reflection types.
@@ -179,8 +175,7 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  *                   already be allocated and zero-initialised).
  * @return 1 on success, 0 on parse error or type mismatch.
  */
-int csilk_json_unmarshal(const char* type_name, const char* json_str,
-                         void* ptr);
+int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr);
 
 /* --- Automatic Type Dispatch (C11 _Generic) --- */
 
@@ -210,24 +205,24 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
  * @param x  Expression whose static type determines the returned name.
  * @return A string literal naming the type (e.g., "string", "int32").
  */
-#define csilk_type_name(x)                       \
-  _Generic((x),                                  \
-      _Bool: "bool",                             \
-      signed char: "int8",                       \
-      unsigned char: "uint8",                    \
-      short: "int16",                            \
-      unsigned short: "uint16",                  \
-      int: "int32",                              \
-      unsigned int: "uint32",                    \
-      long: "int64",                             \
-      unsigned long: "uint64",                   \
-      long long: "int64",                        \
-      unsigned long long: "uint64",              \
-      float: "float",                            \
-      double: "double",                          \
-      char*: "string",                           \
-      const char*: "string" CSILK_USER_TYPE_MAP, \
-      default: "unknown")
+#define csilk_type_name(x)                                                                         \
+	_Generic((x),                                                                              \
+	    _Bool: "bool",                                                                         \
+	    signed char: "int8",                                                                   \
+	    unsigned char: "uint8",                                                                \
+	    short: "int16",                                                                        \
+	    unsigned short: "uint16",                                                              \
+	    int: "int32",                                                                          \
+	    unsigned int: "uint32",                                                                \
+	    long: "int64",                                                                         \
+	    unsigned long: "uint64",                                                               \
+	    long long: "int64",                                                                    \
+	    unsigned long long: "uint64",                                                          \
+	    float: "float",                                                                        \
+	    double: "double",                                                                      \
+	    char*: "string",                                                                       \
+	    const char*: "string" CSILK_USER_TYPE_MAP,                                             \
+	    default: "unknown")
 
 /**
  * @brief Convenience macro to serialise a reflected struct to a JSON string.
@@ -249,8 +244,7 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
  * @param ptr   Pointer to a registered struct instance (must be pre-allocated).
  * @return 0 on success, -1 on error.
  */
-#define csilk_unmarshal(json, ptr) \
-  csilk_json_unmarshal(csilk_type_name(*(ptr)), json, ptr)
+#define csilk_unmarshal(json, ptr) csilk_json_unmarshal(csilk_type_name(*(ptr)), json, ptr)
 
 /* --- Macro Magic for Automatic Registration --- */
 
@@ -270,10 +264,8 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
  * @param nested_name  Registered type name for CSILK_TYPE_STRUCT fields
  *                     (ignored for other types).
  */
-#define CSILK_META_EXPAND(struct_type, field, type_enum, size, arr_len, \
-                          is_ptr, nested_name)                          \
-  {#field, type_enum,  offsetof(struct_type, field), size, arr_len,     \
-   is_ptr, nested_name},
+#define CSILK_META_EXPAND(struct_type, field, type_enum, size, arr_len, is_ptr, nested_name)       \
+	{#field, type_enum, offsetof(struct_type, field), size, arr_len, is_ptr, nested_name},
 
 /**
  * @brief Automatically register a struct for reflection at program startup.
@@ -304,13 +296,13 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str,
  *                     field, type_enum, size, arr_len, is_ptr, nested_name)
  *                     call per field.
  */
-#define CSILK_REGISTER_REFLECT(struct_type, map_macro)                    \
-  static csilk_field_desc_t struct_type##_meta[] = {                      \
-      map_macro(CSILK_META_EXPAND){NULL, 0, 0, 0, 0, false, NULL}};       \
-  static void __attribute__((constructor)) auto_reg_##struct_type(void) { \
-    size_t count =                                                        \
-        (sizeof(struct_type##_meta) / sizeof(csilk_field_desc_t)) - 1;    \
-    csilk_reflect_register(#struct_type, struct_type##_meta, count);      \
-  }
+#define CSILK_REGISTER_REFLECT(struct_type, map_macro)                                             \
+	static csilk_field_desc_t struct_type##_meta[] = {                                         \
+	    map_macro(CSILK_META_EXPAND){NULL, 0, 0, 0, 0, false, NULL}};                          \
+	static void __attribute__((constructor)) auto_reg_##struct_type(void)                      \
+	{                                                                                          \
+		size_t count = (sizeof(struct_type##_meta) / sizeof(csilk_field_desc_t)) - 1;      \
+		csilk_reflect_register(#struct_type, struct_type##_meta, count);                   \
+	}
 
 #endif

@@ -30,14 +30,14 @@ typedef struct csilk_ctx_s csilk_ctx_t;
  *       For database-backed drivers, use a fast cache or async offload.
  */
 struct csilk_perm_driver_s {
-  const char* name; /**< Driver identifier (e.g., "simple", "casbin"). */
-  /** @brief Evaluate whether the request is allowed.
+	const char* name; /**< Driver identifier (e.g., "simple", "casbin"). */
+	/** @brief Evaluate whether the request is allowed.
    *  @param c          Request context (used to identify the authenticated
    * user).
    *  @param permission Permission string (e.g., "read", "write", "delete").
    *  @param resource   Resource pattern (e.g., "users:*", "documents:42").
    *  @return 1 if allowed, 0 if denied, -1 on error. */
-  int (*check)(csilk_ctx_t* c, const char* permission, const char* resource);
+	int (*check)(csilk_ctx_t* c, const char* permission, const char* resource);
 };
 
 typedef struct csilk_perm_driver_s csilk_perm_driver_t;
@@ -49,9 +49,9 @@ typedef struct csilk_perm_driver_s csilk_perm_driver_t;
  * Rules are managed via csilk_perm_simple_allow / csilk_perm_simple_clear.
  */
 typedef struct {
-  const char* role;       /**< Role identifier (e.g., "admin", "editor"). */
-  const char* permission; /**< Action/permission string (e.g., "read"). */
-  const char* resource;   /**< Resource pattern (e.g., "articles:*"). */
+	const char* role;	/**< Role identifier (e.g., "admin", "editor"). */
+	const char* permission; /**< Action/permission string (e.g., "read"). */
+	const char* resource;	/**< Resource pattern (e.g., "articles:*"). */
 } csilk_perm_rule_t;
 
 /** @brief Initialise the permission subsystem.
@@ -81,16 +81,14 @@ int csilk_perm_set_default(const char* name);
  *  @param permission Permission to check.
  *  @param resource   Resource to check.
  *  @return 1 if allowed, 0 if denied, -1 on error (or no driver set). */
-int csilk_perm_check(csilk_ctx_t* c, const char* permission,
-                     const char* resource);
+int csilk_perm_check(csilk_ctx_t* c, const char* permission, const char* resource);
 
 /** @brief Abort the handler chain with 403 Forbidden if the check fails.
  *  Convenience wrapper: calls csilk_perm_check and csilk_abort on denial.
  *  @param c          Request context.
  *  @param permission Permission to check.
  *  @param resource   Resource to check. */
-void csilk_perm_require(csilk_ctx_t* c, const char* permission,
-                        const char* resource);
+void csilk_perm_require(csilk_ctx_t* c, const char* permission, const char* resource);
 
 /** @brief Initialise the built-in in-memory RBAC driver.
  *  Registers as "simple".  Must be called before any simple_* functions. */
@@ -101,8 +99,7 @@ void csilk_perm_simple_init(void);
  *  @param permission Permission string (e.g., "write").
  *  @param resource   Resource pattern (e.g., "articles:*").
  *  @return 1 if the rule was added, 0 if it already existed. */
-int csilk_perm_simple_allow(const char* role, const char* permission,
-                            const char* resource);
+int csilk_perm_simple_allow(const char* role, const char* permission, const char* resource);
 
 /** @brief Remove all rules from the simple driver.
  *  After calling this, all checks will deny until new rules are added. */

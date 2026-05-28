@@ -21,9 +21,9 @@
  * a string key and an opaque void* value.
  */
 typedef struct csilk_session_data_s {
-  char* key;
-  void* value;
-  struct csilk_session_data_s* next;
+	char* key;
+	void* value;
+	struct csilk_session_data_s* next;
 } csilk_session_data_t;
 
 /**
@@ -34,10 +34,10 @@ typedef struct csilk_session_data_s {
  * in the global store (singly-linked list).
  */
 typedef struct csilk_session_s {
-  char id[37];
-  csilk_session_data_t* data;
-  time_t expires_at;
-  struct csilk_session_s* next;
+	char id[37];
+	csilk_session_data_t* data;
+	time_t expires_at;
+	struct csilk_session_s* next;
 } csilk_session_t;
 
 /**
@@ -67,7 +67,11 @@ static uv_once_t session_mutex_once = UV_ONCE_INIT;
 /**
  * @brief Initialize the session store mutex (called once via uv_once).
  */
-static void init_session_mutex(void) { uv_mutex_init(&session_mutex); }
+static void
+init_session_mutex(void)
+{
+	uv_mutex_init(&session_mutex);
+}
 
 /**
  * @brief Lock the session store mutex.
@@ -75,9 +79,11 @@ static void init_session_mutex(void) { uv_mutex_init(&session_mutex); }
  * Ensures the mutex is initialized (via uv_once) before acquiring the lock.
  * Blocks until the lock is held.
  */
-static void session_lock(void) {
-  uv_once(&session_mutex_once, init_session_mutex);
-  uv_mutex_lock(&session_mutex);
+static void
+session_lock(void)
+{
+	uv_once(&session_mutex_once, init_session_mutex);
+	uv_mutex_lock(&session_mutex);
 }
 
 /**
@@ -85,7 +91,11 @@ static void session_lock(void) {
  *
  * Releases the lock previously acquired by session_lock().
  */
-static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
+static void
+session_unlock(void)
+{
+	uv_mutex_unlock(&session_mutex);
+}
 
 /** @brief Session cookie name. */
 #define SESSION_COOKIE "csilk_session"
@@ -103,8 +113,10 @@ static void session_unlock(void) { uv_mutex_unlock(&session_mutex); }
  * @param id  Output buffer of at least 37 bytes to receive the
  *            null-terminated UUID string.
  */
-static void generate_session_id(csilk_ctx_t* c, char id[37]) {
-  _csilk_generate_uuid(c, id);
+static void
+generate_session_id(csilk_ctx_t* c, char id[37])
+{
+	_csilk_generate_uuid(c, id);
 }
 
 /**
@@ -119,13 +131,17 @@ static void generate_session_id(csilk_ctx_t* c, char id[37]) {
  * @note This function does NOT acquire the mutex. The caller must hold
  *       session_mutex when calling this function.
  */
-static csilk_session_t* find_session(const char* id) {
-  csilk_session_t* s = session_store;
-  while (s) {
-    if (strcmp(s->id, id) == 0) return s;
-    s = s->next;
-  }
-  return NULL;
+static csilk_session_t*
+find_session(const char* id)
+{
+	csilk_session_t* s = session_store;
+	while (s) {
+		if (strcmp(s->id, id) == 0) {
+			return s;
+		}
+		s = s->next;
+	}
+	return NULL;
 }
 
 /**
@@ -138,11 +154,13 @@ static csilk_session_t* find_session(const char* id) {
  *
  * @return Pointer to the csilk_session_t if found, NULL otherwise.
  */
-static csilk_session_t* find_session_locked(const char* id) {
-  session_lock();
-  csilk_session_t* s = find_session(id);
-  session_unlock();
-  return s;
+static csilk_session_t*
+find_session_locked(const char* id)
+{
+	session_lock();
+	csilk_session_t* s = find_session(id);
+	session_unlock();
+	return s;
 }
 
 /**
@@ -152,11 +170,13 @@ static csilk_session_t* find_session_locked(const char* id) {
  *
  * @param session  The session to add. Must not be NULL.
  */
-static void add_session_locked(csilk_session_t* session) {
-  session_lock();
-  session->next = session_store;
-  session_store = session;
-  session_unlock();
+static void
+add_session_locked(csilk_session_t* session)
+{
+	session_lock();
+	session->next = session_store;
+	session_store = session;
+	session_unlock();
 }
 
 /**
@@ -169,19 +189,21 @@ static void add_session_locked(csilk_session_t* session) {
  * @param session  The session to remove. Must be a valid pointer currently
  *                 in the store.
  */
-static void remove_session_locked(csilk_session_t* session) {
-  session_lock();
-  csilk_session_t** prev = &session_store;
-  csilk_session_t* s = session_store;
-  while (s) {
-    if (s == session) {
-      *prev = s->next;
-      break;
-    }
-    prev = &s->next;
-    s = s->next;
-  }
-  session_unlock();
+static void
+remove_session_locked(csilk_session_t* session)
+{
+	session_lock();
+	csilk_session_t** prev = &session_store;
+	csilk_session_t* s = session_store;
+	while (s) {
+		if (s == session) {
+			*prev = s->next;
+			break;
+		}
+		prev = &s->next;
+		s = s->next;
+	}
+	session_unlock();
 }
 
 /**
@@ -193,29 +215,31 @@ static void remove_session_locked(csilk_session_t* session) {
  *
  * @note Acquires and releases session_mutex during the sweep.
  */
-static void cleanup_expired(void) {
-  time_t now = time(NULL);
-  session_lock();
-  csilk_session_t** prev = &session_store;
-  csilk_session_t* s = session_store;
-  while (s) {
-    if (s->expires_at <= now) {
-      csilk_session_data_t* d = s->data;
-      while (d) {
-        csilk_session_data_t* next = d->next;
-        free(d->key);
-        free(d);
-        d = next;
-      }
-      *prev = s->next;
-      free(s);
-      s = *prev;
-    } else {
-      prev = &s->next;
-      s = s->next;
-    }
-  }
-  session_unlock();
+static void
+cleanup_expired(void)
+{
+	time_t now = time(NULL);
+	session_lock();
+	csilk_session_t** prev = &session_store;
+	csilk_session_t* s = session_store;
+	while (s) {
+		if (s->expires_at <= now) {
+			csilk_session_data_t* d = s->data;
+			while (d) {
+				csilk_session_data_t* next = d->next;
+				free(d->key);
+				free(d);
+				d = next;
+			}
+			*prev = s->next;
+			free(s);
+			s = *prev;
+		} else {
+			prev = &s->next;
+			s = s->next;
+		}
+	}
+	session_unlock();
 }
 
 /**
@@ -224,7 +248,11 @@ static void cleanup_expired(void) {
  * Performs an immediate cleanup of any expired sessions from the store.
  * This should be called once during server startup.
  */
-void csilk_session_init(void) { cleanup_expired(); }
+void
+csilk_session_init(void)
+{
+	cleanup_expired();
+}
 
 /**
  * @brief Start or resume a session for the current request.
@@ -243,40 +271,45 @@ void csilk_session_init(void) { cleanup_expired(); }
  *          persistent storage. All sessions are in-memory and are lost on
  *          process restart.
  */
-void csilk_session_start(csilk_ctx_t* c) {
-  if (!c) return;
+void
+csilk_session_start(csilk_ctx_t* c)
+{
+	if (!c) {
+		return;
+	}
 
-  /* Look for an existing session cookie. If found and valid, resume it.
+	/* Look for an existing session cookie. If found and valid, resume it.
      Otherwise create a fresh session with a new UUID. */
-  const char* sid = csilk_get_cookie(c, SESSION_COOKIE);
-  csilk_session_t* session = NULL;
+	const char* sid = csilk_get_cookie(c, SESSION_COOKIE);
+	csilk_session_t* session = NULL;
 
-  if (sid) {
-    session = find_session_locked(sid);
-  }
+	if (sid) {
+		session = find_session_locked(sid);
+	}
 
-  if (!session) {
-    /* No session found — allocate a new one, generate an ID, and insert
+	if (!session) {
+		/* No session found — allocate a new one, generate an ID, and insert
        into the global store. The session cookie (HTTP-only, no JS access)
        is set with a 24-hour lifetime. */
-    session = calloc(1, sizeof(csilk_session_t));
-    if (!session) return;
+		session = calloc(1, sizeof(csilk_session_t));
+		if (!session) {
+			return;
+		}
 
-    generate_session_id(c, session->id);
-    session->expires_at = time(NULL) + SESSION_TTL;
+		generate_session_id(c, session->id);
+		session->expires_at = time(NULL) + SESSION_TTL;
 
-    add_session_locked(session);
+		add_session_locked(session);
 
-    csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0,
-                     1);
-  } else {
-    /* Existing session: extend the expiry window. */
-    session->expires_at = time(NULL) + SESSION_TTL;
-  }
+		csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0, 1);
+	} else {
+		/* Existing session: extend the expiry window. */
+		session->expires_at = time(NULL) + SESSION_TTL;
+	}
 
-  /* Store session pointer in context for downstream handlers to access
+	/* Store session pointer in context for downstream handlers to access
      via csilk_session_get() / csilk_session_set(). */
-  csilk_set(c, "_session", session);
+	csilk_set(c, "_session", session);
 }
 
 /**
@@ -296,28 +329,36 @@ void csilk_session_start(csilk_ctx_t* c) {
  *          on the session pointer stored in the per-request context, which
  *          is already exclusively owned by the current request handler.
  */
-void csilk_session_set(csilk_ctx_t* c, const char* key, void* value) {
-  if (!c || !key) return;
+void
+csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
+{
+	if (!c || !key) {
+		return;
+	}
 
-  csilk_session_t* session = csilk_get(c, "_session");
-  if (!session) return;
+	csilk_session_t* session = csilk_get(c, "_session");
+	if (!session) {
+		return;
+	}
 
-  csilk_session_data_t* d = session->data;
-  while (d) {
-    if (strcmp(d->key, key) == 0) {
-      d->value = value;
-      return;
-    }
-    d = d->next;
-  }
+	csilk_session_data_t* d = session->data;
+	while (d) {
+		if (strcmp(d->key, key) == 0) {
+			d->value = value;
+			return;
+		}
+		d = d->next;
+	}
 
-  csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
-  if (!new_d) return;
+	csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
+	if (!new_d) {
+		return;
+	}
 
-  new_d->key = strdup(key);
-  new_d->value = value;
-  new_d->next = session->data;
-  session->data = new_d;
+	new_d->key = strdup(key);
+	new_d->value = value;
+	new_d->next = session->data;
+	session->data = new_d;
 }
 
 /**
@@ -332,18 +373,26 @@ void csilk_session_set(csilk_ctx_t* c, const char* key, void* value) {
  * @return The value pointer previously stored with csilk_session_set(), or
  *         NULL if the key is not found or no session is active.
  */
-void* csilk_session_get(csilk_ctx_t* c, const char* key) {
-  if (!c || !key) return NULL;
+void*
+csilk_session_get(csilk_ctx_t* c, const char* key)
+{
+	if (!c || !key) {
+		return NULL;
+	}
 
-  csilk_session_t* session = csilk_get(c, "_session");
-  if (!session) return NULL;
+	csilk_session_t* session = csilk_get(c, "_session");
+	if (!session) {
+		return NULL;
+	}
 
-  csilk_session_data_t* d = session->data;
-  while (d) {
-    if (strcmp(d->key, key) == 0) return d->value;
-    d = d->next;
-  }
-  return NULL;
+	csilk_session_data_t* d = session->data;
+	while (d) {
+		if (strcmp(d->key, key) == 0) {
+			return d->value;
+		}
+		d = d->next;
+	}
+	return NULL;
 }
 
 /**
@@ -356,23 +405,29 @@ void* csilk_session_get(csilk_ctx_t* c, const char* key) {
  *
  * @param c  The request context.
  */
-void csilk_session_destroy(csilk_ctx_t* c) {
-  if (!c) return;
+void
+csilk_session_destroy(csilk_ctx_t* c)
+{
+	if (!c) {
+		return;
+	}
 
-  csilk_session_t* session = csilk_get(c, "_session");
-  if (!session) return;
+	csilk_session_t* session = csilk_get(c, "_session");
+	if (!session) {
+		return;
+	}
 
-  remove_session_locked(session);
+	remove_session_locked(session);
 
-  csilk_session_data_t* d = session->data;
-  while (d) {
-    csilk_session_data_t* next = d->next;
-    free(d->key);
-    free(d);
-    d = next;
-  }
-  free(session);
+	csilk_session_data_t* d = session->data;
+	while (d) {
+		csilk_session_data_t* next = d->next;
+		free(d->key);
+		free(d);
+		d = next;
+	}
+	free(session);
 
-  csilk_set(c, "_session", NULL);
-  csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);
+	csilk_set(c, "_session", NULL);
+	csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);
 }

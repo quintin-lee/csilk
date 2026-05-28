@@ -30,10 +30,10 @@
  * thread pool) and the after-work callback (running on the event loop).
  */
 typedef struct {
-  uint8_t* dest;         /**< Compressed output buffer. */
-  size_t dest_cap;       /**< Capacity of the output buffer. */
-  int ret;               /**< zlib return status. */
-  size_t compressed_len; /**< Actual compressed data length. */
+	uint8_t* dest;	       /**< Compressed output buffer. */
+	size_t dest_cap;       /**< Capacity of the output buffer. */
+	int ret;	       /**< zlib return status. */
+	size_t compressed_len; /**< Actual compressed data length. */
 } gzip_async_state_t;
 
 /**
@@ -48,37 +48,41 @@ typedef struct {
  * @note Runs on a libuv thread-pool thread. Must not touch non-thread-safe
  *       resources.
  */
-static void gzip_work_cb(uv_work_t* req) {
-  csilk_ctx_t* c = (csilk_ctx_t*)req->data;
-  gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
-  if (!state) return;
+static void
+gzip_work_cb(uv_work_t* req)
+{
+	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
+	if (!state) {
+		return;
+	}
 
-  size_t src_len = c->response.body_len;
-  z_stream strm;
-  memset(&strm, 0, sizeof(strm));
+	size_t src_len = c->response.body_len;
+	z_stream strm;
+	memset(&strm, 0, sizeof(strm));
 
-  if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
-                   Z_DEFAULT_STRATEGY) != Z_OK) {
-    state->ret = Z_ERRNO;
-    return;
-  }
+	if (deflateInit2(
+		&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+		state->ret = Z_ERRNO;
+		return;
+	}
 
-  state->dest_cap = deflateBound(&strm, (uLong)src_len);
-  state->dest = malloc(state->dest_cap);
-  if (!state->dest) {
-    deflateEnd(&strm);
-    state->ret = Z_MEM_ERROR;
-    return;
-  }
+	state->dest_cap = deflateBound(&strm, (uLong)src_len);
+	state->dest = malloc(state->dest_cap);
+	if (!state->dest) {
+		deflateEnd(&strm);
+		state->ret = Z_MEM_ERROR;
+		return;
+	}
 
-  strm.next_in = (Bytef*)c->response.body;
-  strm.avail_in = (uInt)src_len;
-  strm.next_out = state->dest;
-  strm.avail_out = (uInt)state->dest_cap;
+	strm.next_in = (Bytef*)c->response.body;
+	strm.avail_in = (uInt)src_len;
+	strm.next_out = state->dest;
+	strm.avail_out = (uInt)state->dest_cap;
 
-  state->ret = deflate(&strm, Z_FINISH);
-  state->compressed_len = state->dest_cap - strm.avail_out;
-  deflateEnd(&strm);
+	state->ret = deflate(&strm, Z_FINISH);
+	state->compressed_len = state->dest_cap - strm.avail_out;
+	deflateEnd(&strm);
 }
 
 /**
@@ -96,27 +100,33 @@ static void gzip_work_cb(uv_work_t* req) {
  * @note The original (uncompressed) response body is freed only if it was
  *       heap-managed (body_is_managed == 1).
  */
-static void gzip_after_work_cb(uv_work_t* req, int status) {
-  csilk_ctx_t* c = (csilk_ctx_t*)req->data;
-  gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
+static void
+gzip_after_work_cb(uv_work_t* req, int status)
+{
+	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
 
-  if (state && state->ret == Z_STREAM_END) {
-    if (c->response.body && c->response.body_is_managed) {
-      free((void*)c->response.body);
-    }
-    c->response.body = (const char*)state->dest;
-    c->response.body_len = state->compressed_len;
-    c->response.body_is_managed = 1;
+	if (state && state->ret == Z_STREAM_END) {
+		if (c->response.body && c->response.body_is_managed) {
+			free((void*)c->response.body);
+		}
+		c->response.body = (const char*)state->dest;
+		c->response.body_len = state->compressed_len;
+		c->response.body_is_managed = 1;
 
-    csilk_set_header(c, "Content-Encoding", "gzip");
-    csilk_set_header(c, "Vary", "Accept-Encoding");
-  } else if (state) {
-    if (state->dest) free(state->dest);
-  }
+		csilk_set_header(c, "Content-Encoding", "gzip");
+		csilk_set_header(c, "Vary", "Accept-Encoding");
+	} else if (state) {
+		if (state->dest) {
+			free(state->dest);
+		}
+	}
 
-  if (state) free(state);
+	if (state) {
+		free(state);
+	}
 
-  _csilk_send_response(c);
+	_csilk_send_response(c);
 }
 
 /**
@@ -141,58 +151,73 @@ static void gzip_after_work_cb(uv_work_t* req, int status) {
  * @warning The response body is replaced in-place; subsequent middleware or
  *          cleanup code must not free the original pointer after compression.
  */
-void csilk_gzip_middleware(csilk_ctx_t* c) {
-  if (!c) return;
+void
+csilk_gzip_middleware(csilk_ctx_t* c)
+{
+	if (!c) {
+		return;
+	}
 
-  /* Call csilk_next() first so downstream handlers produce the response body.
+	/* Call csilk_next() first so downstream handlers produce the response body.
      This middleware runs AFTER the route handler, not before. */
-  csilk_next(c);
+	csilk_next(c);
 
-  if (!c->response.body || c->response.body_len == 0) return;
+	if (!c->response.body || c->response.body_len == 0) {
+		return;
+	}
 
-  /* Skip if already encoded */
-  if (csilk_get_header(c, "Content-Encoding")) return;
+	/* Skip if already encoded */
+	if (csilk_get_header(c, "Content-Encoding")) {
+		return;
+	}
 
-  /* Skip non-compressible content types — binary formats (images, video,
+	/* Skip non-compressible content types — binary formats (images, video,
      audio) and already-compressed archives yield negligible gains. */
-  const char* content_type = csilk_get_header(c, "Content-Type");
-  if (content_type) {
-    if (strstr(content_type, "image/") || strstr(content_type, "video/") ||
-        strstr(content_type, "audio/") ||
-        strstr(content_type, "application/pdf") ||
-        strstr(content_type, "application/zip") ||
-        strstr(content_type, "application/x-gzip")) {
-      return;
-    }
-  }
+	const char* content_type = csilk_get_header(c, "Content-Type");
+	if (content_type) {
+		if (strstr(content_type, "image/") || strstr(content_type, "video/") ||
+		    strstr(content_type, "audio/") || strstr(content_type, "application/pdf") ||
+		    strstr(content_type, "application/zip") ||
+		    strstr(content_type, "application/x-gzip")) {
+			return;
+		}
+	}
 
-  /* Client capability check: only compress if the client advertises support
+	/* Client capability check: only compress if the client advertises support
      for gzip content-encoding. */
-  const char* accept_encoding = csilk_get_header(c, "Accept-Encoding");
-  if (!accept_encoding || !strstr(accept_encoding, "gzip")) return;
+	const char* accept_encoding = csilk_get_header(c, "Accept-Encoding");
+	if (!accept_encoding || !strstr(accept_encoding, "gzip")) {
+		return;
+	}
 
-  if (c->response.body_len < CSILK_GZIP_MIN_LENGTH) return;
+	if (c->response.body_len < CSILK_GZIP_MIN_LENGTH) {
+		return;
+	}
 
-  /* Ensure body is heap-managed so the after-work callback can free it.
+	/* Ensure body is heap-managed so the after-work callback can free it.
      Non-managed bodies (e.g., string literals) are copied first. */
-  if (c->response.body_is_managed == 0) {
-    char* managed = malloc(c->response.body_len);
-    if (!managed) return;
-    memcpy(managed, c->response.body, c->response.body_len);
-    c->response.body = managed;
-    c->response.body_is_managed = 1;
-  }
+	if (c->response.body_is_managed == 0) {
+		char* managed = malloc(c->response.body_len);
+		if (!managed) {
+			return;
+		}
+		memcpy(managed, c->response.body, c->response.body_len);
+		c->response.body = managed;
+		c->response.body_is_managed = 1;
+	}
 
-  /* Offload compression to libuv thread pool so the event loop is not
+	/* Offload compression to libuv thread pool so the event loop is not
      blocked. State is attached to the context via csilk_set() and picked up
      by gzip_work_cb / gzip_after_work_cb. */
-  gzip_async_state_t* state = calloc(1, sizeof(gzip_async_state_t));
-  if (!state) return;
+	gzip_async_state_t* state = calloc(1, sizeof(gzip_async_state_t));
+	if (!state) {
+		return;
+	}
 
-  csilk_set(c, "gzip_state", state);
-  c->work_req.data = c;
-  c->is_async = 1;
+	csilk_set(c, "gzip_state", state);
+	c->work_req.data = c;
+	c->is_async = 1;
 
-  uv_loop_t* loop = uv_default_loop();
-  uv_queue_work(loop, &c->work_req, gzip_work_cb, gzip_after_work_cb);
+	uv_loop_t* loop = uv_default_loop();
+	uv_queue_work(loop, &c->work_req, gzip_work_cb, gzip_after_work_cb);
 }

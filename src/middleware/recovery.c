@@ -32,21 +32,22 @@
  *          etc.) WILL leak. Use this as a last-resort safety net, not as
  *          a primary error-handling mechanism.
  */
-void csilk_recovery_handler(csilk_ctx_t* c) {
-  /* Install a recovery landing point. If csilk_panic() is called by any
+void
+csilk_recovery_handler(csilk_ctx_t* c)
+{
+	/* Install a recovery landing point. If csilk_panic() is called by any
      downstream handler, execution resumes here with setjmp returning
      non-zero (the value passed to longjmp). */
-  if (setjmp(c->jump_buffer) == 0) {
-    c->has_jump_buffer = 1;
-    csilk_next(c);
-    c->has_jump_buffer = 0; /* Normal path: clear the flag. */
-  } else {
-    /* Panic path: a downstream handler called csilk_panic().
+	if (setjmp(c->jump_buffer) == 0) {
+		c->has_jump_buffer = 1;
+		csilk_next(c);
+		c->has_jump_buffer = 0; /* Normal path: clear the flag. */
+	} else {
+		/* Panic path: a downstream handler called csilk_panic().
        Send a generic 500 to avoid leaking internal state. */
-    c->has_jump_buffer = 0;
-    csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR,
-                 "Internal Server Error");
-  }
+		c->has_jump_buffer = 0;
+		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+	}
 }
 
 /**
@@ -65,11 +66,13 @@ void csilk_recovery_handler(csilk_ctx_t* c) {
  * @warning This function does NOT return when executed without a recovery
  *          handler.
  */
-void csilk_panic(csilk_ctx_t* c) {
-  if (c->has_jump_buffer) {
-    longjmp(c->jump_buffer, 1);
-  } else {
-    fprintf(stderr, "Fatal: No recovery handler registered.\n");
-    exit(1);
-  }
+void
+csilk_panic(csilk_ctx_t* c)
+{
+	if (c->has_jump_buffer) {
+		longjmp(c->jump_buffer, 1);
+	} else {
+		fprintf(stderr, "Fatal: No recovery handler registered.\n");
+		exit(1);
+	}
 }

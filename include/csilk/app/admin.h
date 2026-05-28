@@ -39,7 +39,6 @@ void csilk_admin_serve(csilk_app_t* app, const char* path);
  * @param path            The base URL path for the admin panel.
  * @param auth_middleware The middleware to use for authentication.
  */
-void csilk_admin_serve_secure(csilk_app_t* app, const char* path,
-                              csilk_handler_t auth_middleware);
+void csilk_admin_serve_secure(csilk_app_t* app, const char* path, csilk_handler_t auth_middleware);
 
 #endif /* CSILK_ADMIN_H */

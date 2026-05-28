@@ -45,10 +45,10 @@
  * of the most recent request (used for LRU eviction when the table is full).
  */
 typedef struct {
-  char ip[46];       /**< Client IP address string. */
-  int count;         /**< Request count in current window. */
-  time_t last_reset; /**< Timestamp when the window started. */
-  time_t last_seen;  /**< Timestamp of last request (for LRU eviction). */
+	char ip[46];	   /**< Client IP address string. */
+	int count;	   /**< Request count in current window. */
+	time_t last_reset; /**< Timestamp when the window started. */
+	time_t last_seen;  /**< Timestamp of last request (for LRU eviction). */
 } ip_entry_t;
 
 static ip_entry_t ip_table[MAX_IP_ENTRIES];
@@ -63,7 +63,11 @@ static uv_once_t ratelimit_once = UV_ONCE_INIT;
  * Creates the libuv mutex that protects the shared ip_table and ip_count
  * from concurrent access across worker threads.
  */
-static void init_ratelimit_mutex() { uv_mutex_init(&ratelimit_mutex); }
+static void
+init_ratelimit_mutex()
+{
+	uv_mutex_init(&ratelimit_mutex);
+}
 
 /**
  * @brief Compact the IP table by removing entries whose last_seen timestamp
@@ -74,17 +78,19 @@ static void init_ratelimit_mutex() { uv_mutex_init(&ratelimit_mutex); }
  *
  * @param now  The current time to compare against last_seen.
  */
-static void evict_stale_entries(time_t now) {
-  int write_idx = 0;
-  for (int read_idx = 0; read_idx < ip_count; read_idx++) {
-    if (now - ip_table[read_idx].last_seen <= WINDOW_SIZE) {
-      if (write_idx != read_idx) {
-        ip_table[write_idx] = ip_table[read_idx];
-      }
-      write_idx++;
-    }
-  }
-  ip_count = write_idx;
+static void
+evict_stale_entries(time_t now)
+{
+	int write_idx = 0;
+	for (int read_idx = 0; read_idx < ip_count; read_idx++) {
+		if (now - ip_table[read_idx].last_seen <= WINDOW_SIZE) {
+			if (write_idx != read_idx) {
+				ip_table[write_idx] = ip_table[read_idx];
+			}
+			write_idx++;
+		}
+	}
+	ip_count = write_idx;
 }
 
 /**
@@ -94,16 +100,20 @@ static void evict_stale_entries(time_t now) {
  * replaces it with the last entry in the table, decrementing ip_count.
  * Called when the table is full and a new IP needs to be tracked.
  */
-static void evict_oldest_entry(void) {
-  if (ip_count <= 0) return;
-  int oldest = 0;
-  for (int i = 1; i < ip_count; i++) {
-    if (ip_table[i].last_seen < ip_table[oldest].last_seen) {
-      oldest = i;
-    }
-  }
-  ip_table[oldest] = ip_table[ip_count - 1];
-  ip_count--;
+static void
+evict_oldest_entry(void)
+{
+	if (ip_count <= 0) {
+		return;
+	}
+	int oldest = 0;
+	for (int i = 1; i < ip_count; i++) {
+		if (ip_table[i].last_seen < ip_table[oldest].last_seen) {
+			oldest = i;
+		}
+	}
+	ip_table[oldest] = ip_table[ip_count - 1];
+	ip_count--;
 }
 
 /**
@@ -129,79 +139,81 @@ static void evict_oldest_entry(void) {
  *          proxy setups), the request is passed through without rate
  *          limiting.
  */
-void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit) {
-  uv_once(&ratelimit_once, init_ratelimit_mutex);
+void
+csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
+{
+	uv_once(&ratelimit_once, init_ratelimit_mutex);
 
-  const char* ip = csilk_get_client_ip(c);
-  if (!ip) {
-    csilk_next(c);
-    return;
-  }
+	const char* ip = csilk_get_client_ip(c);
+	if (!ip) {
+		csilk_next(c);
+		return;
+	}
 
-  time_t now = time(NULL);
-  ip_entry_t* entry = NULL;
+	time_t now = time(NULL);
+	ip_entry_t* entry = NULL;
 
-  uv_mutex_lock(&ratelimit_mutex);
+	uv_mutex_lock(&ratelimit_mutex);
 
-  /* Periodic eviction of stale entries prevents the table from filling
+	/* Periodic eviction of stale entries prevents the table from filling
      with one-shot visitors. EVICT_INTERVAL (300 s) is intentionally
      longer than WINDOW_SIZE (60 s) to avoid excessive compaction. */
-  if (now - last_evict > EVICT_INTERVAL) {
-    evict_stale_entries(now);
-    last_evict = now;
-  }
+	if (now - last_evict > EVICT_INTERVAL) {
+		evict_stale_entries(now);
+		last_evict = now;
+	}
 
-  /* Linear scan for existing IP entry. The table is bounded by
+	/* Linear scan for existing IP entry. The table is bounded by
      MAX_IP_ENTRIES (1024), so O(n) lookup is acceptable. */
-  for (int i = 0; i < ip_count; i++) {
-    if (strcmp(ip_table[i].ip, ip) == 0) {
-      entry = &ip_table[i];
-      break;
-    }
-  }
+	for (int i = 0; i < ip_count; i++) {
+		if (strcmp(ip_table[i].ip, ip) == 0) {
+			entry = &ip_table[i];
+			break;
+		}
+	}
 
-  if (!entry) {
-    if (ip_count < MAX_IP_ENTRIES) {
-      /* Slot available: create new entry, reset count to 1. */
-      entry = &ip_table[ip_count++];
-      strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
-      entry->ip[sizeof(entry->ip) - 1] = '\0';
-      entry->count = 0;
-      entry->last_reset = now;
-    } else {
-      /* Table full: evict the LRU entry (oldest last_seen). */
-      evict_oldest_entry();
-      entry = &ip_table[ip_count++];
-      strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
-      entry->ip[sizeof(entry->ip) - 1] = '\0';
-      entry->count = 0;
-      entry->last_reset = now;
-    }
-  }
+	if (!entry) {
+		if (ip_count < MAX_IP_ENTRIES) {
+			/* Slot available: create new entry, reset count to 1. */
+			entry = &ip_table[ip_count++];
+			strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
+			entry->ip[sizeof(entry->ip) - 1] = '\0';
+			entry->count = 0;
+			entry->last_reset = now;
+		} else {
+			/* Table full: evict the LRU entry (oldest last_seen). */
+			evict_oldest_entry();
+			entry = &ip_table[ip_count++];
+			strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
+			entry->ip[sizeof(entry->ip) - 1] = '\0';
+			entry->count = 0;
+			entry->last_reset = now;
+		}
+	}
 
-  /* Sliding window algorithm: if the window has expired since the last
+	/* Sliding window algorithm: if the window has expired since the last
      reset, start a new window with count=1. Otherwise increment the
      counter within the current window. This is a "fixed-window" variant
      that slides on the first request after expiry, avoiding the burst
      at the boundary of pure fixed-window schemes. */
-  if (now - entry->last_reset > WINDOW_SIZE) {
-    entry->count = 1;
-    entry->last_reset = now;
-  } else {
-    entry->count++;
-  }
-  entry->last_seen = now;
+	if (now - entry->last_reset > WINDOW_SIZE) {
+		entry->count = 1;
+		entry->last_reset = now;
+	} else {
+		entry->count++;
+	}
+	entry->last_seen = now;
 
-  int current_count = entry->count;
-  uv_mutex_unlock(&ratelimit_mutex);
+	int current_count = entry->count;
+	uv_mutex_unlock(&ratelimit_mutex);
 
-  if (current_count > limit) {
-    void _csilk_metrics_inc_rate_limit_blocks(void);
-    _csilk_metrics_inc_rate_limit_blocks();
-    csilk_set_header(c, "Retry-After", "60");
-    csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
-    csilk_abort(c);
-  } else {
-    csilk_next(c);
-  }
+	if (current_count > limit) {
+		void _csilk_metrics_inc_rate_limit_blocks(void);
+		_csilk_metrics_inc_rate_limit_blocks();
+		csilk_set_header(c, "Retry-After", "60");
+		csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
+		csilk_abort(c);
+	} else {
+		csilk_next(c);
+	}
 }

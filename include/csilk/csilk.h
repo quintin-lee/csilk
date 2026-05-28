@@ -99,19 +99,19 @@ typedef struct csilk_ctx_s csilk_ctx_t;
  *       implementations need not be thread-safe.
  */
 typedef struct {
-  /** @brief Store a value associated with @p key.
+	/** @brief Store a value associated with @p key.
    *  @param c  Owning request context.
    *  @param key  NUL-terminated key string (copied internally).
    *  @param value  Opaque pointer to store. Ownership remains with caller. */
-  void (*set)(csilk_ctx_t* c, const char* key, void* value);
-  /** @brief Retrieve a value by key.
+	void (*set)(csilk_ctx_t* c, const char* key, void* value);
+	/** @brief Retrieve a value by key.
    *  @param c  Owning request context.
    *  @param key  NUL-terminated key string.
    *  @return The stored pointer, or NULL if @p key was never set. */
-  void* (*get)(csilk_ctx_t* c, const char* key);
-  /** @brief Clear all stored key-value pairs.
+	void* (*get)(csilk_ctx_t* c, const char* key);
+	/** @brief Clear all stored key-value pairs.
    *  Called during csilk_ctx_cleanup to release references. */
-  void (*clear)(csilk_ctx_t* c);
+	void (*clear)(csilk_ctx_t* c);
 } csilk_storage_driver_t;
 
 /**
@@ -135,13 +135,13 @@ typedef void (*csilk_handler_t)(csilk_ctx_t* c);
  *       is destroyed in csilk_ctx_cleanup.
  */
 typedef struct csilk_header_s {
-  char* key;   /**< NUL-terminated header field name (lowercased for
+	char* key;	  /**< NUL-terminated header field name (lowercased for
                   case-insensitive lookup). */
-  char* value; /**< NUL-terminated header field value (raw, as received or set).
+	char* value;	  /**< NUL-terminated header field value (raw, as received or set).
                 */
-  size_t key_len;   /**< Cached strlen(@p key) for rapid comparison. */
-  size_t value_len; /**< Cached strlen(@p value). */
-  struct csilk_header_s* next; /**< Pointer to the next header in the same hash
+	size_t key_len;	  /**< Cached strlen(@p key) for rapid comparison. */
+	size_t value_len; /**< Cached strlen(@p value). */
+	struct csilk_header_s* next; /**< Pointer to the next header in the same hash
                                   bucket (collision chain). */
 } csilk_header_t;
 
@@ -166,8 +166,7 @@ typedef struct csilk_header_s {
  * @note Not thread-safe — all mutations occur on the event-loop thread.
  */
 typedef struct csilk_header_map_s {
-  csilk_header_t*
-      buckets[CSILK_HEADER_BUCKETS]; /**< Bucket array; each entry points to the
+	csilk_header_t* buckets[CSILK_HEADER_BUCKETS]; /**< Bucket array; each entry points to the
                                         head of a collision chain (or NULL). */
 } csilk_header_map_t;
 
@@ -179,18 +178,15 @@ typedef struct csilk_header_map_s {
  * csilk_ctx_cleanup.
  */
 typedef struct {
-  char* method; /**< HTTP method verb (e.g., "GET", "POST", "DELETE"). */
-  char* path;   /**< Decoded URL path (percent-encoding removed, query string
+	char* method;	 /**< HTTP method verb (e.g., "GET", "POST", "DELETE"). */
+	char* path;	 /**< Decoded URL path (percent-encoding removed, query string
                    stripped). */
-  char*
-      body; /**< Raw request body bytes, or NULL for requests without a body. */
-  size_t body_len;            /**< Number of bytes in @p body. */
-  csilk_header_map_t headers; /**< Hash map of request headers (keys lowercased
+	char* body;	 /**< Raw request body bytes, or NULL for requests without a body. */
+	size_t body_len; /**< Number of bytes in @p body. */
+	csilk_header_map_t headers;	 /**< Hash map of request headers (keys lowercased
                                  for case-insensitive lookup). */
-  csilk_header_map_t
-      query_params; /**< Hash map of parsed query-string parameters. */
-  csilk_header_map_t
-      form_params; /**< Hash map of parsed application/x-www-form-urlencoded
+	csilk_header_map_t query_params; /**< Hash map of parsed query-string parameters. */
+	csilk_header_map_t form_params;	 /**< Hash map of parsed application/x-www-form-urlencoded
                       fields (populated by csilk_parse_form_urlencoded). */
 } csilk_request_t;
 
@@ -202,12 +198,12 @@ typedef struct {
  * for streaming responses).
  */
 typedef struct {
-  int status; /**< HTTP status code (e.g., 200, 404, 500). Defaults to 200. */
-  const char* body; /**< Response body content. If @p body_is_managed is 1 the
+	int status;		    /**< HTTP status code (e.g., 200, 404, 500). Defaults to 200. */
+	const char* body;	    /**< Response body content. If @p body_is_managed is 1 the
                        framework calls free() when done. */
-  size_t body_len;  /**< Byte length of @p body. */
-  csilk_header_map_t headers; /**< Hash map of response headers to send. */
-  int body_is_managed; /**< Non-zero if @p body was allocated with malloc() and
+	size_t body_len;	    /**< Byte length of @p body. */
+	csilk_header_map_t headers; /**< Hash map of response headers to send. */
+	int body_is_managed;	    /**< Non-zero if @p body was allocated with malloc() and
                           must be free()'d by the framework. */
 } csilk_response_t;
 
@@ -221,9 +217,8 @@ typedef struct {
  *       until csilk_ctx_cleanup.
  */
 typedef struct {
-  char*
-      key; /**< Parameter name as defined in the route pattern (e.g., "id"). */
-  char* value; /**< Actual decoded value from the request URL. */
+	char* key;   /**< Parameter name as defined in the route pattern (e.g., "id"). */
+	char* value; /**< Actual decoded value from the request URL. */
 } csilk_param_t;
 
 /**
@@ -324,9 +319,9 @@ int csilk_is_aborted(csilk_ctx_t* c);
  * @param cb  Callback function invoked for each received message.
  *            The callback must not block; it runs on the event-loop thread.
  */
-void csilk_set_on_ws_message(csilk_ctx_t* c,
-                             void (*cb)(csilk_ctx_t* c, const uint8_t* payload,
-                                        size_t len, int opcode));
+void
+csilk_set_on_ws_message(csilk_ctx_t* c,
+			void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
 
 /**
  * @brief Get the unique identifier for the current request.
@@ -395,8 +390,7 @@ int csilk_is_async(csilk_ctx_t* c);
  *                0 = caller retains ownership and body must stay valid until
  *                the response is sent.
  */
-void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len,
-                             int managed);
+void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int managed);
 
 const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
@@ -573,8 +567,7 @@ const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);
  * @param key   The header field name.
  * @param value The header field value.
  */
-void csilk_set_request_header(csilk_ctx_t* c, const char* key,
-                              const char* value);
+void csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value);
 
 /**
  * @brief Set (or overwrite) a response header.
@@ -666,8 +659,7 @@ void csilk_arena_free(csilk_arena_t* arena);
  * @param arena  The arena allocator to reset.
  */
 void csilk_arena_reset(csilk_arena_t* arena);
-void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size,
-                           size_t* total_used);
+void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
 
 /**
  * @brief Panic-recovery middleware.
@@ -701,15 +693,15 @@ void csilk_panic(csilk_ctx_t* c);
  * emitted.  CSILK_LOG_FATAL terminates the process after logging.
  */
 typedef enum {
-  CSILK_LOG_TRACE, /**< Finest-grained diagnostic messages (development only).
+	CSILK_LOG_TRACE, /**< Finest-grained diagnostic messages (development only).
                     */
-  CSILK_LOG_DEBUG, /**< Debugging information useful during development. */
-  CSILK_LOG_INFO, /**< Normal operational messages (e.g., request completed). */
-  CSILK_LOG_WARN, /**< Warning conditions that are not errors (e.g., slow
+	CSILK_LOG_DEBUG, /**< Debugging information useful during development. */
+	CSILK_LOG_INFO,	 /**< Normal operational messages (e.g., request completed). */
+	CSILK_LOG_WARN,	 /**< Warning conditions that are not errors (e.g., slow
                      request). */
-  CSILK_LOG_ERROR, /**< Error conditions that still allow the server to
+	CSILK_LOG_ERROR, /**< Error conditions that still allow the server to
                       continue. */
-  CSILK_LOG_FATAL  /**< Fatal errors; the server will exit after logging. */
+	CSILK_LOG_FATAL	 /**< Fatal errors; the server will exit after logging. */
 } csilk_log_level_t;
 
 /**
@@ -719,15 +711,14 @@ typedef enum {
  * Passed by value (not pointer) to csilk_log_init.
  */
 typedef struct {
-  csilk_log_level_t level; /**< Minimum level to emit (messages below this are
+	csilk_log_level_t level; /**< Minimum level to emit (messages below this are
                               filtered out). */
-  const char* file_path; /**< Path to the log file, or NULL to log to stderr. */
-  size_t
-      max_file_size; /**< Maximum file size in bytes before rotation (0 =
+	const char* file_path;	 /**< Path to the log file, or NULL to log to stderr. */
+	size_t max_file_size;	 /**< Maximum file size in bytes before rotation (0 =
                         rotation disabled). Requires @p file_path to be set. */
-  int use_colors;    /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 =
+	int use_colors;		 /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 =
                         auto-detect (default). */
-  int json_format;   /**< When non-zero, emit newline-delimited JSON records
+	int json_format;	 /**< When non-zero, emit newline-delimited JSON records
                         instead of human-readable lines. */
 } csilk_log_config_t;
 
@@ -743,8 +734,8 @@ int csilk_log_init(csilk_log_config_t config);
  * @param func Function name (__func__).
  * @param fmt Printf-style format string.
  * @param ... Format arguments. */
-void _csilk_log_internal(csilk_log_level_t lv, const char* file, int line,
-                         const char* func, const char* fmt, ...);
+void _csilk_log_internal(
+    csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
 void csilk_log_close();
@@ -763,9 +754,13 @@ void csilk_log_close();
  *                Ownership is taken — do not use after the call.
  * @param fmt     Printf-style format string for the log message.
  * @param ...     Format arguments. */
-void _csilk_log_structured(csilk_log_level_t lv, const char* file, int line,
-                           const char* func, cJSON* extra, const char* fmt,
-                           ...);
+void _csilk_log_structured(csilk_log_level_t lv,
+			   const char* file,
+			   int line,
+			   const char* func,
+			   cJSON* extra,
+			   const char* fmt,
+			   ...);
 
 /** @brief Check whether the logger is in JSON format mode.
  * @return 1 if json_format is enabled, 0 otherwise. */
@@ -795,35 +790,31 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  * Convenience macros that capture source location.
  * @{ */
 /** @brief Log a TRACE-level message. */
-#define CSILK_LOG_T(...)                                             \
-  _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, \
-                      __VA_ARGS__)
+#define CSILK_LOG_T(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a DEBUG-level message. */
-#define CSILK_LOG_D(...)                                             \
-  _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, \
-                      __VA_ARGS__)
+#define CSILK_LOG_D(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an INFO-level message. */
-#define CSILK_LOG_I(...) \
-  _csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_I(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a WARN-level message. */
-#define CSILK_LOG_W(...) \
-  _csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define CSILK_LOG_W(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an ERROR-level message. */
-#define CSILK_LOG_E(...)                                             \
-  _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, \
-                      __VA_ARGS__)
+#define CSILK_LOG_E(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a FATAL-level message. */
-#define CSILK_LOG_F(...)                                             \
-  _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, \
-                      __VA_ARGS__)
+#define CSILK_LOG_F(...)                                                                           \
+	_csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 /** @brief Log a structured JSON message (only meaningful when json_format is
  * on).
  * @param level Log level.
  * @param extra  cJSON* with extra fields (can be NULL).
  * @param ...    printf-style format and args for the message string. */
-#define CSILK_LOG_STRUCT(level, extra, ...) \
-  _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
+#define CSILK_LOG_STRUCT(level, extra, ...)                                                        \
+	_csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
 /** @} */
 
 /** @brief Logging middleware handler.
@@ -854,15 +845,15 @@ void csilk_ready_check_handler(csilk_ctx_t* c);
  * middleware.
  */
 typedef struct {
-  const char* allow_origin; /**< Value of the Access-Control-Allow-Origin header
+	const char* allow_origin;  /**< Value of the Access-Control-Allow-Origin header
                                (e.g., "*" or "https://example.com"). */
-  const char* allow_methods; /**< Value of the Access-Control-Allow-Methods
+	const char* allow_methods; /**< Value of the Access-Control-Allow-Methods
                                 header (e.g., "GET, POST, PUT, DELETE"). */
-  const char* allow_headers; /**< Value of the Access-Control-Allow-Headers
+	const char* allow_headers; /**< Value of the Access-Control-Allow-Headers
                                 header (e.g., "Content-Type, Authorization"). */
-  int allow_credentials;     /**< Non-zero to include
+	int allow_credentials;	   /**< Non-zero to include
                                 Access-Control-Allow-Credentials: true. */
-  int max_age; /**< Value of Access-Control-Max-Age in seconds (e.g., 86400 for
+	int max_age;		   /**< Value of Access-Control-Max-Age in seconds (e.g., 86400 for
                   24 h). */
 } csilk_cors_config_t;
 
@@ -905,18 +896,18 @@ void csilk_csrf_middleware(csilk_ctx_t* c);
  * @brief Security layer statistics.
  */
 typedef struct {
-  uint64_t rate_limit_blocks; /**< Total requests blocked by rate limiter. */
-  uint64_t csrf_violations;   /**< Total CSRF token validation failures. */
-  uint64_t auth_failures;     /**< Total failed authentication attempts. */
+	uint64_t rate_limit_blocks; /**< Total requests blocked by rate limiter. */
+	uint64_t csrf_violations;   /**< Total CSRF token validation failures. */
+	uint64_t auth_failures;	    /**< Total failed authentication attempts. */
 } csilk_security_stats_t;
 
 /**
  * @brief OS-level process statistics.
  */
 typedef struct {
-  size_t rss_bytes;         /**< Resident Set Size memory in bytes. */
-  double cpu_user_time_sec; /**< CPU time spent in user mode. */
-  double cpu_sys_time_sec;  /**< CPU time spent in kernel mode. */
+	size_t rss_bytes;	  /**< Resident Set Size memory in bytes. */
+	double cpu_user_time_sec; /**< CPU time spent in user mode. */
+	double cpu_sys_time_sec;  /**< CPU time spent in kernel mode. */
 } csilk_process_stats_t;
 
 void csilk_security_get_stats(csilk_security_stats_t* stats);
@@ -942,46 +933,43 @@ int csilk_csrf_generate_token(char* buf, size_t buf_size);
  * Apply via csilk_server_set_config before calling csilk_server_run.
  */
 typedef struct csilk_server_config_s {
-  unsigned int
-      idle_timeout_ms; /**< HTTP keep-alive idle timeout in milliseconds.
+	unsigned int idle_timeout_ms;	 /**< HTTP keep-alive idle timeout in milliseconds.
                           Connection closed when no new request arrives within
                           this window. 0 = use default (typically 30 s). */
-  unsigned int
-      read_timeout_ms; /**< Maximum time in milliseconds to wait for the full
+	unsigned int read_timeout_ms;	 /**< Maximum time in milliseconds to wait for the full
                           request headers+body (0 = disabled). */
-  unsigned int write_timeout_ms; /**< Maximum time in milliseconds to send the
+	unsigned int write_timeout_ms;	 /**< Maximum time in milliseconds to send the
                                     response (0 = disabled). */
-  unsigned int
-      request_timeout_ms;   /**< Maximum time in milliseconds for a complete
+	unsigned int request_timeout_ms; /**< Maximum time in milliseconds for a complete
                                request/response cycle (0 = disabled). Overrides
                                read/write timeouts if set. */
-  size_t max_body_size;     /**< Maximum allowed request body size in bytes.
+	size_t max_body_size;		 /**< Maximum allowed request body size in bytes.
                                Requests exceeding this get 413 Payload Too Large. */
-  size_t max_header_size;   /**< Maximum total size of all request headers in
+	size_t max_header_size;		 /**< Maximum total size of all request headers in
                                bytes. */
-  size_t max_url_size;      /**< Maximum URL length in bytes (0 = disabled). */
-  size_t max_headers_count; /**< Maximum number of individual header fields (0 =
+	size_t max_url_size;		 /**< Maximum URL length in bytes (0 = disabled). */
+	size_t max_headers_count;	 /**< Maximum number of individual header fields (0 =
                                unlimited). */
-  int max_connections;      /**< Maximum concurrent client connections (0 =
+	int max_connections;		 /**< Maximum concurrent client connections (0 =
                                unlimited). */
-  int listen_backlog; /**< TCP listen(2) backlog hint passed to the kernel. */
-  int tcp_nodelay;    /**< Non-zero enables TCP_NODELAY (disable Nagle's
+	int listen_backlog;		 /**< TCP listen(2) backlog hint passed to the kernel. */
+	int tcp_nodelay;		 /**< Non-zero enables TCP_NODELAY (disable Nagle's
                          algorithm). */
-  int tcp_keepalive;  /**< TCP keep-alive probe interval in seconds (0 =
+	int tcp_keepalive;		 /**< TCP keep-alive probe interval in seconds (0 =
                          disabled). */
-  int worker_threads; /**< Number of worker threads for SO_REUSEPORT listener
+	int worker_threads;		 /**< Number of worker threads for SO_REUSEPORT listener
                          sockets. 0 = number of CPUs. */
 
-  /* TLS configuration */
-  int enable_tls;      /**< Non-zero enables HTTPS via TLS.  Requires @p
+	/* TLS configuration */
+	int enable_tls;	     /**< Non-zero enables HTTPS via TLS.  Requires @p
                           tls_cert_file and @p tls_key_file. */
-  char* tls_cert_file; /**< Path to the SSL/TLS certificate file (PEM format).
+	char* tls_cert_file; /**< Path to the SSL/TLS certificate file (PEM format).
                           Must be set if @p enable_tls is 1. */
-  char* tls_key_file;  /**< Path to the SSL/TLS private key file (PEM format).
+	char* tls_key_file;  /**< Path to the SSL/TLS private key file (PEM format).
                           Must be set if @p enable_tls is 1. */
-  char* tls_ca_file;   /**< Path to the CA certificate bundle for
+	char* tls_ca_file;   /**< Path to the CA certificate bundle for
                           client-certificate verification (optional). */
-  int tls_verify_peer; /**< Non-zero to require and verify a client certificate.
+	int tls_verify_peer; /**< Non-zero to require and verify a client certificate.
                           Requires @p tls_ca_file. */
 } csilk_server_config_t;
 
@@ -992,43 +980,43 @@ typedef struct csilk_server_config_s {
  * Typically populated from a YAML file via csilk_load_config.
  */
 typedef struct {
-  int port;                     /**< TCP port the server listens on. */
-  csilk_server_config_t server; /**< Low-level server/connection settings. */
-  csilk_log_config_t logger;    /**< Logger initialisation settings. */
-  struct {
-    int enable;                 /**< Non-zero to install the CORS middleware. */
-    csilk_cors_config_t config; /**< CORS header values when enabled. */
-  } cors;                       /**< Cross-Origin Resource Sharing settings. */
-  struct {
-    int enable; /**< Non-zero to install the rate-limiter middleware. */
-    int requests_per_minute; /**< Maximum requests/minute/IP when enabled. */
-  } rate_limit;              /**< Per-IP rate limiting settings. */
-  struct {
-    int enable;     /**< Non-zero to enable static file serving. */
-    char* root_dir; /**< Absolute or relative path to the local directory to
+	int port;		      /**< TCP port the server listens on. */
+	csilk_server_config_t server; /**< Low-level server/connection settings. */
+	csilk_log_config_t logger;    /**< Logger initialisation settings. */
+	struct {
+		int enable;		    /**< Non-zero to install the CORS middleware. */
+		csilk_cors_config_t config; /**< CORS header values when enabled. */
+	} cors;				    /**< Cross-Origin Resource Sharing settings. */
+	struct {
+		int enable;		 /**< Non-zero to install the rate-limiter middleware. */
+		int requests_per_minute; /**< Maximum requests/minute/IP when enabled. */
+	} rate_limit;			 /**< Per-IP rate limiting settings. */
+	struct {
+		int enable;	/**< Non-zero to enable static file serving. */
+		char* root_dir; /**< Absolute or relative path to the local directory to
                        serve. */
-    char* prefix;   /**< URL prefix for static files (e.g., "/static"). */
-  } static_files;   /**< Static file server settings. */
-  struct {
-    int enable_logger; /**< Non-zero to install the request-logging middleware.
+		char* prefix;	/**< URL prefix for static files (e.g., "/static"). */
+	} static_files;		/**< Static file server settings. */
+	struct {
+		int enable_logger;   /**< Non-zero to install the request-logging middleware.
                         */
-    int enable_recovery; /**< Non-zero to install the panic-recovery middleware.
+		int enable_recovery; /**< Non-zero to install the panic-recovery middleware.
                           */
-    int enable_csrf; /**< Non-zero to install the CSRF-protection middleware. */
-    int enable_auth; /**< Non-zero to install the token-auth middleware. */
-    char* auth_token; /**< Expected bearer token when @p enable_auth is 1 (NULL
+		int enable_csrf;     /**< Non-zero to install the CSRF-protection middleware. */
+		int enable_auth;     /**< Non-zero to install the token-auth middleware. */
+		char* auth_token;    /**< Expected bearer token when @p enable_auth is 1 (NULL
                          = disabled even if enabled). */
-  } middleware;       /**< Built-in middleware toggles. */
-  struct {
-    char* driver;   /**< AI driver name (e.g., "openai", "claude"). */
-    char* model;    /**< AI model identifier (e.g., "gpt-4", "claude-3"). */
-    char* api_key;  /**< API key for the AI service. */
-    char* base_url; /**< Optional base URL for API requests. */
-  } ai;             /**< AI integration settings. */
-  struct {
-    int enable;   /**< Non-zero to enable cipher functionality. */
-    char* driver; /**< Cipher driver name (e.g., "openssl"). */
-  } cipher;       /**< Cipher/cryptography settings. */
+	} middleware;		     /**< Built-in middleware toggles. */
+	struct {
+		char* driver;	/**< AI driver name (e.g., "openai", "claude"). */
+		char* model;	/**< AI model identifier (e.g., "gpt-4", "claude-3"). */
+		char* api_key;	/**< API key for the AI service. */
+		char* base_url; /**< Optional base URL for API requests. */
+	} ai;			/**< AI integration settings. */
+	struct {
+		int enable;   /**< Non-zero to enable cipher functionality. */
+		char* driver; /**< Cipher driver name (e.g., "openssl"). */
+	} cipher;	      /**< Cipher/cryptography settings. */
 } csilk_config_t;
 
 /**
@@ -1163,9 +1151,14 @@ const char* csilk_get_cookie(csilk_ctx_t* c, const char* name);
  * @param secure    Non-zero adds the Secure flag (HTTPS only).
  * @param http_only Non-zero adds the HttpOnly flag (not accessible to JS).
  */
-void csilk_set_cookie(csilk_ctx_t* c, const char* name, const char* value,
-                      int max_age, const char* path, const char* domain,
-                      int secure, int http_only);
+void csilk_set_cookie(csilk_ctx_t* c,
+		      const char* name,
+		      const char* value,
+		      int max_age,
+		      const char* path,
+		      const char* domain,
+		      int secure,
+		      int http_only);
 
 /**
  * @brief Initialise the session subsystem (call once at startup).
@@ -1217,14 +1210,13 @@ void csilk_session_destroy(csilk_ctx_t* c);
 /** @name Validation flags
  *  Bit flags for use in csilk_valid_rule_t.flags.  Combine with |.
  *  @{ */
-#define CSILK_VALID_REQUIRED \
-  (1 << 0) /**< Field must be present (non-NULL, non-empty). */
-#define CSILK_VALID_INT (1 << 1) /**< Value must parse as a valid integer. */
-#define CSILK_VALID_STRING                                                 \
-  (1 << 2) /**< Value must be a string (always true for form/query values; \
+#define CSILK_VALID_REQUIRED (1 << 0) /**< Field must be present (non-NULL, non-empty). */
+#define CSILK_VALID_INT (1 << 1)      /**< Value must parse as a valid integer. */
+#define CSILK_VALID_STRING                                                                         \
+	(1 << 2) /**< Value must be a string (always true for form/query values; \
               included for symmetry). */
-#define CSILK_VALID_EMAIL                                                 \
-  (1 << 3) /**< Value must match a basic email format (contains '@' and a \
+#define CSILK_VALID_EMAIL                                                                          \
+	(1 << 3) /**< Value must match a basic email format (contains '@' and a \
               dot). */
 /** @} */
 
@@ -1235,14 +1227,14 @@ void csilk_session_destroy(csilk_ctx_t* c);
  * csilk_validate.  Each rule specifies constraints for one field.
  */
 typedef struct csilk_valid_rule_s {
-  const char* field; /**< Name of the field to validate. */
-  int flags;         /**< Bitwise OR of CSILK_VALID_* flags.  Set to 0 for no
+	const char* field;  /**< Name of the field to validate. */
+	int flags;	    /**< Bitwise OR of CSILK_VALID_* flags.  Set to 0 for no
                         constraints (only min/max apply). */
-  int min; /**< Minimum allowed length (string fields) or numeric value (int
+	int min;	    /**< Minimum allowed length (string fields) or numeric value (int
               fields). */
-  int max; /**< Maximum allowed length (string fields) or numeric value (int
+	int max;	    /**< Maximum allowed length (string fields) or numeric value (int
               fields). */
-  const char* source; /**< Location to look for the field: "query", "form",
+	const char* source; /**< Location to look for the field: "query", "form",
                          "header", "cookie", or NULL to auto-detect. */
 } csilk_valid_rule_t;
 
@@ -1314,8 +1306,7 @@ int csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr);
  * @param type_name Registered type name string.
  * @param ptr       Pointer to the struct instance to serialise.
  */
-void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
-                        const void* ptr);
+void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr);
 
 /** @brief Convenience macro for binding JSON body to a reflected struct.
  *  Wraps csilk_bind_reflect, automatically stringifying the type name.
@@ -1329,8 +1320,7 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name,
  *  @param status HTTP status code.
  *  @param type The struct type (used with #type to get the name).
  *  @param ptr Pointer to the struct instance. */
-#define csilk_json_t(c, status, type, ptr) \
-  csilk_json_reflect(c, status, #type, ptr)
+#define csilk_json_t(c, status, type, ptr) csilk_json_reflect(c, status, #type, ptr)
 
 /**
  * @brief Get the client's IP address.
@@ -1387,7 +1377,7 @@ typedef struct csilk_router_node_s csilk_router_node_t;
  *       must be registered before csilk_server_run.
  */
 typedef struct csilk_router_s {
-  csilk_router_node_t* root; /**< Root node of the radix (Patricia) trie. */
+	csilk_router_node_t* root; /**< Root node of the radix (Patricia) trie. */
 } csilk_router_t;
 
 /** @brief Route group structure. */
@@ -1418,8 +1408,11 @@ csilk_router_t* csilk_router_new(void);
  * @param handlers      Array of handler function pointers.
  * @param handler_count Number of elements in @p handlers.
  */
-void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
-                      csilk_handler_t* handlers, size_t handler_count);
+void csilk_router_add(csilk_router_t* r,
+		      const char* method,
+		      const char* path,
+		      csilk_handler_t* handlers,
+		      size_t handler_count);
 
 /**
  * @brief Match a raw method+path to handlers (standalone, no context).
@@ -1433,8 +1426,7 @@ void csilk_router_add(csilk_router_t* r, const char* method, const char* path,
  * @return Pointer to the handler array for the matched route, or NULL if
  *         no route matches.
  */
-csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method,
-                                    const char* path);
+csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method, const char* path);
 
 /**
  * @brief Match the current request against the router and update the context.
@@ -1485,9 +1477,10 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r);
  * @return A cJSON object representing the full OpenAPI spec.  Caller must
  *         free with cJSON_Delete.
  */
-cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
-                                   const char* version,
-                                   const char* description);
+cJSON* csilk_generate_openapi_json(csilk_router_t* router,
+				   const char* title,
+				   const char* version,
+				   const char* description);
 
 /**
  * @brief Register a route with full OpenAPI/reflection metadata.
@@ -1509,11 +1502,16 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router, const char* title,
  * @param summary       Short summary of the operation (NULL to omit from spec).
  * @param description   Detailed description of the operation (NULL to omit).
  */
-void csilk_router_add_extended(csilk_router_t* r, const char* method,
-                               const char* path, csilk_handler_t* handlers,
-                               size_t handler_count, const char* path_pattern,
-                               const char* input_type, const char* output_type,
-                               const char* summary, const char* description);
+void csilk_router_add_extended(csilk_router_t* r,
+			       const char* method,
+			       const char* path,
+			       csilk_handler_t* handlers,
+			       size_t handler_count,
+			       const char* path_pattern,
+			       const char* input_type,
+			       const char* output_type,
+			       const char* summary,
+			       const char* description);
 
 /** @brief Register a route with permission metadata.
  *  @param r             Router instance.
@@ -1523,10 +1521,13 @@ void csilk_router_add_extended(csilk_router_t* r, const char* method,
  *  @param handler_count Number of handlers.
  *  @param perm_required Permission identifier (e.g., "read"), or NULL.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
-void csilk_router_add_perm(csilk_router_t* r, const char* method,
-                           const char* path, csilk_handler_t* handlers,
-                           size_t handler_count, const char* perm_required,
-                           const char* perm_resource);
+void csilk_router_add_perm(csilk_router_t* r,
+			   const char* method,
+			   const char* path,
+			   csilk_handler_t* handlers,
+			   size_t handler_count,
+			   const char* perm_required,
+			   const char* perm_resource);
 
 /** @brief Register a route with full metadata including permissions.
  *  @param r             Router instance.
@@ -1541,12 +1542,18 @@ void csilk_router_add_perm(csilk_router_t* r, const char* method,
  *  @param description   Detailed description (NULL to omit).
  *  @param perm_required Permission identifier (e.g., "read"), or NULL.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
-void csilk_router_add_extended_perm(
-    csilk_router_t* r, const char* method, const char* path,
-    csilk_handler_t* handlers, size_t handler_count, const char* path_pattern,
-    const char* input_type, const char* output_type, const char* summary,
-    const char* description, const char* perm_required,
-    const char* perm_resource);
+void csilk_router_add_extended_perm(csilk_router_t* r,
+				    const char* method,
+				    const char* path,
+				    csilk_handler_t* handlers,
+				    size_t handler_count,
+				    const char* path_pattern,
+				    const char* input_type,
+				    const char* output_type,
+				    const char* summary,
+				    const char* description,
+				    const char* perm_required,
+				    const char* perm_resource);
 
 /**
  * @brief Convenience macro to register a route with metadata.
@@ -1554,10 +1561,18 @@ void csilk_router_add_extended_perm(
  * Automatically passes @p path as both the URL pattern and the documentation
  * path pattern.  Wraps csilk_router_add_extended.
  */
-#define CSILK_ROUTE(r, method, path, handlers, handler_count, input_type,   \
-                    output_type, summary, desc)                             \
-  csilk_router_add_extended(r, method, path, handlers, handler_count, path, \
-                            input_type, output_type, summary, desc)
+#define CSILK_ROUTE(                                                                               \
+    r, method, path, handlers, handler_count, input_type, output_type, summary, desc)              \
+	csilk_router_add_extended(r,                                                               \
+				  method,                                                          \
+				  path,                                                            \
+				  handlers,                                                        \
+				  handler_count,                                                   \
+				  path,                                                            \
+				  input_type,                                                      \
+				  output_type,                                                     \
+				  summary,                                                         \
+				  desc)
 
 /**
  * @brief Serve the OpenAPI JSON specification as the response.
@@ -1576,8 +1591,11 @@ void csilk_router_add_extended_perm(
  * @param version     API version.
  * @param description API description (optional, pass NULL to omit).
  */
-void csilk_serve_openapi(csilk_ctx_t* c, csilk_router_t* r, const char* title,
-                         const char* version, const char* description);
+void csilk_serve_openapi(csilk_ctx_t* c,
+			 csilk_router_t* r,
+			 const char* title,
+			 const char* version,
+			 const char* description);
 
 /**
  * @brief Serve the embedded Swagger UI page.
@@ -1642,8 +1660,10 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
  * @param path    Path relative to the group prefix (e.g., "/:id").
  * @param handler The route handler function.
  */
-void csilk_group_add_route(csilk_group_t* group, const char* method,
-                           const char* path, csilk_handler_t handler);
+void csilk_group_add_route(csilk_group_t* group,
+			   const char* method,
+			   const char* path,
+			   csilk_handler_t handler);
 
 /**
  * @brief Add a route with OpenAPI/reflection metadata to a group.
@@ -1662,18 +1682,25 @@ void csilk_group_add_route(csilk_group_t* group, const char* method,
  * @param summary     Short operation summary for OpenAPI (NULL to omit).
  * @param description Detailed operation description for OpenAPI (NULL to omit).
  */
-void csilk_group_add_route_extended(csilk_group_t* group, const char* method,
-                                    const char* path, csilk_handler_t handler,
-                                    const char* input_type,
-                                    const char* output_type,
-                                    const char* summary,
-                                    const char* description);
+void csilk_group_add_route_extended(csilk_group_t* group,
+				    const char* method,
+				    const char* path,
+				    csilk_handler_t handler,
+				    const char* input_type,
+				    const char* output_type,
+				    const char* summary,
+				    const char* description);
 
-void csilk_group_add_route_extended_perm(
-    csilk_group_t* group, const char* method, const char* path,
-    csilk_handler_t handler, const char* input_type, const char* output_type,
-    const char* summary, const char* description, const char* perm_required,
-    const char* perm_resource);
+void csilk_group_add_route_extended_perm(csilk_group_t* group,
+					 const char* method,
+					 const char* path,
+					 csilk_handler_t handler,
+					 const char* input_type,
+					 const char* output_type,
+					 const char* summary,
+					 const char* description,
+					 const char* perm_required,
+					 const char* perm_resource);
 
 /**
  * @brief Add a route with an explicit array of handlers.
@@ -1689,9 +1716,11 @@ void csilk_group_add_route_extended_perm(
  *                 the router.
  * @param count    Number of elements in @p handlers.
  */
-void csilk_group_add_handlers(csilk_group_t* group, const char* method,
-                              const char* path, csilk_handler_t* handlers,
-                              size_t count);
+void csilk_group_add_handlers(csilk_group_t* group,
+			      const char* method,
+			      const char* path,
+			      csilk_handler_t* handlers,
+			      size_t count);
 
 /**
  * @brief Destroy a route group and release its resources.
@@ -1707,26 +1736,19 @@ void csilk_group_free(csilk_group_t* group);
  * Convenience macros for adding routes to groups.
  * @{ */
 /** @brief Register a GET route on the group. */
-#define csilk_GET(group, path, handler) \
-  csilk_group_add_route(group, "GET", path, handler)
+#define csilk_GET(group, path, handler) csilk_group_add_route(group, "GET", path, handler)
 /** @brief Register a POST route on the group. */
-#define csilk_POST(group, path, handler) \
-  csilk_group_add_route(group, "POST", path, handler)
+#define csilk_POST(group, path, handler) csilk_group_add_route(group, "POST", path, handler)
 /** @brief Register a PUT route on the group. */
-#define csilk_PUT(group, path, handler) \
-  csilk_group_add_route(group, "PUT", path, handler)
+#define csilk_PUT(group, path, handler) csilk_group_add_route(group, "PUT", path, handler)
 /** @brief Register a DELETE route on the group. */
-#define csilk_DELETE(group, path, handler) \
-  csilk_group_add_route(group, "DELETE", path, handler)
+#define csilk_DELETE(group, path, handler) csilk_group_add_route(group, "DELETE", path, handler)
 /** @brief Register a PATCH route on the group. */
-#define csilk_PATCH(group, path, handler) \
-  csilk_group_add_route(group, "PATCH", path, handler)
+#define csilk_PATCH(group, path, handler) csilk_group_add_route(group, "PATCH", path, handler)
 /** @brief Register an OPTIONS route on the group. */
-#define csilk_OPTIONS(group, path, handler) \
-  csilk_group_add_route(group, "OPTIONS", path, handler)
+#define csilk_OPTIONS(group, path, handler) csilk_group_add_route(group, "OPTIONS", path, handler)
 /** @brief Register a HEAD route on the group. */
-#define csilk_HEAD(group, path, handler) \
-  csilk_group_add_route(group, "HEAD", path, handler)
+#define csilk_HEAD(group, path, handler) csilk_group_add_route(group, "HEAD", path, handler)
 /** @} */
 
 /**
@@ -1752,8 +1774,7 @@ void csilk_ws_handshake(csilk_ctx_t* c);
  * @param len     Byte length of @p payload.
  * @param opcode  WebSocket opcode: 0x1 for text, 0x2 for binary, 0x9 for ping.
  */
-void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len,
-                   int opcode);
+void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
 /**
  * @brief Send a WebSocket close frame.
@@ -1897,16 +1918,16 @@ void csilk_gzip_middleware(csilk_ctx_t* c);
  * data longer than the buffer is truncated.
  */
 typedef struct csilk_multipart_part_s {
-  char name[128];     /**< Form field name (NUL-terminated).  Truncated to 127
+	char name[128];	       /**< Form field name (NUL-terminated).  Truncated to 127
                          chars. */
-  char filename[256]; /**< Original filename for file uploads (empty string if
+	char filename[256];    /**< Original filename for file uploads (empty string if
                          not a file).  Truncated to 255 chars. */
-  char content_type[64]; /**< Content-Type of the part (e.g., "image/png").
+	char content_type[64]; /**< Content-Type of the part (e.g., "image/png").
                             Truncated to 63 chars. */
-  uint8_t* data;         /**< Pointer to the part's binary data.  Valid until
+	uint8_t* data;	       /**< Pointer to the part's binary data.  Valid until
                             csilk_ctx_cleanup. */
-  size_t data_len;       /**< Byte length of @p data. */
-  csilk_ctx_t* ctx;      /**< Owning request context (for memory allocation). */
+	size_t data_len;       /**< Byte length of @p data. */
+	csilk_ctx_t* ctx;      /**< Owning request context (for memory allocation). */
 } csilk_multipart_part_t;
 
 /**
@@ -1949,19 +1970,19 @@ csilk_server_t* csilk_ctx_get_server(csilk_ctx_t* c);
  * server and request lifecycle without modifying the framework code.
  */
 typedef enum {
-  CSILK_HOOK_SERVER_START,  /**< Invoked just before the event loop starts
+	CSILK_HOOK_SERVER_START,  /**< Invoked just before the event loop starts
                                (server-level). */
-  CSILK_HOOK_SERVER_STOP,   /**< Invoked when the server is shutting down
+	CSILK_HOOK_SERVER_STOP,	  /**< Invoked when the server is shutting down
                                (server-level). */
-  CSILK_HOOK_CONN_OPEN,     /**< Invoked when a new TCP connection is accepted
+	CSILK_HOOK_CONN_OPEN,	  /**< Invoked when a new TCP connection is accepted
                                (context-level). */
-  CSILK_HOOK_CONN_CLOSE,    /**< Invoked when a TCP connection is closed
+	CSILK_HOOK_CONN_CLOSE,	  /**< Invoked when a TCP connection is closed
                                (context-level). */
-  CSILK_HOOK_REQUEST_BEGIN, /**< Invoked when the full HTTP request has been
+	CSILK_HOOK_REQUEST_BEGIN, /**< Invoked when the full HTTP request has been
                                parsed (context-level). */
-  CSILK_HOOK_REQUEST_END,   /**< Invoked after the response has been sent
+	CSILK_HOOK_REQUEST_END,	  /**< Invoked after the response has been sent
                                (context-level). */
-  CSILK_HOOK_COUNT /**< Sentinel — total number of hook types. Not a valid hook
+	CSILK_HOOK_COUNT	  /**< Sentinel — total number of hook types. Not a valid hook
                       type. */
 } csilk_hook_type_t;
 
@@ -1991,8 +2012,7 @@ typedef void (*csilk_ctx_hook_handler_t)(csilk_ctx_t* c);
  *                signature for @p type (csilk_server_hook_handler_t for
  *                SERVER_*, csilk_ctx_hook_handler_t for others).
  */
-void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
-                           void* handler);
+void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler);
 
 /* --- Crypto Driver Interface --- */
 
@@ -2004,23 +2024,26 @@ void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type,
  * FIPS-compliant versions).  All function pointers must be non-NULL.
  */
 typedef struct {
-  /** @brief Compute the SHA-256 hash of a buffer.
+	/** @brief Compute the SHA-256 hash of a buffer.
    *  @param data  Input data.
    *  @param len   Input length.
    *  @param[out] out  32-byte hash output. */
-  void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
-  /** @brief Compute HMAC-SHA256.
+	void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
+	/** @brief Compute HMAC-SHA256.
    *  @param key       HMAC key.
    *  @param key_len   Key length.
    *  @param data      Input data.
    *  @param data_len  Input length.
    *  @param[out] out  32-byte HMAC output. */
-  void (*hmac_sha256)(const uint8_t* key, size_t key_len, const uint8_t* data,
-                      size_t data_len, uint8_t out[32]);
-  /** @brief Generate a random version-4 UUID string.
+	void (*hmac_sha256)(const uint8_t* key,
+			    size_t key_len,
+			    const uint8_t* data,
+			    size_t data_len,
+			    uint8_t out[32]);
+	/** @brief Generate a random version-4 UUID string.
    *  @param[out] buf  Output buffer of at least 37 bytes.  Populated with a
    *                   NUL-terminated UUID string. */
-  void (*generate_uuid)(char buf[37]);
+	void (*generate_uuid)(char buf[37]);
 } csilk_crypto_driver_t;
 
 /**
@@ -2033,8 +2056,7 @@ typedef struct {
  * @param driver Pointer to a csilk_crypto_driver_t, or NULL for defaults.
  *               The driver struct must remain valid for the server's lifetime.
  */
-void csilk_server_set_crypto_driver(csilk_server_t* server,
-                                    csilk_crypto_driver_t* driver);
+void csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* driver);
 
 /**
  * @brief Set the cipher driver for symmetric/asymmetric encryption.
@@ -2047,8 +2069,7 @@ void csilk_server_set_crypto_driver(csilk_server_t* server,
  * @param driver Pointer to a csilk_cipher_driver_t, or NULL for defaults.
  *               The driver struct must remain valid for the server's lifetime.
  */
-void csilk_server_set_cipher_driver(csilk_server_t* server,
-                                    csilk_cipher_driver_t* driver);
+void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver);
 
 /**
  * @brief Create a new server instance.
@@ -2083,8 +2104,7 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
  * @param server  Server instance.
  * @param handler Handler function, or NULL for default.
  */
-void csilk_server_set_not_found_handler(csilk_server_t* server,
-                                        csilk_handler_t handler);
+void csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handler);
 
 /**
  * @brief Enable single-page application (SPA) fallback mode.
@@ -2097,8 +2117,7 @@ void csilk_server_set_not_found_handler(csilk_server_t* server,
  * @param doc_root Directory containing index.html.  The path is copied
  *                 internally.
  */
-void csilk_server_set_spa_fallback(csilk_server_t* server,
-                                   const char* doc_root);
+void csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root);
 
 /**
  * @brief Destroy the server and release all resources.
@@ -2119,8 +2138,7 @@ void csilk_server_free(csilk_server_t* server);
  * @param server Server instance.
  */
 void csilk_server_stop(csilk_server_t* server);
-void csilk_server_get_stats(csilk_server_t* server, int* active_conn,
-                            int* pooled_conn);
+void csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn);
 
 /**
  * @brief Apply server configuration options.
@@ -2131,8 +2149,7 @@ void csilk_server_get_stats(csilk_server_t* server, int* active_conn,
  * @param server Server instance.
  * @param config Pointer to the configuration to apply.
  */
-void csilk_server_set_config(csilk_server_t* server,
-                             const csilk_server_config_t* config);
+void csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* config);
 
 /**
  * @brief Set the maximum number of concurrent connections and return the
@@ -2152,8 +2169,7 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max);
  *               in-memory arena-backed driver.  The driver struct must remain
  *               valid for the server's lifetime.
  */
-void csilk_server_set_storage_driver(csilk_server_t* server,
-                                     csilk_storage_driver_t* driver);
+void csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* driver);
 
 /**
  * @brief Start the server and enter the libuv event loop.
@@ -2238,8 +2254,7 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  *               The array must end with a NULL sentinel.
  * @return A cJSON array (caller must free), or NULL on failure.
  */
-cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
-                                 const char** params);
+cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /**
  * @brief Prometheus metrics middleware.
@@ -2327,8 +2342,7 @@ void csilk_mq_abort(csilk_mq_ctx_t* ctx);
  * @param payload Opaque data pointer.
  * @param len     Byte length of @p payload.
  */
-typedef void (*csilk_mq_worker_t)(const char* topic, const void* payload,
-                                  size_t len);
+typedef void (*csilk_mq_worker_t)(const char* topic, const void* payload, size_t len);
 
 /**
  * @brief Offload message processing to a background thread.
@@ -2373,8 +2387,7 @@ const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len);
  * @param topic      Topic name to intercept, or NULL for global middleware.
  * @param middleware Handler function.  Must not be NULL.
  */
-void csilk_mq_use(csilk_mq_t* mq, const char* topic,
-                  csilk_mq_handler_t middleware);
+void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware);
 
 /**
  * @brief Register a subscriber for a topic.
@@ -2386,8 +2399,7 @@ void csilk_mq_use(csilk_mq_t* mq, const char* topic,
  * @param topic      Topic name to subscribe to.
  * @param subscriber Handler function.  Must not be NULL.
  */
-void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic,
-                        csilk_mq_handler_t subscriber);
+void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber);
 
 /**
  * @brief Publish a message to a topic.
@@ -2403,18 +2415,17 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic,
  * @return 0 on success, non-zero errno-compatible code on failure (typically
  *         ENOMEM).
  */
-int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
-                     size_t len);
+int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /**
  * @brief Message Queue statistics.
  */
 typedef struct {
-  uint64_t published_total; /**< Total messages published since startup. */
-  uint64_t delivered_total; /**< Total messages delivered to subscribers. */
-  uint64_t failed_total;    /**< Total messages that failed processing. */
-  uint32_t queue_depth; /**< Number of messages currently in memory queue. */
-  uint32_t topic_count; /**< Number of registered topics. */
+	uint64_t published_total; /**< Total messages published since startup. */
+	uint64_t delivered_total; /**< Total messages delivered to subscribers. */
+	uint64_t failed_total;	  /**< Total messages that failed processing. */
+	uint32_t queue_depth;	  /**< Number of messages currently in memory queue. */
+	uint32_t topic_count;	  /**< Number of registered topics. */
 } csilk_mq_stats_t;
 
 /**

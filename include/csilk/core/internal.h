@@ -41,10 +41,10 @@
  *       (RFC 6455).  Do not use for security-critical hashing.
  */
 typedef struct {
-  uint32_t state[5]; /**< 160-bit intermediate hash state (5 × 32-bit words). */
-  uint32_t count[2]; /**< Total message length in bits (64-bit, split into two
+	uint32_t state[5];  /**< 160-bit intermediate hash state (5 × 32-bit words). */
+	uint32_t count[2];  /**< Total message length in bits (64-bit, split into two
                         32-bit halves). */
-  uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
+	uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
 } csilk_sha1_ctx;
 
 /**
@@ -65,8 +65,7 @@ void csilk_sha1_init(csilk_sha1_ctx* context);
  * @param data     Input bytes.
  * @param len      Number of bytes in @p data.
  */
-void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data,
-                       size_t len);
+void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len);
 
 /**
  * @brief Finalise the SHA-1 hash and write the 20-byte digest.
@@ -85,9 +84,9 @@ void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]);
  * computation.  Use csilk_sha256_init / _update / _final.
  */
 typedef struct {
-  uint32_t state[8]; /**< 256-bit intermediate hash state (8 × 32-bit words). */
-  uint64_t count;    /**< Total message length in bits. */
-  uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
+	uint32_t state[8];  /**< 256-bit intermediate hash state (8 × 32-bit words). */
+	uint64_t count;	    /**< Total message length in bits. */
+	uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
 } csilk_sha256_ctx;
 
 /**
@@ -104,8 +103,7 @@ void csilk_sha256_init(csilk_sha256_ctx* context);
  * @param data     Input bytes.
  * @param len      Number of bytes in @p data.
  */
-void csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data,
-                         size_t len);
+void csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data, size_t len);
 
 /**
  * @brief Finalise the SHA-256 hash and write the 32-byte digest.
@@ -126,8 +124,8 @@ void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]);
  * @param data_len  Byte length of @p data.
  * @param[out] out  32-byte buffer receiving the HMAC output.
  */
-void csilk_hmac_sha256(const uint8_t* key, size_t key_len, const uint8_t* data,
-                       size_t data_len, uint8_t out[32]);
+void csilk_hmac_sha256(
+    const uint8_t* key, size_t key_len, const uint8_t* data, size_t data_len, uint8_t out[32]);
 
 /**
  * @brief Encode raw bytes as a standard Base64 string.
@@ -212,8 +210,12 @@ void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len);
  * @param data_len Input length.
  * @param[out] out 32-byte HMAC output.
  */
-void _csilk_hmac_sha256(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
-                        const uint8_t* data, size_t data_len, uint8_t out[32]);
+void _csilk_hmac_sha256(csilk_ctx_t* c,
+			const uint8_t* key,
+			size_t key_len,
+			const uint8_t* data,
+			size_t data_len,
+			uint8_t out[32]);
 
 /**
  * @brief Internal: Generate a random UUID v4 string using the crypto driver
@@ -243,11 +245,17 @@ void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
  * @param tag_len        Tag buffer size (must be 16).
  * @return 0 on success, -1 on failure.
  */
-int _csilk_symmetric_encrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
-                             const uint8_t* plaintext, size_t plaintext_len,
-                             const uint8_t* iv, size_t iv_len,
-                             uint8_t* ciphertext, size_t* ciphertext_len,
-                             uint8_t* tag, size_t tag_len);
+int _csilk_symmetric_encrypt(csilk_ctx_t* c,
+			     const uint8_t* key,
+			     size_t key_len,
+			     const uint8_t* plaintext,
+			     size_t plaintext_len,
+			     const uint8_t* iv,
+			     size_t iv_len,
+			     uint8_t* ciphertext,
+			     size_t* ciphertext_len,
+			     uint8_t* tag,
+			     size_t tag_len);
 
 /**
  * @brief Internal: Symmetric decrypt using the context's cipher driver
@@ -267,11 +275,17 @@ int _csilk_symmetric_encrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
  * @param[in,out] plaintext_len  In: capacity, Out: actual plaintext length.
  * @return 0 on success, -1 on failure (including tag mismatch).
  */
-int _csilk_symmetric_decrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
-                             const uint8_t* ciphertext, size_t ciphertext_len,
-                             const uint8_t* iv, size_t iv_len,
-                             const uint8_t* tag, size_t tag_len,
-                             uint8_t* plaintext, size_t* plaintext_len);
+int _csilk_symmetric_decrypt(csilk_ctx_t* c,
+			     const uint8_t* key,
+			     size_t key_len,
+			     const uint8_t* ciphertext,
+			     size_t ciphertext_len,
+			     const uint8_t* iv,
+			     size_t iv_len,
+			     const uint8_t* tag,
+			     size_t tag_len,
+			     uint8_t* plaintext,
+			     size_t* plaintext_len);
 
 /**
  * @brief Internal: Generate an RSA-2048 key pair using the context's cipher
@@ -286,8 +300,8 @@ int _csilk_symmetric_decrypt(csilk_ctx_t* c, const uint8_t* key, size_t key_len,
  * @param[in,out] priv_len  In: capacity, Out: actual PEM length (incl. NUL).
  * @return 0 on success, -1 on failure.
  */
-int _csilk_generate_keypair(csilk_ctx_t* c, char* public_key, size_t* pub_len,
-                            char* private_key, size_t* priv_len);
+int _csilk_generate_keypair(
+    csilk_ctx_t* c, char* public_key, size_t* pub_len, char* private_key, size_t* priv_len);
 
 /**
  * @brief Internal: Asymmetric encrypt using the context's cipher driver
@@ -302,10 +316,13 @@ int _csilk_generate_keypair(csilk_ctx_t* c, char* public_key, size_t* pub_len,
  * @param[in,out] ciphertext_len  In: capacity, Out: actual length.
  * @return 0 on success, -1 on failure.
  */
-int _csilk_asymmetric_encrypt(csilk_ctx_t* c, const char* public_key,
-                              size_t pub_len, const uint8_t* plaintext,
-                              size_t plaintext_len, uint8_t* ciphertext,
-                              size_t* ciphertext_len);
+int _csilk_asymmetric_encrypt(csilk_ctx_t* c,
+			      const char* public_key,
+			      size_t pub_len,
+			      const uint8_t* plaintext,
+			      size_t plaintext_len,
+			      uint8_t* ciphertext,
+			      size_t* ciphertext_len);
 
 /**
  * @brief Internal: Asymmetric decrypt using the context's cipher driver
@@ -320,10 +337,13 @@ int _csilk_asymmetric_encrypt(csilk_ctx_t* c, const char* public_key,
  * @param[in,out] plaintext_len  In: capacity, Out: actual length.
  * @return 0 on success, -1 on failure.
  */
-int _csilk_asymmetric_decrypt(csilk_ctx_t* c, const char* private_key,
-                              size_t priv_len, const uint8_t* ciphertext,
-                              size_t ciphertext_len, uint8_t* plaintext,
-                              size_t* plaintext_len);
+int _csilk_asymmetric_decrypt(csilk_ctx_t* c,
+			      const char* private_key,
+			      size_t priv_len,
+			      const uint8_t* ciphertext,
+			      size_t ciphertext_len,
+			      uint8_t* plaintext,
+			      size_t* plaintext_len);
 
 /**
  * @brief Internal: Sign data using the context's cipher driver
@@ -338,9 +358,13 @@ int _csilk_asymmetric_decrypt(csilk_ctx_t* c, const char* private_key,
  * @param[in,out] sig_len  In: capacity, Out: actual signature length.
  * @return 0 on success, -1 on failure.
  */
-int _csilk_sign(csilk_ctx_t* c, const char* private_key, size_t priv_len,
-                const uint8_t* data, size_t data_len, uint8_t* signature,
-                size_t* sig_len);
+int _csilk_sign(csilk_ctx_t* c,
+		const char* private_key,
+		size_t priv_len,
+		const uint8_t* data,
+		size_t data_len,
+		uint8_t* signature,
+		size_t* sig_len);
 
 /**
  * @brief Internal: Verify a signature using the context's cipher driver
@@ -355,9 +379,13 @@ int _csilk_sign(csilk_ctx_t* c, const char* private_key, size_t priv_len,
  * @param sig_len     Signature length.
  * @return 0 on valid signature, -1 on invalid or error.
  */
-int _csilk_verify(csilk_ctx_t* c, const char* public_key, size_t pub_len,
-                  const uint8_t* data, size_t data_len,
-                  const uint8_t* signature, size_t sig_len);
+int _csilk_verify(csilk_ctx_t* c,
+		  const char* public_key,
+		  size_t pub_len,
+		  const uint8_t* data,
+		  size_t data_len,
+		  const uint8_t* signature,
+		  size_t sig_len);
 
 /**
  * @brief URL-decode a percent-encoded string in-place.
@@ -386,12 +414,12 @@ void csilk_generate_uuid(char* buf);
  * Messages are heap-allocated and linked via @p next.
  */
 typedef struct csilk_mq_msg_s {
-  char* topic;   /**< NUL-terminated topic string (heap-allocated copy). */
-  void* payload; /**< Message payload bytes (heap-allocated copy of published
+	char* topic;   /**< NUL-terminated topic string (heap-allocated copy). */
+	void* payload; /**< Message payload bytes (heap-allocated copy of published
                     data). */
-  size_t len;    /**< Byte length of @p payload. */
-  struct csilk_mq_msg_s*
-      next; /**< Pointer to the next message in the queue (NULL for tail). */
+	size_t len;    /**< Byte length of @p payload. */
+	struct csilk_mq_msg_s*
+	    next; /**< Pointer to the next message in the queue (NULL for tail). */
 } csilk_mq_msg_t;
 
 /**
@@ -399,13 +427,12 @@ typedef struct csilk_mq_msg_s {
  * Holds the topic name and its associated middleware + subscriber chain.
  */
 typedef struct csilk_mq_topic_s {
-  char* name; /**< NUL-terminated topic name (e.g., "user.created"). */
-  csilk_mq_handler_t* handlers; /**< Dynamically-grown array of handler function
+	char* name;		       /**< NUL-terminated topic name (e.g., "user.created"). */
+	csilk_mq_handler_t* handlers;  /**< Dynamically-grown array of handler function
                                    pointers (middleware + subscribers). */
-  size_t handler_count;         /**< Number of handlers currently registered. */
-  size_t handler_capacity;      /**< Allocated capacity of @p handlers. */
-  struct csilk_mq_topic_s*
-      next; /**< Pointer to the next topic in the linked list. */
+	size_t handler_count;	       /**< Number of handlers currently registered. */
+	size_t handler_capacity;       /**< Allocated capacity of @p handlers. */
+	struct csilk_mq_topic_s* next; /**< Pointer to the next topic in the linked list. */
 } csilk_mq_topic_t;
 
 /**
@@ -428,39 +455,37 @@ typedef struct csilk_mq_topic_s {
  * Not intended for direct manipulation by user code.
  */
 struct csilk_mq_s {
-  uv_async_t async_handle;    /**< libuv async handle for bridging worker-thread
+	uv_async_t async_handle;    /**< libuv async handle for bridging worker-thread
                                  publishes into the main loop. */
-  uv_mutex_t queue_mutex;     /**< Mutex guarding the message linked list. */
-  csilk_mq_msg_t* queue_head; /**< Head of the pending-message linked list. */
-  csilk_mq_msg_t* queue_tail; /**< Tail of the pending-message linked list. */
+	uv_mutex_t queue_mutex;	    /**< Mutex guarding the message linked list. */
+	csilk_mq_msg_t* queue_head; /**< Head of the pending-message linked list. */
+	csilk_mq_msg_t* queue_tail; /**< Tail of the pending-message linked list. */
 
-  csilk_mq_topic_t* topics; /**< Linked list of registered topics. */
+	csilk_mq_topic_t* topics; /**< Linked list of registered topics. */
 
-  /* Global middlewares */
-  csilk_mq_handler_t* global_middlewares; /**< Array of global middleware
+	/* Global middlewares */
+	csilk_mq_handler_t* global_middlewares; /**< Array of global middleware
                                              (intercepts every topic). */
-  size_t
-      global_mw_count; /**< Number of global middleware handlers registered. */
-  size_t
-      global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
+	size_t global_mw_count;	   /**< Number of global middleware handlers registered. */
+	size_t global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
 
-  /* Persistence (WAL) */
-  uv_file wal_fd;       /**< File descriptor for the Write-Ahead Log, or -1 if
+	/* Persistence (WAL) */
+	uv_file wal_fd;	      /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
-  char* wal_path;       /**< Path to the WAL file (heap-allocated copy, NULL if
+	char* wal_path;	      /**< Path to the WAL file (heap-allocated copy, NULL if
                            disabled). */
-  uv_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
+	uv_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
 
-  /* Monitoring */
-  uint64_t published_total; /**< Total messages published. */
-  uint64_t delivered_total; /**< Total messages delivered. */
-  uint64_t failed_total;    /**< Total messages failed. */
-  uint32_t queue_depth;     /**< Current messages in memory. */
+	/* Monitoring */
+	uint64_t published_total; /**< Total messages published. */
+	uint64_t delivered_total; /**< Total messages delivered. */
+	uint64_t failed_total;	  /**< Total messages failed. */
+	uint32_t queue_depth;	  /**< Current messages in memory. */
 
-  csilk_ctx_t** monitors;   /**< WebSocket monitor connections. */
-  size_t monitor_count;     /**< Number of monitors. */
-  size_t monitor_capacity;  /**< Monitor array capacity. */
-  uv_mutex_t monitor_mutex; /**< Protects monitor array. */
+	csilk_ctx_t** monitors;	  /**< WebSocket monitor connections. */
+	size_t monitor_count;	  /**< Number of monitors. */
+	size_t monitor_capacity;  /**< Monitor array capacity. */
+	uv_mutex_t monitor_mutex; /**< Protects monitor array. */
 };
 
 /**
@@ -470,13 +495,13 @@ struct csilk_mq_s {
  * the current position in the chain.
  */
 struct csilk_mq_ctx_s {
-  csilk_mq_t* mq;               /**< Owning MQ instance. */
-  csilk_mq_msg_t* msg;          /**< The message being processed. */
-  csilk_mq_handler_t* handlers; /**< Combined handler array (global mw + topic
+	csilk_mq_t* mq;		      /**< Owning MQ instance. */
+	csilk_mq_msg_t* msg;	      /**< The message being processed. */
+	csilk_mq_handler_t* handlers; /**< Combined handler array (global mw + topic
                                    mw + subscribers). */
-  size_t handler_count;         /**< Total number of handlers in @p handlers. */
-  int handler_index;            /**< Index of the next handler to invoke. */
-  int aborted;                  /**< Non-zero if csilk_mq_abort was called. */
+	size_t handler_count;	      /**< Total number of handlers in @p handlers. */
+	int handler_index;	      /**< Index of the next handler to invoke. */
+	int aborted;		      /**< Non-zero if csilk_mq_abort was called. */
 };
 
 /**
@@ -486,11 +511,11 @@ struct csilk_mq_ctx_s {
  * message offloading.
  */
 typedef struct {
-  uv_work_t req; /**< libuv work request (must be first for casting). */
-  csilk_mq_worker_t handler; /**< User-provided worker function. */
-  char* topic;               /**< Topic string (heap-allocated copy). */
-  void* payload;             /**< Payload data (heap-allocated copy). */
-  size_t len;                /**< Byte length of @p payload. */
+	uv_work_t req;		   /**< libuv work request (must be first for casting). */
+	csilk_mq_worker_t handler; /**< User-provided worker function. */
+	char* topic;		   /**< Topic string (heap-allocated copy). */
+	void* payload;		   /**< Payload data (heap-allocated copy). */
+	size_t len;		   /**< Byte length of @p payload. */
 } csilk_mq_work_ctx_t;
 
 /**

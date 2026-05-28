@@ -51,10 +51,14 @@ extern int g_oom_count;
  * @return Pointer to allocated memory, or NULL if the failure threshold
  *         has been reached.
  */
-static inline void* csilk_test_malloc(size_t size) {
-  if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) return NULL;
-  g_oom_count++;
-  return malloc(size);
+static inline void*
+csilk_test_malloc(size_t size)
+{
+	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+		return NULL;
+	}
+	g_oom_count++;
+	return malloc(size);
 }
 
 /**
@@ -65,10 +69,14 @@ static inline void* csilk_test_malloc(size_t size) {
  * @return Pointer to zero-initialised allocated memory, or NULL if the
  *         failure threshold has been reached.
  */
-static inline void* csilk_test_calloc(size_t nmemb, size_t size) {
-  if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) return NULL;
-  g_oom_count++;
-  return calloc(nmemb, size);
+static inline void*
+csilk_test_calloc(size_t nmemb, size_t size)
+{
+	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+		return NULL;
+	}
+	g_oom_count++;
+	return calloc(nmemb, size);
 }
 
 /**
@@ -79,10 +87,14 @@ static inline void* csilk_test_calloc(size_t nmemb, size_t size) {
  * @return Pointer to resized memory, or NULL if the failure threshold
  *         has been reached.
  */
-static inline void* csilk_test_realloc(void* ptr, size_t size) {
-  if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) return NULL;
-  g_oom_count++;
-  return realloc(ptr, size);
+static inline void*
+csilk_test_realloc(void* ptr, size_t size)
+{
+	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+		return NULL;
+	}
+	g_oom_count++;
+	return realloc(ptr, size);
 }
 
 /**

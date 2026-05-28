@@ -29,14 +29,16 @@
  * @warning The validator must be stateless or thread-safe, as it may be
  *          invoked from multiple worker threads concurrently.
  */
-void csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator) {
-  /* Missing header or failing validator both yield 401.
+void
+csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator)
+{
+	/* Missing header or failing validator both yield 401.
      The validator receives the full Authorization value including "Bearer "
      prefix — it must strip it internally if needed. */
-  const char* token = csilk_get_header(c, "Authorization");
-  if (!token || !validator(token)) {
-    csilk_set_header(c, "WWW-Authenticate", "Bearer");
-    csilk_status(c, CSILK_STATUS_UNAUTHORIZED);
-    csilk_abort(c);
-  }
+	const char* token = csilk_get_header(c, "Authorization");
+	if (!token || !validator(token)) {
+		csilk_set_header(c, "WWW-Authenticate", "Bearer");
+		csilk_status(c, CSILK_STATUS_UNAUTHORIZED);
+		csilk_abort(c);
+	}
 }
