@@ -2368,6 +2368,38 @@ int csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload,
                      size_t len);
 
 /**
+ * @brief Message Queue statistics.
+ */
+typedef struct {
+  uint64_t published_total; /**< Total messages published since startup. */
+  uint64_t delivered_total; /**< Total messages delivered to subscribers. */
+  uint64_t failed_total;    /**< Total messages that failed processing. */
+  uint32_t queue_depth;     /**< Number of messages currently in memory queue. */
+  uint32_t topic_count;     /**< Number of registered topics. */
+} csilk_mq_stats_t;
+
+/**
+ * @brief Get current MQ statistics.
+ * @param mq    The MQ instance.
+ * @param stats [out] Pointer to stats struct to populate.
+ */
+void csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats);
+
+/**
+ * @brief Convert MQ statistics to a JSON string.
+ * @param stats Pointer to stats struct.
+ * @return Heap-allocated JSON string (must be freed).
+ */
+char* csilk_mq_stats_to_json(const csilk_mq_stats_t* stats);
+
+/**
+ * @brief Register a WebSocket monitor for real-time MQ events.
+ * @param mq The MQ instance.
+ * @param c  Framework context (WebSocket connection).
+ */
+void csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c);
+
+/**
  * @brief Enable Write-Ahead Log (WAL) persistence for the MQ.
  *
  * When enabled, every published message is appended to @p wal_path before

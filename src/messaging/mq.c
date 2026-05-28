@@ -219,10 +219,72 @@ static int _mq_recovery(csilk_mq_t* mq);
  * @return A new csilk_mq_t instance, or NULL on allocation failure.
  * @note The MQ must be freed via _csilk_mq_free(). The MQ is initially
  *       non-persistent — call csilk_mq_set_persistence() to enable WAL. */
+#include <time.h>
+#include "cJSON.h"
+
+static void _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len) {
+    if (!mq || mq->monitor_count == 0) return;
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "event", event);
+    if (topic) cJSON_AddStringToObject(root, "topic", topic);
+    cJSON_AddNumberToObject(root, "payload_len", (double)len);
+    cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+    char* json = cJSON_PrintUnformatted(root);
+    
+    uv_mutex_lock(&mq->monitor_mutex);
+    for (size_t i = 0; i < mq->monitor_count; i++) {
+        csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+    }
+    uv_mutex_unlock(&mq->monitor_mutex);
+    
+    free(json);
+    cJSON_Delete(root);
+}
+
+void csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats) {
+    if (!mq || !stats) return;
+    uv_mutex_lock(&mq->queue_mutex);
+    stats->published_total = mq->published_total;
+    stats->delivered_total = mq->delivered_total;
+    stats->failed_total = mq->failed_total;
+    stats->queue_depth = mq->queue_depth;
+    
+    uint32_t topics = 0;
+    for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) topics++;
+    stats->topic_count = topics;
+    uv_mutex_unlock(&mq->queue_mutex);
+}
+
+char* csilk_mq_stats_to_json(const csilk_mq_stats_t* stats) {
+    if (!stats) return NULL;
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "published_total", (double)stats->published_total);
+    cJSON_AddNumberToObject(root, "delivered_total", (double)stats->delivered_total);
+    cJSON_AddNumberToObject(root, "failed_total", (double)stats->failed_total);
+    cJSON_AddNumberToObject(root, "queue_depth", (double)stats->queue_depth);
+    cJSON_AddNumberToObject(root, "topic_count", (double)stats->topic_count);
+    char* json = cJSON_Print(root);
+    cJSON_Delete(root);
+    return json;
+}
+
+void csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c) {
+    if (!mq || !c) return;
+    uv_mutex_lock(&mq->monitor_mutex);
+    if (mq->monitor_count >= mq->monitor_capacity) {
+        size_t new_cap = mq->monitor_capacity ? mq->monitor_capacity * 2 : 4;
+        mq->monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
+        mq->monitor_capacity = new_cap;
+    }
+    mq->monitors[mq->monitor_count++] = c;
+    uv_mutex_unlock(&mq->monitor_mutex);
+}
+
 csilk_mq_t* _csilk_mq_new(uv_loop_t* loop) {
   csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
   if (!mq) return NULL;
   uv_mutex_init(&mq->queue_mutex);
+  uv_mutex_init(&mq->monitor_mutex);
   uv_async_init(loop, &mq->async_handle, on_mq_async);
   mq->async_handle.data = mq;
 
@@ -476,8 +538,12 @@ static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload,
     mq->queue_head = msg;
   }
   mq->queue_tail = msg;
+  
+  mq->published_total++;
+  mq->queue_depth++;
   uv_mutex_unlock(&mq->queue_mutex);
 
+  _mq_broadcast(mq, "mq_published", topic, len);
   uv_async_send(&mq->async_handle);
   return 0;
 }
@@ -594,7 +660,23 @@ static int _mq_recovery(csilk_mq_t* mq) {
 
     if (calc_checksum == checksum) {
       /* Enqueue in memory without re-appending to WAL */
-      _mq_enqueue(mq, topic, payload, payload_len);
+      csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
+      if (msg) {
+          msg->topic = strdup(topic);
+          if (payload_len > 0) {
+              msg->payload = malloc(payload_len);
+              memcpy(msg->payload, payload, payload_len);
+              msg->len = payload_len;
+          }
+          uv_mutex_lock(&mq->queue_mutex);
+          if (mq->queue_tail) mq->queue_tail->next = msg;
+          else mq->queue_head = msg;
+          mq->queue_tail = msg;
+          
+          mq->published_total++;
+          mq->queue_depth++;
+          uv_mutex_unlock(&mq->queue_mutex);
+      }
     } else {
       free(topic);
       free(payload);
@@ -673,11 +755,18 @@ static void on_mq_async(uv_async_t* handle) {
   csilk_mq_msg_t* head = mq->queue_head;
   mq->queue_head = NULL;
   mq->queue_tail = NULL;
+  uint32_t count = mq->queue_depth;
+  mq->queue_depth = 0;
   uv_mutex_unlock(&mq->queue_mutex);
 
   while (head) {
     csilk_mq_msg_t* msg = head;
     head = head->next;
+
+    _mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
+    uv_mutex_lock(&mq->queue_mutex);
+    mq->delivered_total++;
+    uv_mutex_unlock(&mq->queue_mutex);
 
     /* Count total matching handlers */
     size_t total_handlers = mq->global_mw_count;
