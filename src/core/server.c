@@ -1315,9 +1315,10 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
       if (err == HPE_CLOSED_CONNECTION) {
         llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
         client->parser.data = client;
-      } else if (err != HPE_OK) {
+      } else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
         fprintf(stderr, "Parse error: %s %s\n", llhttp_errno_name(err),
                 client->parser.reason);
+
         if (!uv_is_closing((uv_handle_t*)stream)) {
           uv_close((uv_handle_t*)stream, on_close);
         }
@@ -2047,7 +2048,7 @@ static void process_tls_read(csilk_client_t* client) {
       csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
     } else {
       enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
-      if (err != HPE_OK) {
+      if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
         if (err == HPE_CLOSED_CONNECTION) {
           llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
           client->parser.data = client;
