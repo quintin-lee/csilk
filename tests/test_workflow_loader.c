@@ -32,7 +32,7 @@ void test_workflow_json_loader() {
     
     char* mermaid = csilk_wf_to_mermaid(wf);
     assert(mermaid != NULL);
-    assert(strstr(mermaid, "step1 --> step2") != NULL);
+    assert(strstr(mermaid, "\"step1\" --> \"step2\"") != NULL);
     
     free(mermaid);
     csilk_wf_free(wf);
