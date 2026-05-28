@@ -92,6 +92,8 @@ struct csilk_server_s {
 	/* close tracking for async shutdown — see csilk_server_free */
 	uv_thread_t* worker_tids;		/**< Worker thread IDs (NULL if single-thread). */
 	int worker_count;			/**< Number of worker threads created. */
+	uv_async_t* worker_stop_async;		/**< Per-worker async handles for graceful stop. */
+	int worker_stop_count;			/**< Number of worker_stop_async entries. */
 	csilk_handler_t not_found_handler;	/**< Custom 404 handler (NULL = default). */
 	char* spa_doc_root;			/**< SPA fallback doc root (NULL = disabled). */
 	csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
@@ -426,6 +428,11 @@ on_stop_async(uv_async_t* handle)
 	if (uv_is_active((uv_handle_t*)&server->async_handle) &&
 	    !uv_is_closing((uv_handle_t*)&server->async_handle)) {
 		uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
+	}
+
+	// Signal all worker threads to stop
+	for (int i = 0; i < server->worker_stop_count; i++) {
+		uv_async_send(&server->worker_stop_async[i]);
 	}
 
 	// Close MQ async handle
@@ -1693,6 +1700,9 @@ csilk_server_free(csilk_server_t* server)
 		}
 		free(server->worker_tids);
 		server->worker_tids = NULL;
+		free(server->worker_stop_async);
+		server->worker_stop_async = NULL;
+		server->worker_stop_count = 0;
 	}
 
 	free(server->spa_doc_root);
@@ -1920,17 +1930,43 @@ static int
 bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bool reuseport);
 
 /** @brief Per-worker thread initialization data for SO_REUSEPORT multi-loop
- * mode. */
+ *         mode.
+ *
+ * Passed to worker_thread() when spawning multiple accept loops. */
 typedef struct {
-	csilk_server_t* server; /**< Server instance. */
-	int port;		/**< Port to listen on. */
+	csilk_server_t* server;	    /**< The server instance. */
+	int port;		    /**< Port to listen on. */
+	int worker_index;	    /**< Index into server->worker_stop_async[]. */
+	pthread_barrier_t* barrier; /**< Barrier synchronising worker init with main
+                                  thread. */
 } worker_data_t;
+
+/** @brief Async callback for stopping a worker's event loop.
+ *
+ * Fires when the main thread signals this worker to stop (via
+ * uv_async_send). Calls uv_stop on the worker's loop so that
+ * uv_run returns and the thread can exit cleanly.
+ *
+ * @param handle The per-worker async handle (data points to the uv_loop_t). */
+static void
+on_worker_stop_async(uv_async_t* handle)
+{
+	uv_loop_t* loop = (uv_loop_t*)handle->data;
+	if (loop) {
+		uv_stop(loop);
+	}
+}
 
 /** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode.
  *
  * Each worker runs its own libuv event loop and accept loop, sharing the
  * same port via SO_REUSEPORT. The kernel distributes incoming connections
  * across worker threads. The worker_data_t argument is freed by this function.
+ *
+ * The worker registers a per-worker uv_async_t in
+ * server->worker_stop_async[idx] so the main thread can signal it to stop
+ * gracefully.  After uv_run returns, the async handle and the server_handle
+ * are closed synchronously, then the loop is closed.
  *
  * @param arg Pointer to worker_data_t (freed when the function exits). */
 static void
@@ -1939,6 +1975,8 @@ worker_thread(void* arg)
 	worker_data_t* data = (worker_data_t*)arg;
 	csilk_server_t* server = data->server;
 	int port = data->port;
+	int idx = data->worker_index;
+	pthread_barrier_t* barrier = data->barrier;
 	free(data);
 
 	uv_loop_t loop;
@@ -1948,11 +1986,31 @@ worker_thread(void* arg)
 	server_handle.data = server;
 
 	if (bind_and_listen(&loop, &server_handle, port, server->config.listen_backlog, true) < 0) {
+		if (barrier) {
+			pthread_barrier_wait(barrier);
+		}
 		uv_loop_close(&loop);
 		return;
 	}
 
+	/* Register a per-worker async handle so the main thread can stop us */
+	server->worker_stop_async[idx].data = &loop;
+	uv_async_init(&loop, &server->worker_stop_async[idx], on_worker_stop_async);
+
+	/* Signal the main thread that this worker is ready */
+	if (barrier) {
+		pthread_barrier_wait(barrier);
+	}
+
 	uv_run(&loop, UV_RUN_DEFAULT);
+
+	/* Clean up handles synchronously */
+	uv_close((uv_handle_t*)&server->worker_stop_async[idx], NULL);
+	uv_close((uv_handle_t*)&server_handle, NULL);
+
+	/* Run one more iteration to process the close callbacks */
+	uv_run(&loop, UV_RUN_ONCE);
+
 	uv_loop_close(&loop);
 }
 
@@ -2116,18 +2174,36 @@ csilk_server_run(csilk_server_t* server, int port)
 	}
 
 	if (workers > 1) {
-		server->worker_tids = malloc((size_t)(workers - 1) * sizeof(uv_thread_t));
-		if (server->worker_tids) {
-			server->worker_count = workers - 1;
-			for (int i = 0; i < workers - 1; i++) {
+		int nworkers = workers - 1;
+		server->worker_tids = malloc((size_t)nworkers * sizeof(uv_thread_t));
+		server->worker_stop_async = calloc((size_t)nworkers, sizeof(uv_async_t));
+		if (server->worker_tids && server->worker_stop_async) {
+			server->worker_count = nworkers;
+			server->worker_stop_count = nworkers;
+
+			pthread_barrier_t barrier;
+			pthread_barrier_init(&barrier, NULL, workers);
+
+			for (int i = 0; i < nworkers; i++) {
 				worker_data_t* data = malloc(sizeof(worker_data_t));
 				if (!data) {
 					continue;
 				}
 				data->server = server;
 				data->port = port;
+				data->worker_index = i;
+				data->barrier = &barrier;
 				uv_thread_create(&server->worker_tids[i], worker_thread, data);
 			}
+
+			/* Wait for all workers to finish initialising their loops */
+			pthread_barrier_wait(&barrier);
+			pthread_barrier_destroy(&barrier);
+		} else {
+			free(server->worker_tids);
+			server->worker_tids = NULL;
+			free(server->worker_stop_async);
+			server->worker_stop_async = NULL;
 		}
 	}
 

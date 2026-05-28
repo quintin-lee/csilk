@@ -16,6 +16,7 @@ set(CSILK_CORE_TESTS
     test_config
     test_config_comprehensive
     test_config_validate
+    test_config_load
     test_context
     test_context_ext
     test_edge
@@ -25,6 +26,7 @@ set(CSILK_CORE_TESTS
     test_json
     test_keepalive
     test_async_keepalive
+    test_multi_worker
     test_query
     test_radix
     test_redirect

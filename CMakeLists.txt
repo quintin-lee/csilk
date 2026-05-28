@@ -289,6 +289,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
   list(APPEND CSILK_ALL_TEST_NAMES test_timeout)
 
+  # test_multi_worker needs a longer timeout for multi-threaded requests
+  set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
+
   if(ENABLE_OOM_TEST)
       add_executable(test_oom tests/test_oom.c)
       target_compile_definitions(test_oom PRIVATE TEST_OOM)
@@ -314,6 +317,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   add_executable(example_ai examples/example_ai.c)
   target_link_libraries(example_ai csilk)
+
+  add_executable(example_ai_providers examples/example_ai_providers.c)
+  target_link_libraries(example_ai_providers csilk)
 
   add_executable(example_ai_workflow examples/example_ai_workflow.c)
   target_link_libraries(example_ai_workflow csilk)
@@ -438,6 +444,13 @@ if(PYTHON3_EXECUTABLE)
 else()
     message(STATUS "python3 not found — skipping Mermaid validation target")
 endif()
+
+# Benchmark target
+add_custom_target(bench
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_benchmarks.sh --save
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Running performance benchmarks with wrk"
+)
 
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
