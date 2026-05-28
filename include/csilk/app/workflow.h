@@ -343,6 +343,20 @@ void csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec);
 void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
                              int retry_delay_ms);
 
+/**
+ * @brief Mark a node for remote execution via MQ.
+ * @param node      Node handle.
+ * @param is_remote Non-zero to offload to remote worker.
+ */
+void csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote);
+
+/**
+ * @brief Enable distributed execution by bridging workflow with an MQ.
+ * @param wf Workflow handle.
+ * @param mq MQ handle for task distribution.
+ */
+void csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq);
+
 /* --- Execution --- */
 
 /**
