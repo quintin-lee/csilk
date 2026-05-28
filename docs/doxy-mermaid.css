@@ -12,11 +12,8 @@ div.mermaid svg {
   height: auto;
 }
 
-/* Dark mode support */
-html[data-color-mode="dark"] div.mermaid {
-  filter: invert(0.9) hue-rotate(180deg);
-}
-
+/* Dark mode support: Mermaid dark theme SVGs render natively on dark backgrounds.
+   No invert/hue-rotate needed — just ensure the SVG background is transparent. */
 html[data-color-mode="dark"] div.mermaid svg {
   background: transparent;
 }
