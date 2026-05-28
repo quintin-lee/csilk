@@ -1,12 +1,11 @@
 #!/bin/bash
 set -e
 
-CSILK_VERSION="175fe90"
+CSILK_VERSION="8ce90cc"
 AI_PROVIDER="none"
 USE_CIPHER="0"
 MID_REQUESTID="n"
 
-# Auto-detect repo URL from the local csilk checkout (if script is run from within the repo)
 LOCAL_REMOTE=$(git config --get remote.origin.url 2>/dev/null || true)
 if echo "$LOCAL_REMOTE" | grep -qE 'github\.com[/:](.+)/(.+)\.git'; then
   LOCAL_REPO_PATH=$(echo "$LOCAL_REMOTE" | sed -E 's|.*github\.com[/:](.+)/(.+)\.git|\1/\2|')
@@ -15,13 +14,7 @@ else
   CSILK_REPO_DEFAULT="https://github.com/quintin-lee/csilk.git"
 fi
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1" >&2; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1" >&2; }
@@ -50,10 +43,7 @@ ask_yes() {
   printf "  ${BOLD}%s${NC} [%s]: " "$prompt" "$default" >&2
   read -r ans
   ans="${ans:-$default}"
-  case "$ans" in
-    [Yy]*) return 0 ;;
-    *) return 1 ;;
-  esac
+  case "$ans" in [Yy]*) return 0 ;; *) return 1 ;; esac
 }
 
 pick() {
@@ -72,23 +62,32 @@ show_help() {
 Usage: csilkskel [options]
 
 Options:
--h, --help            Show this help message
--n, --name NAME       Project name (default: myapp)
--o, --out-dir DIR     Output directory (default: ./<name>)
--p, --port PORT       Port number (default: 8080)
---api-style STYLE     API style: app, core (default: app)
---db DB               Database: sqlite, mysql, postgres, none (default: sqlite)
---ai PROVIDER         AI driver: none, openai, ollama (default: none)
---cipher              Enable OpenSSL cipher driver
---auth AUTH           Auth: none, jwt, token (default: none)
---use-perm            Enable permission system
---use-swagger         Enable Swagger/OpenAPI
---middleware LIST     Comma-separated list (cors,gzip,ratelimit,session,requestid)
---git                 Initialize git repository
---non-interactive     Skip prompts and use defaults for missing values
+-h, --help             Show this help message
+-n, --name NAME        Project name (default: myapp)
+-o, --out-dir DIR      Output directory (default: ./<name>)
+-p, --port PORT        Port number (default: 8080)
+--api-style STYLE      API style: app, core (default: app)
+--db DB                Database: sqlite, mysql, postgres, none (default: sqlite)
+--ai PROVIDER          AI driver: none, openai, ollama (default: none)
+--cipher               Enable OpenSSL cipher driver
+--auth AUTH            Auth: none, jwt, token (default: none)
+--use-perm             Enable permission system
+--use-swagger          Enable Swagger/OpenAPI
+--middleware LIST      Comma-separated (cors,gzip,ratelimit,session,requestid,csrf)
+--use-ws               WebSocket chat example
+--use-sse              SSE event stream example
+--use-admin            Admin dashboard (/admin)
+--use-workflow         AI Workflow example
+--use-metrics          Prometheus metrics (/metrics)
+--use-upload           Multipart file upload example
+--use-spa              SPA fallback (serve index.html)
+--use-hooks            Server lifecycle hooks example
+--use-mq               Message Queue example
+--git                  Initialize git repository
+--non-interactive      Skip prompts and use defaults for missing values
 
 Example:
-csilkskel -n myapp -p 9090 --db mysql --ai openai --cipher --middleware cors,gzip,requestid --git
+  csilkskel -n myapp -p 9090 --db mysql --ai openai --middleware cors,gzip --use-ws --use-admin --git
 EOF
 }
 
@@ -103,22 +102,13 @@ validate_inputs() {
   fi
   if [ -d "$OUT_DIR" ] && [ "$(ls -A "$OUT_DIR" 2>/dev/null)" ]; then
     log_warn "Output directory '$OUT_DIR' already exists and is not empty."
-    if [ "$NON_INTERACTIVE" -eq 1 ]; then
-      log_error "Aborting due to non-interactive mode."
-      exit 1
-    fi
-    if ! ask_yes "Continue anyway and potentially overwrite files?" "n"; then
-      exit 1
-    fi
+    if [ "$NON_INTERACTIVE" -eq 1 ]; then log_error "Aborting due to non-interactive mode."; exit 1; fi
+    if ! ask_yes "Continue anyway and potentially overwrite files?" "n"; then exit 1; fi
   fi
 }
 
 prepare_vars() {
-  # ──────────────────────────────────────────────
-  # CMake & Source variables based on choices
-  # ──────────────────────────────────────────────
   BUILD_DB=""; LINK_DB=""; HDR_DB=""; SETUP_DB=""; CLEANUP_DB=""; USE_DB_EXEC=""
-
   if [ "$DB" = "mysql" ]; then
     BUILD_DB='find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
 if(NOT MYSQL_LIB)
@@ -144,8 +134,7 @@ endif()'
     CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
     USE_DB_EXEC='  csilk_db_pool_t* pool = csilk_db_pool_new("postgres", "host=127.0.0.1 port=5432 user=postgres password=secret dbname='"${PROJECT_NAME}"'");'
   elif [ "$DB" = "sqlite" ]; then
-    BUILD_DB=''
-    LINK_DB=''
+    BUILD_DB=''; LINK_DB=''
     HDR_DB='#include "csilk/drivers/db.h"'
     SETUP_DB='  csilk_db_init();'
     CLEANUP_DB='  if (pool) csilk_db_pool_free(pool);'
@@ -168,7 +157,6 @@ endif()'
   csilk_perm_set_default("simple");'
     PERM_MID='  csilk_app_use(app, csilk_perm_auto_middleware);'
     PERM_ROUTES='csilk_app_get_perm(app, "/admin", admin_handler, "admin", "*");'
-    PERM_RULES='csilk_perm_simple_allow("admin", "*", "*");'
   fi
 
   SWAGGER_SETUP=""
@@ -176,16 +164,20 @@ endif()'
     SWAGGER_SETUP='  csilk_app_enable_openapi(app, 1);'
   fi
 
-  # Layered Sources
+  # Base source files
   LAYERED_SOURCES="  src/main.c
   src/api/user_handler.c
   src/service/user_service.c
   src/model/user.c"
 
-  AI_HDR=""; AI_SETUP=""; AI_CLEANUP=""; AI_GLOBALS=""
+  AI_HDR=""; AI_SETUP=""; AI_CLEANUP=""; AI_GLOBALS=""; AI_FUNCS=""
   if [ "$AI_PROVIDER" != "none" ]; then
     AI_HDR='#include "csilk/drivers/ai.h"'
     AI_GLOBALS="static csilk_ai_t* ai = NULL;\nstatic csilk_ai_context_t* ai_ctx = NULL;"
+    AI_FUNCS='static void ai_injector_middleware(csilk_ctx_t* c) {
+  csilk_set(c, "ai", ai);
+  csilk_set(c, "ai_ctx", ai_ctx);
+}'
     AI_SETUP='  csilk_config_t* cfg = csilk_app_config(app);
   if (cfg) {
     ai = csilk_ai_new(cfg->ai.driver, cfg->ai.api_key, cfg->ai.base_url);
@@ -194,12 +186,6 @@ endif()'
     }
     csilk_config_free(cfg);
     free(cfg);
-  }
-
-  /* Middleware to inject AI handles into request context */
-  void ai_injector_middleware(csilk_ctx_t* c) {
-    csilk_set(c, "ai", ai);
-    csilk_set(c, "ai_ctx", ai_ctx);
   }
   csilk_app_use(app, ai_injector_middleware);'
     AI_CLEANUP='  csilk_ai_free(ai);
@@ -213,6 +199,97 @@ endif()'
     CIPHER_HDR='#include "csilk/drivers/cipher.h"'
     CIPHER_SETUP='  extern csilk_cipher_driver_t csilk_default_cipher_driver;
   csilk_server_set_cipher_driver(csilk_app_server(app), &csilk_default_cipher_driver);'
+  fi
+
+  # ── WebSocket ──
+  WS_HDR=""; WS_ROUTES=""
+  if [ "$USE_WS" = "1" ]; then
+    WS_ROUTES='  csilk_app_get(app, "/ws", csilk_ws_handshake);
+  csilk_app_get(app, "/ws-chat", ws_chat_handler);'
+    LAYERED_SOURCES="${LAYERED_SOURCES}
+  src/api/ws_handler.c"
+  fi
+
+  # ── SSE ──
+  SSE_HDR=""; SSE_ROUTES=""
+  if [ "$USE_SSE" = "1" ]; then
+    SSE_ROUTES='  csilk_app_get(app, "/events", sse_events_handler);'
+    LAYERED_SOURCES="${LAYERED_SOURCES}
+  src/api/sse_handler.c"
+  fi
+
+  # ── Admin Dashboard ──
+  ADMIN_HDR=""; ADMIN_SETUP=""
+  if [ "$USE_ADMIN" = "1" ]; then
+    ADMIN_HDR='#include "csilk/app/admin.h"'
+    ADMIN_SETUP='  csilk_admin_serve(app, "/admin");'
+  fi
+
+  # ── AI Workflow ──
+  WORKFLOW_HDR=""; WORKFLOW_FUNCS=""; WORKFLOW_SETUP=""; WORKFLOW_ROUTES=""
+  if [ "$USE_WORKFLOW" = "1" ]; then
+    WORKFLOW_HDR='#include "csilk/app/workflow.h"'
+    WORKFLOW_FUNCS=""
+    WORKFLOW_SETUP='  csilk_wf_serve_ui(app, "/workflow");'
+    WORKFLOW_ROUTES='  csilk_app_get(app, "/wf-demo", workflow_demo_handler);'
+    LAYERED_SOURCES="${LAYERED_SOURCES}
+  src/api/workflow_handler.c"
+  fi
+
+  # ── Metrics ──
+  METRICS_MID=""; METRICS_ROUTES=""
+  if [ "$USE_METRICS" = "1" ]; then
+    METRICS_MID='  csilk_app_use(app, csilk_metrics_middleware_wrapper);'
+    METRICS_ROUTES='  csilk_app_get(app, "/metrics", csilk_metrics_handler);'
+  fi
+
+  # ── CSRF ──
+  CSRF_MID=""
+  if [ "$MID_CSRF" = "y" ]; then
+    CSRF_MID='  csilk_app_use(app, csilk_csrf_middleware);'
+  fi
+
+  # ── Multipart Upload ──
+  UPLOAD_HDR=""; UPLOAD_ROUTES=""
+  if [ "$USE_UPLOAD" = "1" ]; then
+    UPLOAD_ROUTES='  csilk_app_post(app, "/upload", upload_handler);'
+    LAYERED_SOURCES="${LAYERED_SOURCES}
+  src/api/upload_handler.c"
+  fi
+
+  # ── SPA Fallback ──
+  SPA_SETUP=""
+  if [ "$USE_SPA" = "1" ]; then
+    SPA_SETUP='  csilk_server_set_spa_fallback(csilk_app_server(app), "index.html");'
+  fi
+
+  # ── Hooks ──
+  HOOKS_FUNCS=""; HOOKS_SETUP=""
+  if [ "$USE_HOOKS" = "1" ]; then
+    HOOKS_FUNCS='static void on_server_start(csilk_server_t* s) {
+  fprintf(stderr, "[hook] server started\\n");
+}
+static void on_server_stop(csilk_server_t* s) {
+  fprintf(stderr, "[hook] server stopping\\n");
+}'
+    HOOKS_SETUP='  csilk_server_add_hook(csilk_app_server(app), CSILK_HOOK_SERVER_START, on_server_start);
+  csilk_server_add_hook(csilk_app_server(app), CSILK_HOOK_SERVER_STOP, on_server_stop);'
+  fi
+
+  # ── Message Queue ──
+  MQ_HDR=""; MQ_FUNCS=""; MQ_SETUP=""; MQ_CLEANUP=""; MQ_GLOBALS=""
+  if [ "$USE_MQ" = "1" ]; then
+    MQ_GLOBALS="static csilk_mq_t* mq = NULL;"
+    MQ_FUNCS='static void mq_handler(csilk_mq_ctx_t* ctx) {
+  size_t len = 0;
+  const void* payload = csilk_mq_get_payload(ctx, &len);
+  fprintf(stderr, "[mq] topic=%s payload=%.*s\\n",
+          csilk_mq_get_topic(ctx), (int)len, (const char*)payload);
+  csilk_mq_next(ctx);
+}'
+    MQ_SETUP='  mq = csilk_server_get_mq(csilk_app_server(app));
+  csilk_mq_subscribe(mq, "events", mq_handler);
+  csilk_mq_subscribe(mq, "notifications", mq_handler);'
   fi
 
   MID_SETUP=""
@@ -262,7 +339,6 @@ middleware:
   enable_recovery: 1
   enable_request_id: $([ "$MID_REQUESTID" = "y" ] && echo "1" || echo "0")
 YAML
-
   if [ "$AI_PROVIDER" != "none" ]; then
     cat >> config.yaml <<YAML
 ai:
@@ -272,7 +348,6 @@ ai:
   base_url: ""
 YAML
   fi
-
   if [ "$DB" = "sqlite" ]; then
     cat >> config.yaml <<YAML
 db:
@@ -283,13 +358,11 @@ YAML
 }
 
 generate_cmake() {
-  local OPENSSL_FIND=""
-  local OPENSSL_LINK=""
+  local OPENSSL_FIND=""; local OPENSSL_LINK=""
   if [ "$USE_CIPHER" = "1" ]; then
     OPENSSL_FIND="find_package(OpenSSL REQUIRED)"
     OPENSSL_LINK=" OpenSSL::Crypto"
   fi
-
   cat > CMakeLists.txt <<CMAKE
 cmake_minimum_required(VERSION 3.11)
 project(${PROJECT_NAME} C)
@@ -297,7 +370,6 @@ project(${PROJECT_NAME} C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ── find or fetch csilk ──
 find_package(csilk QUIET
   HINTS \${CSILK_DIR} /usr/local /usr
   PATH_SUFFIXES lib/cmake/csilk
@@ -305,7 +377,6 @@ find_package(csilk QUIET
 
 if(NOT csilk_FOUND)
   if(CSILK_SOURCE_DIR)
-    # Local subdirectory logic
     set(_csilk_deps_dir "\${CSILK_SOURCE_DIR}/build/_deps")
     if(EXISTS "\${_csilk_deps_dir}/libuv-src/CMakeLists.txt")
       set(FETCHCONTENT_SOURCE_DIR_LIBUV "\${_csilk_deps_dir}/libuv-src" CACHE PATH "" FORCE)
@@ -316,7 +387,6 @@ if(NOT csilk_FOUND)
     add_subdirectory(\${CSILK_SOURCE_DIR} \${CMAKE_BINARY_DIR}/csilk)
     set(CSILK_LIB csilk)
   else()
-    # FetchContent logic
     include(FetchContent)
     FetchContent_Declare(csilk
       GIT_REPOSITORY ${CSILK_REPO_DEFAULT}
@@ -325,21 +395,20 @@ if(NOT csilk_FOUND)
     FetchContent_MakeAvailable(csilk)
     set(CSILK_LIB csilk)
   endif()
+else()
+  set(CSILK_LIB csilk::csilk)
 endif()
 
-# ── find CURL & OpenSSL ──
 find_package(CURL REQUIRED)
 ${OPENSSL_FIND}
 
-# ── sources ──
 set(SOURCES
 ${LAYERED_SOURCES}
 )
 
-# ── executable ──
 add_executable(${PROJECT_NAME} \${SOURCES})
 target_link_libraries(${PROJECT_NAME} PRIVATE \${CSILK_LIB}\${LINK_DB}${OPENSSL_LINK} \${CURL_LIBRARIES})
-target_include_directories(${PROJECT_NAME} PRIVATE 
+target_include_directories(${PROJECT_NAME} PRIVATE
   src
   src/api
   src/service
@@ -347,9 +416,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   \${CURL_INCLUDE_DIRS}
 )
 
-# ── handle dependencies include paths ──
-# When building from source (FetchContent or add_subdirectory),
-# we must ensure the main project can find dependency headers.
 if(NOT csilk_FOUND)
   include(FetchContent)
   FetchContent_GetProperties(cjson)
@@ -362,7 +428,6 @@ if(NOT csilk_FOUND)
   endif()
 endif()
 
-# ── copy config to build dir ──
 configure_file(config.yaml \${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
 CMAKE
 }
@@ -381,8 +446,6 @@ typedef struct {
     char email[128];
 } user_t;
 
-/* Map user_t to "user_t" string for reflection auto-dispatch.
-   Must be defined before including csilk/reflection/reflect.h/csilk.h */
 #undef CSILK_USER_TYPE_MAP
 #define CSILK_USER_TYPE_MAP , user_t: "user_t"
 
@@ -395,10 +458,8 @@ typedef struct {
 
 #endif
 HDR
-
   cat > src/model/user.c <<SRC
 #include "user.h"
-
 CSILK_REGISTER_REFLECT(user_t, USER_FIELDS)
 SRC
 }
@@ -415,7 +476,6 @@ int user_service_create(user_t* user);
 
 #endif
 HDR
-
   cat > src/service/user_service.c <<SRC
 #include "user_service.h"
 #include <stdlib.h>
@@ -427,7 +487,6 @@ int user_service_get_all(user_t** users, int* count) {
     (*users)[0].id = 1;
     strcpy((*users)[0].name, "Alice");
     strcpy((*users)[0].email, "alice@example.com");
-    
     (*users)[1].id = 2;
     strcpy((*users)[1].name, "Bob");
     strcpy((*users)[1].email, "bob@example.com");
@@ -435,7 +494,7 @@ int user_service_get_all(user_t** users, int* count) {
 }
 
 int user_service_create(user_t* user) {
-    user->id = 123; // mock ID assignment
+    user->id = 123;
     return 0;
 }
 SRC
@@ -455,7 +514,6 @@ void ping_handler(csilk_ctx_t* c);
 
 #endif
 HDR
-
   cat > src/api/user_handler.c <<SRC
 #include "user.h"
 #include "user_handler.h"
@@ -479,7 +537,6 @@ void get_users_handler(csilk_ctx_t* c) {
             free(json_str);
         }
     }
-    
     csilk_json(c, 200, root);
     free(users);
 }
@@ -491,9 +548,8 @@ void create_user_handler(csilk_ctx_t* c) {
         csilk_string(c, 400, "Invalid JSON");
         return;
     }
-
     user_service_create(&user);
-    
+
     char* json_str = csilk_marshal(&user);
     if (json_str) {
         csilk_json(c, 201, cJSON_Parse(json_str));
@@ -517,7 +573,6 @@ generate_ai_handler() {
 void chat_handler(csilk_ctx_t* c);
 #endif
 HDR
-
   cat > src/api/ai_handler.c <<SRC
 #include "ai_handler.h"
 #include <stdlib.h>
@@ -548,11 +603,115 @@ void chat_handler(csilk_ctx_t* c) {
     csilk_ai_chat_response_t res = {0};
     if (csilk_ai_chat(ai, &req, &res) == 0) {
         csilk_ai_context_add(ctx, "assistant", res.content);
-        csilk_json_error(c, 200, res.content); // Simplified for boilerplate
+        csilk_json_error(c, 200, res.content);
         csilk_ai_chat_response_free(&res);
     } else {
         csilk_json_error(c, 500, "AI chat failed");
     }
+}
+SRC
+}
+
+generate_ws_handler() {
+  cat > src/api/ws_handler.h <<HDR
+#ifndef API_WS_HANDLER_H
+#define API_WS_HANDLER_H
+#include "csilk.h"
+void ws_chat_handler(csilk_ctx_t* c);
+#endif
+HDR
+  cat > src/api/ws_handler.c <<SRC
+#include "ws_handler.h"
+#include <stdio.h>
+
+static void on_ws_message(csilk_ctx_t* c, const uint8_t* data, size_t len, int binary) {
+    csilk_ws_send(c, data, len, binary);
+}
+
+void ws_chat_handler(csilk_ctx_t* c) {
+    csilk_ws_handshake(c);
+    csilk_set_on_ws_message(c, on_ws_message);
+}
+SRC
+}
+
+generate_sse_handler() {
+  cat > src/api/sse_handler.h <<HDR
+#ifndef API_SSE_HANDLER_H
+#define API_SSE_HANDLER_H
+#include "csilk.h"
+void sse_events_handler(csilk_ctx_t* c);
+#endif
+HDR
+  cat > src/api/sse_handler.c <<SRC
+#include "sse_handler.h"
+#include <stdio.h>
+#include <time.h>
+
+void sse_events_handler(csilk_ctx_t* c) {
+    csilk_sse_init(c);
+    for (int i = 0; i < 10; i++) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "event %d at %ld", i, (long)time(NULL));
+        csilk_sse_send(c, "time", buf);
+    }
+    csilk_sse_close(c);
+}
+SRC
+}
+
+generate_upload_handler() {
+  cat > src/api/upload_handler.h <<HDR
+#ifndef API_UPLOAD_HANDLER_H
+#define API_UPLOAD_HANDLER_H
+#include "csilk.h"
+void upload_handler(csilk_ctx_t* c);
+#endif
+HDR
+  cat > src/api/upload_handler.c <<SRC
+#include "upload_handler.h"
+#include <stdio.h>
+
+static void upload_part_cb(csilk_multipart_part_t* part) {
+    fprintf(stderr, "Part: name=%s, filename=%s, type=%s, size=%zu\n",
+            part->name, part->filename, part->content_type, part->data_len);
+}
+
+void upload_handler(csilk_ctx_t* c) {
+    csilk_multipart_parse(c, upload_part_cb);
+    csilk_string(c, 200, "Upload received");
+}
+SRC
+}
+
+generate_workflow_handler() {
+  cat > src/api/workflow_handler.h <<HDR
+#ifndef API_WORKFLOW_HANDLER_H
+#define API_WORKFLOW_HANDLER_H
+#include "csilk.h"
+#include "csilk/app/workflow.h"
+void workflow_demo_handler(csilk_ctx_t* c);
+#endif
+HDR
+  cat > src/api/workflow_handler.c <<SRC
+#include "workflow_handler.h"
+#include <stdio.h>
+#include <string.h>
+
+static csilk_data_t* greet_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data) {
+    const char* name = input && input->value ? (const char*)input->value : "World";
+    char* msg = csilk_wf_alloc(ctx, 64);
+    snprintf(msg, 64, "Hello, %s!", name);
+    return csilk_wf_data_new(ctx, "text/plain", msg);
+}
+
+void workflow_demo_handler(csilk_ctx_t* c) {
+    csilk_wf_t* wf = csilk_wf_new("demo");
+    csilk_wf_node_t* n1 = csilk_wf_add(wf, "greet", greet_handler, NULL);
+    csilk_wf_node_set_entry(n1, 1);
+
+    csilk_string(c, 200, "Workflow triggered");
+    csilk_wf_free(wf);
 }
 SRC
 }
@@ -564,23 +723,31 @@ generate_main() {
 #include "user.h"
 #include "csilk.h"
 MAIN
-
-  if [ "$API_STYLE" = "app" ]; then
-    echo '#include "csilk/app/app.h"' >> src/main.c
-  fi
-
+  if [ "$API_STYLE" = "app" ]; then echo '#include "csilk/app/app.h"' >> src/main.c; fi
   if [ -n "$HDR_DB" ]; then echo "$HDR_DB" >> src/main.c; fi
   if [ -n "$PERM_HDR" ]; then echo "$PERM_HDR" >> src/main.c; fi
   if [ -n "$AI_HDR" ]; then echo "$AI_HDR" >> src/main.c; fi
   if [ -n "$CIPHER_HDR" ]; then echo "$CIPHER_HDR" >> src/main.c; fi
+  if [ -n "$WS_HDR" ]; then echo "$WS_HDR" >> src/main.c; fi
+  if [ -n "$SSE_HDR" ]; then echo "$SSE_HDR" >> src/main.c; fi
+  if [ -n "$ADMIN_HDR" ]; then echo "$ADMIN_HDR" >> src/main.c; fi
+  if [ -n "$WORKFLOW_HDR" ]; then echo "$WORKFLOW_HDR" >> src/main.c; fi
+  if [ -n "$MQ_HDR" ]; then echo "$MQ_HDR" >> src/main.c; fi
+  if [ -n "$UPLOAD_HDR" ]; then echo "$UPLOAD_HDR" >> src/main.c; fi
   if [ "$AI_PROVIDER" != "none" ]; then echo '#include "ai_handler.h"' >> src/main.c; fi
+  if [ "$USE_WS" = "1" ]; then echo '#include "ws_handler.h"' >> src/main.c; fi
+  if [ "$USE_SSE" = "1" ]; then echo '#include "sse_handler.h"' >> src/main.c; fi
+  if [ "$USE_UPLOAD" = "1" ]; then echo '#include "upload_handler.h"' >> src/main.c; fi
+  if [ "$USE_WORKFLOW" = "1" ]; then echo '#include "workflow_handler.h"' >> src/main.c; fi
   if [ -n "$AI_GLOBALS" ]; then echo -e "\n$AI_GLOBALS" >> src/main.c; fi
-  
+  if [ -n "$MQ_GLOBALS" ]; then echo -e "\n$MQ_GLOBALS" >> src/main.c; fi
+
   cat >> src/main.c <<MAIN
 #include "user_handler.h"
 
 MAIN
 
+  # Middleware wrappers
   if [ "$MID_CORS" = "y" ]; then
     cat >> src/main.c <<EOF
 static void cors_middleware_wrapper(csilk_ctx_t* c) {
@@ -594,7 +761,6 @@ static void cors_middleware_wrapper(csilk_ctx_t* c) {
 }
 EOF
   fi
-
   if [ "$AUTH" = "jwt" ]; then
     cat >> src/main.c <<EOF
 static void jwt_middleware_wrapper(csilk_ctx_t* c) {
@@ -602,26 +768,34 @@ static void jwt_middleware_wrapper(csilk_ctx_t* c) {
 }
 EOF
   fi
-
   if [ "$AUTH" = "token" ]; then
     cat >> src/main.c <<EOF
 static int simple_auth_validator(const char* token) {
   return strcmp(token, "secret123") == 0;
 }
-
 static void auth_middleware_wrapper(csilk_ctx_t* c) {
   csilk_auth_middleware(c, simple_auth_validator);
 }
 EOF
   fi
-
   if [ "$MID_RATELIMIT" = "y" ]; then
     cat >> src/main.c <<EOF
 static void ratelimit_middleware_wrapper(csilk_ctx_t* c) {
-  csilk_rate_limit_middleware(c, 100); // 100 requests per window
+  csilk_rate_limit_middleware(c, 100);
 }
 EOF
   fi
+  if [ "$USE_METRICS" = "1" ]; then
+    cat >> src/main.c <<EOF
+static void csilk_metrics_middleware_wrapper(csilk_ctx_t* c) {
+  csilk_metrics_middleware(c, "$PROJECT_NAME");
+}
+EOF
+  fi
+
+  if [ -n "$AI_FUNCS" ]; then echo -e "\n$AI_FUNCS" >> src/main.c; fi
+  if [ -n "$MQ_FUNCS" ]; then echo -e "\n$MQ_FUNCS" >> src/main.c; fi
+  if [ -n "$HOOKS_FUNCS" ]; then echo -e "\n$HOOKS_FUNCS" >> src/main.c; fi
 
   if [ "$API_STYLE" = "app" ]; then
     cat >> src/main.c <<MAIN
@@ -637,65 +811,80 @@ MAIN
 MAIN
     if [ -n "$CIPHER_SETUP" ]; then echo "$CIPHER_SETUP" >> src/main.c; fi
     if [ -n "$AI_SETUP" ]; then echo "$AI_SETUP" >> src/main.c; fi
+    if [ -n "$MQ_SETUP" ]; then echo "$MQ_SETUP" >> src/main.c; fi
+    if [ -n "$HOOKS_SETUP" ]; then echo "$HOOKS_SETUP" >> src/main.c; fi
 
     cat >> src/main.c <<MAIN
-  /* App-specific middleware */
+  /* Middleware */
 MAIN
-
     if [ -n "$AUTH_MID" ]; then echo "$AUTH_MID" >> src/main.c; fi
     if [ -n "$PERM_MID" ]; then echo "$PERM_MID" >> src/main.c; fi
+    if [ -n "$CSRF_MID" ]; then echo "$CSRF_MID" >> src/main.c; fi
+    if [ -n "$METRICS_MID" ]; then echo "$METRICS_MID" >> src/main.c; fi
     echo -e "$MID_SETUP" >> src/main.c
-    
-    if [ -n "$USE_DB_EXEC" ]; then
-      echo "${USE_DB_EXEC}" >> src/main.c
+    if [ -n "$SWAGGER_SETUP" ]; then echo "$SWAGGER_SETUP" >> src/main.c; fi
+    if [ -n "$SPA_SETUP" ]; then echo "$SPA_SETUP" >> src/main.c; fi
+
+    if [ -n "$USE_DB_EXEC" ]; then echo "${USE_DB_EXEC}" >> src/main.c; fi
+
+    cat >> src/main.c <<MAIN
+
+  /* Routes */
+  csilk_app_get(app, "/health", ping_handler);
+MAIN
+    if [ -n "$WS_ROUTES" ]; then echo "$WS_ROUTES" >> src/main.c; fi
+    if [ -n "$SSE_ROUTES" ]; then echo -e "$SSE_ROUTES" >> src/main.c; fi
+    if [ -n "$METRICS_ROUTES" ]; then echo "$METRICS_ROUTES" >> src/main.c; fi
+    if [ -n "$UPLOAD_ROUTES" ]; then echo "$UPLOAD_ROUTES" >> src/main.c; fi
+    if [ -n "$WORKFLOW_ROUTES" ]; then echo "$WORKFLOW_ROUTES" >> src/main.c; fi
+
+    echo '' >> src/main.c
+    echo '  csilk_app_get_ext(app, "/api/users", get_users_handler, NULL, "user_t",' >> src/main.c
+    echo '                    "List Users", "Returns a list of all users");' >> src/main.c
+    echo '  csilk_app_post_ext(app, "/api/users", create_user_handler, "user_t", "user_t",' >> src/main.c
+    echo '                     "Create User", "Creates a new user");' >> src/main.c
+
+    if [ "$AI_PROVIDER" != "none" ]; then
+      echo '  csilk_app_get(app, "/api/chat", chat_handler);' >> src/main.c
+    fi
+    if [ -n "$PERM_ROUTES" ]; then echo "  $PERM_ROUTES" >> src/main.c; fi
+    if [ "$USE_SWAGGER" = "1" ]; then
+      echo '  csilk_app_get(app, "/", (csilk_handler_t)csilk_serve_swagger_ui);' >> src/main.c
+    elif [ "$USE_ADMIN" = "1" ]; then
+      echo '  /* Admin registered at /admin */' >> src/main.c
     fi
 
     cat >> src/main.c <<MAIN
 
-  /* Root redirect to Swagger UI */
-  csilk_app_get(app, "/", (csilk_handler_t)csilk_serve_swagger_ui);
-  csilk_app_get(app, "/health", ping_handler);
-
-  /* API Routes with OpenAPI metadata */
-  csilk_app_get_ext(app, "/api/users", get_users_handler, NULL, "user_t", 
-                    "List Users", "Returns a list of all users");
-  
-  csilk_app_post_ext(app, "/api/users", create_user_handler, "user_t", "user_t",
-                     "Create User", "Creates a new user");
-
-MAIN
-  if [ "$AI_PROVIDER" != "none" ]; then
-    echo '  csilk_app_get(app, "/api/chat", chat_handler);' >> src/main.c
-  fi
-  if [ -n "$PERM_ROUTES" ]; then echo "  $PERM_ROUTES" >> src/main.c; fi
-
-  cat >> src/main.c <<MAIN
-
   printf("\n  Service started on port ${PORT}\n");
-  printf("  Swagger UI: http://localhost:${PORT}/\n");
-  printf("  OpenAPI Spec: http://localhost:${PORT}/openapi.json\n\n");
-
-  int rc = csilk_app_run(app, ${PORT});
 MAIN
+    if [ "$USE_SWAGGER" = "1" ]; then
+      echo '  printf("  Swagger UI: http://localhost:'"${PORT}"'/\n");' >> src/main.c
+      echo '  printf("  OpenAPI Spec: http://localhost:'"${PORT}"'/openapi.json\n\n");' >> src/main.c
+    fi
+    if [ "$USE_ADMIN" = "1" ]; then
+      echo '  printf("  Admin Dashboard: http://localhost:'"${PORT}"'/admin\n");' >> src/main.c
+    fi
+
+    echo '' >> src/main.c
+    echo '  int rc = csilk_app_run(app, '"${PORT}"');' >> src/main.c
     if [ -n "$CLEANUP_DB" ]; then echo "$CLEANUP_DB" >> src/main.c; fi
     if [ -n "$AI_CLEANUP" ]; then echo "$AI_CLEANUP" >> src/main.c; fi
+    if [ -n "$MQ_CLEANUP" ]; then echo "$MQ_CLEANUP" >> src/main.c; fi
     cat >> src/main.c <<MAIN
   csilk_app_free(app);
   return rc;
 }
 MAIN
   else
-    # Core API
     cat >> src/main.c <<MAIN
 int main(void) {
 MAIN
     if [ -n "$SETUP_DB" ]; then echo "$SETUP_DB" >> src/main.c; fi
     if [ -n "$PERM_INIT" ]; then echo "$PERM_INIT" >> src/main.c; fi
-
     cat >> src/main.c <<MAIN
   csilk_router_t* router = csilk_router_new();
   if (!router) return 1;
-
   csilk_server_t* server = csilk_server_new(router);
   if (!server) { csilk_router_free(router); return 1; }
 
@@ -712,7 +901,6 @@ MAIN
     if [ -n "$PERM_ROUTES" ]; then echo "  csilk_router_add_perm(router, \"GET\", \"/admin\", (csilk_handler_t[]){admin_handler, NULL}, 1, \"admin\", \"*\");" >> src/main.c; fi
 
     cat >> src/main.c <<MAIN
-
   csilk_server_run(server, ${PORT});
 MAIN
     if [ -n "$CLEANUP_DB" ]; then echo "$CLEANUP_DB" >> src/main.c; fi
@@ -733,8 +921,6 @@ Generated with [csilk](${CSILK_REPO_DEFAULT}) v${CSILK_VERSION}.
 
 ## Architecture
 
-This project follows a layered architecture:
-
 - \`src/api/\`: Handlers and route definitions.
 - \`src/service/\`: Business logic layer.
 - \`src/model/\`: Data structures and reflection metadata.
@@ -743,50 +929,73 @@ This project follows a layered architecture:
 
 \`\`\`bash
 mkdir build && cd build
-cmake .. 
+cmake ..
 make
 ./${PROJECT_NAME}
 \`\`\`
-
-## API Documentation
-
-When the server is running, visit:
-- **Swagger UI**: http://localhost:${PORT}/docs
-- **OpenAPI JSON**: http://localhost:${PORT}/openapi.json
 
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | /health | Health check |
 | GET | /api/users | List all users |
 | POST | /api/users | Create a new user |
 README
+  if [ "$USE_SWAGGER" = "1" ]; then
+    cat >> README.md <<README
+| GET | / | Swagger UI |
+| GET | /openapi.json | OpenAPI spec |
+README
+  fi
+  if [ "$USE_WS" = "1" ]; then
+    cat >> README.md <<README
+| GET | /ws | WebSocket endpoint |
+README
+  fi
+  if [ "$USE_SSE" = "1" ]; then
+    cat >> README.md <<README
+| GET | /events | SSE event stream |
+README
+  fi
+  if [ "$USE_ADMIN" = "1" ]; then
+    cat >> README.md <<README
+| GET | /admin | Admin dashboard |
+README
+  fi
+  if [ "$USE_METRICS" = "1" ]; then
+    cat >> README.md <<README
+| GET | /metrics | Prometheus metrics |
+README
+  fi
+  if [ "$USE_UPLOAD" = "1" ]; then
+    cat >> README.md <<README
+| POST | /upload | File upload |
+README
+  fi
+  if [ "$USE_WORKFLOW" = "1" ]; then
+    cat >> README.md <<README
+| GET | /workflow | Workflow UI |
+README
+  fi
+  if [ "$AI_PROVIDER" != "none" ]; then
+    cat >> README.md <<README
+| GET | /api/chat | AI Chat |
+README
+  fi
 }
 
-# Main Execution
+# ── Main Execution ──
 print_banner
 log_step "csilk Project Scaffolding"
 
-# Defaults
-PROJECT_NAME=""
-OUT_DIR=""
-PORT=""
-API_STYLE=""
-DB=""
-AI_PROVIDER=""
-USE_CIPHER=""
-AUTH=""
-USE_PERM=""
-USE_SWAGGER=""
-MID_CORS="n"
-MID_GZIP="n"
-MID_RATELIMIT="n"
-MID_SESSION="n"
-MID_REQUESTID="n"
-DO_GIT=""
-NON_INTERACTIVE=0
+PROJECT_NAME=""; OUT_DIR=""; PORT=""; API_STYLE=""; DB=""; AI_PROVIDER=""
+USE_CIPHER=""; AUTH=""; USE_PERM=""; USE_SWAGGER=""
+MID_CORS="n"; MID_GZIP="n"; MID_RATELIMIT="n"; MID_SESSION="n"; MID_REQUESTID="n"; MID_CSRF="n"
+USE_WS=""; USE_SSE=""; USE_ADMIN=""; USE_WORKFLOW=""; USE_METRICS=""
+USE_UPLOAD=""; USE_SPA=""; USE_HOOKS=""; USE_MQ=""
+DO_GIT=""; NON_INTERACTIVE=0
 
-# Parse CLI arguments
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     -h|--help) show_help; exit 0 ;;
@@ -800,6 +1009,15 @@ while [[ "$#" -gt 0 ]]; do
     --auth) AUTH="$2"; shift ;;
     --use-perm) USE_PERM="1" ;;
     --use-swagger) USE_SWAGGER="1" ;;
+    --use-ws) USE_WS="1" ;;
+    --use-sse) USE_SSE="1" ;;
+    --use-admin) USE_ADMIN="1" ;;
+    --use-workflow) USE_WORKFLOW="1" ;;
+    --use-metrics) USE_METRICS="1" ;;
+    --use-upload) USE_UPLOAD="1" ;;
+    --use-spa) USE_SPA="1" ;;
+    --use-hooks) USE_HOOKS="1" ;;
+    --use-mq) USE_MQ="1" ;;
     --middleware)
       IFS=',' read -r -a mids <<< "$2"
       for m in "${mids[@]}"; do
@@ -810,39 +1028,35 @@ while [[ "$#" -gt 0 ]]; do
           ratelimit) MID_RATELIMIT="y" ;;
           session) MID_SESSION="y" ;;
           requestid) MID_REQUESTID="y" ;;
+          csrf) MID_CSRF="y" ;;
         esac
       done
-      shift
-      ;;
+      shift ;;
     --git) DO_GIT="1" ;;
     --non-interactive) NON_INTERACTIVE=1 ;;
-    *) log_error "Unknown parameter passed: $1"; exit 1 ;;
+    *) log_error "Unknown parameter: $1"; exit 1 ;;
   esac
   shift
 done
 
-# Fallback to interactive prompts if not non-interactive
+# Interactive prompts
 if [ -z "$PROJECT_NAME" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then PROJECT_NAME="myapp"; else PROJECT_NAME=$(ask "Project name" "myapp"); fi
 fi
-DIR_NAME="${PROJECT_NAME// /-}"
-DIR_NAME="${DIR_NAME,,}"
+DIR_NAME="${PROJECT_NAME// /-}"; DIR_NAME="${DIR_NAME,,}"
 
 if [ -z "$OUT_DIR" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then OUT_DIR="./$DIR_NAME"; else OUT_DIR=$(ask "Output directory" "./$DIR_NAME"); fi
 fi
-
 if [ -z "$PORT" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then PORT="8080"; else PORT=$(ask "Port number" "8080"); fi
 fi
-
 if [ -z "$API_STYLE" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then API_STYLE="app"; else
     API_STYLE=$(pick "API style:" "app" 'app|High-level convenience API (csilk_app_t)
 core|Low-level core API (csilk_router_t + csilk_server_t)')
   fi
 fi
-
 if [ -z "$DB" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then DB="sqlite"; else
     DB=$(pick "Database backend:" "sqlite" 'sqlite|SQLite (built-in)
@@ -851,7 +1065,6 @@ postgres|PostgreSQL (requires libpq)
 none|No database')
   fi
 fi
-
 if [ -z "$AI_PROVIDER" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then AI_PROVIDER="none"; else
     AI_PROVIDER=$(pick "AI provider:" "none" 'none|No AI support
@@ -859,13 +1072,11 @@ openai|OpenAI
 ollama|Ollama (local)')
   fi
 fi
-
 if [ -z "$USE_CIPHER" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then USE_CIPHER="0"; else
     USE_CIPHER=$(ask_yes "Enable OpenSSL cipher driver" "n" && echo "1" || echo "0")
   fi
 fi
-
 if [ -z "$AUTH" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then AUTH="none"; else
     AUTH=$(pick "Authentication:" "none" 'none|No authentication
@@ -873,37 +1084,59 @@ jwt|JWT-based authentication
 token|Bearer token (simple validator callback)')
   fi
 fi
-
 if [ -z "$USE_PERM" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then USE_PERM="0"; else
     USE_PERM=$(ask_yes "Enable permission system" "n" && echo "1" || echo "0")
   fi
 fi
-
 if [ -z "$USE_SWAGGER" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then USE_SWAGGER="1"; else
     USE_SWAGGER=$(ask_yes "Enable Swagger/OpenAPI" "y" && echo "1" || echo "0")
   fi
 fi
 
+# Extra features interactive prompts
 if [ "$NON_INTERACTIVE" -eq 0 ]; then
-  if [ "$MID_CORS" = "n" ] && [ "$MID_GZIP" = "n" ] && [ "$MID_RATELIMIT" = "n" ] && [ "$MID_SESSION" = "n" ] && [ "$MID_REQUESTID" = "n" ]; then
-    echo -e "  ${BOLD}Extra middleware${NC} (comma-separated, e.g. cors,gzip):"
-    printf "    cors, gzip, ratelimit, session, requestid\n" >&2
-    printf "  choices [none]: " >&2
-    IFS=',' read -r -a mid_choices
-    for m in "${mid_choices[@]}"; do
-      m="${m// /}"
-      case "$m" in
-        cors) MID_CORS="y" ;;
-        gzip) MID_GZIP="y" ;;
-        ratelimit) MID_RATELIMIT="y" ;;
-        session) MID_SESSION="y" ;;
-        requestid) MID_REQUESTID="y" ;;
-        none|"") ;;
-      esac
-    done
-  fi
+  if [ -z "$USE_WS" ]; then USE_WS=$(ask_yes "WebSocket chat endpoint" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_SSE" ]; then USE_SSE=$(ask_yes "SSE event stream endpoint" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_ADMIN" ]; then USE_ADMIN=$(ask_yes "Admin dashboard (/admin)" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_METRICS" ]; then USE_METRICS=$(ask_yes "Prometheus metrics (/metrics)" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_UPLOAD" ]; then USE_UPLOAD=$(ask_yes "Multipart file upload" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_SPA" ]; then USE_SPA=$(ask_yes "SPA fallback (serve index.html)" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_HOOKS" ]; then USE_HOOKS=$(ask_yes "Server lifecycle hooks" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_MQ" ]; then USE_MQ=$(ask_yes "Message Queue" "n" && echo "1" || echo "0"); fi
+  if [ -z "$USE_WORKFLOW" ]; then USE_WORKFLOW=$(ask_yes "AI Workflow engine" "n" && echo "1" || echo "0"); fi
+fi
+
+# Defaults for non-interactive
+[ -z "$USE_WS" ] && USE_WS="0"
+[ -z "$USE_SSE" ] && USE_SSE="0"
+[ -z "$USE_ADMIN" ] && USE_ADMIN="0"
+[ -z "$USE_WORKFLOW" ] && USE_WORKFLOW="0"
+[ -z "$USE_METRICS" ] && USE_METRICS="0"
+[ -z "$USE_UPLOAD" ] && USE_UPLOAD="0"
+[ -z "$USE_SPA" ] && USE_SPA="0"
+[ -z "$USE_HOOKS" ] && USE_HOOKS="0"
+[ -z "$USE_MQ" ] && USE_MQ="0"
+
+# Extra middleware interactive (only if none set yet)
+if [ "$NON_INTERACTIVE" -eq 0 ] && [ "$MID_CORS" = "n" ] && [ "$MID_GZIP" = "n" ] && [ "$MID_RATELIMIT" = "n" ] && [ "$MID_SESSION" = "n" ] && [ "$MID_REQUESTID" = "n" ] && [ "$MID_CSRF" = "n" ]; then
+  echo -e "  ${BOLD}Extra middleware${NC} (comma-separated, e.g. cors,gzip):"
+  printf "    cors, gzip, ratelimit, session, requestid, csrf\n" >&2
+  printf "  choices [none]: " >&2
+  IFS=',' read -r -a mid_choices
+  for m in "${mid_choices[@]}"; do
+    m="${m// /}"
+    case "$m" in
+      cors) MID_CORS="y" ;;
+      gzip) MID_GZIP="y" ;;
+      ratelimit) MID_RATELIMIT="y" ;;
+      session) MID_SESSION="y" ;;
+      requestid) MID_REQUESTID="y" ;;
+      csrf) MID_CSRF="y" ;;
+      none|"") ;;
+    esac
+  done
 fi
 
 if [ -z "$DO_GIT" ]; then
@@ -914,11 +1147,8 @@ fi
 
 # Validation
 validate_inputs
-
-# Preparation
 prepare_vars
 
-# Execution
 log_step "Creating project files in $OUT_DIR..."
 
 mkdir -p "$OUT_DIR/src/api"
@@ -927,9 +1157,6 @@ mkdir -p "$OUT_DIR/src/model"
 mkdir -p "$OUT_DIR/public"
 touch "$OUT_DIR/public/.gitkeep"
 
-# We must use absolute path for OUT_DIR if we are going to cd
-# or just resolve it before cd.
-# For simplicity, we cd and then generate.
 cd "$OUT_DIR"
 generate_gitignore
 generate_config
@@ -937,13 +1164,16 @@ generate_cmake
 generate_model
 generate_service
 generate_api
-if [ "$AI_PROVIDER" != "none" ]; then
-  generate_ai_handler
-fi
+
+if [ "$AI_PROVIDER" != "none" ]; then generate_ai_handler; fi
+if [ "$USE_WS" = "1" ]; then generate_ws_handler; fi
+if [ "$USE_SSE" = "1" ]; then generate_sse_handler; fi
+if [ "$USE_UPLOAD" = "1" ]; then generate_upload_handler; fi
+if [ "$USE_WORKFLOW" = "1" ]; then generate_workflow_handler; fi
+
 generate_main
 generate_readme
 
-# Git initialization
 if [ "$DO_GIT" = "1" ]; then
   if command -v git >/dev/null 2>&1; then
     git init -q
