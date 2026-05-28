@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 #include "csilk/csilk.h"
 
 int received_count = 0;
@@ -29,7 +30,7 @@ void test_mq_recovery() {
 
     csilk_server_free(server);
     csilk_router_free(router);
-    
+
     /* Process close callbacks */
     uv_run(uv_default_loop(), UV_RUN_NOWAIT);
   }

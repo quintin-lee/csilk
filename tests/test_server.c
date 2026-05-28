@@ -2,8 +2,8 @@
 #include <stdio.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 void test_server_init() {
   printf("Testing server initialization...\n");

@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 // Helper to add request header
 void add_request_header(csilk_ctx_t* c, const char* key, const char* value) {

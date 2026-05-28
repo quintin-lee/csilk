@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 void test_get_header() {
   printf("Testing csilk_get_header...\n");

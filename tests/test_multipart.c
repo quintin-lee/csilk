@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 static int part_count = 0;
 static char last_name[128];

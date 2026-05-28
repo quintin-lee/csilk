@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 static int count_headers(csilk_header_map_t* map, const char* key,
                          const char* value_contains) {

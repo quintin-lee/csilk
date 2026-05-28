@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 static void test_validate_required() {
   csilk_ctx_t c = {0};

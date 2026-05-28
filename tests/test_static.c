@@ -7,8 +7,8 @@
 #include <uv.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #define TEST_DIR "test_dir_static"
 

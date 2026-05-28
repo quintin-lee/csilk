@@ -1,10 +1,11 @@
 #include <assert.h>
+#include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <stdint.h>
+
 #include "csilk/csilk.h"
 
 void test_mq_wal_write() {
@@ -48,7 +49,7 @@ void test_mq_wal_write() {
   assert(strcmp(pbuf, payload) == 0);
 
   assert(read(fd, &checksum, 4) == 4);
-  
+
   /* Verify checksum */
   uint32_t expected_checksum = 0;
   for (uint32_t i = 0; i < tlen; i++) expected_checksum ^= (uint8_t)topic[i];

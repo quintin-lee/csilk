@@ -91,7 +91,8 @@ void csilk_ai_get_stats(csilk_ai_stats_t* stats) {
 char* csilk_ai_stats_to_json(const csilk_ai_stats_t* stats) {
   if (!stats) return NULL;
   cJSON* root = cJSON_CreateObject();
-  cJSON_AddNumberToObject(root, "requests_total", (double)stats->requests_total);
+  cJSON_AddNumberToObject(root, "requests_total",
+                          (double)stats->requests_total);
   cJSON_AddNumberToObject(root, "tokens_total", (double)stats->tokens_total);
   cJSON_AddNumberToObject(root, "prompt_tokens", (double)stats->prompt_tokens);
   cJSON_AddNumberToObject(root, "completion_tokens",
@@ -258,7 +259,7 @@ int csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req,
     break;
   }
 
-  uint64_t duration = (uv_hrtime() - start) / 1000; // us
+  uint64_t duration = (uv_hrtime() - start) / 1000;  // us
   atomic_fetch_add(&ai_duration_us_total, duration);
 
   if (status == 0) {
@@ -373,7 +374,8 @@ int csilk_ai_embeddings(csilk_ai_t* ai, const char* model, const char** input,
     return -1;
   }
 
-  int status = ai->driver->embeddings(ai->driver_state, model, input, count, res);
+  int status =
+      ai->driver->embeddings(ai->driver_state, model, input, count, res);
 
   uint64_t duration = (uv_hrtime() - start) / 1000;
   atomic_fetch_add(&ai_duration_us_total, duration);

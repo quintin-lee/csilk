@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 void mock_handler1(csilk_ctx_t* c) { (void)c; }
 void mock_handler2(csilk_ctx_t* c) { (void)c; }

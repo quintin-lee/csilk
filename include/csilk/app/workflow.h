@@ -36,9 +36,8 @@
 #ifndef CSILK_WORKFLOW_H
 #define CSILK_WORKFLOW_H
 
-#include "csilk/csilk.h"
-
 #include "csilk/app/app.h"
+#include "csilk/csilk.h"
 
 /**
  * @brief Register a default route to serve the workflow dashboard.

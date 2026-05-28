@@ -64,9 +64,9 @@ struct csilk_wf_node_s {
       error_target; /**< Fallback node on handler failure (NULL output). */
   csilk_wf_router_t router_fn; /**< Dynamic router: overrides edges when set. */
   csilk_wf_join_policy_t
-      join_policy; /**< AND (wait for all) or OR (fire on any). */
-  int timeout_ms;  /**< Per-node execution timeout (0 = no timeout). */
-  int is_interactive; /**< Requires manual signal to proceed. */
+      join_policy;     /**< AND (wait for all) or OR (fire on any). */
+  int timeout_ms;      /**< Per-node execution timeout (0 = no timeout). */
+  int is_interactive;  /**< Requires manual signal to proceed. */
   char* output_schema; /**< JSON Schema for output validation. */
   int max_retries;     /**< Max automatic retry attempts. */
   int retry_delay_ms;  /**< Delay between retries. */
@@ -136,9 +136,9 @@ struct csilk_wf_ctx_s {
   uv_mutex_t
       trace_mutex; /**< Protects trace appends from parallel completions. */
 
-  int total_tokens;  /**< Cumulative tokens used across AI nodes. */
-  int is_terminated; /**< Hard stop flag (budget exceeded, TTL expired). */
-  int is_paused;     /**< Workflow is waiting for human input. */
+  int total_tokens;   /**< Cumulative tokens used across AI nodes. */
+  int is_terminated;  /**< Hard stop flag (budget exceeded, TTL expired). */
+  int is_paused;      /**< Workflow is waiting for human input. */
   int* node_approved; /**< Tracking approved interactive nodes. */
 
   uv_timer_t ttl_timer; /**< Global TTL timer handle. */
@@ -192,12 +192,12 @@ static void serve_ui_handler(csilk_ctx_t* c) {
       fseek(f, 0, SEEK_SET);
       char* buf = malloc(sz + 1);
       if (buf) {
-          if (fread(buf, 1, sz, f) == (size_t)sz) {
-              buf[sz] = '\0';
-              csilk_set_header(c, "Content-Type", "text/html");
-              csilk_string(c, 200, buf);
-          }
-          free(buf);
+        if (fread(buf, 1, sz, f) == (size_t)sz) {
+          buf[sz] = '\0';
+          csilk_set_header(c, "Content-Type", "text/html");
+          csilk_string(c, 200, buf);
+        }
+        free(buf);
       }
       fclose(f);
       return;
@@ -399,8 +399,8 @@ void csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries,
   node->retry_delay_ms = retry_delay_ms;
 }
 
-static csilk_data_t* remote_pass_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
-                                         void* user_data) {
+static csilk_data_t* remote_pass_handler(csilk_wf_ctx_t* ctx,
+                                         csilk_data_t* input, void* user_data) {
   (void)user_data;
   return input;
 }
@@ -444,32 +444,36 @@ static void on_remote_result(csilk_mq_ctx_t* m_ctx) {
 
     for (size_t i = 0; i < g_distributed_wf_count; i++) {
       csilk_wf_t* wf = g_distributed_wfs[i];
-      
+
       // 1. Check for Active Context (Hot Resume)
       csilk_wf_ctx_t* active = find_active_ctx(wf, exec_id);
       if (active) {
-          printf("[Workflow] Found active execution %s, resuming hot...\n", exec_id);
-          csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
-          // If node_id wasn't provided, we might have to search the context for a paused node
-          
-          if (n) {
-              uv_mutex_lock(&active->mutex);
-              active->node_approved[n->index] = 1;
-              active->nodes_active--; // Decrement the count we added during offload
-              uv_mutex_unlock(&active->mutex);
-              
-              csilk_data_t* out_data = csilk_wf_data_new(active, "application/json", 
-                                                        csilk_wf_strdup(active, output_str));
-              execute_node(active, n, out_data);
-              break;
-          }
+        printf("[Workflow] Found active execution %s, resuming hot...\n",
+               exec_id);
+        csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
+        // If node_id wasn't provided, we might have to search the context for a
+        // paused node
+
+        if (n) {
+          uv_mutex_lock(&active->mutex);
+          active->node_approved[n->index] = 1;
+          active
+              ->nodes_active--;  // Decrement the count we added during offload
+          uv_mutex_unlock(&active->mutex);
+
+          csilk_data_t* out_data = csilk_wf_data_new(
+              active, "application/json", csilk_wf_strdup(active, output_str));
+          execute_node(active, n, out_data);
+          break;
+        }
       }
 
       // 2. Fallback to Cold Resume (WAL)
       char path[512];
       snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
       if (access(path, F_OK) == 0) {
-        printf("[Workflow] Found WAL for %s, signaling continue (cold)...\n", exec_id);
+        printf("[Workflow] Found WAL for %s, signaling continue (cold)...\n",
+               exec_id);
         csilk_data_t out_data = {"application/json", (void*)output_str, NULL,
                                  NULL};
         csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
@@ -606,35 +610,35 @@ static char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root,
  *       with "(null)". */
 static char* apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val) {
   if (!filter || !val) return val;
-  
+
   if (strcmp(filter, "upper") == 0) {
-      for (int i=0; val[i]; i++) val[i] = toupper(val[i]);
+    for (int i = 0; val[i]; i++) val[i] = toupper(val[i]);
   } else if (strcmp(filter, "lower") == 0) {
-      for (int i=0; val[i]; i++) val[i] = tolower(val[i]);
+    for (int i = 0; val[i]; i++) val[i] = tolower(val[i]);
   } else if (strcmp(filter, "trim") == 0) {
-      char* start = val;
-      while (*start && isspace(*start)) start++;
-      char* end = val + strlen(val) - 1;
-      while (end > start && isspace(*end)) end--;
-      *(end + 1) = '\0';
-      return start;
+    char* start = val;
+    while (*start && isspace(*start)) start++;
+    char* end = val + strlen(val) - 1;
+    while (end > start && isspace(*end)) end--;
+    *(end + 1) = '\0';
+    return start;
   } else if (strncmp(filter, "summarize:", 10) == 0) {
-      size_t len = (size_t)atoi(filter + 10);
-      if (strlen(val) > len) val[len] = '\0';
+    size_t len = (size_t)atoi(filter + 10);
+    if (strlen(val) > len) val[len] = '\0';
   } else if (strcmp(filter, "json_escape") == 0) {
-      cJSON* j = cJSON_CreateString(val);
-      char* escaped = cJSON_PrintUnformatted(j);
-      // Remove surrounding quotes
-      size_t elen = strlen(escaped);
-      if (elen >= 2) {
-          escaped[elen-1] = '\0';
-          char* inner = csilk_wf_strdup(ctx, escaped + 1);
-          free(escaped);
-          cJSON_Delete(j);
-          return inner;
-      }
+    cJSON* j = cJSON_CreateString(val);
+    char* escaped = cJSON_PrintUnformatted(j);
+    // Remove surrounding quotes
+    size_t elen = strlen(escaped);
+    if (elen >= 2) {
+      escaped[elen - 1] = '\0';
+      char* inner = csilk_wf_strdup(ctx, escaped + 1);
       free(escaped);
       cJSON_Delete(j);
+      return inner;
+    }
+    free(escaped);
+    cJSON_Delete(j);
   }
   return val;
 }
@@ -664,7 +668,7 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
         // We need to find if there is a | before }}
         char* pipe = strchr(path_start, '|');
         if (pipe && pipe > end) pipe = NULL;
-        
+
         char* filter_start = pipe ? pipe + 1 : NULL;
         char* actual_end = pipe ? pipe : end;
 
@@ -687,26 +691,29 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
           // Pure value
           replacement = csilk_wf_strdup(ctx, (char*)out->value);
         }
-        
+
         // Apply Filters
         if (filter_start) {
-            size_t flen = end - filter_start;
-            char* filters = malloc(flen + 1);
-            memcpy(filters, filter_start, flen);
-            filters[flen] = '\0';
-            
-            char* saveptr;
-            char* f = strtok_r(filters, "|", &saveptr);
-            while (f) {
-                // Trim filter name
-                while(*f == ' ') f++;
-                char* fe = f + strlen(f) - 1;
-                while(fe > f && *fe == ' ') { *fe = '\0'; fe--; }
-                
-                replacement = apply_filter(ctx, f, replacement);
-                f = strtok_r(NULL, "|", &saveptr);
+          size_t flen = end - filter_start;
+          char* filters = malloc(flen + 1);
+          memcpy(filters, filter_start, flen);
+          filters[flen] = '\0';
+
+          char* saveptr;
+          char* f = strtok_r(filters, "|", &saveptr);
+          while (f) {
+            // Trim filter name
+            while (*f == ' ') f++;
+            char* fe = f + strlen(f) - 1;
+            while (fe > f && *fe == ' ') {
+              *fe = '\0';
+              fe--;
             }
-            free(filters);
+
+            replacement = apply_filter(ctx, f, replacement);
+            f = strtok_r(NULL, "|", &saveptr);
+          }
+          free(filters);
         }
       }
 
@@ -732,11 +739,11 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
     char* replacement = "(null)";
 
     if (ctx->initial_input && ctx->initial_input->value) {
-        char* path_start = pos + strlen(in_pattern);
-        char* pipe = strchr(path_start, '|');
-        if (pipe && pipe > end) pipe = NULL;
-        char* filter_start = pipe ? pipe + 1 : NULL;
-        char* actual_end = pipe ? pipe : end;
+      char* path_start = pos + strlen(in_pattern);
+      char* pipe = strchr(path_start, '|');
+      if (pipe && pipe > end) pipe = NULL;
+      char* filter_start = pipe ? pipe + 1 : NULL;
+      char* actual_end = pipe ? pipe : end;
 
       if (*path_start == '.') {
         path_start++;
@@ -755,22 +762,25 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
       } else {
         replacement = csilk_wf_strdup(ctx, (char*)ctx->initial_input->value);
       }
-      
+
       if (filter_start) {
-          size_t flen = end - filter_start;
-          char* filters = malloc(flen + 1);
-          memcpy(filters, filter_start, flen);
-          filters[flen] = '\0';
-          char* saveptr;
-          char* f = strtok_r(filters, "|", &saveptr);
-          while (f) {
-              while(*f == ' ') f++;
-              char* fe = f + strlen(f) - 1;
-              while(fe > f && *fe == ' ') { *fe = '\0'; fe--; }
-              replacement = apply_filter(ctx, f, replacement);
-              f = strtok_r(NULL, "|", &saveptr);
+        size_t flen = end - filter_start;
+        char* filters = malloc(flen + 1);
+        memcpy(filters, filter_start, flen);
+        filters[flen] = '\0';
+        char* saveptr;
+        char* f = strtok_r(filters, "|", &saveptr);
+        while (f) {
+          while (*f == ' ') f++;
+          char* fe = f + strlen(f) - 1;
+          while (fe > f && *fe == ' ') {
+            *fe = '\0';
+            fe--;
           }
-          free(filters);
+          replacement = apply_filter(ctx, f, replacement);
+          f = strtok_r(NULL, "|", &saveptr);
+        }
+        free(filters);
       }
     }
 
@@ -906,27 +916,29 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
     iterations++;
 
     // Enforce context window limit
-    if (config->max_history_messages > 0 && msg_count > (size_t)config->max_history_messages) {
-        size_t keep = (size_t)config->max_history_messages;
-        size_t discard_start = 0;
-        size_t move_to = 0;
+    if (config->max_history_messages > 0 &&
+        msg_count > (size_t)config->max_history_messages) {
+      size_t keep = (size_t)config->max_history_messages;
+      size_t discard_start = 0;
+      size_t move_to = 0;
 
-        // If msgs[0] is system, always keep it
-        if (strcmp(msgs[0].role, "system") == 0) {
-            discard_start = 1;
-            move_to = 1;
-            keep--;
-        }
+      // If msgs[0] is system, always keep it
+      if (strcmp(msgs[0].role, "system") == 0) {
+        discard_start = 1;
+        move_to = 1;
+        keep--;
+      }
 
-        size_t discard_count = msg_count - (size_t)config->max_history_messages;
-        // Free discarded messages
-        for (size_t i = discard_start; i < discard_start + discard_count; i++) {
-            free((void*)msgs[i].content);
-        }
+      size_t discard_count = msg_count - (size_t)config->max_history_messages;
+      // Free discarded messages
+      for (size_t i = discard_start; i < discard_start + discard_count; i++) {
+        free((void*)msgs[i].content);
+      }
 
-        // Shift remaining messages
-        memmove(&msgs[move_to], &msgs[discard_start + discard_count], sizeof(csilk_ai_message_t) * keep);
-        msg_count = (size_t)config->max_history_messages;
+      // Shift remaining messages
+      memmove(&msgs[move_to], &msgs[discard_start + discard_count],
+              sizeof(csilk_ai_message_t) * keep);
+      msg_count = (size_t)config->max_history_messages;
     }
 
     csilk_ai_chat_request_t req = {
@@ -1073,10 +1085,11 @@ char* csilk_wf_to_mermaid(csilk_wf_t* wf) {
     for (size_t j = 0; j < n->edge_count; j++) {
       csilk_wf_edge_t* e = &n->edges[j];
       if (e->condition)
-        snprintf(line, sizeof(line), "  \"%s\" -- \"%s\" --> \"%s\"\n", n->id, e->condition,
-                 e->target->id);
+        snprintf(line, sizeof(line), "  \"%s\" -- \"%s\" --> \"%s\"\n", n->id,
+                 e->condition, e->target->id);
       else
-        snprintf(line, sizeof(line), "  \"%s\" --> \"%s\"\n", n->id, e->target->id);
+        snprintf(line, sizeof(line), "  \"%s\" --> \"%s\"\n", n->id,
+                 e->target->id);
       strcat(buf, line);
     }
     if (n->error_target) {
@@ -1146,43 +1159,45 @@ static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node,
                          csilk_data_t* input);
 
 static void register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx) {
-    uv_mutex_lock(&wf->ctx_mutex);
-    if (wf->active_context_count >= wf->active_context_capacity) {
-        size_t new_cap = wf->active_context_capacity == 0 ? 8 : wf->active_context_capacity * 2;
-        csilk_wf_ctx_t** new_ctxs = realloc(wf->active_contexts, sizeof(csilk_wf_ctx_t*) * new_cap);
-        if (new_ctxs) {
-            wf->active_contexts = new_ctxs;
-            wf->active_context_capacity = new_cap;
-        }
+  uv_mutex_lock(&wf->ctx_mutex);
+  if (wf->active_context_count >= wf->active_context_capacity) {
+    size_t new_cap =
+        wf->active_context_capacity == 0 ? 8 : wf->active_context_capacity * 2;
+    csilk_wf_ctx_t** new_ctxs =
+        realloc(wf->active_contexts, sizeof(csilk_wf_ctx_t*) * new_cap);
+    if (new_ctxs) {
+      wf->active_contexts = new_ctxs;
+      wf->active_context_capacity = new_cap;
     }
-    if (wf->active_context_count < wf->active_context_capacity) {
-        wf->active_contexts[wf->active_context_count++] = ctx;
-    }
-    uv_mutex_unlock(&wf->ctx_mutex);
+  }
+  if (wf->active_context_count < wf->active_context_capacity) {
+    wf->active_contexts[wf->active_context_count++] = ctx;
+  }
+  uv_mutex_unlock(&wf->ctx_mutex);
 }
 
 static void unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx) {
-    uv_mutex_lock(&wf->ctx_mutex);
-    for (size_t i = 0; i < wf->active_context_count; i++) {
-        if (wf->active_contexts[i] == ctx) {
-            wf->active_contexts[i] = wf->active_contexts[--wf->active_context_count];
-            break;
-        }
+  uv_mutex_lock(&wf->ctx_mutex);
+  for (size_t i = 0; i < wf->active_context_count; i++) {
+    if (wf->active_contexts[i] == ctx) {
+      wf->active_contexts[i] = wf->active_contexts[--wf->active_context_count];
+      break;
     }
-    uv_mutex_unlock(&wf->ctx_mutex);
+  }
+  uv_mutex_unlock(&wf->ctx_mutex);
 }
 
 static csilk_wf_ctx_t* find_active_ctx(csilk_wf_t* wf, const char* exec_id) {
-    csilk_wf_ctx_t* found = NULL;
-    uv_mutex_lock(&wf->ctx_mutex);
-    for (size_t i = 0; i < wf->active_context_count; i++) {
-        if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
-            found = wf->active_contexts[i];
-            break;
-        }
+  csilk_wf_ctx_t* found = NULL;
+  uv_mutex_lock(&wf->ctx_mutex);
+  for (size_t i = 0; i < wf->active_context_count; i++) {
+    if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
+      found = wf->active_contexts[i];
+      break;
     }
-    uv_mutex_unlock(&wf->ctx_mutex);
-    return found;
+  }
+  uv_mutex_unlock(&wf->ctx_mutex);
+  return found;
 }
 
 /** @brief Internal: free a workflow execution context and all resources.
@@ -1284,10 +1299,10 @@ static void worker_cb(uv_work_t* req) {
  *    is complete: log WF_EV_END, deliver the final output via callback,
  *    and clean up the context. */
 static void on_retry_timer(uv_timer_t* handle) {
-    node_work_t* work = (node_work_t*)handle->data;
-    printf("[Workflow] Retrying node '%s' (attempt %d/%d)...\n", 
-           work->node->id, work->retry_count, work->node->max_retries);
-    uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+  node_work_t* work = (node_work_t*)handle->data;
+  printf("[Workflow] Retrying node '%s' (attempt %d/%d)...\n", work->node->id,
+         work->retry_count, work->node->max_retries);
+  uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
 static void after_worker_cb(uv_work_t* req, int status) {
@@ -1307,41 +1322,48 @@ static void after_worker_cb(uv_work_t* req, int status) {
 
   // Handle Retries before error logic
   if (output == NULL && work->retry_count < node->max_retries) {
-      work->retry_count++;
-      printf("[Workflow] Node '%s' failed, scheduled retry in %dms\n", node->id, node->retry_delay_ms);
+    work->retry_count++;
+    printf("[Workflow] Node '%s' failed, scheduled retry in %dms\n", node->id,
+           node->retry_delay_ms);
 
-      if (node->retry_delay_ms > 0) {
-          uv_timer_init(ctx->wf->loop, &work->node_timer);
-          work->node_timer.data = work;
-          uv_timer_start(&work->node_timer, on_retry_timer, node->retry_delay_ms, 0);
-          return; // Wait for timer
-      } else {
-          uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
-          return;
-      }
+    if (node->retry_delay_ms > 0) {
+      uv_timer_init(ctx->wf->loop, &work->node_timer);
+      work->node_timer.data = work;
+      uv_timer_start(&work->node_timer, on_retry_timer, node->retry_delay_ms,
+                     0);
+      return;  // Wait for timer
+    } else {
+      uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+      return;
+    }
   }
 
   // JSON Schema Validation
 
   if (output && output->value && node->output_schema) {
-      cJSON* schema = cJSON_Parse(node->output_schema);
-      cJSON* data = cJSON_Parse((char*)output->value);
-      if (schema && data) {
-          cJSON* required = cJSON_GetObjectItem(schema, "required");
-          if (cJSON_IsArray(required)) {
-              for (int i=0; i < cJSON_GetArraySize(required); i++) {
-                  cJSON* field = cJSON_GetArrayItem(required, i);
-                  if (cJSON_IsString(field) && !cJSON_HasObjectItem(data, field->valuestring)) {
-                      printf("[Workflow] Node '%s' output failed schema: missing required field '%s'\n", node->id, field->valuestring);
-                      output = NULL;
-                      break;
-                  }
-              }
+    cJSON* schema = cJSON_Parse(node->output_schema);
+    cJSON* data = cJSON_Parse((char*)output->value);
+    if (schema && data) {
+      cJSON* required = cJSON_GetObjectItem(schema, "required");
+      if (cJSON_IsArray(required)) {
+        for (int i = 0; i < cJSON_GetArraySize(required); i++) {
+          cJSON* field = cJSON_GetArrayItem(required, i);
+          if (cJSON_IsString(field) &&
+              !cJSON_HasObjectItem(data, field->valuestring)) {
+            printf(
+                "[Workflow] Node '%s' output failed schema: missing required "
+                "field '%s'\n",
+                node->id, field->valuestring);
+            output = NULL;
+            break;
           }
-      } else if (node->output_schema) {
-          output = NULL; // Invalid JSON or Schema
+        }
       }
-      cJSON_Delete(schema); cJSON_Delete(data);
+    } else if (node->output_schema) {
+      output = NULL;  // Invalid JSON or Schema
+    }
+    cJSON_Delete(schema);
+    cJSON_Delete(data);
   }
 
   uv_mutex_lock(&ctx->mutex);
@@ -1432,9 +1454,10 @@ static void after_worker_cb(uv_work_t* req, int status) {
       else if (output && output->type &&
                strcmp(output->type, edge->condition) == 0)
         match = 1;
-      
-      printf("[Workflow] Evaluating edge %zu to '%s' (match=%d)\n", i, edge->target->id, match);
-      
+
+      printf("[Workflow] Evaluating edge %zu to '%s' (match=%d)\n", i,
+             edge->target->id, match);
+
       if (match) {
         csilk_wf_node_t* target = edge->target;
         int ready = 0;
@@ -1443,9 +1466,10 @@ static void after_worker_cb(uv_work_t* req, int status) {
           ctx->node_input_counts[target->index]++;
           int threshold =
               target->incoming_count == 0 ? 1 : target->incoming_count;
-          
-          printf("[Workflow] Node '%s' input count: %d/%d\n", target->id, ctx->node_input_counts[target->index], threshold);
-          
+
+          printf("[Workflow] Node '%s' input count: %d/%d\n", target->id,
+                 ctx->node_input_counts[target->index], threshold);
+
           if (ctx->node_input_counts[target->index] >= threshold) {
             ready = 1;
             ctx->node_input_counts[target->index] = 0;

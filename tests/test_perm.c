@@ -204,10 +204,14 @@ void test_perm_init_idempotent(void) {
   int count_before = 0;
   for (int i = 0;; i++) {
     const char* name;
-    if (i == 0) name = "simple";
-    else if (i == 1) name = "custom2";
-    else if (i == 2) name = "custom_test";
-    else break;
+    if (i == 0)
+      name = "simple";
+    else if (i == 1)
+      name = "custom2";
+    else if (i == 2)
+      name = "custom_test";
+    else
+      break;
     if (csilk_perm_get_driver(name)) count_before++;
   }
 
@@ -216,10 +220,14 @@ void test_perm_init_idempotent(void) {
   int count_after = 0;
   for (int i = 0;; i++) {
     const char* name;
-    if (i == 0) name = "simple";
-    else if (i == 1) name = "custom2";
-    else if (i == 2) name = "custom_test";
-    else break;
+    if (i == 0)
+      name = "simple";
+    else if (i == 1)
+      name = "custom2";
+    else if (i == 2)
+      name = "custom_test";
+    else
+      break;
     if (csilk_perm_get_driver(name)) count_after++;
   }
 
@@ -227,9 +235,7 @@ void test_perm_init_idempotent(void) {
   printf("test_perm_init_idempotent passed\n");
 }
 
-static void dummy_handler(csilk_ctx_t* c) {
-  (void)c;
-}
+static void dummy_handler(csilk_ctx_t* c) { (void)c; }
 
 void test_perm_router_route_perm(void) {
   csilk_router_t* r = csilk_router_new();
@@ -260,10 +266,9 @@ void test_perm_router_route_extended_perm(void) {
   assert(r);
 
   csilk_handler_t h[] = {dummy_handler};
-  csilk_router_add_extended_perm(r, "POST", "/articles", h, 1, "/articles",
-                                 "CreateReq", "ArticleResp", "Create article",
-                                 "Creates a new article", "write",
-                                 "articles:*");
+  csilk_router_add_extended_perm(
+      r, "POST", "/articles", h, 1, "/articles", "CreateReq", "ArticleResp",
+      "Create article", "Creates a new article", "write", "articles:*");
 
   csilk_ctx_t c;
   memset(&c, 0, sizeof(c));

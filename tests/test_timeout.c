@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #define TEST_PORT 8111
 
@@ -30,12 +30,12 @@ void* run_server(void* arg) {
                                .max_header_size = 65536,
                                .listen_backlog = 128};
   csilk_server_set_config(g_server, &cfg);
-  
+
   __sync_synchronize();
   server_ready = 1;
 
   csilk_server_run(g_server, TEST_PORT);
-  
+
   csilk_server_free(g_server);
   csilk_group_free(group);
   csilk_router_free(router);
@@ -45,11 +45,11 @@ void* run_server(void* arg) {
 int main() {
   pthread_t thread;
   pthread_create(&thread, NULL, run_server, NULL);
-  
+
   // Wait for server to be ready
   int retries = 0;
   while (!server_ready && retries < 10) {
-    usleep(50000); // 50ms
+    usleep(50000);  // 50ms
     retries++;
   }
 
@@ -58,7 +58,7 @@ int main() {
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = inet_addr("127.0.0.1");
   addr.sin_port = htons(TEST_PORT);
-  
+
   if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
     perror("connect");
     printf("FAIL: connect\n");

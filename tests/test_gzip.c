@@ -5,8 +5,8 @@
 #include <zlib.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 // Mock _csilk_send_response to capture the result
 static int response_sent = 0;
