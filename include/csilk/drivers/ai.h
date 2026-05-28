@@ -29,6 +29,39 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <stdint.h>
+
+/**
+ * @brief AI Engine statistics.
+ */
+typedef struct {
+  uint64_t requests_total;   /**< Total chat/embeddings calls. */
+  uint64_t tokens_total;     /**< Total tokens (prompt + completion). */
+  uint64_t prompt_tokens;    /**< Total prompt tokens. */
+  uint64_t completion_tokens; /**< Total completion tokens. */
+  uint64_t errors_total;     /**< Total failed AI calls. */
+  uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
+} csilk_ai_stats_t;
+
+/**
+ * @brief Get current AI engine statistics.
+ * @param stats [out] Pointer to stats struct to populate.
+ */
+void csilk_ai_get_stats(csilk_ai_stats_t* stats);
+
+/**
+ * @brief Convert AI statistics to a JSON string.
+ * @param stats Pointer to stats struct.
+ * @return Heap-allocated JSON string (must be freed).
+ */
+char* csilk_ai_stats_to_json(const csilk_ai_stats_t* stats);
+
+/**
+ * @brief Register a WebSocket monitor for real-time AI events.
+ * @param c Framework context (WebSocket connection).
+ */
+void csilk_ai_register_monitor(void* c);
+
 /** @brief Opaque handle for an AI provider instance. */
 typedef struct csilk_ai_s csilk_ai_t;
 

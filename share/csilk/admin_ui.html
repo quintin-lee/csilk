@@ -142,11 +142,38 @@
 
             <!-- AI Engine Tab -->
             <div id="tab-ai" class="tab-content hidden space-y-6">
-                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                    <h3 class="text-lg font-bold mb-4">Model Usage</h3>
-                    <div class="h-64 flex items-center justify-center text-slate-500 italic">
-                        Usage breakdown visualization coming soon...
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">AI Requests</p>
+                        <h3 id="ai-stat-req" class="text-2xl font-bold">0</h3>
                     </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Total Tokens</p>
+                        <h3 id="ai-stat-tokens" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Errors</p>
+                        <h3 id="ai-stat-errors" class="text-2xl font-bold text-red-400">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Avg Latency</p>
+                        <h3 id="ai-stat-latency" class="text-2xl font-bold">0 ms</h3>
+                    </div>
+                </div>
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-700/50 text-slate-400">
+                            <tr>
+                                <th class="p-4">Model</th>
+                                <th class="p-4">Type</th>
+                                <th class="p-4">Tokens (P/C)</th>
+                                <th class="p-4">Status</th>
+                                <th class="p-4 text-right">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ai-log" class="divide-y divide-slate-700">
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -214,6 +241,13 @@
             document.getElementById('stat-latency').innerText = `${(data.avg_latency || 0).toFixed(2)} ms`;
             document.getElementById('stat-rps').innerText = data.rps || 0;
             
+            if (data.ai) {
+                document.getElementById('ai-stat-req').innerText = data.ai.requests;
+                document.getElementById('ai-stat-tokens').innerText = data.ai.tokens;
+                document.getElementById('ai-stat-errors').innerText = data.ai.errors;
+                document.getElementById('ai-stat-latency').innerText = `${(data.ai.avg_duration || 0).toFixed(0)} ms`;
+            }
+
             if (chart) {
                 chart.data.labels.push(new Date().toLocaleTimeString());
                 chart.data.datasets[0].data.push(data.rps);
@@ -260,6 +294,20 @@
                     n.classList.add(`node-${state}`);
                 }
             });
+        }
+
+        function handleAIEvent(data) {
+            const tbody = document.getElementById('ai-log');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="p-4 font-bold text-blue-400">${data.model || 'unknown'}</td>
+                <td class="p-4 text-xs">${data.event}</td>
+                <td class="p-4 text-slate-500">${data.prompt_tokens}/${data.completion_tokens}</td>
+                <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] ${data.status === 0 ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}">${data.status === 0 ? 'OK' : 'Error'}</span></td>
+                <td class="p-4 text-right text-slate-500">${data.duration_ms.toFixed(0)} ms</td>
+            `;
+            tbody.prepend(tr);
+            if (tbody.children.length > 50) tbody.lastChild.remove();
         }
 
         async function handleWorkflowEvent(data) {
@@ -324,6 +372,7 @@
                 const data = JSON.parse(e.data);
                 if (data.type === 'metrics') updateMetrics(data);
                 else if (data.event?.startsWith('mq_')) handleMQEvent(data);
+                else if (data.event?.startsWith('ai_')) handleAIEvent(data);
                 else handleWorkflowEvent(data);
             };
         };
