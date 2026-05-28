@@ -6,6 +6,7 @@
 
 #include "csilk/app/workflow.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -603,6 +604,41 @@ static char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root,
  * @return Resolved string allocated in ctx->arena.
  * @note Unresolvable patterns (missing node output, bad path) are replaced
  *       with "(null)". */
+static char* apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val) {
+  if (!filter || !val) return val;
+  
+  if (strcmp(filter, "upper") == 0) {
+      for (int i=0; val[i]; i++) val[i] = toupper(val[i]);
+  } else if (strcmp(filter, "lower") == 0) {
+      for (int i=0; val[i]; i++) val[i] = tolower(val[i]);
+  } else if (strcmp(filter, "trim") == 0) {
+      char* start = val;
+      while (*start && isspace(*start)) start++;
+      char* end = val + strlen(val) - 1;
+      while (end > start && isspace(*end)) end--;
+      *(end + 1) = '\0';
+      return start;
+  } else if (strncmp(filter, "summarize:", 10) == 0) {
+      size_t len = (size_t)atoi(filter + 10);
+      if (strlen(val) > len) val[len] = '\0';
+  } else if (strcmp(filter, "json_escape") == 0) {
+      cJSON* j = cJSON_CreateString(val);
+      char* escaped = cJSON_PrintUnformatted(j);
+      // Remove surrounding quotes
+      size_t elen = strlen(escaped);
+      if (elen >= 2) {
+          escaped[elen-1] = '\0';
+          char* inner = csilk_wf_strdup(ctx, escaped + 1);
+          free(escaped);
+          cJSON_Delete(j);
+          return inner;
+      }
+      free(escaped);
+      cJSON_Delete(j);
+  }
+  return val;
+}
+
 static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
   if (!template) return NULL;
   char* res = csilk_wf_strdup(ctx, template);
@@ -624,14 +660,18 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
       csilk_data_t* out = ctx->node_outputs[n->index];
 
       if (out && out->value) {
-        // Check if there's a path after .value
-        // pos points to "{{node_id.value"
-        // we need to see if it's followed by "." or "}}"
         char* path_start = pos + strlen(base_pattern);
+        // We need to find if there is a | before }}
+        char* pipe = strchr(path_start, '|');
+        if (pipe && pipe > end) pipe = NULL;
+        
+        char* filter_start = pipe ? pipe + 1 : NULL;
+        char* actual_end = pipe ? pipe : end;
+
         if (*path_start == '.') {
           // JSONPath!
           path_start++;  // Skip the dot
-          size_t path_len = end - path_start;
+          size_t path_len = actual_end - path_start;
           char* path = malloc(path_len + 1);
           memcpy(path, path_start, path_len);
           path[path_len] = '\0';
@@ -643,9 +683,30 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
             cJSON_Delete(json);
           }
           free(path);
-        } else if (*path_start == '}') {
+        } else {
           // Pure value
-          replacement = (char*)out->value;
+          replacement = csilk_wf_strdup(ctx, (char*)out->value);
+        }
+        
+        // Apply Filters
+        if (filter_start) {
+            size_t flen = end - filter_start;
+            char* filters = malloc(flen + 1);
+            memcpy(filters, filter_start, flen);
+            filters[flen] = '\0';
+            
+            char* saveptr;
+            char* f = strtok_r(filters, "|", &saveptr);
+            while (f) {
+                // Trim filter name
+                while(*f == ' ') f++;
+                char* fe = f + strlen(f) - 1;
+                while(fe > f && *fe == ' ') { *fe = '\0'; fe--; }
+                
+                replacement = apply_filter(ctx, f, replacement);
+                f = strtok_r(NULL, "|", &saveptr);
+            }
+            free(filters);
         }
       }
 
@@ -660,7 +721,7 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
     }
   }
 
-  // 2. Handle initial input: {{input.value}} or {{input.value.path}}
+  // 2. Handle initial input: {{input.value}}
   const char* in_pattern = "{{input.value";
   char* pos;
   while ((pos = strstr(res, in_pattern)) != NULL) {
@@ -671,10 +732,15 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
     char* replacement = "(null)";
 
     if (ctx->initial_input && ctx->initial_input->value) {
-      char* path_start = pos + strlen(in_pattern);
+        char* path_start = pos + strlen(in_pattern);
+        char* pipe = strchr(path_start, '|');
+        if (pipe && pipe > end) pipe = NULL;
+        char* filter_start = pipe ? pipe + 1 : NULL;
+        char* actual_end = pipe ? pipe : end;
+
       if (*path_start == '.') {
         path_start++;
-        size_t path_len = end - path_start;
+        size_t path_len = actual_end - path_start;
         char* path = malloc(path_len + 1);
         memcpy(path, path_start, path_len);
         path[path_len] = '\0';
@@ -686,8 +752,25 @@ static char* resolve_templates(csilk_wf_ctx_t* ctx, const char* template) {
           cJSON_Delete(json);
         }
         free(path);
-      } else if (*path_start == '}') {
-        replacement = (char*)ctx->initial_input->value;
+      } else {
+        replacement = csilk_wf_strdup(ctx, (char*)ctx->initial_input->value);
+      }
+      
+      if (filter_start) {
+          size_t flen = end - filter_start;
+          char* filters = malloc(flen + 1);
+          memcpy(filters, filter_start, flen);
+          filters[flen] = '\0';
+          char* saveptr;
+          char* f = strtok_r(filters, "|", &saveptr);
+          while (f) {
+              while(*f == ' ') f++;
+              char* fe = f + strlen(f) - 1;
+              while(fe > f && *fe == ' ') { *fe = '\0'; fe--; }
+              replacement = apply_filter(ctx, f, replacement);
+              f = strtok_r(NULL, "|", &saveptr);
+          }
+          free(filters);
       }
     }
 
