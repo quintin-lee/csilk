@@ -19,6 +19,22 @@
 #include "csilk/csilk.h"
 
 /**
+ * @brief Database statistics.
+ */
+typedef struct {
+  uint64_t queries_total;     /**< Total SELECT queries executed. */
+  uint64_t execs_total;       /**< Total non-query statements (INSERT/UPDATE/etc). */
+  uint64_t errors_total;      /**< Total failed operations. */
+  uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
+} csilk_db_stats_t;
+
+/**
+ * @brief Get current database statistics.
+ * @param stats [out] Pointer to stats struct to populate.
+ */
+void csilk_db_get_stats(csilk_db_stats_t* stats);
+
+/**
  * @brief Opaque database driver interface.
  *
  * Each supported database backend implements the function table in

@@ -82,6 +82,17 @@ static void admin_stats_handler(csilk_ctx_t* c) {
     cJSON_AddNumberToObject(ai, "avg_duration", ai_stats.requests_total > 0 ? (double)ai_stats.duration_us_total / ai_stats.requests_total / 1000.0 : 0);
     cJSON_AddItemToObject(root, "ai", ai);
     
+    // 4. DB Stats
+    csilk_db_stats_t db_stats;
+    csilk_db_get_stats(&db_stats);
+    
+    cJSON* db = cJSON_CreateObject();
+    cJSON_AddNumberToObject(db, "queries", (double)db_stats.queries_total);
+    cJSON_AddNumberToObject(db, "execs", (double)db_stats.execs_total);
+    cJSON_AddNumberToObject(db, "errors", (double)db_stats.errors_total);
+    cJSON_AddNumberToObject(db, "avg_duration", db_stats.queries_total + db_stats.execs_total > 0 ? (double)db_stats.duration_us_total / (db_stats.queries_total + db_stats.execs_total) / 1000.0 : 0);
+    cJSON_AddItemToObject(root, "db", db);
+    
     char* json = cJSON_PrintUnformatted(root);
     csilk_set_header(c, "Content-Type", "application/json");
     csilk_string(c, 200, json);
