@@ -168,51 +168,10 @@ else()
   message(STATUS "MongoDB client library not found — mongodb driver will not build")
 endif()
 
-# Source files
-set(CSILK_SOURCES
-    src/core/context.c
-    src/core/router.c
-    src/app/group.c
-    src/core/server.c
-    src/core/url.c
-    src/core/arena.c
-    src/core/logger.c
-    src/data/db.c
-    src/app/app.c
-    src/core/config.c
-    src/reflection/reflect.c
-    src/core/utils.c
-    src/protocols/websocket.c
-    src/messaging/mq.c
-    src/middleware/logger.c
-    src/middleware/recovery.c
-    src/middleware/auth.c
-    src/middleware/static.c
-    src/middleware/cors.c
-    src/middleware/ratelimit.c
-    src/middleware/csrf.c
-    src/middleware/sse.c
-    src/middleware/gzip.c
-    src/middleware/jwt.c
-    src/middleware/multipart.c
-    src/middleware/request_id.c
-    src/middleware/session.c
-    src/middleware/validate.c
-    src/middleware/metrics.c
-    src/protocols/swagger.c
-    src/security/perm.c
-    src/crypto/cipher.c
-    src/ai/ai.c
-    src/drivers/sqlite.c
-    src/drivers/perm_simple.c
-    src/drivers/ai_openai.c
-    src/drivers/ai_ollama.c
-    src/app/workflow.c
-    src/app/workflow_wal.c
-    src/app/workflow_loader.c
-    src/app/admin.c
-)
+# Source files — organized per module in cmake/sources.cmake
+include(cmake/sources.cmake)
 
+# Conditional driver sources
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/drivers/mysql.c)
   add_definitions(-DHAS_MYSQL)
@@ -289,7 +248,7 @@ target_compile_definitions(csilk PRIVATE
 )
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "0.2.1"
+    VERSION "0.2.3"
     SOVERSION "0"
     OUTPUT_NAME csilk
 )
@@ -314,7 +273,7 @@ if(CSILK_BUILD_SHARED)
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-        VERSION "0.2.1"
+        VERSION "0.2.3"
         SOVERSION "0"
         OUTPUT_NAME csilk
     )
@@ -324,121 +283,22 @@ if(CSILK_BUILD_SHARED)
     message(STATUS "Shared library build enabled: libcsilk.so")
 endif()
 
-# Helper to add a test executable and register with CTest
-function(add_csilk_test name source)
-  add_executable(${name} ${source})
-  target_link_libraries(${name} csilk pthread)
-  target_compile_options(${name} PRIVATE $<$<CONFIG:Release>:-UNDEBUG>)
-  add_test(NAME ${name} COMMAND ${name})
-endfunction()
-
 # Only build tests and examples when csilk is the top-level project
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  # Unit tests
-  add_csilk_test(test_gzip tests/test_gzip.c)
-  add_csilk_test(test_logger tests/test_logger.c)
-  add_csilk_test(test_static tests/test_static.c)
-  add_csilk_test(test_context tests/test_context.c)
-  add_csilk_test(test_router tests/test_router.c)
-  add_csilk_test(test_radix tests/test_radix.c)
-  add_csilk_test(test_group tests/test_group.c)
-  add_csilk_test(test_headers tests/test_headers.c)
-  add_csilk_test(test_server tests/test_server.c)
-  add_csilk_test(test_query tests/test_query.c)
-  add_csilk_test(test_json tests/test_json.c)
-  add_csilk_test(test_recovery tests/test_recovery.c)
-  add_csilk_test(test_auth tests/test_auth.c)
-  add_csilk_test(test_ws tests/test_ws.c)
-  add_csilk_test(test_config tests/test_config.c)
-  add_csilk_test(test_config_validate tests/test_config_validate.c)
-  add_csilk_test(test_csrf tests/test_csrf.c)
-  add_csilk_test(test_redirect tests/test_redirect.c)
-  add_csilk_test(test_cookie tests/test_cookie.c)
-  add_csilk_test(test_reflect tests/test_reflect.c)
-  add_csilk_test(test_keepalive tests/test_keepalive.c)
-  add_csilk_test(test_edge tests/test_edge.c)
+  # Tests — organized per module in cmake/tests.cmake
+  include(cmake/tests.cmake)
+
+  # test_timeout needs an extended CTest timeout
   add_csilk_test(test_timeout tests/test_timeout.c)
-  add_csilk_test(test_arena tests/test_arena.c)
-  add_csilk_test(test_url_decode tests/test_url_decode.c)
-  add_csilk_test(test_utils tests/test_utils.c)
-  add_csilk_test(test_form tests/test_form.c)
-  add_csilk_test(test_ip tests/test_ip.c)
-  add_csilk_test(test_cors tests/test_cors.c)
-  add_csilk_test(test_multipart tests/test_multipart.c)
-  add_csilk_test(test_sse tests/test_sse.c)
-  add_csilk_test(test_ratelimit tests/test_ratelimit.c)
-  add_csilk_test(test_app tests/test_app.c)
-  add_csilk_test(test_swagger tests/test_swagger.c)
-  add_csilk_test(test_session tests/test_session.c)
-  add_csilk_test(test_validate tests/test_validate.c)
-  add_csilk_test(test_jwt tests/test_jwt.c)
-  add_csilk_test(test_hooks tests/test_hooks.c)
-  add_csilk_test(test_crypto_driver tests/test_crypto_driver.c)
-  add_csilk_test(test_cipher tests/test_cipher.c)
-  add_csilk_test(test_storage tests/test_storage.c)
-  add_csilk_test(test_perm tests/test_perm.c)
-  add_csilk_test(test_db tests/test_db.c)
-  add_csilk_test(test_mongodb tests/test_mongodb.c)
-  add_csilk_test(test_ai tests/test_ai.c)
-  add_csilk_test(test_extra tests/test_extra.c)
-  add_csilk_test(test_metrics tests/test_metrics.c)
-  add_csilk_test(test_workflow_lifecycle tests/test_workflow_lifecycle.c)
-  add_csilk_test(test_workflow_graph tests/test_workflow_graph.c)
-  add_csilk_test(test_workflow_exec tests/test_workflow_exec.c)
-  add_csilk_test(test_workflow_parallel tests/test_workflow_parallel.c)
-  add_csilk_test(test_workflow_agentic tests/test_workflow_agentic.c)
-  add_csilk_test(test_workflow_control tests/test_workflow_control.c)
-  add_csilk_test(test_workflow_dx tests/test_workflow_dx.c)
-  add_csilk_test(test_workflow_persistence tests/test_workflow_persistence.c)
-  add_csilk_test(test_workflow_tracing tests/test_workflow_tracing.c)
-  add_csilk_test(test_workflow_loader tests/test_workflow_loader.c)
-  add_csilk_test(test_workflow_tools tests/test_workflow_tools.c)
-  add_csilk_test(test_workflow_monitor tests/test_workflow_monitor.c)
-  add_csilk_test(test_workflow_jsonpath tests/test_workflow_jsonpath.c)
-  add_csilk_test(test_workflow_budget tests/test_workflow_budget.c)
-  add_csilk_test(test_workflow_timeout tests/test_workflow_timeout.c)
-  add_csilk_test(test_workflow_interactive tests/test_workflow_interactive.c)
-  add_csilk_test(test_workflow_streaming tests/test_workflow_streaming.c)
-  add_csilk_test(test_workflow_schema tests/test_workflow_schema.c)
-  add_csilk_test(test_workflow_retry tests/test_workflow_retry.c)
-  add_csilk_test(test_workflow_context tests/test_workflow_context.c)
-  add_csilk_test(test_workflow_distributed tests/test_workflow_distributed.c)
-  add_csilk_test(test_workflow_filters tests/test_workflow_filters.c)
-  add_csilk_test(test_workflow_parallel_tools tests/test_workflow_parallel_tools.c)
-  add_csilk_test(test_mq_integration tests/test_mq_integration.c)
-  add_csilk_test(test_mq tests/test_mq.c)
-  add_csilk_test(test_mq_persistence tests/test_mq_persistence.c)
-  add_csilk_test(test_mq_wal_write tests/test_mq_wal_write.c)
-  add_csilk_test(test_mq_recovery tests/test_mq_recovery.c)
-  add_csilk_test(test_mq_wal tests/test_mq_wal.c)
-  add_csilk_test(test_mq_monitor tests/test_mq_monitor.c)
+  set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
+  list(APPEND CSILK_ALL_TEST_NAMES test_timeout)
+
   if(ENABLE_OOM_TEST)
       add_executable(test_oom tests/test_oom.c)
       target_compile_definitions(test_oom PRIVATE TEST_OOM)
       target_link_libraries(test_oom csilk pthread)
       add_test(NAME test_oom COMMAND test_oom)
   endif()
-
-  # Extended coverage tests
-  add_csilk_test(test_context_ext tests/test_context_ext.c)
-  add_csilk_test(test_url_ext tests/test_url_ext.c)
-  add_csilk_test(test_utils_ext tests/test_utils_ext.c)
-  add_csilk_test(test_cors_ext tests/test_cors_ext.c)
-  add_csilk_test(test_recovery_ext tests/test_recovery_ext.c)
-  add_csilk_test(test_request_id tests/test_request_id.c)
-  add_csilk_test(test_csrf_ext tests/test_csrf_ext.c)
-  add_csilk_test(test_perm_ext tests/test_perm_ext.c)
-  add_csilk_test(test_logger_ext tests/test_logger_ext.c)
-  add_csilk_test(test_app_ext tests/test_app_ext.c)
-  add_csilk_test(test_group_ext tests/test_group_ext.c)
-  add_csilk_test(test_config_comprehensive tests/test_config_comprehensive.c)
-  add_csilk_test(test_session_ext tests/test_session_ext.c)
-  add_csilk_test(test_server_ext tests/test_server_ext.c)
-  add_csilk_test(test_ai_ext tests/test_ai_ext.c)
-
-  add_csilk_test(test_async_keepalive tests/test_async_keepalive.c)
-  add_csilk_test(test_https tests/test_https.c)
-  set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
 
   option(USE_FUZZER "Enable libFuzzer" OFF)
   if(USE_FUZZER)
@@ -448,41 +308,26 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_link_libraries(fuzz_test csilk)
   endif()
 
-  # Integration tests
- add_executable(test_integration tests/test_integration.c)
- target_link_libraries(test_integration csilk)
- add_test(NAME test_integration COMMAND test_integration)
-
- add_executable(test_app_integration tests/test_app_integration.c)
- target_link_libraries(test_app_integration csilk)
- add_test(NAME test_app_integration COMMAND test_app_integration)
-
-  # Example server
+  # Examples
   add_executable(example_server examples/example_server.c)
   target_link_libraries(example_server csilk)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
 
-  # Easy API example
   add_executable(example_app examples/example_app.c)
   target_link_libraries(example_app csilk)
 
-  # AI example
   add_executable(example_ai examples/example_ai.c)
   target_link_libraries(example_ai csilk)
 
-  # AI Workflow example
   add_executable(example_ai_workflow examples/example_ai_workflow.c)
   target_link_libraries(example_ai_workflow csilk)
 
-  # Workflow UI example
   add_executable(example_workflow_ui examples/example_workflow_ui.c)
   target_link_libraries(example_workflow_ui csilk)
 
-  # Admin Dashboard example
   add_executable(example_admin_dashboard examples/example_admin_dashboard.c)
   target_link_libraries(example_admin_dashboard csilk)
 
-  # Database example
   add_executable(example_db examples/example_db.c)
   target_link_libraries(example_db csilk)
 endif()
@@ -490,7 +335,7 @@ endif()
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_cipher test_storage test_perm test_db test_mongodb test_ai test_extra test_async_keepalive test_https test_integration test_app_integration test_swagger test_metrics test_workflow_lifecycle test_workflow_graph test_workflow_exec test_workflow_parallel test_workflow_agentic test_workflow_control test_workflow_dx test_workflow_persistence test_workflow_tracing test_workflow_loader test_workflow_tools test_workflow_monitor test_workflow_jsonpath test_workflow_budget test_workflow_timeout test_workflow_interactive test_workflow_streaming test_workflow_schema test_workflow_retry test_workflow_context test_workflow_distributed test_workflow_filters test_workflow_parallel_tools test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_mq_monitor test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext test_server_ext test_ai_ext
+    DEPENDS csilk ${CSILK_ALL_TEST_NAMES}
     COMMENT "Running all tests with ctest"
 )
 
@@ -600,6 +445,6 @@ endif()
 
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
-set(CPACK_PACKAGE_VERSION "0.2.1")
+set(CPACK_PACKAGE_VERSION "0.2.3")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Csilk")
 include(CPack)
