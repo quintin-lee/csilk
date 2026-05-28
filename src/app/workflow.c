@@ -1067,19 +1067,21 @@ char* csilk_wf_to_mermaid(csilk_wf_t* wf) {
   for (size_t i = 0; i < wf->node_count; i++) {
     csilk_wf_node_t* n = wf->nodes[i];
     char line[512];
-    snprintf(line, sizeof(line), "  %s[%s]\n", n->id, n->id);
+    // Quote node IDs and labels to handle special characters
+    snprintf(line, sizeof(line), "  \"%s\"[\"%s\"]\n", n->id, n->id);
     strcat(buf, line);
     for (size_t j = 0; j < n->edge_count; j++) {
       csilk_wf_edge_t* e = &n->edges[j];
       if (e->condition)
-        snprintf(line, sizeof(line), "  %s -- %s --> %s\n", n->id, e->condition,
+        snprintf(line, sizeof(line), "  \"%s\" -- \"%s\" --> \"%s\"\n", n->id, e->condition,
                  e->target->id);
       else
-        snprintf(line, sizeof(line), "  %s --> %s\n", n->id, e->target->id);
+        snprintf(line, sizeof(line), "  \"%s\" --> \"%s\"\n", n->id, e->target->id);
       strcat(buf, line);
     }
     if (n->error_target) {
-      snprintf(line, sizeof(line), "  %s -. error .-> %s\n", n->id,
+      // Use standard dotted line for errors
+      snprintf(line, sizeof(line), "  \"%s\" -. \"error\" .-> \"%s\"\n", n->id,
                n->error_target->id);
       strcat(buf, line);
     }
