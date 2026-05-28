@@ -450,6 +450,17 @@ struct csilk_mq_s {
   char* wal_path;       /**< Path to the WAL file (heap-allocated copy, NULL if
                            disabled). */
   uv_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
+
+  /* Monitoring */
+  uint64_t published_total; /**< Total messages published. */
+  uint64_t delivered_total; /**< Total messages delivered. */
+  uint64_t failed_total;    /**< Total messages failed. */
+  uint32_t queue_depth;     /**< Current messages in memory. */
+
+  csilk_ctx_t** monitors;   /**< WebSocket monitor connections. */
+  size_t monitor_count;     /**< Number of monitors. */
+  size_t monitor_capacity;  /**< Monitor array capacity. */
+  uv_mutex_t monitor_mutex; /**< Protects monitor array. */
 };
 
 /**
