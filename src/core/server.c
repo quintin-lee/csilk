@@ -2116,3 +2116,9 @@ static void flush_tls_write(csilk_client_t* client) {
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server) {
   return server ? server->mq : NULL;
 }
+
+csilk_server_t* csilk_ctx_get_server(csilk_ctx_t* c) {
+  if (!c) return NULL;
+  csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+  return client ? client->server : NULL;
+}

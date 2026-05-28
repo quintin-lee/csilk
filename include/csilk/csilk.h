@@ -1905,6 +1905,13 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler);
 /** @brief Main Server structure. */
 typedef struct csilk_server_s csilk_server_t;
 
+/**
+ * @brief Get the server instance associated with the current context.
+ * @param c The request context.
+ * @return Server handle, or NULL on error.
+ */
+csilk_server_t* csilk_ctx_get_server(csilk_ctx_t* c);
+
 /* --- Hook System --- */
 
 /**
@@ -2224,6 +2231,8 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
  * @param c  The request context.
  */
 void csilk_metrics_handler(csilk_ctx_t* c);
+uint64_t csilk_metrics_get_total_requests(void);
+uint64_t csilk_metrics_get_total_duration(void);
 
 /**
  * @brief Opaque Message Queue (event bus) instance.
