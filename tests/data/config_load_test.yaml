@@ -1,0 +1,20 @@
+port: 8098
+server:
+  idle_timeout_ms: 3000
+  read_timeout_ms: 10000
+  write_timeout_ms: 10000
+  max_body_size: 1048576
+  max_header_size: 16384
+  max_url_size: 4096
+  max_headers_count: 50
+  max_connections: 100
+  listen_backlog: 64
+  tcp_nodelay: 1
+  tcp_keepalive: 30
+  worker_threads: 1
+logger:
+  level: DEBUG
+  file_path: "test_config_load.log"
+middleware:
+  enable_logger: 1
+  enable_recovery: 1

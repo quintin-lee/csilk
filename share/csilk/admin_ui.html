@@ -271,6 +271,10 @@
 
         let currentTab = 'overview';
         let ws = null;
+        let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        let reconnectEnabled = true;
+        const MAX_RECONNECT_DELAY = 30000;
         let chart = null;
         let currentTopology = 'graph TD\nSELECT["Select a workflow to visualize"]';
 
@@ -467,12 +471,18 @@
             }
         }
 
-        document.getElementById('connect-btn').onclick = () => {
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Already connected — disconnect instead
+                ws.close();
+                return;
+            }
             const url = `ws://${window.location.host}/admin/ws`;
             ws = new WebSocket(url);
             ws.onopen = () => {
+                reconnectAttempts = 0;
                 document.getElementById('ws-status').innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Online';
-                document.getElementById('connect-btn').innerText = 'Reconnect';
+                document.getElementById('connect-btn').innerText = 'Disconnect';
             };
             ws.onmessage = (e) => {
                 const data = JSON.parse(e.data);
@@ -481,6 +491,36 @@
                 else if (data.event?.startsWith('ai_')) handleAIEvent(data);
                 else handleWorkflowEvent(data);
             };
+            ws.onclose = () => {
+                document.getElementById('ws-status').innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span> Offline';
+                document.getElementById('connect-btn').innerText = 'Connect';
+                ws = null;
+                if (reconnectEnabled) {
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+                    reconnectAttempts++;
+                    const statusEl = document.getElementById('ws-status');
+                    statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-500"></span> Reconnecting in ${(delay/1000).toFixed(0)}s (attempt ${reconnectAttempts})`;
+                    reconnectTimer = setTimeout(connectWebSocket, delay);
+                }
+            };
+            ws.onerror = () => {
+                // onclose will fire after onerror, triggering reconnect
+            };
+        }
+
+        document.getElementById('connect-btn').onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                reconnectEnabled = false;
+                ws.close();
+            } else {
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+                reconnectEnabled = true;
+                reconnectAttempts = 0;
+                connectWebSocket();
+            }
         };
 
         // Polling for JSON stats
