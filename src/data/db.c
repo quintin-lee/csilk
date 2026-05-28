@@ -70,6 +70,9 @@ void csilk_db_init(void) {
 #ifdef HAS_POSTGRES
   csilk_db_postgres_init();
 #endif
+#ifdef HAS_MONGODB
+  csilk_db_mongodb_init();
+#endif
 }
 
 /** @brief Statically-sized registry of registered database drivers (max 16). */

@@ -151,6 +151,23 @@ else()
   message(STATUS "PostgreSQL client library not found — postgres driver will not build")
 endif()
 
+# Find MongoDB (optional)
+find_library(MONGOC_LIB NAMES mongoc-1.0)
+find_library(BSON_LIB NAMES bson-1.0)
+if(MONGOC_LIB AND BSON_LIB)
+  message(STATUS "Found MongoDB client library: ${MONGOC_LIB}")
+  find_path(MONGOC_INCLUDE_DIR mongoc/mongoc.h PATHS /usr/include/libmongoc-1.0 /usr/local/include/libmongoc-1.0)
+  find_path(BSON_INCLUDE_DIR bson/bson.h PATHS /usr/include/libbson-1.0 /usr/local/include/libbson-1.0)
+  if(MONGOC_INCLUDE_DIR AND BSON_INCLUDE_DIR)
+    include_directories(${MONGOC_INCLUDE_DIR})
+    include_directories(${BSON_INCLUDE_DIR})
+    message(STATUS "Found MongoDB include dir: ${MONGOC_INCLUDE_DIR}")
+    set(HAS_MONGODB TRUE)
+  endif()
+else()
+  message(STATUS "MongoDB client library not found — mongodb driver will not build")
+endif()
+
 # Source files
 set(CSILK_SOURCES
     src/core/context.c
@@ -205,6 +222,11 @@ if(PQ_LIB AND PQ_INCLUDE_DIR)
   add_definitions(-DHAS_POSTGRES)
 endif()
 
+if(HAS_MONGODB)
+  list(APPEND CSILK_SOURCES src/drivers/mongodb.c)
+  add_definitions(-DHAS_MONGODB)
+endif()
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
@@ -237,6 +259,9 @@ if(MYSQL_LIB)
 endif()
 if(PQ_LIB)
   target_link_libraries(csilk PRIVATE ${PQ_LIB})
+endif()
+if(HAS_MONGODB)
+  target_link_libraries(csilk PRIVATE ${MONGOC_LIB} ${BSON_LIB})
 endif()
 target_include_directories(csilk PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -334,6 +359,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_csilk_test(test_storage tests/test_storage.c)
   add_csilk_test(test_perm tests/test_perm.c)
   add_csilk_test(test_db tests/test_db.c)
+  add_csilk_test(test_mongodb tests/test_mongodb.c)
   add_csilk_test(test_ai tests/test_ai.c)
   add_csilk_test(test_extra tests/test_extra.c)
   add_csilk_test(test_metrics tests/test_metrics.c)
@@ -440,7 +466,7 @@ endif()
 # Add run_tests custom target
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_cipher test_storage test_perm test_db test_ai test_extra test_async_keepalive test_https test_integration test_app_integration test_swagger test_metrics test_workflow_lifecycle test_workflow_graph test_workflow_exec test_workflow_parallel test_workflow_agentic test_workflow_control test_workflow_dx test_workflow_persistence test_workflow_tracing test_workflow_loader test_workflow_tools test_workflow_monitor test_workflow_jsonpath test_workflow_budget test_workflow_timeout test_workflow_interactive test_workflow_streaming test_workflow_schema test_workflow_retry test_workflow_context test_workflow_distributed test_workflow_filters test_workflow_parallel_tools test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext test_server_ext test_ai_ext
+    DEPENDS csilk test_gzip test_logger test_static test_context test_router test_radix test_group test_headers test_server test_query test_json test_recovery test_auth test_ws test_config test_config_validate test_cookie test_reflect test_keepalive test_edge test_timeout test_arena test_url_decode test_utils test_form test_ip test_cors test_multipart test_sse test_ratelimit test_app test_csrf test_redirect test_session test_validate test_jwt test_hooks test_crypto_driver test_cipher test_storage test_perm test_db test_mongodb test_ai test_extra test_async_keepalive test_https test_integration test_app_integration test_swagger test_metrics test_workflow_lifecycle test_workflow_graph test_workflow_exec test_workflow_parallel test_workflow_agentic test_workflow_control test_workflow_dx test_workflow_persistence test_workflow_tracing test_workflow_loader test_workflow_tools test_workflow_monitor test_workflow_jsonpath test_workflow_budget test_workflow_timeout test_workflow_interactive test_workflow_streaming test_workflow_schema test_workflow_retry test_workflow_context test_workflow_distributed test_workflow_filters test_workflow_parallel_tools test_mq_integration test_mq test_mq_persistence test_mq_wal_write test_mq_recovery test_mq_wal test_context_ext test_url_ext test_utils_ext test_cors_ext test_recovery_ext test_request_id test_csrf_ext test_perm_ext test_logger_ext test_app_ext test_group_ext test_config_comprehensive test_session_ext test_server_ext test_ai_ext
     COMMENT "Running all tests with ctest"
 )
 
