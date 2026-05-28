@@ -605,11 +605,13 @@ static int on_url(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   size_t max_url = client->server->config.max_url_size;
   if (max_url > 0 && length > max_url) {
+    fprintf(stderr, "[debug] on_url max_url exceeded\n");
     return HPE_USER;
   }
   if (client->current_url) free(client->current_url);
   client->current_url = malloc(length + 1);
   if (!client->current_url) {
+    fprintf(stderr, "[debug] on_url malloc failed\n");
     return HPE_USER;
   }
   memcpy(client->current_url, at, length);
@@ -631,11 +633,13 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
   if (client->total_header_size > client->server->config.max_header_size) {
+    fprintf(stderr, "[debug] on_header_field max_header_size exceeded\n");
     return HPE_USER;
   }
   client->header_count++;
   if (client->server->config.max_headers_count > 0 &&
       client->header_count > client->server->config.max_headers_count) {
+    fprintf(stderr, "[debug] on_header_field max_headers_count exceeded\n");
     return HPE_USER;
   }
 
@@ -656,6 +660,7 @@ static int on_header_field(llhttp_t* p, const char* at, size_t length) {
 
   client->current_header_field = malloc(length + 1);
   if (!client->current_header_field) {
+    fprintf(stderr, "[debug] on_header_field malloc failed\n");
     return HPE_USER;
   }
   memcpy(client->current_header_field, at, length);
@@ -697,6 +702,7 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
   csilk_client_t* client = (csilk_client_t*)p->data;
   client->total_header_size += length;
   if (client->total_header_size > client->server->config.max_header_size) {
+    fprintf(stderr, "[debug] on_header_value max_header_size exceeded\n");
     return HPE_USER;
   }
 
@@ -710,6 +716,7 @@ static int on_header_value(llhttp_t* p, const char* at, size_t length) {
     client->current_header_value = NULL;
     client->header_value_capacity = 0;
     client->total_header_size = 0;
+    fprintf(stderr, "[debug] on_header_value realloc failed\n");
     return HPE_USER;
   }
   client->current_header_value = new_val;
@@ -1598,7 +1605,29 @@ void csilk_server_get_stats(csilk_server_t* server, int* active_conn,
 void csilk_server_set_config(csilk_server_t* server,
                              const csilk_server_config_t* config) {
   if (!server || !config) return;
+
+  /* Preserve old config to retain defaults for unprovided (zero) fields */
+  csilk_server_config_t old = server->config;
+
   server->config = *config;
+
+  if (server->config.idle_timeout_ms == 0) {
+    server->config.idle_timeout_ms =
+        old.idle_timeout_ms ? old.idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT;
+  }
+  if (server->config.max_body_size == 0) {
+    server->config.max_body_size =
+        old.max_body_size ? old.max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
+  }
+  if (server->config.max_header_size == 0) {
+    server->config.max_header_size = old.max_header_size
+                                         ? old.max_header_size
+                                         : CSILK_DEFAULT_MAX_HEADER_SIZE;
+  }
+  if (server->config.listen_backlog == 0) {
+    server->config.listen_backlog =
+        old.listen_backlog ? old.listen_backlog : CSILK_DEFAULT_LISTEN_BACKLOG;
+  }
 }
 
 /** @brief Set the maximum number of concurrent client connections.
