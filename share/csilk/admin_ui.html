@@ -29,6 +29,9 @@
             <button onclick="switchTab('overview')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview
             </button>
+            <button onclick="switchTab('sys')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="cpu" class="w-4 h-4"></i> System
+            </button>
             <button onclick="switchTab('workflows')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
                 <i data-lucide="git-branch" class="w-4 h-4"></i> Workflows
             </button>
@@ -85,6 +88,28 @@
                 </div>
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 h-80">
                     <canvas id="metrics-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- System Tab -->
+            <div id="tab-sys" class="tab-content hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Active Conns</p>
+                        <h3 id="sys-stat-conn-active" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Pooled Clients</p>
+                        <h3 id="sys-stat-conn-pool" class="text-2xl font-bold">0</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Size</p>
+                        <h3 id="sys-stat-arena-size" class="text-2xl font-bold">0 KB</h3>
+                    </div>
+                    <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                        <p class="text-xs font-semibold text-slate-500 uppercase mb-1">Arena Used</p>
+                        <h3 id="sys-stat-arena-used" class="text-2xl font-bold">0 KB</h3>
+                    </div>
                 </div>
             </div>
 
@@ -271,6 +296,13 @@
                 document.getElementById('ai-stat-tokens').innerText = data.ai.tokens;
                 document.getElementById('ai-stat-errors').innerText = data.ai.errors;
                 document.getElementById('ai-stat-latency').innerText = `${(data.ai.avg_duration || 0).toFixed(0)} ms`;
+            }
+
+            if (data.sys) {
+                document.getElementById('sys-stat-conn-active').innerText = data.sys.active_connections;
+                document.getElementById('sys-stat-conn-pool').innerText = data.sys.pooled_connections;
+                document.getElementById('sys-stat-arena-size').innerText = `${data.sys.arena_size_kb.toFixed(1)} KB`;
+                document.getElementById('sys-stat-arena-used').innerText = `${data.sys.arena_used_kb.toFixed(1)} KB`;
             }
 
             if (data.db) {
