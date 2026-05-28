@@ -1,19 +1,85 @@
-/* Mermaid diagram styling for Doxygen HTML output */
+/* ==========================================
+   Mermaid Diagram Styling for Doxygen HTML
+   ========================================== */
 
+/* ---------- CSS Custom Properties ---------- */
+html,
+html[data-color-mode="light"] {
+  --mermaid-bg: #ffffff;
+  --mermaid-border: rgba(0, 0, 0, 0.06);
+  --mermaid-shadow: rgba(0, 0, 0, 0.04);
+  --mermaid-shadow-subtle: rgba(0, 0, 0, 0.02);
+  --mermaid-shadow-hover: rgba(0, 0, 0, 0.08);
+  --mermaid-thumb: rgba(0, 0, 0, 0.15);
+  --mermaid-thumb-hover: rgba(0, 0, 0, 0.3);
+}
+
+html[data-color-mode="dark"] {
+  --mermaid-bg: rgba(30, 30, 34, 0.55);
+  --mermaid-border: rgba(255, 255, 255, 0.08);
+  --mermaid-shadow: rgba(0, 0, 0, 0.3);
+  --mermaid-shadow-subtle: rgba(0, 0, 0, 0.2);
+  --mermaid-shadow-hover: rgba(0, 0, 0, 0.4);
+  --mermaid-thumb: rgba(255, 255, 255, 0.2);
+  --mermaid-thumb-hover: rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- Container ---------- */
 div.mermaid {
   text-align: center;
-  margin: 1.5em 0;
-  padding: 0.5em;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  max-width: 95%;
+
+  background: var(--mermaid-bg);
+  border: 1px solid var(--mermaid-border);
+  border-radius: 12px;
+
+  box-shadow: 0 4px 20px -2px var(--mermaid-shadow),
+              0 2px 8px -1px var(--mermaid-shadow-subtle);
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
+
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mermaid-thumb) transparent;
 }
 
+div.mermaid:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px -4px var(--mermaid-shadow-hover);
+}
+
+/* ---------- SVG ---------- */
 div.mermaid svg {
-  max-width: 100%;
+  max-width: 100% !important;
   height: auto;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-/* Dark mode support: Mermaid dark theme SVGs render natively on dark backgrounds.
-   No invert/hue-rotate needed — just ensure the SVG background is transparent. */
+/* ---------- Webkit scrollbar (Chrome/Safari/Edge) ---------- */
+div.mermaid::-webkit-scrollbar {
+  height: 6px;
+}
+div.mermaid::-webkit-scrollbar-track {
+  background: transparent;
+}
+div.mermaid::-webkit-scrollbar-thumb {
+  background: var(--mermaid-thumb);
+  border-radius: 4px;
+}
+div.mermaid::-webkit-scrollbar-thumb:hover {
+  background: var(--mermaid-thumb-hover);
+}
+
+/* ---------- Dark mode overrides ---------- */
+html[data-color-mode="dark"] div.mermaid {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 html[data-color-mode="dark"] div.mermaid svg {
   background: transparent;
+  filter: brightness(1.08);
 }
