@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
@@ -39,11 +40,17 @@ test_metrics()
 	assert(strstr(c.response.body, "http_requests_total_agg 1") != NULL);
 	assert(strstr(c.response.body, "http_request_duration_microseconds_agg") != NULL);
 
+	free((void*)c.response.body);
+	c.response.body = NULL;
+
 	/* Second request */
 	c.handler_index = -1; /* reset for next run */
 	csilk_next(&c);
 	csilk_metrics_handler(&c);
 	assert(strstr(c.response.body, "http_requests_total_agg 2") != NULL);
+
+	free((void*)c.response.body);
+	c.response.body = NULL;
 
 	csilk_arena_free(c.arena);
 	printf("Metrics test passed!\n");

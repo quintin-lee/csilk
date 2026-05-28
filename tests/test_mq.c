@@ -38,7 +38,8 @@ test_mq_flow()
 	printf("Testing MQ Flow...\n");
 	uv_loop_t* loop = uv_default_loop();
 
-	csilk_server_t* server = csilk_server_new(csilk_router_new());
+	csilk_router_t* router = csilk_router_new();
+	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
 	csilk_mq_use(mq, NULL, global_mw);
@@ -60,6 +61,7 @@ test_mq_flow()
 	assert(sub_called == 1);
 
 	csilk_server_free(server);
+	csilk_router_free(router);
 	printf("test_mq_flow: PASS\n");
 }
 
@@ -77,7 +79,8 @@ test_mq_wildcard()
 	printf("Testing MQ Wildcard Topic Matching...\n");
 	uv_loop_t* loop = uv_default_loop();
 
-	csilk_server_t* server = csilk_server_new(csilk_router_new());
+	csilk_router_t* router = csilk_router_new();
+	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
 	wildcard_sub_called = 0;
@@ -99,6 +102,7 @@ test_mq_wildcard()
 	assert(wildcard_sub_called == 2);
 
 	csilk_server_free(server);
+	csilk_router_free(router);
 	printf("test_mq_wildcard: PASS\n");
 }
 
@@ -128,7 +132,8 @@ test_mq_offload()
 	printf("Testing MQ Offload (Background Worker)...\n");
 	uv_loop_t* loop = uv_default_loop();
 
-	csilk_server_t* server = csilk_server_new(csilk_router_new());
+	csilk_router_t* router = csilk_router_new();
+	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
 	offload_worker_called = 0;
@@ -148,6 +153,7 @@ test_mq_offload()
 	assert(strcmp(offload_payload, "work") == 0);
 
 	csilk_server_free(server);
+	csilk_router_free(router);
 	printf("test_mq_offload: PASS\n");
 }
 

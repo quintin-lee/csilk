@@ -21,7 +21,7 @@ mock_worker_handler(csilk_mq_ctx_t* ctx)
 {
 	size_t len;
 	const char* payload = csilk_mq_get_payload(ctx, &len);
-	printf("[MockWorker] Received task: %s\n", payload);
+	printf("[MockWorker] Received task: %.*s\n", (int)len, payload);
 	g_remote_task_received++;
 
 	cJSON* root = cJSON_Parse(payload);

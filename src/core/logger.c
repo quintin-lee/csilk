@@ -229,7 +229,10 @@ build_json_entry(csilk_log_level_t lv,
 		entry.msg[cp] = '\0';
 	}
 
-	return cJSON_Parse(csilk_json_marshal("csilk_log_entry_t", &entry));
+	char* tmp = csilk_json_marshal("csilk_log_entry_t", &entry);
+	cJSON* result = tmp ? cJSON_Parse(tmp) : NULL;
+	free(tmp);
+	return result;
 }
 
 /** @brief Format and write a structured JSON log line with optional extra

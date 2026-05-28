@@ -101,7 +101,14 @@ sqlite_free_result(csilk_db_result_t* result)
 		return;
 	}
 	for (int i = 0; i < result->row_count; i++) {
-		free(result->rows[i]);
+		csilk_db_row_t* row = result->rows[i];
+		if (row) {
+			for (int j = 0; j < row->count; j++) {
+				free(row->values[j]);
+			}
+			free(row->values);
+			free(row);
+		}
 	}
 	free(result->rows);
 	for (int i = 0; i < result->column_count; i++) {
