@@ -33,51 +33,28 @@
  * @copyright MIT License
  */
 
-#include "csilk/drivers/db.h"
-
-#include <cJSON.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <uv.h>
 
-#include "csilk/csilk.h"
+#include "cJSON.h"
+#include "csilk/drivers/db.h"
 
-/** @brief Mutex protecting the driver registry during registration/lookup. */
-static uv_mutex_t registry_mutex;
-static int registry_initialized = 0;
+/* --- Global DB Metrics --- */
+static atomic_uint_fast64_t db_queries_total = 0;
+static atomic_uint_fast64_t db_execs_total = 0;
+static atomic_uint_fast64_t db_errors_total = 0;
+static atomic_uint_fast64_t db_duration_us_total = 0;
 
-/** @brief Initialize the database subsystem (call once at process startup).
- *
- * ## Double-checked locking pattern
- * Uses GCC __sync_val_compare_and_swap (atomic CAS) for thread-safe
- * single initialization without a full mutex on the fast path:
- *   1. Atomic CAS sets registry_initialized from 0→1. Only the winning
- *      thread enters the body.
- *   2. Inside: initializes the registry mutex.
- *   3. Registers built-in drivers: SQLite3 always; MySQL and PostgreSQL
- *      only if compiled with HAS_MYSQL / HAS_POSTGRES.
- *
- * @note Must be called before any csilk_db_pool_new() or driver registration
- *       calls. Safe to call from multiple threads concurrently. */
-void csilk_db_init(void) {
-  if (__sync_val_compare_and_swap(&registry_initialized, 0, 1) == 0) {
-    uv_mutex_init(&registry_mutex);
-  }
-  csilk_db_sqlite_init();
-#ifdef HAS_MYSQL
-  csilk_db_mysql_init();
-#endif
-#ifdef HAS_POSTGRES
-  csilk_db_postgres_init();
-#endif
-#ifdef HAS_MONGODB
-  csilk_db_mongodb_init();
-#endif
+void csilk_db_get_stats(csilk_db_stats_t* stats) {
+  if (!stats) return;
+  stats->queries_total = atomic_load(&db_queries_total);
+  stats->execs_total = atomic_load(&db_execs_total);
+  stats->errors_total = atomic_load(&db_errors_total);
+  stats->duration_us_total = atomic_load(&db_duration_us_total);
 }
-
-/** @brief Statically-sized registry of registered database drivers (max 16). */
-static csilk_db_driver_t* drivers[16];
-static int driver_count = 0;
 
 /** @brief Internal: execute a query and return the result as a cJSON array.
  *
@@ -199,9 +176,19 @@ void csilk_db_pool_free(csilk_db_pool_t* pool) {
 cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->driver || !pool->driver->query) return NULL;
 
+  uint64_t start = uv_hrtime();
   uv_mutex_lock(&pool->mutex);
   cJSON* result = csilk_db_query_json_locked(pool, sql);
   uv_mutex_unlock(&pool->mutex);
+
+  uint64_t duration = (uv_hrtime() - start) / 1000;
+  atomic_fetch_add(&db_duration_us_total, duration);
+
+  if (!result) {
+    atomic_fetch_add(&db_errors_total, 1);
+  } else {
+    atomic_fetch_add(&db_queries_total, 1);
+  }
   return result;
 }
 
@@ -209,9 +196,20 @@ cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql) {
  * return rows. */
 int csilk_db_exec(csilk_db_pool_t* pool, const char* sql) {
   if (!pool || !pool->driver || !pool->driver->exec) return -1;
+
+  uint64_t start = uv_hrtime();
   uv_mutex_lock(&pool->mutex);
   int rc = pool->driver->exec(pool, sql);
   uv_mutex_unlock(&pool->mutex);
+
+  uint64_t duration = (uv_hrtime() - start) / 1000;
+  atomic_fetch_add(&db_duration_us_total, duration);
+
+  if (rc != 0) {
+    atomic_fetch_add(&db_errors_total, 1);
+  } else {
+    atomic_fetch_add(&db_execs_total, 1);
+  }
   return rc;
 }
 
@@ -232,86 +230,109 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql) {
  * containing "' OR '1'='1" will inject into the SQL verbatim.
  *
  * @param pool   Database pool.
- * @param sql    SQL query with '?' placeholders.
- * @param params NULL-terminated array of string parameter values.
- * @return A cJSON array of row objects, or NULL on failure.
- * @note Thread-safe (mutex-protected).
- * @warning This function does NOT properly escape parameter values. For
- *          production use with untrusted input, use the driver's native
- *          prepared statement API instead. */
+ * @param sql    SQL pattern with ? placeholders.
+ * @param params NULL-terminated array of string values. */
 cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql,
                                  const char** params) {
-  if (!pool || !pool->driver || !pool->driver->query) return NULL;
+  if (!pool || !sql || !params) return NULL;
 
-  // Build query with parameters (simplified - adds quotes for strings)
-  size_t sql_len = strlen(sql);
-  size_t param_count = 0;
-  const char** p = params;
-  while (*p) {
-    sql_len += strlen(*p) + 2; /* +2 for quotes */
-    param_count++;
-    p++;
+  uint64_t start = uv_hrtime();
+
+  size_t len = strlen(sql);
+  for (int i = 0; params[i]; i++) {
+    len += strlen(params[i]) + 2; /* +2 for quotes */
   }
 
-  char* full_sql = malloc(sql_len + 32); /* extra buffer for quotes */
+  char* full_sql = malloc(len + 1);
   if (!full_sql) return NULL;
 
-  int pos = 0;
-  p = params;
+  char* p = full_sql;
   int param_idx = 0;
-  for (size_t i = 0; sql[i]; i++) {
-    if (sql[i] == '?' && param_idx < param_count) {
-      const char* val = p[param_idx];
-      full_sql[pos++] = '\'';
-      if (val) {
-        size_t len = strlen(val);
-        memcpy(full_sql + pos, val, len);
-        pos += len;
-      }
-      full_sql[pos++] = '\'';
+  for (const char* c = sql; *c; c++) {
+    if (*c == '?' && params[param_idx]) {
+      *p++ = '\'';
+      size_t plen = strlen(params[param_idx]);
+      memcpy(p, params[param_idx], plen);
+      p += plen;
+      *p++ = '\'';
       param_idx++;
     } else {
-      full_sql[pos++] = sql[i];
+      *p++ = *c;
     }
   }
-  full_sql[pos] = '\0';
+  *p = '\0';
 
   uv_mutex_lock(&pool->mutex);
   cJSON* result = csilk_db_query_json_locked(pool, full_sql);
   uv_mutex_unlock(&pool->mutex);
+
+  uint64_t duration = (uv_hrtime() - start) / 1000;
+  atomic_fetch_add(&db_duration_us_total, duration);
+
+  if (!result) {
+    atomic_fetch_add(&db_errors_total, 1);
+  } else {
+    atomic_fetch_add(&db_queries_total, 1);
+  }
+
   free(full_sql);
   return result;
 }
 
-/** @brief Register a database driver in the global registry.
+/* --- Driver Registry --- */
+
+/** @brief Statically-sized registry of registered database drivers (max 16). */
+static csilk_db_driver_t* drivers[16];
+static int driver_count = 0;
+static uv_mutex_t registry_mutex;
+static int registry_initialized = 0;
+
+static void ensure_registry_init(void) {
+  if (!registry_initialized) {
+    uv_mutex_init(&registry_mutex);
+    registry_initialized = 1;
+  }
+}
+
+/** @brief Initialise the database subsystem.
  *
- * Appends the driver to the fixed-size drivers[] array (max 16).
- * The driver's `name` field is set to the provided `name` string.
- * The `name` pointer must remain valid for the lifetime of the driver
- * (typically a static string literal).
- *
- * @param name   Driver name for lookup (e.g., "sqlite3").
- * @param driver Driver vtable with connect/query/exec/free_result/disconnect.
- * @return 0 on success, -1 if the registry is full or parameters are NULL. */
+ * Registers all built-in drivers (SQLite3, MySQL, PostgreSQL, etc.).
+ * Must be called once before any csilk_db_pool_new call.
+ * Safe to call multiple times. */
+void csilk_db_init(void) {
+  ensure_registry_init();
+  csilk_db_sqlite_init();
+#ifdef HAS_MYSQL
+  csilk_db_mysql_init();
+#endif
+#ifdef HAS_POSTGRES
+  csilk_db_postgres_init();
+#endif
+#ifdef HAS_MONGODB
+  csilk_db_mongodb_init();
+#endif
+}
+
+/** @brief Statically-sized registry of registered database drivers (max 16). */
+
 int csilk_db_register_driver(const char* name, csilk_db_driver_t* driver) {
-  if (!name || !driver || driver_count >= 16) return -1;
+  if (!name || !driver) return -1;
+  ensure_registry_init();
 
   uv_mutex_lock(&registry_mutex);
-  driver->name = name;
+  if (driver_count >= 16) {
+    uv_mutex_unlock(&registry_mutex);
+    return -1;
+  }
   drivers[driver_count++] = driver;
   uv_mutex_unlock(&registry_mutex);
   return 0;
 }
 
-/** @brief Look up a registered database driver by name.
- *
- * Linear scan of the drivers[] array under the registry mutex.
- * Returns the first driver whose name matches (strcmp).
- *
- * @param name Driver name to look up (e.g., "sqlite3").
- * @return The registered driver, or NULL if not found. */
 csilk_db_driver_t* csilk_db_get_driver(const char* name) {
   if (!name) return NULL;
+  ensure_registry_init();
+
   uv_mutex_lock(&registry_mutex);
   for (int i = 0; i < driver_count; i++) {
     if (strcmp(drivers[i]->name, name) == 0) {
