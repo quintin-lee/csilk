@@ -30,14 +30,15 @@ void test_metrics() {
   /* Verify output */
   assert(c.response.status == CSILK_STATUS_OK);
   assert(c.response.body != NULL);
-  assert(strstr(c.response.body, "http_requests_total 1") != NULL);
-  assert(strstr(c.response.body, "http_request_duration_microseconds") != NULL);
+  assert(strstr(c.response.body, "http_requests_total_agg 1") != NULL);
+  assert(strstr(c.response.body, "http_request_duration_microseconds_agg") !=
+         NULL);
 
   /* Second request */
   c.handler_index = -1; /* reset for next run */
   csilk_next(&c);
   csilk_metrics_handler(&c);
-  assert(strstr(c.response.body, "http_requests_total 2") != NULL);
+  assert(strstr(c.response.body, "http_requests_total_agg 2") != NULL);
 
   csilk_arena_free(c.arena);
   printf("Metrics test passed!\n");

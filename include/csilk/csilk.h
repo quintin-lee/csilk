@@ -841,6 +841,11 @@ void csilk_request_id_middleware(csilk_ctx_t* c);
  * @param c The request context. */
 void csilk_health_check_handler(csilk_ctx_t* c);
 
+/** @brief Built-in Readiness Check handler.
+ * Performs deep health check (MQ, connections) and returns 200 or 503.
+ * @param c The request context. */
+void csilk_ready_check_handler(csilk_ctx_t* c);
+
 /**
  * @brief CORS middleware configuration.
  *
