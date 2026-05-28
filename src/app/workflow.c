@@ -679,6 +679,31 @@ static csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input,
   int iterations = 0;
   while (iterations < 10) {
     iterations++;
+
+    // Enforce context window limit
+    if (config->max_history_messages > 0 && msg_count > (size_t)config->max_history_messages) {
+        size_t keep = (size_t)config->max_history_messages;
+        size_t discard_start = 0;
+        size_t move_to = 0;
+
+        // If msgs[0] is system, always keep it
+        if (strcmp(msgs[0].role, "system") == 0) {
+            discard_start = 1;
+            move_to = 1;
+            keep--;
+        }
+
+        size_t discard_count = msg_count - (size_t)config->max_history_messages;
+        // Free discarded messages
+        for (size_t i = discard_start; i < discard_start + discard_count; i++) {
+            free((void*)msgs[i].content);
+        }
+
+        // Shift remaining messages
+        memmove(&msgs[move_to], &msgs[discard_start + discard_count], sizeof(csilk_ai_message_t) * keep);
+        msg_count = (size_t)config->max_history_messages;
+    }
+
     csilk_ai_chat_request_t req = {
         .model = config->model ? config->model : "gpt-3.5-turbo",
         .messages = msgs,
