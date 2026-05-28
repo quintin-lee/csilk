@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 // Fuzz test for csilk_split_url, csilk_parse_query, and routing
 

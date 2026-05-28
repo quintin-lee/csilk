@@ -28,18 +28,17 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-
 #include <stdint.h>
 
 /**
  * @brief AI Engine statistics.
  */
 typedef struct {
-  uint64_t requests_total;   /**< Total chat/embeddings calls. */
-  uint64_t tokens_total;     /**< Total tokens (prompt + completion). */
-  uint64_t prompt_tokens;    /**< Total prompt tokens. */
+  uint64_t requests_total;    /**< Total chat/embeddings calls. */
+  uint64_t tokens_total;      /**< Total tokens (prompt + completion). */
+  uint64_t prompt_tokens;     /**< Total prompt tokens. */
   uint64_t completion_tokens; /**< Total completion tokens. */
-  uint64_t errors_total;     /**< Total failed AI calls. */
+  uint64_t errors_total;      /**< Total failed AI calls. */
   uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
 } csilk_ai_stats_t;
 

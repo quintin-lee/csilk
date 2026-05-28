@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 static const char* get_response_header(csilk_ctx_t* ctx, const char* key) {
   for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {

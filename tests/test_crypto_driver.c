@@ -9,8 +9,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 static int custom_uuid_called = 0;
 static int custom_hmac_called = 0;

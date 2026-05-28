@@ -1,9 +1,9 @@
 #include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdint.h>
 
 // Define test structures with explicit tags for _Generic
 /** @brief Test structure for 2D point reflection tests. */
@@ -27,13 +27,15 @@ typedef struct TestArray_s {
 
 // Extend type map BEFORE including csilk.h/csilk_reflect.h
 #undef CSILK_USER_TYPE_MAP
-#define CSILK_USER_TYPE_MAP \
-  , struct TestUser_s : "TestUser", struct TestPoint_s : "TestPoint", struct TestArray_s : "TestArray"
+#define CSILK_USER_TYPE_MAP                               \
+  , struct TestUser_s : "TestUser",                       \
+                        struct TestPoint_s : "TestPoint", \
+                                             struct TestArray_s : "TestArray"
 
-#include "csilk/csilk.h"
-#include "csilk/reflection/reflect.h"
 #include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
+#include "csilk/reflection/reflect.h"
 
 #define POINT_REFLECT_MAP(X)                                         \
   X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL) \
@@ -49,8 +51,8 @@ typedef struct TestArray_s {
 CSILK_REGISTER_REFLECT(TestPoint, POINT_REFLECT_MAP)
 CSILK_REGISTER_REFLECT(TestUser, USER_REFLECT_MAP)
 
-#define ARRAY_REFLECT_MAP(X)                                                  \
-  X(TestArray, tags, CSILK_TYPE_STRING, 16, 3, false, NULL)                   \
+#define ARRAY_REFLECT_MAP(X)                                \
+  X(TestArray, tags, CSILK_TYPE_STRING, 16, 3, false, NULL) \
   X(TestArray, dynamic_tags, CSILK_TYPE_STRING, sizeof(char*), 2, true, NULL)
 
 CSILK_REGISTER_REFLECT(TestArray, ARRAY_REFLECT_MAP)
@@ -146,10 +148,8 @@ void test_basic_types() {
 void test_arrays() {
   printf("Testing array reflection...\n");
 
-  TestArray a = {
-      .tags = {"tag1", "tag2", "tag3"},
-      .dynamic_tags = {"dyn1", "dyn2"}
-  };
+  TestArray a = {.tags = {"tag1", "tag2", "tag3"},
+                 .dynamic_tags = {"dyn1", "dyn2"}};
 
   char* json = csilk_marshal(&a);
   assert(json != NULL);
@@ -157,7 +157,8 @@ void test_arrays() {
   assert(strstr(json, "\"dynamic_tags\":[\"dyn1\",\"dyn2\"]") != NULL);
   free(json);
 
-  const char* input = "{\"tags\":[\"A\",\"B\",\"C\"], \"dynamic_tags\":[\"D\",\"E\"]}";
+  const char* input =
+      "{\"tags\":[\"A\",\"B\",\"C\"], \"dynamic_tags\":[\"D\",\"E\"]}";
   TestArray a2 = {0};
   assert(csilk_unmarshal(input, &a2) == 1);
   assert(strcmp(a2.tags[0], "A") == 0);

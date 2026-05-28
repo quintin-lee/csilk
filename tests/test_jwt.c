@@ -10,8 +10,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 void test_jwt_core() {
   printf("Testing JWT core generation and verification...\n");

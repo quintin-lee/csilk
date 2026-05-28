@@ -9,8 +9,8 @@
 #include <string.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #ifndef TEST_OOM
 #error "TEST_OOM must be defined for this test"

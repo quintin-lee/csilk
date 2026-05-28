@@ -18,8 +18,8 @@
 #include <unistd.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #define PORT 8443
 #define BUFSIZE 4096

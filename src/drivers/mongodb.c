@@ -4,7 +4,8 @@
  *
  * Implements the csilk_db_driver_t vtable using the native libmongoc C API.
  * Key design points:
- *   - The DSN is a standard MongoDB URI (e.g., "mongodb://localhost:27017/testdb").
+ *   - The DSN is a standard MongoDB URI (e.g.,
+ * "mongodb://localhost:27017/testdb").
  *   - SELECT queries (via .query) can be:
  *      a) A simple collection name (returns all documents).
  *      b) A JSON command string (e.g., {"find": "users", "filter": {...}}).
@@ -53,7 +54,8 @@ static int mongodb_connect(csilk_db_pool_t* pool, const char* dsn) {
   bson_error_t error;
   mongoc_uri_t* uri = mongoc_uri_new_with_error(dsn, &error);
   if (!uri) {
-    fprintf(stderr, "csilk_db_mongodb: invalid URI '%s': %s\n", dsn, error.message);
+    fprintf(stderr, "csilk_db_mongodb: invalid URI '%s': %s\n", dsn,
+            error.message);
     free(conn);
     return -1;
   }
@@ -107,40 +109,40 @@ static void mongodb_free_result(csilk_db_result_t* result) {
 
 /** @brief Helper: Convert a BSON value to a string representation. */
 static char* bson_val_to_str(const bson_iter_t* iter) {
-    bson_type_t type = bson_iter_type(iter);
-    switch (type) {
-        case BSON_TYPE_UTF8:
-            return strdup(bson_iter_utf8(iter, NULL));
-        case BSON_TYPE_INT32: {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d", bson_iter_int32(iter));
-            return strdup(buf);
-        }
-        case BSON_TYPE_INT64: {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%ld", (long)bson_iter_int64(iter));
-            return strdup(buf);
-        }
-        case BSON_TYPE_DOUBLE: {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%g", bson_iter_double(iter));
-            return strdup(buf);
-        }
-        case BSON_TYPE_BOOL:
-            return strdup(bson_iter_bool(iter) ? "true" : "false");
-        case BSON_TYPE_OID: {
-            char str[25];
-            bson_oid_to_string(bson_iter_oid(iter), str);
-            return strdup(str);
-        }
-        case BSON_TYPE_NULL:
-            return strdup("");
-        default: {
-            // For complex types (objects, arrays), stringify the BSON subset
-            // This is a simplification.
-            return strdup("[complex]");
-        }
+  bson_type_t type = bson_iter_type(iter);
+  switch (type) {
+    case BSON_TYPE_UTF8:
+      return strdup(bson_iter_utf8(iter, NULL));
+    case BSON_TYPE_INT32: {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%d", bson_iter_int32(iter));
+      return strdup(buf);
     }
+    case BSON_TYPE_INT64: {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%ld", (long)bson_iter_int64(iter));
+      return strdup(buf);
+    }
+    case BSON_TYPE_DOUBLE: {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%g", bson_iter_double(iter));
+      return strdup(buf);
+    }
+    case BSON_TYPE_BOOL:
+      return strdup(bson_iter_bool(iter) ? "true" : "false");
+    case BSON_TYPE_OID: {
+      char str[25];
+      bson_oid_to_string(bson_iter_oid(iter), str);
+      return strdup(str);
+    }
+    case BSON_TYPE_NULL:
+      return strdup("");
+    default: {
+      // For complex types (objects, arrays), stringify the BSON subset
+      // This is a simplification.
+      return strdup("[complex]");
+    }
+  }
 }
 
 /** @brief Execute a MongoDB query and return results as tabular rows.
@@ -149,7 +151,8 @@ static char* bson_val_to_str(const bson_iter_t* iter) {
  * 1. Simple collection name: "users" -> find all.
  * 2. JSON command: {"find": "users", "filter": {...}} -> execute command.
  */
-static int mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result) {
+static int mongodb_query(csilk_db_pool_t* pool, const char* sql,
+                         csilk_db_result_t* result) {
   if (!pool || !pool->connection || !sql || !result) return -1;
   mongodb_conn_t* conn = (mongodb_conn_t*)pool->connection;
 
@@ -158,53 +161,58 @@ static int mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result
   mongoc_cursor_t* cursor = NULL;
 
   if (sql[0] == '{') {
-      // Looks like a JSON command
-      cmd = bson_new_from_json((const uint8_t*)sql, -1, &error);
-      if (!cmd) return -1;
-      cursor = mongoc_client_command_with_opts(conn->client, conn->db_name, cmd, NULL, NULL, NULL);
+    // Looks like a JSON command
+    cmd = bson_new_from_json((const uint8_t*)sql, -1, &error);
+    if (!cmd) return -1;
+    cursor = mongoc_client_command_with_opts(conn->client, conn->db_name, cmd,
+                                             NULL, NULL, NULL);
   } else {
-      // Treat as collection name
-      mongoc_collection_t* coll = mongoc_client_get_collection(conn->client, conn->db_name, sql);
-      cursor = mongoc_collection_find_with_opts(coll, bson_new(), NULL, NULL);
-      mongoc_collection_destroy(coll);
+    // Treat as collection name
+    mongoc_collection_t* coll =
+        mongoc_client_get_collection(conn->client, conn->db_name, sql);
+    cursor = mongoc_collection_find_with_opts(coll, bson_new(), NULL, NULL);
+    mongoc_collection_destroy(coll);
   }
 
   const bson_t* doc;
   while (mongoc_cursor_next(cursor, &doc)) {
-      if (result->column_count == 0) {
-          // Use first document to define columns
-          bson_iter_t iter;
-          if (bson_iter_init(&iter, doc)) {
-              while (bson_iter_next(&iter)) {
-                  result->column_names = realloc(result->column_names, (result->column_count + 1) * sizeof(char*));
-                  result->column_names[result->column_count++] = strdup(bson_iter_key(&iter));
-              }
-          }
+    if (result->column_count == 0) {
+      // Use first document to define columns
+      bson_iter_t iter;
+      if (bson_iter_init(&iter, doc)) {
+        while (bson_iter_next(&iter)) {
+          result->column_names = realloc(
+              result->column_names, (result->column_count + 1) * sizeof(char*));
+          result->column_names[result->column_count++] =
+              strdup(bson_iter_key(&iter));
+        }
       }
+    }
 
-      csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-      row->count = result->column_count;
-      row->values = calloc(row->count, sizeof(char*));
-      
-      for (int i = 0; i < row->count; i++) {
-          bson_iter_t iter;
-          if (bson_iter_init_find(&iter, doc, result->column_names[i])) {
-              row->values[i] = bson_val_to_str(&iter);
-          } else {
-              row->values[i] = strdup("");
-          }
+    csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+    row->count = result->column_count;
+    row->values = calloc(row->count, sizeof(char*));
+
+    for (int i = 0; i < row->count; i++) {
+      bson_iter_t iter;
+      if (bson_iter_init_find(&iter, doc, result->column_names[i])) {
+        row->values[i] = bson_val_to_str(&iter);
+      } else {
+        row->values[i] = strdup("");
       }
+    }
 
-      result->rows = realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-      result->rows[result->row_count++] = row;
+    result->rows = realloc(result->rows,
+                           (result->row_count + 1) * sizeof(csilk_db_row_t*));
+    result->rows[result->row_count++] = row;
   }
 
   if (mongoc_cursor_error(cursor, &error)) {
-      fprintf(stderr, "csilk_db_mongodb: cursor error: %s\n", error.message);
-      mongoc_cursor_destroy(cursor);
-      if (cmd) bson_destroy(cmd);
-      mongodb_free_result(result);
-      return -1;
+    fprintf(stderr, "csilk_db_mongodb: cursor error: %s\n", error.message);
+    mongoc_cursor_destroy(cursor);
+    if (cmd) bson_destroy(cmd);
+    mongodb_free_result(result);
+    return -1;
   }
 
   mongoc_cursor_destroy(cursor);
@@ -223,14 +231,16 @@ static int mongodb_exec(csilk_db_pool_t* pool, const char* sql) {
   bson_error_t error;
   bson_t* cmd = bson_new_from_json((const uint8_t*)sql, -1, &error);
   if (!cmd) {
-      fprintf(stderr, "csilk_db_mongodb: invalid command JSON: %s\n", error.message);
-      return -1;
+    fprintf(stderr, "csilk_db_mongodb: invalid command JSON: %s\n",
+            error.message);
+    return -1;
   }
 
   bson_t reply;
-  bool success = mongoc_client_command_simple(conn->client, conn->db_name, cmd, NULL, &reply, &error);
+  bool success = mongoc_client_command_simple(conn->client, conn->db_name, cmd,
+                                              NULL, &reply, &error);
   if (!success) {
-      fprintf(stderr, "csilk_db_mongodb: exec failed: %s\n", error.message);
+    fprintf(stderr, "csilk_db_mongodb: exec failed: %s\n", error.message);
   }
 
   bson_destroy(cmd);
@@ -238,9 +248,18 @@ static int mongodb_exec(csilk_db_pool_t* pool, const char* sql) {
   return success ? 0 : -1;
 }
 
-static int mongodb_transaction_begin(csilk_db_pool_t* pool) { (void)pool; return 0; }
-static int mongodb_transaction_commit(csilk_db_pool_t* pool) { (void)pool; return 0; }
-static int mongodb_transaction_rollback(csilk_db_pool_t* pool) { (void)pool; return 0; }
+static int mongodb_transaction_begin(csilk_db_pool_t* pool) {
+  (void)pool;
+  return 0;
+}
+static int mongodb_transaction_commit(csilk_db_pool_t* pool) {
+  (void)pool;
+  return 0;
+}
+static int mongodb_transaction_rollback(csilk_db_pool_t* pool) {
+  (void)pool;
+  return 0;
+}
 
 csilk_db_driver_t csilk_db_mongodb_driver = {
     .name = "mongodb",

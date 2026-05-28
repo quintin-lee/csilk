@@ -9,8 +9,8 @@
 #include <unistd.h>
 
 #include "csilk/core/context_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 
 #define PORT 8097
 #define BUFSIZE 8192
