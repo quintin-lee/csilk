@@ -184,6 +184,11 @@ struct csilk_ctx_s {
 
 	struct csilk_server_s* server; /**< Pointer to the owning server instance. */
 
+	/* === HTTP/2 Stream Support === */
+	int32_t stream_id; /**< HTTP/2 Stream ID. 0 for HTTP/1.1 connections. */
+	struct csilk_ctx_s*
+	    next_stream; /**< Linked list of active multiplexed contexts for a single client. */
+
 	/* === Internal I/O State === */
 	void* _internal_client; /**< Opaque pointer to the internal csilk_client_t.
                              MUST NOT be used directly by handlers. Used
@@ -219,5 +224,8 @@ struct csilk_ctx_s {
 	/** Per-request unique identifier (UUID v4 string, 36 chars + null). */
 	char request_id[37];
 };
+
+/** @brief Internal context initialiser. */
+void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
 
 #endif /* CSILK_CONTEXT_INTERNAL_H */

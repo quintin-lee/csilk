@@ -19,6 +19,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
+#include "context_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
 #define CSILK_DEFAULT_IDLE_TIMEOUT 5000
@@ -98,8 +99,10 @@ struct csilk_client_s {
 
 	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
+	csilk_ctx_t* h2_streams;     /**< Linked list of active HTTP/2 stream contexts. */
 
-	llhttp_t parser;	/**< HTTP request parser (if HTTP/1.1). */
+	llhttp_t parser; /**< HTTP request parser (if HTTP/1.1). */
+
 	csilk_server_t* server; /**< Owning server instance. */
 	csilk_ctx_t ctx;	/**< Request context for this connection (HTTP/1.1 only for now). */
 	size_t total_header_size;     /**< Total size of headers parsed so far. */
@@ -116,5 +119,13 @@ struct csilk_client_s {
 	struct csilk_client_s* next;  /**< Next client in active list. */
 	struct csilk_client_s* prev;  /**< Previous client in active list. */
 };
+
+/**
+ * @brief Write data to the client's TCP socket, handling TLS encryption if necessary.
+ * @param client The client connection.
+ * @param data   The data to write.
+ * @param length The length of the data.
+ */
+void csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length);
 
 #endif /* CSILK_SERVER_INTERNAL_H */
