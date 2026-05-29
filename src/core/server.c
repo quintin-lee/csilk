@@ -51,6 +51,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "server_internal.h"
+#include "h2.h"
 
 /** @brief libuv buffer allocation callback — allocates a receive buffer.
  *
@@ -126,6 +127,7 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 		nghttp2_session_del(client->h2_session);
 		client->h2_session = NULL;
 	}
+	csilk_h2_free_streams(client);
 	memset(client, 0, sizeof(*client));
 	uv_mutex_lock(&server->pool_mutex);
 	if (server->client_pool_count < 32) {
@@ -2394,7 +2396,11 @@ process_tls_read(csilk_client_t* client)
 		if (alpn_data && alpn_len == 2 && strncmp((const char*)alpn_data, "h2", 2) == 0) {
 			client->protocol = CSILK_PROTO_HTTP2;
 			CSILK_LOG_D("ALPN negotiated HTTP/2");
-			// To be implemented: initialize nghttp2 session
+			if (csilk_h2_init_session(client) != 0) {
+				CSILK_LOG_E("Failed to initialize HTTP/2 session");
+				uv_close((uv_handle_t*)&client->handle, on_close);
+				return;
+			}
 		} else {
 			client->protocol = CSILK_PROTO_HTTP1;
 		}
@@ -2403,6 +2409,14 @@ process_tls_read(csilk_client_t* client)
 	while ((n = SSL_read(client->ssl, buf, sizeof(buf))) > 0) {
 		if (client->ctx.is_websocket) {
 			csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
+		} else if (client->protocol == CSILK_PROTO_HTTP2) {
+			if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
+				CSILK_LOG_E("HTTP/2 processing error");
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+				break;
+			}
 		} else {
 			enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
 			if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
