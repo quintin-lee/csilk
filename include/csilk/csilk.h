@@ -369,9 +369,14 @@ int csilk_is_aborted(csilk_ctx_t* c);
  * @param cb  Callback function invoked for each received message.
  *            The callback must not block; it runs on the event-loop thread.
  */
-void
-csilk_set_on_ws_message(csilk_ctx_t* c,
-			void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
+void csilk_set_on_ws_message(
+    csilk_ctx_t* c,
+    void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
+
+/** @brief Set a callback for outgoing WebSocket frames (for testing). */
+void csilk_set_on_ws_send(
+    csilk_ctx_t* c,
+    void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
 
 /**
  * @brief Get the currently registered WebSocket message callback.

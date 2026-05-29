@@ -72,6 +72,7 @@ on_room_message(csilk_mq_ctx_t* ctx)
 	}
 
 	const char* room_name = topic + 8;
+	printf("Broadcasting message for room: %s\n", room_name);
 
 	uv_mutex_lock(&g_room_manager.mutex);
 	ws_room_t* room = find_room(room_name);
@@ -110,7 +111,10 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 		snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
 		csilk_mq_t* mq = csilk_ctx_get_mq(c);
 		if (mq) {
+			printf("Subscribing to MQ topic: %s\n", topic);
 			csilk_mq_subscribe(mq, topic, on_room_message);
+		} else {
+			printf("MQ not found in context!\n");
 		}
 	}
 
@@ -128,6 +132,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 		room->clients_capacity = new_cap;
 	}
 	room->clients[room->clients_count++] = c;
+	printf("Client added to room %s, total clients: %d\n", room_name, room->clients_count);
 
 	uv_mutex_unlock(&g_room_manager.mutex);
 }
