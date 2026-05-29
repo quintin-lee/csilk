@@ -68,6 +68,7 @@ set(CSILK_MIDDLEWARE_SOURCES
 set(CSILK_PROTOCOL_SOURCES
     src/protocols/swagger.c
     src/protocols/websocket.c
+    src/protocols/ws_room.c
 )
 
 set(CSILK_REFLECTION_SOURCES
