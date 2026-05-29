@@ -3,9 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 int counter = 0;
 
@@ -36,9 +35,11 @@ test_basic_chaining()
 {
 	counter = 0;
 	csilk_handler_t handlers[] = {m1, m2, handler, NULL};
-	csilk_ctx_t c = {.handler_index = -1, .handlers = handlers, .aborted = 0};
-	csilk_next(&c);
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_handlers(c, handlers);
+	csilk_next(c);
 	assert(counter == 5); // m1++, m2++, handler++, m2++, m1++
+	csilk_test_ctx_free(c);
 	printf("test_basic_chaining passed\n");
 }
 
@@ -54,9 +55,11 @@ test_abort()
 {
 	counter = 0;
 	csilk_handler_t handlers[] = {m_abort, handler, NULL};
-	csilk_ctx_t c = {.handler_index = -1, .handlers = handlers, .aborted = 0};
-	csilk_next(&c);
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_handlers(c, handlers);
+	csilk_next(c);
 	assert(counter == 1);
+	csilk_test_ctx_free(c);
 	printf("test_abort passed\n");
 }
 
@@ -70,52 +73,47 @@ void
 test_context_response()
 {
 	csilk_handler_t handlers[] = {handler_resp, NULL};
-	csilk_ctx_t c = {
-	    .handler_index = -1, .handlers = handlers, .aborted = 0, .response = {0, NULL}};
-	csilk_next(&c);
-	assert(c.response.status == CSILK_STATUS_OK);
-	assert(c.response.body != NULL);
-	// Use string comparison if necessary, but here direct comparison is fine for
-	// a test literal
-	assert(sizeof("hello") == 6);
-	// Just a basic check that it's set
-	csilk_ctx_cleanup(&c);
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_handlers(c, handlers);
+	csilk_next(c);
+	assert(csilk_get_status(c) == CSILK_STATUS_OK);
+	size_t body_len = 0;
+	assert(csilk_get_response_body(c, &body_len) != NULL);
+	assert(body_len == 5);
+	csilk_test_ctx_free(c);
 	printf("test_context_response passed\n");
 }
 
 void
 test_context_storage()
 {
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
+	csilk_ctx_t* c = csilk_test_ctx_new();
 	int val = 42;
-	csilk_set(&c, "test_key", &val);
+	csilk_set(c, "test_key", &val);
 
-	void* retrieved = csilk_get(&c, "test_key");
+	void* retrieved = csilk_get(c, "test_key");
 	assert(retrieved != NULL);
 	assert(*(int*)retrieved == 42);
 
 	// Overwrite
 	int val2 = 100;
-	csilk_set(&c, "test_key", &val2);
-	assert(*(int*)csilk_get(&c, "test_key") == 100);
+	csilk_set(c, "test_key", &val2);
+	assert(*(int*)csilk_get(c, "test_key") == 100);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_context_storage passed\n");
 }
 
 void
 test_context_arena()
 {
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_arena_t* arena = csilk_get_arena(c);
 
-	char* s = csilk_arena_strdup(c.arena, "arena string");
+	char* s = csilk_arena_strdup(arena, "arena string");
 	assert(strcmp(s, "arena string") == 0);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_context_arena passed\n");
 }
 

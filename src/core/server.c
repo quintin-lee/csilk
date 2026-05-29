@@ -47,7 +47,7 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
+#include "context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -1250,6 +1250,12 @@ on_message_complete(llhttp_t* p)
 	return 0;
 }
 
+static void
+on_rejected_close(uv_handle_t* handle)
+{
+	free(handle);
+}
+
 /** @brief libuv connection callback — accept a new incoming TCP connection.
  *
  * This is the entry point for every new TCP connection. The sequence is:
@@ -1299,17 +1305,34 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		max_conn = server->max_connections;
 	}
 	if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
-		/* accept and immediately close to drain the backlog */
-		uv_tcp_t tmp;
-		uv_tcp_init(server_stream->loop, &tmp);
-		if (uv_accept(server_stream, (uv_stream_t*)&tmp) == 0) {
-			uv_close((uv_handle_t*)&tmp, NULL);
+		/* accept and immediately close to drain the backlog.
+		 * MUST heap-allocate the handle because uv_close is async and
+		 * stack-allocated handle would go out of scope. */
+		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
+		if (tmp) {
+			uv_tcp_init(server_stream->loop, tmp);
+			if (uv_accept(server_stream, (uv_stream_t*)tmp) == 0) {
+				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			} else {
+				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			}
 		}
 		return;
 	}
 
 	csilk_client_t* client = pool_get(server);
 	if (!client) {
+		/* accept and close if we can't get a client object (OOM).
+		 * Same logic as connection limiter above. */
+		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
+		if (tmp) {
+			uv_tcp_init(server_stream->loop, tmp);
+			if (uv_accept(server_stream, (uv_stream_t*)tmp) == 0) {
+				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			} else {
+				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			}
+		}
 		return;
 	}
 

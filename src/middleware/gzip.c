@@ -10,9 +10,8 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /* Chunk size used for deflate output buffer expansion (16 KB).
    Matches zlib's recommended buffer granularity for streaming. */
@@ -57,7 +56,8 @@ gzip_work_cb(uv_work_t* req)
 		return;
 	}
 
-	size_t src_len = c->response.body_len;
+	size_t src_len = 0;
+	const char* src_body = csilk_get_response_body(c, &src_len);
 	z_stream strm;
 	memset(&strm, 0, sizeof(strm));
 
@@ -75,7 +75,7 @@ gzip_work_cb(uv_work_t* req)
 		return;
 	}
 
-	strm.next_in = (Bytef*)c->response.body;
+	strm.next_in = (Bytef*)src_body;
 	strm.avail_in = (uInt)src_len;
 	strm.next_out = state->dest;
 	strm.avail_out = (uInt)state->dest_cap;
@@ -107,12 +107,8 @@ gzip_after_work_cb(uv_work_t* req, int status)
 	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
 
 	if (state && state->ret == Z_STREAM_END) {
-		if (c->response.body && c->response.body_is_managed) {
-			free((void*)c->response.body);
-		}
-		c->response.body = (const char*)state->dest;
-		c->response.body_len = state->compressed_len;
-		c->response.body_is_managed = 1;
+		csilk_set_response_body(c, (const char*)state->dest, state->compressed_len, 1);
+		state->dest = NULL; // Ownership transferred to context
 
 		csilk_set_header(c, "Content-Encoding", "gzip");
 		csilk_set_header(c, "Vary", "Accept-Encoding");
@@ -162,7 +158,9 @@ csilk_gzip_middleware(csilk_ctx_t* c)
      This middleware runs AFTER the route handler, not before. */
 	csilk_next(c);
 
-	if (!c->response.body || c->response.body_len == 0) {
+	size_t body_len = 0;
+	const char* body = csilk_get_response_body(c, &body_len);
+	if (!body || body_len == 0) {
 		return;
 	}
 
@@ -190,20 +188,8 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 		return;
 	}
 
-	if (c->response.body_len < CSILK_GZIP_MIN_LENGTH) {
+	if (body_len < CSILK_GZIP_MIN_LENGTH) {
 		return;
-	}
-
-	/* Ensure body is heap-managed so the after-work callback can free it.
-     Non-managed bodies (e.g., string literals) are copied first. */
-	if (c->response.body_is_managed == 0) {
-		char* managed = malloc(c->response.body_len);
-		if (!managed) {
-			return;
-		}
-		memcpy(managed, c->response.body, c->response.body_len);
-		c->response.body = managed;
-		c->response.body_is_managed = 1;
 	}
 
 	/* Offload compression to libuv thread pool so the event loop is not
@@ -215,9 +201,10 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	}
 
 	csilk_set(c, "gzip_state", state);
-	c->work_req.data = c;
-	c->is_async = 1;
+	uv_work_t* req = csilk_get_work_req(c);
+	req->data = c;
+	csilk_set_async(c, 1);
 
 	uv_loop_t* loop = uv_default_loop();
-	uv_queue_work(loop, &c->work_req, gzip_work_cb, gzip_after_work_cb);
+	uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
 }

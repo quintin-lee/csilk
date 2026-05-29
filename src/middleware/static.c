@@ -13,9 +13,8 @@
 #include <unistd.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
  * @brief Internal helper to get MIME type from file path.
@@ -75,9 +74,7 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 		csilk_set_header(c, "Content-Type", mime_type);
 		csilk_set_header(c, "Accept-Ranges", "bytes");
 		csilk_status(c, CSILK_STATUS_OK);
-		c->file_fd = fd;
-		c->file_offset = 0;
-		c->file_size = size;
+		csilk_set_file_response(c, fd, 0, size);
 		return;
 	}
 
@@ -136,9 +133,7 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	csilk_set_header(c, "Accept-Ranges", "bytes");
 	csilk_status(c, CSILK_STATUS_PARTIAL_CONTENT);
 
-	c->file_fd = fd;
-	c->file_offset = (size_t)range_start;
-	c->file_size = range_len;
+	csilk_set_file_response(c, fd, (size_t)range_start, range_len);
 }
 
 /**
@@ -232,9 +227,7 @@ static_after_work_cb(uv_work_t* req, int status)
 {
 	(void)status;
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
-	if (c->_internal_client) {
-		_csilk_send_response(c);
-	}
+	_csilk_send_response(c);
 }
 
 /**
@@ -263,8 +256,10 @@ static_after_work_cb(uv_work_t* req, int status)
 void
 csilk_static(csilk_ctx_t* c, const char* root_dir)
 {
-	c->is_async = 1;
-	c->work_req.data = c;
+	csilk_set_async(c, 1);
+	uv_work_t* req = csilk_get_work_req(c);
+	req->data = c;
 	csilk_set(c, "static_root", (void*)root_dir);
-	uv_queue_work(uv_default_loop(), &c->work_req, static_work_cb, static_after_work_cb);
+	uv_loop_t* loop = uv_default_loop();
+	uv_queue_work(loop, req, static_work_cb, static_after_work_cb);
 }

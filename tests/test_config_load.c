@@ -8,7 +8,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -61,8 +60,6 @@ run_server(void* arg)
 
 	server_ready = 1;
 	csilk_server_run(g_server, CONFIG_LOAD_PORT);
-	csilk_server_free(g_server);
-	csilk_router_free(router);
 	return NULL;
 }
 

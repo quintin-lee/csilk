@@ -33,7 +33,7 @@
 #include <strings.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
+#include "context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -95,7 +95,7 @@ map_get(csilk_header_map_t* map, const char* key)
 static void
 map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value)
 {
-	if (!c->arena) {
+	if (!c->arena || !key || !value) {
 		return;
 	}
 	uint32_t bucket = hash_key(key);
@@ -103,7 +103,7 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
 	while (h) {
 		if (strcasecmp(h->key, key) == 0) {
 			h->value = csilk_arena_strdup(c->arena, value);
-			h->value_len = strlen(h->value);
+			h->value_len = h->value ? strlen(h->value) : 0;
 			return;
 		}
 		h = h->next;
@@ -112,9 +112,9 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
 	csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
 	if (new_h) {
 		new_h->key = csilk_arena_strdup(c->arena, key);
-		new_h->key_len = strlen(new_h->key);
+		new_h->key_len = new_h->key ? strlen(new_h->key) : 0;
 		new_h->value = csilk_arena_strdup(c->arena, value);
-		new_h->value_len = strlen(new_h->value);
+		new_h->value_len = new_h->value ? strlen(new_h->value) : 0;
 		new_h->next = map->buckets[bucket];
 		map->buckets[bucket] = new_h;
 	}
@@ -163,7 +163,7 @@ map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
 void
 csilk_next(csilk_ctx_t* c)
 {
-	if (c->aborted) {
+	if (c->aborted || c->handlers == NULL) {
 		return;
 	}
 	c->handler_index++;
@@ -242,10 +242,51 @@ csilk_string(csilk_ctx_t* c, int status, const char* msg)
 const char*
 csilk_get_param(csilk_ctx_t* c, const char* key)
 {
+	if (!c || !key) {
+		return NULL;
+	}
 	for (int i = 0; i < c->params_count; i++) {
 		if (strcmp(c->params[i].key, key) == 0) {
 			return c->params[i].value;
 		}
+	}
+	return NULL;
+}
+
+/** @brief Get the count of path parameters.
+ *
+ * @param c The request context.
+ * @return Number of parameters. */
+int
+csilk_get_params_count(csilk_ctx_t* c)
+{
+	return c ? c->params_count : 0;
+}
+
+/** @brief Get the name of a parameter by index.
+ *
+ * @param c     The request context.
+ * @param index Parameter index.
+ * @return Parameter name or NULL. */
+const char*
+csilk_get_param_key(csilk_ctx_t* c, int index)
+{
+	if (c && index >= 0 && index < c->params_count) {
+		return c->params[index].key;
+	}
+	return NULL;
+}
+
+/** @brief Get the value of a parameter by index.
+ *
+ * @param c     The request context.
+ * @param index Parameter index.
+ * @return Parameter value or NULL. */
+const char*
+csilk_get_param_value(csilk_ctx_t* c, int index)
+{
+	if (c && index >= 0 && index < c->params_count) {
+		return c->params[index].value;
 	}
 	return NULL;
 }
@@ -466,6 +507,18 @@ csilk_is_websocket(csilk_ctx_t* c)
 	return c ? c->is_websocket : 0;
 }
 
+/** @brief Enable/disable WebSocket mode.
+ *
+ * @param c            The request context.
+ * @param is_websocket 1 to enable, 0 to disable. */
+void
+csilk_set_websocket(csilk_ctx_t* c, int is_websocket)
+{
+	if (c) {
+		c->is_websocket = is_websocket;
+	}
+}
+
 /** @brief Check if the current connection is a Server-Sent Events stream.
  *
  * @param c The request context.
@@ -475,6 +528,40 @@ int
 csilk_is_sse(csilk_ctx_t* c)
 {
 	return c ? c->is_sse : 0;
+}
+
+/** @brief Enable/disable SSE mode.
+ *
+ * @param c      The request context.
+ * @param is_sse 1 to enable, 0 to disable. */
+void
+csilk_set_sse(csilk_ctx_t* c, int is_sse)
+{
+	if (c) {
+		c->is_sse = is_sse;
+	}
+}
+
+/** @brief Get the internal client connection handle.
+ *
+ * @param c The request context.
+ * @return Opaque pointer to csilk_client_t. */
+void*
+_csilk_get_internal_client(csilk_ctx_t* c)
+{
+	return c ? c->_internal_client : NULL;
+}
+
+/** @brief Set the internal client connection handle.
+ *
+ * @param c      The request context.
+ * @param client Opaque pointer to csilk_client_t. */
+void
+_csilk_set_internal_client(csilk_ctx_t* c, void* client)
+{
+	if (c) {
+		c->_internal_client = client;
+	}
 }
 
 /** @brief Get the unique request ID string.
@@ -503,6 +590,11 @@ csilk_get_request_id(csilk_ctx_t* c)
  * @return Pointer to the arena, or NULL if context is NULL.
  * @note All arena memory is reclaimed when the request completes
  *       (via csilk_arena_reset() in csilk_ctx_cleanup()). */
+csilk_arena_t*
+csilk_get_arena(csilk_ctx_t* c)
+{
+	return c ? c->arena : NULL;
+}
 
 /** @brief Get the currently set response status code.
  *
@@ -544,6 +636,95 @@ int
 csilk_is_async(csilk_ctx_t* c)
 {
 	return c ? c->is_async : 0;
+}
+
+/** @brief Get the handler chain index.
+ *
+ * @param c The request context.
+ * @return Current handler index. */
+int
+csilk_get_handler_index(csilk_ctx_t* c)
+{
+	return c ? c->handler_index : -1;
+}
+
+/** @brief Set the request UUID.
+ *
+ * @param c  The request context.
+ * @param id The new UUID string (will be truncated to 36 chars). */
+void
+csilk_set_request_id(csilk_ctx_t* c, const char* id)
+{
+	if (c && id) {
+		strncpy(c->request_id, id, 36);
+		c->request_id[36] = '\0';
+	}
+}
+
+/** @brief Get the internal libuv work request.
+ *
+ * @param c The request context.
+ * @return Pointer to uv_work_t. */
+uv_work_t*
+csilk_get_work_req(csilk_ctx_t* c)
+{
+	return c ? &c->work_req : NULL;
+}
+
+/** @brief Configure zero-copy file transmission.
+ *
+ * @param c      The request context.
+ * @param fd     Open file descriptor.
+ * @param offset Byte offset to start sending.
+ * @param size   Number of bytes to send. */
+void
+csilk_set_file_response(csilk_ctx_t* c, int fd, size_t offset, size_t size)
+{
+	if (c) {
+		c->file_fd = fd;
+		c->file_offset = offset;
+		c->file_size = size;
+	}
+}
+
+/** @brief Get the zero-copy file descriptor.
+ *
+ * @param c The request context.
+ * @return File descriptor or -1. */
+int
+csilk_get_file_fd(csilk_ctx_t* c)
+{
+	return c ? c->file_fd : -1;
+}
+
+/** @brief Get the route pattern for the current request.
+ *
+ * @param c The request context.
+ * @return The route path string (e.g., "/users/:id") or NULL. */
+const char*
+csilk_ctx_get_handler_path(csilk_ctx_t* c)
+{
+	return (c && c->current_handler) ? c->current_handler->path : NULL;
+}
+
+/** @brief Get the permission required by the current handler.
+ *
+ * @param c The request context.
+ * @return Permission string or NULL. */
+const char*
+csilk_ctx_get_handler_perm_required(csilk_ctx_t* c)
+{
+	return (c && c->current_handler) ? c->current_handler->perm_required : NULL;
+}
+
+/** @brief Get the resource pattern for the current handler's permission check.
+ *
+ * @param c The request context.
+ * @return Resource string or NULL. */
+const char*
+csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c)
+{
+	return (c && c->current_handler) ? c->current_handler->perm_resource : NULL;
 }
 
 /** @brief Get the response body data and optionally its length.
@@ -628,6 +809,54 @@ csilk_set_on_ws_message(csilk_ctx_t* c,
 	}
 }
 
+/** @brief Set the storage driver.
+ *
+ * @param c      The request context.
+ * @param driver Pointer to driver vtable. */
+void
+csilk_ctx_set_storage_driver(csilk_ctx_t* c, csilk_storage_driver_t* driver)
+{
+	if (c) {
+		c->storage_driver = driver;
+	}
+}
+
+/** @brief Set the crypto driver.
+ *
+ * @param c      The request context.
+ * @param driver Pointer to driver vtable. */
+void
+csilk_ctx_set_crypto_driver(csilk_ctx_t* c, csilk_crypto_driver_t* driver)
+{
+	if (c) {
+		c->crypto_driver = driver;
+	}
+}
+
+/** @brief Set the cipher driver.
+ *
+ * @param c      The request context.
+ * @param driver Pointer to driver vtable. */
+void
+csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver)
+{
+	if (c) {
+		c->cipher_driver = driver;
+	}
+}
+
+/** @brief Get the registered WebSocket callback.
+ *
+ * @param c The request context.
+ * @return Function pointer or NULL. */
+void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t* c,
+						const uint8_t* payload,
+						size_t len,
+						int opcode)
+{
+	return c ? c->on_ws_message : NULL;
+}
+
 /** @brief Redirect the client to a different URL with a specific status code.
  *
  * Sets the Location header, updates the response status, and aborts the
@@ -705,8 +934,9 @@ csilk_set(csilk_ctx_t* c, const char* key, void* value)
 	}
 
 	/* Limit storage items to prevent excessive allocation in a single request */
-	if (count >= 64) {
-		CSILK_LOG_E("Context storage limit reached (64 items) for key: %s", key);
+	if (count >= CSILK_MAX_STORAGE) {
+		CSILK_LOG_E(
+		    "Context storage limit reached (%d items) for key: %s", CSILK_MAX_STORAGE, key);
 		return;
 	}
 

@@ -3,70 +3,43 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-
-static const char*
-get_resp_header(csilk_ctx_t* c, const char* key)
-{
-	uint32_t hash = 5381;
-	int ch;
-	const char* k = key;
-	while ((ch = (unsigned char)*k++)) {
-		hash = ((hash << 5) + hash) + tolower(ch);
-	}
-	uint32_t bucket = hash % CSILK_HEADER_BUCKETS;
-
-	csilk_header_t* h = c->response.headers.buckets[bucket];
-	while (h) {
-		if (strcasecmp(h->key, key) == 0) {
-			return h->value;
-		}
-		h = h->next;
-	}
-	return NULL;
-}
+#include "csilk/test/test.h"
 
 static void
 test_redirect_basic()
 {
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
-	memset(&c.response.headers, 0, sizeof(csilk_header_map_t));
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_redirect(&c, CSILK_STATUS_FOUND, "/new-location");
+	csilk_redirect(c, CSILK_STATUS_FOUND, "/new-location");
 
-	assert(c.response.status == CSILK_STATUS_FOUND);
-	assert(c.aborted == 1);
+	assert(csilk_get_status(c) == CSILK_STATUS_FOUND);
+	assert(csilk_is_aborted(c) == 1);
 
-	const char* loc = get_resp_header(&c, "Location");
+	const char* loc = csilk_get_response_header(c, "Location");
 	assert(loc != NULL);
 	assert(strcmp(loc, "/new-location") == 0);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_redirect_basic passed\n");
 }
 
 static void
 test_redirect_simple()
 {
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
-	memset(&c.response.headers, 0, sizeof(csilk_header_map_t));
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_redirect_simple(&c, "/redirect-simple");
+	csilk_redirect_simple(c, "/redirect-simple");
 
-	assert(c.response.status == CSILK_STATUS_FOUND);
-	assert(c.aborted == 1);
+	assert(csilk_get_status(c) == CSILK_STATUS_FOUND);
+	assert(csilk_is_aborted(c) == 1);
 
-	const char* loc = get_resp_header(&c, "Location");
+	const char* loc = csilk_get_response_header(c, "Location");
 	assert(loc != NULL);
 	assert(strcmp(loc, "/redirect-simple") == 0);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_redirect_simple passed\n");
 }
 
@@ -80,21 +53,18 @@ test_redirect_status_codes()
 	};
 
 	for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
-		csilk_ctx_t c = {0};
-		c.arena = csilk_arena_new(1024);
-		memset(&c.response.headers, 0, sizeof(csilk_header_map_t));
+		csilk_ctx_t* c = csilk_test_ctx_new();
 
-		csilk_redirect(&c, codes[i], "/target");
+		csilk_redirect(c, codes[i], "/target");
 
-		assert(c.response.status == codes[i]);
-		assert(c.aborted == 1);
+		assert(csilk_get_status(c) == codes[i]);
+		assert(csilk_is_aborted(c) == 1);
 
-		const char* loc = get_resp_header(&c, "Location");
+		const char* loc = csilk_get_response_header(c, "Location");
 		assert(loc != NULL);
 		assert(strcmp(loc, "/target") == 0);
 
-		csilk_ctx_cleanup(&c);
-		csilk_arena_free(c.arena);
+		csilk_test_ctx_free(c);
 	}
 	printf("test_redirect_status_codes passed\n");
 }
@@ -105,16 +75,13 @@ test_redirect_null_safety()
 	csilk_redirect(NULL, CSILK_STATUS_FOUND, "/nowhere");
 	csilk_redirect_simple(NULL, "/nowhere");
 
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
-	memset(&c.response.headers, 0, sizeof(csilk_header_map_t));
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_redirect(&c, CSILK_STATUS_FOUND, NULL);
-	assert(c.aborted == 0);
-	assert(c.response.status == 0);
+	csilk_redirect(c, CSILK_STATUS_FOUND, NULL);
+	assert(csilk_is_aborted(c) == 0);
+	assert(csilk_get_status(c) == 0);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_redirect_null_safety passed\n");
 }
 

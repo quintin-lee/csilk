@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
+#include "csilk/test/test.h"
 
 static int custom_uuid_called = 0;
 static int custom_hmac_called = 0;
@@ -45,27 +45,27 @@ main()
 {
 	printf("Testing Crypto Driver interface...\n");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	// Default behavior
 	char uuid[37];
-	_csilk_generate_uuid(&c, uuid);
+	_csilk_generate_uuid(c, uuid);
 	assert(custom_uuid_called == 0);
 	assert(strlen(uuid) == 36);
 
 	// Plug in driver
-	c.crypto_driver = &my_driver;
+	csilk_ctx_set_crypto_driver(c, &my_driver);
 
-	_csilk_generate_uuid(&c, uuid);
+	_csilk_generate_uuid(c, uuid);
 	assert(custom_uuid_called == 1);
 	assert(strcmp(uuid, "custom-uuid-1234-5678-90abcdef1234") == 0);
 
 	uint8_t sig[32];
-	_csilk_hmac_sha256(&c, (uint8_t*)"key", 3, (uint8_t*)"data", 4, sig);
+	_csilk_hmac_sha256(c, (uint8_t*)"key", 3, (uint8_t*)"data", 4, sig);
 	assert(custom_hmac_called == 1);
 	assert(sig[0] == 0x42);
 
+	csilk_test_ctx_free(c);
 	printf("Crypto Driver interface tests passed!\n");
 	return 0;
 }

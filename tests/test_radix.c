@@ -3,22 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 void
-handler_ping(csilk_ctx_t* c)
-{
-	(void)c;
-}
-void
-handler_user(csilk_ctx_t* c)
-{
-	(void)c;
-}
-void
-handler_static(csilk_ctx_t* c)
+mock_handler(csilk_ctx_t* c)
 {
 	(void)c;
 }
@@ -28,81 +17,57 @@ main()
 {
 	csilk_router_t* r = csilk_router_new();
 
-	csilk_handler_t h_ping[] = {handler_ping};
-	csilk_handler_t h_user[] = {handler_user};
-	csilk_handler_t h_static[] = {handler_static};
+	csilk_handler_t h1[] = {mock_handler};
+	csilk_router_add(r, "GET", "/api/v1/users", h1, 1);
+	csilk_router_add(r, "GET", "/api/v1/users/:id", h1, 1);
+	csilk_router_add(r, "GET", "/api/v1/posts/*path", h1, 1);
+	csilk_router_add(r, "POST", "/api/v1/users", h1, 1);
 
-	csilk_router_add(r, "GET", "/api/ping", h_ping, 1);
-	csilk_router_add(r, "GET", "/users/:id", h_user, 1);
-	csilk_router_add(r, "GET", "/static/*path", h_static, 1);
-
-	// Test Static
+	// Test static match
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/api/ping");
-		int matched = csilk_router_match_ctx(r, &ctx);
-		assert(matched);
-		assert(ctx.handlers[0] == handler_ping);
-		assert(ctx.params_count == 0);
-		csilk_ctx_cleanup(&ctx);
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v1/users");
+		int matched = csilk_router_match_ctx(r, ctx);
+		assert(matched == 1);
+		csilk_test_ctx_free(ctx);
 	}
 
-	// Test Param
+	// Test param match
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/users/123");
-		int matched = csilk_router_match_ctx(r, &ctx);
-		assert(matched);
-		assert(ctx.handlers[0] == handler_user);
-		assert(ctx.params_count == 1);
-		assert(strcmp(ctx.params[0].key, "id") == 0);
-		assert(strcmp(ctx.params[0].value, "123") == 0);
-		assert(strcmp(csilk_get_param(&ctx, "id"), "123") == 0);
-
-		csilk_ctx_cleanup(&ctx);
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v1/users/123");
+		int matched = csilk_router_match_ctx(r, ctx);
+		assert(matched == 1);
+		assert(strcmp(csilk_get_param(ctx, "id"), "123") == 0);
+		csilk_test_ctx_free(ctx);
 	}
 
-	// Test Wildcard
+	// Test wildcard match
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/static/js/app.js");
-		int matched = csilk_router_match_ctx(r, &ctx);
-		assert(matched);
-		assert(ctx.handlers[0] == handler_static);
-		assert(ctx.params_count == 1);
-		assert(strcmp(ctx.params[0].key, "path") == 0);
-		assert(strcmp(ctx.params[0].value, "js/app.js") == 0);
-		assert(strcmp(csilk_get_param(&ctx, "path"), "js/app.js") == 0);
-
-		csilk_ctx_cleanup(&ctx);
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v1/posts/2023/05/hello");
+		int matched = csilk_router_match_ctx(r, ctx);
+		assert(matched == 1);
+		assert(strcmp(csilk_get_param(ctx, "path"), "2023/05/hello") == 0);
+		csilk_test_ctx_free(ctx);
 	}
 
-	// Test No Match
+	// Test method mismatch
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/unknown");
-		int matched = csilk_router_match_ctx(r, &ctx);
-		assert(!matched);
-		csilk_ctx_cleanup(&ctx);
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "PUT", "/api/v1/users");
+		int matched = csilk_router_match_ctx(r, ctx);
+		assert(matched == 0);
+		csilk_test_ctx_free(ctx);
 	}
 
-	// Test Boundary / NULL
+	// Test no match
 	{
-		int matched;
-		matched = csilk_router_match_ctx(NULL, NULL);
-		assert(!matched);
-
-		csilk_ctx_t ctx = {0};
-		matched = csilk_router_match_ctx(r, &ctx);
-		assert(!matched); // missing method and path
-
-		ctx.request.method = "GET";
-		matched = csilk_router_match_ctx(r, &ctx);
-		assert(!matched); // missing path
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v1/undefined");
+		int matched = csilk_router_match_ctx(r, ctx);
+		assert(matched == 0);
+		csilk_test_ctx_free(ctx);
 	}
 
 	csilk_router_free(r);

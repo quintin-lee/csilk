@@ -2,9 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static void
 test_sse_init_null()
@@ -36,16 +35,15 @@ static void
 test_sse_init_headers()
 {
 	printf("Testing SSE init sets status and headers...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_sse_init(&ctx);
+	csilk_sse_init(ctx);
 	/* csilk_sse_init needs _internal_client to send headers;
    * when _internal_client is NULL it still sets up the context */
-	assert(ctx.is_websocket == 1 || ctx.response.status == CSILK_STATUS_OK);
+	assert(csilk_is_sse(ctx) == 1);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("SSE init headers test passed!\n");
 }
 

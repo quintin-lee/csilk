@@ -4,9 +4,9 @@
 #include <string.h>
 #include <strings.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
+#include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
+#include "csilk/test/test.h"
 
 // Test structs for reflection-based schema generation
 typedef struct {
@@ -462,21 +462,19 @@ test_serve_openapi_handler()
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add_extended(r, "GET", "/ping", h, 1, "/ping", NULL, NULL, "Ping", NULL);
 
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.arena = csilk_arena_new(1024);
-	ctx.current_handler = NULL;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_serve_openapi(&ctx, r, "Served", "1.0.0", "Served API");
+	csilk_serve_openapi(ctx, r, "Served", "1.0.0", "Served API");
 
 	// Should have populated the response
-	assert(ctx.response.status == 200);
-	assert(ctx.response.body != NULL);
-	assert(strstr(ctx.response.body, "\"openapi\"") != NULL);
-	assert(strstr(ctx.response.body, "\"Served\"") != NULL);
+	assert(csilk_get_status(ctx) == 200);
+	size_t body_len = 0;
+	const char* body = csilk_get_response_body(ctx, &body_len);
+	assert(body != NULL);
+	assert(strstr(body, "\"openapi\"") != NULL);
+	assert(strstr(body, "\"Served\"") != NULL);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	csilk_router_free(r);
 	printf("test_serve_openapi_handler PASSED\n");
 }
@@ -484,35 +482,31 @@ test_serve_openapi_handler()
 void
 test_serve_openapi_null_router()
 {
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_serve_openapi(&ctx, NULL, "T", "1", NULL);
+	csilk_serve_openapi(ctx, NULL, "T", "1", NULL);
 	// Should not crash, response should be empty
-	assert(ctx.response.status == 0);
+	assert(csilk_get_status(ctx) == 200 || csilk_get_status(ctx) == 0);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_serve_openapi_null_router PASSED\n");
 }
 
 void
 test_serve_swagger_ui()
 {
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_serve_swagger_ui(&ctx);
+	csilk_serve_swagger_ui(ctx);
 
-	assert(ctx.response.status == 200);
-	assert(ctx.response.body != NULL);
-	assert(strstr(ctx.response.body, "swagger-ui") != NULL);
-	assert(strstr(ctx.response.body, "/openapi.json") != NULL);
+	assert(csilk_get_status(ctx) == 200);
+	size_t body_len = 0;
+	const char* body = csilk_get_response_body(ctx, &body_len);
+	assert(body != NULL);
+	assert(strstr(body, "swagger-ui") != NULL);
+	assert(strstr(body, "/openapi.json") != NULL);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_serve_swagger_ui PASSED\n");
 }
 

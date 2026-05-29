@@ -12,7 +12,6 @@
 #include <string.h>
 #include <time.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
@@ -89,16 +88,17 @@ csilk_logger_handler(csilk_ctx_t* c)
 
 	const char* method = csilk_get_method(c) ? csilk_get_method(c) : "UNKNOWN";
 	const char* path = csilk_get_path(c) ? csilk_get_path(c) : "UNKNOWN";
+	const char* rid = csilk_get_request_id(c);
 
 	if (csilk_log_is_json()) {
-		if (c->request_id[0] != '\0') {
-			csilk_log_set_request_id(c->request_id);
+		if (rid && rid[0] != '\0') {
+			csilk_log_set_request_id(rid);
 		}
 		csilk_req_log_t rl;
 		memset(&rl, 0, sizeof(rl));
 		snprintf(rl.method, sizeof(rl.method), "%s", method);
 		snprintf(rl.path, sizeof(rl.path), "%s", path);
-		rl.status = (int32_t)c->response.status;
+		rl.status = (int32_t)csilk_get_status(c);
 		rl.duration = duration;
 		const char* ip = csilk_get_client_ip(c);
 		if (ip) {
@@ -111,9 +111,9 @@ csilk_logger_handler(csilk_ctx_t* c)
 		_csilk_log_structured(
 		    CSILK_LOG_INFO, __FILE__, __LINE__, __func__, extra, "request completed");
 	} else {
-		if (c->request_id[0] != '\0') {
-			csilk_log_set_request_id(c->request_id);
+		if (rid && rid[0] != '\0') {
+			csilk_log_set_request_id(rid);
 		}
-		CSILK_LOG_I("[HTTP] %s %s %d %.6f s", method, path, c->response.status, duration);
+		CSILK_LOG_I("[HTTP] %s %s %d %.6f s", method, path, csilk_get_status(c), duration);
 	}
 }

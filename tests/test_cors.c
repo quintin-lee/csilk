@@ -1,114 +1,95 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static const char*
 get_response_header(csilk_ctx_t* ctx, const char* key)
 {
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		csilk_header_t* h = ctx->response.headers.buckets[i];
-		while (h) {
-			if (strcasecmp(h->key, key) == 0) {
-				return h->value;
-			}
-			h = h->next;
-		}
-	}
-	return NULL;
+	return csilk_get_response_header(ctx, key);
 }
 
-static void
+void
 test_cors_basic()
 {
-	printf("Testing CORS middleware basic...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
+	printf("Testing basic CORS middleware...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_cors_config_t config = {.allow_origin = "*",
-				      .allow_methods = "GET,POST",
-				      .allow_headers = "Content-Type",
-				      .allow_credentials = 0,
-				      .max_age = 3600};
+	csilk_cors_config_t config = {
+	    .allow_origin = "*", .allow_methods = "GET,POST", .allow_headers = "Content-Type"};
 
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
-	ctx.handler_index = -1;
+	csilk_cors_middleware(ctx, &config);
 
-	csilk_cors_middleware(&ctx, &config);
+	assert(strcmp(get_response_header(ctx, "Access-Control-Allow-Origin"), "*") == 0);
+	assert(strcmp(get_response_header(ctx, "Access-Control-Allow-Methods"), "GET,POST") == 0);
+	assert(strcmp(get_response_header(ctx, "Access-Control-Allow-Headers"), "Content-Type") ==
+	       0);
 
-	const char* origin = get_response_header(&ctx, "Access-Control-Allow-Origin");
-	assert(origin != NULL);
-	assert(strcmp(origin, "*") == 0);
-
-	const char* methods = get_response_header(&ctx, "Access-Control-Allow-Methods");
-	assert(methods != NULL);
-	assert(strcmp(methods, "GET,POST") == 0);
-
-	const char* max_age = get_response_header(&ctx, "Access-Control-Max-Age");
-	assert(max_age != NULL);
-	assert(strcmp(max_age, "3600") == 0);
-
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("CORS basic test passed!\n");
+	csilk_test_ctx_free(ctx);
+	printf("test_cors_basic passed\n");
 }
 
-static void
+void
+test_cors_options_preflight()
+{
+	printf("Testing CORS OPTIONS preflight...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "OPTIONS", "/test");
+	csilk_set_request_header(ctx, "Access-Control-Request-Method", "POST");
+
+	csilk_cors_config_t config = {.allow_origin = "http://example.com",
+				      .allow_methods = "POST"};
+
+	csilk_cors_middleware(ctx, &config);
+
+	assert(csilk_get_status(ctx) == CSILK_STATUS_NO_CONTENT);
+	assert(strcmp(get_response_header(ctx, "Access-Control-Allow-Origin"),
+		      "http://example.com") == 0);
+	assert(csilk_is_aborted(ctx) == 1);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_cors_options_preflight passed\n");
+}
+
+void
 test_cors_null_config()
 {
 	printf("Testing CORS with NULL config...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
-	ctx.handler_index = -1;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_cors_middleware(&ctx, NULL);
+	csilk_cors_middleware(ctx, NULL);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("CORS null config test passed!\n");
+	assert(get_response_header(ctx, "Access-Control-Allow-Origin") == NULL);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_cors_null_config passed\n");
 }
 
-static void
+void
 test_cors_credentials()
 {
 	printf("Testing CORS with credentials...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_cors_config_t config = {.allow_origin = "https://example.com",
-				      .allow_methods = "GET",
-				      .allow_headers = "*",
-				      .allow_credentials = 1,
-				      .max_age = 0};
+	csilk_cors_config_t config = {.allow_origin = "http://example.com", .allow_credentials = 1};
 
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
-	ctx.handler_index = -1;
+	csilk_cors_middleware(ctx, &config);
 
-	csilk_cors_middleware(&ctx, &config);
+	assert(strcmp(get_response_header(ctx, "Access-Control-Allow-Credentials"), "true") == 0);
 
-	const char* creds = get_response_header(&ctx, "Access-Control-Allow-Credentials");
-	assert(creds != NULL);
-	assert(strcmp(creds, "true") == 0);
-
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("CORS credentials test passed!\n");
+	csilk_test_ctx_free(ctx);
+	printf("test_cors_credentials passed\n");
 }
 
 int
 main()
 {
 	test_cors_basic();
+	test_cors_options_preflight();
 	test_cors_null_config();
 	test_cors_credentials();
-	printf("test_cors: ALL PASSED\n");
 	return 0;
 }

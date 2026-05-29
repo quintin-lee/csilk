@@ -10,9 +10,8 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
  * @brief SSE write completion callback.
@@ -64,10 +63,11 @@ csilk_sse_init(csilk_ctx_t* c)
 	csilk_set_header(c, "Connection", "keep-alive");
 	csilk_set_header(c, "X-Accel-Buffering", "no");
 
-	c->response.status = CSILK_STATUS_OK;
-	c->is_sse = 1;
+	csilk_status(c, CSILK_STATUS_OK);
+	csilk_set_sse(c, 1);
 
-	if (!c->_internal_client) {
+	void* internal_client = _csilk_get_internal_client(c);
+	if (!internal_client) {
 		return;
 	}
 
@@ -93,7 +93,7 @@ csilk_sse_init(csilk_ctx_t* c)
 
 	uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)hdr_len);
 	req->data = buf;
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+	uv_stream_t* stream = (uv_stream_t*)internal_client;
 	uv_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
@@ -121,7 +121,8 @@ csilk_sse_init(csilk_ctx_t* c)
 void
 csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 {
-	if (!c || !c->_internal_client) {
+	void* internal_client = _csilk_get_internal_client(c);
+	if (!c || !internal_client) {
 		return;
 	}
 
@@ -156,7 +157,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 
 	uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)pos);
 	req->data = buf;
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+	uv_stream_t* stream = (uv_stream_t*)internal_client;
 	uv_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
@@ -172,10 +173,11 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 void
 csilk_sse_close(csilk_ctx_t* c)
 {
-	if (!c || !c->_internal_client) {
+	void* internal_client = _csilk_get_internal_client(c);
+	if (!c || !internal_client) {
 		return;
 	}
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+	uv_stream_t* stream = (uv_stream_t*)internal_client;
 	if (!uv_is_closing((uv_handle_t*)stream)) {
 		uv_close((uv_handle_t*)stream, NULL);
 	}

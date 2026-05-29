@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "csilk/app/app.h"
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static int mid_called = 0;
 static int hnd_called = 0;
@@ -68,18 +68,19 @@ main()
 		assert(app != NULL);
 		csilk_handler_t handlers[] = {hello_handler, NULL};
 		csilk_app_add_handlers(app, "GET", "/handle", handlers, 1);
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/handle");
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/handle");
+
 		csilk_router_t* router = csilk_app_router(app);
 		assert(router != NULL);
-		int matched = csilk_router_match_ctx(router, &ctx);
+		int matched = csilk_router_match_ctx(router, ctx);
 		assert(matched);
 		hnd_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(hnd_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_app_free(app);
 	}
 
@@ -95,18 +96,19 @@ main()
 					     "Output",
 					     "Summary",
 					     "Description");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/extended");
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/extended");
+
 		csilk_router_t* router = csilk_app_router(app);
 		assert(router != NULL);
-		int matched = csilk_router_match_ctx(router, &ctx);
+		int matched = csilk_router_match_ctx(router, ctx);
 		assert(matched);
 		hnd_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(hnd_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_app_free(app);
 	}
 
@@ -124,18 +126,19 @@ main()
 						  "Delete",
 						  "admin",
 						  "users");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "DELETE";
-		ctx.request.path = strdup("/extperm/42");
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "DELETE", "/extperm/42");
+
 		csilk_router_t* router = csilk_app_router(app);
 		assert(router != NULL);
-		int matched = csilk_router_match_ctx(router, &ctx);
+		int matched = csilk_router_match_ctx(router, ctx);
 		assert(matched);
 		hnd_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(hnd_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_app_free(app);
 	}
 
@@ -144,18 +147,19 @@ main()
 		csilk_app_t* app = csilk_app_new(NULL);
 		assert(app != NULL);
 		csilk_app_add_route_perm(app, "GET", "/perm", hello_handler, "read", "documents");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/perm");
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/perm");
+
 		csilk_router_t* router = csilk_app_router(app);
 		assert(router != NULL);
-		int matched = csilk_router_match_ctx(router, &ctx);
+		int matched = csilk_router_match_ctx(router, ctx);
 		assert(matched);
 		hnd_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(hnd_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_app_free(app);
 	}
 
@@ -176,18 +180,19 @@ main()
 		assert(app != NULL);
 		csilk_app_use_group(app, "/api", mid_handler);
 		csilk_app_add_route(app, "GET", "/api/test", hello_handler);
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/api/test");
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/test");
+
 		csilk_router_t* router = csilk_app_router(app);
 		assert(router != NULL);
-		int matched = csilk_router_match_ctx(router, &ctx);
+		int matched = csilk_router_match_ctx(router, ctx);
 		assert(matched);
 		hnd_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(hnd_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_app_free(app);
 	}
 

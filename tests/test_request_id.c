@@ -1,10 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static void
 test_request_id_null_context()
@@ -18,24 +18,22 @@ static void
 test_request_id_generates_id()
 {
 	printf("Testing request_id middleware generates UUID...\n");
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
 	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_request_id_middleware(&ctx);
+	csilk_request_id_middleware(ctx);
 
-	assert(ctx.request_id[0] != '\0');
-	assert(strlen(ctx.request_id) == 36);
+	const char* rid = csilk_get_request_id(ctx);
+	assert(rid != NULL && rid[0] != '\0');
+	assert(strlen(rid) == 36);
 
-	const char* hdr = csilk_get_response_header(&ctx, "X-Request-Id");
+	const char* hdr = csilk_get_response_header(ctx, "X-Request-Id");
 	assert(hdr != NULL);
-	assert(strcmp(hdr, ctx.request_id) == 0);
+	assert(strcmp(hdr, rid) == 0);
 
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("request_id generates UUID passed!\n");
 }
 
@@ -43,24 +41,21 @@ static void
 test_request_id_preserves_existing()
 {
 	printf("Testing request_id middleware preserves existing ID...\n");
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	strcpy(ctx.request_id, "abc-123-def");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_set_request_id(ctx, "abc-123-def");
 
 	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_request_id_middleware(&ctx);
+	csilk_request_id_middleware(ctx);
 
-	assert(strcmp(ctx.request_id, "abc-123-def") == 0);
+	assert(strcmp(csilk_get_request_id(ctx), "abc-123-def") == 0);
 
-	const char* hdr = csilk_get_response_header(&ctx, "X-Request-Id");
+	const char* hdr = csilk_get_response_header(ctx, "X-Request-Id");
 	assert(hdr != NULL);
 	assert(strcmp(hdr, "abc-123-def") == 0);
 
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("request_id preserves existing ID passed!\n");
 }
 
@@ -76,20 +71,18 @@ static void
 test_health_check_handler()
 {
 	printf("Testing health check handler...\n");
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_health_check_handler(&ctx);
+	csilk_health_check_handler(ctx);
 
-	assert(ctx.response.status == CSILK_STATUS_OK);
-	assert(ctx.response.body != NULL);
-	assert(strstr(ctx.response.body, "status") != NULL);
-	assert(strstr(ctx.response.body, "up") != NULL);
-	assert(ctx.response.body_is_managed == 1);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
+	size_t body_len = 0;
+	const char* body = csilk_get_response_body(ctx, &body_len);
+	assert(body != NULL);
+	assert(strstr(body, "status") != NULL);
+	assert(strstr(body, "up") != NULL);
 
-	if (ctx.response.body && ctx.response.body_is_managed) {
-		free((void*)ctx.response.body);
-	}
+	csilk_test_ctx_free(ctx);
 	printf("health check handler passed!\n");
 }
 

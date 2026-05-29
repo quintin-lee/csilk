@@ -17,9 +17,12 @@ set(CSILK_CORE_TESTS
     test_config_comprehensive
     test_config_validate
     test_config_load
+    test_config_tls
     test_context
     test_context_ext
+    test_context_reflect_ext
     test_edge
+    test_get_param
     test_headers
     test_https
     test_ip
@@ -27,13 +30,17 @@ set(CSILK_CORE_TESTS
     test_keepalive
     test_async_keepalive
     test_multi_worker
+    test_next_null
+    test_params_limit
     test_query
     test_radix
     test_redirect
     test_router
     test_server
     test_server_ext
+    test_server_limits
     test_storage
+    test_storage_limit
     test_url_decode
     test_url_ext
     test_utils

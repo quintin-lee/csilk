@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
+#include "context_internal.h"
 #include "csilk/core/internal.h"
 
 /** @brief A single chunk in the arena linked list.

@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static void
 dummy_handler(csilk_ctx_t* c)
@@ -25,34 +25,33 @@ test_metrics()
 
 	csilk_handler_t handlers[] = {
 	    (csilk_handler_t)csilk_metrics_middleware, dummy_handler, NULL};
-	csilk_ctx_t c = {.handler_index = -1, .handlers = handlers, .aborted = 0};
-	c.arena = csilk_arena_new(4096);
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_handlers(c, handlers);
 
 	/* Simulate a request through middleware */
-	csilk_next(&c);
+	csilk_next(c);
 
 	/* Call metrics handler to get output */
-	csilk_metrics_handler(&c);
+	csilk_metrics_handler(c);
 
 	/* Verify output */
-	assert(c.response.status == CSILK_STATUS_OK);
-	assert(c.response.body != NULL);
-	assert(strstr(c.response.body, "http_requests_total_agg 1") != NULL);
-	assert(strstr(c.response.body, "http_request_duration_microseconds_agg") != NULL);
+	assert(csilk_get_status(c) == CSILK_STATUS_OK);
+	const char* body = csilk_get_response_body(c, NULL);
+	assert(body != NULL);
+	assert(strstr(body, "http_requests_total_agg 1") != NULL);
+	assert(strstr(body, "http_request_duration_microseconds_agg") != NULL);
 
-	free((void*)c.response.body);
-	c.response.body = NULL;
+	csilk_test_ctx_free(c);
 
 	/* Second request */
-	c.handler_index = -1; /* reset for next run */
-	csilk_next(&c);
-	csilk_metrics_handler(&c);
-	assert(strstr(c.response.body, "http_requests_total_agg 2") != NULL);
+	c = csilk_test_ctx_new();
+	csilk_test_ctx_set_handlers(c, handlers);
+	csilk_next(c);
+	csilk_metrics_handler(c);
+	body = csilk_get_response_body(c, NULL);
+	assert(strstr(body, "http_requests_total_agg 2") != NULL);
 
-	free((void*)c.response.body);
-	c.response.body = NULL;
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("Metrics test passed!\n");
 }
 

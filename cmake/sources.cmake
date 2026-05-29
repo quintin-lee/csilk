@@ -21,8 +21,10 @@ set(CSILK_CORE_SOURCES
     src/core/config.c
     src/core/context.c
     src/core/logger.c
+    src/core/recovery.c
     src/core/router.c
     src/core/server.c
+    src/core/test_utils.c
     src/core/url.c
     src/core/utils.c
 )
@@ -56,7 +58,6 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/metrics.c
     src/middleware/multipart.c
     src/middleware/ratelimit.c
-    src/middleware/recovery.c
     src/middleware/request_id.c
     src/middleware/session.c
     src/middleware/sse.c

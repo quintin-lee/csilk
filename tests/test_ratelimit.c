@@ -2,9 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static int handler_called = 0;
 
@@ -19,20 +18,17 @@ static void
 test_ratelimit_basic()
 {
 	printf("Testing rate limit basic...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
 	csilk_handler_t handlers[] = {test_handler, NULL};
-	ctx.handlers = handlers;
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	handler_called = 0;
-	csilk_rate_limit_middleware(&ctx, 100);
+	csilk_rate_limit_middleware(ctx, 100);
 	assert(handler_called == 1);
-	assert(ctx.aborted == 0);
+	assert(csilk_is_aborted(ctx) == 0);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("Rate limit basic test passed!\n");
 }
 

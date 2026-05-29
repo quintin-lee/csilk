@@ -83,6 +83,34 @@
 - [x] 11.5 MQ 状态监控 — 队列深度、消息吞吐量实时报告
 - [ ] 11.6 性能基准自动化 — 跨框架对比报告
 
+### v1.0 全面优化与演进计划
+#### 轨道一：边缘稳定性与测试彻底收尾 (P5 平账)
+- [x] 12.1 补全 `csilk_config_free` 释放逻辑与泄露测试
+- [x] 12.2 补全 `csilk_next(NULL handlers)` 健壮性测试
+- [x] 12.3 补充 URL 参数超过 `CSILK_MAX_PARAMS` (20) 时的截断与越界保护测试
+- [x] 12.4 补充 `csilk_set` 达到 `CSILK_MAX_STORAGE` 时的防御逻辑与测试
+- [x] 12.5 补充 `csilk_get_param` 未找到时的断言覆盖
+- [x] 12.6 补充反射引擎 `csilk_bind_reflect` / `csilk_json_reflect` 边界测试
+- [x] 12.7 模拟服务端高并发下的 OOM 与连接拒绝策略极限测试
+
+#### 轨道二：v1.0 ABI 稳定性重构 (Context Opaque)
+- [ ] 13.1 实现 Context 访问器 API (Getter/Setter，如 `csilk_ctx_get_method` 等)
+- [ ] 13.2 迁移 15 个内置中间件至 Accessor API，消除对 `csilk_ctx_s` 直接访问
+- [ ] 13.3 重构 30+ 个单元测试，移除对 `context_internal.h` 的依赖
+- [ ] 13.4 将 `context_internal.h` 从 `include/` 移动至 `src/core/` 彻底隐藏实现
+
+#### 轨道三：极致性能压榨与基准测试
+- [ ] 14.1 集成 `wrk` / `hey` 自动化基准测试套件
+- [ ] 14.2 优化 Arena 分配器在高并发下的 Cache-line 对齐 (伪共享优化)
+- [ ] 14.3 Radix Tree 路由查找实施 Fast-path 优化 (如 SIMD 字符串比较)
+- [ ] 14.4 扩展 `sendfile` 零拷贝应用范围至更多静态资源场景
+
+#### 轨道四：高级协议演进与生态扩展
+- [ ] 15.1 HTTP/2 协议支持预研 (Multiplexing / Stream 控制)
+- [ ] 15.2 基于 MQ 架构实现 WebSocket 高并发房间广播 (Pub/Sub)
+- [ ] 15.3 实现 OpenAPI (Swagger) 自动生成中间件
+- [ ] 15.4 Admin Dashboard 增加 CPU/内存 Flamegraph 抽样展示与节点拓扑视图
+
 ---
 
 ## 二、优先级任务清单
@@ -348,6 +376,10 @@
 | P6 文档 | 0 | (全量 Doxygen 完成) |
 | P7 新功能 | 0 | HTTPS/TLS, MQ, Prometheus, Zero-copy 全部完成 |
 | 阶段十一 | 0 | Admin Dashboard, MongoDB, 全光谱遥测完成 |
+| v1.0 轨道一 | 7 | 边缘稳定性与测试彻底收尾 (P5 平账) |
+| v1.0 轨道二 | 4 | ABI 稳定性重构 (Context Opaque) |
+| v1.0 轨道三 | 4 | 极致性能压榨与基准测试 |
+| v1.0 轨道四 | 4 | 高级协议演进与生态扩展 |
 | 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF）|
 | 平账 P1 | 0 | 所有问题已修复（资源管理与错误处理）|
 | 平账 P2 | 0 | 所有问题已修复（API 设计问题）|
@@ -355,4 +387,4 @@
 | 平账 P4 | 0 | 所有问题已修复（缺失功能）|
 | 平账 P5 | 6 | 边缘测试缺口待补充 |
 | 平账 P6 | 0 | 所有问题已修复（构建系统问题）|
-| **合计** | **~7** | HTTP/2 预研 + 性能基准 + 6 个边缘测试缺口 |
+| **合计** | **19** | v1.0 轨道一/二/三/四全部待办项 |

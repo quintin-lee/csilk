@@ -1,5 +1,3 @@
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 /**
  * @file advanced_server.c
  * @brief Advanced server example with route groups, WebSocket, and auth
@@ -88,8 +86,8 @@ void
 ws_handler(csilk_ctx_t* c)
 {
 	csilk_ws_handshake(c);
-	if (c->is_websocket) {
-		c->on_ws_message = ws_on_message;
+	if (csilk_is_websocket(c)) {
+		csilk_set_on_ws_message(c, ws_on_message);
 	}
 }
 
@@ -151,7 +149,6 @@ main()
 	csilk_group_free(api);
 	csilk_group_free(root);
 	csilk_router_free(router);
-	csilk_config_free(&cfg);
 
 	return 0;
 }

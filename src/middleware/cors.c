@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -43,12 +42,20 @@ csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
 
 	/* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
      so caches do not serve CORS responses across different origins. */
-	csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
-	if (strcmp(config->allow_origin, "*") != 0) {
-		csilk_set_header(c, "Vary", "Origin");
+	if (config->allow_origin) {
+		csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
+		if (strcmp(config->allow_origin, "*") != 0) {
+			csilk_set_header(c, "Vary", "Origin");
+		}
 	}
-	csilk_set_header(c, "Access-Control-Allow-Methods", config->allow_methods);
-	csilk_set_header(c, "Access-Control-Allow-Headers", config->allow_headers);
+
+	if (config->allow_methods) {
+		csilk_set_header(c, "Access-Control-Allow-Methods", config->allow_methods);
+	}
+
+	if (config->allow_headers) {
+		csilk_set_header(c, "Access-Control-Allow-Headers", config->allow_headers);
+	}
 
 	if (config->allow_credentials) {
 		csilk_set_header(c, "Access-Control-Allow-Credentials", "true");
