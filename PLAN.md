@@ -103,10 +103,10 @@
 - [x] 14.1 集成 `wrk` / `hey` 自动化基准测试套件
 - [x] 14.2 优化 Arena 分配器在高并发下的 Cache-line 对齐 (伪共享优化)
 - [x] 14.3 Radix Tree 路由查找实施 Fast-path 优化 (如 SIMD 字符串比较)
-- [ ] 14.4 扩展 `sendfile` 零拷贝应用范围至更多静态资源场景
+- [x] 14.4 扩展 `sendfile` 零拷贝应用范围至更多静态资源场景
 
 #### 轨道四：高级协议演进与生态扩展
-- [ ] 15.1 HTTP/2 协议支持预研 (Multiplexing / Stream 控制)
+- [x] 15.1 HTTP/2 协议支持预研 (Multiplexing / Stream 控制)
 - [ ] 15.2 基于 MQ 架构实现 WebSocket 高并发房间广播 (Pub/Sub)
 - [x] 15.3 实现 OpenAPI (Swagger) 自动生成中间件
 - [ ] 15.4 Admin Dashboard 增加 CPU/内存 Flamegraph 抽样展示与节点拓扑视图
