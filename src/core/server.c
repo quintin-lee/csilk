@@ -820,9 +820,8 @@ get_status_text(int status)
  * @note This is an internal function used by the framework to send HTTP
  *       responses, chunked frames, and WebSocket frames. */
 void
-_csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
+csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 {
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 	if (!client) {
 		return;
 	}
@@ -848,6 +847,13 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 	uv_buf_t buf = uv_buf_init(buf_copy, (unsigned int)len);
 	req->data = buf_copy;
 	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+}
+
+void
+_csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
+{
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	csilk_client_write(client, data, len);
 }
 
 /** @brief Send the assembled HTTP response to the client.
@@ -1270,11 +1276,9 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		return;
 	}
 	client->handle.data = client;
-	client->ctx._internal_client = client;
-	client->ctx.server = server;
-	client->ctx.storage_driver = server->storage_driver;
-	client->ctx.crypto_driver = server->crypto_driver;
-	client->ctx.cipher_driver = server->cipher_driver;
+
+	_csilk_ctx_init(&client->ctx, server, client);
+
 	client_list_add(server, client);
 
 	if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {

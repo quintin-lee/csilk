@@ -841,6 +841,32 @@ csilk_set_on_ws_send(
 	}
 }
 
+/** @brief Initialize a request context.
+ *
+ * Sets up default values for all fields. Should be called for both
+ * static (embedded in client) and dynamic (H2 stream) contexts.
+ *
+ * @param c       The context to initialize.
+ * @param s       The owning server instance.
+ * @param client  The underlying connection object (csilk_client_t*). */
+void
+_csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
+{
+	if (!c) {
+		return;
+	}
+	memset(c, 0, sizeof(csilk_ctx_t));
+	c->handler_index = -1;
+	c->file_fd = -1;
+	c->_internal_client = client;
+	c->server = s;
+	if (s) {
+		c->storage_driver = s->storage_driver;
+		c->crypto_driver = s->crypto_driver;
+		c->cipher_driver = s->cipher_driver;
+	}
+}
+
 /** @brief Set the storage driver.
  *
  * @param c      The request context.

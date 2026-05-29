@@ -20,6 +20,7 @@ set(CSILK_CORE_SOURCES
     src/core/arena.c
     src/core/config.c
     src/core/context.c
+    src/core/h2.c
     src/core/logger.c
     src/core/recovery.c
     src/core/router.c
