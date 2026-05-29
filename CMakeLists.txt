@@ -122,6 +122,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cjson)
 
+# Fetch nghttp2
+set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
+set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+  nghttp2
+  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
+  GIT_TAG        v1.61.0
+)
+FetchContent_MakeAvailable(nghttp2)
+if(nghttp2_SOURCE_DIR)
+  include_directories(${nghttp2_SOURCE_DIR}/lib/includes)
+  include_directories(${nghttp2_BINARY_DIR}/lib/includes)
+endif()
+
 # Find CURL
 find_package(CURL REQUIRED)
 
@@ -232,7 +247,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
-target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
 if(MYSQL_LIB)
   target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
 endif()
@@ -260,7 +275,7 @@ set_target_properties(csilk PROPERTIES
 # Build shared library if requested
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
-    target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB})
+    target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
     if(MYSQL_LIB)
       target_link_libraries(csilk_shared PRIVATE ${MYSQL_LIB})
     endif()

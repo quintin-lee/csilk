@@ -16,6 +16,7 @@
 #include <stdatomic.h>
 #include <uv.h>
 #include <llhttp.h>
+#include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
 
@@ -35,6 +36,9 @@ typedef struct csilk_hook_node_s {
 	void* handler;
 	struct csilk_hook_node_s* next;
 } csilk_hook_node_t;
+
+/** @brief Protocol type for a client connection. */
+typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk_protocol_t;
 
 /** @brief Forward declaration for client connection structure. */
 typedef struct csilk_client_s csilk_client_t;
@@ -85,15 +89,19 @@ struct csilk_server_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-	uv_tcp_t handle;	      /**< libuv TCP stream handle. */
-	uv_timer_t timer;	      /**< Connection idle (keep-alive) timer. */
-	uv_timer_t read_timer;	      /**< Read timeout timer. */
-	uv_timer_t write_timer;	      /**< Write timeout timer. */
-	uv_timer_t request_timer;     /**< Request timeout timer. */
-	int close_pending;	      /**< Pending close refs before freeing client. */
-	llhttp_t parser;	      /**< HTTP request parser. */
-	csilk_server_t* server;	      /**< Owning server instance. */
-	csilk_ctx_t ctx;	      /**< Request context for this connection. */
+	uv_tcp_t handle;	  /**< libuv TCP stream handle. */
+	uv_timer_t timer;	  /**< Connection idle (keep-alive) timer. */
+	uv_timer_t read_timer;	  /**< Read timeout timer. */
+	uv_timer_t write_timer;	  /**< Write timeout timer. */
+	uv_timer_t request_timer; /**< Request timeout timer. */
+	int close_pending;	  /**< Pending close refs before freeing client. */
+
+	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
+	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
+
+	llhttp_t parser;	/**< HTTP request parser (if HTTP/1.1). */
+	csilk_server_t* server; /**< Owning server instance. */
+	csilk_ctx_t ctx;	/**< Request context for this connection (HTTP/1.1 only for now). */
 	size_t total_header_size;     /**< Total size of headers parsed so far. */
 	size_t header_count;	      /**< Number of headers parsed so far. */
 	size_t current_url_capacity;  /**< Allocated size of current_url. */
