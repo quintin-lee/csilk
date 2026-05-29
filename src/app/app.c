@@ -706,7 +706,7 @@ csilk_app_add_handlers(
  * 2. Writes url_prefix + root_dir into the next free global slot.
  * 3. Releases mutex, then registers two GET routes on the group matching
  *    `prefix`:
- *      - `/*path` — wildcard route that captures everything after the prefix.
+ *      - `WILDCARD path` — wildcard route that captures everything after the prefix.
  *      - `/`      — the prefix root (redirects to the index file).
  *    Both routes use the same internal static_serve handler, which scans
  *    g_static[] at request time to find the correct root_dir.

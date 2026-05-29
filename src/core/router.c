@@ -16,7 +16,7 @@
  *              as a named parameter. Identified by a ':' prefix in the
  *              registered pattern (e.g., "/:id" -> segment="id").
  *   WILDCARD - Matches the remainder of the path (one or more segments).
- *              Identified by a '*' prefix (e.g., "/*filepath").
+ *              Identified by a '*' prefix (e.g., "WILDCARD filepath").
  *              Once a wildcard node is reached, matching stops and the
  *              entire tail of the URL is captured as a single parameter.
  *
@@ -64,7 +64,7 @@
  * CSILK_NODE_WILDCARD - Matches the remainder of the URL path (any
  *                      number of segments including none). The segment
  *                      name (without '*' prefix) becomes the parameter key.
- *                      e.g., "/*path" captures "foo/bar/baz" for request
+ *                      e.g., "WILDCARD path" captures "foo/bar/baz" for request
  *                      "/foo/bar/baz". Wildcard is terminal and always
  *                      tried last during matching. */
 typedef enum { CSILK_NODE_STATIC, CSILK_NODE_PARAM, CSILK_NODE_WILDCARD } csilk_node_type_t;

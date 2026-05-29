@@ -188,6 +188,15 @@ csilk_arena_reset(csilk_arena_t* arena)
 	}
 }
 
+/** @brief Get total allocated size and used bytes in the arena.
+ *
+ * Walks the chunk list and sums the total allocated size and total used bytes.
+ *
+ * @param arena      The arena to query (must not be NULL).
+ * @param[out] total_size Pointer to receive the total allocated size in bytes.
+ * @param[out] total_used Pointer to receive the total used bytes in the arena.
+ * @note Safe to call with NULL pointers for total_size or total_used — they
+ *       will simply be ignored. */
 void
 csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used)
 {

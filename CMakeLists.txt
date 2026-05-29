@@ -11,9 +11,17 @@ enable_testing()
 option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
 if(USE_ASAN)
     message(STATUS "AddressSanitizer enabled")
+    # Use -static-libasan to avoid manual LD_PRELOAD issues in some environments.
+    # Note: For clang, static linking is often the default or handled via -fsanitize=address.
+    # For GCC, -static-libasan is explicit.
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
+    
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libasan")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libasan")
+    endif()
 endif()
 
 option(USE_COVERAGE "Enable code coverage with gcov" OFF)
