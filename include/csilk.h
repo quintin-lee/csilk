@@ -1491,6 +1491,13 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c);
 void csilk_router_free(csilk_router_t* r);
 
 /**
+ * @brief Collect all registered routes from the router tree as a cJSON array.
+ * @param r The router instance.
+ * @return A cJSON array of route objects. Caller must free with cJSON_Delete().
+ */
+cJSON* csilk_router_collect_routes(csilk_router_t* r);
+
+/**
  * @brief Collect metadata for all registered routes.
  *
  * Traverses the radix tree and returns a cJSON array where each element
@@ -2364,6 +2371,11 @@ csilk_mq_t* csilk_ctx_get_mq(csilk_ctx_t* c);
  *         initialised.
  */
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
+
+/** @brief Get the router instance attached to a server.
+ *  @param server The server instance.
+ *  @return Pointer to csilk_router_t. */
+csilk_router_t* csilk_server_get_router(csilk_server_t* server);
 
 /**
  * @brief Opaque Message Queue context.
