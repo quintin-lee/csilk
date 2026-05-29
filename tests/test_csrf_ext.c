@@ -1,177 +1,161 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
+
+static int test_handler_called = 0;
 
 static void
-test_csrf_generate_token_null()
+test_handler(csilk_ctx_t* c)
 {
-	printf("Testing csrf_generate_token with NULL...\n");
-	assert(csilk_csrf_generate_token(NULL, 33) == -1);
-	printf("csrf_generate_token NULL passed!\n");
+	test_handler_called++;
+	csilk_string(c, CSILK_STATUS_OK, "ok");
 }
 
-static void
-test_csrf_generate_token_small_buffer()
-{
-	printf("Testing csrf_generate_token with small buffer...\n");
-	char buf[10];
-	assert(csilk_csrf_generate_token(buf, 10) == -1);
-	printf("csrf_generate_token small buffer passed!\n");
-}
-
-static void
-test_csrf_generate_token_valid()
-{
-	printf("Testing csrf_generate_token valid...\n");
-	char buf[64];
-	assert(csilk_csrf_generate_token(buf, sizeof(buf)) == 0);
-	assert(strlen(buf) == 32);
-	printf("csrf_generate_token valid passed! token=%s\n", buf);
-}
-
-static void
-test_csrf_generate_token_unique()
-{
-	printf("Testing csrf_generate_token unique...\n");
-	char buf1[64], buf2[64];
-	csilk_csrf_generate_token(buf1, sizeof(buf1));
-	csilk_csrf_generate_token(buf2, sizeof(buf2));
-	assert(strcmp(buf1, buf2) != 0);
-	printf("csrf_generate_token unique passed!\n");
-}
-
-static void
+void
 test_csrf_middleware_safe_method_get()
 {
-	printf("Testing csrf middleware on GET (safe method)...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "GET";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware safe method GET...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "GET", "/test");
 
-	csilk_csrf_middleware(&ctx);
-	assert(ctx.response.status == 0);
-	assert(ctx.aborted == 0);
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware GET passed!\n");
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 1);
+	assert(csilk_is_aborted(ctx) == 0);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_safe_method_get passed\n");
 }
 
-static void
+void
 test_csrf_middleware_safe_method_head()
 {
-	printf("Testing csrf middleware on HEAD (safe method)...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "HEAD";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware safe method HEAD...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "HEAD", "/test");
 
-	csilk_csrf_middleware(&ctx);
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware HEAD passed!\n");
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 1);
+	assert(csilk_is_aborted(ctx) == 0);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_safe_method_head passed\n");
 }
 
-static void
+void
 test_csrf_middleware_safe_method_options()
 {
-	printf("Testing csrf middleware on OPTIONS (safe method)...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "OPTIONS";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware safe method OPTIONS...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "OPTIONS", "/test");
 
-	csilk_csrf_middleware(&ctx);
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware OPTIONS passed!\n");
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 1);
+	assert(csilk_is_aborted(ctx) == 0);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_safe_method_options passed\n");
 }
 
-static void
+void
 test_csrf_middleware_post_no_token()
 {
-	printf("Testing csrf middleware on POST without CSRF token...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "POST";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware POST with missing token...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "POST", "/test");
 
-	csilk_csrf_middleware(&ctx);
-	assert(ctx.aborted == 1);
-	assert(ctx.response.status == CSILK_STATUS_FORBIDDEN);
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware POST no token passed!\n");
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 0);
+	assert(csilk_is_aborted(ctx) == 1);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_post_no_token passed\n");
 }
 
-static void
+void
 test_csrf_middleware_post_with_matching_token()
 {
-	printf("Testing csrf middleware on POST with matching token...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "POST";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware POST with matching token...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "POST", "/test");
 
-	csilk_set_request_header(&ctx, "Cookie", "csrf_token=abc123");
-	csilk_set_request_header(&ctx, "X-CSRF-Token", "abc123");
+	char token[64];
+	csilk_csrf_generate_token(token, sizeof(token));
 
-	csilk_csrf_middleware(&ctx);
-	assert(ctx.aborted == 0);
+	csilk_set_request_header(ctx, "X-CSRF-Token", token);
+	// Double-submit pattern needs the same token in a cookie
+	csilk_set_request_header(
+	    ctx, "Cookie", "csrf_token=DUMMY"); // Just to ensure cookie map exists
+	// Wait, csilk_get_cookie reads from request headers.
+	// I need to set the cookie in the request headers.
+	char cookie_hdr[128];
+	snprintf(cookie_hdr, sizeof(cookie_hdr), "csrf_token=%s", token);
+	csilk_set_request_header(ctx, "Cookie", cookie_hdr);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware POST matching token passed!\n");
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
+
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 1);
+	assert(csilk_is_aborted(ctx) == 0);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_post_with_matching_token passed\n");
 }
 
-static void
+void
 test_csrf_middleware_post_with_wrong_token()
 {
-	printf("Testing csrf middleware on POST with wrong token...\n");
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
-	ctx.request.method = "POST";
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	printf("Testing CSRF middleware POST with wrong token...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(ctx, "POST", "/test");
 
-	csilk_set_request_header(&ctx, "Cookie", "csrf_token=abc123");
-	csilk_set_request_header(&ctx, "X-CSRF-Token", "wrongtoken");
+	csilk_set_request_header(ctx, "X-CSRF-Token", "wrong-token");
+	csilk_set_request_header(ctx, "Cookie", "csrf_token=correct-token");
 
-	csilk_csrf_middleware(&ctx);
-	assert(ctx.aborted == 1);
-	assert(ctx.response.status == CSILK_STATUS_FORBIDDEN);
+	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_test_ctx_set_handlers(ctx, handlers);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	printf("csrf middleware POST wrong token passed!\n");
+	test_handler_called = 0;
+	csilk_csrf_middleware(ctx);
+
+	assert(test_handler_called == 0);
+	assert(csilk_is_aborted(ctx) == 1);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN);
+
+	csilk_test_ctx_free(ctx);
+	printf("test_csrf_middleware_post_with_wrong_token passed\n");
 }
 
 int
 main()
 {
-	test_csrf_generate_token_null();
-	test_csrf_generate_token_small_buffer();
-	test_csrf_generate_token_valid();
-	test_csrf_generate_token_unique();
 	test_csrf_middleware_safe_method_get();
 	test_csrf_middleware_safe_method_head();
 	test_csrf_middleware_safe_method_options();

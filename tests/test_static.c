@@ -4,214 +4,147 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <uv.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
+#include "csilk/core/internal.h"
 
-#define TEST_DIR "test_dir_static"
+// Mock _csilk_send_response
+void
+_csilk_send_response(csilk_ctx_t* c)
+{
+	(void)c;
+}
 
 static void
-cleanup_test_dir(void)
+setup_test_file()
 {
-	remove(TEST_DIR "/test.html");
-	rmdir(TEST_DIR);
+	mkdir("./test_public", 0777);
+	FILE* f = fopen("./test_public/hello.txt", "w");
+	fputs("Hello, Csilk!", f);
+	fclose(f);
 }
 
 void
 test_static_serves_file()
 {
-	cleanup_test_dir();
+	printf("Testing static file serve...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(csilk_ctx_t));
-	ctx.arena = csilk_arena_new(1024);
-	assert(ctx.arena != NULL);
-	ctx.request.path = strdup("/test.html");
-	assert(ctx.request.path != NULL);
+	csilk_set(ctx, "static_prefix", "/static");
+	csilk_test_ctx_set_request(ctx, "GET", "/static/hello.txt");
 
-	if (mkdir(TEST_DIR, 0777) != 0) {
-		fprintf(stderr, "WARNING: mkdir failed, skipping test\n");
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
+	csilk_static(ctx, "./test_public");
 
-	FILE* f = fopen(TEST_DIR "/test.html", "w");
-	if (!f) {
-		fprintf(stderr, "WARNING: fopen failed, skipping test\n");
-		rmdir(TEST_DIR);
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
-
-	fprintf(f, "<html><body>Hello</body></html>");
-	fclose(f);
-
-	csilk_static(&ctx, TEST_DIR);
+	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	assert(ctx.response.status == CSILK_STATUS_OK);
-	assert(ctx.file_fd >= 0);
-	assert(ctx.file_size > 0);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
+	assert(csilk_get_file_fd(ctx) != -1);
 
-	printf("test_static_serves_file: PASS\n");
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	cleanup_test_dir();
+	csilk_test_ctx_free(ctx);
+	printf("test_static_serves_file passed\n");
 }
 
 void
 test_static_traversal_blocked()
 {
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(csilk_ctx_t));
-	ctx.arena = csilk_arena_new(1024);
-	assert(ctx.arena != NULL);
-	ctx.request.path = strdup("/../../etc/passwd");
-	assert(ctx.request.path != NULL);
+	printf("Testing static file traversal protection...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_static(&ctx, ".");
+	csilk_set(ctx, "static_prefix", "/static");
+	csilk_test_ctx_set_request(ctx, "GET", "/static/../secrets.txt");
+
+	csilk_static(ctx, "./test_public");
+
+	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	assert(ctx.response.status == CSILK_STATUS_FORBIDDEN ||
-	       ctx.response.status == CSILK_STATUS_NOT_FOUND);
+	// Should be 404 or aborted
+	assert(csilk_get_status(ctx) == CSILK_STATUS_NOT_FOUND);
 
-	printf("test_static_traversal_blocked: PASS\n");
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
+	printf("test_static_traversal_blocked passed\n");
 }
 
 void
 test_static_range_first_5()
 {
-	cleanup_test_dir();
+	printf("Testing static file Range request (0-4)...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(csilk_ctx_t));
-	ctx.arena = csilk_arena_new(1024);
-	assert(ctx.arena != NULL);
-	ctx.request.path = strdup("/test.html");
-	assert(ctx.request.path != NULL);
+	csilk_set(ctx, "static_prefix", "/static");
+	csilk_test_ctx_set_request(ctx, "GET", "/static/hello.txt");
+	csilk_set_request_header(ctx, "Range", "bytes=0-4");
 
-	if (mkdir(TEST_DIR, 0777) != 0) {
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
+	csilk_static(ctx, "./test_public");
 
-	FILE* f = fopen(TEST_DIR "/test.html", "w");
-	if (!f) {
-		rmdir(TEST_DIR);
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
-
-	fprintf(f, "Hello World, this is a test file!");
-	fclose(f);
-
-	csilk_set_request_header(&ctx, "Range", "bytes=0-4");
-	csilk_static(&ctx, TEST_DIR);
+	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
-	assert(ctx.file_fd >= 0);
-	assert(ctx.file_size == 5);
-	assert(ctx.file_offset == 0);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
+	const char* cr = csilk_get_response_header(ctx, "Content-Range");
+	assert(cr != NULL && strncmp(cr, "bytes 0-4/", 10) == 0);
 
-	printf("test_static_range_first_5: PASS\n");
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	cleanup_test_dir();
+	csilk_test_ctx_free(ctx);
+	printf("test_static_range_first_5 passed\n");
 }
 
 void
 test_static_range_middle()
 {
-	cleanup_test_dir();
+	printf("Testing static file Range request (7-11)...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(csilk_ctx_t));
-	ctx.arena = csilk_arena_new(1024);
-	assert(ctx.arena != NULL);
-	ctx.request.path = strdup("/test.html");
-	assert(ctx.request.path != NULL);
+	csilk_set(ctx, "static_prefix", "/static");
+	csilk_test_ctx_set_request(ctx, "GET", "/static/hello.txt");
+	csilk_set_request_header(ctx, "Range", "bytes=7-11");
 
-	if (mkdir(TEST_DIR, 0777) != 0) {
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
+	csilk_static(ctx, "./test_public");
 
-	FILE* f = fopen(TEST_DIR "/test.html", "w");
-	if (!f) {
-		rmdir(TEST_DIR);
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
-
-	fprintf(f, "Hello World, this is a test file!");
-	fclose(f);
-
-	csilk_set_request_header(&ctx, "Range", "bytes=6-10");
-	csilk_static(&ctx, TEST_DIR);
+	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	assert(ctx.response.status == CSILK_STATUS_PARTIAL_CONTENT);
-	assert(ctx.file_fd >= 0);
-	assert(ctx.file_size == 5);
-	assert(ctx.file_offset == 6);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
+	const char* cr = csilk_get_response_header(ctx, "Content-Range");
+	assert(cr != NULL && strncmp(cr, "bytes 7-11/", 10) == 0);
 
-	printf("test_static_range_middle: PASS\n");
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	cleanup_test_dir();
+	csilk_test_ctx_free(ctx);
+	printf("test_static_range_middle passed\n");
 }
 
 void
 test_static_range_invalid()
 {
-	cleanup_test_dir();
+	printf("Testing static file invalid Range request...\n");
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_ctx_t ctx;
-	memset(&ctx, 0, sizeof(csilk_ctx_t));
-	ctx.arena = csilk_arena_new(1024);
-	assert(ctx.arena != NULL);
-	ctx.request.path = strdup("/test.html");
-	assert(ctx.request.path != NULL);
+	csilk_set(ctx, "static_prefix", "/static");
+	csilk_test_ctx_set_request(ctx, "GET", "/static/hello.txt");
+	csilk_set_request_header(ctx, "Range", "bytes=50-100");
 
-	if (mkdir(TEST_DIR, 0777) != 0) {
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
+	csilk_static(ctx, "./test_public");
 
-	FILE* f = fopen(TEST_DIR "/test.html", "w");
-	if (!f) {
-		rmdir(TEST_DIR);
-		csilk_ctx_cleanup(&ctx);
-		return;
-	}
-
-	fprintf(f, "Hello World");
-	fclose(f);
-
-	csilk_set_request_header(&ctx, "Range", "bytes=999-1000");
-	csilk_static(&ctx, TEST_DIR);
+	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	assert(ctx.response.status == CSILK_STATUS_RANGE_NOT_SATISFIABLE);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 
-	printf("test_static_range_invalid: PASS\n");
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
-	cleanup_test_dir();
+	csilk_test_ctx_free(ctx);
+	printf("test_static_range_invalid passed\n");
 }
 
 int
 main()
 {
+	setup_test_file();
 	test_static_serves_file();
 	test_static_traversal_blocked();
 	test_static_range_first_5();
 	test_static_range_middle();
 	test_static_range_invalid();
+
+	remove("./test_public/hello.txt");
+	rmdir("./test_public");
 	return 0;
 }

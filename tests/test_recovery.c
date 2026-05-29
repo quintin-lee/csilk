@@ -1,9 +1,8 @@
-#include <setjmp.h>
 #include <stdio.h>
+#include <assert.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 // Define a test that triggers a panic
 void
@@ -21,23 +20,21 @@ normal_handler(csilk_ctx_t* c)
 int
 main()
 {
-	csilk_ctx_t c = {0};
-	c.has_jump_buffer = 0;
-	c.aborted = 0;
-	c.handler_index = -1;
+	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_handler_t handlers[] = {csilk_recovery_handler, panic_handler, normal_handler, NULL};
-	c.handlers = handlers;
+	csilk_test_ctx_set_handlers(c, handlers);
 
 	printf("Testing recovery...\n");
-	csilk_next(&c);
+	csilk_next(c);
 
-	if (c.response.status == CSILK_STATUS_INTERNAL_SERVER_ERROR) {
-		printf("Recovered from panic! Status: %d\n", c.response.status);
-		csilk_ctx_cleanup(&c);
+	int status = csilk_get_status(c);
+	if (status == CSILK_STATUS_INTERNAL_SERVER_ERROR) {
+		printf("Recovered from panic! Status: %d\n", status);
+		csilk_test_ctx_free(c);
 		return 0; // Test passed
 	} else {
-		printf("Failed to recover! Status: %d\n", c.response.status);
-		csilk_ctx_cleanup(&c);
+		printf("Failed to recover! Status: %d\n", status);
+		csilk_test_ctx_free(c);
 		return 1; // Test failed
 	}
 }

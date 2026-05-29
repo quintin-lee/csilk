@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 

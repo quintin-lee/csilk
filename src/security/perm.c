@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
 
 /** @brief Global driver registry (fixed-size array, max 16). */
@@ -147,11 +146,9 @@ csilk_perm_require(csilk_ctx_t* c, const char* permission, const char* resource)
 void
 csilk_perm_auto_middleware(csilk_ctx_t* c)
 {
-	if (!c || !c->current_handler) {
+	const char* perm = csilk_ctx_get_handler_perm_required(c);
+	if (!perm) {
 		return;
 	}
-	if (!c->current_handler->perm_required) {
-		return;
-	}
-	csilk_perm_require(c, c->current_handler->perm_required, c->current_handler->perm_resource);
+	csilk_perm_require(c, perm, csilk_ctx_get_handler_perm_resource(c));
 }

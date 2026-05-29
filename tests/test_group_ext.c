@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static int test_handler_called = 0;
 
@@ -46,17 +45,18 @@ main()
 					       "OutputType",
 					       "Hello summary",
 					       "Hello description");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/api/hello");
-		int matched = csilk_router_match_ctx(r, &ctx);
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/hello");
+
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
 		test_handler_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(test_handler_called == 1);
-		assert(ctx.response.status == CSILK_STATUS_OK);
-		csilk_ctx_cleanup(&ctx);
+		assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
+
+		csilk_test_ctx_free(ctx);
 		csilk_group_free(g);
 	}
 
@@ -66,16 +66,17 @@ main()
 		assert(g != NULL);
 		csilk_group_add_route_extended(
 		    g, "POST", "/data", test_handler, NULL, NULL, NULL, NULL);
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "POST";
-		ctx.request.path = strdup("/v2/data");
-		int matched = csilk_router_match_ctx(r, &ctx);
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "POST", "/v2/data");
+
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
 		test_handler_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(test_handler_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_group_free(g);
 	}
 
@@ -93,16 +94,17 @@ main()
 						    "Delete a user by ID",
 						    "admin",
 						    "users");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "DELETE";
-		ctx.request.path = strdup("/admin/user/42");
-		int matched = csilk_router_match_ctx(r, &ctx);
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "DELETE", "/admin/user/42");
+
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
 		test_handler_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(test_handler_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_group_free(g);
 	}
 
@@ -136,16 +138,17 @@ main()
 						    "Update an item by ID",
 						    "write",
 						    "items:*");
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "PUT";
-		ctx.request.path = strdup("/api/v3/item/99");
-		int matched = csilk_router_match_ctx(r, &ctx);
+
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "PUT", "/api/v3/item/99");
+
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
 		test_handler_called = 0;
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 		assert(test_handler_called == 1);
-		csilk_ctx_cleanup(&ctx);
+
+		csilk_test_ctx_free(ctx);
 		csilk_group_free(g);
 	}
 

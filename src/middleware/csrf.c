@@ -11,7 +11,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 

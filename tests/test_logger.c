@@ -5,15 +5,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 // Mock handler
 void
 dummy_handler(csilk_ctx_t* c)
 {
-	c->response.status = CSILK_STATUS_OK;
+	csilk_status(c, CSILK_STATUS_OK);
 }
 
 #define NUM_THREADS 5
@@ -50,16 +49,15 @@ main()
 	CSILK_LOG_F("This is a FATAL message");
 
 	// 2. Test basic middleware logging
-	csilk_ctx_t c = {0};
-	c.request.method = "GET";
-	c.request.path = "/test";
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(c, "GET", "/test");
 	csilk_handler_t handlers[] = {csilk_logger_handler, dummy_handler, NULL};
-	c.handlers = handlers;
-	c.handler_index = -1; // csilk_next increments this
+	csilk_test_ctx_set_handlers(c, handlers);
 
 	printf("Testing middleware logging...\n");
-	csilk_next(&c);
-	assert(c.response.status == CSILK_STATUS_OK);
+	csilk_next(c);
+	assert(csilk_get_status(c) == CSILK_STATUS_OK);
+	csilk_test_ctx_free(c);
 
 	// 2. Test multi-threaded logging
 	printf("Testing multi-threaded logging...\n");

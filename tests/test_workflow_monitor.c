@@ -7,38 +7,10 @@
 
 #include "cJSON.h"
 #include "csilk/app/workflow.h"
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static int g_events_received = 0;
-static int g_wf_done = 0;
-
-/* --- WebSocket Client Simulation --- */
-// In a real test we'd use a WS client, here we'll mock the ctx for simplicity
-// and directly verify that _wf_broadcast calls ws_send.
-
-void
-mock_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
-{
-	(void)c;
-	(void)opcode;
-	char* msg = strndup((char*)payload, len);
-	printf("[Monitor] Received WS Frame: %s\n", msg);
-
-	cJSON* root = cJSON_Parse(msg);
-	if (root) {
-		g_events_received++;
-		cJSON_Delete(root);
-	}
-	free(msg);
-}
-
-// We'll need to use a real csilk_ctx_t or mock it.
-// Since csilk_ws_send is an exported function, we can't easily override it
-// without linker tricks. Let's just verify the registration and broadcast logic
-// by inspecting internal state if we can, or just trust the logic if it
-// compiles. Actually, I'll just write a test that uses a real server + client
-// to be rigorous.
 
 void
 ws_monitor_handler(csilk_ctx_t* c)
@@ -72,10 +44,7 @@ test_workflow_monitoring()
 	csilk_wf_node_set_entry(n1, 1);
 
 	// Create a dummy context for the monitor
-	csilk_ctx_t* mock_ctx = calloc(1, sizeof(csilk_ctx_t)); // Fake context
-	// We can't easily mock the internal send, but we've verified the code
-	// compiles and the registry works. For a CLI agent in this environment, a
-	// full E2E WS test might be too flaky.
+	csilk_ctx_t* mock_ctx = csilk_test_ctx_new();
 
 	csilk_wf_register_monitor(wf, mock_ctx);
 
@@ -85,7 +54,7 @@ test_workflow_monitoring()
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	csilk_wf_free(wf);
-	free(mock_ctx);
+	csilk_test_ctx_free(mock_ctx);
 	printf("test_workflow_monitoring: PASS (No crashes, broadcast logic "
 	       "active)\n");
 }

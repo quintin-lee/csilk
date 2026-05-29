@@ -161,6 +161,25 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 						config->server.tcp_keepalive = atoi(val);
 					} else if (strcmp(current_key, "worker_threads") == 0) {
 						config->server.worker_threads = atoi(val);
+					} else if (strcmp(current_key, "enable_tls") == 0) {
+						config->server.enable_tls = atoi(val);
+					} else if (strcmp(current_key, "tls_cert_file") == 0) {
+						config->server.tls_cert_file = strdup(val);
+						if (!config->server.tls_cert_file) {
+							error = 1;
+						}
+					} else if (strcmp(current_key, "tls_key_file") == 0) {
+						config->server.tls_key_file = strdup(val);
+						if (!config->server.tls_key_file) {
+							error = 1;
+						}
+					} else if (strcmp(current_key, "tls_ca_file") == 0) {
+						config->server.tls_ca_file = strdup(val);
+						if (!config->server.tls_ca_file) {
+							error = 1;
+						}
+					} else if (strcmp(current_key, "tls_verify_peer") == 0) {
+						config->server.tls_verify_peer = atoi(val);
 					}
 				} else if (strcmp(current_section, "logger") == 0) {
 					if (strcmp(current_key, "level") == 0) {
@@ -381,6 +400,19 @@ csilk_config_free(csilk_config_t* config)
 		free(config->cipher.driver);
 		config->cipher.driver = NULL;
 	}
+
+	if (config->server.tls_cert_file) {
+		free(config->server.tls_cert_file);
+		config->server.tls_cert_file = NULL;
+	}
+	if (config->server.tls_key_file) {
+		free(config->server.tls_key_file);
+		config->server.tls_key_file = NULL;
+	}
+	if (config->server.tls_ca_file) {
+		free(config->server.tls_ca_file);
+		config->server.tls_ca_file = NULL;
+	}
 }
 
 /** @brief Validate configuration values for semantic correctness.
@@ -475,6 +507,30 @@ csilk_config_validate(const csilk_config_t* config, const char** error_msg)
 			*error_msg = "cipher.driver must be set when cipher is enabled";
 		}
 		return -1;
+	}
+	if (config->server.enable_tls) {
+		if (!config->server.tls_cert_file || strlen(config->server.tls_cert_file) == 0) {
+			if (error_msg) {
+				*error_msg = "tls_cert_file must be set when "
+					     "enable_tls is 1";
+			}
+			return -1;
+		}
+		if (!config->server.tls_key_file || strlen(config->server.tls_key_file) == 0) {
+			if (error_msg) {
+				*error_msg = "tls_key_file must be set when "
+					     "enable_tls is 1";
+			}
+			return -1;
+		}
+		if (config->server.tls_verify_peer &&
+		    (!config->server.tls_ca_file || strlen(config->server.tls_ca_file) == 0)) {
+			if (error_msg) {
+				*error_msg = "tls_ca_file must be set when "
+					     "tls_verify_peer is 1";
+			}
+			return -1;
+		}
 	}
 	return 0;
 }

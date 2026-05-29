@@ -110,4 +110,58 @@ csilk_test_realloc(void* ptr, size_t size)
 
 #endif /* TEST_OOM */
 
+/**
+ * @name Context Test Helpers
+ * Helpers to create and manipulate opaque csilk_ctx_t objects in unit tests.
+ * @{ */
+
+/** @brief Create a new mock context for testing (heap-allocated).
+ *  @return Pointer to new context, or NULL on failure. */
+csilk_ctx_t* csilk_test_ctx_new(void);
+
+/** @brief Free a mock context created via csilk_test_ctx_new().
+ *  @param c  The context to free. */
+void csilk_test_ctx_free(csilk_ctx_t* c);
+
+/** @brief Set the handler chain for a test context.
+ *  @param c        The request context.
+ *  @param handlers NULL-terminated array of handler functions. */
+void csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers);
+
+/** @brief Manually set the request method and path for testing.
+ *  @param c       The request context.
+ *  @param method  HTTP method string (e.g. "GET"). Not copied.
+ *  @param path    Decoded URL path string. Not copied. */
+void csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* path);
+
+/** @brief Manually set metadata for the current handler (mocking matched route).
+ *  @param c              The request context.
+ *  @param perm_required  Permission string. Not copied.
+ *  @param perm_resource  Resource pattern. Not copied. */
+void csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
+					 const char* perm_required,
+					 const char* perm_resource);
+
+/** @brief Manually set the request body for testing.
+ *  @param c    The request context.
+ *  @param body The raw request body string. Not copied.
+ *  @param len  Length of the body. */
+void csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len);
+
+/** @brief Manually add a path parameter for testing.
+ *  @param c     The request context.
+ *  @param key   Parameter name. Copied.
+ *  @param value Parameter value. Copied. */
+void csilk_test_ctx_add_param(csilk_ctx_t* c, const char* key, const char* value);
+
+/** @brief Count response headers with a given key and optional value substring.
+ *  @param c               The request context.
+ *  @param key             Header key to look up.
+ *  @param value_contains  Optional substring to match in the value.
+ *  @return Number of matching headers. */
+int
+csilk_test_ctx_count_response_headers(csilk_ctx_t* c, const char* key, const char* value_contains);
+
+/** @} */
+
 #endif /* CSILK_TEST_H */

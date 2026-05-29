@@ -1,5 +1,3 @@
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 /**
  * @file example_app.c
  * @brief Example using the high-level csilk_app_t API.
@@ -378,9 +376,9 @@ timer_mw(csilk_ctx_t* c)
 	clock_t t0 = clock();
 	csilk_next(c);
 	printf("  req %s %s → %d  (%.2f ms)\n",
-	       c->request.method,
-	       c->request.path,
-	       c->response.status,
+	       csilk_get_method(c),
+	       csilk_get_path(c),
+	       csilk_get_status(c),
 	       1000.0 * (clock() - t0) / CLOCKS_PER_SEC);
 }
 

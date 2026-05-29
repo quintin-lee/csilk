@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
+#include "csilk/core/internal.h"
 
 static void
 test_sha256_basic()
@@ -225,6 +225,10 @@ static void
 test_hmac_driver_cb(
     const uint8_t* key, size_t klen, const uint8_t* data, size_t dlen, uint8_t* result)
 {
+	(void)key;
+	(void)klen;
+	(void)data;
+	(void)dlen;
 	hmac_driver_called = 1;
 	memset(result, 0xAB, 32);
 }
@@ -240,11 +244,12 @@ test_csilk_hmac_sha256_with_crypto_driver()
 	memset(&driver, 0, sizeof(driver));
 	driver.hmac_sha256 = test_hmac_driver_cb;
 
-	csilk_ctx_t ctx = {0};
-	ctx.crypto_driver = &driver;
-	_csilk_hmac_sha256(&ctx, (uint8_t*)"k", 1, (uint8_t*)"d", 1, out);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_ctx_set_crypto_driver(ctx, &driver);
+	_csilk_hmac_sha256(ctx, (uint8_t*)"k", 1, (uint8_t*)"d", 1, out);
 	assert(hmac_driver_called == 1);
 	assert(out[0] == 0xAB);
+	csilk_test_ctx_free(ctx);
 	printf("_csilk_hmac_sha256 with crypto driver passed!\n");
 }
 
@@ -266,17 +271,18 @@ test_csilk_generate_uuid_with_driver()
 	memset(&driver, 0, sizeof(driver));
 	driver.generate_uuid = test_uuid_driver_cb;
 
-	csilk_ctx_t ctx = {0};
-	ctx.crypto_driver = &driver;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
+	csilk_ctx_set_crypto_driver(ctx, &driver);
 
 	char buf[37] = {0};
-	_csilk_generate_uuid(&ctx, buf);
+	_csilk_generate_uuid(ctx, buf);
 	assert(uuid_driver_called == 1);
 	assert(strcmp(buf, "driver-uuid-test-1234567890") == 0);
 
 	uuid_driver_called = 0;
 	_csilk_generate_uuid(NULL, buf);
 	assert(strcmp(buf, "driver-uuid-test-1234567890") != 0);
+	csilk_test_ctx_free(ctx);
 	printf("_csilk_generate_uuid with crypto driver passed!\n");
 }
 

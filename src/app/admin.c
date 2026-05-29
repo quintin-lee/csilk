@@ -13,7 +13,6 @@
 #include <unistd.h>
 
 #include "cJSON.h"
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 
 /* Externs from metrics.c */
@@ -113,7 +112,7 @@ admin_stats_handler(csilk_ctx_t* c)
 	csilk_server_get_stats(csilk_ctx_get_server(c), &active_conn, &pooled_conn);
 
 	size_t arena_size = 0, arena_used = 0;
-	csilk_arena_get_stats(c->arena, &arena_size, &arena_used);
+	csilk_arena_get_stats(csilk_get_arena(c), &arena_size, &arena_used);
 
 	cJSON* sys = cJSON_CreateObject();
 	cJSON_AddNumberToObject(sys, "active_connections", (double)active_conn);

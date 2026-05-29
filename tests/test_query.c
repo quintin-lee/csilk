@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 void
 test_split_url()
@@ -36,43 +35,37 @@ test_split_url()
 void
 test_parse_query()
 {
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_parse_query(&ctx, "a=1&b=2&c=hello");
+	csilk_parse_query(ctx, "a=1&b=2&c=hello");
 
-	const char* a = csilk_get_query(&ctx, "a");
-	const char* b = csilk_get_query(&ctx, "b");
-	const char* c = csilk_get_query(&ctx, "c");
-	const char* d = csilk_get_query(&ctx, "d");
+	const char* a = csilk_get_query(ctx, "a");
+	const char* b = csilk_get_query(ctx, "b");
+	const char* c = csilk_get_query(ctx, "c");
+	const char* d = csilk_get_query(ctx, "d");
 
 	assert(a != NULL && strcmp(a, "1") == 0);
 	assert(b != NULL && strcmp(b, "2") == 0);
 	assert(c != NULL && strcmp(c, "hello") == 0);
 	assert(d == NULL);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_parse_query passed\n");
 }
 
 void
 test_empty_query()
 {
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_parse_query(&ctx, "");
-	// query_params is a struct, no longer NULLable.
-	// We check if getting a key returns NULL.
-	assert(csilk_get_query(&ctx, "any") == NULL);
+	csilk_parse_query(ctx, "");
+	assert(csilk_get_query(ctx, "any") == NULL);
 
-	csilk_parse_query(&ctx, "key_no_val");
-	const char* val = csilk_get_query(&ctx, "key_no_val");
+	csilk_parse_query(ctx, "key_no_val");
+	const char* val = csilk_get_query(ctx, "key_no_val");
 	assert(val != NULL && strcmp(val, "") == 0);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_empty_query passed\n");
 }
 
@@ -86,25 +79,23 @@ test_boundary_query()
 	assert(path == NULL);
 	assert(query == NULL);
 
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
 	// NULL query string
-	csilk_parse_query(&ctx, NULL);
-	assert(csilk_get_query(&ctx, "any") == NULL);
+	csilk_parse_query(ctx, NULL);
+	assert(csilk_get_query(ctx, "any") == NULL);
 
 	// Consecutive ampersands
-	csilk_parse_query(&ctx, "a=1&&b=2&");
-	assert(strcmp(csilk_get_query(&ctx, "a"), "1") == 0);
-	assert(strcmp(csilk_get_query(&ctx, "b"), "2") == 0);
+	csilk_parse_query(ctx, "a=1&&b=2&");
+	assert(strcmp(csilk_get_query(ctx, "a"), "1") == 0);
+	assert(strcmp(csilk_get_query(ctx, "b"), "2") == 0);
 
 	// Empty values
-	csilk_parse_query(&ctx, "c=&d");
-	assert(strcmp(csilk_get_query(&ctx, "c"), "") == 0);
-	assert(strcmp(csilk_get_query(&ctx, "d"), "") == 0);
+	csilk_parse_query(ctx, "c=&d");
+	assert(strcmp(csilk_get_query(ctx, "c"), "") == 0);
+	assert(strcmp(csilk_get_query(ctx, "d"), "") == 0);
 
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_boundary_query passed\n");
 }
 

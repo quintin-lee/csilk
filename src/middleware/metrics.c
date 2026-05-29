@@ -21,7 +21,6 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
 
 /* --- Configuration Constants --- */
@@ -230,14 +229,15 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 	atomic_fetch_add(&http_request_duration_microseconds, duration_us);
 
 	/* 2. Update Dimensional Route Metrics & Histograms */
-	const char* method = c->request.method ? c->request.method : "UNKNOWN";
+	const char* method = csilk_get_method(c) ? csilk_get_method(c) : "UNKNOWN";
 
 	/* Use the static route pattern (e.g., /users/:id) if available, otherwise
    * fall back. */
-	const char* route = (c->current_handler && c->current_handler->path)
-				? c->current_handler->path
-				: "unmatched";
-	int status = c->response.status;
+	const char* route = csilk_ctx_get_handler_path(c);
+	if (!route) {
+		route = "unmatched";
+	}
+	int status = csilk_get_status(c);
 
 	csilk_route_metric_t* slot = get_metric_slot(method, route, status);
 	if (slot) {
@@ -536,11 +536,8 @@ csilk_metrics_handler(csilk_ctx_t* c)
 	/* Wrap the dynamically allocated buffer in the response.
      The framework will automatically call free() when the response is sent
      because body_is_managed is set to 1. */
-	csilk_response_t* res = &c->response;
-	res->body = buf;
-	res->body_len = offset;
-	res->body_is_managed = 1;
-	res->status = CSILK_STATUS_OK;
+	csilk_set_response_body(c, buf, offset, 1);
+	csilk_status(c, CSILK_STATUS_OK);
 }
 
 uint64_t

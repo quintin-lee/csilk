@@ -29,7 +29,6 @@
 #include <string.h>
 #include <uv.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -80,7 +79,7 @@ csilk_ws_handshake(csilk_ctx_t* c)
 	csilk_set_header(c, "Sec-WebSocket-Accept", accept_key);
 
 	csilk_status(c, CSILK_STATUS_SWITCHING_PROTOCOLS);
-	c->is_websocket = 1;
+	csilk_set_websocket(c, 1);
 }
 
 /** @brief libuv write completion callback for WebSocket frame sends.
@@ -118,7 +117,8 @@ on_ws_write(uv_write_t* req, int status)
 void
 csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 {
-	if (!c || !c->_internal_client) {
+	void* internal_client = _csilk_get_internal_client(c);
+	if (!c || !internal_client) {
 		return;
 	}
 
@@ -169,7 +169,7 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 		uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)(header_len + len));
 		write_req->data = frame;
 		// The first member of csilk_client_t is uv_tcp_t handle
-		uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+		uv_stream_t* stream = (uv_stream_t*)internal_client;
 		uv_write(write_req, stream, &buf, 1, on_ws_write);
 	} else {
 		free(frame);
@@ -211,7 +211,8 @@ on_close_write(uv_write_t* req, int status)
 void
 csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 {
-	if (!c || !c->_internal_client) {
+	void* internal_client = _csilk_get_internal_client(c);
+	if (!c || !internal_client) {
 		return;
 	}
 
@@ -257,7 +258,7 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 	if (write_req) {
 		uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)frame_len);
 		write_req->data = frame;
-		uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+		uv_stream_t* stream = (uv_stream_t*)internal_client;
 		uv_write(write_req, stream, &buf, 1, on_close_write);
 	} else {
 		free(frame);
@@ -367,8 +368,9 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 			close_code = (uint16_t)((payload[0] << 8) | payload[1]);
 		}
 		csilk_ws_close(c, close_code, NULL);
-		if (c->_internal_client) {
-			uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
+		void* internal_client = _csilk_get_internal_client(c);
+		if (internal_client) {
+			uv_stream_t* stream = (uv_stream_t*)internal_client;
 			if (!uv_is_closing((uv_handle_t*)stream)) {
 				uv_close((uv_handle_t*)stream, NULL);
 			}
@@ -377,8 +379,9 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 		return;
 	}
 
-	if (c->on_ws_message) {
-		c->on_ws_message(c, payload, (size_t)payload_len, opcode);
+	void (*on_ws_msg)(csilk_ctx_t*, const uint8_t*, size_t, int) = csilk_get_on_ws_message(c);
+	if (on_ws_msg) {
+		on_ws_msg(c, payload, (size_t)payload_len, opcode);
 	}
 
 	free(payload);

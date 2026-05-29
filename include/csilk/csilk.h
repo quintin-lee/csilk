@@ -44,6 +44,14 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  */
 #define CSILK_MAX_PARAMS 20
 
+/**
+ * @brief Maximum number of items that can be stored in the context key-value storage.
+ *
+ * This limit prevents uncontrolled memory consumption in the request arena
+ * by preventing a single request from setting an excessive number of keys.
+ */
+#define CSILK_MAX_STORAGE 64
+
 /** @name HTTP Status Codes
  *  Standardized macros for common HTTP response status codes.
  *  Use these instead of raw integer literals for readability.
@@ -288,6 +296,14 @@ size_t csilk_get_body_len(csilk_ctx_t* c);
 int csilk_is_websocket(csilk_ctx_t* c);
 
 /**
+ * @brief Enable or disable WebSocket mode.
+ *
+ * @param c             The request context.
+ * @param is_websocket  1 to enable, 0 to disable.
+ */
+void csilk_set_websocket(csilk_ctx_t* c, int is_websocket);
+
+/**
  * @brief Check whether the connection is in Server-Sent Events mode.
  *
  * Returns 1 only after csilk_sse_init has been called successfully.
@@ -296,6 +312,17 @@ int csilk_is_websocket(csilk_ctx_t* c);
  * @return 1 if SSE mode is active, 0 otherwise.
  */
 int csilk_is_sse(csilk_ctx_t* c);
+
+/**
+ * @brief Enable or disable Server-Sent Events (SSE) mode.
+ *
+ * When SSE mode is active the framework will not automatically close
+ * the connection after the handler returns.
+ *
+ * @param c       The request context.
+ * @param is_sse  1 to enable SSE mode, 0 to disable.
+ */
+void csilk_set_sse(csilk_ctx_t* c, int is_sse);
 
 /**
  * @brief Check whether the handler chain has been aborted.
@@ -322,6 +349,17 @@ int csilk_is_aborted(csilk_ctx_t* c);
 void
 csilk_set_on_ws_message(csilk_ctx_t* c,
 			void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode));
+
+/**
+ * @brief Get the currently registered WebSocket message callback.
+ *
+ * @param c  The request context.
+ * @return The callback function pointer, or NULL if none is set.
+ */
+void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t* c,
+						const uint8_t* payload,
+						size_t len,
+						int opcode);
 
 /**
  * @brief Get the unique identifier for the current request.
@@ -375,6 +413,79 @@ void csilk_set_async(csilk_ctx_t* c, int is_async);
  * @return 1 if async mode is active, 0 if the framework owns response flushing.
  */
 int csilk_is_async(csilk_ctx_t* c);
+
+/**
+ * @brief Get the index of the currently executing handler in the chain.
+ *
+ * @param c  The request context.
+ * @return Index (0-based) or -1 if the chain hasn't started.
+ */
+int csilk_get_handler_index(csilk_ctx_t* c);
+
+/**
+ * @brief Set the request unique identifier.
+ *
+ * @param c   The request context.
+ * @param id  The new request ID string. It is copied into the context.
+ */
+void csilk_set_request_id(csilk_ctx_t* c, const char* id);
+
+/**
+ * @brief Get the libuv work request associated with the context.
+ *
+ * Use this to offload long-running operations to the thread pool while
+ * maintaining context state.
+ *
+ * @param c  The request context.
+ * @return Pointer to the context's internal uv_work_t.
+ */
+uv_work_t* csilk_get_work_req(csilk_ctx_t* c);
+
+/**
+ * @brief Set the zero-copy file response parameters.
+ *
+ * Configures the context to send a file using platform-native zero-copy
+ * mechanisms (e.g., sendfile). This should be used in conjunction with
+ * setting the response as asynchronous.
+ *
+ * @param c       The request context.
+ * @param fd      Open file descriptor (O_RDONLY).
+ * @param offset  Starting byte offset in the file.
+ * @param size    Number of bytes to send.
+ */
+void csilk_set_file_response(csilk_ctx_t* c, int fd, size_t offset, size_t size);
+
+/**
+ * @brief Get the current zero-copy file descriptor.
+ *
+ * @param c  The request context.
+ * @return The file descriptor, or -1 if no file response is configured.
+ */
+int csilk_get_file_fd(csilk_ctx_t* c);
+
+/**
+ * @brief Get the route pattern for the matched handler (e.g., "/users/:id").
+ *
+ * @param c  The request context.
+ * @return The route path pattern, or NULL if no route was matched.
+ */
+const char* csilk_ctx_get_handler_path(csilk_ctx_t* c);
+
+/**
+ * @brief Get the permission string required by the matched handler.
+ *
+ * @param c  The request context.
+ * @return The permission identifier, or NULL if none is required.
+ */
+const char* csilk_ctx_get_handler_perm_required(csilk_ctx_t* c);
+
+/**
+ * @brief Get the resource pattern for the matched handler's permission check.
+ *
+ * @param c  The request context.
+ * @return The resource pattern, or NULL.
+ */
+const char* csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c);
 
 /**
  * @brief Overwrite the response body from middleware.
@@ -500,6 +611,32 @@ void csilk_string(csilk_ctx_t* c, int status, const char* msg);
  *         parameter.  Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_param(csilk_ctx_t* c, const char* key);
+
+/**
+ * @brief Get the number of path parameters extracted from the URL.
+ *
+ * @param c  The request context.
+ * @return Count of parameters (0..CSILK_MAX_PARAMS).
+ */
+int csilk_get_params_count(csilk_ctx_t* c);
+
+/**
+ * @brief Get the name of a path parameter by its index.
+ *
+ * @param c      The request context.
+ * @param index  Index of the parameter (0..count-1).
+ * @return The parameter name string, or NULL if index is out of bounds.
+ */
+const char* csilk_get_param_key(csilk_ctx_t* c, int index);
+
+/**
+ * @brief Get the value of a path parameter by its index.
+ *
+ * @param c      The request context.
+ * @param index  Index of the parameter (0..count-1).
+ * @return The parameter value string, or NULL if index is out of bounds.
+ */
+const char* csilk_get_param_value(csilk_ctx_t* c, int index);
 
 /**
  * @brief Get a request header value by name (case-insensitive).
@@ -2070,6 +2207,27 @@ void csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_
  *               The driver struct must remain valid for the server's lifetime.
  */
 void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver);
+
+/**
+ * @brief Set the storage driver for the context.
+ * @param c       The request context.
+ * @param driver  The storage driver vtable.
+ */
+void csilk_ctx_set_storage_driver(csilk_ctx_t* c, csilk_storage_driver_t* driver);
+
+/**
+ * @brief Set the crypto driver for the context.
+ * @param c       The request context.
+ * @param driver  The crypto driver vtable.
+ */
+void csilk_ctx_set_crypto_driver(csilk_ctx_t* c, csilk_crypto_driver_t* driver);
+
+/**
+ * @brief Set the cipher driver for the context.
+ * @param c       The request context.
+ * @param driver  The cipher driver vtable.
+ */
+void csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver);
 
 /**
  * @brief Create a new server instance.

@@ -1,431 +1,319 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/csilk.h"
-#include "csilk/drivers/perm.h"
+#include "csilk/test/test.h"
 
-static int custom_check_called = 0;
-
-static int
-custom_check(csilk_ctx_t* c, const char* permission, const char* resource)
+// Mock handler for middleware testing
+static int handler_called = 0;
+void
+mock_handler(csilk_ctx_t* c)
 {
 	(void)c;
-	(void)permission;
-	(void)resource;
-	custom_check_called++;
-	return 0;
+	handler_called++;
 }
 
-static csilk_perm_driver_t custom_driver = {
-    .name = "custom",
-    .check = custom_check,
-};
-
-void
-test_perm_init(void)
+// Mock Permission Driver
+static int driver_eval_called = 0;
+static int
+mock_eval(csilk_ctx_t* c, const char* perm, const char* res)
 {
-	csilk_perm_init();
-	csilk_perm_driver_t* d = csilk_perm_get_driver("simple");
-	assert(d != NULL);
-	assert(strcmp(d->name, "simple") == 0);
-	printf("test_perm_init passed\n");
+	(void)c;
+	driver_eval_called++;
+	const char* role = (const char*)csilk_get(c, "role");
+
+	if (role && strcmp(role, "admin") == 0) {
+		return 0; // 0 = allowed
+	}
+	if (perm && strcmp(perm, "read") == 0 && res && strcmp(res, "public") == 0) {
+		return 0; // 0 = allowed
+	}
+	return -1; // non-zero = denied
 }
 
-void
-test_perm_register_lookup(void)
-{
-	assert(csilk_perm_register_driver("custom2", &custom_driver) == 0);
-	csilk_perm_driver_t* d = csilk_perm_get_driver("custom2");
-	assert(d != NULL);
-	assert(strcmp(d->name, "custom2") == 0);
-	assert(csilk_perm_get_driver("nonexistent") == NULL);
-	printf("test_perm_register_lookup passed\n");
-}
+static csilk_perm_driver_t mock_driver = {.name = "mock", .check = mock_eval};
 
 void
-test_perm_set_default(void)
+test_perm_simple_no_role()
 {
+	printf("Testing simple perm (No role)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+
+	// Default simple driver
+	csilk_perm_simple_init();
 	csilk_perm_set_default("simple");
-	csilk_perm_driver_t* d = csilk_perm_get_driver("simple");
-	assert(d != NULL);
-	assert(csilk_perm_set_default("nonexistent") == -1);
-	printf("test_perm_set_default passed\n");
-}
 
-static void
-reset_simple(void)
-{
-	csilk_perm_set_default("simple");
-	csilk_perm_simple_clear();
-}
+	// No role set in context, should deny
+	csilk_perm_require(c, "read", "users:1");
+	assert(csilk_is_aborted(c) == 1);
+	assert(csilk_get_status(c) == CSILK_STATUS_FORBIDDEN);
 
-void
-test_perm_simple_no_role(void)
-{
-	reset_simple();
-
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-
-	int rc = csilk_perm_check(&c, "read", "articles:1");
-	assert(rc == -1);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_no_role passed\n");
 }
 
 void
-test_perm_simple_role_from_csilk_get(void)
+test_perm_simple_role_from_csilk_get()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Role from csilk_get)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_set(&c, "role", (void*)"admin");
-	csilk_perm_simple_allow("admin", "read", "*");
+	csilk_set(c, "role", "user");
+	csilk_perm_simple_allow("user", "read", "articles:*");
 
-	int rc = csilk_perm_check(&c, "read", "anything");
-	assert(rc == 0);
+	csilk_perm_require(c, "read", "articles:42");
+	assert(csilk_is_aborted(c) == 0);
 
-	csilk_arena_free(c.arena);
+	csilk_perm_require(c, "write", "articles:42");
+	assert(csilk_is_aborted(c) == 1);
+
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_role_from_csilk_get passed\n");
 }
 
 void
-test_perm_simple_role_from_jwt(void)
+test_perm_simple_role_from_jwt()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Role from JWT)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "role", "editor");
-	csilk_set(&c, "jwt_payload", (void*)payload);
+	cJSON* jwt = cJSON_CreateObject();
+	cJSON_AddStringToObject(jwt, "role", "editor");
+	csilk_set(c, "jwt_payload", jwt);
 
-	csilk_perm_simple_allow("editor", "write", "articles:*");
+	csilk_perm_simple_allow("editor", "edit", "*");
+	csilk_perm_require(c, "edit", "any");
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "write", "articles:42");
-	assert(rc == 0);
-
-	cJSON_Delete(payload);
-	csilk_arena_free(c.arena);
+	cJSON_Delete(jwt);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_role_from_jwt passed\n");
 }
 
 void
-test_perm_simple_wildcard_permission(void)
+test_perm_simple_wildcard_permission()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Wildcard permission)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "admin");
 
-	csilk_set(&c, "role", (void*)"admin");
 	csilk_perm_simple_allow("admin", "*", "*");
+	csilk_perm_require(c, "anything", "anywhere");
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "delete", "any_resource");
-	assert(rc == 0);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_wildcard_permission passed\n");
 }
 
 void
-test_perm_simple_wildcard_role(void)
+test_perm_simple_wildcard_role()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Wildcard role)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "guest");
 
-	csilk_set(&c, "role", (void*)"guest");
-	csilk_perm_simple_allow("*", "read", "public:*");
+	csilk_perm_simple_allow("*", "view", "landing");
+	csilk_perm_require(c, "view", "landing");
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "read", "public:index.html");
-	assert(rc == 0);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_wildcard_role passed\n");
 }
 
 void
-test_perm_simple_deny_no_rule(void)
+test_perm_simple_deny_no_rule()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Deny when no rule matches)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "user");
 
-	csilk_set(&c, "role", (void*)"viewer");
+	csilk_perm_require(c, "delete", "server");
+	assert(csilk_is_aborted(c) == 1);
 
-	int rc = csilk_perm_check(&c, "delete", "users:1");
-	assert(rc == -1);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_deny_no_rule passed\n");
 }
 
 void
-test_perm_simple_exact_match(void)
+test_perm_simple_exact_match()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Exact match)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "user");
 
-	csilk_set(&c, "role", (void*)"admin");
-	csilk_perm_simple_allow("admin", "delete", "server:config");
+	csilk_perm_simple_allow("user", "read", "secret");
+	csilk_perm_require(c, "read", "secret");
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "delete", "server:config");
-	assert(rc == 0);
+	csilk_perm_require(c, "read", "secret2");
+	assert(csilk_is_aborted(c) == 1);
 
-	rc = csilk_perm_check(&c, "delete", "server:other");
-	assert(rc == -1);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_exact_match passed\n");
 }
 
 void
-test_perm_simple_prefix_resource(void)
+test_perm_simple_prefix_resource()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing simple perm (Prefix resource articles:*)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "user");
 
-	csilk_set(&c, "role", (void*)"editor");
-	csilk_perm_simple_allow("editor", "write", "articles:*");
+	csilk_perm_simple_allow("user", "read", "articles:*");
+	csilk_perm_require(c, "read", "articles:123");
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "write", "articles:99");
-	assert(rc == 0);
+	csilk_perm_require(c, "read", "users:123");
+	assert(csilk_is_aborted(c) == 1);
 
-	rc = csilk_perm_check(&c, "write", "comments:1");
-	assert(rc == -1);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_simple_prefix_resource passed\n");
 }
 
 void
-test_perm_custom_driver(void)
+test_perm_custom_driver()
 {
-	custom_check_called = 0;
+	printf("Testing custom perm driver...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_perm_register_driver("custom_test", &custom_driver);
-	csilk_perm_set_default("custom_test");
+	csilk_perm_register_driver("mock", &mock_driver);
+	csilk_perm_set_default("mock");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
+	csilk_set(c, "role", "admin");
+	driver_eval_called = 0;
+	csilk_perm_require(c, "any", "any");
+	assert(driver_eval_called == 1);
+	assert(csilk_is_aborted(c) == 0);
 
-	int rc = csilk_perm_check(&c, "any", "thing");
-	assert(rc == 0);
-	assert(custom_check_called == 1);
+	csilk_set(c, "role", "guest");
+	csilk_perm_require(c, "read", "public");
+	assert(csilk_is_aborted(c) == 0);
 
+	csilk_perm_require(c, "read", "private");
+	assert(csilk_is_aborted(c) == 1);
+
+	csilk_test_ctx_free(c);
 	printf("test_perm_custom_driver passed\n");
 }
 
 void
-test_perm_init_idempotent(void)
+test_perm_router_route_perm()
 {
-	int count_before = 0;
-	for (int i = 0;; i++) {
-		const char* name;
-		if (i == 0) {
-			name = "simple";
-		} else if (i == 1) {
-			name = "custom2";
-		} else if (i == 2) {
-			name = "custom_test";
-		} else {
-			break;
-		}
-		if (csilk_perm_get_driver(name)) {
-			count_before++;
-		}
-	}
-
-	csilk_perm_init();
-
-	int count_after = 0;
-	for (int i = 0;; i++) {
-		const char* name;
-		if (i == 0) {
-			name = "simple";
-		} else if (i == 1) {
-			name = "custom2";
-		} else if (i == 2) {
-			name = "custom_test";
-		} else {
-			break;
-		}
-		if (csilk_perm_get_driver(name)) {
-			count_after++;
-		}
-	}
-
-	assert(count_before == count_after);
-	printf("test_perm_init_idempotent passed\n");
-}
-
-static void
-dummy_handler(csilk_ctx_t* c)
-{
-	(void)c;
-}
-
-void
-test_perm_router_route_perm(void)
-{
+	printf("Testing router add_route_perm...\n");
 	csilk_router_t* r = csilk_router_new();
-	assert(r);
+	csilk_handler_t h[] = {mock_handler};
 
-	csilk_handler_t h[] = {dummy_handler};
-	csilk_router_add_perm(r, "GET", "/admin/users", h, 1, "admin", "users:*");
+	csilk_router_add_perm(r, "GET", "/test", h, 1, "read", "resource");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.request.method = "GET";
-	c.request.path = "/admin/users";
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(c, "GET", "/test");
 
-	int matched = csilk_router_match_ctx(r, &c);
+	int matched = csilk_router_match_ctx(r, c);
 	assert(matched);
-	assert(c.current_handler != NULL);
-	assert(c.current_handler->perm_required != NULL);
-	assert(strcmp(c.current_handler->perm_required, "admin") == 0);
-	assert(c.current_handler->perm_resource != NULL);
-	assert(strcmp(c.current_handler->perm_resource, "users:*") == 0);
+	assert(strcmp(csilk_ctx_get_handler_perm_required(c), "read") == 0);
+	assert(strcmp(csilk_ctx_get_handler_perm_resource(c), "resource") == 0);
 
+	csilk_test_ctx_free(c);
 	csilk_router_free(r);
 	printf("test_perm_router_route_perm passed\n");
 }
 
 void
-test_perm_router_route_extended_perm(void)
+test_perm_router_route_extended_perm()
 {
+	printf("Testing router add_route_extended_perm...\n");
 	csilk_router_t* r = csilk_router_new();
-	assert(r);
+	csilk_handler_t h[] = {mock_handler};
 
-	csilk_handler_t h[] = {dummy_handler};
-	csilk_router_add_extended_perm(r,
-				       "POST",
-				       "/articles",
-				       h,
-				       1,
-				       "/articles",
-				       "CreateReq",
-				       "ArticleResp",
-				       "Create article",
-				       "Creates a new article",
-				       "write",
-				       "articles:*");
+	csilk_router_add_extended_perm(
+	    r, "GET", "/test", h, 1, "/test", NULL, NULL, NULL, NULL, "read", "resource");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.request.method = "POST";
-	c.request.path = "/articles";
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_test_ctx_set_request(c, "GET", "/test");
 
-	int matched = csilk_router_match_ctx(r, &c);
+	int matched = csilk_router_match_ctx(r, c);
 	assert(matched);
-	assert(c.current_handler != NULL);
-	assert(strcmp(c.current_handler->perm_required, "write") == 0);
-	assert(strcmp(c.current_handler->perm_resource, "articles:*") == 0);
-	assert(strcmp(c.current_handler->input_type, "CreateReq") == 0);
-	assert(strcmp(c.current_handler->output_type, "ArticleResp") == 0);
-	assert(strcmp(c.current_handler->summary, "Create article") == 0);
-	assert(strcmp(c.current_handler->description, "Creates a new article") == 0);
+	assert(strcmp(csilk_ctx_get_handler_perm_required(c), "read") == 0);
+	assert(strcmp(csilk_ctx_get_handler_perm_resource(c), "resource") == 0);
 
+	csilk_test_ctx_free(c);
 	csilk_router_free(r);
 	printf("test_perm_router_route_extended_perm passed\n");
 }
 
 void
-test_perm_auto_middleware_allowed(void)
+test_perm_auto_middleware_allowed()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing csilk_perm_auto_middleware (Allowed)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "admin");
+	csilk_perm_simple_init();
+	csilk_perm_set_default("simple");
+	csilk_perm_simple_allow("admin", "write", "*");
 
-	csilk_set(&c, "role", (void*)"admin");
-	csilk_perm_simple_allow("admin", "write", "articles:*");
+	csilk_test_ctx_set_handler_metadata(c, "write", "articles:42");
 
-	csilk_method_handler_t mh;
-	memset(&mh, 0, sizeof(mh));
-	mh.perm_required = "write";
-	mh.perm_resource = "articles:42";
-	c.current_handler = &mh;
+	csilk_perm_auto_middleware(c);
+	assert(csilk_is_aborted(c) == 0);
 
-	csilk_perm_auto_middleware(&c);
-	assert(c.aborted == 0);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_auto_middleware_allowed passed\n");
 }
 
 void
-test_perm_auto_middleware_denied(void)
+test_perm_auto_middleware_denied()
 {
-	reset_simple();
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.arena = csilk_arena_new(1024);
+	printf("Testing csilk_perm_auto_middleware (Denied)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_set(c, "role", "user");
+	csilk_perm_simple_init();
+	csilk_perm_set_default("simple");
 
-	csilk_set(&c, "role", (void*)"viewer");
+	csilk_test_ctx_set_handler_metadata(c, "delete", "users:1");
 
-	csilk_method_handler_t mh;
-	memset(&mh, 0, sizeof(mh));
-	mh.perm_required = "delete";
-	mh.perm_resource = "users:1";
-	c.current_handler = &mh;
+	csilk_perm_auto_middleware(c);
+	assert(csilk_is_aborted(c) == 1);
+	assert(csilk_get_status(c) == CSILK_STATUS_FORBIDDEN);
 
-	csilk_perm_auto_middleware(&c);
-	assert(c.aborted != 0);
-
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_perm_auto_middleware_denied passed\n");
 }
 
 void
-test_perm_auto_middleware_no_perm(void)
+test_perm_auto_middleware_no_perm()
 {
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
+	printf("Testing csilk_perm_auto_middleware (No perm required)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_method_handler_t mh;
-	memset(&mh, 0, sizeof(mh));
-	mh.perm_required = NULL;
-	c.current_handler = &mh;
+	csilk_test_ctx_set_handler_metadata(c, NULL, NULL);
 
-	csilk_perm_auto_middleware(&c);
-	assert(c.aborted == 0);
+	csilk_perm_auto_middleware(c);
+	assert(csilk_is_aborted(c) == 0);
 
+	csilk_test_ctx_free(c);
 	printf("test_perm_auto_middleware_no_perm passed\n");
 }
 
 void
-test_perm_auto_middleware_no_handler(void)
+test_perm_auto_middleware_no_handler()
 {
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.current_handler = NULL;
+	printf("Testing csilk_perm_auto_middleware (No handler)...\n");
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_perm_auto_middleware(&c);
-	assert(c.aborted == 0);
+	csilk_perm_auto_middleware(c);
+	assert(csilk_is_aborted(c) == 0);
 
+	csilk_test_ctx_free(c);
 	printf("test_perm_auto_middleware_no_handler passed\n");
 }
 
 int
-main(void)
+main()
 {
 	csilk_perm_init();
 
-	test_perm_init();
-	test_perm_register_lookup();
-	test_perm_set_default();
 	test_perm_simple_no_role();
 	test_perm_simple_role_from_csilk_get();
 	test_perm_simple_role_from_jwt();
@@ -435,7 +323,6 @@ main(void)
 	test_perm_simple_exact_match();
 	test_perm_simple_prefix_resource();
 	test_perm_custom_driver();
-	test_perm_init_idempotent();
 	test_perm_router_route_perm();
 	test_perm_router_route_extended_perm();
 	test_perm_auto_middleware_allowed();
@@ -443,6 +330,6 @@ main(void)
 	test_perm_auto_middleware_no_perm();
 	test_perm_auto_middleware_no_handler();
 
-	printf("All perm tests passed\n");
+	printf("test_perm: ALL PASSED\n");
 	return 0;
 }

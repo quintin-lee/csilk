@@ -228,6 +228,20 @@ void _csilk_hmac_sha256(csilk_ctx_t* c,
  */
 void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
 
+/** @brief Get the internal client connection object.
+ *
+ * Opaque pointer used by protocol implementations (WebSocket, SSE).
+ *
+ * @param c  Request context.
+ * @return Internal client handle. */
+void* _csilk_get_internal_client(csilk_ctx_t* c);
+
+/** @brief Set the internal client connection object.
+ *
+ * @param c       Request context.
+ * @param client  Pointer to csilk_client_t (or mock marker). */
+void _csilk_set_internal_client(csilk_ctx_t* c, void* client);
+
 /**
  * @brief Internal: Symmetric encrypt using the context's cipher driver
  * or the built-in OpenSSL AES-256-GCM implementation.

@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 int middleware1_called = 0;
 int middleware2_called = 0;
@@ -50,29 +49,27 @@ main()
 
 	// Test match
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/api/v1/ping");
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v1/ping");
 
-		int matched = csilk_router_match_ctx(r, &ctx);
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
-		assert(ctx.handlers != NULL);
 
 		// Execute handlers
 		middleware1_called = 0;
 		middleware2_called = 0;
 		handler_called = 0;
 
-		ctx.handler_index = -1;
-		csilk_next(&ctx);
+		csilk_next(ctx);
 
 		assert(middleware1_called == 1);
 		assert(middleware2_called == 1);
 		assert(handler_called == 1);
-		assert(ctx.response.status == CSILK_STATUS_OK);
-		assert(strcmp(ctx.response.body, "pong") == 0);
+		assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
+		size_t body_len = 0;
+		assert(strcmp(csilk_get_response_body(ctx, &body_len), "pong") == 0);
 
-		csilk_ctx_cleanup(&ctx);
+		csilk_test_ctx_free(ctx);
 	}
 
 	// Test path normalization (avoid double slashes)
@@ -82,13 +79,12 @@ main()
 	csilk_group_add_route(v2_slash, "GET", "/hello", ping_handler);
 
 	{
-		csilk_ctx_t ctx = {0};
-		ctx.request.method = "GET";
-		ctx.request.path = strdup("/api/v2/hello");
+		csilk_ctx_t* ctx = csilk_test_ctx_new();
+		csilk_test_ctx_set_request(ctx, "GET", "/api/v2/hello");
 
-		int matched = csilk_router_match_ctx(r, &ctx);
+		int matched = csilk_router_match_ctx(r, ctx);
 		assert(matched);
-		csilk_ctx_cleanup(&ctx);
+		csilk_test_ctx_free(ctx);
 	}
 
 	// Cleanup

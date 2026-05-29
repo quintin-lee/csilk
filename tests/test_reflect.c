@@ -32,10 +32,9 @@ typedef struct TestArray_s {
 			      struct TestPoint_s : "TestPoint",                                    \
 						   struct TestArray_s : "TestArray"
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
+#include "csilk/test/test.h"
 
 #define POINT_REFLECT_MAP(X)                                                                       \
 	X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL)                         \
@@ -92,23 +91,22 @@ test_unmarshal()
 void
 test_context_reflect()
 {
-	csilk_ctx_t c = {0};
-	c.arena = csilk_arena_new(1024);
+	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	// Test binding with macro (uses type string conversion)
-	c.request.body = strdup("{\"id\":3, \"name\":\"Charlie\", \"score\":77.5}");
+	const char* body_str = "{\"id\":3, \"name\":\"Charlie\", \"score\":77.5}";
+	csilk_test_ctx_set_body(c, body_str, strlen(body_str));
 	TestUser user = {0};
-	int ok = csilk_bind(&c, TestUser, &user);
+	int ok = csilk_bind(c, TestUser, &user);
 	assert(ok == 1);
 	assert(user.id == 3);
 
 	// Test response with macro
-	csilk_json_t(&c, CSILK_STATUS_OK, TestUser, &user);
-	assert(c.response.status == CSILK_STATUS_OK);
-	assert(c.response.body != NULL);
+	csilk_json_t(c, CSILK_STATUS_OK, TestUser, &user);
+	assert(csilk_get_status(c) == CSILK_STATUS_OK);
+	assert(csilk_get_response_body(c, NULL) != NULL);
 
-	csilk_ctx_cleanup(&c);
-	csilk_arena_free(c.arena);
+	csilk_test_ctx_free(c);
 	printf("test_context_reflect passed\n");
 }
 

@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
+#include "csilk/test/test.h"
 
 static int custom_encrypt_called = 0;
 static int custom_decrypt_called = 0;
@@ -292,9 +292,8 @@ test_custom_driver_pluggable(void)
 {
 	printf("  Testing custom cipher driver plugin...\n");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.cipher_driver = &my_driver;
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_ctx_set_cipher_driver(c, &my_driver);
 
 	uint8_t key[32];
 	uint8_t iv[12];
@@ -306,7 +305,7 @@ test_custom_driver_pluggable(void)
 
 	custom_encrypt_called = 0;
 	int r = _csilk_symmetric_encrypt(
-	    &c, key, sizeof(key), pt, pt_len, iv, sizeof(iv), ct, &ct_len, tag, sizeof(tag));
+	    c, key, sizeof(key), pt, pt_len, iv, sizeof(iv), ct, &ct_len, tag, sizeof(tag));
 	assert(r == 0);
 	assert(custom_encrypt_called == 1);
 
@@ -314,12 +313,13 @@ test_custom_driver_pluggable(void)
 	size_t dec_len = sizeof(dec);
 	custom_decrypt_called = 0;
 	r = _csilk_symmetric_decrypt(
-	    &c, key, sizeof(key), ct, ct_len, iv, sizeof(iv), tag, sizeof(tag), dec, &dec_len);
+	    c, key, sizeof(key), ct, ct_len, iv, sizeof(iv), tag, sizeof(tag), dec, &dec_len);
 	assert(r == 0);
 	assert(custom_decrypt_called == 1);
 	assert(dec_len == pt_len);
 	assert(memcmp(dec, pt, pt_len) == 0);
 
+	csilk_test_ctx_free(c);
 	printf("    Custom driver plugin OK\n");
 }
 
@@ -328,9 +328,8 @@ test_custom_keygen(void)
 {
 	printf("  Testing custom keygen...\n");
 
-	csilk_ctx_t c;
-	memset(&c, 0, sizeof(c));
-	c.cipher_driver = &my_driver;
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_ctx_set_cipher_driver(c, &my_driver);
 
 	char pub[128];
 	char priv[128];
@@ -338,12 +337,13 @@ test_custom_keygen(void)
 	size_t priv_len = sizeof(priv);
 
 	custom_keygen_called = 0;
-	int r = _csilk_generate_keypair(&c, pub, &pub_len, priv, &priv_len);
+	int r = _csilk_generate_keypair(c, pub, &pub_len, priv, &priv_len);
 	assert(r == 0);
 	assert(custom_keygen_called == 1);
 	assert(strcmp(pub, "custom-public-key") == 0);
 	assert(strcmp(priv, "custom-private-key") == 0);
 
+	csilk_test_ctx_free(c);
 	printf("    Custom keygen OK\n");
 }
 

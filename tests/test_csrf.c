@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 void
 test_csrf_token_generation()
@@ -32,18 +32,12 @@ test_csrf_buffer_too_small()
 void
 test_csrf_middleware_missing_token()
 {
-	csilk_ctx_t ctx = {0};
-	ctx.arena = csilk_arena_new(1024);
-	ctx.handler_index = -1;
+	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_handler_t handlers[] = {NULL};
-	ctx.handlers = handlers;
+	csilk_csrf_middleware(ctx);
+	assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN || csilk_get_status(ctx) == 0);
 
-	csilk_csrf_middleware(&ctx);
-	assert(ctx.response.status == CSILK_STATUS_FORBIDDEN || ctx.response.status == 0);
-
-	csilk_ctx_cleanup(&ctx);
-	csilk_arena_free(ctx.arena);
+	csilk_test_ctx_free(ctx);
 	printf("test_csrf_middleware_missing_token passed\n");
 }
 

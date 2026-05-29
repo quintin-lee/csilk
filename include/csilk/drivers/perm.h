@@ -36,7 +36,7 @@ struct csilk_perm_driver_s {
    * user).
    *  @param permission Permission string (e.g., "read", "write", "delete").
    *  @param resource   Resource pattern (e.g., "users:*", "documents:42").
-   *  @return 1 if allowed, 0 if denied, -1 on error. */
+   *  @return 0 if allowed, non-zero if denied. */
 	int (*check)(csilk_ctx_t* c, const char* permission, const char* resource);
 };
 
