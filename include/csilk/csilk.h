@@ -1246,6 +1246,17 @@ void csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator);
 void csilk_static(csilk_ctx_t* c, const char* root_dir);
 
 /**
+ * @brief Serve a specific file from the local filesystem.
+ *
+ * Like csilk_static, this function offloads file I/O to a worker thread and
+ * uses zero-copy transmission (sendfile).
+ *
+ * @param c          The request context.
+ * @param file_path  Absolute or relative path to the file.
+ */
+void csilk_file(csilk_ctx_t* c, const char* file_path);
+
+/**
  * @brief Bind the request body (JSON) to a cJSON object.
  *
  * Parses the raw request body as JSON.  The returned cJSON object is
