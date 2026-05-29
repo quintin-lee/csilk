@@ -106,6 +106,7 @@ struct csilk_server_s {
 	uv_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
 	csilk_client_t* client_pool[32];	    /**< Connection object free list. */
 	int client_pool_count;			    /**< Number of free clients in pool. */
+	uv_mutex_t pool_mutex;			    /**< Mutex for connection pool access. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.
@@ -179,11 +180,13 @@ static csilk_client_t*
 pool_get(csilk_server_t* server)
 {
 	csilk_client_t* client;
+	uv_mutex_lock(&server->pool_mutex);
 	if (server->client_pool_count > 0) {
 		client = server->client_pool[--server->client_pool_count];
 	} else {
 		client = calloc(1, sizeof(csilk_client_t));
 	}
+	uv_mutex_unlock(&server->pool_mutex);
 	if (client) {
 		client->ctx.file_fd = -1;
 	}
@@ -208,11 +211,13 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 		client->write_bio = NULL; // Frees with SSL_free
 	}
 	memset(client, 0, sizeof(*client));
+	uv_mutex_lock(&server->pool_mutex);
 	if (server->client_pool_count < 32) {
 		server->client_pool[server->client_pool_count++] = client;
 	} else {
 		free(client);
 	}
+	uv_mutex_unlock(&server->pool_mutex);
 }
 
 /** @brief Insert a client at the head of the server's active client list.
@@ -1566,6 +1571,7 @@ csilk_server_new(csilk_router_t* router)
 	s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
 	uv_mutex_init(&s->clients_mutex);
+	uv_mutex_init(&s->pool_mutex);
 
 	s->mq = _csilk_mq_new(s->loop);
 
@@ -1753,6 +1759,7 @@ csilk_server_free(csilk_server_t* server)
 		}
 	}
 
+	uv_mutex_destroy(&server->pool_mutex);
 	uv_mutex_destroy(&server->clients_mutex);
 	free(server);
 }
