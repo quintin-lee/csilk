@@ -386,11 +386,11 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 
 	if (c->arena) {
 		csilk_arena_reset(c->arena);
-	}
-
-	for (int i = 0; i < c->params_count; i++) {
-		free(c->params[i].key);
-		free(c->params[i].value);
+	} else {
+		for (int i = 0; i < c->params_count; i++) {
+			free(c->params[i].key);
+			free(c->params[i].value);
+		}
 	}
 	c->params_count = 0;
 

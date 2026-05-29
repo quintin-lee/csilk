@@ -91,8 +91,13 @@ void
 csilk_test_ctx_add_param(csilk_ctx_t* c, const char* key, const char* value)
 {
 	if (c && c->params_count < CSILK_MAX_PARAMS) {
-		c->params[c->params_count].key = strdup(key);
-		c->params[c->params_count].value = strdup(value);
+		if (c->arena) {
+			c->params[c->params_count].key = csilk_arena_strdup(c->arena, key);
+			c->params[c->params_count].value = csilk_arena_strdup(c->arena, value);
+		} else {
+			c->params[c->params_count].key = strdup(key);
+			c->params[c->params_count].value = strdup(value);
+		}
 		c->params_count++;
 	}
 }

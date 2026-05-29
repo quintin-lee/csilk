@@ -194,6 +194,30 @@ csilk_arena_strdup(csilk_arena_t* arena, const char* s)
 	return news;
 }
 
+/** @brief Duplicate @p n bytes of a string using the arena allocator.
+ *
+ * Allocates @p n + 1 bytes of arena memory, copies @p n bytes from @p s,
+ * and adds a null terminator.
+ *
+ * @param arena The arena allocator.
+ * @param s     Source string to duplicate.
+ * @param n     Number of bytes to copy.
+ * @return Pointer to the new string in arena memory, or NULL if @p s is NULL
+ *         or on allocation failure. */
+char*
+csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n)
+{
+	if (!s) {
+		return NULL;
+	}
+	char* news = csilk_arena_alloc(arena, n + 1);
+	if (news) {
+		memcpy(news, s, n);
+		news[n] = '\0';
+	}
+	return news;
+}
+
 /** @brief Free all arena chunks and the arena structure itself.
  *
  * Walks the linked list of chunks, frees each one, then frees the arena
