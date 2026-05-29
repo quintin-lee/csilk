@@ -110,10 +110,10 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 
 	_csilk_ctx_init(ctx, client->server, client);
 	ctx->stream_id = stream_id;
-	ctx->arena = csilk_arena_new(
-	    client->server->config.arena_size ? client->server->config.arena_size : 4096);
+	ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
 
 	/* Prepend to list */
+
 	ctx->next_stream = client->h2_streams;
 	client->h2_streams = ctx;
 
