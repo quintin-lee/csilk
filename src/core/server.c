@@ -381,8 +381,10 @@ on_signal(uv_signal_t* handle, int signum)
  *        - WebSocket: send close frame (1001) to notify the peer.
  *        - SSE: send a "close" event, then close the connection.
  *        - HTTP: close immediately (existing requests finish via on_close).
+ *      ONLY main loop handles are closed here.
  *   4. Close the SIGINT and async handles.
- *   5. Free the message queue.
+ *   5. Signal all worker threads to stop.
+ *   6. Free the message queue.
  *
  * The actual client struct cleanup happens asynchronously in on_close()
  * when each TCP handle finishes closing. This avoids blocking the event
@@ -401,19 +403,24 @@ on_stop_async(uv_async_t* handle)
 		uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
 	}
 
-	// Signal all active clients
+	// Signal all active clients belonging to THIS thread's loop
 	uv_mutex_lock(&server->clients_mutex);
 	csilk_client_t* client = server->active_clients;
 	while (client) {
-		if (client->ctx.is_websocket) {
-			csilk_ws_close(&client->ctx, 1001, "Server stopping");
-		} else if (client->ctx.is_sse) {
-			csilk_sse_send(&client->ctx, "close", "Server stopping");
-			csilk_sse_close(&client->ctx);
-		} else {
-			// Normal HTTP: just close if not already closing
-			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
+		if (client->handle.loop == server->loop) {
+			if (client->ctx.is_websocket) {
+				csilk_ws_close(&client->ctx, 1001, "Server stopping");
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+			} else if (client->ctx.is_sse) {
+				csilk_sse_send(&client->ctx, "close", "Server stopping");
+				csilk_sse_close(&client->ctx);
+			} else {
+				// Normal HTTP: just close if not already closing
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
 			}
 		}
 		client = client->next;
@@ -1964,19 +1971,65 @@ typedef struct {
                                   thread. */
 } worker_data_t;
 
-/** @brief Async callback for stopping a worker's event loop.
+typedef struct {
+	uv_loop_t* loop;	  /**< The worker's event loop. */
+	uv_tcp_t* listen_handle;  /**< The worker's local listen handle. */
+	csilk_server_t* server;	  /**< The server instance. */
+	int worker_index;	  /**< Index for worker_stop_async. */
+} worker_stop_data_t;
+
+/** @brief Async callback for stopping a worker's event loop gracefully.
  *
- * Fires when the main thread signals this worker to stop (via
- * uv_async_send). Calls uv_stop on the worker's loop so that
- * uv_run returns and the thread can exit cleanly.
+ * This is the worker-thread equivalent of on_stop_async. It:
+ *   1. Closes the worker's local listen handle.
+ *   2. Closes all active connections owned by this worker's loop.
+ *   3. Closes the stop async handle itself.
  *
- * @param handle The per-worker async handle (data points to the uv_loop_t). */
+ * The loop will then naturally exit when all close callbacks finish.
+ *
+ * @param handle The per-worker async handle (data points to worker_stop_data_t). */
 static void
 on_worker_stop_async(uv_async_t* handle)
 {
-	uv_loop_t* loop = (uv_loop_t*)handle->data;
-	if (loop) {
-		uv_stop(loop);
+	worker_stop_data_t* sd = (worker_stop_data_t*)handle->data;
+	if (!sd) {
+		return;
+	}
+
+	csilk_server_t* server = sd->server;
+	uv_loop_t* loop = sd->loop;
+
+	// 1. Close local listen handle
+	if (!uv_is_closing((uv_handle_t*)sd->listen_handle)) {
+		uv_close((uv_handle_t*)sd->listen_handle, NULL);
+	}
+
+	// 2. Close connections belonging to this worker
+	uv_mutex_lock(&server->clients_mutex);
+	csilk_client_t* client = server->active_clients;
+	while (client) {
+		if (client->handle.loop == loop) {
+			if (client->ctx.is_websocket) {
+				csilk_ws_close(&client->ctx, 1001, "Server stopping");
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+			} else if (client->ctx.is_sse) {
+				csilk_sse_send(&client->ctx, "close", "Server stopping");
+				csilk_sse_close(&client->ctx);
+			} else {
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+			}
+		}
+		client = client->next;
+	}
+	uv_mutex_unlock(&server->clients_mutex);
+
+	// 3. Close the stop async handle itself to allow the loop to exit
+	if (!uv_is_closing((uv_handle_t*)handle)) {
+		uv_close((uv_handle_t*)handle, NULL);
 	}
 }
 
@@ -2017,7 +2070,8 @@ worker_thread(void* arg)
 	}
 
 	/* Register a per-worker async handle so the main thread can stop us */
-	server->worker_stop_async[idx].data = &loop;
+	worker_stop_data_t sd = {&loop, &server_handle, server, idx};
+	server->worker_stop_async[idx].data = &sd;
 	uv_async_init(&loop, &server->worker_stop_async[idx], on_worker_stop_async);
 
 	/* Signal the main thread that this worker is ready */
@@ -2026,13 +2080,6 @@ worker_thread(void* arg)
 	}
 
 	uv_run(&loop, UV_RUN_DEFAULT);
-
-	/* Clean up handles synchronously */
-	uv_close((uv_handle_t*)&server->worker_stop_async[idx], NULL);
-	uv_close((uv_handle_t*)&server_handle, NULL);
-
-	/* Run one more iteration to process the close callbacks */
-	uv_run(&loop, UV_RUN_ONCE);
 
 	uv_loop_close(&loop);
 }
