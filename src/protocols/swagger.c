@@ -58,9 +58,9 @@ path_to_openapi(const char* path, char* out, size_t out_size)
    * Walk the path character-by-character, converting router parameter syntax
    * to OpenAPI 3.0 path template syntax:
    *   Router ":param"    → OpenAPI "{param}"     (named path segment)
-   *   Router "*wildcard" → OpenAPI "{wildcard+}" (catch-all, greedy suffix)
+   * Router "*wildcard" → OpenAPI "{wildcard+}" (catch-all, greedy suffix)
    *
-   * Example: "/users/:id/posts/*rest" → "/users/{id}/posts/{rest+}"
+   * Example: "/users/:id/posts/...rest" → "/users/{id}/posts/{rest+}"
    */
 	while (*src && remaining > 0) {
 		if (*src == ':') {

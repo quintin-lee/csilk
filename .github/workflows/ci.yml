@@ -30,7 +30,9 @@ jobs:
       run: cmake --build build --target tidy
       
     - name: Test
-      run: cd build && ctest --output-on-failure
+      run: |
+        export ASAN_OPTIONS="detect_leaks=1:symbolize=1:abort_on_error=1"
+        cd build && ctest --output-on-failure
 
   fuzz:
     runs-on: ubuntu-24.04

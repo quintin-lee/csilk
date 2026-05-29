@@ -99,7 +99,7 @@ void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
  *
  * Group middleware is prepended to routes whose path matches @p prefix.
  * For example, a middleware registered with prefix "/api" runs on all
- * "/api/*" routes but not on "/health".
+ * "/api/..." routes but not on "/health".
  *
  * @param app Application handle.
  * @param prefix URL path prefix (e.g., "/api").

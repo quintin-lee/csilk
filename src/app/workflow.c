@@ -1501,23 +1501,31 @@ wal_log_event(csilk_wf_ctx_t* ctx,
 	if (!ctx->wal_path) {
 		return;
 	}
-	size_t node_id_len = node_id ? strlen(node_id) + 1 : 0;
-	size_t type_len = (data && data->type) ? strlen(data->type) + 1 : 0;
-	size_t val_len = (data && data->value) ? strlen((char*)data->value) + 1 : 0;
+
+	/* Ensure we always have 3 null-terminated strings for consistency,
+     even if some fields are NULL. This prevents buffer overflows during
+     recovery parsing. */
+	const char* nid = node_id ? node_id : "";
+	const char* d_type = (data && data->type) ? data->type : "";
+	const char* d_val = (data && data->value) ? (char*)data->value : "";
+
+	size_t node_id_len = strlen(nid) + 1;
+	size_t type_len = strlen(d_type) + 1;
+	size_t val_len = strlen(d_val) + 1;
+
 	size_t total_len = node_id_len + type_len + val_len;
 	char* payload = malloc(total_len);
+	if (!payload) {
+		return;
+	}
+
 	char* p = payload;
-	if (node_id_len) {
-		memcpy(p, node_id, node_id_len);
-		p += node_id_len;
-	}
-	if (type_len) {
-		memcpy(p, data->type, type_len);
-		p += type_len;
-	}
-	if (val_len) {
-		memcpy(p, data->value, val_len);
-	}
+	memcpy(p, nid, node_id_len);
+	p += node_id_len;
+	memcpy(p, d_type, type_len);
+	p += type_len;
+	memcpy(p, d_val, val_len);
+
 	_wf_wal_append(ctx->wal_path, type, payload, total_len);
 	free(payload);
 }
@@ -2075,8 +2083,17 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 			break;
 		case WF_EV_NODE_FINISH: {
 			char* node_id = payload;
-			char* data_type = node_id + strlen(node_id) + 1;
-			char* data_val = data_type + strlen(data_type) + 1;
+			size_t nid_len = strlen(node_id);
+			if (nid_len + 1 >= header.payload_len) {
+				break;
+			}
+			char* data_type = node_id + nid_len + 1;
+			size_t dtype_len = strlen(data_type);
+			if (nid_len + 1 + dtype_len + 1 >= header.payload_len) {
+				break;
+			}
+			char* data_val = data_type + dtype_len + 1;
+
 			for (size_t i = 0; i < wf->node_count; i++) {
 				if (strcmp(wf->nodes[i]->id, node_id) == 0) {
 					node_finished[i] = 1;
@@ -2190,8 +2207,17 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 		switch (header.type) {
 		case WF_EV_NODE_FINISH: {
 			char* node_id = payload;
-			char* data_type = node_id + strlen(node_id) + 1;
-			char* data_val = data_type + strlen(data_type) + 1;
+			size_t nid_len = strlen(node_id);
+			if (nid_len + 1 >= header.payload_len) {
+				break;
+			}
+			char* data_type = node_id + nid_len + 1;
+			size_t dtype_len = strlen(data_type);
+			if (nid_len + 1 + dtype_len + 1 >= header.payload_len) {
+				break;
+			}
+			char* data_val = data_type + dtype_len + 1;
+
 			for (size_t i = 0; i < wf->node_count; i++) {
 				if (strcmp(wf->nodes[i]->id, node_id) == 0) {
 					ctx->node_outputs[i] = csilk_wf_data_new(
