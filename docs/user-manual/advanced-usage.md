@@ -306,3 +306,27 @@ sequenceDiagram
     App->>Server: csilk_server_run(server, 8080)
     Note over Server: Blocking event loop
 ```
+
+## Multi-Worker Mode
+
+When `worker_threads > 1`, csilk uses `SO_REUSEPORT` to bind multiple listener
+sockets — one per worker thread plus the main thread. The kernel distributes
+incoming connections across all listeners.
+
+### Thread Safety
+
+In multi-worker mode, connection callbacks (`on_new_connection`) can execute on
+any event loop thread. All shared mutable state accessed during connection
+establishment must be thread-safe:
+
+- **Client connection pool** (`pool_get`/`pool_put`): Protected by a dedicated
+  `pool_mutex` to prevent two workers from acquiring the same `csilk_client_t`.
+- **Active client list**: Protected by `clients_mutex`.
+- **Connection counters**: Use atomic operations (`atomic_fetch_add`).
+
+### Graceful Shutdown
+
+`csilk_server_stop()` signals the main loop to close its listener and
+connections, then signals each worker thread to do the same via per-worker
+`uv_async_t` handles. The main thread joins all workers in
+`csilk_server_free()` after the event loop exits.

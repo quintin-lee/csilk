@@ -485,6 +485,23 @@ flowchart TB
 
 Each worker thread runs its own libuv event loop with the same port bound via `SO_REUSEPORT`. The kernel distributes incoming connections across worker threads, enabling multi-core utilization without explicit inter-thread synchronization.
 
+### 9.1 Client Pool Thread Safety
+
+The `on_new_connection` callback executes on whichever event loop accepted the
+connection — potentially any worker thread. The server maintains a free list
+(`client_pool`) of `csilk_client_t` objects to avoid per-connection allocation
+overhead. Since `pool_get` and `pool_put` can be called from any thread, access
+to the pool is serialized by a dedicated `pool_mutex`:
+
+```
+pool_get: lock → pop from freelist or calloc → unlock
+pool_put: memset(0) → lock → push to freelist or free → unlock
+```
+
+Without this mutex, two worker threads could retrieve the same client object,
+then each call `uv_tcp_init` on their own event loop, causing `uv_accept` to
+fail with: `Assertion 'server->loop == client->loop'`.
+
 ## 10. Performance Features
 
 ### 10.1 Zero-copy Static File Serving

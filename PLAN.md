@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-05-28 | 基于 `d0fdf21`
+> 最后更新: 2026-05-29 | 基于 `f5a7457`
 
 ---
 
@@ -120,6 +120,9 @@
 - [x] csilk_get_client_ip 静态缓冲区竞态 — static char ip[46] 共享缓冲区
 - [x] Session 全局链表无锁保护 — 已引入 uv_mutex_t
 - [x] Request ID 生成与追踪 — 已实现 X-Request-Id
+- [x] 客户端连接池数据竞争 — pool_get/pool_put 在 multi-worker 模式下
+  被多线程并发调用，无锁保护导致同一个 client 被多个 worker 获取，
+  引发 libuv uv_accept 断言失败。已引入 pool_mutex。
 
 ### P1 — 内存安全与资源泄漏
 - [x] csilk_server_free 未释放 libuv 资源
@@ -194,6 +197,10 @@
   realloc 失败时不释放旧 request.body，连接继续运行不报错。
 - [x] **P0-4: _internal_client 释放后使用** — `src/core/server.c:81-88,415`
   连接关闭后 SSE/WebSocket 回调可能访问已释放的 csilk_client_t。已在 on_close 中解绑。
+- [x] **P0-5: 客户端连接池无锁保护** — `src/core/server.c:179-216`
+  `pool_get`/`pool_put` 在 multi-worker 模式下被多个 event loop 线程
+  并发调用，`client_pool` 和 `client_pool_count` 无锁保护。修复方法：
+  在 `csilk_server_s` 中添加 `uv_mutex_t pool_mutex`，保护所有池操作。
 
 ### P1 — 资源管理与错误处理
 - [x] **P1-1: csilk_server_free 异步关闭后立即 free** — `src/core/server.c:526-543`
@@ -360,6 +367,16 @@
 - **动作**: 修复 MQ 恢复回归、admin 结构体隐私、Mermaid 语法兼容性。
 - **动作**: 全量文档同步更新（README, ARCH.md, architecture.md, module-design, user-manual, CODEPEC, PLAN）。
 
+### [2026-05-29] 客户端连接池数据竞争修复 (P0-5)
+- **动作**: 修复 `pool_get`/`pool_put` 在 multi-worker 模式下的数据竞争。
+  `client_pool` 和 `client_pool_count` 被多个 event loop 线程并发访问
+  无锁保护，导致同一个 `csilk_client_t` 被两个 worker 同时获取。
+  添加 `uv_mutex_t pool_mutex` 保护所有池操作。
+  CI coverage build（带 `-fprofile-arcs -ftest-coverage`）因时序暴露此问题，
+  Build and Test 在正常优化下偶现。
+- **动作**: 全量文档同步更新（CHANGELOG, PLAN, CODEPEC, ARCH.md,
+  architecture.md, index.md, Doxygen）。
+
 ---
 
 ## 六、状态一览
@@ -380,7 +397,7 @@
 | v1.0 轨道二 | 4 | ABI 稳定性重构 (Context Opaque) |
 | v1.0 轨道三 | 4 | 极致性能压榨与基准测试 |
 | v1.0 轨道四 | 4 | 高级协议演进与生态扩展 |
-| 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF）|
+| 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF、连接池竞态）|
 | 平账 P1 | 0 | 所有问题已修复（资源管理与错误处理）|
 | 平账 P2 | 0 | 所有问题已修复（API 设计问题）|
 | 平账 P3 | 0 | 所有问题已修复（代码质量）|
