@@ -44,7 +44,11 @@ graph TB
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Created: Connection accepted
+    [*] --> Pooled: pool_get() acquires client
+
+    state Pooled {
+        [*] --> Created: uv_tcp_init() + uv_accept()
+    }
 
     state Created {
         [*] --> Init: csilk_arena_new()
@@ -88,9 +92,13 @@ stateDiagram-v2
     KeepAlive --> Parsing: Wait for next request
 
     Cleanup --> Closing: Connection: close
-    Closing --> Freed: csilk_arena_free() + free(client)
+    Closing --> Freed: csilk_arena_free() + pool_put(client)
     Freed --> [*]
 ```
+
+### Multi-Thread Safety
+
+In multi-worker mode (configured via `worker_threads > 1`), the `on_new_connection` callback and thus `pool_get`/`pool_put` execute on whichever event loop accepted the connection. A dedicated `pool_mutex` in `csilk_server_s` serializes access to the client object free list (`client_pool` / `client_pool_count`), preventing two threads from acquiring the same `csilk_client_t`.
 
 ## Handler Chain Execution
 

@@ -11,7 +11,7 @@ server:
   port: 8080
   listen_backlog: 128
   max_connections: 0      # 0 = unlimited
-  worker_threads: 4       # Multi-core SO_REUSEPORT
+  worker_threads: 4       # Multi-core SO_REUSEPORT (thread-safe client pool)
   tcp_nodelay: true
   idle_timeout_ms: 30000
   read_timeout_ms: 5000

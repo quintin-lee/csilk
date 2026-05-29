@@ -223,6 +223,16 @@ flowchart TB
     K --> WNT
 ```
 
+### Thread Safety
+
+Since `on_new_connection` runs on whichever event loop accepted the connection
+(the main loop or any worker loop), all shared mutable state accessed during
+connection establishment must be thread-safe. In particular, the **client
+connection object pool** (`pool_get`/`pool_put`) is protected by a dedicated
+`pool_mutex` to prevent two threads from acquiring the same `csilk_client_t`.
+Without this protection, concurrent access would cause `uv_accept` to fail with
+a cross-loop assertion.
+
 ## Request Lifecycle
 
 ```mermaid

@@ -284,6 +284,39 @@ static void ensure_mutex_init(void) {
 - **互斥保护**: 静态可变数据用 `uv_mutex_t` + `uv_once_t`
 - **跨线程通信**: 用 `uv_async_t` 向事件循环投递
 
+### 6.4 多 Worker 连接池保护
+
+在 `SO_REUSEPORT` 多 Worker 模式下，`on_new_connection` 可能在任何
+Worker 线程的 event loop 上执行。客户端连接对象池 (`pool_get`/`pool_put`)
+必须使用专用 `uv_mutex_t` 保护：
+
+```c
+struct csilk_server_s {
+    // ...
+    csilk_client_t* client_pool[32]; /**< Connection object free list. */
+    int client_pool_count;           /**< Number of free clients in pool. */
+    uv_mutex_t pool_mutex;           /**< Mutex for connection pool access. */
+};
+
+static csilk_client_t*
+pool_get(csilk_server_t* server)
+{
+    csilk_client_t* client;
+    uv_mutex_lock(&server->pool_mutex);
+    if (server->client_pool_count > 0) {
+        client = server->client_pool[--server->client_pool_count];
+    } else {
+        client = calloc(1, sizeof(csilk_client_t));
+    }
+    uv_mutex_unlock(&server->pool_mutex);
+    // ...
+}
+```
+
+不保护 `pool_get`/`pool_put` 会导致两个 Worker 线程获取同一个
+`csilk_client_t`，各自用 `uv_tcp_init` 将其绑定到自己的 event loop，
+随后 `uv_accept` 因跨 loop 断言失败而崩溃。锁保护消除了这一数据竞争。
+
 ---
 
 ## 7. libuv 使用规则
