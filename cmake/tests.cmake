@@ -107,6 +107,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_session_ext
     test_sse
     test_static
+    test_file
     test_validate
 )
 
