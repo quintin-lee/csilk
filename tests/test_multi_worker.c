@@ -24,6 +24,13 @@ ping_handler(csilk_ctx_t* c)
 	csilk_string(c, CSILK_STATUS_OK, "pong");
 }
 
+static void
+on_server_start(csilk_ctx_t* c)
+{
+	(void)c;
+	server_ready = 1;
+}
+
 static void*
 run_server(void* arg)
 {
@@ -40,7 +47,8 @@ run_server(void* arg)
 				     .worker_threads = NUM_WORKERS};
 	csilk_server_set_config(g_server, &cfg);
 
-	server_ready = 1;
+	csilk_server_add_hook(g_server, CSILK_HOOK_SERVER_START, on_server_start);
+
 	csilk_server_run(g_server, MW_PORT);
 	csilk_server_free(g_server);
 	csilk_router_free(router);

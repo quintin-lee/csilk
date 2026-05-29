@@ -428,12 +428,10 @@ on_stop_async(uv_async_t* handle)
 	uv_mutex_unlock(&server->clients_mutex);
 
 	// Close signal and async handles
-	if (uv_is_active((uv_handle_t*)&server->sig_handle) &&
-	    !uv_is_closing((uv_handle_t*)&server->sig_handle)) {
+	if (!uv_is_closing((uv_handle_t*)&server->sig_handle)) {
 		uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
 	}
-	if (uv_is_active((uv_handle_t*)&server->async_handle) &&
-	    !uv_is_closing((uv_handle_t*)&server->async_handle)) {
+	if (!uv_is_closing((uv_handle_t*)&server->async_handle)) {
 		uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
 	}
 
@@ -1972,10 +1970,10 @@ typedef struct {
 } worker_data_t;
 
 typedef struct {
-	uv_loop_t* loop;	  /**< The worker's event loop. */
-	uv_tcp_t* listen_handle;  /**< The worker's local listen handle. */
-	csilk_server_t* server;	  /**< The server instance. */
-	int worker_index;	  /**< Index for worker_stop_async. */
+	uv_loop_t* loop;	 /**< The worker's event loop. */
+	uv_tcp_t* listen_handle; /**< The worker's local listen handle. */
+	csilk_server_t* server;	 /**< The server instance. */
+	int worker_index;	 /**< Index for worker_stop_async. */
 } worker_stop_data_t;
 
 /** @brief Async callback for stopping a worker's event loop gracefully.
