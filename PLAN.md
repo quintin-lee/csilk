@@ -94,21 +94,21 @@
 - [x] 12.7 模拟服务端高并发下的 OOM 与连接拒绝策略极限测试
 
 #### 轨道二：v1.0 ABI 稳定性重构 (Context Opaque)
-- [ ] 13.1 实现 Context 访问器 API (Getter/Setter，如 `csilk_ctx_get_method` 等)
-- [ ] 13.2 迁移 15 个内置中间件至 Accessor API，消除对 `csilk_ctx_s` 直接访问
-- [ ] 13.3 重构 30+ 个单元测试，移除对 `context_internal.h` 的依赖
-- [ ] 13.4 将 `context_internal.h` 从 `include/` 移动至 `src/core/` 彻底隐藏实现
+- [x] 13.1 实现 Context 访问器 API (Getter/Setter，如 `csilk_ctx_get_method` 等)
+- [x] 13.2 迁移 15 个内置中间件至 Accessor API，消除对 `csilk_ctx_s` 直接访问
+- [x] 13.3 重构 30+ 个单元测试，移除对 `context_internal.h` 的依赖
+- [x] 13.4 将 `context_internal.h` 从 `include/` 移动至 `src/core/` 彻底隐藏实现
 
 #### 轨道三：极致性能压榨与基准测试
-- [ ] 14.1 集成 `wrk` / `hey` 自动化基准测试套件
-- [ ] 14.2 优化 Arena 分配器在高并发下的 Cache-line 对齐 (伪共享优化)
+- [x] 14.1 集成 `wrk` / `hey` 自动化基准测试套件
+- [x] 14.2 优化 Arena 分配器在高并发下的 Cache-line 对齐 (伪共享优化)
 - [ ] 14.3 Radix Tree 路由查找实施 Fast-path 优化 (如 SIMD 字符串比较)
 - [ ] 14.4 扩展 `sendfile` 零拷贝应用范围至更多静态资源场景
 
 #### 轨道四：高级协议演进与生态扩展
 - [ ] 15.1 HTTP/2 协议支持预研 (Multiplexing / Stream 控制)
 - [ ] 15.2 基于 MQ 架构实现 WebSocket 高并发房间广播 (Pub/Sub)
-- [ ] 15.3 实现 OpenAPI (Swagger) 自动生成中间件
+- [x] 15.3 实现 OpenAPI (Swagger) 自动生成中间件
 - [ ] 15.4 Admin Dashboard 增加 CPU/内存 Flamegraph 抽样展示与节点拓扑视图
 
 ---
@@ -389,19 +389,19 @@
 | P2 中间件系统 | 0 | (已重构) |
 | P3 配置系统 | 0 | (已完善) |
 | P4 代码质量 | 0 | (已清理) |
-| P5 测试扩展 | 6 | 边缘测试缺口（config_free, next(NULL), reflect 等）|
+| P5 测试扩展 | 0 | 全部完成 |
 | P6 文档 | 0 | (全量 Doxygen 完成) |
 | P7 新功能 | 0 | HTTPS/TLS, MQ, Prometheus, Zero-copy 全部完成 |
 | 阶段十一 | 0 | Admin Dashboard, MongoDB, 全光谱遥测完成 |
-| v1.0 轨道一 | 7 | 边缘稳定性与测试彻底收尾 (P5 平账) |
-| v1.0 轨道二 | 4 | ABI 稳定性重构 (Context Opaque) |
-| v1.0 轨道三 | 4 | 极致性能压榨与基准测试 |
-| v1.0 轨道四 | 4 | 高级协议演进与生态扩展 |
-| 平账 P0 | 0 | 所有问题已修复（反射加锁、WebSocket 溢出、on_body 悬空、client UAF、连接池竞态）|
-| 平账 P1 | 0 | 所有问题已修复（资源管理与错误处理）|
-| 平账 P2 | 0 | 所有问题已修复（API 设计问题）|
-| 平账 P3 | 0 | 所有问题已修复（代码质量）|
-| 平账 P4 | 0 | 所有问题已修复（缺失功能）|
-| 平账 P5 | 6 | 边缘测试缺口待补充 |
-| 平账 P6 | 0 | 所有问题已修复（构建系统问题）|
-| **合计** | **19** | v1.0 轨道一/二/三/四全部待办项 |
+| v1.0 轨道一 | 0 | 全部完成 |
+| v1.0 轨道二 | 0 | 全部完成 |
+| v1.0 轨道三 | 2 | Radix Tree Fast-path, sendfile 扩展 |
+| v1.0 轨道四 | 3 | HTTP/2, WS Broadcast, Flamegraph |
+| 平账 P0 | 0 | 所有问题已修复 |
+| 平账 P1 | 0 | 所有问题已修复 |
+| 平账 P2 | 0 | 所有问题已修复 |
+| 平账 P3 | 0 | 所有问题已修复 |
+| 平账 P4 | 0 | 所有问题已修复 |
+| 平账 P5 | 0 | 所有问题已修复 |
+| 平账 P6 | 0 | 所有问题已修复 |
+| **合计** | **5** | v1.0 剩余待办项 |

@@ -29,17 +29,62 @@
 #include "context_internal.h"
 #include "csilk/core/internal.h"
 
+/** @brief Cache line size (typically 64 bytes on modern CPUs).
+ * Used for padding structures to prevent false sharing and improve
+ * memory alignment. */
+#ifndef CSILK_CACHE_LINE_SIZE
+#define CSILK_CACHE_LINE_SIZE 64
+#endif
+
+/** @brief Helper for cache-line aligned allocations.
+ * Ensures the returned pointer starts at a 64-byte boundary.
+ * Respects TEST_OOM for unit testing. */
+static void*
+arena_aligned_alloc(size_t size)
+{
+#ifdef TEST_OOM
+	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+		return NULL;
+	}
+	g_oom_count++;
+#endif
+
+	void* ptr = NULL;
+	/* Round up size to a multiple of alignment as required by aligned_alloc (C11)
+	 */
+	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__APPLE__)
+	ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
+#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L || defined(__APPLE__)
+	if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
+		return NULL;
+	}
+#else
+	/* Fallback to standard malloc if no aligned allocation is available.
+     The structure padding still provides some benefit by ensuring headers
+     don't share a cache line if they are large enough. */
+	ptr = malloc(aligned_size);
+#endif
+	return ptr;
+}
+
 /** @brief A single chunk in the arena linked list.
  *
  * Arena allocator manages memory in chunks. When a chunk is full, a new
  * chunk is allocated. All memory is freed at once when the arena is freed,
  * making it ideal for request-scoped allocations.
+ *
+ * @note This structure is padded to CSILK_CACHE_LINE_SIZE to ensure that
+ *       the data starts on a cache line boundary and to prevent false sharing
+ *       between arenas assigned to different threads.
  */
 typedef struct csilk_arena_chunk_s {
 	struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
 	size_t size;			  /**< Total size of this chunk. */
 	size_t used;			  /**< Bytes used in this chunk. */
-	uint8_t data[];			  /**< Flexible array for chunk data. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
+	uint8_t data[]; /**< Flexible array for chunk data. */
 } csilk_arena_chunk_t;
 
 /** @brief Arena allocator for request-scoped memory.
@@ -48,10 +93,15 @@ typedef struct csilk_arena_chunk_s {
  * allocations until the entire arena is freed. This eliminates fragmentation
  * and is ideal for per-request memory management where all allocations are
  * discarded together after processing.
+ *
+ * @note This structure is padded to CSILK_CACHE_LINE_SIZE to prevent false
+ *       sharing when multiple arena headers are allocated close to each other
+ *       in memory.
  */
 typedef struct csilk_arena_s {
 	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
 	size_t default_chunk_size; /**< Default size for new chunks. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t))];
 } csilk_arena_t;
 
 /** @brief Create a new arena allocator.
@@ -70,7 +120,7 @@ typedef struct csilk_arena_s {
 csilk_arena_t*
 csilk_arena_new(size_t default_chunk_size)
 {
-	csilk_arena_t* arena = malloc(sizeof(csilk_arena_t));
+	csilk_arena_t* arena = arena_aligned_alloc(sizeof(csilk_arena_t));
 	if (!arena) {
 		return NULL;
 	}
@@ -107,7 +157,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 	}
 
 	size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
-	csilk_arena_chunk_t* chunk = malloc(sizeof(csilk_arena_chunk_t) + chunk_size);
+	csilk_arena_chunk_t* chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
 	if (!chunk) {
 		return NULL;
 	}
