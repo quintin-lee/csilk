@@ -179,6 +179,8 @@ struct csilk_ctx_s {
                                          Managed by csilk_set()/csilk_get()
                                          when no storage_driver is set. */
 
+	struct csilk_server_s* server; /**< Pointer to the owning server instance. */
+
 	/* === Internal I/O State === */
 	void* _internal_client; /**< Opaque pointer to the internal csilk_client_t.
                              MUST NOT be used directly by handlers. Used

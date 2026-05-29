@@ -36,6 +36,7 @@
 #include "context_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "server_internal.h"
 
 /** @brief Hash a header key string into a bucket index using djb2.
  *
@@ -624,6 +625,26 @@ csilk_set_async(csilk_ctx_t* c, int is_async)
 	if (c) {
 		c->is_async = is_async;
 	}
+}
+
+/** @brief Get the server instance owning this context.
+ *
+ * @param c The request context.
+ * @return Pointer to csilk_server_t. */
+csilk_server_t*
+csilk_ctx_get_server(csilk_ctx_t* c)
+{
+	return c ? (csilk_server_t*)c->server : NULL;
+}
+
+/** @brief Get the internal MQ instance from the context.
+ *
+ * @param c The request context.
+ * @return Pointer to csilk_mq_t, or NULL if not available. */
+csilk_mq_t*
+csilk_ctx_get_mq(csilk_ctx_t* c)
+{
+	return (c && c->server) ? c->server->mq : NULL;
 }
 
 /** @brief Check if the response is in async mode.

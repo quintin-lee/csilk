@@ -296,6 +296,29 @@ size_t csilk_get_body_len(csilk_ctx_t* c);
 int csilk_is_websocket(csilk_ctx_t* c);
 
 /**
+ * @name WebSocket Room Management (MQ-based)
+ * High-concurrency room broadcasting system leveraging the Message Queue.
+ * @{ */
+
+/** @brief Join a WebSocket client to a room.
+ *  @param c          Request context (must be a WebSocket).
+ *  @param room_name  Name of the room to join. */
+void csilk_ws_join_room(csilk_ctx_t* c, const char* room_name);
+
+/** @brief Remove a WebSocket client from a room.
+ *  @param c          Request context.
+ *  @param room_name  Name of the room to leave. */
+void csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name);
+
+/** @brief Broadcast a message to all WebSockets in a room via MQ.
+ *  @param c          Request context (used to access the server's MQ).
+ *  @param room_name  Room to broadcast to.
+ *  @param message    NUL-terminated message string. */
+void csilk_ws_broadcast_room(csilk_ctx_t* c, const char* room_name, const char* message);
+
+/** @} */
+
+/**
  * @brief Enable or disable WebSocket mode.
  *
  * @param c             The request context.
@@ -2468,6 +2491,11 @@ uint64_t csilk_metrics_get_total_duration(void);
  * background offloading.
  */
 typedef struct csilk_mq_s csilk_mq_t;
+
+/** @brief Get the internal MQ instance from the context.
+ *  @param c The request context.
+ *  @return Pointer to csilk_mq_t, or NULL if not available. */
+csilk_mq_t* csilk_ctx_get_mq(csilk_ctx_t* c);
 
 /**
  * @brief Get the Message Queue instance attached to a server.
