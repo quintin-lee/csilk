@@ -4,15 +4,16 @@
 #include <string.h>
 #include <uv.h>
 
+#include "../src/core/context_internal.h"
+#include "../src/core/server_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
-#include "csilk/core/internal.h"
 
 static int messages_received = 0;
 static char last_message[256];
 
 static void
-on_ws_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
+on_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 {
 	(void)c;
 	(void)opcode;
@@ -34,16 +35,12 @@ test_ws_room_broadcast()
 	csilk_ctx_t* c2 = csilk_test_ctx_new();
 
 	// In a real server, these would be set during connection
-	// For testing, we need to ensure they have the server pointer
-	// We added csilk_ctx_get_server, but test_ctx_new doesn't set it.
-	// We'll use a hack for testing or add a setter.
-	// Actually, I can use context_internal.h
-#include "core/context_internal.h"
 	c1->server = (struct csilk_server_s*)server;
 	c2->server = (struct csilk_server_s*)server;
 
-	csilk_set_on_ws_message(c1, on_ws_message);
-	csilk_set_on_ws_message(c2, on_ws_message);
+	// Use on_ws_send for intercepting outgoing frames
+	csilk_set_on_ws_send(c1, on_ws_send);
+	csilk_set_on_ws_send(c2, on_ws_send);
 
 	// 2. Join room
 	csilk_ws_join_room(c1, "lobby");
@@ -54,11 +51,7 @@ test_ws_room_broadcast()
 	csilk_ws_broadcast_room(c1, "lobby", "hello room");
 
 	// 4. Run loop to process MQ
-	uv_run(uv_default_loop(), UV_RUN_NOWAIT);
-	uv_run(uv_default_loop(), UV_RUN_NOWAIT);
-
-	// Note: MQ uses async handles, so we might need a few turns
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 100 && messages_received < 2; i++) {
 		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
 	}
 
@@ -70,11 +63,12 @@ test_ws_room_broadcast()
 	messages_received = 0;
 	csilk_ws_broadcast_room(c2, "lobby", "only c2");
 
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < 100 && messages_received < 1; i++) {
 		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
 	}
 
 	assert(messages_received == 1);
+	assert(strcmp(last_message, "only c2") == 0);
 
 	csilk_test_ctx_free(c1);
 	csilk_test_ctx_free(c2);

@@ -158,6 +158,9 @@ struct csilk_ctx_s {
    *  payload length, and opcode (0x1=text, 0x2=binary). */
 	void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
+	/** Callback invoked for each outgoing WebSocket data frame (for testing). */
+	void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+
 	/* === Pluggable Driver Pointers === */
 	csilk_storage_driver_t* storage_driver; /**< Optional pluggable storage backend for
                          csilk_set()/csilk_get(). When set, takes precedence

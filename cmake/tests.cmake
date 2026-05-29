@@ -115,6 +115,7 @@ set(CSILK_MIDDLEWARE_TESTS
 set(CSILK_PROTOCOL_TESTS
     test_swagger
     test_ws
+    test_ws_room
 )
 
 # -- Security tests --

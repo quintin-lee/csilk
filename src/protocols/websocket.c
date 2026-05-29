@@ -31,6 +31,7 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "../core/context_internal.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
  *
@@ -117,8 +118,16 @@ on_ws_write(uv_write_t* req, int status)
 void
 csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 {
+	if (!c) {
+		return;
+	}
+
+	if (c->on_ws_send) {
+		c->on_ws_send(c, payload, len, opcode);
+	}
+
 	void* internal_client = _csilk_get_internal_client(c);
-	if (!c || !internal_client) {
+	if (!internal_client) {
 		return;
 	}
 

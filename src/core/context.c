@@ -822,11 +822,22 @@ csilk_is_aborted(csilk_ctx_t* c)
  *       If the handler needs the data after the callback returns, it must
  *       copy it. */
 void
-csilk_set_on_ws_message(csilk_ctx_t* c,
-			void (*cb)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode))
+csilk_set_on_ws_message(
+    csilk_ctx_t* c,
+    void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode))
 {
 	if (c) {
-		c->on_ws_message = cb;
+		c->on_ws_message = callback;
+	}
+}
+
+void
+csilk_set_on_ws_send(
+    csilk_ctx_t* c,
+    void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode))
+{
+	if (c) {
+		c->on_ws_send = callback;
 	}
 }
 
