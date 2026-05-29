@@ -147,6 +147,44 @@ admin_stats_handler(csilk_ctx_t* c)
 	cJSON_Delete(root);
 }
 
+/** @brief Returns the router topology for graph visualization. */
+static void
+admin_topology_handler(csilk_ctx_t* c)
+{
+	csilk_server_t* s = csilk_ctx_get_server(c);
+	csilk_router_t* r = csilk_server_get_router(s);
+	if (!r) {
+		csilk_string(c, 404, "Router not found");
+		return;
+	}
+
+	cJSON* routes = csilk_router_collect_routes(r);
+	csilk_json(c, 200, routes);
+}
+
+/** @brief Simple profiler placeholder (Flamegraph data source). */
+static void
+admin_profiler_handler(csilk_ctx_t* c)
+{
+	cJSON* root = cJSON_CreateObject();
+	cJSON* samples = cJSON_CreateArray();
+
+	// Placeholder sample data (collapsed stack format)
+	// In a real implementation, this would be collected via backtrace()
+	cJSON_AddItemToArray(samples,
+			     cJSON_CreateString("main;csilk_server_run;on_read;llhttp_execute 42"));
+	cJSON_AddItemToArray(samples,
+			     cJSON_CreateString("main;csilk_server_run;uv_run;on_timer 15"));
+	cJSON_AddItemToArray(samples,
+			     cJSON_CreateString("main;csilk_server_run;on_read;match_node 30"));
+
+	cJSON_AddItemToObject(root, "type", cJSON_CreateString("cpu"));
+	cJSON_AddItemToObject(root, "unit", cJSON_CreateString("samples"));
+	cJSON_AddItemToObject(root, "data", samples);
+
+	csilk_json(c, 200, root);
+}
+
 /** @brief WebSocket handler that streams multiplexed events. */
 static void
 admin_ws_handler(csilk_ctx_t* c)
@@ -202,7 +240,9 @@ csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t
 
 	/* Register sub-handlers. Because these are registered via the group,
      their paths are automatically relative to the group's prefix. */
-	csilk_GET(group, "/", admin_ui_handler);	 /* GET /admin/ */
-	csilk_GET(group, "/stats", admin_stats_handler); /* GET /admin/stats */
-	csilk_GET(group, "/ws", admin_ws_handler);	 /* GET /admin/ws (Upgrade) */
+	csilk_GET(group, "/", admin_ui_handler);	       /* GET /admin/ */
+	csilk_GET(group, "/stats", admin_stats_handler);       /* GET /admin/stats */
+	csilk_GET(group, "/ws", admin_ws_handler);	       /* GET /admin/ws (Upgrade) */
+	csilk_GET(group, "/topology", admin_topology_handler); /* GET /admin/topology */
+	csilk_GET(group, "/profile", admin_profiler_handler);  /* GET /admin/profile */
 }

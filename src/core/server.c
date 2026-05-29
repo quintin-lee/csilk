@@ -2434,3 +2434,9 @@ csilk_server_get_mq(csilk_server_t* server)
 {
 	return server ? server->mq : NULL;
 }
+
+csilk_router_t*
+csilk_server_get_router(csilk_server_t* server)
+{
+	return server ? server->router : NULL;
+}
