@@ -211,6 +211,36 @@ static_work_cb(uv_work_t* req)
 	set_range_response(c, fd, size, mime_type);
 }
 
+/** @brief libuv work callback: open and stat a specific file.
+ *
+ * Runs in the libuv thread pool. Opens the file specified by the
+ * "serve_file_path" context property and sets up a range response.
+ *
+ * @param req libuv work request. req->data points to the csilk_ctx_t.
+ */
+static void
+file_work_cb(uv_work_t* req)
+{
+	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+	const char* file_path = (const char*)csilk_get(c, "serve_file_path");
+
+	uv_fs_t open_req;
+	int fd = uv_fs_open(NULL, &open_req, file_path, O_RDONLY, 0, NULL);
+	uv_fs_req_cleanup(&open_req);
+	if (fd < 0) {
+		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+		return;
+	}
+
+	uv_fs_t stat_req;
+	uv_fs_fstat(NULL, &stat_req, fd, NULL);
+	size_t size = stat_req.statbuf.st_size;
+	uv_fs_req_cleanup(&stat_req);
+
+	const char* mime_type = get_mime_type(file_path);
+	set_range_response(c, fd, size, mime_type);
+}
+
 /**
  * @brief libuv after-work callback: send the static file response.
  *

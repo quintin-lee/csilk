@@ -778,6 +778,17 @@ void* csilk_arena_alloc(csilk_arena_t* arena, size_t size);
 char* csilk_arena_strdup(csilk_arena_t* arena, const char* s);
 
 /**
+ * @brief Duplicate @p n bytes of a string using the arena allocator.
+ *
+ * @param arena  The arena allocator.
+ * @param s      Source string to duplicate.
+ * @param n      Number of bytes to copy.
+ * @return A copy of @p n bytes of @p s allocated from @p arena, or NULL on
+ *         allocation failure.  If @p s is NULL the behaviour is undefined.
+ */
+char* csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n);
+
+/**
  * @brief Free all memory chunks owned by the arena.
  *
  * After this call the arena pointer is invalid and must not be used again.

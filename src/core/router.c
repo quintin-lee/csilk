@@ -169,10 +169,11 @@ node_free(csilk_router_node_t* node)
  *
  * @param p [in/out] Pointer to the current position in the path string.
  *           Updated to point past the extracted segment.
- * @return A malloc'd segment string (caller must free), or NULL if the
- *         remaining path is empty or allocation fails. */
-static char*
-get_next_segment(const char** p)
+ * @param len [out] Pointer to receive the length of the segment.
+ * @return A pointer to the start of the segment within the original path string,
+ *         or NULL if no more segments are found. */
+static const char*
+get_next_segment(const char** p, size_t* len)
 {
 	if (!*p || **p == '\0') {
 		return NULL;
@@ -190,15 +191,8 @@ get_next_segment(const char** p)
 		(*p)++;
 	}
 
-	size_t len = (size_t)(*p - start);
-	char* seg = malloc(len + 1);
-	if (!seg) {
-		return NULL;
-	}
-
-	memcpy(seg, start, len);
-	seg[len] = '\0';
-	return seg;
+	*len = (size_t)(*p - start);
+	return start;
 }
 
 /** @brief Create a new router instance with an empty root ("") static node.
@@ -342,9 +336,10 @@ router_add_full(csilk_router_t* r,
 	}
 	csilk_router_node_t* curr = r->root;
 	const char* p = path;
-	char* seg;
+	const char* seg;
+	size_t len;
 
-	while ((seg = get_next_segment(&p)) != NULL) {
+	while ((seg = get_next_segment(&p, &len)) != NULL) {
 		// Classify the segment based on its first character:
 		//   ':' prefix -> PARAM node (matches any single segment, captured as named
 		//   param)
@@ -354,21 +349,41 @@ router_add_full(csilk_router_t* r,
 		// The prefix character is stripped from seg_name so the node stores
 		// only the "key" portion (e.g., "id" for ":id", "path" for "*path").
 		csilk_node_type_t type = CSILK_NODE_STATIC;
-		char* seg_name = seg;
+		const char* seg_name_start = seg;
+		size_t seg_name_len = len;
+
 		if (seg[0] == ':') {
 			type = CSILK_NODE_PARAM;
-			seg_name = seg + 1;
+			seg_name_start = seg + 1;
+			seg_name_len = len - 1;
 		} else if (seg[0] == '*') {
 			type = CSILK_NODE_WILDCARD;
-			seg_name = seg + 1;
+			seg_name_start = seg + 1;
+			seg_name_len = len - 1;
 		}
 
+		// Temporary null-terminated string for existing comparison logic
+		char* seg_name = malloc(seg_name_len + 1);
+		if (!seg_name) {
+			return;
+		}
+		memcpy(seg_name, seg_name_start, seg_name_len);
+		seg_name[seg_name_len] = '\0';
+
 		csilk_router_node_t* found = NULL;
+		int insert_pos = curr->children_count;
+
 		for (int i = 0; i < curr->children_count; i++) {
 			if (curr->children[i]->type == type &&
 			    strcmp(curr->children[i]->segment, seg_name) == 0) {
 				found = curr->children[i];
 				break;
+			}
+			// Maintain order: STATIC < PARAM < WILDCARD
+			if (found == NULL && curr->children[i]->type > type) {
+				insert_pos = i;
+				// Continue searching to see if it already exists further down
+				// Actually, if we maintain order, we could optimize this search.
 			}
 		}
 
@@ -376,11 +391,16 @@ router_add_full(csilk_router_t* r,
 			if (curr->children_count < CSILK_MAX_CHILDREN) {
 				found = node_new(seg_name, type);
 				if (found) {
-					curr->children[curr->children_count++] = found;
+					// Shift children to insert in order
+					for (int i = curr->children_count; i > insert_pos; i--) {
+						curr->children[i] = curr->children[i - 1];
+					}
+					curr->children[insert_pos] = found;
+					curr->children_count++;
 				}
 			}
 		}
-		free(seg);
+		free(seg_name);
 		if (!found) {
 			return; // Should not happen unless CSILK_MAX_CHILDREN exceeded
 		}
@@ -615,7 +635,7 @@ match_node(csilk_router_node_t* node,
 	   csilk_ctx_t* ctx,
 	   csilk_method_handler_t** out_mh)
 {
-	if (!path || *path == '\0' || strcmp(path, "/") == 0) {
+	if (!path || *path == '\0' || (path[0] == '/' && path[1] == '\0')) {
 		csilk_method_handler_t* mh = node->handlers;
 		while (mh) {
 			if (strcmp(mh->method, method) == 0) {
@@ -630,7 +650,8 @@ match_node(csilk_router_node_t* node,
 	}
 
 	const char* p = path;
-	char* seg = get_next_segment(&p);
+	size_t len;
+	const char* seg = get_next_segment(&p, &len);
 	if (!seg) {
 		return NULL;
 	}
@@ -639,69 +660,86 @@ match_node(csilk_router_node_t* node,
 	for (int i = 0; i < node->children_count; i++) {
 		csilk_router_node_t* child = node->children[i];
 		if (child->type == CSILK_NODE_STATIC) {
-			// STATIC requires an exact strcmp match. If it succeeds, recurse
-			// deeper with the remaining path. If recursion returns NULL (no
-			// handler found down this branch), we fall through to try the
-			// next sibling child.
-			if (strcmp(child->segment, seg) == 0) {
+			// Fast-path: check first character and length before strncmp
+			if (child->segment[0] == seg[0] && strlen(child->segment) == len &&
+			    strncmp(child->segment, seg, len) == 0) {
 				result = match_node(child, method, p, ctx, out_mh);
 			}
 		} else if (child->type == CSILK_NODE_PARAM) {
 			// PARAM node: always matches the current segment regardless of
 			// its value. Capture the segment into ctx->params using the
 			// child's segment name (without ':' prefix) as the key.
-			// param_added tracks whether we allocated so we can roll back
-			// cleanly if this branch fails (see backtracking below).
 			int param_added = 0;
 			if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-				char* key = strdup(child->segment);
-				char* val = strdup(seg);
-				if (key && val) {
-					ctx->params[ctx->params_count].key = key;
-					ctx->params[ctx->params_count].value = val;
+				// Use arena for parameter strings if available (much faster
+				// than strdup)
+				if (ctx->arena) {
+					ctx->params[ctx->params_count].key =
+					    csilk_arena_strdup(ctx->arena, child->segment);
+					ctx->params[ctx->params_count].value =
+					    csilk_arena_strndup(ctx->arena, seg, len);
+				} else {
+					ctx->params[ctx->params_count].key = strdup(child->segment);
+					ctx->params[ctx->params_count].value = malloc(len + 1);
+					if (ctx->params[ctx->params_count].value) {
+						memcpy(
+						    ctx->params[ctx->params_count].value, seg, len);
+						ctx->params[ctx->params_count].value[len] = '\0';
+					}
+				}
+
+				if (ctx->params[ctx->params_count].key &&
+				    ctx->params[ctx->params_count].value) {
 					ctx->params_count++;
 					param_added = 1;
 				} else {
-					free(key);
-					free(val);
+					// Cleanup on allocation failure (only if not using arena)
+					if (!ctx->arena) {
+						free(ctx->params[ctx->params_count].key);
+						free(ctx->params[ctx->params_count].value);
+					}
 				}
 			}
 			// Recurse deeper with the remaining path
 			result = match_node(child, method, p, ctx, out_mh);
-			// Backtracking rollback: if this PARAM branch did not yield a
-			// match anywhere deeper in the tree (result == NULL), undo the
-			// parameter capture before trying sibling STATIC/PARAM children.
-			// Without this rollback, stale parameters from failed branches
-			// would accumulate in ctx->params, corrupting subsequent matches.
+			// Backtracking rollback
 			if (!result && param_added) {
 				ctx->params_count--;
-				free(ctx->params[ctx->params_count].key);
-				free(ctx->params[ctx->params_count].value);
+				if (!ctx->arena) {
+					free(ctx->params[ctx->params_count].key);
+					free(ctx->params[ctx->params_count].value);
+				}
 			}
 		} else if (child->type == CSILK_NODE_WILDCARD) {
 			// WILDCARD node: matches the entire remainder of the URL path
-			// unconditionally. Unlike STATIC and PARAM, wildcards are terminal
-			// — they consume ALL remaining segments without further recursion.
-			// The captured value is the full trailing substring starting from
-			// path[1] (the character after the leading '/' that delimits where
-			// the wildcard-owning segment began).
-			//
-			// Example: route "/assets/*filepath", request "/assets/css/main.css"
-			//   -> captured value = "css/main.css"
 			if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-				char* key = strdup(child->segment);
-				// path + 1 skips the leading '/' to yield the true remainder
-				char* val = strdup(path + 1);
-				if (key && val) {
-					ctx->params[ctx->params_count].key = key;
-					ctx->params[ctx->params_count].value = val;
+				// Skip leading '/' of remainder if present
+				const char* val_start = path;
+				while (*val_start == '/') {
+					val_start++;
+				}
+
+				if (ctx->arena) {
+					ctx->params[ctx->params_count].key =
+					    csilk_arena_strdup(ctx->arena, child->segment);
+					ctx->params[ctx->params_count].value =
+					    csilk_arena_strdup(ctx->arena, val_start);
+				} else {
+					ctx->params[ctx->params_count].key = strdup(child->segment);
+					ctx->params[ctx->params_count].value = strdup(val_start);
+				}
+
+				if (ctx->params[ctx->params_count].key &&
+				    ctx->params[ctx->params_count].value) {
 					ctx->params_count++;
 				} else {
-					free(key);
-					free(val);
+					if (!ctx->arena) {
+						free(ctx->params[ctx->params_count].key);
+						free(ctx->params[ctx->params_count].value);
+					}
 				}
 			}
-			// Directly check the wildcard node's handlers — no deeper recursion
+			// Directly check the wildcard node's handlers
 			csilk_method_handler_t* mh = child->handlers;
 			while (mh) {
 				if (strcmp(mh->method, method) == 0) {
@@ -714,14 +752,11 @@ match_node(csilk_router_node_t* node,
 				mh = mh->next;
 			}
 		}
-		// Propagate the first match up the call stack — do not try sibling
-		// children once a handler has been found anywhere in this branch
 		if (result) {
 			break;
 		}
 	}
 
-	free(seg);
 	return result;
 }
 
