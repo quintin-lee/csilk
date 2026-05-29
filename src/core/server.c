@@ -122,6 +122,10 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 		client->read_bio = NULL;  // Frees with SSL_free
 		client->write_bio = NULL; // Frees with SSL_free
 	}
+	if (client->h2_session) {
+		nghttp2_session_del(client->h2_session);
+		client->h2_session = NULL;
+	}
 	memset(client, 0, sizeof(*client));
 	uv_mutex_lock(&server->pool_mutex);
 	if (server->client_pool_count < 32) {
@@ -2219,6 +2223,35 @@ csilk_server_run(csilk_server_t* server, int port)
 
 /* --- TLS Helper Implementations --- */
 
+static int
+alpn_select_cb(SSL* ssl,
+	       const unsigned char** out,
+	       unsigned char* outlen,
+	       const unsigned char* in,
+	       unsigned int inlen,
+	       void* arg)
+{
+	(void)ssl;
+	(void)arg;
+
+	/* The 'in' buffer contains a series of length-prefixed strings.
+     We look for "\x02h2" (HTTP/2) first, then "\x08http/1.1".
+     Since we only support HTTP/1.1 fully right now, we can advertise
+     both. Eventually we will prefer "h2". */
+	int rv = SSL_select_next_proto((unsigned char**)out,
+				       outlen,
+				       (const unsigned char*)"\x02h2\x08http/1.1",
+				       12,
+				       in,
+				       inlen);
+
+	if (rv != OPENSSL_NPN_NEGOTIATED) {
+		return SSL_TLSEXT_ERR_NOACK;
+	}
+
+	return SSL_TLSEXT_ERR_OK;
+}
+
 /** @brief Initialize the server's TLS/SSL context using OpenSSL.
  *
  * Loads error strings, initializes SSL algorithms, creates a TLS server
@@ -2241,6 +2274,8 @@ init_tls(csilk_server_t* s)
 		ERR_print_errors_fp(stderr);
 		return;
 	}
+
+	SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, NULL);
 
 	if (s->config.tls_cert_file && s->config.tls_key_file) {
 		if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx, s->config.tls_cert_file) <= 0) {
@@ -2348,7 +2383,17 @@ process_tls_read(csilk_client_t* client)
 			}
 			return;
 		}
-		// Handshake finished, might have data in read BIO
+		// Handshake finished, check ALPN protocol
+		const unsigned char* alpn_data;
+		unsigned int alpn_len;
+		SSL_get0_alpn_selected(client->ssl, &alpn_data, &alpn_len);
+		if (alpn_data && alpn_len == 2 && strncmp((const char*)alpn_data, "h2", 2) == 0) {
+			client->protocol = CSILK_PROTO_HTTP2;
+			CSILK_LOG_D("ALPN negotiated HTTP/2");
+			// To be implemented: initialize nghttp2 session
+		} else {
+			client->protocol = CSILK_PROTO_HTTP1;
+		}
 	}
 
 	while ((n = SSL_read(client->ssl, buf, sizeof(buf))) > 0) {
