@@ -107,9 +107,10 @@
 
 #### 轨道四：高级协议演进与生态扩展
 - [x] 15.1 HTTP/2 协议支持预研 (Multiplexing / Stream 控制)
-- [ ] 15.2 基于 MQ 架构实现 WebSocket 高并发房间广播 (Pub/Sub)
+- [x] 15.2 基于 MQ 架构实现 WebSocket 高并发房间广播 (Pub/Sub)
 - [x] 15.3 实现 OpenAPI (Swagger) 自动生成中间件
 - [ ] 15.4 Admin Dashboard 增加 CPU/内存 Flamegraph 抽样展示与节点拓扑视图
+
 
 ---
 
