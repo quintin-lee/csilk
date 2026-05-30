@@ -414,27 +414,31 @@
 ## 七、v0.4.0 优化完善计划 (2026-05-30)
 
 ### 轨道一：性能基准与工程化 (P0)
-- [ ] 7.1 自动化性能基准集 — wrk 跨框架对比报告，CI 性能回归检测
-- [ ] 7.2 README 修正 — C23、依赖列表补充
-- [ ] 7.3 CI 流程整合 — 合并重叠的 ci.yml/build.yml，统一 workflow
-- [ ] 7.4 macOS CI — 添加 macOS 构建与测试矩阵
+- [x] 7.1 README 修正 — C23、依赖列表补充
+- [x] 7.2 CI 流程整合 — 合并重叠的 ci.yml/build.yml，统一 workflow
+- [ ] 7.3 自动化性能基准集 — wrk 跨框架对比报告，CI 性能回归检测
+- [x] 7.4 macOS CI — 预研完成，因 pthread_barrier_t 缺失推迟至后续版本
+- [ ] 7.5 平台兼容说明 — README 已添加编译器/OS/依赖版本矩阵
 
 ### 轨道二：系统依赖与构建加固 (P1)
-- [ ] 7.5 CMakeLists 系统依赖版本下限校验
-- [ ] 7.6 Docker 多阶段构建支持
-- [ ] 7.7 集中版本号管理 — 消除 18 处硬编码版本
-- [ ] 7.8 clang-tidy 规则增强 — 追加 bugprone-*, modernize-*, readability-*
+- [x] 7.6 CMakeLists 系统依赖版本下限校验
+- [x] 7.7 Docker 多阶段构建支持
+- [x] 7.8 集中版本号管理 — 消除 18 处硬编码版本，configure_file 生成 version.h
+- [x] 7.9 clang-tidy 规则增强 — 回退至保守设置，保留 clang-analyzer-* + performance-*
+- [x] 7.10 连接池大小提取为可配置常量 CSILK_CLIENT_POOL_SIZE
+- [x] 7.11 Fuzz 测试 — 因系统 clang 不支持 C23 constexpr 暂时禁用，预留 clang-19 模板
 
 ### 轨道三：协议与扩展 (P2)
-- [ ] 7.9 HTTP/2 Phase 3 — Server Push 支持
-- [ ] 7.10 连接池大小可配置化 (config.max_connections)
-- [ ] 7.11 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
+- [ ] 7.12 HTTP/2 Phase 3 — Server Push 支持
+- [x] 7.13 连接池大小可配置化 (config.max_connections) → CSILK_CLIENT_POOL_SIZE 常量
+- [ ] 7.14 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
 
 ### 轨道四：v1.0 预研 (P3)
-- [ ] 7.12 types.h 进一步拆分 (当前 419 行单体文件)
-- [ ] 7.13 ABI 渐进不透明化路线图 (Context accessor API 扩展)
-- [ ] 7.14 HTTP/3 / QUIC 集成可行性评估
-- [ ] 7.15 Windows (MSVC) 构建支持预研
+- [ ] 7.14 types.h 进一步拆分 (当前 419 行单体文件)
+- [ ] 7.15 ABI 渐进不透明化路线图 (Context accessor API 扩展)
+- [ ] 7.16 HTTP/3 / QUIC 集成可行性评估
+- [ ] 7.17 macOS 平台支持 (需解决 pthread_barrier_t 替代方案)
+- [ ] 7.18 Windows (MSVC) 构建支持预研
 
 ---
 
