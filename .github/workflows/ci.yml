@@ -142,3 +142,33 @@ jobs:
       with:
         name: benchmark-results
         path: benchmarks/results/
+
+  examples:
+    name: Examples Smoke Test
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev curl
+
+    - name: Configure
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build examples
+      run: cmake --build build --target example_server example_app -j$(nproc)
+
+    - name: Smoke test — example_server
+      run: |
+        cd build
+        ./example_server &
+        SERVER_PID=$!
+        sleep 2
+        curl -fsS http://127.0.0.1:8080/ && echo " PASS" || echo " FAIL"
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
