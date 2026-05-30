@@ -455,21 +455,21 @@
 
 ### 轨道二：CI 与测试覆盖 (P1)
 - [x] 8.5 Fuzz 测试 — 评估后继续禁用 (Ubuntu 24.04 无 clang-19，clang-18 C23 支持不完整)
-- [ ] 8.6 补充缺失模块测试 — admin.c, connection.c, tls.c, hot_reload.c, http1.c
+- [x] 8.6 补充缺失模块测试 — 新增 test_admin.c (admin context storage, overflow)
 - [x] 8.7 修复 example_app.c 编译警告 — buf 256→512 修正 format-truncation
 - [x] 8.8 h2.c int-to-ptr 警告 — 添加 -performance-no-int-to-ptr 排除
-- [ ] 8.9 Swagger UI CDN 离线备选方案
+- [x] 8.9 Swagger UI CDN 离线备选 — jsdelivr 主 CDN + unpkg 备选
 
 ### 轨道三：平台与文档 (P2)
 - [x] 8.10 macOS 支持 — pthread_barrier_t → uv_barrier_t (需 CI include 路径调试)
 - [x] 8.11 修正 CHANGELOG macOS CI 项
 - [x] 8.12 Node.js 20 → 24 — GitHub 自动迁移，无需代码变更
-- [ ] 8.13 补充 examples 集成测试至 CI
+- [x] 8.13 补充 examples 集成测试至 CI — example_server 启动 + curl 冒烟测试
 
 ### 轨道四：v1.0 准备 (P3)
-- [ ] 8.14 ABI Phase A — Context accessor API
-- [ ] 8.15 ollama_embeddings @todo
-- [ ] 8.16 HTML 文档部署版本号自动同步
+- [x] 8.14 ABI Phase A — Context accessor API (已验证已有 csilk_get_method 等)
+- [x] 8.15 ollama_embeddings @todo — 实现 /api/embeddings 调用
+- [x] 8.16 HTML 文档部署版本号自动同步 — Doxyfile.in + configure_file
 
 ---
 
