@@ -116,6 +116,7 @@ set(CSILK_PROTOCOL_TESTS
     test_swagger
     test_ws
     test_ws_room
+    test_h2
 )
 
 # -- Security tests --
