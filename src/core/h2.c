@@ -328,6 +328,130 @@ csilk_h2_send_response(csilk_ctx_t* c)
 	_csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
 }
 
+/** @brief Submit an HTTP/2 server push promise and dispatch the pushed stream.
+ *
+ * Sends a PUSH_PROMISE frame on the current stream, then creates a new
+ * per-stream context for the promised stream ID. The pushed resource's
+ * request is routed through the server's router and dispatched; the handler
+ * chain populates the response, which csilk_h2_send_response then sends on
+ * the promised stream.
+ *
+ * Pseudo-headers :authority and :scheme are copied from the original request
+ * if available, falling back to defaults ("localhost" / "https").
+ *
+ * @param c      The original request context (client-initiated stream).
+ * @param method The HTTP method for the pushed resource.
+ * @param path   The path to push (e.g., "/style.css").
+ * @return The promised stream ID on success, or a negative nghttp2 error code.
+ */
+int32_t
+csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
+{
+	if (!c || !method || !path) {
+		return -1;
+	}
+
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	if (!client || !client->h2_session) {
+		return -1;
+	}
+
+	csilk_server_t* server = client->server;
+	if (!server) {
+		return -1;
+	}
+
+	if (!server->config.h2_push_enable) {
+		return -1;
+	}
+
+	/* Enforce per-request push limit */
+	int max_push = server->config.h2_max_push_per_request;
+	if (max_push <= 0) {
+		max_push = 10;
+	}
+	int push_count = 0;
+	void* count_ptr = csilk_get(c, "_h2_push_count");
+	if (count_ptr) {
+		push_count = (int)(uintptr_t)count_ptr;
+	}
+	if (push_count >= max_push) {
+		return -1;
+	}
+
+	/* Extract :authority and :scheme from the original request, falling back */
+	const char* authority = csilk_get_header(c, ":authority");
+	const char* scheme = csilk_get_header(c, ":scheme");
+	if (!authority) {
+		authority = csilk_get_header(c, "host");
+	}
+	if (!authority || authority[0] == '\0') {
+		authority = "localhost";
+	}
+	if (!scheme || scheme[0] == '\0') {
+		scheme = (server->config.enable_tls) ? "https" : "http";
+	}
+
+	/* Build the request pseudo-headers for the pushed resource */
+	nghttp2_nv push_headers[] = {
+	    {(uint8_t*)":method",
+	     (uint8_t*)method,
+	     7,
+	     (uint8_t)strlen(method),
+	     NGHTTP2_NV_FLAG_NONE},
+	    {(uint8_t*)":path", (uint8_t*)path, 5, (uint8_t)strlen(path), NGHTTP2_NV_FLAG_NONE},
+	    {(uint8_t*)":authority",
+	     (uint8_t*)authority,
+	     10,
+	     (uint8_t)strlen(authority),
+	     NGHTTP2_NV_FLAG_NONE},
+	    {(uint8_t*)":scheme",
+	     (uint8_t*)scheme,
+	     7,
+	     (uint8_t)strlen(scheme),
+	     NGHTTP2_NV_FLAG_NONE},
+	};
+
+	/* Submit the PUSH_PROMISE. nghttp2 returns the new stream ID on success.
+	 * The new stream is in "reserved" state — we can immediately submit a
+	 * response to it. */
+	int32_t promised_id =
+	    nghttp2_submit_push_promise(client->h2_session,
+					NGHTTP2_FLAG_NONE,
+					c->stream_id,
+					push_headers,
+					sizeof(push_headers) / sizeof(push_headers[0]),
+					nullptr);
+
+	if (promised_id < 0) {
+		return promised_id;
+	}
+
+	/* Create a request context for the promised stream */
+	csilk_ctx_t* pushed_c = csilk_h2_get_or_create_stream(client, promised_id);
+	if (!pushed_c) {
+		return -1;
+	}
+
+	/* Set up the synthesized request */
+	pushed_c->request.method = csilk_arena_strdup(pushed_c->arena, method);
+	pushed_c->request.path = csilk_arena_strdup(pushed_c->arena, path);
+
+	/* Flush the PUSH_PROMISE frame */
+	nghttp2_session_send(client->h2_session);
+
+	/* Increment push counter on the original context */
+	csilk_set(c, "_h2_push_count", (void*)(uintptr_t)(push_count + 1));
+
+	/* Dispatch the pushed request through the router.
+	 * The handler chain will set pushed_c->response, and the response
+	 * will be sent by _csilk_send_response → csilk_h2_send_response
+	 * on the promised stream ID. */
+	_csilk_dispatch_request(pushed_c);
+
+	return promised_id;
+}
+
 /** @brief Called by nghttp2 when a stream is closed.
  *
  * Triggered when either peer closes a stream (RST_STREAM, END_STREAM

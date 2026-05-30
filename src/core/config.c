@@ -180,6 +180,11 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 						}
 					} else if (strcmp(current_key, "tls_verify_peer") == 0) {
 						config->server.tls_verify_peer = atoi(val);
+					} else if (strcmp(current_key, "h2_push_enable") == 0) {
+						config->server.h2_push_enable = atoi(val);
+					} else if (strcmp(current_key, "h2_max_push_per_request") ==
+						   0) {
+						config->server.h2_max_push_per_request = atoi(val);
 					}
 				} else if (strcmp(current_section, "logger") == 0) {
 					if (strcmp(current_key, "level") == 0) {

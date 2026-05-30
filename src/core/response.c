@@ -19,6 +19,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/srv_types.h"
+#include "h2.h"
 
 /* Forward declarations for context.c helpers */
 void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
@@ -551,4 +552,26 @@ csilk_response_end(csilk_ctx_t* c)
 	}
 
 	_csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
+}
+
+/* --- HTTP/2 Server Push --- */
+
+/** @brief Signal server push for a resource (HTTP/2 only).
+ *
+ * Delegates to the HTTP/2 implementation. On HTTP/1.1 connections
+ * this is a safe no-op. See src/core/h2.c:csilk_h2_submit_push for
+ * the HTTP/2-level implementation.
+ *
+ * @param c      The request context.
+ * @param method The HTTP method for the pushed resource.
+ * @param path   The path of the resource to push.
+ * @return The promised stream ID on success, or < 0 on error. */
+int32_t
+csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path)
+{
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	if (!client || client->protocol != CSILK_PROTO_HTTP2) {
+		return -1;
+	}
+	return csilk_h2_submit_push(c, method, path);
 }

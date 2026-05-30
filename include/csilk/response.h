@@ -193,4 +193,19 @@ void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
  */
 void csilk_response_end(csilk_ctx_t* c);
 
+/**
+ * @brief Signal the server to push a resource via HTTP/2 server push.
+ *
+ * Sends a PUSH_PROMISE frame to the client and dispatches the pushed
+ * resource's request through the router. The pushed response is sent
+ * automatically on the promised stream. Must be called from within an
+ * HTTP/2 request handler; on HTTP/1.1 connections this is a no-op.
+ *
+ * @param c      The current request context.
+ * @param method The HTTP method for the pushed resource (typically "GET").
+ * @param path   The path of the pushed resource (e.g., "/style.css").
+ * @return The promised stream ID on success, or < 0 on error.
+ */
+int32_t csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path);
+
 #endif /* CSILK_RESPONSE_H */

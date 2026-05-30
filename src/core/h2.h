@@ -46,4 +46,18 @@ void csilk_h2_free_streams(csilk_client_t* client);
  */
 void csilk_h2_send_response(csilk_ctx_t* c);
 
+/**
+ * @brief Submit an HTTP/2 server push promise for a resource.
+ *
+ * Sends a PUSH_PROMISE frame and then routes the promised stream's request
+ * through the router to generate a response. Must be called from within a
+ * request handler on the original client-initiated stream.
+ *
+ * @param c      The original request context (client-initiated stream).
+ * @param method The HTTP method for the pushed resource (usually "GET").
+ * @param path   The path of the resource to push (e.g., "/style.css").
+ * @return The promised stream ID on success, or < 0 on error.
+ */
+int32_t csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path);
+
 #endif /* CSILK_H2_H */
