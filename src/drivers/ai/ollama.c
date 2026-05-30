@@ -200,8 +200,13 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 }
 
 /**
- * @brief Generate embeddings via Ollama (stub -- not yet implemented).
- * @todo Implement using Ollama's /api/embeddings endpoint.
+ * @brief Generate embeddings via Ollama's /api/embeddings endpoint.
+ *
+ * Ollama only accepts a single input string per request (no batching).
+ * For multi-input calls, each input is sent individually and results
+ * are concatenated into the response.
+ *
+ * See: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings
  */
 static int
 ollama_embeddings(void* state_ptr,
@@ -210,12 +215,89 @@ ollama_embeddings(void* state_ptr,
 		  size_t count,
 		  csilk_ai_embeddings_response_t* res)
 {
-	(void)state_ptr;
-	(void)model;
-	(void)input;
-	(void)count;
-	(void)res;
-	return -1;
+	ollama_state_t* state = (ollama_state_t*)state_ptr;
+	if (!state || !model || !input || count == 0 || !res) {
+		return -1;
+	}
+
+	res->values = nullptr;
+	res->count = 0;
+	res->dimension = 0;
+
+	for (size_t i = 0; i < count; i++) {
+		CURL* curl = curl_easy_init();
+		if (!curl) {
+			return -1;
+		}
+
+		cJSON* root = cJSON_CreateObject();
+		cJSON_AddStringToObject(root, "model", model);
+		cJSON_AddStringToObject(root, "prompt", input[i]);
+		char* json_body = cJSON_PrintUnformatted(root);
+		cJSON_Delete(root);
+
+		char url[512];
+		snprintf(url, sizeof(url), "%s/api/embeddings", state->base_url);
+
+		struct curl_slist* headers = nullptr;
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+
+		struct curl_response cr = {0};
+		curl_easy_setopt(curl, CURLOPT_URL, url);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+
+		CURLcode rc = curl_easy_perform(curl);
+		free(json_body);
+		curl_slist_free_all(headers);
+
+		if (rc != CURLE_OK) {
+			char err[256];
+			snprintf(err, sizeof(err), "Ollama CURL error: %s", curl_easy_strerror(rc));
+			res->error_message = strdup(err);
+			free(cr.body);
+			curl_easy_cleanup(curl);
+			return -1;
+		}
+
+		cJSON* resp = cJSON_Parse(cr.body);
+		free(cr.body);
+		if (!resp) {
+			res->error_message = strdup("JSON parse error");
+			curl_easy_cleanup(curl);
+			return -1;
+		}
+
+		cJSON* embedding = cJSON_GetObjectItem(resp, "embedding");
+		size_t dim = 0;
+		if (cJSON_IsArray(embedding)) {
+			dim = cJSON_GetArraySize(embedding);
+			if (res->dimension == 0) {
+				res->dimension = dim;
+			}
+			size_t new_count = res->count + 1;
+			float* new_values =
+			    realloc(res->values, sizeof(float) * new_count * res->dimension);
+			if (!new_values) {
+				cJSON_Delete(resp);
+				curl_easy_cleanup(curl);
+				return -1;
+			}
+			res->values = new_values;
+			for (size_t j = 0; j < dim; j++) {
+				res->values[res->count * res->dimension + j] =
+				    (float)cJSON_GetArrayItem(embedding, j)->valuedouble;
+			}
+			res->count = (int)new_count;
+		}
+
+		cJSON_Delete(resp);
+		curl_easy_cleanup(curl);
+	}
+
+	return 0;
 }
 
 /** @brief Driver vtable for the Ollama AI backend. */
