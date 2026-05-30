@@ -1638,13 +1638,6 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c);
 void csilk_router_free(csilk_router_t* r);
 
 /**
- * @brief Collect all registered routes from the router tree as a cJSON array.
- * @param r The router instance.
- * @return A cJSON array of route objects. Caller must free with cJSON_Delete().
- */
-cJSON* csilk_router_collect_routes(csilk_router_t* r);
-
-/**
  * @brief Collect metadata for all registered routes.
  *
  * Traverses the radix tree and returns a cJSON array where each element
