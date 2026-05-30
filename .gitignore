@@ -35,3 +35,8 @@ AGENT.md
 GEMINI.md
 .superpowers/
 test_interactive_wals/
+
+# Swagger UI dist — downloaded at build time, not tracked
+share/swagger-ui/swagger-ui.css
+share/swagger-ui/swagger-ui-bundle.js
+share/swagger-ui/swagger-ui-standalone-preset.js
