@@ -294,6 +294,25 @@ target_include_directories(csilk PUBLIC
 target_compile_definitions(csilk PRIVATE
     CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
 )
+# Download Swagger UI distribution at configure time (not tracked in git).
+# Only the 3 essential runtime files are fetched (~1.2 MB total);
+# custom index.css stays in the repository.
+set(SWAGGER_UI_VERSION "5.17.14")
+set(SWAGGER_UI_CDN "https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_VERSION}")
+foreach(swagger_file swagger-ui.css swagger-ui-bundle.js swagger-ui-standalone-preset.js)
+  set(swagger_dest "${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui/${swagger_file}")
+  if(NOT EXISTS "${swagger_dest}")
+    file(DOWNLOAD "${SWAGGER_UI_CDN}/${swagger_file}" "${swagger_dest}"
+         STATUS swagger_dl_status
+         TIMEOUT 30)
+    list(GET swagger_dl_status 0 swagger_dl_code)
+    if(NOT swagger_dl_code EQUAL 0)
+      message(WARNING "Failed to download ${swagger_file} — Swagger UI may not render")
+    else()
+      message(STATUS "Downloaded ${swagger_file}")
+    endif()
+  endif()
+endforeach()
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
     VERSION "${CSILK_VERSION}"
