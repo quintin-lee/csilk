@@ -32,6 +32,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "csilk/core/ctx_types.h"
 
 /** @brief Per-connection data for the Redis driver. */
 typedef struct {
@@ -591,6 +592,187 @@ void
 csilk_db_redis_init(void)
 {
 	csilk_db_register_driver("redis", &csilk_db_redis_driver);
+}
+
+/* --- Distributed Storage Driver Implementation --- */
+
+typedef struct {
+	csilk_storage_driver_t base;
+	csilk_db_pool_t* pool;
+} redis_storage_driver_t;
+
+static void
+redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
+{
+	if (!c || !key || !value) {
+		return;
+	}
+	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+	if (!drv || !drv->pool) {
+		return;
+	}
+
+	/* Assumes value is a null-terminated string */
+	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	if (!conn || !conn->c) {
+		return;
+	}
+
+	redisReply* reply = redisCommand(conn->c, "SET %s %s", key, (const char*)value);
+	if (reply) {
+		freeReplyObject(reply);
+	}
+}
+
+static void*
+redis_storage_get(csilk_ctx_t* c, const char* key)
+{
+	if (!c || !key) {
+		return nullptr;
+	}
+	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+	if (!drv || !drv->pool) {
+		return nullptr;
+	}
+
+	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	if (!conn || !conn->c) {
+		return nullptr;
+	}
+
+	void* result = nullptr;
+	redisReply* reply = redisCommand(conn->c, "GET %s", key);
+	if (reply) {
+		if (reply->type == REDIS_REPLY_STRING && reply->str && c->arena) {
+			result = csilk_arena_strdup(c->arena, reply->str);
+		}
+		freeReplyObject(reply);
+	}
+	return result;
+}
+
+static void
+redis_storage_clear(csilk_ctx_t* c)
+{
+	/* Unsupported globally, would require FLUSHDB which is dangerous. */
+	(void)c;
+}
+
+static int
+redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec)
+{
+	if (!c || !key || !value) {
+		return -1;
+	}
+	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+	if (!drv || !drv->pool) {
+		return -1;
+	}
+
+	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	if (!conn || !conn->c) {
+		return -1;
+	}
+
+	redisReply* reply = nullptr;
+	if (ttl_sec > 0) {
+		reply = redisCommand(conn->c, "SET %s %s EX %d", key, value, ttl_sec);
+	} else {
+		reply = redisCommand(conn->c, "SET %s %s", key, value);
+	}
+
+	int rc = 0;
+	if (!reply || reply->type == REDIS_REPLY_ERROR) {
+		rc = -1;
+	}
+	if (reply) {
+		freeReplyObject(reply);
+	}
+	return rc;
+}
+
+static char*
+redis_storage_get_string(csilk_ctx_t* c, const char* key)
+{
+	if (!c || !key) {
+		return nullptr;
+	}
+	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+	if (!drv || !drv->pool) {
+		return nullptr;
+	}
+
+	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	if (!conn || !conn->c) {
+		return nullptr;
+	}
+
+	char* result = nullptr;
+	redisReply* reply = redisCommand(conn->c, "GET %s", key);
+	if (reply) {
+		if (reply->type == REDIS_REPLY_STRING && reply->str) {
+			result = strdup(reply->str); /* Heap-allocated as per API */
+		}
+		freeReplyObject(reply);
+	}
+	return result;
+}
+
+static long long
+redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+{
+	if (!c || !key) {
+		return -1;
+	}
+	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+	if (!drv || !drv->pool) {
+		return -1;
+	}
+
+	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	if (!conn || !conn->c) {
+		return -1;
+	}
+
+	long long val = -1;
+	redisReply* reply = redisCommand(conn->c, "INCR %s", key);
+	if (reply) {
+		if (reply->type == REDIS_REPLY_INTEGER) {
+			val = reply->integer;
+			/* If the value is 1, it's a new key, so set the TTL */
+			if (val == 1 && ttl_sec > 0) {
+				redisReply* exp_reply =
+				    redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
+				if (exp_reply) {
+					freeReplyObject(exp_reply);
+				}
+			}
+		}
+		freeReplyObject(reply);
+	}
+	return val;
+}
+
+csilk_storage_driver_t*
+csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
+{
+	if (!pool) {
+		return nullptr;
+	}
+	redis_storage_driver_t* drv = calloc(1, sizeof(redis_storage_driver_t));
+	if (!drv) {
+		return nullptr;
+	}
+
+	drv->base.set = redis_storage_set;
+	drv->base.get = redis_storage_get;
+	drv->base.clear = redis_storage_clear;
+	drv->base.set_string = redis_storage_set_string;
+	drv->base.get_string = redis_storage_get_string;
+	drv->base.incr = redis_storage_incr;
+	drv->pool = pool;
+
+	return (csilk_storage_driver_t*)drv;
 }
 
 #endif /* HAS_REDIS */

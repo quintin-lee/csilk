@@ -954,6 +954,54 @@ csilk_get(csilk_ctx_t* c, const char* key)
 	return nullptr;
 }
 
+int
+csilk_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec)
+{
+	if (!c || !key || !value) {
+		return -1;
+	}
+	if (c->storage_driver && c->storage_driver->set_string) {
+		return c->storage_driver->set_string(c, key, value, ttl_sec);
+	}
+	/* Fallback: allocate the string in the arena and use standard set.
+       Ignores TTL because local storage lives only for the request lifecycle. */
+	if (!c->arena) {
+		return -1;
+	}
+	char* arena_val = csilk_arena_strdup(c->arena, value);
+	csilk_set(c, key, arena_val);
+	return 0;
+}
+
+char*
+csilk_get_string(csilk_ctx_t* c, const char* key)
+{
+	if (!c || !key) {
+		return nullptr;
+	}
+	if (c->storage_driver && c->storage_driver->get_string) {
+		return c->storage_driver->get_string(c, key);
+	}
+	/* Fallback: return a strdup of the arena-stored string so caller can free it */
+	void* val = csilk_get(c, key);
+	if (val) {
+		return strdup((const char*)val);
+	}
+	return nullptr;
+}
+
+long long
+csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+{
+	if (!c || !key) {
+		return -1;
+	}
+	if (c->storage_driver && c->storage_driver->incr) {
+		return c->storage_driver->incr(c, key, ttl_sec);
+	}
+	return -1; /* Local storage doesn't support persistent counters */
+}
+
 /** @brief Parse the request body as JSON using cJSON.
  *
  * @param c The request context.

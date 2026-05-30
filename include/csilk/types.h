@@ -81,6 +81,27 @@ typedef struct {
 	/** @brief Clear all stored key-value pairs.
    *  Called during csilk_ctx_cleanup to release references. */
 	void (*clear)(csilk_ctx_t* c);
+
+	/** @brief Store a string value with an optional TTL (useful for Redis).
+   *  @param c        Owning request context.
+   *  @param key      NUL-terminated key string.
+   *  @param value    NUL-terminated value string.
+   *  @param ttl_sec  Time-to-live in seconds (0 = no expiry).
+   *  @return 0 on success, non-zero on failure. */
+	int (*set_string)(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec);
+
+	/** @brief Retrieve a string value by key.
+   *  @param c    Owning request context.
+   *  @param key  NUL-terminated key string.
+   *  @return Heap-allocated string value (caller must free), or nullptr if not found. */
+	char* (*get_string)(csilk_ctx_t* c, const char* key);
+
+	/** @brief Increment a numeric value by 1 with an optional TTL.
+   *  @param c        Owning request context.
+   *  @param key      NUL-terminated key string.
+   *  @param ttl_sec  Time-to-live in seconds (set only if key is newly created; 0 = no expiry).
+   *  @return The new value after incrementing, or -1 on error. */
+	long long (*incr)(csilk_ctx_t* c, const char* key, int ttl_sec);
 } csilk_storage_driver_t;
 
 /**

@@ -283,6 +283,18 @@ void csilk_db_mongodb_init(void);
  */
 #ifdef HAS_REDIS
 void csilk_db_redis_init(void);
+
+/**
+ * @brief Create a storage driver backed by a Redis connection pool.
+ *
+ * This allows using Redis as the backend for context storage, distributed
+ * session management, and rate limiting via the csilk_storage_driver_t interface.
+ *
+ * @param pool  The Redis database pool (must be initialized and connected).
+ * @return A heap-allocated storage driver instance, or nullptr on failure.
+ *         The caller is responsible for freeing the driver when shutting down.
+ */
+csilk_storage_driver_t* csilk_redis_storage_driver_new(csilk_db_pool_t* pool);
 #endif
 
 /**
