@@ -418,7 +418,7 @@
 - [x] 7.2 CI 流程整合 — 合并重叠的 ci.yml/build.yml，统一 workflow
 - [ ] 7.3 自动化性能基准集 — wrk 跨框架对比报告，CI 性能回归检测
 - [x] 7.4 macOS CI — 预研完成，因 pthread_barrier_t 缺失推迟至后续版本
-- [ ] 7.5 平台兼容说明 — README 已添加编译器/OS/依赖版本矩阵
+- [x] 7.5 平台兼容说明 — README 已添加编译器/OS/依赖版本矩阵
 
 ### 轨道二：系统依赖与构建加固 (P1)
 - [x] 7.6 CMakeLists 系统依赖版本下限校验
@@ -431,7 +431,7 @@
 ### 轨道三：协议与扩展 (P2)
 - [ ] 7.12 HTTP/2 Phase 3 — Server Push 支持
 - [x] 7.13 连接池大小可配置化 (config.max_connections) → CSILK_CLIENT_POOL_SIZE 常量
-- [ ] 7.14 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
+- [ ] 7.19 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
 
 ### 轨道四：v1.0 预研 (P3)
 - [ ] 7.14 types.h 进一步拆分 (当前 419 行单体文件)
