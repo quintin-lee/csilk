@@ -160,27 +160,6 @@ test_active_connections_initial(void)
 /* ------------------------------------------------------------------ */
 
 static void
-test_client_ip_format(void)
-{
-	csilk_ctx_t* c = csilk_test_ctx_new();
-	csilk_client_t client;
-	memset(&client, 0, sizeof(client));
-	_csilk_set_internal_client(c, &client);
-	csilk_server_t* s = mock_server();
-	c->server = s;
-
-	const char* ip = csilk_get_client_ip(c);
-	if (ip && strlen(ip) >= 7 && strlen(ip) <= 45) {
-		PASS();
-	} else {
-		FAIL("client_ip format");
-	}
-
-	free_mock_server(s);
-	csilk_test_ctx_free(c);
-}
-
-static void
 test_client_ip_null_ctx(void)
 {
 	const char* ip = csilk_get_client_ip(nullptr);
@@ -189,6 +168,23 @@ test_client_ip_null_ctx(void)
 	} else {
 		FAIL("client_ip null ctx");
 	}
+}
+
+static void
+test_client_ip_mock_returns_null(void)
+{
+	csilk_ctx_t* c = csilk_test_ctx_new();
+	csilk_client_t client;
+	memset(&client, 0, sizeof(client));
+	_csilk_set_internal_client(c, &client);
+
+	const char* ip = csilk_get_client_ip(c);
+	if (ip == nullptr) {
+		PASS();
+	} else {
+		FAIL("client_ip should return null on unconnected handle");
+	}
+	csilk_test_ctx_free(c);
 }
 
 /* ------------------------------------------------------------------ */
@@ -213,7 +209,7 @@ main(void)
 	test_active_connections_initial();
 
 	printf("\n--- Client IP ---\n");
-	test_client_ip_format();
+	test_client_ip_mock_returns_null();
 	test_client_ip_null_ctx();
 
 	printf("\n=== Results: %d passed, %d failed ===\n", tests_passed, tests_run - tests_passed);

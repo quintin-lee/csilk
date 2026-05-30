@@ -24,27 +24,17 @@ static int tests_passed = 0;
 		printf("  FAIL: %s\n", msg);                                                       \
 	} while (0)
 
-/* ------------------------------------------------------------------ */
-
 static void
 test_status_sets_code(void)
 {
-	fprintf(stderr, "  DBG:new\n");
-	fflush(stderr);
 	csilk_ctx_t* c = csilk_test_ctx_new();
-	fprintf(stderr, "  DBG:ctx=%p\n", (void*)c);
-	fflush(stderr);
 	csilk_status(c, 201);
 	if (csilk_get_status(c) == 201) {
 		PASS();
 	} else {
 		FAIL("status not set");
 	}
-	fprintf(stderr, "  DBG:free\n");
-	fflush(stderr);
 	csilk_test_ctx_free(c);
-	fprintf(stderr, "  DBG:done\n");
-	fflush(stderr);
 }
 
 static void
@@ -81,8 +71,6 @@ test_string_empty(void)
 	}
 	csilk_test_ctx_free(c);
 }
-
-/* ------------------------------------------------------------------ */
 
 static void
 test_json_content_type(void)
@@ -129,8 +117,6 @@ test_json_null_safe(void)
 	csilk_test_ctx_free(c);
 }
 
-/* ------------------------------------------------------------------ */
-
 static void
 test_json_error_format(void)
 {
@@ -158,8 +144,6 @@ test_json_error_empty(void)
 	}
 	csilk_test_ctx_free(c);
 }
-
-/* ------------------------------------------------------------------ */
 
 static void
 test_set_header_single(void)
@@ -205,28 +189,13 @@ test_add_header_multiple(void)
 	csilk_test_ctx_free(c);
 }
 
-/* ------------------------------------------------------------------ */
-
 int
 main(void)
 {
-	fprintf(stderr, "DBG:start\n");
-	fflush(stderr);
 	printf("=== Response Module Tests ===\n\n");
-	fflush(stdout);
-	fprintf(stderr, "DBG:after printf\n");
-	fflush(stderr);
 
 	printf("--- csilk_status ---\n");
-	fflush(stdout);
-	fprintf(stderr, "DBG:before test1\n");
-	fflush(stderr);
 	test_status_sets_code();
-	fprintf(stderr, "DBG:after test1\n");
-	fflush(stderr);
-	test_status_null_safe();
-	fprintf(stderr, "DBG:after test2\n");
-	fflush(stderr);
 	test_status_null_safe();
 
 	printf("\n--- csilk_string ---\n");
