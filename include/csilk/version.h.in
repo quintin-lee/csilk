@@ -2,7 +2,7 @@
  * @file version.h
  * @brief Csilk framework version identifier.
  *
- * @version 0.3.0
+ * @version @CSILK_VERSION@
  * @copyright MIT License
  */
 
@@ -13,6 +13,7 @@
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
  * Used for identification in logs, headers, and the OpenAPI spec.
  */
-#define CSILK_VERSION "0.3.0"
+#define CSILK_VERSION "@CSILK_VERSION@"
 
 #endif /* CSILK_VERSION_H */
+

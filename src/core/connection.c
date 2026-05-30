@@ -47,7 +47,7 @@ alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 /** @brief Get a client connection object from the server's free pool or
  * allocate a new one.
  *
- * Reuses a previously freed client if available (up to 32 pooled entries),
+ * Reuses a previously freed client if available (up to CSILK_CLIENT_POOL_SIZE pooled entries),
  * otherwise allocates a new zero-initialized csilk_client_t. The returned
  * client's file_fd is initialized to -1.
  *
@@ -73,7 +73,7 @@ pool_get(csilk_server_t* server)
 /** @brief Return a client connection to the server's free pool for reuse.
  *
  * If the client has an SSL session, it is freed first. The client struct is
- * zeroed. If the pool has fewer than 32 entries, the client is saved for
+ * zeroed. If the pool has fewer than CSILK_CLIENT_POOL_SIZE entries, the client is saved for
  * reuse; otherwise it is freed.
  *
  * @param server The server instance.
@@ -94,7 +94,7 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 	csilk_h2_free_streams(client);
 	memset(client, 0, sizeof(*client));
 	uv_mutex_lock(&server->pool_mutex);
-	if (server->client_pool_count < 32) {
+	if (server->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
 		server->client_pool[server->client_pool_count++] = client;
 	} else {
 		free(client);

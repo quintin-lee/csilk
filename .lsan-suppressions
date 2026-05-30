@@ -1,0 +1,15 @@
+# LeakSanitizer suppressions for known false positives.
+# See: https://github.com/google/sanitizers/wiki/AddressSanitizerLeakSanitizer
+
+# libuv and OpenSSL may hold memory at exit in worker threads or
+# internal caches that are not freed before process termination.
+# These are not application leaks.
+
+leak:libuv_init
+leak:OPENSSL_init_crypto
+leak:OPENSSL_init_ssl
+leak:CRYPTO_zalloc
+
+# nghttp2 internal buffers may be held at exit
+leak:nghttp2_session_new
+leak:nghttp2_session_del

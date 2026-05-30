@@ -6,6 +6,12 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# Version — single source of truth
+set(CSILK_VERSION_MAJOR 0)
+set(CSILK_VERSION_MINOR 3)
+set(CSILK_VERSION_PATCH 0)
+set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}")
+
 enable_testing()
 
 option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
@@ -137,12 +143,20 @@ if(nghttp2_SOURCE_DIR)
   include_directories(${nghttp2_BINARY_DIR}/lib/includes)
 endif()
 
-# Find CURL
-find_package(CURL REQUIRED)
+# Find CURL (>= 7.80.0 for HTTP/2 support)
+find_package(CURL 7.80.0 REQUIRED)
 
 include_directories(include)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})   # for generated version.h
 include_directories(${cjson_SOURCE_DIR})
 include_directories(${CURL_INCLUDE_DIRS})
+
+# Generate version.h from CMake variable
+configure_file(
+  include/csilk/version.h.in
+  ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
+  @ONLY
+)
 
 # Find MySQL (optional)
 find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
@@ -224,22 +238,29 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-# Find system libyaml
+# Find system libyaml (>= 0.2.0)
 find_library(YAML_LIB NAMES yaml libyaml REQUIRED)
 if(NOT YAML_LIB)
-  message(FATAL_ERROR "libyaml library not found. Install libyaml-dev")
+  message(FATAL_ERROR "libyaml library not found. Install libyaml-dev (>= 0.2.0)")
 endif()
 message(STATUS "Found libyaml: ${YAML_LIB}")
 
-# Find system zlib
+# Find system zlib (>= 1.2.0)
 find_library(ZLIB_LIB NAMES z libz REQUIRED)
 if(NOT ZLIB_LIB)
-  message(FATAL_ERROR "zlib library not found. Install zlib1g-dev")
+  message(FATAL_ERROR "zlib library not found. Install zlib1g-dev (>= 1.2.0)")
 endif()
 message(STATUS "Found zlib: ${ZLIB_LIB}")
 
-# Find OpenSSL
-find_package(OpenSSL REQUIRED)
+# Find system sqlite3 (>= 3.20.0)
+find_library(SQLITE3_LIB NAMES sqlite3 REQUIRED)
+if(NOT SQLITE3_LIB)
+  message(FATAL_ERROR "sqlite3 library not found. Install libsqlite3-dev (>= 3.20.0)")
+endif()
+message(STATUS "Found sqlite3: ${SQLITE3_LIB}")
+
+# Find OpenSSL (>= 1.1.1 for TLS 1.3)
+find_package(OpenSSL 1.1.1 REQUIRED)
 message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 
 # Option to also build as shared library
@@ -248,7 +269,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
 set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
 if(MYSQL_LIB)
   target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
 endif()
@@ -268,15 +289,15 @@ target_compile_definitions(csilk PRIVATE
 )
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "0.3.0"
-    SOVERSION "0"
+    VERSION "${CSILK_VERSION}"
+    SOVERSION "${CSILK_VERSION_MAJOR}"
     OUTPUT_NAME csilk
 )
 
 # Build shared library if requested
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
-    target_link_libraries(csilk_shared PUBLIC uv cjson Threads::Threads sqlite3 PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+    target_link_libraries(csilk_shared PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
     if(MYSQL_LIB)
       target_link_libraries(csilk_shared PRIVATE ${MYSQL_LIB})
     endif()
@@ -293,8 +314,8 @@ if(CSILK_BUILD_SHARED)
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-        VERSION "0.3.0"
-        SOVERSION "0"
+        VERSION "${CSILK_VERSION}"
+        SOVERSION "${CSILK_VERSION_MAJOR}"
         OUTPUT_NAME csilk
     )
     target_compile_definitions(csilk_shared PRIVATE
@@ -437,10 +458,11 @@ install(EXPORT csilk-targets
 # clang-tidy
 find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
 if(CLANG_TIDY_EXECUTABLE)
+    set(CSILK_TIDY_CHECKS "-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-narrowing-conversions,performance-*,readability-*,-readability-function-cognitive-complexity,modernize-*,-modernize-avoid-c-arrays,-bugprone-reserved-identifier,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
     add_custom_target(tidy
         COMMAND ${CLANG_TIDY_EXECUTABLE}
             --quiet
-            --checks="-*,clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling"
+            --checks=${CSILK_TIDY_CHECKS}
             --warnings-as-errors="*"
             ${CSILK_SOURCES}
             -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -478,6 +500,6 @@ add_custom_target(bench
 
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
-set(CPACK_PACKAGE_VERSION "0.3.0")
+set(CPACK_PACKAGE_VERSION "${CSILK_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Csilk")
 include(CPack)
