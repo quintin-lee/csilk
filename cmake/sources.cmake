@@ -31,18 +31,15 @@ set(CSILK_CORE_SOURCES
     src/core/utils.c
 )
 
-set(CSILK_CRYPTO_SOURCES
-    src/crypto/cipher.c
-)
-
 set(CSILK_DATA_SOURCES
     src/data/db.c
 )
 
 set(CSILK_DRIVER_SOURCES
-    src/drivers/ai_ollama.c
-    src/drivers/ai_openai.c
-    src/drivers/perm_simple.c
+    src/drivers/ai/ollama.c
+    src/drivers/ai/openai.c
+    src/drivers/cipher/openssl.c
+    src/drivers/perm/simple.c
     src/drivers/sqlite.c
 )
 
@@ -92,7 +89,6 @@ set(CSILK_SOURCES
     ${CSILK_AI_SOURCES}
     ${CSILK_APP_SOURCES}
     ${CSILK_CORE_SOURCES}
-    ${CSILK_CRYPTO_SOURCES}
     ${CSILK_DATA_SOURCES}
     ${CSILK_DRIVER_SOURCES}
     ${CSILK_MESSAGING_SOURCES}
