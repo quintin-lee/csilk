@@ -35,6 +35,9 @@ void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const cha
 void
 csilk_status(csilk_ctx_t* c, int status)
 {
+	if (!c) {
+		return;
+	}
 	c->response.status = status;
 }
 

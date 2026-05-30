@@ -18,6 +18,7 @@ set(CSILK_CORE_TESTS
     test_config_validate
     test_config_load
     test_config_tls
+    test_connection
     test_context
     test_context_ext
     test_context_reflect_ext
@@ -27,6 +28,7 @@ set(CSILK_CORE_TESTS
     test_https
     test_ip
     test_json
+    test_json_ext
     test_keepalive
     test_async_keepalive
     test_multi_worker
@@ -35,6 +37,7 @@ set(CSILK_CORE_TESTS
     test_query
     test_radix
     test_redirect
+    test_response
     test_router
     test_server
     test_server_ext
