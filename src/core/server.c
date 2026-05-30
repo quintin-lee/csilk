@@ -46,10 +46,10 @@
 #include <string.h>
 #include <uv.h>
 
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "server_internal.h"
+#include "csilk/core/srv_types.h"
 #include "h2.h"
 
 /** @brief libuv buffer allocation callback — allocates a receive buffer.

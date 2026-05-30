@@ -1,5 +1,5 @@
 /**
- * @file server_internal.h
+ * @file srv_types.h
  * @brief Internal layout of csilk_server_s and csilk_client_s.
  *
  * This header defines the memory layout of the server and client structures.
@@ -19,7 +19,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 
 /** @brief Default idle timeout in milliseconds. */
 static constexpr int CSILK_DEFAULT_IDLE_TIMEOUT = 5000;

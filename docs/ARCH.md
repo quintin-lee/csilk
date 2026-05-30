@@ -417,7 +417,7 @@ graph LR
 csilk uses **Doxygen** for API documentation:
 - All public header files (`include/`) include complete `@brief`, `@param`, `@return` annotations
 - All implementation files (`src/core/`, `src/app/`, `src/middleware/`, `src/drivers/`) include `@file`, `@brief`, `@copyright` and full `@param`/`@return` documentation
-- Internal header `context_internal.h` in `include/csilk/core/` includes complete struct field documentation
+- Internal header `ctx_types.h` (formerly `context_internal.h`) in `include/csilk/core/` includes complete struct field documentation
 - Example code (`examples/`) also includes Doxygen annotations
 - Documentation generation command: `make docs` (requires Doxygen 1.12+)
 - CI is configured for GitHub Pages auto-deployment of generated HTML documentation

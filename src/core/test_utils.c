@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 
