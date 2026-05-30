@@ -561,6 +561,42 @@ void csilk_ctx_set_crypto_driver(csilk_ctx_t* c, csilk_crypto_driver_t* driver);
 void csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver);
 
 /**
+ * @brief Register a deferred cleanup callback for the request context.
+ *
+ * The callback @p fn is invoked with @p arg when the context is cleaned
+ * up — including during panic recovery (csilk_panic / longjmp).  This
+ * protects heap allocations, file descriptors, and mutex locks held by
+ * handlers from leaking when longjmp skips stack unwinding.
+ *
+ * Items are arena-allocated and freed automatically on arena reset.
+ * Callbacks are invoked in LIFO order (most recently registered first).
+ *
+ * Example:
+ * @code
+ *   char* buf = malloc(1024);
+ *   csilk_ctx_defer(c, free, buf);
+ * @endcode
+ *
+ * @param c   The request context.
+ * @param fn  Cleanup function (e.g., free, close, uv_mutex_unlock).
+ * @param arg Argument passed to @p fn.
+ * @return 0 on success, -1 on allocation failure.
+ */
+int csilk_ctx_defer(csilk_ctx_t* c, void (*fn)(void*), void* arg);
+
+/**
+ * @brief Execute all deferred cleanup callbacks and clear the list.
+ *
+ * Walks the defer linked list in LIFO order and calls each registered
+ * cleanup function with its argument. After execution the list is cleared
+ * (subsequent calls are no-ops).  Called automatically by
+ * csilk_ctx_cleanup() and by the panic recovery path.
+ *
+ * @param c  The request context.
+ */
+void csilk_ctx_defer_free(csilk_ctx_t* c);
+
+/**
  * @brief Split a URL into path and query-string components.
  *
  * Internal helper.  The returned @p path and @p query point into the

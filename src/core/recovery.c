@@ -46,8 +46,11 @@ csilk_recovery_handler(csilk_ctx_t* c)
 		c->has_jump_buffer = 0; /* Normal path: clear the flag. */
 	} else {
 		/* Panic path: a downstream handler called csilk_panic().
-       Send a generic 500 to avoid leaking internal state. */
+		   Execute deferred cleanups to release heap memory, file
+		   descriptors, and mutexes that would otherwise leak when
+		   longjmp skips stack unwinding.  Then send a generic 500. */
 		c->has_jump_buffer = 0;
+		csilk_ctx_defer_free(c);
 		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
 	}
 }
@@ -72,6 +75,7 @@ void
 csilk_panic(csilk_ctx_t* c)
 {
 	if (c->has_jump_buffer) {
+		csilk_ctx_defer_free(c);
 		longjmp(c->jump_buffer, 1);
 	} else {
 		fprintf(stderr, "Fatal: No recovery handler registered.\n");

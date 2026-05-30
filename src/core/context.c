@@ -327,6 +327,8 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 		return;
 	}
 
+	csilk_ctx_defer_free(c);
+
 	if (c->arena) {
 		csilk_arena_reset(c->arena);
 	} else {
@@ -1276,4 +1278,43 @@ csilk_get_form_field(csilk_ctx_t* c, const char* key)
 		return nullptr;
 	}
 	return map_get(&c->request.form_params, key);
+}
+
+/* --- Deferred Cleanup (panic-safe resource management) --- */
+
+int
+csilk_ctx_defer(csilk_ctx_t* c, void (*fn)(void*), void* arg)
+{
+	if (!c || !fn || !c->arena) {
+		return -1;
+	}
+
+	csilk_defer_item_t* item = csilk_arena_alloc(c->arena, sizeof(csilk_defer_item_t));
+	if (!item) {
+		return -1;
+	}
+
+	item->fn = fn;
+	item->arg = arg;
+	item->next = c->defer_head;
+	c->defer_head = item;
+
+	return 0;
+}
+
+void
+csilk_ctx_defer_free(csilk_ctx_t* c)
+{
+	if (!c) {
+		return;
+	}
+
+	csilk_defer_item_t* item = c->defer_head;
+	while (item) {
+		if (item->fn) {
+			item->fn(item->arg);
+		}
+		item = item->next;
+	}
+	c->defer_head = nullptr;
 }

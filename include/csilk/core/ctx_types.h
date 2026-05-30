@@ -83,6 +83,25 @@ typedef struct csilk_storage_item_s {
 } csilk_storage_item_t;
 
 /**
+ * @brief Deferred cleanup callback — registered via csilk_ctx_defer().
+ *
+ * Forms a singly-linked list of cleanup functions that are executed
+ * by csilk_ctx_defer_free() when the context is cleaned up or when
+ * a longjmp panic occurs.  Nodes are arena-allocated so they are
+ * automatically reclaimed by csilk_arena_reset() without individual
+ * free calls.
+ *
+ * Use this to protect heap allocations, file descriptors, and mutex
+ * locks held by handlers that may call csilk_panic() — the deferred
+ * callbacks run even if the normal handler chain is aborted.
+ */
+typedef struct csilk_defer_item_s {
+	void (*fn)(void* arg);		 /**< Cleanup function to invoke. */
+	void* arg;			 /**< Argument forwarded to @p fn. */
+	struct csilk_defer_item_s* next; /**< Next item (LIFO order). */
+} csilk_defer_item_t;
+
+/**
  * @brief Main Request Context — holds all state for the current HTTP
  *        request/response cycle.
  *
@@ -114,11 +133,14 @@ struct csilk_ctx_s {
                   Subsequent csilk_next() calls are no-ops. */
 
 	/* === Error Recovery (setjmp/longjmp) === */
-	jmp_buf jump_buffer; /**< setjmp buffer for error recovery (used by
+	jmp_buf jump_buffer;		/**< setjmp buffer for error recovery (used by
                            panic/recovery middleware via longjmp). */
-	int has_jump_buffer; /**< Non-zero if jump_buffer has been initialized and is
-                          safe to longjmp to. Guards against longjmp on
-                          uninitialized context. */
+	int has_jump_buffer;		/**< Non-zero if jump_buffer has been initialized and is
+	                       safe to longjmp to. Guards against longjmp on
+	                       uninitialized context. */
+	csilk_defer_item_t* defer_head; /**< Linked list of deferred cleanup callbacks.
+	                                Executed by csilk_ctx_defer_free() on
+	                                panic and during normal cleanup (LIFO). */
 
 	/* === Memory Management === */
 	csilk_arena_t* arena; /**< Request-scoped arena allocator. Memory is reset
