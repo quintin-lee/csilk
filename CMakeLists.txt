@@ -247,6 +247,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
+set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads sqlite3 ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
 if(MYSQL_LIB)
   target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
