@@ -448,6 +448,29 @@ router_add_full(csilk_router_t* r,
 	}
 }
 
+/** @brief Register a route with full OpenAPI/reflection metadata.
+ *
+ * Extended version of csilk_router_add that also stores metadata for
+ * automatic OpenAPI spec generation and request/response binding.
+ * The route is inserted into the radix tree with the same matching
+ * semantics (dynamic :param and *wildcard segments) as the base
+ * registration function.
+ *
+ * @param r             Router instance.
+ * @param method        HTTP method string.
+ * @param path          URL pattern (e.g., "/users/:id").
+ * @param handlers      Array of handler function pointers.
+ * @param handler_count Number of handlers in @p handlers.
+ * @param path_pattern  Canonical path pattern string for documentation
+ *                      (may differ from the radix-tree path).
+ * @param input_type    Registered type name for request-body binding
+ *                      (NULL if there is no request body).
+ * @param output_type   Registered type name for response serialisation
+ *                      (NULL if raw response is used).
+ * @param summary       Short summary of the operation (NULL to omit from spec).
+ * @param description   Detailed description of the operation (NULL to omit).
+ * @note The handlers array is stored by pointer — the caller must ensure
+ *       the function pointers remain valid for the lifetime of the router. */
 void
 csilk_router_add_extended(csilk_router_t* r,
 			  const char* method,

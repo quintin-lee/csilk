@@ -17,8 +17,10 @@ graph TB
     subgraph "csilk Framework"
         subgraph "Transport Layer"
             TCP["TCP Server (libuv)"]
-            HTTP["HTTP/1.1 Parser (llhttp)"]
             TLS["OpenSSL (TLS v1.2/v1.3)"]
+            H2DISPATCH["Protocol Dispatcher<br/>(ALPN: h2 vs http/1.1)"]
+            H1["HTTP/1.1 Parser (llhttp)"]
+            H2["HTTP/2 Parser (nghttp2)"]
         end
 
         subgraph "Core Engine"
@@ -52,6 +54,7 @@ graph TB
     subgraph "Dependencies"
         UV["libuv v1.48<br/>Event Loop + Thread Pool"]
         LLHTTP["llhttp v9.4<br/>Streaming HTTP Parser"]
+        NGHTTP2["nghttp2 v1.52<br/>HTTP/2 Frame Parser"]
         CJ["cJSON v1.7<br/>JSON Parse/Serialize"]
         YAML["libyaml<br/>Config Parse"]
         ZLIB["zlib<br/>Gzip Compression"]
@@ -61,8 +64,11 @@ graph TB
     CLI --> TCP
     TCP --> TLS
     TLS --> SSL
-    TLS --> HTTP
-    HTTP --> SRV
+    TLS --> H2DISPATCH
+    H2DISPATCH --> H1
+    H2DISPATCH --> H2
+    H1 --> SRV
+    H2 --> SRV
     SRV --> RTR
     SRV --> GRP
     SRV --> CTX
@@ -90,7 +96,9 @@ graph TB
 
 The framework is built on `libuv`:
 - All network I/O is non-blocking.
-- Uses `llhttp` for state-machine-driven HTTP protocol parsing, ensuring high parsing efficiency and low memory footprint.
+- A **Protocol Dispatcher** selects between `llhttp` (HTTP/1.1) and `nghttp2` (HTTP/2) based on TLS ALPN negotiation (`h2` vs `http/1.1`).
+- Uses `llhttp` for state-machine-driven HTTP/1.1 protocol parsing, ensuring high parsing efficiency and low memory footprint.
+- Uses `nghttp2` for HTTP/2 binary frame parsing, HPACK header compression, and stream multiplexing.
 
 ```mermaid
 sequenceDiagram
@@ -125,6 +133,9 @@ sequenceDiagram
     S->>S: _csilk_send_response() → uv_write()
     S->>UV: uv_read_start() (keep-alive)
 ```
+
+> **HTTP/2** (ALPN-negotiated):  
+> The protocol dispatcher routes TLS-decrypted data to `csilk_h2_process_data()` and `nghttp2` instead of `llhttp`. The `nghttp2` session callbacks (`on_header_callback`, `on_frame_recv_callback`, etc.) populate a `csilk_ctx_t` per stream ID and invoke the same `_csilk_dispatch_request()` path, sharing the router, middleware chain, and hook system with HTTP/1.1.
 
 ### 1.3 Onion Model Middleware
 

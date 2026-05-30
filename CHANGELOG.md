@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **HTTP/2 Phase 1 — Session scaffolding**: TLS ALPN negotiation (`h2` vs
+  `http/1.1`), nghttp2 session initialisation, `csilk_h2.h` public API with
+  `csilk_h2_init_session`, `csilk_h2_process_data`, `csilk_h2_get_or_create_stream`,
+  `csilk_h2_free_streams`, and `send_callback` for frame serialisation.
+- **HTTP/2 Phase 2 — Request dispatch and response**: Extracted
+  `_csilk_dispatch_request` for unified routing across HTTP/1.1 and HTTP/2.
+  Implemented nghttp2 callbacks (`on_header_callback` for pseudo-header + regular
+  header parsing, `on_frame_recv_callback` for dispatch on END_STREAM,
+  `on_data_chunk_recv_callback` for body accumulation, `on_stream_close_callback`
+  for context cleanup). Added `csilk_h2_send_response` with
+  `body_read_callback` data provider for streaming response bodies.
+- **`test_h2` test suite**: Registered in `cmake/tests.cmake`.
+
+### Changed
+- **`_csilk_trigger_hooks`**: Made non-static and declared in `server_internal.h`
+  so the H2 module can fire lifecycle hooks.
+- **`pool_put`**: Now calls `csilk_h2_free_streams` to clean up any H2 stream
+  contexts before returning the client to the free pool.
+
+### Fixed
+- **Client pool data race in multi-worker mode**: `pool_get`/`pool_put` accessed
+  `client_pool` and `client_pool_count` without synchronization. In multi-worker
+  mode, `on_new_connection` runs on any event loop thread, causing two threads
+  to acquire the same client object. This triggered a libuv assertion crash:
+  `uv_accept: Assertion 'server->loop == client->loop' failed`.
+  Added `pool_mutex` to protect all pool operations.
+
 ## [0.2.5] - 2026-05-29
 
 ### Fixed

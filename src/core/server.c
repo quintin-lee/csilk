@@ -851,6 +851,15 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
 }
 
+/** @brief Write raw data to the client connection.
+ *
+ * Extracts the internal client from the context and delegates the write
+ * to the client's buffered write path. Used internally by the response
+ * sender to flush serialised HTTP data.
+ *
+ * @param c    The request context.
+ * @param data Pointer to the data buffer.
+ * @param len  Number of bytes to write. */
 void
 _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
@@ -858,6 +867,21 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 	csilk_client_write(client, data, len);
 }
 
+/** @brief Dispatch an incoming request through the middleware and routing
+ * pipeline.
+ *
+ * Triggers the CSILK_HOOK_REQUEST_BEGIN lifecycle hook, then attempts to
+ * match the request path against the server's radix-tree router.  On a
+ * match the route-level handlers are prepended with any registered global
+ * middlewares and execution begins via csilk_next().  On a miss the
+ * not-found handler (or a default 404 string response) is invoked.
+ *
+ * After dispatch the function handles the async / sync split: for async
+ * handlers the HTTP/1 connection read loop is stopped (the handler is
+ * responsible for sending the response later); for sync handlers the
+ * response is sent immediately via _csilk_send_response().
+ *
+ * @param c The request context populated by the HTTP parser. */
 void
 _csilk_dispatch_request(csilk_ctx_t* c)
 {
@@ -1205,6 +1229,13 @@ on_message_complete(llhttp_t* p)
 	return 0;
 }
 
+/** @brief libuv close callback for a rejected (overflow) connection handle.
+ *
+ * When the server has reached its maximum simultaneous connection limit a
+ * new connection is accepted and immediately closed — this callback
+ * simply releases the heap-allocated handle.
+ *
+ * @param handle The uv_tcp_t handle that was closed. */
 static void
 on_rejected_close(uv_handle_t* handle)
 {
@@ -1725,6 +1756,16 @@ csilk_server_stop(csilk_server_t* server)
 	uv_async_send(&server->async_handle);
 }
 
+/** @brief Read the server's live connection statistics.
+ *
+ * Provides atomic-safe access to the current active-connection count
+ * and the number of pre-allocated client structs in the internal pool.
+ * Either output pointer may be NULL to skip that value.
+ *
+ * @param server      The server instance (may be NULL; safe no-op).
+ * @param active_conn Out-parameter for the active connection count.
+ * @param pooled_conn Out-parameter for the pool size.
+ * @note Thread-safe — active_conn is read with an atomic load. */
 void
 csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn)
 {
@@ -1827,6 +1868,16 @@ csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* dr
 	}
 }
 
+/** @brief Set the pluggable cipher driver for the server.
+ *
+ * When set, encryption / decryption operations on request contexts
+ * delegate to the supplied driver vtable instead of the built-in
+ * software implementation.  Passing NULL resets to the default.
+ *
+ * @param server The server instance.
+ * @param driver Pointer to the cipher driver vtable (may be NULL).
+ * @note Thread-safe when called before csilk_server_run(); not intended
+ *       to be swapped at runtime without external synchronisation. */
 void
 csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver)
 {
@@ -2250,6 +2301,22 @@ csilk_server_run(csilk_server_t* server, int port)
 
 /* --- TLS Helper Implementations --- */
 
+/** @brief OpenSSL ALPN selection callback.
+ *
+ * Negotiates the application-layer protocol during a TLS handshake.
+ * Currently advertises both HTTP/2 ("h2") and HTTP/1.1 ("http/1.1")
+ * and lets the client decide via SSL_select_next_proto().  The
+ * advertised list order gives preference to h2 for future-proofing;
+ * at present the server fully supports only HTTP/1.1.
+ *
+ * @param ssl    The SSL session (unused).
+ * @param out    On success, set to point at the selected protocol string.
+ * @param outlen On success, set to the length of the selected protocol.
+ * @param in     Client-offered protocols (TLV format).
+ * @param inlen  Length of the client-offered list.
+ * @param arg    User-supplied argument (unused).
+ * @return SSL_TLSEXT_ERR_OK on successful negotiation,
+ *         SSL_TLSEXT_ERR_NOACK if no common protocol was found. */
 static int
 alpn_select_cb(SSL* ssl,
 	       const unsigned char** out,
@@ -2519,6 +2586,13 @@ csilk_server_get_mq(csilk_server_t* server)
 	return server ? server->mq : NULL;
 }
 
+/** @brief Get the server's radix-tree router.
+ *
+ * The router is created automatically during csilk_server_new().  It can
+ * be used to register routes and middleware before the server is started.
+ *
+ * @param server The server instance.
+ * @return Pointer to the router, or NULL if server is NULL. */
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {

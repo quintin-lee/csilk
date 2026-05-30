@@ -1,46 +1,51 @@
-# HTTP/2 Integration Pre-study
+# HTTP/2 Integration — Implementation Status
+
+> **Status**: Phase 1 (Session scaffolding) and Phase 2 (Request dispatch and response) complete.  
+> **Version**: v0.2.5+ | **Last updated**: 2026-05-30
 
 ## 1. Overview
-HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compression (HPACK). Integrating HTTP/2 into `csilk` requires significant changes to the current connection model.
+HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compression (HPACK). The csilk framework has integrated `nghttp2` for frame parsing and generation.
 
-## 2. Key Challenges
+## 2. Implementation Status
 
-### 2.1 Binary Framing & Multiplexing
-- **Current Model**: One TCP connection = One HTTP/1.1 request/response cycle (or sequential keep-alive).
-- **HTTP/2 Model**: One TCP connection = Multiple concurrent bidirectional streams.
-- **Impact**: `csilk_client_t` must be decoupled from `csilk_ctx_t`. A single client will own multiple contexts, one per stream.
+### Phase 1 — Session Scaffolding ✅
+- **ALPN negotiation**: `src/core/server.c` configures OpenSSL ALPN to offer `h2` and `http/1.1`. After TLS handshake, `alpn_select_cb` detects the negotiated protocol and sets `client->protocol`.
+- **nghttp2 session**: `csilk_h2_init_session()` creates an nghttp2 session in server mode, registers callbacks (`on_header`, `on_frame_recv`, `on_data_chunk_recv`, `on_stream_close`, `send_callback`), and configures standard HTTP/2 settings (max concurrent streams, initial window size).
+- **Data routing**: After ALPN negotiation, `process_tls_read()` routes decrypted data to `csilk_h2_process_data()` for HTTP/2 connections, or to `llhttp` for HTTP/1.1.
+- **`csilk_h2.h` public API**: Exposes `csilk_h2_init_session`, `csilk_h2_process_data`, `csilk_h2_get_or_create_stream`, `csilk_h2_free_streams`.
 
-### 2.2 Protocol Negotiation (ALPN)
-- HTTP/2 over TLS requires ALPN.
-- **Impact**: `src/core/server.c` needs to configure ALPN via OpenSSL and detect the protocol after handshake.
+### Phase 2 — Request Dispatch and Response ✅
+- **Unified dispatch**: Extracted `_csilk_dispatch_request()` from the HTTP/1.1 `on_message_complete` handler. Both protocols now share the same routing, middleware chain, and hook-triggering logic.
+- **Header parsing** (`on_header_callback`): Parses `:method`, `:path` pseudo-headers and regular headers into arena-backed `csilk_request_t` fields (method, path, query_params, headers).
+- **Frame completion** (`on_frame_recv_callback`): When `NGHTTP2_FLAG_END_STREAM` is set on HEADERS or DATA frames, the request is dispatched via `_csilk_dispatch_request()`.
+- **Body accumulation** (`on_data_chunk_recv_callback`): Incoming DATA frame payloads are concatenated into `c->request.body` (heap-reallocated, up to `max_body_size`).
+- **Stream cleanup** (`on_stream_close_callback`): Removes the stream context from the linked list, calls `csilk_ctx_cleanup()`, frees the arena, and releases the context struct.
+- **Response sending** (`csilk_h2_send_response`): Builds an nghttp2 HEADERS frame with `:status` pseudo-header and response headers, then sends body DATA frames via a `nghttp2_data_provider` callback (`body_read_callback`).
 
-### 2.3 Frame Parsing
-- `llhttp` does not support HTTP/2.
-- **Recommendation**: Integrate `nghttp2` library. It provides a state-of-the-art H2 frame parser and generator.
+### Remaining Work (Future Phases)
+- **Flow control**: Window update management for stream/connection-level flow control.
+- **Stream priority**: Dependency tree scheduling.
+- **Server push**: `PUSH_PROMISE` frame support.
+- **HPACK dynamic table**: nghttp2 handles this internally, but tuning table sizes may improve compression.
+- **Connection prefaces and SETTINGS**: Currently using nghttp2 defaults — may need customisation.
 
-### 2.4 Header Compression (HPACK)
-- HPACK is complex to implement from scratch.
-- **Recommendation**: Use `nghttp2`'s built-in HPACK support.
-
-## 3. Proposed Architecture
+## 3. Architecture
 
 ### 3.1 Connection Dispatcher
 A new layer between `on_read` and the request handler:
-- If ALPN = `h2`, route data to H2 frame parser.
+- If ALPN = `h2`, route data to `csilk_h2_process_data()` (nghttp2 frame parser).
 - If ALPN = `http/1.1` or no ALPN, route to `llhttp`.
 
 ### 3.2 Stream Mapping
-- Each H2 stream ID will be mapped to a `csilk_ctx_t`.
-- `csilk_ctx_t` needs to support writing frames back to the shared TCP socket with the correct stream ID.
+- Each H2 stream ID is mapped to a `csilk_ctx_t` via `csilk_h2_get_or_create_stream()`.
+- Stream contexts are stored in a singly-linked list on `csilk_client_t::h2_streams`.
+- Multiple streams can be active concurrently on one TCP connection.
 
-### 3.3 Flow Control & Priority
-- Implementation of H2 window updates and stream priorities.
+## 4. Dependencies
+- **nghttp2** (v1.52+): Frame parsing, HPACK, session management.
+- **OpenSSL**: TLS 1.3 with ALPN extension.
 
-## 4. Integration Cost Assessment
-- **Complexity**: High. Requires refactoring the client/context relationship.
-- **Dependencies**: New dependency on `nghttp2`.
-- **Performance**: Significant improvement for high-latency connections and multiplexed assets.
-- **Estimate**: 3-4 man-weeks for a stable implementation.
-
-## 5. Conclusion
-HTTP/2 is highly desirable for modern web performance. The recommended path is integrating `nghttp2` and refactoring `csilk_server_t` to handle multiple contexts per client.
+## 5. Performance Notes
+- nghttp2 handles HPACK internally with a dynamic table; no manual header compression needed.
+- Stream contexts use the same arena allocator model as HTTP/1.1 contexts for zero-fragmentation memory management.
+- The unified `_csilk_dispatch_request` ensures both protocols share the same optimised radix-tree router and middleware chain.
