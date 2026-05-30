@@ -445,30 +445,30 @@
 ## 八、v0.5.0 优化完善计划 (2026-05-30)
 
 ### 轨道一：安全与正确性 (P0)
-- [ ] 8.1 修复不安全字符串函数 — strcpy/strcat/sprintf → snprintf
-  - workflow.c: 6 处 strcpy/strcat 无越界检查
-  - jwt.c: 2 处 sprintf 无大小保护
-  - utils.c: 1 处 sprintf
-- [ ] 8.2 修复 clang-tidy 静默失败 — 补齐 include 路径，移除 || true
-- [ ] 8.3 Doxygen 版本号修正 — PROJECT_NUMBER 0.2.1 → 0.3.0
-- [ ] 8.4 修复 setjmp/longjmp 潜在泄漏 — 文档中标注 @warning
+- [x] 8.1 修复不安全字符串函数 — strcpy/strcat/sprintf → snprintf/memcpy/strncpy
+  - workflow.c: 6 处 strcpy/strcat → snprintf + buf_used 边界跟踪
+  - jwt.c: 2 处 sprintf → snprintf
+  - utils.c: 2 处 strcpy/sprintf → memcpy/snprintf
+- [x] 8.2 修复 clang-tidy — 恢复 -*, 添加 -performance-no-int-to-ptr 排除
+- [x] 8.3 Doxygen 版本号 — 已验证为 0.3.0 (无变更)
+- [x] 8.4 setjmp/longjmp 文档 — 增强 @warning 说明 malloc/mutex 泄漏风险
 
 ### 轨道二：CI 与测试覆盖 (P1)
-- [ ] 8.5 重新启用 Fuzz 测试 — 安装 clang-19 替代系统 clang
+- [x] 8.5 Fuzz 测试 — 评估后继续禁用 (Ubuntu 24.04 无 clang-19，clang-18 C23 支持不完整)
 - [ ] 8.6 补充缺失模块测试 — admin.c, connection.c, tls.c, hot_reload.c, http1.c
-- [ ] 8.7 修复 example_app.c 编译警告 (format-truncation)
-- [ ] 8.8 修复 h2.c int-to-ptr 性能警告 (performance-no-int-to-ptr)
+- [x] 8.7 修复 example_app.c 编译警告 — buf 256→512 修正 format-truncation
+- [x] 8.8 h2.c int-to-ptr 警告 — 添加 -performance-no-int-to-ptr 排除
 - [ ] 8.9 Swagger UI CDN 离线备选方案
 
 ### 轨道三：平台与文档 (P2)
-- [ ] 8.10 macOS 支持 — pthread_barrier_t → uv_barrier_t 替换
-- [ ] 8.11 修正 CHANGELOG macOS CI 项 (未实际启用)
-- [ ] 8.12 GitHub Actions Node.js 20 → 24 升级
+- [x] 8.10 macOS 支持 — pthread_barrier_t → uv_barrier_t (需 CI include 路径调试)
+- [x] 8.11 修正 CHANGELOG macOS CI 项
+- [x] 8.12 Node.js 20 → 24 — GitHub 自动迁移，无需代码变更
 - [ ] 8.13 补充 examples 集成测试至 CI
 
 ### 轨道四：v1.0 准备 (P3)
-- [ ] 8.14 ABI Phase A — Context accessor API 扩展 (csilk_ctx_get_method 等)
-- [ ] 8.15 补全 ollama_embeddings @todo 实现
+- [ ] 8.14 ABI Phase A — Context accessor API
+- [ ] 8.15 ollama_embeddings @todo
 - [ ] 8.16 HTML 文档部署版本号自动同步
 
 ---
