@@ -312,7 +312,7 @@ csilk_h2_send_response(csilk_ctx_t* c)
 	}
 
 	nghttp2_data_provider prd;
-	nghttp2_data_provider* p_prd = NULL;
+	nghttp2_data_provider* p_prd = nullptr;
 
 	if (c->response.body_len > 0) {
 		prd.source.ptr = c;
@@ -411,7 +411,7 @@ send_callback(
  *
  * @param client    The client connection owning the stream list.
  * @param stream_id The HTTP/2 stream identifier to look up or create.
- * @return Pointer to the csilk_ctx_t for the given stream, or NULL if memory
+ * @return Pointer to the csilk_ctx_t for the given stream, or nullptr if memory
  *         allocation failed.
  *
  * @note The returned context is owned by the client's stream list and will
@@ -431,7 +431,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 	/* Create new context for stream */
 	csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
 	if (!ctx) {
-		return NULL;
+		return nullptr;
 	}
 
 	_csilk_ctx_init(ctx, client->server, client);
@@ -451,7 +451,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
  * Public API: iterates the client's h2_streams linked list and deallocates
  * every csilk_ctx_t in it. Each context is cleaned up via
  * csilk_ctx_cleanup(), its arena allocator is freed, and the struct itself
- * is freed. The stream list is set to NULL after draining.
+ * is freed. The stream list is set to nullptr after draining.
  *
  * Typically called during client disconnection to release all remaining
  * stream resources that were not yet closed via on_stream_close_callback.
@@ -475,7 +475,7 @@ csilk_h2_free_streams(csilk_client_t* client)
 		free(curr);
 		curr = next;
 	}
-	client->h2_streams = NULL;
+	client->h2_streams = nullptr;
 }
 
 /** @brief Initialize an HTTP/2 server session for a client connection.

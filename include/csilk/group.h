@@ -22,7 +22,7 @@
  *
  * @param router The router to attach the group to.
  * @param prefix URL prefix for all routes in this group (e.g., "/api/v1").
- * @return A new csilk_group_t instance, or NULL on allocation failure.
+ * @return A new csilk_group_t instance, or nullptr on allocation failure.
  */
 csilk_group_t* csilk_group_new(csilk_router_t* router, const char* prefix);
 
@@ -34,7 +34,7 @@ csilk_group_t* csilk_group_new(csilk_router_t* router, const char* prefix);
  *
  * @param parent The parent group.
  * @param prefix Sub-prefix appended to the parent's prefix (e.g., "admin").
- * @return A new sub-group instance, or NULL on allocation failure.
+ * @return A new sub-group instance, or nullptr on allocation failure.
  */
 csilk_group_t* csilk_group_group(csilk_group_t* parent, const char* prefix);
 
@@ -75,12 +75,12 @@ void csilk_group_add_route(csilk_group_t* group,
  * @param method      HTTP method.
  * @param path        Path relative to the group prefix.
  * @param handler     The route handler function.
- * @param input_type  Registered type name for request-body binding (NULL if
+ * @param input_type  Registered type name for request-body binding (nullptr if
  * none).
- * @param output_type Registered type name for response serialisation (NULL if
+ * @param output_type Registered type name for response serialisation (nullptr if
  * none).
- * @param summary     Short operation summary for OpenAPI (NULL to omit).
- * @param description Detailed operation description for OpenAPI (NULL to omit).
+ * @param summary     Short operation summary for OpenAPI (nullptr to omit).
+ * @param description Detailed operation description for OpenAPI (nullptr to omit).
  */
 void csilk_group_add_route_extended(csilk_group_t* group,
 				    const char* method,
@@ -128,7 +128,7 @@ void csilk_group_add_handlers(csilk_group_t* group,
  * Frees the group struct and its prefix string.  Does NOT free the
  * associated router or any handler functions.
  *
- * @param group The group to free.  Must not be NULL.
+ * @param group The group to free.  Must not be nullptr.
  */
 void csilk_group_free(csilk_group_t* group);
 

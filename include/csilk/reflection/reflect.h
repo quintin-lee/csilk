@@ -56,7 +56,7 @@ typedef struct csilk_field_desc_s csilk_field_desc_t;
  *
  * Each field in a registered struct produces one of these descriptors,
  * typically via the CSILK_META_EXPAND macro.  The array of descriptors
- * is NULL-terminated (sentinel entry with all-zero fields).
+ * is nullptr-terminated (sentinel entry with all-zero fields).
  *
  * During marshalling, the engine walks the field descriptor array, reads
  * @p offset bytes from the struct base, and converts the value according
@@ -80,7 +80,7 @@ struct csilk_field_desc_s {
 	const char* nested_type_name; /**< For CSILK_TYPE_STRUCT fields, the registered type
                            name of the nested struct (resolved lazily at
                            marshalling time to support forward declarations).
-                           NULL for non-struct fields. */
+                           nullptr for non-struct fields. */
 };
 
 /**
@@ -91,7 +91,7 @@ struct csilk_field_desc_s {
  */
 typedef struct {
 	const char* name;		  /**< Unique type name string (e.g., "User", "Config"). */
-	const csilk_field_desc_t* fields; /**< NULL-terminated array of field descriptors. */
+	const csilk_field_desc_t* fields; /**< nullptr-terminated array of field descriptors. */
 	size_t count; /**< Number of valid field descriptors (excluding sentinel). */
 } csilk_reflect_entry_t;
 
@@ -111,9 +111,9 @@ void csilk_reflect_init(void);
  *
  * @param name    Type name string (must remain valid for the lifetime of
  *                the program — typically a string literal).
- * @param fields  NULL-terminated array of csilk_field_desc_t.
+ * @param fields  nullptr-terminated array of csilk_field_desc_t.
  * @param count   Number of valid entries in @p fields (excluding the
- *                NULL-sentinel terminator).
+ *                nullptr-sentinel terminator).
  */
 void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, size_t count);
 
@@ -121,7 +121,7 @@ void csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, 
  * @brief Look up a registered type by name.
  *
  * @param name  Type name string.
- * @return Pointer to the csilk_reflect_entry_t, or NULL if @p name has not
+ * @return Pointer to the csilk_reflect_entry_t, or nullptr if @p name has not
  *         been registered.
  */
 const csilk_reflect_entry_t* csilk_reflect_find(const char* name);
@@ -147,7 +147,7 @@ typedef void (*csilk_reflect_foreach_cb)(const char* name,
  * via GCC constructor functions that run before main().
  *
  * @param cb        Callback invoked for each registered type (must not be
- * NULL).
+ * nullptr).
  * @param user_data Opaque pointer forwarded to every @p cb invocation.
  */
 void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data);
@@ -161,7 +161,7 @@ void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data);
  * @param type_name  Registered type name of the struct.
  * @param ptr        Pointer to the struct instance to serialise.
  * @return A heap-allocated NUL-terminated JSON string (caller must free
- *         with free()), or NULL on error.
+ *         with free()), or nullptr on error.
  */
 char* csilk_json_marshal(const char* type_name, const void* ptr);
 
@@ -233,7 +233,7 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
  * Automatically deduces the type name via csilk_type_name(*(ptr)).
  *
  * @param ptr  Pointer to a registered struct instance.
- * @return A heap-allocated JSON string (caller must free), or NULL on error.
+ * @return A heap-allocated JSON string (caller must free), or nullptr on error.
  */
 #define csilk_marshal(ptr) csilk_json_marshal(csilk_type_name(*(ptr)), ptr)
 
@@ -284,8 +284,8 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
  *
  *   // Map its fields (one _() invocation per field)
  *   #define USER_MAP(_) \
- *       _(User, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL) \
- *       _(User, name, CSILK_TYPE_STRING, sizeof(char*), 0, true, NULL)
+ *       _(User, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr) \
+ *       _(User, name, CSILK_TYPE_STRING, sizeof(char*), 0, true, nullptr)
  *
  *   // Auto-register (this macro invocation must appear at file scope)
  *   CSILK_REGISTER_REFLECT(User, USER_MAP)
@@ -301,7 +301,7 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
  */
 #define CSILK_REGISTER_REFLECT(struct_type, map_macro)                                             \
 	static csilk_field_desc_t struct_type##_meta[] = {                                         \
-	    map_macro(CSILK_META_EXPAND){NULL, 0, 0, 0, 0, false, NULL}};                          \
+	    map_macro(CSILK_META_EXPAND){nullptr, 0, 0, 0, 0, false, nullptr}};                    \
 	static void __attribute__((constructor)) auto_reg_##struct_type(void)                      \
 	{                                                                                          \
 		size_t count = (sizeof(struct_type##_meta) / sizeof(csilk_field_desc_t)) - 1;      \

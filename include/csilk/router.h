@@ -33,7 +33,7 @@ typedef struct csilk_router_s {
  *
  * Allocates and initialises the router structure with a single root node.
  *
- * @return A pointer to the new router (heap-allocated), or NULL on allocation
+ * @return A pointer to the new router (heap-allocated), or nullptr on allocation
  *         failure.
  */
 csilk_router_t* csilk_router_new(void);
@@ -68,7 +68,7 @@ void csilk_router_add(csilk_router_t* r,
  * @param r      Router instance.
  * @param method HTTP method string.
  * @param path   Decoded URL path.
- * @return Pointer to the handler array for the matched route, or NULL if
+ * @return Pointer to the handler array for the matched route, or nullptr if
  *         no route matches.
  */
 csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method, const char* path);
@@ -91,7 +91,7 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c);
  * Frees the radix tree nodes and any associated copy of route metadata
  * (OpenAPI annotations).
  *
- * @param r  Router instance to free.  Must not be NULL.
+ * @param r  Router instance to free.  Must not be nullptr.
  */
 void csilk_router_free(csilk_router_t* r);
 
@@ -103,7 +103,7 @@ void csilk_router_free(csilk_router_t* r);
  * "description" fields.
  *
  * @param r  Router instance.
- * @return A cJSON array (caller must free with cJSON_Delete), or NULL on
+ * @return A cJSON array (caller must free with cJSON_Delete), or nullptr on
  *         allocation failure.
  */
 cJSON* csilk_router_collect_routes(csilk_router_t* r);
@@ -118,7 +118,7 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r);
  * @param router      The router instance.
  * @param title       API title for the OpenAPI info block.
  * @param version     API version for the OpenAPI info block.
- * @param description API description (optional — pass NULL to omit).
+ * @param description API description (optional — pass nullptr to omit).
  * @return A cJSON object representing the full OpenAPI spec.  Caller must
  *         free with cJSON_Delete.
  */
@@ -141,11 +141,11 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router,
  * @param path_pattern  Canonical path pattern string for documentation
  *                      (may differ from the radix-tree path).
  * @param input_type    Registered type name for request-body binding
- *                      (NULL if there is no request body).
+ *                      (nullptr if there is no request body).
  * @param output_type   Registered type name for response serialisation
- *                      (NULL if raw response is used).
- * @param summary       Short summary of the operation (NULL to omit from spec).
- * @param description   Detailed description of the operation (NULL to omit).
+ *                      (nullptr if raw response is used).
+ * @param summary       Short summary of the operation (nullptr to omit from spec).
+ * @param description   Detailed description of the operation (nullptr to omit).
  */
 void csilk_router_add_extended(csilk_router_t* r,
 			       const char* method,
@@ -164,8 +164,8 @@ void csilk_router_add_extended(csilk_router_t* r,
  *  @param path          URL pattern.
  *  @param handlers      Handler function array.
  *  @param handler_count Number of handlers.
- *  @param perm_required Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void csilk_router_add_perm(csilk_router_t* r,
 			   const char* method,
 			   const char* path,
@@ -181,12 +181,12 @@ void csilk_router_add_perm(csilk_router_t* r,
  *  @param handlers      Handler function array.
  *  @param handler_count Number of handlers.
  *  @param path_pattern  Canonical path pattern for docs.
- *  @param input_type    Registered type name for request-body (NULL if none).
- *  @param output_type   Registered type name for response (NULL if none).
- *  @param summary       Short operation summary (NULL to omit).
- *  @param description   Detailed description (NULL to omit).
- *  @param perm_required Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ *  @param input_type    Registered type name for request-body (nullptr if none).
+ *  @param output_type   Registered type name for response (nullptr if none).
+ *  @param summary       Short operation summary (nullptr to omit).
+ *  @param description   Detailed description (nullptr to omit).
+ *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void csilk_router_add_extended_perm(csilk_router_t* r,
 				    const char* method,
 				    const char* path,
@@ -234,7 +234,7 @@ void csilk_router_add_extended_perm(csilk_router_t* r,
  * @param r           The router instance whose routes will be documented.
  * @param title       API title.
  * @param version     API version.
- * @param description API description (optional, pass NULL to omit).
+ * @param description API description (optional, pass nullptr to omit).
  */
 void csilk_serve_openapi(csilk_ctx_t* c,
 			 csilk_router_t* r,

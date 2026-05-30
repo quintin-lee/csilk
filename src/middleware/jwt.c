@@ -29,11 +29,11 @@ static const char* JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
  * base64url-encoded per RFC 4648 §5.
  *
  * @param c       The request context (used for HMAC operations).
- * @param payload A cJSON object containing the claims. Must not be NULL.
- * @param secret  The HMAC-SHA256 signing secret. Must not be NULL.
+ * @param payload A cJSON object containing the claims. Must not be nullptr.
+ * @param secret  The HMAC-SHA256 signing secret. Must not be nullptr.
  *
  * @return A newly allocated, null-terminated JWT string in the format
- *         `header.payload.signature`, or NULL on allocation failure or
+ *         `header.payload.signature`, or nullptr on allocation failure or
  *         invalid arguments.
  *
  * @note The caller is responsible for freeing the returned string with
@@ -45,12 +45,12 @@ char*
 csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 {
 	if (!payload || !secret) {
-		return NULL;
+		return nullptr;
 	}
 
-	char* header_b64 = NULL;
-	char* payload_b64 = NULL;
-	char* token = NULL;
+	char* header_b64 = nullptr;
+	char* payload_b64 = nullptr;
+	char* token = nullptr;
 
 	/* Step 1: Base64url-encode the fixed JWT header.
      The header declares HS256 algorithm and JWT type per RFC 7519 §5. */
@@ -58,7 +58,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	size_t h_b64_len = ((h_len + 2) / 3) * 4 + 1;
 	header_b64 = malloc(h_b64_len);
 	if (!header_b64) {
-		return NULL;
+		return nullptr;
 	}
 	csilk_base64url_encode((const uint8_t*)JWT_HEADER, h_len, header_b64);
 
@@ -67,7 +67,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	char* payload_str = cJSON_PrintUnformatted(payload);
 	if (!payload_str) {
 		free(header_b64);
-		return NULL;
+		return nullptr;
 	}
 	size_t p_len = strlen(payload_str);
 	size_t p_b64_len = ((p_len + 2) / 3) * 4 + 1;
@@ -75,7 +75,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	if (!payload_b64) {
 		free(header_b64);
 		free(payload_str);
-		return NULL;
+		return nullptr;
 	}
 	csilk_base64url_encode((const uint8_t*)payload_str, p_len, payload_b64);
 	free(payload_str);
@@ -87,7 +87,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	if (!sign_input) {
 		free(header_b64);
 		free(payload_b64);
-		return NULL;
+		return nullptr;
 	}
 	sprintf(sign_input, "%s.%s", header_b64, payload_b64);
 
@@ -131,7 +131,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
  * @param secret The HMAC-SHA256 verification secret.
  *
  * @return A newly allocated cJSON object representing the payload claims,
- *         or NULL if the token is malformed, the signature is invalid, or
+ *         or nullptr if the token is malformed, the signature is invalid, or
  *         memory allocation fails.
  *
  * @note The caller owns the returned cJSON object and must free it with
@@ -144,18 +144,18 @@ cJSON*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 {
 	if (!token || !secret) {
-		return NULL;
+		return nullptr;
 	}
 
 	/* Locate the two dots that separate header, payload, and signature.
      JWT format: base64url(header).base64url(payload).base64url(signature) */
 	const char* dot1 = strchr(token, '.');
 	if (!dot1) {
-		return NULL;
+		return nullptr;
 	}
 	const char* dot2 = strchr(dot1 + 1, '.');
 	if (!dot2) {
-		return NULL;
+		return nullptr;
 	}
 
 	size_t header_len = (size_t)(dot1 - token);
@@ -180,14 +180,14 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
 
 	if (strcmp(sig_ptr, sig_expected_b64) != 0) {
-		return NULL; /* Signature mismatch — token has been tampered with. */
+		return nullptr; /* Signature mismatch — token has been tampered with. */
 	}
 
 	/* Step 2: Base64url-decode the payload and parse it as JSON.
      The decoded JSON string is parsed with cJSON_Parse. */
 	char* p_b64 = malloc(payload_len + 1);
 	if (!p_b64) {
-		return NULL;
+		return nullptr;
 	}
 	memcpy(p_b64, dot1 + 1, payload_len);
 	p_b64[payload_len] = '\0';
@@ -195,14 +195,14 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	uint8_t* p_json_str = malloc(payload_len + 1);
 	if (!p_json_str) {
 		free(p_b64);
-		return NULL;
+		return nullptr;
 	}
 	int p_decoded_len = csilk_base64url_decode(p_b64, p_json_str);
 	free(p_b64);
 
 	if (p_decoded_len < 0) {
 		free(p_json_str);
-		return NULL;
+		return nullptr;
 	}
 	p_json_str[p_decoded_len] = '\0';
 
@@ -256,7 +256,7 @@ csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 	// Check expiration if 'exp' claim exists
 	cJSON* exp = cJSON_GetObjectItemCaseSensitive(payload, "exp");
 	if (cJSON_IsNumber(exp)) {
-		if ((double)time(NULL) > exp->valuedouble) {
+		if ((double)time(nullptr) > exp->valuedouble) {
 			cJSON_Delete(payload);
 			csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Token expired");
 			csilk_abort(c);

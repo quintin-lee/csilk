@@ -49,7 +49,7 @@ csilk_csrf_middleware(csilk_ctx_t* c)
 			char token_buf[33];
 			if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
 				csilk_set_cookie(
-				    c, "csrf_token", token_buf, 86400, "/", NULL, 0, 1);
+				    c, "csrf_token", token_buf, 86400, "/", nullptr, 0, 1);
 			}
 		}
 		csilk_next(c);
@@ -90,7 +90,7 @@ csilk_csrf_middleware(csilk_ctx_t* c)
  * @param buf      Output buffer to receive the null-terminated hex token.
  * @param buf_size Size of the output buffer. Must be at least 33 bytes.
  *
- * @return 0 on success, -1 if buf is NULL, buf_size < 33, or fread fails.
+ * @return 0 on success, -1 if buf is nullptr, buf_size < 33, or fread fails.
  *
  * @warning The fallback path uses rand_r() which is NOT cryptographically
  *          secure. Production deployments should always ensure /dev/urandom
@@ -107,7 +107,7 @@ csilk_csrf_generate_token(char* buf, size_t buf_size)
 	FILE* fp = fopen("/dev/urandom", "rb");
 	if (!fp) {
 		/* fallback: use time+pid as weak entropy (better than nothing) */
-		unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid();
+		unsigned int seed = (unsigned int)time(nullptr) ^ (unsigned int)getpid();
 		snprintf(buf,
 			 buf_size,
 			 "%08x%08x%08x%08x",

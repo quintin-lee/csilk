@@ -74,13 +74,13 @@ typedef struct csilk_log_entry_s {
 } csilk_log_entry_t;
 
 #define LOG_ENTRY_MAP(X)                                                                           \
-	X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64, sizeof(int64_t), 0, false, NULL)        \
-	X(csilk_log_entry_t, level, CSILK_TYPE_STRING, 8, 0, false, NULL)                          \
-	X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, 37, 0, false, NULL)                    \
-	X(csilk_log_entry_t, file, CSILK_TYPE_STRING, 64, 0, false, NULL)                          \
-	X(csilk_log_entry_t, line, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)              \
-	X(csilk_log_entry_t, func, CSILK_TYPE_STRING, 64, 0, false, NULL)                          \
-	X(csilk_log_entry_t, msg, CSILK_TYPE_STRING, 1024, 0, false, NULL)
+	X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64, sizeof(int64_t), 0, false, nullptr)     \
+	X(csilk_log_entry_t, level, CSILK_TYPE_STRING, 8, 0, false, nullptr)                       \
+	X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, 37, 0, false, nullptr)                 \
+	X(csilk_log_entry_t, file, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
+	X(csilk_log_entry_t, line, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)           \
+	X(csilk_log_entry_t, func, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
+	X(csilk_log_entry_t, msg, CSILK_TYPE_STRING, 1024, 0, false, nullptr)
 
 CSILK_REGISTER_REFLECT(csilk_log_entry_t, LOG_ENTRY_MAP)
 
@@ -96,7 +96,7 @@ typedef struct {
 	int initialized;	   /**< Whether logger is initialized. */
 } csilk_logger_t;
 
-static csilk_logger_t g_logger = {{0}, NULL, 0, {0}, 0};
+static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
 
 static _Thread_local char tl_request_id[37] = {0};
 
@@ -156,7 +156,7 @@ log_text(csilk_log_level_t lv,
 	fn = fn ? fn + 1 : file;
 
 	char ts[32];
-	time_t now = time(NULL);
+	time_t now = time(nullptr);
 	struct tm tm;
 	localtime_r(&now, &tm);
 	strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm);
@@ -201,7 +201,7 @@ log_text(csilk_log_level_t lv,
  * @param func    Function name.
  * @param msg     Log message content.
  * @param msg_len Message length (may truncate to fit the entry struct).
- * @return cJSON object ready for merging extra fields, or NULL on failure.
+ * @return cJSON object ready for merging extra fields, or nullptr on failure.
  * @note The returned cJSON must be freed by the caller with cJSON_Delete(). */
 static cJSON*
 build_json_entry(csilk_log_level_t lv,
@@ -216,7 +216,7 @@ build_json_entry(csilk_log_level_t lv,
 
 	csilk_log_entry_t entry;
 	memset(&entry, 0, sizeof(entry));
-	entry.time_epoch = (int64_t)time(NULL);
+	entry.time_epoch = (int64_t)time(nullptr);
 	snprintf(entry.level, sizeof(entry.level), "%s", level_names[lv]);
 	snprintf(entry.request_id, sizeof(entry.request_id), "%s", tl_request_id);
 	snprintf(entry.file, sizeof(entry.file), "%s", fn);
@@ -230,7 +230,7 @@ build_json_entry(csilk_log_level_t lv,
 	}
 
 	char* tmp = csilk_json_marshal("csilk_log_entry_t", &entry);
-	cJSON* result = tmp ? cJSON_Parse(tmp) : NULL;
+	cJSON* result = tmp ? cJSON_Parse(tmp) : nullptr;
 	free(tmp);
 	return result;
 }
@@ -248,7 +248,7 @@ build_json_entry(csilk_log_level_t lv,
  * @param func    Function name.
  * @param extra   Extra cJSON object with additional key-value pairs to merge
  *                into the log entry. Ownership is taken (cJSON_Delete is
- * called). May be NULL.
+ * called). May be nullptr.
  * @param msg     Log message content.
  * @param msg_len Message length.
  * @return Number of bytes written, or 0 on failure. */
@@ -307,7 +307,7 @@ log_json(csilk_log_level_t lv,
  *
  * @param config Logger configuration struct with desired settings.
  * @return 0 on success, -1 if the file could not be opened or mutex init fails.
- * @note If file_path is NULL, output goes to stdout and max_file_size is
+ * @note If file_path is nullptr, output goes to stdout and max_file_size is
  *       effectively ignored (set to 0 internally). */
 int
 csilk_log_init(csilk_log_config_t config)
@@ -383,7 +383,7 @@ _csilk_log_internal(
 		rotate_log_files();
 	}
 
-	int n = g_logger.config.json_format ? log_json(lv, file, line, func, NULL, buf, len)
+	int n = g_logger.config.json_format ? log_json(lv, file, line, func, nullptr, buf, len)
 					    : log_text(lv, file, line, func, buf, len);
 
 	if (g_logger.config.file_path) {
@@ -485,14 +485,14 @@ csilk_log_set_request_id(const char* request_id)
 
 /** @brief Build a key-value cJSON object for structured logging.
  *
- * Helper to create a flat JSON object from a NULL-terminated list of strings.
+ * Helper to create a flat JSON object from a nullptr-terminated list of strings.
  * Used primarily with CSILK_LOG_KV. */
 cJSON*
 csilk_log_make_kv(const char* key, ...)
 {
 	cJSON* obj = cJSON_CreateObject();
 	if (!obj) {
-		return NULL;
+		return nullptr;
 	}
 	va_list args;
 	va_start(args, key);

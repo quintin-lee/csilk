@@ -18,7 +18,7 @@
  * the "X-Request-Id" response header and propagated to the thread-local
  * logger state for distributed tracing correlation.
  *
- * @param c  The request context. If NULL the function returns immediately.
+ * @param c  The request context. If nullptr the function returns immediately.
  *
  * @note Should be registered as the very first middleware in the pipeline
  *       so all downstream handlers and log entries share the same request
@@ -60,7 +60,7 @@ csilk_request_id_middleware(csilk_ctx_t* c)
  * Provides a simple "shallow" check to verify that the server's event loop
  * is alive and responsive. Returns a JSON response with status 200 OK.
  *
- * @param c  The request context. If NULL the function returns immediately.
+ * @param c  The request context. If nullptr the function returns immediately.
  * @note Used by load balancers and orchestrators for Liveness probes.
  */
 void
@@ -86,7 +86,7 @@ csilk_health_check_handler(csilk_ctx_t* c)
  * Returns 200 OK if the server is ready to accept more traffic, or
  * 503 Service Unavailable if any check fails.
  *
- * @param c  The request context. If NULL the function returns immediately.
+ * @param c  The request context. If nullptr the function returns immediately.
  * @note Used by load balancers and orchestrators for Readiness probes to
  *       decide whether to route traffic to this instance.
  */
@@ -98,7 +98,7 @@ csilk_ready_check_handler(csilk_ctx_t* c)
 	}
 
 	int is_healthy = 1;
-	const char* reason = NULL;
+	const char* reason = nullptr;
 
 	/* 1. Check MQ Health */
 	csilk_mq_stats_t mq;

@@ -38,7 +38,7 @@ ollama_init(const char* api_key, const char* base_url)
 	(void)api_key;
 	ollama_state_t* state = malloc(sizeof(ollama_state_t));
 	if (!state) {
-		return NULL;
+		return nullptr;
 	}
 
 	state->base_url = strdup(base_url ? base_url : "http://localhost:11434");
@@ -158,7 +158,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 	char url[512];
 	snprintf(url, sizeof(url), "%s/api/chat", state->base_url);
 
-	struct curl_slist* headers = NULL;
+	struct curl_slist* headers = nullptr;
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 
 	struct curl_response cr = {0};

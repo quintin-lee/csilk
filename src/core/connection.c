@@ -52,7 +52,7 @@ alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
  * client's file_fd is initialized to -1.
  *
  * @param server The server instance.
- * @return A csilk_client_t ready for use, or NULL on allocation failure. */
+ * @return A csilk_client_t ready for use, or nullptr on allocation failure. */
 static csilk_client_t*
 pool_get(csilk_server_t* server)
 {
@@ -83,13 +83,13 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 {
 	if (client->ssl) {
 		SSL_free(client->ssl);
-		client->ssl = NULL;
-		client->read_bio = NULL;
-		client->write_bio = NULL;
+		client->ssl = nullptr;
+		client->read_bio = nullptr;
+		client->write_bio = nullptr;
 	}
 	if (client->h2_session) {
 		nghttp2_session_del(client->h2_session);
-		client->h2_session = NULL;
+		client->h2_session = nullptr;
 	}
 	csilk_h2_free_streams(client);
 	memset(client, 0, sizeof(*client));
@@ -115,7 +115,7 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
 	uv_mutex_lock(&server->clients_mutex);
 	client->next = server->active_clients;
-	client->prev = NULL;
+	client->prev = nullptr;
 	if (server->active_clients) {
 		server->active_clients->prev = client;
 	}
@@ -141,7 +141,7 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 	if (client->next) {
 		client->next->prev = client->prev;
 	}
-	client->next = client->prev = NULL;
+	client->next = client->prev = nullptr;
 }
 
 /** @brief Remove a client from the active list (thread-safe).
@@ -213,7 +213,7 @@ on_close(uv_handle_t* handle)
 	if (client) {
 		_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
 		client_list_remove(client->server, client);
-		client->ctx._internal_client = NULL;
+		client->ctx._internal_client = nullptr;
 		uv_timer_stop(&client->timer);
 		uv_timer_stop(&client->read_timer);
 		uv_timer_stop(&client->write_timer);
@@ -537,13 +537,13 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
  * so it is valid for the duration of the request.
  *
  * @param c The request context.
- * @return A string with the client IP (e.g., "127.0.0.1" or "::1"), or NULL
- *         if the context is NULL or the address cannot be resolved. */
+ * @return A string with the client IP (e.g., "127.0.0.1" or "::1"), or nullptr
+ *         if the context is nullptr or the address cannot be resolved. */
 const char*
 csilk_get_client_ip(csilk_ctx_t* c)
 {
 	if (!c || !c->_internal_client) {
-		return NULL;
+		return nullptr;
 	}
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 	struct sockaddr_storage addr;
@@ -557,5 +557,5 @@ csilk_get_client_ip(csilk_ctx_t* c)
 		}
 		return csilk_arena_strdup(c->arena, ip);
 	}
-	return NULL;
+	return nullptr;
 }

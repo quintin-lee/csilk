@@ -179,7 +179,7 @@ void csilk_static(csilk_ctx_t* c, const char* root_dir);
  * HTTP status code counters.  Should be added early in the middleware chain.
  *
  * @param c   The request context.
- * @param arg Optional config string (currently unused, pass NULL).
+ * @param arg Optional config string (currently unused, pass nullptr).
  */
 void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
 
@@ -215,9 +215,9 @@ void csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler);
  * fails validation.
  *
  * @param c     The request context.
- * @param rules NULL-terminated array of csilk_valid_rule_t.  The array must
- *              end with an entry whose field field is NULL.
- * @return NULL if all rules pass, or a pointer to the failing @p field name
+ * @param rules nullptr-terminated array of csilk_valid_rule_t.  The array must
+ *              end with an entry whose field field is nullptr.
+ * @return nullptr if all rules pass, or a pointer to the failing @p field name
  *         (the returned pointer points into the rule array, not into the
  * context).
  */
@@ -255,7 +255,7 @@ void csilk_session_set(csilk_ctx_t* c, const char* key, void* value);
  *
  * @param c   The request context.
  * @param key Key name.
- * @return The value previously stored with csilk_session_set, or NULL if
+ * @return The value previously stored with csilk_session_set, or nullptr if
  *         not found.
  */
 void* csilk_session_get(csilk_ctx_t* c, const char* key);
@@ -297,7 +297,7 @@ int csilk_csrf_generate_token(char* buf, size_t buf_size);
  * @param payload cJSON object containing JWT claims (e.g., {"sub":"123"}).
  *                Not modified; ownership stays with caller.
  * @param secret  Secret key string for HMAC signing.
- * @return A heap-allocated JWT string (caller must free), or NULL on failure.
+ * @return A heap-allocated JWT string (caller must free), or nullptr on failure.
  */
 char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
 
@@ -310,7 +310,7 @@ char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
  * @param c      Request context (for crypto-driver access).
  * @param token  The JWT string to verify.
  * @param secret Secret key for HMAC verification.
- * @return A heap-allocated cJSON object with the payload claims, or NULL if
+ * @return A heap-allocated cJSON object with the payload claims, or nullptr if
  *         the token is invalid or expired.  Caller must free with cJSON_Delete.
  */
 cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);

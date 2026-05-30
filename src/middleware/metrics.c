@@ -107,7 +107,7 @@ metrics_hash(const char* method, const char* route, int status)
  * @param method The HTTP method.
  * @param route  The route pattern.
  * @param status The status code.
- * @return Pointer to the metric slot, or NULL if the table is saturated.
+ * @return Pointer to the metric slot, or nullptr if the table is saturated.
  */
 static csilk_route_metric_t*
 get_metric_slot(const char* method, const char* route, int status)
@@ -135,7 +135,7 @@ get_metric_slot(const char* method, const char* route, int status)
 			return slot;
 		}
 	}
-	return NULL; /* Table is full; telemetry for this combo will be dropped. */
+	return nullptr; /* Table is full; telemetry for this combo will be dropped. */
 }
 
 /* --- Public API: Statistics Collection --- */
@@ -256,7 +256,7 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	int n = vsnprintf(NULL, 0, fmt, args);
+	int n = vsnprintf(nullptr, 0, fmt, args);
 	va_end(args);
 
 	if (n < 0) {
@@ -291,7 +291,7 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
 void
 csilk_metrics_handler(csilk_ctx_t* c)
 {
-	char* buf = NULL;
+	char* buf = nullptr;
 	size_t size = 0, offset = 0;
 
 	/* --- Part 1: Aggregated HTTP Metrics (Compatibility) --- */

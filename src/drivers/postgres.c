@@ -8,7 +8,7 @@
  *   - DSN is passed directly to PQconnectdb in standard PostgreSQL
  *     key=value format (e.g., "host=... port=... dbname=...").
  *   - Queries use PQexec (synchronous, full result buffering).
- *   - NULL SQL values are detected via PQgetisnull and stored as NULL
+ *   - nullptr SQL values are detected via PQgetisnull and stored as nullptr
  *     pointers in the result row.
  *   - Transactions use raw SQL sentinel strings (BEGIN/COMMIT/ROLLBACK).
  *
@@ -80,7 +80,7 @@ postgres_disconnect(csilk_db_pool_t* pool)
 		PQfinish(conn->db);
 	}
 	free(conn);
-	pool->connection = NULL;
+	pool->connection = nullptr;
 	return 0;
 }
 
@@ -110,8 +110,8 @@ postgres_free_result(csilk_db_result_t* result)
 		free(result->column_names[i]);
 	}
 	free(result->column_names);
-	result->rows = NULL;
-	result->column_names = NULL;
+	result->rows = nullptr;
+	result->column_names = nullptr;
 	result->row_count = 0;
 	result->column_count = 0;
 }
@@ -127,7 +127,7 @@ postgres_free_result(csilk_db_result_t* result)
  *   4. Iterate rows with PQgetvalue, using PQgetisnull to detect SQL NULLs.
  *   5. On any allocation failure, partial results are freed immediately.
  *
- * @note NULL SQL values are stored as NULL pointers in the row's values
+ * @note nullptr SQL values are stored as nullptr pointers in the row's values
  *       array, not as empty strings.
  */
 static int
@@ -190,10 +190,10 @@ postgres_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result
 			return -1;
 		}
 
-		/* Copy each field; NULL SQL values remain NULL pointers */
+		/* Copy each field; nullptr SQL values remain nullptr pointers */
 		for (int j = 0; j < nfields; j++) {
 			drow->values[j] =
-			    PQgetisnull(pg_res, i, j) ? NULL : strdup(PQgetvalue(pg_res, i, j));
+			    PQgetisnull(pg_res, i, j) ? nullptr : strdup(PQgetvalue(pg_res, i, j));
 		}
 
 		/* Append row to result array */

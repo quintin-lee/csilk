@@ -57,7 +57,7 @@ find_room(const char* name)
 			return g_room_manager.rooms[i];
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 static void

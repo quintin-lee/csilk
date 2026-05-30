@@ -57,7 +57,7 @@ typedef void (*csilk_mq_worker_t)(const char* topic, const void* payload, size_t
  * The MQ is created lazily on first access.
  *
  * @param server  Pointer to the server instance.
- * @return Pointer to the server's MQ, or NULL if the server is not yet
+ * @return Pointer to the server's MQ, or nullptr if the server is not yet
  *         initialised.
  */
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
@@ -65,12 +65,12 @@ csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
 /**
  * @brief Register MQ middleware for a topic.
  *
- * Middleware runs before subscribers.  Pass NULL as @p topic to register
+ * Middleware runs before subscribers.  Pass nullptr as @p topic to register
  * global middleware that intercepts all messages.
  *
  * @param mq         The MQ instance.
- * @param topic      Topic name to intercept, or NULL for global middleware.
- * @param middleware Handler function.  Must not be NULL.
+ * @param topic      Topic name to intercept, or nullptr for global middleware.
+ * @param middleware Handler function.  Must not be nullptr.
  */
 void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware);
 
@@ -82,7 +82,7 @@ void csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middlewa
  *
  * @param mq         The MQ instance.
  * @param topic      Topic name to subscribe to.
- * @param subscriber Handler function.  Must not be NULL.
+ * @param subscriber Handler function.  Must not be nullptr.
  */
 void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber);
 
@@ -134,7 +134,7 @@ const char* csilk_mq_get_topic(csilk_mq_ctx_t* ctx);
  *
  * @param ctx      The MQ context.
  * @param[out] len Optional pointer to receive the payload byte length (may be
- * NULL).
+ * nullptr).
  * @return Pointer to the message payload.  Valid only for the duration of the
  *         handler call.  The pointer must NOT be freed.
  */

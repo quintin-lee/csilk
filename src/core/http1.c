@@ -86,7 +86,7 @@ on_write(uv_write_t* req, int status)
 	if (status < 0) {
 		fprintf(stderr, "Write error %s\n", uv_strerror(status));
 	}
-	csilk_client_t* client = NULL;
+	csilk_client_t* client = nullptr;
 	if (req->handle) {
 		client = (csilk_client_t*)req->handle->data;
 		if (client) {
@@ -154,7 +154,7 @@ on_message_begin(llhttp_t* p)
 			       0);
 	}
 
-	csilk_log_set_request_id(NULL);
+	csilk_log_set_request_id(nullptr);
 	return 0;
 }
 
@@ -219,14 +219,14 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 		csilk_set_request_header(
 		    &client->ctx, client->current_header_field, client->current_header_value);
 		free(client->current_header_field);
-		client->current_header_field = NULL;
+		client->current_header_field = nullptr;
 		client->header_field_capacity = 0;
 		free(client->current_header_value);
-		client->current_header_value = NULL;
+		client->current_header_value = nullptr;
 		client->header_value_capacity = 0;
 	} else if (client->current_header_field) {
 		free(client->current_header_field);
-		client->current_header_field = NULL;
+		client->current_header_field = nullptr;
 		client->header_field_capacity = 0;
 	}
 
@@ -243,13 +243,13 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 /** @brief Grow a heap-allocated buffer to at least @p needed bytes.
  *
  * Uses realloc with capacity doubling for amortized O(1) growth. If @p buf
- * is NULL and *@p cap is 0, this acts as a malloc. On realloc failure the
+ * is nullptr and *@p cap is 0, this acts as a malloc. On realloc failure the
  * original buffer is NOT freed (caller must free it).
  *
- * @param buf    Existing allocation (may be NULL).
+ * @param buf    Existing allocation (may be nullptr).
  * @param cap    [in,out] Current capacity — updated on success.
  * @param needed Minimum required size in bytes.
- * @return Pointer to the resized buffer, or NULL on allocation failure. */
+ * @return Pointer to the resized buffer, or nullptr on allocation failure. */
 static char*
 buf_grow(char* buf, size_t* cap, size_t needed)
 {
@@ -262,7 +262,7 @@ buf_grow(char* buf, size_t* cap, size_t needed)
 	}
 	char* new_buf = realloc(buf, new_cap);
 	if (!new_buf) {
-		return NULL;
+		return nullptr;
 	}
 	*cap = new_cap;
 	return new_buf;
@@ -294,7 +294,7 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 	    buf_grow(client->current_header_value, &client->header_value_capacity, needed);
 	if (!new_val) {
 		free(client->current_header_value);
-		client->current_header_value = NULL;
+		client->current_header_value = nullptr;
 		client->header_value_capacity = 0;
 		client->total_header_size = 0;
 		fprintf(stderr, "[debug] on_header_value realloc failed\n");
@@ -320,10 +320,10 @@ on_headers_complete(llhttp_t* p)
 		csilk_set_request_header(
 		    &client->ctx, client->current_header_field, client->current_header_value);
 		free(client->current_header_field);
-		client->current_header_field = NULL;
+		client->current_header_field = nullptr;
 		client->header_field_capacity = 0;
 		free(client->current_header_value);
-		client->current_header_value = NULL;
+		client->current_header_value = nullptr;
 		client->header_value_capacity = 0;
 	}
 	return 0;
@@ -355,7 +355,7 @@ on_body(llhttp_t* p, const char* at, size_t length)
 		client->ctx.request.body = new_body;
 	} else {
 		free(client->ctx.request.body);
-		client->ctx.request.body = NULL;
+		client->ctx.request.body = nullptr;
 		client->ctx.request.body_len = 0;
 		return HPE_USER;
 	}
@@ -490,7 +490,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 
 		if (server->middleware_count > 0) {
 			int route_handler_count = 0;
-			while (c->handlers[route_handler_count] != NULL) {
+			while (c->handlers[route_handler_count] != nullptr) {
 				route_handler_count++;
 			}
 
@@ -505,7 +505,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 					arena_handlers[server->middleware_count + i] =
 					    c->handlers[i];
 				}
-				arena_handlers[total_count] = NULL;
+				arena_handlers[total_count] = nullptr;
 				c->handlers = arena_handlers;
 			}
 		}
@@ -606,9 +606,9 @@ _csilk_send_response(csilk_ctx_t* c)
 
 	int header_len;
 	if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-		header_len = snprintf(NULL, 0, "HTTP/1.1 101 Switching Protocols\r\n");
+		header_len = snprintf(nullptr, 0, "HTTP/1.1 101 Switching Protocols\r\n");
 	} else if (use_chunked) {
-		header_len = snprintf(NULL,
+		header_len = snprintf(nullptr,
 				      0,
 				      "HTTP/1.1 %d %s\r\n"
 				      "%s"
@@ -618,7 +618,7 @@ _csilk_send_response(csilk_ctx_t* c)
 				      transfer_encoding,
 				      connection_val);
 	} else {
-		header_len = snprintf(NULL,
+		header_len = snprintf(nullptr,
 				      0,
 				      "HTTP/1.1 %d %s\r\n"
 				      "Content-Length: %zu\r\n"
@@ -740,16 +740,16 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
 		csilk_set_request_header(
 		    &client->ctx, client->current_header_field, client->current_header_value);
 		free(client->current_header_field);
-		client->current_header_field = NULL;
+		client->current_header_field = nullptr;
 		client->header_field_capacity = 0;
 		free(client->current_header_value);
-		client->current_header_value = NULL;
+		client->current_header_value = nullptr;
 		client->header_value_capacity = 0;
 	}
 
 	if (client->current_url) {
-		char* path = NULL;
-		char* query = NULL;
+		char* path = nullptr;
+		char* query = nullptr;
 		csilk_split_url(client->current_url, &path, &query);
 		if (client->ctx.request.path) {
 			free((void*)client->ctx.request.path);
@@ -760,7 +760,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
 			free(query);
 		}
 		free(client->current_url);
-		client->current_url = NULL;
+		client->current_url = nullptr;
 	}
 
 	client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));

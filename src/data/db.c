@@ -70,8 +70,8 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
  *      a. Create a cJSON object.
  *      b. For each field (row->values[j]):
  *         - Add (column_name[j], field_value) as a string key-value pair.
- *         - If column_names is NULL, use "col" as the key.
- *         - NULL values are skipped (not added to the object).
+ *         - If column_names is nullptr, use "col" as the key.
+ *         - nullptr values are skipped (not added to the object).
  *      c. Append the object to the array.
  *   4. Call driver->free_result() to release the driver's memory.
  *   5. Return the cJSON array (caller must cJSON_Delete()).
@@ -82,7 +82,7 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
  *
  * @param pool Database pool with an active connection.
  * @param sql  SQL query string.
- * @return A cJSON array of row objects, or NULL on failure.
+ * @return A cJSON array of row objects, or nullptr on failure.
  * @note The returned cJSON must be freed by the caller with cJSON_Delete().
  * @warning The pool mutex must be held for the duration of this call. */
 static cJSON*
@@ -90,13 +90,13 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 {
 	csilk_db_result_t result = {0};
 	if (pool->driver->query(pool, sql, &result) != 0) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* array = cJSON_CreateArray();
 	if (!array) {
 		pool->driver->free_result(&result);
-		return NULL;
+		return nullptr;
 	}
 
 	for (int i = 0; i < result.row_count; i++) {
@@ -104,7 +104,7 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 		if (!obj) {
 			cJSON_Delete(array);
 			pool->driver->free_result(&result);
-			return NULL;
+			return nullptr;
 		}
 
 		csilk_db_row_t* row = result.rows[i];
@@ -142,18 +142,18 @@ csilk_db_pool_t*
 csilk_db_pool_new(const char* driver_name, const char* dsn)
 {
 	if (!driver_name) {
-		return NULL;
+		return nullptr;
 	}
 
 	csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
 	if (!driver) {
 		fprintf(stderr, "csilk_db: driver '%s' not found\n", driver_name);
-		return NULL;
+		return nullptr;
 	}
 
 	csilk_db_pool_t* pool = calloc(1, sizeof(csilk_db_pool_t));
 	if (!pool) {
-		return NULL;
+		return nullptr;
 	}
 
 	uv_mutex_init(&pool->mutex);
@@ -161,7 +161,7 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
 	if (driver->connect(pool, dsn) != 0) {
 		uv_mutex_destroy(&pool->mutex);
 		free(pool);
-		return NULL;
+		return nullptr;
 	}
 
 	return pool;
@@ -194,7 +194,7 @@ cJSON*
 csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 {
 	if (!pool || !pool->driver || !pool->driver->query) {
-		return NULL;
+		return nullptr;
 	}
 
 	uint64_t start = uv_hrtime();
@@ -256,12 +256,12 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
  *
  * @param pool   Database pool.
  * @param sql    SQL pattern with ? placeholders.
- * @param params NULL-terminated array of string values. */
+ * @param params nullptr-terminated array of string values. */
 cJSON*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
 	if (!pool || !sql || !params) {
-		return NULL;
+		return nullptr;
 	}
 
 	uint64_t start = uv_hrtime();
@@ -273,7 +273,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 
 	char* full_sql = malloc(len + 1);
 	if (!full_sql) {
-		return NULL;
+		return nullptr;
 	}
 
 	char* p = full_sql;
@@ -374,7 +374,7 @@ csilk_db_driver_t*
 csilk_db_get_driver(const char* name)
 {
 	if (!name) {
-		return NULL;
+		return nullptr;
 	}
 	ensure_registry_init();
 
@@ -386,5 +386,5 @@ csilk_db_get_driver(const char* name)
 		}
 	}
 	uv_mutex_unlock(&registry_mutex);
-	return NULL;
+	return nullptr;
 }

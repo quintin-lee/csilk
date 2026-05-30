@@ -10,7 +10,7 @@
  * ## Dispatch model
  * Messages flow through a handler chain assembled dynamically at dispatch
  * time (see on_mq_async). The chain order is:
- *   1. Global middleware (registered with topic=NULL) — runs for ALL topics.
+ *   1. Global middleware (registered with topic=nullptr) — runs for ALL topics.
  *   2. Topic-specific handlers — matched by fnmatch(topic_pattern, msg_topic).
  *   3. Subscribers (just handlers registered via csilk_mq_subscribe).
  *
@@ -73,7 +73,7 @@ csilk_mq_next(csilk_mq_ctx_t* ctx)
  * Sets the aborted flag on the context. Subsequent calls to csilk_mq_next()
  * will be ignored.
  *
- * @param ctx Message queue context (may be NULL). */
+ * @param ctx Message queue context (may be nullptr). */
 void
 csilk_mq_abort(csilk_mq_ctx_t* ctx)
 {
@@ -85,27 +85,27 @@ csilk_mq_abort(csilk_mq_ctx_t* ctx)
 /** @brief Get the topic name of the current message in the MQ context.
  *
  * @param ctx Message queue context.
- * @return The topic string (e.g., "user.created"), or NULL if the context
- *         or message is NULL. */
+ * @return The topic string (e.g., "user.created"), or nullptr if the context
+ *         or message is nullptr. */
 const char*
 csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 {
-	return (ctx && ctx->msg) ? ctx->msg->topic : NULL;
+	return (ctx && ctx->msg) ? ctx->msg->topic : nullptr;
 }
 
 /** @brief Get the payload data and length of the current message.
  *
  * @param ctx Message queue context.
- * @param len [out] If non-NULL, receives the payload length in bytes.
- * @return Pointer to the raw payload data, or NULL if the context or
- *         message is NULL.
+ * @param len [out] If non-nullptr, receives the payload length in bytes.
+ * @return Pointer to the raw payload data, or nullptr if the context or
+ *         message is nullptr.
  * @note The returned pointer is valid only for the duration of the handler
  *       callback. If the data is needed later, the handler must copy it. */
 const void*
 csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len)
 {
 	if (!ctx || !ctx->msg) {
-		return NULL;
+		return nullptr;
 	}
 	if (len) {
 		*len = ctx->msg->len;
@@ -240,7 +240,7 @@ static int _mq_recovery(csilk_mq_t* mq);
  * populated lazily.
  *
  * @param loop libuv event loop to associate the async handle with.
- * @return A new csilk_mq_t instance, or NULL on allocation failure.
+ * @return A new csilk_mq_t instance, or nullptr on allocation failure.
  * @note The MQ must be freed via _csilk_mq_free(). The MQ is initially
  *       non-persistent — call csilk_mq_set_persistence() to enable WAL. */
 #include <time.h>
@@ -259,7 +259,7 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 		cJSON_AddStringToObject(root, "topic", topic);
 	}
 	cJSON_AddNumberToObject(root, "payload_len", (double)len);
-	cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
 	char* json = cJSON_PrintUnformatted(root);
 
 	uv_mutex_lock(&mq->monitor_mutex);
@@ -296,7 +296,7 @@ char*
 csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
 {
 	if (!stats) {
-		return NULL;
+		return nullptr;
 	}
 	cJSON* root = cJSON_CreateObject();
 	cJSON_AddNumberToObject(root, "published_total", (double)stats->published_total);
@@ -330,7 +330,7 @@ _csilk_mq_new(uv_loop_t* loop)
 {
 	csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
 	if (!mq) {
-		return NULL;
+		return nullptr;
 	}
 	uv_mutex_init(&mq->queue_mutex);
 	uv_mutex_init(&mq->monitor_mutex);
@@ -338,7 +338,7 @@ _csilk_mq_new(uv_loop_t* loop)
 	mq->async_handle.data = mq;
 
 	mq->wal_fd = -1;
-	mq->wal_path = NULL;
+	mq->wal_path = nullptr;
 	uv_mutex_init(&mq->wal_mutex);
 
 	return mq;
@@ -361,7 +361,7 @@ _csilk_mq_new(uv_loop_t* loop)
  * @param mq       The MQ instance.
  * @param wal_path File path for the WAL. The file is created if it does not
  *                 exist.
- * @return 0 on success, -1 if parameters are NULL or the file cannot be opened.
+ * @return 0 on success, -1 if parameters are nullptr or the file cannot be opened.
  * @note The WAL uses a simple binary format: [topic_len][topic][payload_len]
  *       [payload][checksum] entries. Checksum is a simple XOR for integrity. */
 int
@@ -376,19 +376,19 @@ csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
 	/* Close existing WAL if any */
 	if (mq->wal_fd >= 0) {
 		uv_fs_t close_req;
-		uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, NULL);
+		uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, nullptr);
 		uv_fs_req_cleanup(&close_req);
 		mq->wal_fd = -1;
 	}
 	if (mq->wal_path) {
 		free(mq->wal_path);
-		mq->wal_path = NULL;
+		mq->wal_path = nullptr;
 	}
 
 	uv_fs_t open_req;
 	/* Use synchronous open */
 	int fd = uv_fs_open(
-	    mq->async_handle.loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, NULL);
+	    mq->async_handle.loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, nullptr);
 	uv_fs_req_cleanup(&open_req);
 
 	if (fd < 0) {
@@ -410,7 +410,7 @@ csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
 /** @brief Find or create a topic structure.
  * @param mq The MQ instance.
  * @param name Topic name.
- * @return Pointer to topic structure, or NULL on failure. */
+ * @return Pointer to topic structure, or nullptr on failure. */
 static csilk_mq_topic_t*
 get_or_create_topic(csilk_mq_t* mq, const char* name)
 {
@@ -421,7 +421,7 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
 	}
 	csilk_mq_topic_t* t = calloc(1, sizeof(csilk_mq_topic_t));
 	if (!t) {
-		return NULL;
+		return nullptr;
 	}
 	t->name = strdup(name);
 	t->next = mq->topics;
@@ -432,16 +432,16 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
 /** @brief Register a middleware handler for a specific topic (or globally).
  *
  * ## Global vs topic-specific
- * - topic == NULL: handler is appended to mq->global_middlewares[].
+ * - topic == nullptr: handler is appended to mq->global_middlewares[].
  *   These run for EVERY message, regardless of topic, and execute first.
- * - topic != NULL: handler is appended to that topic's handlers[] array.
+ * - topic != nullptr: handler is appended to that topic's handlers[] array.
  *   The topic is created lazily via get_or_create_topic().
  *   These run only when fnmatch(topic_name, msg_topic) matches.
  *
  * Both arrays grow by doubling (initial cap = 4) when full.
  *
  * @param mq        The MQ instance.
- * @param topic     Topic name (e.g., "user.created"), or NULL for global.
+ * @param topic     Topic name (e.g., "user.created"), or nullptr for global.
  * @param middleware Handler function to invoke during message processing.
  * @note The handler arrays grow dynamically (doubling capacity) as needed.
  *       Topic matching supports glob patterns via fnmatch(). */
@@ -507,7 +507,7 @@ csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscri
  *
  * @param mq      The MQ instance (must have wal_fd >= 0).
  * @param topic   Message topic string.
- * @param payload Message payload data (may be NULL if len == 0).
+ * @param payload Message payload data (may be nullptr if len == 0).
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on write failure.
  * @note This is a no-op if the MQ has no WAL file (wal_fd < 0).
@@ -546,12 +546,13 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
 
 	uv_fs_t write_req;
 	/* Write to the end of file (synchronous) */
-	int result = uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs, 5, -1, NULL);
+	int result =
+	    uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs, 5, -1, nullptr);
 	uv_fs_req_cleanup(&write_req);
 
 	if (result >= 0) {
 		uv_fs_t sync_req;
-		uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, NULL);
+		uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, nullptr);
 		uv_fs_req_cleanup(&sync_req);
 	}
 
@@ -565,7 +566,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
  * 1. Allocate and populate a new csilk_mq_msg_t (deep-copy topic + payload).
  * 2. Lock queue_mutex.
  * 3. Append to the tail of the singly-linked list:
- *      - If queue_tail != NULL: queue_tail->next = msg
+ *      - If queue_tail != nullptr: queue_tail->next = msg
  *      - Else: queue_head = msg
  *    Update queue_tail to msg.
  * 4. Unlock, call uv_async_send() to wake the event loop.
@@ -575,7 +576,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
  *
  * @param mq      The MQ instance.
  * @param topic   Message topic.
- * @param payload Message payload (may be NULL).
+ * @param payload Message payload (may be nullptr).
  * @param len     Payload length.
  * @return 0 on success, -1 on allocation failure.
  * @note Thread-safe. The async signal ensures on_mq_async() processes the
@@ -663,8 +664,8 @@ _mq_recovery(csilk_mq_t* mq)
 
 		/* 1. Read Topic Length */
 		uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
-		nread =
-		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		nread = uv_fs_read(
+		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		uv_fs_req_cleanup(&read_req);
 		if (nread < 4) {
 			break; /* EOF or error */
@@ -677,8 +678,8 @@ _mq_recovery(csilk_mq_t* mq)
 			break;
 		}
 		buf = uv_buf_init(topic, topic_len);
-		nread =
-		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		nread = uv_fs_read(
+		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		uv_fs_req_cleanup(&read_req);
 		if (nread < (int)topic_len) {
 			free(topic);
@@ -689,8 +690,8 @@ _mq_recovery(csilk_mq_t* mq)
 
 		/* 3. Read Payload Length */
 		buf = uv_buf_init((char*)&payload_len, 4);
-		nread =
-		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		nread = uv_fs_read(
+		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		uv_fs_req_cleanup(&read_req);
 		if (nread < 4) {
 			free(topic);
@@ -699,7 +700,7 @@ _mq_recovery(csilk_mq_t* mq)
 		offset += 4;
 
 		/* 4. Read Payload */
-		void* payload = NULL;
+		void* payload = nullptr;
 		if (payload_len > 0) {
 			payload = malloc(payload_len);
 			if (!payload) {
@@ -708,7 +709,7 @@ _mq_recovery(csilk_mq_t* mq)
 			}
 			buf = uv_buf_init(payload, payload_len);
 			nread = uv_fs_read(
-			    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+			    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 			uv_fs_req_cleanup(&read_req);
 			if (nread < (int)payload_len) {
 				free(topic);
@@ -720,8 +721,8 @@ _mq_recovery(csilk_mq_t* mq)
 
 		/* 5. Read Checksum */
 		buf = uv_buf_init((char*)&checksum, 4);
-		nread =
-		    uv_fs_read(mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
+		nread = uv_fs_read(
+		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		uv_fs_req_cleanup(&read_req);
 		if (nread < 4) {
 			free(topic);
@@ -771,10 +772,10 @@ _mq_recovery(csilk_mq_t* mq)
  * The message is deep-copied at both stages.
  *
  * @param mq      The MQ instance.
- * @param topic   Target topic name (cannot be NULL).
- * @param payload Message payload data (may be NULL).
+ * @param topic   Target topic name (cannot be nullptr).
+ * @param payload Message payload data (may be nullptr).
  * @param len     Payload length in bytes.
- * @return 0 on success, -1 if the topic is NULL or WAL append fails.
+ * @return 0 on success, -1 if the topic is nullptr or WAL append fails.
  * @note Thread-safe. The caller may free or reuse @p payload immediately
  *       after this call returns — the data is copied internally. */
 int
@@ -799,7 +800,7 @@ csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t 
  * ## Dispatch algorithm (per message)
  * This is the core of the MQ — it runs on the main event loop thread.
  *
- *   1. Atomically swap the queue head to NULL under mutex (drain all).
+ *   1. Atomically swap the queue head to nullptr under mutex (drain all).
  *   2. Walk the linked list of messages.
  *   3. For each message:
  *      a. Count total handlers: global_mw_count + sum of handler_count for
@@ -826,8 +827,8 @@ on_mq_async(uv_async_t* handle)
 
 	uv_mutex_lock(&mq->queue_mutex);
 	csilk_mq_msg_t* head = mq->queue_head;
-	mq->queue_head = NULL;
-	mq->queue_tail = NULL;
+	mq->queue_head = nullptr;
+	mq->queue_tail = nullptr;
 	uint32_t count = mq->queue_depth;
 	mq->queue_depth = 0;
 	uv_mutex_unlock(&mq->queue_mutex);
@@ -912,7 +913,7 @@ on_mq_close(uv_handle_t* handle)
 
 	if (mq->wal_fd >= 0) {
 		uv_fs_t close_req;
-		uv_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
+		uv_fs_close(handle->loop, &close_req, mq->wal_fd, nullptr);
 		uv_fs_req_cleanup(&close_req);
 	}
 	if (mq->wal_path) {
@@ -951,9 +952,9 @@ on_mq_close(uv_handle_t* handle)
  * The actual cleanup (mutexes, WAL, queue, topics) happens in on_mq_close()
  * when the close callback fires.
  *
- * @param mq The MQ instance to free (may be NULL).
+ * @param mq The MQ instance to free (may be nullptr).
  * @note This is an async operation — the MQ is not freed immediately.
- *       Safe to call with NULL. */
+ *       Safe to call with nullptr. */
 void
 _csilk_mq_free(csilk_mq_t* mq)
 {

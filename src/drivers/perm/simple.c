@@ -72,7 +72,7 @@ match_pattern(const char* pattern, const char* value)
  *   2. The "role" field inside the "jwt_payload" JSON object.
  *
  * @param c  The current request context.
- * @return A pointer to the role string (borrowed from context), or NULL if
+ * @return A pointer to the role string (borrowed from context), or nullptr if
  *         no role can be determined.
  */
 static const char*
@@ -91,7 +91,7 @@ get_role_from_ctx(csilk_ctx_t* c)
 		}
 	}
 
-	return NULL;
+	return nullptr;
 }
 
 /**
@@ -150,7 +150,7 @@ csilk_perm_simple_init(void)
  * @param role       Role identifier (may contain wildcards).
  * @param permission Permission name (may contain wildcards).
  * @param resource   Resource pattern (may contain wildcards).
- * @return 0 on success, -1 if the table is full or parameters are NULL.
+ * @return 0 on success, -1 if the table is full or parameters are nullptr.
  */
 int
 csilk_perm_simple_allow(const char* role, const char* permission, const char* resource)

@@ -68,7 +68,7 @@ int csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver);
 
 /** @brief Look up a registered driver by name.
  *  @param name Driver identifier string.
- *  @return The registered driver vtable, or NULL if not found. */
+ *  @return The registered driver vtable, or nullptr if not found. */
 csilk_perm_driver_t* csilk_perm_get_driver(const char* name);
 
 /** @brief Set the default permission driver used by csilk_perm_check.

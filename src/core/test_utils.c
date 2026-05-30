@@ -16,7 +16,7 @@
  * Creates a zero-initialised csilk_ctx_t with a fresh arena,
  * handler index set to -1 and file descriptor set to -1.
  *
- * @return Pointer to the new context, or NULL on allocation failure.
+ * @return Pointer to the new context, or nullptr on allocation failure.
  */
 csilk_ctx_t*
 csilk_test_ctx_new(void)
@@ -33,9 +33,9 @@ csilk_test_ctx_new(void)
 /** @brief Free a test context and all its resources.
  *
  * Calls csilk_ctx_cleanup, frees the arena, then frees the
- * context structure itself. Safe to call with NULL.
+ * context structure itself. Safe to call with nullptr.
  *
- * @param c The context to free (may be NULL).
+ * @param c The context to free (may be nullptr).
  */
 void
 csilk_test_ctx_free(csilk_ctx_t* c)
@@ -51,7 +51,7 @@ csilk_test_ctx_free(csilk_ctx_t* c)
 
 /** @brief Attach a handler array to a test context.
  *
- * @param c The context (may be NULL).
+ * @param c The context (may be nullptr).
  * @param handlers Pointer to the handler table to assign.
  */
 void
@@ -67,7 +67,7 @@ csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers)
  * The path is duplicated; any previously set path is freed
  * before replacement.
  *
- * @param c The context (may be NULL).
+ * @param c The context (may be nullptr).
  * @param method HTTP method string (assigned by pointer, not copied).
  * @param path Request path string (copied internally).
  */
@@ -79,7 +79,7 @@ csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* path)
 		if (c->request.path) {
 			free((void*)c->request.path);
 		}
-		c->request.path = path ? strdup(path) : NULL;
+		c->request.path = path ? strdup(path) : nullptr;
 	}
 }
 
@@ -88,7 +88,7 @@ csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* path)
  * Allocates a new csilk_method_handler_t in the context's arena
  * if none exists yet, then sets the permission fields.
  *
- * @param c The context (may be NULL).
+ * @param c The context (may be nullptr).
  * @param perm_required Permission required string (assigned by pointer).
  * @param perm_resource Permission resource string (assigned by pointer).
  */
@@ -117,8 +117,8 @@ csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
  * The body string is duplicated; any previously set body is
  * freed before replacement.
  *
- * @param c The context (may be NULL).
- * @param body Body content (copied internally; may be NULL).
+ * @param c The context (may be nullptr).
+ * @param body Body content (copied internally; may be nullptr).
  * @param len Length of the body data.
  */
 void
@@ -128,7 +128,7 @@ csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len)
 		if (c->request.body) {
 			free(c->request.body);
 		}
-		c->request.body = body ? strdup(body) : NULL;
+		c->request.body = body ? strdup(body) : nullptr;
 		c->request.body_len = len;
 	}
 }
@@ -140,7 +140,7 @@ csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len)
  * Strings are arena-allocated when possible, otherwise
  * heap-allocated with strdup.
  *
- * @param c The context (may be NULL).
+ * @param c The context (may be nullptr).
  * @param key Parameter name.
  * @param value Parameter value.
  */
@@ -163,11 +163,11 @@ csilk_test_ctx_add_param(csilk_ctx_t* c, const char* key, const char* value)
  *
  * Iterates the response header hash table and counts entries
  * whose key matches (case-insensitive). If value_contains is
- * non-NULL, only headers whose value contains that substring
+ * non-nullptr, only headers whose value contains that substring
  * are counted.
  *
- * @param c The context (must not be NULL).
- * @param key Header key to match (case-insensitive, must not be NULL).
+ * @param c The context (must not be nullptr).
+ * @param key Header key to match (case-insensitive, must not be nullptr).
  * @param value_contains Optional substring to match against the header value.
  * @return Number of matching headers.
  */

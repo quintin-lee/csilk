@@ -46,23 +46,23 @@ csilk_status(csilk_ctx_t* c, int status)
  *
  * @param c      The request context.
  * @param status HTTP status code for the response.
- * @param msg    Plain text body (may be NULL).
+ * @param msg    Plain text body (may be nullptr).
  * @note Ownership: when arena is unavailable, the strdup'd copy is freed
- *       automatically during csilk_ctx_cleanup(). Safe to pass NULL for msg. */
+ *       automatically during csilk_ctx_cleanup(). Safe to pass nullptr for msg. */
 void
 csilk_string(csilk_ctx_t* c, int status, const char* msg)
 {
 	c->response.status = status;
 	size_t msg_len = msg ? strlen(msg) : 0;
 	if (c->arena) {
-		c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : NULL;
+		c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : nullptr;
 		c->response.body_len = msg_len;
 		c->response.body_is_managed = 0;
 	} else {
 		if (c->response.body && c->response.body_is_managed) {
 			free((void*)c->response.body);
 		}
-		char* body = msg ? strdup(msg) : NULL;
+		char* body = msg ? strdup(msg) : nullptr;
 		c->response.body = body;
 		c->response.body_len = body ? msg_len : 0;
 		c->response.body_is_managed = body ? 1 : 0;
@@ -143,12 +143,12 @@ csilk_redirect_simple(csilk_ctx_t* c, const char* url)
  * multiple cookies can be set on the same response.
  *
  * @param c         The request context.
- * @param name      Cookie name (cannot be NULL).
- * @param value     Cookie value (cannot be NULL).
+ * @param name      Cookie name (cannot be nullptr).
+ * @param value     Cookie value (cannot be nullptr).
  * @param max_age   Cookie Max-Age in seconds. Pass 0 to omit, negative for
  *                  immediate expiry (Max-Age=0), positive for a future expiry.
- * @param path      Cookie path (pass NULL for default "/").
- * @param domain    Cookie domain (pass NULL to omit).
+ * @param path      Cookie path (pass nullptr for default "/").
+ * @param domain    Cookie domain (pass nullptr to omit).
  * @param secure    If non-zero, adds the Secure flag.
  * @param http_only If non-zero, adds the HttpOnly flag.
  * @note The cookie is arena-allocated. The name+value and attribute strings
@@ -235,7 +235,7 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 
 	if (c->response.body && c->response.body_is_managed) {
 		free((void*)c->response.body);
-		c->response.body = NULL;
+		c->response.body = nullptr;
 		c->response.body_is_managed = 0;
 	}
 
@@ -255,7 +255,7 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
  *
  * @param c       The request context.
  * @param status  HTTP status code.
- * @param message Error message string (if NULL, "Unknown error" is used). */
+ * @param message Error message string (if nullptr, "Unknown error" is used). */
 void
 csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 {
@@ -275,12 +275,12 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 /** @brief Send a JSON response from a registered struct via reflection.
  *
  * Serializes the provided struct to JSON using the csilk reflection engine
- * and sends it as the HTTP response. If @p type_name is NULL, the type is
+ * and sends it as the HTTP response. If @p type_name is nullptr, the type is
  * inferred from the current handler's output_type metadata.
  *
  * @param c         The request context.
  * @param status    HTTP status code.
- * @param type_name Registered type name, or NULL to infer from route metadata.
+ * @param type_name Registered type name, or nullptr to infer from route metadata.
  * @param ptr       Pointer to the struct to serialize.
  * @note The serialized JSON string is heap-allocated and managed by the
  *       framework (freed during cleanup). Uses csilk_json_marshal() internally.
@@ -358,7 +358,7 @@ on_stream_end_write(uv_write_t* req, int status)
 		free(req->data);
 	}
 	if (req->handle) {
-		uv_close((uv_handle_t*)req->handle, NULL);
+		uv_close((uv_handle_t*)req->handle, nullptr);
 	}
 	free(req);
 }
@@ -371,7 +371,7 @@ on_stream_end_write(uv_write_t* req, int status)
  * csilk_response_write() if the response has not started yet.
  *
  * @param c Request context.
- * @return 0 on success, -1 on allocation failure or NULL input.
+ * @return 0 on success, -1 on allocation failure or nullptr input.
  * @note Sets c->response_started = 1 on success. */
 static int
 send_chunked_headers(csilk_ctx_t* c)
@@ -401,7 +401,7 @@ send_chunked_headers(csilk_ctx_t* c)
 		}
 	}
 
-	int header_len = snprintf(NULL,
+	int header_len = snprintf(nullptr,
 				  0,
 				  "HTTP/1.1 %d %s\r\n"
 				  "Transfer-Encoding: chunked\r\n"

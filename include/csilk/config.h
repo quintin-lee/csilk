@@ -90,7 +90,7 @@ typedef struct {
                           */
 		int enable_csrf;     /**< Non-zero to install the CSRF-protection middleware. */
 		int enable_auth;     /**< Non-zero to install the token-auth middleware. */
-		char* auth_token;    /**< Expected bearer token when @p enable_auth is 1 (NULL
+		char* auth_token;    /**< Expected bearer token when @p enable_auth is 1 (nullptr
                          = disabled even if enabled). */
 	} middleware;		     /**< Built-in middleware toggles. */
 	struct {

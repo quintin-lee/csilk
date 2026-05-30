@@ -107,8 +107,8 @@ csilk_sse_init(csilk_ctx_t* c)
  *
  * @param c     The request context (must be in SSE mode).
  * @param event Optional event type string (e.g. "message", "update").
- *              May be NULL, in which case no "event:" line is emitted.
- * @param data  The event payload string. May be NULL (produces a "data:" line
+ *              May be nullptr, in which case no "event:" line is emitted.
+ * @param data  The event payload string. May be nullptr (produces a "data:" line
  *              with no content). Must not contain embedded "\n\n" sequences
  *              unless multi-line data is intended per SSE spec.
  *
@@ -179,6 +179,6 @@ csilk_sse_close(csilk_ctx_t* c)
 	}
 	uv_stream_t* stream = (uv_stream_t*)internal_client;
 	if (!uv_is_closing((uv_handle_t*)stream)) {
-		uv_close((uv_handle_t*)stream, NULL);
+		uv_close((uv_handle_t*)stream, nullptr);
 	}
 }

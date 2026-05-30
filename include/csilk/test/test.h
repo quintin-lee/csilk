@@ -13,7 +13,7 @@
  *   g_oom_fail_after = 5;   // fail on the 5th allocation
  *   g_oom_count = 0;        // reset counter
  *
- *   // Run code under test — the 5th malloc/calloc/realloc returns NULL.
+ *   // Run code under test — the 5th malloc/calloc/realloc returns nullptr.
  * @endcode
  *
  * Without -DTEST_OOM, this header is a no-op (macros expand to the standard
@@ -31,7 +31,7 @@
 /**
  * @brief Global: trigger allocation failure after this many calls.
  *
- * When >= 0, allocations at or beyond this count return NULL.
+ * When >= 0, allocations at or beyond this count return nullptr.
  * Set to -1 to disable OOM simulation.
  */
 extern int g_oom_fail_after;
@@ -48,14 +48,14 @@ extern int g_oom_count;
  * @brief Mock malloc that fails after g_oom_fail_after calls.
  *
  * @param size  Number of bytes to allocate.
- * @return Pointer to allocated memory, or NULL if the failure threshold
+ * @return Pointer to allocated memory, or nullptr if the failure threshold
  *         has been reached.
  */
 static inline void*
 csilk_test_malloc(size_t size)
 {
 	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return NULL;
+		return nullptr;
 	}
 	g_oom_count++;
 	return malloc(size);
@@ -66,14 +66,14 @@ csilk_test_malloc(size_t size)
  *
  * @param nmemb  Number of elements.
  * @param size   Size of each element.
- * @return Pointer to zero-initialised allocated memory, or NULL if the
+ * @return Pointer to zero-initialised allocated memory, or nullptr if the
  *         failure threshold has been reached.
  */
 static inline void*
 csilk_test_calloc(size_t nmemb, size_t size)
 {
 	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return NULL;
+		return nullptr;
 	}
 	g_oom_count++;
 	return calloc(nmemb, size);
@@ -82,16 +82,16 @@ csilk_test_calloc(size_t nmemb, size_t size)
 /**
  * @brief Mock realloc that fails after g_oom_fail_after calls.
  *
- * @param ptr   Previously allocated pointer (may be NULL).
+ * @param ptr   Previously allocated pointer (may be nullptr).
  * @param size  New size in bytes.
- * @return Pointer to resized memory, or NULL if the failure threshold
+ * @return Pointer to resized memory, or nullptr if the failure threshold
  *         has been reached.
  */
 static inline void*
 csilk_test_realloc(void* ptr, size_t size)
 {
 	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return NULL;
+		return nullptr;
 	}
 	g_oom_count++;
 	return realloc(ptr, size);
@@ -116,7 +116,7 @@ csilk_test_realloc(void* ptr, size_t size)
  * @{ */
 
 /** @brief Create a new mock context for testing (heap-allocated).
- *  @return Pointer to new context, or NULL on failure. */
+ *  @return Pointer to new context, or nullptr on failure. */
 csilk_ctx_t* csilk_test_ctx_new(void);
 
 /** @brief Free a mock context created via csilk_test_ctx_new().
@@ -125,7 +125,7 @@ void csilk_test_ctx_free(csilk_ctx_t* c);
 
 /** @brief Set the handler chain for a test context.
  *  @param c        The request context.
- *  @param handlers NULL-terminated array of handler functions. */
+ *  @param handlers nullptr-terminated array of handler functions. */
 void csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers);
 
 /** @brief Manually set the request method and path for testing.

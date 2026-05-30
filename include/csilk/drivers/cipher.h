@@ -43,7 +43,7 @@ extern "C" {
 /**
  * @brief Virtual function table implemented by each cipher backend.
  *
- * All function pointers must be non-NULL except where noted.
+ * All function pointers must be non-nullptr except where noted.
  * Operations follow the same parameter patterns as their _csilk_*
  * counterparts in internal.h so that the dispatch layer is transparent.
  */
