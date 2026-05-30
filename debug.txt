@@ -1,0 +1,2 @@
+  DEBUG: failed to set key admin_k0
+  DEBUG: lost key admin_k0

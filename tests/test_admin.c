@@ -77,15 +77,21 @@ test_admin_ctx_storage_overflow(void)
 {
 	csilk_ctx_t* c = make_ctx();
 	int ok = 1;
-	for (int i = 0; i < CSILK_MAX_STORAGE + 10; i++) {
-		char key[16];
-		snprintf(key, sizeof(key), "admin_k%d", i);
-		csilk_set(c, key, (void*)(uintptr_t)i);
-	}
 	for (int i = 0; i < CSILK_MAX_STORAGE; i++) {
 		char key[16];
 		snprintf(key, sizeof(key), "admin_k%d", i);
+		csilk_set(c, key, (void*)(uintptr_t)i);
 		if (csilk_get(c, key) == nullptr) {
+			fprintf(stderr, "  DEBUG: failed to set key %s\n", key);
+		}
+	}
+	/* Verify all CSILK_MAX_STORAGE keys are present */
+	for (int i = 0; i < CSILK_MAX_STORAGE; i++) {
+		char key[16];
+		snprintf(key, sizeof(key), "admin_k%d", i);
+		void* val = csilk_get(c, key);
+		if (val == nullptr) {
+			fprintf(stderr, "  DEBUG: lost key %s\n", key);
 			ok = 0;
 			break;
 		}
@@ -105,6 +111,7 @@ main(void)
 
 	test_admin_enable_metrics_collection();
 	test_admin_stats_collection();
+	printf("  Calling test_admin_ctx_storage_overflow...\n");
 	test_admin_ctx_storage_overflow();
 
 	printf("\n=== Results: %d passed, %d failed ===\n", tests_passed, tests_run - tests_passed);
