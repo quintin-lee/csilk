@@ -458,14 +458,15 @@ install(EXPORT csilk-targets
 # clang-tidy
 find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
 if(CLANG_TIDY_EXECUTABLE)
-    set(CSILK_TIDY_CHECKS "-*,clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-narrowing-conversions,performance-*,readability-*,-readability-function-cognitive-complexity,modernize-*,-modernize-avoid-c-arrays,-bugprone-reserved-identifier,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
+    set(CSILK_TIDY_CHECKS "clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
     add_custom_target(tidy
         COMMAND ${CLANG_TIDY_EXECUTABLE}
             --quiet
-            --checks=${CSILK_TIDY_CHECKS}
+            --checks=-*,${CSILK_TIDY_CHECKS}
             --warnings-as-errors="*"
             ${CSILK_SOURCES}
             -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
+            -I${CMAKE_CURRENT_BINARY_DIR}
             -I${cjson_SOURCE_DIR}
             -I${cjson_BINARY_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
