@@ -21,6 +21,32 @@
 static const char* JWT_HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
 
 /**
+ * @brief Constant-time string comparison to prevent timing attacks.
+ *
+ * Compares two byte sequences of known lengths without branching on
+ * individual byte differences. The loop always runs to completion,
+ * and the control flow is identical regardless of whether the inputs
+ * match.  This prevents an attacker from deducing the expected
+ * signature byte-by-byte via response-time measurements.
+ *
+ * @param a      First byte sequence.
+ * @param b      Second byte sequence.
+ * @param len    Exact number of bytes to compare. Caller must ensure
+ *               both buffers are at least this long and that the
+ *               lengths are equal (otherwise the result is moot).
+ * @return 0 if the sequences are equal, non-zero otherwise.
+ */
+static int
+constant_time_compare(const uint8_t* a, const uint8_t* b, size_t len)
+{
+	volatile uint8_t diff = 0;
+	for (size_t i = 0; i < len; i++) {
+		diff |= (a[i] ^ b[i]);
+	}
+	return (int)(diff != 0);
+}
+
+/**
  * @brief Generate a signed HS256 JWT token.
  *
  * Constructs a JWT with the fixed header `{"alg":"HS256","typ":"JWT"}` and
@@ -126,9 +152,10 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
  *
  * Splits the token into its three dot-separated components (header, payload,
  * signature), recomputes the HMAC-SHA256 signature over the signing input,
- * and compares it against the provided signature (constant-time not guaranteed
- * — uses strcmp). On success, the payload is base64url-decoded and parsed
- * into a cJSON object.
+ * and compares it against the provided signature using a constant-time
+ * comparison (constant_time_compare) to defend against timing side-channel
+ * attacks.  On success, the payload is base64url-decoded and parsed into a
+ * cJSON object.
  *
  * @param c      The request context (used for HMAC operations).
  * @param token  The JWT string in the format `header.payload.signature`.
@@ -140,9 +167,6 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
  *
  * @note The caller owns the returned cJSON object and must free it with
  *       cJSON_Delete() when no longer needed.
- * @warning Signature comparison uses strcmp, which is NOT constant-time.
- *          This may be vulnerable to timing attacks in high-security
- *          environments.
  */
 cJSON*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
@@ -167,10 +191,9 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	const char* sig_ptr = dot2 + 1;
 
 	/* Step 1: Verify the HMAC-SHA256 signature.
-     Recompute the signature over the signing input (header.payload)
-     and compare it against the provided signature. A non-constant-time
-     strcmp is used; consider memcmp + xor-constant-time for high-security
-     deployments. */
+	   Recompute the signature over the signing input (header.payload)
+	   and compare it against the provided signature using a
+	   constant-time comparison to prevent timing side-channel attacks. */
 	size_t sign_input_len = (size_t)(dot2 - token);
 	uint8_t sig_actual[32];
 	_csilk_hmac_sha256(c,
@@ -183,8 +206,13 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	char sig_expected_b64[45];
 	csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
 
-	if (strcmp(sig_ptr, sig_expected_b64) != 0) {
-		return nullptr; /* Signature mismatch — token has been tampered with. */
+	/* Constant-time comparison to prevent timing side-channel attacks.
+	 * Both strings are base64url of a 32-byte digest (always 43 chars). */
+	size_t sig_len = strlen(sig_ptr);
+	if (sig_len != strlen(sig_expected_b64) ||
+	    constant_time_compare(
+		(const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, sig_len)) {
+		return nullptr;
 	}
 
 	/* Step 2: Base64url-decode the payload and parse it as JSON.
