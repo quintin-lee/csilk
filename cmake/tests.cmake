@@ -52,6 +52,7 @@ set(CSILK_APP_TESTS
     test_app
     test_app_ext
     test_app_integration
+    test_admin
     test_cookie
     test_form
     test_group
