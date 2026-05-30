@@ -62,6 +62,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/sse.c
     src/middleware/static.c
     src/middleware/validate.c
+    src/middleware/waf.c
 )
 
 set(CSILK_PROTOCOL_SOURCES

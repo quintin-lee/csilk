@@ -109,6 +109,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_static
     test_file
     test_validate
+    test_waf
 )
 
 # -- Protocol tests --

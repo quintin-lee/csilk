@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#include "csilk/core/srv_types.h"
 #include "csilk/csilk.h"
 
 void
@@ -132,6 +133,43 @@ test_arena_reset()
 	printf("csilk_arena_reset passed!\n");
 }
 
+#ifdef TEST_OOM
+extern int csilk_arena_get_tls_chunk_count(void);
+
+void
+test_arena_tls_cache()
+{
+	printf("Testing csilk_arena TLS cache...\n");
+
+	csilk_arena_t* arenas[5];
+	/* Allocate 5 arenas with standard chunks */
+	for (int i = 0; i < 5; i++) {
+		arenas[i] = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+		csilk_arena_alloc(arenas[i], 100); // Trigger first chunk allocation
+	}
+
+	/* Free them all — this should populate the TLS cache */
+	for (int i = 0; i < 5; i++) {
+		csilk_arena_free(arenas[i]);
+	}
+
+	int initial_count = csilk_arena_get_tls_chunk_count();
+	assert(initial_count >= 5);
+
+	/* Now allocate new arenas and see if they reuse chunks (count should decrease)
+	 */
+	for (int i = 0; i < 5; i++) {
+		csilk_arena_t* arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+		csilk_arena_alloc(arena, 100); // Should reuse from TLS
+		assert(csilk_arena_get_tls_chunk_count() < initial_count);
+		csilk_arena_free(arena); // Return back to TLS
+		assert(csilk_arena_get_tls_chunk_count() == initial_count);
+	}
+
+	printf("csilk_arena TLS cache passed!\n");
+}
+#endif
+
 int
 main()
 {
@@ -142,6 +180,9 @@ main()
 	test_arena_strdup();
 	test_arena_alignment();
 	test_arena_reset();
+#ifdef TEST_OOM
+	test_arena_tls_cache();
+#endif
 	printf("All arena tests passed!\n");
 	return 0;
 }
