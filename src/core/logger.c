@@ -98,7 +98,28 @@ typedef struct {
 
 static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
 
-static _Thread_local char tl_request_id[37] = {0};
+#include <pthread.h>
+
+static pthread_key_t tl_request_id_key;
+static pthread_once_t tl_request_id_once = PTHREAD_ONCE_INIT;
+
+static void
+init_request_id_key(void)
+{
+	pthread_key_create(&tl_request_id_key, free);
+}
+
+static char*
+get_tl_request_id(void)
+{
+	pthread_once(&tl_request_id_once, init_request_id_key);
+	char* id = (char*)pthread_getspecific(tl_request_id_key);
+	if (!id) {
+		id = calloc(37, 1);
+		pthread_setspecific(tl_request_id_key, id);
+	}
+	return id;
+}
 
 static const char* level_names[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
 static const char* level_colors[] = {
@@ -176,6 +197,7 @@ log_text(csilk_log_level_t lv,
 		    g_logger.fp, "%s %s [%s:%d] %s(): ", ts, level_names[lv], fn, line, func);
 	}
 
+	char* tl_request_id = get_tl_request_id();
 	if (tl_request_id[0] != '\0') {
 		n += fprintf(g_logger.fp, "<%s> ", tl_request_id);
 	}
@@ -218,6 +240,7 @@ build_json_entry(csilk_log_level_t lv,
 	memset(&entry, 0, sizeof(entry));
 	entry.time_epoch = (int64_t)time(nullptr);
 	snprintf(entry.level, sizeof(entry.level), "%s", level_names[lv]);
+	char* tl_request_id = get_tl_request_id();
 	snprintf(entry.request_id, sizeof(entry.request_id), "%s", tl_request_id);
 	snprintf(entry.file, sizeof(entry.file), "%s", fn);
 	entry.line = (int32_t)line;
@@ -475,9 +498,10 @@ csilk_log_is_json(void)
 void
 csilk_log_set_request_id(const char* request_id)
 {
+	char* tl_request_id = get_tl_request_id();
 	if (request_id) {
-		strncpy(tl_request_id, request_id, sizeof(tl_request_id) - 1);
-		tl_request_id[sizeof(tl_request_id) - 1] = '\0';
+		strncpy(tl_request_id, request_id, 36);
+		tl_request_id[36] = '\0';
 	} else {
 		tl_request_id[0] = '\0';
 	}

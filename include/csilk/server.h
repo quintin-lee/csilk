@@ -155,6 +155,13 @@ int csilk_server_run(csilk_server_t* server, int port);
  *  @return Pointer to csilk_router_t. */
 csilk_router_t* csilk_server_get_router(csilk_server_t* server);
 
+/** @brief Swap the router instance attached to a server (for hot-reloading).
+ *  Frees the old router and attaches the new one. Thread-safe if called
+ *  from the main event loop thread (e.g. during a hot-reload callback).
+ *  @param server The server instance.
+ *  @param router The new router instance. */
+void csilk_server_set_router(csilk_server_t* server, csilk_router_t* router);
+
 /**
  * @brief Get the client's IP address.
  *

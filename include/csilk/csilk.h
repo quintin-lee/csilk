@@ -29,5 +29,6 @@
 #include "csilk/server.h"
 #include "csilk/workflow.h"
 #include "csilk/admin.h"
+#include "csilk/hot_reload.h"
 
 #endif /* CSILK_H */

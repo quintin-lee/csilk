@@ -29,6 +29,7 @@ set(CSILK_CORE_SOURCES
     src/core/tls.c
     src/core/url.c
     src/core/utils.c
+    src/core/hot_reload.c
 )
 
 set(CSILK_DATA_SOURCES
