@@ -28,9 +28,11 @@
  * @note This middleware MUST be registered before any handler that may
  *       call csilk_panic().
  * @warning setjmp/longjmp do NOT unwind the C stack or call destructors.
- *          Resources allocated by panicked handlers (malloc, open files,
- *          etc.) WILL leak. Use this as a last-resort safety net, not as
- *          a primary error-handling mechanism.
+ *          Heap allocations, file handles, and mutex locks held at the
+ *          point of csilk_panic() WILL leak. Use arena-allocated memory
+ *          for handler resources (cleaned on ctx cleanup) and avoid
+ *          holding mutexes across potentially-panicking code paths.
+ *          This is a last-resort safety net, not primary error handling.
  */
 void
 csilk_recovery_handler(csilk_ctx_t* c)

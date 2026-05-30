@@ -586,7 +586,7 @@ typedef struct {
 	csilk_server_t* server;
 	int port;
 	int worker_index;
-	pthread_barrier_t* barrier;
+	uv_barrier_t* barrier;
 } worker_data_t;
 
 typedef struct {
@@ -667,7 +667,7 @@ worker_thread(void* arg)
 	csilk_server_t* server = data->server;
 	int port = data->port;
 	int idx = data->worker_index;
-	pthread_barrier_t* barrier = data->barrier;
+	uv_barrier_t* barrier = data->barrier;
 	free(data);
 
 	uv_loop_t loop;
@@ -678,7 +678,7 @@ worker_thread(void* arg)
 
 	if (bind_and_listen(&loop, &server_handle, port, server->config.listen_backlog, true) < 0) {
 		if (barrier) {
-			pthread_barrier_wait(barrier);
+			uv_barrier_wait(barrier);
 		}
 		uv_loop_close(&loop);
 		return;
@@ -689,7 +689,7 @@ worker_thread(void* arg)
 	uv_async_init(&loop, &server->worker_stop_async[idx], on_worker_stop_async);
 
 	if (barrier) {
-		pthread_barrier_wait(barrier);
+		uv_barrier_wait(barrier);
 	}
 
 	uv_run(&loop, UV_RUN_DEFAULT);
@@ -840,8 +840,8 @@ csilk_server_run(csilk_server_t* server, int port)
 			server->worker_count = nworkers;
 			server->worker_stop_count = nworkers;
 
-			pthread_barrier_t barrier;
-			pthread_barrier_init(&barrier, nullptr, workers);
+			uv_barrier_t barrier;
+			uv_barrier_init(&barrier, (unsigned int)workers);
 
 			for (int i = 0; i < nworkers; i++) {
 				worker_data_t* data = malloc(sizeof(worker_data_t));
@@ -855,8 +855,8 @@ csilk_server_run(csilk_server_t* server, int port)
 				uv_thread_create(&server->worker_tids[i], worker_thread, data);
 			}
 
-			pthread_barrier_wait(&barrier);
-			pthread_barrier_destroy(&barrier);
+			uv_barrier_wait(&barrier);
+			uv_barrier_destroy(&barrier);
 		} else {
 			free(server->worker_tids);
 			server->worker_tids = nullptr;
