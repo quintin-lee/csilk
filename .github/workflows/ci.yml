@@ -35,13 +35,11 @@ jobs:
 
     - name: Configure (macOS)
       if: runner.os == 'macOS'
-      env:
-        LDFLAGS: -L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/zlib/lib -L/opt/homebrew/opt/sqlite3/lib -L/opt/homebrew/opt/libyaml/lib -L/opt/homebrew/opt/curl/lib
-        CPPFLAGS: -I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/zlib/include -I/opt/homebrew/opt/sqlite3/include -I/opt/homebrew/opt/libyaml/include -I/opt/homebrew/opt/curl/include
       run: |
         cmake -B build -S . \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang \
+          -DCMAKE_PREFIX_PATH="$(brew --prefix);$(brew --prefix openssl);$(brew --prefix libyaml)" \
           -DENABLE_OOM_TEST=ON \
           ${{ matrix.build_type == 'Debug' && '-DUSE_ASAN=ON' || '' }}
 
