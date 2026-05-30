@@ -15,7 +15,7 @@ include/csilk/app/app.h         # 高层 csilk_app_t API
 include/csilk/app/admin.h       # 统一管理面板 API
 include/csilk/app/workflow.h    # 工作流引擎 API
 include/csilk/app/workflow_wal.h # 工作流 WAL 日志
-include/csilk/core/context_internal.h # 不透明 csilk_ctx_s 结构体
+include/csilk/core/ctx_types.h # csilk_ctx_s 结构体 (原 context_internal.h)
 include/csilk/core/internal.h   # 内部接口伞（→ hash.h/codec.h/ws_frame.h/crypto_dispatch.h/mq_types.h）
 include/csilk/drivers/ai.h      # AI 驱动接口
 include/csilk/drivers/cipher.h  # 密码驱动接口（AES/RSA）

@@ -4,8 +4,8 @@
 #include <string.h>
 #include <uv.h>
 
-#include "../src/core/context_internal.h"
-#include "../src/core/server_internal.h"
+#include "csilk/core/ctx_types.h"
+#include "csilk/core/srv_types.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 

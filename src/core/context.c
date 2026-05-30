@@ -33,10 +33,10 @@
 #include <strings.h>
 #include <uv.h>
 
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "server_internal.h"
+#include "csilk/core/srv_types.h"
 
 /** @brief Hash a header key string into a bucket index using djb2.
  *

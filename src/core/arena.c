@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).

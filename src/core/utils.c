@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "context_internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/drivers/cipher.h"
 

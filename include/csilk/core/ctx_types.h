@@ -1,5 +1,5 @@
 /**
- * @file context_internal.h
+ * @file ctx_types.h
  * @brief Internal layout of csilk_ctx_s — the central per-request data
  * structure.
  *

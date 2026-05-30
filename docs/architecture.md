@@ -122,7 +122,7 @@ In addition to the Onion model, a **Hook System** allows listening to global eve
 
 ### 3. Opaque Context & ABI Stability
 
-Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/csilk/core/context_internal.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
+Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/csilk/core/ctx_types.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
 
 ### 4. Pluggable Drivers
 
