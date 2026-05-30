@@ -545,7 +545,7 @@ csilk_base64url_decode(const char* src, uint8_t* out)
 	if (!tmp) {
 		return -1;
 	}
-	strcpy(tmp, src);
+	memcpy(tmp, src, len + 1);
 	for (size_t i = 0; i < len; i++) {
 		if (tmp[i] == '-') {
 			tmp[i] = '+';
@@ -653,25 +653,26 @@ csilk_generate_uuid(char* buf)
 	random[8] = (random[8] & 0x3F) | 0x80;
 
 	/* Format as: %08x-%04x-%04x-%04x-%012x */
-	sprintf(buf,
-		"%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%"
-		"02x%02x",
-		random[0],
-		random[1],
-		random[2],
-		random[3],
-		random[4],
-		random[5],
-		random[6],
-		random[7],
-		random[8],
-		random[9],
-		random[10],
-		random[11],
-		random[12],
-		random[13],
-		random[14],
-		random[15]);
+	snprintf(buf,
+		 37,
+		 "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%"
+		 "02x%02x",
+		 random[0],
+		 random[1],
+		 random[2],
+		 random[3],
+		 random[4],
+		 random[5],
+		 random[6],
+		 random[7],
+		 random[8],
+		 random[9],
+		 random[10],
+		 random[11],
+		 random[12],
+		 random[13],
+		 random[14],
+		 random[15]);
 }
 
 /** @brief Context-aware HMAC-SHA256 — delegates to the crypto driver if

@@ -442,6 +442,37 @@
 
 ---
 
+## 八、v0.5.0 优化完善计划 (2026-05-30)
+
+### 轨道一：安全与正确性 (P0)
+- [ ] 8.1 修复不安全字符串函数 — strcpy/strcat/sprintf → snprintf
+  - workflow.c: 6 处 strcpy/strcat 无越界检查
+  - jwt.c: 2 处 sprintf 无大小保护
+  - utils.c: 1 处 sprintf
+- [ ] 8.2 修复 clang-tidy 静默失败 — 补齐 include 路径，移除 || true
+- [ ] 8.3 Doxygen 版本号修正 — PROJECT_NUMBER 0.2.1 → 0.3.0
+- [ ] 8.4 修复 setjmp/longjmp 潜在泄漏 — 文档中标注 @warning
+
+### 轨道二：CI 与测试覆盖 (P1)
+- [ ] 8.5 重新启用 Fuzz 测试 — 安装 clang-19 替代系统 clang
+- [ ] 8.6 补充缺失模块测试 — admin.c, connection.c, tls.c, hot_reload.c, http1.c
+- [ ] 8.7 修复 example_app.c 编译警告 (format-truncation)
+- [ ] 8.8 修复 h2.c int-to-ptr 性能警告 (performance-no-int-to-ptr)
+- [ ] 8.9 Swagger UI CDN 离线备选方案
+
+### 轨道三：平台与文档 (P2)
+- [ ] 8.10 macOS 支持 — pthread_barrier_t → uv_barrier_t 替换
+- [ ] 8.11 修正 CHANGELOG macOS CI 项 (未实际启用)
+- [ ] 8.12 GitHub Actions Node.js 20 → 24 升级
+- [ ] 8.13 补充 examples 集成测试至 CI
+
+### 轨道四：v1.0 准备 (P3)
+- [ ] 8.14 ABI Phase A — Context accessor API 扩展 (csilk_ctx_get_method 等)
+- [ ] 8.15 补全 ollama_embeddings @todo 实现
+- [ ] 8.16 HTML 文档部署版本号自动同步
+
+---
+
 ## 代码库重构 (Codebase Restructuring)
 
 > csilk 从当前 48 文件 / 平铺架构重构为 ～54 文件的模块化分层架构。
