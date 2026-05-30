@@ -31,9 +31,22 @@ jobs:
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install cmake pkg-config libyaml zlib curl openssl libpq sqlite3
+        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3
 
-    - name: Configure
+    - name: Configure (macOS)
+      if: runner.os == 'macOS'
+      env:
+        LDFLAGS: -L/opt/homebrew/opt/openssl/lib -L/opt/homebrew/opt/zlib/lib -L/opt/homebrew/opt/sqlite3/lib
+        CPPFLAGS: -I/opt/homebrew/opt/openssl/include -I/opt/homebrew/opt/zlib/include -I/opt/homebrew/opt/sqlite3/include
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang \
+          -DENABLE_OOM_TEST=ON \
+          ${{ matrix.build_type == 'Debug' && '-DUSE_ASAN=ON' || '' }}
+
+    - name: Configure (Ubuntu)
+      if: runner.os == 'Linux'
       run: |
         cmake -B build -S . \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
