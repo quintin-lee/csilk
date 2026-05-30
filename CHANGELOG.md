@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Docker multi-stage build support**: Added `Dockerfile` with builder and
   runtime stages, plus `.dockerignore` for lean build context.
-- **macOS CI**: Added macOS 14 (ARM64) to the CI matrix alongside Ubuntu.
+- **macOS CI research**: Evaluated macOS 14 (ARM64) compatibility.  Identified
+  `pthread_barrier_t` as blocker (not on Darwin); solution documented in
+  `docs/research/macos-port.md` (uv_barrier_t replacement, targeted v0.5.0).
 - **System dependency version checks**: Added minimum version requirements for
   OpenSSL (>= 1.1.1), CURL (>= 7.80.0), libyaml (>= 0.2.0), zlib (>= 1.2.0),
   sqlite3 (>= 3.20.0).

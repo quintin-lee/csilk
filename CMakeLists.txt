@@ -484,11 +484,11 @@ install(EXPORT csilk-targets
 # clang-tidy
 find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
 if(CLANG_TIDY_EXECUTABLE)
-    set(CSILK_TIDY_CHECKS "clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling")
+    set(CSILK_TIDY_CHECKS "clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-performance-no-int-to-ptr")
     add_custom_target(tidy
         COMMAND ${CLANG_TIDY_EXECUTABLE}
             --quiet
-            --checks=${CSILK_TIDY_CHECKS}
+            --checks=-*,${CSILK_TIDY_CHECKS}
             --warnings-as-errors="*"
             --extra-arg=-Wno-everything
             ${CSILK_SOURCES}

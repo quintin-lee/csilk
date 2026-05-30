@@ -70,7 +70,7 @@ jobs:
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 
     - name: clang-tidy
-      run: cmake --build build --target tidy || true
+      run: cmake --build build --target tidy
 
   fuzz:
     name: Fuzz Testing
