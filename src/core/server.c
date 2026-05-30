@@ -78,7 +78,7 @@ static void cleanup_tls(csilk_server_t* s);
 static int setup_client_tls(csilk_client_t* client);
 static void process_tls_read(csilk_client_t* client);
 static void flush_tls_write(csilk_client_t* client);
-static void trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
+void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
 
 /** @brief Get a client connection object from the server's free pool or
  * allocate a new one.
@@ -241,7 +241,7 @@ on_close(uv_handle_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (client) {
-		trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
+		_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
 		client_list_remove(client->server, client);
 		client->ctx._internal_client = NULL;
 		uv_timer_stop(&client->timer);
@@ -319,7 +319,7 @@ on_stop_async(uv_async_t* handle)
 {
 	csilk_server_t* server = (csilk_server_t*)handle->data;
 
-	trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
+	_csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
 
 	// Close the server listen handle (stop accepting new connections)
 	if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
@@ -419,7 +419,7 @@ on_sendfile_complete(uv_fs_t* req)
 		}
 	}
 
-	trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
+	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
 	csilk_ctx_cleanup(&client->ctx);
 }
 
@@ -858,6 +858,67 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 	csilk_client_write(client, data, len);
 }
 
+void
+_csilk_dispatch_request(csilk_ctx_t* c)
+{
+	if (!c || !c->server) {
+		return;
+	}
+
+	csilk_server_t* server = (csilk_server_t*)c->server;
+
+	CSILK_LOG_I("Request: %s %s", c->request.method, c->request.path);
+
+	_csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
+
+	if (csilk_router_match_ctx(server->router, c)) {
+		CSILK_LOG_D("Route matched, calling next handler");
+
+		// Prepend global middlewares
+		if (server->middleware_count > 0) {
+			int route_handler_count = 0;
+			while (c->handlers[route_handler_count] != NULL) {
+				route_handler_count++;
+			}
+
+			int total_count = server->middleware_count + route_handler_count;
+			csilk_handler_t* arena_handlers = csilk_arena_alloc(
+			    c->arena, (total_count + 1) * sizeof(csilk_handler_t));
+			if (arena_handlers) {
+				for (int i = 0; i < server->middleware_count; i++) {
+					arena_handlers[i] = server->middlewares[i];
+				}
+				for (int i = 0; i < route_handler_count; i++) {
+					arena_handlers[server->middleware_count + i] =
+					    c->handlers[i];
+				}
+				arena_handlers[total_count] = NULL;
+				c->handlers = arena_handlers;
+			}
+		}
+
+		csilk_next(c);
+	} else {
+		CSILK_LOG_W("Route not found: %s", c->request.path);
+		if (server->not_found_handler) {
+			server->not_found_handler(c);
+		} else {
+			csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+		}
+	}
+
+	if (c->is_async) {
+		csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+		if (client && client->protocol == CSILK_PROTO_HTTP1) {
+			uv_read_stop((uv_stream_t*)&client->handle);
+		}
+	}
+
+	if (!c->is_async) {
+		_csilk_send_response(c);
+	}
+}
+
 /** @brief Send the assembled HTTP response to the client.
  *
  * This is the central response-serialization function. It constructs the
@@ -898,6 +959,11 @@ _csilk_send_response(csilk_ctx_t* c)
 {
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 	if (!client) {
+		return;
+	}
+
+	if (client->protocol == CSILK_PROTO_HTTP2) {
+		csilk_h2_send_response(c);
 		return;
 	}
 
@@ -1051,7 +1117,7 @@ _csilk_send_response(csilk_ctx_t* c)
 		}
 	}
 
-	trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
+	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
 
 	csilk_ctx_cleanup(&client->ctx);
 }
@@ -1105,7 +1171,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
  *   1. finalize_request(): store remaining headers, split URL into path
  *      and query, URL-decode the path, parse query parameters.
  *
- *   2. trigger_hooks(CSILK_HOOK_REQUEST_BEGIN): user-registered
+ *   2. _csilk_trigger_hooks(CSILK_HOOK_REQUEST_BEGIN): user-registered
  *      request-start hooks (e.g., request logging, rate limiting).
  *
  *   3. csilk_router_match_ctx(): walk the radix tree to find a matching
@@ -1134,53 +1200,8 @@ on_message_complete(llhttp_t* p)
 	csilk_client_t* client = (csilk_client_t*)p->data;
 
 	finalize_request(client, p);
-	CSILK_LOG_I("Request: %s %s", client->ctx.request.method, client->ctx.request.path);
+	_csilk_dispatch_request(&client->ctx);
 
-	trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_BEGIN);
-
-	if (csilk_router_match_ctx(client->server->router, &client->ctx)) {
-		CSILK_LOG_D("Route matched, calling next handler");
-
-		// Prepend global middlewares
-		if (client->server->middleware_count > 0) {
-			int route_handler_count = 0;
-			while (client->ctx.handlers[route_handler_count] != NULL) {
-				route_handler_count++;
-			}
-
-			int total_count = client->server->middleware_count + route_handler_count;
-			csilk_handler_t* arena_handlers = csilk_arena_alloc(
-			    client->ctx.arena, (total_count + 1) * sizeof(csilk_handler_t));
-			if (arena_handlers) {
-				for (int i = 0; i < client->server->middleware_count; i++) {
-					arena_handlers[i] = client->server->middlewares[i];
-				}
-				for (int i = 0; i < route_handler_count; i++) {
-					arena_handlers[client->server->middleware_count + i] =
-					    client->ctx.handlers[i];
-				}
-				arena_handlers[total_count] = NULL;
-				client->ctx.handlers = arena_handlers;
-			}
-		}
-
-		csilk_next(&client->ctx);
-	} else {
-		CSILK_LOG_W("Route not found: %s", client->ctx.request.path);
-		if (client->server->not_found_handler) {
-			client->server->not_found_handler(&client->ctx);
-		} else {
-			csilk_string(&client->ctx, CSILK_STATUS_NOT_FOUND, "Not Found");
-		}
-	}
-
-	if (client->ctx.is_async) {
-		uv_read_stop((uv_stream_t*)&client->handle);
-	}
-
-	if (!client->ctx.is_async) {
-		_csilk_send_response(&client->ctx);
-	}
 	return 0;
 }
 
@@ -1291,7 +1312,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
 		client->parser.data = client;
 
-		trigger_hooks(server, &client->ctx, CSILK_HOOK_CONN_OPEN);
+		_csilk_trigger_hooks(server, &client->ctx, CSILK_HOOK_CONN_OPEN);
 
 		if (server->ssl_ctx) {
 			if (setup_client_tls(client) < 0) {
@@ -1854,8 +1875,8 @@ csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler)
  * @param s    The server instance.
  * @param c    The request context (may be NULL for server-level hooks).
  * @param type Hook type to trigger. */
-static void
-trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
+void
+_csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
 {
 	if (!s || type < 0 || type >= CSILK_HOOK_COUNT) {
 		return;
@@ -2222,7 +2243,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
 	CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
 
-	trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
+	_csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
 	return uv_run(server->loop, UV_RUN_DEFAULT);
 }

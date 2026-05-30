@@ -40,4 +40,10 @@ csilk_ctx_t* csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t strea
  */
 void csilk_h2_free_streams(csilk_client_t* client);
 
+/**
+ * @brief Send an HTTP/2 response for a given stream context.
+ * @param c The stream context.
+ */
+void csilk_h2_send_response(csilk_ctx_t* c);
+
 #endif /* CSILK_H2_H */
