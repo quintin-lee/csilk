@@ -8,15 +8,12 @@ set(CSILK_AI_SOURCES
 )
 
 set(CSILK_APP_SOURCES
-    src/app/admin.c
     src/app/app.c
     src/app/group.c
-    src/app/workflow.c
-    src/app/workflow_loader.c
-    src/app/workflow_wal.c
 )
 
 set(CSILK_CORE_SOURCES
+    src/core/admin.c
     src/core/arena.c
     src/core/config.c
     src/core/connection.c
@@ -84,6 +81,12 @@ set(CSILK_SECURITY_SOURCES
     src/security/perm.c
 )
 
+set(CSILK_WORKFLOW_SOURCES
+    src/workflow/workflow.c
+    src/workflow/workflow_loader.c
+    src/workflow/workflow_wal.c
+)
+
 # Combine into the main source list.
 set(CSILK_SOURCES
     ${CSILK_AI_SOURCES}
@@ -97,4 +100,5 @@ set(CSILK_SOURCES
     ${CSILK_PROTOCOL_SOURCES}
     ${CSILK_REFLECTION_SOURCES}
     ${CSILK_SECURITY_SOURCES}
+    ${CSILK_WORKFLOW_SOURCES}
 )
