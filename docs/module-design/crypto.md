@@ -121,7 +121,7 @@ Same as the crypto primitive driver:
 
 ```c
 #include "csilk/csilk.h"
-#include "csilk/core/internal.h"
+#include "csilk/core/internal.h"  // umbrella → includes crypto_dispatch.h
 
 void my_handler(csilk_ctx_t* c) {
   uint8_t key[32], iv[12];
@@ -176,7 +176,7 @@ The built-in default (`csilk_default_cipher_driver` in `src/crypto/cipher.c`) us
 
 ### Internal Delegation Mechanism
 
-Internal wrappers in `internal.h` (implemented in `utils.c`) follow the same pattern as the crypto primitive driver:
+Internal wrappers in `crypto_dispatch.h` (included via `internal.h`, implemented in `utils.c`) follow the same pattern as the crypto primitive driver:
 
 ```c
 int _csilk_symmetric_encrypt(csilk_ctx_t* c, ...) {

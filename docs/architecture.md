@@ -333,7 +333,12 @@ struct csilk_server_s {
 
 ```mermaid
 graph TB
-    csilk.h["csilk.h<br/>(Public API)"] --> csilk/core/internal.h["csilk/core/internal.h<br/>(Internal API)"]
+    csilk.h["csilk.h<br/>(Public API)"] --> csilk/core/internal.h["csilk/core/internal.h<br/>(Internal API umbrella)"]
+    csilk/core/internal.h["csilk/core/internal.h"] --> csilk/core/hash.h["hash.h<br/>(SHA-1/SHA-256/HMAC)"]
+    csilk/core/internal.h --> csilk/core/codec.h["codec.h<br/>(Base64/URL-decode)"]
+    csilk/core/internal.h --> csilk/core/ws_frame.h["ws_frame.h<br/>(WebSocket frames)"]
+    csilk/core/internal.h --> csilk/core/crypto_dispatch.h["crypto_dispatch.h<br/>(Crypto stubs)"]
+    csilk/core/internal.h --> csilk/core/mq_types.h["mq_types.h<br/>(Message Queue)"]
     csilk/app/app.h["csilk/app/app.h<br/>(High-Level API)"]
     csilk/app/admin.h["csilk/app/admin.h<br/>(Admin Dashboard API)"]
 
