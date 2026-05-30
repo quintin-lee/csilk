@@ -56,7 +56,12 @@ typedef struct csilk_server_config_s {
 	char* tls_ca_file;   /**< Path to the CA certificate bundle for
                           client-certificate verification (optional). */
 	int tls_verify_peer; /**< Non-zero to require and verify a client certificate.
-                          Requires @p tls_ca_file. */
+                           Requires @p tls_ca_file. */
+
+	/* HTTP/2 server push */
+	int h2_push_enable;	     /**< Non-zero to enable HTTP/2 server push. */
+	int h2_max_push_per_request; /**< Maximum push promises per request (0 = default
+				      10). */
 } csilk_server_config_t;
 
 /**
