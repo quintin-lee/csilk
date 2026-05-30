@@ -416,7 +416,7 @@
 ### 轨道一：性能基准与工程化 (P0)
 - [x] 7.1 README 修正 — C23、依赖列表补充
 - [x] 7.2 CI 流程整合 — 合并重叠的 ci.yml/build.yml，统一 workflow
-- [ ] 7.3 自动化性能基准集 — wrk 跨框架对比报告，CI 性能回归检测
+- [x] 7.3 自动化性能基准集 — wrk JSON 输出 + --save/--compare/--ci 模式，CI 集成
 - [x] 7.4 macOS CI — 预研完成，因 pthread_barrier_t 缺失推迟至后续版本
 - [x] 7.5 平台兼容说明 — README 已添加编译器/OS/依赖版本矩阵
 
@@ -429,16 +429,16 @@
 - [x] 7.11 Fuzz 测试 — 因系统 clang 不支持 C23 constexpr 暂时禁用，预留 clang-19 模板
 
 ### 轨道三：协议与扩展 (P2)
-- [ ] 7.12 HTTP/2 Phase 3 — Server Push 支持
-- [x] 7.13 连接池大小可配置化 (config.max_connections) → CSILK_CLIENT_POOL_SIZE 常量
-- [ ] 7.19 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
+- [x] 7.12 HTTP/2 Phase 3 — Server Push 支持 (csilk_push_promise API)
+- [x] 7.13 连接池大小可配置化 → CSILK_CLIENT_POOL_SIZE 常量
+- [x] 7.19 Swagger UI 治理 — 移除仓库 4.4MB 静态资源，CMake 构建时自动下载
 
 ### 轨道四：v1.0 预研 (P3)
-- [ ] 7.14 types.h 进一步拆分 (当前 419 行单体文件)
-- [ ] 7.15 ABI 渐进不透明化路线图 (Context accessor API 扩展)
-- [ ] 7.16 HTTP/3 / QUIC 集成可行性评估
-- [ ] 7.17 macOS 平台支持 (需解决 pthread_barrier_t 替代方案)
-- [ ] 7.18 Windows (MSVC) 构建支持预研
+- [x] 7.14 types.h 拆分 — 评估推迟至 v1.0（与 ABI 不透明化同步进行）
+- [x] 7.15 ABI 渐进不透明化路线图 → docs/research/abi-opaque-roadmap.md
+- [x] 7.16 HTTP/3 / QUIC 可行性评估 → docs/research/http3-quic.md
+- [x] 7.17 macOS 平台支持评估 → docs/research/macos-port.md (uv_barrier_t 方案)
+- [x] 7.18 Windows (MSVC) 支持预研 → docs/research/windows-port.md (WSL2/Docker 推荐)
 
 ---
 
