@@ -32,9 +32,6 @@ mock_server(void)
 	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
 	uv_mutex_init(&s->pool_mutex);
 	uv_mutex_init(&s->clients_mutex);
-	uv_loop_t* loop = uv_default_loop();
-	uv_loop_init(loop);
-	s->loop = loop;
 	return s;
 }
 
@@ -43,7 +40,6 @@ free_mock_server(csilk_server_t* s)
 {
 	uv_mutex_destroy(&s->pool_mutex);
 	uv_mutex_destroy(&s->clients_mutex);
-	uv_loop_close(s->loop);
 	free(s);
 }
 

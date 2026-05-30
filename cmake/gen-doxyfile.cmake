@@ -1,10 +1,10 @@
 # gen-doxyfile.cmake — Generate Doxyfile with correct version number.
 # Invoked by the 'docs' custom target.
-# Requires: -DCSILK_VERSION=<ver> on the cmake -P command line.
+# Requires: -DSRC_DIR=<path> -DBIN_DIR=<path> -DCSILK_VERSION=<ver>
 
 configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
+  "${SRC_DIR}/Doxyfile.in"
+  "${BIN_DIR}/Doxyfile"
   @ONLY
 )
 message(STATUS "Generated Doxyfile with version ${CSILK_VERSION}")

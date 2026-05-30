@@ -112,7 +112,9 @@ test_json_null_safe(void)
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_json(c, 200, nullptr);
-	csilk_json(nullptr, 200, cJSON_CreateObject());
+	cJSON* leak_test = cJSON_CreateObject();
+	csilk_json(nullptr, 200, leak_test);
+	cJSON_Delete(leak_test);
 	PASS();
 	csilk_test_ctx_free(c);
 }
