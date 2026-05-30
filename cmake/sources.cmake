@@ -41,6 +41,8 @@ set(CSILK_DRIVER_SOURCES
     src/drivers/cipher/openssl.c
     src/drivers/perm/simple.c
     src/drivers/sqlite.c
+    src/drivers/vector/vector.c
+    src/drivers/vector/qdrant.c
 )
 
 set(CSILK_MESSAGING_SOURCES
