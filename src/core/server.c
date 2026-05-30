@@ -914,3 +914,20 @@ csilk_server_get_router(csilk_server_t* server)
 {
 	return server ? server->router : nullptr;
 }
+
+/** @brief Swap the router instance attached to a server.
+ *
+ * @param server The server instance.
+ * @param router The new router instance. */
+void
+csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
+{
+	if (!server || !router) {
+		return;
+	}
+	csilk_router_t* old_router = server->router;
+	server->router = router;
+	if (old_router) {
+		csilk_router_free(old_router);
+	}
+}
