@@ -66,6 +66,40 @@ libuv, nghttp2, and cJSON are automatically fetched during build via CMake's Fet
 sudo apt install libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev libsqlite3-dev
 ```
 
+## Supported Platforms
+
+csilk requires **C23** language support (`static constexpr`, `nullptr`, `bool` keywords).
+
+### Compilers
+
+| Compiler        | Minimum Version | Notes                                                    |
+|-----------------|:--------------:|----------------------------------------------------------|
+| **GCC**         | 13+            | Full C23 support. Primary CI target on Ubuntu 24.04.     |
+| **Clang**       | 19+            | C23 `constexpr` support. libFuzzer fuzzing.              |
+| **Apple Clang** | —              | Not supported — lacks C23 `constexpr` and `nullptr`.     |
+| **MSVC**        | —              | Not supported — POSIX APIs (libuv, pthread, sys/socket). |
+
+### Operating Systems
+
+| Platform          | Status      | Notes                                                       |
+|-------------------|:-----------:|-------------------------------------------------------------|
+| **Linux**         | Supported   | Ubuntu 24.04 (CI), Debian 12+, any glibc-based distro.      |
+| **macOS**         | Planned     | Missing `pthread_barrier_t` in multi-worker mode.           |
+| **Windows**       | Not planned | POSIX dependency surface too large (libuv may enable).      |
+| **musl / Alpine** | Untested    | Likely compatible; no CI coverage.                          |
+
+### Dependency Versions
+
+| Dependency     | Minimum   | Purpose                        |
+|----------------|:---------:|--------------------------------|
+| CMake          | 3.11      | Build system                   |
+| OpenSSL        | 1.1.1     | TLS, crypto, JWT (HS256)       |
+| libcurl        | 7.80.0    | HTTP client (AI drivers)       |
+| libyaml        | 0.2.0     | Configuration parsing          |
+| zlib           | 1.2.0     | Gzip compression               |
+| sqlite3        | 3.20.0    | Embedded database              |
+| pthread        | —         | Threading (system)             |
+
 ## Building
 
 ### Prerequisites
