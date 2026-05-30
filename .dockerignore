@@ -1,0 +1,11 @@
+**/build
+**/build_release
+**/.cache
+.specstory
+*.o
+*.gcda
+*.gcno
+.git
+docs/html
+docs/latex
+coverage

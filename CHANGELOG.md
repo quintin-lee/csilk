@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Docker multi-stage build support**: Added `Dockerfile` with builder and
+  runtime stages, plus `.dockerignore` for lean build context.
+- **macOS CI**: Added macOS 14 (ARM64) to the CI matrix alongside Ubuntu.
+- **System dependency version checks**: Added minimum version requirements for
+  OpenSSL (>= 1.1.1), CURL (>= 7.80.0), libyaml (>= 0.2.0), zlib (>= 1.2.0),
+  sqlite3 (>= 3.20.0).
+- **`.clang-tidy` project configuration**: Added for IDE integration with
+  `bugprone-*`, `modernize-*`, and `readability-*` checks.
+- **`.lsan-suppressions`**: Suppress known false positives from libuv, OpenSSL,
+  and nghttp2 in LeakSanitizer.
+
+### Changed
+- **CI consolidation**: Merged `build.yml` into `ci.yml` with unified
+  Debug/Release matrix, separated lint (clang-tidy + Mermaid), fuzz, and
+  benchmark jobs. Removed redundant build workflow.
+- **Clang-tidy rules enhanced**: Added `bugprone-*`, `modernize-*`,
+  and `readability-*` check categories (with sensible exclusions for C
+  codebase).
+- **CMake version centralization**: Replaced 18 hardcoded `0.3.0` references
+  with `CSILK_VERSION` CMake variable. `version.h` is now generated from
+  `version.h.in` via `configure_file()`.
+- **Connection pool constant**: Hardcoded `[32]` extracted to named
+  `CSILK_CLIENT_POOL_SIZE` constant in `srv_types.h`.
+
+### Fixed
+- **README corrections**: Updated C11 → C23 compiler requirement, added
+  missing dependencies (nghttp2, zlib, libcurl, sqlite3) and their install
+  commands, added HTTP/2 to features list, fixed project structure to remove
+  deleted `src/crypto/`, updated acknowledgments.
+- **PLAN.md consistency**: Marked P4-1 (HTTPS/TLS) and P5 test coverage items
+  as completed, clarified P2-1 (Context opaque) as deferred to v1.0 per
+  ABI_REPORT.md, added v0.4.0 roadmap.
+
 ## [0.3.0] - 2026-05-30
 
 ### Added

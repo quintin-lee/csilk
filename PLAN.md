@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-05-30 | 基于 0.3.0 重构
+> 最后更新: 2026-05-30 | 基于 0.3.0 重构 | 0.4.0 规划中
 
 ---
 
@@ -213,8 +213,9 @@
 - [x] **P1-5: csilk_log_init 返回值在 app.c 中被忽略** — `src/app/app.c:121,170,176`
 
 ### P2 — API 设计问题
-- [ ] **P2-1: csilk_ctx_s 结构体完全暴露** — `include/csilk.h:71-89`
-  ABI 不稳定；应改为不透明类型。
+- [x] **P2-1: csilk_ctx_s 结构体完全暴露** — `include/csilk/core/ctx_types.h`
+> 已评估并制定路线图（见 ABI_REPORT.md）。当前通过访问器 API 提供 ABI 保护。
+> 完全不透明化推迟至 v1.0（需迁移 30+ 测试文件）。
 - [x] **P2-2: csilk_cors_middleware 按值传结构体** — `include/csilk.h:311`
   72 字节按值传递，已改为 `const csilk_cors_config_t*`。
 - [x] **P2-3: 固定长度中间件数组静默丢弃** — `src/core/server.c:36,521`
@@ -240,7 +241,7 @@
 - [x] **P3-8: SHA1 使用 uint32_t len 限制更新大小** — `src/core/utils.c:68`
 
 ### P4 — 缺失功能
-- [ ] P4-1: HTTPS/TLS 支持（PLAN.md 已标注待后续）
+- [x] P4-1: HTTPS/TLS 支持（Phase 10-11 已完成）
 - [x] **P4-2: HTTP/2 支持**
   已实现 Phase 1（会话搭建 + ALPN 协商 + nghttp2 session 初始化 + `csilk_h2.h` 公开 API）和 Phase 2（请求派发：`on_header_callback` 解析伪首部与常规首部、`on_frame_recv_callback` 在 END_STREAM 时派发请求、`on_data_chunk_recv_callback` 累积请求体、`on_stream_close_callback` 清理流上下文；响应发送：`csilk_h2_send_response` 通过 `body_read_callback` 构建 HEADERS 帧 + DATA 帧）。路由通过 `_csilk_dispatch_request` 统一处理 HTTP/1.1 与 HTTP/2。
 - [x] **P4-3: 优雅关闭** — 当前 `csilk_server_stop` 直接 `uv_stop`，断活跃连接。已实现通过 `uv_walk` 显式关闭所有句柄。
@@ -270,14 +271,14 @@
 **功能覆盖不足：**
 - [x] **csilk_config_validate** — `src/core/config.c:197-234`
    已增加 `tests/test_config_validate.c` 验证。
-- [ ] csilk_config_free — src/core/config.c:161-195
-- [ ] csilk_next(NULL handlers) — src/core/context.c:15-21
-- [ ] csilk_get_param 未找到时 — src/core/context.c:45-52
-- [ ] csilk_set 存储槽满时 — src/core/context.c:220
-- [ ] csilk_bind_reflect / csilk_json_reflect — src/core/context.c:393-411
-- [ ] 路由溢出（>20 个路径参数）
-- [ ] 服务端多连接场景
-- [ ] OOM / 内存压力场景
+- [x] csilk_config_free — src/core/config.c:161-195
+- [x] csilk_next(NULL handlers) — src/core/context.c:15-21
+- [x] csilk_get_param 未找到时 — src/core/context.c:45-52
+- [x] csilk_set 存储槽满时 — src/core/context.c:220
+- [x] csilk_bind_reflect / csilk_json_reflect — src/core/context.c:393-411
+- [x] 路由溢出（>20 个路径参数）
+- [x] 服务端多连接场景
+- [x] OOM / 内存压力场景
 
 ### P6 — 构建系统问题
 - [x] **P6-1: 库链接可见性应为 PRIVATE** — CMakeLists.txt:139
@@ -381,7 +382,7 @@
 
 ---
 
-## 六、状态一览
+## 六、状态一览 (v0.3.0 闭环)
 
 | 域 | 待办 | 说明 |
 |-----|:----:|------|
@@ -401,12 +402,39 @@
 | v1.0 轨道四 | 0 | 全部完成 |
 | 平账 P0 | 0 | 所有问题已修复 |
 | 平账 P1 | 0 | 所有问题已修复 |
-| 平账 P2 | 0 | 所有问题已修复 |
+| 平账 P2 | 0 | P2-1 已评估，推迟至 v1.0 |
 | 平账 P3 | 0 | 所有问题已修复 |
 | 平账 P4 | 0 | 所有问题已修复 |
 | 平账 P5 | 0 | 所有问题已修复 |
 | 平账 P6 | 0 | 所有问题已修复 |
-| **合计** | **0** | v1.0 目标全部达成 |
+| **合计** | **0** | v0.3.0 目标全部达成 |
+
+---
+
+## 七、v0.4.0 优化完善计划 (2026-05-30)
+
+### 轨道一：性能基准与工程化 (P0)
+- [ ] 7.1 自动化性能基准集 — wrk 跨框架对比报告，CI 性能回归检测
+- [ ] 7.2 README 修正 — C23、依赖列表补充
+- [ ] 7.3 CI 流程整合 — 合并重叠的 ci.yml/build.yml，统一 workflow
+- [ ] 7.4 macOS CI — 添加 macOS 构建与测试矩阵
+
+### 轨道二：系统依赖与构建加固 (P1)
+- [ ] 7.5 CMakeLists 系统依赖版本下限校验
+- [ ] 7.6 Docker 多阶段构建支持
+- [ ] 7.7 集中版本号管理 — 消除 18 处硬编码版本
+- [ ] 7.8 clang-tidy 规则增强 — 追加 bugprone-*, modernize-*, readability-*
+
+### 轨道三：协议与扩展 (P2)
+- [ ] 7.9 HTTP/2 Phase 3 — Server Push 支持
+- [ ] 7.10 连接池大小可配置化 (config.max_connections)
+- [ ] 7.11 Swagger UI 治理 — 从仓库中移除 1.5MB 静态资源，改为构建时获取
+
+### 轨道四：v1.0 预研 (P3)
+- [ ] 7.12 types.h 进一步拆分 (当前 419 行单体文件)
+- [ ] 7.13 ABI 渐进不透明化路线图 (Context accessor API 扩展)
+- [ ] 7.14 HTTP/3 / QUIC 集成可行性评估
+- [ ] 7.15 Windows (MSVC) 构建支持预研
 
 ---
 

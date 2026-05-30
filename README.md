@@ -1,6 +1,6 @@
 # csilk
 
-A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, and cJSON.
+A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON.
 
 
 ## Features
@@ -11,6 +11,7 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
 - 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, and MQ
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
+- 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK)
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
@@ -49,16 +50,20 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Dependencies
 
 - [libuv](https://github.com/libuv/libuv) - Asynchronous I/O library
-- [llhttp](https://github.com/nodejs/llhttp) - HTTP parser
+- [llhttp](https://github.com/nodejs/llhttp) - HTTP/1.1 parser
+- [nghttp2](https://github.com/nghttp2/nghttp2) - HTTP/2 library
 - [cJSON](https://github.com/DaveGamble/cJSON) - JSON parser
 - [libyaml](https://github.com/yaml/libyaml) - YAML parser
-- [OpenSSL](https://www.openssl.org/) - TLS/SSL and Cryptographic library (Required for HTTPS and JWT)
+- [OpenSSL](https://www.openssl.org/) - TLS/SSL and Cryptographic library
+- [zlib](https://www.zlib.net/) - Gzip compression
+- [libcurl](https://curl.se/libcurl/) - HTTP client (AI drivers)
+- [sqlite3](https://www.sqlite.org/) - Embedded SQL database
 
-libuv and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml and OpenSSL must be installed as system dependencies.
+libuv, nghttp2, and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml, OpenSSL, zlib, libcurl, and sqlite3 must be installed as system dependencies.
 
 ### Installation (Debian/Ubuntu)
 ```bash
-sudo apt install libyaml-dev libssl-dev
+sudo apt install libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev libsqlite3-dev
 ```
 
 ## Building
@@ -66,9 +71,9 @@ sudo apt install libyaml-dev libssl-dev
 ### Prerequisites
 
 - CMake 3.11 or higher
-- C compiler (supporting C11)
+- C compiler (supporting C23)
 - Git (for fetching dependencies)
-- libyaml development headers (`apt install libyaml-dev` on Debian/Ubuntu)
+- System dependencies: `sudo apt install libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev libsqlite3-dev`
 
 ### Build Steps
 
@@ -108,6 +113,19 @@ make docs  # Requires Doxygen
 
 # Optional: Format code
 make format  # Requires clang-format
+```
+
+### Docker
+
+```bash
+# Build the Docker image
+docker build -t csilk .
+
+# Run a container
+docker run -p 8080:8080 csilk
+
+# Override config
+docker run -p 8080:8080 -v $(pwd)/custom_config.yaml:/etc/csilk/config.yaml csilk
 ```
 
 ## Documentation
@@ -257,13 +275,12 @@ src/
   ├── core/           # Kernel (libuv TCP, Router, Arena, Logger, Config)
   ├── app/            # Application Layer (app, admin dashboard, workflow engine)
   ├── ai/             # AI Unified Interface Engine
-  ├── crypto/         # Cipher Driver (AES, RSA, sign/verify)
   ├── data/           # Database Abstraction Layer
   ├── messaging/      # Internal Event Bus (Message Queue)
   ├── security/       # Permission & Security Core
   ├── reflection/     # Reflection Engine implementation
   ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
-  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB)
+  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB, Redis, Qdrant)
   └── middleware/     # 15 built-in middleware modules
 
 include/csilk/        # Public Hierarchical Headers
@@ -274,7 +291,7 @@ include/csilk/        # Public Hierarchical Headers
   ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tests/                # 98+ comprehensive unit tests
+tests/                # 109+ comprehensive unit tests
 examples/             # Functional usage examples
 ```
 
@@ -296,8 +313,8 @@ The project includes a comprehensive test suite. After building, run individual 
 | 🚀 | Performance / Async I/O |
 | 📬 | Internal Event Bus (MQ) |
 | 📈 | Prometheus Metrics |
+| 🌐 | Networking / Routing / HTTP/2 |
 | 🔧 | Middleware / Tooling |
-| 🌐 | Networking / Routing |
 | 📦 | JSON / Data serialization |
 | 🍪 | Cookie management |
 | 🔌 | WebSocket support |
@@ -330,4 +347,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by [Gin](https://github.com/gin-gonic/gin) web framework
-- Built upon excellent C libraries: libuv, llhttp, and cJSON
+- Built upon excellent C libraries: libuv, llhttp, nghttp2, and cJSON

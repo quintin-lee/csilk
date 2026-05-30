@@ -31,6 +31,12 @@ static constexpr size_t CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL;
 static constexpr int CSILK_DEFAULT_LISTEN_BACKLOG = 128;
 /** @brief Default request arena chunk size. */
 static constexpr size_t CSILK_DEFAULT_ARENA_SIZE = 4096;
+/** @brief Client connection object pool capacity.
+ *
+ * Controls the maximum number of idle client objects cached for reuse.
+ * When pool is exhausted, new clients are allocated from heap and returned
+ * to pool on connection close. Increase for high-concurrency scenarios. */
+static constexpr int CSILK_CLIENT_POOL_SIZE = 32;
 
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {
@@ -78,9 +84,9 @@ struct csilk_server_s {
 	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
 	csilk_client_t* active_clients;		    /**< Head of active connections list. */
 	uv_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
-	csilk_client_t* client_pool[32];	    /**< Connection object free list. */
-	int client_pool_count;			    /**< Number of free clients in pool. */
-	uv_mutex_t pool_mutex;			    /**< Mutex for connection pool access. */
+	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Connection object free list. */
+	int client_pool_count;				     /**< Number of free clients in pool. */
+	uv_mutex_t pool_mutex; /**< Mutex for connection pool access. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.

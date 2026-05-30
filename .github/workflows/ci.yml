@@ -2,67 +2,119 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
-  build_and_test:
+  test:
+    name: Test (${{ matrix.os }}, ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        build_type: [Debug, Release]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang clang-tidy \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake pkg-config libyaml zlib curl openssl libpq sqlite3
+
+    - name: Configure
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DENABLE_OOM_TEST=ON \
+          ${{ matrix.build_type == 'Debug' && '-DUSE_ASAN=ON' || '' }}
+
+    - name: Build
+      run: cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+
+    - name: Run unit tests
+      run: ctest --test-dir build -E test_integration --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+
+    - name: Run integration tests
+      run: ctest --test-dir build -R test_integration --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+
+  lint:
+    name: Lint & Static Analysis
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang clang-tidy libyaml-dev zlib1g-dev libcurl4-openssl-dev libpq-dev
-        
+        sudo apt-get install -y \
+          cmake clang clang-tidy \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev
+
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
-        
-    - name: Configure CMake
-      run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON -DENABLE_OOM_TEST=ON
-      
-    - name: Build
-      run: cmake --build build -j4
-      
+
+    - name: Configure
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+
     - name: clang-tidy
       run: cmake --build build --target tidy
-      
-    - name: Test
-      run: |
-        export ASAN_OPTIONS="detect_leaks=1:symbolize=1:abort_on_error=1"
-        cd build && ctest --output-on-failure
 
   fuzz:
+    name: Fuzz Testing
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev libpq-dev
-        
-    - name: Configure CMake
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev
+
+    - name: Configure
       run: CC=clang cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON -DUSE_FUZZER=ON
-      
+
     - name: Build Fuzzer
-      run: cmake --build build --target fuzz_test -j4
-      
+      run: cmake --build build --target fuzz_test -j$(nproc)
+
     - name: Run Fuzzer
       run: cd build && ./fuzz_test -max_total_time=10
 
   benchmark:
+    name: Performance Benchmarks
     runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev libpq-dev wrk
-        
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev wrk
+
     - name: Run benchmarks
       run: ./scripts/run_benchmarks.sh --save
