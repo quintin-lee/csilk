@@ -19,13 +19,16 @@ set(CSILK_APP_SOURCES
 set(CSILK_CORE_SOURCES
     src/core/arena.c
     src/core/config.c
+    src/core/connection.c
     src/core/context.c
     src/core/h2.c
+    src/core/http1.c
     src/core/logger.c
     src/core/recovery.c
     src/core/router.c
     src/core/server.c
     src/core/test_utils.c
+    src/core/tls.c
     src/core/url.c
     src/core/utils.c
 )
