@@ -72,11 +72,22 @@
 ## Running
 
 ```bash
-# Run with default 10s per test
-bash benchmarks/run_benchmarks.sh
+# Run all benchmarks, print summary
+bash scripts/run_benchmarks.sh
 
-# Run with custom duration
-bash benchmarks/run_benchmarks.sh 5s
+# Run and save results for later comparison
+bash scripts/run_benchmarks.sh --save
+
+# Compare against last saved result
+bash scripts/run_benchmarks.sh --compare
+
+# CI mode: save, compare, fail on >10% regression
+bash scripts/run_benchmarks.sh --ci
+
+# Custom duration
+BENCH_DURATION=10s bash scripts/run_benchmarks.sh --save
 ```
 
-Raw results are stored in `benchmarks/results/`.
+Raw JSON results are saved to `benchmarks/results/`.
+CI runs `--save` on every main push, uploads results as an artifact,
+and compares against the previous run (non-blocking).
