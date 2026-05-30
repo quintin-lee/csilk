@@ -11,6 +11,7 @@
 #include <uv.h>
 
 #include "csilk/core/internal.h"
+#include "csilk/core/ctx_types.h"
 #include "csilk/csilk.h"
 
 /**
@@ -119,14 +120,32 @@ evict_oldest_entry(void)
 void
 csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 {
-	uv_once(&ratelimit_once, init_ratelimit_mutex);
-
 	const char* ip = csilk_get_client_ip(c);
 	if (!ip) {
 		csilk_next(c);
 		return;
 	}
 
+	/* Distributed rate limiting using storage driver */
+	if (c->storage_driver && c->storage_driver->incr) {
+		char key[128];
+		snprintf(key, sizeof(key), "ratelimit:%s", ip);
+		long long current_count = csilk_incr(c, key, WINDOW_SIZE);
+
+		if (current_count > limit) {
+			void _csilk_metrics_inc_rate_limit_blocks(void);
+			_csilk_metrics_inc_rate_limit_blocks();
+			csilk_set_header(c, "Retry-After", "60");
+			csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
+			csilk_abort(c);
+		} else {
+			csilk_next(c);
+		}
+		return;
+	}
+
+	/* Local in-memory rate limiting fallback */
+	uv_once(&ratelimit_once, init_ratelimit_mutex);
 	time_t now = time(nullptr);
 	ip_entry_t* entry = nullptr;
 

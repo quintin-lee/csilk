@@ -376,6 +376,33 @@ void csilk_set(csilk_ctx_t* c, const char* key, void* value);
 void* csilk_get(csilk_ctx_t* c, const char* key);
 
 /**
+ * @brief Store a string value with an optional TTL (requires a compatible storage driver).
+ * @param c        The request context.
+ * @param key      Storage key.
+ * @param value    String value.
+ * @param ttl_sec  Time-to-live in seconds (0 = no expiry).
+ * @return 0 on success, non-zero on failure.
+ */
+int csilk_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec);
+
+/**
+ * @brief Retrieve a string value by key (requires a compatible storage driver).
+ * @param c    The request context.
+ * @param key  Storage key.
+ * @return Heap-allocated string value (caller must free), or nullptr if not found.
+ */
+char* csilk_get_string(csilk_ctx_t* c, const char* key);
+
+/**
+ * @brief Increment a numeric value by 1 with an optional TTL (requires a compatible storage driver).
+ * @param c        The request context.
+ * @param key      Storage key.
+ * @param ttl_sec  Time-to-live in seconds (set only if newly created; 0 = no expiry).
+ * @return The new value after incrementing, or -1 on error.
+ */
+long long csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec);
+
+/**
  * @brief Bind the request body (JSON) to a cJSON object.
  *
  * Parses the raw request body as JSON.  The returned cJSON object is
