@@ -528,3 +528,96 @@ The `csilk_request_id_middleware` ensures every request is assigned a unique UUI
 
 - **Propagation**: The ID is injected into the "X-Request-Id" response header and the thread-local logger state.
 - **Correlation**: This allows all log entries generated during the processing of a single request to be correlated, even in a highly concurrent environment.
+
+## 11. Final Directory Tree (Post-Restructuring)
+
+```
+csilk/
+├── include/
+│   ├── csilk.h                    # Umbrella (includes all module headers)
+│   └── csilk/
+│       ├── types.h                # Core types, constants, driver vtables
+│       ├── context.h              # Request context accessor API
+│       ├── response.h             # Response writing (status/JSON/redirect/chunked)
+│       ├── router.h               # Radix-tree router
+│       ├── server.h               # Server lifecycle + config
+│       ├── middleware.h            # Built-in middleware function declarations
+│       ├── websocket.h            # WebSocket API
+│       ├── sse.h                  # Server-Sent Events API
+│       ├── mq.h                   # Message Queue pub/sub API
+│       ├── group.h                # Route groups
+│       ├── hooks.h                # Lifecycle hook system
+│       ├── workflow.h             # Workflow engine umbrella
+│       ├── admin.h                # Admin dashboard umbrella
+│       ├── errors.h               # HTTP status code macros
+│       ├── config.h               # Server/app configuration structs
+│       ├── version.h              # CSILK_VERSION macro
+│       ├── app/
+│       │   ├── app.h              # High-level app API
+│       │   ├── workflow.h         # Workflow engine public API
+│       │   └── workflow_wal.h     # WAL persistence API
+│       ├── core/
+│       │   ├── internal.h         # Internal umbrella → hash/codec/ws_frame/crypto_dispatch/mq_types
+│       │   ├── hash.h             # SHA-1, SHA-256, HMAC-SHA256
+│       │   ├── codec.h            # Base64, Base64URL, URL decode
+│       │   ├── ws_frame.h         # WebSocket frame parsing
+│       │   ├── crypto_dispatch.h  # Crypto/cipher dispatch stubs
+│       │   ├── mq_types.h         # Internal MQ data structures
+│       │   ├── ctx_types.h        # csilk_ctx_s struct layout
+│       │   └── srv_types.h        # csilk_server_s / csilk_client_s layouts
+│       ├── drivers/
+│       │   ├── ai.h               # AI driver interface
+│       │   ├── db.h               # DB driver interface
+│       │   ├── cipher.h           # Cipher driver interface
+│       │   └── perm.h             # Permission driver interface
+│       ├── test/
+│       │   └── test.h             # Test utilities (OOM simulation)
+│       └── reflection/
+│           └── reflect.h          # Runtime type reflection
+├── src/
+│   ├── core/                      # Server engine
+│   │   ├── server.c               # Lifecycle: create/run/stop/free/hooks/workers
+│   │   ├── connection.c           # Pool, accept, I/O, timers, on_read
+│   │   ├── http1.c                # llHTTP callbacks, dispatch, response serialization
+│   │   ├── tls.c                  # OpenSSL init, BIO-pair, ALPN negotiation
+│   │   ├── context.c              # Request reading, lifecycle, binding, cookies
+│   │   ├── response.c             # Response writing (status/JSON/redirect/chunked)
+│   │   ├── router.c               # Radix-tree route matching
+│   │   ├── arena.c                # Bump allocator
+│   │   ├── config.c               # YAML configuration loader
+│   │   ├── h2.c                   # HTTP/2 integration (nghttp2)
+│   │   ├── h2.h                   # HTTP/2 internal header
+│   │   ├── logger.c               # Structured logging
+│   │   ├── recovery.c             # setjmp/longjmp error recovery
+│   │   ├── url.c                  # URL parsing and splitting
+│   │   ├── utils.c                # Encoding, crypto primitives
+│   │   ├── test_utils.c           # Test OOM utilities
+│   │   ├── admin.c                # Admin dashboard (moved from src/app/)
+│   │   └── srv_impl.h             # Cross-file declarations for server split
+│   ├── app/                       # Thin app wrappers (2 files)
+│   │   ├── app.c
+│   │   └── group.c
+│   ├── workflow/                  # AI workflow engine (3 files)
+│   │   ├── workflow.c
+│   │   ├── workflow_loader.c
+│   │   └── workflow_wal.c
+│   ├── middleware/                 # 14 built-in middleware modules
+│   ├── protocols/                 # WebSocket, Swagger
+│   ├── drivers/                   # Organized by interface
+│   │   ├── ai/                    # ollama.c, openai.c
+│   │   ├── cipher/                # openssl.c
+│   │   ├── perm/                  # simple.c
+│   │   └── sqlite.c               # SQLite (flat, single file)
+│   ├── ai/                        # AI unified interface
+│   ├── data/                      # Database abstraction
+│   ├── messaging/                 # Message Queue implementation
+│   ├── reflection/                # Runtime type reflection
+│   └── security/                  # Permission system
+├── tests/                         # 109 unit/integration tests
+├── examples/                      # Example applications
+├── docs/                          # Documentation
+├── cmake/                         # CMake modules
+│   ├── sources.cmake              # Source file organization
+│   └── tests.cmake                # Test registration
+└── CMakeLists.txt                 # C23, version 0.3.0
+```

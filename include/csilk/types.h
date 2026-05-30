@@ -76,7 +76,7 @@ typedef struct {
 	/** @brief Retrieve a value by key.
    *  @param c  Owning request context.
    *  @param key  NUL-terminated key string.
-   *  @return The stored pointer, or NULL if @p key was never set. */
+   *  @return The stored pointer, or nullptr if @p key was never set. */
 	void* (*get)(csilk_ctx_t* c, const char* key);
 	/** @brief Clear all stored key-value pairs.
    *  Called during csilk_ctx_cleanup to release references. */
@@ -136,7 +136,7 @@ typedef struct csilk_header_s {
  */
 typedef struct csilk_header_map_s {
 	csilk_header_t* buckets[CSILK_HEADER_BUCKETS]; /**< Bucket array; each entry points to the
-                                        head of a collision chain (or NULL). */
+                                        head of a collision chain (or nullptr). */
 } csilk_header_map_t;
 
 /**
@@ -150,7 +150,7 @@ typedef struct {
 	char* method;	 /**< HTTP method verb (e.g., "GET", "POST", "DELETE"). */
 	char* path;	 /**< Decoded URL path (percent-encoding removed, query string
                    stripped). */
-	char* body;	 /**< Raw request body bytes, or NULL for requests without a body. */
+	char* body;	 /**< Raw request body bytes, or nullptr for requests without a body. */
 	size_t body_len; /**< Number of bytes in @p body. */
 	csilk_header_map_t headers;	 /**< Hash map of request headers (keys lowercased
                                  for case-insensitive lookup). */
@@ -229,7 +229,7 @@ typedef enum {
 typedef struct {
 	csilk_log_level_t level; /**< Minimum level to emit (messages below this are
                               filtered out). */
-	const char* file_path;	 /**< Path to the log file, or NULL to log to stderr. */
+	const char* file_path;	 /**< Path to the log file, or nullptr to log to stderr. */
 	size_t max_file_size;	 /**< Maximum file size in bytes before rotation (0 =
                         rotation disabled). Requires @p file_path to be set. */
 	int use_colors;		 /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 =
@@ -290,7 +290,7 @@ typedef int (*csilk_auth_validator_t)(const char* token);
 /**
  * @brief A single validation rule for request parameter checking.
  *
- * Rules are collected into a NULL-terminated array and passed to
+ * Rules are collected into a nullptr-terminated array and passed to
  * csilk_validate.  Each rule specifies constraints for one field.
  */
 typedef struct csilk_valid_rule_s {
@@ -302,7 +302,7 @@ typedef struct csilk_valid_rule_s {
 	int max;	    /**< Maximum allowed length (string fields) or numeric value (int
               fields). */
 	const char* source; /**< Location to look for the field: "query", "form",
-                         "header", "cookie", or NULL to auto-detect. */
+                         "header", "cookie", or nullptr to auto-detect. */
 } csilk_valid_rule_t;
 
 /**
@@ -366,7 +366,7 @@ typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
  *
  * Allows users to replace the default software implementations of SHA256,
  * HMAC-SHA256, and UUID generation (e.g., with hardware-accelerated or
- * FIPS-compliant versions).  All function pointers must be non-NULL.
+ * FIPS-compliant versions).  All function pointers must be non-nullptr.
  */
 typedef struct {
 	/** @brief Compute the SHA-256 hash of a buffer.

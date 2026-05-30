@@ -214,7 +214,7 @@ on_close_write(uv_write_t* req, int status)
  * @param c           The request context.
  * @param status_code WebSocket close status code (e.g., 1000 for normal,
  *                    1001 for "going away"). Pass 0 to omit the status code.
- * @param reason      Human-readable reason string (may be NULL).
+ * @param reason      Human-readable reason string (may be nullptr).
  * @note The frame is sent asynchronously. The connection should be closed
  *       by the caller after receiving the peer's close frame or on timeout. */
 void
@@ -376,12 +376,12 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 		if (payload_len >= 2) {
 			close_code = (uint16_t)((payload[0] << 8) | payload[1]);
 		}
-		csilk_ws_close(c, close_code, NULL);
+		csilk_ws_close(c, close_code, nullptr);
 		void* internal_client = _csilk_get_internal_client(c);
 		if (internal_client) {
 			uv_stream_t* stream = (uv_stream_t*)internal_client;
 			if (!uv_is_closing((uv_handle_t*)stream)) {
-				uv_close((uv_handle_t*)stream, NULL);
+				uv_close((uv_handle_t*)stream, nullptr);
 			}
 		}
 		free(payload);

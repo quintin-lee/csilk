@@ -19,8 +19,8 @@
  * Allocates and initialises a server bound to the given router.  The server
  * takes ownership of the router and frees it in csilk_server_free.
  *
- * @param router The router to use for request dispatch.  Must not be NULL.
- * @return A new server instance, or NULL on allocation failure.
+ * @param router The router to use for request dispatch.  Must not be nullptr.
+ * @return A new server instance, or nullptr on allocation failure.
  */
 csilk_server_t* csilk_server_new(csilk_router_t* router);
 
@@ -41,10 +41,10 @@ int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
  *
  * Replaces the default 404 behaviour.  The handler is invoked with the
  * request context (status 404 is NOT pre-set — the handler may set its own).
- * Pass NULL to restore the default 404 handler.
+ * Pass nullptr to restore the default 404 handler.
  *
  * @param server  Server instance.
- * @param handler Handler function, or NULL for default.
+ * @param handler Handler function, or nullptr for default.
  */
 void csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handler);
 
@@ -107,10 +107,10 @@ int csilk_server_set_max_connections(csilk_server_t* server, int max);
  * @brief Set the global crypto driver for the server.
  *
  * Replaces the default software crypto routines with a user-provided
- * implementation.  Pass NULL to restore the built-in defaults.
+ * implementation.  Pass nullptr to restore the built-in defaults.
  *
  * @param server The server instance.
- * @param driver Pointer to a csilk_crypto_driver_t, or NULL for defaults.
+ * @param driver Pointer to a csilk_crypto_driver_t, or nullptr for defaults.
  *               The driver struct must remain valid for the server's lifetime.
  */
 void csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* driver);
@@ -119,11 +119,11 @@ void csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_
  * @brief Set the cipher driver for symmetric/asymmetric encryption.
  *
  * Replaces the default OpenSSL-based AES-256-GCM / RSA-OAEP / RSA-PSS
- * implementations with a user-provided driver.  Pass NULL to restore the
+ * implementations with a user-provided driver.  Pass nullptr to restore the
  * built-in defaults.
  *
  * @param server The server instance.
- * @param driver Pointer to a csilk_cipher_driver_t, or NULL for defaults.
+ * @param driver Pointer to a csilk_cipher_driver_t, or nullptr for defaults.
  *               The driver struct must remain valid for the server's lifetime.
  */
 void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver);
@@ -132,7 +132,7 @@ void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_
  * @brief Replace the context key-value storage driver.
  *
  * @param server Server instance.
- * @param driver Pointer to the new driver, or NULL to restore the default
+ * @param driver Pointer to the new driver, or nullptr to restore the default
  *               in-memory arena-backed driver.  The driver struct must remain
  *               valid for the server's lifetime.
  */
@@ -162,7 +162,7 @@ csilk_router_t* csilk_server_get_router(csilk_server_t* server);
  * falls back to the socket peer address.
  *
  * @param c  The request context.
- * @return A NUL-terminated IP string, or NULL if the address cannot be
+ * @return A NUL-terminated IP string, or nullptr if the address cannot be
  *         determined.  Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_client_ip(csilk_ctx_t* c);
@@ -188,7 +188,7 @@ void csilk_db_init(void);
  *                     registered via csilk_db_register_driver or the built-in
  *                     init.
  * @param dsn          Data source name (driver-specific, e.g., "file:test.db").
- * @return A new pool instance, or NULL if the driver is unknown or connection
+ * @return A new pool instance, or nullptr if the driver is unknown or connection
  *         fails.
  */
 csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
@@ -198,7 +198,7 @@ csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
  *
  * Closes the underlying connection and frees the pool struct.
  *
- * @param pool  The pool to free.  Must not be NULL.
+ * @param pool  The pool to free.  Must not be nullptr.
  */
 void csilk_db_pool_free(csilk_db_pool_t* pool);
 
@@ -210,7 +210,7 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  * @param pool  Connection pool.
  * @param sql   SQL SELECT statement.
  * @return A cJSON array of row objects (caller must free with cJSON_Delete),
- *         or NULL on failure.
+ *         or nullptr on failure.
  */
 cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
@@ -234,9 +234,9 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  *
  * @param pool   Connection pool.
  * @param sql    SQL with ? placeholders.
- * @param params NULL-terminated array of string values for the placeholders.
- *               The array must end with a NULL sentinel.
- * @return A cJSON array (caller must free), or NULL on failure.
+ * @param params nullptr-terminated array of string values for the placeholders.
+ *               The array must end with a nullptr sentinel.
+ * @return A cJSON array (caller must free), or nullptr on failure.
  */
 cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
@@ -270,7 +270,7 @@ void csilk_log_close();
  *  @param file    Source file name (__FILE__).
  *  @param line    Source line number (__LINE__).
  *  @param func    Function name (__func__).
- *  @param extra   cJSON object with extra structured fields (can be NULL).
+ *  @param extra   cJSON object with extra structured fields (can be nullptr).
  *                 Ownership is taken — do not use after the call.
  *  @param fmt     Printf-style format string for the log message.
  *  @param ...     Format arguments. */
@@ -287,22 +287,22 @@ void _csilk_log_structured(csilk_log_level_t lv,
 int csilk_log_is_json(void);
 
 /** @brief Set the Request ID for the current thread (for log correlation).
- * @param request_id The Request ID string, or NULL to clear. */
+ * @param request_id The Request ID string, or nullptr to clear. */
 void csilk_log_set_request_id(const char* request_id);
 
 /** @brief Create a simple key-value cJSON object for structured logging.
  *
  *  Convenience helper that builds a cJSON object from alternating key/value
- *  string pairs terminated by a NULL key.
+ *  string pairs terminated by a nullptr key.
  *
  *  @code
- *    cJSON* fields = csilk_log_make_kv("method", method, "path", path, NULL);
+ *    cJSON* fields = csilk_log_make_kv("method", method, "path", path, nullptr);
  *    _csilk_log_structured(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, fields,
  *                          "request completed");
  *  @endcode
  *
  *  @param key   First key.
- *  @param ...   Value, then key, value, ... terminated by NULL.
+ *  @param ...   Value, then key, value, ... terminated by nullptr.
  *  @return New cJSON object (caller owns). */
 cJSON* csilk_log_make_kv(const char* key, ...);
 
@@ -331,7 +331,7 @@ cJSON* csilk_log_make_kv(const char* key, ...);
 /** @brief Log a structured JSON message (only meaningful when json_format is
  *  on).
  *  @param level Log level.
- *  @param extra  cJSON* with extra fields (can be NULL).
+ *  @param extra  cJSON* with extra fields (can be nullptr).
  *  @param ...    printf-style format and args for the message string. */
 #define CSILK_LOG_STRUCT(level, extra, ...)                                                        \
 	_csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
@@ -347,7 +347,7 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  *
  * @param default_chunk_size  Initial chunk size in bytes.  Pass 0 for a
  *                            sensible default (typically 4–8 KB).
- * @return Pointer to the new arena, or NULL if malloc fails.
+ * @return Pointer to the new arena, or nullptr if malloc fails.
  */
 csilk_arena_t* csilk_arena_new(size_t default_chunk_size);
 
@@ -359,7 +359,7 @@ csilk_arena_t* csilk_arena_new(size_t default_chunk_size);
  *
  * @param arena  The arena allocator.
  * @param size   Number of bytes to allocate.
- * @return Pointer to the allocated block (always suitably aligned), or NULL
+ * @return Pointer to the allocated block (always suitably aligned), or nullptr
  *         if the allocation failed (the arena's malloc failed).
  */
 void* csilk_arena_alloc(csilk_arena_t* arena, size_t size);
@@ -369,8 +369,8 @@ void* csilk_arena_alloc(csilk_arena_t* arena, size_t size);
  *
  * @param arena  The arena allocator.
  * @param s      Source string to duplicate.  Must be NUL-terminated.
- * @return A copy of @p s allocated from @p arena, or NULL on allocation
- *         failure.  If @p s is NULL the behaviour is undefined.
+ * @return A copy of @p s allocated from @p arena, or nullptr on allocation
+ *         failure.  If @p s is nullptr the behaviour is undefined.
  */
 char* csilk_arena_strdup(csilk_arena_t* arena, const char* s);
 
@@ -380,8 +380,8 @@ char* csilk_arena_strdup(csilk_arena_t* arena, const char* s);
  * @param arena  The arena allocator.
  * @param s      Source string to duplicate.
  * @param n      Number of bytes to copy.
- * @return A copy of @p n bytes of @p s allocated from @p arena, or NULL on
- *         allocation failure.  If @p s is NULL the behaviour is undefined.
+ * @return A copy of @p n bytes of @p s allocated from @p arena, or nullptr on
+ *         allocation failure.  If @p s is nullptr the behaviour is undefined.
  */
 char* csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n);
 

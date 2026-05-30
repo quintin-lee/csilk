@@ -33,15 +33,15 @@
  * 1. Open (or create) the WAL file in O_WRONLY | O_APPEND mode.
  * 2. Write a fixed-size csilk_wf_wal_header_t (magic, type, timestamp,
  *    payload_len).
- * 3. If payload_len > 0 and payload is non-NULL, write the payload
+ * 3. If payload_len > 0 and payload is non-nullptr, write the payload
  *    bytes immediately after the header.
  * 4. fdatasync() the file to flush the data to disk before closing.
  *
  * @param wal_path Absolute path to the WAL file.
  * @param type     Event type (e.g., WF_EV_START, WF_EV_NODE_FINISH).
- * @param payload  Opaque payload data to persist (may be NULL if len is 0).
+ * @param payload  Opaque payload data to persist (may be nullptr if len is 0).
  * @param len      Number of payload bytes.
- * @return 0 on success, -1 if wal_path is NULL or any write fails.
+ * @return 0 on success, -1 if wal_path is nullptr or any write fails.
  * @note Not thread-safe for concurrent writes to the same file —
  *       callers should serialize access at the workflow context level. */
 int
@@ -59,7 +59,7 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
 	csilk_wf_wal_header_t header;
 	header.magic = CSILK_WF_MAGIC;
 	header.type = (uint8_t)type;
-	header.timestamp = (uint32_t)time(NULL);
+	header.timestamp = (uint32_t)time(nullptr);
 	header.payload_len = (uint32_t)len;
 
 	if (write(fd, &header, sizeof(header)) != sizeof(header)) {

@@ -83,25 +83,25 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	if (!dash) {
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 		uv_fs_t close_req;
-		uv_fs_close(NULL, &close_req, fd, NULL);
+		uv_fs_close(nullptr, &close_req, fd, nullptr);
 		return;
 	}
 
 	long long range_start = 0, range_end = (long long)size - 1;
 	*dash = '\0';
 	if (range_val[0] != '\0') {
-		char* endptr = NULL;
+		char* endptr = nullptr;
 		range_start = strtoll(range_val, &endptr, 10);
 		if (endptr == range_val || range_start < 0) {
 			*dash = '-';
 			csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 			uv_fs_t close_req;
-			uv_fs_close(NULL, &close_req, fd, NULL);
+			uv_fs_close(nullptr, &close_req, fd, nullptr);
 			return;
 		}
 	}
 	if (*(dash + 1) != '\0') {
-		char* endptr = NULL;
+		char* endptr = nullptr;
 		range_end = strtoll(dash + 1, &endptr, 10);
 		if (endptr == dash + 1 || range_end >= (long long)size) {
 			range_end = (long long)size - 1;
@@ -112,7 +112,7 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	if (range_start > range_end || range_start >= (long long)size) {
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 		uv_fs_t close_req;
-		uv_fs_close(NULL, &close_req, fd, NULL);
+		uv_fs_close(nullptr, &close_req, fd, nullptr);
 		return;
 	}
 	if (range_end >= (long long)size) {
@@ -164,7 +164,7 @@ static_work_cb(uv_work_t* req)
 	char resolved_root[PATH_MAX];
 	char resolved_file[PATH_MAX];
 
-	if (realpath(root_dir, resolved_root) == NULL) {
+	if (realpath(root_dir, resolved_root) == nullptr) {
 		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
 		return;
 	}
@@ -184,7 +184,7 @@ static_work_cb(uv_work_t* req)
 	/* Path traversal protection: realpath() resolves all symlinks and ".."
      segments. If the resolved file path does not start with the resolved
      root directory prefix, the request is outside the allowed tree. */
-	if (realpath(full_path, resolved_file) == NULL) {
+	if (realpath(full_path, resolved_file) == nullptr) {
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
@@ -195,7 +195,7 @@ static_work_cb(uv_work_t* req)
 	}
 
 	uv_fs_t open_req;
-	int fd = uv_fs_open(NULL, &open_req, resolved_file, O_RDONLY, 0, NULL);
+	int fd = uv_fs_open(nullptr, &open_req, resolved_file, O_RDONLY, 0, nullptr);
 	uv_fs_req_cleanup(&open_req);
 	if (fd < 0) {
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
@@ -203,7 +203,7 @@ static_work_cb(uv_work_t* req)
 	}
 
 	uv_fs_t stat_req;
-	uv_fs_fstat(NULL, &stat_req, fd, NULL);
+	uv_fs_fstat(nullptr, &stat_req, fd, nullptr);
 	size_t size = stat_req.statbuf.st_size;
 	uv_fs_req_cleanup(&stat_req);
 
@@ -225,7 +225,7 @@ file_work_cb(uv_work_t* req)
 	const char* file_path = (const char*)csilk_get(c, "serve_file_path");
 
 	uv_fs_t open_req;
-	int fd = uv_fs_open(NULL, &open_req, file_path, O_RDONLY, 0, NULL);
+	int fd = uv_fs_open(nullptr, &open_req, file_path, O_RDONLY, 0, nullptr);
 	uv_fs_req_cleanup(&open_req);
 	if (fd < 0) {
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
@@ -233,7 +233,7 @@ file_work_cb(uv_work_t* req)
 	}
 
 	uv_fs_t stat_req;
-	uv_fs_fstat(NULL, &stat_req, fd, NULL);
+	uv_fs_fstat(nullptr, &stat_req, fd, nullptr);
 	size_t size = stat_req.statbuf.st_size;
 	uv_fs_req_cleanup(&stat_req);
 
@@ -245,7 +245,7 @@ file_work_cb(uv_work_t* req)
  * @brief libuv after-work callback: send the static file response.
  *
  * Runs on the event loop after static_work_cb completes. If the client
- * connection is still alive (_internal_client is non-NULL), it triggers
+ * connection is still alive (_internal_client is non-nullptr), it triggers
  * _csilk_send_response() to transmit the file (using sendfile or chunked
  * I/O depending on the platform).
  *
@@ -275,7 +275,7 @@ static_after_work_cb(uv_work_t* req, int status)
  *
  * @param c        The request context.
  * @param root_dir Absolute or relative path to the static file root
- *                 directory. Must not be NULL.
+ *                 directory. Must not be nullptr.
  *
  * @note The prefix is configured separately via csilk_set(c, "static_prefix",
  *       ...) NOT via this function's parameters.

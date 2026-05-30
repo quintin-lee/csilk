@@ -37,7 +37,7 @@ typedef struct {
 } csilk_wf_tool_entry_t;
 
 typedef struct csilk_wf_edge_s {
-	char* condition;	 /**< NULL for default/bind. */
+	char* condition;	 /**< nullptr for default/bind. */
 	csilk_wf_node_t* target; /**< Destination node. */
 } csilk_wf_edge_t;
 
@@ -57,8 +57,8 @@ struct csilk_wf_node_s {
 	int incoming_count; /**< Number of incoming edges (for join tracking). */
 	int is_entry;	    /**< Explicit entry point flag. */
 
-	csilk_wf_node_t* error_target;	    /**< Fallback node on handler failure (NULL output). */
-	csilk_wf_router_t router_fn;	    /**< Dynamic router: overrides edges when set. */
+	csilk_wf_node_t* error_target; /**< Fallback node on handler failure (nullptr output). */
+	csilk_wf_router_t router_fn;   /**< Dynamic router: overrides edges when set. */
 	csilk_wf_join_policy_t join_policy; /**< AND (wait for all) or OR (fire on any). */
 	int timeout_ms;			    /**< Per-node execution timeout (0 = no timeout). */
 	int is_interactive;		    /**< Requires manual signal to proceed. */
@@ -80,7 +80,7 @@ struct csilk_wf_s {
 	size_t node_count;	 /**< Number of registered nodes. */
 	size_t node_capacity;	 /**< Allocated node array capacity. */
 	uv_loop_t* loop;	 /**< libuv event loop for thread-pool scheduling. */
-	char* wal_dir;		 /**< WAL directory path (NULL = no persistence). */
+	char* wal_dir;		 /**< WAL directory path (nullptr = no persistence). */
 
 	csilk_wf_tool_entry_t* tools; /**< Registered tool definitions. */
 	size_t tool_count;	      /**< Number of registered tools. */
@@ -141,16 +141,17 @@ struct csilk_wf_ctx_s {
 /** @brief Per-node-execution state passed through libuv work requests.
  *  Allocated in execute_node(), freed in after_worker_cb(). */
 typedef struct node_work_s {
-	uv_work_t req;			   /**< libuv work request (must be first for cast). */
-	csilk_wf_ctx_t* ctx;		   /**< Workflow execution context. */
-	csilk_wf_node_t* node;		   /**< The node being executed. */
-	csilk_data_t* input;		   /**< Input data to the node's handler. */
-	csilk_data_t* output;		   /**< Output data from the handler (set by worker_cb). */
-	csilk_wf_trace_node_t* trace_node; /**< Trace record for this node (NULL if not tracing). */
-	uv_timer_t node_timer;		   /**< Per-node timeout or retry delay timer. */
-	int is_timed_out;		   /**< Flag set by timer if node exceeds timeout_ms. */
-	int retry_count;		   /**< Current retry attempt. */
-	int timer_closing;		   /**< Non-zero once uv_close is called on node_timer. */
+	uv_work_t req;	       /**< libuv work request (must be first for cast). */
+	csilk_wf_ctx_t* ctx;   /**< Workflow execution context. */
+	csilk_wf_node_t* node; /**< The node being executed. */
+	csilk_data_t* input;   /**< Input data to the node's handler. */
+	csilk_data_t* output;  /**< Output data from the handler (set by worker_cb). */
+	csilk_wf_trace_node_t*
+	    trace_node;	       /**< Trace record for this node (nullptr if not tracing). */
+	uv_timer_t node_timer; /**< Per-node timeout or retry delay timer. */
+	int is_timed_out;      /**< Flag set by timer if node exceeds timeout_ms. */
+	int retry_count;       /**< Current retry attempt. */
+	int timer_closing;     /**< Non-zero once uv_close is called on node_timer. */
 } node_work_t;
 
 /* --- Internal Helpers --- */
@@ -286,21 +287,21 @@ csilk_wf_node_t*
 csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data)
 {
 	if (!wf || !id) {
-		return NULL;
+		return nullptr;
 	}
 	if (wf->node_count >= wf->node_capacity) {
 		size_t new_cap = wf->node_capacity == 0 ? 8 : wf->node_capacity * 2;
 		csilk_wf_node_t** new_nodes =
 		    realloc(wf->nodes, sizeof(csilk_wf_node_t*) * new_cap);
 		if (!new_nodes) {
-			return NULL;
+			return nullptr;
 		}
 		wf->nodes = new_nodes;
 		wf->node_capacity = new_cap;
 	}
 	csilk_wf_node_t* node = calloc(1, sizeof(csilk_wf_node_t));
 	if (!node) {
-		return NULL;
+		return nullptr;
 	}
 	node->id = strdup(id);
 	node->index = (int)wf->node_count;
@@ -337,7 +338,7 @@ node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to,
 		from->edges = new_edges;
 		from->edge_capacity = new_cap;
 	}
-	from->edges[from->edge_count].condition = condition ? strdup(condition) : NULL;
+	from->edges[from->edge_count].condition = condition ? strdup(condition) : nullptr;
 	from->edges[from->edge_count].target = to;
 	from->edge_count++;
 	if (!is_loop) {
@@ -348,7 +349,7 @@ node_add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to,
 void
 csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to)
 {
-	node_add_edge(from, NULL, to, 0);
+	node_add_edge(from, nullptr, to, 0);
 }
 void
 csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
@@ -391,7 +392,7 @@ csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir)
 		return;
 	}
 	free(wf->wal_dir);
-	wf->wal_dir = wal_dir ? strdup(wal_dir) : NULL;
+	wf->wal_dir = wal_dir ? strdup(wal_dir) : nullptr;
 }
 
 /* --- Monitoring --- */
@@ -431,7 +432,7 @@ _wf_broadcast(csilk_wf_t* wf, const char* event, const char* node_id, const char
 	if (payload) {
 		cJSON_AddStringToObject(root, "payload", payload);
 	}
-	cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
 	char* json = cJSON_PrintUnformatted(root);
 	uv_mutex_lock(&wf->monitor_mutex);
 	for (size_t i = 0; i < wf->monitor_count; i++) {
@@ -483,7 +484,7 @@ csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema)
 		return;
 	}
 	free(node->output_schema);
-	node->output_schema = schema ? strdup(schema) : NULL;
+	node->output_schema = schema ? strdup(schema) : nullptr;
 }
 
 void
@@ -510,7 +511,7 @@ csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote)
 		return;
 	}
 	node->is_remote = is_remote;
-	if (is_remote && node->handler == NULL) {
+	if (is_remote && node->handler == nullptr) {
 		node->handler = remote_pass_handler;
 	}
 }
@@ -542,7 +543,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 
 	if (j_exec_id && cJSON_IsString(j_exec_id) && j_output && cJSON_IsString(j_output)) {
 		const char* exec_id = j_exec_id->valuestring;
-		const char* node_id = j_node_id ? j_node_id->valuestring : NULL;
+		const char* node_id = j_node_id ? j_node_id->valuestring : nullptr;
 		const char* output_str = j_output->valuestring;
 
 		for (size_t i = 0; i < g_distributed_wf_count; i++) {
@@ -555,7 +556,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 				       "resuming hot...\n",
 				       exec_id);
 				csilk_wf_node_t* n =
-				    node_id ? csilk_wf_get_node(wf, node_id) : NULL;
+				    node_id ? csilk_wf_get_node(wf, node_id) : nullptr;
 				// If node_id wasn't provided, we might have to search the context for a
 				// paused node
 
@@ -583,8 +584,8 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 				       "continue (cold)...\n",
 				       exec_id);
 				csilk_data_t out_data = {
-				    "application/json", (void*)output_str, NULL, NULL};
-				csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
+				    "application/json", (void*)output_str, nullptr, nullptr};
+				csilk_wf_signal_continue(wf, exec_id, &out_data, nullptr);
 				break;
 			}
 		}
@@ -612,7 +613,7 @@ void*
 csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 {
 	if (!ctx) {
-		return NULL;
+		return nullptr;
 	}
 	uv_mutex_lock(&ctx->arena_mutex);
 	void* ptr = csilk_arena_alloc(ctx->arena, size);
@@ -624,7 +625,7 @@ char*
 csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
 {
 	if (!s) {
-		return NULL;
+		return nullptr;
 	}
 	size_t len = strlen(s);
 	char* news = csilk_wf_alloc(ctx, len + 1);
@@ -641,8 +642,8 @@ csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
 	if (data) {
 		data->type = csilk_wf_strdup(ctx, type);
 		data->value = value;
-		data->free_fn = NULL;
-		data->meta = NULL;
+		data->free_fn = nullptr;
+		data->meta = nullptr;
 	}
 	return data;
 }
@@ -660,13 +661,13 @@ csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
  * @param ctx  Workflow context (for arena allocation).
  * @param root Root cJSON node to start traversal from.
  * @param path Dot-separated path (e.g., "user.address.city").
- * @return A string allocated in ctx->arena, or NULL if the path does not
+ * @return A string allocated in ctx->arena, or nullptr if the path does not
  *         exist. The returned string is valid for the workflow's lifetime. */
 static char*
 _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path)
 {
 	if (!root || !path) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* curr = root;
@@ -680,10 +681,10 @@ _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path)
 		} else {
 			curr = cJSON_GetObjectItemCaseSensitive(curr, token);
 		}
-		token = strtok_r(NULL, ".", &saveptr);
+		token = strtok_r(nullptr, ".", &saveptr);
 	}
 
-	char* result = NULL;
+	char* result = nullptr;
 	if (curr) {
 		if (cJSON_IsString(curr)) {
 			result = csilk_wf_strdup(ctx, curr->valuestring);
@@ -785,7 +786,7 @@ static char*
 resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 {
 	if (!template) {
-		return NULL;
+		return nullptr;
 	}
 	char* res = csilk_wf_strdup(ctx, template);
 
@@ -797,7 +798,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 		snprintf(base_pattern, sizeof(base_pattern), "{{%s.value", n->id);
 
 		char* pos;
-		while ((pos = strstr(res, base_pattern)) != NULL) {
+		while ((pos = strstr(res, base_pattern)) != nullptr) {
 			char* end = strstr(pos, "}}");
 			if (!end) {
 				break;
@@ -812,10 +813,10 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 				// We need to find if there is a | before }}
 				char* pipe = strchr(path_start, '|');
 				if (pipe && pipe > end) {
-					pipe = NULL;
+					pipe = nullptr;
 				}
 
-				char* filter_start = pipe ? pipe + 1 : NULL;
+				char* filter_start = pipe ? pipe + 1 : nullptr;
 				char* actual_end = pipe ? pipe : end;
 
 				if (*path_start == '.') {
@@ -861,7 +862,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 						}
 
 						replacement = apply_filter(ctx, f, replacement);
-						f = strtok_r(NULL, "|", &saveptr);
+						f = strtok_r(nullptr, "|", &saveptr);
 					}
 					free(filters);
 				}
@@ -881,7 +882,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 	// 2. Handle initial input: {{input.value}}
 	const char* in_pattern = "{{input.value";
 	char* pos;
-	while ((pos = strstr(res, in_pattern)) != NULL) {
+	while ((pos = strstr(res, in_pattern)) != nullptr) {
 		char* end = strstr(pos, "}}");
 		if (!end) {
 			break;
@@ -894,9 +895,9 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 			char* path_start = pos + strlen(in_pattern);
 			char* pipe = strchr(path_start, '|');
 			if (pipe && pipe > end) {
-				pipe = NULL;
+				pipe = nullptr;
 			}
-			char* filter_start = pipe ? pipe + 1 : NULL;
+			char* filter_start = pipe ? pipe + 1 : nullptr;
 			char* actual_end = pipe ? pipe : end;
 
 			if (*path_start == '.') {
@@ -937,7 +938,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 						fe--;
 					}
 					replacement = apply_filter(ctx, f, replacement);
-					f = strtok_r(NULL, "|", &saveptr);
+					f = strtok_r(nullptr, "|", &saveptr);
 				}
 				free(filters);
 			}
@@ -974,7 +975,7 @@ static void
 sub_worker_cb(uv_work_t* req)
 {
 	sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
-	sw->result = NULL;
+	sw->result = nullptr;
 	for (size_t j = 0; j < sw->ctx->wf->tool_count; j++) {
 		if (strcmp(sw->ctx->wf->tools[j].name, sw->tc->name) == 0) {
 			sw->result = sw->ctx->wf->tools[j].fn(sw->tc->arguments,
@@ -1030,7 +1031,7 @@ on_ai_stream(const char* chunk, void* user_data)
  * @param ctx       Workflow execution context.
  * @param input     Ignored (AI prompts come from config templates).
  * @param user_data Pointer to csilk_ai_config_t with model, prompt, etc.
- * @return Output data with type "text/plain" and AI metadata, or NULL on
+ * @return Output data with type "text/plain" and AI metadata, or nullptr on
  *         failure (missing API key, driver init failure, all retries
  *         exhausted). */
 static csilk_data_t*
@@ -1041,13 +1042,13 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	char* prompt = resolve_templates(ctx, config->prompt);
 	const char* api_key = getenv("AGENT_API_KEY");
 	if (!api_key) {
-		return NULL;
+		return nullptr;
 	}
 	csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
 	if (!ai) {
-		return NULL;
+		return nullptr;
 	}
-	csilk_ai_tool_t* tools = NULL;
+	csilk_ai_tool_t* tools = nullptr;
 	if (ctx->wf->tool_count > 0) {
 		tools = calloc(ctx->wf->tool_count, sizeof(csilk_ai_tool_t));
 		for (size_t i = 0; i < ctx->wf->tool_count; i++) {
@@ -1081,7 +1082,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	msgs[msg_count].role = "user";
 	msgs[msg_count].content = strdup(prompt);
 	msg_count++;
-	csilk_data_t* out = NULL;
+	csilk_data_t* out = nullptr;
 	int iterations = 0;
 	while (iterations < 10) {
 		iterations++;
@@ -1121,8 +1122,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 		    .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
 		    .tools = tools,
 		    .tool_count = ctx->wf->tool_count,
-		    .on_chunk = config->stream ? on_ai_stream : NULL,
-		    .user_data = config->stream ? &s_ctx : NULL};
+		    .on_chunk = config->stream ? on_ai_stream : nullptr,
+		    .user_data = config->stream ? &s_ctx : nullptr};
 		csilk_ai_chat_response_t res;
 		if (csilk_ai_chat(ai, &req, &res) != 0) {
 			break;
@@ -1204,9 +1205,9 @@ csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 {
 	csilk_ai_config_t* copy = malloc(sizeof(csilk_ai_config_t));
 	memcpy(copy, config, sizeof(csilk_ai_config_t));
-	copy->model = config->model ? strdup(config->model) : NULL;
-	copy->system_msg = config->system_msg ? strdup(config->system_msg) : NULL;
-	copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
+	copy->model = config->model ? strdup(config->model) : nullptr;
+	copy->system_msg = config->system_msg ? strdup(config->system_msg) : nullptr;
+	copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
 	csilk_wf_node_t* node = csilk_wf_add(wf, id, ai_node_handler, copy);
 	if (node) {
 		node->user_data_free = ai_config_free;
@@ -1238,8 +1239,8 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 	if (wf->tool_count < wf->tool_capacity) {
 		csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
 		entry->name = strdup(name);
-		entry->description = description ? strdup(description) : NULL;
-		entry->parameters_json = parameters_json ? strdup(parameters_json) : NULL;
+		entry->description = description ? strdup(description) : nullptr;
+		entry->parameters_json = parameters_json ? strdup(parameters_json) : nullptr;
 		entry->fn = fn;
 		entry->user_data = user_data;
 	}
@@ -1249,20 +1250,20 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 /** @brief Look up a workflow node by its string ID.
  *  @param wf The workflow instance.
  *  @param id Node identifier (set in csilk_wf_add()).
- *  @return Node pointer, or NULL if not found.
+ *  @return Node pointer, or nullptr if not found.
  *  @note Linear search of the node array — O(n). */
 csilk_wf_node_t*
 csilk_wf_get_node(csilk_wf_t* wf, const char* id)
 {
 	if (!wf || !id) {
-		return NULL;
+		return nullptr;
 	}
 	for (size_t i = 0; i < wf->node_count; i++) {
 		if (strcmp(wf->nodes[i]->id, id) == 0) {
 			return wf->nodes[i];
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 /* --- Visualization --- */
@@ -1271,7 +1272,7 @@ char*
 csilk_wf_to_mermaid(csilk_wf_t* wf)
 {
 	if (!wf) {
-		return NULL;
+		return nullptr;
 	}
 	size_t buf_size = 8192;
 	char* buf = malloc(buf_size);
@@ -1319,7 +1320,7 @@ char*
 csilk_wf_trace_to_json(const csilk_wf_trace_t* trace)
 {
 	if (!trace) {
-		return NULL;
+		return nullptr;
 	}
 	cJSON* root = cJSON_CreateObject();
 	cJSON_AddStringToObject(root, "exec_id", trace->exec_id);
@@ -1420,7 +1421,7 @@ unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 static csilk_wf_ctx_t*
 find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 {
-	csilk_wf_ctx_t* found = NULL;
+	csilk_wf_ctx_t* found = nullptr;
 	uv_mutex_lock(&wf->ctx_mutex);
 	for (size_t i = 0; i < wf->active_context_count; i++) {
 		if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
@@ -1459,7 +1460,7 @@ on_ttl_timer_close(uv_handle_t* handle)
  * frees the memory arena, node tracking arrays, WAL path, and the
  * context struct itself.
  *
- * @param ctx The execution context to clean up (may be NULL). */
+ * @param ctx The execution context to clean up (may be nullptr). */
 static void
 cleanup_ctx(csilk_wf_ctx_t* ctx)
 {
@@ -1487,8 +1488,8 @@ cleanup_ctx(csilk_wf_ctx_t* ctx)
  *
  * @param ctx     Workflow execution context (must have wal_path set).
  * @param type    Event type (WF_EV_START, WF_EV_NODE_START, etc.).
- * @param node_id Originating node ID, or NULL for workflow-level events.
- * @param data    Associated data (may be NULL for simple events).
+ * @param node_id Originating node ID, or nullptr for workflow-level events.
+ * @param data    Associated data (may be nullptr for simple events).
  * @note This is a no-op if ctx has no WAL path configured. */
 static void
 wal_log_event(csilk_wf_ctx_t* ctx,
@@ -1501,7 +1502,7 @@ wal_log_event(csilk_wf_ctx_t* ctx,
 	}
 
 	/* Ensure we always have 3 null-terminated strings for consistency,
-     even if some fields are NULL. This prevents buffer overflows during
+     even if some fields are nullptr. This prevents buffer overflows during
      recovery parsing. */
 	const char* nid = node_id ? node_id : "";
 	const char* d_type = (data && data->type) ? data->type : "";
@@ -1538,7 +1539,7 @@ static void
 worker_cb(uv_work_t* req)
 {
 	node_work_t* work = (node_work_t*)req->data;
-	_wf_broadcast(work->ctx->wf, "node_start", work->node->id, NULL);
+	_wf_broadcast(work->ctx->wf, "node_start", work->node->id, nullptr);
 	work->output = work->node->handler(work->ctx, work->input, work->node->user_data);
 }
 
@@ -1553,10 +1554,10 @@ worker_cb(uv_work_t* req)
  * 4. Record trace data (start/end time, input/output dump, model info).
  * 5. Check budget (max_tokens): if exceeded, set is_terminated flag and
  *    terminate the workflow on next idle check.
- * 6. If output is NULL and error_target is set, route to error node.
+ * 6. If output is nullptr and error_target is set, route to error node.
  * 7. If the node has a dynamic router function, call it to determine
  *    the next node; otherwise, evaluate each outgoing edge:
- *    - Unconditional edges (condition == NULL) always match.
+ *    - Unconditional edges (condition == nullptr) always match.
  *    - Conditional edges match if output type equals condition string.
  * 8. For matching edges, check the target's join policy: AND join
  *    requires all incoming edges to fire before the target is ready;
@@ -1605,11 +1606,11 @@ after_worker_cb(uv_work_t* req, int status)
 	csilk_data_t* output = work->output;
 
 	if (work->is_timed_out) {
-		output = NULL;
+		output = nullptr;
 	}
 
 	// Handle Retries before error logic
-	if (output == NULL && work->retry_count < node->max_retries) {
+	if (output == nullptr && work->retry_count < node->max_retries) {
 		work->retry_count++;
 		printf("[Workflow] Node '%s' failed, scheduled retry in %dms\n",
 		       node->id,
@@ -1644,13 +1645,13 @@ after_worker_cb(uv_work_t* req, int status)
 						       "field '%s'\n",
 						       node->id,
 						       field->valuestring);
-						output = NULL;
+						output = nullptr;
 						break;
 					}
 				}
 			}
 		} else if (node->output_schema) {
-			output = NULL; // Invalid JSON or Schema
+			output = nullptr; // Invalid JSON or Schema
 		}
 		cJSON_Delete(schema);
 		cJSON_Delete(data);
@@ -1666,7 +1667,7 @@ after_worker_cb(uv_work_t* req, int status)
 	uv_mutex_unlock(&ctx->mutex);
 
 	wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
-	_wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : NULL);
+	_wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : nullptr);
 
 	if (work->trace_node) {
 		work->trace_node->end_time = uv_hrtime() / 1000;
@@ -1705,12 +1706,12 @@ after_worker_cb(uv_work_t* req, int status)
 		uv_mutex_unlock(&ctx->mutex);
 		if (current_active == 0) {
 			if (ctx->trace_callback) {
-				ctx->trace_callback(NULL, ctx->trace);
+				ctx->trace_callback(nullptr, ctx->trace);
 			} else if (ctx->callback) {
-				ctx->callback(NULL);
+				ctx->callback(nullptr);
 			}
 			if (ctx->trace_callback) {
-				ctx->trace = NULL;
+				ctx->trace = nullptr;
 			}
 			cleanup_ctx(ctx);
 		}
@@ -1718,8 +1719,8 @@ after_worker_cb(uv_work_t* req, int status)
 		return;
 	}
 
-	if (output == NULL && node->error_target) {
-		execute_node(ctx, node->error_target, NULL);
+	if (output == nullptr && node->error_target) {
+		execute_node(ctx, node->error_target, nullptr);
 		uv_mutex_lock(&ctx->mutex);
 		ctx->nodes_active--;
 		uv_mutex_unlock(&ctx->mutex);
@@ -1743,7 +1744,7 @@ after_worker_cb(uv_work_t* req, int status)
 		for (size_t i = 0; i < node->edge_count; i++) {
 			csilk_wf_edge_t* edge = &node->edges[i];
 			int match = 0;
-			if (edge->condition == NULL) {
+			if (edge->condition == nullptr) {
 				match = 1;
 			} else if (output && output->type &&
 				   strcmp(output->type, edge->condition) == 0) {
@@ -1792,8 +1793,9 @@ after_worker_cb(uv_work_t* req, int status)
 	int current_active = ctx->nodes_active;
 	uv_mutex_unlock(&ctx->mutex);
 	if (triggered_count == 0 && current_active == 0) {
-		wal_log_event(ctx, WF_EV_END, NULL, NULL);
-		_wf_broadcast(ctx->wf, "workflow_end", NULL, output ? (char*)output->value : NULL);
+		wal_log_event(ctx, WF_EV_END, nullptr, nullptr);
+		_wf_broadcast(
+		    ctx->wf, "workflow_end", nullptr, output ? (char*)output->value : nullptr);
 		if (ctx->trace) {
 			ctx->trace->end_time = uv_hrtime() / 1000;
 		}
@@ -1803,10 +1805,10 @@ after_worker_cb(uv_work_t* req, int status)
 			ctx->callback(output);
 		}
 		if (ctx->trace_callback) {
-			ctx->trace = NULL;
+			ctx->trace = nullptr;
 		} else if (ctx->trace) {
 			csilk_wf_trace_free(ctx->trace);
-			ctx->trace = NULL;
+			ctx->trace = nullptr;
 		}
 		cleanup_ctx(ctx);
 	}
@@ -1815,7 +1817,7 @@ after_worker_cb(uv_work_t* req, int status)
 
 /** @brief libuv timer callback — marks a node as timed out.
  *  Sets the is_timed_out flag on the node_work_t, which causes
- *  after_worker_cb to treat the output as NULL even if the handler
+ *  after_worker_cb to treat the output as nullptr even if the handler
  *  eventually completes. */
 static void
 on_node_timeout(uv_timer_t* handle)
@@ -1862,7 +1864,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 
 		wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
 		_wf_broadcast(
-		    ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : NULL);
+		    ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : nullptr);
 		printf("[Workflow] Execution %s paused at node '%s'\n", ctx->exec_id, node->id);
 		return;
 	}
@@ -1896,8 +1898,8 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 	}
 	uv_mutex_unlock(&ctx->mutex);
 
-	wal_log_event(ctx, WF_EV_NODE_START, node->id, NULL);
-	_wf_broadcast(ctx->wf, "node_queued", node->id, NULL);
+	wal_log_event(ctx, WF_EV_NODE_START, node->id, nullptr);
+	_wf_broadcast(ctx->wf, "node_queued", node->id, nullptr);
 
 	node_work_t* work = calloc(1, sizeof(node_work_t));
 	if (ctx->trace) {
@@ -1930,7 +1932,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 const char*
 csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t* result))
 {
-	return csilk_wf_run_ext_internal(wf, input, callback, NULL);
+	return csilk_wf_run_ext_internal(wf, input, callback, nullptr);
 }
 
 void
@@ -1938,7 +1940,7 @@ csilk_wf_run_traced(csilk_wf_t* wf,
 		    csilk_data_t* input,
 		    void (*callback)(csilk_data_t* result, csilk_wf_trace_t* trace))
 {
-	csilk_wf_run_ext_internal(wf, input, NULL, callback);
+	csilk_wf_run_ext_internal(wf, input, nullptr, callback);
 }
 
 static void
@@ -1960,12 +1962,12 @@ csilk_wf_run_ext_internal(csilk_wf_t* wf,
 {
 	if (!wf || wf->node_count == 0) {
 		if (callback) {
-			callback(NULL);
+			callback(nullptr);
 		}
 		if (trace_cb) {
-			trace_cb(NULL, NULL);
+			trace_cb(nullptr, nullptr);
 		}
-		return NULL;
+		return nullptr;
 	}
 	csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
 	ctx->wf = wf;
@@ -1989,16 +1991,16 @@ csilk_wf_run_ext_internal(csilk_wf_t* wf,
 		uv_timer_start(&ctx->ttl_timer, on_workflow_ttl, wf->ttl_sec * 1000, 0);
 	}
 
-	_wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : NULL);
+	_wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : nullptr);
 
 	char* m_graph = csilk_wf_to_mermaid(wf);
-	_wf_broadcast(wf, "workflow_topology", NULL, m_graph);
+	_wf_broadcast(wf, "workflow_topology", nullptr, m_graph);
 	free(m_graph);
 	if (wf->wal_dir) {
 		char path[512];
 		snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, ctx->exec_id);
 		ctx->wal_path = strdup(path);
-		wal_log_event(ctx, WF_EV_START, NULL, input);
+		wal_log_event(ctx, WF_EV_START, nullptr, input);
 	}
 	if (trace_cb) {
 		ctx->trace = calloc(1, sizeof(csilk_wf_trace_t));
@@ -2022,13 +2024,13 @@ csilk_wf_run_ext_internal(csilk_wf_t* wf,
 	}
 	if (!started) {
 		if (callback) {
-			callback(NULL);
+			callback(nullptr);
 		}
 		if (trace_cb) {
-			trace_cb(NULL, NULL);
+			trace_cb(nullptr, nullptr);
 		}
 		cleanup_ctx(ctx);
-		return NULL;
+		return nullptr;
 	}
 	return ctx->exec_id;
 }
@@ -2065,7 +2067,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 		if (header.magic != CSILK_WF_MAGIC) {
 			break;
 		}
-		char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
+		char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
 		if (payload && fread(payload, header.payload_len, 1, f) != 1) {
 			free(payload);
 			break;
@@ -2124,7 +2126,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	fclose(f);
 	if (wf_ended) {
 		if (callback) {
-			callback(NULL);
+			callback(nullptr);
 		}
 		cleanup_ctx(ctx);
 	} else if (ctx->is_paused) {
@@ -2190,14 +2192,14 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 	strcpy(ctx->exec_id, exec_id);
 	ctx->wal_path = strdup(wal_path);
 
-	char* paused_node_id = NULL;
+	char* paused_node_id = nullptr;
 
 	csilk_wf_wal_header_t header;
 	while (fread(&header, sizeof(header), 1, f) == 1) {
 		if (header.magic != CSILK_WF_MAGIC) {
 			break;
 		}
-		char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
+		char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
 		if (payload && fread(payload, header.payload_len, 1, f) != 1) {
 			free(payload);
 			break;

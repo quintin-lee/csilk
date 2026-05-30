@@ -70,7 +70,7 @@ on_stop_async(uv_async_t* handle)
 {
 	csilk_server_t* server = (csilk_server_t*)handle->data;
 
-	_csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
+	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
 
 	if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
 		uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
@@ -111,7 +111,7 @@ on_stop_async(uv_async_t* handle)
 
 	if (server->mq) {
 		_csilk_mq_free(server->mq);
-		server->mq = NULL;
+		server->mq = nullptr;
 	}
 }
 
@@ -128,7 +128,7 @@ on_stop_async(uv_async_t* handle)
  * (MQ) instance.
  *
  * @param router The router instance to use for request matching.
- * @return A new csilk_server_t instance, or NULL on allocation failure.
+ * @return A new csilk_server_t instance, or nullptr on allocation failure.
  * @note The server must be configured (via csilk_server_set_config()) and
  *       started via csilk_server_run(). Free with csilk_server_free(). */
 csilk_server_t*
@@ -137,12 +137,12 @@ csilk_server_new(csilk_router_t* router)
 	csilk_reflect_init();
 	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
 	if (!s) {
-		return NULL;
+		return nullptr;
 	}
 	s->loop = uv_default_loop();
 	if (!s->loop) {
 		free(s);
-		return NULL;
+		return nullptr;
 	}
 	s->router = router;
 	llhttp_settings_init(&s->settings);
@@ -252,7 +252,7 @@ csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handl
  * @param server   The server instance.
  * @param doc_root Absolute or relative filesystem path to the directory
  *                 containing index.html.
- * @note The doc_root string is strdup'd internally. Pass NULL to disable. */
+ * @note The doc_root string is strdup'd internally. Pass nullptr to disable. */
 void
 csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
 {
@@ -274,7 +274,7 @@ csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
  *
  * @param server  The server instance.
  * @param handler Middleware handler function.
- * @return 0 on success, -1 if the limit is reached or parameters are NULL. */
+ * @return 0 on success, -1 if the limit is reached or parameters are nullptr. */
 int
 csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 {
@@ -311,8 +311,8 @@ on_server_handle_close(uv_handle_t* handle)
  * frees the message queue, frees all registered hooks, destroys the clients
  * mutex and pool mutex, and frees the server struct.
  *
- * @param server The server to free (may be NULL).
- * @note Safe to call with NULL. After this call the server pointer is
+ * @param server The server to free (may be nullptr).
+ * @note Safe to call with nullptr. After this call the server pointer is
  *       invalid. */
 void
 csilk_server_free(csilk_server_t* server)
@@ -326,9 +326,9 @@ csilk_server_free(csilk_server_t* server)
 			uv_thread_join(&server->worker_tids[i]);
 		}
 		free(server->worker_tids);
-		server->worker_tids = NULL;
+		server->worker_tids = nullptr;
 		free(server->worker_stop_async);
-		server->worker_stop_async = NULL;
+		server->worker_stop_async = nullptr;
 		server->worker_stop_count = 0;
 	}
 
@@ -382,9 +382,9 @@ csilk_server_stop(csilk_server_t* server)
  *
  * Provides atomic-safe access to the current active-connection count
  * and the number of pre-allocated client structs in the internal pool.
- * Either output pointer may be NULL to skip that value.
+ * Either output pointer may be nullptr to skip that value.
  *
- * @param server      The server instance (may be NULL; safe no-op).
+ * @param server      The server instance (may be nullptr; safe no-op).
  * @param active_conn Out-parameter for the active connection count.
  * @param pooled_conn Out-parameter for the pool size.
  * @note Thread-safe — active_conn is read with an atomic load. */
@@ -450,7 +450,7 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
  *
  * @param server The server instance.
  * @param max    Maximum concurrent connections (0 for unlimited).
- * @return The previous maximum connections value, or -1 if server is NULL. */
+ * @return The previous maximum connections value, or -1 if server is nullptr. */
 int
 csilk_server_set_max_connections(csilk_server_t* server, int max)
 {
@@ -471,7 +471,7 @@ csilk_server_set_max_connections(csilk_server_t* server, int max)
  * arena-backed linked list.
  *
  * @param server The server instance.
- * @param driver Pointer to the storage driver vtable (may be NULL to reset). */
+ * @param driver Pointer to the storage driver vtable (may be nullptr to reset). */
 void
 csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* driver)
 {
@@ -486,7 +486,7 @@ csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* 
  * the driver instead of using the built-in software implementations.
  *
  * @param server The server instance.
- * @param driver Pointer to the crypto driver vtable (may be NULL to reset). */
+ * @param driver Pointer to the crypto driver vtable (may be nullptr to reset). */
 void
 csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* driver)
 {
@@ -499,10 +499,10 @@ csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* dr
  *
  * When set, encryption / decryption operations on request contexts
  * delegate to the supplied driver vtable instead of the built-in
- * software implementation.  Passing NULL resets to the default.
+ * software implementation.  Passing nullptr resets to the default.
  *
  * @param server The server instance.
- * @param driver Pointer to the cipher driver vtable (may be NULL).
+ * @param driver Pointer to the cipher driver vtable (may be nullptr).
  * @note Thread-safe when called before csilk_server_run(); not intended
  *       to be swapped at runtime without external synchronisation. */
 void
@@ -551,7 +551,7 @@ csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler)
  * request context pointer.
  *
  * @param s    The server instance.
- * @param c    The request context (may be NULL for server-level hooks).
+ * @param c    The request context (may be nullptr for server-level hooks).
  * @param type Hook type to trigger. */
 void
 _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
@@ -618,7 +618,7 @@ on_worker_stop_async(uv_async_t* handle)
 	uv_loop_t* loop = sd->loop;
 
 	if (!uv_is_closing((uv_handle_t*)sd->listen_handle)) {
-		uv_close((uv_handle_t*)sd->listen_handle, NULL);
+		uv_close((uv_handle_t*)sd->listen_handle, nullptr);
 	}
 
 	uv_mutex_lock(&server->clients_mutex);
@@ -644,7 +644,7 @@ on_worker_stop_async(uv_async_t* handle)
 	uv_mutex_unlock(&server->clients_mutex);
 
 	if (!uv_is_closing((uv_handle_t*)handle)) {
-		uv_close((uv_handle_t*)handle, NULL);
+		uv_close((uv_handle_t*)handle, nullptr);
 	}
 }
 
@@ -841,7 +841,7 @@ csilk_server_run(csilk_server_t* server, int port)
 			server->worker_stop_count = nworkers;
 
 			pthread_barrier_t barrier;
-			pthread_barrier_init(&barrier, NULL, workers);
+			pthread_barrier_init(&barrier, nullptr, workers);
 
 			for (int i = 0; i < nworkers; i++) {
 				worker_data_t* data = malloc(sizeof(worker_data_t));
@@ -859,30 +859,30 @@ csilk_server_run(csilk_server_t* server, int port)
 			pthread_barrier_destroy(&barrier);
 		} else {
 			free(server->worker_tids);
-			server->worker_tids = NULL;
+			server->worker_tids = nullptr;
 			free(server->worker_stop_async);
-			server->worker_stop_async = NULL;
+			server->worker_stop_async = nullptr;
 		}
 	}
 
 	r = uv_signal_init(server->loop, &server->sig_handle);
 	if (r < 0) {
-		uv_close((uv_handle_t*)&server->async_handle, NULL);
-		uv_close((uv_handle_t*)&server->server_handle, NULL);
+		uv_close((uv_handle_t*)&server->async_handle, nullptr);
+		uv_close((uv_handle_t*)&server->server_handle, nullptr);
 		return -1;
 	}
 	server->sig_handle.data = server;
 	r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
 	if (r < 0) {
-		uv_close((uv_handle_t*)&server->sig_handle, NULL);
-		uv_close((uv_handle_t*)&server->async_handle, NULL);
-		uv_close((uv_handle_t*)&server->server_handle, NULL);
+		uv_close((uv_handle_t*)&server->sig_handle, nullptr);
+		uv_close((uv_handle_t*)&server->async_handle, nullptr);
+		uv_close((uv_handle_t*)&server->server_handle, nullptr);
 		return -1;
 	}
 
 	CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
 
-	_csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
+	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
 
 	return uv_run(server->loop, UV_RUN_DEFAULT);
 }
@@ -895,11 +895,11 @@ csilk_server_run(csilk_server_t* server, int port)
  * used to register topics, subscribers, and publish messages.
  *
  * @param server The server instance.
- * @return Pointer to the MQ instance, or NULL if server is NULL. */
+ * @return Pointer to the MQ instance, or nullptr if server is nullptr. */
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
-	return server ? server->mq : NULL;
+	return server ? server->mq : nullptr;
 }
 
 /** @brief Get the server's radix-tree router.
@@ -908,9 +908,9 @@ csilk_server_get_mq(csilk_server_t* server)
  * be used to register routes and middleware before the server is started.
  *
  * @param server The server instance.
- * @return Pointer to the router, or NULL if server is NULL. */
+ * @return Pointer to the router, or nullptr if server is nullptr. */
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
-	return server ? server->router : NULL;
+	return server ? server->router : nullptr;
 }

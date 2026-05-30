@@ -150,7 +150,7 @@ field_type_to_openapi_type(csilk_field_type_t type)
  * wrapper with "items".
  *
  * @param type_name Registered reflection type name.
- * @return A cJSON object representing the OpenAPI schema, or NULL if the
+ * @return A cJSON object representing the OpenAPI schema, or nullptr if the
  *         type is not registered or allocation fails.
  * @note The caller must free the returned cJSON with cJSON_Delete(). */
 static cJSON*
@@ -158,19 +158,19 @@ generate_schema_for_type(const char* type_name)
 {
 	const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
 	if (!entry) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* schema = cJSON_CreateObject();
 	if (!schema) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON_AddStringToObject(schema, "type", "object");
 	cJSON* properties = cJSON_AddObjectToObject(schema, "properties");
 	if (!properties) {
 		cJSON_Delete(schema);
-		return NULL;
+		return nullptr;
 	}
 
 	/*
@@ -301,11 +301,11 @@ auto_register_schema(const char* name, const csilk_reflect_entry_t* entry, void*
  * and output_type metadata using the reflection engine.
  *
  * @param router      The router instance containing registered routes.
- * @param title       API title for the info section (pass NULL for default).
- * @param version     API version string (pass NULL for default "1.0.0").
- * @param description API description (may be NULL).
+ * @param title       API title for the info section (pass nullptr for default).
+ * @param version     API version string (pass nullptr for default "1.0.0").
+ * @param description API description (may be nullptr).
  * @return A cJSON object representing the full OpenAPI document. Caller must
- *         free with cJSON_Delete(). Returns NULL if router is NULL or
+ *         free with cJSON_Delete(). Returns nullptr if router is nullptr or
  *         allocation fails. */
 cJSON*
 csilk_generate_openapi_json(csilk_router_t* router,
@@ -314,12 +314,12 @@ csilk_generate_openapi_json(csilk_router_t* router,
 			    const char* description)
 {
 	if (!router) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* doc = cJSON_CreateObject();
 	if (!doc) {
-		return NULL;
+		return nullptr;
 	}
 
 	// OpenAPI version
@@ -340,7 +340,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
 
 	// Components section
 	cJSON* components = cJSON_AddObjectToObject(doc, "components");
-	cJSON* schemas = NULL;
+	cJSON* schemas = nullptr;
 	if (components) {
 		schemas = cJSON_AddObjectToObject(components, "schemas");
 	}
@@ -349,7 +349,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
 	cJSON* routes = csilk_router_collect_routes(router);
 	if (!routes) {
 		cJSON_Delete(doc);
-		return NULL;
+		return nullptr;
 	}
 
 	/*
@@ -511,7 +511,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
 		}
 
 		// Request body (if input_type is set)
-		const char* input_type = input_item ? cJSON_GetStringValue(input_item) : NULL;
+		const char* input_type = input_item ? cJSON_GetStringValue(input_item) : nullptr;
 		if (input_type && *input_type != '\0') {
 			// Add schema for this type
 			if (schemas) {
@@ -544,7 +544,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
 		cJSON* responses = cJSON_AddObjectToObject(operation, "responses");
 		if (responses) {
 			const char* output_type =
-			    output_item ? cJSON_GetStringValue(output_item) : NULL;
+			    output_item ? cJSON_GetStringValue(output_item) : nullptr;
 			int has_output = (output_type && *output_type != '\0');
 
 			if (has_output && schemas) {

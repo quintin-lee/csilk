@@ -73,7 +73,7 @@ alpn_select_cb(SSL* ssl,
  * method context, loads the certificate chain and private key from the
  * configured file paths, optionally loads a CA file, and optionally enables
  * peer verification. On any failure, the SSL context is freed and set to
- * NULL (TLS is effectively disabled).
+ * nullptr (TLS is effectively disabled).
  *
  * @param s The server instance (config must have tls_cert_file and
  *          tls_key_file set if enable_tls is true). */
@@ -90,7 +90,7 @@ init_tls(csilk_server_t* s)
 		return;
 	}
 
-	SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, NULL);
+	SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, nullptr);
 
 	if (s->config.tls_cert_file && s->config.tls_key_file) {
 		if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx, s->config.tls_cert_file) <= 0) {
@@ -108,34 +108,35 @@ init_tls(csilk_server_t* s)
 	}
 
 	if (s->config.tls_ca_file) {
-		if (SSL_CTX_load_verify_locations(s->ssl_ctx, s->config.tls_ca_file, NULL) <= 0) {
+		if (SSL_CTX_load_verify_locations(s->ssl_ctx, s->config.tls_ca_file, nullptr) <=
+		    0) {
 			ERR_print_errors_fp(stderr);
 		}
 	}
 
 	if (s->config.tls_verify_peer) {
 		SSL_CTX_set_verify(
-		    s->ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+		    s->ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
 	}
 
 	return;
 
 error:
 	SSL_CTX_free(s->ssl_ctx);
-	s->ssl_ctx = NULL;
+	s->ssl_ctx = nullptr;
 }
 
 /** @brief Clean up the server's TLS/SSL context and global SSL state.
  *
  * Frees the SSL_CTX and calls EVP_cleanup() for OpenSSL global cleanup.
  *
- * @param s The server instance (may have ssl_ctx == NULL). */
+ * @param s The server instance (may have ssl_ctx == nullptr). */
 void
 cleanup_tls(csilk_server_t* s)
 {
 	if (s->ssl_ctx) {
 		SSL_CTX_free(s->ssl_ctx);
-		s->ssl_ctx = NULL;
+		s->ssl_ctx = nullptr;
 	}
 	EVP_cleanup();
 }
@@ -162,7 +163,7 @@ setup_client_tls(csilk_client_t* client)
 	client->write_bio = BIO_new(BIO_s_mem());
 	if (!client->read_bio || !client->write_bio) {
 		SSL_free(client->ssl);
-		client->ssl = NULL;
+		client->ssl = nullptr;
 		return -1;
 	}
 

@@ -45,7 +45,7 @@
  */
 struct csilk_method_handler_s {
 	char* method;			     /**< HTTP method string (e.g., "GET", "POST"). */
-	csilk_handler_t* handlers;	     /**< NULL-terminated array of handler function
+	csilk_handler_t* handlers;	     /**< nullptr-terminated array of handler function
                                 pointers for this method. */
 	struct csilk_method_handler_s* next; /**< Next method handler in this node's
                                          linked list. */
@@ -61,9 +61,9 @@ struct csilk_method_handler_s {
 
 	/** Permission metadata for interface-level access control */
 	const char* perm_required; /**< Permission required for this route (e.g.,
-                                "read", "write"), or NULL if no check. */
+                                "read", "write"), or nullptr if no check. */
 	const char* perm_resource; /**< Resource pattern for permission check (e.g.,
-                                "users:*"), or NULL. */
+                                "users:*"), or nullptr. */
 };
 typedef struct csilk_method_handler_s csilk_method_handler_t;
 
@@ -78,7 +78,7 @@ typedef struct csilk_storage_item_s {
 	char* key;			   /**< Item key name (arena-allocated). */
 	void* value;			   /**< Opaque pointer to user data (not
                                         copied, not freed). */
-	struct csilk_storage_item_s* next; /**< Next item in the linked list (NULL if
+	struct csilk_storage_item_s* next; /**< Next item in the linked list (nullptr if
                                        tail). */
 } csilk_storage_item_t;
 
@@ -108,7 +108,7 @@ struct csilk_ctx_s {
 	/* === Handler Chain State === */
 	int handler_index;	   /**< Index of the current handler in the chain; starts at
                         -1 (before first handler). */
-	csilk_handler_t* handlers; /**< NULL-terminated array of handler function
+	csilk_handler_t* handlers; /**< nullptr-terminated array of handler function
                                 pointers for the matched route. */
 	int aborted;		   /**< Non-zero if handler execution was aborted via csilk_abort().
                   Subsequent csilk_next() calls are no-ops. */
@@ -217,7 +217,7 @@ struct csilk_ctx_s {
 	/** OpenAPI spec generation — tracks the current method handler's metadata */
 	csilk_method_handler_t*
 	    current_handler; /**< Pointer to the method handler entry for the matched
-                          route (NULL if unmatched). Used by
+                          route (nullptr if unmatched). Used by
                           csilk_bind_reflect() and csilk_json_reflect() to
                           infer input/output type names from route metadata. */
 

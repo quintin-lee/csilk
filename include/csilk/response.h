@@ -72,8 +72,8 @@ void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value);
  * @param value     Cookie value (not URL-encoded).
  * @param max_age   Lifetime in seconds: >0 = max age, 0 = session cookie, -1 =
  * immediate expiry (delete).
- * @param path      Cookie path scope, or NULL for "/".
- * @param domain    Cookie domain scope, or NULL for current host.
+ * @param path      Cookie path scope, or nullptr for "/".
+ * @param domain    Cookie domain scope, or nullptr for current host.
  * @param secure    Non-zero adds the Secure flag (HTTPS only).
  * @param http_only Non-zero adds the HttpOnly flag (not accessible to JS).
  */
@@ -142,7 +142,7 @@ void csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const
  * @param c        The request context.
  * @param status   HTTP redirect status (e.g., 301 Moved Permanently,
  *                 302 Found, 307 Temporary Redirect).
- * @param location The destination URL.  Must not be NULL.
+ * @param location The destination URL.  Must not be nullptr.
  */
 void csilk_redirect(csilk_ctx_t* c, int status, const char* location);
 

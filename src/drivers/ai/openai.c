@@ -33,18 +33,18 @@ typedef struct {
 
 /**
  * @brief Initialize the OpenAI driver state.
- * @note api_key is required (returns NULL if absent).
+ * @note api_key is required (returns nullptr if absent).
  * Allocates state and performs one-shot libcurl global init.
  */
 static void*
 openai_init(const char* api_key, const char* base_url)
 {
 	if (!api_key) {
-		return NULL;
+		return nullptr;
 	}
 	openai_state_t* state = malloc(sizeof(openai_state_t));
 	if (!state) {
-		return NULL;
+		return nullptr;
 	}
 
 	state->api_key = strdup(api_key);
@@ -208,7 +208,7 @@ write_cb(void* contents, size_t size, size_t nmemb, void* userp)
 		/* Extract and process all complete lines */
 		char* line_start = ctx->line_buf;
 		char* newline;
-		while ((newline = strchr(line_start, '\n')) != NULL) {
+		while ((newline = strchr(line_start, '\n')) != nullptr) {
 			*newline = '\0'; /* null-terminate the line */
 			process_stream_line(ctx, line_start);
 			line_start = newline + 1; /* advance past the newline */
@@ -342,7 +342,7 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 	char url[512];
 	snprintf(url, sizeof(url), "%s/chat/completions", state->base_url);
 
-	struct curl_slist* headers = NULL;
+	struct curl_slist* headers = nullptr;
 	char auth_hdr[256];
 	snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s", state->api_key);
 	headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -499,7 +499,7 @@ openai_embeddings(void* state_ptr,
 	char url[512];
 	snprintf(url, sizeof(url), "%s/embeddings", state->base_url);
 
-	struct curl_slist* headers = NULL;
+	struct curl_slist* headers = nullptr;
 	char auth_hdr[256];
 	snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s", state->api_key);
 	headers = curl_slist_append(headers, "Content-Type: application/json");

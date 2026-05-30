@@ -51,7 +51,7 @@ struct csilk_group_s {
                                  *   csilk_group_free(). */
 	size_t middleware_count;      /**< Current number of middleware handlers. */
 	size_t middleware_capacity;   /**< Allocated capacity (always ≥ count). */
-	csilk_group_t* parent;	      /**< Parent group in the nesting tree, or NULL
+	csilk_group_t* parent;	      /**< Parent group in the nesting tree, or nullptr
                                  *   for root groups. Used by gather_handlers()
                                  *   to walk up the tree. Not owned. */
 };
@@ -59,7 +59,7 @@ struct csilk_group_s {
 /** @brief Internal: join two URL path components with a single '/' separator.
  *
  * ## Algorithm
- * 1. Handle trivial cases: if either component is NULL or empty, return
+ * 1. Handle trivial cases: if either component is nullptr or empty, return
  *    a strdup of the other (or "/" if both are empty).
  * 2. Strip trailing slashes from p1 by decrementing l1.
  * 3. Strip leading slashes from p2 by advancing p2_start.
@@ -69,13 +69,13 @@ struct csilk_group_s {
  * Examples:
  *   join_path("/api/", "/v1")  → "/api/v1"
  *   join_path("api", "v1")     → "api/v1"
- *   join_path(NULL, "/users")  → "/users"
+ *   join_path(nullptr, "/users")  → "/users"
  *   join_path("", "")          → "/"
  *
- * @param p1 First path component (may be empty or NULL).
- * @param p2 Second path component (may be empty or NULL).
+ * @param p1 First path component (may be empty or nullptr).
+ * @param p2 Second path component (may be empty or nullptr).
  * @return A newly heap-allocated joined path string. Caller must free().
- * @note Returns strdup("/") if both components are NULL or empty. */
+ * @note Returns strdup("/") if both components are nullptr or empty. */
 static char*
 join_path(const char* p1, const char* p2)
 {
@@ -100,7 +100,7 @@ join_path(const char* p1, const char* p2)
 
 	char* res = malloc(l1 + l2 + 2);
 	if (!res) {
-		return NULL;
+		return nullptr;
 	}
 
 	if (l1 > 0) {
@@ -123,22 +123,22 @@ join_path(const char* p1, const char* p2)
  *
  * @param router The router instance this group belongs to.
  * @param prefix URL prefix for all routes in this group (e.g., "/api/v1").
- *               Pass NULL or "/" for no prefix.
- * @return A new csilk_group_t, or NULL on allocation failure.
+ *               Pass nullptr or "/" for no prefix.
+ * @return A new csilk_group_t, or nullptr on allocation failure.
  * @note The group must be freed with csilk_group_free(). */
 csilk_group_t*
 csilk_group_new(csilk_router_t* router, const char* prefix)
 {
 	csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
 	if (!group) {
-		return NULL;
+		return nullptr;
 	}
 
 	group->router = router;
 	group->prefix = strdup(prefix ? prefix : "/");
 	if (!group->prefix) {
 		free(group);
-		return NULL;
+		return nullptr;
 	}
 	return group;
 }
@@ -149,21 +149,21 @@ csilk_group_new(csilk_router_t* router, const char* prefix)
  * parent's prefix (e.g., parent="/api", child="/v1" -> combined prefix
  * "/api/v1").
  *
- * @param parent The parent group (cannot be NULL).
+ * @param parent The parent group (cannot be nullptr).
  * @param prefix URL prefix for this subgroup (e.g., "/v1").
- * @return A new csilk_group_t, or NULL on failure.
+ * @return A new csilk_group_t, or nullptr on failure.
  * @note The child must be freed separately with csilk_group_free() — freeing
  *       the parent does NOT free its children. */
 csilk_group_t*
 csilk_group_group(csilk_group_t* parent, const char* prefix)
 {
 	if (!parent) {
-		return NULL;
+		return nullptr;
 	}
 
 	csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
 	if (!group) {
-		return NULL;
+		return nullptr;
 	}
 
 	group->parent = parent;
@@ -172,7 +172,7 @@ csilk_group_group(csilk_group_t* parent, const char* prefix)
 
 	if (!group->prefix) {
 		free(group);
-		return NULL;
+		return nullptr;
 	}
 	return group;
 }
@@ -219,7 +219,7 @@ csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
  *
  *   gather_handlers(child, &arr, &n)
  *     → gather_handlers(parent, &arr, &n)       // recurse to root first
- *       → gather_handlers(grandparent, &arr, &n) // root's parent is NULL
+ *       → gather_handlers(grandparent, &arr, &n) // root's parent is nullptr
  *         → (no parent — return)
  *       → memcpy grandparent's middlewares into arr[n..]
  *       → n += grandparent.middleware_count
@@ -292,9 +292,9 @@ csilk_group_add_route(csilk_group_t* group,
  * @param path        Path relative to the group prefix.
  * @param handler     The route handler function.
  * @param input_type  Registered reflection type name for the request body
- *                    (e.g., "CreateUserRequest"), or NULL.
+ *                    (e.g., "CreateUserRequest"), or nullptr.
  * @param output_type Registered reflection type name for the response body,
- *                    or NULL.
+ *                    or nullptr.
  * @param summary     Short description for OpenAPI operation summary.
  * @param description Detailed description for OpenAPI operation. */
 void
@@ -316,7 +316,7 @@ csilk_group_add_route_extended(csilk_group_t* group,
 		return;
 	}
 
-	csilk_handler_t* combined_handlers = NULL;
+	csilk_handler_t* combined_handlers = nullptr;
 	size_t combined_count = 0;
 
 	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
@@ -352,8 +352,8 @@ csilk_group_add_route_extended(csilk_group_t* group,
 }
 
 /** @copydoc csilk_group_add_route_extended
- *  @param perm_required  Permission required for this route, or NULL.
- *  @param perm_resource  Resource pattern for permission check, or NULL.
+ *  @param perm_required  Permission required for this route, or nullptr.
+ *  @param perm_resource  Resource pattern for permission check, or nullptr.
  *
  *  Permission metadata is forwarded to the router which stores it alongside
  *  the route for authorization middleware to inspect at request time. */
@@ -378,7 +378,7 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
 		return;
 	}
 
-	csilk_handler_t* combined_handlers = NULL;
+	csilk_handler_t* combined_handlers = nullptr;
 	size_t combined_count = 0;
 
 	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
@@ -451,7 +451,7 @@ csilk_group_add_handlers(csilk_group_t* group,
 		return;
 	}
 
-	csilk_handler_t* combined_handlers = NULL;
+	csilk_handler_t* combined_handlers = nullptr;
 	size_t combined_count = 0;
 
 	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
@@ -482,7 +482,7 @@ csilk_group_add_handlers(csilk_group_t* group,
  * Releases the group's prefix string, middleware handlers array, and the
  * group struct itself. Does NOT free child groups or the router.
  *
- * @param group The group to free (may be NULL).
+ * @param group The group to free (may be nullptr).
  * @note Child groups created with csilk_group_group() must be freed
  *       separately. The router is not owned by the group. */
 void

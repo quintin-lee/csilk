@@ -48,7 +48,8 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 		return -1;
 	}
 
-	int rc = sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+	int rc =
+	    sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr,
 			"csilk_db_sqlite: cannot open '%s': %s\n",
@@ -65,10 +66,10 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 /** @brief Close a SQLite connection and free the pool's connection data.
  *
  * Calls sqlite3_close() on the underlying handle, frees the connection struct,
- * and sets pool->connection to NULL.
+ * and sets pool->connection to nullptr.
  *
  * @param pool The database pool to shut down.
- * @return 0 on success, -1 if pool or its connection is NULL. */
+ * @return 0 on success, -1 if pool or its connection is nullptr. */
 static int
 sqlite_disconnect(csilk_db_pool_t* pool)
 {
@@ -81,7 +82,7 @@ sqlite_disconnect(csilk_db_pool_t* pool)
 		sqlite3_close(conn->db);
 	}
 	free(conn);
-	pool->connection = NULL;
+	pool->connection = nullptr;
 	return 0;
 }
 
@@ -93,7 +94,7 @@ sqlite_disconnect(csilk_db_pool_t* pool)
  * @note Currently frees row structs directly without freeing the
  *       row->values[] array or its individual string elements.
  *
- * @param result The result set to free (may be NULL). */
+ * @param result The result set to free (may be nullptr). */
 static void
 sqlite_free_result(csilk_db_result_t* result)
 {
@@ -115,8 +116,8 @@ sqlite_free_result(csilk_db_result_t* result)
 		free(result->column_names[i]);
 	}
 	free(result->column_names);
-	result->rows = NULL;
-	result->column_names = NULL;
+	result->rows = nullptr;
+	result->column_names = nullptr;
 	result->row_count = 0;
 	result->column_count = 0;
 }
@@ -140,7 +141,7 @@ sqlite_free_result(csilk_db_result_t* result)
  *   2. Extract column metadata from the prepared statement.
  *   3. Step through rows with sqlite3_step, allocating a csilk_db_row_t
  *      per row.  Each cell is extracted via sqlite3_column_text and
- *      duplicated via strdup (NULL cells become empty strings).
+ *      duplicated via strdup (nullptr cells become empty strings).
  *   4. Finalize the statement.  On any allocation failure, partial
  *      results are freed and -1 is returned.
  */
@@ -153,8 +154,8 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 
 	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
 
-	sqlite3_stmt* stmt = NULL;
-	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, NULL);
+	sqlite3_stmt* stmt = nullptr;
+	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, nullptr);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "csilk_db_sqlite: prepare failed: %s\n", sqlite3_errmsg(conn->db));
 		return -1;
@@ -190,7 +191,7 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 			return -1;
 		}
 
-		/* Copy each column as text; NULL values become "" for consistency */
+		/* Copy each column as text; nullptr values become "" for consistency */
 		for (int i = 0; i < result->column_count; i++) {
 			const char* val = (const char*)sqlite3_column_text(stmt, i);
 			row->values[i] = val ? strdup(val) : strdup("");
@@ -233,8 +234,8 @@ sqlite_exec(csilk_db_pool_t* pool, const char* sql)
 	}
 
 	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
-	char* err = NULL;
-	int rc = sqlite3_exec(conn->db, sql, NULL, NULL, &err);
+	char* err = nullptr;
+	int rc = sqlite3_exec(conn->db, sql, nullptr, nullptr, &err);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "csilk_db_sqlite: exec failed: %s\n", err ? err : "unknown");
 		if (err) {

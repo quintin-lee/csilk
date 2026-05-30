@@ -76,7 +76,7 @@ typedef struct csilk_data_s {
 	void* value;		/**< Opaque data pointer.  Ownership semantics
                              depend on @p free_fn. */
 	void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
-                             when the data is consumed.  NULL means the
+                             when the data is consumed.  nullptr means the
                              engine does NOT take ownership. */
 	void* meta;		/**< Optional metadata pointer (not freed by the
                              engine).  Common use: AI token usage stats. */
@@ -107,7 +107,7 @@ typedef struct {
 /**
  * @brief Dynamic router function signature.
  * @param input Data from the node that just finished.
- * @return ID of the next node to trigger, or NULL for default routing.
+ * @return ID of the next node to trigger, or nullptr for default routing.
  */
 typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
 
@@ -170,7 +170,7 @@ void* csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size);
 /**
  * @brief Create a new AI workflow instance.
  * @param name Descriptive name for the workflow.
- * @return New workflow handle, or NULL on failure.
+ * @return New workflow handle, or nullptr on failure.
  */
 csilk_wf_t* csilk_wf_new(const char* name);
 
@@ -186,7 +186,7 @@ void csilk_wf_free(csilk_wf_t* wf);
  * @param id        Unique ID for the node.
  * @param handler   Function to execute.
  * @param user_data Opaque pointer passed to the handler.
- * @return Handle to the created node, or NULL on failure.
+ * @return Handle to the created node, or nullptr on failure.
  */
 csilk_wf_node_t*
 csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data);
@@ -230,7 +230,7 @@ void csilk_wf_register_tool(csilk_wf_t* wf,
  * @brief Get a node by ID.
  * @param wf Workflow handle.
  * @param id Node ID.
- * @return Node handle or NULL if not found.
+ * @return Node handle or nullptr if not found.
  */
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id);
 
@@ -301,7 +301,7 @@ void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive);
 /**
  * @brief Set an expected JSON Schema for a node's output.
  * @param node   Node handle.
- * @param schema JSON Schema string (NULL to disable).
+ * @param schema JSON Schema string (nullptr to disable).
  */
 void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema);
 
@@ -413,7 +413,7 @@ void csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler);
 /**
  * @brief Load a workflow definition from a YAML file.
  * @param path Path to the .yaml or .yml file.
- * @return Workflow handle, or NULL on failure.
+ * @return Workflow handle, or nullptr on failure.
  */
 csilk_wf_t* csilk_wf_load_yaml(const char* path);
 

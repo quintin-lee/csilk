@@ -82,7 +82,7 @@ default_symmetric_encrypt(const uint8_t* key,
 	int ret = -1;
 	int len = 0;
 
-	if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
+	if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, key, iv) != 1) {
 		goto out;
 	}
 	if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) {
@@ -157,7 +157,7 @@ default_symmetric_decrypt(const uint8_t* key,
 	int ret = -1;
 	int len = 0;
 
-	if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
+	if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, key, iv) != 1) {
 		goto out;
 	}
 	if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) {
@@ -209,13 +209,13 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
 		return -1;
 	}
 
-	EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+	EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
 	if (!kctx) {
 		return -1;
 	}
 
 	int ret = -1;
-	EVP_PKEY* pkey = NULL;
+	EVP_PKEY* pkey = nullptr;
 
 	if (EVP_PKEY_keygen_init(kctx) != 1) {
 		goto out;
@@ -240,7 +240,7 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
 		BIO_free(priv_bio);
 		goto out;
 	}
-	if (PEM_write_bio_PrivateKey(priv_bio, pkey, NULL, NULL, 0, NULL, NULL) != 1) {
+	if (PEM_write_bio_PrivateKey(priv_bio, pkey, nullptr, nullptr, 0, nullptr, nullptr) != 1) {
 		BIO_free(pub_bio);
 		BIO_free(priv_bio);
 		goto out;
@@ -277,16 +277,16 @@ out:
 /** @brief Internal: parse a PEM-encoded public key into an EVP_PKEY handle.
  * @param pem PEM string buffer.
  * @param len Length of the PEM string.
- * @return New EVP_PKEY with a reference count of 1, or NULL on parse failure.
+ * @return New EVP_PKEY with a reference count of 1, or nullptr on parse failure.
  * @note The caller must free the returned key with EVP_PKEY_free(). */
 static EVP_PKEY*
 pem_to_pkey(const char* pem, size_t len)
 {
 	BIO* bio = BIO_new_mem_buf(pem, (int)len);
 	if (!bio) {
-		return NULL;
+		return nullptr;
 	}
-	EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+	EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
 	BIO_free(bio);
 	return pkey;
 }
@@ -294,16 +294,16 @@ pem_to_pkey(const char* pem, size_t len)
 /** @brief Internal: parse a PEM-encoded private key into an EVP_PKEY handle.
  * @param pem PEM string buffer.
  * @param len Length of the PEM string.
- * @return New EVP_PKEY with a reference count of 1, or NULL on parse failure.
+ * @return New EVP_PKEY with a reference count of 1, or nullptr on parse failure.
  * @note The caller must free the returned key with EVP_PKEY_free(). */
 static EVP_PKEY*
 pem_to_privkey(const char* pem, size_t len)
 {
 	BIO* bio = BIO_new_mem_buf(pem, (int)len);
 	if (!bio) {
-		return NULL;
+		return nullptr;
 	}
-	EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+	EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
 	BIO_free(bio);
 	return pkey;
 }
@@ -345,7 +345,7 @@ default_asymmetric_encrypt(const char* public_key,
 	}
 
 	int ret = -1;
-	EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, NULL);
+	EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
 	if (!ctx) {
 		goto out;
 	}
@@ -411,7 +411,7 @@ default_asymmetric_decrypt(const char* private_key,
 	}
 
 	int ret = -1;
-	EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, NULL);
+	EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
 	if (!ctx) {
 		goto out;
 	}
@@ -482,7 +482,7 @@ default_sign(const char* private_key,
 		goto out;
 	}
 
-	if (EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
+	if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
 		goto out2;
 	}
 	if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PSS_PADDING) != 1) {
@@ -547,7 +547,7 @@ default_verify(const char* public_key,
 		goto out;
 	}
 
-	if (EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
+	if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
 		goto out2;
 	}
 	if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PSS_PADDING) != 1) {

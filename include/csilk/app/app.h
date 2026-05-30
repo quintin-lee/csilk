@@ -50,19 +50,19 @@ typedef struct csilk_app_s csilk_app_t;
  * Initialises the router, server, logger, database subsystem, and AI
  * subsystem.  If @p config_path is provided and readable, settings for
  * CORS, rate-limiting, static files, auth, AI, and cipher are loaded.
- * If config_path is NULL or the file doesn't exist, sensible defaults
+ * If config_path is nullptr or the file doesn't exist, sensible defaults
  * are used (port 8080, stderr logging, all middleware disabled).
  *
- * @param config_path Path to YAML config file, or NULL for defaults.
- * @return New application handle, or NULL on fatal error. */
+ * @param config_path Path to YAML config file, or nullptr for defaults.
+ * @return New application handle, or nullptr on fatal error. */
 csilk_app_t* csilk_app_new(const char* config_path);
 
 /** @brief Deallocate all application resources.
  *
  * Stops the server (if running), frees the router, config, and any
- * registered middleware.  Safe to call with a NULL @p app.
+ * registered middleware.  Safe to call with a nullptr @p app.
  *
- * @param app Application handle (may be NULL). */
+ * @param app Application handle (may be nullptr). */
 void csilk_app_free(csilk_app_t* app);
 
 /* ---- Logger ---- */
@@ -142,10 +142,10 @@ void csilk_app_add_handlers(
  *  @param method HTTP method string.
  *  @param path URL pattern (supports :param and *wildcard).
  *  @param handler Route handler function.
- *  @param input_type Registered type name for request body (NULL if none).
- *  @param output_type Registered type name for response (NULL if none).
- *  @param summary Short operation summary (NULL if none).
- *  @param description Detailed operation description (NULL if none). */
+ *  @param input_type Registered type name for request body (nullptr if none).
+ *  @param output_type Registered type name for response (nullptr if none).
+ *  @param summary Short operation summary (nullptr if none).
+ *  @param description Detailed operation description (nullptr if none). */
 void csilk_app_add_route_extended(csilk_app_t* app,
 				  const char* method,
 				  const char* path,
@@ -160,8 +160,8 @@ void csilk_app_add_route_extended(csilk_app_t* app,
  *  @param method HTTP method string.
  *  @param path URL pattern (supports :param and *wildcard).
  *  @param handler Route handler function.
- *  @param perm_required Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void csilk_app_add_route_perm(csilk_app_t* app,
 			      const char* method,
 			      const char* path,
@@ -174,12 +174,12 @@ void csilk_app_add_route_perm(csilk_app_t* app,
  *  @param method HTTP method string.
  *  @param path URL pattern.
  *  @param handler Route handler function.
- *  @param input_type Registered type name for request body (NULL if none).
- *  @param output_type Registered type name for response (NULL if none).
- *  @param summary Short operation summary (NULL if none).
- *  @param description Detailed operation description (NULL if none).
- *  @param perm_required Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ *  @param input_type Registered type name for request body (nullptr if none).
+ *  @param output_type Registered type name for response (nullptr if none).
+ *  @param summary Short operation summary (nullptr if none).
+ *  @param description Detailed operation description (nullptr if none).
+ *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void csilk_app_add_route_extended_perm(csilk_app_t* app,
 				       const char* method,
 				       const char* path,
@@ -289,7 +289,7 @@ void csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c);
 /** @brief Get a copy of the current application configuration.
  * @param app Application handle.
  * @return Copy of internal config (caller must csilk_config_free it),
- *         or NULL on error. */
+ *         or nullptr on error. */
 csilk_config_t* csilk_app_config(csilk_app_t* app);
 
 /* ---- OpenAPI / Swagger ---- */

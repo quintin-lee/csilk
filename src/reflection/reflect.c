@@ -120,14 +120,14 @@ csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, size_
  * Searches the global registry for a type matching @p name.
  *
  * @param name Type name to find (case-sensitive).
- * @return Pointer to the type's reflection entry, or NULL if not found.
+ * @return Pointer to the type's reflection entry, or nullptr if not found.
  * @note Thread-safe. The returned pointer is valid for the lifetime of the
  *       registration. */
 const csilk_reflect_entry_t*
 csilk_reflect_find(const char* name)
 {
 	if (!name) {
-		return NULL;
+		return nullptr;
 	}
 	registry_lock();
 	for (size_t i = 0; i < g_registry_count; i++) {
@@ -137,7 +137,7 @@ csilk_reflect_find(const char* name)
 		}
 	}
 	registry_unlock();
-	return NULL;
+	return nullptr;
 }
 
 /** @brief Iterate over all registered reflection types and invoke a callback
@@ -220,12 +220,12 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
    * String → two modes via desc->is_pointer:
    *   - Pointer string: field stores a char*; dereference to get the string.
    *   - Fixed buffer: field IS the char array; cast addr directly.
-   *   NULL or empty → cJSON_CreateNull().
+   *   nullptr or empty → cJSON_CreateNull().
    *
    * Nested struct → look up the type's reflection entry by nested_type_name,
    *   create a fresh cJSON object, and recurse via struct_to_cjson_internal().
    *   If desc->is_pointer (struct*), dereference the pointer first.  Returns
-   *   Null if the nested type is not registered or the pointer is NULL.
+   *   Null if the nested type is not registered or the pointer is nullptr.
    */
 	switch (desc->type) {
 	case CSILK_TYPE_INT8:
@@ -267,7 +267,7 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
 
 		cJSON* sub_obj = cJSON_CreateObject();
 		if (!sub_obj) {
-			return NULL;
+			return nullptr;
 		}
 		struct_to_cjson_internal(sub_obj, struct_addr, entry->fields, entry->count);
 		return sub_obj;
@@ -285,7 +285,7 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
  * json_key as the object key.
  *
  * @param obj         Target cJSON object to populate.
- * @param struct_ptr  Pointer to the source struct (must not be NULL).
+ * @param struct_ptr  Pointer to the source struct (must not be nullptr).
  * @param descs       Array of field descriptors.
  * @param field_count Number of field descriptors. */
 static void
@@ -344,7 +344,7 @@ static void cjson_to_struct_internal(const cJSON* obj,
  * calls cjson_to_struct_internal(). Null JSON values or missing items
  * cause the field to be skipped (left at its current value).
  *
- * @param item Source cJSON node (may be NULL or Null).
+ * @param item Source cJSON node (may be nullptr or Null).
  * @param addr Memory address of the target field.
  * @param desc Field descriptor with type, size, and pointer flag.
  * @note For pointer string fields, any existing allocation is freed before
@@ -565,7 +565,7 @@ char*
 csilk_json_marshal(const char* type_name, const void* ptr)
 {
 	if (!type_name || !ptr) {
-		return NULL;
+		return nullptr;
 	}
 
 	/*
@@ -579,7 +579,7 @@ csilk_json_marshal(const char* type_name, const void* ptr)
 	if (get_basic_type(type_name, &basic_desc)) {
 		cJSON* node = serialize_scalar(ptr, &basic_desc);
 		if (!node) {
-			return NULL;
+			return nullptr;
 		}
 		char* out = cJSON_PrintUnformatted(node);
 		cJSON_Delete(node);
@@ -588,12 +588,12 @@ csilk_json_marshal(const char* type_name, const void* ptr)
 
 	const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
 	if (!entry) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* root = cJSON_CreateObject();
 	if (!root) {
-		return NULL;
+		return nullptr;
 	}
 
 	struct_to_cjson_internal(root, ptr, entry->fields, entry->count);

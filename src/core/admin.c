@@ -204,7 +204,7 @@ admin_ws_handler(csilk_ctx_t* c)
 void
 csilk_admin_serve(csilk_app_t* app, const char* app_path)
 {
-	csilk_admin_serve_secure(app, app_path, NULL);
+	csilk_admin_serve_secure(app, app_path, nullptr);
 }
 
 /**

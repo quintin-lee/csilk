@@ -30,7 +30,7 @@ int csilk_h2_process_data(csilk_client_t* client, const uint8_t* data, size_t le
  * @brief Get an existing stream context or create a new one.
  * @param client    The client connection.
  * @param stream_id The HTTP/2 stream ID.
- * @return Pointer to the context, or NULL on failure.
+ * @return Pointer to the context, or nullptr on failure.
  */
 csilk_ctx_t* csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id);
 

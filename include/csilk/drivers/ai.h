@@ -161,9 +161,9 @@ typedef struct {
 	const char* name; /**< Driver identifier (e.g., "openai", "ollama"). Must
                        match the name passed to csilk_ai_new. */
 	/** @brief Initialize driver-specific state (e.g., HTTP client, auth tokens).
-   *  @param api_key  API key (may be NULL for providers that don't need one).
-   *  @param base_url Optional custom endpoint URL (NULL for provider default).
-   *  @return Opaque driver state handle, or NULL on failure. */
+   *  @param api_key  API key (may be nullptr for providers that don't need one).
+   *  @param base_url Optional custom endpoint URL (nullptr for provider default).
+   *  @return Opaque driver state handle, or nullptr on failure. */
 	void* (*init)(const char* api_key, const char* base_url);
 	/** @brief Perform a synchronous chat completion call.
    *  @param state Driver state from init().
@@ -200,9 +200,9 @@ typedef struct {
 
 /** @brief Create a new AI instance with a specific driver.
  * @param driver_name "openai", "ollama", or other registered driver names.
- * @param api_key     API key for the provider (may be NULL for Ollama).
- * @param base_url    Optional custom base URL (pass NULL for provider default).
- * @return New AI handle, or NULL if driver not found or init failed. */
+ * @param api_key     API key for the provider (may be nullptr for Ollama).
+ * @param base_url    Optional custom base URL (pass nullptr for provider default).
+ * @return New AI handle, or nullptr if driver not found or init failed. */
 csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url);
 
 /** @brief Perform a chat completion.

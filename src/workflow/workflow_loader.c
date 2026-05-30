@@ -19,7 +19,7 @@ typedef struct handler_entry_s {
 	struct handler_entry_s* next;
 } handler_entry_t;
 
-static handler_entry_t* g_handlers = NULL;
+static handler_entry_t* g_handlers = nullptr;
 
 void
 csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
@@ -37,7 +37,7 @@ csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
 /** @brief Internal: look up a handler by name in the singly-linked list
  * registry.
  * @param name Handler name (case-sensitive).
- * @return Handler function pointer, or NULL if not registered. */
+ * @return Handler function pointer, or nullptr if not registered. */
 static csilk_wf_handler_t
 find_handler(const char* name)
 {
@@ -48,7 +48,7 @@ find_handler(const char* name)
 		}
 		curr = curr->next;
 	}
-	return NULL;
+	return nullptr;
 }
 
 /* --- JSON Parser --- */
@@ -66,7 +66,7 @@ find_handler(const char* name)
  * Pass 3: Set error targets from each step's "on_error" field.
  *
  * @param json_str Null-terminated JSON string.
- * @return A new csilk_wf_t, or NULL on parse failure or empty workflow.
+ * @return A new csilk_wf_t, or nullptr on parse failure or empty workflow.
  * @note The caller owns the returned workflow and must free it with
  *       csilk_wf_free(). Handler functions must be registered via
  *       csilk_wf_register_handler() before calling this function. */
@@ -74,12 +74,12 @@ csilk_wf_t*
 csilk_wf_from_json(const char* json_str)
 {
 	if (!json_str) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* root = cJSON_Parse(json_str);
 	if (!root) {
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* name_item = cJSON_GetObjectItem(root, "name");
@@ -89,7 +89,7 @@ csilk_wf_from_json(const char* json_str)
 	csilk_wf_t* wf = csilk_wf_new(wf_name);
 	if (!wf) {
 		cJSON_Delete(root);
-		return NULL;
+		return nullptr;
 	}
 
 	cJSON* steps = cJSON_GetObjectItem(root, "steps");
@@ -107,7 +107,7 @@ csilk_wf_from_json(const char* json_str)
 			const char* type =
 			    cJSON_IsString(type_item) ? type_item->valuestring : "handler";
 
-			csilk_wf_node_t* node = NULL;
+			csilk_wf_node_t* node = nullptr;
 			if (strcmp(type, "ai") == 0) {
 				cJSON* config = cJSON_GetObjectItem(step, "config");
 				csilk_ai_config_t aic = {0};
@@ -132,7 +132,7 @@ csilk_wf_from_json(const char* json_str)
 					csilk_wf_handler_t h =
 					    find_handler(handler_item->valuestring);
 					if (h) {
-						node = csilk_wf_add(wf, id, h, NULL);
+						node = csilk_wf_add(wf, id, h, nullptr);
 					} else {
 						printf("[Workflow] Warning: "
 						       "Handler '%s' not "
@@ -178,7 +178,7 @@ csilk_wf_from_json(const char* json_str)
 				cJSON* cond_item = cJSON_GetObjectItem(conn, "condition");
 				cJSON* loop_item = cJSON_GetObjectItem(conn, "loop");
 				const char* cond =
-				    cJSON_IsString(cond_item) ? cond_item->valuestring : NULL;
+				    cJSON_IsString(cond_item) ? cond_item->valuestring : nullptr;
 
 				if (cJSON_IsTrue(loop_item)) {
 					csilk_wf_on_loop(n_from, cond, n_to);
@@ -230,7 +230,7 @@ csilk_wf_from_json(const char* json_str)
  * 4. Return the root cJSON node.
  *
  * @param path Filesystem path to the YAML file.
- * @return Root cJSON node (object or array), or NULL if the file
+ * @return Root cJSON node (object or array), or nullptr if the file
  *         cannot be opened or parsed.
  * @note The caller must free the returned cJSON with cJSON_Delete().
  *       YAML boolean values ("true"/"false") are converted to cJSON
@@ -240,22 +240,22 @@ parse_yaml_file(const char* path)
 {
 	FILE* fh = fopen(path, "rb");
 	if (!fh) {
-		return NULL;
+		return nullptr;
 	}
 
 	yaml_parser_t parser;
 	if (!yaml_parser_initialize(&parser)) {
 		fclose(fh);
-		return NULL;
+		return nullptr;
 	}
 	yaml_parser_set_input_file(&parser, fh);
 
-	cJSON* root = NULL;
+	cJSON* root = nullptr;
 	cJSON* stack[64];
 	int stack_ptr = 0;
 
 	// To handle mapping keys:
-	char* current_key = NULL;
+	char* current_key = nullptr;
 
 	yaml_event_t event;
 	int done = 0;
@@ -277,7 +277,7 @@ parse_yaml_file(const char* path)
 				} else if (cJSON_IsObject(parent) && current_key) {
 					cJSON_AddItemToObject(parent, current_key, obj);
 					free(current_key);
-					current_key = NULL;
+					current_key = nullptr;
 				}
 				stack[stack_ptr++] = obj;
 			}
@@ -295,14 +295,14 @@ parse_yaml_file(const char* path)
 				} else if (cJSON_IsObject(parent) && current_key) {
 					cJSON_AddItemToObject(parent, current_key, arr);
 					free(current_key);
-					current_key = NULL;
+					current_key = nullptr;
 				}
 				stack[stack_ptr++] = arr;
 			}
 			break;
 		}
 		case YAML_SCALAR_EVENT: {
-			cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
+			cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
 			if (parent) {
 				if (cJSON_IsObject(parent)) {
 					if (!current_key) {
@@ -310,7 +310,7 @@ parse_yaml_file(const char* path)
 						    strdup((char*)event.data.scalar.value);
 					} else {
 						const char* val = (char*)event.data.scalar.value;
-						cJSON* scalar = NULL;
+						cJSON* scalar = nullptr;
 						if (strcmp(val, "true") == 0) {
 							scalar = cJSON_CreateBool(1);
 						} else if (strcmp(val, "false") == 0) {
@@ -320,11 +320,11 @@ parse_yaml_file(const char* path)
 						}
 						cJSON_AddItemToObject(parent, current_key, scalar);
 						free(current_key);
-						current_key = NULL;
+						current_key = nullptr;
 					}
 				} else if (cJSON_IsArray(parent)) {
 					const char* val = (char*)event.data.scalar.value;
-					cJSON* scalar = NULL;
+					cJSON* scalar = nullptr;
 					if (strcmp(val, "true") == 0) {
 						scalar = cJSON_CreateBool(1);
 					} else if (strcmp(val, "false") == 0) {
@@ -366,7 +366,7 @@ parse_yaml_file(const char* path)
  * approach avoids duplicated parsing logic.
  *
  * @param path Path to a .yaml or .yml file.
- * @return A new csilk_wf_t, or NULL if the file cannot be read or
+ * @return A new csilk_wf_t, or nullptr if the file cannot be read or
  *         the YAML is invalid.
  * @note The caller owns the returned workflow. */
 csilk_wf_t*
@@ -374,7 +374,7 @@ csilk_wf_load_yaml(const char* path)
 {
 	cJSON* root = parse_yaml_file(path);
 	if (!root) {
-		return NULL;
+		return nullptr;
 	}
 	char* json_str = cJSON_PrintUnformatted(root);
 	cJSON_Delete(root);

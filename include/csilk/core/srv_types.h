@@ -64,17 +64,17 @@ struct csilk_server_s {
 	int max_connections;		 /**< Max concurrent connections (0=unlimited). */
 	atomic_int active_connections;	 /**< Current connection count (atomic). */
 	/* close tracking for async shutdown — see csilk_server_free */
-	uv_thread_t* worker_tids;		/**< Worker thread IDs (NULL if single-thread). */
-	int worker_count;			/**< Number of worker threads created. */
-	uv_async_t* worker_stop_async;		/**< Per-worker async handles for graceful stop. */
-	int worker_stop_count;			/**< Number of worker_stop_async entries. */
-	csilk_handler_t not_found_handler;	/**< Custom 404 handler (NULL = default). */
-	char* spa_doc_root;			/**< SPA fallback doc root (NULL = disabled). */
-	csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
-	csilk_crypto_driver_t* crypto_driver;	/**< Crypto algorithm driver. */
-	csilk_cipher_driver_t* cipher_driver;	/**< Cipher algorithm driver. */
-	SSL_CTX* ssl_ctx;			/**< OpenSSL context. */
-	csilk_mq_t* mq;				/**< Message Queue instance. */
+	uv_thread_t* worker_tids;	   /**< Worker thread IDs (nullptr if single-thread). */
+	int worker_count;		   /**< Number of worker threads created. */
+	uv_async_t* worker_stop_async;	   /**< Per-worker async handles for graceful stop. */
+	int worker_stop_count;		   /**< Number of worker_stop_async entries. */
+	csilk_handler_t not_found_handler; /**< Custom 404 handler (nullptr = default). */
+	char* spa_doc_root;		   /**< SPA fallback doc root (nullptr = disabled). */
+	csilk_storage_driver_t* storage_driver;	    /**< Context storage driver. */
+	csilk_crypto_driver_t* crypto_driver;	    /**< Crypto algorithm driver. */
+	csilk_cipher_driver_t* cipher_driver;	    /**< Cipher algorithm driver. */
+	SSL_CTX* ssl_ctx;			    /**< OpenSSL context. */
+	csilk_mq_t* mq;				    /**< Message Queue instance. */
 	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
 	csilk_client_t* active_clients;		    /**< Head of active connections list. */
 	uv_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
@@ -137,7 +137,7 @@ void _csilk_dispatch_request(csilk_ctx_t* c);
 /**
  * @brief Internal: invoke all registered handlers for a given hook type.
  * @param s    The server instance.
- * @param c    The request context (may be NULL for server-level hooks).
+ * @param c    The request context (may be nullptr for server-level hooks).
  * @param type Hook type to trigger.
  */
 void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);

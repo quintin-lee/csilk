@@ -88,19 +88,19 @@ struct csilk_router_node_s {
  *
  * @param segment The path segment name (e.g., "users", "id" for ":id").
  * @param type    The node type (static, param, or wildcard).
- * @return A new csilk_router_node_t, or NULL on allocation failure.
+ * @return A new csilk_router_node_t, or nullptr on allocation failure.
  * @note The returned node must be freed with node_free(). */
 static csilk_router_node_t*
 node_new(const char* segment, csilk_node_type_t type)
 {
 	csilk_router_node_t* node = calloc(1, sizeof(csilk_router_node_t));
 	if (!node) {
-		return NULL;
+		return nullptr;
 	}
 	node->segment = strdup(segment);
 	if (!node->segment) {
 		free(node);
-		return NULL;
+		return nullptr;
 	}
 	node->type = type;
 	return node;
@@ -112,7 +112,7 @@ node_new(const char* segment, csilk_node_type_t type)
  * method, handlers array, and path strings), recursively frees all child
  * nodes, and finally frees the node itself.
  *
- * @param node The node to free (may be NULL). */
+ * @param node The node to free (may be nullptr). */
 static void
 node_free(csilk_router_node_t* node)
 {
@@ -145,7 +145,7 @@ node_free(csilk_router_node_t* node)
  *   1. Skip all leading '/' characters — this normalises paths such as
  *      "//foo//bar" into the same segments as "/foo/bar".
  *   2. If the remaining string is empty after skipping slashes, return
- *      NULL (no more segments).
+ *      nullptr (no more segments).
  *   3. Record the start pointer, then advance until the next '/' or
  *      end-of-string. The characters in between form one segment.
  *   4. Allocate and return a heap copy of that segment.
@@ -156,31 +156,31 @@ node_free(csilk_router_node_t* node)
  *   Call 1: returns "users",    p -> "/42/profile"
  *   Call 2: returns "42",       p -> "/profile"
  *   Call 3: returns "profile",  p -> ""
- *   Call 4: returns NULL
+ *   Call 4: returns nullptr
  *
  * Edge cases:
- *   - Leading slashes are always skipped, so path "/" yields NULL
+ *   - Leading slashes are always skipped, so path "/" yields nullptr
  *     (zero segments), matching the root node.
  *   - Paths with trailing slashes like "/users/" return "users" then
- *     NULL — the trailing '/' is consumed but produces no segment.
+ *     nullptr — the trailing '/' is consumed but produces no segment.
  *
  * @param p [in/out] Pointer to the current position in the path string.
  *           Updated to point past the extracted segment.
  * @param len [out] Pointer to receive the length of the segment.
  * @return A pointer to the start of the segment within the original path string,
- *         or NULL if no more segments are found. */
+ *         or nullptr if no more segments are found. */
 static const char*
 get_next_segment(const char** p, size_t* len)
 {
 	if (!*p || **p == '\0') {
-		return NULL;
+		return nullptr;
 	}
 
 	while (**p == '/') {
 		(*p)++;
 	}
 	if (**p == '\0') {
-		return NULL;
+		return nullptr;
 	}
 
 	const char* start = *p;
@@ -194,7 +194,7 @@ get_next_segment(const char** p, size_t* len)
 
 /** @brief Create a new router instance with an empty root ("") static node.
  *
- * @return A new csilk_router_t, or NULL on allocation failure.
+ * @return A new csilk_router_t, or nullptr on allocation failure.
  * @note The router must be freed with csilk_router_free(). The root node
  *       is a static node with an empty segment, representing the root "/". */
 csilk_router_t*
@@ -202,7 +202,7 @@ csilk_router_new()
 {
 	csilk_router_t* r = malloc(sizeof(csilk_router_t));
 	if (!r) {
-		return NULL;
+		return nullptr;
 	}
 	r->root = node_new("", CSILK_NODE_STATIC);
 	return r;
@@ -213,7 +213,7 @@ csilk_router_new()
  * Recursively frees the entire trie starting from the root node, then
  * frees the router struct itself.
  *
- * @param r The router to free (may be NULL). */
+ * @param r The router to free (may be nullptr). */
 void
 csilk_router_free(csilk_router_t* r)
 {
@@ -273,16 +273,16 @@ node_collect_routes(csilk_router_node_t* node, cJSON* routes)
  *
  * @param r The router instance.
  * @return A cJSON array of route objects. Caller must free with cJSON_Delete().
- *         Returns NULL if the router is NULL or allocation fails. */
+ *         Returns nullptr if the router is nullptr or allocation fails. */
 cJSON*
 csilk_router_collect_routes(csilk_router_t* r)
 {
 	if (!r || !r->root) {
-		return NULL;
+		return nullptr;
 	}
 	cJSON* array = cJSON_CreateArray();
 	if (!array) {
-		return NULL;
+		return nullptr;
 	}
 	node_collect_routes(r->root, array);
 	return array;
@@ -303,14 +303,14 @@ csilk_router_collect_routes(csilk_router_t* r)
  * @param r              The router instance.
  * @param method         HTTP method (e.g., "GET", "POST").
  * @param path           URL path pattern (e.g., "/users/:id").
- * @param handlers       Array of handler functions (NULL-terminated).
- * @param handler_count  Number of handlers (excluding the NULL terminator).
+ * @param handlers       Array of handler functions (nullptr-terminated).
+ * @param handler_count  Number of handlers (excluding the nullptr terminator).
  * @param path_pattern   Original path pattern for OpenAPI metadata (may differ
  *                       from @p path if prefix was prepended by group).
- * @param input_type     Registered type name for request body, or NULL.
- * @param output_type    Registered type name for response body, or NULL.
- * @param summary        OpenAPI operation summary, or NULL.
- * @param description    OpenAPI operation description, or NULL.
+ * @param input_type     Registered type name for request body, or nullptr.
+ * @param output_type    Registered type name for response body, or nullptr.
+ * @param summary        OpenAPI operation summary, or nullptr.
+ * @param description    OpenAPI operation description, or nullptr.
  * @note The router does NOT support overriding an existing route — duplicate
  *       method+path registrations are silently dropped.
  * @note The handler array is copied; the caller may free it after this call. */
@@ -336,7 +336,7 @@ router_add_full(csilk_router_t* r,
 	const char* seg;
 	size_t len;
 
-	while ((seg = get_next_segment(&p, &len)) != NULL) {
+	while ((seg = get_next_segment(&p, &len)) != nullptr) {
 		// Classify the segment based on its first character:
 		//   ':' prefix -> PARAM node (matches any single segment, captured as named
 		//   param)
@@ -367,7 +367,7 @@ router_add_full(csilk_router_t* r,
 		memcpy(seg_name, seg_name_start, seg_name_len);
 		seg_name[seg_name_len] = '\0';
 
-		csilk_router_node_t* found = NULL;
+		csilk_router_node_t* found = nullptr;
 		int insert_pos = curr->children_count;
 
 		for (int i = 0; i < curr->children_count; i++) {
@@ -377,7 +377,7 @@ router_add_full(csilk_router_t* r,
 				break;
 			}
 			// Maintain order: STATIC < PARAM < WILDCARD
-			if (found == NULL && curr->children[i]->type > type) {
+			if (found == nullptr && curr->children[i]->type > type) {
 				insert_pos = i;
 				// Continue searching to see if it already exists further down
 				// Actually, if we maintain order, we could optimize this search.
@@ -432,8 +432,8 @@ router_add_full(csilk_router_t* r,
 			return;
 		}
 		memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
-		mh->handlers[handler_count] = NULL;
-		mh->path = path_pattern ? strdup(path_pattern) : NULL;
+		mh->handlers[handler_count] = nullptr;
+		mh->path = path_pattern ? strdup(path_pattern) : nullptr;
 		mh->input_type = input_type;
 		mh->output_type = output_type;
 		mh->summary = summary;
@@ -461,11 +461,11 @@ router_add_full(csilk_router_t* r,
  * @param path_pattern  Canonical path pattern string for documentation
  *                      (may differ from the radix-tree path).
  * @param input_type    Registered type name for request-body binding
- *                      (NULL if there is no request body).
+ *                      (nullptr if there is no request body).
  * @param output_type   Registered type name for response serialisation
- *                      (NULL if raw response is used).
- * @param summary       Short summary of the operation (NULL to omit from spec).
- * @param description   Detailed description of the operation (NULL to omit).
+ *                      (nullptr if raw response is used).
+ * @param summary       Short summary of the operation (nullptr to omit from spec).
+ * @param description   Detailed description of the operation (nullptr to omit).
  * @note The handlers array is stored by pointer — the caller must ensure
  *       the function pointers remain valid for the lifetime of the router. */
 void
@@ -490,14 +490,14 @@ csilk_router_add_extended(csilk_router_t* r,
 			output_type,
 			summary,
 			description,
-			NULL,
-			NULL);
+			nullptr,
+			nullptr);
 }
 
 /** @brief Register a route with method, path pattern, and handler chain (no
  * OpenAPI metadata).
  *
- * Convenience wrapper around csilk_router_add_extended() that passes NULL
+ * Convenience wrapper around csilk_router_add_extended() that passes nullptr
  * for all optional metadata fields.
  *
  * @param r             The router instance.
@@ -513,7 +513,7 @@ csilk_router_add(csilk_router_t* r,
 		 size_t handler_count)
 {
 	csilk_router_add_extended(
-	    r, method, path, handlers, handler_count, path, NULL, NULL, NULL, NULL);
+	    r, method, path, handlers, handler_count, path, nullptr, nullptr, nullptr, nullptr);
 }
 
 /** @brief Register a route with permission metadata.
@@ -527,8 +527,8 @@ csilk_router_add(csilk_router_t* r,
  * @param path          URL path pattern.
  * @param handlers      Array of handler functions.
  * @param handler_count Number of handlers.
- * @param perm_required Permission identifier (e.g., "read", "write"), or NULL.
- * @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ * @param perm_required Permission identifier (e.g., "read", "write"), or nullptr.
+ * @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void
 csilk_router_add_perm(csilk_router_t* r,
 		      const char* method,
@@ -544,10 +544,10 @@ csilk_router_add_perm(csilk_router_t* r,
 			handlers,
 			handler_count,
 			path,
-			NULL,
-			NULL,
-			NULL,
-			NULL,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
 			perm_required,
 			perm_resource);
 }
@@ -563,12 +563,12 @@ csilk_router_add_perm(csilk_router_t* r,
  * @param handlers      Array of handler functions.
  * @param handler_count Number of handlers.
  * @param path_pattern  Original path pattern for OpenAPI metadata.
- * @param input_type    Registered type name for request body, or NULL.
- * @param output_type   Registered type name for response body, or NULL.
- * @param summary       OpenAPI operation summary, or NULL.
- * @param description   OpenAPI operation description, or NULL.
- * @param perm_required Permission identifier (e.g., "read"), or NULL.
- * @param perm_resource Resource pattern (e.g., "users:*"), or NULL. */
+ * @param input_type    Registered type name for request body, or nullptr.
+ * @param output_type   Registered type name for response body, or nullptr.
+ * @param summary       OpenAPI operation summary, or nullptr.
+ * @param description   OpenAPI operation description, or nullptr.
+ * @param perm_required Permission identifier (e.g., "read"), or nullptr.
+ * @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 void
 csilk_router_add_extended_perm(csilk_router_t* r,
 			       const char* method,
@@ -603,7 +603,7 @@ csilk_router_add_extended_perm(csilk_router_t* r,
  * This is the core matching function. It implements a depth-first,
  * backtracking search over the radix tree:
  *
- *   1. Base case: if the remaining path is empty, "/", or NULL, check
+ *   1. Base case: if the remaining path is empty, "/", or nullptr, check
  *      whether the current node has a handler for the given HTTP method.
  *      If so, return it — this is a successful terminal match.
  *
@@ -619,13 +619,13 @@ csilk_router_add_extended_perm(csilk_router_t* r,
  *   4. Recurse: if the child matches, call match_node() on it with the
  *      remaining path pointer (p). Propagate the result back up.
  *
- *   5. Backtrack: if recursion returns NULL (no handler found deeper),
+ *   5. Backtrack: if recursion returns nullptr (no handler found deeper),
  *      undo any PARAM capture that was made for this branch
  *      (decrement params_count, free key/value strings). Continue
  *      to the next sibling child.
  *
- *   6. If no child matches or all branches return NULL, free the segment
- *      and return NULL — no route matched.
+ *   6. If no child matches or all branches return nullptr, free the segment
+ *      and return nullptr — no route matched.
  *
  * === Why backtracking matters ===
  * Consider routes:  GET /users/:id   (PARAM)
@@ -641,11 +641,11 @@ csilk_router_add_extended_perm(csilk_router_t* r,
  * @param node   Current trie node to match against.
  * @param method HTTP method to match.
  * @param path   Remaining path string (may be "" or "/" for exact match).
- * @param ctx    Request context for parameter capture (may be NULL for
+ * @param ctx    Request context for parameter capture (may be nullptr for
  *               standalone matching).
  * @param out_mh [out] Optional pointer to receive the matched method handler
  *               metadata (for OpenAPI metadata access).
- * @return Pointer to the NULL-terminated handler array, or NULL if no match.
+ * @return Pointer to the nullptr-terminated handler array, or nullptr if no match.
  * @note Parameter and wildcard values are strdup'd and must be freed by the
  *       caller (or during csilk_ctx_cleanup()). */
 static csilk_handler_t*
@@ -666,17 +666,17 @@ match_node(csilk_router_node_t* node,
 			}
 			mh = mh->next;
 		}
-		return NULL;
+		return nullptr;
 	}
 
 	const char* p = path;
 	size_t len;
 	const char* seg = get_next_segment(&p, &len);
 	if (!seg) {
-		return NULL;
+		return nullptr;
 	}
 
-	csilk_handler_t* result = NULL;
+	csilk_handler_t* result = nullptr;
 	for (int i = 0; i < node->children_count; i++) {
 		csilk_router_node_t* child = node->children[i];
 		if (child->type == CSILK_NODE_STATIC) {
@@ -789,15 +789,15 @@ match_node(csilk_router_node_t* node,
  * @param r      The router instance.
  * @param method HTTP method.
  * @param path   URL path.
- * @return Pointer to the handler array if matched, NULL otherwise.
+ * @return Pointer to the handler array if matched, nullptr otherwise.
  * @note No parameter capture is performed since no context is provided. */
 csilk_handler_t*
 csilk_router_match(csilk_router_t* r, const char* method, const char* path)
 {
 	if (!r || !r->root || !method || !path) {
-		return NULL;
+		return nullptr;
 	}
-	return match_node(r->root, method, path, NULL, NULL);
+	return match_node(r->root, method, path, nullptr, nullptr);
 }
 
 /** @brief Match the current request context against the routing table and
@@ -819,7 +819,7 @@ csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
 		return 0;
 	}
 	c->params_count = 0;
-	csilk_method_handler_t* mh = NULL;
+	csilk_method_handler_t* mh = nullptr;
 	csilk_handler_t* handlers = match_node(r->root, c->request.method, c->request.path, c, &mh);
 	if (handlers) {
 		c->handlers = handlers;

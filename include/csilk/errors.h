@@ -47,7 +47,7 @@
 /** @name Validation flags
  *  Bit flags for use in csilk_valid_rule_t.flags.  Combine with |.
  *  @{ */
-#define CSILK_VALID_REQUIRED (1 << 0) /**< Field must be present (non-NULL, non-empty). */
+#define CSILK_VALID_REQUIRED (1 << 0) /**< Field must be present (non-nullptr, non-empty). */
 #define CSILK_VALID_INT (1 << 1)      /**< Value must parse as a valid integer. */
 #define CSILK_VALID_STRING                                                                         \
 	(1 << 2) /**< Value must be a string (always true for form/query values; \

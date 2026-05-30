@@ -102,7 +102,7 @@ gzip_after_work_cb(uv_work_t* req, int status)
 
 	if (state && state->ret == Z_STREAM_END) {
 		csilk_set_response_body(c, (const char*)state->dest, state->compressed_len, 1);
-		state->dest = NULL; // Ownership transferred to context
+		state->dest = nullptr; // Ownership transferred to context
 
 		csilk_set_header(c, "Content-Encoding", "gzip");
 		csilk_set_header(c, "Vary", "Accept-Encoding");

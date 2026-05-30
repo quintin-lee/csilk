@@ -61,7 +61,7 @@ csilk_recovery_handler(csilk_ctx_t* c)
  * If no recovery handler is registered, it prints a fatal error message to
  * stderr and calls exit(1) to terminate the process.
  *
- * @param c  The request context. May be NULL (will trigger abort path).
+ * @param c  The request context. May be nullptr (will trigger abort path).
  *
  * @warning This function does NOT return when executed without a recovery
  *          handler.

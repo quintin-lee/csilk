@@ -67,7 +67,7 @@ typedef struct {
 } static_route_t;
 
 /** @brief Router reference for the built-in OpenAPI handler. */
-static csilk_router_t* s_openapi_router = NULL;
+static csilk_router_t* s_openapi_router = nullptr;
 static uv_mutex_t s_app_mutex;
 static uv_once_t s_app_mutex_once = UV_ONCE_INIT;
 
@@ -85,7 +85,7 @@ init_app_mutex(void)
 /** @brief Internal: safely retrieve the current OpenAPI router under the app
  * mutex.
  *
- * @return The current s_openapi_router pointer, or NULL.
+ * @return The current s_openapi_router pointer, or nullptr.
  * @note Thread-safe. The returned pointer should not be stored beyond the
  *       calling scope as it may change. */
 static csilk_router_t*
@@ -99,7 +99,7 @@ get_openapi_router(void)
 
 /** @brief Internal: atomically set the global OpenAPI router reference.
  *
- * @param r Router to set (pass NULL to disable the OpenAPI endpoint).
+ * @param r Router to set (pass nullptr to disable the OpenAPI endpoint).
  * @note Thread-safe. The previous value is simply overwritten. */
 static void
 set_openapi_router(csilk_router_t* r)
@@ -112,7 +112,7 @@ set_openapi_router(csilk_router_t* r)
 /** @brief Built-in handler for the /openapi.json endpoint.
  *
  * Retrieves the current OpenAPI router and serves the generated OpenAPI 3.0
- * specification as a JSON response. If the router is NULL (endpoint disabled),
+ * specification as a JSON response. If the router is nullptr (endpoint disabled),
  * returns 404.
  *
  * @param c The request context. */
@@ -199,7 +199,7 @@ static int g_static_n = 0;
  *
  * @param app Application handle.
  * @param prefix URL path prefix.
- * @return Route group instance, or NULL on failure. */
+ * @return Route group instance, or nullptr on failure. */
 static csilk_group_t*
 find_or_create_group(csilk_app_t* app, const char* prefix)
 {
@@ -216,7 +216,7 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
 	}
 
 	if (app->group_count >= CSILK_MAX_GROUPS) {
-		return NULL;
+		return nullptr;
 	}
 
 	if (!app->root_group) {
@@ -226,7 +226,7 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
 	csilk_group_t* g = app->root_group ? csilk_group_group(app->root_group, prefix)
 					   : csilk_group_new(app->router, prefix);
 	if (!g) {
-		return NULL;
+		return nullptr;
 	}
 
 	int n = app->group_count++;
@@ -304,9 +304,9 @@ static_serve(csilk_ctx_t* c)
  *  10. Register /csdk-docs/ as a static file route pointing to the bundled
  *      Swagger UI assets.
  *
- * @param config_path Path to a YAML configuration file, or NULL to use
+ * @param config_path Path to a YAML configuration file, or nullptr to use
  *                    defaults (port 8080, info-level logging to stdout).
- * @return A new csilk_app_t instance, or NULL on initialization failure.
+ * @return A new csilk_app_t instance, or nullptr on initialization failure.
  * @note The returned app must be freed with csilk_app_free(). On failure,
  *       any partially allocated resources are cleaned up internally. */
 csilk_app_t*
@@ -314,7 +314,7 @@ csilk_app_new(const char* config_path)
 {
 	csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
 	if (!app) {
-		return NULL;
+		return nullptr;
 	}
 
 	uv_once(&s_app_mutex_once, init_app_mutex);
@@ -367,8 +367,8 @@ csilk_app_new(const char* config_path)
 		    openapi_h,
 		    1,
 		    "/openapi.json",
-		    NULL,
-		    NULL,
+		    nullptr,
+		    nullptr,
 		    "OpenAPI Specification",
 		    "Returns the OpenAPI 3.0 JSON specification for this API");
 	}
@@ -388,7 +388,7 @@ fail:
 	}
 	csilk_config_free(&app->config);
 	free(app);
-	return NULL;
+	return nullptr;
 }
 
 /** @brief Free all application resources: server, router, groups, config, and
@@ -406,8 +406,8 @@ fail:
  * Server must be freed before the router because the server holds a
  * reference to the router internally.
  *
- * @param app The application instance to free (may be NULL).
- * @note Safe to call with NULL. After this call the app pointer is invalid. */
+ * @param app The application instance to free (may be nullptr).
+ * @note Safe to call with nullptr. After this call the app pointer is invalid. */
 void
 csilk_app_free(csilk_app_t* app)
 {
@@ -452,7 +452,7 @@ csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level)
  * file is rotated (renamed to .1) when it exceeds this size.
  *
  * @param app   Application instance.
- * @param path  File path for log output. Pass NULL to disable file logging
+ * @param path  File path for log output. Pass nullptr to disable file logging
  *              and revert to stdout.
  * @param max_sz Maximum file size in bytes before rotation (0 = no limit). */
 void
@@ -464,7 +464,7 @@ csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
 	if (app->config.logger.file_path) {
 		free((void*)app->config.logger.file_path);
 	}
-	app->config.logger.file_path = path ? strdup(path) : NULL;
+	app->config.logger.file_path = path ? strdup(path) : nullptr;
 	app->config.logger.max_file_size = max_sz;
 	(void)csilk_log_init(app->config.logger);
 }
@@ -562,7 +562,7 @@ void
 csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
 	(void)app;
-	set_openapi_router(enable ? app->router : NULL);
+	set_openapi_router(enable ? app->router : nullptr);
 	CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
@@ -620,8 +620,8 @@ csilk_app_add_route_extended(csilk_app_t* app,
 }
 
 /** @copydoc csilk_app_add_route_extended
- *  @param perm_required  Permission required for this route, or NULL.
- *  @param perm_resource  Resource pattern for permission check, or NULL. */
+ *  @param perm_required  Permission required for this route, or nullptr.
+ *  @param perm_resource  Resource pattern for permission check, or nullptr. */
 void
 csilk_app_add_route_extended_perm(csilk_app_t* app,
 				  const char* method,
@@ -658,8 +658,8 @@ csilk_app_add_route_extended_perm(csilk_app_t* app,
  *  @param method         HTTP method.
  *  @param path           URL path.
  *  @param handler        Handler function.
- *  @param perm_required  Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource  Resource pattern (e.g., "users:*"), or NULL. */
+ *  @param perm_required  Permission identifier (e.g., "read"), or nullptr.
+ *  @param perm_resource  Resource pattern (e.g., "users:*"), or nullptr. */
 void
 csilk_app_add_route_perm(csilk_app_t* app,
 			 const char* method,
@@ -668,8 +668,16 @@ csilk_app_add_route_perm(csilk_app_t* app,
 			 const char* perm_required,
 			 const char* perm_resource)
 {
-	csilk_app_add_route_extended_perm(
-	    app, method, path, handler, NULL, NULL, NULL, NULL, perm_required, perm_resource);
+	csilk_app_add_route_extended_perm(app,
+					  method,
+					  path,
+					  handler,
+					  nullptr,
+					  nullptr,
+					  nullptr,
+					  nullptr,
+					  perm_required,
+					  perm_resource);
 }
 
 /** @brief Register a route with a custom handler chain on the root group.
@@ -746,7 +754,7 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 		return;
 	}
 
-	csilk_handler_t hs[] = {static_serve, NULL};
+	csilk_handler_t hs[] = {static_serve, nullptr};
 	csilk_group_add_handlers(g, "GET", wild, hs, 1);
 	csilk_group_add_handlers(g, "GET", idxrt, hs, 1);
 
@@ -776,7 +784,7 @@ csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c)
  *
  * @param app Application instance.
  * @return A malloc'd copy of the configuration struct. The caller must free
- *         it with free(). Returns NULL if app is NULL or allocation fails.
+ *         it with free(). Returns nullptr if app is nullptr or allocation fails.
  * @note The returned copy includes deep copies of any dynamically allocated
  *       string fields? No — it is a shallow memcpy. Use csilk_config_free()
  *       only if you modify strings separately. */
@@ -784,7 +792,7 @@ csilk_config_t*
 csilk_app_config(csilk_app_t* app)
 {
 	if (!app) {
-		return NULL;
+		return nullptr;
 	}
 	csilk_config_t* cp = malloc(sizeof(csilk_config_t));
 	if (cp) {
@@ -819,19 +827,19 @@ csilk_app_run(csilk_app_t* app, int port)
 /** @brief Get the underlying router handle from the application.
  *
  * @param app Application instance.
- * @return The router pointer, or NULL if app is NULL. */
+ * @return The router pointer, or nullptr if app is nullptr. */
 csilk_router_t*
 csilk_app_router(csilk_app_t* app)
 {
-	return app ? app->router : NULL;
+	return app ? app->router : nullptr;
 }
 
 /** @brief Get the underlying server handle from the application.
  *
  * @param app Application instance.
- * @return The server pointer, or NULL if app is NULL. */
+ * @return The server pointer, or nullptr if app is nullptr. */
 csilk_server_t*
 csilk_app_server(csilk_app_t* app)
 {
-	return app ? app->server : NULL;
+	return app ? app->server : nullptr;
 }

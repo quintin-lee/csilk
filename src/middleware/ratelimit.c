@@ -112,7 +112,7 @@ evict_oldest_entry(void)
  * @warning Rate limiting is per-worker-process. In multi-process
  *          deployments, each process maintains its own independent table
  *          unless an external store (Redis, etc.) is used instead.
- * @warning If csilk_get_client_ip() returns NULL (e.g. in tests or certain
+ * @warning If csilk_get_client_ip() returns nullptr (e.g. in tests or certain
  *          proxy setups), the request is passed through without rate
  *          limiting.
  */
@@ -127,8 +127,8 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 		return;
 	}
 
-	time_t now = time(NULL);
-	ip_entry_t* entry = NULL;
+	time_t now = time(nullptr);
+	ip_entry_t* entry = nullptr;
 
 	uv_mutex_lock(&ratelimit_mutex);
 

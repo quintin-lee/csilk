@@ -28,7 +28,7 @@ typedef struct csilk_mq_msg_s {
                     data). */
 	size_t len;    /**< Byte length of @p payload. */
 	struct csilk_mq_msg_s*
-	    next; /**< Pointer to the next message in the queue (NULL for tail). */
+	    next; /**< Pointer to the next message in the queue (nullptr for tail). */
 } csilk_mq_msg_t;
 
 /**
@@ -81,7 +81,7 @@ struct csilk_mq_s {
 	/* Persistence (WAL) */
 	uv_file wal_fd;	      /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
-	char* wal_path;	      /**< Path to the WAL file (heap-allocated copy, NULL if
+	char* wal_path;	      /**< Path to the WAL file (heap-allocated copy, nullptr if
                            disabled). */
 	uv_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
 
@@ -131,7 +131,7 @@ typedef struct {
  * @brief Internal: Create a new MQ instance bound to a libuv loop.
  *
  * @param loop  The libuv event loop.
- * @return A new MQ instance (heap-allocated), or NULL on failure.
+ * @return A new MQ instance (heap-allocated), or nullptr on failure.
  */
 csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
 
