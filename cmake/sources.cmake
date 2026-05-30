@@ -25,6 +25,7 @@ set(CSILK_CORE_SOURCES
     src/core/http1.c
     src/core/logger.c
     src/core/recovery.c
+    src/core/response.c
     src/core/router.c
     src/core/server.c
     src/core/test_utils.c
