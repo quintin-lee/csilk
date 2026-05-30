@@ -874,7 +874,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 			size_t prefix_len = pos - res;
 			memcpy(new_res, res, prefix_len);
 			memcpy(new_res + prefix_len, replacement, rep_len);
-			strcpy(new_res + prefix_len + rep_len, end + 2);
+			memcpy(new_res + prefix_len + rep_len, end + 2, strlen(end + 2) + 1);
 			res = new_res;
 		}
 	}
@@ -950,7 +950,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 		size_t prefix_len = pos - res;
 		memcpy(new_res, res, prefix_len);
 		memcpy(new_res + prefix_len, replacement, rep_len);
-		strcpy(new_res + prefix_len + rep_len, end + 2);
+		memcpy(new_res + prefix_len + rep_len, end + 2, strlen(end + 2) + 1);
 		res = new_res;
 	}
 
@@ -1276,13 +1276,16 @@ csilk_wf_to_mermaid(csilk_wf_t* wf)
 	}
 	size_t buf_size = 8192;
 	char* buf = malloc(buf_size);
-	strcpy(buf, "graph TD\n");
+	size_t buf_used = 0;
+	buf_used += (size_t)snprintf(buf, buf_size, "graph TD\n");
 	for (size_t i = 0; i < wf->node_count; i++) {
 		csilk_wf_node_t* n = wf->nodes[i];
 		char line[512];
-		// Quote node IDs and labels to handle special characters
 		snprintf(line, sizeof(line), "  \"%s\"[\"%s\"]\n", n->id, n->id);
-		strcat(buf, line);
+		if (buf_used + strlen(line) < buf_size) {
+			buf_used +=
+			    (size_t)snprintf(buf + buf_used, buf_size - buf_used, "%s", line);
+		}
 		for (size_t j = 0; j < n->edge_count; j++) {
 			csilk_wf_edge_t* e = &n->edges[j];
 			if (e->condition) {
@@ -1299,16 +1302,21 @@ csilk_wf_to_mermaid(csilk_wf_t* wf)
 					 n->id,
 					 e->target->id);
 			}
-			strcat(buf, line);
+			if (buf_used + strlen(line) < buf_size) {
+				buf_used += (size_t)snprintf(
+				    buf + buf_used, buf_size - buf_used, "%s", line);
+			}
 		}
 		if (n->error_target) {
-			// Use standard dotted line for errors
 			snprintf(line,
 				 sizeof(line),
 				 "  \"%s\" -. \"error\" .-> \"%s\"\n",
 				 n->id,
 				 n->error_target->id);
-			strcat(buf, line);
+			if (buf_used + strlen(line) < buf_size) {
+				buf_used += (size_t)snprintf(
+				    buf + buf_used, buf_size - buf_used, "%s", line);
+			}
 		}
 	}
 	return buf;
@@ -2057,7 +2065,8 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	uv_mutex_init(&ctx->mutex);
 	uv_mutex_init(&ctx->arena_mutex);
 	uv_mutex_init(&ctx->trace_mutex);
-	strcpy(ctx->exec_id, exec_id);
+	strncpy(ctx->exec_id, exec_id, sizeof(ctx->exec_id) - 1);
+	ctx->exec_id[sizeof(ctx->exec_id) - 1] = '\0';
 	ctx->wal_path = strdup(wal_path);
 	int *node_started = calloc(wf->node_count, sizeof(int)),
 	    *node_finished = calloc(wf->node_count, sizeof(int));
@@ -2189,7 +2198,8 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 	uv_mutex_init(&ctx->mutex);
 	uv_mutex_init(&ctx->arena_mutex);
 	uv_mutex_init(&ctx->trace_mutex);
-	strcpy(ctx->exec_id, exec_id);
+	strncpy(ctx->exec_id, exec_id, sizeof(ctx->exec_id) - 1);
+	ctx->exec_id[sizeof(ctx->exec_id) - 1] = '\0';
 	ctx->wal_path = strdup(wal_path);
 
 	char* paused_node_id = nullptr;

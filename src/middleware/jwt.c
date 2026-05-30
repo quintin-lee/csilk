@@ -89,7 +89,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 		free(payload_b64);
 		return nullptr;
 	}
-	sprintf(sign_input, "%s.%s", header_b64, payload_b64);
+	snprintf(sign_input, sign_input_len, "%s.%s", header_b64, payload_b64);
 
 	/* Step 4: Compute HMAC-SHA256 signature over the signing input.
      Output is a 32-byte digest which is then base64url-encoded. */
@@ -107,7 +107,11 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	/* Step 5: Assemble final JWT: header.payload.signature. */
 	token = malloc(strlen(sign_input) + 1 + strlen(sig_b64) + 1);
 	if (token) {
-		sprintf(token, "%s.%s", sign_input, sig_b64);
+		snprintf(token,
+			 strlen(sign_input) + 1 + strlen(sig_b64) + 1,
+			 "%s.%s",
+			 sign_input,
+			 sig_b64);
 	}
 
 	free(header_b64);
