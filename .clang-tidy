@@ -3,6 +3,7 @@ Checks: >
   -*,
   clang-analyzer-*,
   performance-*,
+  -performance-no-int-to-ptr,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
 WarningsAsErrors: '*'

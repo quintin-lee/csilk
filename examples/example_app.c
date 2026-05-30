@@ -257,7 +257,7 @@ create_user(csilk_ctx_t* c)
 		free(u.bio);
 		csilk_string(c, CSILK_STATUS_OK, buf);
 	} else {
-		char buf[256];
+		char buf[512];
 		snprintf(buf,
 			 sizeof(buf),
 			 "{\"received\":true,\"id\":%lld,\"name\":\"%s\","
