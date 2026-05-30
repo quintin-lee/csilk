@@ -3,12 +3,15 @@ cmake_minimum_required(VERSION 3.11)
 project(c_csilk_framework C)
 
 set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-# cJSON defines true/false macros conflicting with C23 keywords (macOS LLVM).
+# cJSON defines true/false macros conflicting with C23 keywords, and
+# Apple's SDK deprecates sprintf. These flags suppress benign warnings
+# from third-party code (cJSON, nghttp2, libuv).
 # GCC and older Clang silently ignore unsupported -Wno-* flags.
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-keyword-macro")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-keyword-macro -Wno-deprecated-declarations")
 
 # Version — single source of truth
 set(CSILK_VERSION_MAJOR 0)
