@@ -73,7 +73,7 @@
 - [x] 10.2 Prometheus 可观测性 — 提供标准 /metrics 端点与指标统计
 - [ ] 10.3 自动化性能基准集 — wrk/hey 集成与跨框架对比报告
 - [x] 10.4 零拷贝优化 — 实现 sendfile 静态文件加速
-- [ ] 10.5 HTTP/2 预研 — 评估多路复用集成成本
+- [x] 10.5 HTTP/2 预研 — ALPN + nghttp2 集成，已完成 Phase 1（会话搭建）与 Phase 2（请求派发与响应）
 
 ### 阶段十一：统一可观测性与管理面板 (v0.4.1)
 - [x] 11.1 统一管理面板 — Web 管理界面 (/admin) 整合 HTTP/Workflow/MQ 监控
@@ -241,7 +241,8 @@
 
 ### P4 — 缺失功能
 - [ ] P4-1: HTTPS/TLS 支持（PLAN.md 已标注待后续）
-- [ ] P4-2: HTTP/2 支持
+- [x] **P4-2: HTTP/2 支持**
+  已实现 Phase 1（会话搭建 + ALPN 协商 + nghttp2 session 初始化 + `csilk_h2.h` 公开 API）和 Phase 2（请求派发：`on_header_callback` 解析伪首部与常规首部、`on_frame_recv_callback` 在 END_STREAM 时派发请求、`on_data_chunk_recv_callback` 累积请求体、`on_stream_close_callback` 清理流上下文；响应发送：`csilk_h2_send_response` 通过 `body_read_callback` 构建 HEADERS 帧 + DATA 帧）。路由通过 `_csilk_dispatch_request` 统一处理 HTTP/1.1 与 HTTP/2。
 - [x] **P4-3: 优雅关闭** — 当前 `csilk_server_stop` 直接 `uv_stop`，断活跃连接。已实现通过 `uv_walk` 显式关闭所有句柄。
 - [x] **P4-4: 分块传输编码（chunked transfer encoding）**
    已实现 `csilk_response_write` / `csilk_response_end` API，支持完整的 HTTP 分块编码流式响应。

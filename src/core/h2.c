@@ -11,6 +11,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+/** @brief Called by nghttp2 when a HEADERS frame is received and parsing begins.
+ *
+ * Triggered at the start of header block processing for any HEADERS frame
+ * (request, response, or push-promise). This implementation is a no-op stub
+ * that always succeeds; actual header processing is deferred to
+ * on_header_callback() for individual header name/value pairs.
+ *
+ * @param session The nghttp2 session receiving the frame.
+ * @param frame   The incoming nghttp2 frame (type will be NGHTTP2_HEADERS
+ *                or NGHTTP2_PUSH_PROMISE).
+ * @param user_data Opaque pointer set during session creation (csilk_client_t*).
+ * @return 0 on success, or a negative nghttp2 error code to abort the session.
+ */
 static int
 on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
@@ -20,6 +33,24 @@ on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, 
 	return 0;
 }
 
+/** @brief Called by nghttp2 for each header name/value pair in a HEADERS frame.
+ *
+ * Triggered once per header during header block decomposition. Pseudo-headers
+ * (those starting with ':') are parsed for :method and :path; :path is further
+ * split into path and query-string components. All other headers are stored as
+ * regular request headers on the per-stream context via csilk_set_request_header().
+ *
+ * @param session  The nghttp2 session receiving the frame.
+ * @param frame    The incoming nghttp2 frame (must be NGHTTP2_HEADERS).
+ * @param name     Pointer to the header name (not null-terminated).
+ * @param namelen  Length of the header name in bytes.
+ * @param value    Pointer to the header value (not null-terminated).
+ * @param valuelen Length of the header value in bytes.
+ * @param flags    nghttp2 header flags (unused in this callback).
+ * @param user_data Opaque pointer (csilk_client_t*).
+ * @return 0 on success, or NGHTTP2_ERR_CALLBACK_FAILURE if the per-stream
+ *         context could not be created or allocated.
+ */
 static int
 on_header_callback(nghttp2_session* session,
 		   const nghttp2_frame* frame,
@@ -69,6 +100,18 @@ on_header_callback(nghttp2_session* session,
 	return 0;
 }
 
+/** @brief Called by nghttp2 after a complete frame has been received.
+ *
+ * Triggered after the entire frame (including any header block or data payload)
+ * has been fully reassembled and validated. When a HEADERS or DATA frame with
+ * the END_STREAM flag is received, the per-stream request context is dispatched
+ * for application-level processing via _csilk_dispatch_request().
+ *
+ * @param session  The nghttp2 session receiving the frame.
+ * @param frame    The fully received nghttp2 frame.
+ * @param user_data Opaque pointer (csilk_client_t*).
+ * @return 0 on success. A non-zero return aborts the nghttp2 session.
+ */
 static int
 on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
@@ -89,6 +132,23 @@ on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, voi
 	return 0;
 }
 
+/** @brief Called by nghttp2 for each chunk of DATA frame payload.
+ *
+ * Triggered repeatedly as DATA frame payload bytes arrive, allowing the
+ * application to accumulate the request body incrementally. Each chunk is
+ * appended to the per-stream request body buffer via realloc(). The total
+ * accumulated body size is checked against the server's max_body_size
+ * configuration to prevent resource exhaustion.
+ *
+ * @param session   The nghttp2 session receiving the data.
+ * @param flags     nghttp2 data flags (unused).
+ * @param stream_id The stream ID this data chunk belongs to.
+ * @param data      Pointer to the data chunk (not retained after callback).
+ * @param len       Length of the data chunk in bytes.
+ * @param user_data Opaque pointer (csilk_client_t*).
+ * @return 0 on success, or NGHTTP2_ERR_CALLBACK_FAILURE if the body exceeds
+ *         the configured limit or memory allocation fails.
+ */
 static int
 on_data_chunk_recv_callback(nghttp2_session* session,
 			    uint8_t flags,
@@ -123,6 +183,26 @@ on_data_chunk_recv_callback(nghttp2_session* session,
 	return 0;
 }
 
+/** @brief nghttp2 data_provider read callback for streaming response bodies.
+ *
+ * Called by nghttp2 when it needs more response body data to serialize onto
+ * the wire. The response body is served from the per-stream context's
+ * response.body buffer, with an internal offset stored via csilk_set/get to
+ * track progress across multiple invocations. When all bytes have been
+ * transferred, NGHTTP2_DATA_FLAG_EOF is set to signal end-of-stream.
+ *
+ * @param session    The nghttp2 session sending the response.
+ * @param stream_id  The stream ID for which data is being requested.
+ * @param buf        Output buffer to copy response data into.
+ * @param length     Maximum number of bytes that can be written to buf.
+ * @param data_flags Output flags; set NGHTTP2_DATA_FLAG_EOF when all
+ *                   response data has been consumed.
+ * @param source     The nghttp2 data source (source->ptr points to the
+ *                   csilk_ctx_t* for this stream).
+ * @param user_data  Opaque pointer (unused).
+ * @return Number of bytes written to buf, or 0 if no data is available.
+ *         Returning a negative value signals an error to nghttp2.
+ */
 static ssize_t
 body_read_callback(nghttp2_session* session,
 		   int32_t stream_id,
@@ -168,6 +248,26 @@ body_read_callback(nghttp2_session* session,
 	return (ssize_t)to_copy;
 }
 
+/** @brief Submit an HTTP/2 response for a stream and trigger immediate send.
+ *
+ * Public API: constructs an nghttp2 response from a csilk_ctx_t's response
+ * headers and body. The :status pseudo-header is set from c->response.status
+ * (defaulting to 200). All response headers stored in the context's header
+ * hash table are appended as nghttp2 name/value pairs. If the response body
+ * is non-empty, an nghttp2_data_provider is configured using body_read_callback
+ * for streaming. The response is submitted and flushed immediately via
+ * nghttp2_session_send().
+ *
+ * After flushing, the CSILK_HOOK_REQUEST_END hook chain is triggered on the
+ * server.
+ *
+ * @param c The per-stream request context containing response headers, body,
+ *          stream_id, and a reference to the internal client.
+ *
+ * @note Must only be called after the request has been fully processed and
+ *       response headers/body have been set. Not thread-safe; must be called
+ *       from the event loop thread owning the client connection.
+ */
 void
 csilk_h2_send_response(csilk_ctx_t* c)
 {
@@ -228,6 +328,20 @@ csilk_h2_send_response(csilk_ctx_t* c)
 	_csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
 }
 
+/** @brief Called by nghttp2 when a stream is closed.
+ *
+ * Triggered when either peer closes a stream (RST_STREAM, END_STREAM
+ * processed, or error). Removes the associated csilk_ctx_t from the client's
+ * linked list of active streams, cleans up the context via csilk_ctx_cleanup(),
+ * frees the arena allocator, and deallocates the context struct itself.
+ *
+ * @param session    The nghttp2 session closing the stream.
+ * @param stream_id  The ID of the stream being closed.
+ * @param error_code nghttp2 error code indicating why the stream closed
+ *                   (e.g. NGHTTP2_NO_ERROR).
+ * @param user_data  Opaque pointer (csilk_client_t*).
+ * @return 0 on success (return value ignored by nghttp2 for this callback).
+ */
 static int
 on_stream_close_callback(nghttp2_session* session,
 			 int32_t stream_id,
@@ -258,6 +372,20 @@ on_stream_close_callback(nghttp2_session* session,
 	return 0;
 }
 
+/** @brief nghttp2 send callback for writing serialized frames to the client.
+ *
+ * Called by nghttp2 when it has serialized HTTP/2 frames ready to transmit
+ * over the wire. Delegates directly to csilk_client_write() to write the raw
+ * bytes to the client's connection.
+ *
+ * @param session   The nghttp2 session producing the data.
+ * @param data      Pointer to the serialized frame bytes to send.
+ * @param length    Number of bytes to send.
+ * @param flags     nghttp2 send flags (unused).
+ * @param user_data Opaque pointer (csilk_client_t*).
+ * @return The number of bytes written (always equals @p length on success).
+ *         Returning a negative value signals a write error to nghttp2.
+ */
 static ssize_t
 send_callback(
     nghttp2_session* session, const uint8_t* data, size_t length, int flags, void* user_data)
@@ -269,6 +397,26 @@ send_callback(
 	return (ssize_t)length;
 }
 
+/** @brief Look up an existing per-stream context, or create a new one.
+ *
+ * Public API: searches the client's h2_streams linked list for a context
+ * matching the given @p stream_id. If found, returns the existing context.
+ * If not found, allocates a new csilk_ctx_t, initializes it via
+ * _csilk_ctx_init(), assigns it a fresh arena allocator, records the
+ * stream_id, and prepends it to the client's stream list.
+ *
+ * This function is called from multiple nghttp2 callbacks (on_header_callback,
+ * on_frame_recv_callback, on_data_chunk_recv_callback) and must handle
+ * concurrent creation for different streams within the same client session.
+ *
+ * @param client    The client connection owning the stream list.
+ * @param stream_id The HTTP/2 stream identifier to look up or create.
+ * @return Pointer to the csilk_ctx_t for the given stream, or NULL if memory
+ *         allocation failed.
+ *
+ * @note The returned context is owned by the client's stream list and will
+ *       be freed in on_stream_close_callback or csilk_h2_free_streams().
+ */
 csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
@@ -298,6 +446,22 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 	return ctx;
 }
 
+/** @brief Free all per-stream contexts associated with a client.
+ *
+ * Public API: iterates the client's h2_streams linked list and deallocates
+ * every csilk_ctx_t in it. Each context is cleaned up via
+ * csilk_ctx_cleanup(), its arena allocator is freed, and the struct itself
+ * is freed. The stream list is set to NULL after draining.
+ *
+ * Typically called during client disconnection to release all remaining
+ * stream resources that were not yet closed via on_stream_close_callback.
+ *
+ * @param client The client connection whose streams should be freed.
+ *
+ * @note This function performs cleanup only; it does not send RST_STREAM
+ *       frames or otherwise notify the peer. Callers should ensure the
+ *       nghttp2 session is already torn down or closing.
+ */
 void
 csilk_h2_free_streams(csilk_client_t* client)
 {
@@ -314,6 +478,25 @@ csilk_h2_free_streams(csilk_client_t* client)
 	client->h2_streams = NULL;
 }
 
+/** @brief Initialize an HTTP/2 server session for a client connection.
+ *
+ * Public API: creates an nghttp2 server session bound to the given client.
+ * Registers all internal nghttp2 callbacks (send, on_frame_recv,
+ * on_data_chunk_recv, on_stream_close, on_header, on_begin_headers).
+ * Submits initial SETTINGS frames (MAX_CONCURRENT_STREAMS = 100) and
+ * immediately flushes the settings to the client.
+ *
+ * The session is stored in client->h2_session. All subsequent HTTP/2 data
+ * received from this client should be fed to csilk_h2_process_data().
+ *
+ * @param client The client connection to initialize an H2 session for.
+ *               Must have a valid client->server pointer.
+ * @return 0 on success, or -1 if callback allocation, session creation, or
+ *         settings submission fails.
+ *
+ * @note Must be called once after the HTTP/2 preface (PRI * HTTP/2.0) has
+ *       been received from the client.
+ */
 int
 csilk_h2_init_session(csilk_client_t* client)
 
@@ -350,6 +533,24 @@ csilk_h2_init_session(csilk_client_t* client)
 	return 0;
 }
 
+/** @brief Feed incoming HTTP/2 data to the nghttp2 session for processing.
+ *
+ * Public API: passes raw bytes received from the client to nghttp2's
+ * session_mem_recv() for protocol parsing and callback dispatch. After
+ * processing, calls nghttp2_session_send() to flush any pending outgoing
+ * frames (e.g., SETTINGS ACK, HEADERS, DATA, RST_STREAM).
+ *
+ * @param client The client connection owning the nghttp2 session.
+ * @param data   Pointer to the raw bytes received from the client.
+ * @param len    Number of bytes to process.
+ * @return 0 on success, or -1 if nghttp2 session processing fails or
+ *         frame sending fails. On failure the session should be considered
+ *         corrupted and the connection should be closed.
+ *
+ * @note Must be called from the event loop that owns the client connection.
+ * @note data must remain valid for the duration of the call; nghttp2 may
+ *       access it during callback dispatch.
+ */
 int
 csilk_h2_process_data(csilk_client_t* client, const uint8_t* data, size_t len)
 {

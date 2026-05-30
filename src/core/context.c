@@ -831,6 +831,18 @@ csilk_set_on_ws_message(
 	}
 }
 
+/** @brief Set a callback for outgoing WebSocket frames (testing hook).
+ *
+ * Registers a callback that is invoked every time the framework sends
+ * a WebSocket data frame.  Primarily used in unit tests to intercept
+ * and verify the raw frames produced by the server.
+ *
+ * @param c        The request context.
+ * @param callback Callback function receiving the context, payload bytes,
+ *                 payload length, and WebSocket opcode.  Pass NULL to
+ *                 clear a previously registered callback.
+ * @note The callback runs synchronously on the event-loop thread during
+ *       the write path — it must not block or call back into the framework. */
 void
 csilk_set_on_ws_send(
     csilk_ctx_t* c,

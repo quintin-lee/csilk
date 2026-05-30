@@ -733,6 +733,17 @@ _csilk_generate_uuid(csilk_ctx_t* c, char buf[37])
 
 extern csilk_cipher_driver_t csilk_default_cipher_driver;
 
+/** @brief Resolve the active cipher driver for a given context.
+ *
+ * Returns the cipher driver attached to the context, or falls back to the
+ * default built-in driver when no context or no driver is set.  This is the
+ * central dispatch helper used by all _csilk_* crypto wrappers.
+ *
+ * @param c Server context, may be NULL.
+ * @return Pointer to an active csilk_cipher_driver_t (never NULL on its own).
+ * @note The fallback driver is declared as a weak symbol so that
+ *       applications can override it at link time.
+ */
 static csilk_cipher_driver_t*
 resolve_cipher(csilk_ctx_t* c)
 {
@@ -742,6 +753,28 @@ resolve_cipher(csilk_ctx_t* c)
 	return &csilk_default_cipher_driver;
 }
 
+/** @brief Symmetric encryption dispatcher.
+ *
+ * Resolves the cipher driver via resolve_cipher() and delegates to its
+ * symmetric_encrypt callback.  Useful for AEAD ciphers where the tag (e.g.
+ * GCM authentication tag) is written separately.
+ *
+ * @param c Server context (driver resolution).
+ * @param key Symmetric key.
+ * @param key_len Length of key in bytes.
+ * @param plaintext Input plaintext.
+ * @param plaintext_len Length of plaintext.
+ * @param iv Initialisation vector / nonce.
+ * @param iv_len Length of IV.
+ * @param[out] ciphertext Output buffer for ciphertext.
+ * @param[in,out] ciphertext_len On input, capacity of ciphertext buffer; on
+ *                 output, bytes written.
+ * @param[out] tag Output buffer for authentication tag.
+ * @param tag_len Requested tag length in bytes.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_symmetric_encrypt(csilk_ctx_t* c,
 			 const uint8_t* key,
@@ -771,6 +804,28 @@ _csilk_symmetric_encrypt(csilk_ctx_t* c,
 				    tag_len);
 }
 
+/** @brief Symmetric decryption dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its symmetric_decrypt
+ * callback.  Performs AEAD decryption — the caller must supply the
+ * authentication tag produced during encryption.
+ *
+ * @param c Server context (driver resolution).
+ * @param key Symmetric key.
+ * @param key_len Length of key in bytes.
+ * @param ciphertext Input ciphertext.
+ * @param ciphertext_len Length of ciphertext.
+ * @param iv Initialisation vector / nonce used during encryption.
+ * @param iv_len Length of IV.
+ * @param tag Authentication tag to verify.
+ * @param tag_len Length of the tag.
+ * @param[out] plaintext Output buffer for decrypted data.
+ * @param[in,out] plaintext_len On input, capacity of plaintext buffer; on
+ *                 output, bytes written.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_symmetric_decrypt(csilk_ctx_t* c,
 			 const uint8_t* key,
@@ -800,6 +855,22 @@ _csilk_symmetric_decrypt(csilk_ctx_t* c,
 				    plaintext_len);
 }
 
+/** @brief Asymmetric key-pair generation dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its generate_keypair
+ * callback.  The generated keys are returned as PEM-encoded strings.
+ *
+ * @param c Server context (driver resolution).
+ * @param[out] public_key Buffer for the PEM-encoded public key.
+ * @param[in,out] pub_len On input, capacity of public_key buffer; on
+ *                output, bytes written (including NUL terminator).
+ * @param[out] private_key Buffer for the PEM-encoded private key.
+ * @param[in,out] priv_len On input, capacity of private_key buffer; on
+ *                 output, bytes written (including NUL terminator).
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_generate_keypair(
     csilk_ctx_t* c, char* public_key, size_t* pub_len, char* private_key, size_t* priv_len)
@@ -811,6 +882,23 @@ _csilk_generate_keypair(
 	return d->generate_keypair(public_key, pub_len, private_key, priv_len);
 }
 
+/** @brief Asymmetric encryption dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its asymmetric_encrypt
+ * callback.  Typically used with RSA or ECIES-style encryption schemes.
+ *
+ * @param c Server context (driver resolution).
+ * @param public_key PEM-encoded public key of the recipient.
+ * @param pub_len Length of the public key string (including NUL).
+ * @param plaintext Input plaintext.
+ * @param plaintext_len Length of plaintext.
+ * @param[out] ciphertext Output buffer for encrypted data.
+ * @param[in,out] ciphertext_len On input, capacity of ciphertext buffer; on
+ *                 output, bytes written.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_asymmetric_encrypt(csilk_ctx_t* c,
 			  const char* public_key,
@@ -828,6 +916,24 @@ _csilk_asymmetric_encrypt(csilk_ctx_t* c,
 	    public_key, pub_len, plaintext, plaintext_len, ciphertext, ciphertext_len);
 }
 
+/** @brief Asymmetric decryption dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its asymmetric_decrypt
+ * callback.  Decrypts data that was previously encrypted with the
+ * corresponding public key.
+ *
+ * @param c Server context (driver resolution).
+ * @param private_key PEM-encoded private key of the recipient.
+ * @param priv_len Length of the private key string (including NUL).
+ * @param ciphertext Input ciphertext.
+ * @param ciphertext_len Length of ciphertext.
+ * @param[out] plaintext Output buffer for decrypted data.
+ * @param[in,out] plaintext_len On input, capacity of plaintext buffer; on
+ *                 output, bytes written.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_asymmetric_decrypt(csilk_ctx_t* c,
 			  const char* private_key,
@@ -845,6 +951,23 @@ _csilk_asymmetric_decrypt(csilk_ctx_t* c,
 	    private_key, priv_len, ciphertext, ciphertext_len, plaintext, plaintext_len);
 }
 
+/** @brief Digital signature creation dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its sign callback.  Creates a
+ * digital signature over the supplied data using the private key.
+ *
+ * @param c Server context (driver resolution).
+ * @param private_key PEM-encoded private key used for signing.
+ * @param priv_len Length of the private key string (including NUL).
+ * @param data Input data to sign.
+ * @param data_len Length of the input data.
+ * @param[out] signature Output buffer for the raw signature bytes.
+ * @param[in,out] sig_len On input, capacity of the signature buffer; on
+ *                output, bytes written.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_sign(csilk_ctx_t* c,
 	    const char* private_key,
@@ -861,6 +984,22 @@ _csilk_sign(csilk_ctx_t* c,
 	return d->sign(private_key, priv_len, data, data_len, signature, sig_len);
 }
 
+/** @brief Digital signature verification dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its verify callback.  Checks
+ * that the signature is valid for the given data and public key.
+ *
+ * @param c Server context (driver resolution).
+ * @param public_key PEM-encoded public key of the signer.
+ * @param pub_len Length of the public key string (including NUL).
+ * @param data Data that was signed.
+ * @param data_len Length of the signed data.
+ * @param signature Raw signature bytes to verify.
+ * @param sig_len Length of the signature.
+ * @return 0 on success, or a negative error code.
+ * @note Falls back to the default cipher driver when the context has no
+ *       driver set.
+ */
 int
 _csilk_verify(csilk_ctx_t* c,
 	      const char* public_key,
