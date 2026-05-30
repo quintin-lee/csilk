@@ -6,6 +6,10 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# cJSON defines true/false macros conflicting with C23 keywords (macOS LLVM).
+# GCC and older Clang silently ignore unsupported -Wno-* flags.
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-keyword-macro")
+
 # Version — single source of truth
 set(CSILK_VERSION_MAJOR 0)
 set(CSILK_VERSION_MINOR 3)
@@ -462,8 +466,9 @@ if(CLANG_TIDY_EXECUTABLE)
     add_custom_target(tidy
         COMMAND ${CLANG_TIDY_EXECUTABLE}
             --quiet
-            --checks=-*,${CSILK_TIDY_CHECKS}
+            --checks=${CSILK_TIDY_CHECKS}
             --warnings-as-errors="*"
+            --extra-arg=-Wno-everything
             ${CSILK_SOURCES}
             -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
             -I${CMAKE_CURRENT_BINARY_DIR}
