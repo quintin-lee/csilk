@@ -28,6 +28,11 @@
 
 #include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/srv_types.h"
+
+/** @brief Maximum number of chunks to keep in the thread-local free list.
+ * This limit prevents unbounded memory growth in long-running threads. */
+#define MAX_TLS_ARENA_CHUNKS 16
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
  * Used for padding structures to prevent false sharing and improve
@@ -83,6 +88,11 @@ typedef struct csilk_arena_chunk_s {
 	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
 	uint8_t data[]; /**< Flexible array for chunk data. */
 } csilk_arena_chunk_t;
+
+/** @brief Thread-local free list of arena chunks for reuse. */
+static __thread csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
+/** @brief Number of chunks currently in the thread-local free list. */
+static __thread int tls_chunk_count = 0;
 
 /** @brief Arena allocator for request-scoped memory.
  *
@@ -154,7 +164,19 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 	}
 
 	size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
-	csilk_arena_chunk_t* chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
+	csilk_arena_chunk_t* chunk = nullptr;
+
+	/* Try to reuse a chunk from the thread-local free list if it matches the
+     standard size. This avoids expensive aligned_alloc syscalls in the
+     hot path. */
+	if (chunk_size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_free_list) {
+		chunk = tls_chunk_free_list;
+		tls_chunk_free_list = chunk->next;
+		tls_chunk_count--;
+	} else {
+		chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
+	}
+
 	if (!chunk) {
 		return nullptr;
 	}
@@ -231,7 +253,17 @@ csilk_arena_free(csilk_arena_t* arena)
 	csilk_arena_chunk_t* curr = arena->head;
 	while (curr) {
 		csilk_arena_chunk_t* next = curr->next;
-		free(curr);
+		/* Return standard-sized chunks to the thread-local free list if there is
+		room. This speeds up subsequent allocations on the same thread. */
+		if (curr->size == CSILK_DEFAULT_ARENA_SIZE &&
+		    tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
+			curr->next = tls_chunk_free_list;
+			tls_chunk_free_list = curr;
+			tls_chunk_count++;
+		} else {
+			free(curr);
+		}
+
 		curr = next;
 	}
 	free(arena);
@@ -258,6 +290,16 @@ csilk_arena_reset(csilk_arena_t* arena)
 		curr = curr->next;
 	}
 }
+
+#ifdef TEST_OOM
+/** @brief Get the number of chunks currently in the thread-local free list.
+ * Only available during testing. */
+int
+csilk_arena_get_tls_chunk_count(void)
+{
+	return tls_chunk_count;
+}
+#endif
 
 /** @brief Get total allocated size and used bytes in the arena.
  *

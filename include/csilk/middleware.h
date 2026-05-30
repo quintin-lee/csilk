@@ -67,6 +67,15 @@ void csilk_panic(csilk_ctx_t* c);
  * @param c The request context. */
 void csilk_logger_handler(csilk_ctx_t* c);
 
+/** @brief WAF (Web Application Firewall) middleware.
+ *
+ *  Inspects request path, query parameters, and headers for common attack
+ *  patterns (SQL Injection, XSS, Path Traversal). If a violation is detected,
+ *  responds with 403 Forbidden and aborts the chain.
+ *
+ *  @param c  The request context. */
+void csilk_waf_middleware(csilk_ctx_t* c);
+
 /** @brief Request ID middleware.
  * Generates a unique ID for each request and sets X-Request-Id header.
  * @param c The request context. */
