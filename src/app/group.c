@@ -37,8 +37,6 @@
  * for any route is the concatenation of parent middleware (recursively)
  * followed by this group's middleware, followed by the route handlers.
  */
-#define CSILK_GROUP_MW_INIT_CAP 4
-
 struct csilk_group_s {
 	char* prefix;		      /**< URL prefix for routes in this group.
                            *   Combined with parent prefix at creation

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-30
+
 ### Added
 - **HTTP/2 Phase 1 — Session scaffolding**: TLS ALPN negotiation (`h2` vs
   `http/1.1`), nghttp2 session initialisation, `csilk_h2.h` public API with
@@ -20,12 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for context cleanup). Added `csilk_h2_send_response` with
   `body_read_callback` data provider for streaming response bodies.
 - **`test_h2` test suite**: Registered in `cmake/tests.cmake`.
+- **C23 language standard**: Upgraded from C11 to C23 (`CMAKE_C_STANDARD 23`).
+  Converted `#define` constants to `static constexpr` for type-safe compile-time
+  values. Removed 6 `#include <stdbool.h>` lines (now a C23 keyword).
 
 ### Changed
 - **`_csilk_trigger_hooks`**: Made non-static and declared in `server_internal.h`
   so the H2 module can fire lifecycle hooks.
 - **`pool_put`**: Now calls `csilk_h2_free_streams` to clean up any H2 stream
   contexts before returning the client to the free pool.
+- **Version bumped**: 0.2.5 → 0.3.0 across all 18 version references.
+- **Constants migrated**: `CSILK_DEFAULT_*` (5), `CSILK_MAX_PARAMS`,
+  `CSILK_MAX_STORAGE`, `CSILK_MAX_CHILDREN`, `MAX_REG_STRUCTS`, `MAX_IP_ENTRIES`,
+  `WINDOW_SIZE` converted to `static constexpr` and moved to appropriate headers.
 
 ### Fixed
 - **Client pool data race in multi-worker mode**: `pool_get`/`pool_put` accessed

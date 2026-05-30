@@ -13,13 +13,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 
-/* Chunk size used for deflate output buffer expansion (16 KB).
-   Matches zlib's recommended buffer granularity for streaming. */
-#define CSILK_GZIP_CHUNK 16384
-
-/* Minimum response body length (1 KB) before compression is considered.
-   Skipping tiny payloads avoids wasting CPU on incompressible data. */
-#define CSILK_GZIP_MIN_LENGTH 1024
+/* See include/csilk/core/internal.h for CSILK_GZIP_CHUNK and CSILK_GZIP_MIN_LENGTH. */
 
 /**
  * @brief State for asynchronous gzip compression offloading.

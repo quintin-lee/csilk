@@ -23,9 +23,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/perm.h"
-
-/** @brief Maximum number of rules that can be registered. */
-#define MAX_RULES 128
+#include "csilk/core/internal.h"
 
 /** @brief Global rule table.  Populated at startup by
  * csilk_perm_simple_allow(). */

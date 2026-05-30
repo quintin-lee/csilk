@@ -26,9 +26,11 @@
 #ifndef CSILK_AI_H
 #define CSILK_AI_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+/** @brief Maximum number of AI driver backends that can be registered. */
+static constexpr int MAX_DRIVERS = 8;
 
 /**
  * @brief AI Engine statistics.

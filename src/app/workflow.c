@@ -17,8 +17,6 @@
 #include "csilk/app/workflow_wal.h"
 #include "csilk/core/internal.h"
 
-#define MAX_WORKFLOW_STEPS 1000
-
 /** @brief AI metadata attached to workflow node outputs for token
  *  tracking and budget enforcement. */
 typedef struct {

@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.11)
 project(c_csilk_framework C)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 23)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
@@ -267,7 +267,7 @@ target_compile_definitions(csilk PRIVATE
 )
 set_target_properties(csilk PROPERTIES
     PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "0.2.3"
+    VERSION "0.3.0"
     SOVERSION "0"
     OUTPUT_NAME csilk
 )
@@ -292,7 +292,7 @@ if(CSILK_BUILD_SHARED)
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-        VERSION "0.2.3"
+        VERSION "0.3.0"
         SOVERSION "0"
         OUTPUT_NAME csilk
     )
@@ -477,6 +477,6 @@ add_custom_target(bench
 
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
-set(CPACK_PACKAGE_VERSION "0.2.3")
+set(CPACK_PACKAGE_VERSION "0.3.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight C HTTP framework inspired by Csilk")
 include(CPack)

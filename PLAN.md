@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-05-29 | 基于 `f5a7457`
+> 最后更新: 2026-05-30 | 基于 0.3.0 重构
 
 ---
 
@@ -407,3 +407,26 @@
 | 平账 P5 | 0 | 所有问题已修复 |
 | 平账 P6 | 0 | 所有问题已修复 |
 | **合计** | **0** | v1.0 目标全部达成 |
+
+---
+
+## 代码库重构 (Codebase Restructuring)
+
+> csilk 从当前 48 文件 / 平铺架构重构为 ～54 文件的模块化分层架构。
+> 同时升级至 C23、模块化公共 API、规范化文档版本号。
+
+| 阶段 | 内容 | 关键动作 |
+|---|---|---|
+| **0** | C23 + 版本 0.3.0 + 常量化 | `CMAKE_C_STANDARD 23`; 版本号全局同步 (18 处); `#define` → `static constexpr` (11 个常量); 删 `#include <stdbool.h>` (6 处) |
+| **1** | 拆分 `internal.h` (552 行 → 5 文件) | `hash.h` / `codec.h` / `ws_frame.h` / `crypto_dispatch.h` / `mq_types.h` |
+| **2** | 迁移内部头文件至 `include/csilk/core/` | `context_internal.h` → `ctx_types.h`; `server_internal.h` → `srv_types.h`; 修复相对 include 路径 |
+| **3** | 拆分 `server.c` (2600 行 → 4 文件) | `server.c` (生命周期) / `connection.c` / `http1.c` / `tls.c` |
+| **4** | 拆分 `context.c` (1761 行 → 2 文件) | `context.c` (请求读取) / `response.c` (响应写入) |
+| **5** | 拆分 `workflow.c` + 移动 `admin.c` | `src/workflow/engine.c` / `steps.c` / `parallel.c`; `admin.c` → `src/core/` |
+| **6** | Drivers 重组 + 删 `src/crypto/` | `drivers/ai/` / `drivers/perm/` / `drivers/cipher/` 子目录; `cipher.c` → `drivers/cipher/openssl.c` |
+| **7** | 模块化 `csilk.h` (2683 行 → 14+ 头文件) | `types.h` / `server.h` / `context.h` / `response.h` / `router.h` / `app.h` / `group.h` / `middleware.h` / `websocket.h` / `sse.h` / `mq.h` / `workflow.h` / `hooks.h` / `admin.h` / `errors.h` / `config.h` / `version.h` |
+| **8** | 构建审计 + Doxygen 验证 | 全量构建 + 108 测试 + Doxygen 文档生成 (0 警告) + #include 路径审计 |
+| **9** | `NULL` → `nullptr` 迁移 (~1000 处) | 脚本化替换; `CODEPEC.md` 更新; 编译 + 测试验证 |
+| **10** | `docs/ARCH.md` 最终更新 | 新增 Section 11 (最终目录树); 验证所有路径引用 |
+
+每个阶段独立提交 (`Phase N: <title>`)，编译 + 测试验证 (`cmake --build && ctest`)。

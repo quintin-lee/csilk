@@ -135,9 +135,6 @@ csilk_ai_register_monitor(void* c)
 	uv_mutex_unlock(&g_ai_monitor_mutex);
 }
 
-/** @brief Maximum number of concurrently registered AI drivers. */
-#define MAX_DRIVERS 8
-
 /** @brief Global registry of AI driver implementations.
  *  Populated once during the first csilk_ai_new() call via lazy init of
  *  the built-in drivers (OpenAI, Ollama). Not thread-safe for concurrent

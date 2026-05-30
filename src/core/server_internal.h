@@ -22,15 +22,15 @@
 #include "context_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
-#define CSILK_DEFAULT_IDLE_TIMEOUT 5000
+static constexpr int CSILK_DEFAULT_IDLE_TIMEOUT = 5000;
 /** @brief Default maximum request body size in bytes. */
-#define CSILK_DEFAULT_MAX_BODY_SIZE (1024UL * 1024UL)
+static constexpr size_t CSILK_DEFAULT_MAX_BODY_SIZE = 1024UL * 1024UL;
 /** @brief Default maximum request header size in bytes. */
-#define CSILK_DEFAULT_MAX_HEADER_SIZE (64UL * 1024UL)
+static constexpr size_t CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL;
 /** @brief Default TCP listen backlog. */
-#define CSILK_DEFAULT_LISTEN_BACKLOG 128
+static constexpr int CSILK_DEFAULT_LISTEN_BACKLOG = 128;
 /** @brief Default request arena chunk size. */
-#define CSILK_DEFAULT_ARENA_SIZE 4096
+static constexpr size_t CSILK_DEFAULT_ARENA_SIZE = 4096;
 
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {

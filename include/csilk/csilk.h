@@ -6,7 +6,7 @@
  * for the csilk HTTP web framework, including the request context,
  * router, server, middleware, WebSocket, SSE, and utility APIs.
  * Inspired by Gin (Golang).
- * @version 0.2.3
+ * @version 0.3.0
  * @copyright MIT License
  */
 
@@ -35,14 +35,14 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
  * Used for identification in logs, headers, and the OpenAPI spec.
  */
-#define CSILK_VERSION "0.2.3"
+#define CSILK_VERSION "0.3.0"
 
 /**
  * @brief Maximum number of URL path parameters that can be extracted from a
  * single request.  Parameters beyond this limit are silently ignored.
  * Tune if your routes contain more than 20 dynamic segments.
  */
-#define CSILK_MAX_PARAMS 20
+static constexpr int CSILK_MAX_PARAMS = 20;
 
 /**
  * @brief Maximum number of items that can be stored in the context key-value storage.
@@ -50,7 +50,7 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  * This limit prevents uncontrolled memory consumption in the request arena
  * by preventing a single request from setting an excessive number of keys.
  */
-#define CSILK_MAX_STORAGE 64
+static constexpr int CSILK_MAX_STORAGE = 64;
 
 /** @name HTTP Status Codes
  *  Standardized macros for common HTTP response status codes.

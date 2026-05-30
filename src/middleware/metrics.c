@@ -22,19 +22,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
-
-/* --- Configuration Constants --- */
-
-/**
- * @brief Maximum unique combinations of {method, route, status} tracked.
- *
- * Once this limit is reached, new combinations will not be tracked to
- * prevent memory exhaustion. 1024 is typically sufficient for most APIs.
- */
-#define CSILK_METRICS_MAX_ENTRIES 1024
-
-/** @brief Number of latency histogram buckets. */
-#define CSILK_METRICS_BUCKET_COUNT 6
+#include "csilk/core/internal.h"
 
 /**
  * @brief Latency buckets in seconds for P99/P95 analysis.
