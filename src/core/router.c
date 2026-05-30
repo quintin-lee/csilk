@@ -75,6 +75,7 @@ typedef enum { CSILK_NODE_STATIC, CSILK_NODE_PARAM, CSILK_NODE_WILDCARD } csilk_
  */
 struct csilk_router_node_s {
 	char* segment;			  /**< URL path segment. */
+	size_t segment_len;		  /**< Cached length of segment. */
 	csilk_node_type_t type;		  /**< Type of node (static/param/wildcard). */
 	csilk_method_handler_t* handlers; /**< Method handlers for this node. */
 	struct csilk_router_node_s* children[CSILK_MAX_CHILDREN]; /**< Child nodes array. */
@@ -102,6 +103,7 @@ node_new(const char* segment, csilk_node_type_t type)
 		free(node);
 		return nullptr;
 	}
+	node->segment_len = strlen(node->segment);
 	node->type = type;
 	return node;
 }
@@ -595,6 +597,87 @@ csilk_router_add_extended_perm(csilk_router_t* r,
 			description,
 			perm_required,
 			perm_resource);
+}
+
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
+/**
+ * @brief Fast memory comparison for URL segments.
+ *
+ * Employs SIMD instructions (if available) or word-sized operations to
+ * compare small strings extremely quickly, bypassing the overhead of
+ * libc memcmp/strncmp.
+ *
+ * @param s1  First string.
+ * @param s2  Second string.
+ * @param n   Number of bytes to compare.
+ * @return 1 if equal, 0 if different.
+ */
+static inline int
+csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
+{
+#if defined(__AVX2__)
+	if (n >= 32) {
+		__m256i v1 = _mm256_loadu_si256((const __m256i*)s1);
+		__m256i v2 = _mm256_loadu_si256((const __m256i*)s2);
+		__m256i cmp = _mm256_cmpeq_epi8(v1, v2);
+		int mask = _mm256_movemask_epi8(cmp);
+		if (mask != (int)0xFFFFFFFF) {
+			return 0;
+		}
+		if (n == 32) {
+			return 1;
+		}
+		return memcmp(s1 + 32, s2 + 32, n - 32) == 0;
+	}
+#endif
+	/* Fast path for short segments */
+	if (n == 0) {
+		return 1;
+	}
+
+	/* Use unaligned word comparisons for small segments (common in URLs).
+       Assumes architecture supports unaligned access (x86, modern ARM). */
+#if defined(__x86_64__) || defined(__aarch64__)
+	if (n >= 8) {
+		if (*(const uint64_t*)s1 != *(const uint64_t*)s2) {
+			return 0;
+		}
+		if (n == 8) {
+			return 1;
+		}
+		s1 += 8;
+		s2 += 8;
+		n -= 8;
+	}
+	if (n >= 4) {
+		if (*(const uint32_t*)s1 != *(const uint32_t*)s2) {
+			return 0;
+		}
+		if (n == 4) {
+			return 1;
+		}
+		s1 += 4;
+		s2 += 4;
+		n -= 4;
+	}
+	if (n >= 2) {
+		if (*(const uint16_t*)s1 != *(const uint16_t*)s2) {
+			return 0;
+		}
+		if (n == 2) {
+			return 1;
+		}
+		s1 += 2;
+		s2 += 2;
+		n -= 2;
+	}
+	return *s1 == *s2;
+#else
+	return memcmp(s1, s2, n) == 0;
+#endif
 }
 
 /** @brief Recursively match a request path against the trie from the given
