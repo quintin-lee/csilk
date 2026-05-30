@@ -80,14 +80,16 @@ if(DOXYGEN_EXECUTABLE)
         add_custom_target(docs
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets"
             COMMAND ${CURL_EXECUTABLE} -fsSL --connect-timeout 10 --retry 3 -o "${MERMAID_JS}" "${MERMAID_URL}"
-            COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+            COMMAND ${CMAKE_COMMAND} -DCSILK_VERSION="${CSILK_VERSION}" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen-doxyfile.cmake
+            COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Generating documentation with Doxygen (Mermaid diagrams enabled)"
         )
         message(STATUS "Found curl: ${CURL_EXECUTABLE}")
     else()
         add_custom_target(docs
-            COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
+            COMMAND ${CMAKE_COMMAND} -DCSILK_VERSION="${CSILK_VERSION}" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen-doxyfile.cmake
+            COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Generating documentation with Doxygen (curl not found, Mermaid may be disabled)"
         )
@@ -297,17 +299,26 @@ target_compile_definitions(csilk PRIVATE
 # Download Swagger UI distribution at configure time (not tracked in git).
 # Only the 3 essential runtime files are fetched (~1.2 MB total);
 # custom index.css stays in the repository.
+# Primary CDN: jsdelivr; fallback: unpkg.
 set(SWAGGER_UI_VERSION "5.17.14")
 set(SWAGGER_UI_CDN "https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_VERSION}")
+set(SWAGGER_UI_FALLBACK "https://unpkg.com/swagger-ui-dist@${SWAGGER_UI_VERSION}")
 foreach(swagger_file swagger-ui.css swagger-ui-bundle.js swagger-ui-standalone-preset.js)
   set(swagger_dest "${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui/${swagger_file}")
   if(NOT EXISTS "${swagger_dest}")
     file(DOWNLOAD "${SWAGGER_UI_CDN}/${swagger_file}" "${swagger_dest}"
          STATUS swagger_dl_status
-         TIMEOUT 30)
+         TIMEOUT 15)
     list(GET swagger_dl_status 0 swagger_dl_code)
     if(NOT swagger_dl_code EQUAL 0)
-      message(WARNING "Failed to download ${swagger_file} — Swagger UI may not render")
+      message(WARNING "jsdelivr failed for ${swagger_file}, trying unpkg...")
+      file(DOWNLOAD "${SWAGGER_UI_FALLBACK}/${swagger_file}" "${swagger_dest}"
+           STATUS swagger_dl_status
+           TIMEOUT 30)
+      list(GET swagger_dl_status 0 swagger_dl_code)
+    endif()
+    if(NOT swagger_dl_code EQUAL 0)
+      message(WARNING "Failed to download ${swagger_file} — Swagger UI will be unavailable at runtime")
     else()
       message(STATUS "Downloaded ${swagger_file}")
     endif()
