@@ -44,8 +44,6 @@
 #include <string.h>
 #include <uv.h>
 
-#define MAX_REG_STRUCTS 256
-
 static csilk_reflect_entry_t g_registry[MAX_REG_STRUCTS];
 static size_t g_registry_count = 0;
 static uv_mutex_t g_registry_mutex;

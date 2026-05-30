@@ -38,10 +38,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-
-#define CSILK_MAX_GROUPS 32
-#define CSILK_MAX_STATIC 32
-#define CSILK_DFL_PORT 8080
+#include "csilk/core/internal.h"
 
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
  * mapping.

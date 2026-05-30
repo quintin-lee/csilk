@@ -1,7 +1,7 @@
 # HTTP/2 Integration — Implementation Status
 
 > **Status**: Phase 1 (Session scaffolding) and Phase 2 (Request dispatch and response) complete.  
-> **Version**: v0.2.5+ | **Last updated**: 2026-05-30
+> **Version**: v0.3.0+ | **Last updated**: 2026-05-30
 
 ## 1. Overview
 HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compression (HPACK). The csilk framework has integrated `nghttp2` for frame parsing and generation.

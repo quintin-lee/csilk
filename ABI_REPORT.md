@@ -96,7 +96,7 @@ The struct has 30+ fields across 9 functional groups:
 ### Defer opaque conversion until v1.0 preparation
 
 **Rationale**:
-1. **Project maturity**: csilk is pre-1.0 (current: v0.2.3). ABI stability
+1. **Project maturity**: csilk is pre-1.0 (current: v0.3.0). ABI stability
    is not a contractual promise at this stage.
 2. **Test dependency**: 30+ test files include `context_internal.h`. Moving
    them to pure API-based testing is a separate project.

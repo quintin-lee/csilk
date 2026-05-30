@@ -14,28 +14,6 @@
 #include "csilk/csilk.h"
 
 /**
- * @brief Maximum number of distinct IP addresses tracked concurrently.
- *
- * When the table is full, the least recently seen entry is evicted to make
- * room for new clients.
- */
-#define MAX_IP_ENTRIES 1024
-/**
- * @brief Rate limiting sliding window size in seconds.
- *
- * The request counter for each IP is reset if the last reset timestamp is
- * older than this many seconds.
- */
-#define WINDOW_SIZE 60
-/**
- * @brief Interval (in seconds) at which stale entries are garbage-collected.
- *
- * A periodic eviction pass removes entries whose last_seen timestamp is
- * older than WINDOW_SIZE seconds, preventing the table from filling with
- * dead entries.
- */
-#define EVICT_INTERVAL 300
-
 /**
  * @brief Rate-limit tracking entry for a single IP address.
  *

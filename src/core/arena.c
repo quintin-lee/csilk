@@ -32,9 +32,6 @@
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
  * Used for padding structures to prevent false sharing and improve
  * memory alignment. */
-#ifndef CSILK_CACHE_LINE_SIZE
-#define CSILK_CACHE_LINE_SIZE 64
-#endif
 
 /** @brief Helper for cache-line aligned allocations.
  * Ensures the returned pointer starts at a 64-byte boundary.

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - CMake 3.11+
-- C compiler (C11 support)
+- C compiler (C23 support)
 - Git
 - libyaml-dev
 - zlib1g-dev (for gzip middleware)
@@ -17,7 +17,7 @@
 ```mermaid
 flowchart LR
     subgraph Host System
-        CC["C Compiler (C11)"]
+        CC["C Compiler (C23)"]
         SYS["libyaml-dev\nzlib1g-dev\npthread"]
     end
 

@@ -21,7 +21,7 @@ Thank you for your interest in contributing to csilk! We welcome all contributio
 
 | Dependency | Ubuntu/Debian | macOS (Homebrew) |
 |---|---|---|
-| C11 compiler (gcc/clang) | `build-essential` | Xcode CLT |
+| C23 compiler (gcc/clang) | `build-essential` | Xcode CLT |
 | CMake >= 3.11 | `cmake` | `cmake` |
 | libuv >= 1.48 | fetched automatically | fetched automatically |
 | llhttp >= 9.4 | `libllhttp-dev` or fetched | fetched automatically |
@@ -97,7 +97,7 @@ csilk/
 │   ├── messaging/     # Message Queue (MQ)
 │   ├── reflection/    # Runtime type reflection
 │   └── security/      # Permission system
-├── tests/             # 96 unit/integration tests
+├── tests/             # 109 unit/integration tests
 ├── examples/          # Example applications
 ├── share/             # Runtime assets (admin UI, Swagger UI)
 ├── docs/              # Documentation (ARCH.md, architecture.md, user-manual)
@@ -114,7 +114,7 @@ csilk/
 
 ## Coding Standards
 
-- **C11**: Use standard C11 features. Avoid platform-specific extensions unless necessary (and provide fallbacks).
+- **C23**: Use standard C23 features. Prefer `static constexpr` over `#define` for constants, `[[nodiscard]]` for error-returning functions. Avoid platform-specific extensions unless necessary (and provide fallbacks).
 - **Style**: We use `clang-format` to maintain consistent code style. Run `cmake --build build --target format` before committing.
 - **Memory Safety**: Always check memory allocation results. Use the request-scoped `arena` whenever possible for temporary data.
 - **Naming**: Functions use `csilk_` prefix. Internal functions use `_csilk_` prefix. Types use `_t` suffix. Macros use `CSILK_` prefix.
@@ -122,7 +122,7 @@ csilk/
 
 ## Testing Guide
 
-The framework has **96 tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
+The framework has **109 tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
 
 **Run all tests:**
 ```bash

@@ -12,10 +12,6 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
-#define CSILK_MAX_PART_HEADERS 32
-#define CSILK_MAX_PART_NAME 128
-#define CSILK_MAX_PART_FILENAME 256
-
 /**
  * @brief Parse a multipart/form-data request body and invoke a handler for
  *        each part.

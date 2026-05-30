@@ -13,7 +13,6 @@
 #ifndef CSILK_REFLECT_H
 #define CSILK_REFLECT_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -44,6 +43,10 @@ typedef enum {
 	CSILK_TYPE_STRUCT  /**< Nested struct (by value or pointer).  @p
                         nested_type_name identifies the type. */
 } csilk_field_type_t;
+
+/** @brief Maximum number of struct types that can be registered in the
+ * reflection registry. */
+static constexpr int MAX_REG_STRUCTS = 256;
 
 /** @brief Forward declaration for the field descriptor struct. */
 typedef struct csilk_field_desc_s csilk_field_desc_t;

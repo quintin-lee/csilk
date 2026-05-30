@@ -99,9 +99,6 @@ session_unlock(void)
 /** @brief Session cookie name. */
 #define SESSION_COOKIE "csilk_session"
 
-/** @brief Default session TTL (seconds). */
-#define SESSION_TTL 3600
-
 /**
  * @brief Generate a cryptographically random session ID.
  *
