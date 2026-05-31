@@ -97,7 +97,7 @@ csilk/
 │   ├── messaging/     # Message Queue (MQ)
 │   ├── reflection/    # Runtime type reflection
 │   └── security/      # Permission system
-├── tests/             # 109 unit/integration tests
+├── tests/             # 118 unit/integration tests
 ├── examples/          # Example applications
 ├── share/             # Runtime assets (admin UI, Swagger UI)
 ├── docs/              # Documentation (ARCH.md, architecture.md, user-manual)
@@ -122,7 +122,7 @@ csilk/
 
 ## Testing Guide
 
-The framework has **109 tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
+The framework has **118 tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
 
 **Run all tests:**
 ```bash

@@ -1,33 +1,33 @@
 # ABI Stability Roadmap — v1.0 Context Opaque Conversion
 
-> Status: Planned | Target: v1.0 | Based on: ABI_REPORT.md
+> Status: **Complete** | Completed: v0.3.0 | Based on: ABI_REPORT.md
 
 ## Current State
 
-`csilk_ctx_s` is defined in `include/csilk/core/ctx_types.h` with 30+ fields.
-External code receives `csilk_ctx_t*` pointers. Tests and examples include
-`ctx_types.h` for direct field access (30+ test files, 3 examples).
+`csilk_ctx_s` internal layout is hidden in `src/core/ctx_types.h`. All public
+API uses the opaque `csilk_ctx_t*` handle through accessor functions. 
 
-## Plan
+All phases below were completed during the v0.3.0 development cycle:
 
-### Phase A: Accessor API Expansion (v0.5.0)
+## Completed Phases
 
-Add well-documented accessor/mutator in `include/csilk/context.h`:
+### Phase A: Accessor API Expansion (v0.3.0) ✅
+
+Implemented accessor/mutator API in `include/csilk/context.h`:
 
 ```c
-const char* csilk_ctx_get_method(csilk_ctx_t* c);
-const char* csilk_ctx_get_path(csilk_ctx_t* c);
-int         csilk_ctx_get_status(csilk_ctx_t* c);
-void        csilk_ctx_set_status(csilk_ctx_t* c, int status);
-int         csilk_ctx_is_websocket(csilk_ctx_t* c);
-csilk_arena_t* csilk_ctx_get_arena(csilk_ctx_t* c);
-const char* csilk_request_get_header(csilk_ctx_t* c, const char* key);
-void        csilk_response_set_header(csilk_ctx_t* c, const char* key, const char* value);
-void        csilk_ctx_set_body(csilk_ctx_t* c, const char* data, size_t len);
-// ... and 10+ more as needed
+const char* csilk_get_method(csilk_ctx_t* c);       // (was csilk_ctx_get_method in plan)
+const char* csilk_get_path(csilk_ctx_t* c);          // (was csilk_ctx_get_path in plan)
+int         csilk_get_status(csilk_ctx_t* c);        // (was csilk_ctx_get_status in plan)
+int         csilk_is_websocket(csilk_ctx_t* c);      // (was csilk_ctx_is_websocket in plan)
+csilk_arena_t* csilk_get_arena(csilk_ctx_t* c);      // (was csilk_ctx_get_arena in plan)
+const char* csilk_get_header(csilk_ctx_t* c, const char* key);
+void        csilk_set_header(csilk_ctx_t* c, const char* key, const char* value);
+void        csilk_set_response_body(csilk_ctx_t* c, const char* data, size_t len, int managed);
+// ... and 30+ more accessors fully implemented
 ```
 
-### Phase B: Internal Migration (v0.6.0)
+### Phase B-E: Migration Complete (v0.3.0) ✅
 
 - Update all framework source (`src/`) to use accessors instead of direct
   struct field access

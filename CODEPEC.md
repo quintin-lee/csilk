@@ -1,7 +1,7 @@
 # csilk 编码规范（面向 AI 代码生成/修改）
 
 > **目标**: 确保 AI 模型生成或修改的代码与项目现有风格、模式和约束完全一致。
-> **版本**: 0.3.0 | 最后更新: 2026-05-30
+> **版本**: 0.3.0 | 最后更新: 2026-05-31
 
 ---
 
@@ -15,7 +15,7 @@ include/csilk/app/app.h         # 高层 csilk_app_t API
 include/csilk/app/admin.h       # 统一管理面板 API
 include/csilk/app/workflow.h    # 工作流引擎 API
 include/csilk/app/workflow_wal.h # 工作流 WAL 日志
-include/csilk/core/ctx_types.h # csilk_ctx_s 结构体 (原 context_internal.h)
+include/csilk/core/ctx_types.h # csilk_ctx_s 结构体 (src/core/ 内部使用，隐藏)
 include/csilk/core/internal.h   # 内部接口伞（→ hash.h/codec.h/ws_frame.h/crypto_dispatch.h/mq_types.h）
 include/csilk/drivers/ai.h      # AI 驱动接口
 include/csilk/drivers/cipher.h  # 密码驱动接口（AES/RSA）
@@ -30,7 +30,7 @@ src/protocols/                  # 协议扩展（WebSocket, Swagger）
 src/messaging/                  # 内部事件总线（Message Queue）
 src/security/                   # 权限与安全核心
 src/reflection/                 # 反射引擎实现
-src/crypto/                     # 密码驱动实现（AES/RSA 加解密）
+src/crypto/                     # 密码驱动实现（AES/RSA 加解密，已合并至 src/drivers/cipher/）
 src/data/                       # 数据库抽象层（连接池管理）
 src/drivers/                    # 具体驱动实现（OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB）
 src/ai/                         # AI 统一接口引擎

@@ -1,33 +1,37 @@
 # macOS Platform Support Assessment
 
-> Date: 2026-05-30 | CI attempt: 2026-05-30 (5 rounds)
+> Date: 2026-05-31 | Status: **Supported** (macOS 14 ARM64 CI active as of 2026-05-31)
 
 ## Background
 
-macOS CI (macos-14 ARM64) was attempted and uncovered 4 categories of issues.
-This document evaluates feasibility and proposes a plan.
+macOS CI (macos-14 ARM64) is now part of the CI matrix. The issues below were resolved as follows:
 
-## Issues Found
+## Issues Resolved
 
 ### 1. Compiler: Apple Clang lacks C23
 
 | Feature | Status |
 |---------|:------:|
-| `static constexpr` | Not supported |
-| `nullptr` keyword | Not supported |
-| `bool` keyword | Not supported |
-
-**Fix**: Use Homebrew LLVM 19+ (`brew install llvm`). Works for compilation
-but adds complexity to CI and user build instructions.
+| `static constexpr` | Resolved — Homebrew LLVM 19+ used in CI (`brew install llvm`) |
+| `nullptr` keyword | Resolved — via LLVM 19+ |
+| `bool` keyword | Resolved — via LLVM 19+ |
 
 ### 2. cJSON C23 Keyword Conflicts
 
-cJSON v1.7.18 defines `true`/`false` macros that conflict with C23 keywords
-when compiled with clang in C23 mode.
-
-**Fix**: Add `-Wno-keyword-macro` to CMAKE_C_FLAGS. Works on all platforms.
+**Fix**: `-Wno-keyword-macro` in CMAKE_C_FLAGS. Works on all platforms.
 
 ### 3. Apple SDK Deprecation Warnings
+
+**Fix**: `-Wno-deprecated-declarations` in CMAKE_C_FLAGS.
+
+### 4. System API Differences
+
+| API | Linux | macOS | Fix |
+|-----|-------|-------|-----|
+| `fdatasync` | Available | Not available (POSIX optional) | `fsync` fallback (`#ifdef __APPLE__`) |
+| `SOCK_NONBLOCK` | Available | Not available | `fcntl(fd, F_SETFL, O_NONBLOCK)` fallback |
+| `pthread_barrier_t` | Available | Not available | Replaced with `uv_barrier_t` for cross-platform |
+| `CLOCK_MONOTONIC` | Available | Available | No changes needed |
 
 macOS SDK deprecates `sprintf` — cJSON uses it. Promoted to error with
 `-Werror,-Wdeprecated-declarations`.
@@ -84,6 +88,6 @@ os: [ubuntu-24.04, macos-14]
 
 ## Verdict
 
-**Implementable with ~2-3 days of work**. Primary blocker is `pthread_barrier_t`
-which has a clean fix using `uv_barrier_t`. Recommend targeting v0.5.0 for macOS
-support.
+**Implemented** — macOS 14 ARM64 is now in the CI matrix (Ubuntu 24.04 + macos-14).
+All blockers resolved: `pthread_barrier_t` → `uv_barrier_t`, `fdatasync` → `fsync`,
+`SOCK_NONBLOCK` → `fcntl` fallback, ASan false positives suppressed.

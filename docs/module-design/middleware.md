@@ -1,6 +1,6 @@
 # Middleware Design Overview
 
-csilk ships with **15 built-in middleware modules** covering authentication, security, observability, performance, and developer experience:
+csilk ships with built-in middleware handlers covering authentication, security, observability, performance, and developer experience. The table below lists all middleware handlers exposed through `csilk/middleware.h`:
 
 | Middleware | File | Description |
 |-----------|------|-------------|
@@ -19,6 +19,7 @@ csilk ships with **15 built-in middleware modules** covering authentication, sec
 | RequestID | `src/middleware/request_id.c` | UUID v4 request tracing |
 | Session | `src/middleware/session.c` | Cookie-based session management |
 | Validate | `src/middleware/validate.c` | Request parameter validation |
+| WAF | `src/middleware/waf.c` | Web Application Firewall (SQLi, XSS, Path Traversal) |
 
 ---
 
@@ -94,7 +95,7 @@ void login_handler(csilk_ctx_t* c) {
 // 2. Protecting routes
 int main() {
     // ...
-    csilk_group_t* api = csilk_router_group(router, "/api");
+    csilk_group_t* api = csilk_group_new(router, "/api");
     csilk_group_use(api, (csilk_handler_t)csilk_jwt_middleware, "my_secret");
     
     csilk_GET(api, "/me", profile_handler);

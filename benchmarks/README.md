@@ -16,7 +16,7 @@ This directory contains scripts and documentation for benchmarking the Csilk web
 
 2. In a separate terminal, run the benchmark script:
    ```bash
-   ./benchmarks/run_benchmarks.sh
+   ./scripts/run_benchmarks.sh
    ```
 
 ## Targets

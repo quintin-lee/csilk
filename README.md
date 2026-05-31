@@ -9,9 +9,11 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🚀 **Zero-copy Static File Serving** via `sendfile` integration
 - 📬 **Internal Event Bus** - Asynchronous, thread-safe Message Queue with middleware and subscriber support
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
-- 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, and MQ
+- 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, MQ, and CPU flame graphs
+- 🔥 **Real-time CPU Flame Graph** — Backtrace sampling for performance profiling in admin dashboard
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
-- 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK)
+- 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK, Server Push)
+- ⚡ **SIMD-accelerated routing** — AVX2 (x86_64) and NEON (aarch64) path matching
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
@@ -31,12 +33,15 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)
 - 🏗️ Arena allocator for request-scoped memory management
 - 🤖 **Unified AI Interface** - Provider-agnostic API for Chat, Embeddings, and Tool Calling (OpenAI & Ollama)
+- 🔧 **Dynamic AI Tool Discovery** — MCP-like tool discovery for agentic workflows
 - 🗂️ Reflection engine for automatic struct <-> JSON conversion (including basic types and arrays)
-- 🔐 Built-in CSRF protection, CORS, and rate limiting
+- 🧬 **OpenAPI Spec Generation** — Auto-generate OpenAPI 3.0 JSON from route metadata
+- 🧬 **SDK Code Generation** — Auto-generate TypeScript and Python API clients from OpenAPI spec
+- 🔐 Built-in CSRF protection, CORS, rate limiting, and WAF
 - 📝 Complete Doxygen documentation for all public APIs and internals
 - 🧵 Thread-safe logging with file rotation and ANSI colors
 - 🔍 Configurable connection timeout and body/header size limits
-- 🎯 Global (server-level) and per-route middleware support
+- 🎯 Global (server-level), group-level, and per-route middleware support
 - 🌲 Radix Tree router with :param and *wildcard matching
 - 📝 Form URL-encoded body parsing (`application/x-www-form-urlencoded`)
 - 🍪 Session management with **thread-safe mutex protection**
@@ -46,6 +51,10 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🆔 **Request ID middleware** for end-to-end tracing (X-Request-Id)
 - 🩺 **Built-in Health Check** handler (/healthz)
 - 📦 **Opaque Context API** for ABI stability
+- 🍏 **macOS 14 ARM64** — CI-supported build target
+- 🔒 **Lock-free per-worker connection pool** for multi-core scaling
+- 🔄 **Hot Reload** — Swap router at runtime without restart
+- 🧹 **Deferred Cleanup API** (`csilk_ctx_defer`) — panic-safe resource management
 
 ## Dependencies
 
@@ -325,7 +334,7 @@ include/csilk/        # Public Hierarchical Headers
   ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tests/                # 109+ comprehensive unit tests
+tests/                # 118 comprehensive unit tests
 examples/             # Functional usage examples
 ```
 
