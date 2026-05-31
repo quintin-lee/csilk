@@ -211,6 +211,23 @@ csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_
 typedef char* (*csilk_wf_tool_fn)(const char* args_json, void* user_data);
 
 /**
+ * @brief A single tool entry — corresponds to one OpenAI-compatible
+ *        "function" tool.  Used both for static registration and dynamic
+ *        discovery.
+ *
+ * For dynamically-discovered tools, the name and description strings must
+ * be heap-allocated; the workflow engine takes ownership and will free them
+ * after the AI node completes.
+ */
+typedef struct csilk_wf_tool_entry_s {
+	char* name;	       /**< Tool name exposed to the LLM. */
+	char* description;     /**< Human-readable description (for tool schema). */
+	char* parameters_json; /**< JSON Schema string for the tool's parameters. */
+	csilk_wf_tool_fn fn;   /**< C callback invoked for tool execution. */
+	void* user_data;       /**< Opaque context forwarded to @p fn. */
+} csilk_wf_tool_entry_t;
+
+/**
  * @brief Register a tool that AI nodes can call.
  * @param wf Workflow handle.
  * @param name Function name exposed to the LLM.
@@ -225,6 +242,52 @@ void csilk_wf_register_tool(csilk_wf_t* wf,
 			    const char* parameters_json,
 			    csilk_wf_tool_fn fn,
 			    void* user_data);
+
+/**
+ * @brief Dynamic tool discovery callback (MCP-like protocol).
+ *
+ * Invoked each time an AI node builds its tool list. The workflow's
+ * statically-registered tools are provided as read-only context; the
+ * callback can augment them with dynamically-discovered tools (e.g.,
+ * from remote MCP servers, plugins, or service registries).
+ *
+ * Implementation notes:
+ * - The @p discovered_out array and its name/description strings must be
+ *   heap-allocated. They are freed by the workflow engine after the AI
+ *   node completes.
+ * - On name collision, statically-registered tools take precedence.
+ * - The callback may return 0 tools (set @p discovered_count_out to 0
+ *   and @p discovered_out to nullptr).
+ * - Runs on the thread pool — blocking I/O (HTTP calls, DB queries) is
+ *   acceptable here.
+ *
+ * @param wf             Workflow handle.
+ * @param static_tools   Statically-registered tools (read-only).
+ * @param static_count   Number of static tools.
+ * @param[out] discovered_out      Heap-allocated array of discovered tools.
+ * @param[out] discovered_count_out Number of discovered tools.
+ * @param user_data      Opaque pointer from csilk_wf_set_tool_discovery.
+ * @return 0 on success, -1 on failure (static tools still work). */
+typedef int (*csilk_wf_tool_discovery_fn)(csilk_wf_t* wf,
+					  const csilk_wf_tool_entry_t* static_tools,
+					  size_t static_count,
+					  csilk_wf_tool_entry_t** discovered_out,
+					  size_t* discovered_count_out,
+					  void* user_data);
+
+/**
+ * @brief Set a dynamic tool discovery callback.
+ *
+ * When set, every AI node in the workflow will call @p discovery before
+ * sending the tool list to the LLM.  This enables MCP-server integration,
+ * dynamic plugin loading, and other late-binding tool scenarios.
+ *
+ * @param wf        Workflow handle.
+ * @param discovery Discovery callback (nullptr to disable).
+ * @param user_data Opaque pointer passed to the callback on each invocation.
+ */
+void
+csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery, void* user_data);
 
 /**
  * @brief Get a node by ID.
