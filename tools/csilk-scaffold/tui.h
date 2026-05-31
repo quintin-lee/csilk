@@ -17,6 +17,8 @@ void tui_draw_header(const char* title);
 void tui_draw_menu(const char** options, int count, int selected, const char* title);
 void tui_draw_checklist(
     const char** options, bool* selected_flags, int count, int current, const char* title);
+void
+tui_draw_radiolist(const char** options, int count, int selected, int current, const char* title);
 
 #define COLOR_BLUE 34
 #define COLOR_GREEN 32

@@ -126,3 +126,19 @@ tui_draw_checklist(
 	}
 	printf("\n(SPACE to toggle, arrow keys to move, ENTER to confirm)\n");
 }
+
+void
+tui_draw_radiolist(const char** options, int count, int selected, int current, const char* title)
+{
+	tui_draw_header(title);
+	for (int i = 0; i < count; i++) {
+		if (i == current) {
+			tui_set_color(COLOR_CYAN);
+			printf("  > (%c) %s\n", i == selected ? 'o' : ' ', options[i]);
+			tui_reset_color();
+		} else {
+			printf("    (%c) %s\n", i == selected ? 'o' : ' ', options[i]);
+		}
+	}
+	printf("\n(Arrow keys to move, ENTER to confirm)\n");
+}
