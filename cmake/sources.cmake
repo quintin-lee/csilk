@@ -44,6 +44,7 @@ set(CSILK_DRIVER_SOURCES
     src/drivers/sqlite.c
     src/drivers/vector/vector.c
     src/drivers/vector/qdrant.c
+    src/drivers/vector/milvus.c
 )
 
 set(CSILK_MESSAGING_SOURCES

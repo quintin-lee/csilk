@@ -38,6 +38,7 @@
 
 #include "csilk/app/app.h"
 #include "csilk/csilk.h"
+#include "csilk/drivers/vector.h"
 
 /**
  * @brief Register a default route to serve the workflow dashboard.
@@ -126,6 +127,18 @@ typedef struct {
 } csilk_ai_config_t;
 
 /**
+ * @brief Configuration for built-in Vector Search nodes.
+ */
+typedef struct {
+	csilk_ai_t* ai;		     /**< AI handle for generating embeddings. */
+	const char* embedding_model; /**< Model name for embeddings. */
+	csilk_vector_db_t* db;	     /**< Vector DB handle. */
+	const char* collection;	     /**< Collection/Index name. */
+	int limit;		     /**< Max results to return. */
+	const char* input_template;  /**< Optional template for embedding input. */
+} csilk_vector_search_config_t;
+
+/**
  * @brief Function signature for a workflow node handler.
  * @param ctx   Execution context (can be used for arena allocation).
  * @param input Input data from previous node(s).
@@ -199,6 +212,21 @@ csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* u
  * @return Node handle.
  */
 csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config);
+
+/**
+ * @brief Add a built-in Vector Search node.
+ *
+ * This node takes text as input, generates an embedding using the provided
+ * AI engine, and queries the Vector DB for similar documents.
+ *
+ * @param wf     Workflow handle.
+ * @param id     Unique ID.
+ * @param config Vector search configuration (copied internally).
+ * @return Node handle.
+ */
+csilk_wf_node_t* csilk_wf_add_vector_search(csilk_wf_t* wf,
+					    const char* id,
+					    const csilk_vector_search_config_t* config);
 
 /* --- Tool Calling --- */
 

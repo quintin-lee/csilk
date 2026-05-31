@@ -36,6 +36,9 @@ typedef struct {
 	char* error_message;		       /**< Error message (if failed). */
 } csilk_vector_search_response_t;
 
+/** @brief Opaque handle for a Vector DB instance. */
+typedef struct csilk_vector_db_s csilk_vector_db_t;
+
 /**
  * @brief Virtual function table implemented by each Vector DB driver.
  */
@@ -78,7 +81,35 @@ typedef struct {
 	void (*free)(void* state);
 } csilk_vector_db_driver_t;
 
+/** @brief Create a new Vector DB instance.
+ * @param driver_name "qdrant", "milvus", etc.
+ * @param endpoint    API endpoint.
+ * @param api_key     Optional API key.
+ * @return Handle or nullptr. */
+csilk_vector_db_t*
+csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* api_key);
+
+/** @brief Upsert points. */
+int csilk_vector_db_upsert(csilk_vector_db_t* db,
+			   const char* collection,
+			   const csilk_vector_point_t* points,
+			   size_t count);
+
+/** @brief Search points. */
+int csilk_vector_db_search(csilk_vector_db_t* db,
+			   const char* collection,
+			   const float* vector,
+			   size_t dimension,
+			   int limit,
+			   csilk_vector_search_response_t* res);
+
+/** @brief Free Vector DB instance. */
+void csilk_vector_db_free(csilk_vector_db_t* db);
+
 /** @brief Free a search response structure. */
 void csilk_vector_search_response_free(csilk_vector_search_response_t* res);
+
+/** @brief Register a driver. */
+void csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver);
 
 #endif /* CSILK_VECTOR_H */
