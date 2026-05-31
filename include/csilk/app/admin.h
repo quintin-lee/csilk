@@ -7,11 +7,13 @@
  * AI Workflows, and the Internal Message Queue.
  */
 
-#ifndef CSILK_ADMIN_H
-#define CSILK_ADMIN_H
+#ifndef CSILK_APP_ADMIN_H
+#define CSILK_APP_ADMIN_H
 
-#include "csilk/app/app.h"
-#include "csilk/csilk.h"
+#include "csilk/types.h"
+
+struct csilk_app_s;
+typedef struct csilk_app_s csilk_app_t;
 
 /**
  * @brief Register administration routes to an application.
@@ -41,4 +43,4 @@ void csilk_admin_serve(csilk_app_t* app, const char* path);
  */
 void csilk_admin_serve_secure(csilk_app_t* app, const char* path, csilk_handler_t auth_middleware);
 
-#endif /* CSILK_ADMIN_H */
+#endif /* CSILK_APP_ADMIN_H */

@@ -4,6 +4,7 @@
  */
 
 #include "csilk/app/admin.h"
+#include "csilk/app/app.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
