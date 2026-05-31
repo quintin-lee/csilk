@@ -28,13 +28,6 @@ typedef struct {
 /** @brief A registered workflow tool (function-calling capability exposed
  *  to AI nodes). Tools are invoked in parallel via the libuv thread pool
  *  during AI node execution. */
-typedef struct {
-	char* name;	       /**< Tool name (e.g., "get_weather"). */
-	char* description;     /**< Description for the AI model's tool schema. */
-	char* parameters_json; /**< JSON schema string for tool parameters. */
-	csilk_wf_tool_fn fn;   /**< Tool implementation callback. */
-	void* user_data;       /**< Opaque context for the callback. */
-} csilk_wf_tool_entry_t;
 
 typedef struct csilk_wf_edge_s {
 	char* condition;	 /**< nullptr for default/bind. */
@@ -85,6 +78,9 @@ struct csilk_wf_s {
 	csilk_wf_tool_entry_t* tools; /**< Registered tool definitions. */
 	size_t tool_count;	      /**< Number of registered tools. */
 	size_t tool_capacity;	      /**< Allocated tool array capacity. */
+
+	csilk_wf_tool_discovery_fn tool_discovery; /**< Dynamic tool discovery callback. */
+	void* tool_discovery_user_data;		   /**< User data for discovery callback. */
 
 	csilk_ctx_t** monitors;	  /**< WebSocket monitoring connections. */
 	size_t monitor_count;	  /**< Number of active monitors. */
@@ -960,12 +956,14 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 /** @brief Per-tool-call context for parallel tool execution within an
  *  AI node. Each tool call runs on its own libuv thread-pool worker. */
 typedef struct {
-	csilk_wf_ctx_t* ctx;	  /**< Workflow context (for tool registry lookup). */
-	csilk_ai_tool_call_t* tc; /**< Tool call arguments from the AI response. */
-	char* result;		  /**< Tool output string (allocated by tool fn). */
-	uv_mutex_t* mutex;	  /**< Shared mutex for the pending counter. */
-	uv_cond_t* cond;	  /**< Shared condition variable for completion. */
-	int* pending;		  /**< Shared atomic-like pending count. */
+	csilk_wf_ctx_t* ctx;		   /**< Workflow context (for tool registry lookup). */
+	csilk_ai_tool_call_t* tc;	   /**< Tool call arguments from the AI response. */
+	char* result;			   /**< Tool output string (allocated by tool fn). */
+	uv_mutex_t* mutex;		   /**< Shared mutex for the pending counter. */
+	uv_cond_t* cond;		   /**< Shared condition variable for completion. */
+	int* pending;			   /**< Shared atomic-like pending count. */
+	csilk_wf_tool_entry_t* discovered; /**< Dynamically discovered tools. */
+	size_t discovered_count;	   /**< Number of discovered tools. */
 } sub_tool_work_t;
 
 /** @brief libuv thread-pool work callback for tool execution.
@@ -980,7 +978,14 @@ sub_worker_cb(uv_work_t* req)
 		if (strcmp(sw->ctx->wf->tools[j].name, sw->tc->name) == 0) {
 			sw->result = sw->ctx->wf->tools[j].fn(sw->tc->arguments,
 							      sw->ctx->wf->tools[j].user_data);
-			break;
+			return;
+		}
+	}
+	for (size_t j = 0; j < sw->discovered_count; j++) {
+		if (strcmp(sw->discovered[j].name, sw->tc->name) == 0) {
+			sw->result =
+			    sw->discovered[j].fn(sw->tc->arguments, sw->discovered[j].user_data);
+			return;
 		}
 	}
 }
@@ -1049,8 +1054,23 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 		return nullptr;
 	}
 	csilk_ai_tool_t* tools = nullptr;
-	if (ctx->wf->tool_count > 0) {
-		tools = calloc(ctx->wf->tool_count, sizeof(csilk_ai_tool_t));
+	csilk_wf_tool_entry_t* discovered = nullptr;
+	size_t discovered_count = 0;
+
+	/* Call dynamic discovery callback if set */
+	if (ctx->wf->tool_discovery) {
+		ctx->wf->tool_discovery(ctx->wf,
+					ctx->wf->tools,
+					ctx->wf->tool_count,
+					&discovered,
+					&discovered_count,
+					ctx->wf->tool_discovery_user_data);
+	}
+
+	size_t total_tools = ctx->wf->tool_count + discovered_count;
+	if (total_tools > 0) {
+		tools = calloc(total_tools, sizeof(csilk_ai_tool_t));
+		/* Static tools first (take precedence on name collision) */
 		for (size_t i = 0; i < ctx->wf->tool_count; i++) {
 			tools[i].type = "function";
 			tools[i].function.name = ctx->wf->tools[i].name;
@@ -1058,6 +1078,17 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 			if (ctx->wf->tools[i].parameters_json) {
 				tools[i].function.parameters_json =
 				    cJSON_Parse(ctx->wf->tools[i].parameters_json);
+			}
+		}
+		/* Discovered tools appended after static ones */
+		for (size_t i = 0; i < discovered_count; i++) {
+			size_t idx = ctx->wf->tool_count + i;
+			tools[idx].type = "function";
+			tools[idx].function.name = discovered[i].name;
+			tools[idx].function.description = discovered[i].description;
+			if (discovered[i].parameters_json) {
+				tools[idx].function.parameters_json =
+				    cJSON_Parse(discovered[i].parameters_json);
 			}
 		}
 	}
@@ -1152,6 +1183,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 				sws[i].mutex = &m;
 				sws[i].cond = &c;
 				sws[i].pending = &pending;
+				sws[i].discovered = discovered;
+				sws[i].discovered_count = discovered_count;
 				reqs[i].data = &sws[i];
 				uv_queue_work(
 				    ctx->wf->loop, &reqs[i], sub_worker_cb, after_sub_worker_cb);
@@ -1244,6 +1277,22 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 		entry->fn = fn;
 		entry->user_data = user_data;
 	}
+	uv_mutex_unlock(&wf->monitor_mutex);
+}
+
+/**
+ * @brief Set a dynamic tool discovery callback for the workflow.
+ * @see csilk_wf_tool_discovery_fn in workflow.h for callback contract.
+ */
+void
+csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery, void* user_data)
+{
+	if (!wf) {
+		return;
+	}
+	uv_mutex_lock(&wf->monitor_mutex);
+	wf->tool_discovery = discovery;
+	wf->tool_discovery_user_data = user_data;
 	uv_mutex_unlock(&wf->monitor_mutex);
 }
 
