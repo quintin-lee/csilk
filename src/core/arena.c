@@ -52,8 +52,11 @@ arena_aligned_alloc(size_t size)
 #endif
 
 	void* ptr = nullptr;
-	/* Round up size to a multiple of alignment as required by aligned_alloc (C11)
-	 */
+	/* Guard (size + CLS - 1) against overflow. size is already bounded
+	 * by callers but this provides defense-in-depth. */
+	if (size > SIZE_MAX - (CSILK_CACHE_LINE_SIZE - 1)) {
+		return nullptr;
+	}
 	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__APPLE__)
@@ -154,6 +157,13 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 		return nullptr;
 	}
 
+	/* Zero-size allocation: return a non-null sentinel to prevent
+	 * degenerate (zero-capacity) chunks from being created. This
+	 * matches the spirit of malloc(0) returning a unique pointer. */
+	if (size == 0) {
+		return (void*)(uintptr_t)1;
+	}
+
 	size = (size + 7) & ~7;
 
 	if (arena->head && (arena->head->size - arena->head->used) >= size) {
@@ -173,6 +183,12 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 		tls_chunk_free_list = chunk->next;
 		tls_chunk_count--;
 	} else {
+		/* Guard sizeof(chunk) + chunk_size against integer overflow.
+		 * In practice this is unreachable (requires allocating ~18 EB)
+		 * but provides formal correctness for all SIZE_MAX inputs. */
+		if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
+			return nullptr;
+		}
 		chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
 	}
 
