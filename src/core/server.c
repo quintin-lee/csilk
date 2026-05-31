@@ -23,6 +23,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 
 #include "core/ctx_types.h"
@@ -731,7 +732,16 @@ bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bo
 {
 #ifndef _WIN32
 	if (reuseport) {
-		int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+		int fd;
+#ifdef __APPLE__
+		fd = socket(AF_INET, SOCK_STREAM, 0);
+		if (fd >= 0) {
+			int flags = fcntl(fd, F_GETFL, 0);
+			fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+		}
+#else
+		fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#endif
 		if (fd < 0) {
 			return -1;
 		}
