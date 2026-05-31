@@ -62,8 +62,8 @@ dd if=/dev/urandom bs=1024 count=1 of=public/1k.bin 2>/dev/null
 
 # Generate config
 cat > config.yaml << 'YAML'
+port: 8080
 server:
-  port: 8080
   worker_threads: 4
 logger:
   level: "error"
