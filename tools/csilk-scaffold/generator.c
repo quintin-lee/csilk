@@ -86,7 +86,7 @@ add_handlers(const project_config_t* cfg, char* buf, size_t sz)
 			sz - strlen(buf) - 1);
 	}
 
-	if (cfg->has_cors && cfg->template_type == 1) {
+	if (cfg->has_cors) {
 		strncat(buf,
 			"static void cors_mw(csilk_ctx_t* c) {\n"
 			"    static const csilk_cors_config_t cfg = {\n"
