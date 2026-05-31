@@ -47,6 +47,9 @@
             <button onclick="switchTab('ai')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
                 <i data-lucide="bot" class="w-4 h-4"></i> AI Engine
             </button>
+            <button onclick="switchTab('flamegraph')" class="nav-item w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i data-lucide="flame" class="w-4 h-4"></i> Flame Graph
+            </button>
         </nav>
         <div class="p-4 border-t border-slate-700 space-y-4">
             <div class="flex items-center justify-between text-xs text-slate-500">
@@ -258,7 +261,25 @@
                 </div>
             </div>
         </div>
+
+        <!-- Flame Graph Tab -->
+        <div id="tab-flamegraph" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-slate-200">CPU Flame Graph</h2>
+                    <button id="btn-capture" onclick="captureFlamegraph()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-all">
+                        Capture (5s)
+                    </button>
+                </div>
+                <div id="flamegraph-status" class="text-slate-400 text-sm mb-4">Click "Capture" to start profiling</div>
+                <div id="flamegraph-container" class="w-full overflow-x-auto" style="max-height:500px">
+                    <div class="text-slate-500 text-center py-16">No profile data yet</div>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3-flame-graph@4.1.3/dist/d3-flamegraph.min.js"></script>
 
     <script>
         lucide.createIcons();
@@ -536,6 +557,30 @@
 
         initChart();
         switchTab('overview');
+
+        async function captureFlamegraph() {
+            const btn = document.getElementById('btn-capture');
+            const status = document.getElementById('flamegraph-status');
+            const container = document.getElementById('flamegraph-container');
+
+            btn.disabled = true;
+            btn.textContent = 'Profiling...';
+            status.textContent = 'Sampling for 5 seconds (100 Hz)...';
+            container.innerHTML = '<div class="text-slate-400 text-center py-16 animate-pulse">Collecting stack samples...</div>';
+
+            try {
+                const res = await fetch('/admin/flamegraph');
+                if (!res.ok) throw new Error('Server error: ' + res.status);
+                const svgText = await res.text();
+                container.innerHTML = svgText;
+                status.textContent = 'Profile complete. Hover over frames for details.';
+            } catch (e) {
+                container.innerHTML = '<div class="text-red-400 text-center py-16">Failed: ' + e.message + '</div>';
+                status.textContent = 'Error capturing profile';
+            }
+            btn.disabled = false;
+            btn.textContent = 'Capture (5s)';
+        }
     </script>
 </body>
 </html>
