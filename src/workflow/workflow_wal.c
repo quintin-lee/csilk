@@ -74,7 +74,11 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
 		}
 	}
 
+#ifdef __APPLE__
+	fsync(fd);
+#else
 	fdatasync(fd);
+#endif
 	close(fd);
 	return 0;
 }
