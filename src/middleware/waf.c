@@ -8,8 +8,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "csilk/core/internal.h"
-#include "core/ctx_types.h"
 #include "csilk/csilk.h"
 
 /** @brief Common patterns for SQL Injection attacks. */
@@ -89,23 +87,20 @@ contains_pattern(const char* input, const char** patterns)
 }
 
 /**
- * @brief Check all entries in a header map for malicious patterns.
+ * @brief Callback for header/parameter iteration to check for malicious
+ * patterns.
  */
 static int
-check_map(csilk_header_map_t* map)
+check_pattern_cb(const char* key, const char* value, void* arg)
 {
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		csilk_header_t* h = map->buckets[i];
-		while (h) {
-			if (contains_pattern(h->value, sql_patterns) ||
-			    contains_pattern(h->value, xss_patterns) ||
-			    contains_pattern(h->value, traversal_patterns)) {
-				return 1;
-			}
-			h = h->next;
-		}
+	(void)key;
+	int* blocked = (int*)arg;
+	if (contains_pattern(value, sql_patterns) || contains_pattern(value, xss_patterns) ||
+	    contains_pattern(value, traversal_patterns)) {
+		*blocked = 1;
+		return 0; /* Stop iteration */
 	}
-	return 0;
+	return 1; /* Continue */
 }
 
 /**
@@ -125,18 +120,18 @@ csilk_waf_middleware(csilk_ctx_t* c)
 	int blocked = 0;
 
 	/* Check path for directory traversal */
-	if (contains_pattern(c->request.path, traversal_patterns)) {
+	if (contains_pattern(csilk_get_path(c), traversal_patterns)) {
 		blocked = 1;
 	}
 
 	/* Check query parameters for SQLi/XSS */
-	if (!blocked && check_map(&c->request.query_params)) {
-		blocked = 1;
+	if (!blocked) {
+		csilk_for_each_query(c, check_pattern_cb, &blocked);
 	}
 
 	/* Check form parameters for SQLi/XSS */
-	if (!blocked && check_map(&c->request.form_params)) {
-		blocked = 1;
+	if (!blocked) {
+		csilk_for_each_form_field(c, check_pattern_cb, &blocked);
 	}
 
 	if (blocked) {

@@ -498,6 +498,35 @@ const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);
 void csilk_parse_query(csilk_ctx_t* c, const char* query_string);
 
 /**
+ * @brief Iterate over all request headers.
+ *
+ * @param c   The request context.
+ * @param cb  Callback function invoked for each header.
+ * @param arg User-provided closure argument.
+ */
+void csilk_for_each_header(csilk_ctx_t* c, csilk_header_cb cb, void* arg);
+
+/**
+ * @brief Iterate over all query parameters.
+ *
+ * @param c   The request context.
+ * @param cb  Callback function invoked for each query parameter.
+ * @param arg User-provided closure argument.
+ */
+void csilk_for_each_query(csilk_ctx_t* c, csilk_header_cb cb, void* arg);
+
+/**
+ * @brief Iterate over all form-urlencoded parameters.
+ *
+ * Only meaningful after csilk_parse_form_urlencoded() has been called.
+ *
+ * @param c   The request context.
+ * @param cb  Callback function invoked for each form parameter.
+ * @param arg User-provided closure argument.
+ */
+void csilk_for_each_form_field(csilk_ctx_t* c, csilk_header_cb cb, void* arg);
+
+/**
  * @brief Register a callback for incoming WebSocket messages.
  *
  * Must be called after csilk_ws_handshake and before the event loop

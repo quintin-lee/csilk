@@ -10,9 +10,8 @@
 #include <time.h>
 #include <uv.h>
 
-#include "csilk/core/internal.h"
-#include "core/ctx_types.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
 /**
@@ -127,11 +126,11 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	}
 
 	/* Distributed rate limiting using storage driver */
-	if (c->storage_driver && c->storage_driver->incr) {
-		char key[128];
-		snprintf(key, sizeof(key), "ratelimit:%s", ip);
-		long long current_count = csilk_incr(c, key, WINDOW_SIZE);
+	char key[128];
+	snprintf(key, sizeof(key), "ratelimit:%s", ip);
+	long long current_count = csilk_incr(c, key, WINDOW_SIZE);
 
+	if (current_count >= 0) {
 		if (current_count > limit) {
 			void _csilk_metrics_inc_rate_limit_blocks(void);
 			_csilk_metrics_inc_rate_limit_blocks();
@@ -200,10 +199,10 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	}
 	entry->last_seen = now;
 
-	int current_count = entry->count;
+	int local_count = entry->count;
 	uv_mutex_unlock(&ratelimit_mutex);
 
-	if (current_count > limit) {
+	if (local_count > limit) {
 		void _csilk_metrics_inc_rate_limit_blocks(void);
 		_csilk_metrics_inc_rate_limit_blocks();
 		csilk_set_header(c, "Retry-After", "60");

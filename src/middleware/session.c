@@ -10,9 +10,8 @@
 #include <unistd.h>
 #include <uv.h>
 
-#include "csilk/core/internal.h"
-#include "core/ctx_types.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
  * @brief Session data item (key-value pair).
@@ -390,19 +389,19 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
 		d = d->next;
 	}
 
-	if (c->storage_driver && c->storage_driver->get_string) {
-		char s_key[128];
-		snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
-		char* val = csilk_get_string(c, s_key);
-		if (val && c->arena) {
-			char* arena_val = csilk_arena_strdup(c->arena, val);
+	char s_key[128];
+	snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
+	char* val = csilk_get_string(c, s_key);
+	if (val) {
+		csilk_arena_t* arena = csilk_get_arena(c);
+		if (arena) {
+			char* arena_val = csilk_arena_strdup(arena, val);
 			free(val);
 			/* Cache it locally for subsequent gets */
 			csilk_session_set(c, key, arena_val);
 			return arena_val;
-		} else if (val) {
-			free(val);
 		}
+		free(val);
 	}
 
 	return nullptr;
