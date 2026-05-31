@@ -25,10 +25,10 @@
 #include <unistd.h>
 #endif
 
-#include "csilk/core/ctx_types.h"
+#include "core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "csilk/core/srv_types.h"
+#include "core/srv_types.h"
 #include "srv_impl.h"
 
 /* --- Signal handler --- */

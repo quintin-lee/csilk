@@ -8,7 +8,6 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
@@ -36,9 +35,10 @@ test_json_roundtrip(void)
 
 	csilk_json(c, 200, obj);
 
-	int ok_body = c->response.body && strstr(c->response.body, "\"id\"") &&
-		      strstr(c->response.body, "42") && strstr(c->response.body, "\"name\"") &&
-		      strstr(c->response.body, "Alice");
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	int ok_body = body && strstr(body, "\"id\"") && strstr(body, "42") &&
+		      strstr(body, "\"name\"") && strstr(body, "Alice");
 	int ok_status = csilk_get_status(c) == 200;
 	int ok_ct =
 	    csilk_test_ctx_count_response_headers(c, "Content-Type", "application/json") >= 1;
@@ -65,7 +65,9 @@ test_json_large_payload(void)
 
 	csilk_json(c, 200, arr);
 
-	if (c->response.body && c->response.body_len > 500) {
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	if (body && len > 500) {
 		PASS();
 	} else {
 		FAIL("json large payload");
@@ -85,8 +87,9 @@ test_json_nested_structure(void)
 
 	csilk_json(c, 200, root);
 
-	if (c->response.body && strstr(c->response.body, "\"version\"") &&
-	    strstr(c->response.body, "\"data\"")) {
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	if (body && strstr(body, "\"version\"") && strstr(body, "\"data\"")) {
 		PASS();
 	} else {
 		FAIL("json nested structure");
@@ -102,7 +105,9 @@ test_json_error_status_preserved(void)
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_json_error(c, 422, "validation failed");
 
-	int ok = csilk_get_status(c) == 422 && strstr(c->response.body, "422") == nullptr;
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	int ok = csilk_get_status(c) == 422 && body && strstr(body, "422") == nullptr;
 	if (ok) {
 		PASS();
 	} else {
@@ -118,7 +123,9 @@ test_json_error_copy(void)
 	csilk_json_error(c, 500, "test error message");
 	csilk_json_error(c, 503, "another");
 
-	if (csilk_get_status(c) == 503 && strstr(c->response.body, "another")) {
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	if (csilk_get_status(c) == 503 && body && strstr(body, "another")) {
 		PASS();
 	} else {
 		FAIL("json_error replace");
@@ -137,8 +144,9 @@ test_reflect_json_basic(void)
 	csilk_json_error(c, 200, "ok test");
 	cJSON_Delete(obj);
 
-	if (c->response.body && strstr(c->response.body, "\"error\"") &&
-	    strstr(c->response.body, "ok test")) {
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	if (body && strstr(body, "\"error\"") && strstr(body, "ok test")) {
 		PASS();
 	} else {
 		FAIL("reflect json basic");

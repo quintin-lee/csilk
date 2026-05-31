@@ -32,7 +32,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
-#include "csilk/core/ctx_types.h"
+#include "core/ctx_types.h"
 
 /** @brief Per-connection data for the Redis driver. */
 typedef struct {

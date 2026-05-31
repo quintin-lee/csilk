@@ -6,7 +6,7 @@
 
 #include "csilk/hot_reload.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/srv_types.h"
+#include "core/srv_types.h"
 
 #include <stdio.h>
 #include <stdlib.h>

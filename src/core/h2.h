@@ -8,7 +8,7 @@
 #ifndef CSILK_H2_H
 #define CSILK_H2_H
 
-#include "csilk/core/srv_types.h"
+#include "core/srv_types.h"
 
 /**
  * @brief Initialize HTTP/2 session for a client connection.
