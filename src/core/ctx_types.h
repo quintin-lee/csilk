@@ -34,6 +34,65 @@
 #include "csilk/csilk.h"
 
 /**
+ * @brief A single HTTP header stored as a node in a chained hash table.
+ */
+struct csilk_header_s {
+	char* key;
+	char* value;
+	size_t key_len;
+	size_t value_len;
+	struct csilk_header_s* next;
+};
+typedef struct csilk_header_s csilk_header_t;
+
+#ifndef CSILK_HEADER_BUCKETS
+#define CSILK_HEADER_BUCKETS 64
+#endif
+
+/**
+ * @brief A fixed-size chained hash table for HTTP headers.
+ */
+struct csilk_header_map_s {
+	csilk_header_t* buckets[CSILK_HEADER_BUCKETS];
+};
+typedef struct csilk_header_map_s csilk_header_map_t;
+
+/**
+ * @brief Parsed HTTP request.
+ */
+struct csilk_request_s {
+	char* method;
+	char* path;
+	char* body;
+	size_t body_len;
+	csilk_header_map_t headers;
+	csilk_header_map_t query_params;
+	csilk_header_map_t form_params;
+};
+typedef struct csilk_request_s csilk_request_t;
+
+/**
+ * @brief Mutable HTTP response.
+ */
+struct csilk_response_s {
+	int status;
+	const char* body;
+	size_t body_len;
+	csilk_header_map_t headers;
+	int body_is_managed;
+};
+typedef struct csilk_response_s csilk_response_t;
+
+/**
+ * @brief A single URL path parameter.
+ */
+struct csilk_param_s {
+	char* key;
+	char* value;
+};
+typedef struct csilk_param_s csilk_param_t;
+
+/**
  * @brief Method-specific handler mapping with OpenAPI metadata and permission
  *        info.
  *

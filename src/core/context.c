@@ -753,6 +753,48 @@ csilk_is_aborted(csilk_ctx_t* c)
 	return c ? c->aborted : 0;
 }
 
+/** @brief Internal helper to iterate over all entries in a header map. */
+static void
+for_each_in_map(csilk_header_map_t* map, csilk_header_cb cb, void* arg)
+{
+	if (!map || !cb) {
+		return;
+	}
+	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+		csilk_header_t* h = map->buckets[i];
+		while (h) {
+			if (!cb(h->key, h->value, arg)) {
+				return;
+			}
+			h = h->next;
+		}
+	}
+}
+
+void
+csilk_for_each_header(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
+{
+	if (c) {
+		for_each_in_map(&c->request.headers, cb, arg);
+	}
+}
+
+void
+csilk_for_each_query(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
+{
+	if (c) {
+		for_each_in_map(&c->request.query_params, cb, arg);
+	}
+}
+
+void
+csilk_for_each_form_field(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
+{
+	if (c) {
+		for_each_in_map(&c->request.form_params, cb, arg);
+	}
+}
+
 /** @brief Register a callback for incoming WebSocket messages.
  *
  * The callback is invoked for each data frame received on the WebSocket

@@ -115,101 +115,26 @@ typedef struct {
  */
 typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
-/**
- * @brief A single HTTP header stored as a node in a chained hash table.
- *
- * Key and value are NUL-terminated strings allocated from the request arena.
- * The @p next pointer forms a singly-linked list for hash-collision chains.
- *
- * @note Strings are NOT individually freeable — they live until the arena
- *       is destroyed in csilk_ctx_cleanup.
- */
-typedef struct csilk_header_s {
-	char* key;	  /**< NUL-terminated header field name (lowercased for
-                  case-insensitive lookup). */
-	char* value;	  /**< NUL-terminated header field value (raw, as received or set).
-                */
-	size_t key_len;	  /**< Cached strlen(@p key) for rapid comparison. */
-	size_t value_len; /**< Cached strlen(@p value). */
-	struct csilk_header_s* next; /**< Pointer to the next header in the same hash
-                                  bucket (collision chain). */
-} csilk_header_t;
+/** @brief Opaque header map type. */
+typedef struct csilk_header_map_s csilk_header_map_t;
 
-/**
- * @brief Number of buckets in the header chained hash table.
- *
- * Larger values reduce collision chains at the cost of a small amount of
- * per-map memory.  Override at compile-time with -DCSILK_HEADER_BUCKETS=N.
- * @note Must be a power of two for efficient bucket indexing.
- */
-#ifndef CSILK_HEADER_BUCKETS
-#define CSILK_HEADER_BUCKETS 64
-#endif
+/** @brief Opaque request type. */
+typedef struct csilk_request_s csilk_request_t;
 
-/**
- * @brief A fixed-size chained hash table for HTTP headers.
- *
- * Uses CSILK_HEADER_BUCKETS buckets; each bucket holds a singly-linked list
- * of csilk_header_t nodes.  Used for both request and response headers,
- * query parameters, and form fields.
- *
- * @note Not thread-safe — all mutations occur on the event-loop thread.
- */
-typedef struct csilk_header_map_s {
-	csilk_header_t* buckets[CSILK_HEADER_BUCKETS]; /**< Bucket array; each entry points to the
-                                        head of a collision chain (or nullptr). */
-} csilk_header_map_t;
+/** @brief Opaque response type. */
+typedef struct csilk_response_s csilk_response_t;
 
-/**
- * @brief Parsed HTTP request.
- *
- * Populated by the HTTP parser before handlers are invoked.  All string
- * fields point into arena-allocated memory that stays valid until
- * csilk_ctx_cleanup.
- */
-typedef struct {
-	char* method;	 /**< HTTP method verb (e.g., "GET", "POST", "DELETE"). */
-	char* path;	 /**< Decoded URL path (percent-encoding removed, query string
-                   stripped). */
-	char* body;	 /**< Raw request body bytes, or nullptr for requests without a body. */
-	size_t body_len; /**< Number of bytes in @p body. */
-	csilk_header_map_t headers;	 /**< Hash map of request headers (keys lowercased
-                                 for case-insensitive lookup). */
-	csilk_header_map_t query_params; /**< Hash map of parsed query-string parameters. */
-	csilk_header_map_t form_params;	 /**< Hash map of parsed application/x-www-form-urlencoded
-                      fields (populated by csilk_parse_form_urlencoded). */
-} csilk_request_t;
+/** @brief Opaque path parameter type. */
+typedef struct csilk_param_s csilk_param_t;
 
-/**
- * @brief Mutable HTTP response.
+/** @brief Header iteration callback function.
  *
- * Handlers write their response into this struct.  The framework serialises
- * it after the handler chain completes (or when csilk_response_end is called
- * for streaming responses).
+ * @param key    The header or parameter name.
+ * @param value  The header or parameter value.
+ * @param arg    User-provided closure argument.
+ * @return 1 to continue iteration, 0 to stop early.
  */
-typedef struct {
-	int status;		    /**< HTTP status code (e.g., 200, 404, 500). Defaults to 200. */
-	const char* body;	    /**< Response body content. If @p body_is_managed is 1 the
-                       framework calls free() when done. */
-	size_t body_len;	    /**< Byte length of @p body. */
-	csilk_header_map_t headers; /**< Hash map of response headers to send. */
-	int body_is_managed;	    /**< Non-zero if @p body was allocated with malloc() and
-                          must be free()'d by the framework. */
-} csilk_response_t;
-
-/**
- * @brief A single URL path parameter extracted from a route pattern.
- *
- * For a route like `/users/:id/posts/:post_id`, two csilk_param_t entries
- * are generated: {"id", actual_id} and {"post_id", actual_post_id}.
- *
- * @note The key and value strings live in the request arena and are valid
- *       until csilk_ctx_cleanup.
- */
-typedef struct {
-	char* key;   /**< Parameter name as defined in the route pattern (e.g., "id"). */
-	char* value; /**< Actual decoded value from the request URL. */
-} csilk_param_t;
+typedef int (*csilk_header_cb)(const char* key, const char* value, void* arg);
 
 /**
  * @brief Opaque arena allocator type.
