@@ -468,7 +468,7 @@
 
 ### 轨道四：v1.0 准备 (P3)
 - [x] 8.14 ABI Phase A — Context accessor API (已验证已有 csilk_get_method 等)
-- [x] 8.15 ollama_embeddings @todo — 实现 /api/embeddings 调用
+- [x] 8.15 AI Embedding 驱动增强 — 实现 Milvus 驱动与 Workflow 向量搜索节点 (Vector Search Node)
 - [x] 8.16 HTML 文档部署版本号自动同步 — Doxyfile.in + configure_file
 
 ---

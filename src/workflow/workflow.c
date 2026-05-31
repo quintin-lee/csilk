@@ -233,6 +233,22 @@ ai_config_free(void* ptr)
 	free(cfg);
 }
 
+/**
+ * @brief Free a vector search configuration.
+ */
+static void
+vector_search_config_free(void* ptr)
+{
+	csilk_vector_search_config_t* cfg = (csilk_vector_search_config_t*)ptr;
+	if (!cfg) {
+		return;
+	}
+	free((void*)cfg->embedding_model);
+	free((void*)cfg->collection);
+	free((void*)cfg->input_template);
+	free(cfg);
+}
+
 static void
 node_free(csilk_wf_node_t* node)
 {
@@ -1233,6 +1249,85 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	return out;
 }
 
+/**
+ * @brief Internal built-in handler for Vector Search nodes.
+ */
+static csilk_data_t*
+vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+	csilk_vector_search_config_t* config = (csilk_vector_search_config_t*)user_data;
+	if (!config || !config->ai || !config->db || !config->collection) {
+		return nullptr;
+	}
+
+	/* 1. Get input text (either from template or input value) */
+	const char* text = nullptr;
+	char* resolved = nullptr;
+	if (config->input_template) {
+		resolved = resolve_templates(ctx, config->input_template);
+		text = resolved;
+	} else if (input && input->value && strcmp(input->type, "text/plain") == 0) {
+		text = (const char*)input->value;
+	}
+
+	if (!text) {
+		return nullptr;
+	}
+
+	/* 2. Generate embeddings */
+	csilk_ai_embeddings_response_t eres = {0};
+	if (csilk_ai_embeddings(config->ai, config->embedding_model, &text, 1, &eres) != 0) {
+		csilk_ai_embeddings_response_free(&eres);
+		return nullptr;
+	}
+
+	if (eres.count == 0 || eres.dimension == 0) {
+		csilk_ai_embeddings_response_free(&eres);
+		return nullptr;
+	}
+
+	/* 3. Search Vector DB */
+	csilk_vector_search_response_t vres = {0};
+	if (csilk_vector_db_search(config->db,
+				   config->collection,
+				   eres.values,
+				   eres.dimension,
+				   config->limit > 0 ? config->limit : 5,
+				   &vres) != 0) {
+		csilk_ai_embeddings_response_free(&eres);
+		csilk_vector_search_response_free(&vres);
+		return nullptr;
+	}
+
+	/* 4. Convert results to JSON */
+	cJSON* root = cJSON_CreateArray();
+	for (size_t i = 0; i < vres.count; i++) {
+		cJSON* item = cJSON_CreateObject();
+		cJSON_AddStringToObject(item, "id", vres.results[i].id);
+		cJSON_AddNumberToObject(item, "score", (double)vres.results[i].score);
+		if (vres.results[i].payload) {
+			cJSON_AddItemToObject(
+			    item, "payload", cJSON_Duplicate(vres.results[i].payload, 1));
+		}
+		cJSON_AddItemToArray(root, item);
+	}
+
+	char* json_str = cJSON_PrintUnformatted(root);
+	cJSON_Delete(root);
+
+	/* 5. Cleanup and return */
+	csilk_ai_embeddings_response_free(&eres);
+	csilk_vector_search_response_free(&vres);
+
+	csilk_data_t* out = csilk_wf_data_new(ctx, "application/json", json_str);
+	if (out) {
+		out->free_fn = free;
+	} else {
+		free(json_str);
+	}
+	return out;
+}
+
 csilk_wf_node_t*
 csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 {
@@ -1244,6 +1339,25 @@ csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 	csilk_wf_node_t* node = csilk_wf_add(wf, id, ai_node_handler, copy);
 	if (node) {
 		node->user_data_free = ai_config_free;
+	}
+	return node;
+}
+
+csilk_wf_node_t*
+csilk_wf_add_vector_search(csilk_wf_t* wf,
+			   const char* id,
+			   const csilk_vector_search_config_t* config)
+{
+	csilk_vector_search_config_t* copy = malloc(sizeof(csilk_vector_search_config_t));
+	memcpy(copy, config, sizeof(csilk_vector_search_config_t));
+	copy->embedding_model = config->embedding_model ? strdup(config->embedding_model) : nullptr;
+	copy->collection = config->collection ? strdup(config->collection) : nullptr;
+	copy->input_template = config->input_template ? strdup(config->input_template) : nullptr;
+	/* AI and DB handles are shared, not copied or freed by the node */
+
+	csilk_wf_node_t* node = csilk_wf_add(wf, id, vector_search_node_handler, copy);
+	if (node) {
+		node->user_data_free = vector_search_config_free;
 	}
 	return node;
 }
