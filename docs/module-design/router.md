@@ -1,6 +1,6 @@
 # Router Design
 
-csilk uses a **Radix Tree** (compact prefix tree) for efficient route matching. The router supports static routes, named parameters (`:param`), and wildcards (`*wildcard`).
+csilk uses a **Radix Tree** (compact prefix tree) for efficient route matching. The router supports static routes, named parameters (`:param`), and wildcards (`*wildcard`). Path matching is **SIMD-accelerated** via AVX2 (x86_64) and ARM NEON (aarch64) for byte-level prefix comparison.
 
 ## Node Structure
 

@@ -12,7 +12,7 @@ graph TB
     end
 
     subgraph "Layer 2: Middleware"
-        MW["Recovery | Logger | CORS | Auth | JWT\nRateLimit | CSRF | Static | Gzip | SSE | Multipart\nMetrics | RequestID | Validate | Session"]
+        MW["Recovery | Logger | CORS | Auth | JWT | WAF\nRateLimit | CSRF | Static | Gzip | SSE | Multipart\nMetrics | RequestID | Validate | Session"]
     end
 
     subgraph "Layer 3: Core"
@@ -228,10 +228,8 @@ flowchart TB
 Since `on_new_connection` runs on whichever event loop accepted the connection
 (the main loop or any worker loop), all shared mutable state accessed during
 connection establishment must be thread-safe. In particular, the **client
-connection object pool** (`pool_get`/`pool_put`) is protected by a dedicated
-`pool_mutex` to prevent two threads from acquiring the same `csilk_client_t`.
-Without this protection, concurrent access would cause `uv_accept` to fail with
-a cross-loop assertion.
+connection object pool** (`pool_get`/`pool_put`) uses a per-worker lock-free
+design — each worker thread manages its own pool, eliminating mutex contention.
 
 ## Request Lifecycle
 

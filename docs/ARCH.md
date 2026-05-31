@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper
 
-> **Last updated**: 2026-05-30 | **Version**: 0.3.0
+> **Last updated**: 2026-05-31 | **Version**: 0.3.0
 
 ## 1. Core Architecture Design
 
@@ -36,6 +36,7 @@ graph TB
             REC["Recovery<br/>(setjmp/longjmp)"]
             LOG["Logger<br/>(structured JSON)"]
             MET["Metrics<br/>(Prometheus/Observability)"]
+            WAF["WAF<br/>(SQLi/XSS/Path Traversal)"]
             AUTH["Auth<br/>(token validation)"]
             CORS["CORS<br/>(cross-origin)"]
             RATE["RateLimit<br/>(sliding window)"]
@@ -499,14 +500,13 @@ Each worker thread runs its own libuv event loop with the same port bound via `S
 ### 9.1 Client Pool Thread Safety
 
 The `on_new_connection` callback executes on whichever event loop accepted the
-connection — potentially any worker thread. The server maintains a free list
-(`client_pool`) of `csilk_client_t` objects to avoid per-connection allocation
-overhead. Since `pool_get` and `pool_put` can be called from any thread, access
-to the pool is serialized by a dedicated `pool_mutex`:
+connection — potentially any worker thread. The server uses a **per-worker
+lock-free connection object pool** — each worker thread manages its own
+`csilk_client_t` freelist, eliminating locking overhead:
 
 ```
-pool_get: lock → pop from freelist or calloc → unlock
-pool_put: memset(0) → lock → push to freelist or free → unlock
+pool_get: pop from per-worker freelist or calloc
+pool_put: memset(0) → push to per-worker freelist or free
 ```
 
 Without this mutex, two worker threads could retrieve the same client object,

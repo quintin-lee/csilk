@@ -319,8 +319,7 @@ In multi-worker mode, connection callbacks (`on_new_connection`) can execute on
 any event loop thread. All shared mutable state accessed during connection
 establishment must be thread-safe:
 
-- **Client connection pool** (`pool_get`/`pool_put`): Protected by a dedicated
-  `pool_mutex` to prevent two workers from acquiring the same `csilk_client_t`.
+- **Client connection pool** (`pool_get`/`pool_put`): Each worker thread manages its own lock-free connection object pool, avoiding mutex contention.
 - **Active client list**: Protected by `clients_mutex`.
 - **Connection counters**: Use atomic operations (`atomic_fetch_add`).
 

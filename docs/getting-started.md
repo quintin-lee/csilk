@@ -76,8 +76,8 @@ Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project 
 git clone https://github.com/username/csilk.git
 cd csilk
 
-# Generate a new project
-bash scripts/csilkskel -n my-service
+# Generate a new project (interactive Python tool)
+python3 scripts/csilkskel -n my-service
 
 # Build and run the new project
 cd my-service

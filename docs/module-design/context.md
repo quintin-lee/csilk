@@ -98,7 +98,7 @@ stateDiagram-v2
 
 ### Multi-Thread Safety
 
-In multi-worker mode (configured via `worker_threads > 1`), the `on_new_connection` callback and thus `pool_get`/`pool_put` execute on whichever event loop accepted the connection. A dedicated `pool_mutex` in `csilk_server_s` serializes access to the client object free list (`client_pool` / `client_pool_count`), preventing two threads from acquiring the same `csilk_client_t`.
+In multi-worker mode (configured via `worker_threads > 1`), csilk uses a **per-worker lock-free connection object pool** (`pool_get`/`pool_put`) that avoids mutex contention. Each worker thread manages its own pool, eliminating the data race previously present in the shared-mutex pool design.
 
 ## Handler Chain Execution
 
@@ -186,6 +186,8 @@ flowchart TB
 
 ## Context Cleanup
 
+### Regular Cleanup
+
 Between requests (keep-alive), `csilk_ctx_cleanup()` efficiently resets state:
 
 1. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations freed
@@ -195,3 +197,16 @@ Between requests (keep-alive), `csilk_ctx_cleanup()` efficiently resets state:
 5. `memset()` header/query/response maps to zero
 6. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`
 7. Reset `handler_index = -1`, `storage_head = NULL`
+
+### Deferred Cleanup (Panic-Safe)
+
+The deferred cleanup API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) protects against resource leaks across `setjmp`/`longjmp` boundaries. When a handler panics via `csilk_panic`, stack unwinding is skipped via `longjmp`, so heap allocations, open file descriptors, and mutex locks held by the handler would normally leak. The deferred cleanup list is processed in LIFO order before arena reset, ensuring all registered cleanup callbacks are invoked even on panic paths:
+
+```c
+char* buf = malloc(1024);
+csilk_ctx_defer(c, free, buf);       // free(buf) called on cleanup or panic
+csilk_ctx_defer(c, close, &fd);      // close(fd) called on cleanup or panic
+csilk_ctx_defer(c, uv_mutex_unlock, &mutex);  // unlock called on cleanup or panic
+```
+
+Items are arena-allocated and auto-freed on arena reset. Callbacks are invoked automatically by `csilk_ctx_cleanup` and by the panic recovery path.

@@ -1,7 +1,7 @@
 # HTTP/2 Integration — Implementation Status
 
-> **Status**: Phase 1 (Session scaffolding) and Phase 2 (Request dispatch and response) complete.  
-> **Version**: v0.3.0+ | **Last updated**: 2026-05-30
+> **Status**: Phase 1 (Session scaffolding), Phase 2 (Request dispatch/response), and Phase 3 (Server Push) complete.  
+> **Version**: v0.3.0+ | **Last updated**: 2026-05-31
 
 ## 1. Overview
 HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compression (HPACK). The csilk framework has integrated `nghttp2` for frame parsing and generation.
@@ -22,10 +22,13 @@ HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compressio
 - **Stream cleanup** (`on_stream_close_callback`): Removes the stream context from the linked list, calls `csilk_ctx_cleanup()`, frees the arena, and releases the context struct.
 - **Response sending** (`csilk_h2_send_response`): Builds an nghttp2 HEADERS frame with `:status` pseudo-header and response headers, then sends body DATA frames via a `nghttp2_data_provider` callback (`body_read_callback`).
 
+### Phase 3 — Server Push ✅
+- **`csilk_push_promise`**: Public API for sending `PUSH_PROMISE` frames to clients. Called from within HTTP/2 request handlers to push resources before they are requested. On HTTP/1.1 connections, this is a no-op.
+- **Response dispatch**: Pushed resources are dispatched through the router automatically, with responses sent on the promised stream.
+
 ### Remaining Work (Future Phases)
 - **Flow control**: Window update management for stream/connection-level flow control.
 - **Stream priority**: Dependency tree scheduling.
-- **Server push**: `PUSH_PROMISE` frame support.
 - **HPACK dynamic table**: nghttp2 handles this internally, but tuning table sizes may improve compression.
 - **Connection prefaces and SETTINGS**: Currently using nghttp2 defaults — may need customisation.
 
