@@ -1,0 +1,79 @@
+name: Performance Benchmark
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev libssl-dev wrk python3
+
+      - name: Cache Build
+        uses: actions/cache@v4
+        with:
+          path: build_release
+          key: ${{ runner.os }}-release-${{ hashFiles('**/CMakeLists.txt', 'src/**/*.c', 'src/**/*.h') }}
+
+      - name: Prepare Baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p benchmarks/results
+          # Try to get baseline from master branch artifact or cache
+          # For simplicity in this implementation, we run on master if not exists
+          # (A more robust version would use a dedicated baseline branch or artifact)
+          echo "Setting up baseline..."
+
+      - name: Run Benchmarks
+        env:
+          BENCH_DURATION: 5s
+        run: |
+          chmod +x benchmarks/run_benchmarks.sh
+          # Run current branch bench
+          bash benchmarks/run_benchmarks.sh --save
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmarks/results/latest.json
+
+      - name: Compare (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Fetch master branch for comparison
+          git checkout master
+          bash benchmarks/run_benchmarks.sh --save
+          mv benchmarks/results/latest.json benchmarks/results/baseline.json
+          
+          # Go back to PR branch
+          git checkout ${{ github.event.pull_request.head.sha }}
+          # Run comparison
+          bash benchmarks/run_benchmarks.sh --compare
+
+      - name: Post Comment (PR only)
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'benchmarks/results/comparison.md';
+            if (fs.existsSync(path)) {
+              const report = fs.readFileSync(path, 'utf8');
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: report
+              });
+            }
