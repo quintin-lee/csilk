@@ -26,9 +26,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/ctx_types.h"
+#include "core/ctx_types.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/srv_types.h"
+#include "core/srv_types.h"
 
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */

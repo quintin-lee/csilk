@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "csilk/core/ctx_types.h"
+#include "core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 

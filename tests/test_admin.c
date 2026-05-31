@@ -9,9 +9,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/core/ctx_types.h"
-#include "csilk/core/srv_types.h"
 #include "csilk/csilk.h"
+#include "csilk/test/test.h"
 
 static int tests_run = 0;
 static int tests_passed = 0;
@@ -26,16 +25,14 @@ static int tests_passed = 0;
 static csilk_ctx_t*
 make_ctx(void)
 {
-	csilk_ctx_t* c = calloc(1, sizeof(csilk_ctx_t));
-	c->arena = csilk_arena_new(4096);
+	csilk_ctx_t* c = csilk_test_ctx_new();
 	return c;
 }
 
 static void
 free_ctx(csilk_ctx_t* c)
 {
-	csilk_arena_free(c->arena);
-	free(c);
+	csilk_test_ctx_free(c);
 }
 
 static void

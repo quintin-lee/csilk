@@ -156,6 +156,7 @@ endif()
 find_package(CURL 7.80.0 REQUIRED)
 
 include_directories(include)
+include_directories(src)   # for internal headers (ctx_types.h moved from include/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})   # for generated version.h
 include_directories(${cjson_SOURCE_DIR})
 include_directories(${CURL_INCLUDE_DIRS})

@@ -9,7 +9,6 @@
 #include <strings.h>
 
 #include "cJSON.h"
-#include "csilk/core/ctx_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
@@ -49,8 +48,10 @@ test_string_sets_body(void)
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_string(c, 200, "hello world");
-	int ok = (csilk_get_status(c) == 200 && c->response.body &&
-		  strcmp(c->response.body, "hello world") == 0 && c->response.body_len == 11);
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	int ok =
+	    (csilk_get_status(c) == 200 && body && strcmp(body, "hello world") == 0 && len == 11);
 	if (ok) {
 		PASS();
 	} else {
@@ -64,7 +65,9 @@ test_string_empty(void)
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_string(c, 200, "");
-	if (csilk_get_status(c) == 200 && c->response.body_len == 0) {
+	size_t len;
+	csilk_get_response_body(c, &len);
+	if (csilk_get_status(c) == 200 && len == 0) {
 		PASS();
 	} else {
 		FAIL("empty string body");
@@ -97,8 +100,9 @@ test_json_body_valid(void)
 	cJSON* obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(obj, "msg", "hello");
 	csilk_json(c, 201, obj);
-	int ok = c->response.body && strstr(c->response.body, "\"msg\"") &&
-		 strstr(c->response.body, "\"hello\"");
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	int ok = body && strstr(body, "\"msg\"") && strstr(body, "\"hello\"");
 	if (ok) {
 		PASS();
 	} else {
@@ -124,8 +128,10 @@ test_json_error_format(void)
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_json_error(c, 400, "bad input");
-	int ok = csilk_get_status(c) == 400 && c->response.body &&
-		 strstr(c->response.body, "\"error\"") && strstr(c->response.body, "bad input");
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	int ok = csilk_get_status(c) == 400 && body && strstr(body, "\"error\"") &&
+		 strstr(body, "bad input");
 	if (ok) {
 		PASS();
 	} else {
@@ -139,7 +145,9 @@ test_json_error_empty(void)
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_json_error(c, 500, "");
-	if (csilk_get_status(c) == 500 && c->response.body) {
+	size_t len;
+	const char* body = csilk_get_response_body(c, &len);
+	if (csilk_get_status(c) == 500 && body) {
 		PASS();
 	} else {
 		FAIL("json_error empty");

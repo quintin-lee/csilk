@@ -15,7 +15,7 @@
 #include <llhttp.h>
 #include <uv.h>
 #include "csilk/csilk.h"
-#include "csilk/core/srv_types.h"
+#include "core/srv_types.h"
 
 /* --- Connection pool & I/O (connection.c) --- */
 
