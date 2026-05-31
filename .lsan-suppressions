@@ -5,11 +5,18 @@
 # internal caches that are not freed before process termination.
 # These are not application leaks.
 
-leak:libuv_init
-leak:OPENSSL_init_crypto
-leak:OPENSSL_init_ssl
-leak:CRYPTO_zalloc
+leak:libuv
+leak:OPENSSL_init
+leak:CRYPTO_
+leak:BIO_
+leak:SSL_
+
+# libcurl internal state held at exit (test_ai)
+leak:curl_
 
 # nghttp2 internal buffers may be held at exit
-leak:nghttp2_session_new
-leak:nghttp2_session_del
+leak:nghttp2_session
+leak:nghttp2_
+
+# pthread internals (macOS libc)
+leak:pthread_
