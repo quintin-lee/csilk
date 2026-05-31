@@ -3,6 +3,9 @@
 # Refactored for automated CI and regression testing
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Configuration
 PORT=8080
 BASE_URL="http://localhost:$PORT"
@@ -13,9 +16,6 @@ SAVE_MODE=0
 COMPARE_MODE=0
 CI_MODE=0
 THRESHOLD=10 # Regression threshold in percentage
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 mkdir -p "$RESULTS_DIR"
 
