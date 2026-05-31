@@ -17,13 +17,15 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libuv1-dev libssl-dev wrk python3
+          sudo apt-get install -y \
+            cmake clang \
+            libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+            libpq-dev libsqlite3-dev wrk python3
 
-      - name: Cache Build
-        uses: actions/cache@v4
-        with:
-          path: build_release
-          key: ${{ runner.os }}-release-${{ hashFiles('**/CMakeLists.txt', 'src/**/*.c', 'src/**/*.h') }}
+      - name: Configure & Build
+        run: |
+          cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_release --target example_server -j$(nproc)
 
       - name: Prepare Baseline
         if: github.event_name == 'pull_request'
@@ -38,9 +40,8 @@ jobs:
         env:
           BENCH_DURATION: 5s
         run: |
-          chmod +x benchmarks/run_benchmarks.sh
-          # Run current branch bench
-          bash benchmarks/run_benchmarks.sh --save
+          cd build_release
+          bash ../benchmarks/run_benchmarks.sh --save
 
       - name: Upload Results
         uses: actions/upload-artifact@v4

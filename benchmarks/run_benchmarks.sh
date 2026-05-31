@@ -6,7 +6,7 @@ set -uo pipefail
 # Configuration
 PORT=8080
 BASE_URL="http://localhost:$PORT"
-RESULTS_DIR="benchmarks/results"
+RESULTS_DIR="$PROJECT_DIR/benchmarks/results"
 DURATION="${BENCH_DURATION:-10s}"
 WARMUP=3s
 SAVE_MODE=0
@@ -35,13 +35,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Build server
-echo "Building server in Release mode..."
-cd "$PROJECT_DIR"
-mkdir -p build_release
-cd build_release
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=OFF > /dev/null 2>&1
-make -j$(nproc) example_server > /dev/null 2>&1
+# Build server (skip if already built by CI)
+if [ ! -f example_server ]; then
+  echo "Building server in Release mode..."
+  cd "$PROJECT_DIR"
+  mkdir -p build_release
+  cd build_release
+  cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=OFF > /dev/null 2>&1
+  make -j$(nproc) example_server > /dev/null 2>&1
+fi
+
+# We should be in a build directory (project root or build_release)
+if [ -f "$PROJECT_DIR/build_release/example_server" ]; then
+  cd "$PROJECT_DIR/build_release"
+elif [ -f example_server ]; then
+  : # already in correct directory
+else
+  echo "ERROR: example_server binary not found"
+  exit 1
+fi
 
 # Prepare static files
 mkdir -p public
@@ -50,11 +62,11 @@ dd if=/dev/urandom bs=1024 count=1 of=public/1k.bin 2>/dev/null
 
 # Generate config
 cat > config.yaml << 'YAML'
-port: 8080
 server:
+  port: 8080
   worker_threads: 4
 logger:
-  level: ERROR
+  level: "error"
 static_files:
   enable: 1
   root_dir: "./public"
