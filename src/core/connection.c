@@ -42,44 +42,41 @@ alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 	buf->len = suggested_size;
 }
 
-/* --- Connection pool --- */
+/* --- Connection pool (per-worker, lock-free) --- */
 
-/** @brief Get a client connection object from the server's free pool or
- * allocate a new one.
+/** @brief Get a client connection object from the worker-local free pool or
+ *  allocate a new one.
  *
- * Reuses a previously freed client if available (up to CSILK_CLIENT_POOL_SIZE pooled entries),
- * otherwise allocates a new zero-initialized csilk_client_t. The returned
- * client's file_fd is initialized to -1.
+ * In multi-worker mode, each worker thread has its own pool with no shared
+ * state — pool_get is a pure thread-local O(1) operation with zero locking.
  *
- * @param server The server instance.
+ * @param wp The worker pool (must not be nullptr).
  * @return A csilk_client_t ready for use, or nullptr on allocation failure. */
 static csilk_client_t*
-pool_get(csilk_server_t* server)
+pool_get(worker_pool_t* wp)
 {
 	csilk_client_t* client;
-	uv_mutex_lock(&server->pool_mutex);
-	if (server->client_pool_count > 0) {
-		client = server->client_pool[--server->client_pool_count];
+	if (wp->client_pool_count > 0) {
+		client = wp->client_pool[--wp->client_pool_count];
 	} else {
 		client = calloc(1, sizeof(csilk_client_t));
 	}
-	uv_mutex_unlock(&server->pool_mutex);
 	if (client) {
 		client->ctx.file_fd = -1;
 	}
 	return client;
 }
 
-/** @brief Return a client connection to the server's free pool for reuse.
+/** @brief Return a client to the worker-local free pool for reuse.
  *
- * If the client has an SSL session, it is freed first. The client struct is
- * zeroed. If the pool has fewer than CSILK_CLIENT_POOL_SIZE entries, the client is saved for
- * reuse; otherwise it is freed.
+ * SSL and H2 sessions are cleaned before returning. The client struct is
+ * zeroed. If the pool has room, the client is saved for reuse; otherwise
+ * freed. No lock — only the owning libuv event loop thread accesses this.
  *
- * @param server The server instance.
+ * @param wp     The worker pool (derived from client->owner_pool).
  * @param client The client to return (must not be used after this call). */
 static void
-pool_put(csilk_server_t* server, csilk_client_t* client)
+pool_put(worker_pool_t* wp, csilk_client_t* client)
 {
 	if (client->ssl) {
 		SSL_free(client->ssl);
@@ -93,13 +90,11 @@ pool_put(csilk_server_t* server, csilk_client_t* client)
 	}
 	csilk_h2_free_streams(client);
 	memset(client, 0, sizeof(*client));
-	uv_mutex_lock(&server->pool_mutex);
-	if (server->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
-		server->client_pool[server->client_pool_count++] = client;
+	if (wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
+		wp->client_pool[wp->client_pool_count++] = client;
 	} else {
 		free(client);
 	}
-	uv_mutex_unlock(&server->pool_mutex);
 }
 
 /* --- Active client list --- */
@@ -190,8 +185,7 @@ on_timer_close(uv_handle_t* handle)
 	free(client->current_header_field);
 	free(client->current_header_value);
 	free(client->current_url);
-	csilk_server_t* srv = client->server;
-	pool_put(srv, client);
+	pool_put(client->owner_pool, client);
 }
 
 /* --- Connection close --- */
@@ -244,7 +238,7 @@ on_close(uv_handle_t* handle)
 			free(client->current_header_field);
 			free(client->current_header_value);
 			free(client->current_url);
-			pool_put(srv, client);
+			pool_put(client->owner_pool, client);
 		}
 	}
 }
@@ -344,7 +338,8 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		return;
 	}
 
-	csilk_server_t* server = (csilk_server_t*)server_stream->data;
+	worker_pool_t* wp = (worker_pool_t*)server_stream->data;
+	csilk_server_t* server = wp->server;
 
 	int max_conn = server->config.max_connections;
 	if (max_conn == 0) {
@@ -363,7 +358,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		return;
 	}
 
-	csilk_client_t* client = pool_get(server);
+	csilk_client_t* client = pool_get(wp);
 	if (!client) {
 		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
 		if (tmp) {
@@ -378,10 +373,11 @@ on_new_connection(uv_stream_t* server_stream, int status)
 	}
 
 	client->server = server;
+	client->owner_pool = wp;
 	int r = uv_tcp_init(server_stream->loop, &client->handle);
 	if (r < 0) {
 		fprintf(stderr, "uv_tcp_init error %s\n", uv_strerror(r));
-		pool_put(server, client);
+		pool_put(wp, client);
 		return;
 	}
 	client->handle.data = client;

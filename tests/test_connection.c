@@ -30,15 +30,17 @@ static csilk_server_t*
 mock_server(void)
 {
 	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
-	uv_mutex_init(&s->pool_mutex);
 	uv_mutex_init(&s->clients_mutex);
+	s->worker_pools = calloc(1, sizeof(worker_pool_t));
+	s->worker_pools[0].server = s;
+	s->worker_pool_count = 1;
 	return s;
 }
 
 static void
 free_mock_server(csilk_server_t* s)
 {
-	uv_mutex_destroy(&s->pool_mutex);
+	free(s->worker_pools);
 	uv_mutex_destroy(&s->clients_mutex);
 	free(s);
 }
@@ -59,10 +61,10 @@ static void
 test_server_alloc_sets_pool(void)
 {
 	csilk_server_t* s = mock_server();
-	if (s->client_pool_count == 0) {
+	if (s->worker_pool_count == 1 && s->worker_pools[0].client_pool_count == 0) {
 		PASS();
 	} else {
-		FAIL("client pool should be empty at init");
+		FAIL("worker pool should be empty at init");
 	}
 	free_mock_server(s);
 }
@@ -72,8 +74,6 @@ test_server_mutexes_init(void)
 {
 	csilk_server_t* s = mock_server();
 	int ok = 1;
-	uv_mutex_lock(&s->pool_mutex);
-	uv_mutex_unlock(&s->pool_mutex);
 	uv_mutex_lock(&s->clients_mutex);
 	uv_mutex_unlock(&s->clients_mutex);
 	if (ok) {

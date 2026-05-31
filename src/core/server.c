@@ -105,8 +105,8 @@ on_stop_async(uv_async_t* handle)
 		uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
 	}
 
-	for (int i = 0; i < server->worker_stop_count; i++) {
-		uv_async_send(&server->worker_stop_async[i]);
+	for (int i = 1; i < server->worker_pool_count; i++) {
+		uv_async_send(&server->worker_pools[i].stop_async);
 	}
 
 	if (server->mq) {
@@ -160,7 +160,6 @@ csilk_server_new(csilk_router_t* router)
 	s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
 	uv_mutex_init(&s->clients_mutex);
-	uv_mutex_init(&s->pool_mutex);
 
 	s->mq = _csilk_mq_new(s->loop);
 
@@ -327,14 +326,17 @@ csilk_server_free(csilk_server_t* server)
 		}
 		free(server->worker_tids);
 		server->worker_tids = nullptr;
-		free(server->worker_stop_async);
-		server->worker_stop_async = nullptr;
-		server->worker_stop_count = 0;
 	}
 
 	free(server->spa_doc_root);
-	for (int i = 0; i < server->client_pool_count; i++) {
-		free(server->client_pool[i]);
+	if (server->worker_pools) {
+		for (int w = 0; w < server->worker_pool_count; w++) {
+			worker_pool_t* wp = &server->worker_pools[w];
+			for (int i = 0; i < wp->client_pool_count; i++) {
+				free(wp->client_pool[i]);
+			}
+		}
+		free(server->worker_pools);
 	}
 
 	cleanup_tls(server);
@@ -352,7 +354,6 @@ csilk_server_free(csilk_server_t* server)
 		}
 	}
 
-	uv_mutex_destroy(&server->pool_mutex);
 	uv_mutex_destroy(&server->clients_mutex);
 	free(server);
 }
@@ -398,7 +399,11 @@ csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_con
 		*active_conn = atomic_load(&server->active_connections);
 	}
 	if (pooled_conn) {
-		*pooled_conn = server->client_pool_count;
+		int total = 0;
+		for (int w = 0; w < server->worker_pool_count; w++) {
+			total += server->worker_pools[w].client_pool_count;
+		}
+		*pooled_conn = total;
 	}
 }
 
@@ -583,9 +588,8 @@ bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bo
  *
  * Passed to worker_thread() when spawning multiple accept loops. */
 typedef struct {
-	csilk_server_t* server;
+	worker_pool_t* wp; /**< Pre-allocated worker pool (index 1..N-1). */
 	int port;
-	int worker_index;
 	uv_barrier_t* barrier;
 } worker_data_t;
 
@@ -664,37 +668,36 @@ static void
 worker_thread(void* arg)
 {
 	worker_data_t* data = (worker_data_t*)arg;
-	csilk_server_t* server = data->server;
+	worker_pool_t* wp = data->wp;
+	csilk_server_t* server = wp->server;
 	int port = data->port;
-	int idx = data->worker_index;
 	uv_barrier_t* barrier = data->barrier;
 	free(data);
 
-	uv_loop_t loop;
-	uv_loop_init(&loop);
+	uv_loop_t* loop_ptr = &wp->loop;
+	uv_loop_init(loop_ptr);
 
-	uv_tcp_t server_handle;
-	server_handle.data = server;
+	wp->server_handle.data = wp;
 
-	if (bind_and_listen(&loop, &server_handle, port, server->config.listen_backlog, true) < 0) {
+	if (bind_and_listen(
+		loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) < 0) {
 		if (barrier) {
 			uv_barrier_wait(barrier);
 		}
-		uv_loop_close(&loop);
+		uv_loop_close(loop_ptr);
 		return;
 	}
 
-	worker_stop_data_t sd = {&loop, &server_handle, server, idx};
-	server->worker_stop_async[idx].data = &sd;
-	uv_async_init(&loop, &server->worker_stop_async[idx], on_worker_stop_async);
+	worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
+	wp->stop_async.data = &sd;
+	uv_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
 
 	if (barrier) {
 		uv_barrier_wait(barrier);
 	}
 
-	uv_run(&loop, UV_RUN_DEFAULT);
-
-	uv_loop_close(&loop);
+	uv_run(loop_ptr, UV_RUN_DEFAULT);
+	uv_loop_close(loop_ptr);
 }
 
 #ifndef UV_HANDLE_BOUND
@@ -826,7 +829,19 @@ csilk_server_run(csilk_server_t* server, int port)
 	if (r < 0) {
 		return -1;
 	}
-	server->server_handle.data = server;
+
+	/* Create per-worker pools. Index 0 = main loop (already has loop + server_handle
+	 * set up). Worker thread indices 1..workers-1 get their own pools. */
+	server->worker_pool_count = workers;
+	server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
+	if (!server->worker_pools) {
+		uv_close((uv_handle_t*)&server->async_handle, nullptr);
+		uv_close((uv_handle_t*)&server->server_handle, nullptr);
+		return -1;
+	}
+	server->worker_pools[0].server = server;
+	server->worker_pools[0].worker_index = 0;
+	server->server_handle.data = &server->worker_pools[0];
 
 	if (server->config.tcp_keepalive > 0) {
 		uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
@@ -835,22 +850,23 @@ csilk_server_run(csilk_server_t* server, int port)
 	if (workers > 1) {
 		int nworkers = workers - 1;
 		server->worker_tids = malloc((size_t)nworkers * sizeof(uv_thread_t));
-		server->worker_stop_async = calloc((size_t)nworkers, sizeof(uv_async_t));
-		if (server->worker_tids && server->worker_stop_async) {
+		if (server->worker_tids) {
 			server->worker_count = nworkers;
-			server->worker_stop_count = nworkers;
 
 			uv_barrier_t barrier;
 			uv_barrier_init(&barrier, (unsigned int)workers);
 
 			for (int i = 0; i < nworkers; i++) {
+				int idx = i + 1;
+				server->worker_pools[idx].server = server;
+				server->worker_pools[idx].worker_index = idx;
+
 				worker_data_t* data = malloc(sizeof(worker_data_t));
 				if (!data) {
 					continue;
 				}
-				data->server = server;
+				data->wp = &server->worker_pools[idx];
 				data->port = port;
-				data->worker_index = i;
 				data->barrier = &barrier;
 				uv_thread_create(&server->worker_tids[i], worker_thread, data);
 			}
@@ -860,8 +876,6 @@ csilk_server_run(csilk_server_t* server, int port)
 		} else {
 			free(server->worker_tids);
 			server->worker_tids = nullptr;
-			free(server->worker_stop_async);
-			server->worker_stop_async = nullptr;
 		}
 	}
 

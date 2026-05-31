@@ -51,6 +51,27 @@ typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk
 typedef struct csilk_client_s csilk_client_t;
 
 /**
+ * @brief Per-worker connection pool and event-loop state.
+ *
+ * In multi-worker mode (SO_REUSEPORT), each worker thread gets its own pool.
+ * This eliminates the global pool_mutex contention — pool_get and pool_put
+ * are purely thread-local operations with zero locking overhead.  The main
+ * event-loop thread uses pool index 0; worker threads use indices 1..N-1.
+ *
+ * For single-worker mode (worker_threads <= 1), only pool[0] is used and
+ * the pool works identically to the old shared-pool model.
+ */
+typedef struct {
+	csilk_server_t* server;				     /**< Owning server instance. */
+	uv_loop_t loop;					     /**< This worker's libuv event loop. */
+	uv_tcp_t server_handle;				     /**< Worker-local listen handle. */
+	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
+	int client_pool_count;				     /**< Items in local free list. */
+	uv_async_t stop_async;				     /**< Async for graceful worker stop. */
+	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
+} worker_pool_t;
+
+/**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
  * Manages the libuv event loop, HTTP listener, configuration, global
@@ -69,24 +90,21 @@ struct csilk_server_s {
 	int middleware_count;		 /**< Number of global middlewares. */
 	int max_connections;		 /**< Max concurrent connections (0=unlimited). */
 	atomic_int active_connections;	 /**< Current connection count (atomic). */
-	/* close tracking for async shutdown — see csilk_server_free */
-	uv_thread_t* worker_tids;	   /**< Worker thread IDs (nullptr if single-thread). */
-	int worker_count;		   /**< Number of worker threads created. */
-	uv_async_t* worker_stop_async;	   /**< Per-worker async handles for graceful stop. */
-	int worker_stop_count;		   /**< Number of worker_stop_async entries. */
-	csilk_handler_t not_found_handler; /**< Custom 404 handler (nullptr = default). */
-	char* spa_doc_root;		   /**< SPA fallback doc root (nullptr = disabled). */
-	csilk_storage_driver_t* storage_driver;	    /**< Context storage driver. */
-	csilk_crypto_driver_t* crypto_driver;	    /**< Crypto algorithm driver. */
-	csilk_cipher_driver_t* cipher_driver;	    /**< Cipher algorithm driver. */
-	SSL_CTX* ssl_ctx;			    /**< OpenSSL context. */
-	csilk_mq_t* mq;				    /**< Message Queue instance. */
+	uv_thread_t* worker_tids;	 /**< Worker thread IDs (nullptr if single-thread). */
+	int worker_count;		 /**< Number of worker threads created. */
+	worker_pool_t*
+	    worker_pools; /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
+	int worker_pool_count;			/**< Number of worker pools (= worker_threads). */
+	csilk_handler_t not_found_handler;	/**< Custom 404 handler (nullptr = default). */
+	char* spa_doc_root;			/**< SPA fallback doc root (nullptr = disabled). */
+	csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
+	csilk_crypto_driver_t* crypto_driver;	/**< Crypto algorithm driver. */
+	csilk_cipher_driver_t* cipher_driver;	/**< Cipher algorithm driver. */
+	SSL_CTX* ssl_ctx;			/**< OpenSSL context. */
+	csilk_mq_t* mq;				/**< Message Queue instance. */
 	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
 	csilk_client_t* active_clients;		    /**< Head of active connections list. */
 	uv_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
-	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Connection object free list. */
-	int client_pool_count;				     /**< Number of free clients in pool. */
-	uv_mutex_t pool_mutex; /**< Mutex for connection pool access. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.
@@ -109,8 +127,9 @@ struct csilk_client_s {
 
 	llhttp_t parser; /**< HTTP request parser (if HTTP/1.1). */
 
-	csilk_server_t* server; /**< Owning server instance. */
-	csilk_ctx_t ctx;	/**< Request context for this connection (HTTP/1.1 only for now). */
+	csilk_server_t* server;	      /**< Owning server instance. */
+	worker_pool_t* owner_pool;    /**< Per-worker pool that owns this client. */
+	csilk_ctx_t ctx;	      /**< Request context for this connection. */
 	size_t total_header_size;     /**< Total size of headers parsed so far. */
 	size_t header_count;	      /**< Number of headers parsed so far. */
 	size_t current_url_capacity;  /**< Allocated size of current_url. */
