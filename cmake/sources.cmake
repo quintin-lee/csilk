@@ -82,6 +82,10 @@ set(CSILK_SECURITY_SOURCES
     src/security/perm.c
 )
 
+set(CSILK_UTIL_SOURCES
+    src/util/flamegraph.c
+)
+
 set(CSILK_WORKFLOW_SOURCES
     src/workflow/workflow.c
     src/workflow/workflow_loader.c
@@ -100,5 +104,6 @@ set(CSILK_SOURCES
     ${CSILK_PROTOCOL_SOURCES}
     ${CSILK_REFLECTION_SOURCES}
     ${CSILK_SECURITY_SOURCES}
+    ${CSILK_UTIL_SOURCES}
     ${CSILK_WORKFLOW_SOURCES}
 )

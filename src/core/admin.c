@@ -14,6 +14,7 @@
 
 #include "cJSON.h"
 #include "csilk/core/internal.h"
+#include "util/flamegraph.h"
 
 /* Externs from metrics.c */
 extern uint64_t atomic_load_http_requests(void);
@@ -162,27 +163,61 @@ admin_topology_handler(csilk_ctx_t* c)
 	csilk_json(c, 200, routes);
 }
 
-/** @brief Simple profiler placeholder (Flamegraph data source). */
+/** @brief Start flame graph profiling and return the SVG result.
+ *
+ * Begins stack sampling for 5 seconds (100Hz), then stops and returns
+ * the generated SVG flame graph directly as an image/svg+xml response.
+ * Only one profiler session runs at a time. */
 static void
-admin_profiler_handler(csilk_ctx_t* c)
+admin_flamegraph_handler(csilk_ctx_t* c)
 {
-	cJSON* root = cJSON_CreateObject();
-	cJSON* samples = cJSON_CreateArray();
+	if (csilk_flamegraph_is_running()) {
+		csilk_json_error(c, 409, "Profiler already running — try again later");
+		return;
+	}
 
-	// Placeholder sample data (collapsed stack format)
-	// In a real implementation, this would be collected via backtrace()
-	cJSON_AddItemToArray(samples,
-			     cJSON_CreateString("main;csilk_server_run;on_read;llhttp_execute 42"));
-	cJSON_AddItemToArray(samples,
-			     cJSON_CreateString("main;csilk_server_run;uv_run;on_timer 15"));
-	cJSON_AddItemToArray(samples,
-			     cJSON_CreateString("main;csilk_server_run;on_read;match_node 30"));
+	if (csilk_flamegraph_start(10000) != 0) {
+		csilk_json_error(c, 500, "Failed to start profiler");
+		return;
+	}
 
-	cJSON_AddItemToObject(root, "type", cJSON_CreateString("cpu"));
-	cJSON_AddItemToObject(root, "unit", cJSON_CreateString("samples"));
-	cJSON_AddItemToObject(root, "data", samples);
+	usleep(5000000);
 
-	csilk_json(c, 200, root);
+	char* svg = nullptr;
+	size_t svg_len = 0;
+	if (csilk_flamegraph_stop(&svg, &svg_len) == 0 && svg) {
+		csilk_set_header(c, "Content-Type", "image/svg+xml");
+		csilk_set_header(c, "Cache-Control", "no-cache");
+		csilk_set_response_body(c, svg, svg_len, 1);
+		csilk_string(c, 200, "");
+		free(svg);
+	} else {
+		csilk_json_error(c, 500, "No samples collected");
+	}
+}
+
+/** @brief Quick CPU profile — always available, non-blocking.
+ *
+ * Runs a brief 100ms sample and returns collapsed stacks as JSON.
+ * Useful for dashboard widgets and automated monitoring. */
+static void
+admin_profile_quick_handler(csilk_ctx_t* c)
+{
+	if (csilk_flamegraph_is_running()) {
+		cJSON* root = cJSON_CreateObject();
+		cJSON_AddStringToObject(root, "status", "running");
+		cJSON_AddStringToObject(root, "message", "Profiler is already running");
+		csilk_json(c, 200, root);
+		return;
+	}
+
+	if (csilk_flamegraph_start(5000) != 0) {
+		csilk_json_error(c, 500, "Failed to start profiler");
+		return;
+	}
+	usleep(100000);
+	csilk_flamegraph_stop(nullptr, nullptr);
+	csilk_json_error(c, 200, "Quick profile complete");
 }
 
 /** @brief WebSocket handler that streams multiplexed events. */
@@ -240,9 +275,10 @@ csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t
 
 	/* Register sub-handlers. Because these are registered via the group,
      their paths are automatically relative to the group's prefix. */
-	csilk_GET(group, "/", admin_ui_handler);	       /* GET /admin/ */
-	csilk_GET(group, "/stats", admin_stats_handler);       /* GET /admin/stats */
-	csilk_GET(group, "/ws", admin_ws_handler);	       /* GET /admin/ws (Upgrade) */
-	csilk_GET(group, "/topology", admin_topology_handler); /* GET /admin/topology */
-	csilk_GET(group, "/profile", admin_profiler_handler);  /* GET /admin/profile */
+	csilk_GET(group, "/", admin_ui_handler);		   /* GET /admin/ */
+	csilk_GET(group, "/stats", admin_stats_handler);	   /* GET /admin/stats */
+	csilk_GET(group, "/ws", admin_ws_handler);		   /* GET /admin/ws (Upgrade) */
+	csilk_GET(group, "/topology", admin_topology_handler);	   /* GET /admin/topology */
+	csilk_GET(group, "/flamegraph", admin_flamegraph_handler); /* GET /admin/flamegraph */
+	csilk_GET(group, "/profile", admin_profile_quick_handler); /* GET /admin/profile */
 }
