@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "csilk/app/admin.h"
+#include "csilk/app/app.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 
