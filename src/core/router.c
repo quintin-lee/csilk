@@ -601,6 +601,8 @@ csilk_router_add_extended_perm(csilk_router_t* r,
 
 #if defined(__AVX2__)
 #include <immintrin.h>
+#elif defined(__ARM_NEON)
+#include <arm_neon.h>
 #endif
 
 /**
@@ -631,6 +633,21 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 			return 1;
 		}
 		return memcmp(s1 + 32, s2 + 32, n - 32) == 0;
+	}
+#elif defined(__ARM_NEON)
+	if (n >= 16) {
+		uint8x16_t v1 = vld1q_u8((const uint8_t*)s1);
+		uint8x16_t v2 = vld1q_u8((const uint8_t*)s2);
+		uint8x16_t cmp = vceqq_u8(v1, v2);
+		uint64_t mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
+		uint64_t mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
+		if (mask_low != UINT64_MAX || mask_high != UINT64_MAX) {
+			return 0;
+		}
+		if (n == 16) {
+			return 1;
+		}
+		return memcmp(s1 + 16, s2 + 16, n - 16) == 0;
 	}
 #endif
 	/* Fast path for short segments */
