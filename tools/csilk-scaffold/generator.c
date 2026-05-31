@@ -85,6 +85,21 @@ add_handlers(const project_config_t* cfg, char* buf, size_t sz)
 			"}\n\n",
 			sz - strlen(buf) - 1);
 	}
+
+	if (cfg->has_cors && cfg->template_type == 1) {
+		strncat(buf,
+			"static void cors_mw(csilk_ctx_t* c) {\n"
+			"    static const csilk_cors_config_t cfg = {\n"
+			"        .allow_origin = \"*\",\n"
+			"        .allow_methods = \"GET, POST, PUT, DELETE, OPTIONS\",\n"
+			"        .allow_headers = \"Content-Type, Authorization\",\n"
+			"        .allow_credentials = 1,\n"
+			"        .max_age = 86400,\n"
+			"    };\n"
+			"    csilk_cors_middleware(c, &cfg);\n"
+			"}\n\n",
+			sz - strlen(buf) - 1);
+	}
 }
 
 static void
@@ -162,8 +177,7 @@ add_routes_app(const project_config_t* cfg, char* buf, size_t sz)
 		    buf, "    csilk_app_use(app, csilk_gzip_middleware);\n", sz - strlen(buf) - 1);
 	}
 	if (cfg->has_cors) {
-		strncat(
-		    buf, "    csilk_app_use(app, csilk_cors_middleware);\n", sz - strlen(buf) - 1);
+		strncat(buf, "    csilk_app_use(app, cors_mw);\n", sz - strlen(buf) - 1);
 	}
 
 	if (cfg->template_type == 0) {
