@@ -13,7 +13,6 @@
 
 #include <limits.h>
 #include <llhttp.h>
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>

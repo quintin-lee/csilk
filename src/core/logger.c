@@ -98,25 +98,23 @@ typedef struct {
 
 static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
 
-#include <pthread.h>
-
-static pthread_key_t tl_request_id_key;
-static pthread_once_t tl_request_id_once = PTHREAD_ONCE_INIT;
+static uv_key_t tl_request_id_key;
+static uv_once_t tl_request_id_once = UV_ONCE_INIT;
 
 static void
 init_request_id_key(void)
 {
-	pthread_key_create(&tl_request_id_key, free);
+	uv_key_create(&tl_request_id_key);
 }
 
 static char*
 get_tl_request_id(void)
 {
-	pthread_once(&tl_request_id_once, init_request_id_key);
-	char* id = (char*)pthread_getspecific(tl_request_id_key);
+	uv_once(&tl_request_id_once, init_request_id_key);
+	char* id = (char*)uv_key_get(&tl_request_id_key);
 	if (!id) {
 		id = calloc(37, 1);
-		pthread_setspecific(tl_request_id_key, id);
+		uv_key_set(&tl_request_id_key, id);
 	}
 	return id;
 }
