@@ -98,25 +98,12 @@ typedef struct {
 
 static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
 
-static uv_key_t tl_request_id_key;
-static uv_once_t tl_request_id_once = UV_ONCE_INIT;
-
-static void
-init_request_id_key(void)
-{
-	uv_key_create(&tl_request_id_key);
-}
+static _Thread_local char tl_request_id[37];
 
 static char*
 get_tl_request_id(void)
 {
-	uv_once(&tl_request_id_once, init_request_id_key);
-	char* id = (char*)uv_key_get(&tl_request_id_key);
-	if (!id) {
-		id = calloc(37, 1);
-		uv_key_set(&tl_request_id_key, id);
-	}
-	return id;
+	return tl_request_id;
 }
 
 static const char* level_names[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
