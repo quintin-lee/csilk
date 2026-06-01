@@ -121,6 +121,29 @@ test_arena_alignment()
 }
 
 void
+test_arena_64_alignment()
+{
+	printf("Testing csilk_arena_alloc 64-byte alignment...\n");
+
+	csilk_arena_t* arena = csilk_arena_new(1024);
+	csilk_arena_set_alignment(arena, 1);
+
+	for (int i = 0; i < 10; i++) {
+		void* ptr = csilk_arena_alloc(arena, 1);
+		assert(ptr != NULL);
+		assert(((uintptr_t)ptr & 63) == 0);
+	}
+
+	/* Toggle back to 8-byte */
+	csilk_arena_set_alignment(arena, 0);
+	void* ptr8 = csilk_arena_alloc(arena, 1);
+	assert(((uintptr_t)ptr8 & 7) == 0);
+
+	csilk_arena_free(arena);
+	printf("csilk_arena_alloc 64-byte alignment passed!\n");
+}
+
+void
 test_arena_reset()
 {
 	printf("Testing csilk_arena_reset...\n");
@@ -179,6 +202,7 @@ main()
 	test_arena_alloc_fill();
 	test_arena_strdup();
 	test_arena_alignment();
+	test_arena_64_alignment();
 	test_arena_reset();
 #ifdef TEST_OOM
 	test_arena_tls_cache();

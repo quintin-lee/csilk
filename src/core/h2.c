@@ -276,7 +276,8 @@ csilk_h2_send_response(csilk_ctx_t* c)
 		return;
 	}
 
-	/* Count headers */
+	nghttp2_nv hdrs[32];
+
 	int header_count = 1; /* :status */
 	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
 		for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
@@ -412,6 +413,12 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 	     NGHTTP2_NV_FLAG_NONE},
 	};
 
+	/* Check if push is enabled by client */
+	if (nghttp2_session_get_remote_settings(client->h2_session, NGHTTP2_SETTINGS_ENABLE_PUSH) ==
+	    0) {
+		return -1;
+	}
+
 	/* Submit the PUSH_PROMISE. nghttp2 returns the new stream ID on success.
 	 * The new stream is in "reserved" state — we can immediately submit a
 	 * response to it. */
@@ -435,10 +442,14 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 
 	/* Set up the synthesized request */
 	pushed_c->request.method = csilk_arena_strdup(pushed_c->arena, method);
-	pushed_c->request.path = csilk_arena_strdup(pushed_c->arena, path);
-
-	/* Flush the PUSH_PROMISE frame */
-	nghttp2_session_send(client->h2_session);
+	char* path_heap = nullptr;
+	char* query_heap = nullptr;
+	csilk_split_url(path, &path_heap, &query_heap);
+	pushed_c->request.path = path_heap;
+	if (query_heap) {
+		csilk_parse_query(pushed_c, query_heap);
+		free(query_heap);
+	}
 
 	/* Increment push counter on the original context */
 	csilk_set(c, "_h2_push_count", (void*)(uintptr_t)(push_count + 1));
@@ -448,6 +459,9 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 	 * will be sent by _csilk_send_response → csilk_h2_send_response
 	 * on the promised stream ID. */
 	_csilk_dispatch_request(pushed_c);
+
+	/* Flush everything: PUSH_PROMISE and the pushed response */
+	int rv = nghttp2_session_send(client->h2_session);
 
 	return promised_id;
 }
@@ -561,6 +575,9 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 	_csilk_ctx_init(ctx, client->server, client);
 	ctx->stream_id = stream_id;
 	ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+	if (client->server->config.enable_arena_alignment) {
+		csilk_arena_set_alignment(ctx->arena, 1);
+	}
 
 	/* Prepend to list */
 
@@ -623,7 +640,6 @@ csilk_h2_free_streams(csilk_client_t* client)
  */
 int
 csilk_h2_init_session(csilk_client_t* client)
-
 {
 	nghttp2_session_callbacks* callbacks;
 	if (nghttp2_session_callbacks_new(&callbacks) != 0) {
@@ -632,6 +648,7 @@ csilk_h2_init_session(csilk_client_t* client)
 
 	nghttp2_session_callbacks_set_send_callback(callbacks, send_callback);
 	nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, on_frame_recv_callback);
+
 	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
 								  on_data_chunk_recv_callback);
 	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, on_stream_close_callback);

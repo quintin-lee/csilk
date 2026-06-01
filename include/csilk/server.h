@@ -411,6 +411,19 @@ void csilk_arena_free(csilk_arena_t* arena);
  * @param arena  The arena allocator to reset.
  */
 void csilk_arena_reset(csilk_arena_t* arena);
+
+/**
+ * @brief Enable or disable 64-byte alignment for an arena.
+ *
+ * When enabled, all subsequent allocations from this arena will be aligned
+ * to a 64-byte boundary (cache line).  This is useful for preventing false
+ * sharing in high-concurrency environments but increases memory overhead.
+ *
+ * @param arena   The arena allocator.
+ * @param enabled Non-zero to enable 64-byte alignment, 0 for default 8-byte.
+ */
+void csilk_arena_set_alignment(csilk_arena_t* arena, int enabled);
+
 void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
 
 #endif /* CSILK_SERVER_H */
