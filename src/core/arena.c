@@ -110,7 +110,8 @@ static int tls_chunk_count = 0;
 typedef struct csilk_arena_s {
 	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
 	size_t default_chunk_size; /**< Default size for new chunks. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t))];
+	int align_64;		   /**< Non-zero to enable 64-byte alignment. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int)];
 } csilk_arena_t;
 
 /** @brief Create a new arena allocator.
@@ -135,7 +136,21 @@ csilk_arena_new(size_t default_chunk_size)
 	}
 	arena->head = nullptr;
 	arena->default_chunk_size = default_chunk_size;
+	arena->align_64 = 0;
 	return arena;
+}
+
+/** @brief Enable or disable 64-byte alignment for this arena.
+ *
+ * @param arena   The arena to configure.
+ * @param enabled Non-zero to enable 64-byte alignment, zero for 8-byte.
+ */
+void
+csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
+{
+	if (arena) {
+		arena->align_64 = enabled;
+	}
 }
 
 /** @brief Allocate memory from the arena with 8-byte alignment.
@@ -153,7 +168,8 @@ csilk_arena_new(size_t default_chunk_size)
 void*
 csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 {
-	if (size > SIZE_MAX - 7) {
+	size_t alignment = (arena && arena->align_64) ? CSILK_CACHE_LINE_SIZE : 8;
+	if (size > SIZE_MAX - (alignment - 1)) {
 		return nullptr;
 	}
 
@@ -164,7 +180,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 		return (void*)(uintptr_t)1;
 	}
 
-	size = (size + 7) & ~7;
+	size = (size + alignment - 1) & ~(alignment - 1);
 
 	if (arena->head && (arena->head->size - arena->head->used) >= size) {
 		void* ptr = arena->head->data + arena->head->used;

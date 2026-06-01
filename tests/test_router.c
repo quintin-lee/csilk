@@ -16,9 +16,35 @@ mock_handler2(csilk_ctx_t* c)
 	(void)c;
 }
 
+void
+test_router_simd()
+{
+	printf("Testing SIMD routing paths...\n");
+	csilk_router_t* r = csilk_router_new();
+	csilk_handler_t h1[] = {mock_handler1};
+
+	/* Long segment (>32 chars) for AVX2 */
+	const char* long_path =
+	    "/this_is_a_very_long_path_segment_that_should_trigger_avx2_matching";
+	csilk_router_add(r, "GET", long_path, h1, 1);
+
+	csilk_handler_t* matched = csilk_router_match(r, "GET", long_path);
+	assert(matched != NULL && matched[0] == mock_handler1);
+
+	/* Test with prefix match but different tail */
+	assert(csilk_router_match(
+		   r,
+		   "GET",
+		   "/this_is_a_very_long_path_segment_that_should_trigger_avx2_matchinx") == NULL);
+
+	csilk_router_free(r);
+	printf("test_router_simd passed!\n");
+}
+
 int
 main()
 {
+	test_router_simd();
 	csilk_router_t* r = csilk_router_new();
 	assert(r != NULL);
 

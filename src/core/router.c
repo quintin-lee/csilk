@@ -48,6 +48,7 @@
 #include <string.h>
 
 #include "core/ctx_types.h"
+#include "core/srv_types.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -599,10 +600,52 @@ csilk_router_add_extended_perm(csilk_router_t* r,
 			perm_resource);
 }
 
-#if defined(__AVX2__)
+#if defined(__x86_64__)
+#include <cpuid.h>
 #include <immintrin.h>
-#elif defined(__ARM_NEON)
+
+__attribute__((target("avx2"))) static inline int
+csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
+{
+	if (n >= 32) {
+		__m256i v1 = _mm256_loadu_si256((const __m256i*)s1);
+		__m256i v2 = _mm256_loadu_si256((const __m256i*)s2);
+		__m256i cmp = _mm256_cmpeq_epi8(v1, v2);
+		int mask = _mm256_movemask_epi8(cmp);
+		if (mask != (int)0xFFFFFFFF) {
+			return 0;
+		}
+		if (n == 32) {
+			return 1;
+		}
+		return memcmp(s1 + 32, s2 + 32, n - 32) == 0;
+	}
+	return memcmp(s1, s2, n) == 0;
+}
+#endif
+
+#if defined(__ARM_NEON)
 #include <arm_neon.h>
+
+static inline int
+csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
+{
+	if (n >= 16) {
+		uint8x16_t v1 = vld1q_u8((const uint8_t*)s1);
+		uint8x16_t v2 = vld1q_u8((const uint8_t*)s2);
+		uint8x16_t cmp = vceqq_u8(v1, v2);
+		uint64_t mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
+		uint64_t mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
+		if (mask_low != UINT64_MAX || mask_high != UINT64_MAX) {
+			return 0;
+		}
+		if (n == 16) {
+			return 1;
+		}
+		return memcmp(s1 + 16, s2 + 16, n - 16) == 0;
+	}
+	return memcmp(s1, s2, n) == 0;
+}
 #endif
 
 /**
@@ -620,36 +663,14 @@ csilk_router_add_extended_perm(csilk_router_t* r,
 static inline int
 csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 {
-#if defined(__AVX2__)
-	if (n >= 32) {
-		__m256i v1 = _mm256_loadu_si256((const __m256i*)s1);
-		__m256i v2 = _mm256_loadu_si256((const __m256i*)s2);
-		__m256i cmp = _mm256_cmpeq_epi8(v1, v2);
-		int mask = _mm256_movemask_epi8(cmp);
-		if (mask != (int)0xFFFFFFFF) {
-			return 0;
-		}
-		if (n == 32) {
-			return 1;
-		}
-		return memcmp(s1 + 32, s2 + 32, n - 32) == 0;
+#if defined(__x86_64__)
+	if (__builtin_cpu_supports("avx2")) {
+		return csilk_memcmp_avx2(s1, s2, n);
 	}
 #elif defined(__ARM_NEON)
-	if (n >= 16) {
-		uint8x16_t v1 = vld1q_u8((const uint8_t*)s1);
-		uint8x16_t v2 = vld1q_u8((const uint8_t*)s2);
-		uint8x16_t cmp = vceqq_u8(v1, v2);
-		uint64_t mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
-		uint64_t mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
-		if (mask_low != UINT64_MAX || mask_high != UINT64_MAX) {
-			return 0;
-		}
-		if (n == 16) {
-			return 1;
-		}
-		return memcmp(s1 + 16, s2 + 16, n - 16) == 0;
-	}
+	return csilk_memcmp_neon(s1, s2, n);
 #endif
+
 	/* Fast path for short segments */
 	if (n == 0) {
 		return 1;
@@ -755,6 +776,8 @@ match_node(csilk_router_node_t* node,
 	   csilk_ctx_t* ctx,
 	   csilk_method_handler_t** out_mh)
 {
+	int use_simd = (ctx && ctx->server) ? ctx->server->config.enable_simd : 1;
+
 	if (!path || *path == '\0' || (path[0] == '/' && path[1] == '\0')) {
 		csilk_method_handler_t* mh = node->handlers;
 		while (mh) {
@@ -780,10 +803,18 @@ match_node(csilk_router_node_t* node,
 	for (int i = 0; i < node->children_count; i++) {
 		csilk_router_node_t* child = node->children[i];
 		if (child->type == CSILK_NODE_STATIC) {
-			// Fast-path: check first character and length before strncmp
-			if (child->segment[0] == seg[0] && strlen(child->segment) == len &&
-			    strncmp(child->segment, seg, len) == 0) {
-				result = match_node(child, method, p, ctx, out_mh);
+			// Fast-path: check length and first character before full comparison
+			if (child->segment_len == len && child->segment[0] == seg[0]) {
+				int match = 0;
+				if (use_simd) {
+					match = csilk_memcmp_fast(child->segment, seg, len);
+				} else {
+					match = (strncmp(child->segment, seg, len) == 0);
+				}
+
+				if (match) {
+					result = match_node(child, method, p, ctx, out_mh);
+				}
 			}
 		} else if (child->type == CSILK_NODE_PARAM) {
 			// PARAM node: always matches the current segment regardless of

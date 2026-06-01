@@ -99,6 +99,7 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 	// Default values
 	memset(config, 0, sizeof(csilk_config_t));
 	config->port = 8080;
+	config->http3_port = 0;
 	config->server.idle_timeout_ms = 5000;
 	config->server.read_timeout_ms = 30000;
 	config->server.write_timeout_ms = 30000;
@@ -109,6 +110,8 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 	config->server.listen_backlog = 128;
 	config->server.tcp_nodelay = 1;
 	config->server.worker_threads = 1;
+	config->server.enable_simd = 1;
+	config->server.enable_arena_alignment = 1;
 	config->logger.level = CSILK_LOG_INFO;
 	config->logger.use_colors = -1;
 
@@ -132,6 +135,8 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 				if (current_section == nullptr) {
 					if (strcmp(current_key, "port") == 0) {
 						config->port = atoi(val);
+					} else if (strcmp(current_key, "http3_port") == 0) {
+						config->http3_port = atoi(val);
 					}
 				} else if (strcmp(current_section, "server") == 0) {
 					if (strcmp(current_key, "idle_timeout_ms") == 0) {
@@ -185,6 +190,11 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 					} else if (strcmp(current_key, "h2_max_push_per_request") ==
 						   0) {
 						config->server.h2_max_push_per_request = atoi(val);
+					} else if (strcmp(current_key, "enable_simd") == 0) {
+						config->server.enable_simd = atoi(val);
+					} else if (strcmp(current_key, "enable_arena_alignment") ==
+						   0) {
+						config->server.enable_arena_alignment = atoi(val);
 					}
 				} else if (strcmp(current_section, "logger") == 0) {
 					if (strcmp(current_key, "level") == 0) {
@@ -445,6 +455,12 @@ csilk_config_validate(const csilk_config_t* config, const char** error_msg)
 	if (config->port < 1 || config->port > 65535) {
 		if (error_msg) {
 			*error_msg = "Port must be between 1 and 65535";
+		}
+		return -1;
+	}
+	if (config->http3_port != 0 && (config->http3_port < 1 || config->http3_port > 65535)) {
+		if (error_msg) {
+			*error_msg = "HTTP/3 Port must be between 1 and 65535";
 		}
 		return -1;
 	}

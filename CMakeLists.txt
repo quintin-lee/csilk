@@ -160,6 +160,8 @@ FetchContent_MakeAvailable(cjson)
 set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
 set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
 set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
+set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   nghttp2
   GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
@@ -170,6 +172,29 @@ if(nghttp2_SOURCE_DIR)
   include_directories(${nghttp2_SOURCE_DIR}/lib/includes)
   include_directories(${nghttp2_BINARY_DIR}/lib/includes)
 endif()
+
+# Fetch ngtcp2 (QUIC)
+# set(ENABLE_ASIO_LIB OFF CACHE BOOL "" FORCE)
+# FetchContent_Declare(
+#   ngtcp2
+#   GIT_REPOSITORY https://github.com/ngtcp2/ngtcp2.git
+#   GIT_TAG        v1.6.0
+# )
+# FetchContent_MakeAvailable(ngtcp2)
+# if(ngtcp2_SOURCE_DIR)
+#   include_directories(${ngtcp2_SOURCE_DIR}/lib/includes)
+# endif()
+
+# Fetch nghttp3 (HTTP/3)
+# FetchContent_Declare(
+#   nghttp3
+#   GIT_REPOSITORY https://github.com/ngtcp2/nghttp3.git
+#   GIT_TAG        v1.4.0
+# )
+# FetchContent_MakeAvailable(nghttp3)
+# if(nghttp3_SOURCE_DIR)
+#   include_directories(${nghttp3_SOURCE_DIR}/lib/includes)
+# endif()
 
 # Find CURL (>= 7.80.0 for HTTP/2 support)
 find_package(CURL 7.80.0 REQUIRED)

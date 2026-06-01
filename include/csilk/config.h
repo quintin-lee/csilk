@@ -62,6 +62,10 @@ typedef struct csilk_server_config_s {
 	int h2_push_enable;	     /**< Non-zero to enable HTTP/2 server push. */
 	int h2_max_push_per_request; /**< Maximum push promises per request (0 = default
 				      10). */
+
+	/* Performance optimizations */
+	int enable_simd; /**< Non-zero to enable SIMD-accelerated routing (if supported). */
+	int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
 } csilk_server_config_t;
 
 /**
@@ -72,6 +76,7 @@ typedef struct csilk_server_config_s {
  */
 typedef struct {
 	int port;		      /**< TCP port the server listens on. */
+	int http3_port;		      /**< UDP port for HTTP/3 (0 = disabled). */
 	csilk_server_config_t server; /**< Low-level server/connection settings. */
 	csilk_log_config_t logger;    /**< Logger initialisation settings. */
 	struct {

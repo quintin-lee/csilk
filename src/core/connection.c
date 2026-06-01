@@ -426,6 +426,9 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		}
 
 		client->ctx.arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+		if (server->config.enable_arena_alignment) {
+			csilk_arena_set_alignment(client->ctx.arena, 1);
+		}
 
 		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
