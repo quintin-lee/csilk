@@ -33,10 +33,10 @@
 #include <strings.h>
 #include <uv.h>
 
-#include "core/ctx_types.h"
+#include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_types.h"
+#include "core/srv_internal.h"
 
 /** @brief Hash a header key string into a bucket index using djb2.
  *
@@ -550,6 +550,20 @@ int
 csilk_get_status(csilk_ctx_t* c)
 {
 	return c ? c->response.status : 0;
+}
+
+void
+csilk_set_status(csilk_ctx_t* c, int status)
+{
+	if (c) {
+		c->response.status = status;
+	}
+}
+
+csilk_header_map_t*
+csilk_get_headers(csilk_ctx_t* c)
+{
+	return c ? &c->request.headers : nullptr;
 }
 
 /** @brief Mark the response as asynchronous (sent later, not automatically).

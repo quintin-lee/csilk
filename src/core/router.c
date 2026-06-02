@@ -47,8 +47,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "core/ctx_types.h"
-#include "core/srv_types.h"
+#include "core/ctx_internal.h"
+#include "core/srv_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
@@ -953,6 +953,7 @@ csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
 	csilk_method_handler_t* mh = nullptr;
 	csilk_handler_t* handlers = match_node(r->root, c->request.method, c->request.path, c, &mh);
 	if (handlers) {
+
 		c->handlers = handlers;
 		c->handler_index = -1;
 		c->current_handler = mh;

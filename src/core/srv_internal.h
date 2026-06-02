@@ -19,7 +19,7 @@
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
-#include "core/ctx_types.h"
+#include "core/ctx_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
 static constexpr int CSILK_DEFAULT_IDLE_TIMEOUT = 5000;

@@ -110,6 +110,14 @@ void csilk_set_sse(csilk_ctx_t* c, int is_sse);
 int csilk_is_aborted(csilk_ctx_t* c);
 
 /**
+ * @brief Get the request headers map.
+ *
+ * @param c  The request context.
+ * @return Pointer to the opaque header map.
+ */
+csilk_header_map_t* csilk_get_headers(csilk_ctx_t* c);
+
+/**
  * @brief Get a request header value by name (case-insensitive).
  *
  * @param c   The request context.
@@ -231,6 +239,14 @@ csilk_arena_t* csilk_get_arena(csilk_ctx_t* c);
  * @return The HTTP status code (e.g., 200, 404).  Default is 200 if not set.
  */
 int csilk_get_status(csilk_ctx_t* c);
+
+/**
+ * @brief Set the current response status code.
+ *
+ * @param c  The request context.
+ * @param status The HTTP status code to set.
+ */
+void csilk_set_status(csilk_ctx_t* c, int status);
 
 /**
  * @brief Enable or disable asynchronous response mode.

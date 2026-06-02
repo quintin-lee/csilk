@@ -25,10 +25,10 @@
 #include <fcntl.h>
 #endif
 
-#include "core/ctx_types.h"
+#include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_types.h"
+#include "core/srv_internal.h"
 #include "srv_impl.h"
 
 /* --- Signal handler --- */
@@ -675,6 +675,12 @@ worker_thread(void* arg)
 	free(data);
 
 	uv_loop_t* loop_ptr = &wp->loop;
+
+#ifdef __APPLE__
+	/* Optimize kqueue for OOB data handling on macOS */
+	setenv("UV_KQUEUE_OOB", "1", 0);
+#endif
+
 	uv_loop_init(loop_ptr);
 
 	wp->server_handle.data = wp;
@@ -807,11 +813,32 @@ bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bo
  * @return The uv_run() return value on exit, or -1 on initialization failure.
  * @note When worker_threads > 1, the main thread runs the event loop and
  *       additional worker threads each run their own independent loop. */
+static void
+openapi_json_handler(csilk_ctx_t* c)
+{
+	csilk_server_t* server = csilk_ctx_get_server(c);
+	if (server && server->router) {
+		csilk_serve_openapi(c,
+				    server->router,
+				    "Csilk API",
+				    "1.0.0",
+				    "Auto-generated OpenAPI documentation.");
+	} else {
+		csilk_set_status(c, 500);
+	}
+}
+
 int
 csilk_server_run(csilk_server_t* server, int port)
 {
 	if (!server) {
 		return -1;
+	}
+
+	if (server->config.enable_openapi && server->router) {
+		static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
+		csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
+		CSILK_LOG_I("OpenAPI endpoint automatically registered at GET /openapi.json");
 	}
 
 	if (server->config.enable_tls) {

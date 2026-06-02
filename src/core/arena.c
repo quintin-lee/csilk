@@ -26,9 +26,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "core/ctx_types.h"
+#ifdef __APPLE__
+#include <mach/mach_init.h>
+#include <mach/mach_vm.h>
+#endif
+
+#include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
-#include "core/srv_types.h"
+#include "core/srv_internal.h"
 
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */
@@ -59,9 +64,17 @@ arena_aligned_alloc(size_t size)
 	}
 	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
 
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__APPLE__)
+#if defined(__APPLE__)
+	mach_vm_address_t addr = 0;
+	if (mach_vm_allocate(
+		mach_task_self(), &addr, (mach_vm_size_t)aligned_size, VM_FLAGS_ANYWHERE) !=
+	    KERN_SUCCESS) {
+		return nullptr;
+	}
+	ptr = (void*)addr;
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 	ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
-#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L || defined(__APPLE__)
+#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
 	if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
 		return nullptr;
 	}
@@ -72,6 +85,22 @@ arena_aligned_alloc(size_t size)
 	ptr = malloc(aligned_size);
 #endif
 	return ptr;
+}
+
+/** @brief Helper for freeing cache-line aligned allocations. */
+static void
+arena_aligned_free(void* ptr, size_t size)
+{
+	if (!ptr) {
+		return;
+	}
+	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
+
+#if defined(__APPLE__)
+	mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)ptr, (mach_vm_size_t)aligned_size);
+#else
+	free(ptr);
+#endif
 }
 
 /** @brief A single chunk in the arena linked list.
@@ -289,15 +318,16 @@ csilk_arena_free(csilk_arena_t* arena)
 		if (curr->size == CSILK_DEFAULT_ARENA_SIZE &&
 		    tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
 			curr->next = tls_chunk_free_list;
+			curr->used = 0;
 			tls_chunk_free_list = curr;
 			tls_chunk_count++;
 		} else {
-			free(curr);
+			arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 		}
 
 		curr = next;
 	}
-	free(arena);
+	arena_aligned_free(arena, sizeof(csilk_arena_t));
 }
 
 /** @brief Reset arena for reuse without freeing underlying chunks.

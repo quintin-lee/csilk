@@ -66,6 +66,9 @@ typedef struct csilk_server_config_s {
 	/* Performance optimizations */
 	int enable_simd; /**< Non-zero to enable SIMD-accelerated routing (if supported). */
 	int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
+
+	/* Ecosystem */
+	int enable_openapi; /**< Non-zero to automatically serve /openapi.json. */
 } csilk_server_config_t;
 
 /**
