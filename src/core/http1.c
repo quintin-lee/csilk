@@ -17,8 +17,8 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_types.h"
-#include "core/ctx_types.h"
+#include "core/srv_internal.h"
+#include "core/ctx_internal.h"
 #include "h2.h"
 #include "srv_impl.h"
 

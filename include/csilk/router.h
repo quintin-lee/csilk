@@ -201,6 +201,16 @@ void csilk_router_add_extended_perm(csilk_router_t* r,
 				    const char* perm_resource);
 
 /**
+ * @brief Metadata for a route used to generate OpenAPI documentation.
+ */
+typedef struct {
+	const char* input_type;	 /**< Request body type name. */
+	const char* output_type; /**< Response type name. */
+	const char* summary;	 /**< Short summary. */
+	const char* description; /**< Detailed description. */
+} csilk_route_metadata_t;
+
+/**
  * @brief Convenience macro to register a route with metadata.
  *
  * Automatically passes @p path as both the URL pattern and the documentation
@@ -218,6 +228,21 @@ void csilk_router_add_extended_perm(csilk_router_t* r,
 				  output_type,                                                     \
 				  summary,                                                         \
 				  desc)
+
+/**
+ * @brief Register a route with a metadata struct for OpenAPI documentation.
+ */
+#define CSILK_REGISTER_ROUTE_DOC(r, method, path, handlers, handler_count, meta)                   \
+	csilk_router_add_extended(r,                                                               \
+				  method,                                                          \
+				  path,                                                            \
+				  handlers,                                                        \
+				  handler_count,                                                   \
+				  path,                                                            \
+				  (meta).input_type,                                               \
+				  (meta).output_type,                                              \
+				  (meta).summary,                                                  \
+				  (meta).description)
 
 /**
  * @brief Serve the OpenAPI JSON specification as the response.

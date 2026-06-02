@@ -119,6 +119,7 @@ set(CSILK_MIDDLEWARE_TESTS
 # -- Protocol tests --
 set(CSILK_PROTOCOL_TESTS
     test_swagger
+    test_openapi
     test_ws
     test_ws_room
     test_h2

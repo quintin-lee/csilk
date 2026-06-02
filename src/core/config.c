@@ -112,6 +112,7 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 	config->server.worker_threads = 1;
 	config->server.enable_simd = 1;
 	config->server.enable_arena_alignment = 1;
+	config->server.enable_openapi = 0;
 	config->logger.level = CSILK_LOG_INFO;
 	config->logger.use_colors = -1;
 
@@ -195,8 +196,11 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 					} else if (strcmp(current_key, "enable_arena_alignment") ==
 						   0) {
 						config->server.enable_arena_alignment = atoi(val);
+					} else if (strcmp(current_key, "enable_openapi") == 0) {
+						config->server.enable_openapi = atoi(val);
 					}
 				} else if (strcmp(current_section, "logger") == 0) {
+
 					if (strcmp(current_key, "level") == 0) {
 						config->logger.level = string_to_log_level(val);
 					} else if (strcmp(current_key, "file_path") == 0) {

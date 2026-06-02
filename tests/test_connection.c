@@ -8,10 +8,10 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "core/ctx_types.h"
+#include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_types.h"
+#include "core/srv_internal.h"
 #include "csilk/test/test.h"
 
 static int tests_run = 0;
