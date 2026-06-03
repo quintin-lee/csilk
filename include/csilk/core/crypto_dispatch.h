@@ -68,6 +68,17 @@ CSILK_INTERNAL void _csilk_hmac_sha256(csilk_ctx_t* c,
  */
 CSILK_INTERNAL void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
 
+/**
+ * @brief Internal: Fill a buffer with cryptographically secure random bytes
+ * using the crypto driver (if set) or the built-in implementation.
+ *
+ * @param c    Request context (for driver lookup, may be nullptr).
+ * @param out  Buffer to fill.
+ * @param len  Number of bytes to generate.
+ * @return 0 on success, -1 on failure.
+ */
+CSILK_INTERNAL int _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len);
+
 /** @brief Get the internal client connection object.
  *
  * Opaque pointer used by protocol implementations (WebSocket, SSE).

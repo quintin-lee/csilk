@@ -342,6 +342,11 @@ typedef struct {
    *  @param[out] buf  Output buffer of at least 37 bytes.  Populated with a
    *                   NUL-terminated UUID string. */
 	void (*generate_uuid)(char buf[37]);
+	/** @brief Fill a buffer with cryptographically secure random bytes.
+   *  @param[out] out  Buffer to fill.
+   *  @param      len  Number of bytes to generate.
+   *  @return 0 on success, -1 on failure. */
+	int (*fill_random)(void* out, size_t len);
 } csilk_crypto_driver_t;
 
 /* Include db.h last — it pulls in csilk/csilk.h and must see all core

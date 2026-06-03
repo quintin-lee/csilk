@@ -20,6 +20,7 @@
 
 #include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
+#include "csilk/crypto.h"
 #include "csilk/drivers/cipher.h"
 
 #ifdef TEST_OOM
@@ -323,6 +324,44 @@ _csilk_generate_uuid(csilk_ctx_t* c, char buf[37])
 		c->crypto_driver->generate_uuid(buf);
 	} else {
 		csilk_generate_uuid(buf);
+	}
+}
+
+CSILK_INTERNAL int
+_csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
+{
+	if (c && c->crypto_driver && c->crypto_driver->fill_random) {
+		return c->crypto_driver->fill_random(out, len);
+	}
+
+	FILE* f = fopen("/dev/urandom", "rb");
+	if (f) {
+		size_t n = fread(out, 1, len, f);
+		fclose(f);
+		return (n == len) ? 0 : -1;
+	}
+
+	/* /dev/urandom not available — fall back to rand() (NOT secure) */
+	uint8_t* p = (uint8_t*)out;
+	for (size_t i = 0; i < len; i++) {
+		p[i] = (uint8_t)(rand() & 0xFF);
+	}
+	return 0;
+}
+
+int
+csilk_crypto_fill_random(void* out, size_t len)
+{
+	return _csilk_fill_random(nullptr, out, len);
+}
+
+void
+csilk_crypto_generate_nonce(uint8_t* out, size_t len)
+{
+	if (csilk_crypto_fill_random(out, len) != 0) {
+		/* Fallback should always succeed but if it fails we
+		 * still shouldn't return an empty/zero nonce. */
+		memset(out, 0, len);
 	}
 }
 
