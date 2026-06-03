@@ -63,12 +63,34 @@ int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t l
 
 #include "cJSON.h"
 
+/** @brief Broadcast a monitoring event to all registered WebSocket monitors.
+ *
+ * Constructs a JSON event object and sends it to every monitor context.
+ * Monitors receive real-time notifications of MQ activity (publish,
+ * deliver, etc.) for observability and debugging.
+ *
+ * ## JSON event format
+ * @code{.json}
+ * {
+ *   "event":       "mq_published" | "mq_delivered",
+ *   "topic":       "user.created",
+ *   "payload_len": 128,
+ *   "timestamp":   1700000000
+ * }
+ * @endcode
+ *
+ * @param mq    The MQ instance.
+ * @param event Event type string (e.g. "mq_published").
+ * @param topic The topic of the message.
+ * @param len   The payload length. */
 static void
 _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 {
 	if (!mq || mq->monitor_count == 0) {
 		return;
 	}
+
+	/* Build JSON event object */
 	cJSON* root = cJSON_CreateObject();
 	cJSON_AddStringToObject(root, "event", event);
 	if (topic) {
@@ -78,6 +100,7 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
 	char* json = cJSON_PrintUnformatted(root);
 
+	/* Send to every monitor (WebSocket TEXT frame, opcode 0x1) */
 	uv_mutex_lock(&mq->monitor_mutex);
 	for (size_t i = 0; i < mq->monitor_count; i++) {
 		csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
@@ -144,15 +167,22 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 csilk_mq_t*
 _csilk_mq_new(uv_loop_t* loop)
 {
+	/* Allocate zero-initialized struct — counts/capacities start at 0 */
 	csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
 	if (!mq) {
 		return nullptr;
 	}
+
+	/* Initialize mutexes for thread-safe queue/monitor operations */
 	uv_mutex_init(&mq->queue_mutex);
 	uv_mutex_init(&mq->monitor_mutex);
+
+	/* Register the async handle on the event loop.
+	 * uv_async_send() on this handle wakes the loop to call on_mq_async(). */
 	uv_async_init(loop, &mq->async_handle, on_mq_async);
 	mq->async_handle.data = mq;
 
+	/* WAL is closed by default — csilk_mq_set_persistence() opens it */
 	mq->wal_fd = -1;
 	mq->wal_path = nullptr;
 	uv_mutex_init(&mq->wal_mutex);
@@ -332,13 +362,19 @@ csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t 
 		return -1;
 	}
 
-	/* Persistence: Append to WAL before memory queue */
+	/* 1. WAL: persist to disk first (if WAL is enabled).
+	 *    If the WAL write fails, we return -1 without enqueuing —
+	 *    the message is dropped entirely. This is stricter than the
+	 *    reverse ordering (enqueue then WAL) which could lose a
+	 *    delivered-but-unpersisted message on crash. */
 	if (mq->wal_fd >= 0) {
 		if (_mq_append_wal(mq, topic, payload, len) != 0) {
 			return -1;
 		}
 	}
 
+	/* 2. Memory: enqueue for async delivery on the event loop.
+	 *    This always succeeds except on OOM. */
 	return _mq_enqueue(mq, topic, payload, len);
 }
 
@@ -389,7 +425,8 @@ on_mq_async(uv_async_t* handle)
 		mq->delivered_total++;
 		uv_mutex_unlock(&mq->queue_mutex);
 
-		/* Count total matching handlers */
+		/* Count total matching handlers:
+		 * global middlewares always run; topic handlers only if fnmatch matches */
 		size_t total_handlers = mq->global_mw_count;
 		for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
 			if (fnmatch(t->name, msg->topic, 0) == 0) {
@@ -398,10 +435,13 @@ on_mq_async(uv_async_t* handle)
 		}
 
 		if (total_handlers > 0) {
+			/* Allocate a contiguous handler chain array */
 			csilk_mq_handler_t* chain =
 			    malloc(total_handlers * sizeof(csilk_mq_handler_t));
 			if (chain) {
 				size_t idx = 0;
+
+				/* Bulk-copy global middlewares (run first, in order) */
 				if (mq->global_mw_count > 0) {
 					memcpy(chain,
 					       mq->global_middlewares,
@@ -409,6 +449,7 @@ on_mq_async(uv_async_t* handle)
 					idx += mq->global_mw_count;
 				}
 
+				/* Bulk-copy matching topic handlers (appended after globals) */
 				for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
 					if (fnmatch(t->name, msg->topic, 0) == 0 &&
 					    t->handler_count > 0) {
@@ -420,12 +461,14 @@ on_mq_async(uv_async_t* handle)
 					}
 				}
 
+				/* Create a stack-allocated context and kick off the chain */
 				csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
 				csilk_mq_next(&ctx);
 				free(chain);
 			}
 		}
 
+		/* Free the message (deep copies are consumed by handlers or freed) */
 		free(msg->topic);
 		free(msg->payload);
 		free(msg);

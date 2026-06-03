@@ -13,18 +13,52 @@
 #include "csilk/core/mq_types.h"
 #include "csilk/mq.h"
 
+/** @brief Advance to the next handler in the middleware chain.
+ *
+ * Increments handler_index and invokes the next handler. If the chain has
+ * been aborted (ctx->aborted == 1), this is a no-op — the chain stops.
+ *
+ * ## Typical usage inside a handler
+ * @code{.c}
+ * static void my_mw(csilk_mq_ctx_t* ctx) {
+ *     const char* topic = csilk_mq_get_topic(ctx);
+ *     if (should_process(topic)) {
+ *         // ... do work ...
+ *     }
+ *     csilk_mq_next(ctx); // continue the chain
+ * }
+ * @endcode
+ *
+ * @param ctx The per-message context. If NULL or aborted, does nothing. */
 void
 csilk_mq_next(csilk_mq_ctx_t* ctx)
 {
+	/* If the context is NULL or the chain was aborted, stop */
 	if (!ctx || ctx->aborted) {
 		return;
 	}
+
+	/* Advance to the next handler in the chain and invoke it */
 	ctx->handler_index++;
 	if (ctx->handler_index < (int)ctx->handler_count) {
 		ctx->handlers[ctx->handler_index](ctx);
 	}
+	/* If handler_index == handler_count, the chain is complete —
+	 * the message processing ends naturally here. */
 }
 
+/** @brief Short-circuit the handler chain for the current message.
+ *
+ * Sets ctx->aborted = 1. Subsequent calls to csilk_mq_next() will be
+ * no-ops, and no further handlers run. The current handler still
+ * completes, but the chain stops after it returns.
+ *
+ * Useful for early-exit scenarios:
+ *   - Authorization failure ("not authorized, abort")
+ *   - Message validation failure ("malformed payload, abort")
+ *   - Rate limiting ("too many requests, abort")
+ *
+ * @param ctx The per-message context. If NULL, does nothing. */
 void
 csilk_mq_abort(csilk_mq_ctx_t* ctx)
 {
@@ -33,12 +67,26 @@ csilk_mq_abort(csilk_mq_ctx_t* ctx)
 	}
 }
 
+/** @brief Get the topic string of the current message.
+ *
+ * @param ctx The per-message context.
+ * @return The topic string (same lifetime as the message), or NULL if
+ *         ctx is NULL or no message has been associated. */
 const char*
 csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 {
 	return (ctx && ctx->msg) ? ctx->msg->topic : nullptr;
 }
 
+/** @brief Get the payload data and length of the current message.
+ *
+ * @param ctx The per-message context.
+ * @param[out] len If non-NULL, receives the payload length in bytes.
+ * @return Pointer to the payload data (same lifetime as the message), or
+ *         NULL if ctx is NULL or no message has been associated.
+ * @note The returned pointer is owned by the MQ internals — do NOT free it.
+ *       The payload is a deep copy, but it belongs to the message which is
+ *       freed once all handlers complete. */
 const void*
 csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len)
 {
