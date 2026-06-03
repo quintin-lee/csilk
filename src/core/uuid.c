@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "csilk/core/crypto_dispatch.h"
+#include "csilk/crypto.h"
 
 void
 csilk_generate_uuid(char* buf)
@@ -29,32 +30,10 @@ csilk_generate_uuid(char* buf)
 	/**
 	 * @brief Random byte buffer for UUID generation.
 	 *
-	 * UUID v4 requires 128 bits (16 bytes) of randomness:
-	 *   - bytes 0-5: time_low + time_mid (48 random bits)
-	 *   - byte 6:    clock_seq_hi_and_reserved (4 version bits + 4 random)
-	 *   - byte 7:    clock_seq_low (8 random bits)
-	 *   - byte 8:    time_hi_and_version (2 variant bits + 6 random, or
-	 *                 rather in the RFC layout: 4 version + 12 random for
-	 *                 time_hi_ver; but we apply the 0x40 mask on byte 6
-	 *                 and 0x80 on byte 8 for the variant field placement)
-	 *   - bytes 9-15: node (48 random bits)
+	 * UUID v4 requires 128 bits (16 bytes) of randomness.
 	 */
 	uint8_t random[16];
-	FILE* f = fopen("/dev/urandom", "rb");
-	if (f) {
-		if (fread(random, 1, 16, f) != 16) {
-			/* urandom read failed — fall back to rand() */
-			for (int i = 0; i < 16; i++) {
-				random[i] = rand() & 0xFF;
-			}
-		}
-		fclose(f);
-	} else {
-		/* /dev/urandom not available — fall back to rand() */
-		for (int i = 0; i < 16; i++) {
-			random[i] = rand() & 0xFF;
-		}
-	}
+	csilk_crypto_fill_random(random, 16);
 
 	/* Apply RFC 4122 §4.4 version and variant bit masks:
 	 *
