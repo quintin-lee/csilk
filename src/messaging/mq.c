@@ -1,203 +1,28 @@
-/** @file mq.c
- * @brief Internal Event Bus (Message Queue) implementation.
+/**
+ * @file mq.c
+ * @brief Message Queue core — setup, publish, dispatch, and teardown.
  *
- * ## Architecture
- * The MQ is a publish-subscribe event bus built on libuv async handles.
- * It supports topic-based routing with glob patterns (via fnmatch),
- * middleware chains, thread-safe publishing from any thread, optional
- * persistence via Write-Ahead Log (WAL), and background thread offloading.
+ * Implements the central MQ engine: instance creation (csilk_mq_new),
+ * middleware/subscriber registration (csilk_mq_use, csilk_mq_subscribe),
+ * publishing (csilk_mq_publish), async dispatch (on_mq_async), monitoring
+ * (csilk_mq_get_stats, csilk_mq_register_monitor), and teardown
+ * (csilk_mq_free).
  *
- * ## Dispatch model
- * Messages flow through a handler chain assembled dynamically at dispatch
- * time (see on_mq_async). The chain order is:
- *   1. Global middleware (registered with topic=nullptr) — runs for ALL topics.
- *   2. Topic-specific handlers — matched by fnmatch(topic_pattern, msg_topic).
- *   3. Subscribers (just handlers registered via csilk_mq_subscribe).
- *
- * Each handler calls csilk_mq_next() to advance the chain, or csilk_mq_abort()
- * to short-circuit.
- *
- * ## Thread safety
- * Publishing (csilk_mq_publish) is thread-safe and lock-free on the fast path:
- * the message is copied, appended to a mutex-guarded linked list, and an
- * async signal (uv_async_send) wakes the main loop thread to drain the queue.
- *
- * ## Persistence (WAL)
- * When enabled via csilk_mq_set_persistence(), every published message is
- * first written to a binary WAL file before being enqueued in memory.
- * On next startup, _mq_recovery() replays the WAL to restore undelivered
- * messages. The WAL format is:
- * [topic_len:4][topic:N][payload_len:4][payload:M][xor_checksum:4].
- *
+ * Context API moved to mq_context.c, offload to mq_offload.c, and WAL
+ * persistence to mq_wal.c.
  * @copyright MIT License
  */
-#include <fcntl.h>
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#include "csilk/core/mq_types.h"
 #include "csilk/csilk.h"
+#include "csilk/mq.h"
 
-/* --- Context API --- */
-
-/** @brief Advance to the next middleware or subscriber in the MQ handler chain.
- *
- * ## Execution model
- * Handlers form a linear chain: [global_mw..., topic_mw..., subscriber...].
- * Each handler calls csilk_mq_next() to yield control to the next one.
- * This is a non-recursive, non-reentrant manual trampoline — the chain
- * is driven by the handlers themselves, not by a central loop.
- *
- * If ctx->aborted is set (by a previous csilk_mq_abort() call), this is a
- * no-op. Out-of-bounds handler_index is also silently ignored (end of chain).
- *
- * @param ctx Message queue context.
- * @note Typically called by middleware to pass control to the next handler
- *       or subscriber. */
-void
-csilk_mq_next(csilk_mq_ctx_t* ctx)
-{
-	if (!ctx || ctx->aborted) {
-		return;
-	}
-	ctx->handler_index++;
-	if (ctx->handler_index < (int)ctx->handler_count) {
-		ctx->handlers[ctx->handler_index](ctx);
-	}
-}
-
-/** @brief Abort the current MQ middleware chain immediately.
- *
- * Sets the aborted flag on the context. Subsequent calls to csilk_mq_next()
- * will be ignored.
- *
- * @param ctx Message queue context (may be nullptr). */
-void
-csilk_mq_abort(csilk_mq_ctx_t* ctx)
-{
-	if (ctx) {
-		ctx->aborted = 1;
-	}
-}
-
-/** @brief Get the topic name of the current message in the MQ context.
- *
- * @param ctx Message queue context.
- * @return The topic string (e.g., "user.created"), or nullptr if the context
- *         or message is nullptr. */
-const char*
-csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
-{
-	return (ctx && ctx->msg) ? ctx->msg->topic : nullptr;
-}
-
-/** @brief Get the payload data and length of the current message.
- *
- * @param ctx Message queue context.
- * @param len [out] If non-nullptr, receives the payload length in bytes.
- * @return Pointer to the raw payload data, or nullptr if the context or
- *         message is nullptr.
- * @note The returned pointer is valid only for the duration of the handler
- *       callback. If the data is needed later, the handler must copy it. */
-const void*
-csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len)
-{
-	if (!ctx || !ctx->msg) {
-		return nullptr;
-	}
-	if (len) {
-		*len = ctx->msg->len;
-	}
-	return ctx->msg->payload;
-}
-
-/* --- Offload API --- */
-
-/** @brief libuv work callback — runs the offloaded handler on a thread pool
- * thread.
- *
- * Extracts the work context from the request, then calls the user's handler
- * with the topic, payload, and length.
- *
- * @param req libuv work request (contains csilk_mq_work_ctx_t in data). */
-static void
-worker_cb(uv_work_t* req)
-{
-	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
-	wctx->handler(wctx->topic, wctx->payload, wctx->len);
-}
-
-/** @brief libuv after-work callback — runs on the main loop thread after
- * worker_cb completes.
- *
- * Frees the work context (topic, payload, and struct). The handler results
- * (if any) should have been communicated back before this point since no
- * result channel is provided.
- *
- * @param req    libuv work request (freed by this callback).
- * @param status libuv status (ignored). */
-static void
-worker_after_cb(uv_work_t* req, int status)
-{
-	(void)status;
-	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
-	free(wctx->topic);
-	free(wctx->payload);
-	free(wctx);
-}
-
-/** @brief Offload message processing to a libuv thread pool worker.
- *
- * ## Mechanism
- * 1. Deep-copy topic (strdup) and payload (malloc+memcpy) into a work ctx.
- * 2. Queue the work via uv_queue_work() — runs worker_cb on a libuv thread
- *    pool thread.
- * 3. worker_after_cb fires on the main loop thread: frees the work ctx.
- * 4. Call csilk_mq_next() immediately *on the main thread* to continue the
- *    handler chain, without waiting for the background worker.
- *
- * The deep copy avoids shared mutable state between the background thread
- * and the event loop. The caller's handler chain continues in parallel with
- * the offloaded work — there is no result channel.
- *
- * @param ctx    Message queue context.
- * @param worker Worker function that will receive topic, payload, and length
- *               on a background thread.
- * @note The payload is deep-copied so the background thread can safely
- *       process it without worrying about mutex locking. */
-void
-csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
-{
-	if (!ctx || !ctx->msg || !worker) {
-		return;
-	}
-	csilk_mq_work_ctx_t* wctx = calloc(1, sizeof(csilk_mq_work_ctx_t));
-	if (!wctx) {
-		return;
-	}
-	wctx->req.data = wctx;
-	wctx->handler = worker;
-	wctx->topic = strdup(ctx->msg->topic);
-	if (!wctx->topic) {
-		free(wctx);
-		return;
-	}
-	if (ctx->msg->len > 0 && ctx->msg->payload) {
-		wctx->payload = malloc(ctx->msg->len);
-		if (wctx->payload) {
-			memcpy(wctx->payload, ctx->msg->payload, ctx->msg->len);
-			wctx->len = ctx->msg->len;
-		} else {
-			free(wctx->topic);
-			free(wctx);
-			return;
-		}
-	}
-	uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb, worker_after_cb);
-	csilk_mq_next(ctx);
-}
+#include "mq_internal.h"
 
 /* --- Setup API --- */
 
@@ -215,16 +40,7 @@ static void on_mq_async(uv_async_t* handle);
  * @param payload Opaque payload data.
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on allocation failure. */
-static int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
-
-/** @brief Internal: Recover messages from the Write-Ahead Log on startup.
- *
- * Reads the WAL file sequentially and enqueues each persisted message into
- * memory. Called once during MQ initialization.
- *
- * @param mq The MQ instance.
- * @return 0 on success, -1 on I/O or replay failure. */
-static int _mq_recovery(csilk_mq_t* mq);
+int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /** @brief Internal: Create a new Message Queue instance.
  *
@@ -344,69 +160,6 @@ _csilk_mq_new(uv_loop_t* loop)
 	return mq;
 }
 
-/** @brief Enable persistent message delivery using a Write-Ahead Log (WAL).
- *
- * ## WAL handshake
- * 1. Lock wal_mutex (held for the entire setup + recovery).
- * 2. Close any previously-opened WAL file + free old wal_path.
- * 3. Open (or create) the WAL file at wal_path with O_CREAT | O_RDWR |
- * O_APPEND.
- * 4. Store fd and path in the MQ struct.
- * 5. Call _mq_recovery() to replay any existing messages from the WAL file
- *    into the in-memory queue. This ensures messages survive process restarts.
- *
- * After this call, every csilk_mq_publish() appends to the WAL before
- * enqueuing in memory.
- *
- * @param mq       The MQ instance.
- * @param wal_path File path for the WAL. The file is created if it does not
- *                 exist.
- * @return 0 on success, -1 if parameters are nullptr or the file cannot be opened.
- * @note The WAL uses a simple binary format: [topic_len][topic][payload_len]
- *       [payload][checksum] entries. Checksum is a simple XOR for integrity. */
-int
-csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
-{
-	if (!mq || !wal_path) {
-		return -1;
-	}
-
-	uv_mutex_lock(&mq->wal_mutex);
-
-	/* Close existing WAL if any */
-	if (mq->wal_fd >= 0) {
-		uv_fs_t close_req;
-		uv_fs_close(mq->async_handle.loop, &close_req, mq->wal_fd, nullptr);
-		uv_fs_req_cleanup(&close_req);
-		mq->wal_fd = -1;
-	}
-	if (mq->wal_path) {
-		free(mq->wal_path);
-		mq->wal_path = nullptr;
-	}
-
-	uv_fs_t open_req;
-	/* Use synchronous open */
-	int fd = uv_fs_open(
-	    mq->async_handle.loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, nullptr);
-	uv_fs_req_cleanup(&open_req);
-
-	if (fd < 0) {
-		uv_mutex_unlock(&mq->wal_mutex);
-		return fd;
-	}
-
-	mq->wal_fd = fd;
-	mq->wal_path = strdup(wal_path);
-
-	/* Recovery: Load existing messages from WAL */
-	_mq_recovery(mq);
-
-	uv_mutex_unlock(&mq->wal_mutex);
-
-	return 0;
-}
-
 /** @brief Find or create a topic structure.
  * @param mq The MQ instance.
  * @param name Topic name.
@@ -491,75 +244,6 @@ csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscri
 
 /* --- Publishing and Async Dispatch --- */
 
-/** @brief Internal: append a message frame to the Write-Ahead Log file.
- *
- * ## WAL frame format (total frame size = 4 + N + 4 + M + 4)
- * ```
- *   [topic_len    : uint32_t, 4 bytes]  — byte length of topic string
- *   [topic_data   : uint8_t[], N bytes]  — topic UTF-8 bytes (no NUL)
- *   [payload_len  : uint32_t, 4 bytes]  — byte length of payload
- *   [payload_data : uint8_t[], M bytes]  — raw payload bytes
- *   [checksum     : uint32_t, 4 bytes]  — XOR over topic + payload
- * ```
- *
- * After writing all 5 parts via a single uv_fs_write() scatter-gather I/O
- * (5 uv_buf_t entries), the file is fsynced for crash durability.
- *
- * @param mq      The MQ instance (must have wal_fd >= 0).
- * @param topic   Message topic string.
- * @param payload Message payload data (may be nullptr if len == 0).
- * @param len     Payload length in bytes.
- * @return 0 on success, -1 on write failure.
- * @note This is a no-op if the MQ has no WAL file (wal_fd < 0).
- * @note The caller should hold wal_mutex, though this function acquires it
- *       internally as well for safety. */
-static int
-_mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
-{
-	if (!mq || mq->wal_fd < 0 || !topic) {
-		return 0;
-	}
-
-	uv_mutex_lock(&mq->wal_mutex);
-
-	uint32_t topic_len = (uint32_t)strlen(topic);
-	uint32_t payload_len = (uint32_t)len;
-	uint32_t checksum = 0;
-
-	/* Simple XOR checksum of topic and payload */
-	for (uint32_t i = 0; i < topic_len; i++) {
-		checksum ^= (uint8_t)topic[i];
-	}
-	const uint8_t* p = (const uint8_t*)payload;
-	if (p) {
-		for (uint32_t i = 0; i < payload_len; i++) {
-			checksum ^= p[i];
-		}
-	}
-
-	uv_buf_t bufs[5];
-	bufs[0] = uv_buf_init((char*)&topic_len, 4);
-	bufs[1] = uv_buf_init((char*)topic, topic_len);
-	bufs[2] = uv_buf_init((char*)&payload_len, 4);
-	bufs[3] = uv_buf_init((char*)payload, payload_len);
-	bufs[4] = uv_buf_init((char*)&checksum, 4);
-
-	uv_fs_t write_req;
-	/* Write to the end of file (synchronous) */
-	int result =
-	    uv_fs_write(mq->async_handle.loop, &write_req, mq->wal_fd, bufs, 5, -1, nullptr);
-	uv_fs_req_cleanup(&write_req);
-
-	if (result >= 0) {
-		uv_fs_t sync_req;
-		uv_fs_fsync(mq->async_handle.loop, &sync_req, mq->wal_fd, nullptr);
-		uv_fs_req_cleanup(&sync_req);
-	}
-
-	uv_mutex_unlock(&mq->wal_mutex);
-	return (result >= 0) ? 0 : -1;
-}
-
 /** @brief Internal: enqueue a message in the in-memory linked list.
  *
  * ## Enqueue algorithm
@@ -581,7 +265,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
  * @return 0 on success, -1 on allocation failure.
  * @note Thread-safe. The async signal ensures on_mq_async() processes the
  *       message on the main loop thread. */
-static int
+int
 _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
 	csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
@@ -619,143 +303,6 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 
 	_mq_broadcast(mq, "mq_published", topic, len);
 	uv_async_send(&mq->async_handle);
-	return 0;
-}
-/** @brief Internal: recover messages from the Write-Ahead Log on startup.
- *
- * ## Recovery algorithm (WAL replay)
- * Reads the WAL file sequentially from offset 0 using positional reads
- * (uv_fs_read with offset parameter). For each frame:
- *
- *   1. Read 4 bytes → topic_len. If < 4 bytes: EOF or corruption → stop.
- *   2. Read topic_len bytes → topic name. If short read → stop.
- *   3. Read 4 bytes → payload_len. If < 4 bytes → stop.
- *   4. Read payload_len bytes → payload. If short read → stop.
- *   5. Read 4 bytes → stored checksum. If < 4 bytes → stop.
- *   6. Compute XOR checksum over topic + payload.
- *   7. If checksum matches: enqueue the message in memory (_mq_enqueue),
- *      WITHOUT re-appending to the WAL.
- *   8. If checksum mismatches: free, stop (treat as corruption boundary).
- *
- * ## Why stop at corruption?
- * The WAL is append-only with no frame-length prefix. If a frame is corrupt,
- * the next frame boundary is unknowable — we stop to avoid misinterpreting
- * garbage as valid data.
- *
- * @param mq The MQ instance (must have wal_fd >= 0).
- * @return 0 on success (or if no WAL), -1 on allocation failure.
- * @note The WAL is NOT truncated after recovery — new messages append after
- *       existing ones. A future compaction step could truncate processed
- *       entries. */
-static int
-_mq_recovery(csilk_mq_t* mq)
-{
-	if (!mq || mq->wal_fd < 0) {
-		return 0;
-	}
-
-	uint64_t offset = 0;
-	while (1) {
-		uint32_t topic_len = 0;
-		uint32_t payload_len = 0;
-		uint32_t checksum = 0;
-		uv_fs_t read_req;
-		int nread;
-
-		/* 1. Read Topic Length */
-		uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
-		nread = uv_fs_read(
-		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
-		uv_fs_req_cleanup(&read_req);
-		if (nread < 4) {
-			break; /* EOF or error */
-		}
-		offset += 4;
-
-		/* 2. Read Topic Name */
-		char* topic = malloc(topic_len + 1);
-		if (!topic) {
-			break;
-		}
-		buf = uv_buf_init(topic, topic_len);
-		nread = uv_fs_read(
-		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
-		uv_fs_req_cleanup(&read_req);
-		if (nread < (int)topic_len) {
-			free(topic);
-			break;
-		}
-		topic[topic_len] = '\0';
-		offset += topic_len;
-
-		/* 3. Read Payload Length */
-		buf = uv_buf_init((char*)&payload_len, 4);
-		nread = uv_fs_read(
-		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
-		uv_fs_req_cleanup(&read_req);
-		if (nread < 4) {
-			free(topic);
-			break;
-		}
-		offset += 4;
-
-		/* 4. Read Payload */
-		void* payload = nullptr;
-		if (payload_len > 0) {
-			payload = malloc(payload_len);
-			if (!payload) {
-				free(topic);
-				break;
-			}
-			buf = uv_buf_init(payload, payload_len);
-			nread = uv_fs_read(
-			    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
-			uv_fs_req_cleanup(&read_req);
-			if (nread < (int)payload_len) {
-				free(topic);
-				free(payload);
-				break;
-			}
-			offset += payload_len;
-		}
-
-		/* 5. Read Checksum */
-		buf = uv_buf_init((char*)&checksum, 4);
-		nread = uv_fs_read(
-		    mq->async_handle.loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
-		uv_fs_req_cleanup(&read_req);
-		if (nread < 4) {
-			free(topic);
-			free(payload);
-			break;
-		}
-		offset += 4;
-
-		/* 6. Validate Checksum */
-		uint32_t calc_checksum = 0;
-		for (uint32_t i = 0; i < topic_len; i++) {
-			calc_checksum ^= (uint8_t)topic[i];
-		}
-		const uint8_t* p = (const uint8_t*)payload;
-		if (p) {
-			for (uint32_t i = 0; i < payload_len; i++) {
-				calc_checksum ^= p[i];
-			}
-		}
-
-		if (calc_checksum == checksum) {
-			/* Enqueue in memory without re-appending to WAL */
-			_mq_enqueue(mq, topic, payload, payload_len);
-		} else {
-			free(topic);
-			free(payload);
-			break; /* Stop at first invalid frame */
-		}
-
-		free(topic);
-		free(payload);
-	}
-
 	return 0;
 }
 
