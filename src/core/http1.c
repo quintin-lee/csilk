@@ -457,7 +457,7 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
  * @param c    The request context.
  * @param data Pointer to the data buffer.
  * @param len  Number of bytes to write. */
-void
+CSILK_INTERNAL void
 _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
@@ -481,7 +481,7 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
  * response is sent immediately via _csilk_send_response().
  *
  * @param c The request context populated by the HTTP parser. */
-void
+CSILK_INTERNAL void
 _csilk_dispatch_request(csilk_ctx_t* c)
 {
 	if (!c || !c->server) {
@@ -578,7 +578,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
  *   - Fire CSILK_HOOK_REQUEST_END, clean up context.
  *
  * @param c Request context (must have _internal_client set). */
-void
+CSILK_INTERNAL void
 _csilk_send_response(csilk_ctx_t* c)
 {
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;

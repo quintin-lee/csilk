@@ -365,7 +365,7 @@ csilk_log_init(csilk_log_config_t config)
  * @note Use the CSILK_LOG_* macros (CSILK_LOG_I, CSILK_LOG_E, etc.) instead
  *       of calling this function directly. The macros automatically supply
  *       __FILE__, __LINE__, and __func__. */
-void
+CSILK_INTERNAL void
 _csilk_log_internal(
     csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...)
 {
@@ -415,7 +415,7 @@ _csilk_log_internal(
  * @param fmt  printf-style format string.
  * @param ...  Variadic arguments.
  * @note Use the CSILK_LOG_KV macro instead of calling this directly. */
-void
+CSILK_INTERNAL void
 _csilk_log_structured(csilk_log_level_t lv,
 		      const char* file,
 		      int line,

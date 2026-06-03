@@ -133,7 +133,7 @@ typedef struct {
  * @param loop  The libuv event loop.
  * @return A new MQ instance (heap-allocated), or nullptr on failure.
  */
-csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
+CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
 
 /**
  * @brief Internal: Destroy an MQ instance and release all resources.
@@ -142,6 +142,6 @@ csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
  *
  * @param mq  The MQ instance to free.
  */
-void _csilk_mq_free(csilk_mq_t* mq);
+CSILK_INTERNAL void _csilk_mq_free(csilk_mq_t* mq);
 
 #endif /* CSILK_MQ_TYPES_H */
