@@ -171,19 +171,19 @@ csilk_process_get_stats(csilk_process_stats_t* stats)
 	}
 }
 
-void
+CSILK_INTERNAL void
 _csilk_metrics_inc_rate_limit_blocks(void)
 {
 	atomic_fetch_add(&security_rate_limit_blocks, 1);
 }
 
-void
+CSILK_INTERNAL void
 _csilk_metrics_inc_csrf_violations(void)
 {
 	atomic_fetch_add(&security_csrf_violations, 1);
 }
 
-void
+CSILK_INTERNAL void
 _csilk_metrics_inc_auth_failures(void)
 {
 	atomic_fetch_add(&security_auth_failures, 1);

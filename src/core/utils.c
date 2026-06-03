@@ -288,7 +288,7 @@ csilk_hmac_sha256(
  * @param data     Input data.
  * @param data_len Data length.
  * @param out      [out] 32-byte HMAC output buffer. */
-void
+CSILK_INTERNAL void
 _csilk_hmac_sha256(csilk_ctx_t* c,
 		   const uint8_t* key,
 		   size_t key_len,
@@ -316,7 +316,7 @@ _csilk_hmac_sha256(csilk_ctx_t* c,
  *
  * @param c   Request context (may be nullptr — falls back to built-in).
  * @param buf [out] 37-byte buffer for the UUID string. */
-void
+CSILK_INTERNAL void
 _csilk_generate_uuid(csilk_ctx_t* c, char buf[37])
 {
 	if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
@@ -370,7 +370,7 @@ resolve_cipher(csilk_ctx_t* c)
  * @note Falls back to the default cipher driver when the context has no
  *       driver set.
  */
-int
+CSILK_INTERNAL int
 _csilk_symmetric_encrypt(csilk_ctx_t* c,
 			 const uint8_t* key,
 			 size_t key_len,
@@ -421,7 +421,7 @@ _csilk_symmetric_encrypt(csilk_ctx_t* c,
  * @note Falls back to the default cipher driver when the context has no
  *       driver set.
  */
-int
+CSILK_INTERNAL int
 _csilk_symmetric_decrypt(csilk_ctx_t* c,
 			 const uint8_t* key,
 			 size_t key_len,

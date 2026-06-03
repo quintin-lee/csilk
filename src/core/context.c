@@ -861,7 +861,7 @@ csilk_set_on_ws_send(
  * @param c       The context to initialize.
  * @param s       The owning server instance.
  * @param client  The underlying connection object (csilk_client_t*). */
-void
+CSILK_INTERNAL void
 _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
 {
 	if (!c) {

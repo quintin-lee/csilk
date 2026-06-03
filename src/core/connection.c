@@ -200,7 +200,7 @@ on_timer_close(uv_handle_t* handle)
  *
  * @param handle The TCP handle being closed (data points to csilk_client_t).
  */
-void
+CSILK_INTERNAL void
 on_close(uv_handle_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;

@@ -558,7 +558,7 @@ csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler)
  * @param s    The server instance.
  * @param c    The request context (may be nullptr for server-level hooks).
  * @param type Hook type to trigger. */
-void
+CSILK_INTERNAL void
 _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
 {
 	if (!s || type < 0 || type >= CSILK_HOOK_COUNT) {

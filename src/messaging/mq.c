@@ -164,7 +164,7 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 	uv_mutex_unlock(&mq->monitor_mutex);
 }
 
-csilk_mq_t*
+CSILK_INTERNAL csilk_mq_t*
 _csilk_mq_new(uv_loop_t* loop)
 {
 	/* Allocate zero-initialized struct — counts/capacities start at 0 */
@@ -545,7 +545,7 @@ on_mq_close(uv_handle_t* handle)
  * @param mq The MQ instance to free (may be nullptr).
  * @note This is an async operation — the MQ is not freed immediately.
  *       Safe to call with nullptr. */
-void
+CSILK_INTERNAL void
 _csilk_mq_free(csilk_mq_t* mq)
 {
 	if (!mq) {

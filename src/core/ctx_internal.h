@@ -307,6 +307,6 @@ struct csilk_ctx_s {
 };
 
 /** @brief Internal context initialiser. */
-void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
+CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
 
 #endif /* CSILK_CONTEXT_INTERNAL_H */

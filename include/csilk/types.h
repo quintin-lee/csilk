@@ -23,6 +23,13 @@
 #include "csilk/errors.h"
 #include "csilk/version.h"
 
+/** @brief Internal visibility macro for symbols not part of the public API. */
+#if defined(__GNUC__) && __GNUC__ >= 4
+#define CSILK_INTERNAL __attribute__((visibility("hidden")))
+#else
+#define CSILK_INTERNAL
+#endif
+
 /* Forward declarations to break circular dependency:
    csilk/drivers/db.h includes csilk.h, so types defined in db.h
    must be forward-declared here before the include. */

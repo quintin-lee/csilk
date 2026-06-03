@@ -261,7 +261,7 @@ int csilk_log_init(csilk_log_config_t config);
  * @param func Function name (__func__).
  * @param fmt Printf-style format string.
  * @param ... Format arguments. */
-void _csilk_log_internal(
+CSILK_INTERNAL void _csilk_log_internal(
     csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...);
 
 /** @brief Close the global logger. */
@@ -281,13 +281,13 @@ void csilk_log_close();
  *                 Ownership is taken — do not use after the call.
  *  @param fmt     Printf-style format string for the log message.
  *  @param ...     Format arguments. */
-void _csilk_log_structured(csilk_log_level_t lv,
-			   const char* file,
-			   int line,
-			   const char* func,
-			   cJSON* extra,
-			   const char* fmt,
-			   ...);
+CSILK_INTERNAL void _csilk_log_structured(csilk_log_level_t lv,
+					  const char* file,
+					  int line,
+					  const char* func,
+					  cJSON* extra,
+					  const char* fmt,
+					  ...);
 
 /** @brief Check whether the logger is in JSON format mode.
  * @return 1 if json_format is enabled, 0 otherwise. */

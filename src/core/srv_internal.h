@@ -151,13 +151,13 @@ struct csilk_client_s {
  * @param data   The data to write.
  * @param length The length of the data.
  */
-void csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length);
+CSILK_INTERNAL void csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length);
 
 /**
  * @brief Dispatch a request context to the router and handler chain.
  * @param c The request context.
  */
-void _csilk_dispatch_request(csilk_ctx_t* c);
+CSILK_INTERNAL void _csilk_dispatch_request(csilk_ctx_t* c);
 
 /**
  * @brief Internal: invoke all registered handlers for a given hook type.
@@ -165,6 +165,6 @@ void _csilk_dispatch_request(csilk_ctx_t* c);
  * @param c    The request context (may be nullptr for server-level hooks).
  * @param type Hook type to trigger.
  */
-void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
+CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
 
 #endif /* CSILK_SERVER_INTERNAL_H */
