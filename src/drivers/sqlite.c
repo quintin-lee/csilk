@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
 /** @brief Per-connection data for the SQLite driver. */
@@ -59,7 +60,7 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 		return -1;
 	}
 
-	pool->connection = conn;
+	csilk_db_pool_set_connection(pool, conn);
 	return 0;
 }
 
@@ -73,16 +74,16 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 sqlite_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !pool->connection) {
+	if (!pool || !csilk_db_pool_get_connection(pool)) {
 		return -1;
 	}
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
 	if (conn->db) {
 		sqlite3_close(conn->db);
 	}
 	free(conn);
-	pool->connection = nullptr;
+	csilk_db_pool_set_connection(pool, nullptr);
 	return 0;
 }
 
@@ -148,11 +149,11 @@ sqlite_free_result(csilk_db_result_t* result)
 static int
 sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !pool->connection || !sql || !result) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
 		return -1;
 	}
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
 
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, nullptr);
@@ -229,11 +230,11 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 static int
 sqlite_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !pool->connection || !sql) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
 		return -1;
 	}
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)pool->connection;
+	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
 	char* err = nullptr;
 	int rc = sqlite3_exec(conn->db, sql, nullptr, nullptr, &err);
 	if (rc != SQLITE_OK) {

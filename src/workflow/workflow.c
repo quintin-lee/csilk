@@ -16,6 +16,7 @@
 #include "cJSON.h"
 #include "csilk/app/workflow_wal.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/workflow_internal.h"
 
 /** @brief AI metadata attached to workflow node outputs for token
  *  tracking and budget enforcement. */

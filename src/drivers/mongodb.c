@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
 /** @brief Per-connection data for the MongoDB driver. */
@@ -78,7 +79,7 @@ mongodb_connect(csilk_db_pool_t* pool, const char* dsn)
 		return -1;
 	}
 
-	pool->connection = conn;
+	csilk_db_pool_set_connection(pool, conn);
 	return 0;
 }
 
@@ -86,16 +87,16 @@ mongodb_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 mongodb_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !pool->connection) {
+	if (!pool || !csilk_db_pool_get_connection(pool)) {
 		return -1;
 	}
-	mongodb_conn_t* conn = (mongodb_conn_t*)pool->connection;
+	mongodb_conn_t* conn = (mongodb_conn_t*)csilk_db_pool_get_connection(pool);
 	if (conn->client) {
 		mongoc_client_destroy(conn->client);
 	}
 	free(conn->db_name);
 	free(conn);
-	pool->connection = nullptr;
+	csilk_db_pool_set_connection(pool, nullptr);
 	return 0;
 }
 
@@ -173,10 +174,10 @@ bson_val_to_str(const bson_iter_t* iter)
 static int
 mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !pool->connection || !sql || !result) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
 		return -1;
 	}
-	mongodb_conn_t* conn = (mongodb_conn_t*)pool->connection;
+	mongodb_conn_t* conn = (mongodb_conn_t*)csilk_db_pool_get_connection(pool);
 
 	bson_error_t error;
 	bson_t* cmd = nullptr;
@@ -256,10 +257,10 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 static int
 mongodb_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !pool->connection || !sql) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
 		return -1;
 	}
-	mongodb_conn_t* conn = (mongodb_conn_t*)pool->connection;
+	mongodb_conn_t* conn = (mongodb_conn_t*)csilk_db_pool_get_connection(pool);
 
 	bson_error_t error;
 	bson_t* cmd = bson_new_from_json((const uint8_t*)sql, -1, &error);

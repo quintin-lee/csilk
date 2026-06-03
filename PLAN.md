@@ -493,3 +493,45 @@
 | **10** | `docs/ARCH.md` 最终更新 | 新增 Section 11 (最终目录树); 验证所有路径引用 |
 
 每个阶段独立提交 (`Phase N: <title>`)，编译 + 测试验证 (`cmake --build && ctest`)。
+
+---
+
+## 九、系统优化分析建议路线 (2026-06-03)
+
+> 基于 improvement-analysis change 的 6 维度分析结果。完整报告见 `docs/analysis/MASTER_REPORT.md`。
+> 优先级排序：P1（安全/正确性）> P2（重要）> P3（锦上添花）
+
+### P1 — 优先执行
+
+- [ ] 9.1 修复 UUID v4 中 `rand()` 不安全回退 — 改用 OpenSSL `RAND_bytes()` 或 CryptoDriver
+- [ ] 9.2 添加 AES-256-GCM nonce 生成辅助函数 — 防止调用者重用 nonce
+- [ ] 9.3 在 `http1.c:173,350` 的 realloc 中增加整数溢出保护
+- [ ] 9.4 将 20+ 个内部符号 (`_csilk_*`, `on_*`, `cleanup_tls` 等) 标记为 `hidden` 可见性
+- [ ] 9.5 扩展多 worker 测试覆盖 — 目前仅 `test_multi_worker.c` 使用 >1 worker
+
+### P2 — 后续执行
+
+- [ ] 9.6 拆分 `src/workflow/workflow.c` (2428 行) 为 engine/steps/wal
+- [ ] 9.7 恢复 Fuzz 测试 — clang libFuzzer 或 afl++
+- [ ] 9.8 添加新 Fuzz 目标：YAML 解析器、URL 解码器
+- [ ] 9.9 添加并发 WebSocket/SSE/MQ 场景测试
+- [ ] 9.10 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
+- [ ] 9.11 配置 ccache + PCH 加速增量构建
+- [ ] 9.12 配置 GitHub Actions 依赖缓存
+- [ ] 9.13 模块化 `src/messaging/mq.c` (968 行)
+- [ ] 9.14 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
+- [ ] 9.15 不透明化 `csilk_db_pool_s` 和 workflow 结构体
+- [ ] 9.16 扩展 OOM 测试覆盖到 I/O 路径
+- [ ] 9.17 添加 WebSocket/TLS/MQ 示例程序
+- [ ] 9.18 GitHub Releases 发布预编译产物
+- [ ] 9.19 创建 vcpkg port
+
+### P3 — 远期
+
+- [ ] 9.20 安装 perf/wrk/FlameGraph 工具链进行基准测试
+- [ ] 9.21 评估 io_uring Option C (`UV_USE_IO_URING=1`)
+- [ ] 9.22 Arena 块在工作线程初始化时预分配
+- [ ] 9.23 为热指标路径实现有界 JSON 构建器
+- [ ] 9.24 实现 URL/Base64 的属性基测试
+- [ ] 9.25 Benchmark CI 方差归一化
+- [ ] 9.26 API 命名清理：`csilk_set_websocket` → `csilk_ctx_set_websocket`

@@ -4,6 +4,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "csilk/core/db_internal.h"
 
 void
 test_db_init(void)

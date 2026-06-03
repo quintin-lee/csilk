@@ -5,6 +5,7 @@
 #include <uv.h>
 
 #include "csilk/app/workflow.h"
+#include "csilk/core/workflow_internal.h"
 
 static int g_done = 0;
 static char* g_trace_json = NULL;

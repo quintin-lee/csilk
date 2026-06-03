@@ -34,6 +34,7 @@
  */
 
 #include "csilk/drivers/db.h"
+#include "csilk/core/db_internal.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -59,6 +60,20 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 	stats->execs_total = atomic_load(&db_execs_total);
 	stats->errors_total = atomic_load(&db_errors_total);
 	stats->duration_us_total = atomic_load(&db_duration_us_total);
+}
+
+void*
+csilk_db_pool_get_connection(csilk_db_pool_t* pool)
+{
+	return pool ? pool->connection : nullptr;
+}
+
+void
+csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
+{
+	if (pool) {
+		pool->connection = conn;
+	}
 }
 
 /** @brief Internal: execute a query and return the result as a cJSON array.

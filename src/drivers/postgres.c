@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
 /** @brief Per-connection data for the PostgreSQL driver. */
@@ -61,7 +62,7 @@ postgres_connect(csilk_db_pool_t* pool, const char* dsn)
 		return -1;
 	}
 
-	pool->connection = conn;
+	csilk_db_pool_set_connection(pool, conn);
 	return 0;
 }
 
@@ -71,16 +72,16 @@ postgres_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 postgres_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !pool->connection) {
+	if (!pool || !csilk_db_pool_get_connection(pool)) {
 		return -1;
 	}
 
-	pg_conn_t* conn = (pg_conn_t*)pool->connection;
+	pg_conn_t* conn = (pg_conn_t*)csilk_db_pool_get_connection(pool);
 	if (conn->db) {
 		PQfinish(conn->db);
 	}
 	free(conn);
-	pool->connection = nullptr;
+	csilk_db_pool_set_connection(pool, nullptr);
 	return 0;
 }
 
@@ -133,11 +134,11 @@ postgres_free_result(csilk_db_result_t* result)
 static int
 postgres_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !pool->connection || !sql || !result) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
 		return -1;
 	}
 
-	pg_conn_t* conn = (pg_conn_t*)pool->connection;
+	pg_conn_t* conn = (pg_conn_t*)csilk_db_pool_get_connection(pool);
 
 	PGresult* pg_res = PQexec(conn->db, sql);
 	if (!pg_res) {
@@ -224,11 +225,11 @@ postgres_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result
 static int
 postgres_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !pool->connection || !sql) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
 		return -1;
 	}
 
-	pg_conn_t* conn = (pg_conn_t*)pool->connection;
+	pg_conn_t* conn = (pg_conn_t*)csilk_db_pool_get_connection(pool);
 
 	PGresult* pg_res = PQexec(conn->db, sql);
 	if (!pg_res) {
