@@ -17,6 +17,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(__linux__)
+#include <sys/random.h>
+#endif
 
 #include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
@@ -334,6 +337,15 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 		return c->crypto_driver->fill_random(out, len);
 	}
 
+#if defined(__linux__)
+	/* Try getrandom() first on Linux (modern, no FD needed) */
+	ssize_t ret = getrandom(out, len, 0);
+	if (ret == (ssize_t)len) {
+		return 0;
+	}
+#endif
+
+	/* Fallback to /dev/urandom for older Linux or other POSIX systems */
 	FILE* f = fopen("/dev/urandom", "rb");
 	if (f) {
 		size_t n = fread(out, 1, len, f);
@@ -341,12 +353,7 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 		return (n == len) ? 0 : -1;
 	}
 
-	/* /dev/urandom not available — fall back to rand() (NOT secure) */
-	uint8_t* p = (uint8_t*)out;
-	for (size_t i = 0; i < len; i++) {
-		p[i] = (uint8_t)(rand() & 0xFF);
-	}
-	return 0;
+	return -1;
 }
 
 int
