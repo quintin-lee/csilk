@@ -29,6 +29,9 @@ set(CSILK_CORE_SOURCES
     src/core/tls.c
     src/core/url.c
     src/core/utils.c
+    src/core/sha1.c
+    src/core/base64.c
+    src/core/uuid.c
     src/core/hot_reload.c
 )
 
