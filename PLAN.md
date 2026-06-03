@@ -503,10 +503,10 @@
 
 ### P1 — 优先执行
 
-- [ ] 9.1 修复 UUID v4 中 `rand()` 不安全回退 — 改用 OpenSSL `RAND_bytes()` 或 CryptoDriver
-- [ ] 9.2 添加 AES-256-GCM nonce 生成辅助函数 — 防止调用者重用 nonce
-- [ ] 9.3 在 `http1.c:173,350` 的 realloc 中增加整数溢出保护
-- [ ] 9.4 将 20+ 个内部符号 (`_csilk_*`, `on_*`, `cleanup_tls` 等) 标记为 `hidden` 可见性
+- [x] 9.1 修复 UUID v4 中 `rand()` 不安全回退 — 改用 Linux `getrandom()` 或 `/dev/urandom`
+- [x] 9.2 添加 AES-256-GCM nonce 生成辅助函数 — 防止调用者重用 nonce
+- [x] 9.3 在 `http1.c:173,350` 的 realloc 中增加整数溢出保护
+- [x] 9.4 将 20+ 个内部符号 (`_csilk_*`, `on_*`, `cleanup_tls` 等) 标记为 `hidden` 可见性
 - [ ] 9.5 扩展多 worker 测试覆盖 — 目前仅 `test_multi_worker.c` 使用 >1 worker
 
 ### P2 — 后续执行

@@ -3,17 +3,12 @@
  * @brief UUID version 4 (random) generation per RFC 4122.
  *
  * Generates universally unique identifiers (UUIDs) version 4 using
- * cryptographically strong randomness from /dev/urandom, with a
- * fallback to the C library rand() function when /dev/urandom is
- * unavailable.
+ * cryptographically strong randomness.
  *
  * UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
  *   where '4' indicates RFC 4122 version 4 (random UUID)
  *   where 'y' has the top 2 bits set to '10' (RFC 4122 variant)
  *
- * @warning The rand() fallback is NOT cryptographically secure.
- *          On systems without /dev/urandom, a CSILK_CRYPTO_DRIVER
- *          should be configured to supply secure randomness.
  * @copyright MIT License
  */
 
