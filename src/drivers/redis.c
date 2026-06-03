@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 #include "core/ctx_internal.h"
 
@@ -177,7 +178,7 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 		freeReplyObject(reply);
 	}
 
-	pool->connection = conn;
+	csilk_db_pool_set_connection(pool, conn);
 	return 0;
 }
 
@@ -192,16 +193,16 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 redis_drv_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !pool->connection) {
+	if (!pool || !csilk_db_pool_get_connection(pool)) {
 		return -1;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
 	if (conn->c) {
 		redisFree(conn->c);
 	}
 	free(conn);
-	pool->connection = nullptr;
+	csilk_db_pool_set_connection(pool, nullptr);
 	return 0;
 }
 
@@ -302,11 +303,11 @@ redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count,
 static int
 redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !pool->connection || !sql || !result) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
 		return -1;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
 	redisReply* reply = redisCommand(conn->c, sql);
 	if (!reply) {
 		fprintf(stderr,
@@ -527,11 +528,11 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 static int
 redis_drv_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !pool->connection || !sql) {
+	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
 		return -1;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
 	redisReply* reply = redisCommand(conn->c, sql);
 	if (!reply) {
 		fprintf(stderr,
@@ -613,7 +614,7 @@ redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
 	}
 
 	/* Assumes value is a null-terminated string */
-	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
 	if (!conn || !conn->c) {
 		return;
 	}
@@ -635,7 +636,7 @@ redis_storage_get(csilk_ctx_t* c, const char* key)
 		return nullptr;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
 	if (!conn || !conn->c) {
 		return nullptr;
 	}
@@ -669,7 +670,7 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
 		return -1;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
 	if (!conn || !conn->c) {
 		return -1;
 	}
@@ -702,7 +703,7 @@ redis_storage_get_string(csilk_ctx_t* c, const char* key)
 		return nullptr;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
 	if (!conn || !conn->c) {
 		return nullptr;
 	}
@@ -729,7 +730,7 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 		return -1;
 	}
 
-	redis_conn_t* conn = (redis_conn_t*)drv->pool->connection;
+	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
 	if (!conn || !conn->c) {
 		return -1;
 	}
