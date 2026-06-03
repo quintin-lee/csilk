@@ -258,6 +258,9 @@ buf_grow(char* buf, size_t* cap, size_t needed)
 	}
 	size_t new_cap = *cap ? *cap : 32;
 	while (new_cap < needed) {
+		if (new_cap > SIZE_MAX / 2) {
+			return nullptr;
+		}
 		new_cap *= 2;
 	}
 	char* new_buf = realloc(buf, new_cap);
@@ -346,6 +349,12 @@ on_body(llhttp_t* p, const char* at, size_t length)
 	if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
 		return HPE_USER;
 	}
+
+	/* Overflow check for size calculation: body_len + length + 1 */
+	if (length > SIZE_MAX - client->ctx.request.body_len - 1) {
+		return HPE_USER;
+	}
+
 	char* new_body =
 	    realloc(client->ctx.request.body, client->ctx.request.body_len + length + 1);
 	if (new_body) {
