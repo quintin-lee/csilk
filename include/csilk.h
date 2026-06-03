@@ -18,6 +18,7 @@
 #include "csilk/types.h"
 #include "csilk/hooks.h"
 #include "csilk/config.h"
+#include "csilk/crypto.h"
 #include "csilk/context.h"
 #include "csilk/response.h"
 #include "csilk/router.h"
