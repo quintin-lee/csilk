@@ -1,0 +1,48 @@
+{
+  "name": "csilk",
+  "version-semver": "0.3.0",
+  "description": "A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON. Supports HTTP/1.1, HTTP/2, WebSocket, SSE, TLS, JWT auth, AI workflow, message queue, Prometheus metrics, and pluggable database drivers (SQLite, MySQL, PostgreSQL, MongoDB, Redis).",
+  "homepage": "https://github.com/quintin-lee/csilk",
+  "license": "MIT",
+  "dependencies": [
+    "cjson",
+    "curl",
+    "libuv",
+    "libyaml",
+    "llhttp",
+    "nghttp2",
+    "openssl",
+    "sqlite3",
+    "zlib",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "mysql": {
+      "description": "MySQL database driver",
+      "dependencies": ["libmysqlclient"]
+    },
+    "postgresql": {
+      "description": "PostgreSQL database driver",
+      "dependencies": ["libpq"]
+    },
+    "mongodb": {
+      "description": "MongoDB database driver",
+      "dependencies": ["mongo-c-driver"]
+    },
+    "redis": {
+      "description": "Redis database driver",
+      "dependencies": ["hiredis"]
+    },
+    "shared": {
+      "description": "Build shared library in addition to static"
+    }
+  },
+  "default-features": []
+}
