@@ -38,6 +38,13 @@ set(CSILK_VERSION_MINOR 3)
 set(CSILK_VERSION_PATCH 0)
 set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}")
 
+# Build acceleration: ccache (if available)
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "Found ccache: ${CCACHE_PROGRAM}")
+endif()
+
 enable_testing()
 
 option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
@@ -375,6 +382,19 @@ set_target_properties(csilk PROPERTIES
     SOVERSION "${CSILK_VERSION_MAJOR}"
     OUTPUT_NAME csilk
 )
+
+# Precompiled Headers (PCH) — accelerate builds by pre-including stable headers
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
+    target_precompile_headers(csilk PRIVATE
+        <stdio.h>
+        <stdlib.h>
+        <string.h>
+        <stdint.h>
+        <uv.h>
+        "cJSON.h"
+        "csilk/types.h"
+    )
+endif()
 
 # Build shared library if requested
 if(CSILK_BUILD_SHARED)
