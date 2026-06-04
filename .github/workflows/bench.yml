@@ -14,6 +14,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: build_release/_deps
+          key: ${{ runner.os }}-bench-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-bench-deps-
+
       - name: Install Dependencies
         run: |
           sudo apt-get update

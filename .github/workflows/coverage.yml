@@ -12,6 +12,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-coverage-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-coverage-deps-
+
     - name: Install dependencies
       run: |
         sudo apt-get update

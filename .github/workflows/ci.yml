@@ -19,6 +19,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-${{ matrix.build_type }}-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.build_type }}-deps-
+
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -73,6 +81,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-lint-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-lint-deps-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -96,6 +112,14 @@ jobs:
     if: false  # clang-18 on Ubuntu 24.04 lacks full C23 constexpr; re-enable when clang-19 is available
     steps:
     - uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-fuzz-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-fuzz-deps-
 
     - name: Install dependencies
       run: |
@@ -123,6 +147,14 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build_bench/_deps
+        key: ${{ runner.os }}-bench-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-bench-deps-
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -149,6 +181,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-examples-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-examples-deps-
 
     - name: Install dependencies
       run: |
