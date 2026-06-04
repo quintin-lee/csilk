@@ -89,10 +89,10 @@ int
 main()
 {
 	/* 1. Setup Server Configuration with TLS */
-	csilk_server_config_t config = csilk_config_default();
-	config.tls.enabled = 1;
-	config.tls.cert_path = "tests/test_cert.pem";
-	config.tls.key_path = "tests/test_key.pem";
+	csilk_server_config_t config = {0};
+	config.enable_tls = 1;
+	config.tls_cert_file = "tests/test_cert.pem";
+	config.tls_key_file = "tests/test_key.pem";
 
 	/* 2. Setup Routing */
 	csilk_router_t* router = csilk_router_new();
