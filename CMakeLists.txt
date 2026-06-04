@@ -460,6 +460,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(example_db examples/example_db.c)
   target_link_libraries(example_db csilk)
 
+  add_executable(example_ws_tls_mq examples/example_ws_tls_mq.c)
+  target_link_libraries(example_ws_tls_mq csilk)
+
   # Scaffold Tool (TUI)
   file(GLOB SCAFFOLD_SOURCES tools/csilk-scaffold/*.c)
   if(SCAFFOLD_SOURCES)
