@@ -10,7 +10,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
-#define PORT 8097
+#define PORT 8103
 #define BUFSIZE 8192
 
 static volatile int server_ready = 0;

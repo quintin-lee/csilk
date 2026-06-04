@@ -15,7 +15,7 @@
 #include "csilk/test/test.h"
 #endif
 
-#define PORT 8100
+#define PORT 8102
 
 static void
 dummy_handler(csilk_ctx_t* c)

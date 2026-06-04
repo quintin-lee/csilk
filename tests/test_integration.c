@@ -11,7 +11,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
-#define PORT 8099
+#define PORT 8100
 #define BUFSIZE 4096
 
 static int g_tests_passed = 0;
