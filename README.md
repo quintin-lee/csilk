@@ -335,7 +335,7 @@ include/csilk/        # Public Hierarchical Headers
   └── csilk.h         # Main entry point (includes all modules)
 
 tests/                # 118 comprehensive unit tests
-examples/             # Functional usage examples
+examples/             # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
 ```
 
 ## Testing
