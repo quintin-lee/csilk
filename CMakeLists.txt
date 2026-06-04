@@ -432,6 +432,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer -std=c23)
       target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
       target_link_libraries(fuzz_test csilk)
+
+      add_executable(fuzz_yaml tests/fuzz_yaml.c)
+      target_compile_options(fuzz_yaml PRIVATE -fsanitize=fuzzer -std=c23)
+      target_link_options(fuzz_yaml PRIVATE -fsanitize=fuzzer)
+      target_link_libraries(fuzz_yaml csilk)
+
+      add_executable(fuzz_url tests/fuzz_url.c)
+      target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
+      target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
+      target_link_libraries(fuzz_url csilk)
   endif()
 
   # Examples

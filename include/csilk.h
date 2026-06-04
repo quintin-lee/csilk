@@ -20,6 +20,7 @@
 #include "csilk/config.h"
 #include "csilk/crypto.h"
 #include "csilk/context.h"
+#include "csilk/core/codec.h"
 #include "csilk/response.h"
 #include "csilk/router.h"
 #include "csilk/group.h"
