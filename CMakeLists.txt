@@ -390,9 +390,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
         <stdlib.h>
         <string.h>
         <stdint.h>
-        <uv.h>
-        "cJSON.h"
-        "csilk/types.h"
+        <time.h>
+        <errno.h>
     )
 endif()
 
@@ -444,6 +443,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_compile_definitions(test_oom PRIVATE TEST_OOM)
       target_link_libraries(test_oom csilk pthread)
       add_test(NAME test_oom COMMAND test_oom)
+
+      add_executable(test_oom_io tests/test_oom_io.c)
+      target_compile_definitions(test_oom_io PRIVATE TEST_OOM)
+      target_link_libraries(test_oom_io csilk pthread)
+      add_test(NAME test_oom_io COMMAND test_oom_io)
   endif()
 
   option(USE_FUZZER "Enable libFuzzer" OFF)
