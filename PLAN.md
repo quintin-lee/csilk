@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-05-31 | 基于 0.3.0 重构 | 0.5.0 开发中
+> 最后更新: 2026-06-05 | 基于 0.3.0 重构 | 0.5.0 开发中
 
 ---
 
@@ -84,7 +84,7 @@
 - [x] 11.6 性能基准自动化 — 集成 CI 自动压测与性能衰退检测 (Regression Detection)
 
 ### v1.0 全面优化与演进计划
-#### 轨道一：边缘稳定性与测试彻底收尾 (P5 平账) [已通过 106/106 测试验证]
+#### 轨道一：边缘稳定性与测试彻底收尾 (P5 平账) [已通过 116/116 测试验证]
 - [x] 12.1 补全 `csilk_config_free` 释放逻辑与泄露测试
 - [x] 12.2 补全 `csilk_next(NULL handlers)` 健壮性测试
 - [x] 12.3 补充 URL 参数超过 `CSILK_MAX_PARAMS` (20) 时的截断与越界保护测试
@@ -370,6 +370,17 @@
 - **动作**: 修复 MQ 恢复回归、admin 结构体隐私、Mermaid 语法兼容性。
 - **动作**: 全量文档同步更新（README, ARCH.md, architecture.md, module-design, user-manual, CODEPEC, PLAN）。
 
+### [2026-06-05] OOM I/O 测试修复 — stack-use-after-return & 内存泄漏
+- **动作**: 修复 `test_oom_io.c` 中 `test_oom_http_parser` 的 stack-use-after-return ASAN 错误：
+  栈上 `csilk_client_t` 注册的 libuv 定时器句柄在函数返回后仍被默认事件循环引用，
+  导致 `test_oom_static_file` 调用 `uv_run` 时触发 use-after-return。添加 `uv_close`
+  + `uv_run(UV_RUN_NOWAIT)` 在返回前清理句柄。
+- **动作**: 修复 `test_oom_http_parser` 的内存泄漏：`csilk_ctx_cleanup` 和
+  `free(client.current_url)` 放在 `llhttp_execute` 之前而非之后，导致最后一次
+  循环迭代分配的 `request.body`/`request.path`/`response.body` 泄漏。移动至之后。
+- **动作**: CI GitHub Actions 全部 6 个 job 验证通过（116/116 测试）。
+- **动作**: 补充完整中文/英文代码注释。
+
 ### [2026-05-29] 客户端连接池数据竞争修复 (P0-5)
 - **动作**: 修复 `pool_get`/`pool_put` 在 multi-worker 模式下的数据竞争。
   `client_pool` 和 `client_pool_count` 被多个 event loop 线程并发访问
@@ -507,24 +518,23 @@
 - [x] 9.2 添加 AES-256-GCM nonce 生成辅助函数 — 防止调用者重用 nonce
 - [x] 9.3 在 `http1.c:173,350` 的 realloc 中增加整数溢出保护
 - [x] 9.4 将 20+ 个内部符号 (`_csilk_*`, `on_*`, `cleanup_tls` 等) 标记为 `hidden` 可见性
-- [ ] 9.5 扩展多 worker 测试覆盖 — 目前仅 `test_multi_worker.c` 使用 >1 worker
+- [x] 9.5 扩展多 worker 测试覆盖 — 目前仅 `test_multi_worker.c` 使用 >1 worker
+- [x] 9.6 拆分 `src/workflow/workflow.c` (2428 行) 为 engine/steps/wal (已完成结构拆分，待深入重构)
 
 ### P2 — 后续执行
 
-- [ ] 9.6 拆分 `src/workflow/workflow.c` (2428 行) 为 engine/steps/wal
-- [ ] 9.7 恢复 Fuzz 测试 — clang libFuzzer 或 afl++
-- [ ] 9.8 添加新 Fuzz 目标：YAML 解析器、URL 解码器
-- [ ] 9.9 添加并发 WebSocket/SSE/MQ 场景测试
-- [ ] 9.10 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
-- [ ] 9.11 配置 ccache + PCH 加速增量构建
-- [ ] 9.12 配置 GitHub Actions 依赖缓存
-- [ ] 9.13 模块化 `src/messaging/mq.c` (968 行)
-- [ ] 9.14 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
-- [ ] 9.15 不透明化 `csilk_db_pool_s` 和 workflow 结构体
-- [ ] 9.16 扩展 OOM 测试覆盖到 I/O 路径
-- [ ] 9.17 添加 WebSocket/TLS/MQ 示例程序
-- [ ] 9.18 GitHub Releases 发布预编译产物
-- [ ] 9.19 创建 vcpkg port
+- [x] 9.7 配置 ccache + PCH 加速增量构建
+- [x] 9.8 恢复 Fuzz 测试 — clang libFuzzer 或 afl++
+- [x] 9.9 添加新 Fuzz 目标：YAML 解析器、URL 解码器
+- [x] 9.10 添加 WebSocket/TLS/MQ 示例程序
+- [x] 9.11 配置 GitHub Actions 依赖缓存
+- [ ] 9.12 添加并发 WebSocket/SSE/MQ 场景测试
+- [ ] 9.13 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
+- [ ] 9.14 模块化 `src/messaging/mq.c` (968 行)
+- [ ] 9.15 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
+- [ ] 9.16 不透明化 `csilk_db_pool_s` 和 workflow 结构体
+- [ ] 9.17 GitHub Releases 发布预编译产物
+- [ ] 9.18 创建 vcpkg port
 
 ### P3 — 远期
 
