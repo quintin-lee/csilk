@@ -1,9 +1,14 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
+#include "core/ctx_internal.h"
 
 // Fuzz test for csilk_split_url, csilk_parse_query, and routing
 
@@ -27,10 +32,15 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	char* query = NULL;
 	csilk_split_url(input, &path, &query);
 
-	csilk_ctx_t ctx = {0};
+	csilk_ctx_t ctx;
+	_csilk_ctx_init(&ctx, NULL, NULL);
+
+	// The fuzzer manually allocated path/query, but csilk_ctx_cleanup expects
+	// to own them if assigned. To avoid double-free, we handle them carefully.
 
 	// 2. Fuzz csilk_parse_query
 	if (query) {
+		// csilk_parse_query might allocate into ctx.params
 		csilk_parse_query(&ctx, query);
 	}
 
@@ -43,8 +53,12 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 		if (path) {
 			ctx.request.method = "GET";
+			// Assign path to ctx. request.path takes ownership in some flows,
+			// but here we manually manage it to be safe.
 			ctx.request.path = path;
 			csilk_router_match_ctx(router, &ctx);
+			// Reset to NULL so csilk_ctx_cleanup doesn't try to free our manual path
+			ctx.request.path = NULL;
 		}
 		csilk_router_free(router);
 	}
@@ -55,7 +69,11 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	if (query) {
 		free(query);
 	}
+
 	csilk_ctx_cleanup(&ctx);
+	if (ctx.arena) {
+		csilk_arena_free(ctx.arena);
+	}
 	free(input);
 
 	return 0;
