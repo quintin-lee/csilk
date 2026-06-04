@@ -52,16 +52,21 @@ test_oom_http_parser()
 		g_oom_fail_after = i;
 		g_oom_count = 0;
 
-		/* Reset parser and context for each run */
+		/* Reset parser for each run */
 		llhttp_init(&client.parser, HTTP_REQUEST, &s->settings);
 		client.parser.data = &client;
+
+		enum llhttp_errno err = llhttp_execute(&client.parser, req, strlen(req));
+
+		/* Clean up allocations made during parsing. This must happen
+		 * after every iteration — including the last — to prevent
+		 * memory leaks (request.body, request.path, response.body,
+		 * current_url, header fields, etc.). */
 		csilk_ctx_cleanup(&client.ctx);
 		if (client.current_url) {
 			free(client.current_url);
 			client.current_url = NULL;
 		}
-
-		enum llhttp_errno err = llhttp_execute(&client.parser, req, strlen(req));
 
 		if (err != HPE_OK) {
 			/* If it failed, it should be due to user error (our callback returning non-zero)
@@ -70,6 +75,13 @@ test_oom_http_parser()
 	}
 
 	g_oom_fail_after = -1;
+
+	/* Close libuv handles before returning to prevent use-after-return
+	 * when subsequent tests run uv_run on the default loop. */
+	uv_close((uv_handle_t*)&client.request_timer, NULL);
+	uv_close((uv_handle_t*)&client.timer, NULL);
+	uv_run(loop, UV_RUN_NOWAIT);
+
 	csilk_server_free(s);
 }
 
