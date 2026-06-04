@@ -11,7 +11,7 @@
 #include "csilk/app/app.h"
 #include "csilk/csilk.h"
 
-#define PORT 8100
+#define PORT 8101
 #define BUFSIZE 65536
 
 static volatile int server_ready = 0;
