@@ -30,26 +30,22 @@ jobs:
             libyaml-dev zlib1g-dev libcurl4-openssl-dev \
             libpq-dev libsqlite3-dev wrk python3
 
+      - name: Setup benchmark toolchain
+        run: |
+          # Only perf + FlameGraph (wrk already installed above)
+          ./scripts/setup_bench_tools.sh --ci
+
       - name: Configure & Build
         run: |
           cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release
           cmake --build build_release --target example_server -j$(nproc)
-
-      - name: Prepare Baseline
-        if: github.event_name == 'pull_request'
-        run: |
-          mkdir -p benchmarks/results
-          # Try to get baseline from master branch artifact or cache
-          # For simplicity in this implementation, we run on master if not exists
-          # (A more robust version would use a dedicated baseline branch or artifact)
-          echo "Setting up baseline..."
 
       - name: Run Benchmarks
         env:
           BENCH_DURATION: 5s
         run: |
           cd build_release
-          bash ../benchmarks/run_benchmarks.sh --save
+          bash ../scripts/run_benchmarks.sh --save
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
@@ -62,13 +58,13 @@ jobs:
         run: |
           # Fetch master branch for comparison
           git checkout master
-          bash benchmarks/run_benchmarks.sh --save
+          bash scripts/run_benchmarks.sh --save
           mv benchmarks/results/latest.json benchmarks/results/baseline.json
-          
+
           # Go back to PR branch
           git checkout ${{ github.event.pull_request.head.sha }}
           # Run comparison
-          bash benchmarks/run_benchmarks.sh --compare
+          bash scripts/run_benchmarks.sh --compare
 
       - name: Post Comment (PR only)
         if: github.event_name == 'pull_request' && always()
@@ -86,3 +82,48 @@ jobs:
                 body: report
               });
             }
+
+  profile:
+    name: CPU Profile (FlameGraph)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: build-profile/_deps
+          key: ${{ runner.os }}-profile-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-profile-deps-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake clang \
+            libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+            libpq-dev libsqlite3-dev wrk
+
+      - name: Setup benchmark toolchain (perf + FlameGraph)
+        run: |
+          # perf_event_paranoid may be 4 in GitHub Actions;
+          # cap_perfmon is not granted, so perf will use kernel tracepoints only
+          ./scripts/setup_bench_tools.sh --ci
+          sudo sysctl kernel.perf_event_paranoid=1 2>/dev/null || true
+
+      - name: Profile with perf + FlameGraph
+        run: |
+          ./scripts/profile.sh \
+            --duration 30 \
+            --rate 50000 \
+            --output profile-output
+
+      - name: Upload FlameGraph
+        uses: actions/upload-artifact@v4
+        with:
+          name: flamegraph
+          path: profile-output/flamegraph.svg

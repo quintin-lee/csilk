@@ -634,6 +634,13 @@ add_custom_target(bench
     COMMENT "Running performance benchmarks with wrk"
 )
 
+# Profiling target (perf + FlameGraph)
+add_custom_target(profile
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/profile.sh --duration 30
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Profiling example_server with perf + FlameGraph"
+)
+
 # CPack packaging
 set(CPACK_PACKAGE_NAME "csilk")
 set(CPACK_PACKAGE_VERSION "${CSILK_VERSION}")
