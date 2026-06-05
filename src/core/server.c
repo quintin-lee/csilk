@@ -651,6 +651,15 @@ on_worker_stop_async(uv_async_t* handle)
 		uv_close((uv_handle_t*)handle, nullptr);
 	}
 
+	/* Drain pending close callbacks (including nested ones from e.g. client
+	 * timers), then stop the loop.  The UV_RUN_NOWAIT loop ensures all close
+	 * callbacks fire before uv_stop so the loop exits cleanly even under
+	 * slow conditions (e.g. GCC coverage builds).  The uv_stop fallback is
+	 * needed for io_uring compatibility where uv_run may not exit when all
+	 * user handles are closed. */
+	for (int i = 0; i < 8; i++) {
+		uv_run(loop, UV_RUN_NOWAIT);
+	}
 	uv_stop(loop);
 }
 
