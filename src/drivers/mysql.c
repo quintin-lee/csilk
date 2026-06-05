@@ -21,6 +21,21 @@
 #include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
+/* strndup is POSIX.1-2008 but may not be visible on musl-based systems
+ * (Alpine Linux) without the correct feature test macros. We always
+ * use this local wrapper instead of calling strndup directly. */
+static inline char*
+csilk_strndup(const char* s, size_t n)
+{
+	size_t len = strnlen(s, n);
+	char* copy = (char*)malloc(len + 1);
+	if (copy) {
+		memcpy(copy, s, len);
+		copy[len] = '\0';
+	}
+	return copy;
+}
+
 /** @brief Per-connection data for the MySQL driver. */
 typedef struct {
 	MYSQL* db; /**< libmysqlclient connection handle. */
@@ -264,7 +279,7 @@ mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 
 		/* Copy each field using the binary-safe length from mysql_fetch_lengths */
 		for (unsigned int i = 0; i < num_fields; i++) {
-			drow->values[i] = row[i] ? strndup(row[i], lengths[i]) : nullptr;
+			drow->values[i] = row[i] ? csilk_strndup(row[i], lengths[i]) : nullptr;
 		}
 
 		/* Append row to the result array */

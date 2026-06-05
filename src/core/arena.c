@@ -72,12 +72,16 @@ arena_aligned_alloc(size_t size)
 		return nullptr;
 	}
 	ptr = (void*)addr;
-#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-	ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
 #elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+	/* posix_memalign is preferred over C11 aligned_alloc because it is
+	 * available on a wider range of platforms (POSIX 2001), including
+	 * musl-based systems where aligned_alloc may not exist despite the
+	 * compiler advertising C11 conformance. */
 	if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
 		return nullptr;
 	}
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+	ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
 #else
 	/* Fallback to standard malloc if no aligned allocation is available.
      The structure padding still provides some benefit by ensuring headers
