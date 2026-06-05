@@ -533,7 +533,11 @@
   - `tests/test_mq_concurrent.c`: MQ 多线程并发发布 (4线程×100, 4线程×250压力, 单线程1000突发)
   - `tests/test_ws_concurrent.c`: WS 多房间广播/快速加入离开/独立房间 (单事件循环并发)
   - `tests/test_sse_concurrent.c`: SSE 多流并行初始化/生命周期/混合事件 (单事件循环并发)
-- [ ] 9.13 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
+- [x] 9.13 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
+
+  - `flamegraph.c`: 用 `__GLIBC__` 守卫 `execinfo.h`/`backtrace`/`backtrace_symbols`，非 glibc 跳过采样
+  - `arena.c`: `posix_memalign` 优先于 C11 `aligned_alloc` (musl 可能没有 `aligned_alloc` 即使编译器宣称 C11)
+  - `mysql.c`: 添加 `csilk_strndup` 局部 polyfill 宏，当 libc 不暴露 `strndup` 时使用
 - [x] 9.14 模块化 `src/messaging/mq.c` (968 行) — 已拆分为 mq.c(558) + mq_context.c + mq_offload.c + mq_wal.c
 - [x] 9.15 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
 - [~] 9.16 不透明化 `csilk_db_pool_s` 和 workflow 结构体 (workflow 已 opaque; db_pool_s 完整定义仍在 `include/csilk/core/db_internal.h`，需移至 `src/` 私有头文件)

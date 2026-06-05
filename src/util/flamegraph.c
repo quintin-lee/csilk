@@ -15,7 +15,9 @@
  * @copyright MIT License
  */
 
+#if defined(__GLIBC__)
 #include <execinfo.h>
+#endif
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -112,6 +114,7 @@ fg_sampler_thread(void* arg)
 	void* buffer[FG_MAX_DEPTH];
 
 	while (atomic_load(&p->running)) {
+#if defined(__GLIBC__)
 		int nptrs = backtrace(buffer, FG_MAX_DEPTH);
 		if (nptrs > 1) {
 			char** symbols = backtrace_symbols(buffer, nptrs);
@@ -148,7 +151,10 @@ fg_sampler_thread(void* arg)
 				pthread_mutex_unlock(&p->mutex);
 			}
 		}
-
+#else
+		(void)buffer;
+		(void)collapsed;
+#endif
 		usleep(p->interval_us);
 	}
 
