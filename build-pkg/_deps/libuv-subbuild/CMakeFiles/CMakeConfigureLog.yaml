@@ -1,0 +1,83 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:16 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/home/quintin/.npm-global/bin/"
+      - "/home/quintin/.opencode/bin/"
+      - "/home/quintin/.local/nvcode/bin/"
+      - "/home/quintin/.cargo/bin/"
+      - "/home/quintin/.local/share/gem/ruby/3.0.0/bin/"
+      - "/home/quintin/.local/bin/"
+      - "/usr/local/bin/"
+      - "/usr/bin/"
+      - "/home/quintin/.oh-my-zsh/custom/plugins/fzf-zsh-plugin/bin/"
+      - "/home/quintin/.fzf/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/bin/site_perl/"
+      - "/usr/bin/vendor_perl/"
+      - "/usr/bin/core_perl/"
+      - "/opt/android-sdk/platform-tools/"
+      - "/opt/android-sdk/cmdline-tools/latest/bin/"
+      - "/opt/android-sdk/tools/bin/"
+      - "/home/quintin/.lmstudio/bin/"
+      - "/bin/"
+    searched_directories:
+      - "/home/quintin/.npm-global/bin/uname"
+      - "/home/quintin/.opencode/bin/uname"
+      - "/home/quintin/.local/nvcode/bin/uname"
+      - "/home/quintin/.cargo/bin/uname"
+      - "/home/quintin/.local/share/gem/ruby/3.0.0/bin/uname"
+      - "/home/quintin/.local/bin/uname"
+      - "/usr/local/bin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/home/quintin/.npm-global/bin"
+        - "/home/quintin/.opencode/bin"
+        - "/home/quintin/.local/nvcode/bin"
+        - "/home/quintin/.local/nvcode/bin"
+        - "/home/quintin/.cargo/bin"
+        - "/home/quintin/.local/share/gem/ruby/3.0.0/bin"
+        - "/home/quintin/.local/bin"
+        - "/home/quintin/.local/nvcode/bin"
+        - "/home/quintin/.cargo/bin"
+        - "/home/quintin/.local/share/gem/ruby/3.0.0/bin"
+        - "/usr/local/bin"
+        - "/usr/bin"
+        - "/home/quintin/.oh-my-zsh/custom/plugins/fzf-zsh-plugin/bin"
+        - "/home/quintin/.fzf/bin"
+        - "/usr/local/sbin"
+        - "/usr/bin/site_perl"
+        - "/usr/bin/vendor_perl"
+        - "/usr/bin/core_perl"
+        - "/home/quintin/.oh-my-zsh/custom/plugins/fzf-zsh-plugin/bin"
+        - "/opt/android-sdk/platform-tools"
+        - "/opt/android-sdk/cmdline-tools/latest/bin"
+        - "/opt/android-sdk/tools/bin"
+        - "/home/quintin/.lmstudio/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake/Modules/CMakeDetermineSystem.cmake:212 (message)"
+      - "CMakeLists.txt:16 (project)"
+    message: |
+      The system is: Linux - 6.12.91-1-MANJARO - x86_64
+...
