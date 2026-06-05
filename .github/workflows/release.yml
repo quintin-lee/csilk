@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build-pkg/_deps
+        key: ${{ runner.os }}-release-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-release-deps-
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3
+
+    - name: Build and package (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        ./scripts/package.sh --shared
+
+    - name: Build and package (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        ./scripts/package.sh --shared
+      env:
+        CFLAGS: "-Wno-deprecated-declarations"
+        LDFLAGS: "-L$(brew --prefix openssl)/lib"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages-${{ runner.os }}
+        path: build-pkg/csilk-*.tar.gz*
+        retention-days: 1
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        merge-multiple: true
+
+    - name: Generate release notes
+      id: notes
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        # Extract the matching section from CHANGELOG.md
+        NOTES_FILE="/tmp/release-notes.md"
+        if grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+          awk "/^## \\[${VERSION}\\]/,/^## \\[/" CHANGELOG.md \
+            | sed '$d' \
+            > "$NOTES_FILE"
+        else
+          echo "## ${GITHUB_REF_NAME}" > "$NOTES_FILE"
+          echo "" >> "$NOTES_FILE"
+          echo "See CHANGELOG.md for details." >> "$NOTES_FILE"
+        fi
+        echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+
+    - name: List artifacts
+      run: |
+        ls -lh csilk-*.tar.gz* || echo "(no packages found)"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        body_path: ${{ steps.notes.outputs.notes_file }}
+        files: |
+          csilk-*.tar.gz*
+        fail_on_unmatched_files: false
+        generate_release_notes: false
