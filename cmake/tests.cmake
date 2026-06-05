@@ -110,6 +110,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_session
     test_session_ext
     test_sse
+    test_sse_concurrent
     test_static
     test_file
     test_validate
@@ -122,6 +123,7 @@ set(CSILK_PROTOCOL_TESTS
     test_openapi
     test_ws
     test_ws_room
+    test_ws_concurrent
     test_h2
 )
 
@@ -159,6 +161,7 @@ set(CSILK_MESSAGING_TESTS
     test_mq_recovery
     test_mq_wal
     test_mq_wal_write
+    test_mq_concurrent
 )
 
 # -- Extra / integration tests --

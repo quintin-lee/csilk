@@ -528,7 +528,11 @@
 - [x] 9.9 添加新 Fuzz 目标：YAML 解析器、URL 解码器
 - [x] 9.10 添加 WebSocket/TLS/MQ 示例程序
 - [x] 9.11 配置 GitHub Actions 依赖缓存
-- [ ] 9.12 添加并发 WebSocket/SSE/MQ 场景测试
+- [x] 9.12 添加并发 WebSocket/SSE/MQ 场景测试
+
+  - `tests/test_mq_concurrent.c`: MQ 多线程并发发布 (4线程×100, 4线程×250压力, 单线程1000突发)
+  - `tests/test_ws_concurrent.c`: WS 多房间广播/快速加入离开/独立房间 (单事件循环并发)
+  - `tests/test_sse_concurrent.c`: SSE 多流并行初始化/生命周期/混合事件 (单事件循环并发)
 - [ ] 9.13 修复 Alpine/musl 移植问题：`backtrace()`, `aligned_alloc`, `strndup`
 - [x] 9.14 模块化 `src/messaging/mq.c` (968 行) — 已拆分为 mq.c(558) + mq_context.c + mq_offload.c + mq_wal.c
 - [x] 9.15 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
