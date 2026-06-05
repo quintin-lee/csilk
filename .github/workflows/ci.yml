@@ -138,6 +138,40 @@ jobs:
     - name: Run Fuzzer
       run: cd build && ./fuzz_test -max_total_time=10
 
+  io_uring:
+    name: io_uring compatibility
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-uring-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-uring-deps-
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev
+
+    - name: Configure
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_OOM_TEST=ON
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run tests with io_uring
+      run: UV_USE_IO_URING=1 ctest --test-dir build --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
