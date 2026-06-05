@@ -650,6 +650,8 @@ on_worker_stop_async(uv_async_t* handle)
 	if (!uv_is_closing((uv_handle_t*)handle)) {
 		uv_close((uv_handle_t*)handle, nullptr);
 	}
+
+	uv_stop(loop);
 }
 
 /** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode.

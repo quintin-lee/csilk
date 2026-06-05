@@ -48,17 +48,6 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-# ── Generate server config ──────────────────────────────────────
-CONFIG_FILE="${BUILD_DIR}/profile-config.yaml"
-cat > "$CONFIG_FILE" << 'YAML'
-port: 8081
-server:
-  max_header_size: 8192
-  max_body_size: 1048576
-  idle_timeout_ms: 30000
-  listen_backlog: 512
-YAML
-
 # ── Build example_server if needed ──────────────────────────────
 if [[ ! -f "${BUILD_DIR}/example_server" ]]; then
     echo "=== Building example_server (Release, with frame pointers) ==="
@@ -69,6 +58,17 @@ if [[ ! -f "${BUILD_DIR}/example_server" ]]; then
     cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)" --target example_server
 fi
 SERVER_BINARY="${BUILD_DIR}/example_server"
+
+# ── Generate server config ──────────────────────────────────────
+CONFIG_FILE="${BUILD_DIR}/profile-config.yaml"
+cat > "$CONFIG_FILE" << 'YAML'
+port: 8081
+server:
+  max_header_size: 8192
+  max_body_size: 1048576
+  idle_timeout_ms: 30000
+  listen_backlog: 512
+YAML
 
 # ── Start server ────────────────────────────────────────────────
 echo "=== Starting server on port ${SERVER_PORT} ==="
