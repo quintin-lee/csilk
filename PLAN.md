@@ -550,7 +550,12 @@
 
 ### P3 — 远期
 
-- [ ] 9.20 安装 perf/wrk/FlameGraph 工具链进行基准测试
+- [x] 9.20 安装 perf/wrk/FlameGraph 工具链进行基准测试
+
+  - `scripts/setup_bench_tools.sh`: 一键安装 perf (linux-tools) + wrk + FlameGraph (Brendan Gregg)
+  - `scripts/profile.sh`: 启动 example_server → perf record 采样 → stackcollapse → flamegraph SVG
+  - `CMakeLists.txt`: `make profile` 目标 (30秒采样)
+  - `.github/workflows/bench.yml`: 新增 profile job (master 分支)，自动运行 perf + 上传 flamegraph.svg
 - [ ] 9.21 评估 io_uring Option C (`UV_USE_IO_URING=1`)
 - [ ] 9.22 Arena 块在工作线程初始化时预分配
 - [ ] 9.23 为热指标路径实现有界 JSON 构建器
