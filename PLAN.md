@@ -556,7 +556,13 @@
   - `scripts/profile.sh`: 启动 example_server → perf record 采样 → stackcollapse → flamegraph SVG
   - `CMakeLists.txt`: `make profile` 目标 (30秒采样)
   - `.github/workflows/bench.yml`: 新增 profile job (master 分支)，自动运行 perf + 上传 flamegraph.svg
-- [ ] 9.21 评估 io_uring Option C (`UV_USE_IO_URING=1`)
+- [x] 9.21 评估 io_uring Option C (`UV_USE_IO_URING=1`)
+
+  - Kernel 6.12.91 + libuv 1.48.0: 119/119 测试在 `UV_USE_IO_URING=1` 下通过
+  - 零代码修改 — libuv 自动选择 io_uring backend (IORING_SETUP_SQPOLL)
+  - CI: 新增 `io_uring` job 在每个 push 运行全量测试
+  - `docs/research/io_uring.md`: 更新状态为 Evaluated，补充评估结果
+  - 生产部署: `UV_USE_IO_URING=1 ./example_server config.yaml`
 - [ ] 9.22 Arena 块在工作线程初始化时预分配
 - [ ] 9.23 为热指标路径实现有界 JSON 构建器
 - [ ] 9.24 实现 URL/Base64 的属性基测试
