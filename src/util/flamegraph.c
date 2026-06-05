@@ -316,9 +316,8 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 	fg_generate_svg(p, out_svg, out_len);
 
 	pthread_mutex_destroy(&p->mutex);
-	for (int i = 0; i < p->entry_count; i++) {
-		free(p->entries[i].frames.stack[0]);
-	}
+	/* entries[i].frames.stack is an inline member array (not heap-allocated),
+	 * so only the entries array itself needs to be freed. */
 	free(p->entries);
 	free(p->hash_table);
 	free(p);
