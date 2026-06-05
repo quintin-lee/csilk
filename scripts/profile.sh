@@ -48,6 +48,17 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
+# ── Generate server config ──────────────────────────────────────
+CONFIG_FILE="${BUILD_DIR}/profile-config.yaml"
+cat > "$CONFIG_FILE" << 'YAML'
+port: 8081
+server:
+  max_header_size: 8192
+  max_body_size: 1048576
+  idle_timeout_ms: 30000
+  listen_backlog: 512
+YAML
+
 # ── Build example_server if needed ──────────────────────────────
 if [[ ! -f "${BUILD_DIR}/example_server" ]]; then
     echo "=== Building example_server (Release, with frame pointers) ==="
@@ -61,7 +72,8 @@ SERVER_BINARY="${BUILD_DIR}/example_server"
 
 # ── Start server ────────────────────────────────────────────────
 echo "=== Starting server on port ${SERVER_PORT} ==="
-"$SERVER_BINARY" --port "$SERVER_PORT" &
+echo "  Config: ${CONFIG_FILE}"
+"$SERVER_BINARY" "$CONFIG_FILE" &
 SERVER_PID=$!
 sleep 2
 
