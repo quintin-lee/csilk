@@ -37,7 +37,7 @@
 
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */
-#define MAX_TLS_ARENA_CHUNKS 16
+static constexpr int MAX_TLS_ARENA_CHUNKS = 16;
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
  * Used for padding structures to prevent false sharing and improve

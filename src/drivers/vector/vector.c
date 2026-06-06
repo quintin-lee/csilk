@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_VECTOR_DRIVERS 4
+static constexpr int MAX_VECTOR_DRIVERS = 4;
 
 static const csilk_vector_db_driver_t* vector_drivers[MAX_VECTOR_DRIVERS];
 static int vector_driver_count = 0;
