@@ -69,6 +69,8 @@ typedef struct {
 	int client_pool_count;				     /**< Items in local free list. */
 	uv_async_t stop_async;				     /**< Async for graceful worker stop. */
 	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
+	csilk_arena_t* arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
+	int arena_pool_count;				   /**< Items in arena pool. */
 } worker_pool_t;
 
 /**

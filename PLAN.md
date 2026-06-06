@@ -1,6 +1,6 @@
 # csilk 完善计划 & 演进路线
 
-> 最后更新: 2026-06-05 | 基于 0.3.0 重构 | 0.5.0 开发中
+> 最后更新: 2026-06-06 | 基于 0.3.0 重构 | 0.5.0 开发中
 
 ---
 
@@ -563,7 +563,7 @@
   - CI: 新增 `io_uring` job 在每个 push 运行全量测试
   - `docs/research/io_uring.md`: 更新状态为 Evaluated，补充评估结果
   - 生产部署: `UV_USE_IO_URING=1 ./example_server config.yaml`
-- [ ] 9.22 Arena 块在工作线程初始化时预分配
+- [x] 9.22 Arena 块在工作线程初始化时预分配
 - [ ] 9.23 为热指标路径实现有界 JSON 构建器
 - [ ] 9.24 实现 URL/Base64 的属性基测试
 - [ ] 9.25 Benchmark CI 方差归一化

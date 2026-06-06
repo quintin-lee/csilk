@@ -97,6 +97,81 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
 	}
 }
 
+/** @brief Get a pre-allocated arena from the worker-local arena pool.
+ *
+ * Pops a pre-allocated arena from the pool. If the pool is empty, falls back
+ * to creating a new arena on the fly. Pre-allocated arenas already have their
+ * first chunk ready, so the hot path avoids aligned_alloc entirely.
+ *
+ * @param wp The worker pool (must not be nullptr).
+ * @return A csilk_arena_t ready for use, or nullptr on allocation failure. */
+static csilk_arena_t*
+pool_get_arena(worker_pool_t* wp)
+{
+	csilk_arena_t* arena;
+	if (wp->arena_pool_count > 0) {
+		arena = wp->arena_pool[--wp->arena_pool_count];
+	} else {
+		arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+		if (arena && wp->server->config.enable_arena_alignment) {
+			csilk_arena_set_alignment(arena, 1);
+		}
+	}
+	return arena;
+}
+
+/** @brief Return an arena to the worker-local arena pool for reuse.
+ *
+ * Resets the arena (zero-clear, no system calls) and pushes it back into
+ * the pool. If the pool is full, frees the arena normally.
+ *
+ * @param wp    The worker pool.
+ * @param arena The arena to return (must not be used after this call). */
+static void
+pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
+{
+	csilk_arena_reset(arena);
+	if (wp->arena_pool_count < CSILK_CLIENT_POOL_SIZE) {
+		wp->arena_pool[wp->arena_pool_count++] = arena;
+	} else {
+		csilk_arena_free(arena);
+	}
+}
+
+/** @brief Pre-populate the worker-local arena pool with ready-to-use arenas.
+ *
+ * Each pre-allocated arena has its first chunk already allocated and reset,
+ * so the hot accept path (on_new_connection) performs zero aligned_alloc
+ * calls — the arena is popped from the pool and used immediately.
+ *
+ * Alignment is set according to the server config at pre-alloc time so it
+ * does not need to be repeated per-connection.
+ *
+ * @param wp The worker pool to initialise. */
+void
+_csilk_worker_init_arena_pool(worker_pool_t* wp)
+{
+	int align = wp->server->config.enable_arena_alignment;
+	for (int i = 0; i < CSILK_CLIENT_POOL_SIZE; i++) {
+		csilk_arena_t* a = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+		if (!a) {
+			break;
+		}
+		if (align) {
+			csilk_arena_set_alignment(a, 1);
+		}
+		/* Pre-allocate the first chunk so csilk_arena_alloc in the hot
+		 * path always hits the fast (bump) path. */
+		void* p = csilk_arena_alloc(a, 1);
+		if (!p) {
+			csilk_arena_free(a);
+			break;
+		}
+		csilk_arena_reset(a);
+		wp->arena_pool[wp->arena_pool_count++] = a;
+	}
+}
+
 /* --- Active client list --- */
 
 /** @brief Insert a client at the head of the server's active client list.
@@ -180,7 +255,7 @@ on_timer_close(uv_handle_t* handle)
 	}
 	csilk_ctx_cleanup(&client->ctx);
 	if (client->ctx.arena) {
-		csilk_arena_free(client->ctx.arena);
+		pool_put_arena(client->owner_pool, client->ctx.arena);
 	}
 	free(client->current_header_field);
 	free(client->current_header_value);
@@ -233,7 +308,7 @@ on_close(uv_handle_t* handle)
 			}
 			csilk_ctx_cleanup(&client->ctx);
 			if (client->ctx.arena) {
-				csilk_arena_free(client->ctx.arena);
+				pool_put_arena(client->owner_pool, client->ctx.arena);
 			}
 			free(client->current_header_field);
 			free(client->current_header_value);
@@ -425,10 +500,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 				       0);
 		}
 
-		client->ctx.arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
-		if (server->config.enable_arena_alignment) {
-			csilk_arena_set_alignment(client->ctx.arena, 1);
-		}
+		client->ctx.arena = pool_get_arena(wp);
 
 		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
