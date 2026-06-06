@@ -70,9 +70,32 @@ csilk_health_check_handler(csilk_ctx_t* c)
 		return;
 	}
 
-	cJSON* root = cJSON_CreateObject();
-	cJSON_AddStringToObject(root, "status", "up");
-	csilk_json(c, CSILK_STATUS_OK, root);
+	csilk_arena_t* arena = csilk_get_arena(c);
+	if (!arena) {
+		cJSON* root = cJSON_CreateObject();
+		cJSON_AddStringToObject(root, "status", "up");
+		csilk_json(c, CSILK_STATUS_OK, root);
+		return;
+	}
+
+	char buf[128];
+	csilk_bounded_json_t j;
+	csilk_bounded_json_status(&j, buf, sizeof(buf), "up");
+
+	if (csilk_bounded_json_overflow(&j)) {
+		cJSON* root = cJSON_CreateObject();
+		cJSON_AddStringToObject(root, "status", "up");
+		csilk_json(c, CSILK_STATUS_OK, root);
+		return;
+	}
+
+	csilk_set_header(c, "Content-Type", "application/json");
+	csilk_set_status(c, CSILK_STATUS_OK);
+	size_t body_len = csilk_bounded_buf_len(&j.buf);
+	char* arena_body = csilk_arena_strndup(arena, csilk_bounded_json_str(&j), body_len);
+	if (arena_body) {
+		csilk_set_response_body(c, arena_body, body_len, 0);
+	}
 }
 
 /**
@@ -116,13 +139,54 @@ csilk_ready_check_handler(csilk_ctx_t* c)
 		reason = "connection_limit_reached";
 	}
 
-	cJSON* root = cJSON_CreateObject();
+	csilk_arena_t* arena = csilk_get_arena(c);
+	if (!arena) {
+		cJSON* root = cJSON_CreateObject();
+		if (is_healthy) {
+			cJSON_AddStringToObject(root, "status", "ready");
+			csilk_json(c, CSILK_STATUS_OK, root);
+		} else {
+			cJSON_AddStringToObject(root, "status", "unavailable");
+			cJSON_AddStringToObject(root, "reason", reason);
+			csilk_json(c, CSILK_STATUS_SERVICE_UNAVAILABLE, root);
+		}
+		return;
+	}
+
+	char buf[256];
+	csilk_bounded_json_t j;
+	csilk_bounded_json_init(&j, buf, sizeof(buf));
+	csilk_bounded_json_object_open(&j);
+
 	if (is_healthy) {
-		cJSON_AddStringToObject(root, "status", "ready");
-		csilk_json(c, CSILK_STATUS_OK, root);
+		csilk_bounded_json_key(&j, "status");
+		csilk_bounded_json_string(&j, "ready");
 	} else {
-		cJSON_AddStringToObject(root, "status", "unavailable");
-		cJSON_AddStringToObject(root, "reason", reason);
-		csilk_json(c, CSILK_STATUS_SERVICE_UNAVAILABLE, root);
+		csilk_bounded_json_key(&j, "status");
+		csilk_bounded_json_string(&j, "unavailable");
+		csilk_bounded_json_key(&j, "reason");
+		csilk_bounded_json_string(&j, reason);
+	}
+	csilk_bounded_json_object_close(&j);
+
+	if (csilk_bounded_json_overflow(&j)) {
+		cJSON* root = cJSON_CreateObject();
+		if (is_healthy) {
+			cJSON_AddStringToObject(root, "status", "ready");
+			csilk_json(c, CSILK_STATUS_OK, root);
+		} else {
+			cJSON_AddStringToObject(root, "status", "unavailable");
+			cJSON_AddStringToObject(root, "reason", reason);
+			csilk_json(c, CSILK_STATUS_SERVICE_UNAVAILABLE, root);
+		}
+		return;
+	}
+
+	csilk_set_header(c, "Content-Type", "application/json");
+	csilk_set_status(c, is_healthy ? CSILK_STATUS_OK : CSILK_STATUS_SERVICE_UNAVAILABLE);
+	size_t body_len = csilk_bounded_buf_len(&j.buf);
+	char* arena_body = csilk_arena_strndup(arena, csilk_bounded_json_str(&j), body_len);
+	if (arena_body) {
+		csilk_set_response_body(c, arena_body, body_len, 0);
 	}
 }

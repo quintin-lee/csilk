@@ -15,6 +15,7 @@ set(CSILK_APP_SOURCES
 set(CSILK_CORE_SOURCES
     src/core/admin.c
     src/core/arena.c
+    src/core/bounded_buf.c
     src/core/config.c
     src/core/connection.c
     src/core/context.c
