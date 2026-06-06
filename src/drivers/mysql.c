@@ -18,7 +18,6 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
 /* strndup is POSIX.1-2008 but may not be visible on musl-based systems

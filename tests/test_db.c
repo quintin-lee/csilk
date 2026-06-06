@@ -4,7 +4,6 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
-#include "csilk/core/db_internal.h"
 
 void
 test_db_init(void)
@@ -87,18 +86,14 @@ test_db_sqlite_transactions(void)
 		      "balance INTEGER)");
 
 	/* Begin transaction */
-	if (pool->driver->transaction_begin) {
-		pool->driver->transaction_begin(pool);
-	}
+	csilk_db_exec(pool, "BEGIN");
 
 	/* Insert multiple rows */
 	csilk_db_exec(pool, "INSERT INTO accounts (balance) VALUES (100)");
 	csilk_db_exec(pool, "INSERT INTO accounts (balance) VALUES (200)");
 
 	/* Commit */
-	if (pool->driver->transaction_commit) {
-		pool->driver->transaction_commit(pool);
-	}
+	csilk_db_exec(pool, "COMMIT");
 
 	/* Verify */
 	cJSON* accounts = csilk_db_query_json(pool, "SELECT SUM(balance) as total FROM accounts");
