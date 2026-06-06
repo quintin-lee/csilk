@@ -64,7 +64,7 @@ csilk_sse_init(csilk_ctx_t* c)
 	csilk_set_header(c, "X-Accel-Buffering", "no");
 
 	csilk_status(c, CSILK_STATUS_OK);
-	csilk_set_sse(c, 1);
+	csilk_ctx_set_sse(c, 1);
 
 	void* internal_client = _csilk_get_internal_client(c);
 	if (!internal_client) {

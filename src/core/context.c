@@ -480,7 +480,7 @@ csilk_is_sse(csilk_ctx_t* c)
  * @param c      The request context.
  * @param is_sse 1 to enable, 0 to disable. */
 void
-csilk_set_sse(csilk_ctx_t* c, int is_sse)
+csilk_ctx_set_sse(csilk_ctx_t* c, int is_sse)
 {
 	if (c) {
 		c->is_sse = is_sse;
@@ -578,7 +578,7 @@ csilk_get_headers(csilk_ctx_t* c)
  * @note Async mode is automatically set by csilk_response_write() for
  *       streaming responses. */
 void
-csilk_set_async(csilk_ctx_t* c, int is_async)
+csilk_ctx_set_async(csilk_ctx_t* c, int is_async)
 {
 	if (c) {
 		c->is_async = is_async;

@@ -281,7 +281,7 @@ struct csilk_ctx_s {
 	int is_async;		/**< Non-zero if the response will be sent asynchronously
                    (framework skips auto-send after handler chain returns).
                    Set by csilk_response_write() for streaming responses or
-                   explicitly by csilk_set_async(). */
+                   explicitly by csilk_ctx_set_async(). */
 	int response_started;	/**< Non-zero if chunked response headers have already
                            been sent to the client. Used by
                            csilk_response_write() to avoid sending headers

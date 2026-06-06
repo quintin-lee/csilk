@@ -96,7 +96,7 @@ int csilk_is_sse(csilk_ctx_t* c);
  * @param c       The request context.
  * @param is_sse  1 to enable SSE mode, 0 to disable.
  */
-void csilk_set_sse(csilk_ctx_t* c, int is_sse);
+void csilk_ctx_set_sse(csilk_ctx_t* c, int is_sse);
 
 /**
  * @brief Check whether the handler chain has been aborted.
@@ -259,7 +259,7 @@ void csilk_set_status(csilk_ctx_t* c, int status);
  * @param c         The request context.
  * @param is_async  1 to enable async mode, 0 to disable (default).
  */
-void csilk_set_async(csilk_ctx_t* c, int is_async);
+void csilk_ctx_set_async(csilk_ctx_t* c, int is_async);
 
 /**
  * @brief Check whether asynchronous response mode is enabled.
