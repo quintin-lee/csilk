@@ -49,6 +49,7 @@ set(CSILK_CORE_TESTS
     test_utils
     test_utils_ext
     test_codec_prop
+    test_hash_prop
 )
 
 # -- Application tests --
