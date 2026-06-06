@@ -567,4 +567,4 @@
 - [x] 9.23 为热指标路径实现有界 JSON 构建器
 - [x] 9.24 实现 URL/Base64 的属性基测试 (`test_codec_prop`, 8 个属性测试)
 - [x] 9.25 Benchmark CI 方差归一化 (`BENCH_RUNS=3`, 中位数比较, CV 告警)
-- [x] 9.26 API 命名清理：`csilk_set_websocket` → `csilk_ctx_set_websocket`
+- [x] 9.26 API 命名清理：`csilk_set_websocket`／`csilk_set_sse`／`csilk_set_async` → `csilk_ctx_set_*`

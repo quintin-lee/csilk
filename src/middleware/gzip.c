@@ -197,7 +197,7 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	csilk_set(c, "gzip_state", state);
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
-	csilk_set_async(c, 1);
+	csilk_ctx_set_async(c, 1);
 
 	uv_loop_t* loop = uv_default_loop();
 	uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);

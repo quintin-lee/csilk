@@ -174,7 +174,7 @@ void csilk_file(csilk_ctx_t* c, const char* file_path);
  *
  * The first call sends the HTTP response headers with
  * Transfer-Encoding: chunked.  Subsequent calls append chunked frames.
- * The handler MUST set async mode (csilk_set_async(c, 1)) before calling
+ * The handler MUST set async mode (csilk_ctx_set_async(c, 1)) before calling
  * this and MUST NOT use csilk_string, csilk_json, etc.
  *
  * @param c    The request context.

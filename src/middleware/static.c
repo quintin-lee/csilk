@@ -286,7 +286,7 @@ static_after_work_cb(uv_work_t* req, int status)
 void
 csilk_static(csilk_ctx_t* c, const char* root_dir)
 {
-	csilk_set_async(c, 1);
+	csilk_ctx_set_async(c, 1);
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "static_root", (void*)root_dir);
@@ -306,7 +306,7 @@ csilk_static(csilk_ctx_t* c, const char* root_dir)
 void
 csilk_file(csilk_ctx_t* c, const char* file_path)
 {
-	csilk_set_async(c, 1);
+	csilk_ctx_set_async(c, 1);
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "serve_file_path", (void*)file_path);

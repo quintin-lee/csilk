@@ -498,14 +498,14 @@ test_csilk_get_status_is_websocket_is_sse_is_async()
 	assert(csilk_is_websocket(NULL) == 0);
 
 	assert(csilk_is_sse(ctx) == 0);
-	csilk_set_sse(ctx, 1);
+	csilk_ctx_set_sse(ctx, 1);
 	assert(csilk_is_sse(ctx) == 1);
 	assert(csilk_is_sse(NULL) == 0);
 
 	assert(csilk_is_async(ctx) == 0);
-	csilk_set_async(ctx, 1);
+	csilk_ctx_set_async(ctx, 1);
 	assert(csilk_is_async(ctx) == 1);
-	csilk_set_async(NULL, 1);
+	csilk_ctx_set_async(NULL, 1);
 	assert(csilk_is_async(NULL) == 0);
 	csilk_test_ctx_free(ctx);
 	printf("csilk_get_status/is_websocket/is_sse/is_async passed!\n");

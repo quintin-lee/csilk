@@ -36,7 +36,7 @@ src/core/srv_impl.h     — Internal server implementation details
 | `csilk_get_status` / `csilk_set_header` / `csilk_add_header` | Response control |
 | `csilk_get_arena` / `csilk_set` / `csilk_get` | Arena + key-value storage |
 | `csilk_is_websocket` / `csilk_is_sse` / `csilk_is_aborted` | Protocol mode flags |
-| `csilk_is_async` / `csilk_set_async` | Async response mode |
+| `csilk_is_async` / `csilk_ctx_set_async` | Async response mode |
 | `csilk_get_handler_index` / `csilk_get_work_req` | Handler chain state |
 | `csilk_get_file_fd` / `csilk_set_file_response` | Zero-copy file I/O |
 | `csilk_get_response_body` / `csilk_set_response_body` | Response body manipulation |
