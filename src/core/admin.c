@@ -205,10 +205,32 @@ static void
 admin_profile_quick_handler(csilk_ctx_t* c)
 {
 	if (csilk_flamegraph_is_running()) {
-		cJSON* root = cJSON_CreateObject();
-		cJSON_AddStringToObject(root, "status", "running");
-		cJSON_AddStringToObject(root, "message", "Profiler is already running");
-		csilk_json(c, 200, root);
+		char buf[256];
+		csilk_bounded_json_t j;
+		csilk_bounded_json_init(&j, buf, sizeof(buf));
+		csilk_bounded_json_object_open(&j);
+		csilk_bounded_json_key(&j, "status");
+		csilk_bounded_json_string(&j, "running");
+		csilk_bounded_json_key(&j, "message");
+		csilk_bounded_json_string(&j, "Profiler is already running");
+		csilk_bounded_json_object_close(&j);
+
+		if (csilk_bounded_json_overflow(&j)) {
+			cJSON* root = cJSON_CreateObject();
+			cJSON_AddStringToObject(root, "status", "running");
+			cJSON_AddStringToObject(root, "message", "Profiler is already running");
+			csilk_json(c, 200, root);
+			return;
+		}
+
+		csilk_set_header(c, "Content-Type", "application/json");
+		csilk_set_status(c, 200);
+		size_t body_len = csilk_bounded_buf_len(&j.buf);
+		csilk_arena_t* arena = csilk_get_arena(c);
+		char* arena_body = csilk_arena_strndup(arena, csilk_bounded_json_str(&j), body_len);
+		if (arena_body) {
+			csilk_set_response_body(c, arena_body, body_len, 0);
+		}
 		return;
 	}
 
