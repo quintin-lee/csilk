@@ -36,6 +36,7 @@
 #include "csilk/core/ws_frame.h"
 #include "csilk/core/crypto_dispatch.h"
 #include "csilk/core/mq_types.h"
+#include "csilk/core/bounded_buf.h"
 
 /* ================================================================
  * Framework Constants

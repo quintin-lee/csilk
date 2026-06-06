@@ -252,10 +252,11 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 	cJSON_Delete(json);
 }
 
-/** @brief Send a JSON error response containing an "error" field.
+/** @brief Send a JSON error response containing an "error" field (no-heap
+ *  hot path).
  *
- * Creates a JSON object with a single "error" key containing @p message
- * and sends it as the response via csilk_json().
+ * Uses a bounded stack buffer for small error messages (the common case).
+ * Falls back to cJSON if the message is too large for the stack buffer.
  *
  * @param c       The request context.
  * @param status  HTTP status code.
@@ -263,15 +264,38 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 void
 csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 {
-	if (!c) {
+	if (!c || !c->arena) {
 		return;
 	}
-	cJSON* err = cJSON_CreateObject();
-	if (!err) {
+
+	if (!message) {
+		message = "Unknown error";
+	}
+
+	char buf[256];
+	csilk_bounded_json_t j;
+	csilk_bounded_json_error(&j, buf, sizeof(buf), message);
+
+	csilk_set_header(c, "Content-Type", "application/json");
+	c->response.status = status;
+
+	const char* body = csilk_bounded_json_str(&j);
+	size_t body_len = csilk_bounded_buf_len(&j.buf);
+
+	if (csilk_bounded_json_overflow(&j)) {
+		/* Fall back to cJSON for unusually long messages */
+		cJSON* err = cJSON_CreateObject();
+		if (err) {
+			cJSON_AddStringToObject(err, "error", message);
+			csilk_json(c, status, err);
+		}
 		return;
 	}
-	cJSON_AddStringToObject(err, "error", message ? message : "Unknown error");
-	csilk_json(c, status, err);
+
+	char* arena_body = csilk_arena_strndup(c->arena, body, body_len);
+	if (arena_body) {
+		csilk_set_response_body(c, arena_body, body_len, 0);
+	}
 }
 
 /* --- JSON reflect --- */
