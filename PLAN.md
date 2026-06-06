@@ -565,6 +565,6 @@
   - 生产部署: `UV_USE_IO_URING=1 ./example_server config.yaml`
 - [x] 9.22 Arena 块在工作线程初始化时预分配
 - [x] 9.23 为热指标路径实现有界 JSON 构建器
-- [ ] 9.24 实现 URL/Base64 的属性基测试
+- [x] 9.24 实现 URL/Base64 的属性基测试 (`test_codec_prop`, 8 个属性测试)
 - [ ] 9.25 Benchmark CI 方差归一化
 - [ ] 9.26 API 命名清理：`csilk_set_websocket` → `csilk_ctx_set_websocket`
