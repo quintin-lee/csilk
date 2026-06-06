@@ -48,6 +48,7 @@ set(CSILK_CORE_TESTS
     test_url_ext
     test_utils
     test_utils_ext
+    test_codec_prop
 )
 
 # -- Application tests --
