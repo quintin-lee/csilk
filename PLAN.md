@@ -540,7 +540,7 @@
   - `mysql.c`: 添加 `csilk_strndup` 局部 polyfill 宏，当 libc 不暴露 `strndup` 时使用
 - [x] 9.14 模块化 `src/messaging/mq.c` (968 行) — 已拆分为 mq.c(558) + mq_context.c + mq_offload.c + mq_wal.c
 - [x] 9.15 拆分 `src/core/utils.c` (1018 行) — UUID/Base64/SHA1 独立文件
-- [~] 9.16 不透明化 `csilk_db_pool_s` 和 workflow 结构体 (workflow 已 opaque; db_pool_s 完整定义仍在 `include/csilk/core/db_internal.h`，需移至 `src/` 私有头文件)
+- [x] 9.16 不透明化 `csilk_db_pool_s` 和 workflow 结构体
 - [x] 9.17 GitHub Releases 发布预编译产物
 
   - `.github/workflows/release.yml`: 在 `v*` tag push 时构建 Release，产出 Linux (x86_64) 和 macOS (arm64) 静态/动态库 + 头文件 + CMake 配置包的 `.tar.gz`

@@ -20,7 +20,6 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/db_internal.h"
 #include "csilk/drivers/db.h"
 
 /** @brief Per-connection data for the PostgreSQL driver. */

@@ -34,7 +34,7 @@
  */
 
 #include "csilk/drivers/db.h"
-#include "csilk/core/db_internal.h"
+#include "db_internal.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
