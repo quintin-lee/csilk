@@ -20,23 +20,24 @@ main()
 {
 	csilk_router_t* r = csilk_router_new();
 
-	printf("Testing csilk_group_add_route_extended with NULL params...\n");
+	printf("Testing csilk_group_add_route_extended with nullptr params...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/nulltest");
 		csilk_group_add_route_extended(
-		    NULL, "GET", "/test", test_handler, NULL, NULL, NULL, NULL);
+		    nullptr, "GET", "/test", test_handler, nullptr, nullptr, nullptr, nullptr);
 		csilk_group_add_route_extended(
-		    g, NULL, "/test", test_handler, NULL, NULL, NULL, NULL);
+		    g, nullptr, "/test", test_handler, nullptr, nullptr, nullptr, nullptr);
 		csilk_group_add_route_extended(
-		    g, "GET", NULL, test_handler, NULL, NULL, NULL, NULL);
-		csilk_group_add_route_extended(g, "GET", "/test", NULL, NULL, NULL, NULL, NULL);
+		    g, "GET", nullptr, test_handler, nullptr, nullptr, nullptr, nullptr);
+		csilk_group_add_route_extended(
+		    g, "GET", "/test", nullptr, nullptr, nullptr, nullptr, nullptr);
 		csilk_group_free(g);
 	}
 
 	printf("Testing csilk_group_add_route_extended with basic metadata...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/api");
-		assert(g != NULL);
+		assert(g != nullptr);
 		csilk_group_add_route_extended(g,
 					       "GET",
 					       "/hello",
@@ -60,12 +61,12 @@ main()
 		csilk_group_free(g);
 	}
 
-	printf("Testing csilk_group_add_route_extended with NULL metadata...\n");
+	printf("Testing csilk_group_add_route_extended with nullptr metadata...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/v2");
-		assert(g != NULL);
+		assert(g != nullptr);
 		csilk_group_add_route_extended(
-		    g, "POST", "/data", test_handler, NULL, NULL, NULL, NULL);
+		    g, "POST", "/data", test_handler, nullptr, nullptr, nullptr, nullptr);
 
 		csilk_ctx_t* ctx = csilk_test_ctx_new();
 		csilk_test_ctx_set_request(ctx, "POST", "/v2/data");
@@ -83,13 +84,13 @@ main()
 	printf("Testing csilk_group_add_route_extended_perm...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/admin");
-		assert(g != NULL);
+		assert(g != nullptr);
 		csilk_group_add_route_extended_perm(g,
 						    "DELETE",
 						    "/user/:id",
 						    test_handler,
-						    NULL,
-						    NULL,
+						    nullptr,
+						    nullptr,
 						    "Delete user",
 						    "Delete a user by ID",
 						    "admin",
@@ -108,18 +109,50 @@ main()
 		csilk_group_free(g);
 	}
 
-	printf("Testing csilk_group_add_route_extended_perm with NULL "
+	printf("Testing csilk_group_add_route_extended_perm with nullptr "
 	       "params...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/nullperm");
-		csilk_group_add_route_extended_perm(
-		    NULL, "GET", "/test", test_handler, NULL, NULL, NULL, NULL, NULL, NULL);
-		csilk_group_add_route_extended_perm(
-		    g, NULL, "/test", test_handler, NULL, NULL, NULL, NULL, NULL, NULL);
-		csilk_group_add_route_extended_perm(
-		    g, "GET", NULL, test_handler, NULL, NULL, NULL, NULL, NULL, NULL);
-		csilk_group_add_route_extended_perm(
-		    g, "GET", "/test", NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+		csilk_group_add_route_extended_perm(nullptr,
+						    "GET",
+						    "/test",
+						    test_handler,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr);
+		csilk_group_add_route_extended_perm(g,
+						    nullptr,
+						    "/test",
+						    test_handler,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr);
+		csilk_group_add_route_extended_perm(g,
+						    "GET",
+						    nullptr,
+						    test_handler,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr);
+		csilk_group_add_route_extended_perm(g,
+						    "GET",
+						    "/test",
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr,
+						    nullptr);
 		csilk_group_free(g);
 	}
 
@@ -127,7 +160,7 @@ main()
 	       "metadata...\n");
 	{
 		csilk_group_t* g = csilk_group_new(r, "/api/v3");
-		assert(g != NULL);
+		assert(g != nullptr);
 		csilk_group_add_route_extended_perm(g,
 						    "PUT",
 						    "/item/:id",

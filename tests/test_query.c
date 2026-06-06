@@ -19,7 +19,7 @@ test_split_url()
 
 	csilk_split_url("/noquery", &path, &query);
 	assert(strcmp(path, "/noquery") == 0);
-	assert(query == NULL);
+	assert(query == nullptr);
 	free(path);
 	free(query);
 
@@ -44,10 +44,10 @@ test_parse_query()
 	const char* c = csilk_get_query(ctx, "c");
 	const char* d = csilk_get_query(ctx, "d");
 
-	assert(a != NULL && strcmp(a, "1") == 0);
-	assert(b != NULL && strcmp(b, "2") == 0);
-	assert(c != NULL && strcmp(c, "hello") == 0);
-	assert(d == NULL);
+	assert(a != nullptr && strcmp(a, "1") == 0);
+	assert(b != nullptr && strcmp(b, "2") == 0);
+	assert(c != nullptr && strcmp(c, "hello") == 0);
+	assert(d == nullptr);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_parse_query passed\n");
@@ -59,11 +59,11 @@ test_empty_query()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
 	csilk_parse_query(ctx, "");
-	assert(csilk_get_query(ctx, "any") == NULL);
+	assert(csilk_get_query(ctx, "any") == nullptr);
 
 	csilk_parse_query(ctx, "key_no_val");
 	const char* val = csilk_get_query(ctx, "key_no_val");
-	assert(val != NULL && strcmp(val, "") == 0);
+	assert(val != nullptr && strcmp(val, "") == 0);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_empty_query passed\n");
@@ -74,16 +74,16 @@ test_boundary_query()
 {
 	char *path, *query;
 
-	// NULL url
-	csilk_split_url(NULL, &path, &query);
-	assert(path == NULL);
-	assert(query == NULL);
+	// nullptr url
+	csilk_split_url(nullptr, &path, &query);
+	assert(path == nullptr);
+	assert(query == nullptr);
 
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	// NULL query string
-	csilk_parse_query(ctx, NULL);
-	assert(csilk_get_query(ctx, "any") == NULL);
+	// nullptr query string
+	csilk_parse_query(ctx, nullptr);
+	assert(csilk_get_query(ctx, "any") == nullptr);
 
 	// Consecutive ampersands
 	csilk_parse_query(ctx, "a=1&&b=2&");

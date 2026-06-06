@@ -30,7 +30,7 @@ dummy_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)input;
 	(void)user_data;
 	usleep(10000);
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -40,7 +40,7 @@ test_workflow_monitoring()
 	g_events_received = 0;
 
 	csilk_wf_t* wf = csilk_wf_new("monitored_wf");
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", dummy_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", dummy_handler, nullptr);
 	csilk_wf_node_set_entry(n1, 1);
 
 	// Create a dummy context for the monitor
@@ -49,7 +49,7 @@ test_workflow_monitoring()
 	csilk_wf_register_monitor(wf, mock_ctx);
 
 	// Instead of full E2E, let's just run it and ensure no crashes.
-	csilk_wf_run(wf, NULL, NULL);
+	csilk_wf_run(wf, nullptr, nullptr);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

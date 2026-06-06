@@ -32,7 +32,7 @@ extern void _csilk_metrics_inc_rate_limit_blocks(void);
 extern void _csilk_metrics_inc_csrf_violations(void);
 
 /* Global DB pool for the example */
-static csilk_db_pool_t* global_db_pool = NULL;
+static csilk_db_pool_t* global_db_pool = nullptr;
 
 /* --- Handlers --- */
 
@@ -151,7 +151,7 @@ static const csilk_ai_driver_t mock_ai_driver = {
     .free = mock_ai_free,
 };
 
-static csilk_ai_t* g_mock_ai = NULL;
+static csilk_ai_t* g_mock_ai = nullptr;
 
 /* --- Background Tasks --- */
 
@@ -282,7 +282,7 @@ main()
 	printf(" - Readiness:  http://localhost:8080/readyz\n");
 	printf("====================================================\n\n");
 
-	csilk_app_t* app = csilk_app_new(NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
 
 	/* Database (SQLite) */
 	csilk_db_init();
@@ -316,7 +316,7 @@ main()
 
 	/* Mock AI Driver */
 	csilk_ai_register_driver(&mock_ai_driver);
-	g_mock_ai = csilk_ai_new("mock", NULL, NULL);
+	g_mock_ai = csilk_ai_new("mock", nullptr, nullptr);
 	if (g_mock_ai) {
 		printf("[Init] Mock AI driver ready for dashboard AI stats\n");
 	}

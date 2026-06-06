@@ -7,7 +7,7 @@
 #include "csilk/app/workflow.h"
 
 static int g_steps_completed = 0;
-static char* g_final_result = NULL;
+static char* g_final_result = nullptr;
 
 csilk_data_t*
 step1_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -50,29 +50,29 @@ test_workflow_exec_sequential()
 	g_steps_completed = 0;
 	if (g_final_result) {
 		free(g_final_result);
-		g_final_result = NULL;
+		g_final_result = nullptr;
 	}
 
 	csilk_wf_t* wf = csilk_wf_new("seq_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", step1_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", step2_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", step1_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", step2_handler, nullptr);
 
 	csilk_wf_bind(n1, n2);
 
-	csilk_data_t initial_input = {"text/plain", "start", NULL};
+	csilk_data_t initial_input = {"text/plain", "start", nullptr};
 
 	csilk_wf_run(wf, &initial_input, on_workflow_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	assert(g_steps_completed == 2);
-	assert(g_final_result != NULL);
+	assert(g_final_result != nullptr);
 	assert(strcmp(g_final_result, "result from step 2") == 0);
 
 	csilk_wf_free(wf);
 	free(g_final_result);
-	g_final_result = NULL;
+	g_final_result = nullptr;
 	printf("test_workflow_exec_sequential: PASS\n");
 }
 

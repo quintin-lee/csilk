@@ -82,10 +82,10 @@ static csilk_cipher_driver_t my_driver = {
     .symmetric_encrypt = my_symmetric_encrypt,
     .symmetric_decrypt = my_symmetric_decrypt,
     .generate_keypair = my_generate_keypair,
-    .asymmetric_encrypt = NULL,
-    .asymmetric_decrypt = NULL,
-    .sign = NULL,
-    .verify = NULL,
+    .asymmetric_encrypt = nullptr,
+    .asymmetric_decrypt = nullptr,
+    .sign = nullptr,
+    .verify = nullptr,
 };
 
 static void
@@ -105,7 +105,7 @@ test_default_symmetric_roundtrip(void)
 	size_t ct_len = sizeof(ciphertext);
 	uint8_t tag[16];
 
-	int r = _csilk_symmetric_encrypt(NULL,
+	int r = _csilk_symmetric_encrypt(nullptr,
 					 key,
 					 sizeof(key),
 					 plaintext,
@@ -121,7 +121,7 @@ test_default_symmetric_roundtrip(void)
 
 	uint8_t decrypted[256];
 	size_t dec_len = sizeof(decrypted);
-	r = _csilk_symmetric_decrypt(NULL,
+	r = _csilk_symmetric_decrypt(nullptr,
 				     key,
 				     sizeof(key),
 				     ciphertext,
@@ -156,7 +156,7 @@ test_default_symmetric_wrong_tag(void)
 	size_t ct_len = sizeof(ciphertext);
 	uint8_t tag[16];
 
-	int r = _csilk_symmetric_encrypt(NULL,
+	int r = _csilk_symmetric_encrypt(nullptr,
 					 key,
 					 sizeof(key),
 					 plaintext,
@@ -173,7 +173,7 @@ test_default_symmetric_wrong_tag(void)
 
 	uint8_t decrypted[256];
 	size_t dec_len = sizeof(decrypted);
-	r = _csilk_symmetric_decrypt(NULL,
+	r = _csilk_symmetric_decrypt(nullptr,
 				     key,
 				     sizeof(key),
 				     ciphertext,
@@ -200,7 +200,7 @@ test_default_symmetric_bad_key(void)
 	size_t ct_len = sizeof(ciphertext);
 	uint8_t tag[16];
 
-	int r = _csilk_symmetric_encrypt(NULL,
+	int r = _csilk_symmetric_encrypt(nullptr,
 					 key,
 					 sizeof(key),
 					 (const uint8_t*)"data",
@@ -226,7 +226,7 @@ test_default_asymmetric_roundtrip(void)
 	size_t pub_len = sizeof(pub_key);
 	size_t priv_len = sizeof(priv_key);
 
-	int r = _csilk_generate_keypair(NULL, pub_key, &pub_len, priv_key, &priv_len);
+	int r = _csilk_generate_keypair(nullptr, pub_key, &pub_len, priv_key, &priv_len);
 	assert(r == 0);
 	assert(pub_len > 0);
 	assert(priv_len > 0);
@@ -238,7 +238,7 @@ test_default_asymmetric_roundtrip(void)
 	size_t ct_len = sizeof(ciphertext);
 
 	r = _csilk_asymmetric_encrypt(
-	    NULL, pub_key, pub_len, plaintext, pt_len, ciphertext, &ct_len);
+	    nullptr, pub_key, pub_len, plaintext, pt_len, ciphertext, &ct_len);
 	assert(r == 0);
 	assert(ct_len == CSILK_RSA_KEY_SIZE);
 
@@ -246,7 +246,7 @@ test_default_asymmetric_roundtrip(void)
 	size_t dec_len = sizeof(decrypted);
 
 	r = _csilk_asymmetric_decrypt(
-	    NULL, priv_key, priv_len, ciphertext, ct_len, decrypted, &dec_len);
+	    nullptr, priv_key, priv_len, ciphertext, ct_len, decrypted, &dec_len);
 	assert(r == 0);
 	assert(dec_len == pt_len);
 	assert(memcmp(decrypted, plaintext, pt_len) == 0);
@@ -264,7 +264,7 @@ test_default_sign_verify(void)
 	size_t pub_len = sizeof(pub_key);
 	size_t priv_len = sizeof(priv_key);
 
-	int r = _csilk_generate_keypair(NULL, pub_key, &pub_len, priv_key, &priv_len);
+	int r = _csilk_generate_keypair(nullptr, pub_key, &pub_len, priv_key, &priv_len);
 	assert(r == 0);
 
 	const uint8_t data[] = "Data to sign with RSA-PSS";
@@ -273,15 +273,15 @@ test_default_sign_verify(void)
 	uint8_t sig[CSILK_RSA_SIGNATURE_SIZE];
 	size_t sig_len = sizeof(sig);
 
-	r = _csilk_sign(NULL, priv_key, priv_len, data, data_len, sig, &sig_len);
+	r = _csilk_sign(nullptr, priv_key, priv_len, data, data_len, sig, &sig_len);
 	assert(r == 0);
 	assert(sig_len == CSILK_RSA_SIGNATURE_SIZE);
 
-	r = _csilk_verify(NULL, pub_key, pub_len, data, data_len, sig, sig_len);
+	r = _csilk_verify(nullptr, pub_key, pub_len, data, data_len, sig, sig_len);
 	assert(r == 0);
 
 	sig[0] ^= 0xFF;
-	r = _csilk_verify(NULL, pub_key, pub_len, data, data_len, sig, sig_len);
+	r = _csilk_verify(nullptr, pub_key, pub_len, data, data_len, sig, sig_len);
 	assert(r == -1);
 
 	printf("    Sign/verify OK\n");
@@ -350,7 +350,7 @@ test_custom_keygen(void)
 static void
 test_null_context_defaults(void)
 {
-	printf("  Testing NULL context falls back to defaults...\n");
+	printf("  Testing nullptr context falls back to defaults...\n");
 
 	uint8_t key[32];
 	uint8_t iv[12];
@@ -364,18 +364,18 @@ test_null_context_defaults(void)
 	uint8_t tag[16];
 
 	int r = _csilk_symmetric_encrypt(
-	    NULL, key, sizeof(key), pt, pt_len, iv, sizeof(iv), ct, &ct_len, tag, sizeof(tag));
+	    nullptr, key, sizeof(key), pt, pt_len, iv, sizeof(iv), ct, &ct_len, tag, sizeof(tag));
 	assert(r == 0);
 
 	uint8_t dec[256];
 	size_t dec_len = sizeof(dec);
 	r = _csilk_symmetric_decrypt(
-	    NULL, key, sizeof(key), ct, ct_len, iv, sizeof(iv), tag, sizeof(tag), dec, &dec_len);
+	    nullptr, key, sizeof(key), ct, ct_len, iv, sizeof(iv), tag, sizeof(tag), dec, &dec_len);
 	assert(r == 0);
 	assert(dec_len == pt_len);
 	assert(memcmp(dec, pt, pt_len) == 0);
 
-	printf("    NULL context defaults OK\n");
+	printf("    nullptr context defaults OK\n");
 }
 
 int

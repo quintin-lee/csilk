@@ -21,7 +21,8 @@ int
 main()
 {
 	csilk_ctx_t* c = csilk_test_ctx_new();
-	csilk_handler_t handlers[] = {csilk_recovery_handler, panic_handler, normal_handler, NULL};
+	csilk_handler_t handlers[] = {
+	    csilk_recovery_handler, panic_handler, normal_handler, nullptr};
 	csilk_test_ctx_set_handlers(c, handlers);
 
 	printf("Testing recovery...\n");

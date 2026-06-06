@@ -15,7 +15,7 @@ test_request_id()
 	// Case 1: ID is empty, should be generated
 	csilk_request_id_middleware(c);
 	const char* rid1 = csilk_get_request_id(c);
-	assert(rid1 != NULL && rid1[0] != '\0');
+	assert(rid1 != nullptr && rid1[0] != '\0');
 	assert(strlen(rid1) == 36);
 
 	// Case 2: ID is already present, should be preserved
@@ -41,8 +41,8 @@ test_health_check()
 	assert(csilk_get_status(c) == CSILK_STATUS_OK);
 	size_t len;
 	const char* body = csilk_get_response_body(c, &len);
-	assert(body != NULL);
-	assert(strstr(body, "\"status\":\"up\"") != NULL);
+	assert(body != nullptr);
+	assert(strstr(body, "\"status\":\"up\"") != nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_health_check passed\n");

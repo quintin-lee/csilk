@@ -27,18 +27,36 @@ typedef struct {
 } LoginResp;
 
 #define PRODUCT_MAP(X)                                                                             \
-	X(Product, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)                          \
-	X(Product, name, CSILK_TYPE_STRING, sizeof(((Product*)0)->name), 0, false, NULL)           \
-	X(Product, price, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, NULL)                       \
-	X(Product, active, CSILK_TYPE_BOOL, sizeof(bool), 0, false, NULL)
+	X(Product, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)                       \
+	X(Product, name, CSILK_TYPE_STRING, sizeof(((Product*)0)->name), 0, false, nullptr)        \
+	X(Product, price, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, nullptr)                    \
+	X(Product, active, CSILK_TYPE_BOOL, sizeof(bool), 0, false, nullptr)
 
 #define LOGINREQ_MAP(X)                                                                            \
-	X(LoginReq, username, CSILK_TYPE_STRING, sizeof(((LoginReq*)0)->username), 0, false, NULL) \
-	X(LoginReq, password, CSILK_TYPE_STRING, sizeof(((LoginReq*)0)->password), 0, false, NULL)
+	X(LoginReq,                                                                                \
+	  username,                                                                                \
+	  CSILK_TYPE_STRING,                                                                       \
+	  sizeof(((LoginReq*)0)->username),                                                        \
+	  0,                                                                                       \
+	  false,                                                                                   \
+	  nullptr)                                                                                 \
+	X(LoginReq,                                                                                \
+	  password,                                                                                \
+	  CSILK_TYPE_STRING,                                                                       \
+	  sizeof(((LoginReq*)0)->password),                                                        \
+	  0,                                                                                       \
+	  false,                                                                                   \
+	  nullptr)
 
 #define LOGINRESP_MAP(X)                                                                           \
-	X(LoginResp, token, CSILK_TYPE_STRING, sizeof(((LoginResp*)0)->token), 0, false, NULL)     \
-	X(LoginResp, message, CSILK_TYPE_STRING, sizeof(((LoginResp*)0)->message), 0, false, NULL)
+	X(LoginResp, token, CSILK_TYPE_STRING, sizeof(((LoginResp*)0)->token), 0, false, nullptr)  \
+	X(LoginResp,                                                                               \
+	  message,                                                                                 \
+	  CSILK_TYPE_STRING,                                                                       \
+	  sizeof(((LoginResp*)0)->message),                                                        \
+	  0,                                                                                       \
+	  false,                                                                                   \
+	  nullptr)
 
 CSILK_REGISTER_REFLECT(Product, PRODUCT_MAP)
 CSILK_REGISTER_REFLECT(LoginReq, LOGINREQ_MAP)
@@ -65,11 +83,11 @@ get_path(cJSON* spec, const char* method, const char* path)
 {
 	cJSON* paths = cJSON_GetObjectItem(spec, "paths");
 	if (!paths) {
-		return NULL;
+		return nullptr;
 	}
 	cJSON* pobj = cJSON_GetObjectItem(paths, path);
 	if (!pobj) {
-		return NULL;
+		return nullptr;
 	}
 	return cJSON_GetObjectItem(pobj, method);
 }
@@ -99,7 +117,8 @@ test_basic_spec_structure()
 	assert(r);
 
 	csilk_handler_t h[] = {dummy_handler};
-	csilk_router_add_extended(r, "GET", "/", h, 1, "/", NULL, NULL, "Root", "Root endpoint");
+	csilk_router_add_extended(
+	    r, "GET", "/", h, 1, "/", nullptr, nullptr, "Root", "Root endpoint");
 
 	cJSON* spec = csilk_generate_openapi_json(r, "TestAPI", "2.0.0", "Description");
 	assert(spec);
@@ -135,11 +154,11 @@ test_path_parameter_conversion()
 
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add_extended(
-	    r, "GET", "/users/:id", h, 1, "/users/:id", NULL, "Product", "Get User", NULL);
+	    r, "GET", "/users/:id", h, 1, "/users/:id", nullptr, "Product", "Get User", nullptr);
 	csilk_router_add_extended(
-	    r, "GET", "/files/*path", h, 1, "/files/*path", NULL, NULL, NULL, NULL);
+	    r, "GET", "/files/*path", h, 1, "/files/*path", nullptr, nullptr, nullptr, nullptr);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	// Check :id → {id}
@@ -185,7 +204,7 @@ test_request_response_types()
 				  "User Login",
 				  "Authenticate user");
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* post_op = get_path(spec, "post", "/login");
@@ -226,9 +245,9 @@ test_schema_generation()
 
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add_extended(
-	    r, "POST", "/products", h, 1, "/products", "Product", "Product", NULL, NULL);
+	    r, "POST", "/products", h, 1, "/products", "Product", "Product", nullptr, nullptr);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	// Check components/schemas
@@ -275,13 +294,21 @@ test_multiple_methods_same_path()
 
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add_extended(
-	    r, "GET", "/items", h, 1, "/items", NULL, "Product", "List items", NULL);
+	    r, "GET", "/items", h, 1, "/items", nullptr, "Product", "List items", nullptr);
 	csilk_router_add_extended(
-	    r, "POST", "/items", h, 1, "/items", "Product", "Product", "Create item", NULL);
-	csilk_router_add_extended(
-	    r, "DELETE", "/items/:id", h, 1, "/items/:id", NULL, NULL, "Delete item", NULL);
+	    r, "POST", "/items", h, 1, "/items", "Product", "Product", "Create item", nullptr);
+	csilk_router_add_extended(r,
+				  "DELETE",
+				  "/items/:id",
+				  h,
+				  1,
+				  "/items/:id",
+				  nullptr,
+				  nullptr,
+				  "Delete item",
+				  nullptr);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* paths = cJSON_GetObjectItem(spec, "paths");
@@ -320,20 +347,20 @@ test_route_without_types()
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add(r, "GET", "/plain", h, 1);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* get_op = get_path(spec, "get", "/plain");
 	assert(get_op);
 
 	// Should NOT have requestBody
-	assert(cJSON_GetObjectItem(get_op, "requestBody") == NULL);
+	assert(cJSON_GetObjectItem(get_op, "requestBody") == nullptr);
 
 	// Should have default response (no schema ref)
 	cJSON* resp200 = cJSON_GetObjectItem(cJSON_GetObjectItem(get_op, "responses"), "200");
 	assert(resp200);
 	// No content section for type-less routes
-	assert(cJSON_GetObjectItem(resp200, "content") == NULL);
+	assert(cJSON_GetObjectItem(resp200, "content") == nullptr);
 
 	cJSON_Delete(spec);
 	csilk_router_free(r);
@@ -347,9 +374,10 @@ test_router_collect_routes()
 	assert(r);
 
 	csilk_handler_t h1[] = {dummy_handler};
-	csilk_router_add_extended(r, "GET", "/a", h1, 1, "/a", NULL, NULL, "A", NULL);
+	csilk_router_add_extended(r, "GET", "/a", h1, 1, "/a", nullptr, nullptr, "A", nullptr);
 	csilk_handler_t h2[] = {dummy_handler};
-	csilk_router_add_extended(r, "POST", "/b", h2, 1, "/b", "LoginReq", NULL, NULL, NULL);
+	csilk_router_add_extended(
+	    r, "POST", "/b", h2, 1, "/b", "LoginReq", nullptr, nullptr, nullptr);
 
 	cJSON* routes = csilk_router_collect_routes(r);
 	assert(routes);
@@ -380,10 +408,12 @@ test_no_duplicate_schemas()
 
 	csilk_handler_t h[] = {dummy_handler};
 	// Two routes referencing the same type
-	csilk_router_add_extended(r, "GET", "/p1", h, 1, "/p1", NULL, "Product", NULL, NULL);
-	csilk_router_add_extended(r, "GET", "/p2", h, 1, "/p2", NULL, "Product", NULL, NULL);
+	csilk_router_add_extended(
+	    r, "GET", "/p1", h, 1, "/p1", nullptr, "Product", nullptr, nullptr);
+	csilk_router_add_extended(
+	    r, "GET", "/p2", h, 1, "/p2", nullptr, "Product", nullptr, nullptr);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* schemas = cJSON_GetObjectItem(cJSON_GetObjectItem(spec, "components"), "schemas");
@@ -418,7 +448,7 @@ test_extended_route_macro()
 	csilk_handler_t h[] = {dummy_handler};
 	CSILK_ROUTE(r, "PUT", "/item/:id", h, 1, "Product", "Product", "Update", "Update item");
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* put_op = get_path(spec, "put", "/item/{id}");
@@ -438,9 +468,9 @@ test_descriptions_and_summaries()
 
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add_extended(
-	    r, "GET", "/test", h, 1, "/test", NULL, NULL, "Short", "Long description");
+	    r, "GET", "/test", h, 1, "/test", nullptr, nullptr, "Short", "Long description");
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* op = get_path(spec, "get", "/test");
@@ -460,7 +490,8 @@ test_serve_openapi_handler()
 	assert(r);
 
 	csilk_handler_t h[] = {dummy_handler};
-	csilk_router_add_extended(r, "GET", "/ping", h, 1, "/ping", NULL, NULL, "Ping", NULL);
+	csilk_router_add_extended(
+	    r, "GET", "/ping", h, 1, "/ping", nullptr, nullptr, "Ping", nullptr);
 
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
@@ -470,9 +501,9 @@ test_serve_openapi_handler()
 	assert(csilk_get_status(ctx) == 200);
 	size_t body_len = 0;
 	const char* body = csilk_get_response_body(ctx, &body_len);
-	assert(body != NULL);
-	assert(strstr(body, "\"openapi\"") != NULL);
-	assert(strstr(body, "\"Served\"") != NULL);
+	assert(body != nullptr);
+	assert(strstr(body, "\"openapi\"") != nullptr);
+	assert(strstr(body, "\"Served\"") != nullptr);
 
 	csilk_test_ctx_free(ctx);
 	csilk_router_free(r);
@@ -484,7 +515,7 @@ test_serve_openapi_null_router()
 {
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_serve_openapi(ctx, NULL, "T", "1", NULL);
+	csilk_serve_openapi(ctx, nullptr, "T", "1", nullptr);
 	// Should not crash, response should be empty
 	assert(csilk_get_status(ctx) == 200 || csilk_get_status(ctx) == 0);
 
@@ -502,9 +533,9 @@ test_serve_swagger_ui()
 	assert(csilk_get_status(ctx) == 200);
 	size_t body_len = 0;
 	const char* body = csilk_get_response_body(ctx, &body_len);
-	assert(body != NULL);
-	assert(strstr(body, "swagger-ui") != NULL);
-	assert(strstr(body, "/openapi.json") != NULL);
+	assert(body != nullptr);
+	assert(strstr(body, "swagger-ui") != nullptr);
+	assert(strstr(body, "/openapi.json") != nullptr);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_serve_swagger_ui PASSED\n");
@@ -513,7 +544,7 @@ test_serve_swagger_ui()
 void
 test_serve_swagger_ui_null_ctx()
 {
-	csilk_serve_swagger_ui(NULL);
+	csilk_serve_swagger_ui(nullptr);
 	printf("test_serve_swagger_ui_null_ctx PASSED\n");
 }
 
@@ -528,7 +559,7 @@ test_auto_register_all_types()
 	csilk_handler_t h[] = {dummy_handler};
 	csilk_router_add(r, "GET", "/foo", h, 1);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
 	assert(spec);
 
 	cJSON* schemas = cJSON_GetObjectItem(cJSON_GetObjectItem(spec, "components"), "schemas");
@@ -551,7 +582,7 @@ test_empty_router()
 	csilk_router_t* r = csilk_router_new();
 	assert(r);
 
-	cJSON* spec = csilk_generate_openapi_json(r, "Empty", "1", NULL);
+	cJSON* spec = csilk_generate_openapi_json(r, "Empty", "1", nullptr);
 	assert(spec);
 
 	cJSON* paths = cJSON_GetObjectItem(spec, "paths");

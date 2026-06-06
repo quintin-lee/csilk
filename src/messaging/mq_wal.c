@@ -55,8 +55,8 @@
  *       └─ _mq_enqueue(mq, topic, payload, len)
  *
  * @param mq      MQ instance (must have wal_fd >= 0).
- * @param topic   Topic string (not NULL).
- * @param payload Opaque payload data (may be NULL if len == 0).
+ * @param topic   Topic string (not nullptr).
+ * @param payload Opaque payload data (may be nullptr if len == 0).
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on write or fsync failure.
  * @threadsafe Serialized via wal_mutex. */
@@ -283,8 +283,8 @@ _mq_recovery(csilk_mq_t* mq)
  *    │                             └─ _mq_enqueue()    ← in-memory queue
  * ```
  *
- * @param mq       The MQ instance (must not be NULL).
- * @param wal_path Filesystem path to the WAL file (must not be NULL).
+ * @param mq       The MQ instance (must not be nullptr).
+ * @param wal_path Filesystem path to the WAL file (must not be nullptr).
  * @return 0 on success, or a negative uv_fs_open error code on failure.
  * @threadsafe Serialized via wal_mutex.
  * @note The WAL file is opened with O_CREAT | O_RDWR | O_APPEND, mode 0644.

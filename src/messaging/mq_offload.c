@@ -77,7 +77,7 @@ worker_after_cb(uv_work_t* req, int status)
  *
  * @param ctx    The per-message context (must have a valid msg).
  * @param worker The callback to invoke on the thread pool thread.
- * @note If ctx, ctx->msg, or worker is NULL, this is a no-op.
+ * @note If ctx, ctx->msg, or worker is nullptr, this is a no-op.
  * @note The worker callback owns the topic and payload pointers for its
  *       duration — they are freed automatically after it returns. */
 void

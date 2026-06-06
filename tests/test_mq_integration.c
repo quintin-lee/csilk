@@ -10,10 +10,10 @@ main()
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
 
-	assert(server != NULL);
+	assert(server != nullptr);
 
 	csilk_mq_t* mq = csilk_server_get_mq(server);
-	assert(mq != NULL);
+	assert(mq != nullptr);
 
 	printf("MQ instance successfully retrieved from server\n");
 

@@ -209,7 +209,7 @@ test_base64url_no_padding(void)
 		}
 		char encoded[128];
 		csilk_base64url_encode(src, len, encoded);
-		assert(strchr(encoded, '=') == NULL);
+		assert(strchr(encoded, '=') == nullptr);
 	}
 	printf("test_base64url_no_padding passed\n");
 }

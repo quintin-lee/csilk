@@ -28,12 +28,12 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	input[size] = '\0';
 
 	// 1. Fuzz csilk_split_url
-	char* path = NULL;
-	char* query = NULL;
+	char* path = nullptr;
+	char* query = nullptr;
 	csilk_split_url(input, &path, &query);
 
 	csilk_ctx_t ctx;
-	_csilk_ctx_init(&ctx, NULL, NULL);
+	_csilk_ctx_init(&ctx, nullptr, nullptr);
 
 	// The fuzzer manually allocated path/query, but csilk_ctx_cleanup expects
 	// to own them if assigned. To avoid double-free, we handle them carefully.
@@ -47,7 +47,7 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	// 3. Fuzz routing
 	csilk_router_t* router = csilk_router_new();
 	if (router) {
-		csilk_handler_t handlers[] = {NULL};
+		csilk_handler_t handlers[] = {nullptr};
 		csilk_router_add(router, "GET", "/api/:id/users/*action", handlers, 1);
 		csilk_router_add(router, "POST", "/api/ping", handlers, 1);
 
@@ -57,8 +57,8 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 			// but here we manually manage it to be safe.
 			ctx.request.path = path;
 			csilk_router_match_ctx(router, &ctx);
-			// Reset to NULL so csilk_ctx_cleanup doesn't try to free our manual path
-			ctx.request.path = NULL;
+			// Reset to nullptr so csilk_ctx_cleanup doesn't try to free our manual path
+			ctx.request.path = nullptr;
 		}
 		csilk_router_free(router);
 	}

@@ -52,7 +52,7 @@ publisher_thread(void* arg)
 		int n = snprintf(buf, sizeof(buf), "msg_%d_%d", ta->id, i);
 		csilk_mq_publish(ta->mq, ta->topic, buf, (size_t)n);
 	}
-	return NULL;
+	return nullptr;
 }
 
 static void
@@ -83,7 +83,7 @@ test_mq_concurrent_publish(void)
 	g_bob_count = 0;
 	g_global_count = 0;
 
-	csilk_mq_use(mq, NULL, global_mw);
+	csilk_mq_use(mq, nullptr, global_mw);
 	csilk_mq_subscribe(mq, "alice", alice_sub);
 	csilk_mq_subscribe(mq, "bob", bob_sub);
 
@@ -96,11 +96,11 @@ test_mq_concurrent_publish(void)
 		args[i].topic = topics[i];
 		args[i].id = i;
 		args[i].count = MSGS_PER_THREAD;
-		pthread_create(&threads[i], NULL, publisher_thread, &args[i]);
+		pthread_create(&threads[i], nullptr, publisher_thread, &args[i]);
 	}
 
 	for (int i = 0; i < NUM_PUB_THREADS; i++) {
-		pthread_join(threads[i], NULL);
+		pthread_join(threads[i], nullptr);
 	}
 
 	drain_loop(loop, &g_global_count, TOTAL_EXPECTED);
@@ -161,11 +161,11 @@ test_mq_concurrent_stress(void)
 		args[i].topic = strdup(topic_buf);
 		args[i].id = i;
 		args[i].count = STRESS_MSGS;
-		pthread_create(&threads[i], NULL, publisher_thread, &args[i]);
+		pthread_create(&threads[i], nullptr, publisher_thread, &args[i]);
 	}
 
 	for (int i = 0; i < STRESS_THREADS; i++) {
-		pthread_join(threads[i], NULL);
+		pthread_join(threads[i], nullptr);
 		free((char*)args[i].topic);
 	}
 

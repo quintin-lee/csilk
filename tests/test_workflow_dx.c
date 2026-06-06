@@ -26,7 +26,7 @@ mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)ctx;
 	(void)input;
 	(void)user_data;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -35,14 +35,14 @@ test_workflow_mermaid()
 	printf("Testing Mermaid visualization...\n");
 	csilk_wf_t* wf = csilk_wf_new("viz_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", mock_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", mock_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", mock_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", mock_handler, nullptr);
 	csilk_wf_bind(n1, n2);
 
 	char* mermaid = csilk_wf_to_mermaid(wf);
-	assert(mermaid != NULL);
-	assert(strstr(mermaid, "graph TD") != NULL);
-	assert(strstr(mermaid, "\"n1\" --> \"n2\"") != NULL);
+	assert(mermaid != nullptr);
+	assert(strstr(mermaid, "graph TD") != nullptr);
+	assert(strstr(mermaid, "\"n1\" --> \"n2\"") != nullptr);
 
 	printf("Mermaid Output:\n%s", mermaid);
 

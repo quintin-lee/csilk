@@ -14,7 +14,7 @@
 #include "csilk/csilk.h"
 
 /* Global workflow for the demo handler */
-static csilk_wf_t* g_wf = NULL;
+static csilk_wf_t* g_wf = nullptr;
 
 csilk_data_t*
 delay_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -44,7 +44,7 @@ trigger_wf(uv_timer_t* h)
 {
 	csilk_wf_t* w = (csilk_wf_t*)h->data;
 	printf("[Server] Triggering workflow execution...\n");
-	csilk_wf_run(w, NULL, NULL);
+	csilk_wf_run(w, nullptr, nullptr);
 }
 
 int
@@ -53,13 +53,13 @@ main()
 	printf("Starting Csilk Workflow UI Example on port 8080...\n");
 	printf("Open http://localhost:8080/ui in your browser.\n\n");
 
-	csilk_app_t* app = csilk_app_new(NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
 
 	/* 1. Define Workflow */
 	g_wf = csilk_wf_new("LiveDashboardDemo");
-	csilk_wf_node_t* n1 = csilk_wf_add(g_wf, "start", delay_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(g_wf, "process", delay_handler, NULL);
-	csilk_wf_node_t* n3 = csilk_wf_add(g_wf, "finish", delay_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(g_wf, "start", delay_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(g_wf, "process", delay_handler, nullptr);
+	csilk_wf_node_t* n3 = csilk_wf_add(g_wf, "finish", delay_handler, nullptr);
 
 	csilk_wf_bind(n1, n2);
 	csilk_wf_bind(n2, n3);

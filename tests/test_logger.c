@@ -26,7 +26,7 @@ thread_func(void* arg)
 		CSILK_LOG_I("Thread %d: log message %d", id, i);
 		usleep(1000); // 1ms
 	}
-	return NULL;
+	return nullptr;
 }
 
 int
@@ -34,7 +34,7 @@ main()
 {
 	printf("Initializing logger...\n");
 	csilk_log_config_t cfg = {.level = CSILK_LOG_TRACE, // Set to TRACE to see all
-				  .file_path = NULL,
+				  .file_path = nullptr,
 				  .max_file_size = 0,
 				  .use_colors = -1};
 	assert(csilk_log_init(cfg) == 0);
@@ -51,7 +51,7 @@ main()
 	// 2. Test basic middleware logging
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(c, "GET", "/test");
-	csilk_handler_t handlers[] = {csilk_logger_handler, dummy_handler, NULL};
+	csilk_handler_t handlers[] = {csilk_logger_handler, dummy_handler, nullptr};
 	csilk_test_ctx_set_handlers(c, handlers);
 
 	printf("Testing middleware logging...\n");
@@ -66,11 +66,11 @@ main()
 
 	for (int i = 0; i < NUM_THREADS; i++) {
 		thread_ids[i] = i;
-		pthread_create(&threads[i], NULL, thread_func, &thread_ids[i]);
+		pthread_create(&threads[i], nullptr, thread_func, &thread_ids[i]);
 	}
 
 	for (int i = 0; i < NUM_THREADS; i++) {
-		pthread_join(threads[i], NULL);
+		pthread_join(threads[i], nullptr);
 	}
 
 	// 3. Test logging to file & rotation

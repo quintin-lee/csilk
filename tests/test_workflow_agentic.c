@@ -17,7 +17,7 @@ n1_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)user_data;
 	g_n1_count++;
 	printf("N1 executing (count: %d)\n", g_n1_count);
-	return NULL;
+	return nullptr;
 }
 
 csilk_data_t*
@@ -28,10 +28,10 @@ n2_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	printf("N2 (Check) executing\n");
 	if (g_n1_count < 3) {
 		printf("N2: fail -> loop back\n");
-		return csilk_wf_data_new(ctx, "fail", NULL);
+		return csilk_wf_data_new(ctx, "fail", nullptr);
 	} else {
 		printf("N2: pass -> proceed\n");
-		return csilk_wf_data_new(ctx, "pass", NULL);
+		return csilk_wf_data_new(ctx, "pass", nullptr);
 	}
 }
 
@@ -43,7 +43,7 @@ n3_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)user_data;
 	printf("N3 executing\n");
 	g_done = 1;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -62,9 +62,9 @@ test_workflow_agentic()
 
 	csilk_wf_t* wf = csilk_wf_new("agentic_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", n1_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", n2_handler, NULL);
-	csilk_wf_node_t* n3 = csilk_wf_add(wf, "n3", n3_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", n1_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", n2_handler, nullptr);
+	csilk_wf_node_t* n3 = csilk_wf_add(wf, "n3", n3_handler, nullptr);
 
 	csilk_wf_node_set_entry(n1, 1);
 
@@ -72,7 +72,7 @@ test_workflow_agentic()
 	csilk_wf_on_loop(n2, "fail", n1);
 	csilk_wf_on(n2, "pass", n3);
 
-	csilk_wf_run(wf, NULL, on_agent_complete);
+	csilk_wf_run(wf, nullptr, on_agent_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

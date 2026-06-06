@@ -10,14 +10,14 @@ static void
 test_app_new_free()
 {
 	printf("Testing csilk_app_new and csilk_app_free...\n");
-	csilk_app_t* app = csilk_app_new(NULL);
-	assert(app != NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
+	assert(app != nullptr);
 
 	csilk_router_t* router = csilk_app_router(app);
-	assert(router != NULL);
+	assert(router != nullptr);
 
 	csilk_server_t* server = csilk_app_server(app);
-	assert(server != NULL);
+	assert(server != nullptr);
 
 	csilk_app_free(app);
 	printf("App new/free test passed!\n");
@@ -27,13 +27,13 @@ static void
 test_app_route()
 {
 	printf("Testing app route registration...\n");
-	csilk_app_t* app = csilk_app_new(NULL);
-	assert(app != NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
+	assert(app != nullptr);
 
-	csilk_app_get(app, "/test", NULL);
-	csilk_app_post(app, "/test", NULL);
-	csilk_app_put(app, "/test", NULL);
-	csilk_app_delete(app, "/test", NULL);
+	csilk_app_get(app, "/test", nullptr);
+	csilk_app_post(app, "/test", nullptr);
+	csilk_app_put(app, "/test", nullptr);
+	csilk_app_delete(app, "/test", nullptr);
 
 	csilk_app_free(app);
 	printf("App route test passed!\n");
@@ -43,8 +43,8 @@ static void
 test_app_server_config()
 {
 	printf("Testing app server config...\n");
-	csilk_app_t* app = csilk_app_new(NULL);
-	assert(app != NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
+	assert(app != nullptr);
 
 	csilk_server_config_t cfg = {.idle_timeout_ms = 10000,
 				     .max_body_size = 4096,
@@ -56,7 +56,7 @@ test_app_server_config()
 	csilk_app_set_server_config(app, cfg);
 
 	csilk_config_t* cfg_copy = csilk_app_config(app);
-	assert(cfg_copy != NULL);
+	assert(cfg_copy != nullptr);
 	assert(cfg_copy->server.idle_timeout_ms == 10000);
 	assert(cfg_copy->server.max_body_size == 4096);
 	csilk_config_free(cfg_copy);

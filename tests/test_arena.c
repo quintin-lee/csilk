@@ -13,14 +13,14 @@ test_arena_new_free()
 	printf("Testing csilk_arena_new and csilk_arena_free...\n");
 
 	csilk_arena_t* arena = csilk_arena_new(1024);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 	csilk_arena_free(arena);
 
 	arena = csilk_arena_new(0);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 	csilk_arena_free(arena);
 
-	csilk_arena_free(NULL);
+	csilk_arena_free(nullptr);
 
 	printf("csilk_arena_new/free passed!\n");
 }
@@ -31,14 +31,14 @@ test_arena_alloc_basic()
 	printf("Testing csilk_arena_alloc basic...\n");
 
 	csilk_arena_t* arena = csilk_arena_new(1024);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 
 	char* s1 = csilk_arena_alloc(arena, 64);
-	assert(s1 != NULL);
+	assert(s1 != nullptr);
 	strcpy(s1, "hello arena");
 
 	char* s2 = csilk_arena_alloc(arena, 128);
-	assert(s2 != NULL);
+	assert(s2 != nullptr);
 	strcpy(s2, "second allocation");
 
 	assert(strcmp(s1, "hello arena") == 0);
@@ -54,10 +54,10 @@ test_arena_alloc_large()
 	printf("Testing csilk_arena_alloc large allocation...\n");
 
 	csilk_arena_t* arena = csilk_arena_new(256);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 
 	char* big = csilk_arena_alloc(arena, 4096);
-	assert(big != NULL);
+	assert(big != nullptr);
 	memset(big, 'X', 1024);
 	big[1023] = '\0';
 	assert(strlen(big) == 1023);
@@ -72,13 +72,13 @@ test_arena_alloc_fill()
 	printf("Testing csilk_arena_alloc fill chunk...\n");
 
 	csilk_arena_t* arena = csilk_arena_new(256);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 
 	char* a = csilk_arena_alloc(arena, 200);
-	assert(a != NULL);
+	assert(a != nullptr);
 
 	char* b = csilk_arena_alloc(arena, 200);
-	assert(b != NULL);
+	assert(b != nullptr);
 
 	assert(a != b);
 
@@ -94,10 +94,10 @@ test_arena_strdup()
 	csilk_arena_t* arena = csilk_arena_new(1024);
 
 	char* s = csilk_arena_strdup(arena, "test string");
-	assert(s != NULL);
+	assert(s != nullptr);
 	assert(strcmp(s, "test string") == 0);
 
-	assert(csilk_arena_strdup(arena, NULL) == NULL);
+	assert(csilk_arena_strdup(arena, nullptr) == nullptr);
 
 	csilk_arena_free(arena);
 	printf("csilk_arena_strdup passed!\n");
@@ -112,7 +112,7 @@ test_arena_alignment()
 
 	for (int i = 0; i < 10; i++) {
 		void* ptr = csilk_arena_alloc(arena, 1);
-		assert(ptr != NULL);
+		assert(ptr != nullptr);
 		assert(((uintptr_t)ptr & 7) == 0);
 	}
 
@@ -130,7 +130,7 @@ test_arena_64_alignment()
 
 	for (int i = 0; i < 10; i++) {
 		void* ptr = csilk_arena_alloc(arena, 1);
-		assert(ptr != NULL);
+		assert(ptr != nullptr);
 		assert(((uintptr_t)ptr & 63) == 0);
 	}
 

@@ -15,8 +15,8 @@
 #define BUFSIZE 65536
 
 static volatile int server_ready = 0;
-static csilk_server_t* g_server = NULL;
-static csilk_app_t* g_app = NULL;
+static csilk_server_t* g_server = nullptr;
+static csilk_app_t* g_app = nullptr;
 
 static int g_tests_passed = 0;
 static int g_tests_failed = 0;
@@ -42,7 +42,7 @@ read_response(int sock, char* buf, size_t size)
 	while (total < (int)size - 1) {
 		FD_ZERO(&fds);
 		FD_SET(sock, &fds);
-		int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+		int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 		if (ret <= 0) {
 			break;
 		}
@@ -64,7 +64,7 @@ expect_status(const char* resp, int expected)
 {
 	char expected_str[32];
 	snprintf(expected_str, sizeof(expected_str), "HTTP/1.1 %d", expected);
-	return strstr(resp, expected_str) != NULL;
+	return strstr(resp, expected_str) != nullptr;
 }
 
 static int
@@ -75,7 +75,7 @@ expect_body(const char* resp, const char* body)
 		return 0;
 	}
 	const char* body_start = hdr_end + 4;
-	return strstr(body_start, body) != NULL;
+	return strstr(body_start, body) != nullptr;
 }
 
 static int
@@ -114,7 +114,7 @@ static void*
 run_app(void* arg)
 {
 	(void)arg;
-	g_app = csilk_app_new(NULL);
+	g_app = csilk_app_new(nullptr);
 	csilk_app_log_json(g_app, 1);
 	csilk_app_get(g_app, "/hello", hello_handler);
 	g_server = csilk_app_server(g_app);
@@ -122,8 +122,8 @@ run_app(void* arg)
 	server_ready = 1;
 	csilk_app_run(g_app, PORT);
 	csilk_app_free(g_app);
-	g_app = NULL;
-	return NULL;
+	g_app = nullptr;
+	return nullptr;
 }
 
 /* ---- Tests ---- */
@@ -256,11 +256,11 @@ main(void)
 	printf("=== App Integration Tests ===\n\n");
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_app, NULL);
+	pthread_create(&thread, nullptr, run_app, nullptr);
 	while (!server_ready) {
-		nanosleep(&(struct timespec){0, 10000000}, NULL);
+		nanosleep(&(struct timespec){0, 10000000}, nullptr);
 	}
-	nanosleep(&(struct timespec){0, 100000000}, NULL);
+	nanosleep(&(struct timespec){0, 100000000}, nullptr);
 
 	test_get_hello();
 	test_openapi_json();
@@ -270,7 +270,7 @@ main(void)
 	test_not_found();
 
 	csilk_server_stop(g_server);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 
 	printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed, g_tests_failed);
 	return g_tests_failed > 0 ? 1 : 0;

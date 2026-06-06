@@ -64,7 +64,7 @@ void
 test_perm_auto_middleware_null()
 {
 	printf("Testing csilk_perm_auto_middleware with NULLs...\n");
-	csilk_perm_auto_middleware(NULL);
+	csilk_perm_auto_middleware(nullptr);
 
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_perm_auto_middleware(ctx);

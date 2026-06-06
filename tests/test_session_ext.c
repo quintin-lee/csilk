@@ -19,7 +19,7 @@ test_session_destroy()
 	csilk_session_set(c, "key", &val);
 
 	csilk_session_destroy(c);
-	assert(csilk_session_get(c, "key") == NULL);
+	assert(csilk_session_get(c, "key") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_session_destroy passed\n");
@@ -37,7 +37,7 @@ test_session_resume()
 	csilk_session_set(ctx1, "data", &val);
 
 	const char* cookie = csilk_get_response_header(ctx1, "Set-Cookie");
-	assert(cookie != NULL);
+	assert(cookie != nullptr);
 	char id[64];
 	// Extract session ID from cookie: csilk_session=ID; ...
 	sscanf(cookie, "csilk_session=%63[^;]", id);
@@ -49,7 +49,7 @@ test_session_resume()
 
 	csilk_session_start(ctx2);
 	int* retrieved = csilk_session_get(ctx2, "data");
-	assert(retrieved != NULL);
+	assert(retrieved != nullptr);
 	assert(*retrieved == 999);
 
 	csilk_test_ctx_free(ctx1);
@@ -62,7 +62,7 @@ test_session_get_no_session()
 {
 	printf("Testing csilk_session_get without session...\n");
 	csilk_ctx_t* c = csilk_test_ctx_new();
-	assert(csilk_session_get(c, "key") == NULL);
+	assert(csilk_session_get(c, "key") == nullptr);
 	csilk_test_ctx_free(c);
 	printf("test_session_get_no_session passed\n");
 }
@@ -74,9 +74,9 @@ test_session_set_get_null()
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_session_start(c);
 
-	csilk_session_set(c, NULL, (void*)0x1);
-	csilk_session_set(c, "key", NULL);
-	assert(csilk_session_get(c, NULL) == NULL);
+	csilk_session_set(c, nullptr, (void*)0x1);
+	csilk_session_set(c, "key", nullptr);
+	assert(csilk_session_get(c, nullptr) == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_session_set_get_null passed\n");

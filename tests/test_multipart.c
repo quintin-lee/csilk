@@ -49,8 +49,8 @@ test_multipart_simple()
 
 	/* Verify the header is set */
 	const char* ct = csilk_get_header(ctx, "Content-Type");
-	assert(ct != NULL);
-	assert(strstr(ct, "boundary=boundary123") != NULL);
+	assert(ct != nullptr);
+	assert(strstr(ct, "boundary=boundary123") != nullptr);
 
 	reset_counters();
 	csilk_multipart_parse(ctx, collect_part);
@@ -110,8 +110,8 @@ test_multipart_missing_content_type()
 static void
 test_multipart_null_body()
 {
-	printf("Testing multipart with NULL body...\n");
-	csilk_multipart_parse(NULL, collect_part);
+	printf("Testing multipart with nullptr body...\n");
+	csilk_multipart_parse(nullptr, collect_part);
 
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_multipart_parse(ctx, collect_part);

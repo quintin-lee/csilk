@@ -9,10 +9,10 @@
 void
 test_get_client_ip_null_ctx()
 {
-	printf("Testing csilk_get_client_ip with NULL context...\n");
-	const char* ip = csilk_get_client_ip(NULL);
-	assert(ip == NULL);
-	printf("csilk_get_client_ip NULL context passed!\n");
+	printf("Testing csilk_get_client_ip with nullptr context...\n");
+	const char* ip = csilk_get_client_ip(nullptr);
+	assert(ip == nullptr);
+	printf("csilk_get_client_ip nullptr context passed!\n");
 }
 
 void
@@ -21,7 +21,7 @@ test_get_client_ip_no_client()
 	printf("Testing csilk_get_client_ip with no internal client...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	const char* ip = csilk_get_client_ip(ctx);
-	assert(ip == NULL);
+	assert(ip == nullptr);
 	csilk_test_ctx_free(ctx);
 	printf("csilk_get_client_ip no client passed!\n");
 }
@@ -33,9 +33,9 @@ test_get_client_ip_no_connection()
 
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	/* _internal_client is NULL, so IP should be NULL */
+	/* _internal_client is nullptr, so IP should be nullptr */
 	const char* ip = csilk_get_client_ip(ctx);
-	assert(ip == NULL);
+	assert(ip == nullptr);
 
 	csilk_test_ctx_free(ctx);
 	printf("csilk_get_client_ip no connection passed!\n");

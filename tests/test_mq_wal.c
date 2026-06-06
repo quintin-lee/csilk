@@ -7,7 +7,7 @@
 #include "csilk/csilk.h"
 
 static int received_count = 0;
-static char* received_payloads[3] = {NULL, NULL, NULL};
+static char* received_payloads[3] = {nullptr, nullptr, nullptr};
 
 void
 on_msg(csilk_mq_ctx_t* ctx)
@@ -106,7 +106,7 @@ test_mq_wal_persistence_recovery()
 		/* Clean up allocated payloads */
 		for (int i = 0; i < 3; i++) {
 			free(received_payloads[i]);
-			received_payloads[i] = NULL;
+			received_payloads[i] = nullptr;
 		}
 
 		csilk_server_free(server);

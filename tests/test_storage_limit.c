@@ -33,7 +33,7 @@ main()
 
 	// Verify the overflow item is NOT present
 	void* val = csilk_get(ctx, "too_many");
-	assert(val == NULL);
+	assert(val == nullptr);
 
 	// Verify we can still update existing items
 	csilk_set(ctx, "key0", (void*)123);

@@ -20,7 +20,7 @@ test_ratelimit_basic()
 	printf("Testing rate limit basic...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	handler_called = 0;

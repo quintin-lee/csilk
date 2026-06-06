@@ -47,14 +47,14 @@ typedef struct {
 	  sizeof(((login_request_t*)0)->username),                                                 \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
+	  nullptr)                                                                                 \
 	_(login_request_t,                                                                         \
 	  password,                                                                                \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((login_request_t*)0)->password),                                                 \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)
+	  nullptr)
 
 #define LOGIN_RESPONSE_MAP(_, ...)                                                                 \
 	_(login_response_t,                                                                        \
@@ -63,26 +63,26 @@ typedef struct {
 	  sizeof(((login_response_t*)0)->token),                                                   \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
+	  nullptr)                                                                                 \
 	_(login_response_t,                                                                        \
 	  message,                                                                                 \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((login_response_t*)0)->message),                                                 \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)
+	  nullptr)
 
 #define USER_PROFILE_MAP(_, ...)                                                                   \
-	_(user_profile_t, id, CSILK_TYPE_INT32, sizeof(int), 0, false, NULL)                       \
+	_(user_profile_t, id, CSILK_TYPE_INT32, sizeof(int), 0, false, nullptr)                    \
 	_(user_profile_t,                                                                          \
 	  name,                                                                                    \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((user_profile_t*)0)->name),                                                      \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
-	_(user_profile_t, score, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, NULL)                \
-	_(user_profile_t, active, CSILK_TYPE_BOOL, sizeof(bool), 0, false, NULL)
+	  nullptr)                                                                                 \
+	_(user_profile_t, score, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, nullptr)             \
+	_(user_profile_t, active, CSILK_TYPE_BOOL, sizeof(bool), 0, false, nullptr)
 
 // Auto-register structs with reflection at startup
 CSILK_REGISTER_REFLECT(login_request_t, LOGIN_REQUEST_MAP)
@@ -90,7 +90,7 @@ CSILK_REGISTER_REFLECT(login_response_t, LOGIN_RESPONSE_MAP)
 CSILK_REGISTER_REFLECT(user_profile_t, USER_PROFILE_MAP)
 
 /** @brief Global router reference for OpenAPI handler. */
-static csilk_router_t* g_router = NULL;
+static csilk_router_t* g_router = nullptr;
 
 /** @brief OpenAPI spec handler - serves the generated spec at runtime. */
 void
@@ -199,7 +199,7 @@ api_data_handler(csilk_ctx_t* c)
 	cJSON_AddItemToArray(items, cJSON_CreateString("item3"));
 	cJSON_AddItemToObject(data, "items", items);
 
-	time_t now = time(NULL);
+	time_t now = time(nullptr);
 	cJSON_AddNumberToObject(data, "timestamp", (double)now);
 
 	csilk_json(c, CSILK_STATUS_OK, data);
@@ -214,7 +214,8 @@ sse_on_timer(csilk_ctx_t* c)
 	static int counter = 0;
 	counter++;
 	char data[128];
-	snprintf(data, sizeof(data), "{\"counter\": %d, \"time\": %ld}", counter, (long)time(NULL));
+	snprintf(
+	    data, sizeof(data), "{\"counter\": %d, \"time\": %ld}", counter, (long)time(nullptr));
 	csilk_sse_send(c, "update", data);
 	if (counter >= 5) {
 		csilk_sse_close(c);
@@ -229,9 +230,9 @@ events_handler(csilk_ctx_t* c)
 
 	// SSE data is sent via a periodic timer in a real app.
 	// Here we send a few messages synchronously (for demo).
-	csilk_sse_send(c, NULL, "Welcome to csilk SSE stream!");
+	csilk_sse_send(c, nullptr, "Welcome to csilk SSE stream!");
 	csilk_sse_send(c, "greeting", "{\"msg\": \"Hello from SSE\"}");
-	csilk_sse_send(c, "done", NULL);
+	csilk_sse_send(c, "done", nullptr);
 	csilk_sse_close(c);
 }
 
@@ -278,10 +279,10 @@ cookie_handler(csilk_ctx_t* c)
 {
 	const char* action = csilk_get_query(c, "action");
 	if (action && strcmp(action, "set") == 0) {
-		csilk_set_cookie(c, "demo_session", "abc123", 3600, "/", NULL, 1, 1);
+		csilk_set_cookie(c, "demo_session", "abc123", 3600, "/", nullptr, 1, 1);
 		csilk_string(c, CSILK_STATUS_OK, "Cookie set!");
 	} else if (action && strcmp(action, "delete") == 0) {
-		csilk_set_cookie(c, "demo_session", "deleted", -1, "/", NULL, 0, 0);
+		csilk_set_cookie(c, "demo_session", "deleted", -1, "/", nullptr, 0, 0);
 		csilk_string(c, CSILK_STATUS_OK, "Cookie deleted!");
 	} else {
 		const char* val = csilk_get_cookie(c, "demo_session");
@@ -327,7 +328,7 @@ main(int argc, char* argv[])
 		printf("Config file not found or invalid, using defaults.\n");
 		cfg.port = 8080;
 		cfg.logger.level = CSILK_LOG_DEBUG;
-		cfg.logger.file_path = NULL;
+		cfg.logger.file_path = nullptr;
 		cfg.logger.max_file_size = 0;
 		cfg.logger.use_colors = -1;
 		cfg.server.idle_timeout_ms = 5000;
@@ -338,7 +339,7 @@ main(int argc, char* argv[])
 	}
 
 	// Validate config
-	const char* err_msg = NULL;
+	const char* err_msg = nullptr;
 	if (csilk_config_validate(&cfg, &err_msg) != 0) {
 		printf("Config validation error: %s\n", err_msg);
 		return 1;
@@ -422,8 +423,8 @@ main(int argc, char* argv[])
 				  openapi_handlers,
 				  1,
 				  "/openapi.json",
-				  NULL,
-				  NULL,
+				  nullptr,
+				  nullptr,
 				  "OpenAPI Specification",
 				  "Returns the OpenAPI 3.0 JSON specification for this API");
 
@@ -433,7 +434,7 @@ main(int argc, char* argv[])
 		char route[256];
 		snprintf(route, sizeof(route), "%s/*path", prefix);
 		CSILK_LOG_I("Static files: %s -> %s", route, cfg.static_files.root_dir);
-		csilk_handler_t handlers[] = {csilk_logger_handler, NULL};
+		csilk_handler_t handlers[] = {csilk_logger_handler, nullptr};
 		csilk_group_add_handlers(root, "GET", route, handlers, 1);
 	}
 

@@ -36,7 +36,7 @@ main()
 	char mock_client_marker = 1;
 	_csilk_set_internal_client(c, &mock_client_marker); // Mock internal client
 
-	csilk_handler_t handlers[] = {csilk_gzip_middleware, mock_handler, NULL};
+	csilk_handler_t handlers[] = {csilk_gzip_middleware, mock_handler, nullptr};
 	csilk_test_ctx_set_handlers(c, handlers);
 
 	// Simulate request with Accept-Encoding: gzip
@@ -54,7 +54,7 @@ main()
 	assert(response_sent == 1);
 
 	const char* content_encoding = csilk_get_response_header(c, "Content-Encoding");
-	assert(content_encoding != NULL);
+	assert(content_encoding != nullptr);
 	assert(strcmp(content_encoding, "gzip") == 0);
 
 	size_t body_len = 0;

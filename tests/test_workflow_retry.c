@@ -22,7 +22,7 @@ flakey_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
 	if (g_attempts < 3) {
 		printf("[FlakeyNode] Failing deliberately\n");
-		return NULL;
+		return nullptr;
 	}
 
 	printf("[FlakeyNode] Succeeding on attempt %d!\n", g_attempts);
@@ -32,7 +32,7 @@ flakey_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 void
 on_retry_complete(csilk_data_t* result)
 {
-	assert(result != NULL);
+	assert(result != nullptr);
 	assert(strcmp((char*)result->value, "success") == 0);
 	g_done = 1;
 }
@@ -46,12 +46,12 @@ test_workflow_automatic_retries()
 
 	csilk_wf_t* wf = csilk_wf_new("retry_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "flakey", flakey_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "flakey", flakey_handler, nullptr);
 	csilk_wf_node_set_retry(n1, 3, 50); // 3 retries, 50ms delay
 
 	csilk_wf_node_set_entry(n1, 1);
 
-	csilk_wf_run(wf, NULL, on_retry_complete);
+	csilk_wf_run(wf, nullptr, on_retry_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

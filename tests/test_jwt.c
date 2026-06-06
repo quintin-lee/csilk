@@ -29,11 +29,11 @@ test_jwt_core()
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	char* token = csilk_jwt_generate(c, payload, secret);
-	assert(token != NULL);
+	assert(token != nullptr);
 	printf("Generated Token: %s\n", token);
 
 	cJSON* verified_payload = csilk_jwt_verify(c, token, secret);
-	assert(verified_payload != NULL);
+	assert(verified_payload != nullptr);
 
 	assert(cJSON_HasObjectItem(verified_payload, "sub"));
 	assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "1234567890") ==
@@ -41,12 +41,12 @@ test_jwt_core()
 
 	// Test invalid secret
 	cJSON* invalid_payload = csilk_jwt_verify(c, token, "wrong_secret");
-	assert(invalid_payload == NULL);
+	assert(invalid_payload == nullptr);
 
 	// Test tampered token
 	token[strlen(token) - 1] ^= 0xFF; // Flip a bit in signature
 	cJSON* tampered_payload = csilk_jwt_verify(c, token, secret);
-	assert(tampered_payload == NULL);
+	assert(tampered_payload == nullptr);
 
 	free(token);
 	cJSON_Delete(payload);
@@ -68,7 +68,7 @@ test_jwt_middleware()
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	// Setup handlers for csilk_next
-	csilk_handler_t handlers[] = {dummy_handler, dummy_handler, NULL};
+	csilk_handler_t handlers[] = {dummy_handler, dummy_handler, nullptr};
 	csilk_test_ctx_set_handlers(c, handlers);
 
 	const char* secret = "supersecret";
@@ -85,7 +85,7 @@ test_jwt_middleware()
 	assert(csilk_is_aborted(c) == 0);
 
 	cJSON* stored_payload = (cJSON*)csilk_get(c, "jwt_payload");
-	assert(stored_payload != NULL);
+	assert(stored_payload != nullptr);
 	assert(strcmp(cJSON_GetObjectItem(stored_payload, "user")->valuestring, "admin") == 0);
 	cJSON_Delete(stored_payload);
 
@@ -117,13 +117,13 @@ test_jwt_expiration()
 	printf("Testing JWT expiration...\n");
 
 	csilk_ctx_t* c = csilk_test_ctx_new();
-	csilk_handler_t handlers[] = {dummy_handler, NULL};
+	csilk_handler_t handlers[] = {dummy_handler, nullptr};
 	csilk_test_ctx_set_handlers(c, handlers);
 
 	const char* secret = "secret";
 	cJSON* payload = cJSON_CreateObject();
 	cJSON_AddNumberToObject(payload, "exp",
-				(double)time(NULL) - 10); // Expired 10s ago
+				(double)time(nullptr) - 10); // Expired 10s ago
 
 	char* token = csilk_jwt_generate(c, payload, secret);
 	char auth_header[512];

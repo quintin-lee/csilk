@@ -34,7 +34,7 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 	csilk_config_t config;
 	if (csilk_load_config(filename, &config) == 0) {
-		const char* error_msg = NULL;
+		const char* error_msg = nullptr;
 		csilk_config_validate(&config, &error_msg);
 		csilk_config_free(&config);
 	}

@@ -20,23 +20,23 @@ main()
 	csilk_set(c, "key2", val2);
 
 	int* r1 = (int*)csilk_get(c, "key1");
-	assert(r1 != NULL && *r1 == 123);
+	assert(r1 != nullptr && *r1 == 123);
 
 	char* r2 = (char*)csilk_get(c, "key2");
-	assert(r2 != NULL && strcmp(r2, "hello") == 0);
+	assert(r2 != nullptr && strcmp(r2, "hello") == 0);
 
 	// Test update
 	int val3 = 456;
 	csilk_set(c, "key1", &val3);
 	r1 = (int*)csilk_get(c, "key1");
-	assert(r1 != NULL && *r1 == 456);
+	assert(r1 != nullptr && *r1 == 456);
 
 	// Test missing
-	assert(csilk_get(c, "key3") == NULL);
+	assert(csilk_get(c, "key3") == nullptr);
 
-	// Test overwrite with NULL
-	csilk_set(c, "key2", NULL);
-	assert(csilk_get(c, "key2") == NULL);
+	// Test overwrite with nullptr
+	csilk_set(c, "key2", nullptr);
+	assert(csilk_get(c, "key2") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_storage: PASS\n");

@@ -24,7 +24,7 @@ slow_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	usleep(200000); // 200ms
 	g_node1_ran = 1;
 	printf("[SlowNode] Finished (too late!)\n");
-	return NULL;
+	return nullptr;
 }
 
 csilk_data_t*
@@ -35,7 +35,7 @@ timeout_fallback_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_da
 	(void)user_data;
 	printf("[Fallback] Executing due to timeout\n");
 	g_fallback_ran = 1;
-	return NULL;
+	return nullptr;
 }
 
 csilk_data_t*
@@ -45,7 +45,7 @@ dummy_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)input;
 	(void)user_data;
 	g_node2_ran++;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -65,13 +65,13 @@ test_workflow_node_timeout()
 
 	csilk_wf_t* wf = csilk_wf_new("timeout_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "slow", slow_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "slow", slow_handler, nullptr);
 	csilk_wf_node_set_timeout(n1, 50); // 50ms timeout
 
-	csilk_wf_node_t* nf = csilk_wf_add(wf, "fallback", timeout_fallback_handler, NULL);
+	csilk_wf_node_t* nf = csilk_wf_add(wf, "fallback", timeout_fallback_handler, nullptr);
 	csilk_wf_on_error(n1, nf);
 
-	csilk_wf_run(wf, NULL, on_timeout_complete);
+	csilk_wf_run(wf, nullptr, on_timeout_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
@@ -94,18 +94,18 @@ test_workflow_global_ttl()
 	csilk_wf_set_ttl(wf, 1); // 1 second TTL
 
 	// Create a chain that would take 2 seconds
-	csilk_wf_node_t* last = NULL;
+	csilk_wf_node_t* last = nullptr;
 	for (int i = 0; i < 5; i++) {
 		char id[16];
 		snprintf(id, sizeof(id), "node%d", i);
-		csilk_wf_node_t* n = csilk_wf_add(wf, id, slow_handler, NULL);
+		csilk_wf_node_t* n = csilk_wf_add(wf, id, slow_handler, nullptr);
 		if (last) {
 			csilk_wf_bind(last, n);
 		}
 		last = n;
 	}
 
-	csilk_wf_run(wf, NULL, on_timeout_complete);
+	csilk_wf_run(wf, nullptr, on_timeout_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

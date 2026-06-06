@@ -29,11 +29,11 @@
  * }
  * @endcode
  *
- * @param ctx The per-message context. If NULL or aborted, does nothing. */
+ * @param ctx The per-message context. If nullptr or aborted, does nothing. */
 void
 csilk_mq_next(csilk_mq_ctx_t* ctx)
 {
-	/* If the context is NULL or the chain was aborted, stop */
+	/* If the context is nullptr or the chain was aborted, stop */
 	if (!ctx || ctx->aborted) {
 		return;
 	}
@@ -58,7 +58,7 @@ csilk_mq_next(csilk_mq_ctx_t* ctx)
  *   - Message validation failure ("malformed payload, abort")
  *   - Rate limiting ("too many requests, abort")
  *
- * @param ctx The per-message context. If NULL, does nothing. */
+ * @param ctx The per-message context. If nullptr, does nothing. */
 void
 csilk_mq_abort(csilk_mq_ctx_t* ctx)
 {
@@ -70,8 +70,8 @@ csilk_mq_abort(csilk_mq_ctx_t* ctx)
 /** @brief Get the topic string of the current message.
  *
  * @param ctx The per-message context.
- * @return The topic string (same lifetime as the message), or NULL if
- *         ctx is NULL or no message has been associated. */
+ * @return The topic string (same lifetime as the message), or nullptr if
+ *         ctx is nullptr or no message has been associated. */
 const char*
 csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 {
@@ -81,9 +81,9 @@ csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 /** @brief Get the payload data and length of the current message.
  *
  * @param ctx The per-message context.
- * @param[out] len If non-NULL, receives the payload length in bytes.
+ * @param[out] len If non-nullptr, receives the payload length in bytes.
  * @return Pointer to the payload data (same lifetime as the message), or
- *         NULL if ctx is NULL or no message has been associated.
+ *         nullptr if ctx is nullptr or no message has been associated.
  * @note The returned pointer is owned by the MQ internals — do NOT free it.
  *       The payload is a deep copy, but it belongs to the message which is
  *       freed once all handlers complete. */

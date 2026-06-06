@@ -108,7 +108,7 @@ run_server(void* arg)
 
 	csilk_server_free(server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 /* ---- HTTP/2 Client (via curl) ---- */
@@ -130,9 +130,9 @@ test_h2_get()
 	}
 
 	char buf[BUFSIZE];
-	while (fgets(buf, sizeof(buf), fp) != NULL) {
+	while (fgets(buf, sizeof(buf), fp) != nullptr) {
 		printf("  [CURL] %s", buf);
-		if (strstr(buf, "Hello HTTP/2 World!") != NULL) {
+		if (strstr(buf, "Hello HTTP/2 World!") != nullptr) {
 			test_result("HTTP/2 GET (body content)", 1);
 		}
 	}
@@ -157,7 +157,7 @@ test_h2_post()
 	}
 
 	char buf[BUFSIZE];
-	if (fgets(buf, sizeof(buf), fp) != NULL) {
+	if (fgets(buf, sizeof(buf), fp) != nullptr) {
 		printf("  [CURL] %s\n", buf);
 		test_result("HTTP/2 POST (body content)", strcmp(buf, "echo me") == 0);
 	} else {
@@ -187,8 +187,8 @@ test_h2_push()
 	int push_seen = 0;
 	int push_disabled_by_curl = 1; // Assume disabled by default for curl CLI
 	char buf[BUFSIZE];
-	while (fgets(buf, sizeof(buf), fp) != NULL) {
-		if (strstr(buf, "pushed.css") != NULL) {
+	while (fgets(buf, sizeof(buf), fp) != nullptr) {
+		if (strstr(buf, "pushed.css") != nullptr) {
 			push_seen = 1;
 		}
 	}
@@ -209,7 +209,7 @@ main()
 	}
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
 		usleep(100000);
 	}

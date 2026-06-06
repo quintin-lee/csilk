@@ -24,7 +24,7 @@ dummy_handler(csilk_ctx_t* c)
 }
 
 static volatile int server_ready = 0;
-static csilk_server_t* global_server = NULL;
+static csilk_server_t* global_server = nullptr;
 
 static void*
 run_server(void* arg)
@@ -43,7 +43,7 @@ run_server(void* arg)
 
 	csilk_server_free(global_server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 static int
@@ -68,7 +68,7 @@ int
 main()
 {
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
 		usleep(10000);
 	}
@@ -116,7 +116,7 @@ main()
 
 	printf("Stopping server...\n");
 	csilk_server_stop(global_server);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 
 	printf("test_server_limits: PASS\n");
 	return 0;

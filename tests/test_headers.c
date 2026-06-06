@@ -16,16 +16,16 @@ test_get_header()
 	csilk_set_request_header(c, "Content-Type", "application/json");
 
 	const char* val = csilk_get_header(c, "Content-Type");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "application/json") == 0);
 
 	// Test case insensitivity
 	val = csilk_get_header(c, "content-type");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "application/json") == 0);
 
 	val = csilk_get_header(c, "X-Not-Found");
-	assert(val == NULL);
+	assert(val == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("csilk_get_header passed!\n");
@@ -39,13 +39,13 @@ test_set_header()
 
 	csilk_set_header(c, "Server", "Csilk/0.1.0");
 	const char* val = csilk_get_response_header(c, "Server");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "Csilk/0.1.0") == 0);
 
 	// Update existing header
 	csilk_set_header(c, "Server", "Csilk/1.0.0");
 	val = csilk_get_response_header(c, "Server");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "Csilk/1.0.0") == 0);
 
 	csilk_test_ctx_free(c);
@@ -66,11 +66,11 @@ test_add_header()
 	// and we can't access buckets, we trust the internal implementation or just check at least one.
 	// But let's check if csilk_get_response_header works.
 	const char* val = csilk_get_response_header(c, "X-Custom");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "value") == 0);
 
 	val = csilk_get_response_header(c, "Set-Cookie");
-	assert(val != NULL);
+	assert(val != nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("csilk_add_header passed!\n");

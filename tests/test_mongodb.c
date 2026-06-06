@@ -36,7 +36,7 @@ test_mongodb_basic(void)
 	// For our MongoDB driver, query with a string that is NOT JSON is treated as
 	// collection name
 	cJSON* users = csilk_db_query_json(pool, "users");
-	assert(users != NULL);
+	assert(users != nullptr);
 	assert(cJSON_IsArray(users));
 
 	// We expect at least Alice
