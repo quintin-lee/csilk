@@ -37,7 +37,7 @@ custom_hmac_sha256(
 static csilk_crypto_driver_t my_driver = {
     .generate_uuid = custom_generate_uuid,
     .hmac_sha256 = custom_hmac_sha256,
-    .sha256 = NULL // Use default
+    .sha256 = nullptr // Use default
 };
 
 int

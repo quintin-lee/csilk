@@ -52,7 +52,7 @@ test_full_yaml(void)
 			   "  auth_token: secret123\n";
 
 	FILE* f = fopen("test_full_config.yaml", "w");
-	assert(f != NULL);
+	assert(f != nullptr);
 	fputs(yaml, f);
 	fclose(f);
 
@@ -76,7 +76,7 @@ test_full_yaml(void)
 	assert(cfg.server.tcp_keepalive == 60);
 	assert(cfg.server.worker_threads == 4);
 	assert(cfg.logger.level == CSILK_LOG_DEBUG);
-	assert(cfg.logger.file_path != NULL);
+	assert(cfg.logger.file_path != nullptr);
 	assert(strcmp(cfg.logger.file_path, "test_full_cfg.log") == 0);
 	assert(cfg.logger.max_file_size == 1048576);
 	assert(cfg.logger.use_colors == 0);
@@ -96,7 +96,7 @@ test_full_yaml(void)
 	assert(cfg.middleware.enable_recovery == 1);
 	assert(cfg.middleware.enable_csrf == 1);
 	assert(cfg.middleware.enable_auth == 0);
-	assert(cfg.middleware.auth_token != NULL);
+	assert(cfg.middleware.auth_token != nullptr);
 	assert(strcmp(cfg.middleware.auth_token, "secret123") == 0);
 
 	csilk_config_free(&cfg);
@@ -182,7 +182,7 @@ test_level_unknown(void)
 static void
 test_null_path(void)
 {
-	int ret = csilk_load_config(NULL, NULL);
+	int ret = csilk_load_config(nullptr, nullptr);
 	assert(ret == -1);
 }
 

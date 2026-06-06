@@ -30,7 +30,7 @@ schema_fallback_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_dat
 	(void)user_data;
 	printf("[Fallback] Executing due to schema validation failure\n");
 	g_fallback_ran = 1;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -49,17 +49,17 @@ test_workflow_schema_validation()
 
 	csilk_wf_t* wf = csilk_wf_new("schema_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "invalid_node", invalid_json_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "invalid_node", invalid_json_handler, nullptr);
 
 	// Require "result" field
 	csilk_wf_node_set_schema(n1, "{\"required\": [\"result\"]}");
 
-	csilk_wf_node_t* nf = csilk_wf_add(wf, "fallback", schema_fallback_handler, NULL);
+	csilk_wf_node_t* nf = csilk_wf_add(wf, "fallback", schema_fallback_handler, nullptr);
 	csilk_wf_on_error(n1, nf);
 
 	csilk_wf_node_set_entry(n1, 1);
 
-	csilk_wf_run(wf, NULL, on_schema_complete);
+	csilk_wf_run(wf, nullptr, on_schema_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

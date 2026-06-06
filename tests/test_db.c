@@ -18,7 +18,7 @@ test_db_sqlite_create_table(void)
 	csilk_db_init();
 
 	csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "test_db.db");
-	assert(pool != NULL);
+	assert(pool != nullptr);
 
 	int rc = csilk_db_exec(pool,
 			       "CREATE TABLE IF NOT EXISTS test_items (id INTEGER "
@@ -39,7 +39,7 @@ test_db_sqlite_insert_query(void)
 	csilk_db_init();
 
 	csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "test_db.db");
-	assert(pool != NULL);
+	assert(pool != nullptr);
 
 	/* Create table */
 	csilk_db_exec(pool,
@@ -47,7 +47,7 @@ test_db_sqlite_insert_query(void)
 		      "KEY, name TEXT)");
 
 	/* Insert */
-	const char* params[] = {"Alice", NULL};
+	const char* params[] = {"Alice", nullptr};
 	cJSON* result =
 	    csilk_db_query_param_json(pool, "INSERT INTO users (name) VALUES (?)", params);
 	if (result) {
@@ -56,12 +56,12 @@ test_db_sqlite_insert_query(void)
 
 	/* Query */
 	cJSON* users = csilk_db_query_json(pool, "SELECT * FROM users");
-	assert(users != NULL);
+	assert(users != nullptr);
 	assert(cJSON_GetArraySize(users) == 1);
 
 	cJSON* user = cJSON_GetArrayItem(users, 0);
 	cJSON* name = cJSON_GetObjectItem(user, "name");
-	assert(name != NULL);
+	assert(name != nullptr);
 	assert(strcmp(name->valuestring, "Alice") == 0);
 
 	cJSON_Delete(users);
@@ -79,7 +79,7 @@ test_db_sqlite_transactions(void)
 	csilk_db_init();
 
 	csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "test_db.db");
-	assert(pool != NULL);
+	assert(pool != nullptr);
 
 	csilk_db_exec(pool,
 		      "CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY, "
@@ -97,10 +97,10 @@ test_db_sqlite_transactions(void)
 
 	/* Verify */
 	cJSON* accounts = csilk_db_query_json(pool, "SELECT SUM(balance) as total FROM accounts");
-	assert(accounts != NULL);
+	assert(accounts != nullptr);
 	cJSON* acc = cJSON_GetArrayItem(accounts, 0);
 	cJSON* total = cJSON_GetObjectItem(acc, "total");
-	assert(total != NULL);
+	assert(total != nullptr);
 	assert(strcmp(total->valuestring, "300") == 0);
 
 	cJSON_Delete(accounts);

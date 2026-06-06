@@ -58,7 +58,7 @@ test_empty()
 void
 test_null_input()
 {
-	size_t len = csilk_url_decode(NULL);
+	size_t len = csilk_url_decode(nullptr);
 	assert(len == 0);
 	printf("test_null_input passed\n");
 }

@@ -98,9 +98,9 @@ main()
 	csilk_wf_t* wf = csilk_wf_new("AdvancedAssistant");
 
 	/* 1. Define Nodes */
-	csilk_wf_node_t* n_brain = csilk_wf_add(wf, "brainstorm", brainstorm_handler, NULL);
-	csilk_wf_node_t* n_write = csilk_wf_add(wf, "writer", writer_handler, NULL);
-	csilk_wf_node_t* n_critic = csilk_wf_add(wf, "critic", critic_handler, NULL);
+	csilk_wf_node_t* n_brain = csilk_wf_add(wf, "brainstorm", brainstorm_handler, nullptr);
+	csilk_wf_node_t* n_write = csilk_wf_add(wf, "writer", writer_handler, nullptr);
+	csilk_wf_node_t* n_critic = csilk_wf_add(wf, "critic", critic_handler, nullptr);
 
 	/* Use high-level AI Node with Template Injection for formatting */
 	csilk_wf_node_t* n_format = csilk_wf_add_ai(
@@ -112,7 +112,7 @@ main()
 				     "{{writer.value}}. Final critique was: {{critic.value}}"});
 
 	/* Add a fallback for the AI node */
-	csilk_wf_node_t* n_fallback = csilk_wf_add(wf, "fallback", fallback_handler, NULL);
+	csilk_wf_node_t* n_fallback = csilk_wf_add(wf, "fallback", fallback_handler, nullptr);
 	csilk_wf_on_error(n_format, n_fallback);
 
 	/* 2. Set Entry Node */
@@ -132,7 +132,7 @@ main()
 	free(mermaid);
 
 	/* 5. Execution */
-	csilk_data_t in = {"text", "Csilk Framework Overview", NULL};
+	csilk_data_t in = {"text", "Csilk Framework Overview", nullptr};
 	csilk_wf_run(wf, &in, on_workflow_done);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);

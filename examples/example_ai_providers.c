@@ -75,7 +75,7 @@ static const csilk_ai_driver_t echo_driver = {
     .name = "echo",
     .init = echo_init,
     .chat = echo_chat,
-    .embeddings = NULL,
+    .embeddings = nullptr,
     .free = echo_free,
 };
 
@@ -89,7 +89,7 @@ main()
 
 	/* ---- Provider 1: Custom Echo Driver ---- */
 	printf("--- Provider: Custom Echo Driver ---\n");
-	csilk_ai_t* echo = csilk_ai_new("echo", NULL, NULL);
+	csilk_ai_t* echo = csilk_ai_new("echo", nullptr, nullptr);
 	if (echo) {
 		csilk_ai_message_t msgs[] = {{"user", "Hello from csilk!"},
 					     {"user", "Custom provider demo."}};
@@ -148,7 +148,7 @@ main()
 
 	/* ---- Provider 3: Ollama (local) ---- */
 	printf("\n--- Provider: Ollama (local) ---\n");
-	printf("  Use: csilk_ai_new(\"ollama\", NULL, NULL)\n");
+	printf("  Use: csilk_ai_new(\"ollama\", nullptr, nullptr)\n");
 	printf("  Model example: llama3.2\n");
 	printf("  Start Ollama: ollama serve\n");
 	printf("  (Requires Ollama driver fix — see src/drivers/ai_ollama.c:191)\n");

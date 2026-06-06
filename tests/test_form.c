@@ -19,7 +19,7 @@ test_basic_form()
 	assert(strcmp(csilk_get_form_field(c, "name"), "John") == 0);
 	assert(strcmp(csilk_get_form_field(c, "age"), "30") == 0);
 	assert(strcmp(csilk_get_form_field(c, "city"), "NYC") == 0);
-	assert(csilk_get_form_field(c, "missing") == NULL);
+	assert(csilk_get_form_field(c, "missing") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_basic_form passed\n");
@@ -49,7 +49,7 @@ test_empty_form()
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	csilk_parse_form_urlencoded(c);
-	assert(csilk_get_form_field(c, "any") == NULL);
+	assert(csilk_get_form_field(c, "any") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_empty_form passed\n");
@@ -63,7 +63,7 @@ test_no_content_type()
 	csilk_test_ctx_set_body(c, body, strlen(body));
 
 	csilk_parse_form_urlencoded(c);
-	assert(csilk_get_form_field(c, "key") == NULL);
+	assert(csilk_get_form_field(c, "key") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_no_content_type passed\n");
@@ -78,7 +78,7 @@ test_wrong_content_type()
 	csilk_set_request_header(c, "Content-Type", "application/json");
 
 	csilk_parse_form_urlencoded(c);
-	assert(csilk_get_form_field(c, "key") == NULL);
+	assert(csilk_get_form_field(c, "key") == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_wrong_content_type passed\n");
@@ -87,8 +87,8 @@ test_wrong_content_type()
 static void
 test_null_context()
 {
-	csilk_parse_form_urlencoded(NULL);
-	assert(csilk_get_form_field(NULL, "key") == NULL);
+	csilk_parse_form_urlencoded(nullptr);
+	assert(csilk_get_form_field(nullptr, "key") == nullptr);
 	printf("test_null_context passed\n");
 }
 
@@ -103,7 +103,7 @@ test_duplicate_keys()
 	csilk_parse_form_urlencoded(c);
 
 	const char* val = csilk_get_form_field(c, "key");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "second") == 0);
 
 	csilk_test_ctx_free(c);
@@ -121,7 +121,7 @@ test_empty_value()
 	csilk_parse_form_urlencoded(c);
 
 	const char* val = csilk_get_form_field(c, "key");
-	assert(val != NULL);
+	assert(val != nullptr);
 	assert(strcmp(val, "") == 0);
 	assert(strcmp(csilk_get_form_field(c, "other"), "val") == 0);
 

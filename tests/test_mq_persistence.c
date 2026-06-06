@@ -14,8 +14,8 @@ test_mq_persistence_api()
 	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
-	/* Test with NULL mq */
-	int rc = csilk_mq_set_persistence(NULL, "test.wal");
+	/* Test with nullptr mq */
+	int rc = csilk_mq_set_persistence(nullptr, "test.wal");
 	assert(rc != 0);
 
 	/* Test with valid mq */

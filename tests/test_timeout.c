@@ -12,7 +12,7 @@
 
 #define TEST_PORT 8111
 
-static csilk_server_t* g_server = NULL;
+static csilk_server_t* g_server = nullptr;
 static volatile int server_ready = 0;
 
 void
@@ -44,14 +44,14 @@ run_server(void* arg)
 	csilk_server_free(g_server);
 	csilk_group_free(group);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 int
 main()
 {
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 
 	// Wait for server to be ready
 	int retries = 0;
@@ -70,7 +70,7 @@ main()
 		perror("connect");
 		printf("FAIL: connect\n");
 		csilk_server_stop(g_server);
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		return 1;
 	}
 	const char* req = "GET /idle HTTP/1.1\r\nConnection: close\r\n\r\n";
@@ -96,6 +96,6 @@ main()
 
 	close(sock);
 	csilk_server_stop(g_server);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 	return passed ? 0 : 1;
 }

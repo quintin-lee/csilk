@@ -18,7 +18,7 @@ test_redirect_basic()
 	assert(csilk_is_aborted(c) == 1);
 
 	const char* loc = csilk_get_response_header(c, "Location");
-	assert(loc != NULL);
+	assert(loc != nullptr);
 	assert(strcmp(loc, "/new-location") == 0);
 
 	csilk_test_ctx_free(c);
@@ -36,7 +36,7 @@ test_redirect_simple()
 	assert(csilk_is_aborted(c) == 1);
 
 	const char* loc = csilk_get_response_header(c, "Location");
-	assert(loc != NULL);
+	assert(loc != nullptr);
 	assert(strcmp(loc, "/redirect-simple") == 0);
 
 	csilk_test_ctx_free(c);
@@ -61,7 +61,7 @@ test_redirect_status_codes()
 		assert(csilk_is_aborted(c) == 1);
 
 		const char* loc = csilk_get_response_header(c, "Location");
-		assert(loc != NULL);
+		assert(loc != nullptr);
 		assert(strcmp(loc, "/target") == 0);
 
 		csilk_test_ctx_free(c);
@@ -72,12 +72,12 @@ test_redirect_status_codes()
 static void
 test_redirect_null_safety()
 {
-	csilk_redirect(NULL, CSILK_STATUS_FOUND, "/nowhere");
-	csilk_redirect_simple(NULL, "/nowhere");
+	csilk_redirect(nullptr, CSILK_STATUS_FOUND, "/nowhere");
+	csilk_redirect_simple(nullptr, "/nowhere");
 
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_redirect(c, CSILK_STATUS_FOUND, NULL);
+	csilk_redirect(c, CSILK_STATUS_FOUND, nullptr);
 	assert(csilk_is_aborted(c) == 0);
 	assert(csilk_get_status(c) == 0);
 

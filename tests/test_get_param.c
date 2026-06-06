@@ -14,14 +14,14 @@ main()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
 	// No params
-	assert(csilk_get_param(ctx, "any") == NULL);
+	assert(csilk_get_param(ctx, "any") == nullptr);
 
 	// With some params
 	csilk_test_ctx_add_param(ctx, "id", "123");
 
-	assert(csilk_get_param(ctx, "id") != NULL);
+	assert(csilk_get_param(ctx, "id") != nullptr);
 	assert(strcmp(csilk_get_param(ctx, "id"), "123") == 0);
-	assert(csilk_get_param(ctx, "other") == NULL);
+	assert(csilk_get_param(ctx, "other") == nullptr);
 
 	// Cleanup
 	csilk_test_ctx_free(ctx);

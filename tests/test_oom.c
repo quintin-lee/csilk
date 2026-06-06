@@ -24,14 +24,14 @@ test_oom_arena()
 	g_oom_count = 0;
 
 	csilk_arena_t* arena = csilk_arena_new(1024);
-	assert(arena == NULL);
+	assert(arena == nullptr);
 
 	g_oom_fail_after = 1; /* Succeed on arena struct, fail on first chunk */
 	g_oom_count = 0;
 	arena = csilk_arena_new(1024);
-	assert(arena != NULL);
+	assert(arena != nullptr);
 	void* ptr = csilk_arena_alloc(arena, 10);
-	assert(ptr == NULL);
+	assert(ptr == nullptr);
 	csilk_arena_free(arena);
 
 	g_oom_fail_after = -1; /* Disable OOM */
@@ -46,7 +46,7 @@ test_oom_context()
 	g_oom_fail_after = 0;
 	g_oom_count = 0;
 	csilk_set(c, "test", (void*)0x1);
-	assert(csilk_get(c, "test") == NULL);
+	assert(csilk_get(c, "test") == nullptr);
 
 	g_oom_fail_after = -1;
 	csilk_test_ctx_free(c);
@@ -61,7 +61,7 @@ test_oom_header_map()
 	g_oom_fail_after = 1; /* Struct allocated, but header entry fails */
 	g_oom_count = 0;
 	csilk_set_header(ctx, "Key", "Value");
-	assert(csilk_get_header(ctx, "Key") == NULL);
+	assert(csilk_get_header(ctx, "Key") == nullptr);
 
 	g_oom_fail_after = -1;
 	csilk_test_ctx_free(ctx);

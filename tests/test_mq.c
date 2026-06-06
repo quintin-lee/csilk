@@ -42,7 +42,7 @@ test_mq_flow()
 	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);
 
-	csilk_mq_use(mq, NULL, global_mw);
+	csilk_mq_use(mq, nullptr, global_mw);
 	csilk_mq_use(mq, "events", topic_mw);
 	csilk_mq_subscribe(mq, "events", sub_handler);
 

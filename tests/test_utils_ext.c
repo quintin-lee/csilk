@@ -212,7 +212,7 @@ test_csilk_hmac_sha256()
 {
 	printf("Testing _csilk_hmac_sha256...\n");
 	uint8_t out[32];
-	_csilk_hmac_sha256(NULL, (uint8_t*)"key", 3, (uint8_t*)"data", 4, out);
+	_csilk_hmac_sha256(nullptr, (uint8_t*)"key", 3, (uint8_t*)"data", 4, out);
 
 	uint8_t expected[32];
 	csilk_hmac_sha256((uint8_t*)"key", 3, (uint8_t*)"data", 4, expected);
@@ -280,7 +280,7 @@ test_csilk_generate_uuid_with_driver()
 	assert(strcmp(buf, "driver-uuid-test-1234567890") == 0);
 
 	uuid_driver_called = 0;
-	_csilk_generate_uuid(NULL, buf);
+	_csilk_generate_uuid(nullptr, buf);
 	assert(strcmp(buf, "driver-uuid-test-1234567890") != 0);
 	csilk_test_ctx_free(ctx);
 	printf("_csilk_generate_uuid with crypto driver passed!\n");

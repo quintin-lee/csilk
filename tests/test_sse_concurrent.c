@@ -50,7 +50,7 @@ test_sse_stream_lifecycle(void)
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
 	for (int cycle = 0; cycle < 3; cycle++) {
-		csilk_sse_send(c, "reset", NULL);
+		csilk_sse_send(c, "reset", nullptr);
 		csilk_sse_init(c);
 		assert(csilk_is_sse(c) == 1);
 
@@ -82,9 +82,9 @@ test_sse_mixed_events(void)
 	csilk_sse_send(streams[1], "event_b", "beta");
 	csilk_sse_send(streams[0], "event_a", "gamma");
 	csilk_sse_send(streams[2], "event_c", "delta");
-	csilk_sse_send(streams[3], NULL, "comment_data");
+	csilk_sse_send(streams[3], nullptr, "comment_data");
 	csilk_sse_send(streams[1], "event_b", "epsilon");
-	csilk_sse_send(streams[0], NULL, NULL);
+	csilk_sse_send(streams[0], nullptr, nullptr);
 
 	for (int i = 0; i < 4; i++) {
 		assert(csilk_is_sse(streams[i]) == 1);

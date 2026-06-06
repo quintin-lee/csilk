@@ -8,7 +8,7 @@
 #include "csilk/core/workflow_internal.h"
 
 static int g_done = 0;
-static char* g_trace_json = NULL;
+static char* g_trace_json = nullptr;
 
 csilk_data_t*
 t_step_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -25,7 +25,7 @@ on_trace_complete(csilk_data_t* result, csilk_wf_trace_t* trace)
 	(void)result;
 	printf("[TraceTest] Workflow complete! Generating JSON...\n");
 
-	assert(trace != NULL);
+	assert(trace != nullptr);
 	assert(trace->node_count == 2);
 	assert(trace->nodes[0]->start_time > 0);
 	assert(trace->nodes[1]->end_time >= trace->nodes[1]->start_time);
@@ -49,14 +49,14 @@ test_workflow_tracing()
 	csilk_wf_node_t* n2 = csilk_wf_add(wf, "node2", t_step_handler, "node2_output");
 	csilk_wf_bind(n1, n2);
 
-	csilk_wf_run_traced(wf, NULL, on_trace_complete);
+	csilk_wf_run_traced(wf, nullptr, on_trace_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	assert(g_done == 1);
-	assert(g_trace_json != NULL);
-	assert(strstr(g_trace_json, "node1") != NULL);
-	assert(strstr(g_trace_json, "node2_output") != NULL);
+	assert(g_trace_json != nullptr);
+	assert(strstr(g_trace_json, "node1") != nullptr);
+	assert(strstr(g_trace_json, "node2_output") != nullptr);
 
 	free(g_trace_json);
 	csilk_wf_free(wf);

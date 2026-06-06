@@ -58,7 +58,7 @@ test_oom_http_parser()
 	 * Create a bare server with no config.  We only need the server
 	 * for its llhttp settings (callback table).  No I/O happens.
 	 */
-	csilk_server_t* s = csilk_server_new(NULL);
+	csilk_server_t* s = csilk_server_new(nullptr);
 
 	/*
 	 * Stack-allocated fake client.  This is NOT a real connection —
@@ -84,7 +84,7 @@ test_oom_http_parser()
 	uv_timer_init(loop, &client.timer);
 
 	/*
-	 * Initialise the request context with _internal_client = NULL.
+	 * Initialise the request context with _internal_client = nullptr.
 	 *
 	 * This is deliberate: when _csilk_dispatch_request eventually
 	 * calls _csilk_send_response, the latter checks
@@ -93,7 +93,7 @@ test_oom_http_parser()
 	 * We only care about the allocation / deallocation paths, not
 	 * about sending bytes on the wire.
 	 */
-	_csilk_ctx_init(&client.ctx, s, NULL);
+	_csilk_ctx_init(&client.ctx, s, nullptr);
 
 	llhttp_init(&client.parser, HTTP_REQUEST, &s->settings);
 	client.parser.data = &client;
@@ -166,7 +166,7 @@ test_oom_http_parser()
 		csilk_ctx_cleanup(&client.ctx);
 		if (client.current_url) {
 			free(client.current_url);
-			client.current_url = NULL;
+			client.current_url = nullptr;
 		}
 
 		/*
@@ -193,8 +193,8 @@ test_oom_http_parser()
 	 * write to memory that has already been reclaimed — a textbook
 	 * stack-use-after-return ASAN error.
 	 */
-	uv_close((uv_handle_t*)&client.request_timer, NULL);
-	uv_close((uv_handle_t*)&client.timer, NULL);
+	uv_close((uv_handle_t*)&client.request_timer, nullptr);
+	uv_close((uv_handle_t*)&client.timer, nullptr);
 	uv_run(loop, UV_RUN_NOWAIT);
 
 	csilk_server_free(s);

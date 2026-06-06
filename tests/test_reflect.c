@@ -36,13 +36,13 @@ typedef struct TestArray_s {
 #include "csilk/test/test.h"
 
 #define POINT_REFLECT_MAP(X)                                                                       \
-	X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL)                         \
-	X(TestPoint, y, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, NULL)
+	X(TestPoint, x, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, nullptr)                      \
+	X(TestPoint, y, CSILK_TYPE_INT16, sizeof(int16_t), 0, false, nullptr)
 
 #define USER_REFLECT_MAP(X)                                                                        \
-	X(TestUser, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)                         \
-	X(TestUser, name, CSILK_TYPE_STRING, 32, 0, false, NULL)                                   \
-	X(TestUser, score, CSILK_TYPE_FLOAT, sizeof(float), 0, false, NULL)                        \
+	X(TestUser, id, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)                      \
+	X(TestUser, name, CSILK_TYPE_STRING, 32, 0, false, nullptr)                                \
+	X(TestUser, score, CSILK_TYPE_FLOAT, sizeof(float), 0, false, nullptr)                     \
 	X(TestUser, pos, CSILK_TYPE_STRUCT, sizeof(TestPoint), 0, false, "TestPoint")
 
 // Automatic registration
@@ -50,8 +50,8 @@ CSILK_REGISTER_REFLECT(TestPoint, POINT_REFLECT_MAP)
 CSILK_REGISTER_REFLECT(TestUser, USER_REFLECT_MAP)
 
 #define ARRAY_REFLECT_MAP(X)                                                                       \
-	X(TestArray, tags, CSILK_TYPE_STRING, 16, 3, false, NULL)                                  \
-	X(TestArray, dynamic_tags, CSILK_TYPE_STRING, sizeof(char*), 2, true, NULL)
+	X(TestArray, tags, CSILK_TYPE_STRING, 16, 3, false, nullptr)                               \
+	X(TestArray, dynamic_tags, CSILK_TYPE_STRING, sizeof(char*), 2, true, nullptr)
 
 CSILK_REGISTER_REFLECT(TestArray, ARRAY_REFLECT_MAP)
 
@@ -62,10 +62,10 @@ test_marshal()
 	// Use automatic type dispatch!
 	char* json = csilk_marshal(&user);
 
-	assert(json != NULL);
-	assert(strstr(json, "\"id\":1") != NULL);
-	assert(strstr(json, "\"name\":\"Alice\"") != NULL);
-	assert(strstr(json, "\"pos\":{\"x\":10,\"y\":20}") != NULL);
+	assert(json != nullptr);
+	assert(strstr(json, "\"id\":1") != nullptr);
+	assert(strstr(json, "\"name\":\"Alice\"") != nullptr);
+	assert(strstr(json, "\"pos\":{\"x\":10,\"y\":20}") != nullptr);
 
 	free(json);
 	printf("test_marshal passed\n");
@@ -103,7 +103,7 @@ test_context_reflect()
 	// Test response with macro
 	csilk_json_t(c, CSILK_STATUS_OK, TestUser, &user);
 	assert(csilk_get_status(c) == CSILK_STATUS_OK);
-	assert(csilk_get_response_body(c, NULL) != NULL);
+	assert(csilk_get_response_body(c, nullptr) != nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_context_reflect passed\n");
@@ -117,7 +117,7 @@ test_basic_types()
 	// int32
 	int32_t i32 = 123;
 	char* json = csilk_marshal(&i32);
-	assert(json != NULL);
+	assert(json != nullptr);
 	assert(strcmp(json, "123") == 0);
 	free(json);
 
@@ -141,7 +141,7 @@ test_basic_types()
 	assert(strcmp(json, "\"hello world\"") == 0);
 	free(json);
 
-	char* s2 = NULL;
+	char* s2 = nullptr;
 	assert(csilk_unmarshal("\"new string\"", &s2) == 1);
 	assert(strcmp(s2, "new string") == 0);
 	free(s2);
@@ -157,9 +157,9 @@ test_arrays()
 	TestArray a = {.tags = {"tag1", "tag2", "tag3"}, .dynamic_tags = {"dyn1", "dyn2"}};
 
 	char* json = csilk_marshal(&a);
-	assert(json != NULL);
-	assert(strstr(json, "\"tags\":[\"tag1\",\"tag2\",\"tag3\"]") != NULL);
-	assert(strstr(json, "\"dynamic_tags\":[\"dyn1\",\"dyn2\"]") != NULL);
+	assert(json != nullptr);
+	assert(strstr(json, "\"tags\":[\"tag1\",\"tag2\",\"tag3\"]") != nullptr);
+	assert(strstr(json, "\"dynamic_tags\":[\"dyn1\",\"dyn2\"]") != nullptr);
 	free(json);
 
 	const char* input = "{\"tags\":[\"A\",\"B\",\"C\"], \"dynamic_tags\":[\"D\",\"E\"]}";

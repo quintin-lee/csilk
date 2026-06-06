@@ -227,8 +227,18 @@ test_perm_router_route_extended_perm()
 	csilk_router_t* r = csilk_router_new();
 	csilk_handler_t h[] = {mock_handler};
 
-	csilk_router_add_extended_perm(
-	    r, "GET", "/test", h, 1, "/test", NULL, NULL, NULL, NULL, "read", "resource");
+	csilk_router_add_extended_perm(r,
+				       "GET",
+				       "/test",
+				       h,
+				       1,
+				       "/test",
+				       nullptr,
+				       nullptr,
+				       nullptr,
+				       nullptr,
+				       "read",
+				       "resource");
 
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(c, "GET", "/test");
@@ -287,7 +297,7 @@ test_perm_auto_middleware_no_perm()
 	printf("Testing csilk_perm_auto_middleware (No perm required)...\n");
 	csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_test_ctx_set_handler_metadata(c, NULL, NULL);
+	csilk_test_ctx_set_handler_metadata(c, nullptr, nullptr);
 
 	csilk_perm_auto_middleware(c);
 	assert(csilk_is_aborted(c) == 0);

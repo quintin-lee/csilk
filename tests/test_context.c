@@ -34,7 +34,7 @@ void
 test_basic_chaining()
 {
 	counter = 0;
-	csilk_handler_t handlers[] = {m1, m2, handler, NULL};
+	csilk_handler_t handlers[] = {m1, m2, handler, nullptr};
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_test_ctx_set_handlers(c, handlers);
 	csilk_next(c);
@@ -54,7 +54,7 @@ void
 test_abort()
 {
 	counter = 0;
-	csilk_handler_t handlers[] = {m_abort, handler, NULL};
+	csilk_handler_t handlers[] = {m_abort, handler, nullptr};
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_test_ctx_set_handlers(c, handlers);
 	csilk_next(c);
@@ -72,13 +72,13 @@ handler_resp(csilk_ctx_t* c)
 void
 test_context_response()
 {
-	csilk_handler_t handlers[] = {handler_resp, NULL};
+	csilk_handler_t handlers[] = {handler_resp, nullptr};
 	csilk_ctx_t* c = csilk_test_ctx_new();
 	csilk_test_ctx_set_handlers(c, handlers);
 	csilk_next(c);
 	assert(csilk_get_status(c) == CSILK_STATUS_OK);
 	size_t body_len = 0;
-	assert(csilk_get_response_body(c, &body_len) != NULL);
+	assert(csilk_get_response_body(c, &body_len) != nullptr);
 	assert(body_len == 5);
 	csilk_test_ctx_free(c);
 	printf("test_context_response passed\n");
@@ -92,7 +92,7 @@ test_context_storage()
 	csilk_set(c, "test_key", &val);
 
 	void* retrieved = csilk_get(c, "test_key");
-	assert(retrieved != NULL);
+	assert(retrieved != nullptr);
 	assert(*(int*)retrieved == 42);
 
 	// Overwrite

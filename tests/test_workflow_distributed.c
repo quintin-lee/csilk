@@ -12,8 +12,8 @@
 
 static int g_remote_task_received = 0;
 static int g_done = 0;
-static char* g_final_result = NULL;
-static csilk_mq_t* g_mq = NULL;
+static char* g_final_result = nullptr;
+static csilk_mq_t* g_mq = nullptr;
 
 /* --- Mock Remote Worker --- */
 static void
@@ -76,7 +76,7 @@ test_workflow_distributed_mq()
 	g_done = 0;
 	mkdir("test_distributed_wals", 0755);
 
-	csilk_server_t* server = csilk_server_new(NULL);
+	csilk_server_t* server = csilk_server_new(nullptr);
 	g_mq = csilk_server_get_mq(server);
 
 	csilk_wf_t* wf = csilk_wf_new("dist_wf");
@@ -85,8 +85,8 @@ test_workflow_distributed_mq()
 
 	// Node 1: Local
 	// Node 2: Remote (Triggered after local)
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "local", local_step_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "remote", NULL, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "local", local_step_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "remote", nullptr, nullptr);
 	csilk_wf_node_set_remote(n2, 1);
 
 	csilk_wf_bind(n1, n2);
@@ -95,7 +95,7 @@ test_workflow_distributed_mq()
 	// Register mock worker BEFORE running
 	csilk_mq_subscribe(g_mq, "csilk.wf.tasks", mock_worker_handler);
 
-	csilk_wf_run(wf, NULL, on_distributed_done);
+	csilk_wf_run(wf, nullptr, on_distributed_done);
 
 	// Run the loop.
 	for (int i = 0; i < 200 && !g_done; i++) {
@@ -105,8 +105,8 @@ test_workflow_distributed_mq()
 
 	assert(g_remote_task_received == 1);
 	assert(g_done == 1);
-	assert(g_final_result != NULL);
-	assert(strstr(g_final_result, "remote_worker_result") != NULL);
+	assert(g_final_result != nullptr);
+	assert(strstr(g_final_result, "remote_worker_result") != nullptr);
 
 	csilk_wf_free(wf);
 	csilk_server_free(server);

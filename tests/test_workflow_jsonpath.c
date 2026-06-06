@@ -8,7 +8,7 @@
 #include "csilk/drivers/ai.h"
 
 static int g_done = 0;
-static char* g_final_output = NULL;
+static char* g_final_output = nullptr;
 
 /* --- Handlers --- */
 
@@ -69,7 +69,7 @@ test_workflow_jsonpath_injection()
 	g_done = 0;
 	if (g_final_output) {
 		free(g_final_output);
-		g_final_output = NULL;
+		g_final_output = nullptr;
 	}
 
 	// Overwrite the real OpenAI driver with our mock
@@ -78,7 +78,7 @@ test_workflow_jsonpath_injection()
 
 	csilk_wf_t* wf = csilk_wf_new("jsonpath_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "producer", json_producer_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "producer", json_producer_handler, nullptr);
 
 	csilk_wf_node_t* n2 = csilk_wf_add_ai(
 	    wf,
@@ -90,18 +90,18 @@ test_workflow_jsonpath_injection()
 	csilk_wf_bind(n1, n2);
 	csilk_wf_node_set_entry(n1, 1);
 
-	csilk_wf_run(wf, NULL, on_jsonpath_complete);
+	csilk_wf_run(wf, nullptr, on_jsonpath_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	assert(g_done == 1);
-	assert(g_final_output != NULL);
+	assert(g_final_output != nullptr);
 
 	printf("Final Resolved Prompt: %s\n", g_final_output);
 
-	assert(strstr(g_final_output, "Hello Quintin!") != NULL);
-	assert(strstr(g_final_output, "Age: 30") != NULL);
-	assert(strstr(g_final_output, "Active: true") != NULL);
+	assert(strstr(g_final_output, "Hello Quintin!") != nullptr);
+	assert(strstr(g_final_output, "Age: 30") != nullptr);
+	assert(strstr(g_final_output, "Active: true") != nullptr);
 
 	csilk_wf_free(wf);
 	if (g_final_output) {

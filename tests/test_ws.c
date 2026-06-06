@@ -128,7 +128,7 @@ test_parse_frame_medium_payload()
 	size_t payload_len = 200;
 	size_t frame_len = 2 + 2 + 4 + payload_len;
 	uint8_t* frame = calloc(1, frame_len);
-	assert(frame != NULL);
+	assert(frame != nullptr);
 
 	frame[0] = 0x81;
 	frame[1] = 0xFE; // masked, 126 extended
@@ -153,7 +153,7 @@ test_parse_frame_ping_pong_close()
 
 	uint8_t ping[] = {0x89, 0x00};
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
-	csilk_set_on_ws_message(ctx, NULL);
+	csilk_set_on_ws_message(ctx, nullptr);
 	csilk_ws_parse_frame(ctx, ping, sizeof(ping));
 
 	uint8_t pong[] = {0x8A, 0x00};
@@ -185,9 +185,9 @@ test_parse_frame_truncated()
 static void
 test_ws_send_null()
 {
-	printf("Testing csilk_ws_send with NULL context/client...\n");
+	printf("Testing csilk_ws_send with nullptr context/client...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
-	csilk_ws_send(NULL, (uint8_t*)"hi", 2, 1);
+	csilk_ws_send(nullptr, (uint8_t*)"hi", 2, 1);
 	csilk_ws_send(ctx, (uint8_t*)"hi", 2, 1);
 	csilk_test_ctx_free(ctx);
 	printf("csilk_ws_send null safe passed!\n");
@@ -200,7 +200,7 @@ test_parse_frame_large_payload()
 	size_t payload_len = 70000;
 	size_t frame_len = 2 + 8 + 4 + payload_len;
 	uint8_t* frame = calloc(1, frame_len);
-	assert(frame != NULL);
+	assert(frame != nullptr);
 
 	frame[0] = 0x81;
 	frame[1] = 0xFF; // masked, 127 extended
@@ -238,7 +238,7 @@ test_ws_close_no_reason()
 	printf("Testing WebSocket close without reason...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_ws_close(ctx, 1000, NULL);
+	csilk_ws_close(ctx, 1000, nullptr);
 
 	csilk_test_ctx_free(ctx);
 	printf("WebSocket close no reason passed!\n");
@@ -247,8 +247,8 @@ test_ws_close_no_reason()
 static void
 test_ws_close_null()
 {
-	printf("Testing WebSocket close NULL context...\n");
-	csilk_ws_close(NULL, 1000, "test");
+	printf("Testing WebSocket close nullptr context...\n");
+	csilk_ws_close(nullptr, 1000, "test");
 	printf("WebSocket close null passed!\n");
 }
 
@@ -260,7 +260,7 @@ test_ws_close_handshake()
 
 	/* No real client handle — csilk_ws_parse_frame will still detect the
      * close opcode and return without sending (csilk_ws_close checks
-     * _internal_client and skips if NULL). The payload is freed internally. */
+     * _internal_client and skips if nullptr). The payload is freed internally. */
 	uint8_t close_frame[] = {0x88, 0x02, 0x03, 0xE8};
 	csilk_ws_parse_frame(ctx, close_frame, sizeof(close_frame));
 

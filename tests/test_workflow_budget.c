@@ -44,15 +44,15 @@ skip_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)user_data;
 	printf("[Test] Node 2 running (Error: Should have been skipped!)\n");
 	g_node2_ran = 1;
-	return NULL;
+	return nullptr;
 }
 
 void
 on_budget_complete(csilk_data_t* result)
 {
 	printf("[Test] Workflow finished. Result was: %s\n",
-	       result ? "present" : "NULL (expected)");
-	assert(result == NULL); // Should be NULL because it was terminated
+	       result ? "present" : "nullptr (expected)");
+	assert(result == nullptr); // Should be nullptr because it was terminated
 	g_callback_called = 1;
 }
 
@@ -68,11 +68,11 @@ test_workflow_budget_enforcement()
 	// Set a small budget
 	csilk_wf_set_budget(wf, 50);
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "node1", expensive_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "node2", skip_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "node1", expensive_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "node2", skip_handler, nullptr);
 	csilk_wf_bind(n1, n2);
 
-	csilk_wf_run(wf, NULL, on_budget_complete);
+	csilk_wf_run(wf, nullptr, on_budget_complete);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

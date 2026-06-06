@@ -59,7 +59,7 @@ post_data_handler(csilk_ctx_t* c)
 
 	/* simulate processing delay */
 	struct timespec ts = {0, 50 * 1000000}; // 50ms
-	nanosleep(&ts, NULL);
+	nanosleep(&ts, nullptr);
 
 	cJSON* resp = cJSON_CreateObject();
 	cJSON_AddStringToObject(resp, "status", "received");
@@ -110,7 +110,7 @@ main()
 {
 	// Initialize logger
 	csilk_log_config_t log_cfg = {
-	    .level = CSILK_LOG_DEBUG, .file_path = NULL, .max_file_size = 0, .use_colors = -1};
+	    .level = CSILK_LOG_DEBUG, .file_path = nullptr, .max_file_size = 0, .use_colors = -1};
 	csilk_log_init(log_cfg);
 
 	/* create router */

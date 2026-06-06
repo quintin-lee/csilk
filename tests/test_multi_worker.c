@@ -16,7 +16,7 @@
 #define NUM_WORKERS 3
 
 static volatile int server_ready = 0;
-static csilk_server_t* g_server = NULL;
+static csilk_server_t* g_server = nullptr;
 
 static void
 ping_handler(csilk_ctx_t* c)
@@ -52,7 +52,7 @@ run_server(void* arg)
 	csilk_server_run(g_server, MW_PORT);
 	csilk_server_free(g_server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 typedef struct {
@@ -92,7 +92,7 @@ run_client(void* arg)
 		FD_ZERO(&fds);
 		FD_SET(sock, &fds);
 		char buf[1024] = {0};
-		int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+		int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 		if (ret > 0) {
 			int n = recv(sock, buf, sizeof(buf) - 1, 0);
 			if (n > 0) {
@@ -110,14 +110,14 @@ run_client(void* arg)
 		}
 		close(sock);
 	}
-	return NULL;
+	return nullptr;
 }
 
 int
 main()
 {
 	pthread_t srv;
-	pthread_create(&srv, NULL, run_server, NULL);
+	pthread_create(&srv, nullptr, run_server, nullptr);
 
 	int retries = 0;
 	while (!server_ready && retries < 20) {
@@ -126,7 +126,7 @@ main()
 	}
 	if (!server_ready) {
 		printf("FAIL: server failed to start\n");
-		pthread_join(srv, NULL);
+		pthread_join(srv, nullptr);
 		return 1;
 	}
 	usleep(100000);
@@ -135,19 +135,19 @@ main()
 	client_result_t results[NUM_CLIENTS];
 	for (int i = 0; i < NUM_CLIENTS; i++) {
 		results[i].id = i;
-		pthread_create(&clients[i], NULL, run_client, &results[i]);
+		pthread_create(&clients[i], nullptr, run_client, &results[i]);
 	}
 
 	int total_success = 0;
 	int total_fail = 0;
 	for (int i = 0; i < NUM_CLIENTS; i++) {
-		pthread_join(clients[i], NULL);
+		pthread_join(clients[i], nullptr);
 		total_success += results[i].success_count;
 		total_fail += results[i].fail_count;
 	}
 
 	csilk_server_stop(g_server);
-	pthread_join(srv, NULL);
+	pthread_join(srv, nullptr);
 
 	int expected = NUM_CLIENTS * 5;
 	printf("multi_worker: %d/%d success, %d failed\n", total_success, expected, total_fail);

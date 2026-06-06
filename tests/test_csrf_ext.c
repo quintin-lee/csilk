@@ -22,7 +22,7 @@ test_csrf_middleware_safe_method_get()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(ctx, "GET", "/test");
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;
@@ -42,7 +42,7 @@ test_csrf_middleware_safe_method_head()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(ctx, "HEAD", "/test");
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;
@@ -62,7 +62,7 @@ test_csrf_middleware_safe_method_options()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(ctx, "OPTIONS", "/test");
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;
@@ -82,7 +82,7 @@ test_csrf_middleware_post_no_token()
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 	csilk_test_ctx_set_request(ctx, "POST", "/test");
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;
@@ -116,7 +116,7 @@ test_csrf_middleware_post_with_matching_token()
 	snprintf(cookie_hdr, sizeof(cookie_hdr), "csrf_token=%s", token);
 	csilk_set_request_header(ctx, "Cookie", cookie_hdr);
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;
@@ -139,7 +139,7 @@ test_csrf_middleware_post_with_wrong_token()
 	csilk_set_request_header(ctx, "X-CSRF-Token", "wrong-token");
 	csilk_set_request_header(ctx, "Cookie", "csrf_token=correct-token");
 
-	csilk_handler_t handlers[] = {test_handler, NULL};
+	csilk_handler_t handlers[] = {test_handler, nullptr};
 	csilk_test_ctx_set_handlers(ctx, handlers);
 
 	test_handler_called = 0;

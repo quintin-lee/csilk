@@ -77,14 +77,14 @@ test_workflow_parallel_tools()
 	setenv("AGENT_API_KEY", "mock", 1);
 
 	csilk_wf_t* wf = csilk_wf_new("parallel_tools_wf");
-	csilk_wf_register_tool(wf, "slow_tool", "A slow tool", "{}", slow_tool, NULL);
+	csilk_wf_register_tool(wf, "slow_tool", "A slow tool", "{}", slow_tool, nullptr);
 
 	csilk_wf_node_t* n1 = csilk_wf_add_ai(
 	    wf, "agent", &(csilk_ai_config_t){.model = "gpt-4", .prompt = "Do 3 slow things"});
 	csilk_wf_node_set_entry(n1, 1);
 
 	g_start_time = uv_hrtime();
-	csilk_wf_run(wf, NULL, NULL);
+	csilk_wf_run(wf, nullptr, nullptr);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	g_end_time = uv_hrtime();
 

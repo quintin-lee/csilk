@@ -29,7 +29,7 @@ mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)ctx;
 	(void)input;
 	(void)user_data;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -38,9 +38,9 @@ test_workflow_graph()
 	printf("Testing workflow graph connectivity...\n");
 	csilk_wf_t* wf = csilk_wf_new("graph_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", mock_handler, NULL);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", mock_handler, NULL);
-	csilk_wf_node_t* n3 = csilk_wf_add(wf, "n3", mock_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", mock_handler, nullptr);
+	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", mock_handler, nullptr);
+	csilk_wf_node_t* n3 = csilk_wf_add(wf, "n3", mock_handler, nullptr);
 
 	csilk_wf_bind(n1, n2);
 	csilk_wf_on(n2, "fail", n1);
@@ -48,7 +48,7 @@ test_workflow_graph()
 
 	// Verify n1 connections
 	assert(n1->edge_count == 1);
-	assert(n1->edges[0].condition == NULL);
+	assert(n1->edges[0].condition == nullptr);
 	assert(n1->edges[0].target == n2);
 
 	// Verify n2 connections

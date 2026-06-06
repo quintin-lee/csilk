@@ -72,7 +72,7 @@ test_workflow_template_filters()
 
 	csilk_wf_t* wf = csilk_wf_new("filter_wf");
 
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "prod", producer_handler, NULL);
+	csilk_wf_node_t* n1 = csilk_wf_add(wf, "prod", producer_handler, nullptr);
 
 	// AI Node using multiple filters
 	csilk_wf_node_t* n2 = csilk_wf_add_ai(
@@ -83,7 +83,7 @@ test_workflow_template_filters()
 	csilk_wf_bind(n1, n2);
 	csilk_wf_node_set_entry(n1, 1);
 
-	csilk_wf_run(wf, NULL, on_filter_done);
+	csilk_wf_run(wf, nullptr, on_filter_done);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

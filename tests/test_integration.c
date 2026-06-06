@@ -36,7 +36,7 @@ recv_response(int sock, char* buf, size_t size)
 	struct timeval tv = {2, 0};
 	FD_ZERO(&fds);
 	FD_SET(sock, &fds);
-	int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+	int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 	if (ret <= 0) {
 		return -1;
 	}
@@ -48,7 +48,7 @@ expect_status(const char* resp, int expected)
 {
 	char expected_str[32];
 	snprintf(expected_str, sizeof(expected_str), "HTTP/1.1 %d", expected);
-	return strstr(resp, expected_str) != NULL;
+	return strstr(resp, expected_str) != nullptr;
 }
 
 static int
@@ -59,7 +59,7 @@ expect_body(const char* resp, const char* body)
 		return 0;
 	}
 	const char* body_start = hdr_end + 4;
-	return strstr(body_start, body) != NULL;
+	return strstr(body_start, body) != nullptr;
 }
 
 static int
@@ -220,7 +220,7 @@ run_server(void* arg)
 	csilk_server_free(server);
 	csilk_group_free(api);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 /* ---- Tests ---- */
@@ -476,7 +476,7 @@ test_streaming_response()
 		struct timeval tv = {1, 0};
 		FD_ZERO(&fds);
 		FD_SET(sock, &fds);
-		int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+		int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 		if (ret <= 0) {
 			break;
 		}
@@ -493,10 +493,10 @@ test_streaming_response()
 	close(sock);
 	test_result("GET /stream (response received)", total > 0);
 	test_result("GET /stream (chunked encoding)",
-		    strstr(full, "Transfer-Encoding: chunked") != NULL);
-	test_result("GET /stream (chunk 1)", strstr(full, "6\r\nHello ") != NULL);
-	test_result("GET /stream (chunk 2)", strstr(full, "5\r\nWorld") != NULL);
-	test_result("GET /stream (final chunk)", strstr(full, "0\r\n\r\n") != NULL);
+		    strstr(full, "Transfer-Encoding: chunked") != nullptr);
+	test_result("GET /stream (chunk 1)", strstr(full, "6\r\nHello ") != nullptr);
+	test_result("GET /stream (chunk 2)", strstr(full, "5\r\nWorld") != nullptr);
+	test_result("GET /stream (final chunk)", strstr(full, "0\r\n\r\n") != nullptr);
 }
 
 static void
@@ -517,9 +517,10 @@ test_websocket_handshake()
 	test_result("WS handshake (response received)", n > 0);
 	test_result("WS handshake (status 101)",
 		    expect_status(buf, CSILK_STATUS_SWITCHING_PROTOCOLS));
-	test_result("WS handshake (Upgrade: websocket)", strstr(buf, "Upgrade: websocket") != NULL);
+	test_result("WS handshake (Upgrade: websocket)",
+		    strstr(buf, "Upgrade: websocket") != nullptr);
 	test_result("WS handshake (Sec-WebSocket-Accept)",
-		    strstr(buf, "Sec-WebSocket-Accept:") != NULL);
+		    strstr(buf, "Sec-WebSocket-Accept:") != nullptr);
 	close(sock);
 }
 
@@ -529,11 +530,11 @@ main()
 	printf("=== Integration Tests ===\n\n");
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
-		nanosleep(&(struct timespec){0, 10000000}, NULL);
+		nanosleep(&(struct timespec){0, 10000000}, nullptr);
 	}
-	nanosleep(&(struct timespec){0, 50000000}, NULL);
+	nanosleep(&(struct timespec){0, 50000000}, nullptr);
 
 	test_get_root();
 	test_get_user_param();

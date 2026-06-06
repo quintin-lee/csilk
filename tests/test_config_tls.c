@@ -25,23 +25,23 @@ main()
 	assert(ret == 0);
 
 	assert(cfg.server.enable_tls == 1);
-	assert(cfg.server.tls_cert_file != NULL);
+	assert(cfg.server.tls_cert_file != nullptr);
 	assert(strcmp(cfg.server.tls_cert_file, "cert.pem") == 0);
-	assert(cfg.server.tls_key_file != NULL);
+	assert(cfg.server.tls_key_file != nullptr);
 	assert(strcmp(cfg.server.tls_key_file, "key.pem") == 0);
-	assert(cfg.server.tls_ca_file != NULL);
+	assert(cfg.server.tls_ca_file != nullptr);
 	assert(strcmp(cfg.server.tls_ca_file, "ca.pem") == 0);
 	assert(cfg.server.tls_verify_peer == 1);
 
 	printf("Testing TLS YAML config validation...\n");
-	const char* error_msg = NULL;
+	const char* error_msg = nullptr;
 	ret = csilk_config_validate(&cfg, &error_msg);
 	assert(ret == 0);
 
 	csilk_config_free(&cfg);
-	assert(cfg.server.tls_cert_file == NULL);
-	assert(cfg.server.tls_key_file == NULL);
-	assert(cfg.server.tls_ca_file == NULL);
+	assert(cfg.server.tls_cert_file == nullptr);
+	assert(cfg.server.tls_key_file == nullptr);
+	assert(cfg.server.tls_ca_file == nullptr);
 
 	remove("test_config_tls.yaml");
 
@@ -55,20 +55,20 @@ main()
 	cfg.server.enable_tls = 1;
 	ret = csilk_config_validate(&cfg, &error_msg);
 	assert(ret == -1);
-	assert(strstr(error_msg, "tls_cert_file") != NULL);
+	assert(strstr(error_msg, "tls_cert_file") != nullptr);
 
 	printf("Testing TLS validation failure (missing key)...\n");
 	cfg.server.tls_cert_file = "cert.pem";
 	ret = csilk_config_validate(&cfg, &error_msg);
 	assert(ret == -1);
-	assert(strstr(error_msg, "tls_key_file") != NULL);
+	assert(strstr(error_msg, "tls_key_file") != nullptr);
 
 	printf("Testing TLS validation failure (missing CA for verify_peer)...\n");
 	cfg.server.tls_key_file = "key.pem";
 	cfg.server.tls_verify_peer = 1;
 	ret = csilk_config_validate(&cfg, &error_msg);
 	assert(ret == -1);
-	assert(strstr(error_msg, "tls_ca_file") != NULL);
+	assert(strstr(error_msg, "tls_ca_file") != nullptr);
 
 	printf("test_config_tls: PASS\n");
 	return 0;

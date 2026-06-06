@@ -15,7 +15,7 @@
 #define TEST_YAML "test_config_load_tmp.yaml"
 
 static volatile int server_ready = 0;
-static csilk_server_t* g_server = NULL;
+static csilk_server_t* g_server = nullptr;
 
 static void
 hello_handler(csilk_ctx_t* c)
@@ -35,15 +35,15 @@ run_server(void* arg)
 	int ret = csilk_load_config(TEST_YAML, &config);
 	if (ret != 0) {
 		fprintf(stderr, "FAIL: csilk_load_config returned %d\n", ret);
-		return NULL;
+		return nullptr;
 	}
 
-	const char* err = NULL;
+	const char* err = nullptr;
 	ret = csilk_config_validate(&config, &err);
 	if (ret != 0) {
 		fprintf(stderr, "FAIL: config validation: %s\n", err ? err : "unknown");
 		csilk_config_free(&config);
-		return NULL;
+		return nullptr;
 	}
 
 	/* Verify key fields were parsed correctly */
@@ -60,7 +60,7 @@ run_server(void* arg)
 
 	server_ready = 1;
 	csilk_server_run(g_server, CONFIG_LOAD_PORT);
-	return NULL;
+	return nullptr;
 }
 
 static int
@@ -83,7 +83,7 @@ do_request(const char* req, char* buf, size_t bufsize)
 	struct timeval tv = {5, 0};
 	FD_ZERO(&fds);
 	FD_SET(sock, &fds);
-	int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+	int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 	int n = 0;
 	if (ret > 0) {
 		n = recv(sock, buf, bufsize - 1, 0);
@@ -125,7 +125,7 @@ main()
 	fclose(f);
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 
 	int retries = 0;
 	while (!server_ready && retries < 20) {
@@ -134,7 +134,7 @@ main()
 	}
 	if (!server_ready) {
 		printf("FAIL: server failed to start\n");
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		remove(TEST_YAML);
 		return 1;
 	}
@@ -155,7 +155,7 @@ main()
 	}
 
 	csilk_server_stop(g_server);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 	remove(TEST_YAML);
 
 	if (passed) {

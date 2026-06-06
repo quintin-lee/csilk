@@ -28,7 +28,7 @@ step_b_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)user_data;
 	g_step_b_ran++;
 	printf("[Test] Step B running with input: %s\n", (char*)input->value);
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -40,8 +40,8 @@ test_workflow_persistence()
 	csilk_wf_t* wf = csilk_wf_new("persist_wf");
 	csilk_wf_set_persistence(wf, "test_wals");
 
-	csilk_wf_node_t* n_a = csilk_wf_add(wf, "node_a", step_a_handler, NULL);
-	csilk_wf_node_t* n_b = csilk_wf_add(wf, "node_b", step_b_handler, NULL);
+	csilk_wf_node_t* n_a = csilk_wf_add(wf, "node_a", step_a_handler, nullptr);
+	csilk_wf_node_t* n_b = csilk_wf_add(wf, "node_b", step_b_handler, nullptr);
 	csilk_wf_bind(n_a, n_b);
 
 	/* Part 1: Partial execution.
@@ -49,7 +49,7 @@ test_workflow_persistence()
    */
 	g_step_a_ran = 0;
 	g_step_b_ran = 0;
-	const char* id = csilk_wf_run(wf, NULL, NULL);
+	const char* id = csilk_wf_run(wf, nullptr, nullptr);
 	strcpy(g_exec_id, id);
 
 	// Run until Node A is done.
@@ -72,7 +72,7 @@ test_workflow_persistence()
      Here we just call resume.
    */
 	printf("[Test] Resuming execution %s...\n", g_exec_id);
-	csilk_wf_resume(wf, g_exec_id, NULL);
+	csilk_wf_resume(wf, g_exec_id, nullptr);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

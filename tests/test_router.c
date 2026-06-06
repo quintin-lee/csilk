@@ -29,13 +29,13 @@ test_router_simd()
 	csilk_router_add(r, "GET", long_path, h1, 1);
 
 	csilk_handler_t* matched = csilk_router_match(r, "GET", long_path);
-	assert(matched != NULL && matched[0] == mock_handler1);
+	assert(matched != nullptr && matched[0] == mock_handler1);
 
 	/* Test with prefix match but different tail */
-	assert(csilk_router_match(
-		   r,
-		   "GET",
-		   "/this_is_a_very_long_path_segment_that_should_trigger_avx2_matchinx") == NULL);
+	assert(
+	    csilk_router_match(
+		r, "GET", "/this_is_a_very_long_path_segment_that_should_trigger_avx2_matchinx") ==
+	    nullptr);
 
 	csilk_router_free(r);
 	printf("test_router_simd passed!\n");
@@ -46,16 +46,16 @@ main()
 {
 	test_router_simd();
 	csilk_router_t* r = csilk_router_new();
-	assert(r != NULL);
+	assert(r != nullptr);
 
 	csilk_handler_t h1[] = {mock_handler1};
 	csilk_handler_t h2[] = {mock_handler2};
 
 	// Boundary cases for adding routes
-	csilk_router_add(NULL, "GET", "/hello", h1, 1);
-	csilk_router_add(r, NULL, "/hello", h1, 1);
-	csilk_router_add(r, "GET", NULL, h1, 1);
-	csilk_router_add(r, "GET", "/hello", NULL, 1);
+	csilk_router_add(nullptr, "GET", "/hello", h1, 1);
+	csilk_router_add(r, nullptr, "/hello", h1, 1);
+	csilk_router_add(r, "GET", nullptr, h1, 1);
+	csilk_router_add(r, "GET", "/hello", nullptr, 1);
 
 	csilk_router_add(r, "GET", "/hello", h1, 1);
 	csilk_router_add(r, "POST", "/submit", h2, 1);
@@ -63,31 +63,31 @@ main()
 	csilk_handler_t* matched;
 
 	// Boundary cases for matching
-	matched = csilk_router_match(NULL, "GET", "/hello");
-	assert(matched == NULL);
-	matched = csilk_router_match(r, NULL, "/hello");
-	assert(matched == NULL);
-	matched = csilk_router_match(r, "GET", NULL);
-	assert(matched == NULL);
+	matched = csilk_router_match(nullptr, "GET", "/hello");
+	assert(matched == nullptr);
+	matched = csilk_router_match(r, nullptr, "/hello");
+	assert(matched == nullptr);
+	matched = csilk_router_match(r, "GET", nullptr);
+	assert(matched == nullptr);
 
 	matched = csilk_router_match(r, "GET", "/hello");
-	assert(matched != NULL && matched[0] == mock_handler1);
+	assert(matched != nullptr && matched[0] == mock_handler1);
 
 	matched = csilk_router_match(r, "POST", "/submit");
-	assert(matched != NULL && matched[0] == mock_handler2);
+	assert(matched != nullptr && matched[0] == mock_handler2);
 
-	assert(csilk_router_match(r, "GET", "/notfound") == NULL);
-	assert(csilk_router_match(r, "POST", "/hello") == NULL);
+	assert(csilk_router_match(r, "GET", "/notfound") == nullptr);
+	assert(csilk_router_match(r, "POST", "/hello") == nullptr);
 
 	// Match root path corner case
 	csilk_router_add(r, "GET", "/", h1, 1);
 	matched = csilk_router_match(r, "GET", "/");
-	assert(matched != NULL && matched[0] == mock_handler1);
+	assert(matched != nullptr && matched[0] == mock_handler1);
 
 	csilk_router_free(r);
 
 	// Test double free safety
-	csilk_router_free(NULL);
+	csilk_router_free(nullptr);
 
 	printf("test_router passed!\n");
 	return 0;

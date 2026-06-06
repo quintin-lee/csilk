@@ -9,7 +9,7 @@ test_config_validate()
 {
 	csilk_config_t cfg;
 	memset(&cfg, 0, sizeof(cfg));
-	const char* err = NULL;
+	const char* err = nullptr;
 
 	// Test invalid port
 	cfg.port = 0;

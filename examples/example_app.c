@@ -70,44 +70,44 @@ typedef struct {
 	  sizeof(((reflect_address_t*)0)->street),                                                 \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
+	  nullptr)                                                                                 \
 	_(reflect_address_t,                                                                       \
 	  city,                                                                                    \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((reflect_address_t*)0)->city),                                                   \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
+	  nullptr)                                                                                 \
 	_(reflect_address_t,                                                                       \
 	  zip,                                                                                     \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((reflect_address_t*)0)->zip),                                                    \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
-	_(reflect_address_t, is_primary, CSILK_TYPE_BOOL, 0, 0, false, NULL)
+	  nullptr)                                                                                 \
+	_(reflect_address_t, is_primary, CSILK_TYPE_BOOL, 0, 0, false, nullptr)
 
 #define REFLECT_USER_MAP(_, ...)                                                                   \
-	_(reflect_user_t, id, CSILK_TYPE_INT64, 0, 0, false, NULL)                                 \
+	_(reflect_user_t, id, CSILK_TYPE_INT64, 0, 0, false, nullptr)                              \
 	_(reflect_user_t,                                                                          \
 	  name,                                                                                    \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((reflect_user_t*)0)->name),                                                      \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
+	  nullptr)                                                                                 \
 	_(reflect_user_t,                                                                          \
 	  email,                                                                                   \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((reflect_user_t*)0)->email),                                                     \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
-	_(reflect_user_t, active, CSILK_TYPE_BOOL, 0, 0, false, NULL)                              \
-	_(reflect_user_t, score, CSILK_TYPE_DOUBLE, 0, 0, false, NULL)                             \
-	_(reflect_user_t, rating, CSILK_TYPE_FLOAT, 0, 0, false, NULL)                             \
-	_(reflect_user_t, level, CSILK_TYPE_INT16, 0, 0, false, NULL)                              \
-	_(reflect_user_t, flags, CSILK_TYPE_UINT8, sizeof(uint8_t), 4, false, NULL)                \
+	  nullptr)                                                                                 \
+	_(reflect_user_t, active, CSILK_TYPE_BOOL, 0, 0, false, nullptr)                           \
+	_(reflect_user_t, score, CSILK_TYPE_DOUBLE, 0, 0, false, nullptr)                          \
+	_(reflect_user_t, rating, CSILK_TYPE_FLOAT, 0, 0, false, nullptr)                          \
+	_(reflect_user_t, level, CSILK_TYPE_INT16, 0, 0, false, nullptr)                           \
+	_(reflect_user_t, flags, CSILK_TYPE_UINT8, sizeof(uint8_t), 4, false, nullptr)             \
 	_(reflect_user_t,                                                                          \
 	  address,                                                                                 \
 	  CSILK_TYPE_STRUCT,                                                                       \
@@ -115,7 +115,7 @@ typedef struct {
 	  0,                                                                                       \
 	  false,                                                                                   \
 	  "reflect_address_t")                                                                     \
-	_(reflect_user_t, bio, CSILK_TYPE_STRING, 0, 0, true, NULL)
+	_(reflect_user_t, bio, CSILK_TYPE_STRING, 0, 0, true, nullptr)
 
 #define REFLECT_ORDER_ITEM_MAP(_, ...)                                                             \
 	_(reflect_order_item_t,                                                                    \
@@ -124,20 +124,20 @@ typedef struct {
 	  sizeof(((reflect_order_item_t*)0)->sku),                                                 \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
-	_(reflect_order_item_t, quantity, CSILK_TYPE_INT32, 0, 0, false, NULL)                     \
-	_(reflect_order_item_t, unit_price, CSILK_TYPE_DOUBLE, 0, 0, false, NULL)
+	  nullptr)                                                                                 \
+	_(reflect_order_item_t, quantity, CSILK_TYPE_INT32, 0, 0, false, nullptr)                  \
+	_(reflect_order_item_t, unit_price, CSILK_TYPE_DOUBLE, 0, 0, false, nullptr)
 
 #define REFLECT_ORDER_MAP(_, ...)                                                                  \
-	_(reflect_order_t, order_id, CSILK_TYPE_INT64, 0, 0, false, NULL)                          \
+	_(reflect_order_t, order_id, CSILK_TYPE_INT64, 0, 0, false, nullptr)                       \
 	_(reflect_order_t,                                                                         \
 	  customer_email,                                                                          \
 	  CSILK_TYPE_STRING,                                                                       \
 	  sizeof(((reflect_order_t*)0)->customer_email),                                           \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)                                                                                    \
-	_(reflect_order_t, total, CSILK_TYPE_DOUBLE, 0, 0, false, NULL)                            \
+	  nullptr)                                                                                 \
+	_(reflect_order_t, total, CSILK_TYPE_DOUBLE, 0, 0, false, nullptr)                         \
 	_(reflect_order_t,                                                                         \
 	  items,                                                                                   \
 	  CSILK_TYPE_STRUCT,                                                                       \
@@ -151,7 +151,7 @@ typedef struct {
 	  sizeof(((reflect_order_t*)0)->notes),                                                    \
 	  0,                                                                                       \
 	  false,                                                                                   \
-	  NULL)
+	  nullptr)
 
 /* Auto-register at startup */
 CSILK_REGISTER_REFLECT(reflect_address_t, REFLECT_ADDRESS_MAP)
@@ -186,7 +186,7 @@ ping(csilk_ctx_t* c)
 {
 	cJSON* obj = cJSON_CreateObject();
 	cJSON_AddStringToObject(obj, "status", "ok");
-	cJSON_AddNumberToObject(obj, "time", (double)time(NULL));
+	cJSON_AddNumberToObject(obj, "time", (double)time(nullptr));
 	csilk_json(c, CSILK_STATUS_OK, obj);
 }
 
@@ -229,14 +229,14 @@ create_user(csilk_ctx_t* c)
 {
 	reflect_user_t u;
 	memset(&u, 0, sizeof(u));
-	u.bio = NULL;
+	u.bio = nullptr;
 
 	if (!csilk_bind_reflect(c, "reflect_user_t", &u)) {
 		csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Invalid user JSON");
 		return;
 	}
 
-	u.id = (int64_t)(time(NULL) % 100000);
+	u.id = (int64_t)(time(nullptr) % 100000);
 	csilk_set_header(c, "Content-Type", "application/json");
 
 	if (u.bio) {
@@ -317,7 +317,7 @@ create_order(csilk_ctx_t* c)
 		return;
 	}
 
-	o.order_id = (int64_t)(time(NULL) % 100000);
+	o.order_id = (int64_t)(time(nullptr) % 100000);
 
 	csilk_json_reflect(c, CSILK_STATUS_OK, "reflect_order_t", &o);
 }
@@ -361,7 +361,7 @@ static void
 sse_handler(csilk_ctx_t* c)
 {
 	csilk_sse_init(c);
-	csilk_sse_send(c, NULL, "connected");
+	csilk_sse_send(c, nullptr, "connected");
 	csilk_sse_send(c, "greeting", "{\"hello\":\"world\"}");
 	csilk_sse_close(c);
 }
@@ -386,7 +386,7 @@ timer_mw(csilk_ctx_t* c)
 int
 main(void)
 {
-	csilk_app_t* app = csilk_app_new(NULL);
+	csilk_app_t* app = csilk_app_new(nullptr);
 
 	csilk_app_log_level(app, CSILK_LOG_DEBUG);
 
@@ -417,7 +417,7 @@ main(void)
 	csilk_app_get_ext(app,
 			  "/api/users/:id",
 			  get_user,
-			  NULL,
+			  nullptr,
 			  "reflect_user_t",
 			  "Get user profile",
 			  "Returns a user profile with nested address and array fields");
@@ -431,7 +431,7 @@ main(void)
 	csilk_app_get_ext(app,
 			  "/api/orders/:id",
 			  get_order,
-			  NULL,
+			  nullptr,
 			  "reflect_order_t",
 			  "Get order",
 			  "Returns an order with items array, totals, and notes");

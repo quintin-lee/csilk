@@ -28,7 +28,7 @@ setup_db(csilk_db_pool_t* pool)
 
 	// Insert sample data
 	const char* insert_sql = "INSERT INTO users (name, email) VALUES (?, ?)";
-	const char* params[] = {"Alice", "alice@example.com", NULL};
+	const char* params[] = {"Alice", "alice@example.com", nullptr};
 
 	cJSON* result = csilk_db_query_param_json(pool, insert_sql, params);
 	if (result) {
@@ -56,7 +56,7 @@ query_users(csilk_db_pool_t* pool)
 	}
 
 	printf("Users:\n");
-	cJSON* item = NULL;
+	cJSON* item = nullptr;
 	cJSON_ArrayForEach(item, result)
 	{
 		const char* name = cJSON_GetObjectItem(item, "name")->valuestring;

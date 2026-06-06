@@ -57,12 +57,12 @@ test_cors_options_preflight()
 void
 test_cors_null_config()
 {
-	printf("Testing CORS with NULL config...\n");
+	printf("Testing CORS with nullptr config...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	csilk_cors_middleware(ctx, NULL);
+	csilk_cors_middleware(ctx, nullptr);
 
-	assert(get_response_header(ctx, "Access-Control-Allow-Origin") == NULL);
+	assert(get_response_header(ctx, "Access-Control-Allow-Origin") == nullptr);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_cors_null_config passed\n");

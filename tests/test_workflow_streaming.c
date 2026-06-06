@@ -82,7 +82,7 @@ test_workflow_streaming()
 	// The previous failure was a SEGFAULT in AI init, now it's an assertion.
 	// To test streaming WITHOUT a real WS, I'd need to mock the broadcast.
 
-	csilk_wf_run(wf, NULL, on_streaming_done);
+	csilk_wf_run(wf, nullptr, on_streaming_done);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	assert(g_done == 1);

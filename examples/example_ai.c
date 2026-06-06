@@ -109,8 +109,8 @@ main()
 	/* 3. Asynchronous call */
 	printf("\n--- [3] Asynchronous call (Non-blocking) ---\n");
 	req.stream = false;
-	req.on_chunk = NULL;
-	csilk_ai_chat_async(ai, &req, on_async_chat, NULL);
+	req.on_chunk = nullptr;
+	csilk_ai_chat_async(ai, &req, on_async_chat, nullptr);
 	printf("Async request dispatched, main thread continues...\n");
 
 	/* Simulate doing other work */

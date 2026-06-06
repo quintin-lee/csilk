@@ -17,7 +17,7 @@ start_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)input;
 	(void)user_data;
 	printf("Start Node\n");
-	return csilk_wf_data_new(ctx, "init", NULL);
+	return csilk_wf_data_new(ctx, "init", nullptr);
 }
 
 csilk_data_t*
@@ -30,7 +30,7 @@ n2a_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	usleep(100000); // 100ms
 	g_n2a_done = 1;
 	printf("N2a: done\n");
-	return NULL;
+	return nullptr;
 }
 
 csilk_data_t*
@@ -41,7 +41,7 @@ n2b_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)user_data;
 	printf("N2b: done\n");
 	g_n2b_done = 1;
-	return NULL;
+	return nullptr;
 }
 
 csilk_data_t*
@@ -54,7 +54,7 @@ n3_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	assert(g_n2a_done == 1);
 	assert(g_n2b_done == 1);
 	g_n3_done = 1;
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -67,17 +67,17 @@ test_workflow_parallel()
 
 	csilk_wf_t* wf = csilk_wf_new("parallel_wf");
 
-	csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_handler, NULL);
-	csilk_wf_node_t* n_2a = csilk_wf_add(wf, "n2a", n2a_handler, NULL);
-	csilk_wf_node_t* n_2b = csilk_wf_add(wf, "n2b", n2b_handler, NULL);
-	csilk_wf_node_t* n_3 = csilk_wf_add(wf, "n3", n3_handler, NULL);
+	csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_handler, nullptr);
+	csilk_wf_node_t* n_2a = csilk_wf_add(wf, "n2a", n2a_handler, nullptr);
+	csilk_wf_node_t* n_2b = csilk_wf_add(wf, "n2b", n2b_handler, nullptr);
+	csilk_wf_node_t* n_3 = csilk_wf_add(wf, "n3", n3_handler, nullptr);
 
 	csilk_wf_bind(n_start, n_2a);
 	csilk_wf_bind(n_start, n_2b);
 	csilk_wf_bind(n_2a, n_3);
 	csilk_wf_bind(n_2b, n_3);
 
-	csilk_wf_run(wf, NULL, NULL);
+	csilk_wf_run(wf, nullptr, nullptr);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

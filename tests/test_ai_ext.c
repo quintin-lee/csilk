@@ -11,36 +11,36 @@ main()
 {
 	printf("Testing csilk_ai_chat_response_free...\n");
 	{
-		csilk_ai_chat_response_free(NULL);
+		csilk_ai_chat_response_free(nullptr);
 
 		csilk_ai_chat_response_t res = {0};
 		res.content = strdup("hello");
 		res.raw_response = strdup("{\"ok\": true}");
-		res.error_message = NULL;
+		res.error_message = nullptr;
 		csilk_ai_chat_response_free(&res);
 	}
 
 	{
 		csilk_ai_chat_response_t res = {0};
 		res.error_message = strdup("error occurred");
-		res.content = NULL;
-		res.raw_response = NULL;
+		res.content = nullptr;
+		res.raw_response = nullptr;
 		csilk_ai_chat_response_free(&res);
 	}
 
 	printf("Testing csilk_ai_embeddings_response_free...\n");
 	{
-		csilk_ai_embeddings_response_free(NULL);
+		csilk_ai_embeddings_response_free(nullptr);
 
 		csilk_ai_embeddings_response_t res = {0};
 		res.values = malloc(10 * sizeof(float));
-		res.error_message = NULL;
+		res.error_message = nullptr;
 		csilk_ai_embeddings_response_free(&res);
 	}
 
 	{
 		csilk_ai_embeddings_response_t res = {0};
-		res.values = NULL;
+		res.values = nullptr;
 		res.error_message = strdup("error");
 		csilk_ai_embeddings_response_free(&res);
 	}
@@ -48,7 +48,7 @@ main()
 	printf("Testing csilk_ai_context_new/free...\n");
 	{
 		csilk_ai_context_t* ctx = csilk_ai_context_new(0);
-		assert(ctx != NULL);
+		assert(ctx != nullptr);
 		csilk_ai_context_add(ctx, "user", "Hello");
 		assert(ctx->count == 1);
 		csilk_ai_context_free(ctx);
@@ -57,7 +57,7 @@ main()
 	printf("Testing csilk_ai_context sliding window...\n");
 	{
 		csilk_ai_context_t* ctx = csilk_ai_context_new(2);
-		assert(ctx != NULL);
+		assert(ctx != nullptr);
 		csilk_ai_context_add(ctx, "user", "msg1");
 		csilk_ai_context_add(ctx, "assistant", "msg2");
 		csilk_ai_context_add(ctx, "user", "msg3");
@@ -67,21 +67,21 @@ main()
 		csilk_ai_context_free(ctx);
 	}
 
-	printf("Testing csilk_ai_context NULL safety...\n");
+	printf("Testing csilk_ai_context nullptr safety...\n");
 	{
 		csilk_ai_context_t* ctx2 = csilk_ai_context_new(10);
-		csilk_ai_context_add(NULL, "user", "hi");
-		csilk_ai_context_add(ctx2, NULL, "hi");
-		csilk_ai_context_add(ctx2, "user", NULL);
-		csilk_ai_context_clear(NULL);
-		csilk_ai_context_free(NULL);
+		csilk_ai_context_add(nullptr, "user", "hi");
+		csilk_ai_context_add(ctx2, nullptr, "hi");
+		csilk_ai_context_add(ctx2, "user", nullptr);
+		csilk_ai_context_clear(nullptr);
+		csilk_ai_context_free(nullptr);
 		csilk_ai_context_free(ctx2);
 	}
 
 	printf("Testing csilk_ai_context_clear...\n");
 	{
 		csilk_ai_context_t* ctx = csilk_ai_context_new(10);
-		assert(ctx != NULL);
+		assert(ctx != nullptr);
 		csilk_ai_context_add(ctx, "user", "data");
 		csilk_ai_context_clear(ctx);
 		assert(ctx->count == 0);

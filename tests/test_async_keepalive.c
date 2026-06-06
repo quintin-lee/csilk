@@ -15,7 +15,7 @@
 #define BUFSIZE 8192
 
 static volatile int server_ready = 0;
-static csilk_server_t* g_server = NULL;
+static csilk_server_t* g_server = nullptr;
 
 static void
 hello_handler(csilk_ctx_t* c)
@@ -40,7 +40,7 @@ run_server(void* arg)
 	csilk_server_run(g_server, PORT);
 	csilk_server_free(g_server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 static int
@@ -65,7 +65,7 @@ int
 main()
 {
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
 	}
 	usleep(100000);
@@ -83,7 +83,7 @@ main()
 	char buf1[BUFSIZE] = {0};
 	int n1 = recv(sock, buf1, sizeof(buf1), 0);
 	assert(n1 > 0);
-	assert(strstr(buf1, "Content-Encoding: gzip") != NULL);
+	assert(strstr(buf1, "Content-Encoding: gzip") != nullptr);
 	printf("  Request 1 (Gzip) OK\n");
 
 	// Request 2: without Gzip on same connection
@@ -99,25 +99,25 @@ main()
 	struct timeval tv = {2, 0}; // 2 seconds timeout
 	FD_ZERO(&fds);
 	FD_SET(sock, &fds);
-	int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+	int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 
 	if (ret <= 0) {
 		printf("  FAIL: Request 2 timed out! (is_async not reset bug "
 		       "confirmed)\n");
 		close(sock);
 		csilk_server_stop(g_server);
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		return 1;
 	}
 
 	int n2 = recv(sock, buf2, sizeof(buf2), 0);
 	assert(n2 > 0);
-	assert(strstr(buf2, "HTTP/1.1 200 OK") != NULL);
+	assert(strstr(buf2, "HTTP/1.1 200 OK") != nullptr);
 	printf("  Request 2 OK (is_async was reset)\n");
 
 	close(sock);
 	csilk_server_stop(g_server);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 
 	printf("Test passed!\n");
 	return 0;

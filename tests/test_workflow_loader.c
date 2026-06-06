@@ -12,7 +12,7 @@ t_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	(void)input;
 	(void)user_data;
 	printf("[LoaderTest] Executing dummy handler\n");
-	return NULL;
+	return nullptr;
 }
 
 void
@@ -35,11 +35,11 @@ test_workflow_json_loader()
 			   "}";
 
 	csilk_wf_t* wf = csilk_wf_from_json(json);
-	assert(wf != NULL);
+	assert(wf != nullptr);
 
 	char* mermaid = csilk_wf_to_mermaid(wf);
-	assert(mermaid != NULL);
-	assert(strstr(mermaid, "\"step1\" --> \"step2\"") != NULL);
+	assert(mermaid != nullptr);
+	assert(strstr(mermaid, "\"step1\" --> \"step2\"") != nullptr);
 
 	free(mermaid);
 	csilk_wf_free(wf);

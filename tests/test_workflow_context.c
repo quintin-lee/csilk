@@ -91,7 +91,7 @@ test_workflow_context_truncation()
 						 .max_history_messages = 4});
 	csilk_wf_node_set_entry(n1, 1);
 
-	csilk_wf_run(wf, NULL, on_context_done);
+	csilk_wf_run(wf, nullptr, on_context_done);
 
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 

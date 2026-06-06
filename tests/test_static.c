@@ -84,7 +84,7 @@ test_static_range_first_5()
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
 	const char* cr = csilk_get_response_header(ctx, "Content-Range");
-	assert(cr != NULL && strncmp(cr, "bytes 0-4/", 10) == 0);
+	assert(cr != nullptr && strncmp(cr, "bytes 0-4/", 10) == 0);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_static_range_first_5 passed\n");
@@ -107,7 +107,7 @@ test_static_range_middle()
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
 	const char* cr = csilk_get_response_header(ctx, "Content-Range");
-	assert(cr != NULL && strncmp(cr, "bytes 7-11/", 10) == 0);
+	assert(cr != nullptr && strncmp(cr, "bytes 7-11/", 10) == 0);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_static_range_middle passed\n");

@@ -16,7 +16,7 @@ test_session_start()
 	csilk_session_start(c);
 
 	void* session = csilk_get(c, "_session");
-	assert(session != NULL);
+	assert(session != nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_session_start passed\n");
@@ -34,7 +34,7 @@ test_session_set_get()
 	int val = 42;
 	csilk_session_set(c, "answer", &val);
 	int* retrieved = csilk_session_get(c, "answer");
-	assert(retrieved != NULL);
+	assert(retrieved != nullptr);
 	assert(*retrieved == 42);
 
 	csilk_test_ctx_free(c);
@@ -51,7 +51,7 @@ test_session_get_missing()
 	csilk_session_start(c);
 
 	void* val = csilk_session_get(c, "nonexistent");
-	assert(val == NULL);
+	assert(val == nullptr);
 
 	csilk_test_ctx_free(c);
 	printf("test_session_get_missing passed\n");
@@ -72,7 +72,7 @@ test_session_overwrite()
 	csilk_session_set(c, "key", &val2);
 
 	int* retrieved = csilk_session_get(c, "key");
-	assert(retrieved != NULL);
+	assert(retrieved != nullptr);
 	assert(*retrieved == 2);
 
 	csilk_test_ctx_free(c);
@@ -82,10 +82,10 @@ test_session_overwrite()
 static void
 test_session_null_safety()
 {
-	csilk_session_start(NULL);
-	csilk_session_set(NULL, "key", NULL);
-	assert(csilk_session_get(NULL, "key") == NULL);
-	csilk_session_destroy(NULL);
+	csilk_session_start(nullptr);
+	csilk_session_set(nullptr, "key", nullptr);
+	assert(csilk_session_get(nullptr, "key") == nullptr);
+	csilk_session_destroy(nullptr);
 	printf("test_session_null_safety passed\n");
 }
 

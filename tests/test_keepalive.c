@@ -14,7 +14,7 @@
 #define BUFSIZE 4096
 
 static volatile int server_ready = 0;
-static csilk_server_t* g_server = NULL;
+static csilk_server_t* g_server = nullptr;
 
 static void
 hello_handler(csilk_ctx_t* c)
@@ -53,7 +53,7 @@ run_server(void* arg)
 	csilk_server_run(g_server, PORT);
 	csilk_server_free(g_server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 static int
@@ -87,7 +87,7 @@ recv_resp(int sock, char* buf, size_t size)
 	struct timeval tv = {3, 0};
 	FD_ZERO(&fds);
 	FD_SET(sock, &fds);
-	int ret = select(sock + 1, &fds, NULL, NULL, &tv);
+	int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
 	if (ret <= 0) {
 		return -1;
 	}
@@ -103,7 +103,7 @@ expect_status(const char* resp, int expected)
 {
 	char exp[32];
 	snprintf(exp, sizeof(exp), "HTTP/1.1 %d", expected);
-	return strstr(resp, exp) != NULL;
+	return strstr(resp, exp) != nullptr;
 }
 
 static int
@@ -113,14 +113,14 @@ expect_body(const char* resp, const char* body)
 	if (!hdr_end) {
 		return 0;
 	}
-	return strstr(hdr_end + 4, body) != NULL;
+	return strstr(hdr_end + 4, body) != nullptr;
 }
 
 int
 main()
 {
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
 	}
 	usleep(100000);
@@ -138,7 +138,7 @@ main()
 	if (sock < 0) {
 		printf("FAIL: connect\n");
 		csilk_server_stop(g_server);
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		return 1;
 	}
 
@@ -147,7 +147,7 @@ main()
 		printf("FAIL: send req1\n");
 		close(sock);
 		csilk_server_stop(g_server);
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		return 1;
 	}
 
@@ -169,7 +169,7 @@ main()
 		printf("FAIL: send req2\n");
 		close(sock);
 		csilk_server_stop(g_server);
-		pthread_join(thread, NULL);
+		pthread_join(thread, nullptr);
 		return 1;
 	}
 
@@ -190,7 +190,7 @@ main()
 	csilk_server_stop(g_server);
 	// Give the server thread a moment to process the stop async and close handles
 	usleep(200000);
-	pthread_join(thread, NULL);
+	pthread_join(thread, nullptr);
 
 	printf("Keep-alive test: %d passed, %d failed\n", passed, failed);
 	return failed > 0 ? 1 : 0;

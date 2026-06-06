@@ -55,7 +55,7 @@ run_server(void* arg)
 	(void)arg;
 	printf("  [SERVER] Starting HTTPS server on port %d...\n", PORT);
 
-	csilk_log_config_t log_cfg = {CSILK_LOG_DEBUG, NULL};
+	csilk_log_config_t log_cfg = {CSILK_LOG_DEBUG, nullptr};
 	csilk_log_init(log_cfg); // Enable debug logging
 
 	csilk_router_t* router = csilk_router_new();
@@ -81,7 +81,7 @@ run_server(void* arg)
 	} else {
 		fprintf(stderr, "  [SERVER] Certificates not found!\n");
 		server_ready = -1;
-		return NULL;
+		return nullptr;
 	}
 
 	csilk_server_set_config(server, &config);
@@ -94,7 +94,7 @@ run_server(void* arg)
 	printf("  [SERVER] Stopping HTTPS server...\n");
 	csilk_server_free(server);
 	csilk_router_free(router);
-	return NULL;
+	return nullptr;
 }
 
 /* ---- HTTPS Client ---- */
@@ -151,9 +151,9 @@ test_https_get()
 			printf("  [CLIENT] Received %d bytes\n", n);
 			test_result("HTTPS GET (response received)", 1);
 			test_result("HTTPS GET (status 200)",
-				    strstr(buf, "HTTP/1.1 200 OK") != NULL);
+				    strstr(buf, "HTTP/1.1 200 OK") != nullptr);
 			test_result("HTTPS GET (body content)",
-				    strstr(buf, "Hello Secure World!") != NULL);
+				    strstr(buf, "Hello Secure World!") != nullptr);
 		} else {
 			int err = SSL_get_error(ssl, n);
 			fprintf(stderr, "  [CLIENT] SSL_read error: %d\n", err);
@@ -231,7 +231,7 @@ main()
 	}
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, run_server, NULL);
+	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {
 		usleep(100000);
 	}
