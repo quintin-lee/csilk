@@ -43,6 +43,7 @@ jobs:
       - name: Run Benchmarks
         env:
           BENCH_DURATION: 5s
+          BENCH_RUNS: 3
         run: |
           cd build_release
           bash ../scripts/run_benchmarks.sh --save
