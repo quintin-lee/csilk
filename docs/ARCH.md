@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper
 
-> **Last updated**: 2026-05-31 | **Version**: 0.3.0
+> **Last updated**: 2026-06-07 | **Version**: 0.3.0
 
 ## 1. Core Architecture Design
 
@@ -549,17 +549,20 @@ csilk/
 │       ├── hooks.h                # Lifecycle hook system
 │       ├── workflow.h             # Workflow engine umbrella
 │       ├── admin.h                # Admin dashboard umbrella
-│       ├── errors.h               # HTTP status code macros
+│       ├── errors.h               # HTTP status code constants
 │       ├── config.h               # Server/app configuration structs
-│       ├── version.h              # CSILK_VERSION macro
+│       ├── crypto.h               # Cryptographic utility functions
+│       ├── hot_reload.h           # Hot-reload API
+│       ├── version.h              # CSILK_VERSION macro (generated)
 │       ├── app/
 │       │   ├── app.h              # High-level app API
 │       │   ├── workflow.h         # Workflow engine public API
 │       │   └── workflow_wal.h     # WAL persistence API
 │       ├── core/
-│       │   ├── internal.h         # Internal umbrella → hash/codec/ws_frame/crypto_dispatch/mq_types
+│       │   ├── internal.h         # Internal umbrella → hash/codec/ws_frame/crypto_dispatch/mq_types/bounded_buf
 │       │   ├── hash.h             # SHA-1, SHA-256, HMAC-SHA256
 │       │   ├── codec.h            # Base64, Base64URL, URL decode
+│       │   ├── bounded_buf.h      # Stack-only bounded string/JSON builder
 │       │   ├── ws_frame.h         # WebSocket frame parsing
 │       │   ├── crypto_dispatch.h  # Crypto/cipher dispatch stubs
 │       │   ├── mq_types.h         # Internal MQ data structures
@@ -569,13 +572,14 @@ csilk/
 │       │   ├── ai.h               # AI driver interface
 │       │   ├── db.h               # DB driver interface
 │       │   ├── cipher.h           # Cipher driver interface
-│       │   └── perm.h             # Permission driver interface
+│       │   ├── perm.h             # Permission driver interface
+│       │   └── vector.h           # Vector DB driver interface
 │       ├── test/
-│       │   └── test.h             # Test utilities (OOM simulation)
+│       │   └── test.h             # Test utilities (OOM simulation, context helpers)
 │       └── reflection/
 │           └── reflect.h          # Runtime type reflection
 ├── src/
-│   ├── core/                      # Server engine
+│   ├── core/                      # Server engine (21 .c files)
 │   │   ├── server.c               # Lifecycle: create/run/stop/free/hooks/workers
 │   │   ├── connection.c           # Pool, accept, I/O, timers, on_read
 │   │   ├── http1.c                # llHTTP callbacks, dispatch, response serialization
@@ -590,32 +594,96 @@ csilk/
 │   │   ├── logger.c               # Structured logging
 │   │   ├── recovery.c             # setjmp/longjmp error recovery
 │   │   ├── url.c                  # URL parsing and splitting
-│   │   ├── utils.c                # Encoding, crypto primitives
+│   │   ├── utils.c                # misc utility functions
+│   │   ├── base64.c               # Base64/Base64URL encode/decode
+│   │   ├── sha1.c                 # SHA-1 hash (WebSocket handshake)
+│   │   ├── uuid.c                 # UUID v4 generation
+│   │   ├── bounded_buf.c          # Stack-only bounded string/JSON builder
+│   │   ├── hot_reload.c           # File-watch hot-reload (inotify)
 │   │   ├── test_utils.c           # Test OOM utilities
-│   │   ├── admin.c                # Admin dashboard (moved from src/app/)
-│   │   └── srv_impl.h             # Cross-file declarations for server split
+│   │   ├── admin.c                # Admin dashboard
+│   │   ├── srv_impl.h             # Cross-file declarations for server split
+│   │   └── srv_internal.h         # Internal server types
 │   ├── app/                       # Thin app wrappers (2 files)
 │   │   ├── app.c
 │   │   └── group.c
-│   ├── workflow/                  # AI workflow engine (3 files)
-│   │   ├── workflow.c
-│   │   ├── workflow_loader.c
-│   │   └── workflow_wal.c
-│   ├── middleware/                 # 14 built-in middleware modules
-│   ├── protocols/                 # WebSocket, Swagger
-│   ├── drivers/                   # Organized by interface
-│   │   ├── ai/                    # ollama.c, openai.c
-│   │   ├── cipher/                # openssl.c
-│   │   ├── perm/                  # simple.c
-│   │   └── sqlite.c               # SQLite (flat, single file)
-│   ├── ai/                        # AI unified interface
 │   ├── data/                      # Database abstraction
-│   ├── messaging/                 # Message Queue implementation
-│   ├── reflection/                # Runtime type reflection
-│   └── security/                  # Permission system
-├── tests/                         # 109 unit/integration tests
-├── examples/                      # Example applications
-├── docs/                          # Documentation
+│   │   ├── db.c                   # Pool lifecycle, query/exec dispatch
+│   │   └── db_internal.h          # csilk_db_pool_s private struct
+│   ├── ai/                        # AI unified interface (1 file)
+│   │   └── ai.c
+│   ├── workflow/                  # AI workflow engine (11 files)
+│   │   ├── workflow.c             # Top-level orchestrator
+│   │   ├── workflow_loader.c      # YAML → workflow definition
+│   │   ├── workflow_wal.c         # Write-ahead log persistence
+│   │   ├── workflow_internal.h    # Workflow private structs
+│   │   ├── core/                  # Core engine modules
+│   │   │   ├── distributed.c
+│   │   │   ├── lifecycle.c
+│   │   │   ├── metadata.c
+│   │   │   ├── registry.c
+│   │   │   └── utils.c
+│   │   ├── engine/                # Execution engine
+│   │   │   ├── runner.c
+│   │   │   └── scheduler.c
+│   │   └── steps/                 # Built-in step handlers
+│   │       └── ai_steps.c
+│   ├── middleware/                 # 15 built-in middleware modules
+│   │   ├── auth.c                 # Token-based authentication
+│   │   ├── cors.c                 # Cross-Origin Resource Sharing
+│   │   ├── csrf.c                 # CSRF token validation
+│   │   ├── gzip.c                 # Response compression
+│   │   ├── jwt.c                  # JWT parsing/validation
+│   │   ├── logger.c               # Structured JSON request logging
+│   │   ├── metrics.c              # Prometheus-compatible metrics
+│   │   ├── multipart.c            # Multipart form-data parser
+│   │   ├── ratelimit.c            # Sliding-window rate limiting
+│   │   ├── recovery.c             # Panic recovery (setjmp/longjmp)
+│   │   ├── request_id.c           # UUID v4 request identification
+│   │   ├── session.c              # Cookie-based session management
+│   │   ├── sse.c                  # Server-Sent Events
+│   │   ├── static.c               # Static file serving (sendfile)
+│   │   ├── validate.c             # Request parameter validation
+│   │   └── waf.c                  # SQLi/XSS/path-traversal WAF
+│   ├── protocols/                 # WebSocket, Swagger
+│   │   ├── websocket.c            # WebSocket handshake/frame I/O
+│   │   ├── ws_room.c              # WebSocket room broadcast
+│   │   └── swagger.c              # OpenAPI spec generation
+│   ├── drivers/                   # 12 driver implementations
+│   │   ├── ai/                    # AI providers
+│   │   │   ├── ollama.c
+│   │   │   └── openai.c
+│   │   ├── cipher/                # Crypto backends
+│   │   │   └── openssl.c
+│   │   ├── perm/                  # Permission backends
+│   │   │   └── simple.c
+│   │   ├── vector/                # Vector DB backends
+│   │   │   ├── vector.c           # Registry
+│   │   │   ├── milvus.c
+│   │   │   └── qdrant.c
+│   │   ├── sqlite.c               # SQLite DB driver
+│   │   ├── mysql.c                # MySQL DB driver
+│   │   ├── postgres.c             # PostgreSQL DB driver
+│   │   ├── mongodb.c              # MongoDB driver
+│   │   └── redis.c                # Redis driver
+│   ├── messaging/                 # Message Queue (5 files)
+│   │   ├── mq.c
+│   │   ├── mq_context.c
+│   │   ├── mq_offload.c
+│   │   ├── mq_wal.c
+│   │   └── mq_internal.h
+│   ├── reflection/                # Runtime type reflection (1 file)
+│   │   └── reflect.c
+│   ├── security/                  # Permission system (1 file)
+│   │   └── perm.c
+│   └── util/                      # Utility modules
+│       ├── flamegraph.c           # perf + FlameGraph profiler
+│       └── flamegraph.h
+├── tests/                         # 120 unit/integration/fuzz tests
+│   ├── test_*.c                   # 117 CTest-registered test executables
+│   └── fuzz_*.c                   # 3 libFuzzer targets
+├── examples/                      # 10 example applications
+├── docs/                          # Architecture, research, analysis docs
 ├── cmake/                         # CMake modules
 │   ├── sources.cmake              # Source file organization
 │   └── tests.cmake                # Test registration
