@@ -493,7 +493,7 @@ test_csilk_get_status_is_websocket_is_sse_is_async()
 	assert(csilk_get_status(ctx) == 200);
 
 	assert(csilk_is_websocket(ctx) == 0);
-	csilk_set_websocket(ctx, 1);
+	csilk_ctx_set_websocket(ctx, 1);
 	assert(csilk_is_websocket(ctx) == 1);
 	assert(csilk_is_websocket(NULL) == 0);
 
