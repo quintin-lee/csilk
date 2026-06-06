@@ -335,6 +335,9 @@ csilk_server_free(csilk_server_t* server)
 			for (int i = 0; i < wp->client_pool_count; i++) {
 				free(wp->client_pool[i]);
 			}
+			for (int i = 0; i < wp->arena_pool_count; i++) {
+				csilk_arena_free(wp->arena_pool[i]);
+			}
 		}
 		free(server->worker_pools);
 	}
@@ -696,6 +699,8 @@ worker_thread(void* arg)
 
 	wp->server_handle.data = wp;
 
+	_csilk_worker_init_arena_pool(wp);
+
 	if (bind_and_listen(
 		loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) < 0) {
 		if (barrier) {
@@ -889,6 +894,8 @@ csilk_server_run(csilk_server_t* server, int port)
 	server->worker_pools[0].server = server;
 	server->worker_pools[0].worker_index = 0;
 	server->server_handle.data = &server->worker_pools[0];
+
+	_csilk_worker_init_arena_pool(&server->worker_pools[0]);
 
 	if (server->config.tcp_keepalive > 0) {
 		uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
