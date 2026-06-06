@@ -80,7 +80,7 @@ csilk_ws_handshake(csilk_ctx_t* c)
 	csilk_set_header(c, "Sec-WebSocket-Accept", accept_key);
 
 	csilk_status(c, CSILK_STATUS_SWITCHING_PROTOCOLS);
-	csilk_set_websocket(c, 1);
+	csilk_ctx_set_websocket(c, 1);
 }
 
 /** @brief libuv write completion callback for WebSocket frame sends.

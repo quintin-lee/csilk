@@ -457,7 +457,7 @@ csilk_is_websocket(csilk_ctx_t* c)
  * @param c            The request context.
  * @param is_websocket 1 to enable, 0 to disable. */
 void
-csilk_set_websocket(csilk_ctx_t* c, int is_websocket)
+csilk_ctx_set_websocket(csilk_ctx_t* c, int is_websocket)
 {
 	if (c) {
 		c->is_websocket = is_websocket;
