@@ -4,6 +4,38 @@
 
 ---
 
+## v0.5.x 增量修复与优化 (2026-06-05 — 2026-06-06)
+
+### 正确性与内存安全
+- [x] **arena TLS data race**: `tls_chunk_free_list`/`tls_chunk_count` 缺少 `_Thread_local`，多 worker 下竞态。加 `_Thread_local` + `csilk_arena_flush_free_list()` 线程退出清理
+- [x] **MQ realloc 整数溢出**: `monitor`/`handler` 数组扩容 `* 2` 可溢出，`realloc` 返回值未检查
+- [x] **SQL 注入**: `csilk_db_query_param_json` 参数原样拼接，无转义。添加 SQL 标准单引号双写转义
+- [x] **HTTP 解析器内存泄漏**: `on_url` URL 超限、`on_header_value` 超限/分配失败时未释放 `current_url`/`current_header_field`/`current_header_value`
+- [x] **app.c 错误路径泄漏**: `csilk_router_new()` 失败时 `csilk_server_new(NULL)` 仍成功，`group_new` 失败时 server 未释放
+- [x] **hot_reload.c dlclose 泄漏**: `dlsym` 失败 / `init_fn()` 返回 NULL 时未关闭 `dl_handle`
+- [x] **WAF null context 段错误**: `csilk_waf_middleware(nullptr)` 在非 blocked 路径调用 `csilk_next(nullptr)`
+
+### 代码整洁
+- [x] **4 处 const 警告**: `bounded_buf.c` `uint64_to_str` 返回类型、`static.c` `strchr` C23 重载
+- [x] **GCC 内置原子 → C11 标准**: `perm.c` `__sync_val_compare_and_swap` → `atomic_compare_exchange_strong`
+- [x] **int → size_t**: `http1.c` response 序列化 `pos` 变量消除 `(int)` 截断转型
+
+### 性能
+- [x] **chunked write 零拷贝**: `_csilk_send_data_owned()` 消除 `write_chunk_frame` 中的双重分配拷贝
+
+### 测试覆盖提升
+- [x] WAF: 4 → 9 (+125%, 多参数 SQLi, 深层目录穿越, query 穿越, clean POST, null 安全)
+- [x] Session: 5 → 8 (+60%, destroy, 多键操作, 无 init 使用)
+- [x] Recovery: 1 → 4 (+300%, 正常路径, deferred cleanup, 混合链)
+- [x] CSRF: 3 → 7 (+133%, null buffer, 精确大小, GET/HEAD/OPTIONS 安全方法, POST/PUT/DELETE 缺 token, hex 格式校验)
+- [x] Workflow Lifecycle: 1 → 3 (+200%, null 安全, get_node)
+
+### CI 与文档
+- [x] Fuzz 测试启用: 移除 `if: false`（预期 clang-19 已在 Ubuntu 24.04 可用）
+- [x] 代码注释: `bounded_buf.c` (7 funcs), `hot_reload.c` (4 items), `flamegraph.c` (7 funcs), `db.c` (5 funcs), `context.c` (3 funcs: `csilk_next`, `ctx_defer`, `defer_free`)
+
+---
+
 ## 一、演进阶段
 
 ### 阶段一：稳定性与测试基建
@@ -568,3 +600,24 @@
 - [x] 9.24 实现 URL/Base64 的属性基测试 (`test_codec_prop`, 8 个属性测试)
 - [x] 9.25 Benchmark CI 方差归一化 (`BENCH_RUNS=3`, 中位数比较, CV 告警)
 - [x] 9.26 API 命名清理：`csilk_set_websocket`／`csilk_set_sse`／`csilk_set_async` → `csilk_ctx_set_*`
+
+### [2026-06-05] v0.5.x 增量修复 — 正确性
+- **动作**: 修复 arena TLS data race（`_Thread_local`）+ TLS flush
+- **动作**: 修复 MQ realloc 整数溢出 ×3 + NULL 检查
+- **动作**: 修复 `db.c` SQL 注入（SQL 标准单引号转义）
+- **动作**: 修复 `http1.c` URL/header 超限时的 3 处内存泄漏
+- **动作**: 修复 `app.c` 错误路径 server 指针泄漏
+- **动作**: 修复 `hot_reload.c` `dlclose`/`FreeLibrary` 泄漏
+- **动作**: 修复 `waf.c` null context 段错误
+- **动作**: 修复 4 处 const-qualifier 编译警告
+
+### [2026-06-05] v0.5.x 增量修复 — 整洁与性能
+- **动作**: `perm.c` GCC 内置原子 → C11 标准原子
+- **动作**: `http1.c` int pos → size_t pos 消除截断转型
+- **动作**: chunked write 零拷贝（`_csilk_send_data_owned`）
+- **动作**: CI Fuzz 测试启用
+
+### [2026-06-05—06] 测试覆盖与文档
+- **动作**: WAF 4→9, Session 5→8, Recovery 1→4, CSRF 3→7, WF Lifecycle 1→3
+- **动作**: 文档补全：`bounded_buf.c`, `hot_reload.c`, `flamegraph.c`, `db.c`, `context.c`
+- **动作**: 全部 117 测试通过（ASAN Debug + Release + io_uring + Coverage）

@@ -334,7 +334,7 @@ include/csilk/        # Public Hierarchical Headers
   ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tests/                # 118 comprehensive unit tests
+tests/                # 120 comprehensive unit tests
 examples/             # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
 ```
 

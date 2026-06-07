@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fuzz testing in CI**: Re-enabled fuzz testing job (clang-19 expected available on Ubuntu 24.04 by June 2026).
+- **Extended test coverage**: WAF (4→9), Session (5→8), Recovery (1→4), CSRF (3→7), Workflow Lifecycle (1→3).
+- **Zero-copy chunked write**: `_csilk_send_data_owned()` eliminates double-allocation/copy in chunked transfer encoding path.
 - **ABI opaque type conversion**: Moved internal struct definitions (`csilk_ctx_s`, `csilk_server_s`) from `include/csilk/core/` to `src/core/`. All non-framework code now accesses context state exclusively through the public accessor API.
 - **Deferred cleanup API** (`csilk_ctx_defer` / `csilk_ctx_defer_free`): Panic-safe resource management across `setjmp`/`longjmp` boundaries. Protects heap allocations, file descriptors, and mutex locks from leaking during panic recovery.
 - **SIMD-accelerated router**: AVX2 path matching on x86_64 and ARM NEON on aarch64. CMake auto-detection with `-mavx2` flag.
@@ -29,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ASan leaks**: Resolved memory leaks in new tests and Doxyfile generation.
 - **macOS compatibility**: `fdatasync` → `fsync`, `SOCK_NONBLOCK` handling.
 - **CI ASan suppression**: Added suppression for macOS false positives.
+- **Arena TLS free list leak**: Added `csilk_arena_flush_free_list()` called on server free to prevent ASAN-detected leaks when server runs on a non-main thread.
+- **MQ realloc overflow**: Added integer overflow guards and NULL checks in monitor array, global middleware array, and per-topic handler array growth paths.
+- **SQL injection in `csilk_db_query_param_json`**: Added standard SQL single-quote doubling escaping.
+- **HTTP parser memory leaks**: `on_url` max URL exceeded, `on_header_value` max size exceeded / buffer grow failure now free `current_url`, `current_header_field`, and `current_header_value`.
+- **app.c server leak on error**: `csilk_server_new(NULL)` succeeds when `csilk_router_new()` fails; added `csilk_server_free()` in failure path.
+- **hot_reload.c resource leak**: `dlclose`/`FreeLibrary` not called when `dlsym`/`GetProcAddress` or init function fails.
+- **WAF null context segfault**: `csilk_waf_middleware(nullptr)` crashed on unblocked path calling `csilk_next(nullptr)`.
+- **4 const-qualifier warnings**: `bounded_buf.c` return type and `static.c` C23 `strchr` overload.
+- **GCC builtin atomics**: `perm.c` `__sync_val_compare_and_swap` → C11 `atomic_compare_exchange_strong`.
 
 ## [0.3.0] - 2026-05-30
 
