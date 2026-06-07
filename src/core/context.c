@@ -161,6 +161,15 @@ map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
  * @param c The request context.
  * @note Typically called at the end of a middleware or route handler to pass
  *       control to the next handler in the pipeline. */
+/** @brief Invoke the next handler in the middleware/route chain.
+ *
+ * Advances the internal handler index and calls the next non-null handler.
+ * If the context has been aborted (via csilk_abort()) or no handlers are
+ * registered, this is a no-op.  Each handler is responsible for calling
+ * csilk_next() to continue the chain — handlers that set a terminal response
+ * (e.g. csilk_string) typically do NOT call csilk_next().
+ *
+ * @param c The request context. */
 void
 csilk_next(csilk_ctx_t* c)
 {
@@ -1336,8 +1345,28 @@ csilk_get_form_field(csilk_ctx_t* c, const char* key)
 	return map_get(&c->request.form_params, key);
 }
 
-/* --- Deferred Cleanup (panic-safe resource management) --- */
+/* --- Deferred Cleanup (panic-safe resource management) ---
+ *
+ * Deferred cleanups are registered during normal handler execution and
+ * automatically invoked when csilk_panic() triggers a longjmp back to
+ * the recovery handler.  Because longjmp does NOT unwind the C stack
+ * (destructors and free() calls in downstream stack frames are skipped),
+ * deferred cleanups are the only way to safely release resources across
+ * a panic boundary.  Items are arena-allocated so they do not need to be
+ * individually freed — the arena is cleaned up when the request context
+ * is destroyed.
+ */
 
+/** @brief Register a cleanup function to run on panic.
+ *
+ * The function will be executed by csilk_ctx_defer_free() when recovery
+ * catches a panic.  Allocated in arena memory so it is cleaned up with
+ * the request context after the response is sent.
+ *
+ * @param c   The request context.
+ * @param fn  Cleanup function (e.g. close an fd, release a mutex).
+ * @param arg User data passed to @p fn.
+ * @return 0 if registered, -1 if context/arena/fn is invalid. */
 int
 csilk_ctx_defer(csilk_ctx_t* c, void (*fn)(void*), void* arg)
 {
@@ -1358,6 +1387,13 @@ csilk_ctx_defer(csilk_ctx_t* c, void (*fn)(void*), void* arg)
 	return 0;
 }
 
+/** @brief Execute all registered deferred cleanups in reverse order.
+ *
+ * Called by the recovery handler after catching a panic.  Walks the
+ * deferred item linked list (LIFO — most recently registered first) and
+ * invokes each cleanup function.  The list is cleared by this call.
+ *
+ * @param c The request context. */
 void
 csilk_ctx_defer_free(csilk_ctx_t* c)
 {

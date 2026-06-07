@@ -70,7 +70,11 @@ typedef struct {
 
 static fg_profiler_t* g_profiler = nullptr;
 
-/* djb2 hash for collapsed stack strings */
+/** @brief djb2 hash function for collapsed stack strings.
+ *
+ * The classic djb2 algorithm (Daniel J. Bernstein) — simple, fast, and
+ * well-distributed for ASCII strings.  Used to index into the stack hash
+ * table for deduplication. */
 static unsigned int
 fg_hash(const char* str)
 {
@@ -82,6 +86,16 @@ fg_hash(const char* str)
 	return h;
 }
 
+/** @brief Insert or increment a collapsed stack entry in the hash map.
+ *
+ * Looks up @p collapsed in the hash table.  If found, increments the hit
+ * count; otherwise allocates a new entry at the end of the entries array.
+ * Caller must hold @c p->mutex.
+ *
+ * @param p         The profiler instance.
+ * @param collapsed Semicolon-separated function names (collapsed format).
+ * @param depth     Number of frames in this stack.
+ * @return          Entry index on success, -1 if the table is full. */
 static int
 fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
 {
@@ -106,6 +120,15 @@ fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
 	return idx;
 }
 
+/** @brief Background sampler thread entry point.
+ *
+ * Loops at the configured interval while @c running is set.  On each
+ * iteration captures the calling thread's stack via backtrace() (glibc),
+ * converts frames to semicolon-separated collapsed format, and inserts
+ * the result into the hash map.  On non-glibc platforms this is a no-op
+ * loop (sampling is not supported).
+ *
+ * @param arg Pointer to the fg_profiler_t instance. */
 static void*
 fg_sampler_thread(void* arg)
 {
@@ -161,6 +184,20 @@ fg_sampler_thread(void* arg)
 	return nullptr;
 }
 
+/** @brief Render accumulated samples as a Brendan Gregg-style SVG flame graph.
+ *
+ * Builds an inline SVG document with proportional-width rectangles coloured
+ * by a 12-colour rainbow palette.  Each stack frame gets a <rect> with a
+ * <title> tooltip and horizontally truncated label text.  The output is
+ * returned as a heap-allocated string the caller must free.
+ *
+ * Uses a large stack buffer for the SVG skeleton plus a heap buffer for
+ * per-frame <g> elements to avoid repeated reallocation.  On allocation
+ * failure the function still produces a valid (if empty) SVG snippet.
+ *
+ * @param p       The profiler instance (must have been stopped).
+ * @param out_svg [out] Receives a heap-allocated SVG string.
+ * @param out_len [out] Receives the length of the SVG string. */
 static void
 fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
 {
@@ -262,6 +299,15 @@ done:
 	*out_len = pos;
 }
 
+/** @brief Start a background stack-sampling profiler.
+ *
+ * Allocates a profiler instance, initialises the hash table, and spawns
+ * a sampler thread.  Only one profiler can be active at a time (returns
+ * -1 if one is already running).
+ *
+ * @param interval_us Sampling interval in microseconds (e.g. 10000 for
+ *                    100 samples/sec).  Must be > 0.
+ * @return 0 on success, -1 on allocation or thread-creation failure. */
 int
 csilk_flamegraph_start(useconds_t interval_us)
 {
@@ -302,6 +348,15 @@ csilk_flamegraph_start(useconds_t interval_us)
 	return 0;
 }
 
+/** @brief Stop the profiler and generate the flame graph SVG.
+ *
+ * Signals the sampler thread to exit, joins it, generates the SVG, and
+ * frees all profiler resources.  The returned SVG is heap-allocated;
+ * the caller takes ownership and must free it with free().
+ *
+ * @param out_svg [out] Receives the SVG string (caller must free).
+ * @param out_len [out] Receives the SVG byte length.
+ * @return 0 on success, -1 if no profiler is active. */
 int
 csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 {
@@ -325,6 +380,8 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 	return 0;
 }
 
+/** @brief Check whether a flame-graph profiler is currently running.
+ * @return 1 if the profiler is active, 0 otherwise. */
 int
 csilk_flamegraph_is_running(void)
 {
