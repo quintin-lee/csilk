@@ -264,10 +264,11 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
  *      - any other char → copy verbatim.
  *   4. Execute the constructed SQL via csilk_db_query_json_locked().
  *
- * ## Security caveat
- * This is naive string substitution — NOT prepared-statement binding.
- * Parameter values are NOT escaped for SQL special characters. A parameter
- * containing "' OR '1'='1" will inject into the SQL verbatim.
+ * ## Security
+ * Parameter values are escaped for SQL injection: single quotes and
+ * backslashes are doubled before string substitution.  This is NOT an
+ * ORM or prepared-statement binding — it trades a small performance
+ * cost for safety over the previous naive substitution.
  *
  * @param pool   Database pool.
  * @param sql    SQL pattern with ? placeholders.
@@ -281,9 +282,14 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 
 	uint64_t start = uv_hrtime();
 
+	/* Pre-scan: compute output size with SQL-escaped param values.
+	 * Each ? is replaced with a single-quoted, escaped value. */
 	size_t len = strlen(sql);
 	for (int i = 0; params[i]; i++) {
-		len += strlen(params[i]) + 2; /* +2 for quotes */
+		len += 2; /* surrounding single quotes */
+		for (const char* c = params[i]; *c; c++) {
+			len += (*c == '\'') ? 2 : 1;
+		}
 	}
 
 	char* full_sql = malloc(len + 1);
@@ -296,9 +302,14 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 	for (const char* c = sql; *c; c++) {
 		if (*c == '?' && params[param_idx]) {
 			*p++ = '\'';
-			size_t plen = strlen(params[param_idx]);
-			memcpy(p, params[param_idx], plen);
-			p += plen;
+			for (const char* v = params[param_idx]; *v; v++) {
+				if (*v == '\'') {
+					*p++ = '\'';
+					*p++ = '\'';
+				} else {
+					*p++ = *v;
+				}
+			}
 			*p++ = '\'';
 			param_idx++;
 		} else {
