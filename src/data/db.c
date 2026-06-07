@@ -50,6 +50,9 @@ static atomic_uint_fast64_t db_execs_total = 0;
 static atomic_uint_fast64_t db_errors_total = 0;
 static atomic_uint_fast64_t db_duration_us_total = 0;
 
+/** @brief Read aggregated database metrics atomically.
+ * @param stats [out] Pointer to a csilk_db_stats_t struct to populate.
+ * @note Safe to call from any thread. */
 void
 csilk_db_get_stats(csilk_db_stats_t* stats)
 {
@@ -62,12 +65,20 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 	stats->duration_us_total = atomic_load(&db_duration_us_total);
 }
 
+/** @brief Get the raw driver-level connection handle.
+ * @return The connection pointer, or nullptr if pool is nullptr.
+ * @note The caller must hold the pool mutex if concurrent access is possible. */
 void*
 csilk_db_pool_get_connection(csilk_db_pool_t* pool)
 {
 	return pool ? pool->connection : nullptr;
 }
 
+/** @brief Store a driver-level connection handle.
+ *
+ * Typically called by the driver's connect() callback.  The pool takes
+ * ownership of the pointer; the driver's disconnect() callback is
+ * responsible for freeing it. */
 void
 csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
 {
@@ -376,8 +387,15 @@ csilk_db_init(void)
 #endif
 }
 
-/** @brief Statically-sized registry of registered database drivers (max 16). */
-
+/** @brief Register a database driver in the global registry.
+ *
+ * The driver's vtable (with connect/query/exec/disconnect callbacks) must
+ * remain valid for the process lifetime.  Up to 16 drivers can be registered.
+ *
+ * @param name   Unique driver name for later lookup.
+ * @param driver Heap-allocated driver vtable (not copied, only the pointer is
+ *               stored). Must outlive the registry.
+ * @return 0 on success, -1 if name/driver is nullptr or registry is full. */
 int
 csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
 {
@@ -396,6 +414,13 @@ csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
 	return 0;
 }
 
+/** @brief Look up a registered database driver by name.
+ *
+ * Linear search of the driver registry (at most 16 entries, so O(1) in
+ * practice).  Must call csilk_db_init() first to register built-in drivers.
+ *
+ * @param name Driver name (case-sensitive, e.g. "sqlite3").
+ * @return Driver pointer, or nullptr if not found or @p name is nullptr. */
 csilk_db_driver_t*
 csilk_db_get_driver(const char* name)
 {
