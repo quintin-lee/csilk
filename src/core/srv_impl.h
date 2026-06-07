@@ -24,6 +24,7 @@ CSILK_INTERNAL void on_close(uv_handle_t* handle);
 CSILK_INTERNAL void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 CSILK_INTERNAL void on_new_connection(uv_stream_t* server_stream, int status);
 CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
+CSILK_INTERNAL void csilk_arena_flush_free_list(void);
 CSILK_INTERNAL void on_idle_timeout(uv_timer_t* handle);
 CSILK_INTERNAL void on_read_timeout(uv_timer_t* handle);
 CSILK_INTERNAL void on_write_timeout(uv_timer_t* handle);
