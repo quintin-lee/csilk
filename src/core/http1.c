@@ -174,6 +174,8 @@ on_url(llhttp_t* p, const char* at, size_t length)
 	size_t max_url = client->server->config.max_url_size;
 	if (max_url > 0 && length > max_url) {
 		fprintf(stderr, "[debug] on_url max_url exceeded\n");
+		free(client->current_url);
+		client->current_url = nullptr;
 		return HPE_USER;
 	}
 	if (client->current_url) {
@@ -288,6 +290,10 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 	client->total_header_size += length;
 	if (client->total_header_size > client->server->config.max_header_size) {
 		fprintf(stderr, "[debug] on_header_value max_header_size exceeded\n");
+		free(client->current_header_field);
+		client->current_header_field = nullptr;
+		free(client->current_header_value);
+		client->current_header_value = nullptr;
 		return HPE_USER;
 	}
 
@@ -300,6 +306,8 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 		client->current_header_value = nullptr;
 		client->header_value_capacity = 0;
 		client->total_header_size = 0;
+		free(client->current_header_field);
+		client->current_header_field = nullptr;
 		fprintf(stderr, "[debug] on_header_value realloc failed\n");
 		return HPE_USER;
 	}
