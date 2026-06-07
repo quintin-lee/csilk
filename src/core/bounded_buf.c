@@ -81,7 +81,7 @@ csilk_bounded_buf_puts(csilk_bounded_buf_t* b, const char* s)
 	}
 }
 
-static const char*
+static char*
 uint64_to_str(char* end, uint64_t n)
 {
 	*end = '\0';
