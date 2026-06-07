@@ -332,6 +332,7 @@ csilk_server_free(csilk_server_t* server)
 	if (server->worker_pools) {
 		for (int w = 0; w < server->worker_pool_count; w++) {
 			worker_pool_t* wp = &server->worker_pools[w];
+			free(wp->read_buf);
 			for (int i = 0; i < wp->client_pool_count; i++) {
 				free(wp->client_pool[i]);
 			}

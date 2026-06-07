@@ -71,6 +71,8 @@ typedef struct {
 	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
 	csilk_arena_t* arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
 	int arena_pool_count;				   /**< Items in arena pool. */
+	char* read_buf;	      /**< Per-worker persistent read buffer (reused across reads). */
+	size_t read_buf_size; /**< Current allocated size of read_buf. */
 } worker_pool_t;
 
 /**

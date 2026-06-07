@@ -472,6 +472,43 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 	csilk_client_write(client, data, len);
 }
 
+/** @brief Send data with ownership transfer — caller's buffer is freed by
+ *  the write callback (or immediately for TLS).
+ *
+ *  Unlike _csilk_send_data() / csilk_client_write(), this does NOT make
+ *  an internal copy. Instead the caller's heap buffer is passed directly
+ *  to uv_write() and freed by on_write().  For TLS connections the buffer
+ *  is freed immediately after SSL_write(). */
+CSILK_INTERNAL void
+_csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
+{
+	if (!data) {
+		return;
+	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	if (!client) {
+		free(data);
+		return;
+	}
+
+	if (client->ssl) {
+		SSL_write(client->ssl, (const uint8_t*)data, (int)len);
+		flush_tls_write(client);
+		free(data);
+		return;
+	}
+
+	uv_write_t* req = malloc(sizeof(uv_write_t));
+	if (!req) {
+		free(data);
+		return;
+	}
+
+	req->data = data;
+	uv_buf_t buf = uv_buf_init(data, (unsigned int)len);
+	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+}
+
 /* --- Request dispatch --- */
 
 /** @brief Dispatch an incoming request through the middleware and routing

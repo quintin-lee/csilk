@@ -37,8 +37,24 @@
 void
 alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
-	(void)handle;
-	buf->base = (char*)malloc(suggested_size);
+	csilk_client_t* client = (csilk_client_t*)handle->data;
+	worker_pool_t* wp = client->owner_pool;
+	if (!wp) {
+		buf->base = nullptr;
+		buf->len = 0;
+		return;
+	}
+	if (suggested_size > wp->read_buf_size) {
+		char* new_buf = realloc(wp->read_buf, suggested_size);
+		if (!new_buf) {
+			buf->base = nullptr;
+			buf->len = 0;
+			return;
+		}
+		wp->read_buf = new_buf;
+		wp->read_buf_size = suggested_size;
+	}
+	buf->base = wp->read_buf;
 	buf->len = suggested_size;
 }
 
@@ -592,10 +608,6 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		if (!uv_is_closing((uv_handle_t*)stream)) {
 			uv_close((uv_handle_t*)stream, on_close);
 		}
-	}
-
-	if (buf->base) {
-		free(buf->base);
 	}
 }
 
