@@ -21,15 +21,32 @@
 
 typedef csilk_router_t* (*csilk_app_init_t)(void);
 
+/** @brief Internal context for the hot-reload subsystem.
+ *
+ * Tracks the shared library handle, the watched file path, and the libuv
+ * handles for filesystem events and debounce timer.  Created by
+ * csilk_dev_hot_reload_start() and lives for the server lifetime. */
 typedef struct {
-	csilk_server_t* server;
-	char* lib_path;
-	char* init_sym;
-	void* dl_handle;
-	uv_fs_event_t fs_event;
-	uv_timer_t debounce_timer;
+	csilk_server_t* server;	   /**< Owning server (router is swapped on reload). */
+	char* lib_path;		   /**< strdup'd path to the shared library to watch. */
+	char* init_sym;		   /**< strdup'd name of the factory symbol. */
+	void* dl_handle;	   /**< Current loaded library handle (nullptr on start). */
+	uv_fs_event_t fs_event;	   /**< libuv filesystem watcher. */
+	uv_timer_t debounce_timer; /**< Debounce timer (100 ms). */
 } hot_reload_ctx_t;
 
+/** @brief Load a new shared library and atomically swap the server's router.
+ *
+ * On Linux/macOS: dlclose() old library, dlopen() new one, dlsym() the
+ * factory function, call it to get a new router, then set it via
+ * csilk_server_set_router().  The old router is freed automatically.
+ * On Windows: equivalent via LoadLibrary/FreeLibrary/GetProcAddress.
+ *
+ * RTLD_NOW | RTLD_LOCAL ensures symbols are resolved immediately and the
+ * library can be re-loaded on the next change event.
+ *
+ * @return 0 on success, -1 if any step fails (with an explanatory message
+ *         printed to stderr). */
 static int
 load_and_swap_router(hot_reload_ctx_t* ctx)
 {
@@ -94,6 +111,9 @@ fail:
 	return -1;
 }
 
+/** @brief Debounce timer callback — triggers the actual reload after a quiet
+ *  period.  The 100 ms window coalesces multiple rapid file-change events
+ *  (common during save or compilation tooling) into a single reload. */
 static void
 on_debounce_timer(uv_timer_t* handle)
 {
@@ -102,6 +122,12 @@ on_debounce_timer(uv_timer_t* handle)
 	load_and_swap_router(ctx);
 }
 
+/** @brief Watch the file change event from the filesystem watcher.
+ *
+ * Called by libuv whenever the shared library file is created, modified, or
+ * renamed.  Restarts the debounce timer rather than reloading immediately,
+ * so that rapid successive events (e.g. editor atomic-save writes a temp
+ * file then renames) are collapsed into a single reload. */
 static void
 on_file_change(uv_fs_event_t* handle, const char* filename, int events, int status)
 {

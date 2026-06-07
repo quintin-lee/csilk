@@ -16,8 +16,18 @@
 
 /* ===================================================================
  * Bounded string buffer
+ *
+ * A pre-allocated, fixed-capacity string builder. All output is appended to
+ * a caller-provided char array; no heap allocation is ever performed. When
+ * the capacity is exhausted, writing stops and the overflow flag is set so
+ * the caller can detect truncation and fall back to cJSON if necessary.
  * =================================================================== */
 
+/** @brief Initialise a bounded string buffer.
+ *
+ * @param b        Pointer to the buffer struct to initialise.
+ * @param buf      Caller-owned char array that will receive the output.
+ * @param capacity Size of @p buf in bytes. Must be > 0 for any output. */
 void
 csilk_bounded_buf_init(csilk_bounded_buf_t* b, char* buf, size_t capacity)
 {
@@ -30,6 +40,10 @@ csilk_bounded_buf_init(csilk_bounded_buf_t* b, char* buf, size_t capacity)
 	}
 }
 
+/** @brief Reset the buffer to empty without re-allocating.
+ *
+ * Clears the overflow flag and resets the write position. The underlying
+ * char array is reused as-is. */
 void
 csilk_bounded_buf_reset(csilk_bounded_buf_t* b)
 {
@@ -40,12 +54,16 @@ csilk_bounded_buf_reset(csilk_bounded_buf_t* b)
 	}
 }
 
+/** @brief Check whether the buffer has overflowed (truncation occurred).
+ * @return Non-zero if any write was dropped due to capacity limit. */
 int
 csilk_bounded_buf_overflow(const csilk_bounded_buf_t* b)
 {
 	return b->overflow;
 }
 
+/** @brief Get the null-terminated output string.
+ * @return Pointer to the caller-owned buffer, always null-terminated. */
 const char*
 csilk_bounded_buf_str(const csilk_bounded_buf_t* b)
 {
@@ -58,6 +76,11 @@ csilk_bounded_buf_len(const csilk_bounded_buf_t* b)
 	return b->len;
 }
 
+/** @brief Append a single character.
+ *
+ * If the buffer is full, sets the overflow flag instead. Always keeps the
+ * buffer null-terminated so csilk_bounded_buf_str() is safe to call at any
+ * point. */
 void
 csilk_bounded_buf_putc(csilk_bounded_buf_t* b, char c)
 {
@@ -81,6 +104,15 @@ csilk_bounded_buf_puts(csilk_bounded_buf_t* b, const char* s)
 	}
 }
 
+/** @brief Format an unsigned 64-bit integer backwards into a buffer.
+ *
+ * Writes digits in reverse (from the end towards the front) and returns a
+ * pointer to the first digit.  The caller owns the buffer and must ensure
+ * at least 21 bytes are available for the largest uint64_t.
+ *
+ * @param end   One-past-the-end pointer of the output buffer.
+ * @param n     Unsigned 64-bit value to format.
+ * @return      Pointer to the first character of the formatted number. */
 static char*
 uint64_to_str(char* end, uint64_t n)
 {
@@ -130,8 +162,18 @@ csilk_bounded_buf_putf(csilk_bounded_buf_t* b, double d, int precision)
 
 /* ===================================================================
  * Bounded JSON builder
+ *
+ * A lightweight, zero-allocation JSON document builder sitting on top of
+ * the bounded string buffer.  It automatically inserts commas between
+ * elements.  Like the underlying buffer, on overflow the output is
+ * truncated gracefully and the overflow flag is set so the caller can
+ * fall back to a full JSON library such as cJSON.
  * =================================================================== */
 
+/** @brief Initialise a bounded JSON builder.
+ * @param j        Pointer to the builder struct.
+ * @param buf      Caller-owned output buffer.
+ * @param capacity Size of @p buf in bytes. */
 void
 csilk_bounded_json_init(csilk_bounded_json_t* j, char* buf, size_t capacity)
 {
@@ -153,6 +195,11 @@ csilk_bounded_json_str(const csilk_bounded_json_t* j)
 
 /* --- Helper: write a JSON-escaped string value --- */
 
+/** @brief Write a JSON string with proper escaping.
+ *
+ * Wraps the string in double quotes and escapes \\, \", \\n, \\r, \\t, and
+ * control characters (< 0x20) as \\u00XX sequences.  A null pointer is
+ * written as the literal @c null. */
 static void
 json_write_escaped(csilk_bounded_json_t* j, const char* s)
 {
