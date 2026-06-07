@@ -1,5 +1,7 @@
 # Architecture
 
+> **Version**: 0.5.0-dev | **Last updated**: 2026-06-07
+
 csilk follows a **layered event-driven architecture** with an **onion middleware model**, inspired by Go's Gin framework.
 
 ## Layer Architecture

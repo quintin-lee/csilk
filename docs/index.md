@@ -1,6 +1,6 @@
 # csilk Documentation
 
-> **Version**: 0.3.0 | **Last updated**: 2026-05-31
+> **Version**: 0.5.0-dev | **Last updated**: 2026-06-07
 
 csilk is a lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON.
 
@@ -24,6 +24,12 @@ graph TB
         GZ["Gzip"]
         SSE["SSE"]
         MP["Multipart"]
+        JWT["JWT"]
+        MET["Metrics"]
+        RID["RequestID"]
+        SES["Session"]
+        VAL["Validate"]
+        WAF["WAF"]
     end
 
     subgraph Core Framework
@@ -85,8 +91,6 @@ graph TB
 | [ARCH Whitepaper](ARCH.md) | Detailed architecture whitepaper |
 | [Module Design](module-design/) | Deep dives into core module internals: [AI](module-design/ai.md), [Workflow](module-design/workflow.md), [Reflection](module-design/reflection.md), [Context](module-design/context.md), [Router](module-design/router.md), [Middleware](module-design/middleware.md), [Crypto](module-design/crypto.md), [Hooks](module-design/hooks.md) |
 | [User Manual](user-manual/) | Configuration, middleware development, and advanced usage |
-| [API Reference](html/index.html) | Doxygen-generated API documentation |
-| [User Manual](user-manual/) | Configuration, middleware, and advanced usage |
 | [API Reference](html/index.html) | Doxygen-generated API documentation |
 
 ## Quick Start

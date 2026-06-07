@@ -19,6 +19,8 @@ server:
   request_timeout_ms: 10000
   max_header_size: 8192
   max_body_size: 1048576  # 1MB
+  max_url_size: 8192      # Maximum URL length (0 = unlimited)
+  max_headers_count: 100  # Maximum number of request headers (0 = unlimited)
   
   # TLS/HTTPS settings (OpenSSL required)
   enable_tls: true
