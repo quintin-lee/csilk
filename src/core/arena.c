@@ -126,8 +126,8 @@ typedef struct csilk_arena_chunk_s {
 } csilk_arena_chunk_t;
 
 /** @brief Thread-local free list of arena chunks for reuse. */
-static csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
-static int tls_chunk_count = 0;
+static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
+static _Thread_local int tls_chunk_count = 0;
 
 /** @brief Arena allocator for request-scoped memory.
  *
