@@ -156,8 +156,26 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 	}
 	uv_mutex_lock(&mq->monitor_mutex);
 	if (mq->monitor_count >= mq->monitor_capacity) {
-		size_t new_cap = mq->monitor_capacity ? mq->monitor_capacity * 2 : 4;
-		mq->monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
+		size_t new_cap;
+		if (mq->monitor_capacity == 0) {
+			new_cap = 4;
+		} else {
+			if (mq->monitor_capacity > SIZE_MAX / 2) {
+				uv_mutex_unlock(&mq->monitor_mutex);
+				return;
+			}
+			new_cap = mq->monitor_capacity * 2;
+		}
+		if (new_cap > SIZE_MAX / sizeof(csilk_ctx_t*)) {
+			uv_mutex_unlock(&mq->monitor_mutex);
+			return;
+		}
+		csilk_ctx_t** new_monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
+		if (!new_monitors) {
+			uv_mutex_unlock(&mq->monitor_mutex);
+			return;
+		}
+		mq->monitors = new_monitors;
 		mq->monitor_capacity = new_cap;
 	}
 	mq->monitors[mq->monitor_count++] = c;
@@ -236,9 +254,24 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 	}
 	if (!topic) {
 		if (mq->global_mw_count >= mq->global_mw_capacity) {
-			size_t new_cap = mq->global_mw_capacity ? mq->global_mw_capacity * 2 : 4;
-			mq->global_middlewares =
+			size_t new_cap;
+			if (mq->global_mw_capacity == 0) {
+				new_cap = 4;
+			} else {
+				if (mq->global_mw_capacity > SIZE_MAX / 2) {
+					return;
+				}
+				new_cap = mq->global_mw_capacity * 2;
+			}
+			if (new_cap > SIZE_MAX / sizeof(csilk_mq_handler_t)) {
+				return;
+			}
+			csilk_mq_handler_t* new_mw =
 			    realloc(mq->global_middlewares, new_cap * sizeof(csilk_mq_handler_t));
+			if (!new_mw) {
+				return;
+			}
+			mq->global_middlewares = new_mw;
 			mq->global_mw_capacity = new_cap;
 		}
 		mq->global_middlewares[mq->global_mw_count++] = middleware;
@@ -246,9 +279,24 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 		csilk_mq_topic_t* t = get_or_create_topic(mq, topic);
 		if (t) {
 			if (t->handler_count >= t->handler_capacity) {
-				size_t new_cap = t->handler_capacity ? t->handler_capacity * 2 : 4;
-				t->handlers =
+				size_t new_cap;
+				if (t->handler_capacity == 0) {
+					new_cap = 4;
+				} else {
+					if (t->handler_capacity > SIZE_MAX / 2) {
+						return;
+					}
+					new_cap = t->handler_capacity * 2;
+				}
+				if (new_cap > SIZE_MAX / sizeof(csilk_mq_handler_t)) {
+					return;
+				}
+				csilk_mq_handler_t* new_h =
 				    realloc(t->handlers, new_cap * sizeof(csilk_mq_handler_t));
+				if (!new_h) {
+					return;
+				}
+				t->handlers = new_h;
 				t->handler_capacity = new_cap;
 			}
 			t->handlers[t->handler_count++] = middleware;
