@@ -79,7 +79,7 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	}
 
 	const char* range_val = range_hdr + 6;
-	char* dash = strchr(range_val, '-');
+	char* dash = strchr((char*)range_val, '-');
 	if (!dash) {
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 		uv_fs_t close_req;
