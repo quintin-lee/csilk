@@ -356,6 +356,24 @@ csilk_arena_reset(csilk_arena_t* arena)
 	}
 }
 
+/** @brief Flush the thread-local arena chunk free list.
+ *
+ * Frees all chunks cached in the calling thread's TLS free list. Call this
+ * before the thread exits to prevent ASAN from reporting the cached chunks
+ * as memory leaks when arenas were used on a non-main thread. */
+void
+csilk_arena_flush_free_list(void)
+{
+	csilk_arena_chunk_t* curr = tls_chunk_free_list;
+	while (curr) {
+		csilk_arena_chunk_t* next = curr->next;
+		arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+		curr = next;
+	}
+	tls_chunk_free_list = nullptr;
+	tls_chunk_count = 0;
+}
+
 #ifdef TEST_OOM
 /** @brief Get the number of chunks currently in the thread-local free list.
  * Only available during testing. */

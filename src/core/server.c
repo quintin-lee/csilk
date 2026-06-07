@@ -358,6 +358,7 @@ csilk_server_free(csilk_server_t* server)
 	}
 
 	uv_mutex_destroy(&server->clients_mutex);
+	csilk_arena_flush_free_list();
 	free(server);
 }
 
