@@ -386,6 +386,7 @@ fail:
 	if (app->router) {
 		csilk_router_free(app->router);
 	}
+	csilk_server_free(app->server);
 	csilk_config_free(&app->config);
 	free(app);
 	return nullptr;
