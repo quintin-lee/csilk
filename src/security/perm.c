@@ -18,6 +18,7 @@
 
 #include "csilk/drivers/perm.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +30,7 @@ static csilk_perm_driver_t* drivers[16];
 static int driver_count = 0;
 /** @brief Currently active default driver for authorization checks. */
 static csilk_perm_driver_t* default_driver = nullptr;
-static int perm_initialized = 0;
+static atomic_int perm_initialized = 0;
 
 /** @brief Initialize the permission subsystem.
  *
@@ -39,7 +40,8 @@ static int perm_initialized = 0;
 void
 csilk_perm_init(void)
 {
-	if (__sync_val_compare_and_swap(&perm_initialized, 0, 1) == 0) {
+	int expected = 0;
+	if (atomic_compare_exchange_strong(&perm_initialized, &expected, 1)) {
 		csilk_perm_simple_init();
 	}
 }

@@ -47,6 +47,8 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
 	    (csilk_app_init_t)GetProcAddress((HMODULE)ctx->dl_handle, ctx->init_sym);
 	if (!init_fn) {
 		fprintf(stderr, "[Hot-Reload] Failed to find symbol: %s\n", ctx->init_sym);
+		FreeLibrary((HMODULE)ctx->dl_handle);
+		ctx->dl_handle = nullptr;
 		return -1;
 	}
 #else
@@ -68,19 +70,28 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
 	const char* dlsym_error = dlerror();
 	if (dlsym_error) {
 		fprintf(stderr, "[Hot-Reload] Failed to find symbol: %s\n", dlsym_error);
-		return -1;
+		goto fail;
 	}
 #endif
 
 	csilk_router_t* new_router = init_fn();
 	if (!new_router) {
 		fprintf(stderr, "[Hot-Reload] Initialization function returned nullptr\n");
-		return -1;
+		goto fail;
 	}
 
 	csilk_server_set_router(ctx->server, new_router);
 	printf("[Hot-Reload] Successfully loaded and hot-swapped router from %s\n", ctx->lib_path);
 	return 0;
+
+fail:
+#ifndef _WIN32
+	dlclose(ctx->dl_handle);
+#else
+	FreeLibrary((HMODULE)ctx->dl_handle);
+#endif
+	ctx->dl_handle = nullptr;
+	return -1;
 }
 
 static void
@@ -118,6 +129,12 @@ csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const c
 	ctx->server = server;
 	ctx->lib_path = strdup(lib_path);
 	ctx->init_sym = strdup(init_sym);
+	if (!ctx->lib_path || !ctx->init_sym) {
+		free(ctx->lib_path);
+		free(ctx->init_sym);
+		free(ctx);
+		return -1;
+	}
 	ctx->fs_event.data = ctx;
 	ctx->debounce_timer.data = ctx;
 
