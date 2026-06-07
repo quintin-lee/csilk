@@ -19,6 +19,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "core/srv_internal.h"
+#include "core/srv_impl.h"
 #include "h2.h"
 
 /* Forward declarations for context.c helpers */
@@ -515,8 +516,7 @@ write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
 	buf[(size_t)size_len + len] = '\r';
 	buf[(size_t)size_len + len + 1] = '\n';
 
-	_csilk_send_data(c, (const uint8_t*)buf, total);
-	free(buf);
+	_csilk_send_data_owned(c, buf, total);
 }
 
 /** @brief Write data to a streaming response using chunked transfer encoding.
