@@ -119,6 +119,10 @@ csilk_waf_middleware(csilk_ctx_t* c)
 {
 	int blocked = 0;
 
+	if (!c) {
+		return;
+	}
+
 	/* Check path for directory traversal */
 	if (contains_pattern(csilk_get_path(c), traversal_patterns)) {
 		blocked = 1;
