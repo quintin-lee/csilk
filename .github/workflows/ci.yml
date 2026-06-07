@@ -109,7 +109,6 @@ jobs:
   fuzz:
     name: Fuzz Testing
     runs-on: ubuntu-24.04
-    if: false  # clang-18 on Ubuntu 24.04 lacks full C23 constexpr; re-enable when clang-19 is available
     steps:
     - uses: actions/checkout@v4
 
