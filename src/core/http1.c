@@ -655,12 +655,13 @@ _csilk_send_response(csilk_ctx_t* c)
 
 	char* write_base = malloc(response_len + 1);
 	if (write_base) {
-		int pos;
+		int snp;
+		size_t pos;
 		if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-			pos = snprintf(
+			snp = snprintf(
 			    write_base, response_len + 1, "HTTP/1.1 101 Switching Protocols\r\n");
 		} else if (use_chunked) {
-			pos = snprintf(write_base,
+			snp = snprintf(write_base,
 				       response_len + 1,
 				       "HTTP/1.1 %d %s\r\n"
 				       "%s"
@@ -670,7 +671,7 @@ _csilk_send_response(csilk_ctx_t* c)
 				       transfer_encoding,
 				       connection_val);
 		} else {
-			pos = snprintf(write_base,
+			snp = snprintf(write_base,
 				       response_len + 1,
 				       "HTTP/1.1 %d %s\r\n"
 				       "Content-Length: %zu\r\n"
@@ -680,16 +681,21 @@ _csilk_send_response(csilk_ctx_t* c)
 				       body_len,
 				       connection_val);
 		}
+		if (snp < 0) {
+			free(write_base);
+			return;
+		}
+		pos = (size_t)snp;
 
 		for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
 			for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
 			     h = h->next) {
 				memcpy(write_base + pos, h->key, h->key_len);
-				pos += (int)h->key_len;
+				pos += h->key_len;
 				write_base[pos++] = ':';
 				write_base[pos++] = ' ';
 				memcpy(write_base + pos, h->value, h->value_len);
-				pos += (int)h->value_len;
+				pos += h->value_len;
 				write_base[pos++] = '\r';
 				write_base[pos++] = '\n';
 			}
