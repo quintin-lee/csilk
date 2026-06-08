@@ -120,25 +120,10 @@ CSILK_INTERNAL void
 _wf_broadcast(csilk_wf_t* wf, const char* event, const char* node_id, const char* payload);
 CSILK_INTERNAL void
 _wf_execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input);
-CSILK_INTERNAL void _wf_cleanup_ctx(csilk_wf_ctx_t* ctx);
-CSILK_INTERNAL void _wf_cleanup_ctx_now(csilk_wf_ctx_t* ctx);
 CSILK_INTERNAL csilk_wf_ctx_t* _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id);
-CSILK_INTERNAL void _wf_register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx);
-CSILK_INTERNAL void _wf_unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx);
-CSILK_INTERNAL void _wf_wal_log_event(csilk_wf_ctx_t* ctx,
-				      csilk_wf_event_type_t type,
-				      const char* node_id,
-				      csilk_data_t* data);
-CSILK_INTERNAL char* _wf_resolve_templates(csilk_wf_ctx_t* ctx, const char* template);
 CSILK_INTERNAL const char* _wf_run_ext_internal(csilk_wf_t* wf,
 						csilk_data_t* input,
 						void (*callback)(csilk_data_t*),
 						void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*));
 
 #endif
-
-/* --- Additional Internal APIs --- */
-CSILK_INTERNAL void _wf_node_free(csilk_wf_node_t* node);
-CSILK_INTERNAL void _wf_ai_config_free(void* ptr);
-CSILK_INTERNAL void _wf_vector_search_config_free(void* ptr);
-CSILK_INTERNAL void _wf_serve_ui_handler(csilk_ctx_t* c);
