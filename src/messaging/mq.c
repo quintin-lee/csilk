@@ -40,7 +40,7 @@ static void on_mq_async(uv_async_t* handle);
  * @param payload Opaque payload data.
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on allocation failure. */
-int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
+CSILK_INTERNAL int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /** @brief Internal: Create a new Message Queue instance.
  *
@@ -343,7 +343,7 @@ csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscri
  * @return 0 on success, -1 on allocation failure.
  * @note Thread-safe. The async signal ensures on_mq_async() processes the
  *       message on the main loop thread. */
-int
+CSILK_INTERNAL int
 _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
 	csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));

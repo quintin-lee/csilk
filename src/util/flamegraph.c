@@ -15,17 +15,19 @@
  * @copyright MIT License
  */
 
-#if defined(__GLIBC__)
-#include <execinfo.h>
-#endif
-#include <pthread.h>
-#include <signal.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdatomic.h>
+
+#if defined(__GLIBC__) || defined(__linux__)
+#define HAS_EXECINFO 1
+#include <execinfo.h>
+#endif
 
 #include "csilk/csilk.h"
 
@@ -137,7 +139,7 @@ fg_sampler_thread(void* arg)
 	void* buffer[FG_MAX_DEPTH];
 
 	while (atomic_load(&p->running)) {
-#if defined(__GLIBC__)
+#if defined(HAS_EXECINFO)
 		int nptrs = backtrace(buffer, FG_MAX_DEPTH);
 		if (nptrs > 1) {
 			char** symbols = backtrace_symbols(buffer, nptrs);

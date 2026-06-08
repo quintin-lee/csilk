@@ -23,8 +23,10 @@
 #include "h2.h"
 
 /* Forward declarations for context.c helpers */
-void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
-void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
+CSILK_INTERNAL void
+map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
+CSILK_INTERNAL void
+map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
 
 /* --- Status & string --- */
 

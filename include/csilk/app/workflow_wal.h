@@ -71,7 +71,7 @@ typedef struct __attribute__((packed)) {
  * @param len       Byte length of @p payload.
  * @return 0 on success, -1 on I/O error.
  */
-int
+CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len);
 
 #endif /* CSILK_WORKFLOW_WAL_H */
