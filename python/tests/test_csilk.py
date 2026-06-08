@@ -17,5 +17,12 @@ class TestCsilkLoader(unittest.TestCase):
         self.assertIsNotNone(lib.csilk_app_free)
         self.assertIsNotNone(lib.csilk_app_add_route)
 
+    def test_context_class_existence(self):
+        from csilk.context import Context
+        # Ensure Context constructor takes a ctypes pointer
+        from csilk.lib import CsilkCtxPtr
+        ctx = Context(CsilkCtxPtr())
+        self.assertIsNotNone(ctx)
+
 if __name__ == '__main__':
     unittest.main()
