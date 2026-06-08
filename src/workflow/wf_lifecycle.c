@@ -131,6 +131,9 @@ csilk_wf_free(csilk_wf_t* wf)
 	if (!wf) {
 		return;
 	}
+	while (wf->active_context_count > 0) {
+		_wf_cleanup_ctx(wf->active_contexts[0]);
+	}
 	for (size_t i = 0; i < wf->node_count; i++) {
 		node_free(wf->nodes[i]);
 	}
