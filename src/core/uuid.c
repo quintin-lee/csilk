@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <uv.h>
+#include <string.h>
 
 #include "csilk/core/crypto_dispatch.h"
 #include "csilk/crypto.h"
