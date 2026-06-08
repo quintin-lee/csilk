@@ -1,10 +1,12 @@
-# Architecture
+# csilk Architecture Whitepaper & Technical Manual
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-07
+> **Version**: 0.5.0-dev | **Last updated**: 2026-06-08
 
-csilk follows a **layered event-driven architecture** with an **onion middleware model**, inspired by Go's Gin framework.
+csilk is a lightweight, high-performance HTTP web framework written in C, adopting a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv, llhttp, nghttp2, and cJSON.
 
-## Layer Architecture
+---
+
+## 1. Layer Architecture
 
 ```mermaid
 graph TB
@@ -17,7 +19,7 @@ graph TB
         MW["Recovery | Logger | CORS | Auth | JWT | WAF\nRateLimit | CSRF | Static | Gzip | SSE | Multipart\nMetrics | RequestID | Validate | Session"]
     end
 
-    subgraph "Layer 3: Core"
+    subgraph "Layer 3: Core Engine"
         subgraph "Request Processing"
             CTX["Context (csilk_ctx_t)"]
             ARENA["Arena Allocator"]
@@ -82,59 +84,93 @@ graph TB
     ADMIN --> MQ
 ```
 
-## Core Design Principles
+---
 
-### 1. Reactor Event-Driven Model with Native TLS
+## 2. Core Design Principles
 
-csilk uses libuv's event loop as its execution core. All I/O is non-blocking. Since v0.4.0, native TLS support is integrated via OpenSSL BIOs:
+### 2.1 Reactor Event-Driven Model with Native TLS & ALPN
+The framework is built on `libuv`, ensuring all network I/O is non-blocking. 
 
-- **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute`
-- **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
+* **Protocol Dispatcher**: During TLS ALPN negotiation, a dispatcher routes decrypted traffic to either `llhttp` (HTTP/1.1) or `nghttp2` (HTTP/2) based on ALPN (`h2` vs `http/1.1`).
+* **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests.
+* **HTTP/2 parsing**: `nghttp2` processes binary HTTP/2 frames, HPACK headers, and handles multiplexed streams.
+* **Native TLS integration**: OpenSSL BIO-pairs handle encrypted network traffic directly on the event loop:
+  - **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute` / `csilk_h2_process_data`
+  - **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
 
-### 2. Onion Middleware & Hook System
+```mermaid
+sequenceDiagram
+    participant K as Kernel
+    participant UV as libuv Event Loop
+    participant TCP as TCP Handle
+    participant LL as llhttp Parser
+    participant S as Server
 
-#### Onion Middleware Model
+    K-->>UV: epoll/kqueue: new connection ready
+    UV->>S: on_new_connection()
+    S->>TCP: uv_tcp_init() + uv_accept()
+    S->>LL: llhttp_init(parser, HTTP_REQUEST, settings)
+    S->>UV: uv_read_start(stream, alloc_buffer, on_read)
 
-Middleware forms a concentric "onion" where each layer wraps the next:
+    Note over UV: Event loop idle, waiting
+
+    K-->>UV: epoll/kqueue: data available
+    UV->>S: on_read()
+    S->>LL: llhttp_execute(parser, buf, nread)
+
+    LL-->>S: on_url(data, len)
+    LL-->>S: on_header_field(data, len)
+    LL-->>S: on_header_value(data, len)
+    LL-->>S: on_headers_complete()
+    LL-->>S: on_body(data, len)
+    LL-->>S: on_message_complete()
+
+    S->>S: finalize_request() + csilk_router_match_ctx()
+    S->>S: Assemble handler chain + csilk_next()
+    S->>S: _csilk_send_response() → uv_write()
+    S->>UV: uv_read_start() (keep-alive)
+```
+
+### 2.2 Onion Middleware Model
+Middleware implements bidirectional request interception through the `csilk_next()` mechanism.
 
 ```mermaid
 flowchart LR
-    A["Client Request"] --> B
+    REQ["Request"]
 
-    subgraph Onion["Middleware Chain"]
+    subgraph "Onion Layers"
         direction LR
-        B["Logger (pre)"] --> C["Recovery (setjmp)"]
-        C --> D["Auth (pre)"]
-        D --> E["CORS (pre)"]
-        E --> F["Handler\n(Business Logic)"]
-        F --> G["CORS (post)"]
-        G --> H["Auth (post)"]
-        H --> I["Logger (post)"]
+        L1i["Recovery (pre)<br/>setjmp()"] --> L2i["Logger (pre)<br/>start timer"]
+        L2i --> L3i["Auth (pre)<br/>check token"]
+        L3i --> L4i["RateLimit (pre)<br/>check quota"]
+        L4i --> CORE["Business Handler<br/>(csilk_string/json)"]
+        CORE --> L4o["RateLimit (post)<br/>(no-op)"]
+        L4o --> L3o["Auth (post)<br/>(no-op)"]
+        L3o --> L2o["Logger (post)<br/>log latency"]
+        L2o --> L1o["Recovery (post)<br/>cleanup"]
     end
 
-    I --> J["HTTP Response"]
+    L1o --> RES["Response"]
 ```
 
-#### Hook System
+### 2.3 Hook System
+In addition to onion middleware, a hook system allows non-blocking observation of global lifecycle events:
+* `CSILK_HOOK_SERVER_START` / `CSILK_HOOK_SERVER_STOP`
+* `CSILK_HOOK_CONN_OPEN` / `CSILK_HOOK_CONN_CLOSE`
+* `CSILK_HOOK_REQUEST_BEGIN` / `CSILK_HOOK_REQUEST_END`
 
-In addition to the Onion model, a **Hook System** allows listening to global events without intercepting the request flow:
-- `CSILK_HOOK_SERVER_START / STOP`
-- `CSILK_HOOK_CONN_OPEN / CLOSE`
-- `CSILK_HOOK_REQUEST_BEGIN / END`
+### 2.4 Opaque Context & ABI Stability
+Starting from v0.3.0, `csilk_ctx_t` is defined as an **opaque pointer**. The internal structure layout is hidden in `include/csilk/core/ctx_types.h`. This guarantees binary compatibility (ABI stability) for third-party middleware and user applications when the core engine structure undergoes internal modifications.
 
-### 3. Opaque Context & ABI Stability
+### 2.5 Pluggable Drivers
+Services are pluggable through clean interfaces:
+* **Storage Driver**: Backing store for `csilk_set/get` session variables (e.g. SQLite, Redis).
+* **Crypto/Cipher Driver**: Interchangeable cryptography backends (e.g. OpenSSL).
+* **AI Driver**: Interface to generic LLM providers (e.g. OpenAI, Ollama).
+* **Vector DB Driver**: Interface to vector databases (e.g. Qdrant, Milvus).
 
-Starting from v0.3.0, `csilk_ctx_t` is an **opaque type**. The internal structure is hidden in `include/csilk/core/ctx_types.h`, ensuring that changes to the core engine do not break binary compatibility for third-party middleware and applications.
-
-### 4. Pluggable Drivers
-
-The framework now supports pluggable drivers for core services:
-- **Storage Driver**: Customize how `csilk_set/get` values are stored (e.g., Redis for distributed sessions).
-- **Crypto Driver**: Replace default hashing (SHA256, HMAC) and UUID generation with custom or hardware-accelerated implementations.
-
-### 5. Arena Memory Management
-
-Per-connection Arena Allocator eliminates malloc/free overhead:
+### 2.6 Per-Connection Arena Memory Management
+An Arena Allocator maps blocks (4KB default) per-connection. All allocations during request processing (headers, JSON parsing, URL splits) use pointer bump allocation.
 
 ```mermaid
 flowchart TB
@@ -158,9 +194,13 @@ flowchart TB
     F2 --> FREE
 ```
 
-### 6. Radix Tree Routing
+**Key Advantages:**
+* Allocation is reduced to simple pointer arithmetic (no call to malloc/free per request object).
+* O(1) reset between requests (setting offset pointer `used = 0`).
+* Avoids heap fragmentation. Entire memory pool is freed in one pass when the TCP connection closes.
 
-Prefix tree routing with O(path_length) matching:
+### 2.7 Radix Tree Routing
+Prefix tree routing with O(path_length) matching, support for static, parameterized, and wildcard routes.
 
 ```mermaid
 graph TB
@@ -193,47 +233,137 @@ graph TB
     K -.- S5["/static/css/app.css"]
 ```
 
-### 7. Multi-Worker SO_REUSEPORT
+---
 
-For multi-core utilization, csilk supports worker threads each with their own event loop:
+## 3. Crash Recovery Mechanism (setjmp/longjmp)
+
+Lightweight exception handling routes panics cleanly back to the recovery middleware:
+
+```mermaid
+sequenceDiagram
+    participant REC as Recovery MW
+    participant MW as Other Middleware
+    participant H as Business Handler
+    participant JB as jmp_buf (in ctx)
+
+    REC->>JB: setjmp(ctx->jump_buffer) → 0
+    Note over REC: First pass: proceed normally
+    REC->>MW: csilk_next(ctx)
+    MW->>H: csilk_next(ctx)
+
+    alt Normal execution
+        H->>H: csilk_string(ctx, 200, "OK")
+        H-->>REC: Return through stack
+    else Panic case
+        H->>H: csilk_panic(ctx)
+        Note over H: Trigger longjmp!
+        H-->>JB: longjmp(ctx->jump_buffer, 1)
+        JB-->>REC: setjmp returns 1
+        REC->>REC: ctx->response.status = 500
+        REC->>REC: csilk_string(ctx, 500, "Internal Server Error")
+        REC->>REC: csilk_abort(ctx)
+    end
+
+    Note over REC: Response sent, server continues running
+```
+
+---
+
+## 4. WebSocket & Message Queue
+
+### 4.1 WebSocket Upgrade Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant HTTP as llhttp
+    participant WS as WebSocket Engine
+    participant EvLoop as libuv
+
+    Client->>Server: HTTP GET /ws (WebSocket upgrade)
+    Note over Server,HTTP: Standard HTTP request parsed by llhttp
+    Server->>Server: Router matches /ws handler
+    Server->>WS: csilk_ws_handshake(ctx)
+    WS->>WS: SHA1("abc123" + WS_GUID)
+    WS->>WS: Base64(sha1_digest) → accept_key
+    WS->>WS: ctx->is_websocket = 1
+    Server->>Client: HTTP/1.1 101 Switching Protocols (WS upgrade accepted)
+    Note over Server: Connection stays open, parser switches mode
+    Note over EvLoop: on_read() now routes to csilk_ws_parse_frame()
+    Client->>Client: Send Frame
+    Client->>Server: WS Frame (text: "hello")
+    Server->>WS: csilk_ws_parse_frame(ctx, buf, len)
+    WS->>WS: Parse FIN + Opcode + Mask + Payload
+    WS->>WS: Unmask payload with XOR mask key
+    WS->>Client: ctx->on_ws_message(ctx, payload, len, opcode)
+    Client->>Server: WS Close Frame (opcode 0x08)
+    Server->>WS: Auto-respond with close frame
+    Server->>EvLoop: uv_close() connection
+```
+
+* **WebSocket Framing**: Full support for text (opcode 0x1), binary (opcode 0x2), and close frames (opcode 0x8) under RFC 6455.
+* **Asynchronous delivery**: `csilk_ws_send` runs asynchronously via `uv_write`.
+
+### 4.2 Thread-Safe Message Queue (csilk_mq)
+csilk provides a built-in topic-based message queue system enabling thread-safe communication:
+
+```mermaid
+graph LR
+    WT["Worker Thread /<br/>External Event"] -- csilk_mq_publish --> ASYNC["uv_async_t<br/>(Signaling)"]
+    ASYNC -- Loop Awake --> DISPATCH["MQ Dispatcher<br/>(Main Loop)"]
+    DISPATCH --> GMW["Global MQ Middleware"]
+    GMW --> TMW["Topic MQ Middleware"]
+    TMW --> SUB["Subscribers"]
+```
+
+* `csilk_mq_publish` is safe to call from any thread. It signals the main loop using `uv_async_send`.
+* The MQ system implements the onion middleware pattern (`csilk_mq_use`) to process topics uniformly.
+
+---
+
+## 5. Multi-Worker Architecture
 
 ```mermaid
 flowchart TB
     subgraph "Main Thread"
         ML["libuv Event Loop"]
-        MT["Main TCP Listener\n(SO_REUSEPORT)"]
+        MT["TCP Socket (SO_REUSEPORT)"]
+        MW["Global Middlewares\n(recovery, logger, ...)"]
     end
 
-    subgraph "Worker Thread 1"
+    subgraph "Worker 1"
         W1L["libuv Event Loop"]
-        W1T["TCP Listener\n(SO_REUSEPORT)"]
+        W1T["TCP Socket (SO_REUSEPORT)"]
+        W1M["Global Middlewares"]
     end
 
-    subgraph "Worker Thread 2"
+    subgraph "Worker 2"
         W2L["libuv Event Loop"]
-        W2T["TCP Listener\n(SO_REUSEPORT)"]
+        W2T["TCP Socket (SO_REUSEPORT)"]
+        W2M["Global Middlewares"]
     end
 
-    subgraph "Worker Thread N"
+    subgraph "Worker N"
         WNL["libuv Event Loop"]
-        WNT["TCP Listener\n(SO_REUSEPORT)"]
+        WNT["TCP Socket (SO_REUSEPORT)"]
+        WNM["Global Middlewares"]
     end
 
-    K["Kernel\n(Connection Distribution)"] --> MT
+    K["Kernel TCP Stack\n<code>SO_REUSEPORT</code> distributes connections"] --> MT
     K --> W1T
     K --> W2T
     K --> WNT
 ```
 
-### Thread Safety
+### Client Pool Thread Safety
+Since connection requests run on whatever worker thread accepted them, a lock-free per-worker connection pool is implemented. Each worker loop manages its own `csilk_client_t` freelist, eliminating mutex contention and guaranteeing thread safety when workers construct client structures.
 
-Since `on_new_connection` runs on whichever event loop accepted the connection
-(the main loop or any worker loop), all shared mutable state accessed during
-connection establishment must be thread-safe. In particular, the **client
-connection object pool** (`pool_get`/`pool_put`) uses a per-worker lock-free
-design — each worker thread manages its own pool, eliminating mutex contention.
+---
 
-## Request Lifecycle
+## 6. Request Lifecycle
+
+The sequence diagram below shows the complete lifecycle of a request from client to network response:
 
 ```mermaid
 sequenceDiagram
@@ -299,37 +429,105 @@ sequenceDiagram
     Note over Server: Keep-Alive: wait for next request<br>Non-Keep-Alive: close connection
 ```
 
-## Key Data Structures
+---
 
-### csilk_ctx_t (Opaque Pointer)
-The internal structure (hidden from public API) includes:
-```c
-struct csilk_ctx_s {
-  int handler_index;              // Current position in handler chain
-  csilk_handler_t* handlers;      // NULL-terminated handler array
-  csilk_arena_t* arena;           // Per-connection arena allocator
-  csilk_request_t request;        // Incoming request data
-  csilk_response_t response;      // Outgoing response data
-  char request_id[37];            // Unique Trace ID (UUID v4)
-  csilk_storage_driver_t* storage_driver; // Custom storage backend
-  csilk_crypto_driver_t* crypto_driver;   // Custom crypto backend (hash/HMAC/UUID)
-  csilk_cipher_driver_t* cipher_driver;   // Custom cipher backend (AES/RSA/sign)
-};
+## 7. Database Driver Matrix
+
+Unified database drivers implement a standard interface (`csilk/drivers/db.h`):
+
+| Driver | Source File | Protocol/Dependency | Connection Model |
+|--------|-------------|---------------------|------------------|
+| **SQLite** | `src/drivers/sqlite.c` | Local File (sqlite3) | Local DB instance |
+| **MySQL** | `src/drivers/mysql.c` | TCP Socket (libmysqlclient) | Thread pool connection pool |
+| **PostgreSQL** | `src/drivers/postgres.c` | TCP Socket (libpq) | Thread pool connection pool |
+| **MongoDB** | `src/drivers/mongodb.c` | TCP Socket (libmongoc) | Driver pool manager |
+
+---
+
+## 8. Observability & Dashboard
+
+### 8.1 Prometheus Metrics
+Native metrics exposition format:
+* `http_requests_total`: Counter partitioned by method, path, and status code.
+* `http_request_duration_seconds`: Histogram bucket for request latency calculations (P99, P95).
+* `http_active_connections`: Current active connection counts.
+
+### 8.2 Admin Dashboard (/admin)
+
+```mermaid
+graph TB
+    subgraph "Admin Dashboard (/admin)"
+        UI["admin_ui.html<br/>Single-page Application"]
+        STATS["GET /admin/stats<br/>JSON metrics snapshot"]
+        WS["GET /admin/ws<br/>WebSocket live events"]
+    end
+
+    subgraph "Data Sources"
+        HTTP_M["HTTP Metrics<br/>(requests, latency)"]
+        WF_M["Workflow Metrics<br/>(executions, tokens)"]
+        MQ_M["MQ Metrics<br/>(messages, queues)"]
+    end
+
+    UI --> STATS
+    UI --> WS
+    STATS --> HTTP_M
+    STATS --> WF_M
+    STATS --> MQ_M
+    WS --> HTTP_M
+    WS --> WF_M
+    WS --> MQ_M
 ```
 
-### csilk_server_s (server instance)
+---
+
+## 9. Performance Features
+
+* **Zero-copy Static File Serving**: Serves files using `sendfile` system calls (abstracted as `uv_fs_sendfile`). Transmit calls happen directly from the kernel cache to the socket descriptor, avoiding user-space context switches.
+* **Trace correlation**: Request ID middleware injects a unique UUID v4 into the request headers and logging telemetry.
+
+---
+
+## 10. Developer Guide
+
+### 10.1 Writing WebSocket Handlers
 ```c
-struct csilk_server_s {
-  uv_loop_t* loop;                // libuv event loop
-  csilk_server_config_t config;   // Server configuration (including TLS)
-  SSL_CTX* ssl_ctx;               // OpenSSL context
-  csilk_hook_node_t* hooks[HOOK_COUNT]; // Registered event listeners
-  atomic_int active_connections;  // Thread-safe connection count
-  csilk_mq_t* mq;                 // Internal event bus
-};
+void ws_on_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode) {
+    csilk_ws_send(c, (uint8_t*)"Hello Client", 12, 1);
+}
+
+void ws_handler(csilk_ctx_t* c) {
+    csilk_ws_handshake(c);
+    if (c->is_websocket) {
+        c->on_ws_message = ws_on_message;
+    }
+}
 ```
 
-## Component Dependency Map
+### 10.2 Writing Middleware
+```c
+void my_middleware(csilk_ctx_t* c) {
+    // Pre-logic: e.g., check Token
+    csilk_next(c);
+    // Post-logic: e.g., log latency
+}
+```
+
+### 10.3 Starting the Server
+```c
+int main() {
+    csilk_router_t* r = csilk_router_new();
+    csilk_group_t* g = csilk_group_new(r, "/api");
+    csilk_GET(g, "/ping", handler);
+
+    csilk_server_t* s = csilk_server_new(r);
+    csilk_server_run(s, 8080);
+    return 0;
+}
+```
+
+---
+
+## 11. Component Dependency Map
 
 ```mermaid
 graph TB
@@ -392,3 +590,120 @@ graph TB
     server.c --> llhttp[llhttp]
     context.c --> cjson[cJSON]
 ```
+
+---
+
+## 12. Directory Tree Structure
+
+```
+csilk/
+├── include/
+│   ├── csilk.h                    # Umbrella (includes all module headers)
+│   └── csilk/
+│       ├── types.h                # Core types, constants, driver vtables
+│       ├── context.h              # Request context accessor API
+│       ├── response.h             # Response writing (status/JSON/redirect/chunked)
+│       ├── router.h               # Radix-tree router
+│       ├── server.h               # Server lifecycle + config
+│       ├── middleware.h            # Built-in middleware function declarations
+│       ├── websocket.h            # WebSocket API
+│       ├── sse.h                  # Server-Sent Events API
+│       ├── mq.h                   # Message Queue pub/sub API
+│       ├── group.h                # Route groups
+│       ├── hooks.h                # Lifecycle hook system
+│       ├── workflow.h             # Workflow engine umbrella
+│       ├── admin.h                # Admin dashboard umbrella
+│       ├── errors.h               # HTTP status code constants
+│       ├── config.h               # Server/app configuration structs
+│       ├── crypto.h               # Cryptographic utility functions
+│       ├── hot_reload.h           # Hot-reload API
+│       ├── version.h              # CSILK_VERSION macro (generated)
+│       ├── app/
+│       │   ├── app.h              # High-level app API
+│       │   ├── workflow.h         # Workflow engine public API
+│       │   └── workflow_wal.h     # WAL persistence API
+│       ├── core/
+│       │   ├── internal.h         # Internal umbrella
+│       │   ├── hash.h             # SHA-1, SHA-256, HMAC-SHA256
+│       │   ├── codec.h            # Base64, Base64URL, URL decode
+│       │   ├── bounded_buf.h      # Stack-only bounded string/JSON builder
+│       │   ├── ws_frame.h         # WebSocket frame parsing
+│       │   ├── crypto_dispatch.h  # Crypto/cipher dispatch stubs
+│       │   ├── mq_types.h         # Internal MQ data structures
+│       │   ├── ctx_types.h        # csilk_ctx_s struct layout
+│       │   └── srv_types.h        # csilk_server_s / csilk_client_s layouts
+│       ├── drivers/
+│       │   ├── ai.h               # AI driver interface
+│       │   ├── db.h               # DB driver interface
+│       │   ├── cipher.h           # Cipher driver interface
+│       │   ├── perm.h             # Permission driver interface
+│       │   └── vector.h           # Vector DB driver interface
+│       ├── test/
+│       │   └── test.h             # Test utilities (OOM simulation, context helpers)
+│       └── reflection/
+│           └── reflect.h          # Runtime type reflection
+├── src/
+│   ├── core/                      # Server engine
+│   │   ├── server.c               # Lifecycle: create/run/stop/free/hooks/workers
+│   │   ├── connection.c           # Pool, accept, I/O, timers, on_read
+│   │   ├── http1.c                # llHTTP callbacks, dispatch, response serialization
+│   │   ├── tls.c                  # OpenSSL init, BIO-pair, ALPN negotiation
+│   │   ├── context.c              # Request reading, lifecycle, binding, cookies
+│   │   ├── response.c             # Response writing (status/JSON/redirect/chunked)
+│   │   ├── router.c               # Radix-tree route matching
+│   │   ├── arena.c                # Bump allocator
+│   │   ├── config.c               # YAML configuration loader
+│   │   ├── h2.c                   # HTTP/2 integration (nghttp2)
+│   │   ├── h2.h                   # HTTP/2 internal header
+│   │   ├── logger.c               # Structured logging
+│   │   ├── recovery.c             # setjmp/longjmp error recovery
+│   │   ├── url.c                  # URL parsing and splitting
+│   │   ├── utils.c                # misc utility functions
+│   │   ├── base64.c               # Base64/Base64URL encode/decode
+│   │   ├── sha1.c                 # SHA-1 hash (WebSocket handshake)
+│   │   ├── uuid.c                 # UUID v4 generation
+│   │   ├── bounded_buf.c          # Stack-only bounded string/JSON builder
+│   │   ├── hot_reload.c           # File-watch hot-reload (inotify)
+│   │   ├── test_utils.c           # Test OOM utilities
+│   │   ├── admin.c                # Admin dashboard
+│   │   ├── srv_impl.h             # Cross-file declarations for server split
+│   │   └── srv_internal.h         # Internal server types
+│   ├── app/                       # Thin app wrappers
+│   │   ├── app.c
+│   │   └── group.c
+│   ├── data/                      # Database abstraction
+│   │   ├── db.c                   # Pool lifecycle, query/exec dispatch
+│   │   └── db_internal.h          # csilk_db_pool_s private struct
+│   ├── ai/                        # AI unified interface
+│   │   └── ai.c
+│   ├── workflow/                  # AI workflow engine
+│   │   ├── wf_ai.c                # AI chat nodes, memory helper, templates
+│   │   ├── wf_lifecycle.c         # Lifecycle: creation, destruction, registration
+│   │   ├── wf_monitor.c           # Real-time monitor events
+│   │   ├── wf_scheduler.c         # Execution engine, DAG scheduling, WAL restore
+│   │   ├── wf_trace.c             # Execution trace recording
+│   │   ├── workflow_internal.h    # Internal structures & stubs
+│   │   ├── workflow_loader.c      # JSON/YAML parser loaders
+│   │   └── workflow_wal.c         # WAL persistence engine
+│   ├── middleware/                # Built-in middleware modules
+│   ├── protocols/                 # WebSocket, Swagger
+│   ├── drivers/                   # Driver implementations
+│   ├── messaging/                 # Message Queue
+│   ├── reflection/                # Runtime type reflection
+│   ├── security/                  # Permission system
+│   └── util/                      # Utility modules
+├── tests/                         # Unit/integration/fuzz tests
+├── examples/                      # Example applications
+├── docs/                          # Architecture, research, analysis docs
+├── cmake/                         # CMake modules
+└── CMakeLists.txt                 # C23, version 0.5.0-dev
+```
+
+---
+
+## 13. Document Generation
+
+csilk uses **Doxygen** to build API documentation from annotated files:
+* All public headers in `include/` and implementation files in `src/` include full Doxygen tags (`@brief`, `@param`, `@return`).
+* Command to generate documentation locally: `make docs` (requires Doxygen 1.12+).
+* CI is configured for GitHub Pages auto-deployment of the generated HTML docs.
