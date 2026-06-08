@@ -16,7 +16,7 @@
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on allocation failure.
  * @threadsafe */
-int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
+CSILK_INTERNAL int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /** @brief Append a message frame to the WAL file on disk.
  *
@@ -29,7 +29,8 @@ int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t l
  * @param len     Payload length.
  * @return 0 on success, -1 on write failure.
  * @threadsafe (uses wal_mutex). */
-int _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
+CSILK_INTERNAL int
+_mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 
 /** @brief Recover messages from the WAL file on startup.
  *
@@ -40,6 +41,6 @@ int _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_
  * @param mq MQ instance (must have wal_fd >= 0).
  * @return 0 on success.
  * @threadsafe (called under wal_mutex by csilk_mq_set_persistence). */
-int _mq_recovery(csilk_mq_t* mq);
+CSILK_INTERNAL int _mq_recovery(csilk_mq_t* mq);
 
 #endif

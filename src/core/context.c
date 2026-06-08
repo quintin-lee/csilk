@@ -93,7 +93,7 @@ map_get(csilk_header_map_t* map, const char* key)
  * @param value Header value string.
  * @note The key and value are duplicated into arena memory. If the arena is
  *       nullptr this function silently does nothing. */
-void
+CSILK_INTERNAL void
 map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value)
 {
 	if (!c->arena || !key || !value) {
@@ -133,7 +133,7 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
  * @param value Header value.
  * @note Both key and value are duplicated into arena memory. Silently does
  *       nothing if the arena is nullptr. */
-void
+CSILK_INTERNAL void
 map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value)
 {
 	if (!c->arena) {

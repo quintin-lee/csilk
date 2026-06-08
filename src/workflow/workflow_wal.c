@@ -44,7 +44,7 @@
  * @return 0 on success, -1 if wal_path is nullptr or any write fails.
  * @note Not thread-safe for concurrent writes to the same file —
  *       callers should serialize access at the workflow context level. */
-int
+CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len)
 {
 	if (!wal_path) {

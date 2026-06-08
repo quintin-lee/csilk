@@ -60,7 +60,7 @@
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on write or fsync failure.
  * @threadsafe Serialized via wal_mutex. */
-int
+CSILK_INTERNAL int
 _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
 	if (!mq || mq->wal_fd < 0 || !topic) {
@@ -136,7 +136,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
  * @param mq MQ instance (must have wal_fd >= 0).
  * @return 0 always (errors are non-fatal — we stop and return).
  * @note Called from csilk_mq_set_persistence() under wal_mutex. */
-int
+CSILK_INTERNAL int
 _mq_recovery(csilk_mq_t* mq)
 {
 	if (!mq || mq->wal_fd < 0) {
