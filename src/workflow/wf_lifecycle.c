@@ -40,6 +40,15 @@ serve_ui_handler(csilk_ctx_t* c)
 	csilk_string(c, 404, "Workflow UI template not found.");
 }
 
+/**
+ * @brief Registers a HTTP GET route on the server application to serve the workflow dashboard UI.
+ *
+ * Checks several local and prefix paths for the workflow_ui.html template file.
+ * Returns 404 if the HTML template is not found.
+ *
+ * @param app  Pointer to the csilk app context.
+ * @param path Optional custom URL path route (defaults to "/workflow/ui" if null).
+ */
 void
 csilk_wf_serve_ui(csilk_app_t* app, const char* path)
 {
@@ -48,6 +57,14 @@ csilk_wf_serve_ui(csilk_app_t* app, const char* path)
 
 /* --- Lifecycle --- */
 
+/**
+ * @brief Creates a new empty workflow configuration engine with the given name.
+ *
+ * Initializes sync mutexes and sets the execution event loop to uv_default_loop().
+ *
+ * @param name The descriptive name of the workflow.
+ * @return Pointer to the new workflow handle, or nullptr on allocation failure.
+ */
 csilk_wf_t*
 csilk_wf_new(const char* name)
 {
@@ -100,6 +117,14 @@ vector_search_config_free(void* ptr)
 	free(c);
 }
 
+/**
+ * @brief Deallocates all resources occupied by a workflow structure.
+ *
+ * Frees nodes, edges, static tools registries, WebSocket monitors lists,
+ * mutexes, and all active execution contexts.
+ *
+ * @param wf The workflow handle to free.
+ */
 void
 csilk_wf_free(csilk_wf_t* wf)
 {
@@ -128,6 +153,17 @@ csilk_wf_free(csilk_wf_t* wf)
 	free(wf);
 }
 
+/**
+ * @brief Appends a new step node to the workflow DAG.
+ *
+ * Allocates and registers a node configuration.
+ *
+ * @param wf        The workflow instance.
+ * @param id        Unique string identifier for the node.
+ * @param handler   Callback executed when this node is run (null permitted for remote-only nodes).
+ * @param user_data Opaque pointer forwarded to the callback.
+ * @return The new node pointer, or nullptr on failure.
+ */
 csilk_wf_node_t*
 csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data)
 {
@@ -188,23 +224,47 @@ add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 	to->incoming_count++;
 }
 
+/**
+ * @brief Unconditionally binds one node to another (sequential execution).
+ * @param from Source node.
+ * @param to   Target node.
+ */
 void
 csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to)
 {
 	add_edge(from, nullptr, to);
 }
 
+/**
+ * @brief Binds nodes conditionally. The target node runs only if the source node's
+ *        output type matches the condition string.
+ * @param from      Source node.
+ * @param condition Output type string to match.
+ * @param to        Target node.
+ */
 void
 csilk_wf_on(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 {
 	add_edge(from, condition, to);
 }
+
+/**
+ * @brief Helper identical to csilk_wf_on for creating conditional loops.
+ * @param from      Source node.
+ * @param condition Output type to match.
+ * @param to        Target node.
+ */
 void
 csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 {
 	add_edge(from, condition, to);
 }
 
+/**
+ * @brief Directs execution to target if the source node returns nullptr (representing error).
+ * @param from   Source node.
+ * @param target Error fallback node.
+ */
 void
 csilk_wf_on_error(csilk_wf_node_t* from, csilk_wf_node_t* target)
 {
@@ -213,6 +273,11 @@ csilk_wf_on_error(csilk_wf_node_t* from, csilk_wf_node_t* target)
 	}
 }
 
+/**
+ * @brief Configures a dynamic routing function callback on a node.
+ * @param node   The node instance.
+ * @param router Callback returning target node ID based on output data.
+ */
 void
 csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router)
 {
@@ -221,6 +286,11 @@ csilk_wf_route(csilk_wf_node_t* node, csilk_wf_router_t router)
 	}
 }
 
+/**
+ * @brief Configures execution join policy on a node (AND join vs OR join).
+ * @param node   Target node.
+ * @param policy Join policy value.
+ */
 void
 csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy)
 {
@@ -231,6 +301,11 @@ csilk_wf_node_set_join(csilk_wf_node_t* node, csilk_wf_join_policy_t policy)
 
 /* --- Persistence --- */
 
+/**
+ * @brief Enables Write-Ahead Log (WAL) persistence for the workflow and sets the directory path.
+ * @param wf      The workflow instance.
+ * @param wal_dir Directory path where execution WAL files will be stored.
+ */
 void
 csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir)
 {
@@ -243,6 +318,11 @@ csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir)
 
 /* --- Budget --- */
 
+/**
+ * @brief Sets a maximum token budget for workflow executions to prevent runaway LLM costs.
+ * @param wf         The workflow instance.
+ * @param max_tokens Maximum token count allowed.
+ */
 void
 csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens)
 {
@@ -251,6 +331,11 @@ csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens)
 	}
 }
 
+/**
+ * @brief Sets an execution timeout limit on a specific node.
+ * @param node       The node to configure.
+ * @param timeout_ms Timeout value in milliseconds.
+ */
 void
 csilk_wf_node_set_timeout(csilk_wf_node_t* node, int timeout_ms)
 {
@@ -259,6 +344,11 @@ csilk_wf_node_set_timeout(csilk_wf_node_t* node, int timeout_ms)
 	}
 }
 
+/**
+ * @brief Sets a time-to-live expiration limit on workflow execution contexts.
+ * @param wf      The workflow instance.
+ * @param ttl_sec TTL value in seconds.
+ */
 void
 csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec)
 {
@@ -267,6 +357,11 @@ csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec)
 	}
 }
 
+/**
+ * @brief Marks a node as interactive (requiring human-in-the-loop approval before running).
+ * @param node           Target node.
+ * @param is_interactive Boolean flag.
+ */
 void
 csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive)
 {
@@ -275,6 +370,11 @@ csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive)
 	}
 }
 
+/**
+ * @brief Binds a JSON schema schema validator to a node's output data structure.
+ * @param node   Target node.
+ * @param schema JSON schema string.
+ */
 void
 csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema)
 {
@@ -284,6 +384,12 @@ csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema)
 	}
 }
 
+/**
+ * @brief Configures execution retry parameters on a node.
+ * @param node           Target node.
+ * @param max_retries    Maximum retry attempts.
+ * @param retry_delay_ms Delay interval in milliseconds.
+ */
 void
 csilk_wf_node_set_retry(csilk_wf_node_t* node, int max_retries, int retry_delay_ms)
 {
@@ -307,6 +413,11 @@ remote_pass_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	return input;
 }
 
+/**
+ * @brief Configures a node to execute remotely via message queue offloading.
+ * @param node      Target node.
+ * @param is_remote Boolean flag.
+ */
 void
 csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote)
 {
@@ -397,6 +508,14 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 	csilk_mq_next(m_ctx);
 }
 
+/**
+ * @brief Enables distributed workflow support by binding a message queue connection.
+ *
+ * Subscribes to the "csilk.wf.results" topic to dynamically receive and resume offloaded tasks.
+ *
+ * @param wf The workflow instance.
+ * @param mq The message queue connection handle.
+ */
 void
 csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq)
 {
@@ -412,6 +531,12 @@ csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq)
 
 /* --- Node Lookup --- */
 
+/**
+ * @brief Looks up a workflow node pointer by its unique ID string.
+ * @param wf The workflow instance.
+ * @param id Unique identifier string of the target node.
+ * @return The matching node pointer, or nullptr if not found.
+ */
 csilk_wf_node_t*
 csilk_wf_get_node(csilk_wf_t* wf, const char* id)
 {

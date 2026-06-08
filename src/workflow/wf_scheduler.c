@@ -8,6 +8,14 @@
 
 /* --- Active Context Management --- */
 
+/**
+ * @brief Registers a newly created execution context as active.
+ *
+ * Adds the context pointer to the workflow's active contexts array in a thread-safe manner.
+ *
+ * @param wf  The workflow definition instance.
+ * @param ctx The execution context to register.
+ */
 static void
 register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 {
@@ -28,6 +36,14 @@ register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 	uv_mutex_unlock(&wf->ctx_mutex);
 }
 
+/**
+ * @brief Unregisters an active execution context.
+ *
+ * Removes the context pointer from the workflow's active contexts array in a thread-safe manner.
+ *
+ * @param wf  The workflow definition instance.
+ * @param ctx The execution context to unregister.
+ */
 static void
 unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 {
@@ -41,6 +57,15 @@ unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 	uv_mutex_unlock(&wf->ctx_mutex);
 }
 
+/**
+ * @brief Locates an active execution context by its execution ID.
+ *
+ * Performs a linear scan of the active contexts array in a thread-safe manner.
+ *
+ * @param wf      The workflow definition instance.
+ * @param exec_id The unique execution UUID to find.
+ * @return A pointer to the matching csilk_wf_ctx_t, or nullptr if not found.
+ */
 static csilk_wf_ctx_t*
 find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 {
@@ -56,6 +81,13 @@ find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 	return found;
 }
 
+/**
+ * @brief Internal wrapper to expose find_active_ctx to other modules.
+ *
+ * @param wf      The workflow definition instance.
+ * @param exec_id The execution UUID to find.
+ * @return A pointer to the active context, or nullptr if not found.
+ */
 CSILK_INTERNAL csilk_wf_ctx_t*
 _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 {
@@ -64,6 +96,13 @@ _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 
 /* --- Context Cleanup --- */
 
+/**
+ * @brief Immediately releases all memory and OS resources associated with a context.
+ *
+ * Destroys context mutexes, frees the memory arena, and releases all allocated trackers.
+ *
+ * @param ctx The workflow execution context to destroy.
+ */
 static void
 cleanup_ctx_now(csilk_wf_ctx_t* ctx)
 {
@@ -78,6 +117,13 @@ cleanup_ctx_now(csilk_wf_ctx_t* ctx)
 	free(ctx);
 }
 
+/**
+ * @brief libuv handle close callback for the TTL timer.
+ *
+ * Triggers the final cleanup of the context after the libuv timer handle is closed.
+ *
+ * @param handle The uv_handle_t pointer of the TTL timer.
+ */
 static void
 on_ttl_timer_close(uv_handle_t* handle)
 {
@@ -181,6 +227,13 @@ worker_cb(uv_work_t* req)
 	work->output = work->node->handler(work->ctx, work->input, work->node->user_data);
 }
 
+/**
+ * @brief libuv timer callback invoked when a node retry delay expires.
+ *
+ * Re-queues the node's execution on the libuv thread pool.
+ *
+ * @param handle The libuv timer handle.
+ */
 static void
 on_retry_timer(uv_timer_t* handle)
 {
@@ -192,6 +245,13 @@ on_retry_timer(uv_timer_t* handle)
 	uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
+/**
+ * @brief libuv handle close callback for node work timer.
+ *
+ * Frees the node_work_t allocation after its timer handle is closed.
+ *
+ * @param handle The closed libuv handle.
+ */
 static void
 on_work_timer_close(uv_handle_t* handle)
 {
@@ -199,6 +259,14 @@ on_work_timer_close(uv_handle_t* handle)
 	free(work);
 }
 
+/**
+ * @brief Safely cleans up the node work struct, closing timers if active.
+ *
+ * If the node has an active timeout timer, stops and closes it asynchronously,
+ * deferring the free until on_work_timer_close. Otherwise, frees it immediately.
+ *
+ * @param work The node work structure to free.
+ */
 static void
 free_work(node_work_t* work)
 {
@@ -567,6 +635,13 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 	uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
+/**
+ * @brief Internal wrapper to expose execute_node to other modules.
+ *
+ * @param ctx   Workflow execution context.
+ * @param node  The node to execute.
+ * @param input Input data to pass to the node.
+ */
 CSILK_INTERNAL void
 _wf_execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 {
@@ -575,12 +650,34 @@ _wf_execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input
 
 /* --- Public Run Entry Points --- */
 
+/**
+ * @brief Runs the workflow definition asynchronously.
+ *
+ * Instantiates a new execution context, generates a unique UUID, initializes
+ * tracking arrays, triggers entry nodes (nodes with 0 incoming dependencies or explicitly marked),
+ * and kicks off async execution on the libuv default loop.
+ *
+ * @param wf       The workflow definition instance.
+ * @param input    The initial workflow input data.
+ * @param callback Callback function invoked with the final workflow output when complete.
+ * @return The unique execution ID string (UUID) assigned to this run. Do not free.
+ */
 const char*
 csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t* result))
 {
 	return _wf_run_ext_internal(wf, input, callback, nullptr);
 }
 
+/**
+ * @brief Runs the workflow definition asynchronously with detailed execution tracing.
+ *
+ * Similar to csilk_wf_run, but collects execution times, token counts, and input/output
+ * value dumps for every node, returning a complete trace structure in the callback.
+ *
+ * @param wf       The workflow definition instance.
+ * @param input    The initial workflow input data.
+ * @param callback Callback function invoked with the final workflow output and execution trace.
+ */
 void
 csilk_wf_run_traced(csilk_wf_t* wf,
 		    csilk_data_t* input,
@@ -589,6 +686,14 @@ csilk_wf_run_traced(csilk_wf_t* wf,
 	_wf_run_ext_internal(wf, input, nullptr, callback);
 }
 
+/**
+ * @brief libuv timer callback invoked when the global workflow TTL expires.
+ *
+ * Sets the is_terminated and is_ttl_expired flags on the context, halting
+ * any further node execution.
+ *
+ * @param handle The global TTL timer handle.
+ */
 static void
 on_workflow_ttl(uv_timer_t* handle)
 {
@@ -600,6 +705,18 @@ on_workflow_ttl(uv_timer_t* handle)
 	printf("[Workflow] TTL Expired for execution %s\n", ctx->exec_id);
 }
 
+/**
+ * @brief Internal common entry point for running workflows.
+ *
+ * Coordinates context creation, registration, active TTL timer setup, Mermaid graph
+ * topology broadcast to monitors, WAL file initialization, and entry node execution.
+ *
+ * @param wf       The workflow definition instance.
+ * @param input    The initial input data container.
+ * @param callback The completion callback (for non-traced runs).
+ * @param trace_cb The completion callback (for traced runs).
+ * @return The assigned execution UUID, or nullptr on failure.
+ */
 const char*
 _wf_run_ext_internal(csilk_wf_t* wf,
 		     csilk_data_t* input,
@@ -683,6 +800,17 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 
 /* --- Resume & Signal --- */
 
+/**
+ * @brief Resumes an interrupted workflow execution from its Write-Ahead Log (WAL).
+ *
+ * Re-reads the WAL file to reconstruct the execution state (which nodes completed and
+ * their outputs, which nodes were active/paused), reinstantiates the context, and
+ * schedules remaining nodes to resume execution.
+ *
+ * @param wf       The workflow definition instance.
+ * @param exec_id  The UUID of the workflow execution to recover and resume.
+ * @param callback Callback function invoked with the final output when the resumed run completes.
+ */
 void
 csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data_t* result))
 {
@@ -811,6 +939,17 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	free(node_finished);
 }
 
+/**
+ * @brief Signals a paused workflow context to resume execution.
+ *
+ * Used for interactive nodes that paused execution waiting for approval or human input.
+ * Reconstructs state from the WAL, sets the paused node as approved, and resumes run.
+ *
+ * @param wf       The workflow definition instance.
+ * @param exec_id  The unique execution ID (UUID) that is currently paused.
+ * @param input    Optional new/edited input data to feed to the resuming node.
+ * @param callback Callback function invoked when the workflow run eventually completes.
+ */
 void
 csilk_wf_signal_continue(csilk_wf_t* wf,
 			 const char* exec_id,
