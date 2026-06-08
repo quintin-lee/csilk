@@ -24,5 +24,11 @@ class TestCsilkLoader(unittest.TestCase):
         ctx = Context(CsilkCtxPtr())
         self.assertIsNotNone(ctx)
 
+    def test_app_instantiation(self):
+        from csilk.app import App
+        app = App()
+        self.assertIsNotNone(app)
+        app.free()
+
 if __name__ == '__main__':
     unittest.main()
