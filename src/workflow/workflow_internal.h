@@ -120,6 +120,7 @@ CSILK_INTERNAL void
 _wf_broadcast(csilk_wf_t* wf, const char* event, const char* node_id, const char* payload);
 CSILK_INTERNAL void
 _wf_execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input);
+CSILK_INTERNAL void _wf_cleanup_ctx(csilk_wf_ctx_t* ctx);
 CSILK_INTERNAL csilk_wf_ctx_t* _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id);
 CSILK_INTERNAL const char* _wf_run_ext_internal(csilk_wf_t* wf,
 						csilk_data_t* input,

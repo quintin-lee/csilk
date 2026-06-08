@@ -81,6 +81,23 @@ find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 	return found;
 }
 
+static void
+cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
+{
+	csilk_wf_ctx_t* stale = find_active_ctx(wf, exec_id);
+	if (stale) {
+		uv_mutex_lock(&stale->mutex);
+		stale->is_terminated = 1;
+		int active = stale->nodes_active;
+		uv_mutex_unlock(&stale->mutex);
+		if (active == 0) {
+			_wf_cleanup_ctx(stale);
+		} else {
+			unregister_active_ctx(wf, stale);
+		}
+	}
+}
+
 /**
  * @brief Internal wrapper to expose find_active_ctx to other modules.
  *
@@ -138,8 +155,8 @@ on_ttl_timer_close(uv_handle_t* handle)
  * context struct itself.
  *
  * @param ctx The execution context to clean up (may be nullptr). */
-static void
-cleanup_ctx(csilk_wf_ctx_t* ctx)
+CSILK_INTERNAL void
+_wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
 {
 	if (!ctx) {
 		return;
@@ -419,7 +436,7 @@ after_worker_cb(uv_work_t* req, int status)
 			if (ctx->trace_callback) {
 				ctx->trace = nullptr;
 			}
-			cleanup_ctx(ctx);
+			_wf_cleanup_ctx(ctx);
 		}
 		free_work(work);
 		return;
@@ -516,7 +533,7 @@ after_worker_cb(uv_work_t* req, int status)
 			csilk_wf_trace_free(ctx->trace);
 			ctx->trace = nullptr;
 		}
-		cleanup_ctx(ctx);
+		_wf_cleanup_ctx(ctx);
 	}
 	free_work(work);
 }
@@ -792,7 +809,7 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 		if (trace_cb) {
 			trace_cb(nullptr, nullptr);
 		}
-		cleanup_ctx(ctx);
+		_wf_cleanup_ctx(ctx);
 		return nullptr;
 	}
 	return ctx->exec_id;
@@ -817,6 +834,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	if (!wf || !exec_id || !wf->wal_dir) {
 		return;
 	}
+
+	cleanup_stale_ctx(wf, exec_id);
+
 	char wal_path[512];
 	snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
 	FILE* f = fopen(wal_path, "rb");
@@ -905,9 +925,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 		if (callback) {
 			callback(nullptr);
 		}
-		cleanup_ctx(ctx);
+		_wf_cleanup_ctx(ctx);
 	} else if (ctx->is_paused) {
-		cleanup_ctx(ctx);
+		_wf_cleanup_ctx(ctx);
 	} else {
 		for (size_t i = 0; i < wf->node_count; i++) {
 			csilk_wf_node_t* n = wf->nodes[i];
@@ -959,6 +979,8 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 	if (!wf || !exec_id || !wf->wal_dir) {
 		return;
 	}
+
+	cleanup_stale_ctx(wf, exec_id);
 
 	char wal_path[512];
 	snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
@@ -1039,6 +1061,6 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 		}
 		free(paused_node_id);
 	} else {
-		cleanup_ctx(ctx);
+		_wf_cleanup_ctx(ctx);
 	}
 }
