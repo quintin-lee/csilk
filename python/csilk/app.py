@@ -36,10 +36,20 @@ class App:
             wrapper
         )
 
-    def get(self, path, handler):
+    def get(self, path, handler=None):
+        if handler is None:
+            def decorator(h):
+                self.route("GET", path, h)
+                return h
+            return decorator
         self.route("GET", path, handler)
 
-    def post(self, path, handler):
+    def post(self, path, handler=None):
+        if handler is None:
+            def decorator(h):
+                self.route("POST", path, h)
+                return h
+            return decorator
         self.route("POST", path, handler)
 
     def run(self, port):
