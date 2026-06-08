@@ -15,6 +15,7 @@
 #include "csilk/app/workflow.h"
 #include "csilk/core/internal.h"
 #include "csilk/app/workflow_wal.h"
+#include "csilk/core/workflow_internal.h"
 #include "cJSON.h"
 
 /** @brief AI metadata attached to workflow node outputs. */
@@ -23,16 +24,6 @@ typedef struct {
 	int prompt_tokens;
 	int completion_tokens;
 } csilk_ai_meta_t;
-
-/** @brief A registered workflow tool. */
-struct csilk_wf_tool_entry_s {
-	char* name;
-	char* description;
-	char* parameters_json;
-	csilk_wf_tool_fn handler;
-	void* user_data;
-};
-typedef struct csilk_wf_tool_entry_s csilk_wf_tool_entry_t;
 
 typedef struct csilk_wf_edge_s {
 	char* condition;
