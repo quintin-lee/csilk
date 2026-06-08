@@ -87,8 +87,7 @@ graph TB
 | Document | Description |
 |----------|-------------|
 | [Getting Started](getting-started.md) | Build, install, and run your first server |
-| [Architecture](architecture.md) | High-level architecture and design principles |
-| [ARCH Whitepaper](ARCH.md) | Detailed architecture whitepaper |
+| [Architecture](architecture.md) | High-level architecture, core design principles, and component dependency map |
 | [Module Design](module-design/) | Deep dives into core module internals: [AI](module-design/ai.md), [Workflow](module-design/workflow.md), [Reflection](module-design/reflection.md), [Context](module-design/context.md), [Router](module-design/router.md), [Middleware](module-design/middleware.md), [Crypto](module-design/crypto.md), [Hooks](module-design/hooks.md) |
 | [User Manual](user-manual/) | Configuration, middleware development, and advanced usage |
 | [API Reference](html/index.html) | Doxygen-generated API documentation |
