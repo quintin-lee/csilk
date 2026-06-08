@@ -101,9 +101,9 @@ static void
 ai_config_free(void* ptr)
 {
 	csilk_ai_config_t* c = (csilk_ai_config_t*)ptr;
-	free(c->model);
-	free(c->system_msg);
-	free(c->prompt);
+	free((void*)c->model);
+	free((void*)c->system_msg);
+	free((void*)c->prompt);
 	free(c);
 }
 
@@ -111,9 +111,9 @@ static void
 vector_search_config_free(void* ptr)
 {
 	csilk_vector_search_config_t* c = (csilk_vector_search_config_t*)ptr;
-	free(c->embedding_model);
-	free(c->collection);
-	free(c->input_template);
+	free((void*)c->embedding_model);
+	free((void*)c->collection);
+	free((void*)c->input_template);
 	free(c);
 }
 
