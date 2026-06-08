@@ -95,7 +95,11 @@ set(CSILK_UTIL_SOURCES
 )
 
 set(CSILK_WORKFLOW_SOURCES
-    src/workflow/workflow.c
+    src/workflow/wf_lifecycle.c
+    src/workflow/wf_monitor.c
+    src/workflow/wf_ai.c
+    src/workflow/wf_scheduler.c
+    src/workflow/wf_trace.c
     src/workflow/workflow_loader.c
     src/workflow/workflow_wal.c
 )
