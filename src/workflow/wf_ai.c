@@ -9,6 +9,18 @@
 #include <ctype.h>
 
 /* --- Memory Helpers --- */
+
+/**
+ * @brief Allocates memory from the workflow arena in a thread-safe manner.
+ *
+ * This function uses the workflow context's internal arena allocator. The memory
+ * is tied to the execution context and will be automatically freed when the
+ * context is destroyed at the end of the workflow execution.
+ *
+ * @param ctx  The workflow execution context.
+ * @param size The number of bytes to allocate.
+ * @return A pointer to the allocated memory, or nullptr if ctx is null.
+ */
 void*
 csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 {
@@ -21,6 +33,16 @@ csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 	return ptr;
 }
 
+/**
+ * @brief Duplicates a string using the workflow's arena allocator.
+ *
+ * Allocates memory from the context's arena and copies the source string.
+ * The duplicated string remains valid for the lifetime of the workflow context.
+ *
+ * @param ctx The workflow execution context.
+ * @param s   The source string to duplicate.
+ * @return A pointer to the duplicated NUL-terminated string, or nullptr if s is null.
+ */
 char*
 csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
 {
@@ -35,6 +57,17 @@ csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
 	return news;
 }
 
+/**
+ * @brief Allocates and initializes a new csilk_data_t container.
+ *
+ * The container structure and its type string are allocated within the workflow's
+ * arena. The container can be passed between workflow nodes as input/output.
+ *
+ * @param ctx   The workflow execution context.
+ * @param type  The MIME-like content type (e.g., "text/plain"). Copied via csilk_wf_strdup.
+ * @param value The raw data payload pointer.
+ * @return A pointer to the newly created data container, or nullptr on failure.
+ */
 csilk_data_t*
 csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
 {
@@ -110,6 +143,21 @@ _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path)
 
 /* --- Template Engine & AI Node --- */
 
+/**
+ * @brief Applies a text processing filter to a string value.
+ *
+ * Supported filters:
+ * - "upper": Converts the string to uppercase in-place.
+ * - "lower": Converts the string to lowercase in-place.
+ * - "trim": Trims leading and trailing whitespace.
+ * - "summarize:N": Truncates the string to N characters.
+ * - "json_escape": Escapes the string for safe inclusion in a JSON string.
+ *
+ * @param ctx    The workflow execution context.
+ * @param filter The name/specification of the filter.
+ * @param val    The string to filter (may be modified in-place or replaced).
+ * @return The filtered string (may be a new pointer allocated in the arena).
+ */
 static char*
 apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
 {
@@ -159,6 +207,21 @@ apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
 	return val;
 }
 
+/**
+ * @brief Parses and resolves template variables in a template string.
+ *
+ * Variables can reference the initial workflow input or the output of previous nodes.
+ * Syntax formats:
+ * - `{{input.value}}` for initial input value.
+ * - `{{input.value.path.to.field}}` for JSONPath traversal of input.
+ * - `{{node_id.value}}` for predecessor node outputs.
+ * - `{{node_id.value.path.to.field}}` for JSONPath traversal of node output.
+ * - Pipeling filters: `{{input.value | upper | trim}}`.
+ *
+ * @param ctx      The workflow execution context.
+ * @param template The template string containing variables.
+ * @return The fully resolved string, allocated in the workflow's arena.
+ */
 static char*
 resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 {
@@ -386,6 +449,14 @@ typedef struct {
 	const char* node_id;
 } stream_ctx_t;
 
+/**
+ * @brief Callback invoked when a new text chunk is streamed from the AI model.
+ *
+ * Broadcasts the chunk to registered WebSocket monitors using the "node_stream" event.
+ *
+ * @param chunk     The newly received text segment.
+ * @param user_data Pointer to the stream_ctx_t structure containing the context and node ID.
+ */
 static void
 on_ai_stream(const char* chunk, void* user_data)
 {
@@ -393,6 +464,14 @@ on_ai_stream(const char* chunk, void* user_data)
 	_wf_broadcast(s_ctx->ctx->wf, "node_stream", s_ctx->node_id, chunk);
 }
 
+/**
+ * @brief Destructor function for csilk_ai_config_t.
+ *
+ * Frees the dynamically allocated members (model, system_msg, prompt) and the config itself.
+ * Assigned as node->user_data_free for AI nodes.
+ *
+ * @param ptr Pointer to the csilk_ai_config_t structure to free.
+ */
 static void
 ai_config_free(void* ptr)
 {
@@ -403,6 +482,14 @@ ai_config_free(void* ptr)
 	free(c);
 }
 
+/**
+ * @brief Destructor function for csilk_vector_search_config_t.
+ *
+ * Frees the dynamically allocated members (embedding_model, collection, input_template) and the config itself.
+ * Assigned as node->user_data_free for Vector Search nodes.
+ *
+ * @param ptr Pointer to the csilk_vector_search_config_t structure to free.
+ */
 static void
 vector_search_config_free(void* ptr)
 {
@@ -413,6 +500,18 @@ vector_search_config_free(void* ptr)
 	free(c);
 }
 
+/**
+ * @brief Built-in handler for AI Chat nodes.
+ *
+ * Initializes the AI engine, resolves prompt templates, sets up tool lists (including dynamic discovery),
+ * enforces message history limits, sends requests to the LLM, coordinates parallel tool execution,
+ * and records token usage statistics.
+ *
+ * @param ctx       The workflow execution context.
+ * @param input     Input data (unused, as prompt templates are resolved from context).
+ * @param user_data Pointer to the csilk_ai_config_t configuration.
+ * @return The final text/plain output data container from the AI, or nullptr on failure.
+ */
 static csilk_data_t*
 ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
@@ -423,7 +522,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 	if (!api_key) {
 		return nullptr;
 	}
-	csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_AI_BASE"));
+	csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
 	if (!ai) {
 		return nullptr;
 	}
@@ -609,6 +708,15 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
 /**
  * @brief Internal built-in handler for Vector Search nodes.
+ *
+ * Generates an embedding for the input text (or text resolved from a template)
+ * using the configured AI engine, searches the Vector DB, and serializes the
+ * match IDs, scores, and payloads into a JSON array returned to the workflow.
+ *
+ * @param ctx       The workflow execution context.
+ * @param input     Input data container (fallback text source if template is null).
+ * @param user_data Pointer to the csilk_vector_search_config_t configuration.
+ * @return An application/json output data container with results, or nullptr on failure.
  */
 static csilk_data_t*
 vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -686,6 +794,17 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
 	return out;
 }
 
+/**
+ * @brief Adds a built-in AI Chat node to the workflow.
+ *
+ * Creates a duplicate of the AI configuration structure and registers a node with the
+ * built-in ai_node_handler. Sets the destructor to automatically clean up the configuration.
+ *
+ * @param wf     The workflow definition instance.
+ * @param id     A unique identifier for the new node.
+ * @param config The AI configuration settings (copied).
+ * @return A pointer to the newly created node, or nullptr on failure.
+ */
 csilk_wf_node_t*
 csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 {
@@ -701,6 +820,17 @@ csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 	return node;
 }
 
+/**
+ * @brief Adds a built-in Vector Search node to the workflow.
+ *
+ * Creates a duplicate of the Vector Search configuration structure and registers a node
+ * with the built-in vector_search_node_handler. Sets the destructor to clean up the config.
+ *
+ * @param wf     The workflow definition instance.
+ * @param id     A unique identifier for the new node.
+ * @param config The vector search configuration settings (copied).
+ * @return A pointer to the newly created node, or nullptr on failure.
+ */
 csilk_wf_node_t*
 csilk_wf_add_vector_search(csilk_wf_t* wf,
 			   const char* id,
@@ -720,6 +850,19 @@ csilk_wf_add_vector_search(csilk_wf_t* wf,
 	return node;
 }
 
+/**
+ * @brief Registers a static function tool that AI nodes can invoke.
+ *
+ * Registered tools are exposed to LLMs in AI nodes. When the LLM decides to call a tool,
+ * the workflow engine schedules and runs the C callback function on the thread pool.
+ *
+ * @param wf              The workflow definition instance.
+ * @param name            The tool function name exposed to the LLM (must be unique).
+ * @param description     A detailed description of what the tool does.
+ * @param parameters_json An optional JSON Schema string describing tool parameters.
+ * @param fn              The C function callback to execute.
+ * @param user_data       Opaque context pointer passed to the callback.
+ */
 void
 csilk_wf_register_tool(csilk_wf_t* wf,
 		       const char* name,
@@ -753,8 +896,14 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 }
 
 /**
- * @brief Set a dynamic tool discovery callback for the workflow.
- * @see csilk_wf_tool_discovery_fn in workflow.h for callback contract.
+ * @brief Sets a callback for dynamic, runtime tool discovery.
+ *
+ * The callback is executed during AI node invocations to augment the statically
+ * registered tool list with dynamically discovered tools (e.g., via MCP servers).
+ *
+ * @param wf        The workflow definition instance.
+ * @param discovery The discovery callback function (nullptr to disable).
+ * @param user_data Opaque context pointer passed to the callback.
  */
 void
 csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery, void* user_data)

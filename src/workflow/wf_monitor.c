@@ -7,6 +7,15 @@
 
 /* --- Monitoring --- */
 
+/**
+ * @brief Registers a WebSocket context client to receive real-time workflow monitor events.
+ *
+ * Registered monitor clients are sent structured JSON messages for event occurrences
+ * (e.g. node execution starts/finishes, workflow paused/ended).
+ *
+ * @param wf The workflow instance.
+ * @param c  Pointer to the WebSocket client context.
+ */
 void
 csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
 {
