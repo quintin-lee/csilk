@@ -399,7 +399,7 @@ if(CSILK_BUILD_SHARED)
         SOVERSION "${CSILK_VERSION_MAJOR}"
         OUTPUT_NAME csilk
     )
-    if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+    if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
         target_link_options(csilk_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libcsilk.map")
     endif()
     target_compile_definitions(csilk_shared PRIVATE
