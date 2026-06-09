@@ -35,6 +35,7 @@
 
 #include "csilk/drivers/db.h"
 #include "db_internal.h"
+#include "csilk/csilk.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -168,28 +169,35 @@ csilk_db_pool_t*
 csilk_db_pool_new(const char* driver_name, const char* dsn)
 {
 	if (!driver_name) {
+		CSILK_LOG_E("Failed to create database pool: driver_name is NULL");
 		return nullptr;
 	}
 
 	csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
 	if (!driver) {
-		fprintf(stderr, "csilk_db: driver '%s' not found\n", driver_name);
+		CSILK_LOG_E("Failed to create database pool: driver '%s' not found", driver_name);
 		return nullptr;
 	}
 
 	csilk_db_pool_t* pool = calloc(1, sizeof(csilk_db_pool_t));
 	if (!pool) {
+		CSILK_LOG_E("Failed to allocate memory for database pool (driver: '%s')",
+			    driver_name);
 		return nullptr;
 	}
 
 	uv_mutex_init(&pool->mutex);
 	pool->driver = driver;
 	if (driver->connect(pool, dsn) != 0) {
+		CSILK_LOG_E(
+		    "Database connection failed for driver '%s' (DSN: '%s')", driver_name, dsn);
 		uv_mutex_destroy(&pool->mutex);
 		free(pool);
 		return nullptr;
 	}
 
+	CSILK_LOG_I(
+	    "Database pool created and connected using driver '%s' (DSN: '%s')", driver_name, dsn);
 	return pool;
 }
 
@@ -208,6 +216,8 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
 	if (!pool) {
 		return;
 	}
+	CSILK_LOG_D("Freeing database pool and closing connection for driver '%s'",
+		    pool->driver ? pool->driver->name : "unknown");
 	if (pool->driver && pool->driver->disconnect) {
 		pool->driver->disconnect(pool);
 	}
@@ -220,10 +230,13 @@ cJSON*
 csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 {
 	if (!pool || !pool->driver || !pool->driver->query) {
+		CSILK_LOG_E("Database query failed: invalid pool, driver, or query method");
 		return nullptr;
 	}
 
 	uint64_t start = uv_hrtime();
+	CSILK_LOG_D("Database query initiated: %s", sql);
+
 	uv_mutex_lock(&pool->mutex);
 	cJSON* result = csilk_db_query_json_locked(pool, sql);
 	uv_mutex_unlock(&pool->mutex);
@@ -233,8 +246,14 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 
 	if (!result) {
 		atomic_fetch_add(&db_errors_total, 1);
+		CSILK_LOG_E("Database query failed (duration: %.2f ms): %s",
+			    (double)duration / 1000.0,
+			    sql);
 	} else {
 		atomic_fetch_add(&db_queries_total, 1);
+		CSILK_LOG_T("Database query succeeded (duration: %.2f ms): %s",
+			    (double)duration / 1000.0,
+			    sql);
 	}
 	return result;
 }
@@ -245,10 +264,13 @@ int
 csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 {
 	if (!pool || !pool->driver || !pool->driver->exec) {
+		CSILK_LOG_E("Database exec failed: invalid pool, driver, or exec method");
 		return -1;
 	}
 
 	uint64_t start = uv_hrtime();
+	CSILK_LOG_D("Database exec initiated: %s", sql);
+
 	uv_mutex_lock(&pool->mutex);
 	int rc = pool->driver->exec(pool, sql);
 	uv_mutex_unlock(&pool->mutex);
@@ -258,8 +280,15 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 
 	if (rc != 0) {
 		atomic_fetch_add(&db_errors_total, 1);
+		CSILK_LOG_E("Database exec failed with rc %d (duration: %.2f ms): %s",
+			    rc,
+			    (double)duration / 1000.0,
+			    sql);
 	} else {
 		atomic_fetch_add(&db_execs_total, 1);
+		CSILK_LOG_T("Database exec succeeded (duration: %.2f ms): %s",
+			    (double)duration / 1000.0,
+			    sql);
 	}
 	return rc;
 }
@@ -288,10 +317,12 @@ cJSON*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
 	if (!pool || !sql || !params) {
+		CSILK_LOG_E("Parameterized query failed: invalid pool, sql, or params");
 		return nullptr;
 	}
 
 	uint64_t start = uv_hrtime();
+	CSILK_LOG_D("Parameterized database query initiated: %s", sql);
 
 	/* Pre-scan: compute output size with SQL-escaped param values.
 	 * Each ? is replaced with a single-quoted, escaped value. */
@@ -305,6 +336,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 
 	char* full_sql = malloc(len + 1);
 	if (!full_sql) {
+		CSILK_LOG_E("Failed to allocate memory for full SQL statement");
 		return nullptr;
 	}
 
@@ -338,8 +370,14 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 
 	if (!result) {
 		atomic_fetch_add(&db_errors_total, 1);
+		CSILK_LOG_E("Parameterized database query failed (duration: %.2f ms): %s",
+			    (double)duration / 1000.0,
+			    full_sql);
 	} else {
 		atomic_fetch_add(&db_queries_total, 1);
+		CSILK_LOG_T("Parameterized database query succeeded (duration: %.2f ms): %s",
+			    (double)duration / 1000.0,
+			    full_sql);
 	}
 
 	free(full_sql);
@@ -400,16 +438,19 @@ int
 csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
 {
 	if (!name || !driver) {
+		CSILK_LOG_E("Failed to register database driver: name or driver is NULL");
 		return -1;
 	}
 	ensure_registry_init();
 
 	uv_mutex_lock(&registry_mutex);
 	if (driver_count >= 16) {
+		CSILK_LOG_E("Failed to register database driver '%s': registry is full", name);
 		uv_mutex_unlock(&registry_mutex);
 		return -1;
 	}
 	drivers[driver_count++] = driver;
+	CSILK_LOG_I("Registered database driver: '%s'", name);
 	uv_mutex_unlock(&registry_mutex);
 	return 0;
 }
