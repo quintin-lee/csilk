@@ -125,7 +125,7 @@ mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 
 	conn->db = mysql_init(nullptr);
 	if (!conn->db) {
-		fprintf(stderr, "csilk_db_mysql: mysql_init failed\n");
+		CSILK_LOG_E("csilk_db_mysql: mysql_init failed");
 		free(conn);
 		return -1;
 	}
@@ -142,7 +142,7 @@ mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 	free(dbname);
 
 	if (!ret) {
-		fprintf(stderr, "csilk_db_mysql: connect failed: %s\n", mysql_error(conn->db));
+		CSILK_LOG_E("csilk_db_mysql: connect failed: %s", mysql_error(conn->db));
 		mysql_close(conn->db);
 		free(conn);
 		return -1;
@@ -231,7 +231,7 @@ mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 	mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
 
 	if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
-		fprintf(stderr, "csilk_db_mysql: query failed: %s\n", mysql_error(conn->db));
+		CSILK_LOG_E("csilk_db_mysql: query failed: %s", mysql_error(conn->db));
 		return -1;
 	}
 
@@ -316,7 +316,7 @@ mysql_drv_exec(csilk_db_pool_t* pool, const char* sql)
 	mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
 
 	if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
-		fprintf(stderr, "csilk_db_mysql: exec failed: %s\n", mysql_error(conn->db));
+		CSILK_LOG_E("csilk_db_mysql: exec failed: %s", mysql_error(conn->db));
 		return -1;
 	}
 

@@ -51,10 +51,7 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 	int rc =
 	    sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr,
-			"csilk_db_sqlite: cannot open '%s': %s\n",
-			dsn,
-			sqlite3_errmsg(conn->db));
+		CSILK_LOG_E("csilk_db_sqlite: cannot open '%s': %s", dsn, sqlite3_errmsg(conn->db));
 		free(conn);
 		return -1;
 	}
@@ -157,7 +154,7 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, nullptr);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "csilk_db_sqlite: prepare failed: %s\n", sqlite3_errmsg(conn->db));
+		CSILK_LOG_E("csilk_db_sqlite: prepare failed: %s", sqlite3_errmsg(conn->db));
 		return -1;
 	}
 
@@ -237,7 +234,7 @@ sqlite_exec(csilk_db_pool_t* pool, const char* sql)
 	char* err = nullptr;
 	int rc = sqlite3_exec(conn->db, sql, nullptr, nullptr, &err);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "csilk_db_sqlite: exec failed: %s\n", err ? err : "unknown");
+		CSILK_LOG_E("csilk_db_sqlite: exec failed: %s", err ? err : "unknown");
 		if (err) {
 			sqlite3_free(err);
 		}

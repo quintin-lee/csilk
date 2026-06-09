@@ -62,7 +62,7 @@ mongodb_connect(csilk_db_pool_t* pool, const char* dsn)
 	bson_error_t error;
 	mongoc_uri_t* uri = mongoc_uri_new_with_error(dsn, &error);
 	if (!uri) {
-		fprintf(stderr, "csilk_db_mongodb: invalid URI '%s': %s\n", dsn, error.message);
+		CSILK_LOG_E("csilk_db_mongodb: invalid URI '%s': %s", dsn, error.message);
 		free(conn);
 		return -1;
 	}
@@ -233,7 +233,7 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 	}
 
 	if (mongoc_cursor_error(cursor, &error)) {
-		fprintf(stderr, "csilk_db_mongodb: cursor error: %s\n", error.message);
+		CSILK_LOG_E("csilk_db_mongodb: cursor error: %s", error.message);
 		mongoc_cursor_destroy(cursor);
 		if (cmd) {
 			bson_destroy(cmd);
@@ -264,7 +264,7 @@ mongodb_exec(csilk_db_pool_t* pool, const char* sql)
 	bson_error_t error;
 	bson_t* cmd = bson_new_from_json((const uint8_t*)sql, -1, &error);
 	if (!cmd) {
-		fprintf(stderr, "csilk_db_mongodb: invalid command JSON: %s\n", error.message);
+		CSILK_LOG_E("csilk_db_mongodb: invalid command JSON: %s", error.message);
 		return -1;
 	}
 
@@ -272,7 +272,7 @@ mongodb_exec(csilk_db_pool_t* pool, const char* sql)
 	bool success =
 	    mongoc_client_command_simple(conn->client, conn->db_name, cmd, nullptr, &reply, &error);
 	if (!success) {
-		fprintf(stderr, "csilk_db_mongodb: exec failed: %s\n", error.message);
+		CSILK_LOG_E("csilk_db_mongodb: exec failed: %s", error.message);
 	}
 
 	bson_destroy(cmd);
