@@ -56,23 +56,55 @@ class TestCsilkIntegration(unittest.TestCase):
         t = threading.Thread(target=run_server)
         t.daemon = True
         t.start()
+        # Bypass system proxy for tests
+        proxy_handler = urllib.request.ProxyHandler({})
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
+        # Wait for the server to be ready with retries
+        import socket
+        for _ in range(10):
+            try:
+                with socket.create_connection(("127.0.0.1", 8081), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            self.fail("Server did not start in time")
         
-        # Give server time to spin up
-        time.sleep(0.3)
+        # Perform requests with retries to handle server startup latency
+        def request_with_retry(url, data=None, headers=None, method='GET'):
+            for _ in range(10):
+                try:
+                    if data is None:
+                        res = urllib.request.urlopen(url)
+                    else:
+                        req = urllib.request.Request(url, data=data, headers=headers or {})
+                        res = urllib.request.urlopen(req)
+                    return res
+                except urllib.error.HTTPError as e:
+                    if e.code == 502:
+                        time.sleep(0.2)
+                        continue
+                    raise
+                except Exception:
+                    time.sleep(0.2)
+                    continue
+            self.fail("Server did not respond successfully in time")
         
         try:
             # 1. Test GET request
-            res = urllib.request.urlopen("http://127.0.0.1:8081/hello")
+            res = request_with_retry("http://127.0.0.1:8081/hello")
             self.assertEqual(res.status, 200)
             self.assertEqual(res.read().decode('utf-8'), "hello world from python")
-
+            
             # 2. Test POST JSON request
-            req = urllib.request.Request(
+            req_data = json.dumps({"test": "value"}).encode('utf-8')
+            res2 = request_with_retry(
                 "http://127.0.0.1:8081/echo",
-                data=json.dumps({"test": "value"}).encode('utf-8'),
+                data=req_data,
                 headers={"Content-Type": "application/json"}
             )
-            res2 = urllib.request.urlopen(req)
             self.assertEqual(res2.status, 200)
             res_data = json.loads(res2.read().decode('utf-8'))
             self.assertEqual(res_data["echoed"]["test"], "value")
