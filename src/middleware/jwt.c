@@ -71,8 +71,13 @@ char*
 csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 {
 	if (!payload || !secret) {
+		CSILK_LOG_E("JWT: Generation failed: invalid arguments (payload: %p, secret: %p)",
+			    (void*)payload,
+			    (void*)secret);
 		return nullptr;
 	}
+
+	CSILK_LOG_T("JWT: Generating token...");
 
 	char* header_b64 = nullptr;
 	char* payload_b64 = nullptr;
@@ -84,6 +89,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	size_t h_b64_len = ((h_len + 2) / 3) * 4 + 1;
 	header_b64 = malloc(h_b64_len);
 	if (!header_b64) {
+		CSILK_LOG_E("JWT: Memory allocation failed for header base64");
 		return nullptr;
 	}
 	csilk_base64url_encode((const uint8_t*)JWT_HEADER, h_len, header_b64);
@@ -92,6 +98,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
      then base64url-encode it per RFC 4648 §5 (no padding). */
 	char* payload_str = cJSON_PrintUnformatted(payload);
 	if (!payload_str) {
+		CSILK_LOG_E("JWT: Failed to serialize cJSON payload to string");
 		free(header_b64);
 		return nullptr;
 	}
@@ -99,6 +106,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	size_t p_b64_len = ((p_len + 2) / 3) * 4 + 1;
 	payload_b64 = malloc(p_b64_len);
 	if (!payload_b64) {
+		CSILK_LOG_E("JWT: Memory allocation failed for payload base64");
 		free(header_b64);
 		free(payload_str);
 		return nullptr;
@@ -111,6 +119,7 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 	size_t sign_input_len = strlen(header_b64) + 1 + strlen(payload_b64) + 1;
 	char* sign_input = malloc(sign_input_len);
 	if (!sign_input) {
+		CSILK_LOG_E("JWT: Memory allocation failed for signature signing input");
 		free(header_b64);
 		free(payload_b64);
 		return nullptr;
@@ -138,6 +147,9 @@ csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
 			 "%s.%s",
 			 sign_input,
 			 sig_b64);
+		CSILK_LOG_D("JWT: Token generated successfully");
+	} else {
+		CSILK_LOG_E("JWT: Memory allocation failed for final token assembly");
 	}
 
 	free(header_b64);
@@ -172,17 +184,24 @@ cJSON*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 {
 	if (!token || !secret) {
+		CSILK_LOG_E("JWT: Verification failed: invalid arguments (token: %p, secret: %p)",
+			    (void*)token,
+			    (void*)secret);
 		return nullptr;
 	}
+
+	CSILK_LOG_T("JWT: Verifying token...");
 
 	/* Locate the two dots that separate header, payload, and signature.
      JWT format: base64url(header).base64url(payload).base64url(signature) */
 	const char* dot1 = strchr(token, '.');
 	if (!dot1) {
+		CSILK_LOG_W("JWT: Verification failed: missing first dot separator");
 		return nullptr;
 	}
 	const char* dot2 = strchr(dot1 + 1, '.');
 	if (!dot2) {
+		CSILK_LOG_W("JWT: Verification failed: missing second dot separator");
 		return nullptr;
 	}
 
@@ -212,6 +231,7 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	if (sig_len != strlen(sig_expected_b64) ||
 	    constant_time_compare(
 		(const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, sig_len)) {
+		CSILK_LOG_W("JWT: Verification failed: signature mismatch");
 		return nullptr;
 	}
 
@@ -219,6 +239,7 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
      The decoded JSON string is parsed with cJSON_Parse. */
 	char* p_b64 = malloc(payload_len + 1);
 	if (!p_b64) {
+		CSILK_LOG_E("JWT: Memory allocation failed for payload base64 buffer");
 		return nullptr;
 	}
 	memcpy(p_b64, dot1 + 1, payload_len);
@@ -226,6 +247,7 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 
 	uint8_t* p_json_str = malloc(payload_len + 1);
 	if (!p_json_str) {
+		CSILK_LOG_E("JWT: Memory allocation failed for payload json string buffer");
 		free(p_b64);
 		return nullptr;
 	}
@@ -233,6 +255,7 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 	free(p_b64);
 
 	if (p_decoded_len < 0) {
+		CSILK_LOG_W("JWT: Verification failed: base64url decoding failed for payload");
 		free(p_json_str);
 		return nullptr;
 	}
@@ -240,6 +263,12 @@ csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 
 	cJSON* payload = cJSON_Parse((const char*)p_json_str);
 	free(p_json_str);
+
+	if (!payload) {
+		CSILK_LOG_W("JWT: Verification failed: JSON parsing failed for payload");
+	} else {
+		CSILK_LOG_D("JWT: Verification successful");
+	}
 
 	return payload;
 }
@@ -267,11 +296,19 @@ void
 csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 {
 	if (!c || !secret) {
+		CSILK_LOG_E("JWT: Middleware error: invalid arguments (c: %p, secret: %p)",
+			    (void*)c,
+			    (void*)secret);
 		return;
 	}
 
+	CSILK_LOG_T("JWT: Middleware triggered for request %p", (void*)c);
+
 	const char* auth_header = csilk_get_header(c, "Authorization");
 	if (!auth_header || strncmp(auth_header, "Bearer ", 7) != 0) {
+		CSILK_LOG_W(
+		    "JWT: Middleware rejected request %p: missing or invalid Authorization header",
+		    (void*)c);
 		csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Bearer token required");
 		csilk_abort(c);
 		return;
@@ -280,6 +317,8 @@ csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 	const char* token = auth_header + 7;
 	cJSON* payload = csilk_jwt_verify(c, token, secret);
 	if (!payload) {
+		CSILK_LOG_W("JWT: Middleware rejected request %p: token verification failed",
+			    (void*)c);
 		csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Invalid or expired token");
 		csilk_abort(c);
 		return;
@@ -289,6 +328,11 @@ csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 	cJSON* exp = cJSON_GetObjectItemCaseSensitive(payload, "exp");
 	if (cJSON_IsNumber(exp)) {
 		if ((double)time(nullptr) > exp->valuedouble) {
+			CSILK_LOG_W("JWT: Middleware rejected request %p: token expired (exp: %g, "
+				    "now: %ld)",
+				    (void*)c,
+				    exp->valuedouble,
+				    (long)time(nullptr));
 			cJSON_Delete(payload);
 			csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Token expired");
 			csilk_abort(c);
@@ -302,5 +346,6 @@ csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
      csilk_get(c, "jwt_payload") when it is no longer needed. */
 	csilk_set(c, "jwt_payload", payload);
 
+	CSILK_LOG_D("JWT: Middleware verification successful for request %p", (void*)c);
 	csilk_next(c);
 }

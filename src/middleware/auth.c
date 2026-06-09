@@ -31,13 +31,19 @@
 void
 csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator)
 {
+	CSILK_LOG_T("Auth: Authentication middleware triggered for request %p", (void*)c);
 	/* Missing header or failing validator both yield 401.
      The validator receives the full Authorization value including "Bearer "
      prefix — it must strip it internally if needed. */
 	const char* token = csilk_get_header(c, "Authorization");
 	if (!token || !validator(token)) {
+		CSILK_LOG_W("Auth: Authentication failed for request %p (Authorization header: %s)",
+			    (void*)c,
+			    token ? "present" : "missing");
 		csilk_set_header(c, "WWW-Authenticate", "Bearer");
 		csilk_status(c, CSILK_STATUS_UNAUTHORIZED);
 		csilk_abort(c);
+	} else {
+		CSILK_LOG_D("Auth: Authentication successful for request %p", (void*)c);
 	}
 }

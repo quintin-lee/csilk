@@ -43,11 +43,16 @@ csilk_csrf_middleware(csilk_ctx_t* c)
 	if (csilk_get_method(c) &&
 	    (strcmp(csilk_get_method(c), "GET") == 0 || strcmp(csilk_get_method(c), "HEAD") == 0 ||
 	     strcmp(csilk_get_method(c), "OPTIONS") == 0)) {
+		CSILK_LOG_T("CSRF: Safe method (%s) bypasses validation for request %p",
+			    csilk_get_method(c),
+			    (void*)c);
 		// Set CSRF cookie on safe methods so frontend can read it
 		const char* existing = csilk_get_cookie(c, "csrf_token");
 		if (!existing) {
 			char token_buf[33];
 			if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
+				CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p",
+					    (void*)c);
 				csilk_set_cookie(
 				    c, "csrf_token", token_buf, 86400, "/", nullptr, 0, 1);
 			}
@@ -56,8 +61,13 @@ csilk_csrf_middleware(csilk_ctx_t* c)
 		return;
 	}
 
+	CSILK_LOG_T("CSRF: Validating request %p (%s)",
+		    (void*)c,
+		    csilk_get_method(c) ? csilk_get_method(c) : "none");
+
 	const char* token = csilk_get_header(c, "X-CSRF-Token");
 	if (!token) {
+		CSILK_LOG_W("CSRF: Blocked request %p: missing X-CSRF-Token header", (void*)c);
 		void _csilk_metrics_inc_csrf_violations(void);
 		_csilk_metrics_inc_csrf_violations();
 		csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: CSRF token missing");
@@ -71,8 +81,13 @@ csilk_csrf_middleware(csilk_ctx_t* c)
      from reading/writing the cookie on the target origin. */
 	const char* cookie_token = csilk_get_cookie(c, "csrf_token");
 	if (cookie_token && strcmp(cookie_token, token) == 0) {
+		CSILK_LOG_D("CSRF: Validation successful for request %p", (void*)c);
 		csilk_next(c);
 	} else {
+		CSILK_LOG_W("CSRF: Blocked request %p: token mismatch (header: '%s', cookie: '%s')",
+			    (void*)c,
+			    token,
+			    cookie_token ? cookie_token : "missing");
 		void _csilk_metrics_inc_csrf_violations(void);
 		_csilk_metrics_inc_csrf_violations();
 		csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: Invalid CSRF token");
@@ -106,6 +121,8 @@ csilk_csrf_generate_token(char* buf, size_t buf_size)
 	/* use /dev/urandom for cryptographically random bytes */
 	FILE* fp = fopen("/dev/urandom", "rb");
 	if (!fp) {
+		CSILK_LOG_W("CSRF: Failed to open /dev/urandom. Falling back to "
+			    "non-cryptographically secure PRNG.");
 		/* fallback: use time+pid as weak entropy (better than nothing) */
 		unsigned int seed = (unsigned int)time(nullptr) ^ (unsigned int)getpid();
 		snprintf(buf,

@@ -34,15 +34,26 @@ void
 csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
 {
 	if (!c || !config) {
+		CSILK_LOG_E("CORS: Middleware error: invalid arguments (c: %p, config: %p)",
+			    (void*)c,
+			    (void*)config);
 		if (c) {
 			csilk_next(c);
 		}
 		return;
 	}
 
+	const char* origin = csilk_get_header(c, "Origin");
+	CSILK_LOG_T("CORS: Middleware triggered for request %p (Origin: %s, Method: %s)",
+		    (void*)c,
+		    origin ? origin : "none",
+		    csilk_get_method(c) ? csilk_get_method(c) : "none");
+
 	/* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
      so caches do not serve CORS responses across different origins. */
 	if (config->allow_origin) {
+		CSILK_LOG_T("CORS: Setting CORS header Access-Control-Allow-Origin: %s",
+			    config->allow_origin);
 		csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
 		if (strcmp(config->allow_origin, "*") != 0) {
 			csilk_set_header(c, "Vary", "Origin");
@@ -74,6 +85,9 @@ csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
      of forwarding to the actual route handler. */
 	const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
 	if (csilk_get_method(c) && strcmp(csilk_get_method(c), "OPTIONS") == 0 && req_method) {
+		CSILK_LOG_D(
+		    "CORS: Handling preflight OPTIONS request for request %p, returning 204",
+		    (void*)c);
 		csilk_string(c, CSILK_STATUS_NO_CONTENT, "");
 		csilk_abort(c);
 		return;
