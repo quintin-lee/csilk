@@ -131,6 +131,9 @@ csilk_ai_register_monitor(void* c)
 	uv_mutex_lock(&g_ai_monitor_mutex);
 	if (g_ai_monitor_count < 16) {
 		g_ai_monitors[g_ai_monitor_count++] = (csilk_ctx_t*)c;
+		CSILK_LOG_I("Registered AI monitor: %p", c);
+	} else {
+		CSILK_LOG_E("Failed to register AI monitor: monitor registry is full");
 	}
 	uv_mutex_unlock(&g_ai_monitor_mutex);
 }
@@ -163,6 +166,9 @@ csilk_ai_register_driver(const csilk_ai_driver_t* driver)
 {
 	if (g_driver_count < MAX_DRIVERS) {
 		g_drivers[g_driver_count++] = driver;
+		CSILK_LOG_I("Registered AI driver: '%s'", driver->name);
+	} else {
+		CSILK_LOG_E("Failed to register AI driver '%s': registry is full", driver->name);
 	}
 }
 
@@ -204,6 +210,7 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
      pulling in unused driver dependencies at process startup. */
 	static int initialized = 0;
 	if (!initialized) {
+		CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama)...");
 		csilk_ai_openai_init_driver();
 		csilk_ai_ollama_init_driver();
 		initialized = 1;
@@ -211,22 +218,31 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
 
 	const csilk_ai_driver_t* driver = find_driver(driver_name);
 	if (!driver) {
+		CSILK_LOG_E("Failed to create AI instance: driver '%s' not found", driver_name);
 		return nullptr;
 	}
 
 	void* state = driver->init(api_key, base_url);
 	if (!state) {
+		CSILK_LOG_E("Failed to initialize AI driver '%s' state (base_url: %s)",
+			    driver_name,
+			    base_url ? base_url : "default");
 		return nullptr;
 	}
 
 	csilk_ai_t* ai = malloc(sizeof(csilk_ai_t));
 	if (!ai) {
+		CSILK_LOG_E("Failed to allocate memory for AI instance (driver: '%s')",
+			    driver_name);
 		driver->free(state);
 		return nullptr;
 	}
 
 	ai->driver = driver;
 	ai->driver_state = state;
+	CSILK_LOG_I("AI instance successfully created using driver '%s' (base_url: %s)",
+		    driver_name,
+		    base_url ? base_url : "default");
 	return ai;
 }
 
@@ -253,11 +269,17 @@ int
 csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res)
 {
 	if (!ai || !req || !res) {
+		CSILK_LOG_E("Invalid arguments provided to csilk_ai_chat");
 		return -1;
 	}
 
 	uint64_t start = uv_hrtime();
 	atomic_fetch_add(&ai_requests_total, 1);
+
+	CSILK_LOG_D("AI chat request initiated. Model: '%s', Messages count: %zu, Tools count: %zu",
+		    req->model ? req->model : "default",
+		    req->message_count,
+		    req->tool_count);
 
 	int retries = 0;
 	int max_retries = 2;
@@ -282,6 +304,12 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 				/* Exponential backoff: 1s, then 2s. This avoids thundering herd
            on rate-limited endpoints. */
 				unsigned int wait_ms = (unsigned int)(1000 * (1 << (retries - 1)));
+				CSILK_LOG_W("AI chat transient failure: '%s'. Retrying in %u ms "
+					    "(attempt %d/%d)...",
+					    res->error_message,
+					    wait_ms,
+					    retries,
+					    max_retries);
 				uv_sleep(wait_ms);
 				csilk_ai_chat_response_free(res);
 				continue;
@@ -297,8 +325,19 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 		atomic_fetch_add(&ai_tokens_total, res->total_tokens);
 		atomic_fetch_add(&ai_prompt_tokens, res->prompt_tokens);
 		atomic_fetch_add(&ai_completion_tokens, res->completion_tokens);
+		CSILK_LOG_I("AI chat request succeeded. Model: '%s', Prompt tokens: %d, Completion "
+			    "tokens: %d, Total tokens: %d, Duration: %.2f ms",
+			    req->model ? req->model : "default",
+			    res->prompt_tokens,
+			    res->completion_tokens,
+			    res->total_tokens,
+			    (double)duration / 1000.0);
 	} else {
 		atomic_fetch_add(&ai_errors_total, 1);
+		CSILK_LOG_E("AI chat request failed after %d attempts. Model: '%s', Error: %s",
+			    retries + 1,
+			    req->model ? req->model : "default",
+			    res->error_message ? res->error_message : "Unknown error");
 	}
 
 	_ai_broadcast("ai_chat",
@@ -371,12 +410,14 @@ csilk_ai_chat_async(csilk_ai_t* ai,
 		    void* user_data)
 {
 	if (!ai || !req || !cb) {
+		CSILK_LOG_E("Invalid arguments provided to csilk_ai_chat_async");
 		return;
 	}
 
 	uv_work_t* work = malloc(sizeof(uv_work_t));
 	async_chat_req_t* ar = malloc(sizeof(async_chat_req_t));
 	if (!work || !ar) {
+		CSILK_LOG_E("Failed to allocate memory for async chat request");
 		free(work);
 		free(ar);
 		return;
@@ -389,6 +430,8 @@ csilk_ai_chat_async(csilk_ai_t* ai,
 	memset(&ar->res, 0, sizeof(ar->res));
 
 	work->data = ar;
+	CSILK_LOG_D("Queueing async chat request for model '%s'",
+		    req->model ? req->model : "default");
 	uv_queue_work(uv_default_loop(), work, chat_work_cb, chat_after_work_cb);
 }
 
@@ -413,16 +456,23 @@ csilk_ai_embeddings(csilk_ai_t* ai,
 		    csilk_ai_embeddings_response_t* res)
 {
 	if (!ai || !model || !input || !res) {
+		CSILK_LOG_E("Invalid arguments provided to csilk_ai_embeddings");
 		return -1;
 	}
 
 	uint64_t start = uv_hrtime();
 	atomic_fetch_add(&ai_requests_total, 1);
 
+	CSILK_LOG_D(
+	    "AI embeddings request initiated. Model: '%s', Inputs count: %zu", model, count);
+
 	memset(res, 0, sizeof(*res));
 	if (!ai->driver->embeddings) {
 		res->error_message = strdup("Driver does not support embeddings");
 		atomic_fetch_add(&ai_errors_total, 1);
+		CSILK_LOG_E(
+		    "Failed to generate AI embeddings: driver '%s' does not support embeddings",
+		    ai->driver->name);
 		_ai_broadcast("ai_embeddings", model, -1, 0, 0, 0, res->error_message);
 		return -1;
 	}
@@ -435,8 +485,17 @@ csilk_ai_embeddings(csilk_ai_t* ai,
 	if (status == 0) {
 		atomic_fetch_add(&ai_tokens_total, res->total_tokens);
 		atomic_fetch_add(&ai_prompt_tokens, res->prompt_tokens);
+		CSILK_LOG_I("AI embeddings generated successfully. Model: '%s', Prompt tokens: %d, "
+			    "Total tokens: %d, Duration: %.2f ms",
+			    model,
+			    res->prompt_tokens,
+			    res->total_tokens,
+			    (double)duration / 1000.0);
 	} else {
 		atomic_fetch_add(&ai_errors_total, 1);
+		CSILK_LOG_E("Failed to generate AI embeddings. Model: '%s', Error: %s",
+			    model,
+			    res->error_message ? res->error_message : "Unknown error");
 	}
 
 	_ai_broadcast(
@@ -504,12 +563,14 @@ csilk_ai_embeddings_async(csilk_ai_t* ai,
 			  void* user_data)
 {
 	if (!ai || !model || !input || !cb) {
+		CSILK_LOG_E("Invalid arguments provided to csilk_ai_embeddings_async");
 		return;
 	}
 
 	uv_work_t* work = malloc(sizeof(uv_work_t));
 	async_emb_req_t* ar = malloc(sizeof(async_emb_req_t));
 	if (!work || !ar) {
+		CSILK_LOG_E("Failed to allocate memory for async embeddings request");
 		free(work);
 		free(ar);
 		return;
@@ -524,6 +585,7 @@ csilk_ai_embeddings_async(csilk_ai_t* ai,
 	memset(&ar->res, 0, sizeof(ar->res));
 
 	work->data = ar;
+	CSILK_LOG_D("Queueing async embeddings request for model '%s' (inputs: %zu)", model, count);
 	uv_queue_work(uv_default_loop(), work, emb_work_cb, emb_after_work_cb);
 }
 
@@ -536,6 +598,8 @@ csilk_ai_free(csilk_ai_t* ai)
 	if (!ai) {
 		return;
 	}
+	CSILK_LOG_D("Freeing AI engine instance and driver state for driver '%s'",
+		    ai->driver->name);
 	ai->driver->free(ai->driver_state);
 	free(ai);
 }
@@ -594,6 +658,9 @@ csilk_ai_context_new(size_t max_history)
 	csilk_ai_context_t* ctx = calloc(1, sizeof(csilk_ai_context_t));
 	if (ctx) {
 		ctx->max_history = max_history;
+		CSILK_LOG_D("Created new AI context (max_history: %zu)", max_history);
+	} else {
+		CSILK_LOG_E("Failed to allocate memory for new AI context");
 	}
 	return ctx;
 }
@@ -616,6 +683,7 @@ void
 csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* content)
 {
 	if (!ctx || !role || !content) {
+		CSILK_LOG_E("Invalid arguments provided to csilk_ai_context_add");
 		return;
 	}
 
@@ -624,6 +692,8 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
 		csilk_ai_message_t* new_msgs =
 		    realloc(ctx->messages, sizeof(csilk_ai_message_t) * new_cap);
 		if (!new_msgs) {
+			CSILK_LOG_E(
+			    "Failed to allocate memory to expand AI context messages array");
 			return;
 		}
 		ctx->messages = new_msgs;
@@ -632,6 +702,9 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
 
 	/* Sliding window check */
 	if (ctx->max_history > 0 && ctx->count >= ctx->max_history) {
+		CSILK_LOG_D(
+		    "AI context sliding window reached limit (%zu). Evicting oldest message.",
+		    ctx->max_history);
 		/* Remove oldest message */
 		free((char*)ctx->messages[0].role);
 		free((char*)ctx->messages[0].content);
@@ -643,6 +716,7 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
 
 	ctx->messages[ctx->count].role = strdup(role);
 	ctx->messages[ctx->count].content = strdup(content);
+	CSILK_LOG_T("Added message to AI context. Role: '%s', Content: '%.30s...'", role, content);
 	ctx->count++;
 }
 
@@ -657,6 +731,7 @@ csilk_ai_context_clear(csilk_ai_context_t* ctx)
 	if (!ctx) {
 		return;
 	}
+	CSILK_LOG_D("Clearing %zu messages from AI context", ctx->count);
 	for (size_t i = 0; i < ctx->count; i++) {
 		free((char*)ctx->messages[i].role);
 		free((char*)ctx->messages[i].content);
@@ -673,6 +748,7 @@ csilk_ai_context_free(csilk_ai_context_t* ctx)
 	if (!ctx) {
 		return;
 	}
+	CSILK_LOG_D("Freeing AI context with %zu messages", ctx->count);
 	csilk_ai_context_clear(ctx);
 	free(ctx->messages);
 	free(ctx);
