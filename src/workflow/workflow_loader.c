@@ -10,6 +10,7 @@
 
 #include "cJSON.h"
 #include "csilk/app/workflow.h"
+#include "csilk/csilk.h"
 
 /* --- Global Handler Registry --- */
 
@@ -134,12 +135,10 @@ csilk_wf_from_json(const char* json_str)
 					if (h) {
 						node = csilk_wf_add(wf, id, h, nullptr);
 					} else {
-						printf("[Workflow] Warning: "
-						       "Handler '%s' not "
-						       "registered for step "
-						       "'%s'.\n",
-						       handler_item->valuestring,
-						       id);
+						CSILK_LOG_W(
+						    "Handler '%s' not registered for step '%s'",
+						    handler_item->valuestring,
+						    id);
 					}
 				}
 			}
