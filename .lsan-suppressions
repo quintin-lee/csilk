@@ -20,3 +20,13 @@ leak:nghttp2_
 
 # pthread internals (macOS libc)
 leak:pthread_
+
+# Python internals (when using ctypes)
+leak:PyMem_RawMalloc
+leak:PyObject_Malloc
+leak:_PyObject_Malloc
+leak:_PyMem_RawMalloc
+leak:PyMem_Malloc
+leak:_PyBytes_Resize
+leak:PyType_Ready
+leak:Py_Initialize
