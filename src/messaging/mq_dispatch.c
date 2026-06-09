@@ -18,6 +18,12 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 		return;
 	}
 
+	CSILK_LOG_T("MQ: Broadcasting monitor event '%s' for topic '%s' (len: %zu) to %zu monitors",
+		    event,
+		    topic ? topic : "",
+		    len,
+		    mq->monitor_count);
+
 	cJSON* root = cJSON_CreateObject();
 	cJSON_AddStringToObject(root, "event", event);
 	if (topic) {
@@ -40,18 +46,26 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 CSILK_INTERNAL int
 _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
+	CSILK_LOG_T("MQ: Enqueuing message on topic '%s' (len: %zu)", topic, len);
 	csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
 	if (!msg) {
+		CSILK_LOG_E("MQ: Failed to allocate memory for message enqueued on topic '%s'",
+			    topic);
 		return -1;
 	}
 	msg->topic = strdup(topic);
 	if (!msg->topic) {
+		CSILK_LOG_E("MQ: Failed to duplicate topic name '%s' for enqueued message", topic);
 		free(msg);
 		return -1;
 	}
 	if (len > 0 && payload) {
 		msg->payload = malloc(len + 1);
 		if (!msg->payload) {
+			CSILK_LOG_E("MQ: Failed to allocate payload memory (len: %zu) for enqueued "
+				    "message on topic '%s'",
+				    len,
+				    topic);
 			free(msg->topic);
 			free(msg);
 			return -1;
@@ -82,11 +96,17 @@ int
 csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
 	if (!mq || !topic) {
+		CSILK_LOG_E("MQ: Publish failed: invalid arguments (mq: %p, topic: %p)",
+			    (void*)mq,
+			    (void*)topic);
 		return -1;
 	}
 
+	CSILK_LOG_D("MQ: Publishing message on topic '%s' (len: %zu)", topic, len);
+
 	if (mq->wal_fd >= 0) {
 		if (_mq_append_wal(mq, topic, payload, len) != 0) {
+			CSILK_LOG_E("MQ: Failed to append message to WAL for topic '%s'", topic);
 			return -1;
 		}
 	}
@@ -107,9 +127,15 @@ on_mq_async(uv_async_t* handle)
 	mq->queue_depth = 0;
 	uv_mutex_unlock(&mq->queue_mutex);
 
+	CSILK_LOG_D("MQ: Async worker triggered processing %u messages from queue", count);
+
 	while (head) {
 		csilk_mq_msg_t* msg = head;
 		head = head->next;
+
+		CSILK_LOG_T("MQ: Processing message from queue. Topic: '%s', Length: %zu",
+			    msg->topic,
+			    msg->len);
 
 		_mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
 		uv_mutex_lock(&mq->queue_mutex);
@@ -147,10 +173,21 @@ on_mq_async(uv_async_t* handle)
 					}
 				}
 
+				CSILK_LOG_T("MQ: Executing handler chain with %zu total handlers "
+					    "for topic '%s'",
+					    total_handlers,
+					    msg->topic);
 				csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
 				csilk_mq_next(&ctx);
 				free(chain);
+			} else {
+				CSILK_LOG_E("MQ: Failed to allocate memory for handler chain "
+					    "(total_handlers: %zu) for topic '%s'",
+					    total_handlers,
+					    msg->topic);
 			}
+		} else {
+			CSILK_LOG_D("MQ: No handlers registered for topic '%s'", msg->topic);
 		}
 
 		free(msg->topic);

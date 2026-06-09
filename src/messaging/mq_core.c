@@ -53,6 +53,7 @@ void
 csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 {
 	if (!mq || !c) {
+		CSILK_LOG_E("MQ: Failed to register monitor: invalid arguments");
 		return;
 	}
 	uv_mutex_lock(&mq->monitor_mutex);
@@ -73,6 +74,7 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 		}
 		csilk_ctx_t** new_monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
 		if (!new_monitors) {
+			CSILK_LOG_E("MQ: Failed to allocate memory for monitor registration");
 			uv_mutex_unlock(&mq->monitor_mutex);
 			return;
 		}
@@ -80,6 +82,7 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 		mq->monitor_capacity = new_cap;
 	}
 	mq->monitors[mq->monitor_count++] = c;
+	CSILK_LOG_I("MQ: Monitor %p registered. Total monitors: %zu", (void*)c, mq->monitor_count);
 	uv_mutex_unlock(&mq->monitor_mutex);
 }
 
@@ -88,6 +91,7 @@ _csilk_mq_new(uv_loop_t* loop)
 {
 	csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
 	if (!mq) {
+		CSILK_LOG_E("MQ: Failed to allocate memory for message queue");
 		return nullptr;
 	}
 
@@ -101,6 +105,7 @@ _csilk_mq_new(uv_loop_t* loop)
 	mq->wal_path = nullptr;
 	uv_mutex_init(&mq->wal_mutex);
 
+	CSILK_LOG_I("MQ: Message queue initialized successfully");
 	return mq;
 }
 
@@ -144,6 +149,7 @@ on_mq_close(uv_handle_t* handle)
 
 	free(mq->global_middlewares);
 
+	CSILK_LOG_I("MQ: Message queue closed and resource cleanup complete");
 	free(mq);
 }
 
