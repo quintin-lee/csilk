@@ -5,6 +5,7 @@
 
 #include "csilk/app/admin.h"
 #include "csilk/app/app.h"
+#include "csilk/csilk.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -255,7 +256,7 @@ admin_ws_handler(csilk_ctx_t* c)
 		// Also monitor AI engine
 		csilk_ai_register_monitor(c);
 
-		printf("[Admin] Dashboard connected via WebSocket\n");
+		CSILK_LOG_I("Admin Dashboard connected via WebSocket");
 	}
 }
 
@@ -281,27 +282,36 @@ void
 csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t auth_middleware)
 {
 	if (!app || !app_path) {
+		CSILK_LOG_E("Failed to serve admin dashboard: invalid app or app_path");
 		return;
 	}
 
+	CSILK_LOG_I("Initializing admin dashboard on path '%s'", app_path);
+
 	/* Create a dedicated route group. This allows us to apply prefixing
-     and middleware to all sub-routes (/stats, /ws) in one go. */
+      and middleware to all sub-routes (/stats, /ws) in one go. */
 	csilk_group_t* group = csilk_group_new(csilk_app_router(app), app_path);
 	if (!group) {
+		CSILK_LOG_E("Failed to initialize admin dashboard: could not create route group "
+			    "for path '%s'",
+			    app_path);
 		return;
 	}
 
 	/* If a security middleware is provided (e.g., JWT validator), apply it. */
 	if (auth_middleware) {
+		CSILK_LOG_I("Applied security/auth middleware to admin dashboard");
 		csilk_group_use(group, auth_middleware);
 	}
 
 	/* Register sub-handlers. Because these are registered via the group,
-     their paths are automatically relative to the group's prefix. */
+      their paths are automatically relative to the group's prefix. */
 	csilk_GET(group, "/", admin_ui_handler);		   /* GET /admin/ */
 	csilk_GET(group, "/stats", admin_stats_handler);	   /* GET /admin/stats */
 	csilk_GET(group, "/ws", admin_ws_handler);		   /* GET /admin/ws (Upgrade) */
 	csilk_GET(group, "/topology", admin_topology_handler);	   /* GET /admin/topology */
 	csilk_GET(group, "/flamegraph", admin_flamegraph_handler); /* GET /admin/flamegraph */
 	csilk_GET(group, "/profile", admin_profile_quick_handler); /* GET /admin/profile */
+
+	CSILK_LOG_D("Admin routes registered relative to group prefix '%s'", app_path);
 }
