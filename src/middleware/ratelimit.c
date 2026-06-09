@@ -58,6 +58,7 @@ init_ratelimit_mutex()
 static void
 evict_stale_entries(time_t now)
 {
+	int orig = ip_count;
 	int write_idx = 0;
 	for (int read_idx = 0; read_idx < ip_count; read_idx++) {
 		if (now - ip_table[read_idx].last_seen <= WINDOW_SIZE) {
@@ -68,6 +69,11 @@ evict_stale_entries(time_t now)
 		}
 	}
 	ip_count = write_idx;
+	if (orig != ip_count) {
+		CSILK_LOG_D("RateLimit: Evicted %d stale IP entry/entries. Active count: %d",
+			    orig - ip_count,
+			    ip_count);
+	}
 }
 
 /**
@@ -89,6 +95,9 @@ evict_oldest_entry(void)
 			oldest = i;
 		}
 	}
+	CSILK_LOG_D("RateLimit: IP table full. Evicting oldest entry for IP '%s' (last seen: %ld)",
+		    ip_table[oldest].ip,
+		    (long)ip_table[oldest].last_seen);
 	ip_table[oldest] = ip_table[ip_count - 1];
 	ip_count--;
 }
@@ -121,9 +130,12 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 {
 	const char* ip = csilk_get_client_ip(c);
 	if (!ip) {
+		CSILK_LOG_T("RateLimit: Skipping rate limiting: client IP not available");
 		csilk_next(c);
 		return;
 	}
+
+	CSILK_LOG_T("RateLimit: Checking request %p from IP %s (limit: %d)", (void*)c, ip, limit);
 
 	/* Distributed rate limiting using storage driver */
 	char key[128];
@@ -132,6 +144,11 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 
 	if (current_count >= 0) {
 		if (current_count > limit) {
+			CSILK_LOG_W("RateLimit: [Distributed] Blocked request from IP %s: current "
+				    "count %lld exceeds limit %d",
+				    ip,
+				    current_count,
+				    limit);
 			void _csilk_metrics_inc_rate_limit_blocks(void);
 			_csilk_metrics_inc_rate_limit_blocks();
 			csilk_set_header(c, "Retry-After", "60");
@@ -203,6 +220,11 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	uv_mutex_unlock(&ratelimit_mutex);
 
 	if (local_count > limit) {
+		CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %d "
+			    "exceeds limit %d",
+			    ip,
+			    local_count,
+			    limit);
 		void _csilk_metrics_inc_rate_limit_blocks(void);
 		_csilk_metrics_inc_rate_limit_blocks();
 		csilk_set_header(c, "Retry-After", "60");
