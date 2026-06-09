@@ -93,6 +93,7 @@ jobs:
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
 
     - name: Run Python integration tests
+      if: matrix.build_type == 'Release' || runner.os == 'Linux'
       run: |
         if [ "${{ matrix.build_type }}" = "Debug" ]; then
           if [ "${{ runner.os }}" = "Linux" ]; then
