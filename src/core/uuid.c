@@ -19,6 +19,7 @@
 #include <uv.h>
 #include <string.h>
 
+#include "csilk/csilk.h"
 #include "csilk/core/crypto_dispatch.h"
 #include "csilk/crypto.h"
 
@@ -32,7 +33,7 @@ csilk_generate_uuid(char* buf)
 	 */
 	uint8_t random[16];
 	if (csilk_crypto_fill_random(random, 16) != 0) {
-		fprintf(stderr, "FATAL: csilk_generate_uuid failed to get entropy.\n");
+		CSILK_LOG_F("FATAL: csilk_generate_uuid failed to get entropy.");
 		abort();
 	}
 

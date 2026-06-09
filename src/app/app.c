@@ -206,32 +206,39 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
 	if (!prefix || !*prefix || !strcmp(prefix, "/")) {
 		if (!app->root_group) {
 			app->root_group = csilk_group_new(app->router, "");
+			CSILK_LOG_D("Created root route group");
 		}
 		return app->root_group;
 	}
 	for (int i = 0; i < app->group_count; i++) {
 		if (!strcmp(app->groups[i].prefix, prefix)) {
+			CSILK_LOG_T("Found existing group for prefix: %s", prefix);
 			return app->groups[i].group;
 		}
 	}
 
 	if (app->group_count >= CSILK_MAX_GROUPS) {
+		CSILK_LOG_E("Failed to create route group: max group limit (%d) reached",
+			    CSILK_MAX_GROUPS);
 		return nullptr;
 	}
 
 	if (!app->root_group) {
 		app->root_group = csilk_group_new(app->router, "");
+		CSILK_LOG_D("Created root route group");
 	}
 
 	csilk_group_t* g = app->root_group ? csilk_group_group(app->root_group, prefix)
 					   : csilk_group_new(app->router, prefix);
 	if (!g) {
+		CSILK_LOG_E("Failed to create subgroup for prefix: %s", prefix);
 		return nullptr;
 	}
 
 	int n = app->group_count++;
 	snprintf(app->groups[n].prefix, sizeof(app->groups[n].prefix), "%s", prefix);
 	app->groups[n].group = g;
+	CSILK_LOG_I("Created route group prefix: %s", prefix);
 	return g;
 }
 
@@ -506,6 +513,7 @@ csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 		return;
 	}
 	csilk_server_use(app->server, h);
+	CSILK_LOG_I("Registered global middleware: %p", (void*)h);
 }
 
 /** @brief Register a middleware handler scoped to a specific URL prefix group.
@@ -526,6 +534,7 @@ csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
 	csilk_group_t* g = find_or_create_group(app, prefix);
 	if (g) {
 		csilk_group_use(g, h);
+		CSILK_LOG_I("Registered group middleware for prefix '%s': %p", prefix, (void*)h);
 	}
 }
 
@@ -574,10 +583,7 @@ find_matching_group_for_path(csilk_app_t* app, const char* path, const char** ou
 	size_t best_len = 0;
 	*out_relative_path = path;
 
-	printf("[find_matching_group_for_path] path=%s, group_count=%d\n", path, app->group_count);
-	for (int i = 0; i < app->group_count; i++) {
-		printf("  - group[%d] prefix=%s\n", i, app->groups[i].prefix);
-	}
+	CSILK_LOG_T("Matching path '%s' against %d registered groups", path, app->group_count);
 
 	for (int i = 0; i < app->group_count; i++) {
 		const char* prefix = app->groups[i].prefix;
@@ -591,9 +597,9 @@ find_matching_group_for_path(csilk_app_t* app, const char* path, const char** ou
 			}
 		}
 	}
-	printf("  -> best_group pointer=%p, relative_path=%s\n",
-	       (void*)best_group,
-	       *out_relative_path);
+	CSILK_LOG_D("Matched best group with prefix length %zu, relative path: '%s'",
+		    best_len,
+		    *out_relative_path);
 	return best_group;
 }
 
@@ -614,9 +620,11 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
 	const char* relative_path = nullptr;
 	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
+		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
 		return;
 	}
 	csilk_group_add_route(g, method, relative_path, handler);
+	CSILK_LOG_I("Route registered: %s %s", method, path);
 }
 
 /** @brief Register a route on the root group with a single handler and OpenAPI
@@ -646,10 +654,12 @@ csilk_app_add_route_extended(csilk_app_t* app,
 	const char* relative_path = nullptr;
 	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
+		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
 		return;
 	}
 	csilk_group_add_route_extended(
 	    g, method, relative_path, handler, input_type, output_type, summary, description);
+	CSILK_LOG_I("Route registered (with OpenAPI metadata): %s %s", method, path);
 }
 
 /** @copydoc csilk_app_add_route_extended
@@ -673,6 +683,7 @@ csilk_app_add_route_extended_perm(csilk_app_t* app,
 	const char* relative_path = nullptr;
 	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
+		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
 		return;
 	}
 	csilk_group_add_route_extended_perm(g,
@@ -685,6 +696,11 @@ csilk_app_add_route_extended_perm(csilk_app_t* app,
 					    description,
 					    perm_required,
 					    perm_resource);
+	CSILK_LOG_I("Route registered (with Perm/OpenAPI metadata): %s %s (perm: %s on %s)",
+		    method,
+		    path,
+		    perm_required ? perm_required : "none",
+		    perm_resource ? perm_resource : "none");
 }
 
 /** @brief Register a route with permission metadata.
@@ -731,9 +747,11 @@ csilk_app_add_handlers(
 	const char* relative_path = nullptr;
 	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
+		CSILK_LOG_E("Failed to add handler chain %s %s: group match failed", method, path);
 		return;
 	}
 	csilk_group_add_handlers(g, method, relative_path, handlers, n);
+	CSILK_LOG_I("Route chain registered: %s %s (handlers count: %zu)", method, path, n);
 }
 
 /* ---- static files ---- */

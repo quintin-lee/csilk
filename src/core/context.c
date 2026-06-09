@@ -1189,15 +1189,23 @@ int
 csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr)
 {
 	if (!c || !c->request.body || !ptr) {
+		CSILK_LOG_D("csilk_bind_reflect failed: null context, body, or target pointer");
 		return 0;
 	}
 	if (!type_name && c->current_handler) {
 		type_name = c->current_handler->input_type;
 	}
 	if (!type_name) {
+		CSILK_LOG_D("csilk_bind_reflect failed: no type name specified or inferred");
 		return 0;
 	}
-	return csilk_json_unmarshal(type_name, c->request.body, ptr);
+	int ret = csilk_json_unmarshal(type_name, c->request.body, ptr);
+	if (!ret) {
+		CSILK_LOG_W("Failed to unmarshal request body JSON to type '%s'", type_name);
+	} else {
+		CSILK_LOG_D("Successfully bound request body JSON to type '%s'", type_name);
+	}
+	return ret;
 }
 
 /** @brief Parse a raw query string into the context's query_params hash map.
@@ -1221,6 +1229,8 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
 
 	char* qs = csilk_arena_strdup(c->arena, query_string);
 	if (!qs) {
+		CSILK_LOG_E("Failed to allocate arena memory to parse query string: %s",
+			    query_string);
 		return;
 	}
 
@@ -1248,6 +1258,7 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
 				csilk_url_decode(value);
 			}
 			map_add(c, &c->request.query_params, key, value);
+			CSILK_LOG_T("Parsed query parameter: %s = %s", key, value);
 		}
 
 		if (amp) {
@@ -1277,19 +1288,26 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 	}
 	const char* body = csilk_get_body(c, nullptr);
 	if (!body || *body == '\0') {
+		CSILK_LOG_D("csilk_parse_form_urlencoded: empty request body");
 		return;
 	}
 
 	const char* ct = csilk_get_header(c, "Content-Type");
 	if (!ct) {
+		CSILK_LOG_D("csilk_parse_form_urlencoded: missing Content-Type");
 		return;
 	}
 	if (strncmp(ct, "application/x-www-form-urlencoded", 33) != 0) {
+		CSILK_LOG_D("csilk_parse_form_urlencoded: Content-Type is not "
+			    "application/x-www-form-urlencoded (got '%s')",
+			    ct);
 		return;
 	}
 
 	char* qs = csilk_arena_strdup(c->arena, body);
 	if (!qs) {
+		CSILK_LOG_E(
+		    "Failed to allocate arena memory to parse form urlencoded request body");
 		return;
 	}
 
@@ -1317,6 +1335,7 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 				csilk_url_decode(value);
 			}
 			map_add(c, &c->request.form_params, key, value);
+			CSILK_LOG_T("Parsed form parameter: %s = %s", key, value);
 		}
 
 		if (amp) {

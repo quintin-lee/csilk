@@ -347,7 +347,7 @@ static void
 on_stream_write(uv_write_t* req, int status)
 {
 	if (status < 0) {
-		fprintf(stderr, "Stream write error %s\n", uv_strerror(status));
+		CSILK_LOG_E("Stream write error: %s", uv_strerror(status));
 	}
 	if (req->data) {
 		free(req->data);
@@ -383,7 +383,7 @@ static void
 on_stream_end_write(uv_write_t* req, int status)
 {
 	if (status < 0) {
-		fprintf(stderr, "Stream end write error %s\n", uv_strerror(status));
+		CSILK_LOG_E("Stream end write error: %s", uv_strerror(status));
 	}
 	if (req->data) {
 		free(req->data);
