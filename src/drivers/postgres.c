@@ -48,14 +48,13 @@ postgres_connect(csilk_db_pool_t* pool, const char* dsn)
 
 	conn->db = PQconnectdb(dsn);
 	if (!conn->db) {
-		fprintf(stderr, "csilk_db_postgres: PQconnectdb failed (OOM)\n");
+		CSILK_LOG_E("csilk_db_postgres: PQconnectdb failed (OOM)");
 		free(conn);
 		return -1;
 	}
 
 	if (PQstatus(conn->db) != CONNECTION_OK) {
-		fprintf(
-		    stderr, "csilk_db_postgres: connect failed: %s\n", PQerrorMessage(conn->db));
+		CSILK_LOG_E("csilk_db_postgres: connect failed: %s", PQerrorMessage(conn->db));
 		PQfinish(conn->db);
 		free(conn);
 		return -1;
@@ -146,8 +145,7 @@ postgres_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result
 
 	ExecStatusType status = PQresultStatus(pg_res);
 	if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) {
-		fprintf(
-		    stderr, "csilk_db_postgres: query failed: %s\n", PQresultErrorMessage(pg_res));
+		CSILK_LOG_E("csilk_db_postgres: query failed: %s", PQresultErrorMessage(pg_res));
 		PQclear(pg_res);
 		return -1;
 	}
@@ -237,8 +235,7 @@ postgres_exec(csilk_db_pool_t* pool, const char* sql)
 
 	ExecStatusType status = PQresultStatus(pg_res);
 	if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-		fprintf(
-		    stderr, "csilk_db_postgres: exec failed: %s\n", PQresultErrorMessage(pg_res));
+		CSILK_LOG_E("csilk_db_postgres: exec failed: %s", PQresultErrorMessage(pg_res));
 		PQclear(pg_res);
 		return -1;
 	}

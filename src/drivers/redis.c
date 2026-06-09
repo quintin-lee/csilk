@@ -134,9 +134,8 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 	free(host);
 
 	if (!conn->c || conn->c->err) {
-		fprintf(stderr,
-			"csilk_db_redis: connect failed: %s\n",
-			conn->c ? conn->c->errstr : "allocation failed");
+		CSILK_LOG_E("csilk_db_redis: connect failed: %s",
+			    conn->c ? conn->c->errstr : "allocation failed");
 		if (conn->c) {
 			redisFree(conn->c);
 		}
@@ -150,9 +149,8 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 		redisReply* reply = redisCommand(conn->c, "AUTH %s", password);
 		free(password);
 		if (!reply || reply->type == REDIS_REPLY_ERROR) {
-			fprintf(stderr,
-				"csilk_db_redis: AUTH failed: %s\n",
-				reply ? reply->str : "no reply");
+			CSILK_LOG_E("csilk_db_redis: AUTH failed: %s",
+				    reply ? reply->str : "no reply");
 			freeReplyObject(reply);
 			redisFree(conn->c);
 			free(conn);
@@ -165,10 +163,9 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 	if (db > 0) {
 		redisReply* reply = redisCommand(conn->c, "SELECT %d", db);
 		if (!reply || reply->type == REDIS_REPLY_ERROR) {
-			fprintf(stderr,
-				"csilk_db_redis: SELECT %d failed: %s\n",
-				db,
-				reply ? reply->str : "no reply");
+			CSILK_LOG_E("csilk_db_redis: SELECT %d failed: %s",
+				    db,
+				    reply ? reply->str : "no reply");
 			freeReplyObject(reply);
 			redisFree(conn->c);
 			free(conn);
@@ -309,14 +306,13 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
 	redisReply* reply = redisCommand(conn->c, sql);
 	if (!reply) {
-		fprintf(stderr,
-			"csilk_db_redis: connection error: %s\n",
-			conn->c ? conn->c->errstr : "unknown");
+		CSILK_LOG_E("csilk_db_redis: connection error: %s",
+			    conn->c ? conn->c->errstr : "unknown");
 		return -1;
 	}
 
 	if (reply->type == REDIS_REPLY_ERROR) {
-		fprintf(stderr, "csilk_db_redis: command error: %s\n", reply->str);
+		CSILK_LOG_E("csilk_db_redis: command error: %s", reply->str);
 		freeReplyObject(reply);
 		return -1;
 	}
@@ -534,15 +530,14 @@ redis_drv_exec(csilk_db_pool_t* pool, const char* sql)
 	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
 	redisReply* reply = redisCommand(conn->c, sql);
 	if (!reply) {
-		fprintf(stderr,
-			"csilk_db_redis: exec connection error: %s\n",
-			conn->c ? conn->c->errstr : "unknown");
+		CSILK_LOG_E("csilk_db_redis: exec connection error: %s",
+			    conn->c ? conn->c->errstr : "unknown");
 		return -1;
 	}
 
 	int rc = (reply->type == REDIS_REPLY_ERROR) ? -1 : 0;
 	if (rc != 0) {
-		fprintf(stderr, "csilk_db_redis: exec error: %s\n", reply->str);
+		CSILK_LOG_E("csilk_db_redis: exec error: %s", reply->str);
 	}
 	freeReplyObject(reply);
 	return rc;
