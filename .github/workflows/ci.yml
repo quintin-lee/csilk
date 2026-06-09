@@ -57,6 +57,7 @@ jobs:
         cmake -B build -S . \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DENABLE_OOM_TEST=ON \
+          -DCSILK_BUILD_SHARED=ON \
           ${{ matrix.build_type == 'Debug' && '-DUSE_ASAN=ON' || '' }}
 
     - name: Configure (macOS)
@@ -68,6 +69,7 @@ jobs:
           -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang \
           -DCMAKE_PREFIX_PATH="${BREW_PREFIX};${BREW_PREFIX}/opt/openssl;${BREW_PREFIX}/opt/libyaml;${BREW_PREFIX}/opt/zlib;${BREW_PREFIX}/opt/curl;${BREW_PREFIX}/opt/sqlite3" \
           -DENABLE_OOM_TEST=ON \
+          -DCSILK_BUILD_SHARED=ON \
           ${{ matrix.build_type == 'Debug' && '-DUSE_ASAN=ON' || '' }}
 
     - name: Build
@@ -81,6 +83,12 @@ jobs:
 
     - name: Run integration tests
       run: ctest --test-dir build -R test_integration --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+
+    - name: Run Python integration tests
+      run: python3 python/tests/test_csilk.py
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
