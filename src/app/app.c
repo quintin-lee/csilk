@@ -567,6 +567,36 @@ csilk_app_enable_openapi(csilk_app_t* app, int enable)
 	CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
+static csilk_group_t*
+find_matching_group_for_path(csilk_app_t* app, const char* path, const char** out_relative_path)
+{
+	csilk_group_t* best_group = app->root_group;
+	size_t best_len = 0;
+	*out_relative_path = path;
+
+	printf("[find_matching_group_for_path] path=%s, group_count=%d\n", path, app->group_count);
+	for (int i = 0; i < app->group_count; i++) {
+		printf("  - group[%d] prefix=%s\n", i, app->groups[i].prefix);
+	}
+
+	for (int i = 0; i < app->group_count; i++) {
+		const char* prefix = app->groups[i].prefix;
+		size_t prefix_len = strlen(prefix);
+		if (prefix_len > best_len && strncmp(path, prefix, prefix_len) == 0) {
+			/* Ensure it's a clean boundary, e.g. /api matches /api/test but not /apipending */
+			if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
+				best_group = app->groups[i].group;
+				best_len = prefix_len;
+				*out_relative_path = path + prefix_len;
+			}
+		}
+	}
+	printf("  -> best_group pointer=%p, relative_path=%s\n",
+	       (void*)best_group,
+	       *out_relative_path);
+	return best_group;
+}
+
 /* ---- routes ---- */
 
 /** @brief Register a route on the root group with a single handler.
@@ -581,11 +611,12 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
 	if (!app || !method || !path || !handler) {
 		return;
 	}
-	csilk_group_t* g = app->root_group;
+	const char* relative_path = nullptr;
+	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
 		return;
 	}
-	csilk_group_add_route(g, method, path, handler);
+	csilk_group_add_route(g, method, relative_path, handler);
 }
 
 /** @brief Register a route on the root group with a single handler and OpenAPI
@@ -612,12 +643,13 @@ csilk_app_add_route_extended(csilk_app_t* app,
 	if (!app || !method || !path || !handler) {
 		return;
 	}
-	csilk_group_t* g = app->root_group;
+	const char* relative_path = nullptr;
+	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
 		return;
 	}
 	csilk_group_add_route_extended(
-	    g, method, path, handler, input_type, output_type, summary, description);
+	    g, method, relative_path, handler, input_type, output_type, summary, description);
 }
 
 /** @copydoc csilk_app_add_route_extended
@@ -638,13 +670,14 @@ csilk_app_add_route_extended_perm(csilk_app_t* app,
 	if (!app || !method || !path || !handler) {
 		return;
 	}
-	csilk_group_t* g = app->root_group;
+	const char* relative_path = nullptr;
+	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
 		return;
 	}
 	csilk_group_add_route_extended_perm(g,
 					    method,
-					    path,
+					    relative_path,
 					    handler,
 					    input_type,
 					    output_type,
@@ -695,11 +728,12 @@ csilk_app_add_handlers(
 	if (!app || !method || !path || !handlers || n == 0) {
 		return;
 	}
-	csilk_group_t* g = app->root_group;
+	const char* relative_path = nullptr;
+	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
 	if (!g) {
 		return;
 	}
-	csilk_group_add_handlers(g, method, path, handlers, n);
+	csilk_group_add_handlers(g, method, relative_path, handlers, n);
 }
 
 /* ---- static files ---- */

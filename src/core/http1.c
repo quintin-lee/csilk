@@ -778,9 +778,19 @@ _csilk_send_response(csilk_ctx_t* c)
 		}
 	}
 
+	int is_ws = client->ctx.is_websocket;
+	void* ws_msg_cb = client->ctx.on_ws_message;
+	void* ws_send_cb = client->ctx.on_ws_send;
+
 	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
 
 	csilk_ctx_cleanup(&client->ctx);
+
+	if (is_ws) {
+		client->ctx.is_websocket = is_ws;
+		client->ctx.on_ws_message = ws_msg_cb;
+		client->ctx.on_ws_send = ws_send_cb;
+	}
 }
 
 /* --- Request finalization --- */
