@@ -236,10 +236,10 @@ process_tls_read(csilk_client_t* client)
 						    &client->server->settings);
 					client->parser.data = client;
 				} else {
-					fprintf(stderr,
-						"TLS Parse error: %s %s\n",
-						llhttp_errno_name(err),
-						client->parser.reason);
+					CSILK_LOG_E("TLS Parse error: %s %s",
+						    llhttp_errno_name(err),
+						    client->parser.reason ? client->parser.reason
+									  : "unknown reason");
 					if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 						uv_close((uv_handle_t*)&client->handle, on_close);
 					}

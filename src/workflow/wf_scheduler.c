@@ -5,6 +5,7 @@
  */
 
 #include "workflow_internal.h"
+#include "csilk/csilk.h"
 
 /* --- Active Context Management --- */
 
@@ -255,10 +256,10 @@ static void
 on_retry_timer(uv_timer_t* handle)
 {
 	node_work_t* work = (node_work_t*)handle->data;
-	printf("[Workflow] Retrying node '%s' (attempt %d/%d)...\n",
-	       work->node->id,
-	       work->retry_count,
-	       work->node->max_retries);
+	CSILK_LOG_I("[Workflow] Retrying node '%s' (attempt %d/%d)...",
+		    work->node->id,
+		    work->retry_count,
+		    work->node->max_retries);
 	uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
@@ -335,9 +336,9 @@ after_worker_cb(uv_work_t* req, int status)
 	// Handle Retries before error logic
 	if (output == nullptr && work->retry_count < node->max_retries) {
 		work->retry_count++;
-		printf("[Workflow] Node '%s' failed, scheduled retry in %dms\n",
-		       node->id,
-		       node->retry_delay_ms);
+		CSILK_LOG_W("[Workflow] Node '%s' failed, scheduled retry in %dms",
+			    node->id,
+			    node->retry_delay_ms);
 
 		if (node->retry_delay_ms > 0) {
 			uv_timer_init(ctx->wf->loop, &work->node_timer);
@@ -362,12 +363,10 @@ after_worker_cb(uv_work_t* req, int status)
 					cJSON* field = cJSON_GetArrayItem(required, i);
 					if (cJSON_IsString(field) &&
 					    !cJSON_HasObjectItem(data, field->valuestring)) {
-						printf("[Workflow] Node '%s' "
-						       "output failed schema: "
-						       "missing required "
-						       "field '%s'\n",
-						       node->id,
-						       field->valuestring);
+						CSILK_LOG_W("[Workflow] Node '%s' output failed "
+							    "schema: missing required field '%s'",
+							    node->id,
+							    field->valuestring);
 						output = nullptr;
 						break;
 					}
@@ -415,9 +414,9 @@ after_worker_cb(uv_work_t* req, int status)
 	uv_mutex_lock(&ctx->mutex);
 	if (ctx->wf->max_tokens > 0 && ctx->total_tokens > ctx->wf->max_tokens) {
 		ctx->is_terminated = 1;
-		printf("[Workflow] Budget exceeded: %d > %d. Terminating.\n",
-		       ctx->total_tokens,
-		       ctx->wf->max_tokens);
+		CSILK_LOG_E("[Workflow] Budget exceeded: %d > %d. Terminating.",
+			    ctx->total_tokens,
+			    ctx->wf->max_tokens);
 	}
 	int terminated = ctx->is_terminated;
 	uv_mutex_unlock(&ctx->mutex);
@@ -474,11 +473,10 @@ after_worker_cb(uv_work_t* req, int status)
 				match = 1;
 			}
 
-			printf("[Workflow] Evaluating edge %zu to '%s' "
-			       "(match=%d)\n",
-			       i,
-			       edge->target->id,
-			       match);
+			CSILK_LOG_D("[Workflow] Evaluating edge %zu to '%s' (match=%d)",
+				    i,
+				    edge->target->id,
+				    match);
 
 			if (match) {
 				csilk_wf_node_t* target = edge->target;
@@ -490,11 +488,10 @@ after_worker_cb(uv_work_t* req, int status)
 							    ? 1
 							    : target->incoming_count;
 
-					printf("[Workflow] Node '%s' input count: "
-					       "%d/%d\n",
-					       target->id,
-					       ctx->node_input_counts[target->index],
-					       threshold);
+					CSILK_LOG_D("[Workflow] Node '%s' input count: %d/%d",
+						    target->id,
+						    ctx->node_input_counts[target->index],
+						    threshold);
 
 					if (ctx->node_input_counts[target->index] >= threshold) {
 						ready = 1;
@@ -503,7 +500,7 @@ after_worker_cb(uv_work_t* req, int status)
 				}
 				uv_mutex_unlock(&ctx->mutex);
 				if (ready) {
-					printf("[Workflow] Triggering node '%s'\n", target->id);
+					CSILK_LOG_D("[Workflow] Triggering node '%s'", target->id);
 					execute_node(ctx, target, output);
 					triggered_count++;
 				}
@@ -547,8 +544,8 @@ on_node_timeout(uv_timer_t* handle)
 {
 	node_work_t* work = (node_work_t*)handle->data;
 	work->is_timed_out = 1;
-	printf(
-	    "[Workflow] Node '%s' timed out after %dms\n", work->node->id, work->node->timeout_ms);
+	CSILK_LOG_W(
+	    "[Workflow] Node '%s' timed out after %dms", work->node->id, work->node->timeout_ms);
 }
 
 /** @brief Internal: enqueue a workflow node for execution on the libuv
@@ -588,7 +585,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 		wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
 		_wf_broadcast(
 		    ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : nullptr);
-		printf("[Workflow] Execution %s paused at node '%s'\n", ctx->exec_id, node->id);
+		CSILK_LOG_I("[Workflow] Execution %s paused at node '%s'", ctx->exec_id, node->id);
 		return;
 	}
 
@@ -612,8 +609,8 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 		wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
 		_wf_broadcast(ctx->wf, "node_remote_queued", node->id, json);
 
-		printf(
-		    "[Workflow] Execution %s offloaded node '%s' to MQ\n", ctx->exec_id, node->id);
+		CSILK_LOG_I(
+		    "[Workflow] Execution %s offloaded node '%s' to MQ", ctx->exec_id, node->id);
 
 		free(json);
 		cJSON_Delete(task);
@@ -719,7 +716,7 @@ on_workflow_ttl(uv_timer_t* handle)
 	ctx->is_terminated = 1;
 	ctx->is_ttl_expired = 1;
 	uv_mutex_unlock(&ctx->mutex);
-	printf("[Workflow] TTL Expired for execution %s\n", ctx->exec_id);
+	CSILK_LOG_W("[Workflow] TTL Expired for execution %s", ctx->exec_id);
 }
 
 /**

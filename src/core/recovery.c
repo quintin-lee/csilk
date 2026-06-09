@@ -50,6 +50,7 @@ csilk_recovery_handler(csilk_ctx_t* c)
 		   descriptors, and mutexes that would otherwise leak when
 		   longjmp skips stack unwinding.  Then send a generic 500. */
 		c->has_jump_buffer = 0;
+		CSILK_LOG_W("Panic recovered in request handler! Executing deferred cleanups.");
 		csilk_ctx_defer_free(c);
 		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
 	}
@@ -78,7 +79,7 @@ csilk_panic(csilk_ctx_t* c)
 		csilk_ctx_defer_free(c);
 		longjmp(c->jump_buffer, 1);
 	} else {
-		fprintf(stderr, "Fatal: No recovery handler registered.\n");
+		CSILK_LOG_F("Fatal: No recovery handler registered.");
 		exit(1);
 	}
 }

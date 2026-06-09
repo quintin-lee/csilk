@@ -84,7 +84,7 @@ void
 on_write(uv_write_t* req, int status)
 {
 	if (status < 0) {
-		fprintf(stderr, "Write error %s\n", uv_strerror(status));
+		CSILK_LOG_E("Write error: %s", uv_strerror(status));
 	}
 	csilk_client_t* client = nullptr;
 	if (req->handle) {
@@ -173,7 +173,7 @@ on_url(llhttp_t* p, const char* at, size_t length)
 	csilk_client_t* client = (csilk_client_t*)p->data;
 	size_t max_url = client->server->config.max_url_size;
 	if (max_url > 0 && length > max_url) {
-		fprintf(stderr, "[debug] on_url max_url exceeded\n");
+		CSILK_LOG_W("URL length (%zu) exceeds max_url_size limit (%zu)", length, max_url);
 		free(client->current_url);
 		client->current_url = nullptr;
 		return HPE_USER;
@@ -183,7 +183,7 @@ on_url(llhttp_t* p, const char* at, size_t length)
 	}
 	client->current_url = malloc(length + 1);
 	if (!client->current_url) {
-		fprintf(stderr, "[debug] on_url malloc failed\n");
+		CSILK_LOG_E("Failed to allocate memory for URL string");
 		return HPE_USER;
 	}
 	memcpy(client->current_url, at, length);
@@ -207,13 +207,13 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 	csilk_client_t* client = (csilk_client_t*)p->data;
 	client->total_header_size += length;
 	if (client->total_header_size > client->server->config.max_header_size) {
-		fprintf(stderr, "[debug] on_header_field max_header_size exceeded\n");
+		CSILK_LOG_W("Total header size limit exceeded on header field");
 		return HPE_USER;
 	}
 	client->header_count++;
 	if (client->server->config.max_headers_count > 0 &&
 	    client->header_count > client->server->config.max_headers_count) {
-		fprintf(stderr, "[debug] on_header_field max_headers_count exceeded\n");
+		CSILK_LOG_W("Total header count limit exceeded (%d)", client->header_count);
 		return HPE_USER;
 	}
 
@@ -234,7 +234,7 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 
 	client->current_header_field = malloc(length + 1);
 	if (!client->current_header_field) {
-		fprintf(stderr, "[debug] on_header_field malloc failed\n");
+		CSILK_LOG_E("Failed to allocate memory for header field");
 		return HPE_USER;
 	}
 	memcpy(client->current_header_field, at, length);
@@ -289,7 +289,7 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 	csilk_client_t* client = (csilk_client_t*)p->data;
 	client->total_header_size += length;
 	if (client->total_header_size > client->server->config.max_header_size) {
-		fprintf(stderr, "[debug] on_header_value max_header_size exceeded\n");
+		CSILK_LOG_W("Total header size limit exceeded on header value");
 		free(client->current_header_field);
 		client->current_header_field = nullptr;
 		free(client->current_header_value);
@@ -308,7 +308,7 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 		client->total_header_size = 0;
 		free(client->current_header_field);
 		client->current_header_field = nullptr;
-		fprintf(stderr, "[debug] on_header_value realloc failed\n");
+		CSILK_LOG_E("Failed to allocate/grow memory for header value");
 		return HPE_USER;
 	}
 	client->current_header_value = new_val;
