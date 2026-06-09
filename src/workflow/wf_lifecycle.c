@@ -5,6 +5,7 @@
  */
 
 #include "workflow_internal.h"
+#include "csilk/csilk.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -445,7 +446,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 		csilk_mq_next(m_ctx);
 		return;
 	}
-	printf("[Workflow] Received remote result: %s\n", payload);
+	CSILK_LOG_I("Workflow received remote result: %s", payload);
 
 	cJSON* root = cJSON_Parse(payload);
 	if (!root) {
@@ -468,9 +469,8 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 			// 1. Check for Active Context (Hot Resume)
 			csilk_wf_ctx_t* active = _wf_find_active_ctx(wf, exec_id);
 			if (active) {
-				printf("[Workflow] Found active execution %s, "
-				       "resuming hot...\n",
-				       exec_id);
+				CSILK_LOG_I("Workflow found active execution %s, resuming hot",
+					    exec_id);
 				csilk_wf_node_t* n =
 				    node_id ? csilk_wf_get_node(wf, node_id) : nullptr;
 				// If node_id wasn't provided, we might have to search the context for a
@@ -496,9 +496,8 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 			char path[512];
 			snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
 			if (access(path, F_OK) == 0) {
-				printf("[Workflow] Found WAL for %s, signaling "
-				       "continue (cold)...\n",
-				       exec_id);
+				CSILK_LOG_I("Workflow found WAL for %s, signaling continue (cold)",
+					    exec_id);
 				csilk_data_t out_data = {
 				    "application/json", (void*)output_str, nullptr, nullptr};
 				csilk_wf_signal_continue(wf, exec_id, &out_data, nullptr);
