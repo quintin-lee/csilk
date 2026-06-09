@@ -1,0 +1,160 @@
+#include <fnmatch.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include "cJSON.h"
+#include "csilk/core/internal.h"
+#include "csilk/core/mq_types.h"
+#include "csilk/csilk.h"
+#include "csilk/mq.h"
+#include "mq_internal.h"
+
+static void
+_mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
+{
+	if (!mq || mq->monitor_count == 0) {
+		return;
+	}
+
+	cJSON* root = cJSON_CreateObject();
+	cJSON_AddStringToObject(root, "event", event);
+	if (topic) {
+		cJSON_AddStringToObject(root, "topic", topic);
+	}
+	cJSON_AddNumberToObject(root, "payload_len", (double)len);
+	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
+	char* json = cJSON_PrintUnformatted(root);
+
+	uv_mutex_lock(&mq->monitor_mutex);
+	for (size_t i = 0; i < mq->monitor_count; i++) {
+		csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+	}
+	uv_mutex_unlock(&mq->monitor_mutex);
+
+	free(json);
+	cJSON_Delete(root);
+}
+
+CSILK_INTERNAL int
+_mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
+{
+	csilk_mq_msg_t* msg = calloc(1, sizeof(csilk_mq_msg_t));
+	if (!msg) {
+		return -1;
+	}
+	msg->topic = strdup(topic);
+	if (!msg->topic) {
+		free(msg);
+		return -1;
+	}
+	if (len > 0 && payload) {
+		msg->payload = malloc(len + 1);
+		if (!msg->payload) {
+			free(msg->topic);
+			free(msg);
+			return -1;
+		}
+		memcpy(msg->payload, payload, len);
+		((char*)msg->payload)[len] = '\0';
+		msg->len = len;
+	}
+
+	uv_mutex_lock(&mq->queue_mutex);
+	if (mq->queue_tail) {
+		mq->queue_tail->next = msg;
+	} else {
+		mq->queue_head = msg;
+	}
+	mq->queue_tail = msg;
+
+	mq->published_total++;
+	mq->queue_depth++;
+	uv_mutex_unlock(&mq->queue_mutex);
+
+	_mq_broadcast(mq, "mq_published", topic, len);
+	uv_async_send(&mq->async_handle);
+	return 0;
+}
+
+int
+csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
+{
+	if (!mq || !topic) {
+		return -1;
+	}
+
+	if (mq->wal_fd >= 0) {
+		if (_mq_append_wal(mq, topic, payload, len) != 0) {
+			return -1;
+		}
+	}
+
+	return _mq_enqueue(mq, topic, payload, len);
+}
+
+CSILK_INTERNAL void
+on_mq_async(uv_async_t* handle)
+{
+	csilk_mq_t* mq = (csilk_mq_t*)handle->data;
+
+	uv_mutex_lock(&mq->queue_mutex);
+	csilk_mq_msg_t* head = mq->queue_head;
+	mq->queue_head = nullptr;
+	mq->queue_tail = nullptr;
+	uint32_t count = mq->queue_depth;
+	mq->queue_depth = 0;
+	uv_mutex_unlock(&mq->queue_mutex);
+
+	while (head) {
+		csilk_mq_msg_t* msg = head;
+		head = head->next;
+
+		_mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
+		uv_mutex_lock(&mq->queue_mutex);
+		mq->delivered_total++;
+		uv_mutex_unlock(&mq->queue_mutex);
+
+		size_t total_handlers = mq->global_mw_count;
+		for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+			if (fnmatch(t->name, msg->topic, 0) == 0) {
+				total_handlers += t->handler_count;
+			}
+		}
+
+		if (total_handlers > 0) {
+			csilk_mq_handler_t* chain =
+			    malloc(total_handlers * sizeof(csilk_mq_handler_t));
+			if (chain) {
+				size_t idx = 0;
+
+				if (mq->global_mw_count > 0) {
+					memcpy(chain,
+					       mq->global_middlewares,
+					       mq->global_mw_count * sizeof(csilk_mq_handler_t));
+					idx += mq->global_mw_count;
+				}
+
+				for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
+					if (fnmatch(t->name, msg->topic, 0) == 0 &&
+					    t->handler_count > 0) {
+						memcpy(chain + idx,
+						       t->handlers,
+						       t->handler_count *
+							   sizeof(csilk_mq_handler_t));
+						idx += t->handler_count;
+					}
+				}
+
+				csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
+				csilk_mq_next(&ctx);
+				free(chain);
+			}
+		}
+
+		free(msg->topic);
+		free(msg->payload);
+		free(msg);
+	}
+}

@@ -42,6 +42,7 @@ set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
     message(STATUS "Found ccache: ${CCACHE_PROGRAM}")
 endif()
 
@@ -398,6 +399,9 @@ if(CSILK_BUILD_SHARED)
         SOVERSION "${CSILK_VERSION_MAJOR}"
         OUTPUT_NAME csilk
     )
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+        target_link_options(csilk_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libcsilk.map")
+    endif()
     target_compile_definitions(csilk_shared PRIVATE
         CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
     )
@@ -480,6 +484,18 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   add_executable(example_ws_tls_mq examples/example_ws_tls_mq.c)
   target_link_libraries(example_ws_tls_mq csilk)
+
+  add_executable(example_websocket examples/example_websocket.c)
+  target_link_libraries(example_websocket csilk)
+
+  add_executable(example_sse examples/example_sse.c)
+  target_link_libraries(example_sse csilk)
+
+  add_executable(example_tls examples/example_tls.c)
+  target_link_libraries(example_tls csilk)
+
+  add_executable(example_custom_driver examples/example_custom_driver.c)
+  target_link_libraries(example_custom_driver csilk)
 
   # Scaffold Tool (TUI)
   file(GLOB SCAFFOLD_SOURCES tools/csilk-scaffold/*.c)

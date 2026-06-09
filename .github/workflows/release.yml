@@ -30,19 +30,29 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-release-deps-
 
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/ccache
+          ~/Library/Caches/ccache
+        key: ${{ runner.os }}-release-ccache-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-release-ccache-
+
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake clang \
+          cmake clang ccache \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3
+        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 ccache
 
     - name: Build and package (Linux)
       if: runner.os == 'Linux'

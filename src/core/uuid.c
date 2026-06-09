@@ -32,16 +32,8 @@ csilk_generate_uuid(char* buf)
 	 */
 	uint8_t random[16];
 	if (csilk_crypto_fill_random(random, 16) != 0) {
-		/* Monotonic unique fallback to ensure uniqueness and prevent stack memory leakage
-		 * if the system entropy source fails. Uses uv_hrtime() and an atomic counter. */
-		uint64_t ts = uv_hrtime();
-		static _Atomic uint32_t counter = 0;
-		uint32_t count = atomic_fetch_add(&counter, 1);
-		memcpy(random, &ts, 8);
-		memcpy(random + 8, &count, 4);
-		for (int i = 12; i < 16; i++) {
-			random[i] = (uint8_t)rand();
-		}
+		fprintf(stderr, "FATAL: csilk_generate_uuid failed to get entropy.\n");
+		abort();
 	}
 
 	/* Apply RFC 4122 §4.4 version and variant bit masks:

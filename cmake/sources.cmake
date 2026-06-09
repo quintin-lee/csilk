@@ -52,7 +52,9 @@ set(CSILK_DRIVER_SOURCES
 )
 
 set(CSILK_MESSAGING_SOURCES
-    src/messaging/mq.c
+    src/messaging/mq_core.c
+    src/messaging/mq_pubsub.c
+    src/messaging/mq_dispatch.c
     src/messaging/mq_context.c
     src/messaging/mq_offload.c
     src/messaging/mq_wal.c

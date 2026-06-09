@@ -24,7 +24,7 @@
 #include <signal.h>
 #include <stdatomic.h>
 
-#if defined(__GLIBC__) || defined(__linux__)
+#if defined(__GLIBC__) || defined(__APPLE__)
 #define HAS_EXECINFO 1
 #include <execinfo.h>
 #endif
