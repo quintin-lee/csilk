@@ -11,6 +11,7 @@
  * @copyright MIT License
  */
 #include "csilk/core/mq_types.h"
+#include "csilk/csilk.h"
 #include "csilk/mq.h"
 
 /** @brief Advance to the next handler in the middleware chain.
@@ -34,12 +35,22 @@ void
 csilk_mq_next(csilk_mq_ctx_t* ctx)
 {
 	/* If the context is nullptr or the chain was aborted, stop */
-	if (!ctx || ctx->aborted) {
+	if (!ctx) {
+		return;
+	}
+	if (ctx->aborted) {
+		CSILK_LOG_T("MQ: Chain execution skipped: context is aborted (topic: '%s')",
+			    ctx->msg ? ctx->msg->topic : "");
 		return;
 	}
 
 	/* Advance to the next handler in the chain and invoke it */
 	ctx->handler_index++;
+	CSILK_LOG_T("MQ: Advancing to handler index %d/%zu in chain for topic '%s'",
+		    ctx->handler_index,
+		    ctx->handler_count,
+		    ctx->msg ? ctx->msg->topic : "");
+
 	if (ctx->handler_index < (int)ctx->handler_count) {
 		ctx->handlers[ctx->handler_index](ctx);
 	}
@@ -63,6 +74,10 @@ void
 csilk_mq_abort(csilk_mq_ctx_t* ctx)
 {
 	if (ctx) {
+		CSILK_LOG_I("MQ: Aborting handler chain at index %d/%zu for topic '%s'",
+			    ctx->handler_index,
+			    ctx->handler_count,
+			    ctx->msg ? ctx->msg->topic : "");
 		ctx->aborted = 1;
 	}
 }

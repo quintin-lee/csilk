@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "csilk/core/mq_types.h"
+#include "csilk/csilk.h"
 #include "csilk/mq.h"
 
 /** @brief libuv work callback — runs on a thread pool thread.
@@ -29,7 +30,12 @@ static void
 worker_cb(uv_work_t* req)
 {
 	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+	CSILK_LOG_T("MQ: Worker thread started processing offloaded task for topic '%s' (len: %zu)",
+		    wctx->topic,
+		    wctx->len);
 	wctx->handler(wctx->topic, wctx->payload, wctx->len);
+	CSILK_LOG_T("MQ: Worker thread finished processing offloaded task for topic '%s'",
+		    wctx->topic);
 }
 
 /** @brief libuv after-work callback — runs on the main loop thread.
@@ -43,8 +49,11 @@ worker_cb(uv_work_t* req)
 static void
 worker_after_cb(uv_work_t* req, int status)
 {
-	(void)status;
 	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
+	CSILK_LOG_T(
+	    "MQ: Main thread cleaning up offloaded work context for topic '%s' (status: %d)",
+	    wctx->topic,
+	    status);
 	free(wctx->topic);
 	free(wctx->payload);
 	free(wctx);
@@ -84,12 +93,22 @@ void
 csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
 {
 	if (!ctx || !ctx->msg || !worker) {
+		CSILK_LOG_E("MQ: Offload failed: invalid arguments (ctx: %p, worker: %p)",
+			    (void*)ctx,
+			    (void*)worker);
 		return;
 	}
+
+	CSILK_LOG_D("MQ: Offloading message processing to thread pool. Topic: '%s', Length: %zu",
+		    ctx->msg->topic,
+		    ctx->msg->len);
 
 	/* Allocate the work context that lives across the thread pool dispatch */
 	csilk_mq_work_ctx_t* wctx = calloc(1, sizeof(csilk_mq_work_ctx_t));
 	if (!wctx) {
+		CSILK_LOG_E(
+		    "MQ: Offload failed: memory allocation for work context failed for topic '%s'",
+		    ctx->msg->topic);
 		return;
 	}
 	wctx->req.data = wctx;
@@ -98,6 +117,8 @@ csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
 	/* Deep-copy topic — the message struct is freed after dispatch */
 	wctx->topic = strdup(ctx->msg->topic);
 	if (!wctx->topic) {
+		CSILK_LOG_E("MQ: Offload failed: topic string duplication failed for topic '%s'",
+			    ctx->msg->topic);
 		free(wctx);
 		return;
 	}
@@ -109,6 +130,10 @@ csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
 			memcpy(wctx->payload, ctx->msg->payload, ctx->msg->len);
 			wctx->len = ctx->msg->len;
 		} else {
+			CSILK_LOG_E("MQ: Offload failed: payload allocation failed (len: %zu) for "
+				    "topic '%s'",
+				    ctx->msg->len,
+				    ctx->msg->topic);
 			free(wctx->topic);
 			free(wctx);
 			return;
@@ -118,7 +143,17 @@ csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
 	/* Dispatch to libuv thread pool.
 	 * worker_cb() runs on a thread pool thread.
 	 * worker_after_cb() runs on the main loop thread. */
-	uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb, worker_after_cb);
+	CSILK_LOG_D("MQ: Queueing work on thread pool for topic '%s'", wctx->topic);
+	int rc = uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb, worker_after_cb);
+	if (rc != 0) {
+		CSILK_LOG_E("MQ: Failed to queue work on thread pool (error: %d) for topic '%s'",
+			    rc,
+			    wctx->topic);
+		free(wctx->topic);
+		free(wctx->payload);
+		free(wctx);
+		return;
+	}
 
 	/* Continue the handler chain on the main thread */
 	csilk_mq_next(ctx);

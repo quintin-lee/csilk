@@ -19,11 +19,13 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
 	}
 	csilk_mq_topic_t* t = calloc(1, sizeof(csilk_mq_topic_t));
 	if (!t) {
+		CSILK_LOG_E("MQ: Failed to allocate memory for topic '%s'", name);
 		return nullptr;
 	}
 	t->name = strdup(name);
 	t->next = mq->topics;
 	mq->topics = t;
+	CSILK_LOG_D("MQ: Created topic entry '%s'", name);
 	return t;
 }
 
@@ -31,6 +33,7 @@ void
 csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 {
 	if (!mq || !middleware) {
+		CSILK_LOG_E("MQ: Failed to register handler: invalid arguments");
 		return;
 	}
 	if (!topic) {
@@ -50,12 +53,14 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 			csilk_mq_handler_t* new_mw =
 			    realloc(mq->global_middlewares, new_cap * sizeof(csilk_mq_handler_t));
 			if (!new_mw) {
+				CSILK_LOG_E("MQ: Failed to allocate memory for global middleware");
 				return;
 			}
 			mq->global_middlewares = new_mw;
 			mq->global_mw_capacity = new_cap;
 		}
 		mq->global_middlewares[mq->global_mw_count++] = middleware;
+		CSILK_LOG_I("MQ: Registered global middleware %p", (void*)middleware);
 	} else {
 		csilk_mq_topic_t* t = get_or_create_topic(mq, topic);
 		if (t) {
@@ -75,12 +80,18 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 				csilk_mq_handler_t* new_h =
 				    realloc(t->handlers, new_cap * sizeof(csilk_mq_handler_t));
 				if (!new_h) {
+					CSILK_LOG_E("MQ: Failed to allocate memory for handler on "
+						    "topic '%s'",
+						    topic);
 					return;
 				}
 				t->handlers = new_h;
 				t->handler_capacity = new_cap;
 			}
 			t->handlers[t->handler_count++] = middleware;
+			CSILK_LOG_I("MQ: Registered subscription/middleware %p for topic '%s'",
+				    (void*)middleware,
+				    topic);
 		}
 	}
 }
