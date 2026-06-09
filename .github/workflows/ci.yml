@@ -19,6 +19,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -88,7 +93,17 @@ jobs:
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
 
     - name: Run Python integration tests
-      run: python3 python/tests/test_csilk.py
+      run: |
+        if [ "${{ matrix.build_type }}" = "Debug" ]; then
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            export LD_PRELOAD=$(clang -print-file-name=libclang_rt.asan-x86_64.so 2>/dev/null || gcc -print-file-name=libasan.so 2>/dev/null)
+            echo "LD_PRELOAD=$LD_PRELOAD"
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            export DYLD_INSERT_LIBRARIES=$($(brew --prefix llvm)/bin/clang -print-file-name=libclang_rt.asan_osx_dynamic.dylib)
+            echo "DYLD_INSERT_LIBRARIES=$DYLD_INSERT_LIBRARIES"
+          fi
+        fi
+        python3 python/tests/test_csilk.py
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
