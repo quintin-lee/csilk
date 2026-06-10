@@ -174,18 +174,21 @@ csilk_process_get_stats(csilk_process_stats_t* stats)
 CSILK_INTERNAL void
 _csilk_metrics_inc_rate_limit_blocks(void)
 {
+	CSILK_LOG_D("Metrics: incrementing security_rate_limit_blocks");
 	atomic_fetch_add(&security_rate_limit_blocks, 1);
 }
 
 CSILK_INTERNAL void
 _csilk_metrics_inc_csrf_violations(void)
 {
+	CSILK_LOG_D("Metrics: incrementing security_csrf_violations");
 	atomic_fetch_add(&security_csrf_violations, 1);
 }
 
 CSILK_INTERNAL void
 _csilk_metrics_inc_auth_failures(void)
 {
+	CSILK_LOG_D("Metrics: incrementing security_auth_failures");
 	atomic_fetch_add(&security_auth_failures, 1);
 }
 
@@ -200,6 +203,8 @@ void
 csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 {
 	(void)arg;
+
+	CSILK_LOG_T("Metrics: middleware triggered for request %p", (void*)c);
 
 	/* Start high-resolution timer */
 	uint64_t start = uv_hrtime();
@@ -227,6 +232,13 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 	}
 	int status = csilk_get_status(c);
 
+	CSILK_LOG_D("Metrics: recorded request %p (%s %s -> %d) duration: %zu us",
+		    (void*)c,
+		    method,
+		    route,
+		    status,
+		    duration_us);
+
 	csilk_route_metric_t* slot = get_metric_slot(method, route, status);
 	if (slot) {
 		/* Atomically update count and duration for this dimension */
@@ -241,6 +253,12 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 		}
 		/* The +Inf bucket always increments */
 		atomic_fetch_add(&slot->buckets[CSILK_METRICS_BUCKET_COUNT], 1);
+	} else {
+		CSILK_LOG_W("Metrics: route metrics table saturated, dropping stats for method: "
+			    "%s, route: %s, status: %d",
+			    method,
+			    route,
+			    status);
 	}
 }
 
@@ -271,6 +289,8 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
 		}
 		char* new_buf = realloc(*buf, new_size);
 		if (!new_buf) {
+			CSILK_LOG_E("Metrics: failed to expand metric buffer to %zu bytes",
+				    new_size);
 			return;
 		}
 		*buf = new_buf;
@@ -293,6 +313,8 @@ csilk_metrics_handler(csilk_ctx_t* c)
 {
 	char* buf = nullptr;
 	size_t size = 0, offset = 0;
+
+	CSILK_LOG_T("Metrics: metrics scrape request received from %p", (void*)c);
 
 	/* --- Part 1: Aggregated HTTP Metrics (Compatibility) --- */
 	append_metric(&buf,
@@ -526,6 +548,8 @@ csilk_metrics_handler(csilk_ctx_t* c)
      because body_is_managed is set to 1. */
 	csilk_set_response_body(c, buf, offset, 1);
 	csilk_status(c, CSILK_STATUS_OK);
+
+	CSILK_LOG_D("Metrics: scraped metrics response generated, length: %zu bytes", offset);
 }
 
 uint64_t

@@ -41,21 +41,29 @@ void
 csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 {
 	if (!c || !csilk_get_body(c, nullptr) || !handler) {
+		CSILK_LOG_W("Multipart: parser skipped - context, body, or handler is missing");
 		return;
 	}
 
+	CSILK_LOG_T("Multipart: starting parser for request %p", (void*)c);
+
 	const char* content_type = csilk_get_header(c, "Content-Type");
 	if (!content_type) {
+		CSILK_LOG_W("Multipart: parser skipped - missing Content-Type header");
 		return;
 	}
 
 	const char* boundary_prefix = "multipart/form-data; boundary=";
 	if (strncmp(content_type, boundary_prefix, strlen(boundary_prefix)) != 0) {
+		CSILK_LOG_W(
+		    "Multipart: parser skipped - Content-Type '%s' is not multipart/form-data",
+		    content_type);
 		return;
 	}
 
 	const char* boundary = content_type + strlen(boundary_prefix);
 	if (!boundary || strlen(boundary) == 0) {
+		CSILK_LOG_W("Multipart: parser skipped - empty boundary string in Content-Type");
 		return;
 	}
 
@@ -68,11 +76,17 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 	const char* data = csilk_get_body(c, nullptr);
 	size_t data_len = csilk_get_body_len(c);
 
+	CSILK_LOG_D("Multipart: parsed boundary delimiter '%s', payload length: %zu bytes",
+		    boundary,
+		    data_len);
+
 	const char* pos = data;
 
 	/* Expect the first boundary marker at the very start of the body.
      RFC 2046 §5.1.1: the body must begin with "--boundary\r\n". */
 	if (strncmp(pos, delimiter, delim_len) != 0) {
+		CSILK_LOG_E("Multipart: invalid payload structure - first boundary marker not "
+			    "found at start of body");
 		return;
 	}
 	pos += delim_len;
@@ -89,6 +103,8 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 	while (pos < data + data_len) {
 		csilk_multipart_part_t part;
 		memset(&part, 0, sizeof(part));
+
+		CSILK_LOG_T("Multipart: parsing part at byte offset %td", pos - data);
 
 		/* Parse part headers: Content-Disposition (name + optional filename),
        Content-Type, and any additional headers up to the blank line. */
@@ -108,6 +124,11 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 						if (nlen < CSILK_MAX_PART_NAME) {
 							memcpy(part.name, name_start, nlen);
 							part.name[nlen] = '\0';
+						} else {
+							CSILK_LOG_W(
+							    "Multipart: part name truncated - "
+							    "exceeds limit of %d bytes",
+							    CSILK_MAX_PART_NAME);
 						}
 					}
 				}
@@ -121,6 +142,10 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 						if (flen < CSILK_MAX_PART_FILENAME) {
 							memcpy(part.filename, filename_start, flen);
 							part.filename[flen] = '\0';
+						} else {
+							CSILK_LOG_W("Multipart: filename truncated "
+								    "- exceeds limit of %d bytes",
+								    CSILK_MAX_PART_FILENAME);
 						}
 					}
 				}
@@ -188,7 +213,16 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 			part.data_len = body_end - body_start;
 		}
 
+		CSILK_LOG_D("Multipart: parsed part - name: '%s', filename: '%s', content-type: "
+			    "'%s', size: %zu bytes",
+			    part.name,
+			    part.filename,
+			    part.content_type,
+			    part.data_len);
+
 		part.ctx = c;
+
+		CSILK_LOG_T("Multipart: invoking user handler for part '%s'", part.name);
 		handler(&part);
 
 		pos = body_end;
@@ -196,13 +230,20 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 			pos += 2;
 		}
 		if (pos + delim_len > data + data_len) {
+			CSILK_LOG_D("Multipart: reached end of payload or remaining data too short "
+				    "for boundary");
 			break;
 		}
 		if (strncmp(pos, delimiter, delim_len) != 0) {
+			CSILK_LOG_W(
+			    "Multipart: parsing break - expected boundary delimiter, got '%c%c...'",
+			    pos[0],
+			    pos[1]);
 			break;
 		}
 		if (pos + end_delim_len <= data + data_len &&
 		    strncmp(pos + delim_len, "--", 2) == 0) {
+			CSILK_LOG_D("Multipart: reached final boundary marker '--%s--'", boundary);
 			break;
 		}
 		pos += delim_len;
@@ -213,4 +254,6 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 			pos++;
 		}
 	}
+
+	CSILK_LOG_T("Multipart: parser execution finished for request %p", (void*)c);
 }
