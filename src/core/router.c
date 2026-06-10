@@ -97,15 +97,18 @@ node_new(const char* segment, csilk_node_type_t type)
 {
 	csilk_router_node_t* node = calloc(1, sizeof(csilk_router_node_t));
 	if (!node) {
+		CSILK_LOG_E("Router: failed to allocate memory for router node");
 		return nullptr;
 	}
 	node->segment = strdup(segment);
 	if (!node->segment) {
+		CSILK_LOG_E("Router: failed to duplicate segment string '%s'", segment);
 		free(node);
 		return nullptr;
 	}
 	node->segment_len = strlen(node->segment);
 	node->type = type;
+	CSILK_LOG_T("Router: allocated new node (segment: '%s', type: %d)", segment, type);
 	return node;
 }
 
@@ -122,6 +125,7 @@ node_free(csilk_router_node_t* node)
 	if (!node) {
 		return;
 	}
+	CSILK_LOG_T("Router: freeing node (segment: '%s', type: %d)", node->segment, node->type);
 	free(node->segment);
 	csilk_method_handler_t* mh = node->handlers;
 	while (mh) {
@@ -365,6 +369,9 @@ router_add_full(csilk_router_t* r,
 		// Temporary null-terminated string for existing comparison logic
 		char* seg_name = malloc(seg_name_len + 1);
 		if (!seg_name) {
+			CSILK_LOG_E("Router: failed to allocate memory for segment name '%.*s'",
+				    (int)seg_name_len,
+				    seg_name_start);
 			return;
 		}
 		memcpy(seg_name, seg_name_start, seg_name_len);
@@ -397,19 +404,32 @@ router_add_full(csilk_router_t* r,
 					}
 					curr->children[insert_pos] = found;
 					curr->children_count++;
-				} else {
-					CSILK_LOG_E("Failed to allocate new route node for segment "
-						    "'%s' in path '%s'",
+					CSILK_LOG_D("Router: inserted new node '%s' (type: %d) at "
+						    "index %d under node '%s'",
 						    seg_name,
-						    path);
+						    type,
+						    insert_pos,
+						    curr->segment[0] ? curr->segment : "/");
+				} else {
+					CSILK_LOG_E(
+					    "Router: failed to allocate new route node for segment "
+					    "'%s' in path '%s'",
+					    seg_name,
+					    path);
 				}
 			} else {
-				CSILK_LOG_E("Failed to insert route segment '%s' in path '%s': "
-					    "maximum node children limit (%d) exceeded",
-					    seg_name,
-					    path,
-					    CSILK_MAX_CHILDREN);
+				CSILK_LOG_E(
+				    "Router: failed to insert route segment '%s' in path '%s': "
+				    "maximum node children limit (%d) exceeded",
+				    seg_name,
+				    path,
+				    CSILK_MAX_CHILDREN);
 			}
+		} else {
+			CSILK_LOG_T("Router: matched existing node '%s' (type: %d) under node '%s'",
+				    seg_name,
+				    type,
+				    curr->segment[0] ? curr->segment : "/");
 		}
 		free(seg_name);
 		if (!found) {
@@ -420,6 +440,8 @@ router_add_full(csilk_router_t* r,
 		// path registration, so stop segment processing after a wildcard.
 		// Any segments registered after a wildcard in the same path are ignored.
 		if (type == CSILK_NODE_WILDCARD) {
+			CSILK_LOG_T("Router: stopping segment processing at wildcard node '%s'",
+				    curr->segment);
 			break;
 		}
 	}
@@ -427,7 +449,8 @@ router_add_full(csilk_router_t* r,
 	csilk_method_handler_t* mh = curr->handlers;
 	while (mh) {
 		if (strcmp(mh->method, method) == 0) {
-			CSILK_LOG_W("Duplicate route registration ignored: %s %s", method, path);
+			CSILK_LOG_W(
+			    "Router: duplicate route registration ignored: %s %s", method, path);
 			return;
 		}
 		mh = mh->next;
@@ -437,15 +460,17 @@ router_add_full(csilk_router_t* r,
 	if (mh) {
 		mh->method = strdup(method);
 		if (!mh->method) {
-			CSILK_LOG_E(
-			    "Failed to duplicate method string for route: %s %s", method, path);
+			CSILK_LOG_E("Router: failed to duplicate method string for route: %s %s",
+				    method,
+				    path);
 			free(mh);
 			return;
 		}
 		mh->handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
 		if (!mh->handlers) {
-			CSILK_LOG_E(
-			    "Failed to allocate handler array for route: %s %s", method, path);
+			CSILK_LOG_E("Router: failed to allocate handler array for route: %s %s",
+				    method,
+				    path);
 			free(mh->method);
 			free(mh);
 			return;
@@ -461,9 +486,10 @@ router_add_full(csilk_router_t* r,
 		mh->perm_resource = perm_resource;
 		mh->next = curr->handlers;
 		curr->handlers = mh;
-		CSILK_LOG_D("Route successfully registered: %s %s", method, path);
+		CSILK_LOG_D("Router: route successfully registered: %s %s", method, path);
 	} else {
-		CSILK_LOG_E("Failed to allocate method handler for route: %s %s", method, path);
+		CSILK_LOG_E(
+		    "Router: failed to allocate method handler for route: %s %s", method, path);
 	}
 }
 
@@ -797,17 +823,30 @@ match_node(csilk_router_node_t* node,
 {
 	int use_simd = (ctx && ctx->server) ? ctx->server->config.enable_simd : 1;
 
+	CSILK_LOG_T("Router: matching node '%s' (type: %d) with remaining path '%s'",
+		    node->segment[0] ? node->segment : "/",
+		    node->type,
+		    path ? path : "empty");
+
 	if (!path || *path == '\0' || (path[0] == '/' && path[1] == '\0')) {
+		CSILK_LOG_T("Router: reached leaf/terminal match at node '%s'",
+			    node->segment[0] ? node->segment : "/");
 		csilk_method_handler_t* mh = node->handlers;
 		while (mh) {
 			if (strcmp(mh->method, method) == 0) {
 				if (out_mh) {
 					*out_mh = mh;
 				}
+				CSILK_LOG_T("Router: matched handler for method '%s' at node '%s'",
+					    method,
+					    node->segment[0] ? node->segment : "/");
 				return mh->handlers;
 			}
 			mh = mh->next;
 		}
+		CSILK_LOG_T("Router: no handler for method '%s' at node '%s'",
+			    method,
+			    node->segment[0] ? node->segment : "/");
 		return nullptr;
 	}
 
@@ -815,8 +854,15 @@ match_node(csilk_router_node_t* node,
 	size_t len;
 	const char* seg = get_next_segment(&p, &len);
 	if (!seg) {
+		CSILK_LOG_T("Router: no more segments found in path '%s'", path);
 		return nullptr;
 	}
+
+	CSILK_LOG_T("Router: testing segment '%.*s' against %d children of node '%s'",
+		    (int)len,
+		    seg,
+		    node->children_count,
+		    node->segment[0] ? node->segment : "/");
 
 	csilk_handler_t* result = nullptr;
 	for (int i = 0; i < node->children_count; i++) {
@@ -832,7 +878,18 @@ match_node(csilk_router_node_t* node,
 				}
 
 				if (match) {
+					CSILK_LOG_T("Router: STATIC child '%s' matches segment "
+						    "'%.*s', recursing",
+						    child->segment,
+						    (int)len,
+						    seg);
 					result = match_node(child, method, p, ctx, out_mh);
+					if (result) {
+						break;
+					}
+					CSILK_LOG_T("Router: backtrack - match failed deeper for "
+						    "STATIC child '%s'",
+						    child->segment);
 				}
 			}
 		} else if (child->type == CSILK_NODE_PARAM) {
@@ -862,34 +919,47 @@ match_node(csilk_router_node_t* node,
 				    ctx->params[ctx->params_count].value) {
 					ctx->params_count++;
 					param_added = 1;
+					CSILK_LOG_T("Router: PARAM child '%s' matched segment "
+						    "'%.*s', captured parameter",
+						    child->segment,
+						    (int)len,
+						    seg);
 				} else {
 					// Cleanup on allocation failure (only if not using arena)
 					if (!ctx->arena) {
 						free(ctx->params[ctx->params_count].key);
 						free(ctx->params[ctx->params_count].value);
 					}
-					CSILK_LOG_E(
-					    "Failed to allocate path parameter memory for key '%s'",
-					    child->segment);
+					CSILK_LOG_E("Router: failed to allocate path parameter "
+						    "memory for key '%s'",
+						    child->segment);
 				}
 			} else if (ctx) {
-				CSILK_LOG_E(
-				    "Path parameter limit (%d) exceeded while parsing key '%s'",
-				    CSILK_MAX_PARAMS,
-				    child->segment);
+				CSILK_LOG_E("Router: path parameter limit (%d) exceeded while "
+					    "parsing key '%s'",
+					    CSILK_MAX_PARAMS,
+					    child->segment);
 			}
 			// Recurse deeper with the remaining path
 			result = match_node(child, method, p, ctx, out_mh);
 			// Backtracking rollback
 			if (!result && param_added) {
+				CSILK_LOG_T("Router: backtrack - match failed deeper for PARAM "
+					    "child '%s', rolling back parameter",
+					    child->segment);
 				ctx->params_count--;
 				if (!ctx->arena) {
 					free(ctx->params[ctx->params_count].key);
 					free(ctx->params[ctx->params_count].value);
 				}
+			} else if (result) {
+				break;
 			}
 		} else if (child->type == CSILK_NODE_WILDCARD) {
 			// WILDCARD node: matches the entire remainder of the URL path
+			CSILK_LOG_T("Router: WILDCARD child '%s' matches remaining path '%s'",
+				    child->segment,
+				    path);
 			if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
 				// Skip leading '/' of remainder if present
 				const char* val_start = path;
@@ -910,20 +980,26 @@ match_node(csilk_router_node_t* node,
 				if (ctx->params[ctx->params_count].key &&
 				    ctx->params[ctx->params_count].value) {
 					ctx->params_count++;
+					CSILK_LOG_T(
+					    "Router: captured wildcard parameter '%s' = '%s'",
+					    child->segment,
+					    val_start);
 				} else {
 					if (!ctx->arena) {
 						free(ctx->params[ctx->params_count].key);
 						free(ctx->params[ctx->params_count].value);
 					}
-					CSILK_LOG_E("Failed to allocate wildcard path parameter "
-						    "memory for key '%s'",
-						    child->segment);
+					CSILK_LOG_E(
+					    "Router: failed to allocate wildcard path parameter "
+					    "memory for key '%s'",
+					    child->segment);
 				}
 			} else if (ctx) {
-				CSILK_LOG_E("Path parameter limit (%d) exceeded while parsing "
-					    "wildcard key '%s'",
-					    CSILK_MAX_PARAMS,
-					    child->segment);
+				CSILK_LOG_E(
+				    "Router: path parameter limit (%d) exceeded while parsing "
+				    "wildcard key '%s'",
+				    CSILK_MAX_PARAMS,
+				    child->segment);
 			}
 			// Directly check the wildcard node's handlers
 			csilk_method_handler_t* mh = child->handlers;
@@ -933,6 +1009,10 @@ match_node(csilk_router_node_t* node,
 						*out_mh = mh;
 					}
 					result = mh->handlers;
+					CSILK_LOG_T("Router: matched handler for method '%s' at "
+						    "wildcard node '%s'",
+						    method,
+						    child->segment);
 					break;
 				}
 				mh = mh->next;

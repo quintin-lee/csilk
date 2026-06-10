@@ -69,26 +69,34 @@ static void
 on_stop_async(uv_async_t* handle)
 {
 	csilk_server_t* server = (csilk_server_t*)handle->data;
+	CSILK_LOG_I("Server: initiating graceful shutdown");
 
 	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
 
 	if (!uv_is_closing((uv_handle_t*)&server->server_handle)) {
+		CSILK_LOG_D("Server: closing server socket listener");
 		uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
 	}
 
 	uv_mutex_lock(&server->clients_mutex);
 	csilk_client_t* client = server->active_clients;
+	int active_client_count = 0;
 	while (client) {
 		if (client->handle.loop == server->loop) {
+			active_client_count++;
 			if (client->ctx.is_websocket) {
+				CSILK_LOG_D("Server: closing active WebSocket client %p",
+					    (void*)client);
 				csilk_ws_close(&client->ctx, 1001, "Server stopping");
 				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 					uv_close((uv_handle_t*)&client->handle, on_close);
 				}
 			} else if (client->ctx.is_sse) {
+				CSILK_LOG_D("Server: closing active SSE client %p", (void*)client);
 				csilk_sse_send(&client->ctx, "close", "Server stopping");
 				csilk_sse_close(&client->ctx);
 			} else {
+				CSILK_LOG_D("Server: closing active HTTP client %p", (void*)client);
 				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 					uv_close((uv_handle_t*)&client->handle, on_close);
 				}
@@ -97,6 +105,9 @@ on_stop_async(uv_async_t* handle)
 		client = client->next;
 	}
 	uv_mutex_unlock(&server->clients_mutex);
+	if (active_client_count > 0) {
+		CSILK_LOG_I("Server: closed %d active client connection(s)", active_client_count);
+	}
 
 	if (!uv_is_closing((uv_handle_t*)&server->sig_handle)) {
 		uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
@@ -106,10 +117,12 @@ on_stop_async(uv_async_t* handle)
 	}
 
 	for (int i = 1; i < server->worker_pool_count; i++) {
+		CSILK_LOG_D("Server: signaling worker thread %d to stop", i);
 		uv_async_send(&server->worker_pools[i].stop_async);
 	}
 
 	if (server->mq) {
+		CSILK_LOG_D("Server: freeing message queue");
 		_csilk_mq_free(server->mq);
 		server->mq = nullptr;
 	}
@@ -281,11 +294,14 @@ csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 		return -1;
 	}
 	if (server->middleware_count >= 32) {
-		CSILK_LOG_E("Global middleware limit (32) reached. Middleware "
+		CSILK_LOG_E("Server: global middleware limit (32) reached. Middleware "
 			    "dropped.");
 		return -1;
 	}
 	server->middlewares[server->middleware_count++] = handler;
+	CSILK_LOG_D("Server: registered global middleware %p (count: %d)",
+		    (void*)handler,
+		    server->middleware_count);
 	return 0;
 }
 
@@ -855,13 +871,14 @@ csilk_server_run(csilk_server_t* server, int port)
 	if (server->config.enable_openapi && server->router) {
 		static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
 		csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
-		CSILK_LOG_I("OpenAPI endpoint automatically registered at GET /openapi.json");
+		CSILK_LOG_I(
+		    "Server: OpenAPI endpoint automatically registered at GET /openapi.json");
 	}
 
 	if (server->config.enable_tls) {
 		init_tls(server);
 		if (!server->ssl_ctx) {
-			CSILK_LOG_E("Failed to initialize TLS context");
+			CSILK_LOG_E("Server: failed to initialize TLS context");
 			return -1;
 		}
 	}
@@ -873,6 +890,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
 	int r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
 	if (r < 0) {
+		CSILK_LOG_E("Server: failed to initialize async handle: %s", uv_strerror(r));
 		return -1;
 	}
 	server->async_handle.data = server;
@@ -880,6 +898,8 @@ csilk_server_run(csilk_server_t* server, int port)
 	r = bind_and_listen(
 	    server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1);
 	if (r < 0) {
+		CSILK_LOG_E(
+		    "Server: failed to bind and listen on port %d: %s", port, uv_strerror(r));
 		return -1;
 	}
 
@@ -888,6 +908,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	server->worker_pool_count = workers;
 	server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
 	if (!server->worker_pools) {
+		CSILK_LOG_E("Server: failed to allocate memory for worker pools");
 		uv_close((uv_handle_t*)&server->async_handle, nullptr);
 		uv_close((uv_handle_t*)&server->server_handle, nullptr);
 		return -1;
@@ -903,6 +924,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	}
 
 	if (workers > 1) {
+		CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
 		int nworkers = workers - 1;
 		server->worker_tids = malloc((size_t)nworkers * sizeof(uv_thread_t));
 		if (server->worker_tids) {
@@ -918,6 +940,8 @@ csilk_server_run(csilk_server_t* server, int port)
 
 				worker_data_t* data = malloc(sizeof(worker_data_t));
 				if (!data) {
+					CSILK_LOG_E("Server: failed to allocate memory for worker "
+						    "thread data");
 					continue;
 				}
 				data->wp = &server->worker_pools[idx];
@@ -928,7 +952,10 @@ csilk_server_run(csilk_server_t* server, int port)
 
 			uv_barrier_wait(&barrier);
 			uv_barrier_destroy(&barrier);
+			CSILK_LOG_I("Server: all %d worker threads spawned successfully",
+				    workers - 1);
 		} else {
+			CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
 			free(server->worker_tids);
 			server->worker_tids = nullptr;
 		}
@@ -936,6 +963,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
 	r = uv_signal_init(server->loop, &server->sig_handle);
 	if (r < 0) {
+		CSILK_LOG_E("Server: failed to initialize signal handle: %s", uv_strerror(r));
 		uv_close((uv_handle_t*)&server->async_handle, nullptr);
 		uv_close((uv_handle_t*)&server->server_handle, nullptr);
 		return -1;
@@ -943,6 +971,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	server->sig_handle.data = server;
 	r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
 	if (r < 0) {
+		CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", uv_strerror(r));
 		uv_close((uv_handle_t*)&server->sig_handle, nullptr);
 		uv_close((uv_handle_t*)&server->async_handle, nullptr);
 		uv_close((uv_handle_t*)&server->server_handle, nullptr);
