@@ -70,6 +70,7 @@ static void
 init_session_mutex(void)
 {
 	uv_mutex_init(&session_mutex);
+	CSILK_LOG_I("Session: Mutex initialized");
 }
 
 /**
@@ -209,7 +210,7 @@ remove_session_locked(csilk_session_t* session)
  * expires_at timestamp is <= the current time. Also frees all key-value
  * data items belonging to each expired session.
  *
- * @note Acquires and releases session_mutex during the sweep.
+ * @note Base path locks session_mutex during the sweep.
  */
 static void
 cleanup_expired(void)
@@ -220,6 +221,7 @@ cleanup_expired(void)
 	csilk_session_t* s = session_store;
 	while (s) {
 		if (s->expires_at <= now) {
+			CSILK_LOG_D("Session: Cleaning up expired session '%s'", s->id);
 			csilk_session_data_t* d = s->data;
 			while (d) {
 				csilk_session_data_t* next = d->next;
@@ -247,6 +249,7 @@ cleanup_expired(void)
 void
 csilk_session_init(void)
 {
+	CSILK_LOG_I("Session: Initializing session subsystem");
 	cleanup_expired();
 }
 
@@ -274,6 +277,8 @@ csilk_session_start(csilk_ctx_t* c)
 		return;
 	}
 
+	CSILK_LOG_T("Session: Starting session check for request %p", (void*)c);
+
 	/* Look for an existing session cookie. If found and valid, resume it.
      Otherwise create a fresh session with a new UUID. */
 	const char* sid = csilk_get_cookie(c, SESSION_COOKIE);
@@ -285,10 +290,11 @@ csilk_session_start(csilk_ctx_t* c)
 
 	if (!session) {
 		/* No session found — allocate a new one, generate an ID, and insert
-       into the global store. The session cookie (HTTP-only, no JS access)
-       is set with a 24-hour lifetime. */
+        into the global store. The session cookie (HTTP-only, no JS access)
+        is set with a 24-hour lifetime. */
 		session = calloc(1, sizeof(csilk_session_t));
 		if (!session) {
+			CSILK_LOG_E("Session: Memory allocation failed for new session");
 			return;
 		}
 
@@ -297,14 +303,18 @@ csilk_session_start(csilk_ctx_t* c)
 
 		add_session_locked(session);
 
+		CSILK_LOG_D(
+		    "Session: Created new session '%s' for request %p", session->id, (void*)c);
 		csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", nullptr, 0, 1);
 	} else {
 		/* Existing session: extend the expiry window. */
 		session->expires_at = time(nullptr) + SESSION_TTL;
+		CSILK_LOG_D(
+		    "Session: Resumed existing session '%s' for request %p", session->id, (void*)c);
 	}
 
 	/* Store session pointer in context for downstream handlers to access
-     via csilk_session_get() / csilk_session_set(). */
+      via csilk_session_get() / csilk_session_set(). */
 	csilk_set(c, "_session", session);
 }
 
@@ -337,6 +347,8 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
 		return;
 	}
 
+	CSILK_LOG_T("Session: Storing key '%s' in session '%s'", key, session->id);
+
 	csilk_session_data_t* d = session->data;
 	while (d) {
 		if (strcmp(d->key, key) == 0) {
@@ -348,6 +360,7 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
 
 	csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
 	if (!new_d) {
+		CSILK_LOG_E("Session: Memory allocation failed for session key '%s'", key);
 		return;
 	}
 
@@ -380,6 +393,8 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
 	if (!session) {
 		return nullptr;
 	}
+
+	CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
 
 	csilk_session_data_t* d = session->data;
 	while (d) {
@@ -428,6 +443,8 @@ csilk_session_destroy(csilk_ctx_t* c)
 	if (!session) {
 		return;
 	}
+
+	CSILK_LOG_I("Session: Destroying session '%s' for request %p", session->id, (void*)c);
 
 	remove_session_locked(session);
 
