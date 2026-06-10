@@ -77,6 +77,7 @@ csilk_wf_new(const char* name)
 	wf->loop = uv_default_loop();
 	uv_mutex_init(&wf->monitor_mutex);
 	uv_mutex_init(&wf->ctx_mutex);
+	CSILK_LOG_D("Workflow: created new workflow instance '%s'", name);
 	return wf;
 }
 
@@ -132,6 +133,7 @@ csilk_wf_free(csilk_wf_t* wf)
 	if (!wf) {
 		return;
 	}
+	CSILK_LOG_D("Workflow: destroying workflow instance '%s'", wf->name);
 	while (wf->active_context_count > 0) {
 		_wf_cleanup_ctx(wf->active_contexts[0]);
 	}
@@ -179,6 +181,8 @@ csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* u
 		csilk_wf_node_t** new_nodes =
 		    realloc(wf->nodes, sizeof(csilk_wf_node_t*) * new_cap);
 		if (!new_nodes) {
+			CSILK_LOG_E("Workflow: realloc failed for nodes array on workflow '%s'",
+				    wf->name);
 			return nullptr;
 		}
 		wf->nodes = new_nodes;
@@ -193,6 +197,7 @@ csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* u
 	node->user_data = user_data;
 	node->index = (int)wf->node_count;
 	wf->nodes[wf->node_count++] = node;
+	CSILK_LOG_I("Workflow: added node '%s' to workflow '%s'", id, wf->name);
 	return node;
 }
 
@@ -217,6 +222,8 @@ add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 		csilk_wf_edge_t* new_edges =
 		    realloc(from->edges, sizeof(csilk_wf_edge_t) * new_cap);
 		if (!new_edges) {
+			CSILK_LOG_E("Workflow: realloc failed for edges array on node '%s'",
+				    from->id);
 			return;
 		}
 		from->edges = new_edges;
@@ -226,6 +233,10 @@ add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 	e->condition = condition ? strdup(condition) : nullptr;
 	e->target = to;
 	to->incoming_count++;
+	CSILK_LOG_D("Workflow: added edge from '%s' to '%s' (condition: '%s')",
+		    from->id,
+		    to->id,
+		    condition ? condition : "none");
 }
 
 /**
@@ -318,6 +329,7 @@ csilk_wf_set_persistence(csilk_wf_t* wf, const char* wal_dir)
 	}
 	wf->wal_dir = strdup(wal_dir);
 	mkdir(wal_dir, 0755);
+	CSILK_LOG_I("Workflow: enabled WAL persistence in directory '%s'", wal_dir);
 }
 
 /* --- Budget --- */
@@ -332,6 +344,7 @@ csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens)
 {
 	if (wf) {
 		wf->max_tokens = max_tokens;
+		CSILK_LOG_I("Workflow: set maximum token budget of %d tokens", max_tokens);
 	}
 }
 
@@ -358,6 +371,7 @@ csilk_wf_set_ttl(csilk_wf_t* wf, int ttl_sec)
 {
 	if (wf) {
 		wf->ttl_sec = ttl_sec;
+		CSILK_LOG_I("Workflow: set default context TTL of %d seconds", ttl_sec);
 	}
 }
 
@@ -430,6 +444,9 @@ csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote)
 		if (is_remote && node->handler == nullptr) {
 			node->handler = remote_pass_handler;
 		}
+		CSILK_LOG_I("Workflow: configured node '%s' for %s execution",
+			    node->id,
+			    is_remote ? "remote" : "local");
 	}
 }
 
@@ -529,6 +546,9 @@ csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq)
 		g_distributed_wfs[g_distributed_wf_count++] = wf;
 	}
 	csilk_mq_subscribe(mq, "csilk.wf.results", on_remote_result);
+	CSILK_LOG_I("Workflow: enabled distributed execution on message queue topic "
+		    "'csilk.wf.results' for workflow '%s'",
+		    wf->name);
 }
 
 /* --- Node Lookup --- */
