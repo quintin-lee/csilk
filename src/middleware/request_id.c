@@ -50,6 +50,7 @@ csilk_request_id_middleware(csilk_ctx_t* c)
 	csilk_set_header(c, "X-Request-Id", rid);
 
 	csilk_log_set_request_id(rid);
+	CSILK_LOG_T("RequestID: Assigned ID '%s' to request %p", rid, (void*)c);
 
 	csilk_next(c);
 }
@@ -69,6 +70,8 @@ csilk_health_check_handler(csilk_ctx_t* c)
 	if (!c) {
 		return;
 	}
+
+	CSILK_LOG_T("HealthCheck: Liveness probe triggered");
 
 	csilk_arena_t* arena = csilk_get_arena(c);
 	if (!arena) {
@@ -120,6 +123,8 @@ csilk_ready_check_handler(csilk_ctx_t* c)
 		return;
 	}
 
+	CSILK_LOG_T("HealthCheck: Readiness probe triggered");
+
 	int is_healthy = 1;
 	const char* reason = nullptr;
 
@@ -137,6 +142,14 @@ csilk_ready_check_handler(csilk_ctx_t* c)
 	if (active > 5000) { /* Threshold for connection limit */
 		is_healthy = 0;
 		reason = "connection_limit_reached";
+	}
+
+	if (!is_healthy) {
+		CSILK_LOG_W("HealthCheck: Readiness probe failed: %s (MQ queue depth: %u, active "
+			    "connections: %d)",
+			    reason,
+			    mq.queue_depth,
+			    active);
 	}
 
 	csilk_arena_t* arena = csilk_get_arena(c);
