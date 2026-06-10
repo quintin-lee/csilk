@@ -122,6 +122,8 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 		return nullptr;
 	}
 
+	CSILK_LOG_T("Validate: starting validation for request %p", (void*)c);
+
 	for (const csilk_valid_rule_t* r = rules; r->field; r++) {
 		const char* value = nullptr;
 
@@ -143,11 +145,23 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 			}
 		}
 
+		CSILK_LOG_T("Validate: checking field '%s' (source: %s, flags: 0x%X, val: '%s')",
+			    r->field,
+			    r->source ? r->source : "default",
+			    r->flags,
+			    value ? value : "(null)");
+
 		if (!value && (r->flags & CSILK_VALID_REQUIRED)) {
+			CSILK_LOG_W(
+			    "Validate: validation failed - field '%s' is required but not provided",
+			    r->field);
 			return r->field;
 		}
 
 		if (!value) {
+			CSILK_LOG_D(
+			    "Validate: field '%s' is missing but not required, skipping checks",
+			    r->field);
 			continue;
 		}
 
@@ -157,10 +171,19 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 				p++;
 			}
 			if (!*p) {
+				CSILK_LOG_W("Validate: validation failed - field '%s' has empty or "
+					    "sign-only int value '%s'",
+					    r->field,
+					    value);
 				return r->field;
 			}
 			while (*p) {
 				if (!isdigit((unsigned char)*p)) {
+					CSILK_LOG_W("Validate: validation failed - field '%s' has "
+						    "non-numeric char '%c' in value '%s'",
+						    r->field,
+						    *p,
+						    value);
 					return r->field;
 				}
 				p++;
@@ -168,6 +191,12 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 			long num = atol(value);
 			if (r->min < r->max) {
 				if (num < (long)r->min || num > (long)r->max) {
+					CSILK_LOG_W("Validate: validation failed - field '%s' "
+						    "integer value %ld is out of range [%d, %d]",
+						    r->field,
+						    num,
+						    r->min,
+						    r->max);
 					return r->field;
 				}
 			}
@@ -177,6 +206,12 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 			size_t slen = strlen(value);
 			if (r->min < r->max) {
 				if ((int)slen < r->min || (int)slen > r->max) {
+					CSILK_LOG_W("Validate: validation failed - field '%s' "
+						    "string length %zu is out of range [%d, %d]",
+						    r->field,
+						    slen,
+						    r->min,
+						    r->max);
 					return r->field;
 				}
 			}
@@ -184,10 +219,15 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 
 		if (r->flags & CSILK_VALID_EMAIL) {
 			if (!is_valid_email(value)) {
+				CSILK_LOG_W("Validate: validation failed - field '%s' value '%s' "
+					    "is not a valid email address",
+					    r->field,
+					    value);
 				return r->field;
 			}
 		}
 	}
 
+	CSILK_LOG_D("Validate: all validation rules passed successfully for request %p", (void*)c);
 	return nullptr;
 }

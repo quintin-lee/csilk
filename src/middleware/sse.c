@@ -29,6 +29,8 @@ on_sse_write(uv_write_t* req, int status)
 {
 	if (status < 0) {
 		CSILK_LOG_E("SSE write error: %s", uv_strerror(status));
+	} else {
+		CSILK_LOG_T("SSE: write completed successfully");
 	}
 	if (req->data) {
 		free(req->data);
@@ -58,6 +60,8 @@ csilk_sse_init(csilk_ctx_t* c)
 		return;
 	}
 
+	CSILK_LOG_I("SSE: initializing event-stream connection for request %p", (void*)c);
+
 	csilk_set_header(c, "Content-Type", "text/event-stream");
 	csilk_set_header(c, "Cache-Control", "no-cache");
 	csilk_set_header(c, "Connection", "keep-alive");
@@ -68,6 +72,9 @@ csilk_sse_init(csilk_ctx_t* c)
 
 	void* internal_client = _csilk_get_internal_client(c);
 	if (!internal_client) {
+		CSILK_LOG_E(
+		    "SSE: failed to initialize - internal client stream missing for request %p",
+		    (void*)c);
 		return;
 	}
 
@@ -81,11 +88,13 @@ csilk_sse_init(csilk_ctx_t* c)
 	size_t hdr_len = strlen(hdr);
 	uv_write_t* req = malloc(sizeof(uv_write_t));
 	if (!req) {
+		CSILK_LOG_E("SSE: malloc failed for uv_write_t request");
 		return;
 	}
 
 	char* buf = malloc(hdr_len);
 	if (!buf) {
+		CSILK_LOG_E("SSE: malloc failed for header write buffer");
 		free(req);
 		return;
 	}
@@ -123,6 +132,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 {
 	void* internal_client = _csilk_get_internal_client(c);
 	if (!c || !internal_client) {
+		CSILK_LOG_W("SSE: send failed - context or client missing");
 		return;
 	}
 
@@ -135,8 +145,16 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 	size_t event_len = event ? strlen(event) : 0;
 	size_t data_len = data ? strlen(data) : 0;
 	size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 1;
+
+	CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
+		    event ? event : "",
+		    data_len,
+		    (void*)c);
+
 	char* buf = malloc(buf_size);
 	if (!buf) {
+		CSILK_LOG_E("SSE: failed to allocate memory for event buffer of size %zu",
+			    buf_size);
 		return;
 	}
 
@@ -151,6 +169,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 
 	uv_write_t* req = malloc(sizeof(uv_write_t));
 	if (!req) {
+		CSILK_LOG_E("SSE: malloc failed for uv_write_t request structure");
 		free(buf);
 		return;
 	}
@@ -175,8 +194,12 @@ csilk_sse_close(csilk_ctx_t* c)
 {
 	void* internal_client = _csilk_get_internal_client(c);
 	if (!c || !internal_client) {
+		CSILK_LOG_W("SSE: close ignored - context or client missing");
 		return;
 	}
+
+	CSILK_LOG_I("SSE: closing connection for request %p", (void*)c);
+
 	uv_stream_t* stream = (uv_stream_t*)internal_client;
 	if (!uv_is_closing((uv_handle_t*)stream)) {
 		uv_close((uv_handle_t*)stream, nullptr);

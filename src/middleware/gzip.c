@@ -47,6 +47,7 @@ gzip_work_cb(uv_work_t* req)
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
 	if (!state) {
+		CSILK_LOG_E("Gzip: async state missing in work callback");
 		return;
 	}
 
@@ -55,8 +56,11 @@ gzip_work_cb(uv_work_t* req)
 	z_stream strm;
 	memset(&strm, 0, sizeof(strm));
 
+	CSILK_LOG_T("Gzip: starting deflation of %zu bytes in thread-pool", src_len);
+
 	if (deflateInit2(
 		&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+		CSILK_LOG_E("Gzip: deflateInit2 failed");
 		state->ret = Z_ERRNO;
 		return;
 	}
@@ -64,6 +68,8 @@ gzip_work_cb(uv_work_t* req)
 	state->dest_cap = deflateBound(&strm, (uLong)src_len);
 	state->dest = malloc(state->dest_cap);
 	if (!state->dest) {
+		CSILK_LOG_E("Gzip: failed to allocate compressed destination buffer of %zu bytes",
+			    state->dest_cap);
 		deflateEnd(&strm);
 		state->ret = Z_MEM_ERROR;
 		return;
@@ -77,6 +83,15 @@ gzip_work_cb(uv_work_t* req)
 	state->ret = deflate(&strm, Z_FINISH);
 	state->compressed_len = state->dest_cap - strm.avail_out;
 	deflateEnd(&strm);
+
+	if (state->ret == Z_STREAM_END) {
+		CSILK_LOG_D("Gzip: deflation complete, ratio: %.2f%% (%zu -> %zu bytes)",
+			    (double)state->compressed_len / (src_len ? src_len : 1) * 100.0,
+			    src_len,
+			    state->compressed_len);
+	} else {
+		CSILK_LOG_E("Gzip: deflation failed with zlib code %d", state->ret);
+	}
 }
 
 /**
@@ -97,17 +112,24 @@ gzip_work_cb(uv_work_t* req)
 static void
 gzip_after_work_cb(uv_work_t* req, int status)
 {
+	(void)status;
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
 
 	if (state && state->ret == Z_STREAM_END) {
+		CSILK_LOG_D("Gzip: applying compressed response body for request %p (len: %zu)",
+			    (void*)c,
+			    state->compressed_len);
 		csilk_set_response_body(c, (const char*)state->dest, state->compressed_len, 1);
 		state->dest = nullptr; // Ownership transferred to context
 
 		csilk_set_header(c, "Content-Encoding", "gzip");
 		csilk_set_header(c, "Vary", "Accept-Encoding");
-	} else if (state) {
-		if (state->dest) {
+	} else {
+		CSILK_LOG_W("Gzip: compression failed or state missing (ret: %d), sending original "
+			    "response",
+			    state ? state->ret : -1);
+		if (state && state->dest) {
 			free(state->dest);
 		}
 	}
@@ -148,6 +170,8 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 		return;
 	}
 
+	CSILK_LOG_T("Gzip: middleware invoked for request %p", (void*)c);
+
 	/* Call csilk_next() first so downstream handlers produce the response body.
      This middleware runs AFTER the route handler, not before. */
 	csilk_next(c);
@@ -155,11 +179,15 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	size_t body_len = 0;
 	const char* body = csilk_get_response_body(c, &body_len);
 	if (!body || body_len == 0) {
+		CSILK_LOG_D("Gzip: skipping response compression - empty body");
 		return;
 	}
 
 	/* Skip if already encoded */
-	if (csilk_get_header(c, "Content-Encoding")) {
+	const char* current_encoding = csilk_get_header(c, "Content-Encoding");
+	if (current_encoding) {
+		CSILK_LOG_D("Gzip: skipping response compression - already encoded as '%s'",
+			    current_encoding);
 		return;
 	}
 
@@ -171,6 +199,9 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 		    strstr(content_type, "audio/") || strstr(content_type, "application/pdf") ||
 		    strstr(content_type, "application/zip") ||
 		    strstr(content_type, "application/x-gzip")) {
+			CSILK_LOG_D("Gzip: skipping response compression - non-compressible "
+				    "Content-Type '%s'",
+				    content_type);
 			return;
 		}
 	}
@@ -179,10 +210,17 @@ csilk_gzip_middleware(csilk_ctx_t* c)
      for gzip content-encoding. */
 	const char* accept_encoding = csilk_get_header(c, "Accept-Encoding");
 	if (!accept_encoding || !strstr(accept_encoding, "gzip")) {
+		CSILK_LOG_D("Gzip: skipping response compression - client Accept-Encoding '%s' "
+			    "does not include gzip",
+			    accept_encoding ? accept_encoding : "");
 		return;
 	}
 
 	if (body_len < CSILK_GZIP_MIN_LENGTH) {
+		CSILK_LOG_D("Gzip: skipping response compression - body length %zu is below "
+			    "minimum threshold of %d bytes",
+			    body_len,
+			    CSILK_GZIP_MIN_LENGTH);
 		return;
 	}
 
@@ -191,6 +229,7 @@ csilk_gzip_middleware(csilk_ctx_t* c)
      by gzip_work_cb / gzip_after_work_cb. */
 	gzip_async_state_t* state = calloc(1, sizeof(gzip_async_state_t));
 	if (!state) {
+		CSILK_LOG_E("Gzip: failed to allocate memory for gzip_async_state_t");
 		return;
 	}
 
@@ -198,6 +237,9 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_ctx_set_async(c, 1);
+
+	CSILK_LOG_D("Gzip: scheduling asynchronous deflation of %zu bytes on thread pool",
+		    body_len);
 
 	uv_loop_t* loop = uv_default_loop();
 	uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
