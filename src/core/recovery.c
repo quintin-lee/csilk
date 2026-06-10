@@ -40,6 +40,7 @@ csilk_recovery_handler(csilk_ctx_t* c)
 	/* Install a recovery landing point. If csilk_panic() is called by any
      downstream handler, execution resumes here with setjmp returning
      non-zero (the value passed to longjmp). */
+	CSILK_LOG_T("Recovery: installing recovery landing point");
 	if (setjmp(c->jump_buffer) == 0) {
 		c->has_jump_buffer = 1;
 		csilk_next(c);
@@ -50,7 +51,8 @@ csilk_recovery_handler(csilk_ctx_t* c)
 		   descriptors, and mutexes that would otherwise leak when
 		   longjmp skips stack unwinding.  Then send a generic 500. */
 		c->has_jump_buffer = 0;
-		CSILK_LOG_W("Panic recovered in request handler! Executing deferred cleanups.");
+		CSILK_LOG_W(
+		    "Recovery: panic recovered in request handler! Executing deferred cleanups.");
 		csilk_ctx_defer_free(c);
 		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
 	}
@@ -76,10 +78,11 @@ void
 csilk_panic(csilk_ctx_t* c)
 {
 	if (c->has_jump_buffer) {
+		CSILK_LOG_W("Recovery: triggering panic (longjmp to recovery point)");
 		csilk_ctx_defer_free(c);
 		longjmp(c->jump_buffer, 1);
 	} else {
-		CSILK_LOG_F("Fatal: No recovery handler registered.");
+		CSILK_LOG_F("Recovery: fatal - no recovery handler registered.");
 		exit(1);
 	}
 }

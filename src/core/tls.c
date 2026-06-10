@@ -103,7 +103,7 @@ init_tls(csilk_server_t* s)
 			goto error;
 		}
 	} else {
-		CSILK_LOG_E("TLS enabled but cert/key files missing");
+		CSILK_LOG_E("TLS: TLS enabled but cert/key files missing");
 		goto error;
 	}
 
@@ -195,7 +195,7 @@ process_tls_read(csilk_client_t* client)
 		if (r <= 0) {
 			int err = SSL_get_error(client->ssl, r);
 			if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-				CSILK_LOG_E("TLS Handshake error: %d", err);
+				CSILK_LOG_E("TLS: Handshake error: %d", err);
 				uv_close((uv_handle_t*)&client->handle, on_close);
 			}
 			return;
@@ -205,9 +205,9 @@ process_tls_read(csilk_client_t* client)
 		SSL_get0_alpn_selected(client->ssl, &alpn_data, &alpn_len);
 		if (alpn_data && alpn_len == 2 && strncmp((const char*)alpn_data, "h2", 2) == 0) {
 			client->protocol = CSILK_PROTO_HTTP2;
-			CSILK_LOG_D("ALPN negotiated HTTP/2");
+			CSILK_LOG_D("TLS: ALPN negotiated HTTP/2");
 			if (csilk_h2_init_session(client) != 0) {
-				CSILK_LOG_E("Failed to initialize HTTP/2 session");
+				CSILK_LOG_E("TLS: Failed to initialize HTTP/2 session");
 				uv_close((uv_handle_t*)&client->handle, on_close);
 				return;
 			}
@@ -221,7 +221,7 @@ process_tls_read(csilk_client_t* client)
 			csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
 		} else if (client->protocol == CSILK_PROTO_HTTP2) {
 			if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
-				CSILK_LOG_E("HTTP/2 processing error");
+				CSILK_LOG_E("TLS: HTTP/2 processing error");
 				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 					uv_close((uv_handle_t*)&client->handle, on_close);
 				}
@@ -236,7 +236,7 @@ process_tls_read(csilk_client_t* client)
 						    &client->server->settings);
 					client->parser.data = client;
 				} else {
-					CSILK_LOG_E("TLS Parse error: %s %s",
+					CSILK_LOG_E("TLS: Parse error: %s %s",
 						    llhttp_errno_name(err),
 						    client->parser.reason ? client->parser.reason
 									  : "unknown reason");
@@ -253,7 +253,7 @@ process_tls_read(csilk_client_t* client)
 		int err = SSL_get_error(client->ssl, n);
 		if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
 		    err != SSL_ERROR_ZERO_RETURN) {
-			CSILK_LOG_E("TLS Read error: %d", err);
+			CSILK_LOG_E("TLS: Read error: %d", err);
 			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 				uv_close((uv_handle_t*)&client->handle, on_close);
 			}

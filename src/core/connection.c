@@ -280,7 +280,7 @@ on_close(uv_handle_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (client) {
-		CSILK_LOG_D("Connection closed (client pointer: %p)", (void*)client);
+		CSILK_LOG_D("Connection: closed (client pointer: %p)", (void*)client);
 		_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
 		client_list_remove(client->server, client);
 		client->ctx._internal_client = nullptr;
@@ -326,7 +326,7 @@ on_idle_timeout(uv_timer_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-		CSILK_LOG_D("Closing connection: idle timeout");
+		CSILK_LOG_D("Connection: closing connection due to idle timeout");
 		uv_close((uv_handle_t*)&client->handle, on_close);
 	}
 }
@@ -342,7 +342,7 @@ on_read_timeout(uv_timer_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-		CSILK_LOG_D("Closing connection: read timeout");
+		CSILK_LOG_D("Connection: closing connection due to read timeout");
 		uv_close((uv_handle_t*)&client->handle, on_close);
 	}
 }
@@ -410,7 +410,7 @@ void
 on_new_connection(uv_stream_t* server_stream, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("New connection error: %s", uv_strerror(status));
+		CSILK_LOG_E("Connection: new connection error: %s", uv_strerror(status));
 		return;
 	}
 
@@ -452,7 +452,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 	client->owner_pool = wp;
 	int r = uv_tcp_init(server_stream->loop, &client->handle);
 	if (r < 0) {
-		CSILK_LOG_E("uv_tcp_init error: %s", uv_strerror(r));
+		CSILK_LOG_E("Connection: uv_tcp_init error: %s", uv_strerror(r));
 		pool_put(wp, client);
 		return;
 	}
@@ -463,7 +463,8 @@ on_new_connection(uv_stream_t* server_stream, int status)
 	client_list_add(server, client);
 
 	if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
-		CSILK_LOG_D("Accepted new TCP connection (client pointer: %p)", (void*)client);
+		CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)",
+			    (void*)client);
 		if (server->config.tcp_nodelay) {
 			uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
 		}
@@ -474,7 +475,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		_csilk_trigger_hooks(server, &client->ctx, CSILK_HOOK_CONN_OPEN);
 
 		if (server->ssl_ctx) {
-			CSILK_LOG_D("Setting up TLS for connection: %p", (void*)client);
+			CSILK_LOG_D("Connection: setting up TLS for connection: %p", (void*)client);
 			if (setup_client_tls(client) < 0) {
 				uv_close((uv_handle_t*)&client->handle, on_close);
 				return;
@@ -490,7 +491,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		uv_timer_init(server_stream->loop, &client->request_timer);
 		client->request_timer.data = client;
 
-		CSILK_LOG_T("Connection timers initialized, starting read listener");
+		CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
 		if (server->config.read_timeout_ms > 0) {
 			uv_timer_start(&client->read_timer,
 				       on_read_timeout,
@@ -508,7 +509,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 
 		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
-			CSILK_LOG_E("uv_read_start error: %s", uv_strerror(r));
+			CSILK_LOG_E("Connection: uv_read_start error: %s", uv_strerror(r));
 			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 				uv_close((uv_handle_t*)&client->handle, on_close);
 			}
@@ -579,7 +580,7 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 				    &client->parser, HTTP_REQUEST, &client->server->settings);
 				client->parser.data = client;
 			} else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
-				CSILK_LOG_E("Parse error: %s %s",
+				CSILK_LOG_E("Connection: HTTP parse error: %s %s",
 					    llhttp_errno_name(err),
 					    client->parser.reason ? client->parser.reason
 								  : "unknown reason");
@@ -591,7 +592,7 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		}
 	} else if (nread < 0) {
 		if (nread != UV_EOF) {
-			CSILK_LOG_E("Read error: %s", uv_err_name((int)nread));
+			CSILK_LOG_E("Connection: read error: %s", uv_err_name((int)nread));
 		}
 		if (!uv_is_closing((uv_handle_t*)stream)) {
 			uv_close((uv_handle_t*)stream, on_close);
