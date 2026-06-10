@@ -71,6 +71,8 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 {
 	const char* range_hdr = csilk_get_header(c, "Range");
 	if (!range_hdr || strncmp(range_hdr, "bytes=", 6) != 0) {
+		CSILK_LOG_T(
+		    "Static: Serving full file (fd: %d, size: %zu, mime: %s)", fd, size, mime_type);
 		csilk_set_header(c, "Content-Type", mime_type);
 		csilk_set_header(c, "Accept-Ranges", "bytes");
 		csilk_status(c, CSILK_STATUS_OK);
@@ -81,6 +83,9 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	const char* range_val = range_hdr + 6;
 	char* dash = strchr((char*)range_val, '-');
 	if (!dash) {
+		CSILK_LOG_W(
+		    "Static: Range request unsatisfiable: missing dash (Range header: '%s')",
+		    range_hdr);
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 		uv_fs_t close_req;
 		uv_fs_close(nullptr, &close_req, fd, nullptr);
@@ -94,6 +99,9 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 		range_start = strtoll(range_val, &endptr, 10);
 		if (endptr == range_val || range_start < 0) {
 			*dash = '-';
+			CSILK_LOG_W("Static: Range request unsatisfiable: invalid start (Range "
+				    "header: '%s')",
+				    range_hdr);
 			csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 			uv_fs_t close_req;
 			uv_fs_close(nullptr, &close_req, fd, nullptr);
@@ -110,6 +118,10 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 	*dash = '-';
 
 	if (range_start > range_end || range_start >= (long long)size) {
+		CSILK_LOG_W("Static: Range request unsatisfiable: range out of bounds (Range "
+			    "header: '%s', size: %zu)",
+			    range_hdr,
+			    size);
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 		uv_fs_t close_req;
 		uv_fs_close(nullptr, &close_req, fd, nullptr);
@@ -128,6 +140,13 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 		 range_start,
 		 range_end,
 		 size);
+	CSILK_LOG_T(
+	    "Static: Serving partial file (fd: %d, start: %lld, end: %lld, size: %zu, mime: %s)",
+	    fd,
+	    range_start,
+	    range_end,
+	    size,
+	    mime_type);
 	csilk_set_header(c, "Content-Range", content_range);
 	csilk_set_header(c, "Content-Type", mime_type);
 	csilk_set_header(c, "Accept-Ranges", "bytes");
@@ -164,7 +183,12 @@ static_work_cb(uv_work_t* req)
 	char resolved_root[PATH_MAX];
 	char resolved_file[PATH_MAX];
 
+	CSILK_LOG_T("Static: Resolving static file for path '%s' relative to root '%s'",
+		    csilk_get_path(c),
+		    root_dir);
+
 	if (realpath(root_dir, resolved_root) == nullptr) {
+		CSILK_LOG_E("Static: Failed to resolve root directory path '%s'", root_dir);
 		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
 		return;
 	}
@@ -185,11 +209,16 @@ static_work_cb(uv_work_t* req)
      segments. If the resolved file path does not start with the resolved
      root directory prefix, the request is outside the allowed tree. */
 	if (realpath(full_path, resolved_file) == nullptr) {
+		CSILK_LOG_D("Static: Requested file not found: resolved path '%s' is invalid",
+			    full_path);
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
 
 	if (strncmp(resolved_root, resolved_file, strlen(resolved_root)) != 0) {
+		CSILK_LOG_W("Static: Traversal attack blocked! Path '%s' is outside root '%s'",
+			    resolved_file,
+			    resolved_root);
 		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
 		return;
 	}
@@ -198,6 +227,7 @@ static_work_cb(uv_work_t* req)
 	int fd = uv_fs_open(nullptr, &open_req, resolved_file, O_RDONLY, 0, nullptr);
 	uv_fs_req_cleanup(&open_req);
 	if (fd < 0) {
+		CSILK_LOG_D("Static: Failed to open file '%s' (error: %d)", resolved_file, fd);
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
@@ -224,10 +254,13 @@ file_work_cb(uv_work_t* req)
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	const char* file_path = (const char*)csilk_get(c, "serve_file_path");
 
+	CSILK_LOG_T("Static: Resolving specific file serve request for path '%s'", file_path);
+
 	uv_fs_t open_req;
 	int fd = uv_fs_open(nullptr, &open_req, file_path, O_RDONLY, 0, nullptr);
 	uv_fs_req_cleanup(&open_req);
 	if (fd < 0) {
+		CSILK_LOG_D("Static: Failed to open specific file '%s' (error: %d)", file_path, fd);
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
@@ -255,8 +288,10 @@ file_work_cb(uv_work_t* req)
 static void
 static_after_work_cb(uv_work_t* req, int status)
 {
-	(void)status;
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
+	CSILK_LOG_T("Static: Work complete. Sending response to client (request: %p, status: %d)",
+		    (void*)c,
+		    status);
 	_csilk_send_response(c);
 }
 
@@ -286,6 +321,11 @@ static_after_work_cb(uv_work_t* req, int status)
 void
 csilk_static(csilk_ctx_t* c, const char* root_dir)
 {
+	CSILK_LOG_D("Static: Enqueuing async static file serve request for root directory '%s' "
+		    "(prefix: '%s')",
+		    root_dir,
+		    csilk_get(c, "static_prefix") ? (const char*)csilk_get(c, "static_prefix")
+						  : "none");
 	csilk_ctx_set_async(c, 1);
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
@@ -306,6 +346,7 @@ csilk_static(csilk_ctx_t* c, const char* root_dir)
 void
 csilk_file(csilk_ctx_t* c, const char* file_path)
 {
+	CSILK_LOG_D("Static: Enqueuing async serve specific file request for path '%s'", file_path);
 	csilk_ctx_set_async(c, 1);
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
