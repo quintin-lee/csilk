@@ -24,6 +24,10 @@ from csilk.workflow import (
     WorkflowContext,
     WorkflowData,
 )
+from csilk.ai import (
+    AI,
+    AIContext,
+)
 
 
 

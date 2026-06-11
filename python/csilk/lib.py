@@ -73,7 +73,97 @@ class CsilkWfToolEntry(ctypes.Structure):
         ("user_data", ctypes.c_void_p)
     ]
 CsilkWfToolEntryPtr = ctypes.POINTER(CsilkWfToolEntry)
+class CsilkAiMessage(ctypes.Structure):
+    _fields_ = [
+        ("role", ctypes.c_char_p),
+        ("content", ctypes.c_char_p)
+    ]
 
+class CsilkAiToolCall(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_char_p),
+        ("name", ctypes.c_char_p),
+        ("arguments", ctypes.c_char_p)
+    ]
+CsilkAiToolCallPtr = ctypes.POINTER(CsilkAiToolCall)
+
+class CsilkAiChatResponse(ctypes.Structure):
+    _fields_ = [
+        ("content", ctypes.c_char_p),
+        ("tool_calls", CsilkAiToolCallPtr),
+        ("tool_call_count", ctypes.c_size_t),
+        ("prompt_tokens", ctypes.c_int),
+        ("completion_tokens", ctypes.c_int),
+        ("total_tokens", ctypes.c_int),
+        ("raw_response", ctypes.c_char_p),
+        ("error_message", ctypes.c_char_p)
+    ]
+
+class CsilkAiEmbeddingsResponse(ctypes.Structure):
+    _fields_ = [
+        ("values", ctypes.POINTER(ctypes.c_float)),
+        ("dimension", ctypes.c_size_t),
+        ("count", ctypes.c_size_t),
+        ("prompt_tokens", ctypes.c_int),
+        ("total_tokens", ctypes.c_int),
+        ("error_message", ctypes.c_char_p)
+    ]
+
+class CsilkAiToolFunction(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("description", ctypes.c_char_p),
+        ("parameters_json", ctypes.c_void_p)
+    ]
+
+class CsilkAiTool(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_char_p),
+        ("function", CsilkAiToolFunction)
+    ]
+CsilkAiToolPtr = ctypes.POINTER(CsilkAiTool)
+
+class CsilkAiChatRequest(ctypes.Structure):
+    _fields_ = [
+        ("model", ctypes.c_char_p),
+        ("messages", ctypes.POINTER(CsilkAiMessage)),
+        ("message_count", ctypes.c_size_t),
+        ("temperature", ctypes.c_double),
+        ("top_p", ctypes.c_double),
+        ("presence_penalty", ctypes.c_double),
+        ("frequency_penalty", ctypes.c_double),
+        ("max_tokens", ctypes.c_int),
+        ("stop", ctypes.POINTER(ctypes.c_char_p)),
+        ("stop_count", ctypes.c_size_t),
+        ("user", ctypes.c_char_p),
+        ("stream", ctypes.c_bool),
+        ("on_chunk", ctypes.c_void_p),
+        ("user_data", ctypes.c_void_p),
+        ("timeout_ms", ctypes.c_int),
+        ("tools", CsilkAiToolPtr),
+        ("tool_count", ctypes.c_size_t),
+        ("tool_choice", ctypes.c_char_p)
+    ]
+
+class CsilkAiContext(ctypes.Structure):
+    _fields_ = [
+        ("messages", ctypes.POINTER(CsilkAiMessage)),
+        ("count", ctypes.c_size_t),
+        ("capacity", ctypes.c_size_t),
+        ("max_history", ctypes.c_size_t)
+    ]
+
+class CsilkAiStats(ctypes.Structure):
+    _fields_ = [
+        ("requests_total", ctypes.c_uint64),
+        ("tokens_total", ctypes.c_uint64),
+        ("prompt_tokens", ctypes.c_uint64),
+        ("completion_tokens", ctypes.c_uint64),
+        ("errors_total", ctypes.c_uint64),
+        ("duration_us_total", ctypes.c_uint64)
+    ]
+
+CsilkAiStreamCb = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_void_p)
 
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
@@ -642,6 +732,46 @@ def get_bindings():
 
     lib.csilk_wf_set_budget.restype = None
     lib.csilk_wf_set_budget.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    # AI Engine Drivers
+    lib.csilk_ai_new.restype = ctypes.c_void_p
+    lib.csilk_ai_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_ai_chat.restype = ctypes.c_int
+    lib.csilk_ai_chat.argtypes = [ctypes.c_void_p, ctypes.POINTER(CsilkAiChatRequest), ctypes.POINTER(CsilkAiChatResponse)]
+
+    lib.csilk_ai_embeddings.restype = ctypes.c_int
+    lib.csilk_ai_embeddings.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.POINTER(CsilkAiEmbeddingsResponse)]
+
+    lib.csilk_ai_free.restype = None
+    lib.csilk_ai_free.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_ai_chat_response_free.restype = None
+    lib.csilk_ai_chat_response_free.argtypes = [ctypes.POINTER(CsilkAiChatResponse)]
+
+    lib.csilk_ai_embeddings_response_free.restype = None
+    lib.csilk_ai_embeddings_response_free.argtypes = [ctypes.POINTER(CsilkAiEmbeddingsResponse)]
+
+    lib.csilk_ai_context_new.restype = ctypes.c_void_p
+    lib.csilk_ai_context_new.argtypes = [ctypes.c_size_t]
+
+    lib.csilk_ai_context_add.restype = None
+    lib.csilk_ai_context_add.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_ai_context_clear.restype = None
+    lib.csilk_ai_context_clear.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_ai_context_free.restype = None
+    lib.csilk_ai_context_free.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_ai_get_stats.restype = None
+    lib.csilk_ai_get_stats.argtypes = [ctypes.POINTER(CsilkAiStats)]
+
+    lib.csilk_ai_stats_to_json.restype = ctypes.c_char_p
+    lib.csilk_ai_stats_to_json.argtypes = [ctypes.POINTER(CsilkAiStats)]
+
+    lib.csilk_ai_register_monitor.restype = None
+    lib.csilk_ai_register_monitor.argtypes = [ctypes.c_void_p]
 
     _cached_lib = lib
     return lib

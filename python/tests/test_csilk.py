@@ -10,7 +10,8 @@ import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from csilk import (
     App, Context,
-    request_id_middleware, cors, jwt_middleware
+    request_id_middleware, cors, jwt_middleware,
+    AI, AIContext
 )
 
 
@@ -483,6 +484,39 @@ class TestCsilkIntegration(unittest.TestCase):
         finally:
             app.stop()
             t.join(timeout=1.0)
+
+class TestCsilkAi(unittest.TestCase):
+    def test_ai_lifecycle(self):
+        ai = AI("openai", "mock-key")
+        self.assertIsNotNone(ai)
+        
+        stats = AI.get_stats()
+        self.assertIn("requests_total", stats)
+        
+        ai.free()
+
+        with self.assertRaises(RuntimeError):
+            AI("non-existent", "key")
+
+    def test_ai_context(self):
+        ctx = AIContext(2)
+        self.assertEqual(ctx.count, 0)
+        
+        ctx.add("user", "msg1")
+        ctx.add("assistant", "msg2")
+        self.assertEqual(ctx.count, 2)
+        self.assertEqual(ctx.messages[0]["content"], "msg1")
+        self.assertEqual(ctx.messages[1]["content"], "msg2")
+
+        ctx.add("user", "msg3")
+        self.assertEqual(ctx.count, 2)
+        self.assertEqual(ctx.messages[0]["content"], "msg2")
+        self.assertEqual(ctx.messages[1]["content"], "msg3")
+
+        ctx.clear()
+        self.assertEqual(ctx.count, 0)
+        
+        ctx.free()
 
 if __name__ == '__main__':
     unittest.main()
