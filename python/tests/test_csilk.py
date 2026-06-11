@@ -43,6 +43,13 @@ class TestCsilkIntegration(unittest.TestCase):
     def test_routing_and_requests(self):
         app = App()
         
+        # Test server config setting
+        app.set_server_config(
+            idle_timeout_ms=15000,
+            tcp_nodelay=1,
+            max_body_size=1024 * 1024
+        )
+        
         # 1. Basic Route
         @app.get("/hello")
         def handle_hello(ctx: Context):
