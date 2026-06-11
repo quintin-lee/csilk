@@ -32,6 +32,8 @@ class App:
             self._lib.csilk_app_free(self._app)
             self._app = None
         self._handlers.clear()
+        for g in self._groups:
+            g.free()
         self._groups.clear()
         self._hooks.clear()
         self._websocket_contexts.clear()
@@ -548,6 +550,19 @@ class Group:
         self._parent = parent
         self._handlers = [] # To prevent GC of wrapper callbacks
         self._lib = app._lib
+
+    def free(self):
+        if hasattr(self, "_subgroups"):
+            for sg in self._subgroups:
+                sg.free()
+            self._subgroups.clear()
+        if self._group:
+            self._lib.csilk_group_free(self._group)
+            self._group = None
+        self._handlers.clear()
+
+    def __del__(self):
+        self.free()
 
     def use(self, middleware):
         @CsilkHandler
