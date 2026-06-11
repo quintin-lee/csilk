@@ -10,6 +10,7 @@ class App:
         if not self._app:
             raise RuntimeError("Failed to create csilk application instance")
         self._handlers = [] # Reference storage to prevent garbage collection of callbacks
+        self._groups = []
         self._websocket_contexts = {}
         self._lib.csilk_session_init()
 
@@ -30,6 +31,7 @@ class App:
             self._lib.csilk_app_free(self._app)
             self._app = None
         self._handlers.clear()
+        self._groups.clear()
         self._websocket_contexts.clear()
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
@@ -280,6 +282,18 @@ class App:
     def __del__(self):
         self.free()
 
+    def group(self, prefix):
+        """Create a new top-level route group."""
+        router = self._lib.csilk_app_router(self._app)
+        if not router:
+            raise RuntimeError("Failed to retrieve underlying router")
+        g_ptr = self._lib.csilk_group_new(router, prefix.encode('utf-8'))
+        if not g_ptr:
+            raise RuntimeError(f"Failed to create route group with prefix '{prefix}'")
+        g = Group(self, prefix, g_ptr)
+        self._groups.append(g)
+        return g
+
 # Built-in C middlewares wrappers
 def recovery_middleware(ctx):
     get_bindings().csilk_recovery_handler(ctx._ctx)
@@ -423,3 +437,127 @@ class MQ:
             "queue_depth": stats.queue_depth,
             "topic_count": stats.topic_count
         }
+
+
+class Group:
+    def __init__(self, app, prefix, group_ptr, parent=None):
+        self._app = app
+        self._prefix = prefix
+        self._group = group_ptr
+        self._parent = parent
+        self._handlers = [] # To prevent GC of wrapper callbacks
+        self._lib = app._lib
+
+    def use(self, middleware):
+        @CsilkHandler
+        def wrapper(ctx_ptr):
+            ctx = Context(ctx_ptr)
+            try:
+                middleware(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                ctx.string(500, f"Internal Server Error: {str(e)}")
+        self._handlers.append(wrapper)
+        self._lib.csilk_group_use(self._group, wrapper)
+
+    def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        @CsilkHandler
+        def wrapper(ctx_ptr):
+            ctx = Context(ctx_ptr)
+            ctx._register_ws = lambda: self._app._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
+            try:
+                handler(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                ctx.string(500, f"Internal Server Error: {str(e)}")
+            finally:
+                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
+            if ctx.is_websocket:
+                self._app._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
+
+        # Keep callback reference alive in this group (and transitively in app)
+        self._handlers.append(wrapper)
+        self._app._handlers.append(wrapper)
+
+        self._lib.csilk_group_add_route_extended_perm(
+            self._group,
+            method.encode('utf-8'),
+            path.encode('utf-8'),
+            wrapper,
+            input_type.encode('utf-8') if input_type else None,
+            output_type.encode('utf-8') if output_type else None,
+            summary.encode('utf-8') if summary else None,
+            description.encode('utf-8') if description else None,
+            perm_required.encode('utf-8') if perm_required else None,
+            perm_resource.encode('utf-8') if perm_resource else None
+        )
+
+    # HTTP method decorators / shortcuts
+    def get(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("GET", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("GET", path, handler, **kwargs)
+
+    def post(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("POST", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("POST", path, handler, **kwargs)
+
+    def put(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("PUT", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("PUT", path, handler, **kwargs)
+
+    def delete(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("DELETE", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("DELETE", path, handler, **kwargs)
+
+    def patch(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("PATCH", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("PATCH", path, handler, **kwargs)
+
+    def options(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("OPTIONS", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("OPTIONS", path, handler, **kwargs)
+
+    def head(self, path, handler=None, **kwargs):
+        if handler is None:
+            def decorator(h):
+                self.route("HEAD", path, h, **kwargs)
+                return h
+            return decorator
+        self.route("HEAD", path, handler, **kwargs)
+
+    def group(self, prefix):
+        """Create a nested route group."""
+        g_ptr = self._lib.csilk_group_group(self._group, prefix.encode('utf-8'))
+        if not g_ptr:
+            raise RuntimeError(f"Failed to create sub-group with prefix '{prefix}'")
+        g = Group(self._app, prefix, g_ptr, parent=self)
+        if not hasattr(self, "_subgroups"):
+            self._subgroups = []
+        self._subgroups.append(g)
+        return g

@@ -9,7 +9,7 @@ import json
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from csilk import (
-    App, Context,
+    App, Context, Group,
     request_id_middleware, cors, jwt_middleware,
     AI, AIContext, DBPool, Crypto, Perm, VectorDB
 )
@@ -633,6 +633,82 @@ class TestCsilkVector(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             db.search("test_collection", [0.1, 0.2, 0.3])
+
+class TestCsilkGroups(unittest.TestCase):
+    def test_route_groups_and_middleware(self):
+        app = App()
+
+        # Create a route group
+        api = app.group("/api/v1")
+        self.assertIsNotNone(api)
+
+        # Add a group-level middleware
+        calls = []
+        def group_middleware(ctx):
+            calls.append("middleware")
+            ctx.next()
+        api.use(group_middleware)
+
+        # Register a route on the group
+        @api.get("/users")
+        def list_users(ctx):
+            calls.append("handler")
+            ctx.string(200, "user1, user2")
+
+        # Create a nested sub-group
+        admin = api.group("/admin")
+        self.assertIsNotNone(admin)
+
+        @admin.get("/stats")
+        def get_stats(ctx):
+            calls.append("admin_handler")
+            ctx.string(200, "stats")
+
+        import threading
+        import urllib.request
+        import urllib.error
+        import time
+        import socket
+
+        # Bypass system proxy for tests
+        proxy_handler = urllib.request.ProxyHandler({})
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
+        def run_server():
+            app.run(8085)
+
+        t = threading.Thread(target=run_server)
+        t.daemon = True
+        t.start()
+
+        # Wait for the server to be ready with retries
+        for _ in range(15):
+            try:
+                with socket.create_connection(("127.0.0.1", 8085), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            self.fail("Server did not start in time")
+
+        try:
+            # 1. Test group route "/api/v1/users"
+            req = urllib.request.urlopen("http://localhost:8085/api/v1/users")
+            body = req.read().decode('utf-8')
+            self.assertEqual(req.status, 200)
+            self.assertEqual(body, "user1, user2")
+            self.assertEqual(calls, ["middleware", "handler"])
+
+            # 2. Test nested group route "/api/v1/admin/stats"
+            req2 = urllib.request.urlopen("http://localhost:8085/api/v1/admin/stats")
+            body2 = req2.read().decode('utf-8')
+            self.assertEqual(req2.status, 200)
+            self.assertEqual(body2, "stats")
+            self.assertEqual(calls, ["middleware", "handler", "middleware", "admin_handler"])
+        finally:
+            app.stop()
+            t.join(timeout=1.0)
 
 if __name__ == '__main__':
     unittest.main()
