@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from csilk import (
     App, Context,
     request_id_middleware, cors, jwt_middleware,
-    AI, AIContext
+    AI, AIContext, DBPool
 )
 
 
@@ -517,6 +517,38 @@ class TestCsilkAi(unittest.TestCase):
         self.assertEqual(ctx.count, 0)
         
         ctx.free()
+
+class TestCsilkDb(unittest.TestCase):
+    def test_db_lifecycle_and_queries(self):
+        # 1. Initialize SQLite in-memory DB pool
+        db = DBPool("sqlite", ":memory:")
+        self.assertIsNotNone(db)
+
+        # 2. Exec CREATE TABLE
+        db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+
+        # 3. Exec INSERT
+        db.exec("INSERT INTO users (name, age) VALUES ('alice', 30)")
+        db.exec("INSERT INTO users (name, age) VALUES ('bob', 25)")
+
+        # 4. Query without params
+        rows = db.query("SELECT * FROM users ORDER BY age DESC")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["name"], "alice")
+        self.assertEqual(int(rows[0]["age"]), 30)
+        self.assertEqual(rows[1]["name"], "bob")
+        self.assertEqual(int(rows[1]["age"]), 25)
+
+        # 5. Query with params
+        rows_param = db.query("SELECT name FROM users WHERE age = ?", ["25"])
+        self.assertEqual(len(rows_param), 1)
+        self.assertEqual(rows_param[0]["name"], "bob")
+
+        # 6. Check stats
+        stats = DBPool.get_stats()
+        self.assertIn("queries_total", stats)
+
+        db.free()
 
 if __name__ == '__main__':
     unittest.main()
