@@ -18,5 +18,12 @@ from csilk.app import (
     MQ,
     MqContext,
 )
+from csilk.workflow import (
+    Workflow,
+    WorkflowNode,
+    WorkflowContext,
+    WorkflowData,
+)
+
 
 

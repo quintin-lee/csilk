@@ -700,7 +700,19 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 		for (size_t i = 0; i < ctx->wf->tool_count; i++) {
 			cJSON_Delete(tools[i].function.parameters_json);
 		}
+		for (size_t i = 0; i < discovered_count; i++) {
+			size_t idx = ctx->wf->tool_count + i;
+			cJSON_Delete(tools[idx].function.parameters_json);
+		}
 		free(tools);
+	}
+	if (discovered) {
+		for (size_t i = 0; i < discovered_count; i++) {
+			free(discovered[i].name);
+			free(discovered[i].description);
+			free(discovered[i].parameters_json);
+		}
+		free(discovered);
 	}
 	csilk_ai_free(ai);
 	return out;

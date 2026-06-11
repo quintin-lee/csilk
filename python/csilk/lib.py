@@ -23,10 +23,78 @@ class CsilkCorsConfig(ctypes.Structure):
         ("max_age", ctypes.c_int)
     ]
 
+class CsilkData(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_char_p),
+        ("value", ctypes.c_void_p),
+        ("free_fn", ctypes.c_void_p),
+        ("meta", ctypes.c_void_p)
+    ]
+CsilkDataPtr = ctypes.POINTER(CsilkData)
+
+class CsilkAiMeta(ctypes.Structure):
+    _fields_ = [
+        ("model", ctypes.c_char_p),
+        ("prompt_tokens", ctypes.c_int),
+        ("completion_tokens", ctypes.c_int)
+    ]
+CsilkAiMetaPtr = ctypes.POINTER(CsilkAiMeta)
+
+
+class CsilkAiConfig(ctypes.Structure):
+    _fields_ = [
+        ("model", ctypes.c_char_p),
+        ("system_msg", ctypes.c_char_p),
+        ("prompt", ctypes.c_char_p),
+        ("temperature", ctypes.c_double),
+        ("max_tokens", ctypes.c_int),
+        ("stream", ctypes.c_int),
+        ("max_history_messages", ctypes.c_int)
+    ]
+CsilkAiConfigPtr = ctypes.POINTER(CsilkAiConfig)
+
+class CsilkVectorSearchConfig(ctypes.Structure):
+    _fields_ = [
+        ("ai", ctypes.c_void_p),
+        ("embedding_model", ctypes.c_char_p),
+        ("db", ctypes.c_void_p),
+        ("collection", ctypes.c_char_p),
+        ("limit", ctypes.c_int),
+        ("input_template", ctypes.c_char_p)
+    ]
+CsilkVectorSearchConfigPtr = ctypes.POINTER(CsilkVectorSearchConfig)
+
+class CsilkWfToolEntry(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("description", ctypes.c_char_p),
+        ("parameters_json", ctypes.c_char_p),
+        ("fn", ctypes.c_void_p),
+        ("user_data", ctypes.c_void_p)
+    ]
+CsilkWfToolEntryPtr = ctypes.POINTER(CsilkWfToolEntry)
+
+
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
 CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p)
 CsilkMqHandler = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+
+CsilkWfHandler = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p)
+CsilkWfRouter = ctypes.CFUNCTYPE(ctypes.c_char_p, CsilkDataPtr)
+CsilkWfToolFn = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p)
+CsilkWfRunCallback = ctypes.CFUNCTYPE(None, CsilkDataPtr)
+CsilkWfRunTracedCallback = ctypes.CFUNCTYPE(None, CsilkDataPtr, ctypes.c_void_p)
+CsilkWfToolDiscovery = ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_void_p),
+    ctypes.POINTER(ctypes.c_size_t),
+    ctypes.c_void_p
+)
+
 
 class CsilkMqStats(ctypes.Structure):
     _fields_ = [
@@ -414,5 +482,133 @@ def get_bindings():
     lib.csilk_admin_serve_secure.restype = None
     lib.csilk_admin_serve_secure.argtypes = [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]
     
+    # Utilities
+    lib.csilk_malloc.restype = ctypes.c_void_p
+    lib.csilk_malloc.argtypes = [ctypes.c_size_t]
+
+    lib.csilk_strdup.restype = ctypes.c_void_p
+    lib.csilk_strdup.argtypes = [ctypes.c_char_p]
+
+    # Workflow Engine
+    lib.csilk_wf_serve_ui.restype = None
+    lib.csilk_wf_serve_ui.argtypes = [CsilkAppPtr, ctypes.c_char_p]
+
+    lib.csilk_wf_new.restype = ctypes.c_void_p
+    lib.csilk_wf_new.argtypes = [ctypes.c_char_p]
+
+    lib.csilk_wf_free.restype = None
+    lib.csilk_wf_free.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_wf_add.restype = ctypes.c_void_p
+    lib.csilk_wf_add.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_add_ai.restype = ctypes.c_void_p
+    lib.csilk_wf_add_ai.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_add_vector_search.restype = ctypes.c_void_p
+    lib.csilk_wf_add_vector_search.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_register_tool.restype = None
+    lib.csilk_wf_register_tool.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_set_tool_discovery.restype = None
+    lib.csilk_wf_set_tool_discovery.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_get_node.restype = ctypes.c_void_p
+    lib.csilk_wf_get_node.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_wf_node_set_entry.restype = None
+    lib.csilk_wf_node_set_entry.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_bind.restype = None
+    lib.csilk_wf_bind.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_on.restype = None
+    lib.csilk_wf_on.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_on_loop.restype = None
+    lib.csilk_wf_on_loop.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_on_error.restype = None
+    lib.csilk_wf_on_error.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_route.restype = None
+    lib.csilk_wf_route.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_node_set_join.restype = None
+    lib.csilk_wf_node_set_join.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_node_set_interactive.restype = None
+    lib.csilk_wf_node_set_interactive.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_node_set_schema.restype = None
+    lib.csilk_wf_node_set_schema.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_wf_signal_continue.restype = None
+    lib.csilk_wf_signal_continue.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkDataPtr, ctypes.c_void_p]
+
+    lib.csilk_wf_node_set_timeout.restype = None
+    lib.csilk_wf_node_set_timeout.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_set_ttl.restype = None
+    lib.csilk_wf_set_ttl.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_node_set_retry.restype = None
+    lib.csilk_wf_node_set_retry.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+
+    lib.csilk_wf_node_set_remote.restype = None
+    lib.csilk_wf_node_set_remote.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+    lib.csilk_wf_enable_distributed.restype = None
+    lib.csilk_wf_enable_distributed.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+    lib.csilk_wf_set_persistence.restype = None
+    lib.csilk_wf_set_persistence.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_wf_run.restype = ctypes.c_char_p
+    lib.csilk_wf_run.argtypes = [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]
+
+    lib.csilk_wf_resume.restype = None
+    lib.csilk_wf_resume.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_run_traced.restype = None
+    lib.csilk_wf_run_traced.argtypes = [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]
+
+    lib.csilk_wf_trace_to_json.restype = ctypes.c_void_p
+    lib.csilk_wf_trace_to_json.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_wf_trace_free.restype = None
+    lib.csilk_wf_trace_free.argtypes = [ctypes.c_void_p]
+
+    # Memory Helpers (Arena-backed)
+    lib.csilk_wf_data_new.restype = CsilkDataPtr
+    lib.csilk_wf_data_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_strdup.restype = ctypes.c_void_p
+    lib.csilk_wf_strdup.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_wf_alloc.restype = ctypes.c_void_p
+    lib.csilk_wf_alloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+
+    # Declarative API
+    lib.csilk_wf_register_handler.restype = None
+    lib.csilk_wf_register_handler.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_wf_load_yaml.restype = ctypes.c_void_p
+    lib.csilk_wf_load_yaml.argtypes = [ctypes.c_char_p]
+
+    lib.csilk_wf_from_json.restype = ctypes.c_void_p
+    lib.csilk_wf_from_json.argtypes = [ctypes.c_char_p]
+
+    lib.csilk_wf_to_mermaid.restype = ctypes.c_void_p
+    lib.csilk_wf_to_mermaid.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_wf_register_monitor.restype = None
+    lib.csilk_wf_register_monitor.argtypes = [ctypes.c_void_p, CsilkCtxPtr]
+
+    lib.csilk_wf_set_budget.restype = None
+    lib.csilk_wf_set_budget.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
     _cached_lib = lib
     return lib
+
