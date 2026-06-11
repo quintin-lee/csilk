@@ -185,6 +185,58 @@ class App:
     def apply_config(self):
         self._lib.csilk_app_apply_config(self._app)
 
+    def set_server_config(self, 
+                          idle_timeout_ms=0, 
+                          read_timeout_ms=0, 
+                          write_timeout_ms=0, 
+                          request_timeout_ms=0, 
+                          max_body_size=0, 
+                          max_header_size=0, 
+                          max_url_size=0, 
+                          max_headers_count=0, 
+                          max_connections=0, 
+                          listen_backlog=0, 
+                          tcp_nodelay=0, 
+                          tcp_keepalive=0, 
+                          worker_threads=0, 
+                          enable_tls=0, 
+                          tls_cert_file=None, 
+                          tls_key_file=None, 
+                          tls_ca_file=None, 
+                          tls_verify_peer=0, 
+                          h2_push_enable=0, 
+                          h2_max_push_per_request=0, 
+                          enable_simd=0, 
+                          enable_arena_alignment=0, 
+                          enable_openapi=0):
+        from csilk.lib import CsilkServerConfig
+        config = CsilkServerConfig(
+            idle_timeout_ms=idle_timeout_ms,
+            read_timeout_ms=read_timeout_ms,
+            write_timeout_ms=write_timeout_ms,
+            request_timeout_ms=request_timeout_ms,
+            max_body_size=max_body_size,
+            max_header_size=max_header_size,
+            max_url_size=max_url_size,
+            max_headers_count=max_headers_count,
+            max_connections=max_connections,
+            listen_backlog=listen_backlog,
+            tcp_nodelay=tcp_nodelay,
+            tcp_keepalive=tcp_keepalive,
+            worker_threads=worker_threads,
+            enable_tls=enable_tls,
+            tls_cert_file=tls_cert_file.encode('utf-8') if tls_cert_file else None,
+            tls_key_file=tls_key_file.encode('utf-8') if tls_key_file else None,
+            tls_ca_file=tls_ca_file.encode('utf-8') if tls_ca_file else None,
+            tls_verify_peer=tls_verify_peer,
+            h2_push_enable=h2_push_enable,
+            h2_max_push_per_request=h2_max_push_per_request,
+            enable_simd=enable_simd,
+            enable_arena_alignment=enable_arena_alignment,
+            enable_openapi=enable_openapi
+        )
+        self._lib.csilk_app_set_server_config(self._app, config)
+
     @property
     def mq(self):
         if not hasattr(self, "_mq_obj"):

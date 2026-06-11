@@ -105,6 +105,37 @@ class CsilkMqStats(ctypes.Structure):
         ("topic_count", ctypes.c_uint32)
     ]
 
+class CsilkServerConfig(ctypes.Structure):
+    _fields_ = [
+        ("idle_timeout_ms", ctypes.c_uint),
+        ("read_timeout_ms", ctypes.c_uint),
+        ("write_timeout_ms", ctypes.c_uint),
+        ("request_timeout_ms", ctypes.c_uint),
+        ("max_body_size", ctypes.c_size_t),
+        ("max_header_size", ctypes.c_size_t),
+        ("max_url_size", ctypes.c_size_t),
+        ("max_headers_count", ctypes.c_size_t),
+        ("max_connections", ctypes.c_int),
+        ("listen_backlog", ctypes.c_int),
+        ("tcp_nodelay", ctypes.c_int),
+        ("tcp_keepalive", ctypes.c_int),
+        ("worker_threads", ctypes.c_int),
+        
+        ("enable_tls", ctypes.c_int),
+        ("tls_cert_file", ctypes.c_char_p),
+        ("tls_key_file", ctypes.c_char_p),
+        ("tls_ca_file", ctypes.c_char_p),
+        ("tls_verify_peer", ctypes.c_int),
+        
+        ("h2_push_enable", ctypes.c_int),
+        ("h2_max_push_per_request", ctypes.c_int),
+        
+        ("enable_simd", ctypes.c_int),
+        ("enable_arena_alignment", ctypes.c_int),
+        
+        ("enable_openapi", ctypes.c_int)
+    ]
+
 _cached_lib = None
 
 def load_lib():
@@ -146,6 +177,9 @@ def get_bindings():
     
     lib.csilk_app_enable_openapi.restype = None
     lib.csilk_app_enable_openapi.argtypes = [CsilkAppPtr, ctypes.c_int]
+
+    lib.csilk_app_set_server_config.restype = None
+    lib.csilk_app_set_server_config.argtypes = [CsilkAppPtr, CsilkServerConfig]
     
     # Logger
     lib.csilk_app_log_level.restype = None
