@@ -458,3 +458,49 @@ class Context:
             return token
         return None
 
+    # Request-local context storage (opaque pointers)
+    def set(self, key, value):
+        if not hasattr(self, "_storage"):
+            self._storage = {}
+        key_bytes = key.encode('utf-8')
+        if isinstance(value, str):
+            value_bytes = value.encode('utf-8')
+            self._storage[key] = value_bytes
+            c_ptr = ctypes.cast(ctypes.c_char_p(value_bytes), ctypes.c_void_p)
+            self._lib.csilk_set(self._ctx, key_bytes, c_ptr)
+        elif isinstance(value, bytes):
+            self._storage[key] = value
+            c_ptr = ctypes.cast(ctypes.c_char_p(value), ctypes.c_void_p)
+            self._lib.csilk_set(self._ctx, key_bytes, c_ptr)
+        else:
+            self._storage[key] = value
+            self._lib.csilk_set(self._ctx, key_bytes, ctypes.c_void_p(id(value)))
+
+    def get(self, key):
+        key_bytes = key.encode('utf-8')
+        ptr = self._lib.csilk_get(self._ctx, key_bytes)
+        if not ptr:
+            return None
+        if hasattr(self, "_storage") and key in self._storage:
+            val = self._storage[key]
+            if isinstance(val, bytes):
+                return val.decode('utf-8')
+            return val
+        return ctypes.string_at(ptr).decode('utf-8')
+
+    @classmethod
+    def create_test_context(cls):
+        lib = get_bindings()
+        ctx_ptr = lib.csilk_test_ctx_new()
+        if not ctx_ptr:
+            raise RuntimeError("Failed to create test context")
+        ctx = cls(ctx_ptr)
+        ctx._owned = True
+        return ctx
+
+    def free_test_context(self):
+        if hasattr(self, "_owned") and self._owned and self._ctx:
+            self._lib.csilk_test_ctx_free(self._ctx)
+            self._ctx = None
+            self._owned = False
+

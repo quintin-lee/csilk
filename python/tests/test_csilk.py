@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from csilk import (
     App, Context,
     request_id_middleware, cors, jwt_middleware,
-    AI, AIContext, DBPool
+    AI, AIContext, DBPool, Crypto, Perm, VectorDB
 )
 
 
@@ -549,6 +549,90 @@ class TestCsilkDb(unittest.TestCase):
         self.assertIn("queries_total", stats)
 
         db.free()
+
+class TestCsilkCrypto(unittest.TestCase):
+    def test_random_bytes(self):
+        b1 = Crypto.random_bytes(16)
+        b2 = Crypto.random_bytes(16)
+        self.assertEqual(len(b1), 16)
+        self.assertEqual(len(b2), 16)
+        # Highly unlikely to be equal
+        self.assertNotEqual(b1, b2)
+
+    def test_generate_uuid(self):
+        u1 = Crypto.generate_uuid()
+        u2 = Crypto.generate_uuid()
+        self.assertEqual(len(u1), 36)
+        self.assertEqual(len(u2), 36)
+        self.assertNotEqual(u1, u2)
+        # Check standard UUID format (8-4-4-4-12)
+        parts = u1.split("-")
+        self.assertEqual(len(parts), 5)
+        self.assertEqual(len(parts[0]), 8)
+        self.assertEqual(len(parts[1]), 4)
+        self.assertEqual(len(parts[2]), 4)
+        self.assertEqual(len(parts[3]), 4)
+        self.assertEqual(len(parts[4]), 12)
+
+class TestCsilkPerm(unittest.TestCase):
+    def test_permission_flow(self):
+        # Initialize permission subsystem
+        Perm.init()
+        Perm.simple_init()
+        Perm.set_default("simple")
+
+        # Create test context
+        ctx = Context.create_test_context()
+
+        # Set role in context
+        ctx.set("role", "user")
+        self.assertEqual(ctx.get("role"), "user")
+
+        # Allow user to read articles
+        res = Perm.simple_allow("user", "read", "articles:*")
+        self.assertEqual(res, 0)
+
+        # Check permission allowed
+        self.assertEqual(Perm.check(ctx, "read", "articles:123"), 0)
+
+        # Check permission denied
+        self.assertEqual(Perm.check(ctx, "write", "articles:123"), -1)
+
+        # Test require does not abort for allowed permission
+        Perm.require(ctx, "read", "articles:456")
+        self.assertFalse(ctx.is_aborted)
+
+        # Test require aborts for denied permission
+        Perm.require(ctx, "write", "articles:456")
+        self.assertTrue(ctx.is_aborted)
+        self.assertEqual(ctx.status_code, 403)
+
+        # Clear rules and verify checks on a fresh test context
+        Perm.simple_clear()
+        ctx2 = Context.create_test_context()
+        ctx2.set("role", "user")
+        self.assertEqual(Perm.check(ctx2, "read", "articles:123"), -1)
+
+        ctx.free_test_context()
+        ctx2.free_test_context()
+
+class TestCsilkVector(unittest.TestCase):
+    def test_vector_db_lifecycle_and_error(self):
+        db = VectorDB("qdrant", "http://localhost:6333")
+        self.assertIsNotNone(db)
+
+        points = [
+            {
+                "id": "5ae35d5b-607a-470e-ac97-63ddee295837",
+                "vector": [0.1, 0.2, 0.3],
+                "payload": {"name": "test"}
+            }
+        ]
+        with self.assertRaises(RuntimeError):
+            db.upsert("test_collection", points)
+
+        with self.assertRaises(RuntimeError):
+            db.search("test_collection", [0.1, 0.2, 0.3])
 
 if __name__ == '__main__':
     unittest.main()
