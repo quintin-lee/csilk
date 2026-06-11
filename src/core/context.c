@@ -1067,7 +1067,21 @@ csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 	if (c->storage_driver && c->storage_driver->incr) {
 		return c->storage_driver->incr(c, key, ttl_sec);
 	}
-	return -1; /* Local storage doesn't support persistent counters */
+	/* Fallback: increment inside the request context's local map */
+	long long val = 0;
+	void* existing = csilk_get(c, key);
+	if (existing) {
+		val = atoll((const char*)existing);
+	}
+	val++;
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%lld", val);
+	char* arena_val = csilk_arena_strdup(c->arena, buf);
+	if (!arena_val) {
+		return -1;
+	}
+	csilk_set(c, key, arena_val);
+	return val;
 }
 
 /** @brief Parse the request body as JSON using cJSON.

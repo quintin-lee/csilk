@@ -14,9 +14,9 @@ CsilkAppPtr = ctypes.POINTER(CsilkApp)
 CsilkCtxPtr = ctypes.POINTER(CsilkCtx)
 CsilkServerPtr = ctypes.POINTER(CsilkServer)
 
-# Handler function callback type
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
+CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p)
 
 _cached_lib = None
 
@@ -238,6 +238,60 @@ def get_bindings():
         ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
         ctypes.c_char_p, ctypes.c_char_p
     ]
+    
+    # Utilities
+    lib.csilk_free.restype = None
+    lib.csilk_free.argtypes = [ctypes.c_void_p]
+    
+    # Cookies & Forms
+    lib.csilk_get_cookie.restype = ctypes.c_char_p
+    lib.csilk_get_cookie.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+    
+    lib.csilk_set_cookie.restype = None
+    lib.csilk_set_cookie.argtypes = [
+        CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int,
+        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int
+    ]
+    
+    lib.csilk_parse_form_urlencoded.restype = None
+    lib.csilk_parse_form_urlencoded.argtypes = [CsilkCtxPtr]
+    
+    # Hash Map Iteration
+    lib.csilk_for_each_header.restype = None
+    lib.csilk_for_each_header.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
+    
+    lib.csilk_for_each_query.restype = None
+    lib.csilk_for_each_query.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
+    
+    lib.csilk_for_each_form_field.restype = None
+    lib.csilk_for_each_form_field.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
+    
+    # Context Handler Info
+    lib.csilk_ctx_get_handler_path.restype = ctypes.c_char_p
+    lib.csilk_ctx_get_handler_path.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_ctx_get_handler_perm_required.restype = ctypes.c_char_p
+    lib.csilk_ctx_get_handler_perm_required.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_ctx_get_handler_perm_resource.restype = ctypes.c_char_p
+    lib.csilk_ctx_get_handler_perm_resource.argtypes = [CsilkCtxPtr]
+    
+    # Storage functions
+    lib.csilk_set_string.restype = ctypes.c_int
+    lib.csilk_set_string.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+    
+    lib.csilk_get_string.restype = ctypes.c_void_p
+    lib.csilk_get_string.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+    
+    lib.csilk_incr.restype = ctypes.c_longlong
+    lib.csilk_incr.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_int]
+    
+    # Response body mutation
+    lib.csilk_set_response_body.restype = None
+    lib.csilk_set_response_body.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]
+    
+    lib.csilk_get_response_body.restype = ctypes.c_char_p
+    lib.csilk_get_response_body.argtypes = [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]
     
     _cached_lib = lib
     return lib

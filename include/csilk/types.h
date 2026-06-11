@@ -353,4 +353,6 @@ typedef struct {
    types already defined to avoid circular-definition errors. */
 #include "csilk/drivers/db.h"
 
+void csilk_free(void* ptr);
+
 #endif /* CSILK_TYPES_H */

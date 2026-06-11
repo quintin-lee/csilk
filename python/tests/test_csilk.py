@@ -114,6 +114,56 @@ class TestCsilkIntegration(unittest.TestCase):
         def handle_perm(ctx: Context):
             ctx.string(200, "has permission")
 
+        # 10. Cookies Route
+        @app.get("/cookies")
+        def handle_cookies(ctx: Context):
+            c_val = ctx.get_cookie("my_cookie")
+            ctx.set_cookie("response_cookie", "cookie-ok", path="/", secure=True, http_only=True)
+            ctx.string(200, c_val if c_val else "no-cookie")
+
+        # 11. Form and Iterators Route
+        @app.post("/form-test")
+        def handle_form(ctx: Context):
+            ctx.parse_form_urlencoded()
+            queries = ctx.queries
+            headers = ctx.headers
+            form_fields = ctx.form_fields
+            ctx.json(200, {
+                "query_val": queries.get("q"),
+                "header_val": headers.get("x-test-header"),
+                "form_val": form_fields.get("field"),
+                "debug_headers": list(headers.keys())
+            })
+
+        # 12. Handler Metadata Route
+        @app.get("/meta/:some_param")
+        def handle_meta(ctx: Context):
+            ctx.json(200, {
+                "path": ctx.handler_path,
+                "perm_req": ctx.handler_perm_required,
+                "perm_res": ctx.handler_perm_resource
+            })
+
+        # 13. Storage Route
+        @app.get("/storage")
+        def handle_storage(ctx: Context):
+            ctx.set_string("mystr", "hello_storage")
+            val = ctx.get_string("mystr")
+            
+            c1 = ctx.incr("counter", 0)
+            c2 = ctx.incr("counter", 0)
+            ctx.json(200, {
+                "val": val,
+                "c1": c1,
+                "c2": c2
+            })
+
+        # 14. Response Mutation Route
+        @app.get("/response-body-test")
+        def handle_response_body(ctx: Context):
+            ctx.string(200, "original")
+            ctx.response_body = "mutated"
+
         # Run server in thread
         def run_server():
             app.run(8082)
@@ -235,6 +285,56 @@ class TestCsilkIntegration(unittest.TestCase):
             res9 = request_with_retry("http://127.0.0.1:8082/perm-check")
             self.assertEqual(res9.status, 200)
             self.assertEqual(res9.read().decode('utf-8'), "has permission")
+
+            # 10. Test Cookies
+            res10 = request_with_retry(
+                "http://127.0.0.1:8082/cookies",
+                headers={"Cookie": "my_cookie=hello-cookie"}
+            )
+            self.assertEqual(res10.status, 200)
+            self.assertEqual(res10.read().decode('utf-8'), "hello-cookie")
+            cookie_header = res10.headers.get("Set-Cookie")
+            self.assertIsNotNone(cookie_header)
+            self.assertIn("response_cookie=cookie-ok", cookie_header)
+            self.assertIn("Path=/", cookie_header)
+            self.assertIn("Secure", cookie_header)
+            self.assertIn("HttpOnly", cookie_header)
+
+            # 11. Test Form parsing and map properties (headers, queries, form_fields)
+            form_data = b"field=hello-form"
+            res11 = request_with_retry(
+                "http://127.0.0.1:8082/form-test?q=gemini",
+                data=form_data,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-Test-Header": "header-val"
+                },
+                method="POST"
+            )
+            self.assertEqual(res11.status, 200)
+            res11_json = json.loads(res11.read().decode('utf-8'))
+            self.assertEqual(res11_json["query_val"], "gemini")
+            self.assertEqual(res11_json["header_val"], "header-val")
+            self.assertEqual(res11_json["form_val"], "hello-form")
+
+            # 12. Test Handler Metadata
+            res12 = request_with_retry("http://127.0.0.1:8082/meta/hello")
+            self.assertEqual(res12.status, 200)
+            res12_json = json.loads(res12.read().decode('utf-8'))
+            self.assertEqual(res12_json["path"], "/meta/:some_param")
+
+            # 13. Test Storage String & Incr
+            res13 = request_with_retry("http://127.0.0.1:8082/storage")
+            self.assertEqual(res13.status, 200)
+            res13_json = json.loads(res13.read().decode('utf-8'))
+            self.assertEqual(res13_json["val"], "hello_storage")
+            self.assertEqual(res13_json["c1"], 1)
+            self.assertEqual(res13_json["c2"], 2)
+
+            # 14. Test Response Body Mutation
+            res14 = request_with_retry("http://127.0.0.1:8082/response-body-test")
+            self.assertEqual(res14.status, 200)
+            self.assertEqual(res14.read().decode('utf-8'), "mutated")
 
         finally:
             app.stop()
