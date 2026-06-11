@@ -326,10 +326,33 @@ def get_bindings():
     
     lib.csilk_app_server.restype = CsilkServerPtr
     lib.csilk_app_server.argtypes = [CsilkAppPtr]
+
+    lib.csilk_app_router.restype = ctypes.c_void_p
+    lib.csilk_app_router.argtypes = [CsilkAppPtr]
     
     # Server management
     lib.csilk_server_stop.restype = None
     lib.csilk_server_stop.argtypes = [CsilkServerPtr]
+
+    # Route Groups
+    lib.csilk_group_new.restype = ctypes.c_void_p
+    lib.csilk_group_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_group_group.restype = ctypes.c_void_p
+    lib.csilk_group_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_group_use.restype = None
+    lib.csilk_group_use.argtypes = [ctypes.c_void_p, CsilkHandler]
+
+    lib.csilk_group_add_route_extended_perm.restype = None
+    lib.csilk_group_add_route_extended_perm.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
+        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+        ctypes.c_char_p, ctypes.c_char_p
+    ]
+
+    lib.csilk_group_free.restype = None
+    lib.csilk_group_free.argtypes = [ctypes.c_void_p]
     
     # Context getters
     lib.csilk_get_method.restype = ctypes.c_char_p

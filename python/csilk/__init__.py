@@ -4,6 +4,7 @@
 from csilk.context import Context
 from csilk.app import (
     App,
+    Group,
     recovery_middleware,
     logger_middleware,
     waf_middleware,
