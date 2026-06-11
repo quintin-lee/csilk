@@ -26,6 +26,16 @@ class CsilkCorsConfig(ctypes.Structure):
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
 CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p)
+CsilkMqHandler = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+
+class CsilkMqStats(ctypes.Structure):
+    _fields_ = [
+        ("published_total", ctypes.c_uint64),
+        ("delivered_total", ctypes.c_uint64),
+        ("failed_total", ctypes.c_uint64),
+        ("queue_depth", ctypes.c_uint32),
+        ("topic_count", ctypes.c_uint32)
+    ]
 
 _cached_lib = None
 
@@ -351,6 +361,37 @@ def get_bindings():
     
     lib.csilk_session_get_id.restype = ctypes.c_char_p
     lib.csilk_session_get_id.argtypes = [CsilkCtxPtr]
+    
+    # Message Queue (MQ) Event Bus
+    lib.csilk_server_get_mq.restype = ctypes.c_void_p
+    lib.csilk_server_get_mq.argtypes = [CsilkServerPtr]
+    
+    lib.csilk_mq_use.restype = None
+    lib.csilk_mq_use.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]
+    
+    lib.csilk_mq_subscribe.restype = None
+    lib.csilk_mq_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]
+    
+    lib.csilk_mq_publish.restype = ctypes.c_int
+    lib.csilk_mq_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
+    
+    lib.csilk_mq_next.restype = None
+    lib.csilk_mq_next.argtypes = [ctypes.c_void_p]
+    
+    lib.csilk_mq_abort.restype = None
+    lib.csilk_mq_abort.argtypes = [ctypes.c_void_p]
+    
+    lib.csilk_mq_get_topic.restype = ctypes.c_char_p
+    lib.csilk_mq_get_topic.argtypes = [ctypes.c_void_p]
+    
+    lib.csilk_mq_get_payload.restype = ctypes.c_void_p
+    lib.csilk_mq_get_payload.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
+    
+    lib.csilk_mq_get_stats.restype = None
+    lib.csilk_mq_get_stats.argtypes = [ctypes.c_void_p, ctypes.POINTER(CsilkMqStats)]
+    
+    lib.csilk_mq_set_persistence.restype = ctypes.c_int
+    lib.csilk_mq_set_persistence.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     
     _cached_lib = lib
     return lib
