@@ -163,6 +163,14 @@ class CsilkAiStats(ctypes.Structure):
         ("duration_us_total", ctypes.c_uint64)
     ]
 
+class CsilkDbStats(ctypes.Structure):
+    _fields_ = [
+        ("queries_total", ctypes.c_uint64),
+        ("execs_total", ctypes.c_uint64),
+        ("errors_total", ctypes.c_uint64),
+        ("duration_us_total", ctypes.c_uint64)
+    ]
+
 CsilkAiStreamCb = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_void_p)
 
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
@@ -772,6 +780,35 @@ def get_bindings():
 
     lib.csilk_ai_register_monitor.restype = None
     lib.csilk_ai_register_monitor.argtypes = [ctypes.c_void_p]
+
+    # Database
+    lib.csilk_db_init.restype = None
+    lib.csilk_db_init.argtypes = []
+
+    lib.csilk_db_pool_new.restype = ctypes.c_void_p
+    lib.csilk_db_pool_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_db_pool_free.restype = None
+    lib.csilk_db_pool_free.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_db_query_json.restype = ctypes.c_void_p
+    lib.csilk_db_query_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_db_query_param_json.restype = ctypes.c_void_p
+    lib.csilk_db_query_param_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p)]
+
+    lib.csilk_db_exec.restype = ctypes.c_int
+    lib.csilk_db_exec.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
+    lib.csilk_db_get_stats.restype = None
+    lib.csilk_db_get_stats.argtypes = [ctypes.POINTER(CsilkDbStats)]
+
+    # cJSON
+    lib.cJSON_PrintUnformatted.restype = ctypes.c_void_p
+    lib.cJSON_PrintUnformatted.argtypes = [ctypes.c_void_p]
+
+    lib.cJSON_Delete.restype = None
+    lib.cJSON_Delete.argtypes = [ctypes.c_void_p]
 
     _cached_lib = lib
     return lib
