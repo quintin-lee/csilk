@@ -358,9 +358,10 @@ class Workflow:
         self._lib.csilk_wf_set_persistence(self._wf, wal_dir.encode('utf-8'))
 
     def run(self, input_val, input_type="text/plain", callback=None):
+        c_type = input_type.encode('utf-8')
         c_val = self._lib.csilk_strdup(input_val.encode('utf-8'))
         c_data = CsilkData(
-            type=input_type.encode('utf-8'),
+            type=c_type,
             value=c_val,
             free_fn=None,
             meta=None
@@ -375,7 +376,7 @@ class Workflow:
                     callback(res)
             finally:
                 self._lib.csilk_free(c_val)
-                _ = (c_data, c_input)
+                _ = (c_data, c_input, c_type)
                 if run_cb in self._run_callbacks:
                     self._run_callbacks.remove(run_cb)
 
@@ -398,9 +399,10 @@ class Workflow:
         self._lib.csilk_wf_resume(self._wf, exec_id.encode('utf-8'), run_cb)
 
     def run_traced(self, input_val, input_type="text/plain", callback=None):
+        c_type = input_type.encode('utf-8')
         c_val = self._lib.csilk_strdup(input_val.encode('utf-8'))
         c_data = CsilkData(
-            type=input_type.encode('utf-8'),
+            type=c_type,
             value=c_val,
             free_fn=None,
             meta=None
@@ -415,7 +417,7 @@ class Workflow:
                     callback(res, trace_ptr)
             finally:
                 self._lib.csilk_free(c_val)
-                _ = (c_data, c_input)
+                _ = (c_data, c_input, c_type)
                 if run_cb in self._run_callbacks:
                     self._run_callbacks.remove(run_cb)
 

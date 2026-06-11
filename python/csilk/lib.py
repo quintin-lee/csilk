@@ -203,6 +203,28 @@ class CsilkMqStats(ctypes.Structure):
         ("topic_count", ctypes.c_uint32)
     ]
 
+class CsilkVectorPoint(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_char_p),
+        ("vector", ctypes.POINTER(ctypes.c_float)),
+        ("dimension", ctypes.c_size_t),
+        ("payload", ctypes.c_void_p)
+    ]
+
+class CsilkVectorSearchResult(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_char_p),
+        ("score", ctypes.c_float),
+        ("payload", ctypes.c_void_p)
+    ]
+
+class CsilkVectorSearchResponse(ctypes.Structure):
+    _fields_ = [
+        ("results", ctypes.POINTER(CsilkVectorSearchResult)),
+        ("count", ctypes.c_size_t),
+        ("error_message", ctypes.c_char_p)
+    ]
+
 class CsilkServerConfig(ctypes.Structure):
     _fields_ = [
         ("idle_timeout_ms", ctypes.c_uint),
@@ -495,6 +517,20 @@ def get_bindings():
     lib.csilk_ctx_get_handler_perm_resource.restype = ctypes.c_char_p
     lib.csilk_ctx_get_handler_perm_resource.argtypes = [CsilkCtxPtr]
     
+    # Request-local context storage (opaque pointers)
+    lib.csilk_set.restype = None
+    lib.csilk_set.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]
+
+    lib.csilk_get.restype = ctypes.c_void_p
+    lib.csilk_get.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+
+    # Test utilities
+    lib.csilk_test_ctx_new.restype = CsilkCtxPtr
+    lib.csilk_test_ctx_new.argtypes = []
+
+    lib.csilk_test_ctx_free.restype = None
+    lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
+
     # Storage functions
     lib.csilk_set_string.restype = ctypes.c_int
     lib.csilk_set_string.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
@@ -809,6 +845,58 @@ def get_bindings():
 
     lib.cJSON_Delete.restype = None
     lib.cJSON_Delete.argtypes = [ctypes.c_void_p]
+
+    # Cryptographic utilities
+    lib.csilk_crypto_fill_random.restype = ctypes.c_int
+    lib.csilk_crypto_fill_random.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+
+    lib.csilk_generate_uuid.restype = None
+    lib.csilk_generate_uuid.argtypes = [ctypes.c_char_p]
+
+    # cJSON Parsing
+    lib.cJSON_Parse.restype = ctypes.c_void_p
+    lib.cJSON_Parse.argtypes = [ctypes.c_char_p]
+
+    # Permission management
+    lib.csilk_perm_init.restype = None
+    lib.csilk_perm_init.argtypes = []
+
+    lib.csilk_perm_set_default.restype = ctypes.c_int
+    lib.csilk_perm_set_default.argtypes = [ctypes.c_char_p]
+
+    lib.csilk_perm_check.restype = ctypes.c_int
+    lib.csilk_perm_check.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_perm_require.restype = None
+    lib.csilk_perm_require.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_perm_simple_init.restype = None
+    lib.csilk_perm_simple_init.argtypes = []
+
+    lib.csilk_perm_simple_allow.restype = ctypes.c_int
+    lib.csilk_perm_simple_allow.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_perm_simple_clear.restype = None
+    lib.csilk_perm_simple_clear.argtypes = []
+
+    lib.csilk_perm_auto_middleware.restype = None
+    lib.csilk_perm_auto_middleware.argtypes = [CsilkCtxPtr]
+
+    # Vector Database
+    lib.csilk_vector_db_new.restype = ctypes.c_void_p
+    lib.csilk_vector_db_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_vector_db_upsert.restype = ctypes.c_int
+    lib.csilk_vector_db_upsert.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(CsilkVectorPoint), ctypes.c_size_t]
+
+    lib.csilk_vector_db_search.restype = ctypes.c_int
+    lib.csilk_vector_db_search.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_float), ctypes.c_size_t, ctypes.c_int, ctypes.POINTER(CsilkVectorSearchResponse)]
+
+    lib.csilk_vector_db_free.restype = None
+    lib.csilk_vector_db_free.argtypes = [ctypes.c_void_p]
+
+    lib.csilk_vector_search_response_free.restype = None
+    lib.csilk_vector_search_response_free.argtypes = [ctypes.POINTER(CsilkVectorSearchResponse)]
 
     _cached_lib = lib
     return lib
