@@ -106,16 +106,18 @@ csilk_vector_db_free(csilk_vector_db_t* db)
 void
 csilk_vector_search_response_free(csilk_vector_search_response_t* res)
 {
-	if (!res || !res->results) {
+	if (!res) {
 		return;
 	}
-	for (size_t i = 0; i < res->count; i++) {
-		free(res->results[i].id);
-		if (res->results[i].payload) {
-			cJSON_Delete(res->results[i].payload);
+	if (res->results) {
+		for (size_t i = 0; i < res->count; i++) {
+			free(res->results[i].id);
+			if (res->results[i].payload) {
+				cJSON_Delete(res->results[i].payload);
+			}
 		}
+		free(res->results);
 	}
-	free(res->results);
 	free(res->error_message);
 
 	res->results = nullptr;

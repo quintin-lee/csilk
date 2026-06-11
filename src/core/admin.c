@@ -314,4 +314,8 @@ csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t
 	csilk_GET(group, "/profile", admin_profile_quick_handler); /* GET /admin/profile */
 
 	CSILK_LOG_D("Admin routes registered relative to group prefix '%s'", app_path);
+
+	/* The group struct and its middleware list have been copied into the router's 
+	 * handler chains for each registered route. The group builder object can now be freed. */
+	csilk_group_free(group);
 }
