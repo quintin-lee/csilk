@@ -191,6 +191,23 @@ class App:
                 return None
         return self._mq_obj
 
+    def admin_serve(self, path):
+        self._lib.csilk_admin_serve(self._app, path.encode('utf-8'))
+
+    def admin_serve_secure(self, path, auth_middleware):
+        @CsilkHandler
+        def wrapper(ctx_ptr):
+            ctx = Context(ctx_ptr)
+            try:
+                auth_middleware(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                ctx.string(500, f"Internal Server Error: {str(e)}")
+
+        self._handlers.append(wrapper)
+        self._lib.csilk_admin_serve_secure(self._app, path.encode('utf-8'), wrapper)
+
     # Run / Stop
     def run(self, port):
         return self._lib.csilk_app_run(self._app, port)

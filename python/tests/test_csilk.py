@@ -211,6 +211,9 @@ class TestCsilkIntegration(unittest.TestCase):
                 "stats": app.mq.stats
             })
 
+        # 18. Admin Dashboard
+        app.admin_serve("/admin")
+
         # Run server in thread
         def run_server():
             app.run(8082)
@@ -421,6 +424,13 @@ class TestCsilkIntegration(unittest.TestCase):
             self.assertIn("hello-mq-bus", res17_json["received"])
             self.assertGreaterEqual(res17_json["stats"]["published_total"], 1)
             self.assertGreaterEqual(res17_json["stats"]["delivered_total"], 1)
+
+            # 18. Test Admin Dashboard stats endpoint
+            res18 = request_with_retry("http://127.0.0.1:8082/admin/stats")
+            self.assertEqual(res18.status, 200)
+            res18_json = json.loads(res18.read().decode('utf-8'))
+            self.assertIn("process", res18_json)
+            self.assertIn("mq", res18_json)
 
         finally:
             app.stop()

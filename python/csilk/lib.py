@@ -393,5 +393,12 @@ def get_bindings():
     lib.csilk_mq_set_persistence.restype = ctypes.c_int
     lib.csilk_mq_set_persistence.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     
+    # Admin Dashboard
+    lib.csilk_admin_serve.restype = None
+    lib.csilk_admin_serve.argtypes = [CsilkAppPtr, ctypes.c_char_p]
+    
+    lib.csilk_admin_serve_secure.restype = None
+    lib.csilk_admin_serve_secure.argtypes = [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]
+    
     _cached_lib = lib
     return lib
