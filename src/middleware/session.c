@@ -460,3 +460,13 @@ csilk_session_destroy(csilk_ctx_t* c)
 	csilk_set(c, "_session", nullptr);
 	csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", nullptr, 0, 1);
 }
+
+const char*
+csilk_session_get_id(csilk_ctx_t* c)
+{
+	if (!c) {
+		return nullptr;
+	}
+	csilk_session_t* session = csilk_get(c, "_session");
+	return session ? session->id : nullptr;
+}

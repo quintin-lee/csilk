@@ -279,6 +279,14 @@ void* csilk_session_get(csilk_ctx_t* c, const char* key);
  */
 void csilk_session_destroy(csilk_ctx_t* c);
 
+/**
+ * @brief Get the session ID for the current request.
+ *
+ * @param c  The request context.
+ * @return The session ID string, or nullptr if no session is active.
+ */
+const char* csilk_session_get_id(csilk_ctx_t* c);
+
 void csilk_security_get_stats(csilk_security_stats_t* stats);
 void csilk_process_get_stats(csilk_process_stats_t* stats);
 

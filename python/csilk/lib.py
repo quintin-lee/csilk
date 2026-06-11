@@ -14,6 +14,15 @@ CsilkAppPtr = ctypes.POINTER(CsilkApp)
 CsilkCtxPtr = ctypes.POINTER(CsilkCtx)
 CsilkServerPtr = ctypes.POINTER(CsilkServer)
 
+class CsilkCorsConfig(ctypes.Structure):
+    _fields_ = [
+        ("allow_origin", ctypes.c_char_p),
+        ("allow_methods", ctypes.c_char_p),
+        ("allow_headers", ctypes.c_char_p),
+        ("allow_credentials", ctypes.c_int),
+        ("max_age", ctypes.c_int)
+    ]
+
 CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
 CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p)
@@ -292,6 +301,56 @@ def get_bindings():
     
     lib.csilk_get_response_body.restype = ctypes.c_char_p
     lib.csilk_get_response_body.argtypes = [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]
+    
+    # Built-in C Middlewares
+    lib.csilk_recovery_handler.restype = None
+    lib.csilk_recovery_handler.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_logger_handler.restype = None
+    lib.csilk_logger_handler.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_waf_middleware.restype = None
+    lib.csilk_waf_middleware.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_request_id_middleware.restype = None
+    lib.csilk_request_id_middleware.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_health_check_handler.restype = None
+    lib.csilk_health_check_handler.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_ready_check_handler.restype = None
+    lib.csilk_ready_check_handler.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_rate_limit_middleware.restype = None
+    lib.csilk_rate_limit_middleware.argtypes = [CsilkCtxPtr, ctypes.c_int]
+    
+    lib.csilk_csrf_middleware.restype = None
+    lib.csilk_csrf_middleware.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_gzip_middleware.restype = None
+    lib.csilk_gzip_middleware.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_cors_middleware.restype = None
+    lib.csilk_cors_middleware.argtypes = [CsilkCtxPtr, ctypes.POINTER(CsilkCorsConfig)]
+    
+    # Session Management
+    lib.csilk_session_init.restype = None
+    lib.csilk_session_init.argtypes = []
+    
+    lib.csilk_session_start.restype = None
+    lib.csilk_session_start.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_session_set.restype = None
+    lib.csilk_session_set.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]
+    
+    lib.csilk_session_get.restype = ctypes.c_void_p
+    lib.csilk_session_get.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+    
+    lib.csilk_session_destroy.restype = None
+    lib.csilk_session_destroy.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_session_get_id.restype = ctypes.c_char_p
+    lib.csilk_session_get_id.argtypes = [CsilkCtxPtr]
     
     _cached_lib = lib
     return lib

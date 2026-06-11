@@ -1,6 +1,83 @@
 import ctypes
 import json
+import time
 from csilk.lib import get_bindings
+
+_python_sessions = {}
+
+class Session:
+    def __init__(self, ctx):
+        self._ctx = ctx
+        self._lib = ctx._lib
+
+    @property
+    def id(self):
+        res = self._lib.csilk_session_get_id(self._ctx._ctx)
+        return res.decode('utf-8') if res else None
+
+    def _prune(self):
+        now = time.time()
+        for sid, s_dict in list(_python_sessions.items()):
+            if s_dict.get("_expires_at", 0) < now:
+                _python_sessions.pop(sid, None)
+
+    def __getitem__(self, key):
+        self._prune()
+        sid = self.id
+        if not sid:
+            return None
+        s_dict = _python_sessions.get(sid)
+        if s_dict:
+            s_dict["_expires_at"] = time.time() + 86400
+            return s_dict["_data"].get(key)
+        return None
+
+    def __setitem__(self, key, value):
+        self._prune()
+        sid = self.id
+        if not sid:
+            raise RuntimeError("Session not started. Call session_start() first.")
+        if sid not in _python_sessions:
+            _python_sessions[sid] = {"_data": {}, "_expires_at": 0}
+        _python_sessions[sid]["_data"][key] = value
+        _python_sessions[sid]["_expires_at"] = time.time() + 86400
+
+    def __delitem__(self, key):
+        self._prune()
+        sid = self.id
+        if sid and sid in _python_sessions:
+            _python_sessions[sid]["_data"].pop(key, None)
+
+    def __contains__(self, key):
+        self._prune()
+        sid = self.id
+        if not sid:
+            return False
+        s_dict = _python_sessions.get(sid)
+        return key in s_dict["_data"] if s_dict else False
+
+    def get(self, key, default=None):
+        try:
+            val = self[key]
+            return val if val is not None else default
+        except KeyError:
+            return default
+
+    def pop(self, key, default=None):
+        self._prune()
+        sid = self.id
+        if not sid:
+            return default
+        s_dict = _python_sessions.get(sid)
+        if s_dict:
+            return s_dict["_data"].pop(key, default)
+        return default
+
+    def clear(self):
+        self._prune()
+        sid = self.id
+        if sid and sid in _python_sessions:
+            _python_sessions[sid]["_data"].clear()
 
 class CaseInsensitiveDict(dict):
     def __init__(self, data=None, **kwargs):
@@ -336,3 +413,24 @@ class Context:
             len(self._response_body_ref),
             0
         )
+
+    # Session Management
+    @property
+    def session(self):
+        if not hasattr(self, "_session_obj"):
+            self._session_obj = Session(self)
+        return self._session_obj
+
+    def session_start(self):
+        self._lib.csilk_session_start(self._ctx)
+
+    def session_destroy(self):
+        sid = self.session_id
+        if sid:
+            _python_sessions.pop(sid, None)
+        self._lib.csilk_session_destroy(self._ctx)
+
+    @property
+    def session_id(self):
+        res = self._lib.csilk_session_get_id(self._ctx)
+        return res.decode('utf-8') if res else None
