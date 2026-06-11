@@ -10,8 +10,9 @@ import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from csilk import (
     App, Context,
-    request_id_middleware, cors
+    request_id_middleware, cors, jwt_middleware
 )
+
 
 class TestCsilkLoader(unittest.TestCase):
     def test_library_load(self):
@@ -213,6 +214,25 @@ class TestCsilkIntegration(unittest.TestCase):
 
         # 18. Admin Dashboard
         app.admin_serve("/admin")
+
+        # 19. JWT Routes
+        @app.get("/jwt-generate")
+        def handle_jwt_generate(ctx: Context):
+            token = ctx.jwt_generate({"user": "gemini", "role": "tester"}, "mysecret")
+            if token:
+                ctx.string(200, token)
+            else:
+                ctx.string(500, "generation failed")
+
+        app.use_group("/jwt-protected", jwt_middleware("mysecret"))
+        @app.get("/jwt-protected/info")
+        def handle_jwt_info(ctx: Context):
+            payload = ctx.jwt_payload
+            if payload:
+                ctx.json(200, {"user": payload.get("user"), "role": payload.get("role")})
+            else:
+                ctx.string(400, "no-payload")
+
 
         # Run server in thread
         def run_server():
@@ -431,6 +451,27 @@ class TestCsilkIntegration(unittest.TestCase):
             res18_json = json.loads(res18.read().decode('utf-8'))
             self.assertIn("process", res18_json)
             self.assertIn("mq", res18_json)
+
+            # 19. Test JWT token generation and verification
+            res19_gen = request_with_retry("http://127.0.0.1:8082/jwt-generate")
+            self.assertEqual(res19_gen.status, 200)
+            token = res19_gen.read().decode('utf-8')
+            self.assertEqual(len(token.split(".")), 3)
+
+            # Verification: request without token
+            res19_no_token = request_with_retry("http://127.0.0.1:8082/jwt-protected/info")
+            self.assertEqual(res19_no_token.status, 401)
+
+            # Verification: request with valid token
+            res19_valid = request_with_retry(
+                "http://127.0.0.1:8082/jwt-protected/info",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            self.assertEqual(res19_valid.status, 200)
+            res19_json = json.loads(res19_valid.read().decode('utf-8'))
+            self.assertEqual(res19_json["user"], "gemini")
+            self.assertEqual(res19_json["role"], "tester")
+
 
         finally:
             app.stop()

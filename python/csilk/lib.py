@@ -343,6 +343,20 @@ def get_bindings():
     lib.csilk_cors_middleware.restype = None
     lib.csilk_cors_middleware.argtypes = [CsilkCtxPtr, ctypes.POINTER(CsilkCorsConfig)]
     
+    # JWT Middlewares & Helpers
+    lib.csilk_jwt_middleware.restype = None
+    lib.csilk_jwt_middleware.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+    
+    lib.csilk_ctx_get_jwt_payload_json.restype = ctypes.c_void_p
+    lib.csilk_ctx_get_jwt_payload_json.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_ctx_cleanup_jwt_payload.restype = None
+    lib.csilk_ctx_cleanup_jwt_payload.argtypes = [CsilkCtxPtr]
+    
+    lib.csilk_jwt_generate_json.restype = ctypes.c_void_p
+    lib.csilk_jwt_generate_json.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
+
+    
     # Session Management
     lib.csilk_session_init.restype = None
     lib.csilk_session_init.argtypes = []

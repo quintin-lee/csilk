@@ -332,4 +332,9 @@ char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
  */
 cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
 
+/* --- Language Binding Helpers --- */
+char* csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c);
+void csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
+char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);
+
 #endif /* CSILK_MIDDLEWARE_H */

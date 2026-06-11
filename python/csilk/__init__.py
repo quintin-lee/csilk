@@ -14,7 +14,9 @@ from csilk.app import (
     gzip_middleware,
     rate_limit,
     cors,
+    jwt_middleware,
     MQ,
     MqContext,
 )
+
 
