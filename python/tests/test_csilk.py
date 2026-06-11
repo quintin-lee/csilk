@@ -8,7 +8,10 @@ import urllib.error
 import json
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from csilk import App, Context
+from csilk import (
+    App, Context,
+    request_id_middleware, cors
+)
 
 class TestCsilkLoader(unittest.TestCase):
     def test_library_load(self):
@@ -158,11 +161,35 @@ class TestCsilkIntegration(unittest.TestCase):
                 "c2": c2
             })
 
+        # Register global request ID middleware
+        app.use(request_id_middleware)
+
         # 14. Response Mutation Route
         @app.get("/response-body-test")
         def handle_response_body(ctx: Context):
             ctx.string(200, "original")
             ctx.response_body = "mutated"
+
+        # 15. Session Routes
+        @app.get("/session-write")
+        def handle_session_write(ctx: Context):
+            ctx.session_start()
+            ctx.session["name"] = "gemini"
+            ctx.session["count"] = 100
+            ctx.string(200, f"session_created:{ctx.session_id}")
+
+        @app.get("/session-read")
+        def handle_session_read(ctx: Context):
+            ctx.session_start()
+            name = ctx.session.get("name", "none")
+            count = ctx.session.get("count", 0)
+            ctx.string(200, f"name={name},count={count}")
+
+        # 16. CORS test group
+        app.use_group("/cors-test", cors(allow_origin="http://test.com"))
+        @app.get("/cors-test/ok")
+        def handle_cors_ok(ctx: Context):
+            ctx.string(200, "cors-ok")
 
         # Run server in thread
         def run_server():
@@ -335,6 +362,33 @@ class TestCsilkIntegration(unittest.TestCase):
             res14 = request_with_retry("http://127.0.0.1:8082/response-body-test")
             self.assertEqual(res14.status, 200)
             self.assertEqual(res14.read().decode('utf-8'), "mutated")
+            # Also check if request_id_middleware is working globally
+            self.assertIsNotNone(res14.headers.get("X-Request-Id"))
+
+            # 15. Test Session Management (Write then Read)
+            res15_write = request_with_retry("http://127.0.0.1:8082/session-write")
+            self.assertEqual(res15_write.status, 200)
+            write_body = res15_write.read().decode('utf-8')
+            self.assertTrue(write_body.startswith("session_created:"))
+            session_cookie = res15_write.headers.get("Set-Cookie")
+            self.assertIsNotNone(session_cookie)
+            
+            # Extract cookie value: "csilk_session=UUID; ..."
+            # We want to send back Cookie: csilk_session=UUID
+            cookie_parts = [part.strip() for part in session_cookie.split(";")]
+            session_cookie_val = [part for part in cookie_parts if part.startswith("csilk_session=")][0]
+            
+            res15_read = request_with_retry(
+                "http://127.0.0.1:8082/session-read",
+                headers={"Cookie": session_cookie_val}
+            )
+            self.assertEqual(res15_read.status, 200)
+            self.assertEqual(res15_read.read().decode('utf-8'), "name=gemini,count=100")
+
+            # 16. Test CORS middleware on group
+            res16 = request_with_retry("http://127.0.0.1:8082/cors-test/ok")
+            self.assertEqual(res16.status, 200)
+            self.assertEqual(res16.headers.get("Access-Control-Allow-Origin"), "http://test.com")
 
         finally:
             app.stop()

@@ -11,6 +11,7 @@ class App:
             raise RuntimeError("Failed to create csilk application instance")
         self._handlers = [] # Reference storage to prevent garbage collection of callbacks
         self._websocket_contexts = {}
+        self._lib.csilk_session_init()
 
         # Set up a hook on the server to clean up closed WebSocket contexts
         @ctypes.CFUNCTYPE(None, CsilkCtxPtr)
@@ -187,3 +188,46 @@ class App:
 
     def __del__(self):
         self.free()
+
+# Built-in C middlewares wrappers
+def recovery_middleware(ctx):
+    get_bindings().csilk_recovery_handler(ctx._ctx)
+
+def logger_middleware(ctx):
+    get_bindings().csilk_logger_handler(ctx._ctx)
+
+def waf_middleware(ctx):
+    get_bindings().csilk_waf_middleware(ctx._ctx)
+
+def request_id_middleware(ctx):
+    get_bindings().csilk_request_id_middleware(ctx._ctx)
+
+def health_check_handler(ctx):
+    get_bindings().csilk_health_check_handler(ctx._ctx)
+
+def ready_check_handler(ctx):
+    get_bindings().csilk_ready_check_handler(ctx._ctx)
+
+def csrf_middleware(ctx):
+    get_bindings().csilk_csrf_middleware(ctx._ctx)
+
+def gzip_middleware(ctx):
+    get_bindings().csilk_gzip_middleware(ctx._ctx)
+
+def rate_limit(limit):
+    def middleware(ctx):
+        get_bindings().csilk_rate_limit_middleware(ctx._ctx, limit)
+    return middleware
+
+def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allow_headers="Content-Type, Authorization", allow_credentials=False, max_age=86400):
+    from csilk.lib import CsilkCorsConfig
+    config = CsilkCorsConfig(
+        allow_origin=allow_origin.encode('utf-8') if allow_origin else None,
+        allow_methods=allow_methods.encode('utf-8') if allow_methods else None,
+        allow_headers=allow_headers.encode('utf-8') if allow_headers else None,
+        allow_credentials=1 if allow_credentials else 0,
+        max_age=max_age
+    )
+    def middleware(ctx):
+        get_bindings().csilk_cors_middleware(ctx._ctx, ctypes.byref(config))
+    return middleware
