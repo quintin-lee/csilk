@@ -669,8 +669,20 @@ _csilk_verify(csilk_ctx_t* c,
 	return d->verify(public_key, pub_len, data, data_len, signature, sig_len);
 }
 
+void*
+csilk_malloc(size_t size)
+{
+	return malloc(size);
+}
+
 void
 csilk_free(void* ptr)
 {
 	free(ptr);
+}
+
+char*
+csilk_strdup(const char* s)
+{
+	return s ? strdup(s) : nullptr;
 }
