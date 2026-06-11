@@ -776,6 +776,11 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             ctx.response_write("chunk_two")
             ctx.response_end()
 
+        # 5. Route to test custom 404 handler
+        def handle_custom_404(ctx: Context):
+            ctx.string(404, "custom-404-body")
+        app.set_not_found_handler(handle_custom_404)
+
         # Run server on port 8086 in thread
         import socket
         def run_server():
@@ -828,6 +833,14 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             self.assertEqual(res4.status, 200)
             self.assertEqual(res4.read().decode('utf-8'), "chunk_one chunk_two")
 
+            # Test 5: custom 404 handler
+            try:
+                urllib.request.urlopen("http://127.0.0.1:8086/non-existent-route")
+                self.fail("Expected HTTPError 404")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 404)
+                self.assertEqual(e.read().decode('utf-8'), "custom-404-body")
+
         finally:
             app.stop()
             t.join(timeout=1.0)
@@ -840,6 +853,63 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
         self.assertIn("conn_close", hook_calls)
         self.assertIn("request_begin", hook_calls)
         self.assertIn("request_end", hook_calls)
+
+    def test_spa_fallback_and_stats(self):
+        app = App()
+        
+        # Create temp dir and index.html for SPA fallback test
+        import tempfile
+        import shutil
+        temp_dir = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(temp_dir, "index.html"), "w") as f:
+                f.write("spa-fallback-content")
+
+            app.set_spa_fallback(temp_dir)
+            
+            # Test max connections setting
+            app.set_max_connections(50)
+
+            # Run server on port 8087 in thread
+            import socket
+            def run_server():
+                app.run(8087)
+
+            t = threading.Thread(target=run_server)
+            t.daemon = True
+            t.start()
+
+            # Wait for the server to be ready with retries
+            for _ in range(15):
+                try:
+                    with socket.create_connection(("127.0.0.1", 8087), timeout=0.5):
+                        break
+                except OSError:
+                    time.sleep(0.1)
+            else:
+                self.fail("Server did not start in time")
+
+            # Bypass system proxy for tests
+            proxy_handler = urllib.request.ProxyHandler({})
+            opener = urllib.request.build_opener(proxy_handler)
+            urllib.request.install_opener(opener)
+
+            try:
+                # Test SPA fallback triggers on unmatched GET route
+                res = urllib.request.urlopen("http://127.0.0.1:8087/some-unmatched-route")
+                self.assertEqual(res.status, 200)
+                self.assertEqual(res.read().decode('utf-8'), "spa-fallback-content")
+
+                # Test server stats
+                stats = app.server_stats
+                self.assertIn("active_connections", stats)
+                self.assertIn("pooled_connections", stats)
+                self.assertGreaterEqual(stats["active_connections"], 0)
+            finally:
+                app.stop()
+                t.join(timeout=1.0)
+        finally:
+            shutil.rmtree(temp_dir)
 
 if __name__ == '__main__':
     unittest.main()
