@@ -419,6 +419,12 @@ def get_bindings():
     
     lib.csilk_ctx_set_sse.restype = None
     lib.csilk_ctx_set_sse.argtypes = [CsilkCtxPtr, ctypes.c_int]
+
+    lib.csilk_ctx_set_async.restype = None
+    lib.csilk_ctx_set_async.argtypes = [CsilkCtxPtr, ctypes.c_int]
+
+    lib.csilk_is_async.restype = ctypes.c_int
+    lib.csilk_is_async.argtypes = [CsilkCtxPtr]
     
     # Response helpers
     lib.csilk_status.restype = None
@@ -435,6 +441,24 @@ def get_bindings():
     
     lib.csilk_redirect.restype = None
     lib.csilk_redirect.argtypes = [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]
+
+    lib.csilk_add_header.restype = None
+    lib.csilk_add_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
+
+    lib.csilk_json_error.restype = None
+    lib.csilk_json_error.argtypes = [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]
+
+    lib.csilk_redirect_simple.restype = None
+    lib.csilk_redirect_simple.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
+
+    lib.csilk_response_write.restype = None
+    lib.csilk_response_write.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t]
+
+    lib.csilk_response_end.restype = None
+    lib.csilk_response_end.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_push_promise.restype = ctypes.c_int32
+    lib.csilk_push_promise.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
     
     # Middleware flow
     lib.csilk_next.restype = None

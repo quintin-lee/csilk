@@ -169,6 +169,14 @@ class Context:
         return bool(self._lib.csilk_is_sse(self._ctx))
 
     @property
+    def is_async(self):
+        return bool(self._lib.csilk_is_async(self._ctx))
+
+    @is_async.setter
+    def is_async(self, val):
+        self._lib.csilk_ctx_set_async(self._ctx, 1 if val else 0)
+
+    @property
     def is_aborted(self):
         return bool(self._lib.csilk_is_aborted(self._ctx))
 
@@ -235,10 +243,20 @@ class Context:
         self.set_header("Content-Type", "application/json")
         self._lib.csilk_string(self._ctx, code, json_str.encode('utf-8'))
 
+    def json_error(self, code, message):
+        self._lib.csilk_json_error(self._ctx, code, message.encode('utf-8'))
+
     def set_header(self, key, value):
         self._lib.csilk_set_header(
             self._ctx, 
             key.encode('utf-8'), 
+            value.encode('utf-8') if value else None
+        )
+
+    def add_header(self, key, value):
+        self._lib.csilk_add_header(
+            self._ctx,
+            key.encode('utf-8'),
             value.encode('utf-8') if value else None
         )
 
@@ -247,6 +265,9 @@ class Context:
 
     def redirect(self, code, location):
         self._lib.csilk_redirect(self._ctx, code, location.encode('utf-8'))
+
+    def redirect_simple(self, location):
+        self._lib.csilk_redirect_simple(self._ctx, location.encode('utf-8'))
 
     # Middleware flow control
     def next(self):
@@ -305,6 +326,24 @@ class Context:
 
     def sse_close(self):
         self._lib.csilk_sse_close(self._ctx)
+
+    # Streaming and H2 Push
+    def response_write(self, data):
+        if isinstance(data, str):
+            c_data = data.encode('utf-8')
+        else:
+            c_data = bytes(data)
+        self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
+
+    def response_end(self):
+        self._lib.csilk_response_end(self._ctx)
+
+    def push_promise(self, method, path):
+        return self._lib.csilk_push_promise(
+            self._ctx,
+            method.encode('utf-8'),
+            path.encode('utf-8')
+        )
 
     # Cookies
     def get_cookie(self, name):
