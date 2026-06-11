@@ -177,6 +177,20 @@ class App:
     def apply_config(self):
         self._lib.csilk_app_apply_config(self._app)
 
+    @property
+    def mq(self):
+        if not hasattr(self, "_mq_obj"):
+            server = self._lib.csilk_app_server(self._app)
+            if server:
+                mq_ptr = self._lib.csilk_server_get_mq(server)
+                if mq_ptr:
+                    self._mq_obj = MQ(mq_ptr)
+                else:
+                    return None
+            else:
+                return None
+        return self._mq_obj
+
     # Run / Stop
     def run(self, port):
         return self._lib.csilk_app_run(self._app, port)
@@ -231,3 +245,97 @@ def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allo
     def middleware(ctx):
         get_bindings().csilk_cors_middleware(ctx._ctx, ctypes.byref(config))
     return middleware
+
+class MqContext:
+    def __init__(self, ctx_ptr):
+        self._ctx = ctx_ptr
+        self._lib = get_bindings()
+
+    @property
+    def topic(self):
+        res = self._lib.csilk_mq_get_topic(self._ctx)
+        return res.decode('utf-8') if res else ""
+
+    @property
+    def payload(self):
+        out_len = ctypes.c_size_t(0)
+        res = self._lib.csilk_mq_get_payload(self._ctx, ctypes.byref(out_len))
+        if res and out_len.value > 0:
+            return ctypes.string_at(res, out_len.value)
+        return b""
+
+    def next(self):
+        self._lib.csilk_mq_next(self._ctx)
+
+    def abort(self):
+        self._lib.csilk_mq_abort(self._ctx)
+
+class MQ:
+    def __init__(self, mq_ptr):
+        self._mq = mq_ptr
+        self._lib = get_bindings()
+        self._handlers = []
+
+    def subscribe(self, topic, handler=None):
+        if handler is None:
+            def decorator(h):
+                self.subscribe(topic, h)
+                return h
+            return decorator
+
+        from csilk.lib import CsilkMqHandler
+        @CsilkMqHandler
+        def wrapper(ctx_ptr):
+            ctx = MqContext(ctx_ptr)
+            try:
+                handler(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+        self._handlers.append(wrapper)
+        self._lib.csilk_mq_subscribe(self._mq, topic.encode('utf-8'), wrapper)
+
+    def use(self, topic, handler=None):
+        if handler is None:
+            def decorator(h):
+                self.use(topic, h)
+                return h
+            return decorator
+
+        from csilk.lib import CsilkMqHandler
+        @CsilkMqHandler
+        def wrapper(ctx_ptr):
+            ctx = MqContext(ctx_ptr)
+            try:
+                handler(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+        self._handlers.append(wrapper)
+        c_topic = topic.encode('utf-8') if topic else None
+        self._lib.csilk_mq_use(self._mq, c_topic, wrapper)
+
+    def publish(self, topic, payload):
+        if isinstance(payload, str):
+            c_payload = payload.encode('utf-8')
+        elif isinstance(payload, bytes):
+            c_payload = payload
+        else:
+            c_payload = str(payload).encode('utf-8')
+        return self._lib.csilk_mq_publish(self._mq, topic.encode('utf-8'), c_payload, len(c_payload))
+
+    def set_persistence(self, wal_path):
+        return self._lib.csilk_mq_set_persistence(self._mq, wal_path.encode('utf-8'))
+
+    @property
+    def stats(self):
+        from csilk.lib import CsilkMqStats
+        stats = CsilkMqStats()
+        self._lib.csilk_mq_get_stats(self._mq, ctypes.byref(stats))
+        return {
+            "published_total": stats.published_total,
+            "delivered_total": stats.delivered_total,
+            "failed_total": stats.failed_total,
+            "queue_depth": stats.queue_depth,
+            "topic_count": stats.topic_count
+        }

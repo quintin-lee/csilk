@@ -191,6 +191,26 @@ class TestCsilkIntegration(unittest.TestCase):
         def handle_cors_ok(ctx: Context):
             ctx.string(200, "cors-ok")
 
+        # 17. MQ test setup
+        mq_received = []
+
+        @app.mq.subscribe("test.topic")
+        def on_mq_message(ctx):
+            mq_received.append(ctx.payload.decode('utf-8'))
+
+        @app.get("/mq-publish")
+        def handle_mq_publish(ctx: Context):
+            app.mq.publish("test.topic", "hello-mq-bus")
+            ctx.string(200, "published")
+
+        @app.get("/mq-result")
+        def handle_mq_result(ctx: Context):
+            time.sleep(0.05)
+            ctx.json(200, {
+                "received": mq_received,
+                "stats": app.mq.stats
+            })
+
         # Run server in thread
         def run_server():
             app.run(8082)
@@ -389,6 +409,18 @@ class TestCsilkIntegration(unittest.TestCase):
             res16 = request_with_retry("http://127.0.0.1:8082/cors-test/ok")
             self.assertEqual(res16.status, 200)
             self.assertEqual(res16.headers.get("Access-Control-Allow-Origin"), "http://test.com")
+
+            # 17. Test MQ Event Bus (Publish & Subscribe)
+            res17_pub = request_with_retry("http://127.0.0.1:8082/mq-publish")
+            self.assertEqual(res17_pub.status, 200)
+            self.assertEqual(res17_pub.read().decode('utf-8'), "published")
+
+            res17_res = request_with_retry("http://127.0.0.1:8082/mq-result")
+            self.assertEqual(res17_res.status, 200)
+            res17_json = json.loads(res17_res.read().decode('utf-8'))
+            self.assertIn("hello-mq-bus", res17_json["received"])
+            self.assertGreaterEqual(res17_json["stats"]["published_total"], 1)
+            self.assertGreaterEqual(res17_json["stats"]["delivered_total"], 1)
 
         finally:
             app.stop()
