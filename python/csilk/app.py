@@ -43,9 +43,12 @@ class App:
                 import traceback
                 traceback.print_exc()
                 ctx.string(500, f"Internal Server Error: {str(e)}")
+            finally:
+                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
             if ctx.is_websocket:
                 self._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
+
 
         self._handlers.append(wrapper)
         self._lib.csilk_app_add_route_extended_perm(
@@ -156,6 +159,8 @@ class App:
                 import traceback
                 traceback.print_exc()
                 ctx.string(500, f"Internal Server Error: {str(e)}")
+            finally:
+                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
         self._handlers.append(wrapper)
         self._lib.csilk_app_use(self._app, wrapper)
@@ -170,9 +175,12 @@ class App:
                 import traceback
                 traceback.print_exc()
                 ctx.string(500, f"Internal Server Error: {str(e)}")
+            finally:
+                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
         self._handlers.append(wrapper)
         self._lib.csilk_app_use_group(self._app, prefix.encode('utf-8'), wrapper)
+
 
     def apply_config(self):
         self._lib.csilk_app_apply_config(self._app)
@@ -262,6 +270,13 @@ def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allo
     def middleware(ctx):
         get_bindings().csilk_cors_middleware(ctx._ctx, ctypes.byref(config))
     return middleware
+
+def jwt_middleware(secret):
+    c_secret = secret.encode('utf-8')
+    def middleware(ctx):
+        get_bindings().csilk_jwt_middleware(ctx._ctx, c_secret)
+    return middleware
+
 
 class MqContext:
     def __init__(self, ctx_ptr):

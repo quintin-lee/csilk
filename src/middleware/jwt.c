@@ -349,3 +349,48 @@ csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 	CSILK_LOG_D("JWT: Middleware verification successful for request %p", (void*)c);
 	csilk_next(c);
 }
+
+char*
+csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
+{
+	if (!c) {
+		return nullptr;
+	}
+	cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+	if (!payload) {
+		return nullptr;
+	}
+	char* json_str = cJSON_PrintUnformatted(payload);
+	cJSON_Delete(payload);
+	csilk_set(c, "jwt_payload", nullptr);
+	return json_str;
+}
+
+void
+csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
+{
+	if (!c) {
+		return;
+	}
+	cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+	if (payload) {
+		cJSON_Delete(payload);
+		csilk_set(c, "jwt_payload", nullptr);
+	}
+}
+
+char*
+csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret)
+{
+	if (!payload_json || !secret) {
+		return nullptr;
+	}
+	cJSON* payload = cJSON_Parse(payload_json);
+	if (!payload) {
+		CSILK_LOG_E("JWT: Failed to parse payload JSON: %s", payload_json);
+		return nullptr;
+	}
+	char* token = csilk_jwt_generate(c, payload, secret);
+	cJSON_Delete(payload);
+	return token;
+}

@@ -434,3 +434,27 @@ class Context:
     def session_id(self):
         res = self._lib.csilk_session_get_id(self._ctx)
         return res.decode('utf-8') if res else None
+
+    # JWT Helper Properties and Methods
+    @property
+    def jwt_payload(self):
+        if not hasattr(self, "_jwt_payload"):
+            res = self._lib.csilk_ctx_get_jwt_payload_json(self._ctx)
+            if res:
+                val = ctypes.string_at(res).decode('utf-8')
+                self._lib.csilk_free(res)
+                self._jwt_payload = json.loads(val)
+            else:
+                self._jwt_payload = None
+        return self._jwt_payload
+
+    def jwt_generate(self, payload, secret):
+        payload_json = json.dumps(payload).encode('utf-8')
+        c_secret = secret.encode('utf-8')
+        res = self._lib.csilk_jwt_generate_json(self._ctx, payload_json, c_secret)
+        if res:
+            token = ctypes.string_at(res).decode('utf-8')
+            self._lib.csilk_free(res)
+            return token
+        return None
+
