@@ -710,5 +710,136 @@ class TestCsilkGroups(unittest.TestCase):
             app.stop()
             t.join(timeout=1.0)
 
+class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
+    def test_response_extensions_and_hooks(self):
+        app = App()
+        
+        hook_calls = []
+
+        @app.on_server_start
+        def on_start(srv_app):
+            self.assertEqual(srv_app, app)
+            hook_calls.append("server_start")
+
+        @app.on_server_stop
+        def on_stop(srv_app):
+            self.assertEqual(srv_app, app)
+            hook_calls.append("server_stop")
+
+        @app.on_conn_open
+        def on_conn_open(ctx):
+            self.assertIsNotNone(ctx)
+            hook_calls.append("conn_open")
+
+        @app.on_conn_close
+        def on_conn_close(ctx):
+            self.assertIsNotNone(ctx)
+            hook_calls.append("conn_close")
+
+        @app.on_request_begin
+        def on_req_begin(ctx):
+            self.assertIsNotNone(ctx)
+            hook_calls.append("request_begin")
+
+        @app.on_request_end
+        def on_req_end(ctx):
+            self.assertIsNotNone(ctx)
+            hook_calls.append("request_end")
+
+        # 1. Route to test add_header (dual cookies/keys)
+        @app.get("/add-headers")
+        def handle_add_headers(ctx: Context):
+            ctx.add_header("X-Custom-Header", "value1")
+            ctx.add_header("X-Custom-Header", "value2")
+            ctx.string(200, "headers-added")
+
+        # 2. Route to test redirect_simple
+        @app.get("/redirect-src")
+        def handle_redirect_src(ctx: Context):
+            ctx.redirect_simple("/redirect-dst")
+
+        @app.get("/redirect-dst")
+        def handle_redirect_dst(ctx: Context):
+            ctx.string(200, "redirected-ok")
+
+        # 3. Route to test json_error
+        @app.get("/json-error")
+        def handle_json_error(ctx: Context):
+            ctx.json_error(400, "bad request parameter")
+
+        # 4. Route to test is_async, response_write, response_end
+        @app.get("/stream-chunks")
+        def handle_stream_chunks(ctx: Context):
+            ctx.is_async = True
+            self.assertTrue(ctx.is_async)
+            ctx.response_write("chunk_one ")
+            ctx.response_write("chunk_two")
+            ctx.response_end()
+
+        # Run server on port 8086 in thread
+        import socket
+        def run_server():
+            app.run(8086)
+
+        t = threading.Thread(target=run_server)
+        t.daemon = True
+        t.start()
+
+        # Wait for the server to be ready with retries
+        for _ in range(15):
+            try:
+                with socket.create_connection(("127.0.0.1", 8086), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            self.fail("Server did not start in time")
+
+        # Bypass system proxy for tests
+        proxy_handler = urllib.request.ProxyHandler({})
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
+        try:
+            # Test 1: add_header (dual custom headers)
+            res1 = urllib.request.urlopen("http://127.0.0.1:8086/add-headers")
+            self.assertEqual(res1.status, 200)
+            self.assertEqual(res1.read().decode('utf-8'), "headers-added")
+            custom_headers = res1.headers.get_all("X-Custom-Header")
+            self.assertEqual(custom_headers, ["value2", "value1"])
+
+            # Test 2: redirect_simple
+            res2 = urllib.request.urlopen("http://127.0.0.1:8086/redirect-src")
+            self.assertEqual(res2.status, 200)
+            self.assertEqual(res2.geturl(), "http://127.0.0.1:8086/redirect-dst")
+            self.assertEqual(res2.read().decode('utf-8'), "redirected-ok")
+
+            # Test 3: json_error
+            try:
+                urllib.request.urlopen("http://127.0.0.1:8086/json-error")
+                self.fail("Expected HTTPError 400")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 400)
+                err_data = json.loads(e.read().decode('utf-8'))
+                self.assertEqual(err_data["error"], "bad request parameter")
+
+            # Test 4: async streaming response
+            res4 = urllib.request.urlopen("http://127.0.0.1:8086/stream-chunks")
+            self.assertEqual(res4.status, 200)
+            self.assertEqual(res4.read().decode('utf-8'), "chunk_one chunk_two")
+
+        finally:
+            app.stop()
+            t.join(timeout=1.0)
+
+        # Check lifecycle hook triggers
+        time.sleep(0.2)
+        self.assertIn("server_start", hook_calls)
+        self.assertIn("server_stop", hook_calls)
+        self.assertIn("conn_open", hook_calls)
+        self.assertIn("conn_close", hook_calls)
+        self.assertIn("request_begin", hook_calls)
+        self.assertIn("request_end", hook_calls)
+
 if __name__ == '__main__':
     unittest.main()

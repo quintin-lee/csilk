@@ -11,6 +11,7 @@ class App:
             raise RuntimeError("Failed to create csilk application instance")
         self._handlers = [] # Reference storage to prevent garbage collection of callbacks
         self._groups = []
+        self._hooks = []
         self._websocket_contexts = {}
         self._lib.csilk_session_init()
 
@@ -32,6 +33,7 @@ class App:
             self._app = None
         self._handlers.clear()
         self._groups.clear()
+        self._hooks.clear()
         self._websocket_contexts.clear()
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
@@ -278,6 +280,56 @@ class App:
         server = self._lib.csilk_app_server(self._app)
         if server:
             self._lib.csilk_server_stop(server)
+
+    def on_server_start(self, callback):
+        """Register a callback to run just before the event loop starts."""
+        self._register_hook(0, callback, server_level=True)
+
+    def on_server_stop(self, callback):
+        """Register a callback to run when the server is shutting down."""
+        self._register_hook(1, callback, server_level=True)
+
+    def on_conn_open(self, callback):
+        """Register a callback to run when a new TCP connection is opened."""
+        self._register_hook(2, callback, server_level=False)
+
+    def on_conn_close(self, callback):
+        """Register a callback to run when a TCP connection is closed."""
+        self._register_hook(3, callback, server_level=False)
+
+    def on_request_begin(self, callback):
+        """Register a callback to run when the HTTP request has been parsed."""
+        self._register_hook(4, callback, server_level=False)
+
+    def on_request_end(self, callback):
+        """Register a callback to run after the response has been sent."""
+        self._register_hook(5, callback, server_level=False)
+
+    def _register_hook(self, hook_type, callback, server_level=False):
+        server = self._lib.csilk_app_server(self._app)
+        if not server:
+            raise RuntimeError("Underlying server instance is not initialized")
+            
+        if server_level:
+            @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+            def wrapper(server_ptr):
+                try:
+                    callback(self)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+        else:
+            @ctypes.CFUNCTYPE(None, CsilkCtxPtr)
+            def wrapper(ctx_ptr):
+                ctx = Context(ctx_ptr)
+                try:
+                    callback(ctx)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+
+        self._hooks.append(wrapper)
+        self._lib.csilk_server_add_hook(server, hook_type, wrapper)
 
     def __del__(self):
         self.free()
