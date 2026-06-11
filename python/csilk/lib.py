@@ -507,6 +507,18 @@ def get_bindings():
     lib.csilk_server_add_hook.restype = None
     lib.csilk_server_add_hook.argtypes = [CsilkServerPtr, ctypes.c_int, ctypes.c_void_p]
     
+    lib.csilk_server_set_not_found_handler.restype = None
+    lib.csilk_server_set_not_found_handler.argtypes = [CsilkServerPtr, CsilkHandler]
+    
+    lib.csilk_server_set_spa_fallback.restype = None
+    lib.csilk_server_set_spa_fallback.argtypes = [CsilkServerPtr, ctypes.c_char_p]
+    
+    lib.csilk_server_get_stats.restype = None
+    lib.csilk_server_get_stats.argtypes = [CsilkServerPtr, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+    
+    lib.csilk_server_set_max_connections.restype = ctypes.c_int
+    lib.csilk_server_set_max_connections.argtypes = [CsilkServerPtr, ctypes.c_int]
+    
     # Extended routing with metadata
     lib.csilk_app_add_route_extended.restype = None
     lib.csilk_app_add_route_extended.argtypes = [

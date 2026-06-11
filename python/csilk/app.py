@@ -331,6 +331,55 @@ class App:
         self._hooks.append(wrapper)
         self._lib.csilk_server_add_hook(server, hook_type, wrapper)
 
+    def set_not_found_handler(self, handler):
+        """Set a custom 404 handler for the server."""
+        server = self._lib.csilk_app_server(self._app)
+        if not server:
+            raise RuntimeError("Underlying server instance is not initialized")
+        
+        from csilk.lib import CsilkHandler
+        @CsilkHandler
+        def wrapper(ctx_ptr):
+            ctx = Context(ctx_ptr)
+            try:
+                handler(ctx)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                ctx.string(500, f"Internal Server Error: {str(e)}")
+                 
+        self._handlers.append(wrapper)
+        self._lib.csilk_server_set_not_found_handler(server, wrapper)
+
+    def set_spa_fallback(self, doc_root):
+        """Set Single Page Application (SPA) fallback directory."""
+        server = self._lib.csilk_app_server(self._app)
+        if not server:
+            raise RuntimeError("Underlying server instance is not initialized")
+        self._lib.csilk_server_set_spa_fallback(server, doc_root.encode('utf-8'))
+
+    def set_max_connections(self, max_conn):
+        """Set the maximum number of concurrent client connections."""
+        server = self._lib.csilk_app_server(self._app)
+        if not server:
+            raise RuntimeError("Underlying server instance is not initialized")
+        if self._lib.csilk_server_set_max_connections(server, max_conn) != 0:
+            raise RuntimeError("Failed to set max connections")
+
+    @property
+    def server_stats(self):
+        """Get active and pooled connections counts from the server."""
+        server = self._lib.csilk_app_server(self._app)
+        if not server:
+            raise RuntimeError("Underlying server instance is not initialized")
+        active_conn = ctypes.c_int(0)
+        pooled_conn = ctypes.c_int(0)
+        self._lib.csilk_server_get_stats(server, ctypes.byref(active_conn), ctypes.byref(pooled_conn))
+        return {
+            "active_connections": active_conn.value,
+            "pooled_connections": pooled_conn.value
+        }
+
     def __del__(self):
         self.free()
 
