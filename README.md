@@ -383,6 +383,28 @@ The project includes a comprehensive test suite. After building, run individual 
 | 📄 | HTTP Range / 206 Partial Content |
 | ✅ | Parameter validation |
 
+## Python Bindings
+
+`csilk` provides high-performance, developer-friendly Python bindings out of the box (using the standard library `ctypes` module).
+All core features — including app routing, middlewares, session management, SSE event streams, DB pooling, and AI workflow pipelines — are fully supported in Python.
+
+### Quick Start
+
+```python
+from csilk import App, Context
+
+app = App()
+
+@app.get("/hello")
+def hello(ctx: Context):
+    ctx.string(200, "Hello World from Python!")
+
+if __name__ == "__main__":
+    app.run(8080)
+```
+
+Refer to the [Python Bindings Manual](docs/user-manual/python.md) and [python/README.md](python/README.md) for more details.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
