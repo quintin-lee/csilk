@@ -241,6 +241,14 @@ class TestCsilkIntegration(unittest.TestCase):
             else:
                 ctx.string(400, "no-payload")
 
+        # 20. SSE Route
+        @app.get("/sse")
+        def handle_sse(ctx: Context):
+            ctx.sse_init()
+            is_sse_flag = ctx.is_sse
+            ctx.sse_send("update", f"is_sse:{is_sse_flag}")
+            ctx.sse_close()
+
 
         # Run server in thread
         def run_server():
@@ -479,6 +487,15 @@ class TestCsilkIntegration(unittest.TestCase):
             res19_json = json.loads(res19_valid.read().decode('utf-8'))
             self.assertEqual(res19_json["user"], "gemini")
             self.assertEqual(res19_json["role"], "tester")
+
+            # 20. Test Server-Sent Events (SSE)
+            res20 = request_with_retry("http://127.0.0.1:8082/sse")
+            self.assertEqual(res20.status, 200)
+            self.assertEqual(res20.headers.get("Content-Type"), "text/event-stream")
+            body = res20.read().decode('utf-8')
+            self.assertIn("event: update\n", body)
+            self.assertIn("data: is_sse:True\n", body)
+
 
 
         finally:
