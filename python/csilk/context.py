@@ -543,3 +543,32 @@ class Context:
             self._ctx = None
             self._owned = False
 
+    def multipart_parse(self, handler):
+        from csilk.lib import CsilkMultipartHandler
+        
+        @CsilkMultipartHandler
+        def wrapper(part_ptr):
+            try:
+                name = part_ptr.contents.name.decode('utf-8')
+                filename = part_ptr.contents.filename.decode('utf-8') if part_ptr.contents.filename else ""
+                content_type = part_ptr.contents.content_type.decode('utf-8') if part_ptr.contents.content_type else ""
+                
+                data_len = part_ptr.contents.data_len
+                data_bytes = b""
+                if data_len > 0 and part_ptr.contents.data:
+                    data_bytes = ctypes.string_at(part_ptr.contents.data, data_len)
+                
+                part_dict = {
+                    "name": name,
+                    "filename": filename if filename else None,
+                    "content_type": content_type if content_type else None,
+                    "data": data_bytes
+                }
+                handler(part_dict)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+
+        self._lib.csilk_multipart_parse(self._ctx, wrapper)
+
+
