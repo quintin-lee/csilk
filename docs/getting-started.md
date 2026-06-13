@@ -152,3 +152,37 @@ int main() {
     return 0;
 }
 ```
+
+## Python Bindings Quickstart
+
+If you prefer Python, you can write `csilk` applications in Python using the `ctypes` wrapper package:
+
+1. Compile the `csilk` shared library:
+```bash
+cmake .. -DCSILK_BUILD_SHARED=ON
+make
+```
+
+2. Install the python package in development mode:
+```bash
+pip install -e ./python
+```
+
+3. Create a simple `app.py` script:
+```python
+from csilk import App, Context
+
+app = App()
+
+@app.get("/ping")
+def ping(ctx: Context):
+    ctx.string(200, "pong")
+
+if __name__ == "__main__":
+    app.run(8080)
+```
+
+4. Run the application:
+```bash
+python3 app.py
+```
