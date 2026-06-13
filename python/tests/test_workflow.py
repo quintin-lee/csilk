@@ -1,4 +1,5 @@
 import unittest
+import json
 import threading
 import time
 import sys
@@ -156,6 +157,95 @@ class TestWorkflow(unittest.TestCase):
         wf.run("hello", callback=cb)
         self.assertTrue(event.wait(timeout=2.0))
         self.assertEqual(results, ["HELLO FROM DECA"])
+
+    def test_workflow_traced_and_interactive(self):
+        # 1. Test run_traced and trace_to_json
+        wf = Workflow("traced_test")
+        
+        def step_upper(ctx, inp):
+            return ctx.data_new_string(inp.value.upper())
+            
+        n = wf.add("node1", step_upper)
+        n.set_entry(True)
+        
+        results = []
+        event = threading.Event()
+        trace_ptrs = []
+        
+        def traced_cb(res, trace_ptr):
+            if res:
+                results.append(res.value)
+            if trace_ptr:
+                trace_ptrs.append(trace_ptr)
+            event.set()
+            
+        wf.run_traced("hello", callback=traced_cb)
+        self.assertTrue(event.wait(timeout=2.0))
+        self.assertEqual(results, ["HELLO"])
+        self.assertEqual(len(trace_ptrs), 1)
+        
+        # Convert trace to JSON
+        json_str = wf.trace_to_json(trace_ptrs[0])
+        self.assertIsNotNone(json_str)
+        trace_data = json.loads(json_str)
+        self.assertIn("exec_id", trace_data)
+        self.assertIn("nodes", trace_data)
+        
+        # Free trace and workflow
+        wf.trace_free(trace_ptrs[0])
+        wf.free()
+
+        # 2. Test interactive pause, resume, and signal_continue
+        wf2 = Workflow("interactive_test")
+        
+        import tempfile
+        import shutil
+        wal_dir = tempfile.mkdtemp()
+        wf2.set_persistence(wal_dir)
+        
+        def step1(ctx, inp):
+            return ctx.data_new_string(inp.value + "-step1")
+            
+        def step2(ctx, inp):
+            return ctx.data_new_string(inp.value + "-step2")
+            
+        n1 = wf2.add("node1", step1)
+        n1.set_entry(True)
+        n1.set_interactive(True)
+        
+        n2 = wf2.add("node2", step2)
+        n1.bind(n2)
+        
+        results_int = []
+        event_int = threading.Event()
+        def cb_int(res):
+            if res:
+                results_int.append(res.value)
+            event_int.set()
+            
+        # Run workflow: should pause at node1 immediately
+        exec_id = wf2.run("hello", callback=cb_int)
+        self.assertIsNotNone(exec_id)
+        
+        # Verify it hasn't completed
+        self.assertFalse(event_int.wait(timeout=0.2))
+        self.assertEqual(len(results_int), 0)
+        
+        # Simulating a reload/resume of the paused context
+        wf2.resume(exec_id)
+        
+        # Verify it still hasn't completed (paused at node1 again)
+        self.assertFalse(event_int.wait(timeout=0.2))
+        
+        # Signal continue to approve the interactive node and run to completion
+        wf2.signal_continue(exec_id, "approved-hello", callback=cb_int)
+        
+        self.assertTrue(event_int.wait(timeout=2.0))
+        self.assertEqual(results_int, ["approved-hello-step1-step2"])
+        
+        # Free resources
+        wf2.free()
+        shutil.rmtree(wal_dir)
 
 if __name__ == '__main__':
     unittest.main()
