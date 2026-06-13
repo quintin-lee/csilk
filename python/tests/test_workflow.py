@@ -1,5 +1,6 @@
 import unittest
 import json
+import ctypes
 import threading
 import time
 import sys
@@ -247,5 +248,103 @@ class TestWorkflow(unittest.TestCase):
         wf2.free()
         shutil.rmtree(wal_dir)
 
+    def test_tool_discovery_registration(self):
+        wf = Workflow("tool_test")
+        
+        # 1. Register static tool
+        def my_static_tool(args):
+            return {"result": f"static_ok: {args}"}
+            
+        wf.register_tool(
+            name="static_tool",
+            description="a static test tool",
+            parameters_json='{"type":"object"}',
+            tool_fn=my_static_tool
+        )
+        
+        # 2. Register dynamic discovery callback
+        def my_discovery(static_tools):
+            self.assertEqual(len(static_tools), 1)
+            self.assertEqual(static_tools[0]["name"], "static_tool")
+            self.assertEqual(static_tools[0]["description"], "a static test tool")
+            self.assertEqual(static_tools[0]["parameters_json"], '{"type":"object"}')
+            
+            def my_dynamic_tool(args):
+                return {"result": f"dynamic_ok: {args}"}
+                
+            return [
+                {
+                    "name": "dynamic_tool",
+                    "description": "a dynamic test tool",
+                    "parameters_json": '{"type":"string"}',
+                    "fn": my_dynamic_tool
+                }
+            ]
+            
+        wf.set_tool_discovery(my_discovery)
+        
+        # 3. Verify it is set
+        self.assertIsNotNone(wf._discovery_cb)
+        
+        # 4. Construct a mock static tool array to pass to discovery callback
+        from csilk.lib import CsilkWfToolEntry
+        static_array = (CsilkWfToolEntry * 1)()
+        static_array[0].name = b"static_tool"
+        static_array[0].description = b"a static test tool"
+        static_array[0].parameters_json = b'{"type":"object"}'
+        static_array[0].fn = None
+        static_array[0].user_data = None
+        
+        discovered_out = ctypes.c_void_p()
+        discovered_count_out = ctypes.c_size_t()
+        
+        # Invoke callback directly
+        ret = wf._discovery_cb(
+            wf._wf,
+            ctypes.cast(static_array, ctypes.c_void_p),
+            1,
+            ctypes.byref(discovered_out),
+            ctypes.byref(discovered_count_out),
+            None
+        )
+        
+        self.assertEqual(ret, 0)
+        self.assertEqual(discovered_count_out.value, 1)
+        self.assertIsNotNone(discovered_out.value)
+        
+        # Cast the returned memory to verify the dynamic tool properties
+        discovered_array = ctypes.cast(discovered_out, ctypes.POINTER(CsilkWfToolEntry * 1))
+        entry = discovered_array.contents[0]
+        self.assertEqual(entry.name, b"dynamic_tool")
+        self.assertEqual(entry.description, b"a dynamic test tool")
+        self.assertEqual(entry.parameters_json, b'{"type":"string"}')
+        self.assertIsNotNone(entry.fn)
+        
+        # 5. Call the dynamic tool wrapper function pointer directly
+        from csilk.lib import CsilkWfToolFn
+        fn_callable = CsilkWfToolFn(entry.fn)
+        res_ptr = fn_callable(b'{"arg": 123}', None)
+        self.assertIsNotNone(res_ptr)
+        
+        res_val = ctypes.string_at(res_ptr).decode('utf-8')
+        res_json = json.loads(res_val)
+        self.assertEqual(res_json, {"result": "dynamic_ok: {\"arg\": 123}"})
+        
+        # Free the string returned by CsilkWfToolFn
+        wf._lib.csilk_free(res_ptr)
+        
+        # Free the allocated entries and array to avoid leaks
+        raw_ptrs = ctypes.cast(discovered_out, ctypes.POINTER(ctypes.c_void_p * 5)).contents
+        if raw_ptrs[0]:
+            wf._lib.csilk_free(raw_ptrs[0])
+        if raw_ptrs[1]:
+            wf._lib.csilk_free(raw_ptrs[1])
+        if raw_ptrs[2]:
+            wf._lib.csilk_free(raw_ptrs[2])
+        wf._lib.csilk_free(discovered_out)
+        
+        wf.free()
+
 if __name__ == '__main__':
     unittest.main()
+
