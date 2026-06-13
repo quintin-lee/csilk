@@ -912,6 +912,9 @@ def get_bindings():
     lib.csilk_generate_uuid.restype = None
     lib.csilk_generate_uuid.argtypes = [ctypes.c_char_p]
 
+    lib.csilk_csrf_generate_token.restype = ctypes.c_int
+    lib.csilk_csrf_generate_token.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+
     # cJSON Parsing
     lib.cJSON_Parse.restype = ctypes.c_void_p
     lib.cJSON_Parse.argtypes = [ctypes.c_char_p]
