@@ -17,3 +17,12 @@ class Crypto:
         buf = ctypes.create_string_buffer(37)
         lib.csilk_generate_uuid(buf)
         return buf.value.decode('utf-8')
+
+    @staticmethod
+    def generate_csrf_token():
+        lib = get_bindings()
+        buf = ctypes.create_string_buffer(33)
+        res = lib.csilk_csrf_generate_token(buf, 33)
+        if res != 0:
+            raise RuntimeError("Failed to generate CSRF token")
+        return buf.value.decode('utf-8')

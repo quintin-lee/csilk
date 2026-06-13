@@ -591,6 +591,15 @@ class TestCsilkCrypto(unittest.TestCase):
         self.assertEqual(len(parts[3]), 4)
         self.assertEqual(len(parts[4]), 12)
 
+    def test_generate_csrf_token(self):
+        t1 = Crypto.generate_csrf_token()
+        t2 = Crypto.generate_csrf_token()
+        self.assertEqual(len(t1), 32)
+        self.assertEqual(len(t2), 32)
+        self.assertNotEqual(t1, t2)
+        import re
+        self.assertTrue(re.match(r"^[0-9a-f]{32}$", t1))
+
 class TestCsilkPerm(unittest.TestCase):
     def test_permission_flow(self):
         # Initialize permission subsystem
