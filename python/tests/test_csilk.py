@@ -249,6 +249,22 @@ class TestCsilkIntegration(unittest.TestCase):
             ctx.sse_send("update", f"is_sse:{is_sse_flag}")
             ctx.sse_close()
 
+        # 21. Multipart Form Route
+        @app.post("/multipart-test")
+        def handle_multipart(ctx: Context):
+            parts = []
+            def on_part(part):
+                parts.append({
+                    "name": part["name"],
+                    "filename": part["filename"],
+                    "content_type": part["content_type"],
+                    "data": part["data"].decode('utf-8') if part["data"] else ""
+                })
+            ctx.multipart_parse(on_part)
+            ctx.json(200, {"parts": parts})
+
+
+
 
         # Run server in thread
         def run_server():
@@ -495,6 +511,36 @@ class TestCsilkIntegration(unittest.TestCase):
             body = res20.read().decode('utf-8')
             self.assertIn("event: update\n", body)
             self.assertIn("data: is_sse:True\n", body)
+
+            # 21. Test Multipart Form Parsing
+            boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+            multipart_body = (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="text_field"\r\n\r\n'
+                f"hello-multipart\r\n"
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="file_field"; filename="test.txt"\r\n'
+                f"Content-Type: text/plain\r\n\r\n"
+                f"file-content-here\r\n"
+                f"--{boundary}--\r\n"
+            ).encode('utf-8')
+            
+            res21 = request_with_retry(
+                "http://127.0.0.1:8082/multipart-test",
+                data=multipart_body,
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                method="POST"
+            )
+            self.assertEqual(res21.status, 200)
+            res21_json = json.loads(res21.read().decode('utf-8'))
+            self.assertEqual(len(res21_json["parts"]), 2)
+            self.assertEqual(res21_json["parts"][0]["name"], "text_field")
+            self.assertEqual(res21_json["parts"][0]["data"], "hello-multipart")
+            self.assertEqual(res21_json["parts"][1]["name"], "file_field")
+            self.assertEqual(res21_json["parts"][1]["filename"], "test.txt")
+            self.assertEqual(res21_json["parts"][1]["content_type"], "text/plain")
+            self.assertEqual(res21_json["parts"][1]["data"], "file-content-here")
+
 
 
 

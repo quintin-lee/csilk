@@ -193,6 +193,18 @@ CsilkWfToolDiscovery = ctypes.CFUNCTYPE(
     ctypes.c_void_p
 )
 
+class CsilkMultipartPart(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char * 128),
+        ("filename", ctypes.c_char * 256),
+        ("content_type", ctypes.c_char * 64),
+        ("data", ctypes.POINTER(ctypes.c_uint8)),
+        ("data_len", ctypes.c_size_t),
+        ("ctx", ctypes.c_void_p)
+    ]
+CsilkMultipartPartPtr = ctypes.POINTER(CsilkMultipartPart)
+
+CsilkMultipartHandler = ctypes.CFUNCTYPE(None, CsilkMultipartPartPtr)
 
 class CsilkMqStats(ctypes.Structure):
     _fields_ = [
@@ -637,6 +649,9 @@ def get_bindings():
     
     lib.csilk_cors_middleware.restype = None
     lib.csilk_cors_middleware.argtypes = [CsilkCtxPtr, ctypes.POINTER(CsilkCorsConfig)]
+
+    lib.csilk_multipart_parse.restype = None
+    lib.csilk_multipart_parse.argtypes = [CsilkCtxPtr, CsilkMultipartHandler]
     
     # JWT Middlewares & Helpers
     lib.csilk_jwt_middleware.restype = None
