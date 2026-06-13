@@ -345,6 +345,46 @@ class TestWorkflow(unittest.TestCase):
         
         wf.free()
 
+    def test_workflow_configurations(self):
+        wf = Workflow("config_test")
+        self.assertIsNotNone(wf)
+        
+        # Test workflow settings
+        wf.set_ttl(3600)
+        wf.set_budget(50000)
+        
+        # Add a node and configure it
+        def handler(ctx, inp):
+            return None
+        n1 = wf.add("node1", handler)
+        self.assertIsNotNone(n1)
+        
+        # Test node configurations
+        n1.set_join_policy("OR")
+        n1.set_join_policy("AND")
+        n1.set_timeout(5000)
+        n1.set_retry(3, 1000)
+        n1.set_remote(True)
+        
+        # Add another node to test bind/on/on_loop/on_error/to_mermaid
+        n2 = wf.add("node2", handler)
+        n1.bind(n2)
+        n1.on("custom_cond", n2)
+        n1.on_loop("loop_cond", n2)
+        n1.on_error(n2)
+        
+        # Test to_mermaid
+        mermaid_graph = wf.to_mermaid()
+        self.assertIsNotNone(mermaid_graph)
+        self.assertTrue("graph TD" in mermaid_graph)
+        self.assertTrue("node1" in mermaid_graph)
+        self.assertTrue("node2" in mermaid_graph)
+        self.assertTrue("custom_cond" in mermaid_graph)
+        self.assertTrue("loop_cond" in mermaid_graph)
+        
+        wf.free()
+
 if __name__ == '__main__':
     unittest.main()
+
 
