@@ -35,6 +35,8 @@ set(CSILK_CORE_SOURCES
     src/core/uuid.c
     src/core/hot_reload.c
     src/core/header_map.c
+    src/core/hooks.c
+    src/core/query.c
 )
 
 set(CSILK_DATA_SOURCES
