@@ -54,7 +54,8 @@ CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
  * @note The key and value are duplicated into arena memory. If the arena is
  *       nullptr this function silently does nothing.
  */
-CSILK_INTERNAL void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
+CSILK_INTERNAL void
+map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
 
 /**
  * @brief Add a header value to the hash map, allowing duplicate keys.
@@ -70,6 +71,7 @@ CSILK_INTERNAL void map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char*
  * @note Both key and value are duplicated into arena memory. Silently does
  *       nothing if the arena is nullptr.
  */
-CSILK_INTERNAL void map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
+CSILK_INTERNAL void
+map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
 
 #endif /* CSILK_HEADER_MAP_H */

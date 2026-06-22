@@ -21,6 +21,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/crypto_dispatch.h"
+#include "csilk/core/internal.h"
 #include "csilk/crypto.h"
 
 void
