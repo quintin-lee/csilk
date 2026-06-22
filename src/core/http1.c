@@ -177,6 +177,9 @@ on_message_begin(llhttp_t* p)
 	return 0;
 }
 
+/* Forward declaration for buffer reuse helper used by URL and header callbacks */
+static char* buf_grow(char* buf, size_t* cap, size_t needed);
+
 /** @brief llhttp callback: URL data received.
  *
  * Stores the raw URL string. Checks against max_url_size and returns

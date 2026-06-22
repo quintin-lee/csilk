@@ -22,6 +22,7 @@
 #include <yaml.h>
 
 #include "csilk/csilk.h"
+#include "core/srv_internal.h"
 
 /** @brief Convert a case-insensitive log level string to its enum value.
  *
