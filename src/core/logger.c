@@ -88,7 +88,7 @@ static const char* level_colors[] = {
  * every log line.  Thread-local so each writer thread has its own cache. */
 static _Thread_local struct {
 	time_t last_sec;
-	char   text[20];  /**< "YYYY-MM-DD HH:MM:SS" */<--- 19 chars + NUL */
+	char   text[20];  /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
 } tls_time_cache = {0, {0}};
 
 /* ---- rotation ---- */

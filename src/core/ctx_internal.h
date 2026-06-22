@@ -32,6 +32,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 
 /**
  * @brief A single HTTP header stored as a node in a chained hash table.
