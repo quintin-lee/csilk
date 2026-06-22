@@ -36,6 +36,7 @@ set(CSILK_CORE_SOURCES
     src/core/hot_reload.c
     src/core/header_map.c
     src/core/hooks.c
+    src/core/kv_store.c
     src/core/query.c
 )
 
