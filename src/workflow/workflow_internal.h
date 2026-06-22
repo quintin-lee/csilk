@@ -89,7 +89,7 @@ struct csilk_wf_ctx_s {
 	csilk_arena_t* arena;
 	uv_mutex_t arena_mutex;
 	csilk_data_t** node_outputs;
-	char exec_id[37];
+	char exec_id[CSILK_UUID_BUF_SIZE];
 	char* wal_path;
 	csilk_wf_trace_t* trace;
 	uv_mutex_t trace_mutex;

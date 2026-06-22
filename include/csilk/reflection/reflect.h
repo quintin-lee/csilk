@@ -245,7 +245,7 @@ int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
  *
  * @param json  NUL-terminated JSON string.
  * @param ptr   Pointer to a registered struct instance (must be pre-allocated).
- * @return 0 on success, -1 on error.
+ * @return 1 on success, 0 on failure.
  */
 #define csilk_unmarshal(json, ptr) csilk_json_unmarshal(csilk_type_name(*(ptr)), json, ptr)
 

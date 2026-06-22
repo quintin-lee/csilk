@@ -27,6 +27,8 @@ static constexpr int CSILK_DEFAULT_IDLE_TIMEOUT = 5000;
 static constexpr size_t CSILK_DEFAULT_MAX_BODY_SIZE = 1024UL * 1024UL;
 /** @brief Default maximum request header size in bytes. */
 static constexpr size_t CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL;
+/** @brief Default maximum URL length in bytes. */
+static constexpr size_t CSILK_DEFAULT_MAX_URL_SIZE = 8192;
 /** @brief Default TCP listen backlog. */
 static constexpr int CSILK_DEFAULT_LISTEN_BACKLOG = 128;
 /** @brief Default request arena chunk size. */

@@ -333,14 +333,14 @@ csilk_app_new(const char* config_path)
 		app->config.port = CSILK_DFL_PORT;
 		app->config.logger.level = CSILK_LOG_INFO;
 		app->config.logger.use_colors = -1;
-		app->config.server.idle_timeout_ms = 5000;
+		app->config.server.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
 		app->config.server.read_timeout_ms = 30000;
 		app->config.server.write_timeout_ms = 30000;
-		app->config.server.max_body_size = 1024UL * 1024UL;
-		app->config.server.max_header_size = 64UL * 1024UL;
-		app->config.server.max_url_size = 8192;
+		app->config.server.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+		app->config.server.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
+		app->config.server.max_url_size = CSILK_DEFAULT_MAX_URL_SIZE;
 		app->config.server.max_headers_count = 100;
-		app->config.server.listen_backlog = 128;
+		app->config.server.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 		app->config.server.tcp_nodelay = 1;
 	}
 

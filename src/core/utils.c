@@ -325,7 +325,7 @@ _csilk_hmac_sha256(csilk_ctx_t* c,
  * @param c   Request context (may be nullptr — falls back to built-in).
  * @param buf [out] 37-byte buffer for the UUID string. */
 CSILK_INTERNAL void
-_csilk_generate_uuid(csilk_ctx_t* c, char buf[37])
+_csilk_generate_uuid(csilk_ctx_t* c, char buf[CSILK_UUID_BUF_SIZE])
 {
 	if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
 		c->crypto_driver->generate_uuid(buf);

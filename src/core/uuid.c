@@ -54,9 +54,9 @@ csilk_generate_uuid(char* buf)
 
 	/* Format the 16 random bytes as a 36-character UUID string with
 	 * hyphens in the standard 8-4-4-4-12 grouping pattern, plus a
-	 * null terminator (total 37 bytes). */
+	 * null terminator (total CSILK_UUID_BUF_SIZE bytes). */
 	snprintf(buf,
-		 37,
+		 CSILK_UUID_BUF_SIZE,
 		 "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%"
 		 "02x%02x",
 		 random[0],

@@ -82,6 +82,12 @@ static constexpr int SESSION_TTL = 3600;
 /** @brief CPU cache line size hint for arena alignment. */
 static constexpr int CSILK_CACHE_LINE_SIZE = 64;
 
+/** @brief UUID v4 string length (36 hex chars + 4 hyphens, no null). */
+static constexpr int CSILK_UUID_STR_LEN = 36;
+
+/** @brief Full buffer size for a UUID v4 string (str_len + null terminator). */
+static constexpr int CSILK_UUID_BUF_SIZE = 37;
+
 /** @brief Maximum number of route groups per app. */
 static constexpr int CSILK_MAX_GROUPS = 32;
 
