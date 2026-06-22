@@ -54,6 +54,10 @@ csilk_status(csilk_ctx_t* c, int status)
 void
 csilk_string(csilk_ctx_t* c, int status, const char* msg)
 {
+	if (!c) {
+		CSILK_LOG_E("Response: csilk_string called with null context");
+		return;
+	}
 	c->response.status = status;
 	size_t msg_len = msg ? strlen(msg) : 0;
 	if (c->arena) {
@@ -229,6 +233,9 @@ void
 csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 {
 	if (!c || !json) {
+		if (!c) CSILK_LOG_E("Response: csilk_json called with null context");
+		if (!json) CSILK_LOG_E("Response: csilk_json called with null json");
+		if (json && !c) cJSON_Delete(json);
 		return;
 	}
 
