@@ -644,8 +644,7 @@ void
 csilk_set_request_id(csilk_ctx_t* c, const char* id)
 {
 	if (c && id) {
-		strncpy(c->request_id, id, 36);
-		c->request_id[36] = '\0';
+		snprintf(c->request_id, sizeof(c->request_id), "%s", id);
 	}
 }
 

@@ -850,8 +850,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	uv_mutex_init(&ctx->mutex);
 	uv_mutex_init(&ctx->arena_mutex);
 	uv_mutex_init(&ctx->trace_mutex);
-	strncpy(ctx->exec_id, exec_id, sizeof(ctx->exec_id) - 1);
-	ctx->exec_id[sizeof(ctx->exec_id) - 1] = '\0';
+	snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
 	ctx->wal_path = strdup(wal_path);
 	int *node_started = calloc(wf->node_count, sizeof(int)),
 	    *node_finished = calloc(wf->node_count, sizeof(int));
@@ -996,8 +995,7 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 	uv_mutex_init(&ctx->mutex);
 	uv_mutex_init(&ctx->arena_mutex);
 	uv_mutex_init(&ctx->trace_mutex);
-	strncpy(ctx->exec_id, exec_id, sizeof(ctx->exec_id) - 1);
-	ctx->exec_id[sizeof(ctx->exec_id) - 1] = '\0';
+	snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
 	ctx->wal_path = strdup(wal_path);
 
 	char* paused_node_id = nullptr;

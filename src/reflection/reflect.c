@@ -363,7 +363,7 @@ deserialize_scalar(const cJSON* item, void* addr, const csilk_field_desc_t* desc
    *   - Bool: cJSON_IsTrue() handles both True and False.
    *   - String, pointer mode (desc->is_pointer): free existing allocation
    *     before malloc + memcpy of new value (avoids leaks on re-parse).
-   *   - String, buffer mode: strncpy with desc->size-1 limit + manual
+   *   - String, buffer mode: snprintf with desc->size limit + automatic
    *     null-termination (prevents buffer overrun).
    *   - Nested struct: if pointer field and nil, auto-allocate with
    *     calloc(1, desc->size), then recurse via cjson_to_struct_internal().
@@ -419,8 +419,7 @@ deserialize_scalar(const cJSON* item, void* addr, const csilk_field_desc_t* desc
 					memcpy(*ptr, item->valuestring, len);
 				}
 			} else {
-				strncpy((char*)addr, item->valuestring, desc->size - 1);
-				((char*)addr)[desc->size - 1] = '\0';
+				snprintf((char*)addr, desc->size, "%s", item->valuestring);
 			}
 		}
 		break;

@@ -188,16 +188,14 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 		if (ip_count < MAX_IP_ENTRIES) {
 			/* Slot available: create new entry, reset count to 1. */
 			entry = &ip_table[ip_count++];
-			strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
-			entry->ip[sizeof(entry->ip) - 1] = '\0';
+			snprintf(entry->ip, sizeof(entry->ip), "%s", ip);
 			entry->count = 0;
 			entry->last_reset = now;
 		} else {
 			/* Table full: evict the LRU entry (oldest last_seen). */
 			evict_oldest_entry();
 			entry = &ip_table[ip_count++];
-			strncpy(entry->ip, ip, sizeof(entry->ip) - 1);
-			entry->ip[sizeof(entry->ip) - 1] = '\0';
+			snprintf(entry->ip, sizeof(entry->ip), "%s", ip);
 			entry->count = 0;
 			entry->last_reset = now;
 		}
