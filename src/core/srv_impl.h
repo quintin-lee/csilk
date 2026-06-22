@@ -49,4 +49,9 @@ CSILK_INTERNAL int setup_client_tls(csilk_client_t* client);
 CSILK_INTERNAL void process_tls_read(csilk_client_t* client);
 CSILK_INTERNAL void flush_tls_write(csilk_client_t* client);
 
+/* --- Hooks (hooks.c) --- */
+
+CSILK_INTERNAL void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler);
+CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
+
 #endif /* SRV_IMPL_H */
