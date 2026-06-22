@@ -41,7 +41,7 @@ csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator)
 			    (void*)c,
 			    token ? "present" : "missing");
 		csilk_set_header(c, "WWW-Authenticate", "Bearer");
-		csilk_status(c, CSILK_STATUS_UNAUTHORIZED);
+		csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Unauthorized");
 		csilk_abort(c);
 	} else {
 		CSILK_LOG_D("Auth: Authentication successful for request %p", (void*)c);

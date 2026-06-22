@@ -20,13 +20,8 @@
 #include "csilk/csilk.h"
 #include "core/srv_internal.h"
 #include "core/srv_impl.h"
+#include "core/header_map.h"
 #include "h2.h"
-
-/* Forward declarations for context.c helpers */
-CSILK_INTERNAL void
-map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
-CSILK_INTERNAL void
-map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
 
 /* --- Status & string --- */
 

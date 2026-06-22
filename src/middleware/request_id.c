@@ -39,7 +39,7 @@ csilk_request_id_middleware(csilk_ctx_t* c)
      and reused across the entire request lifecycle. */
 	const char* rid = csilk_get_request_id(c);
 	if (!rid || rid[0] == '\0') {
-		char buf[37];
+		char buf[CSILK_UUID_BUF_SIZE];
 		_csilk_generate_uuid(c, buf);
 		csilk_set_request_id(c, buf);
 		rid = csilk_get_request_id(c);

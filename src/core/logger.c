@@ -54,6 +54,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/internal.h"
 #include "csilk/reflection/reflect.h"
 
 /* ---- reflectable log-entry struct ---- */
@@ -66,7 +67,7 @@
 typedef struct csilk_log_entry_s {
 	int64_t time_epoch;  /**< unix timestamp */
 	char level[8];	     /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
-	char request_id[37]; /**< unique request id */
+	char request_id[CSILK_UUID_BUF_SIZE]; /**< unique request id */
 	char file[64];	     /**< source filename */
 	int32_t line;	     /**< source line number */
 	char func[64];	     /**< function name */
@@ -76,7 +77,7 @@ typedef struct csilk_log_entry_s {
 #define LOG_ENTRY_MAP(X)                                                                           \
 	X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64, sizeof(int64_t), 0, false, nullptr)     \
 	X(csilk_log_entry_t, level, CSILK_TYPE_STRING, 8, 0, false, nullptr)                       \
-	X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, 37, 0, false, nullptr)                 \
+	X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, CSILK_UUID_BUF_SIZE, 0, false, nullptr)                 \
 	X(csilk_log_entry_t, file, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
 	X(csilk_log_entry_t, line, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)           \
 	X(csilk_log_entry_t, func, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
@@ -98,7 +99,7 @@ typedef struct {
 
 static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
 
-static _Thread_local char tl_request_id[37];
+static _Thread_local char tl_request_id[CSILK_UUID_BUF_SIZE];
 
 static char*
 get_tl_request_id(void)
@@ -485,7 +486,7 @@ csilk_log_set_request_id(const char* request_id)
 {
 	char* tl_request_id = get_tl_request_id();
 	if (request_id) {
-		snprintf(tl_request_id, 37, "%s", request_id);
+		snprintf(tl_request_id, CSILK_UUID_BUF_SIZE, "%s", request_id);
 	} else {
 		tl_request_id[0] = '\0';
 	}

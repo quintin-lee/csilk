@@ -95,16 +95,16 @@ init_tls(csilk_server_t* s)
 	if (s->config.tls_cert_file && s->config.tls_key_file) {
 		if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx, s->config.tls_cert_file) <= 0) {
 			ERR_print_errors_fp(stderr);
-			goto error;
+			goto fail;
 		}
 		if (SSL_CTX_use_PrivateKey_file(
 			s->ssl_ctx, s->config.tls_key_file, SSL_FILETYPE_PEM) <= 0) {
 			ERR_print_errors_fp(stderr);
-			goto error;
+			goto fail;
 		}
 	} else {
 		CSILK_LOG_E("TLS: TLS enabled but cert/key files missing");
-		goto error;
+		goto fail;
 	}
 
 	if (s->config.tls_ca_file) {
@@ -121,7 +121,7 @@ init_tls(csilk_server_t* s)
 
 	return;
 
-error:
+fail:
 	SSL_CTX_free(s->ssl_ctx);
 	s->ssl_ctx = nullptr;
 }

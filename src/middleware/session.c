@@ -33,7 +33,7 @@ typedef struct csilk_session_data_s {
  * in the global store (singly-linked list).
  */
 typedef struct csilk_session_s {
-	char id[37];
+	char id[CSILK_UUID_BUF_SIZE];
 	csilk_session_data_t* data;
 	time_t expires_at;
 	struct csilk_session_s* next;
@@ -111,7 +111,7 @@ session_unlock(void)
  *            null-terminated UUID string.
  */
 static void
-generate_session_id(csilk_ctx_t* c, char id[37])
+generate_session_id(csilk_ctx_t* c, char id[CSILK_UUID_BUF_SIZE])
 {
 	_csilk_generate_uuid(c, id);
 }
