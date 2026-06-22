@@ -21,11 +21,13 @@ __pycache__/
 # Pre-generated documentation
 docs/html/
 docs/latex/
+docs/superpowers
 
 # Additional build directories
 build_rel*/
 build-pkg/
 build-profile/
+build/
 
 # Test executables in project root
 test_async_keepalive

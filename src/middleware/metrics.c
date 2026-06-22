@@ -123,8 +123,8 @@ get_metric_slot(const char* method, const char* route, int status)
 		int expected = 0;
 		if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
 			/* Success: We claimed a new slot. Initialize its keys. */
-			strncpy(slot->method, method, sizeof(slot->method) - 1);
-			strncpy(slot->route, route, sizeof(slot->route) - 1);
+			snprintf(slot->method, sizeof(slot->method), "%s", method);
+			snprintf(slot->route, sizeof(slot->route), "%s", route);
 			slot->status = status;
 			return slot;
 		}

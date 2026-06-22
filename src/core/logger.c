@@ -485,8 +485,7 @@ csilk_log_set_request_id(const char* request_id)
 {
 	char* tl_request_id = get_tl_request_id();
 	if (request_id) {
-		strncpy(tl_request_id, request_id, 36);
-		tl_request_id[36] = '\0';
+		snprintf(tl_request_id, 37, "%s", request_id);
 	} else {
 		tl_request_id[0] = '\0';
 	}
