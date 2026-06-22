@@ -19,6 +19,8 @@ set(CSILK_CORE_SOURCES
     src/core/config.c
     src/core/connection.c
     src/core/context.c
+    src/core/ctx_defer.c
+    src/core/ctx_json.c
     src/core/h2.c
     src/core/http1.c
     src/core/logger.c
