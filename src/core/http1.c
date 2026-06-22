@@ -155,30 +155,8 @@ on_message_begin(llhttp_t* p)
 	}
 
 	csilk_log_set_request_id(nullptr);
-
-	/* Free the previous request's header buffers; new ones will be
-	 * allocated by buf_grow in on_header_field/on_header_value. */
-	if (client->current_header_field) {
-		free(client->current_header_field);
-		client->current_header_field = nullptr;
-		client->header_field_capacity = 0;
-	}
-	if (client->current_header_value) {
-		free(client->current_header_value);
-		client->current_header_value = nullptr;
-		client->header_value_capacity = 0;
-	}
-	if (client->current_url) {
-		free(client->current_url);
-		client->current_url = nullptr;
-		client->current_url_capacity = 0;
-	}
-
 	return 0;
 }
-
-/* Forward declaration for buffer reuse helper used by URL and header callbacks */
-static char* buf_grow(char* buf, size_t* cap, size_t needed);
 
 /** @brief llhttp callback: URL data received.
  *
@@ -201,13 +179,11 @@ on_url(llhttp_t* p, const char* at, size_t length)
 		return HPE_USER;
 	}
 	if (client->current_url) {
-		/* Reset length, keep capacity for reuse via buf_grow */
-		client->current_url[0] = '\0';
+		free(client->current_url);
 	}
-	if (!buf_grow(client->current_url, &client->current_url_capacity, length + 1)) {
-		CSILK_LOG_E("Failed to allocate/grow memory for URL string");
-		client->current_url = nullptr;
-		client->current_url_capacity = 0;
+	client->current_url = malloc(length + 1);
+	if (!client->current_url) {
+		CSILK_LOG_E("Failed to allocate memory for URL string");
 		return HPE_USER;
 	}
 	memcpy(client->current_url, at, length);
@@ -244,18 +220,21 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 	if (client->current_header_field && client->current_header_value) {
 		csilk_set_request_header(
 		    &client->ctx, client->current_header_field, client->current_header_value);
-		/* Reuse buffers via buf_grow — reset length, keep capacity */
-		client->current_header_field[0] = '\0';
-		client->current_header_value[0] = '\0';
-	} else if (client->current_header_field) {
-		client->current_header_field[0] = '\0';
-	}
-
-	/* Use buf_grow to reuse the buffer across headers (avoids malloc/free per header) */
-	if (!buf_grow(client->current_header_field, &client->header_field_capacity, length + 1)) {
-		CSILK_LOG_E("Failed to allocate/grow memory for header field");
+		free(client->current_header_field);
 		client->current_header_field = nullptr;
 		client->header_field_capacity = 0;
+		free(client->current_header_value);
+		client->current_header_value = nullptr;
+		client->header_value_capacity = 0;
+	} else if (client->current_header_field) {
+		free(client->current_header_field);
+		client->current_header_field = nullptr;
+		client->header_field_capacity = 0;
+	}
+
+	client->current_header_field = malloc(length + 1);
+	if (!client->current_header_field) {
+		CSILK_LOG_E("Failed to allocate memory for header field");
 		return HPE_USER;
 	}
 	memcpy(client->current_header_field, at, length);
