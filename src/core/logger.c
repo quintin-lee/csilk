@@ -55,35 +55,6 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
-#include "csilk/reflection/reflect.h"
-
-/* ---- reflectable log-entry struct ---- */
-
-/** @brief Structured log entry type used for JSON-formatted log output.
- *
- * All fields are fixed-size character arrays to avoid dynamic allocation.
- * The type is registered with the reflection engine for automatic JSON
- * serialization via csilk_json_marshal(). */
-typedef struct csilk_log_entry_s {
-	int64_t time_epoch;  /**< unix timestamp */
-	char level[8];	     /**< TRACE/DEBUG/INFO/WARN/ERROR/FATAL */
-	char request_id[CSILK_UUID_BUF_SIZE]; /**< unique request id */
-	char file[64];	     /**< source filename */
-	int32_t line;	     /**< source line number */
-	char func[64];	     /**< function name */
-	char msg[1024];	     /**< log message */
-} csilk_log_entry_t;
-
-#define LOG_ENTRY_MAP(X)                                                                           \
-	X(csilk_log_entry_t, time_epoch, CSILK_TYPE_INT64, sizeof(int64_t), 0, false, nullptr)     \
-	X(csilk_log_entry_t, level, CSILK_TYPE_STRING, 8, 0, false, nullptr)                       \
-	X(csilk_log_entry_t, request_id, CSILK_TYPE_STRING, CSILK_UUID_BUF_SIZE, 0, false, nullptr)                 \
-	X(csilk_log_entry_t, file, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
-	X(csilk_log_entry_t, line, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)           \
-	X(csilk_log_entry_t, func, CSILK_TYPE_STRING, 64, 0, false, nullptr)                       \
-	X(csilk_log_entry_t, msg, CSILK_TYPE_STRING, 1024, 0, false, nullptr)
-
-CSILK_REGISTER_REFLECT(csilk_log_entry_t, LOG_ENTRY_MAP)
 
 /* ---- internal logger state ---- */
 
@@ -110,6 +81,15 @@ get_tl_request_id(void)
 static const char* level_names[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
 static const char* level_colors[] = {
     "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m"};
+
+/** @brief Cached formatted timestamp, refreshed once per second.
+ *
+ * Avoids calling time() (system call) and localtime_r() (tz lock) on
+ * every log line.  Thread-local so each writer thread has its own cache. */
+static _Thread_local struct {
+	time_t last_sec;
+	char   text[20];  /**< "YYYY-MM-DD HH:MM:SS" */<--- 19 chars + NUL */
+} tls_time_cache = {0, {0}};
 
 /* ---- rotation ---- */
 
@@ -162,17 +142,22 @@ log_text(csilk_log_level_t lv,
 	const char* fn = strrchr(file, '/');
 	fn = fn ? fn + 1 : file;
 
-	char ts[32];
+	/* Refresh cached timestamp once per second to avoid repeated
+	 * time() system calls and localtime_r() tz-lock contention. */
 	time_t now = time(nullptr);
-	struct tm tm;
-	localtime_r(&now, &tm);
-	strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm);
+	if (now != tls_time_cache.last_sec) {
+		tls_time_cache.last_sec = now;
+		struct tm tm;
+		localtime_r(&now, &tm);
+		strftime(tls_time_cache.text, sizeof(tls_time_cache.text),
+			 "%Y-%m-%d %H:%M:%S", &tm);
+	}
 
 	int n = 0;
 	if (g_logger.config.use_colors) {
 		n += fprintf(g_logger.fp,
 			     "%s %s%s\x1b[0m [%s:%d] %s(): ",
-			     ts,
+			     tls_time_cache.text,
 			     level_colors[lv],
 			     level_names[lv],
 			     fn,
@@ -180,7 +165,7 @@ log_text(csilk_log_level_t lv,
 			     func);
 	} else {
 		n += fprintf(
-		    g_logger.fp, "%s %s [%s:%d] %s(): ", ts, level_names[lv], fn, line, func);
+		    g_logger.fp, "%s %s [%s:%d] %s(): ", tls_time_cache.text, level_names[lv], fn, line, func);
 	}
 
 	char* tl_request_id = get_tl_request_id();
@@ -195,13 +180,10 @@ log_text(csilk_log_level_t lv,
 
 /* ---- JSON-format output (uses reflect) ---- */
 
-/** @brief Build a cJSON object from log entry fields using the reflection
- * engine.
+/** @brief Build a cJSON object from log entry fields directly.
  *
- * Populates a csilk_log_entry_t struct with the provided metadata, then
- * serializes it to JSON via csilk_json_marshal() and parses the result back
- * into a cJSON object. This round-trip is used to produce consistent JSON
- * output that matches the registered reflection schema.
+ * Constructs a cJSON object by adding each field individually, avoiding
+ * the expensive struct→JSON→cJSON round-trip previously used.
  *
  * @param lv      Log level.
  * @param file    Source file name.
@@ -222,26 +204,43 @@ build_json_entry(csilk_log_level_t lv,
 	const char* fn = strrchr(file, '/');
 	fn = fn ? fn + 1 : file;
 
-	csilk_log_entry_t entry;
-	memset(&entry, 0, sizeof(entry));
-	entry.time_epoch = (int64_t)time(nullptr);
-	snprintf(entry.level, sizeof(entry.level), "%s", level_names[lv]);
-	char* tl_request_id = get_tl_request_id();
-	snprintf(entry.request_id, sizeof(entry.request_id), "%s", tl_request_id);
-	snprintf(entry.file, sizeof(entry.file), "%s", fn);
-	entry.line = (int32_t)line;
-	snprintf(entry.func, sizeof(entry.func), "%s", func);
-	if (msg && msg_len > 0) {
-		size_t cp = (size_t)msg_len < sizeof(entry.msg) - 1 ? (size_t)msg_len
-								    : sizeof(entry.msg) - 1;
-		memcpy(entry.msg, msg, cp);
-		entry.msg[cp] = '\0';
+	cJSON* root = cJSON_CreateObject();
+	if (!root) {
+		return nullptr;
 	}
 
-	char* tmp = csilk_json_marshal("csilk_log_entry_t", &entry);
-	cJSON* result = tmp ? cJSON_Parse(tmp) : nullptr;
-	free(tmp);
-	return result;
+	/* Refresh cached time once per second (shared with log_text) */
+	time_t now = time(nullptr);
+	if (now != tls_time_cache.last_sec) {
+		tls_time_cache.last_sec = now;
+		struct tm tm;
+		localtime_r(&now, &tm);
+		strftime(tls_time_cache.text, sizeof(tls_time_cache.text),
+			 "%Y-%m-%d %H:%M:%S", &tm);
+	}
+
+	cJSON_AddNumberToObject(root, "time_epoch", (double)(int64_t)now);
+	cJSON_AddStringToObject(root, "level", level_names[lv]);
+
+	char* tl_request_id = get_tl_request_id();
+	cJSON_AddStringToObject(root, "request_id", tl_request_id);
+
+	cJSON_AddStringToObject(root, "file", fn);
+	cJSON_AddNumberToObject(root, "line", line);
+	cJSON_AddStringToObject(root, "func", func);
+
+	if (msg && msg_len > 0) {
+		/* Truncate to fit the message field limit (same as before) */
+		size_t cp = (size_t)msg_len < 1023 ? (size_t)msg_len : 1023;
+		char buf[1024];
+		memcpy(buf, msg, cp);
+		buf[cp] = '\0';
+		cJSON_AddStringToObject(root, "msg", buf);
+	} else {
+		cJSON_AddStringToObject(root, "msg", "");
+	}
+
+	return root;
 }
 
 /** @brief Format and write a structured JSON log line with optional extra
