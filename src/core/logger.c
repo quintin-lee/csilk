@@ -88,7 +88,7 @@ static const char* level_colors[] = {
  * every log line.  Thread-local so each writer thread has its own cache. */
 static _Thread_local struct {
 	time_t last_sec;
-	char   text[20];  /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
+	char text[20]; /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
 } tls_time_cache = {0, {0}};
 
 /* ---- rotation ---- */
@@ -149,8 +149,8 @@ log_text(csilk_log_level_t lv,
 		tls_time_cache.last_sec = now;
 		struct tm tm;
 		localtime_r(&now, &tm);
-		strftime(tls_time_cache.text, sizeof(tls_time_cache.text),
-			 "%Y-%m-%d %H:%M:%S", &tm);
+		strftime(
+		    tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
 	}
 
 	int n = 0;
@@ -164,8 +164,13 @@ log_text(csilk_log_level_t lv,
 			     line,
 			     func);
 	} else {
-		n += fprintf(
-		    g_logger.fp, "%s %s [%s:%d] %s(): ", tls_time_cache.text, level_names[lv], fn, line, func);
+		n += fprintf(g_logger.fp,
+			     "%s %s [%s:%d] %s(): ",
+			     tls_time_cache.text,
+			     level_names[lv],
+			     fn,
+			     line,
+			     func);
 	}
 
 	char* tl_request_id = get_tl_request_id();
@@ -215,8 +220,8 @@ build_json_entry(csilk_log_level_t lv,
 		tls_time_cache.last_sec = now;
 		struct tm tm;
 		localtime_r(&now, &tm);
-		strftime(tls_time_cache.text, sizeof(tls_time_cache.text),
-			 "%Y-%m-%d %H:%M:%S", &tm);
+		strftime(
+		    tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
 	}
 
 	cJSON_AddNumberToObject(root, "time_epoch", (double)(int64_t)now);
