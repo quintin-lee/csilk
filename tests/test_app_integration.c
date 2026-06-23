@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #include "csilk/app/app.h"
 #include "csilk/csilk.h"
@@ -118,7 +119,7 @@ run_app(void* arg)
 	csilk_app_log_json(g_app, 1);
 	csilk_app_get(g_app, "/hello", hello_handler);
 	g_server = csilk_app_server(g_app);
-	__sync_synchronize();
+	atomic_thread_fence(memory_order_seq_cst);
 	server_ready = 1;
 	csilk_app_run(g_app, PORT);
 	csilk_app_free(g_app);

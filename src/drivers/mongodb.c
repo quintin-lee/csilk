@@ -18,6 +18,7 @@
 #include <mongoc/mongoc.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
@@ -32,8 +33,9 @@ typedef struct {
 static void
 mongodb_ensure_init(void)
 {
-	static int initialized = 0;
-	if (__sync_val_compare_and_swap(&initialized, 0, 1) == 0) {
+	static atomic_int initialized = 0;
+	int expected = 0;
+	if (atomic_compare_exchange_strong(&initialized, &expected, 1)) {
 		mongoc_init();
 	}
 }

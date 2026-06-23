@@ -44,12 +44,13 @@ static atomic_uint_fast64_t ai_duration_us_total = 0;
 static csilk_ctx_t* g_ai_monitors[16];
 static size_t g_ai_monitor_count = 0;
 static uv_mutex_t g_ai_monitor_mutex;
-static int g_ai_monitor_init = 0;
+static atomic_int g_ai_monitor_init = 0;
 
 static void
 ai_ensure_monitor_init(void)
 {
-	if (__sync_val_compare_and_swap(&g_ai_monitor_init, 0, 1) == 0) {
+	int expected = 0;
+	if (atomic_compare_exchange_strong(&g_ai_monitor_init, &expected, 1)) {
 		uv_mutex_init(&g_ai_monitor_mutex);
 	}
 }

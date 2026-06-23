@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
@@ -36,7 +37,7 @@ run_server(void* arg)
 				     .listen_backlog = 128};
 	csilk_server_set_config(g_server, &cfg);
 
-	__sync_synchronize();
+	atomic_thread_fence(memory_order_seq_cst);
 	server_ready = 1;
 
 	csilk_server_run(g_server, TEST_PORT);
