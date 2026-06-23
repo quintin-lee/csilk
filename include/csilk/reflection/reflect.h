@@ -180,6 +180,20 @@ char* csilk_json_marshal(const char* type_name, const void* ptr);
  */
 int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr);
 
+/**
+ * @brief Recursively free heap-allocated memory of a reflected struct's fields.
+ *
+ * Traverses the fields of the struct specified by @p type_name at address @p ptr
+ * according to its registered reflection metadata. Dynamically allocated memory
+ * (e.g. pointer fields containing strings or nested structs) is recursively freed.
+ * Note that the top-level pointer @p ptr itself is NOT freed; the caller must
+ * free it if it was dynamically allocated.
+ *
+ * @param type_name  Registered type name of the struct.
+ * @param ptr        Pointer to the struct instance to free.
+ */
+void csilk_struct_free_reflect(const char* type_name, void* ptr);
+
 /* --- Automatic Type Dispatch (C11 _Generic) --- */
 
 /**

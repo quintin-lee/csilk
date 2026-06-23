@@ -24,12 +24,19 @@ typedef struct TestArray_s {
 	char* dynamic_tags[2];
 } TestArray;
 
+typedef struct TestNode_s {
+	char* name;
+	struct TestNode_s* next;
+} TestNode;
+
 // Extend type map BEFORE including csilk.h/csilk_reflect.h
 #undef CSILK_USER_TYPE_MAP
 #define CSILK_USER_TYPE_MAP                                                                        \
 	, struct TestUser_s : "TestUser",                                                          \
 			      struct TestPoint_s : "TestPoint",                                    \
-						   struct TestArray_s : "TestArray"
+						   struct TestArray_s : "TestArray",               \
+									struct TestNode_s          \
+	    : "TestNode"
 
 #include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
@@ -54,6 +61,12 @@ CSILK_REGISTER_REFLECT(TestUser, USER_REFLECT_MAP)
 	X(TestArray, dynamic_tags, CSILK_TYPE_STRING, sizeof(char*), 2, true, nullptr)
 
 CSILK_REGISTER_REFLECT(TestArray, ARRAY_REFLECT_MAP)
+
+#define NODE_REFLECT_MAP(X)                                                                        \
+	X(TestNode, name, CSILK_TYPE_STRING, sizeof(char*), 0, true, nullptr)                      \
+	X(TestNode, next, CSILK_TYPE_STRUCT, sizeof(TestNode), 0, true, "TestNode")
+
+CSILK_REGISTER_REFLECT(TestNode, NODE_REFLECT_MAP)
 
 void
 test_marshal()
@@ -171,9 +184,50 @@ test_arrays()
 	assert(strcmp(a2.dynamic_tags[0], "D") == 0);
 	assert(strcmp(a2.dynamic_tags[1], "E") == 0);
 
-	free(a2.dynamic_tags[0]);
-	free(a2.dynamic_tags[1]);
+	// Verify csilk_struct_free_reflect on a struct containing an array of string pointers
+	csilk_struct_free_reflect("TestArray", &a2);
+	assert(a2.dynamic_tags[0] == nullptr);
+	assert(a2.dynamic_tags[1] == nullptr);
+
 	printf("test_arrays passed\n");
+}
+
+void
+test_deep_free()
+{
+	printf("Testing deep recursive freeing...\n");
+
+	// 1. Test basic types: string
+	char* s = nullptr;
+	assert(csilk_unmarshal("\"hello dynamic\"", &s) == 1);
+	assert(s != nullptr);
+	assert(strcmp(s, "hello dynamic") == 0);
+
+	csilk_struct_free_reflect("string", &s);
+	assert(s == nullptr);
+
+	// 2. Test deeply nested struct pointer (TestNode)
+	const char* json_node = "{\"name\":\"root\", \"next\":{\"name\":\"child\", \"next\":null}}";
+	TestNode root = {0};
+	assert(csilk_unmarshal(json_node, &root) == 1);
+	assert(root.name != nullptr);
+	assert(strcmp(root.name, "root") == 0);
+	assert(root.next != nullptr);
+	assert(root.next->name != nullptr);
+	assert(strcmp(root.next->name, "child") == 0);
+	assert(root.next->next == nullptr);
+
+	// Keep a copy of the next pointer to check that the struct memory itself was freed
+	TestNode* child_ptr = root.next;
+
+	csilk_struct_free_reflect("TestNode", &root);
+
+	assert(root.name == nullptr);
+	assert(root.next == nullptr);
+	// We cannot safely dereference child_ptr since it has been freed,
+	// but the recursive free has successfully freed its contents and set root.next to NULL.
+
+	printf("test_deep_free passed\n");
 }
 
 int
@@ -184,5 +238,6 @@ main()
 	test_context_reflect();
 	test_basic_types();
 	test_arrays();
+	test_deep_free();
 	return 0;
 }
