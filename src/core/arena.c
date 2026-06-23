@@ -215,10 +215,13 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 
 	size = (size + alignment - 1) & ~(alignment - 1);
 
-	if (arena->head && (arena->head->size - arena->head->used) >= size) {
-		void* ptr = arena->head->data + arena->head->used;
-		arena->head->used += size;
-		return ptr;
+	if (arena->head) {
+		size_t aligned_used = (arena->head->used + alignment - 1) & ~(alignment - 1);
+		if ((arena->head->size - aligned_used) >= size) {
+			void* ptr = arena->head->data + aligned_used;
+			arena->head->used = aligned_used + size;
+			return ptr;
+		}
 	}
 
 	size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
