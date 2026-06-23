@@ -10,7 +10,7 @@
  *   - csilk_mq_get_payload(): retrieve the current message payload.
  * @copyright MIT License
  */
-#include "csilk/core/mq_types.h"
+#include "mq_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/mq.h"
 

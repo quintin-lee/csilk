@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/mq_types.h"
+#include "mq_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/mq.h"
 
