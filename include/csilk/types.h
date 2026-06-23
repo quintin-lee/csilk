@@ -246,7 +246,7 @@ typedef int (*csilk_auth_validator_t)(const char* token);
  * Rules are collected into a nullptr-terminated array and passed to
  * csilk_validate.  Each rule specifies constraints for one field.
  */
-typedef struct csilk_valid_rule_s {
+typedef struct {
 	const char* field;  /**< Name of the field to validate. */
 	int flags;	    /**< Bitwise OR of CSILK_VALID_* flags.  Set to 0 for no
                         constraints (only min/max apply). */
@@ -265,7 +265,7 @@ typedef struct csilk_valid_rule_s {
  * type, and the binary data.  Strings are NUL-terminated fixed-size buffers;
  * data longer than the buffer is truncated.
  */
-typedef struct csilk_multipart_part_s {
+typedef struct {
 	char name[128];	       /**< Form field name (NUL-terminated).  Truncated to 127
                          chars. */
 	char filename[256];    /**< Original filename for file uploads (empty string if
