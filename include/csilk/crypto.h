@@ -23,6 +23,19 @@ extern "C" {
 static constexpr int CSILK_GCM_NONCE_SIZE = 12;
 
 /**
+ * @brief Supported JWT signing algorithms.
+ *
+ * HS256 uses HMAC-SHA256 with a symmetric key (char* secret).
+ * RS256 uses RSA PKCS1-v1_5 with SHA-256 and a PEM-encoded private key.
+ * ES256 uses ECDSA P-256 with SHA-256 and a PEM-encoded EC private key.
+ */
+typedef enum {
+	CSILK_JWT_HS256 = 0, /**< HMAC-SHA256 (symmetric). */
+	CSILK_JWT_RS256 = 1, /**< RSA PKCS1-v1_5 + SHA-256. */
+	CSILK_JWT_ES256 = 2  /**< ECDSA P-256 + SHA-256. */
+} csilk_jwt_alg_t;
+
+/**
  * @brief Generate a cryptographically secure random nonce for AES-256-GCM.
  *
  * This helper ensures that nonces are never reused, which is critical for

@@ -572,6 +572,269 @@ out:
 	return ret;
 }
 
+/* ---- JWT signing (RS256, ES256) ---- */
+
+/** @brief RS256 sign: RSA PKCS1-v1_5 + SHA-256.
+ *  @param private_key PEM-encoded RSA private key.
+ *  @param priv_len    Key length.
+ *  @param data        Data to sign.
+ *  @param data_len    Data length.
+ *  @param[out] sig    Output buffer (>= CSILK_RSA_SIGNATURE_SIZE=256).
+ *  @param[in,out] sig_len In: capacity, Out: actual length.
+ *  @return 0 on success, -1 on error. */
+static int
+jwt_sign_rs256(const char* private_key,
+	       size_t priv_len,
+	       const uint8_t* data,
+	       size_t data_len,
+	       uint8_t* sig,
+	       size_t* sig_len)
+{
+	if (!private_key || !data || !sig || !sig_len || *sig_len < CSILK_RSA_SIGNATURE_SIZE) {
+		return -1;
+	}
+	EVP_PKEY* pkey = pem_to_privkey(private_key, priv_len);
+	if (!pkey) {
+		return -1;
+	}
+	EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+	if (!mdctx) {
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	int ret = -1;
+	if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+		goto out;
+	}
+	if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PADDING) != 1) {
+		goto out;
+	}
+	if (EVP_DigestSign(mdctx, sig, sig_len, data, data_len) != 1) {
+		goto out;
+	}
+	ret = 0;
+out:
+	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_free(pkey);
+	return ret;
+}
+
+/** @brief RS256 verify: RSA PKCS1-v1_5 + SHA-256.
+ *  @param public_key PEM-encoded RSA public key.
+ *  @param pub_len    Key length.
+ *  @param data       Original signed data.
+ *  @param data_len   Data length.
+ *  @param sig        Signature to verify.
+ *  @param sig_len    Signature length.
+ *  @return 0 on valid, -1 on invalid or error. */
+static int
+jwt_verify_rs256(const char* public_key,
+		 size_t pub_len,
+		 const uint8_t* data,
+		 size_t data_len,
+		 const uint8_t* sig,
+		 size_t sig_len)
+{
+	if (!public_key || !data || !sig) {
+		return -1;
+	}
+	EVP_PKEY* pkey = pem_to_pkey(public_key, pub_len);
+	if (!pkey) {
+		return -1;
+	}
+	EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+	if (!mdctx) {
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	int ret = -1;
+	if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+		goto out;
+	}
+	if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PADDING) != 1) {
+		goto out;
+	}
+	if (EVP_DigestVerify(mdctx, sig, sig_len, data, data_len) == 1) {
+		ret = 0;
+	}
+out:
+	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_free(pkey);
+	return ret;
+}
+
+/** @brief ES256 sign: ECDSA P-256 + SHA-256, output raw r||s.
+ *  @param key     PEM-encoded EC private key.
+ *  @param key_len Key length.
+ *  @param data    Data to sign.
+ *  @param data_len Data length.
+ *  @param[out] sig  Output buffer (>= CSILK_ES256_SIGNATURE_SIZE=64).
+ *  @param[in,out] sig_len In: capacity, Out: actual length (64).
+ *  @return 0 on success, -1 on error. */
+static int
+jwt_sign_es256(const char* key,
+	       size_t key_len,
+	       const uint8_t* data,
+	       size_t data_len,
+	       uint8_t* sig,
+	       size_t* sig_len)
+{
+	if (!key || !data || !sig || !sig_len || *sig_len < CSILK_ES256_SIGNATURE_SIZE) {
+		return -1;
+	}
+	EVP_PKEY* pkey = pem_to_privkey(key, key_len);
+	if (!pkey) {
+		return -1;
+	}
+	EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+	if (!mdctx) {
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	int ret = -1;
+	size_t der_len = 0;
+	uint8_t der_buf[128] = {0};
+	if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+		goto out;
+	}
+	/* Get the DER-encoded signature length first */
+	if (EVP_DigestSign(mdctx, nullptr, &der_len, data, data_len) != 1) {
+		goto out;
+	}
+	if (der_len > sizeof(der_buf)) {
+		goto out;
+	}
+	if (EVP_DigestSign(mdctx, der_buf, &der_len, data, data_len) != 1) {
+		goto out;
+	}
+	/* Convert DER ECDSA_SIG to raw r||s (32+32 = 64 bytes) */
+	const uint8_t* p = der_buf;
+	ECDSA_SIG* ec_sig = d2i_ECDSA_SIG(nullptr, &p, (long)der_len);
+	if (!ec_sig) {
+		goto out;
+	}
+	const BIGNUM *r = nullptr, *s = nullptr;
+	ECDSA_SIG_get0(ec_sig, &r, &s);
+	BN_bn2binpad(r, sig, 32);
+	BN_bn2binpad(s, sig + 32, 32);
+	*sig_len = CSILK_ES256_SIGNATURE_SIZE;
+	ECDSA_SIG_free(ec_sig);
+	ret = 0;
+out:
+	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_free(pkey);
+	return ret;
+}
+
+/** @brief ES256 verify: ECDSA P-256 + SHA-256, input raw r||s.
+ *  @param key     PEM-encoded EC public key.
+ *  @param key_len Key length.
+ *  @param data    Original signed data.
+ *  @param data_len Data length.
+ *  @param sig     Raw r||s signature (64 bytes).
+ *  @param sig_len Signature length (must be 64).
+ *  @return 0 on valid, -1 on invalid or error. */
+static int
+jwt_verify_es256(const char* key,
+		 size_t key_len,
+		 const uint8_t* data,
+		 size_t data_len,
+		 const uint8_t* sig,
+		 size_t sig_len)
+{
+	if (!key || !data || !sig || sig_len != CSILK_ES256_SIGNATURE_SIZE) {
+		return -1;
+	}
+	EVP_PKEY* pkey = pem_to_pkey(key, key_len);
+	if (!pkey) {
+		return -1;
+	}
+	/* Build ECDSA_SIG from raw r||s, then DER-encode it */
+	BIGNUM* r = BN_bin2bn(sig, 32, nullptr);
+	BIGNUM* s = BN_bin2bn(sig + 32, 32, nullptr);
+	if (!r || !s) {
+		BN_free(r);
+		BN_free(s);
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	ECDSA_SIG* ec_sig = ECDSA_SIG_new();
+	if (!ec_sig) {
+		BN_free(r);
+		BN_free(s);
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	ECDSA_SIG_set0(ec_sig, r, s);
+	uint8_t der_buf[128] = {0};
+	size_t der_len = 0;
+	uint8_t* der_p = der_buf;
+	der_len = i2d_ECDSA_SIG(ec_sig, &der_p);
+	if (der_len == 0 || der_len > sizeof(der_buf)) {
+		ECDSA_SIG_free(ec_sig);
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	ECDSA_SIG_free(ec_sig);
+
+	EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+	if (!mdctx) {
+		EVP_PKEY_free(pkey);
+		return -1;
+	}
+	int ret = -1;
+	if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+		goto out;
+	}
+	if (EVP_DigestVerify(mdctx, der_buf, der_len, data, data_len) == 1) {
+		ret = 0;
+	}
+out:
+	EVP_MD_CTX_free(mdctx);
+	EVP_PKEY_free(pkey);
+	return ret;
+}
+
+/** @brief Dispatch JWT signing to the algorithm-specific implementation. */
+static int
+default_jwt_sign(const char* key,
+		 size_t key_len,
+		 const uint8_t* data,
+		 size_t data_len,
+		 uint8_t* signature,
+		 size_t* sig_len,
+		 csilk_jwt_alg_t algorithm)
+{
+	switch (algorithm) {
+	case CSILK_JWT_RS256:
+		return jwt_sign_rs256(key, key_len, data, data_len, signature, sig_len);
+	case CSILK_JWT_ES256:
+		return jwt_sign_es256(key, key_len, data, data_len, signature, sig_len);
+	default:
+		return -1;
+	}
+}
+
+/** @brief Dispatch JWT verification to the algorithm-specific implementation. */
+static int
+default_jwt_verify(const char* key,
+		   size_t key_len,
+		   const uint8_t* data,
+		   size_t data_len,
+		   const uint8_t* signature,
+		   size_t sig_len,
+		   csilk_jwt_alg_t algorithm)
+{
+	switch (algorithm) {
+	case CSILK_JWT_RS256:
+		return jwt_verify_rs256(key, key_len, data, data_len, signature, sig_len);
+	case CSILK_JWT_ES256:
+		return jwt_verify_es256(key, key_len, data, data_len, signature, sig_len);
+	default:
+		return -1;
+	}
+}
+
 /** @brief Default cipher driver vtable mapping all operations to the
  *  OpenSSL-backed implementations above.
  *
@@ -587,4 +850,6 @@ csilk_cipher_driver_t csilk_default_cipher_driver = {
     .asymmetric_decrypt = default_asymmetric_decrypt,
     .sign = default_sign,
     .verify = default_verify,
+    .jwt_sign = default_jwt_sign,
+    .jwt_verify = default_jwt_verify,
 };

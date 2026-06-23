@@ -17,6 +17,7 @@
 #include "csilk/types.h"
 #include "csilk/context.h"
 #include "csilk/response.h"
+#include "csilk/crypto.h"
 
 /**
  * @brief Pass control to the next handler in the middleware/handler chain.
@@ -332,7 +333,16 @@ char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
  */
 cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
 
-/* --- Language Binding Helpers --- */
+/* --- Extended JWT API (RS256, ES256 support) --- */
+
+char* csilk_jwt_generate_ex(
+    csilk_ctx_t* c, cJSON* payload, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+cJSON* csilk_jwt_verify_ex(
+    csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+void
+csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+
+/* --- JWT Payload Accessors --- */
 char* csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c);
 void csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
 char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);
