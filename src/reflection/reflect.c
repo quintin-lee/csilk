@@ -89,6 +89,51 @@ registry_unlock(void)
 	uv_mutex_unlock(&g_registry_mutex);
 }
 
+static const csilk_reflect_entry_t*
+find_entry_unlocked(const char* name)
+{
+	if (!name) {
+		return nullptr;
+	}
+	for (size_t i = 0; i < g_registry_count; i++) {
+		if (strcmp(g_registry[i].name, name) == 0) {
+			return &g_registry[i];
+		}
+	}
+	return nullptr;
+}
+
+static int
+detect_cycle_dfs(const char* type_name, const char** stack, size_t stack_depth)
+{
+	for (size_t i = 0; i < stack_depth; i++) {
+		if (strcmp(stack[i], type_name) == 0) {
+			return 1;
+		}
+	}
+
+	if (stack_depth >= 32) {
+		return 0;
+	}
+
+	const csilk_reflect_entry_t* entry = find_entry_unlocked(type_name);
+	if (!entry) {
+		return 0;
+	}
+
+	stack[stack_depth] = type_name;
+
+	for (size_t i = 0; i < entry->count; i++) {
+		if (entry->fields[i].type == CSILK_TYPE_STRUCT && entry->fields[i].nested_type_name) {
+			if (detect_cycle_dfs(entry->fields[i].nested_type_name, stack, stack_depth + 1)) {
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 /** @brief Register a struct type with the reflection engine.
  *
  * Adds a type name and its field descriptors to the global registry. Once
@@ -111,6 +156,11 @@ csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, size_
 		g_registry[g_registry_count].fields = fields;
 		g_registry[g_registry_count].count = count;
 		g_registry_count++;
+
+		const char* stack[32];
+		if (detect_cycle_dfs(name, stack, 0)) {
+			fprintf(stderr, "WARNING: Circular reference detected in registered type '%s'!\n", name);
+		}
 	}
 	registry_unlock();
 }
@@ -194,9 +244,9 @@ static void struct_to_cjson_internal(cJSON* obj,
 				     const csilk_field_desc_t* descs,
 				     size_t field_count);
 
-static void free_scalar(void* addr, const csilk_field_desc_t* desc);
+static void free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visited);
 static void
-free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count);
+free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count, int depth, void** visited);
 
 /** @brief Internal: serialize a single struct field value to a cJSON node.
  *
@@ -647,7 +697,7 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
 }
 
 static void
-free_scalar(void* addr, const csilk_field_desc_t* desc)
+free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visited)
 {
 	if (!addr || !desc) {
 		return;
@@ -673,14 +723,35 @@ free_scalar(void* addr, const csilk_field_desc_t* desc)
 					void** ptr = (void**)addr;
 					if (*ptr) {
 						struct_addr = *ptr;
-						free_struct_internal(
-						    struct_addr, entry->fields, entry->count);
-						free(*ptr);
-						*ptr = nullptr;
+						int is_visited = 0;
+						for (int d = 0; d <= depth; d++) {
+							if (visited[d] == struct_addr) {
+								is_visited = 1;
+								break;
+							}
+						}
+						if (is_visited) {
+							// Break cycle to avoid recursion and double freeing
+							*ptr = nullptr;
+						} else {
+							free_struct_internal(
+							    struct_addr, entry->fields, entry->count, depth + 1, visited);
+							free(*ptr);
+							*ptr = nullptr;
+						}
 					}
 				} else {
-					free_struct_internal(
-					    struct_addr, entry->fields, entry->count);
+					int is_visited = 0;
+					for (int d = 0; d <= depth; d++) {
+						if (visited[d] == struct_addr) {
+							is_visited = 1;
+							break;
+						}
+					}
+					if (!is_visited) {
+						free_struct_internal(
+						    struct_addr, entry->fields, entry->count, depth + 1, visited);
+					}
 				}
 			}
 		}
@@ -692,11 +763,18 @@ free_scalar(void* addr, const csilk_field_desc_t* desc)
 }
 
 static void
-free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count)
+free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count, int depth, void** visited)
 {
 	if (!struct_ptr || !descs) {
 		return;
 	}
+
+	if (depth >= 32) {
+		fprintf(stderr, "ERROR: Max recursion depth exceeded in csilk_struct_free_reflect (circular reference?)\n");
+		return;
+	}
+
+	visited[depth] = struct_ptr;
 
 	for (size_t i = 0; i < field_count; i++) {
 		void* field_addr = (char*)struct_ptr + descs[i].offset;
@@ -704,10 +782,10 @@ free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t f
 		if (descs[i].array_length > 0) {
 			for (size_t j = 0; j < descs[i].array_length; j++) {
 				void* item_addr = (char*)field_addr + (j * descs[i].size);
-				free_scalar(item_addr, &descs[i]);
+				free_scalar(item_addr, &descs[i], depth, visited);
 			}
 		} else {
-			free_scalar(field_addr, &descs[i]);
+			free_scalar(field_addr, &descs[i], depth, visited);
 		}
 	}
 }
@@ -720,9 +798,12 @@ csilk_struct_free_reflect(const char* type_name, void* ptr)
 		return;
 	}
 
+	void* visited[32];
+	memset(visited, 0, sizeof(visited));
+
 	csilk_field_desc_t basic_desc;
 	if (get_basic_type(type_name, &basic_desc)) {
-		free_scalar(ptr, &basic_desc);
+		free_scalar(ptr, &basic_desc, 0, visited);
 		return;
 	}
 
@@ -731,5 +812,5 @@ csilk_struct_free_reflect(const char* type_name, void* ptr)
 		return;
 	}
 
-	free_struct_internal(ptr, entry->fields, entry->count);
+	free_struct_internal(ptr, entry->fields, entry->count, 0, visited);
 }

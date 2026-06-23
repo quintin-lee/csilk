@@ -230,6 +230,40 @@ test_deep_free()
 	printf("test_deep_free passed\n");
 }
 
+void
+test_cyclic_reflection()
+{
+	printf("Testing cyclic reflection safety...\n");
+
+	// 1. Test static cycle detection at registration time
+	// We dynamically register a cyclic structure. Stderr will print a warning.
+	csilk_field_desc_t cyclic_meta[] = {
+	    {"self", CSILK_TYPE_STRUCT, 0, sizeof(void*), 0, true, "CyclicX"},
+	    {nullptr, 0, 0, 0, 0, false, nullptr}
+	};
+	csilk_reflect_register("CyclicX", cyclic_meta, 1);
+
+	// 2. Test runtime recursion depth limit protection
+	// Create a circular list of nodes
+	TestNode n1 = {nullptr, nullptr};
+	char* name = malloc(16);
+	if (name) {
+		strcpy(name, "cyclic_node");
+	}
+	n1.name = name;
+	n1.next = &n1; // Cyclic reference!
+
+	// This call should NOT crash. It will abort when depth exceeds 32.
+	csilk_struct_free_reflect("TestNode", &n1);
+
+	// n1.name should be freed and set to nullptr.
+	assert(n1.name == nullptr);
+	// n1.next was not freed because it points to &n1 (an ancestor), so it was safely nullified to break the loop.
+	assert(n1.next == nullptr);
+
+	printf("test_cyclic_reflection passed\n");
+}
+
 int
 main()
 {
@@ -239,5 +273,6 @@ main()
 	test_basic_types();
 	test_arrays();
 	test_deep_free();
+	test_cyclic_reflection();
 	return 0;
 }
