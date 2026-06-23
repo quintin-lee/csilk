@@ -46,10 +46,12 @@ void csilk_base64url_encode(const uint8_t* src, size_t len, char* out);
  * @param src  NUL-terminated Base64URL string.
  * @param[out] out  Output buffer for decoded bytes (must be at least
  *                  strlen(src) * 3 / 4 bytes).
+ * @param out_cap   Maximum capacity of the output buffer.
  * @return The number of decoded bytes on success, or -1 if the input
- *         contains invalid characters or the length is invalid.
+ *         contains invalid characters, the length is invalid, or the
+ *         decoded output would exceed out_cap.
  */
-int csilk_base64url_decode(const char* src, uint8_t* out);
+int csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap);
 
 /**
  * @brief URL-decode a percent-encoded string in-place.

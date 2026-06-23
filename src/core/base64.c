@@ -88,7 +88,7 @@ csilk_base64url_encode(const uint8_t* src, size_t len, char* out)
 }
 
 int
-csilk_base64url_decode(const char* src, uint8_t* out)
+csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap)
 {
 	/* Decoding proceeds in three steps:
 	 *   1. Convert URL-safe characters back to standard Base64.
@@ -161,6 +161,10 @@ csilk_base64url_decode(const char* src, uint8_t* out)
 		bits += 6;
 		if (bits >= 8) {
 			bits -= 8;
+			if ((size_t)decoded_len >= out_cap) {
+				free(tmp);
+				return -1; /* output buffer capacity exceeded */
+			}
 			out[decoded_len++] = (uint8_t)((v >> bits) & 0xFF);
 		}
 	}

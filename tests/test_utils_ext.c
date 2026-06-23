@@ -149,22 +149,22 @@ test_base64url_decode()
 	printf("Testing csilk_base64url_decode...\n");
 	uint8_t out[64];
 
-	int len = csilk_base64url_decode("", out);
+	int len = csilk_base64url_decode("", out, sizeof(out));
 	assert(len == 0);
 
-	len = csilk_base64url_decode("Zg", out);
+	len = csilk_base64url_decode("Zg", out, sizeof(out));
 	assert(len == 1 && out[0] == 'f');
 
-	len = csilk_base64url_decode("Zm8", out);
+	len = csilk_base64url_decode("Zm8", out, sizeof(out));
 	assert(len == 2 && memcmp(out, "fo", 2) == 0);
 
-	len = csilk_base64url_decode("Zm9v", out);
+	len = csilk_base64url_decode("Zm9v", out, sizeof(out));
 	assert(len == 3 && memcmp(out, "foo", 3) == 0);
 
-	len = csilk_base64url_decode("Zm9vYmE", out);
+	len = csilk_base64url_decode("Zm9vYmE", out, sizeof(out));
 	assert(len == 5 && memcmp(out, "fooba", 5) == 0);
 
-	len = csilk_base64url_decode("Zm9vYmFy", out);
+	len = csilk_base64url_decode("Zm9vYmFy", out, sizeof(out));
 	assert(len == 6 && memcmp(out, "foobar", 6) == 0);
 
 	printf("csilk_base64url_decode passed!\n");
@@ -175,7 +175,7 @@ test_base64url_decode_urlsafe()
 {
 	printf("Testing csilk_base64url_decode URL-safe chars...\n");
 	uint8_t out[64];
-	int len = csilk_base64url_decode("FPucA9l-", out);
+	int len = csilk_base64url_decode("FPucA9l-", out, sizeof(out));
 	assert(len == 6);
 	uint8_t expected[] = {0x14, 0xFB, 0x9C, 0x03, 0xD9, 0x7E};
 	assert(memcmp(out, expected, 6) == 0);
@@ -187,9 +187,19 @@ test_base64url_decode_invalid()
 {
 	printf("Testing csilk_base64url_decode invalid input...\n");
 	uint8_t out[64];
-	int len = csilk_base64url_decode("!!!invalid!!!", out);
+	int len = csilk_base64url_decode("!!!invalid!!!", out, sizeof(out));
 	assert(len == -1);
 	printf("csilk_base64url_decode invalid passed!\n");
+}
+
+static void
+test_base64url_decode_overflow()
+{
+	printf("Testing csilk_base64url_decode capacity bounds...\n");
+	uint8_t out[2];
+	int len = csilk_base64url_decode("Zm9v", out, sizeof(out));
+	assert(len == -1);
+	printf("csilk_base64url_decode capacity bounds passed!\n");
 }
 
 static void
@@ -300,6 +310,7 @@ main()
 	test_base64url_decode();
 	test_base64url_decode_urlsafe();
 	test_base64url_decode_invalid();
+	test_base64url_decode_overflow();
 	test_generate_uuid();
 	test_csilk_hmac_sha256();
 	test_csilk_hmac_sha256_with_crypto_driver();

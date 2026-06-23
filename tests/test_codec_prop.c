@@ -134,7 +134,7 @@ test_base64url_roundtrip(void)
 		char encoded[512];
 		csilk_base64url_encode(src, len, encoded);
 		uint8_t decoded[256];
-		int dlen = csilk_base64url_decode(encoded, decoded);
+		int dlen = csilk_base64url_decode(encoded, decoded, sizeof(decoded));
 		assert(dlen >= 0);
 		assert((size_t)dlen == len);
 		assert(memcmp(src, decoded, len) == 0);
@@ -156,7 +156,7 @@ test_base64url_roundtrip_edge(void)
 		char encoded[32];
 		csilk_base64url_encode(src, len, encoded);
 		uint8_t decoded[8];
-		int dlen = csilk_base64url_decode(encoded, decoded);
+		int dlen = csilk_base64url_decode(encoded, decoded, sizeof(decoded));
 		assert(dlen >= 0);
 		assert((size_t)dlen == len);
 		assert(memcmp(src, decoded, len) == 0);
@@ -168,7 +168,7 @@ test_base64url_roundtrip_edge(void)
 	assert(strcmp(encoded, "") == 0);
 
 	uint8_t empty_dst[8];
-	assert(csilk_base64url_decode("", empty_dst) == 0);
+	assert(csilk_base64url_decode("", empty_dst, sizeof(empty_dst)) == 0);
 
 	printf("test_base64url_roundtrip_edge passed\n");
 }
@@ -227,7 +227,7 @@ test_base64url_decode_random(void)
 		}
 		input[len] = '\0';
 		uint8_t out[128];
-		int result = csilk_base64url_decode(input, out);
+		int result = csilk_base64url_decode(input, out, sizeof(out));
 		if (result >= 0) {
 			assert((size_t)result <= strlen(input) * 3 / 4 + 4);
 		}
