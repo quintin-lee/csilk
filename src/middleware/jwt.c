@@ -118,7 +118,7 @@ jwt_generate_internal(
 	snprintf(sign_input, sign_input_len, "%s.%s", header_b64, payload_b64);
 
 	/* Step 4: Compute signature */
-	char sig_b64[256];
+	char sig_b64[512];
 	sig_b64[0] = '\0';
 
 	if (algorithm == CSILK_JWT_HS256) {
@@ -229,7 +229,8 @@ jwt_verify_internal(
 	} else {
 		/* RS256/ES256: base64url-decode sig, then verify via cipher driver */
 		uint8_t sig_decoded[CSILK_RSA_SIGNATURE_SIZE];
-		int dec_len = csilk_base64url_decode(sig_ptr, sig_decoded);
+		int dec_len =
+		    csilk_base64url_decode(sig_ptr, sig_decoded, CSILK_RSA_SIGNATURE_SIZE);
 		if (dec_len > 0) {
 			sig_ok = (_csilk_jwt_verify(c,
 						    key,
@@ -260,7 +261,7 @@ jwt_verify_internal(
 		free(p_b64);
 		return nullptr;
 	}
-	int p_decoded_len = csilk_base64url_decode(p_b64, p_json_str);
+	int p_decoded_len = csilk_base64url_decode(p_b64, p_json_str, payload_len + 1);
 	free(p_b64);
 
 	if (p_decoded_len < 0) {
