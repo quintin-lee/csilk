@@ -139,6 +139,11 @@ test_arena_64_alignment()
 	void* ptr8 = csilk_arena_alloc(arena, 1);
 	assert(((uintptr_t)ptr8 & 7) == 0);
 
+	/* Toggle from 8-byte to 64-byte */
+	csilk_arena_set_alignment(arena, 1);
+	void* ptr64 = csilk_arena_alloc(arena, 1);
+	assert(((uintptr_t)ptr64 & 63) == 0);
+
 	csilk_arena_free(arena);
 	printf("csilk_arena_alloc 64-byte alignment passed!\n");
 }
