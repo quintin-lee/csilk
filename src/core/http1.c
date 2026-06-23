@@ -468,6 +468,9 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 CSILK_INTERNAL void
 _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
+	if (!c || c->conn_closed || !c->_internal_client) {
+		return;
+	}
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 	csilk_client_write(client, data, len);
 }
@@ -485,11 +488,11 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
 	if (!data) {
 		return;
 	}
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client) {
+	if (!c || c->conn_closed || !c->_internal_client) {
 		free(data);
 		return;
 	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 
 	if (client->ssl) {
 		SSL_write(client->ssl, (const uint8_t*)data, (int)len);

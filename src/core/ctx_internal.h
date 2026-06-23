@@ -276,6 +276,7 @@ struct csilk_ctx_s {
                              MUST NOT be used directly by handlers. Used
                              internally by _csilk_send_data() to route data
                              through TLS or raw TCP. */
+	int conn_closed;	/**< Non-zero if the connection has been closed/timed out. */
 	uv_work_t work_req;	/**< libuv work request structure for offloading async
                              operations to the thread pool. Used by
                              csilk_ai_chat_async() and other async handlers. */
@@ -309,5 +310,10 @@ struct csilk_ctx_s {
 
 /** @brief Internal context initialiser. */
 CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
+
+/* === Async/Multi-Worker Loop Support === */
+CSILK_INTERNAL uv_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);
+CSILK_INTERNAL void _csilk_ctx_async_ref_incr(csilk_ctx_t* c);
+CSILK_INTERNAL void _csilk_ctx_async_ref_decr(csilk_ctx_t* c);
 
 #endif /* CSILK_CONTEXT_INTERNAL_H */

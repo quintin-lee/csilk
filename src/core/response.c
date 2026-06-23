@@ -412,7 +412,7 @@ on_stream_end_write(uv_write_t* req, int status)
 static int
 send_chunked_headers(csilk_ctx_t* c)
 {
-	if (!c || !c->_internal_client) {
+	if (!c || c->conn_closed || !c->_internal_client) {
 		return -1;
 	}
 
@@ -542,7 +542,7 @@ write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
 void
 csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
-	if (!c || !c->_internal_client) {
+	if (!c || c->conn_closed || !c->_internal_client) {
 		return;
 	}
 
@@ -574,7 +574,7 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 void
 csilk_response_end(csilk_ctx_t* c)
 {
-	if (!c || !c->_internal_client) {
+	if (!c || c->conn_closed || !c->_internal_client) {
 		return;
 	}
 
@@ -603,8 +603,11 @@ csilk_response_end(csilk_ctx_t* c)
 int32_t
 csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path)
 {
+	if (!c || c->conn_closed || !c->_internal_client) {
+		return -1;
+	}
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client || client->protocol != CSILK_PROTO_HTTP2) {
+	if (client->protocol != CSILK_PROTO_HTTP2) {
 		return -1;
 	}
 	return csilk_h2_submit_push(c, method, path);

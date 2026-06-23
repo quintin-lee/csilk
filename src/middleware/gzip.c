@@ -12,6 +12,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "core/ctx_internal.h"
 
 /* See include/csilk/core/internal.h for CSILK_GZIP_CHUNK and CSILK_GZIP_MIN_LENGTH. */
 
@@ -139,6 +140,7 @@ gzip_after_work_cb(uv_work_t* req, int status)
 	}
 
 	_csilk_send_response(c);
+	_csilk_ctx_async_ref_decr(c);
 }
 
 /**
@@ -241,6 +243,16 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	CSILK_LOG_D("Gzip: scheduling asynchronous deflation of %zu bytes on thread pool",
 		    body_len);
 
-	uv_loop_t* loop = uv_default_loop();
-	uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
+	uv_loop_t* loop = _csilk_ctx_loop(c);
+	_csilk_ctx_async_ref_incr(c);
+	int rc = uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
+	if (rc != 0) {
+		CSILK_LOG_E("Gzip: failed to queue work: %d", rc);
+		_csilk_ctx_async_ref_decr(c);
+		if (state) {
+			free(state);
+		}
+		csilk_set_status(c, CSILK_STATUS_INTERNAL_SERVER_ERROR);
+		_csilk_send_response(c);
+	}
 }
