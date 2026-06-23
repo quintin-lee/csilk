@@ -252,6 +252,26 @@ CSILK_INTERNAL int _csilk_verify(csilk_ctx_t* c,
 				 const uint8_t* signature,
 				 size_t sig_len);
 
+#include "csilk/crypto.h"
+
+CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t* c,
+				   const char* key,
+				   size_t key_len,
+				   const uint8_t* data,
+				   size_t data_len,
+				   uint8_t* signature,
+				   size_t* sig_len,
+				   csilk_jwt_alg_t algorithm);
+
+CSILK_INTERNAL int _csilk_jwt_verify(csilk_ctx_t* c,
+				     const char* key,
+				     size_t key_len,
+				     const uint8_t* data,
+				     size_t data_len,
+				     const uint8_t* signature,
+				     size_t sig_len,
+				     csilk_jwt_alg_t algorithm);
+
 /**
  * @brief Generate a random UUID v4 string (standalone, no context needed).
  *

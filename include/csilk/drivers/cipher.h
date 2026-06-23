@@ -23,6 +23,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "csilk/crypto.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,6 +41,8 @@ static constexpr int CSILK_RSA_KEY_BITS = 2048;
 static constexpr int CSILK_RSA_KEY_SIZE = 256;
 /** @brief RSA signature output size in bytes (256 bytes for RSA-2048). */
 static constexpr int CSILK_RSA_SIGNATURE_SIZE = 256;
+/** @brief ECDSA P-256 raw signature size in bytes (32+32 bytes r||s). */
+static constexpr int CSILK_ES256_SIGNATURE_SIZE = 64;
 
 /**
  * @brief Virtual function table implemented by each cipher backend.
@@ -167,6 +171,43 @@ typedef struct {
 		      size_t data_len,
 		      const uint8_t* signature,
 		      size_t sig_len);
+
+	/** @brief JWT signing — supports HS256, RS256, ES256.
+	 *  For HS256, key is the raw secret string and sig_len is 32.
+	 *  For RS256, key is a PEM-encoded RSA private key.
+	 *  For ES256, key is a PEM-encoded EC private key.
+	 *  @param key         Signing key.
+	 *  @param key_len     Key length in bytes.
+	 *  @param data        Data to sign (the JWT signing input).
+	 *  @param data_len    Data length.
+	 *  @param[out] signature  Output buffer.
+	 *  @param[in,out] sig_len  In: capacity, Out: actual signature length.
+	 *  @param algorithm   JWT algorithm identifier.
+	 *  @return 0 on success, -1 on failure. */
+	int (*jwt_sign)(const char* key,
+			size_t key_len,
+			const uint8_t* data,
+			size_t data_len,
+			uint8_t* signature,
+			size_t* sig_len,
+			csilk_jwt_alg_t algorithm);
+
+	/** @brief JWT signature verification.
+	 *  @param key         Verification key.
+	 *  @param key_len     Key length.
+	 *  @param data        Original signed data.
+	 *  @param data_len    Data length.
+	 *  @param signature   Signature to verify.
+	 *  @param sig_len     Signature length.
+	 *  @param algorithm   JWT algorithm identifier.
+	 *  @return 0 on valid signature, -1 on invalid or error. */
+	int (*jwt_verify)(const char* key,
+			  size_t key_len,
+			  const uint8_t* data,
+			  size_t data_len,
+			  const uint8_t* signature,
+			  size_t sig_len,
+			  csilk_jwt_alg_t algorithm);
 } csilk_cipher_driver_t;
 
 #ifdef __cplusplus

@@ -686,3 +686,39 @@ csilk_strdup(const char* s)
 {
 	return s ? strdup(s) : nullptr;
 }
+
+CSILK_INTERNAL int
+_csilk_jwt_sign(csilk_ctx_t* c,
+		const char* key,
+		size_t key_len,
+		const uint8_t* data,
+		size_t data_len,
+		uint8_t* signature,
+		size_t* sig_len,
+		csilk_jwt_alg_t algorithm)
+{
+	(void)c;
+	csilk_cipher_driver_t* d = resolve_cipher(c);
+	if (!d || !d->jwt_sign) {
+		return -1;
+	}
+	return d->jwt_sign(key, key_len, data, data_len, signature, sig_len, algorithm);
+}
+
+CSILK_INTERNAL int
+_csilk_jwt_verify(csilk_ctx_t* c,
+		  const char* key,
+		  size_t key_len,
+		  const uint8_t* data,
+		  size_t data_len,
+		  const uint8_t* signature,
+		  size_t sig_len,
+		  csilk_jwt_alg_t algorithm)
+{
+	(void)c;
+	csilk_cipher_driver_t* d = resolve_cipher(c);
+	if (!d || !d->jwt_verify) {
+		return -1;
+	}
+	return d->jwt_verify(key, key_len, data, data_len, signature, sig_len, algorithm);
+}
