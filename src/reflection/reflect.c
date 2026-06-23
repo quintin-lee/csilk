@@ -194,6 +194,10 @@ static void struct_to_cjson_internal(cJSON* obj,
 				     const csilk_field_desc_t* descs,
 				     size_t field_count);
 
+static void free_scalar(void* addr, const csilk_field_desc_t* desc);
+static void
+free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count);
+
 /** @brief Internal: serialize a single struct field value to a cJSON node.
  *
  * Maps C primitive types and nested structs to cJSON values based on the
@@ -640,4 +644,92 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
 	cjson_to_struct_internal(root, ptr, entry->fields, entry->count);
 	cJSON_Delete(root);
 	return 1;
+}
+
+static void
+free_scalar(void* addr, const csilk_field_desc_t* desc)
+{
+	if (!addr || !desc) {
+		return;
+	}
+
+	switch (desc->type) {
+	case CSILK_TYPE_STRING:
+		if (desc->is_pointer) {
+			char** ptr = (char**)addr;
+			if (*ptr) {
+				free(*ptr);
+				*ptr = nullptr;
+			}
+		}
+		break;
+	case CSILK_TYPE_STRUCT: {
+		if (desc->nested_type_name) {
+			const csilk_reflect_entry_t* entry =
+			    csilk_reflect_find(desc->nested_type_name);
+			if (entry) {
+				void* struct_addr = addr;
+				if (desc->is_pointer) {
+					void** ptr = (void**)addr;
+					if (*ptr) {
+						struct_addr = *ptr;
+						free_struct_internal(
+						    struct_addr, entry->fields, entry->count);
+						free(*ptr);
+						*ptr = nullptr;
+					}
+				} else {
+					free_struct_internal(
+					    struct_addr, entry->fields, entry->count);
+				}
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+static void
+free_struct_internal(void* struct_ptr, const csilk_field_desc_t* descs, size_t field_count)
+{
+	if (!struct_ptr || !descs) {
+		return;
+	}
+
+	for (size_t i = 0; i < field_count; i++) {
+		void* field_addr = (char*)struct_ptr + descs[i].offset;
+
+		if (descs[i].array_length > 0) {
+			for (size_t j = 0; j < descs[i].array_length; j++) {
+				void* item_addr = (char*)field_addr + (j * descs[i].size);
+				free_scalar(item_addr, &descs[i]);
+			}
+		} else {
+			free_scalar(field_addr, &descs[i]);
+		}
+	}
+}
+
+/** @brief Recursively free heap-allocated memory of a reflected struct's fields. */
+void
+csilk_struct_free_reflect(const char* type_name, void* ptr)
+{
+	if (!type_name || !ptr) {
+		return;
+	}
+
+	csilk_field_desc_t basic_desc;
+	if (get_basic_type(type_name, &basic_desc)) {
+		free_scalar(ptr, &basic_desc);
+		return;
+	}
+
+	const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
+	if (!entry) {
+		return;
+	}
+
+	free_struct_internal(ptr, entry->fields, entry->count);
 }
