@@ -71,7 +71,7 @@ typedef enum {
  * The @p meta field is a catch-all for extra information (e.g., AI token
  * counts, timing metrics) and is NOT freed by the engine.
  */
-typedef struct csilk_data_s {
+typedef struct {
 	char* type;		/**< MIME-like type identifier (e.g., "text/plain",
                              "application/json"). */
 	void* value;		/**< Opaque data pointer.  Ownership semantics
@@ -231,7 +231,7 @@ typedef char* (*csilk_wf_tool_fn)(const char* args_json, void* user_data);
  * be heap-allocated; the workflow engine takes ownership and will free them
  * after the AI node completes.
  */
-typedef struct csilk_wf_tool_entry_s {
+typedef struct {
 	char* name;	       /**< Tool name exposed to the LLM. */
 	char* description;     /**< Human-readable description (for tool schema). */
 	char* parameters_json; /**< JSON Schema string for the tool's parameters. */
