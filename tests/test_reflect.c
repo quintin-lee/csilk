@@ -239,8 +239,7 @@ test_cyclic_reflection()
 	// We dynamically register a cyclic structure. Stderr will print a warning.
 	csilk_field_desc_t cyclic_meta[] = {
 	    {"self", CSILK_TYPE_STRUCT, 0, sizeof(void*), 0, true, "CyclicX"},
-	    {nullptr, 0, 0, 0, 0, false, nullptr}
-	};
+	    {nullptr, 0, 0, 0, 0, false, nullptr}};
 	csilk_reflect_register("CyclicX", cyclic_meta, 1);
 
 	// 2. Test runtime recursion depth limit protection
