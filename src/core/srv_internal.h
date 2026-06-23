@@ -124,6 +124,7 @@ struct csilk_client_s {
 	uv_timer_t write_timer;	  /**< Write timeout timer. */
 	uv_timer_t request_timer; /**< Request timeout timer. */
 	int close_pending;	  /**< Pending close refs before freeing client. */
+	int async_ref;		  /**< Active asynchronous tasks reference counter. */
 
 	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */

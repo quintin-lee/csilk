@@ -230,26 +230,9 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
 
 /* --- Timer close --- */
 
-/** @brief libuv close callback for client timer handles.
- *
- * Decrements the close_pending counter. When all four timers are closed
- * (close_pending reaches 0), the client is fully cleaned up: the arena is
- * freed, temporary fields are freed, and the client is returned to the pool.
- *
- * @param handle The timer handle being closed (data points to csilk_client_t).
- */
 static void
-on_timer_close(uv_handle_t* handle)
+client_destroy(csilk_client_t* client)
 {
-	csilk_client_t* client = (csilk_client_t*)handle->data;
-	if (!client) {
-		return;
-	}
-	client->close_pending--;
-	if (client->close_pending > 0) {
-		return;
-	}
-
 	if (client->server) {
 		atomic_fetch_sub(&client->server->active_connections, 1);
 	}
@@ -261,6 +244,56 @@ on_timer_close(uv_handle_t* handle)
 	free(client->current_header_value);
 	free(client->current_url);
 	pool_put(client->owner_pool, client);
+}
+
+CSILK_INTERNAL uv_loop_t*
+_csilk_ctx_loop(csilk_ctx_t* c)
+{
+	if (!c || !c->server || !c->_internal_client) {
+		return uv_default_loop();
+	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	return client->handle.loop;
+}
+
+CSILK_INTERNAL void
+_csilk_ctx_async_ref_incr(csilk_ctx_t* c)
+{
+	if (!c || !c->server || !c->_internal_client) {
+		return;
+	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	client->async_ref++;
+}
+
+CSILK_INTERNAL void
+_csilk_ctx_async_ref_decr(csilk_ctx_t* c)
+{
+	if (!c || !c->server || !c->_internal_client) {
+		return;
+	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	client->async_ref--;
+	if (client->async_ref <= 0 && client->close_pending <= 0 && c->conn_closed) {
+		client_destroy(client);
+	}
+}
+
+static void
+on_timer_close(uv_handle_t* handle)
+{
+	csilk_client_t* client = (csilk_client_t*)handle->data;
+	if (!client) {
+		return;
+	}
+	client->close_pending--;
+	if (client->close_pending > 0) {
+		return;
+	}
+	if (client->async_ref > 0) {
+		return;
+	}
+	client_destroy(client);
 }
 
 /* --- Connection close --- */
@@ -283,7 +316,7 @@ on_close(uv_handle_t* handle)
 		CSILK_LOG_D("Connection: closed (client pointer: %p)", (void*)client);
 		_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
 		client_list_remove(client->server, client);
-		client->ctx._internal_client = nullptr;
+		client->ctx.conn_closed = 1;
 		uv_timer_stop(&client->timer);
 		uv_timer_stop(&client->read_timer);
 		uv_timer_stop(&client->write_timer);
@@ -303,18 +336,10 @@ on_close(uv_handle_t* handle)
 			}
 		}
 		if (client->close_pending <= 0) {
-			csilk_server_t* srv = client->server;
-			if (srv) {
-				atomic_fetch_sub(&srv->active_connections, 1);
+			if (client->async_ref > 0) {
+				return;
 			}
-			csilk_ctx_cleanup(&client->ctx);
-			if (client->ctx.arena) {
-				pool_put_arena(client->owner_pool, client->ctx.arena);
-			}
-			free(client->current_header_field);
-			free(client->current_header_value);
-			free(client->current_url);
-			pool_put(client->owner_pool, client);
+			client_destroy(client);
 		}
 	}
 }

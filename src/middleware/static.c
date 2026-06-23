@@ -15,6 +15,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "core/ctx_internal.h"
 
 /**
  * @brief Internal helper to get MIME type from file path.
@@ -293,6 +294,7 @@ static_after_work_cb(uv_work_t* req, int status)
 		    (void*)c,
 		    status);
 	_csilk_send_response(c);
+	_csilk_ctx_async_ref_decr(c);
 }
 
 /**
@@ -330,8 +332,15 @@ csilk_static(csilk_ctx_t* c, const char* root_dir)
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "static_root", (void*)root_dir);
-	uv_loop_t* loop = uv_default_loop();
-	uv_queue_work(loop, req, static_work_cb, static_after_work_cb);
+	uv_loop_t* loop = _csilk_ctx_loop(c);
+	_csilk_ctx_async_ref_incr(c);
+	int rc = uv_queue_work(loop, req, static_work_cb, static_after_work_cb);
+	if (rc != 0) {
+		CSILK_LOG_E("Static: failed to queue work: %d", rc);
+		_csilk_ctx_async_ref_decr(c);
+		csilk_set_status(c, CSILK_STATUS_INTERNAL_SERVER_ERROR);
+		_csilk_send_response(c);
+	}
 }
 
 /**
@@ -351,6 +360,13 @@ csilk_file(csilk_ctx_t* c, const char* file_path)
 	uv_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "serve_file_path", (void*)file_path);
-	uv_loop_t* loop = uv_default_loop();
-	uv_queue_work(loop, req, file_work_cb, static_after_work_cb);
+	uv_loop_t* loop = _csilk_ctx_loop(c);
+	_csilk_ctx_async_ref_incr(c);
+	int rc = uv_queue_work(loop, req, file_work_cb, static_after_work_cb);
+	if (rc != 0) {
+		CSILK_LOG_E("Static: failed to queue work: %d", rc);
+		_csilk_ctx_async_ref_decr(c);
+		csilk_set_status(c, CSILK_STATUS_INTERNAL_SERVER_ERROR);
+		_csilk_send_response(c);
+	}
 }
