@@ -373,7 +373,7 @@ class Context:
         h_dict = CaseInsensitiveDict()
         @CsilkHeaderCb
         def cb(key, value, arg):
-            h_dict[key.decode('utf-8')] = value.decode('utf-8')
+            h_dict[key.decode('latin-1')] = value.decode('latin-1')
             return 1
         self._lib.csilk_for_each_header(self._ctx, cb, None)
         return h_dict
@@ -384,7 +384,7 @@ class Context:
         q_dict = {}
         @CsilkHeaderCb
         def cb(key, value, arg):
-            q_dict[key.decode('utf-8')] = value.decode('utf-8')
+            q_dict[key.decode('latin-1')] = value.decode('latin-1')
             return 1
         self._lib.csilk_for_each_query(self._ctx, cb, None)
         return q_dict
@@ -395,7 +395,7 @@ class Context:
         f_dict = {}
         @CsilkHeaderCb
         def cb(key, value, arg):
-            f_dict[key.decode('utf-8')] = value.decode('utf-8')
+            f_dict[key.decode('latin-1')] = value.decode('latin-1')
             return 1
         self._lib.csilk_for_each_form_field(self._ctx, cb, None)
         return f_dict
