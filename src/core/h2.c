@@ -176,6 +176,7 @@ on_data_chunk_recv_callback(nghttp2_session* session,
 		c->request.body_len += len;
 		new_body[c->request.body_len] = '\0';
 		c->request.body = new_body;
+		c->request.body_is_managed = 1;
 	} else {
 		return NGHTTP2_ERR_CALLBACK_FAILURE;
 	}

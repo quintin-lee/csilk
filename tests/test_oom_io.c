@@ -164,10 +164,15 @@ test_oom_http_parser()
 		 * would clean up after it.
 		 */
 		csilk_ctx_cleanup(&client.ctx);
-		if (client.current_url) {
-			free(client.current_url);
-			client.current_url = nullptr;
-		}
+		/*
+		 * current_url is csilk_str_view_t (a {data, len} struct),
+		 * NOT a raw pointer.  The .data field is either arena-
+		 * allocated (freed by csilk_ctx_cleanup above) or points
+		 * into the stack-allocated request string — never malloc'd.
+		 * Simply reset the fields.
+		 */
+		client.current_url.data = nullptr;
+		client.current_url.len = 0;
 
 		/*
 		 * We do not assert on err.  The parser may fail for many

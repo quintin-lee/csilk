@@ -186,7 +186,7 @@ node_free(csilk_router_node_t* node)
  * @return A pointer to the start of the segment within the original path string,
  *         or nullptr if no more segments are found. */
 #if defined(CSILK_HAS_AVX512)
-__attribute__((target("avx512f,avx512bw"))) static inline const char*
+__attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
 get_next_segment_avx512(const char** p, size_t* len)
 {
 	while (**p == '/') {
@@ -230,7 +230,7 @@ get_next_segment_avx512(const char** p, size_t* len)
 #endif
 
 #if defined(__x86_64__)
-__attribute__((target("avx2"))) static inline const char*
+__attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
 get_next_segment_avx2(const char** p, size_t* len)
 {
 	while (**p == '/') {
@@ -275,7 +275,7 @@ get_next_segment_avx2(const char** p, size_t* len)
 #endif
 
 #if defined(__ARM_NEON)
-static inline const char*
+__attribute__((no_sanitize("address"))) static inline const char*
 get_next_segment_neon(const char** p, size_t* len)
 {
 	while (**p == '/') {
