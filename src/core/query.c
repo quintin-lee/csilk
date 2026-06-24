@@ -94,8 +94,9 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 	if (!c || !c->arena) {
 		return;
 	}
-	const char* body = csilk_get_body(c, nullptr);
-	if (!body || *body == '\0') {
+	size_t body_len;
+	const char* body = csilk_get_body(c, &body_len);
+	if (!body || body_len == 0) {
 		CSILK_LOG_D("Context: csilk_parse_form_urlencoded: empty request body");
 		return;
 	}
@@ -112,7 +113,7 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 		return;
 	}
 
-	char* qs = csilk_arena_strdup(c->arena, body);
+	char* qs = csilk_arena_strndup(c->arena, body, body_len);
 	if (!qs) {
 		CSILK_LOG_E("Context: failed to allocate arena memory to parse form urlencoded "
 			    "request body");
