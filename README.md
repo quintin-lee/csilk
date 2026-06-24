@@ -31,6 +31,7 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 📦 Gzip response compression middleware (with intelligent skipping for media)
 - 📤 Multipart/form-data file upload parsing
 - 🔍 URL parsing and query string handling
+- 📝 URL-encoded form body parsing (`csilk_parse_form_urlencoded`, `csilk_for_each_form_field`)
 - ⚡ Keep-alive connection support
 - 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
 - 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)

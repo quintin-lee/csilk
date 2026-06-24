@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
 - **`App`** — Application entry point. Manages routing, middleware, server lifecycle, and WebSocket contexts.
 - **`Group`** — Route grouping with prefix path support.
-- **`Context`** — Request/response lifecycle wrapper. Provides access to headers, body, JSON, query params, cookies, sessions, SSE, and more.
+- **`Context`** — Request/response lifecycle wrapper. Provides access to headers, body, JSON, query params, cookies, sessions, SSE, form fields, and more.
 
 ### Middleware Modules
 

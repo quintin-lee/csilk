@@ -33,6 +33,35 @@ if __name__ == "__main__":
 
 ---
 
+## Form URL-Encoded Handling
+
+For POST requests with `application/x-www-form-urlencoded` content type:
+
+```python
+from csilk import App, Context
+
+app = App()
+
+@app.post("/login")
+def login(ctx: Context):
+    # Parse the form body into form_fields dict
+    ctx.parse_form_urlencoded()
+    
+    # Access form values as a dict
+    username = ctx.form_fields.get("username")
+    password = ctx.form_fields.get("password")
+    
+    if username and password:
+        ctx.json(200, {"message": f"Login as {username}"})
+    else:
+        ctx.json(400, {"error": "Missing credentials"})
+
+if __name__ == "__main__":
+    app.run(8080)
+```
+
+---
+
 ## Core API Reference
 
 ### 1. App Routing & Configuration
@@ -76,6 +105,10 @@ The `Context` object encapsulates the request/response lifecycle:
   - `ctx.ws_close()`: closes the socket.
 - **Multipart Form parsing**:
   - `ctx.multipart_parse(handler_fn)`: parses multipart file uploads synchronously. Fires `handler_fn(part_dict)` for each form field or file.
+  - `ctx.parse_form_urlencoded()`: parses URL-encoded form bodies (POST with `application/x-www-form-urlencoded`). Must be called before accessing `ctx.form_fields`.
+  - `ctx.form_fields`: property returning a dict of all parsed form fields after calling `parse_form_urlencoded()`.
+  - `ctx.queries`: property returning a dict of all query string parameters.
+  - `ctx.headers`: property returning a case-insensitive dict of all request headers.
 
 ---
 
