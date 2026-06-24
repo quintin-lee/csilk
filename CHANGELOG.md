@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin storage limit test**: Fixed `test_admin` storage overflow to store non-null values.
 
 ### Fixed
+- **Zero-copy form body parsing**: Fixed `csilk_parse_form_urlencoded` to use explicit body length (`csilk_arena_strndup` instead of `csilk_arena_strdup`) when zero-copy HTTP body references llhttp's TCP buffer which is not null-terminated at the body boundary.
 - **ASan leaks**: Resolved memory leaks in new tests and Doxyfile generation.
 - **macOS compatibility**: `fdatasync` → `fsync`, `SOCK_NONBLOCK` handling.
 - **CI ASan suppression**: Added suppression for macOS false positives.

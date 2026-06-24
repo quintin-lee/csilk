@@ -34,6 +34,9 @@ static time_t last_evict = 0;
 static uv_mutex_t ratelimit_mutex;
 static uv_once_t ratelimit_once = UV_ONCE_INIT;
 
+/* Forward declaration for metrics counter — used in the rate-limit middleware */
+static void _csilk_metrics_inc_rate_limit_blocks(void);
+
 /**
  * @brief Initialize the rate-limiting mutex (called once via uv_once).
  *
@@ -149,7 +152,7 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 				    ip,
 				    current_count,
 				    limit);
-			void _csilk_metrics_inc_rate_limit_blocks(void);
+			/* forward-declared at file scope */
 			_csilk_metrics_inc_rate_limit_blocks();
 			csilk_set_header(c, "Retry-After", "60");
 			csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
@@ -223,7 +226,7 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 			    ip,
 			    local_count,
 			    limit);
-		void _csilk_metrics_inc_rate_limit_blocks(void);
+		/* forward-declared at file scope */
 		_csilk_metrics_inc_rate_limit_blocks();
 		csilk_set_header(c, "Retry-After", "60");
 		csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
