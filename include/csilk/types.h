@@ -13,7 +13,6 @@
 #ifndef CSILK_TYPES_H
 #define CSILK_TYPES_H
 
-#include <setjmp.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <uv.h>

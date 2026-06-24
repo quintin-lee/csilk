@@ -4,7 +4,6 @@
  * @copyright MIT License
  */
 
-#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,44 +12,23 @@
 #include "csilk/csilk.h"
 
 /**
- * @brief Panic recovery middleware — catches longjmp panics and returns 500.
+ * @brief Panic recovery middleware — catches panics and returns 500.
  *
- * Installs a setjmp recovery point before calling csilk_next(). If any
- * downstream handler triggers csilk_panic(), execution resumes at the
- * setjmp point and an "Internal Server Error" response (500) is sent
- * instead of crashing the process.
+ * Calls csilk_next(). If any downstream handler triggers csilk_panic(),
+ * the context is marked as panicked, and this middleware performs deferred
+ * cleanups and returns a 500 status.
  *
- * After the normal (non-panic) path completes, the jump buffer flag is
- * cleared.
- *
- * @param c  The request context (must have a valid jump_buffer).
- *
- * @note This middleware MUST be registered before any handler that may
- *       call csilk_panic().
- * @warning setjmp/longjmp do NOT unwind the C stack or call destructors.
- *          Heap allocations, file handles, and mutex locks held at the
- *          point of csilk_panic() WILL leak. Use arena-allocated memory
- *          for handler resources (cleaned on ctx cleanup) and avoid
- *          holding mutexes across potentially-panicking code paths.
- *          This is a last-resort safety net, not primary error handling.
+ * @param c  The request context.
  */
 void
 csilk_recovery_handler(csilk_ctx_t* c)
 {
-	/* Install a recovery landing point. If csilk_panic() is called by any
-     downstream handler, execution resumes here with setjmp returning
-     non-zero (the value passed to longjmp). */
-	CSILK_LOG_T("Recovery: installing recovery landing point");
-	if (setjmp(c->jump_buffer) == 0) {
-		c->has_jump_buffer = 1;
-		csilk_next(c);
-		c->has_jump_buffer = 0; /* Normal path: clear the flag. */
-	} else {
+	CSILK_LOG_T("Recovery: executing handler chain");
+	csilk_next(c);
+	if (c->panicked) {
 		/* Panic path: a downstream handler called csilk_panic().
 		   Execute deferred cleanups to release heap memory, file
-		   descriptors, and mutexes that would otherwise leak when
-		   longjmp skips stack unwinding.  Then send a generic 500. */
-		c->has_jump_buffer = 0;
+		   descriptors, and mutexes, then send a generic 500. */
 		CSILK_LOG_W(
 		    "Recovery: panic recovered in request handler! Executing deferred cleanups.");
 		csilk_ctx_defer_free(c);
@@ -59,30 +37,22 @@ csilk_recovery_handler(csilk_ctx_t* c)
 }
 
 /**
- * @brief Trigger a panic (longjmp to recovery handler) or abort if no recovery
- *        registered.
+ * @brief Trigger a panic (safely aborts context and sets panicked flag).
  *
- * If a recovery handler has been installed (c->has_jump_buffer is set), this
- * function performs a longjmp back to the recovery point set by
- * csilk_recovery_handler().
+ * Marks the context as panicked and aborted, stops the handler chain execution,
+ * and triggers the recovery cleanup path.
  *
- * If no recovery handler is registered, it prints a fatal error message to
- * stderr and calls exit(1) to terminate the process.
- *
- * @param c  The request context. May be nullptr (will trigger abort path).
- *
- * @warning This function does NOT return when executed without a recovery
- *          handler.
+ * @param c  The request context.
  */
 void
 csilk_panic(csilk_ctx_t* c)
 {
-	if (c->has_jump_buffer) {
-		CSILK_LOG_W("Recovery: triggering panic (longjmp to recovery point)");
-		csilk_ctx_defer_free(c);
-		longjmp(c->jump_buffer, 1);
-	} else {
-		CSILK_LOG_F("Recovery: fatal - no recovery handler registered.");
+	if (!c) {
+		CSILK_LOG_F("Recovery: fatal - csilk_panic called with null context.");
 		exit(1);
 	}
+	CSILK_LOG_W("Recovery: triggering panic (safe error propagation)");
+	c->panicked = 1;
+	c->aborted = 1;
+	csilk_ctx_defer_free(c);
 }

@@ -28,7 +28,6 @@
 #ifndef CSILK_CONTEXT_INTERNAL_H
 #define CSILK_CONTEXT_INTERNAL_H
 
-#include <setjmp.h>
 #include <uv.h>
 
 #include "csilk/csilk.h"
@@ -192,12 +191,9 @@ struct csilk_ctx_s {
 	int aborted;		   /**< Non-zero if handler execution was aborted via csilk_abort().
                   Subsequent csilk_next() calls are no-ops. */
 
-	/* === Error Recovery (setjmp/longjmp) === */
-	jmp_buf jump_buffer;		/**< setjmp buffer for error recovery (used by
-                           panic/recovery middleware via longjmp). */
-	int has_jump_buffer;		/**< Non-zero if jump_buffer has been initialized and is
-	                       safe to longjmp to. Guards against longjmp on
-	                       uninitialized context. */
+	/* === Error Recovery === */
+	int panicked;			/**< Non-zero if a handler called csilk_panic().
+	                             Subsequent csilk_next() calls are no-ops. */
 	csilk_defer_item_t* defer_head; /**< Linked list of deferred cleanup callbacks.
 	                                Executed by csilk_ctx_defer_free() on
 	                                panic and during normal cleanup (LIFO). */
