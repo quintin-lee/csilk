@@ -37,6 +37,19 @@ test_router_simd()
 		r, "GET", "/this_is_a_very_long_path_segment_that_should_trigger_avx2_matchinx") ==
 	    nullptr);
 
+	/* Extra long segment (>64 chars) for AVX-512 */
+	const char* extra_long_path = "/this_is_an_extremely_long_path_segment_specifically_"
+				      "designed_to_trigger_avx512_vectorized_matching";
+	csilk_router_add(r, "GET", extra_long_path, h1, 1);
+
+	matched = csilk_router_match(r, "GET", extra_long_path);
+	assert(matched != nullptr && matched[0] == mock_handler1);
+
+	assert(csilk_router_match(r,
+				  "GET",
+				  "/this_is_an_extremely_long_path_segment_specifically_designed_"
+				  "to_trigger_avx512_vectorized_matchinx") == nullptr);
+
 	csilk_router_free(r);
 	printf("test_router_simd passed!\n");
 }
