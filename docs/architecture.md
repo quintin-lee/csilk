@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper & Technical Manual
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-08
+> **Version**: 0.5.0-dev | **Last updated**: 2026-06-24
 
 csilk is a lightweight, high-performance HTTP web framework written in C, adopting a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv, llhttp, nghttp2, and cJSON.
 
@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph "Layer 2: Middleware"
-        MW["Recovery | Logger | CORS | Auth | JWT | WAF\nRateLimit | CSRF | Static | Gzip | SSE | Multipart\nMetrics | RequestID | Validate | Session"]
+        MW["Recovery | Logger | CORS | Auth | JWT | WAF<br/>RateLimit | CSRF | Static | Gzip | SSE | Multipart<br/>Metrics | RequestID | Validate | Session"]
     end
 
     subgraph "Layer 3: Core Engine"
@@ -141,11 +141,13 @@ flowchart LR
     subgraph "Onion Layers"
         direction LR
         L1i["Recovery (pre)<br/>setjmp()"] --> L2i["Logger (pre)<br/>start timer"]
-        L2i --> L3i["Auth (pre)<br/>check token"]
-        L3i --> L4i["RateLimit (pre)<br/>check quota"]
-        L4i --> CORE["Business Handler<br/>(csilk_string/json)"]
-        CORE --> L4o["RateLimit (post)<br/>(no-op)"]
-        L4o --> L3o["Auth (post)<br/>(no-op)"]
+        L2i --> L3i["WAF (pre)<br/>check rules"]
+        L3i --> L4i["Auth (pre)<br/>check token"]
+        L4i --> L5i["RateLimit (pre)<br/>check quota"]
+        L5i --> CORE["Business Handler<br/>(csilk_string/json)"]
+        CORE --> L5o["RateLimit (post)<br/>(no-op)"]
+        L5o --> L4o["Auth (post)<br/>(no-op)"]
+        L4o --> L3o["WAF (post)<br/>(no-op)"]
         L3o --> L2o["Logger (post)<br/>log latency"]
         L2o --> L1o["Recovery (post)<br/>cleanup"]
     end

@@ -1,6 +1,6 @@
 # csilk Documentation
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-07
+> **Version**: 0.5.0-dev | **Last updated**: 2026-06-24
 
 csilk is a lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON.
 
