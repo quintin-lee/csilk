@@ -174,6 +174,42 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
  *       root and requested paths, then verifies the requested path starts
  *       with the root prefix.
  */
+static int
+contains_null_or_control(const char* str)
+{
+	if (!str) {
+		return 1;
+	}
+	while (*str) {
+		if ((unsigned char)*str < 0x20) {
+			return 1;
+		}
+		++str;
+	}
+	return 0;
+}
+
+static int
+contains_path_traversal(const char* path)
+{
+	if (!path) {
+		return 1;
+	}
+	const char* p = path;
+	while (*p) {
+		if (p[0] == '.' && p[1] == '.') {
+			char prev = (p == path) ? '/' : *(p - 1);
+			char next = *(p + 2);
+			if ((prev == '/' || prev == '\0') &&
+			    (next == '/' || next == '\0' || next == '\0')) {
+				return 1;
+			}
+		}
+		++p;
+	}
+	return 0;
+}
+
 static void
 static_work_cb(uv_work_t* req)
 {
@@ -187,6 +223,22 @@ static_work_cb(uv_work_t* req)
 	CSILK_LOG_T("Static: Resolving static file for path '%s' relative to root '%s'",
 		    csilk_get_path(c),
 		    root_dir);
+
+	/* Reject paths containing null bytes or control characters, which
+     could be used to inject malicious path segments. */
+	if (contains_null_or_control(csilk_get_path(c))) {
+		CSILK_LOG_W("Static: blocked request with null/control characters in path");
+		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
+		return;
+	}
+
+	/* Defense in depth: also reject traversal sequences here in case
+     they were not caught upstream. */
+	if (contains_path_traversal(csilk_get_path(c))) {
+		CSILK_LOG_W("Static: blocked path traversal attempt: %s", csilk_get_path(c));
+		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
+		return;
+	}
 
 	if (realpath(root_dir, resolved_root) == nullptr) {
 		CSILK_LOG_E("Static: Failed to resolve root directory path '%s'", root_dir);
@@ -204,7 +256,13 @@ static_work_cb(uv_work_t* req)
 		}
 	}
 
-	snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, relative_path);
+	/* Use snprintf with explicit length check to prevent buffer overflow */
+	int nwritten = snprintf(full_path, sizeof(full_path), "%s/%s", root_dir, relative_path);
+	if (nwritten < 0 || (size_t)nwritten >= sizeof(full_path)) {
+		CSILK_LOG_E("Static: path too long for buffer");
+		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+		return;
+	}
 
 	/* Path traversal protection: realpath() resolves all symlinks and ".."
      segments. If the resolved file path does not start with the resolved
