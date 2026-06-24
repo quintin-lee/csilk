@@ -243,6 +243,10 @@ struct csilk_ctx_s {
 	/** Callback invoked for each outgoing WebSocket data frame (for testing). */
 	void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
+	/* === Zero-Copy Receive Buffers === */
+	char* read_buffers[16];
+	int read_buffers_count;
+
 	/* === Pluggable Driver Pointers === */
 	csilk_storage_driver_t* storage_driver; /**< Optional pluggable storage backend for
                          csilk_set()/csilk_get(). When set, takes precedence

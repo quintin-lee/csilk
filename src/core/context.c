@@ -237,15 +237,20 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 	}
 	c->params_count = 0;
 
-	if (c->request.body) {
-		free(c->request.body);
-		c->request.body = nullptr;
-	}
-
 	if (c->request.path) {
-		free(c->request.path);
 		c->request.path = nullptr;
 	}
+
+	c->request.body = nullptr;
+	c->request.body_len = 0;
+
+	for (int i = 0; i < c->read_buffers_count; i++) {
+		if (c->read_buffers[i]) {
+			free(c->read_buffers[i]);
+			c->read_buffers[i] = nullptr;
+		}
+	}
+	c->read_buffers_count = 0;
 
 	memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
 	memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));

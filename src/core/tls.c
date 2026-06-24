@@ -186,7 +186,12 @@ setup_client_tls(csilk_client_t* client)
 void
 process_tls_read(csilk_client_t* client)
 {
-	char buf[4096];
+	char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
+	if (!buf) {
+		CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
+		uv_close((uv_handle_t*)&client->handle, on_close);
+		return;
+	}
 	int n;
 
 	if (!SSL_is_init_finished(client->ssl)) {
@@ -216,7 +221,7 @@ process_tls_read(csilk_client_t* client)
 		}
 	}
 
-	while ((n = SSL_read(client->ssl, buf, sizeof(buf))) > 0) {
+	while ((n = SSL_read(client->ssl, buf, 4096)) > 0) {
 		if (client->ctx.is_websocket) {
 			csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
 		} else if (client->protocol == CSILK_PROTO_HTTP2) {

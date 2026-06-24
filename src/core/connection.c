@@ -240,9 +240,6 @@ client_destroy(csilk_client_t* client)
 	if (client->ctx.arena) {
 		pool_put_arena(client->owner_pool, client->ctx.arena);
 	}
-	free(client->current_header_field);
-	free(client->current_header_value);
-	free(client->current_url);
 	pool_put(client->owner_pool, client);
 }
 
@@ -484,6 +481,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 	client->handle.data = client;
 
 	_csilk_ctx_init(&client->ctx, server, client);
+	client->ctx.arena = pool_get_arena(wp);
 
 	client_list_add(server, client);
 
@@ -529,8 +527,6 @@ on_new_connection(uv_stream_t* server_stream, int status)
 				       server->config.request_timeout_ms,
 				       0);
 		}
-
-		client->ctx.arena = pool_get_arena(wp);
 
 		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
@@ -584,6 +580,8 @@ void
 on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
 	csilk_client_t* client = (csilk_client_t*)stream->data;
+	char* base = buf->base;
+	int is_registered = 0;
 	uv_timer_stop(&client->timer);
 	if (client->server->config.read_timeout_ms > 0) {
 		uv_timer_start(&client->read_timer,
@@ -593,25 +591,39 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	}
 	if (nread > 0) {
 		if (client->ssl) {
-			BIO_write(client->read_bio, buf->base, (int)nread);
+			BIO_write(client->read_bio, base, (int)nread);
 			process_tls_read(client);
 		} else if (client->ctx.is_websocket) {
-			csilk_ws_parse_frame(
-			    &client->ctx, (const uint8_t*)buf->base, (size_t)nread);
+			csilk_ws_parse_frame(&client->ctx, (const uint8_t*)base, (size_t)nread);
 		} else {
-			enum llhttp_errno err = llhttp_execute(&client->parser, buf->base, nread);
-			if (err == HPE_CLOSED_CONNECTION) {
-				llhttp_init(
-				    &client->parser, HTTP_REQUEST, &client->server->settings);
-				client->parser.data = client;
-			} else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
-				CSILK_LOG_E("Connection: HTTP parse error: %s %s",
-					    llhttp_errno_name(err),
-					    client->parser.reason ? client->parser.reason
-								  : "unknown reason");
+			/* Register the receive buffer so it stays alive for zero-copy header/body views. */
+			if (client->ctx.read_buffers_count < 16) {
+				client->ctx.read_buffers[client->ctx.read_buffers_count++] = base;
+				is_registered = 1;
+			} else {
+				CSILK_LOG_W("Connection: read_buffers capacity exceeded, freeing "
+					    "immediately");
+				free(base);
+				base = nullptr;
+			}
 
-				if (!uv_is_closing((uv_handle_t*)stream)) {
-					uv_close((uv_handle_t*)stream, on_close);
+			if (base) {
+				enum llhttp_errno err =
+				    llhttp_execute(&client->parser, base, nread);
+				if (err == HPE_CLOSED_CONNECTION) {
+					llhttp_init(&client->parser,
+						    HTTP_REQUEST,
+						    &client->server->settings);
+					client->parser.data = client;
+				} else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
+					CSILK_LOG_E("Connection: HTTP parse error: %s %s",
+						    llhttp_errno_name(err),
+						    client->parser.reason ? client->parser.reason
+									  : "unknown reason");
+
+					if (!uv_is_closing((uv_handle_t*)stream)) {
+						uv_close((uv_handle_t*)stream, on_close);
+					}
 				}
 			}
 		}
@@ -624,8 +636,8 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		}
 	}
 
-	if (buf->base) {
-		free(buf->base);
+	if (base && !is_registered) {
+		free(base);
 	}
 }
 
