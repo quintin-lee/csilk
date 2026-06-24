@@ -258,10 +258,47 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
  * configured first wins.
  *
  * @param c The request context. */
+/** @brief Internal: check if a path contains directory traversal sequences.
+ *
+ * Looks for ".." components that would escape the intended directory.
+ * Patterns matched: "..", "/..", "/../", or ".." at end of path.
+ *
+ * @param path The URL path to inspect.
+ * @return 1 if traversal sequences are found, 0 otherwise. */
+static int
+contains_path_traversal(const char* path)
+{
+	if (!path) {
+		return 1;
+	}
+	const char* p = path;
+	while (*p) {
+		if (p[0] == '.' && p[1] == '.') {
+			char prev = (p == path) ? '/' : *(p - 1);
+			char next = *(p + 2);
+			/* Match "..", "/.." / "../", or ".." at end */
+			if ((prev == '/' || prev == '\0') &&
+			    (next == '/' || next == '\0' || next == '\0')) {
+				return 1;
+			}
+		}
+		++p;
+	}
+	return 0;
+}
+
 static void
 static_serve(csilk_ctx_t* c)
 {
 	const char* path = csilk_get_path(c);
+
+	/* Reject paths containing traversal sequences before even looking up
+     the static route table. */
+	if (contains_path_traversal(path)) {
+		CSILK_LOG_W("Static: blocked path traversal attempt: %s", path);
+		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
+		return;
+	}
 
 	uv_mutex_lock(&s_app_mutex);
 	int n = g_static_n;

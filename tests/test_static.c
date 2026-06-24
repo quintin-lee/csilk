@@ -60,8 +60,8 @@ test_static_traversal_blocked()
 	assert(csilk_is_async(ctx) == 1);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-	// Should be 404 or aborted
-	assert(csilk_get_status(ctx) == CSILK_STATUS_NOT_FOUND);
+	// Should be blocked with 403 Forbidden (path traversal detected)
+	assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN);
 
 	csilk_test_ctx_free(ctx);
 	printf("test_static_traversal_blocked passed\n");
