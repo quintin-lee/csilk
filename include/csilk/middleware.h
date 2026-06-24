@@ -44,10 +44,9 @@ void csilk_abort(csilk_ctx_t* c);
 
 /** @brief Panic-recovery middleware.
  *
- *  Wraps the handler chain in a setjmp/longjmp boundary.  If a handler calls
- *  csilk_panic (or a segfault occurs within the protected scope), this
- *  middleware sends a 500 response and logs the error instead of crashing the
- *  server.
+ *  Wraps the handler chain and catches panics or critical errors during request
+ *  execution (if `c->panicked` is set). If an error is detected, this middleware
+ *  sends a 500 response and logs the error instead of cascading failures.
  *
  *  Should be registered as the outermost middleware.
  *
@@ -56,9 +55,8 @@ void csilk_recovery_handler(csilk_ctx_t* c);
 
 /** @brief Trigger a panic (caught by recovery middleware).
  *
- *  Calls longjmp back to the setjmp point established by
- *  csilk_recovery_handler.  If no recovery middleware is registered the
- *  behaviour is undefined (likely a crash).
+ *  Marks the context as panicked and aborted, stops the handler chain execution,
+ *  and triggers the recovery cleanup path.
  *
  *  @param c  The request context. */
 void csilk_panic(csilk_ctx_t* c);

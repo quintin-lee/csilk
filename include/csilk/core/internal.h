@@ -19,7 +19,6 @@
 #ifndef CSILK_INTERNAL_H
 #define CSILK_INTERNAL_H
 
-#include <setjmp.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <uv.h>

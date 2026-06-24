@@ -62,7 +62,7 @@
 void
 csilk_next(csilk_ctx_t* c)
 {
-	if (c->aborted || c->handlers == nullptr) {
+	if (c->aborted || c->panicked || c->handlers == nullptr) {
 		return;
 	}
 	c->handler_index++;
@@ -278,6 +278,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 	c->storage_head = nullptr;
 
 	c->aborted = 0;
+	c->panicked = 0;
 	c->is_websocket = 0;
 	c->is_sse = 0;
 	c->is_async = 0;
