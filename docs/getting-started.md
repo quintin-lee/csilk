@@ -63,19 +63,17 @@ make -j$(nproc)
 | `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
 | `USE_ASAN` | OFF | Enable AddressSanitizer |
 | `USE_FUZZER` | OFF | Build fuzz test harness |
+| `USE_COVERAGE` | OFF | Enable gcov coverage reporting |
 | `CSILK_USE_MYSQL` | OFF | Enable MySQL database driver |
 | `CSILK_USE_POSTGRES` | OFF | Enable PostgreSQL database driver |
 | `CSILK_USE_MONGODB` | OFF | Enable MongoDB database driver |
+| `ENABLE_OOM_TEST` | OFF | Enable out-of-memory simulation tests |
 
 ## Create a New Project
 
 Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project with a professional, layered architecture and built-in Swagger UI and Admin Dashboard.
 
 ```bash
-# Clone the repository
-git clone https://github.com/username/csilk.git
-cd csilk
-
 # Generate a new project (interactive Python tool)
 python3 scripts/csilkskel -n my-service
 
