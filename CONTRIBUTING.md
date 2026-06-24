@@ -88,7 +88,7 @@ csilk/
 ├── src/               # Implementation
 │   ├── core/          # Engine: server, router, context, arena, config, logger, URL
 │   ├── app/           # High-level API: app, admin dashboard, workflow engine
-│   ├── middleware/    # Built-in middleware (15 modules)
+│   ├── middleware/    # Built-in middleware (16 modules)
 │   ├── protocols/     # WebSocket, Swagger
 │   ├── drivers/       # DB (SQLite/MySQL/PG/Mongo/Redis) & AI (OpenAI/Ollama)
 │   ├── ai/            # AI unified interface
@@ -97,10 +97,10 @@ csilk/
 │   ├── messaging/     # Message Queue (MQ)
 │   ├── reflection/    # Runtime type reflection
 │   └── security/      # Permission system
-├── tests/             # 118 unit/integration tests
+├── tests/             # 120+ unit/integration tests
 ├── examples/          # Example applications
 ├── share/             # Runtime assets (admin UI, Swagger UI)
-├── docs/              # Documentation (ARCH.md, architecture.md, user-manual)
+├── docs/              # Documentation (architecture.md, user-manual)
 ├── scripts/           # Utility scripts (Mermaid validation)
 └── cmake/             # CMake modules (sources, tests)
 ```
@@ -122,7 +122,7 @@ csilk/
 
 ## Testing Guide
 
-The framework has **118 tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
+The framework has **120+ tests** across core, app, middleware, protocol, security, data, AI, reflection, and messaging modules.
 
 **Run all tests:**
 ```bash

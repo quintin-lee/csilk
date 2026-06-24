@@ -6,15 +6,17 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 ## Features
 
 - 🚀 High performance using libuv for asynchronous I/O
-- 🚀 **Zero-copy HTTP Parsing** — Directly references TCP/SSL receive buffers using string views (`csilk_str_view_t`), avoiding heap `malloc`/`free` churn for HTTP URLs, headers, and bodies.
-- 🚀 **Zero-copy Static File Serving** via `sendfile` integration
+- **Zero-copy HTTP Parsing** — Directly references TCP/SSL receive buffers using string views (`csilk_str_view_t`), avoiding heap `malloc`/`free` churn for HTTP URLs, headers, and bodies.
+- **Zero-copy Static File Serving** via `sendfile` integration
+- **SIMD-accelerated routing** — AVX2 (x86_64) and NEON (aarch64) path matching
+- **Lock-free per-worker connection pool** for multi-core scaling
+- **Real-time CPU Flame Graph** — Backtrace sampling for performance profiling in admin dashboard
+- **Hot Reload** — Swap router at runtime without restart
 - 📬 **Internal Event Bus** - Asynchronous, thread-safe Message Queue with middleware and subscriber support
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
 - 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, MQ, and CPU flame graphs
-- 🔥 **Real-time CPU Flame Graph** — Backtrace sampling for performance profiling in admin dashboard
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration
 - 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK, Server Push)
-- ⚡ **SIMD-accelerated routing** — AVX2 (x86_64) and NEON (aarch64) path matching
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
@@ -33,29 +35,11 @@ A lightweight, high-performance HTTP web framework written in C, inspired by Gin
 - 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
 - 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)
 - 🏗️ Arena allocator for request-scoped memory management
-- 🤖 **Unified AI Interface** - Provider-agnostic API for Chat, Embeddings, and Tool Calling (OpenAI & Ollama)
-- 🔧 **Dynamic AI Tool Discovery** — MCP-like tool discovery for agentic workflows
-- 🗂️ Reflection engine for automatic struct <-> JSON conversion (including basic types and arrays)
-- 🧬 **OpenAPI Spec Generation** — Auto-generate OpenAPI 3.0 JSON from route metadata
-- 🧬 **SDK Code Generation** — Auto-generate TypeScript and Python API clients from OpenAPI spec
-- 🔐 Built-in CSRF protection, CORS, rate limiting, and WAF
-- 📝 Complete Doxygen documentation for all public APIs and internals
-- 🧵 Thread-safe logging with file rotation and ANSI colors
-- 🔍 Configurable connection timeout and body/header size limits
-- 🎯 Global (server-level), group-level, and per-route middleware support
-- 🌲 Radix Tree router with :param and *wildcard matching
-- 📝 Form URL-encoded body parsing (`application/x-www-form-urlencoded`)
-- 🍪 Session management with **thread-safe mutex protection**
-- 🔀 HTTP redirect helper (`csilk_redirect`)
-- 📄 HTTP Range request support (206 Partial Content) for static files
-- ✅ Request parameter validation middleware (required, int, string, email)
-- 🆔 **Request ID middleware** for end-to-end tracing (X-Request-Id)
-- 🩺 **Built-in Health Check** handler (/healthz)
-- 📦 **Opaque Context API** for ABI stability
-- 🍏 **macOS 14 ARM64** — CI-supported build target
-- 🔒 **Lock-free per-worker connection pool** for multi-core scaling
-- 🔄 **Hot Reload** — Swap router at runtime without restart
-- 🧹 **Deferred Cleanup API** (`csilk_ctx_defer`) — panic-safe resource management
+- **Deferred Cleanup API** (`csilk_ctx_defer`) — panic-safe resource management
+- **Opaque Context API** for ABI stability
+- **Built-in Health Check** handler (/healthz)
+- **Request ID middleware** for end-to-end tracing (X-Request-Id)
+- **WAF (Web Application Firewall)** middleware
 
 ## Dependencies
 
@@ -170,6 +154,15 @@ docker run -p 8080:8080 csilk
 
 # Override config
 docker run -p 8080:8080 -v $(pwd)/custom_config.yaml:/etc/csilk/config.yaml csilk
+```
+
+## Project Scaffolding
+
+Csilk provides a scaffolding tool (`csilkskel`) to quickly bootstrap a new project with a professional layered architecture, built-in Swagger UI, and Admin Dashboard.
+
+```bash
+# Generate a new project (interactive Python tool)
+python3 scripts/csilkskel -n my-service
 ```
 
 ## Documentation
@@ -325,7 +318,7 @@ src/
   ├── reflection/     # Reflection Engine implementation
   ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
   ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB, Redis, Qdrant)
-  └── middleware/     # 15 built-in middleware modules
+  └── middleware/     # 16 built-in middleware modules
 
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions
@@ -335,8 +328,9 @@ include/csilk/        # Public Hierarchical Headers
   ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tests/                # 120 comprehensive unit tests
-examples/             # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
+tools/                  # Developer tools (csilkskel scaffold generator)
+tests/                  # 120+ comprehensive unit tests
+examples/               # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
 ```
 
 ## Testing
@@ -405,6 +399,14 @@ if __name__ == "__main__":
 ```
 
 Refer to the [Python Bindings Manual](docs/user-manual/python.md) and [python/README.md](python/README.md) for more details.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full history of changes.
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute, report issues, and submit pull requests.
 
 ## License
 
