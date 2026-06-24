@@ -47,6 +47,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__x86_64__)
+#include <cpuid.h>
+#include <immintrin.h>
+#endif
+
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+
 #include "core/ctx_internal.h"
 #include "core/srv_internal.h"
 #include "csilk/core/internal.h"
@@ -176,9 +185,164 @@ node_free(csilk_router_node_t* node)
  * @param len [out] Pointer to receive the length of the segment.
  * @return A pointer to the start of the segment within the original path string,
  *         or nullptr if no more segments are found. */
+#if defined(CSILK_HAS_AVX512)
+__attribute__((target("avx512f,avx512bw"))) static inline const char*
+get_next_segment_avx512(const char** p, size_t* len)
+{
+	while (**p == '/') {
+		(*p)++;
+	}
+	if (**p == '\0') {
+		return nullptr;
+	}
+
+	const char* start = *p;
+	const char* curr = *p;
+
+	__m512i slash_vec = _mm512_set1_epi8('/');
+	__m512i zero_vec = _mm512_setzero_si512();
+
+	while (1) {
+		uintptr_t addr = (uintptr_t)curr;
+		if ((addr & 4095) <= 4096 - 64) {
+			__m512i data = _mm512_loadu_si512((const __m512i*)curr);
+			__mmask64 cmp_slash = _mm512_cmpeq_epi8_mask(data, slash_vec);
+			__mmask64 cmp_zero = _mm512_cmpeq_epi8_mask(data, zero_vec);
+			__mmask64 cmp_combined = cmp_slash | cmp_zero;
+			if (cmp_combined != 0) {
+				int idx = __builtin_ctzll(cmp_combined);
+				curr += idx;
+				break;
+			}
+			curr += 64;
+		} else {
+			if (*curr == '/' || *curr == '\0') {
+				break;
+			}
+			curr++;
+		}
+	}
+
+	*p = curr;
+	*len = (size_t)(curr - start);
+	return start;
+}
+#endif
+
+#if defined(__x86_64__)
+__attribute__((target("avx2"))) static inline const char*
+get_next_segment_avx2(const char** p, size_t* len)
+{
+	while (**p == '/') {
+		(*p)++;
+	}
+	if (**p == '\0') {
+		return nullptr;
+	}
+
+	const char* start = *p;
+	const char* curr = *p;
+
+	__m256i slash_vec = _mm256_set1_epi8('/');
+	__m256i zero_vec = _mm256_setzero_si256();
+
+	while (1) {
+		uintptr_t addr = (uintptr_t)curr;
+		if ((addr & 4095) <= 4096 - 32) {
+			__m256i data = _mm256_loadu_si256((const __m256i*)curr);
+			__m256i cmp_slash = _mm256_cmpeq_epi8(data, slash_vec);
+			__m256i cmp_zero = _mm256_cmpeq_epi8(data, zero_vec);
+			__m256i cmp_combined = _mm256_or_si256(cmp_slash, cmp_zero);
+			int mask = _mm256_movemask_epi8(cmp_combined);
+			if (mask != 0) {
+				int idx = __builtin_ctz(mask);
+				curr += idx;
+				break;
+			}
+			curr += 32;
+		} else {
+			if (*curr == '/' || *curr == '\0') {
+				break;
+			}
+			curr++;
+		}
+	}
+
+	*p = curr;
+	*len = (size_t)(curr - start);
+	return start;
+}
+#endif
+
+#if defined(__ARM_NEON)
+static inline const char*
+get_next_segment_neon(const char** p, size_t* len)
+{
+	while (**p == '/') {
+		(*p)++;
+	}
+	if (**p == '\0') {
+		return nullptr;
+	}
+
+	const char* start = *p;
+	const char* curr = *p;
+
+	uint8x16_t slash_vec = vdupq_n_u8('/');
+	uint8x16_t zero_vec = vdupq_n_u8('\0');
+
+	while (1) {
+		uintptr_t addr = (uintptr_t)curr;
+		if ((addr & 4095) <= 4096 - 16) {
+			uint8x16_t data = vld1q_u8((const uint8_t*)curr);
+			uint8x16_t cmp_slash = vceqq_u8(data, slash_vec);
+			uint8x16_t cmp_zero = vceqq_u8(data, zero_vec);
+			uint8x16_t cmp_combined = vorrq_u8(cmp_slash, cmp_zero);
+
+			uint64_t mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp_combined), 0);
+			uint64_t mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp_combined), 1);
+
+			if (mask_low != 0 || mask_high != 0) {
+				if (mask_low != 0) {
+					int idx = __builtin_ctzll(mask_low) / 8;
+					curr += idx;
+				} else {
+					int idx = __builtin_ctzll(mask_high) / 8;
+					curr += 8 + idx;
+				}
+				break;
+			}
+			curr += 16;
+		} else {
+			if (*curr == '/' || *curr == '\0') {
+				break;
+			}
+			curr++;
+		}
+	}
+
+	*p = curr;
+	*len = (size_t)(curr - start);
+	return start;
+}
+#endif
+
 static const char*
 get_next_segment(const char** p, size_t* len)
 {
+#if defined(CSILK_HAS_AVX512)
+	if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+		return get_next_segment_avx512(p, len);
+	}
+#endif
+#if defined(__x86_64__)
+	if (__builtin_cpu_supports("avx2")) {
+		return get_next_segment_avx2(p, len);
+	}
+#elif defined(__ARM_NEON)
+	return get_next_segment_neon(p, len);
+#endif
+
 	if (!*p || **p == '\0') {
 		return nullptr;
 	}
@@ -646,8 +810,25 @@ csilk_router_add_extended_perm(csilk_router_t* r,
 }
 
 #if defined(__x86_64__)
-#include <cpuid.h>
-#include <immintrin.h>
+#if defined(CSILK_HAS_AVX512)
+__attribute__((target("avx512f,avx512bw"))) static inline int
+csilk_memcmp_avx512(const char* s1, const char* s2, size_t n)
+{
+	if (n >= 64) {
+		__m512i v1 = _mm512_loadu_si512((const __m512i*)s1);
+		__m512i v2 = _mm512_loadu_si512((const __m512i*)s2);
+		__mmask64 cmp = _mm512_cmpeq_epi8_mask(v1, v2);
+		if (cmp != 0xFFFFFFFFFFFFFFFFULL) {
+			return 0;
+		}
+		if (n == 64) {
+			return 1;
+		}
+		return memcmp(s1 + 64, s2 + 64, n - 64) == 0;
+	}
+	return memcmp(s1, s2, n) == 0;
+}
+#endif
 
 __attribute__((target("avx2"))) static inline int
 csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
@@ -670,8 +851,6 @@ csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
 #endif
 
 #if defined(__ARM_NEON)
-#include <arm_neon.h>
-
 static inline int
 csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 {
@@ -708,6 +887,11 @@ csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 static inline int
 csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 {
+#if defined(CSILK_HAS_AVX512)
+	if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+		return csilk_memcmp_avx512(s1, s2, n);
+	}
+#endif
 #if defined(__x86_64__)
 	if (__builtin_cpu_supports("avx2")) {
 		return csilk_memcmp_avx2(s1, s2, n);

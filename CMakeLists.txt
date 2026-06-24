@@ -13,7 +13,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 # GCC and older Clang silently ignore unsupported -Wno-* flags.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-keyword-macro -Wno-deprecated-declarations")
 
-# SIMD acceleration for router path matching (AVX2 on x86_64, NEON on aarch64)
+# SIMD acceleration for router path matching (AVX2/AVX-512 on x86_64, NEON on aarch64)
 include(CheckCSourceCompiles)
 set(CMAKE_REQUIRED_FLAGS "-mavx2")
 check_c_source_compiles("
@@ -30,6 +30,21 @@ if(CSILK_HAS_AVX2)
   message(STATUS "AVX2 SIMD enabled for router path matching")
 else()
   message(STATUS "AVX2 not available — using word-aligned fast path")
+endif()
+
+set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512bw")
+check_c_source_compiles("
+  #include <immintrin.h>
+  int main(void) {
+    __m512i v = _mm512_setzero_si512();
+    (void)v;
+    return 0;
+  }
+" CSILK_HAS_AVX512)
+set(CMAKE_REQUIRED_FLAGS "")
+if(CSILK_HAS_AVX512)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCSILK_HAS_AVX512")
+  message(STATUS "AVX-512 SIMD enabled for router path matching")
 endif()
 
 # Version — single source of truth
