@@ -125,10 +125,18 @@ void
 csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len)
 {
 	if (c) {
-		if (c->request.body) {
-			free(c->request.body);
+		if (c->arena && body) {
+			char* arena_body = csilk_arena_alloc(c->arena, len + 1);
+			if (arena_body) {
+				memcpy(arena_body, body, len);
+				arena_body[len] = '\0';
+				c->request.body = arena_body;
+			} else {
+				c->request.body = nullptr;
+			}
+		} else {
+			c->request.body = (char*)body;
 		}
-		c->request.body = body ? strdup(body) : nullptr;
 		c->request.body_len = len;
 	}
 }

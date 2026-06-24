@@ -353,6 +353,44 @@ typedef struct {
    types already defined to avoid circular-definition errors. */
 #include "csilk/drivers/db.h"
 
+/**
+ * @brief Zero-copy string view — references external memory without allocation.
+ *
+ * Used by the HTTP parser to reference fields directly in the receive buffer,
+ * eliminating all heap allocations during header parsing. The referenced
+ * memory is valid for the duration of the request processing.
+ *
+ * @note The data pointer is NOT owned by this struct — it points into the
+ *       libuv read buffer which is valid until the request completes.
+ */
+typedef struct {
+	const char* data; /**< Pointer to the string data (not null-terminated). */
+	size_t len;	  /**< Length of the string in bytes. */
+} csilk_str_view_t;
+
+/**
+ * @brief Convert a string view to a null-terminated heap-allocated string.
+ *
+ * Copies the contents of the string view into a newly allocated buffer.
+ * Caller must free the returned pointer with csilk_free().
+ *
+ * @param view The string view to copy.
+ * @return A newly allocated null-terminated string, or nullptr on failure.
+ */
+char* csilk_str_view_to_string(const csilk_str_view_t* view);
+
+/**
+ * @brief Persist a string view into arena memory.
+ *
+ * Copies the contents of the string view into the request arena.
+ * The returned pointer is valid until the request completes (arena reset).
+ *
+ * @param c    The request context (for arena access).
+ * @param view The string view to persist.
+ * @return A null-terminated string in arena memory, or nullptr on failure.
+ */
+const char* csilk_str_view_persist(csilk_ctx_t* c, const csilk_str_view_t* view);
+
 void* csilk_malloc(size_t size);
 void csilk_free(void* ptr);
 char* csilk_strdup(const char* s);

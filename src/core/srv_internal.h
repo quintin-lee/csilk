@@ -132,22 +132,27 @@ struct csilk_client_s {
 
 	llhttp_t parser; /**< HTTP request parser (if HTTP/1.1). */
 
-	csilk_server_t* server;	      /**< Owning server instance. */
-	worker_pool_t* owner_pool;    /**< Per-worker pool that owns this client. */
-	csilk_ctx_t ctx;	      /**< Request context for this connection. */
-	size_t total_header_size;     /**< Total size of headers parsed so far. */
-	size_t header_count;	      /**< Number of headers parsed so far. */
-	size_t current_url_capacity;  /**< Allocated size of current_url. */
-	size_t header_field_capacity; /**< Allocated size of current_header_field. */
-	size_t header_value_capacity; /**< Allocated size of current_header_value. */
-	char* current_url;	      /**< Current URL being parsed. */
-	char* current_header_field;   /**< Temporary header field name. */
-	char* current_header_value;   /**< Temporary header field value. */
-	SSL* ssl;		      /**< OpenSSL session object. */
-	BIO* read_bio;		      /**< BIO for reading encrypted data. */
-	BIO* write_bio;		      /**< BIO for writing encrypted data. */
-	struct csilk_client_s* next;  /**< Next client in active list. */
-	struct csilk_client_s* prev;  /**< Previous client in active list. */
+	csilk_server_t* server;	   /**< Owning server instance. */
+	worker_pool_t* owner_pool; /**< Per-worker pool that owns this client. */
+	csilk_ctx_t ctx;	   /**< Request context for this connection. */
+	size_t total_header_size;  /**< Total size of headers parsed so far. */
+	size_t header_count;	   /**< Number of headers parsed so far. */
+
+	/** @name Zero-Copy Parsing State
+	 *  HTTP parser callbacks store direct references to the receive buffer
+	 *  instead of allocating and copying. Eliminates all heap allocations
+	 *  during header parsing. */
+	/**@{*/
+	csilk_str_view_t current_url;	       /**< Current URL (zero-copy ref to buf). */
+	csilk_str_view_t current_header_field; /**< Current header field name. */
+	csilk_str_view_t current_header_value; /**< Current header value. */
+	/**@}*/
+
+	SSL* ssl;		     /**< OpenSSL session object. */
+	BIO* read_bio;		     /**< BIO for reading encrypted data. */
+	BIO* write_bio;		     /**< BIO for writing encrypted data. */
+	struct csilk_client_s* next; /**< Next client in active list. */
+	struct csilk_client_s* prev; /**< Previous client in active list. */
 };
 
 /**
@@ -171,5 +176,19 @@ CSILK_INTERNAL void _csilk_dispatch_request(csilk_ctx_t* c);
  * @param type Hook type to trigger.
  */
 CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);
+
+/**
+ * @brief Persist a zero-copy header field+value pair into the request header map.
+ *
+ * Copies the header field and value from string views into the request arena
+ * and inserts them into the request header hash map. This is the single point
+ * where zero-copy references are materialized into persistent arena memory.
+ *
+ * @param c     Request context (for arena allocation).
+ * @param field Header field name (zero-copy reference to recv buffer).
+ * @param value Header value (zero-copy reference to recv buffer).
+ */
+CSILK_INTERNAL void
+_csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk_str_view_t* value);
 
 #endif /* CSILK_SERVER_INTERNAL_H */
