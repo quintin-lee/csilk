@@ -68,6 +68,8 @@ struct csilk_request_s {
 	csilk_header_map_t headers;
 	csilk_header_map_t query_params;
 	csilk_header_map_t form_params;
+	int body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
+	                          must be freed on cleanup. */
 };
 typedef struct csilk_request_s csilk_request_t;
 

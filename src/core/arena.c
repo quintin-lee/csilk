@@ -192,7 +192,7 @@ csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
  * a new chunk large enough to satisfy the request. The returned memory is
  * zero-initialized only by virtue of being freshly allocated from the OS.
  *
- * @param arena The arena allocator (must not be nullptr).
+ * @param arena The arena allocator (may be nullptr — returns nullptr).
  * @param size  Number of bytes to allocate. The actual allocation is rounded
  *              up to the nearest multiple of 8 for alignment.
  * @return Pointer to the allocated block, or nullptr on allocation failure.
@@ -201,7 +201,10 @@ csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
 void*
 csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 {
-	size_t alignment = (arena && arena->align_64) ? CSILK_CACHE_LINE_SIZE : 8;
+	if (!arena) {
+		return nullptr;
+	}
+	size_t alignment = arena->align_64 ? CSILK_CACHE_LINE_SIZE : 8;
 	if (size > SIZE_MAX - (alignment - 1)) {
 		return nullptr;
 	}

@@ -237,12 +237,20 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 	}
 	c->params_count = 0;
 
-	if (c->request.path) {
-		c->request.path = nullptr;
-	}
+	/*
+	 * request.path is always strdup'd (malloc'd) by
+	 * csilk_split_url (or test_utils).  csilk_arena_reset
+	 * above does NOT free it — we must free it here.
+	 */
+	free(c->request.path);
+	c->request.path = nullptr;
 
+	if (c->request.body && c->request.body_is_managed) {
+		free(c->request.body);
+	}
 	c->request.body = nullptr;
 	c->request.body_len = 0;
+	c->request.body_is_managed = 0;
 
 	for (int i = 0; i < c->read_buffers_count; i++) {
 		if (c->read_buffers[i]) {
