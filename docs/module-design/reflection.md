@@ -202,3 +202,27 @@ flowchart TB
     DONE --> REG["CSILK_REGISTER_REFLECT macros\nCalled at global scope"]
     REG --> STORE["Store entry in registry hash map"]
 ```
+
+## Deep Freeing & Cyclic Reference Detection
+
+To support complex nested structure graphs, the reflection engine includes mechanisms for safe deep memory cleanup and validation against loop structures.
+
+### Deep Struct Freeing (`csilk_struct_free_reflect`)
+
+When unmarshaling JSON into a nested structure, pointers to child structures and strings may be dynamically allocated. Standard sequential `free()` calls would miss these nested dynamic structures, leading to leaks.
+
+`csilk_struct_free_reflect` recursively traverses registered struct fields using their metadata:
+- Checks if the field is a pointer to another registered struct (`CSILK_TYPE_STRUCT`).
+- Checks if the field is a pointer to a string (`CSILK_TYPE_STRING`).
+- Frees child structs recursively, then frees the parent struct pointers.
+- Employs a **maximum recursion depth limit** (currently `32`) to prevent stack overflow on extremely deep nested layouts.
+
+### Cyclic Reference Detection
+
+If two structures reference each other (either directly or transitively in a loop), recursive marshaling, unmarshaling, or deep freeing will result in infinite recursion and stack overflow.
+
+Csilk prevents this by performing **Static Cyclic Reference Detection** (using a Depth-First Search cycle-finding algorithm) at type registration time:
+- When a new type is registered via `CSILK_REGISTER_REFLECT`, the registry builds a dependency directed graph of types.
+- If a cycle is detected (e.g. `A -> B -> A`), a compile-time or startup warning/error is logged.
+- At runtime, APIs like marshal/unmarshal respect the recursion limit to fail gracefully rather than crashing the process.
+
