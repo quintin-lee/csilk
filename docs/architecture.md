@@ -92,7 +92,7 @@ graph TB
 The framework is built on `libuv`, ensuring all network I/O is non-blocking. 
 
 * **Protocol Dispatcher**: During TLS ALPN negotiation, a dispatcher routes decrypted traffic to either `llhttp` (HTTP/1.1) or `nghttp2` (HTTP/2) based on ALPN (`h2` vs `http/1.1`).
-* **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests.
+* **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests. During parsing callbacks, `csilk` uses **Zero-copy HTTP parsing** using string views (`csilk_str_view_t`) that directly reference raw network receive buffers, completely eliminating dynamic `malloc`/`realloc`/`free` heap allocations for HTTP headers, URLs, and bodies.
 * **HTTP/2 parsing**: `nghttp2` processes binary HTTP/2 frames, HPACK headers, and handles multiplexed streams.
 * **Native TLS integration**: OpenSSL BIO-pairs handle encrypted network traffic directly on the event loop:
   - **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute` / `csilk_h2_process_data`

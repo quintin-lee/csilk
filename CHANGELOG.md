@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Zero-copy HTTP Parsing** — Integrated C23-style string views (`csilk_str_view_t`) for HTTP headers, URLs, and bodies, referencing network receive buffers directly to eliminate heap malloc/free churn.
+- **Deep struct freeing** — Added `csilk_struct_free_reflect` to recursively free nested struct pointers inside the reflection engine.
+- **Static cyclic reference detection** — Added compile/startup-time DFS graph cycle-finding algorithm to validate registered reflection types and prevent recursion stack overflows.
 - **Fuzz testing in CI**: Re-enabled fuzz testing job (clang-19 expected available on Ubuntu 24.04 by June 2026).
 - **Extended test coverage**: WAF (4→9), Session (5→8), Recovery (1→4), CSRF (3→7), Workflow Lifecycle (1→3).
 - **Zero-copy chunked write**: `_csilk_send_data_owned()` eliminates double-allocation/copy in chunked transfer encoding path.
@@ -24,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hot reload support**: `csilk_server_set_router` for runtime router replacement.
 
 ### Changed
+- **Atomic builtins standardization** — Replaced all legacy compiler-dependent GCC `__sync_*` atomics with standard C11 `<stdatomic.h>` APIs.
+- **Multi-worker loop safety** — Removed hardcoded `uv_default_loop()` reference, dynamically resolving the active worker thread's event loop to prevent multi-worker data races.
+- **HTTPS read path optimization** — SSL read buffers are now allocated from the connection arena instead of the stack, keeping decrypted data safe for zero-copy string views.
 - **Arena safety**: Added overflow guards and zero-size sentinel handling in `csilk_arena_alloc`.
 - **Middleware middleware**: Added WAF (Web Application Firewall) to 15 built-in middleware.
 - **Admin storage limit test**: Fixed `test_admin` storage overflow to store non-null values.

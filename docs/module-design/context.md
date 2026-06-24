@@ -190,13 +190,14 @@ flowchart TB
 
 Between requests (keep-alive), `csilk_ctx_cleanup()` efficiently resets state:
 
-1. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations freed
-2. `free()` path parameters (keys/values)
-3. `free()` request body
-4. `free()` request path
-5. `memset()` header/query/response maps to zero
-6. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`
-7. Reset `handler_index = -1`, `storage_head = NULL`
+1. **Free registered read buffers** - All raw network read buffers accumulated during request parsing (and referenced by zero-copy string views) are freed.
+2. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations (including persisted headers and query params) are freed.
+3. `free()` path parameters (keys/values).
+4. `free()` request body (if it was copied/allocated, otherwise it was zero-copy referenced and freed in step 1).
+5. `free()` request path.
+6. `memset()` header/query/response maps to zero.
+7. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`.
+8. Reset `handler_index = -1`, `storage_head = NULL`, and `read_buffers_count = 0`.
 
 ### Deferred Cleanup (Panic-Safe)
 
