@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #ifdef __APPLE__
 #include <mach/mach_init.h>
@@ -38,6 +39,14 @@
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */
 static constexpr int MAX_TLS_ARENA_CHUNKS = 16;
+
+#ifdef DEBUG_ARENA
+/** @brief Redzone guard size for buffer overflow detection.
+ * When DEBUG_ARENA is enabled, each allocation is padded with this many
+ * bytes after the user data. The arena_free function checks that the redzone
+ * bytes are unchanged (all 0xBE) to detect out-of-bounds writes. */
+static constexpr size_t ARENA_REDZONE_SIZE = 16;
+#endif
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
  * Used for padding structures to prevent false sharing and improve
@@ -106,6 +115,32 @@ arena_aligned_free(void* ptr, size_t size)
 	free(ptr);
 #endif
 }
+
+#ifdef DEBUG_ARENA
+/** @brief Fill redzone bytes after allocation for overflow detection. */
+static void
+arena_fill_redzone(uint8_t* data, size_t size, size_t alloc_sz)
+{
+	/* Fill 16 bytes after user data with 0xBE pattern */
+	const uint8_t pattern = 0xBE;
+	for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
+		data[alloc_sz + i] = pattern;
+	}
+}
+
+/** @brief Verify redzone bytes haven't been corrupted. */
+static int
+arena_check_redzone(uint8_t* data, size_t alloc_sz)
+{
+	const uint8_t pattern = 0xBE;
+	for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
+		if (data[alloc_sz + i] != pattern) {
+			return 0; /* Corrupted */
+		}
+	}
+	return 1; /* OK */
+}
+#endif
 
 /** @brief A single chunk in the arena linked list.
  *
@@ -218,10 +253,19 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 
 	size = (size + alignment - 1) & ~(alignment - 1);
 
+#ifdef DEBUG_ARENA
+	size_t alloc_size = size;
+	size += ARENA_REDZONE_SIZE;
+#endif
+
 	if (arena->head) {
 		size_t aligned_used = (arena->head->used + alignment - 1) & ~(alignment - 1);
 		if ((arena->head->size - aligned_used) >= size) {
 			void* ptr = arena->head->data + aligned_used;
+#ifdef DEBUG_ARENA
+			arena_fill_redzone(
+			    arena->head->data, arena->head->size, aligned_used + alloc_size);
+#endif
 			arena->head->used = aligned_used + size;
 			return ptr;
 		}
@@ -323,6 +367,19 @@ csilk_arena_free(csilk_arena_t* arena)
 	csilk_arena_chunk_t* curr = arena->head;
 	while (curr) {
 		csilk_arena_chunk_t* next = curr->next;
+#ifdef DEBUG_ARENA
+		if (curr->used > ARENA_REDZONE_SIZE && curr->used <= curr->size) {
+			if (!arena_check_redzone(curr->data, curr->used - ARENA_REDZONE_SIZE)) {
+				fprintf(stderr,
+					"ARENA REDZONE CORRUPTED: chunk %p used=%zu size=%zu\n",
+					(void*)curr,
+					curr->used,
+					curr->size);
+				abort();
+			}
+		}
+#endif
+
 		/* Return standard-sized chunks to the thread-local free list if there is
 		room. This speeds up subsequent allocations on the same thread. */
 		if (curr->size == CSILK_DEFAULT_ARENA_SIZE &&

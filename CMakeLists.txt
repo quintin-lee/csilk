@@ -94,6 +94,12 @@ if(ENABLE_OOM_TEST)
     add_definitions(-DTEST_OOM)
 endif()
 
+option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
+if(DEBUG_ARENA)
+    message(STATUS "Arena debug mode enabled")
+    add_definitions(-DDEBUG_ARENA)
+endif()
+
 # 查找 clang-format
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
