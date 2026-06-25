@@ -148,6 +148,7 @@ csilk_server_t*
 csilk_server_new(csilk_router_t* router)
 {
 	csilk_reflect_init();
+	csilk_arena_init();
 	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
 	if (!s) {
 		return nullptr;

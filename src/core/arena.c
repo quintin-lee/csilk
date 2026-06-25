@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #ifdef __APPLE__
 #include <mach/mach_init.h>
@@ -435,6 +436,32 @@ csilk_arena_flush_free_list(void)
 	}
 	tls_chunk_free_list = nullptr;
 	tls_chunk_count = 0;
+}
+
+/** @brief Initialize arena subsystem with automatic TLS cleanup.
+ *
+ * Creates a pthread key that automatically flushes the TLS chunk free list
+ * when the thread exits. Safe to call multiple times; subsequent calls are
+ * no-ops. */
+static void
+arena_tls_cleanup(void* unused)
+{
+	(void)unused;
+	csilk_arena_flush_free_list();
+}
+
+static void
+arena_init_tls_key(void)
+{
+	static pthread_key_t tls_key;
+	pthread_key_create(&tls_key, arena_tls_cleanup);
+}
+
+void
+csilk_arena_init(void)
+{
+	static pthread_once_t once = PTHREAD_ONCE_INIT;
+	pthread_once(&once, arena_init_tls_key);
 }
 
 #ifdef TEST_OOM

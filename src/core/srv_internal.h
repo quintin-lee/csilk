@@ -191,4 +191,12 @@ CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csil
 CSILK_INTERNAL void
 _csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk_str_view_t* value);
 
+/**
+ * @brief Initialize arena subsystem with automatic TLS cleanup.
+ *
+ * Called once during server startup to register a pthread key destructor
+ * that flushes the TLS chunk free list when threads exit.
+ */
+CSILK_INTERNAL void csilk_arena_init(void);
+
 #endif /* CSILK_SERVER_INTERNAL_H */
