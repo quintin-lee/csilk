@@ -54,7 +54,7 @@ typedef enum {
 typedef struct __attribute__((packed)) {
 	uint32_t magic;	      /**< Must equal CSILK_WF_MAGIC for file validation. */
 	uint8_t type;	      /**< csilk_wf_event_type_t value. */
-	uint32_t timestamp;   /**< Unix timestamp (seconds since epoch) of the event. */
+	uint64_t timestamp;   /**< Unix timestamp (seconds since epoch) of the event. */
 	uint32_t payload_len; /**< Byte length of the payload that follows this header. */
 } csilk_wf_wal_header_t;
 

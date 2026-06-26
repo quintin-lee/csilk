@@ -11,7 +11,7 @@
  * workflow's execution state after a crash or restart.
  *
  * Wire format:
- *   [magic:4 bytes][type:1 byte][timestamp:4 bytes][payload_len:4 bytes]
+ *   [magic:4 bytes][type:1 byte][timestamp:8 bytes][payload_len:4 bytes]
  *   [payload:payload_len bytes]
  *
  * @copyright MIT License
@@ -59,7 +59,7 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
 	csilk_wf_wal_header_t header;
 	header.magic = CSILK_WF_MAGIC;
 	header.type = (uint8_t)type;
-	header.timestamp = (uint32_t)time(nullptr);
+	header.timestamp = (uint64_t)time(nullptr);
 	header.payload_len = (uint32_t)len;
 
 	if (write(fd, &header, sizeof(header)) != sizeof(header)) {
