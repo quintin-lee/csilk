@@ -16,6 +16,7 @@
 
 #include "cJSON.h"
 #include "core/ctx_internal.h"
+#include "core/srv_impl.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "core/srv_internal.h"
@@ -417,16 +418,7 @@ send_chunked_headers(csilk_ctx_t* c)
 	}
 
 	int status = c->response.status ? c->response.status : CSILK_STATUS_OK;
-	const char* status_text = status == CSILK_STATUS_OK		? "OK"
-				  : status == CSILK_STATUS_CREATED	? "Created"
-				  : status == CSILK_STATUS_BAD_REQUEST	? "Bad Request"
-				  : status == CSILK_STATUS_UNAUTHORIZED ? "Unauthorized"
-				  : status == CSILK_STATUS_FORBIDDEN	? "Forbidden"
-				  : status == CSILK_STATUS_NOT_FOUND	? "Not Found"
-				  : status == CSILK_STATUS_INTERNAL_SERVER_ERROR
-				      ? "Internal Server Error"
-				      : "OK";
-
+	const char* status_text = get_status_text(status);
 	int want_close = client_wants_close(c);
 	const char* conn_val = want_close ? "close" : "keep-alive";
 

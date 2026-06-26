@@ -31,6 +31,7 @@ CSILK_INTERNAL void on_write_timeout(uv_timer_t* handle);
 
 /* --- HTTP/1.1 callbacks & response (http1.c) --- */
 
+CSILK_INTERNAL const char* get_status_text(int status);
 CSILK_INTERNAL void on_write(uv_write_t* req, int status);
 CSILK_INTERNAL void _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len);
 CSILK_INTERNAL int on_message_begin(llhttp_t* p);

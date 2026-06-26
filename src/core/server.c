@@ -45,6 +45,46 @@ on_signal(uv_signal_t* handle, int signum)
 
 /* --- Graceful shutdown --- */
 
+/**
+ * @brief Iterate clients on the given loop and close them appropriately.
+ *
+ * Walks the server's active_clients linked list under mutex, identifies
+ * clients whose handle belongs to @p loop, and closes them according to
+ * protocol type (WebSocket -> close frame, SSE -> close event, HTTP -> close).
+ *
+ * @param server  The server whose client list to iterate.
+ * @param loop    Only close clients whose handle.loop matches this loop.
+ * @return The number of clients closed.
+ */
+static int
+close_active_clients(csilk_server_t* server, uv_loop_t* loop)
+{
+	uv_mutex_lock(&server->clients_mutex);
+	csilk_client_t* client = server->active_clients;
+	int count = 0;
+	while (client) {
+		if (client->handle.loop == loop) {
+			count++;
+			if (client->ctx.is_websocket) {
+				csilk_ws_close(&client->ctx, 1001, "Server stopping");
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+			} else if (client->ctx.is_sse) {
+				csilk_sse_send(&client->ctx, "close", "Server stopping");
+				csilk_sse_close(&client->ctx);
+			} else {
+				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+					uv_close((uv_handle_t*)&client->handle, on_close);
+				}
+			}
+		}
+		client = client->next;
+	}
+	uv_mutex_unlock(&server->clients_mutex);
+	return count;
+}
+
 /** @brief libuv async callback to stop the server gracefully.
  *
  * This function performs the full shutdown sequence:
@@ -78,35 +118,11 @@ on_stop_async(uv_async_t* handle)
 		uv_close((uv_handle_t*)&server->server_handle, on_server_handle_close);
 	}
 
-	uv_mutex_lock(&server->clients_mutex);
-	csilk_client_t* client = server->active_clients;
-	int active_client_count = 0;
-	while (client) {
-		if (client->handle.loop == server->loop) {
-			active_client_count++;
-			if (client->ctx.is_websocket) {
-				CSILK_LOG_D("Server: closing active WebSocket client %p",
-					    (void*)client);
-				csilk_ws_close(&client->ctx, 1001, "Server stopping");
-				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-					uv_close((uv_handle_t*)&client->handle, on_close);
-				}
-			} else if (client->ctx.is_sse) {
-				CSILK_LOG_D("Server: closing active SSE client %p", (void*)client);
-				csilk_sse_send(&client->ctx, "close", "Server stopping");
-				csilk_sse_close(&client->ctx);
-			} else {
-				CSILK_LOG_D("Server: closing active HTTP client %p", (void*)client);
-				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-					uv_close((uv_handle_t*)&client->handle, on_close);
-				}
-			}
+	{
+		int n = close_active_clients(server, server->loop);
+		if (n > 0) {
+			CSILK_LOG_I("Server: closed %d active client connection(s)", n);
 		}
-		client = client->next;
-	}
-	uv_mutex_unlock(&server->clients_mutex);
-	if (active_client_count > 0) {
-		CSILK_LOG_I("Server: closed %d active client connection(s)", active_client_count);
 	}
 
 	if (!uv_is_closing((uv_handle_t*)&server->sig_handle)) {
@@ -586,27 +602,7 @@ on_worker_stop_async(uv_async_t* handle)
 		uv_close((uv_handle_t*)sd->listen_handle, nullptr);
 	}
 
-	uv_mutex_lock(&server->clients_mutex);
-	csilk_client_t* client = server->active_clients;
-	while (client) {
-		if (client->handle.loop == loop) {
-			if (client->ctx.is_websocket) {
-				csilk_ws_close(&client->ctx, 1001, "Server stopping");
-				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-					uv_close((uv_handle_t*)&client->handle, on_close);
-				}
-			} else if (client->ctx.is_sse) {
-				csilk_sse_send(&client->ctx, "close", "Server stopping");
-				csilk_sse_close(&client->ctx);
-			} else {
-				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-					uv_close((uv_handle_t*)&client->handle, on_close);
-				}
-			}
-		}
-		client = client->next;
-	}
-	uv_mutex_unlock(&server->clients_mutex);
+	close_active_clients(server, loop);
 
 	if (!uv_is_closing((uv_handle_t*)handle)) {
 		uv_close((uv_handle_t*)handle, nullptr);

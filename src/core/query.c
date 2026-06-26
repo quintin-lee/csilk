@@ -17,6 +17,57 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
+/* Forward declaration */
+static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map);
+
+/** @brief Common key-value pair parser for query strings and form bodies.
+ *
+ * Splits the input on '&' and each pair on '=', URL-decodes both key and
+ * value, and stores them in the given hash map.  Operates on arena-allocated
+ * memory (the input is modified in-place).
+ *
+ * @param c           The request context.
+ * @param qs          Arena-allocated, mutable copy of the key-value string.
+ * @param target_map  Pointer to the target hash map (query_params or form_params).
+ */
+static void
+parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
+{
+	char* pos = qs;
+	while (pos && *pos) {
+		char* amp = strchr(pos, '&');
+		if (amp) {
+			*amp = '\0';
+		}
+
+		char* eq = strchr(pos, '=');
+		char* key = pos;
+		char* value = nullptr;
+
+		if (eq) {
+			*eq = '\0';
+			value = eq + 1;
+		} else {
+			value = "";
+		}
+
+		if (*key != '\0') {
+			csilk_url_decode(key);
+			if (value && *value != '\0') {
+				csilk_url_decode(value);
+			}
+			map_add(c, target_map, key, value);
+			CSILK_LOG_T("Context: parsed %s = %s", key, value);
+		}
+
+		if (amp) {
+			pos = amp + 1;
+		} else {
+			pos = nullptr;
+		}
+	}
+}
+
 /** @brief Parse a raw query string into the context's query_params hash map.
  *
  * Splits the query string on '&' and each key-value pair on '=', URL-decodes
@@ -43,39 +94,7 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
 		return;
 	}
 
-	char* pos = qs;
-	while (pos && *pos) {
-		char* amp = strchr(pos, '&');
-		if (amp) {
-			*amp = '\0';
-		}
-
-		char* eq = strchr(pos, '=');
-		char* key = pos;
-		char* value = nullptr;
-
-		if (eq) {
-			*eq = '\0';
-			value = eq + 1;
-		} else {
-			value = "";
-		}
-
-		if (*key != '\0') {
-			csilk_url_decode(key);
-			if (value && *value != '\0') {
-				csilk_url_decode(value);
-			}
-			map_add(c, &c->request.query_params, key, value);
-			CSILK_LOG_T("Context: parsed query parameter: %s = %s", key, value);
-		}
-
-		if (amp) {
-			pos = amp + 1;
-		} else {
-			pos = nullptr;
-		}
-	}
+	parse_key_value_pairs(c, qs, &c->request.query_params);
 }
 
 /** @brief Parse the request body as application/x-www-form-urlencoded.
@@ -132,39 +151,7 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 		return;
 	}
 
-	char* pos = qs;
-	while (pos && *pos) {
-		char* amp = strchr(pos, '&');
-		if (amp) {
-			*amp = '\0';
-		}
-
-		char* eq = strchr(pos, '=');
-		char* key = pos;
-		char* value = nullptr;
-
-		if (eq) {
-			*eq = '\0';
-			value = eq + 1;
-		} else {
-			value = "";
-		}
-
-		if (*key != '\0') {
-			csilk_url_decode(key);
-			if (value && *value != '\0') {
-				csilk_url_decode(value);
-			}
-			map_add(c, &c->request.form_params, key, value);
-			CSILK_LOG_T("Context: parsed form parameter: %s = %s", key, value);
-		}
-
-		if (amp) {
-			pos = amp + 1;
-		} else {
-			pos = nullptr;
-		}
-	}
+	parse_key_value_pairs(c, qs, &c->request.form_params);
 }
 
 /** @brief Get a form urlencoded field value by key.
