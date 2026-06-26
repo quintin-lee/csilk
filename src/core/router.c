@@ -1292,7 +1292,7 @@ match_node(csilk_router_node_t* node,
  * @return Pointer to the handler array if matched, nullptr otherwise.
  * @note No parameter capture is performed since no context is provided. */
 csilk_handler_t*
-csilk_router_match(csilk_router_t* r, const char* method, const char* path)
+csilk_router_match(const csilk_router_t* r, const char* method, const char* path)
 {
 	if (!r || !r->root || !method || !path) {
 		return nullptr;
