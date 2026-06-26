@@ -71,7 +71,7 @@ int csilk_router_add(csilk_router_t* r,
  * @return Pointer to the handler array for the matched route, or nullptr if
  *         no route matches.
  */
-csilk_handler_t* csilk_router_match(csilk_router_t* r, const char* method, const char* path);
+csilk_handler_t* csilk_router_match(const csilk_router_t* r, const char* method, const char* path);
 
 /**
  * @brief Match the current request against the router and update the context.
