@@ -46,7 +46,7 @@ typedef enum {
 
 /** @brief Maximum number of struct types that can be registered in the
  * reflection registry. */
-static constexpr int MAX_REG_STRUCTS = 256;
+enum { MAX_REG_STRUCTS = 256 };
 
 /** @brief Forward declaration for the field descriptor struct. */
 typedef struct csilk_field_desc_s csilk_field_desc_t;

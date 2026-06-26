@@ -30,19 +30,19 @@ extern "C" {
 #endif
 
 /** @brief AES-256 key length in bytes (32 bytes = 256 bits). */
-static constexpr int CSILK_AES256_KEY_SIZE = 32;
+enum { CSILK_AES256_KEY_SIZE = 32 };
 /** @brief GCM initialisation vector (nonce) length in bytes (96 bits). */
-static constexpr int CSILK_GCM_IV_SIZE = 12;
+enum { CSILK_GCM_IV_SIZE = 12 };
 /** @brief GCM authentication tag length in bytes (128 bits). */
-static constexpr int CSILK_GCM_TAG_SIZE = 16;
+enum { CSILK_GCM_TAG_SIZE = 16 };
 /** @brief RSA key size in bits for key generation. */
-static constexpr int CSILK_RSA_KEY_BITS = 2048;
+enum { CSILK_RSA_KEY_BITS = 2048 };
 /** @brief RSA ciphertext output size in bytes (256 bytes for RSA-2048). */
-static constexpr int CSILK_RSA_KEY_SIZE = 256;
+enum { CSILK_RSA_KEY_SIZE = 256 };
 /** @brief RSA signature output size in bytes (256 bytes for RSA-2048). */
-static constexpr int CSILK_RSA_SIGNATURE_SIZE = 256;
+enum { CSILK_RSA_SIGNATURE_SIZE = 256 };
 /** @brief ECDSA P-256 raw signature size in bytes (32+32 bytes r||s). */
-static constexpr int CSILK_ES256_SIGNATURE_SIZE = 64;
+enum { CSILK_ES256_SIGNATURE_SIZE = 64 };
 
 /**
  * @brief Virtual function table implemented by each cipher backend.

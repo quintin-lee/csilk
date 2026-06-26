@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /** @brief AES-256-GCM nonce (IV) size in bytes per NIST SP 800-38D. */
-static constexpr int CSILK_GCM_NONCE_SIZE = 12;
+enum { CSILK_GCM_NONCE_SIZE = 12 };
 
 /**
  * @brief Supported JWT signing algorithms.

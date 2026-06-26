@@ -44,7 +44,7 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  * single request.  Parameters beyond this limit are silently ignored.
  * Tune if your routes contain more than 20 dynamic segments.
  */
-static constexpr int CSILK_MAX_PARAMS = 20;
+enum { CSILK_MAX_PARAMS = 20 };
 
 /**
  * @brief Maximum number of items that can be stored in the context key-value storage.
@@ -52,7 +52,7 @@ static constexpr int CSILK_MAX_PARAMS = 20;
  * This limit prevents uncontrolled memory consumption in the request arena
  * by preventing a single request from setting an excessive number of keys.
  */
-static constexpr int CSILK_MAX_STORAGE = 64;
+enum { CSILK_MAX_STORAGE = 64 };
 
 /**
  * @brief Opaque request context type.

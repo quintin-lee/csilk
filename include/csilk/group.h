@@ -46,8 +46,9 @@ csilk_group_t* csilk_group_group(csilk_group_t* parent, const char* prefix);
  *
  * @param group   The route group.
  * @param handler Middleware function to prepend to all group routes.
+ * @return 0 on success, -1 on failure (e.g., realloc failure).
  */
-void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
+int csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
 
 /**
  * @brief Add a route to the group.
@@ -60,10 +61,10 @@ void csilk_group_use(csilk_group_t* group, csilk_handler_t handler);
  * @param path    Path relative to the group prefix (e.g., "/:id").
  * @param handler The route handler function.
  */
-void csilk_group_add_route(csilk_group_t* group,
-			   const char* method,
-			   const char* path,
-			   csilk_handler_t handler);
+int csilk_group_add_route(csilk_group_t* group,
+			  const char* method,
+			  const char* path,
+			  csilk_handler_t handler);
 
 /**
  * @brief Add a route with OpenAPI/reflection metadata to a group.
@@ -82,25 +83,25 @@ void csilk_group_add_route(csilk_group_t* group,
  * @param summary     Short operation summary for OpenAPI (nullptr to omit).
  * @param description Detailed operation description for OpenAPI (nullptr to omit).
  */
-void csilk_group_add_route_extended(csilk_group_t* group,
-				    const char* method,
-				    const char* path,
-				    csilk_handler_t handler,
-				    const char* input_type,
-				    const char* output_type,
-				    const char* summary,
-				    const char* description);
+int csilk_group_add_route_extended(csilk_group_t* group,
+				   const char* method,
+				   const char* path,
+				   csilk_handler_t handler,
+				   const char* input_type,
+				   const char* output_type,
+				   const char* summary,
+				   const char* description);
 
-void csilk_group_add_route_extended_perm(csilk_group_t* group,
-					 const char* method,
-					 const char* path,
-					 csilk_handler_t handler,
-					 const char* input_type,
-					 const char* output_type,
-					 const char* summary,
-					 const char* description,
-					 const char* perm_required,
-					 const char* perm_resource);
+int csilk_group_add_route_extended_perm(csilk_group_t* group,
+					const char* method,
+					const char* path,
+					csilk_handler_t handler,
+					const char* input_type,
+					const char* output_type,
+					const char* summary,
+					const char* description,
+					const char* perm_required,
+					const char* perm_resource);
 
 /**
  * @brief Add a route with an explicit array of handlers.
@@ -116,11 +117,11 @@ void csilk_group_add_route_extended_perm(csilk_group_t* group,
  *                 the router.
  * @param count    Number of elements in @p handlers.
  */
-void csilk_group_add_handlers(csilk_group_t* group,
-			      const char* method,
-			      const char* path,
-			      csilk_handler_t* handlers,
-			      size_t count);
+int csilk_group_add_handlers(csilk_group_t* group,
+			     const char* method,
+			     const char* path,
+			     csilk_handler_t* handlers,
+			     size_t count);
 
 /**
  * @brief Destroy a route group and release its resources.

@@ -485,7 +485,7 @@ csilk_router_collect_routes(csilk_router_t* r)
  * @note The router does NOT support overriding an existing route — duplicate
  *       method+path registrations are silently dropped.
  * @note The handler array is copied; the caller may free it after this call. */
-static void
+static int
 router_add_full(csilk_router_t* r,
 		const char* method,
 		const char* path,
@@ -500,7 +500,7 @@ router_add_full(csilk_router_t* r,
 		const char* perm_resource)
 {
 	if (!r || !r->root || !method || !path || !handlers) {
-		return;
+		return -1;
 	}
 	csilk_router_node_t* curr = r->root;
 	const char* p = path;
@@ -536,7 +536,7 @@ router_add_full(csilk_router_t* r,
 			CSILK_LOG_E("Router: failed to allocate memory for segment name '%.*s'",
 				    (int)seg_name_len,
 				    seg_name_start);
-			return;
+			return -1;
 		}
 		memcpy(seg_name, seg_name_start, seg_name_len);
 		seg_name[seg_name_len] = '\0';
@@ -597,7 +597,7 @@ router_add_full(csilk_router_t* r,
 		}
 		free(seg_name);
 		if (!found) {
-			return; // Should not happen unless CSILK_MAX_CHILDREN exceeded
+			return -1; // Should not happen unless CSILK_MAX_CHILDREN exceeded
 		}
 		curr = found;
 		// WILDCARD segments are terminal — they consume the remainder of the
@@ -615,7 +615,7 @@ router_add_full(csilk_router_t* r,
 		if (strcmp(mh->method, method) == 0) {
 			CSILK_LOG_W(
 			    "Router: duplicate route registration ignored: %s %s", method, path);
-			return;
+			return 0;
 		}
 		mh = mh->next;
 	}
@@ -628,7 +628,7 @@ router_add_full(csilk_router_t* r,
 				    method,
 				    path);
 			free(mh);
-			return;
+			return -1;
 		}
 		mh->handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
 		if (!mh->handlers) {
@@ -637,7 +637,7 @@ router_add_full(csilk_router_t* r,
 				    path);
 			free(mh->method);
 			free(mh);
-			return;
+			return -1;
 		}
 		memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
 		mh->handlers[handler_count] = nullptr;
@@ -649,7 +649,7 @@ router_add_full(csilk_router_t* r,
 			free(mh->method);
 			free(mh->handlers);
 			free(mh);
-			return;
+			return -1;
 		}
 		mh->input_type = input_type;
 		mh->output_type = output_type;
@@ -660,9 +660,11 @@ router_add_full(csilk_router_t* r,
 		mh->next = curr->handlers;
 		curr->handlers = mh;
 		CSILK_LOG_D("Router: route successfully registered: %s %s", method, path);
+		return 0;
 	} else {
 		CSILK_LOG_E(
 		    "Router: failed to allocate method handler for route: %s %s", method, path);
+		return -1;
 	}
 }
 
@@ -689,7 +691,7 @@ router_add_full(csilk_router_t* r,
  * @param description   Detailed description of the operation (nullptr to omit).
  * @note The handlers array is stored by pointer — the caller must ensure
  *       the function pointers remain valid for the lifetime of the router. */
-void
+int
 csilk_router_add_extended(csilk_router_t* r,
 			  const char* method,
 			  const char* path,
@@ -726,14 +728,14 @@ csilk_router_add_extended(csilk_router_t* r,
  * @param path          URL path pattern.
  * @param handlers      Array of handler functions.
  * @param handler_count Number of handlers. */
-void
+int
 csilk_router_add(csilk_router_t* r,
 		 const char* method,
 		 const char* path,
 		 csilk_handler_t* handlers,
 		 size_t handler_count)
 {
-	csilk_router_add_extended(
+	return csilk_router_add_extended(
 	    r, method, path, handlers, handler_count, path, nullptr, nullptr, nullptr, nullptr);
 }
 
@@ -750,7 +752,7 @@ csilk_router_add(csilk_router_t* r,
  * @param handler_count Number of handlers.
  * @param perm_required Permission identifier (e.g., "read", "write"), or nullptr.
  * @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-void
+int
 csilk_router_add_perm(csilk_router_t* r,
 		      const char* method,
 		      const char* path,
@@ -790,7 +792,7 @@ csilk_router_add_perm(csilk_router_t* r,
  * @param description   OpenAPI operation description, or nullptr.
  * @param perm_required Permission identifier (e.g., "read"), or nullptr.
  * @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-void
+int
 csilk_router_add_extended_perm(csilk_router_t* r,
 			       const char* method,
 			       const char* path,
