@@ -668,7 +668,139 @@ _csilk_dispatch_request(csilk_ctx_t* c)
  *   - For close: initiate uv_close.
  *   - Fire CSILK_HOOK_REQUEST_END, clean up context.
  *
- * @param c Request context (must have _internal_client set). */
+ * @param c Request context (must have _internal_client set).
+/**
+ * @brief Serialize the HTTP/1.1 status line and headers into a buffer.
+ *
+ * Handles three modes: 101 Switching Protocols (minimal headers), chunked
+ * transfer encoding, and normal Content-Length mode.  Call with NULL/0 for
+ * @p buf/@p buf_size to compute the required length without writing.
+ *
+ * @param buf         Output buffer (NULL to compute length only).
+ * @param buf_size    Size of output buffer (ignored when buf is NULL).
+ * @param status      HTTP status code.
+ * @param status_text Corresponding reason phrase (e.g. "OK").
+ * @param use_chunked Non-zero to emit Transfer-Encoding: chunked.
+ * @param transfer_encoding "Transfer-Encoding: chunked\r\n" or "".
+ * @param body_len    Response body length (for Content-Length header).
+ * @param connection_val "keep-alive" or "close".
+ * @return Number of bytes that would be written (excluding NUL), or -1 on error.
+ */
+static int
+serialize_status_line(char* buf,
+		      size_t buf_size,
+		      int status,
+		      const char* status_text,
+		      int use_chunked,
+		      const char* transfer_encoding,
+		      size_t body_len,
+		      const char* connection_val)
+{
+	if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
+		return snprintf(buf, buf_size, "HTTP/1.1 101 Switching Protocols\r\n");
+	} else if (use_chunked) {
+		return snprintf(buf,
+				buf_size,
+				"HTTP/1.1 %d %s\r\n"
+				"%s"
+				"Connection: %s\r\n",
+				status,
+				status_text,
+				transfer_encoding,
+				connection_val);
+	} else {
+		return snprintf(buf,
+				buf_size,
+				"HTTP/1.1 %d %s\r\n"
+				"Content-Length: %zu\r\n"
+				"Connection: %s\r\n",
+				status,
+				status_text,
+				body_len,
+				connection_val);
+	}
+}
+
+/**
+ * @brief Append all custom response headers to a buffer.
+ *
+ * Iterates the header hash map and writes each key-value pair in
+ * "Key: Value\r\n" format starting at @p pos in @p buf.
+ *
+ * @param headers The response header map.
+ * @param buf     Output buffer.
+ * @param pos     Starting position within @p buf.
+ * @return New position after all headers have been written.
+ */
+static size_t
+append_custom_headers(csilk_header_map_t* headers, char* buf, size_t pos)
+{
+	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+		for (csilk_header_t* h = headers->buckets[i]; h; h = h->next) {
+			memcpy(buf + pos, h->key, h->key_len);
+			pos += h->key_len;
+			buf[pos++] = ':';
+			buf[pos++] = ' ';
+			memcpy(buf + pos, h->value, h->value_len);
+			pos += h->value_len;
+			buf[pos++] = '\r';
+			buf[pos++] = '\n';
+		}
+	}
+	return pos;
+}
+
+/**
+ * @brief Post-response cleanup: timers, keep-alive, and WebSocket state.
+ *
+ * Stops the read timer, starts the write-timeout guard and either the
+ * idle timer (keep-alive) or closes the connection.  Preserves WebSocket
+ * callback state across csilk_ctx_cleanup().
+ *
+ * @param client     The client connection.
+ * @param keep_alive Non-zero to keep the connection alive.
+ */
+static void
+handle_post_response(csilk_client_t* client, int keep_alive)
+{
+	uv_timer_stop(&client->read_timer);
+
+	if (client->server->config.write_timeout_ms > 0) {
+		uv_timer_start(&client->write_timer,
+			       on_write_timeout,
+			       client->server->config.write_timeout_ms,
+			       0);
+	}
+
+	int is_ws = client->ctx.is_websocket;
+	void* ws_msg_cb = client->ctx.on_ws_message;
+	void* ws_send_cb = client->ctx.on_ws_send;
+
+	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
+
+	csilk_ctx_cleanup(&client->ctx);
+
+	if (is_ws) {
+		client->ctx.is_websocket = is_ws;
+		client->ctx.on_ws_message = ws_msg_cb;
+		client->ctx.on_ws_send = ws_send_cb;
+	}
+
+	if (client->ctx.is_websocket) {
+		return;
+	}
+
+	if (keep_alive) {
+		uv_timer_start(
+		    &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
+		uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+	} else {
+		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+			uv_close((uv_handle_t*)&client->handle, on_close);
+		}
+	}
+}
+
 CSILK_INTERNAL void
 _csilk_send_response(csilk_ctx_t* c)
 {
@@ -704,31 +836,9 @@ _csilk_send_response(csilk_ctx_t* c)
 	int keep_alive = llhttp_should_keep_alive(&client->parser);
 	const char* connection_val = keep_alive ? "keep-alive" : "close";
 
-	int header_len;
-	if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-		header_len = snprintf(nullptr, 0, "HTTP/1.1 101 Switching Protocols\r\n");
-	} else if (use_chunked) {
-		header_len = snprintf(nullptr,
-				      0,
-				      "HTTP/1.1 %d %s\r\n"
-				      "%s"
-				      "Connection: %s\r\n",
-				      status,
-				      status_text,
-				      transfer_encoding,
-				      connection_val);
-	} else {
-		header_len = snprintf(nullptr,
-				      0,
-				      "HTTP/1.1 %d %s\r\n"
-				      "Content-Length: %zu\r\n"
-				      "Connection: %s\r\n",
-				      status,
-				      status_text,
-				      body_len,
-				      connection_val);
-	}
-
+	/* Serialise status line (NULL/0 computes required length) */
+	int header_len = serialize_status_line(
+	    NULL, 0, status, status_text, use_chunked, transfer_encoding, body_len, connection_val);
 	if (header_len < 0) {
 		return;
 	}
@@ -738,56 +848,28 @@ _csilk_send_response(csilk_ctx_t* c)
 
 	char* write_base = malloc(response_len + 1);
 	if (write_base) {
-		int snp;
-		size_t pos;
-		if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-			snp = snprintf(
-			    write_base, response_len + 1, "HTTP/1.1 101 Switching Protocols\r\n");
-		} else if (use_chunked) {
-			snp = snprintf(write_base,
-				       response_len + 1,
-				       "HTTP/1.1 %d %s\r\n"
-				       "%s"
-				       "Connection: %s\r\n",
-				       status,
-				       status_text,
-				       transfer_encoding,
-				       connection_val);
-		} else {
-			snp = snprintf(write_base,
-				       response_len + 1,
-				       "HTTP/1.1 %d %s\r\n"
-				       "Content-Length: %zu\r\n"
-				       "Connection: %s\r\n",
-				       status,
-				       status_text,
-				       body_len,
-				       connection_val);
-		}
+		int snp = serialize_status_line(write_base,
+						response_len + 1,
+						status,
+						status_text,
+						use_chunked,
+						transfer_encoding,
+						body_len,
+						connection_val);
 		if (snp < 0) {
 			free(write_base);
 			return;
 		}
-		pos = (size_t)snp;
+		size_t pos = (size_t)snp;
 
-		for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-			for (csilk_header_t* h = client->ctx.response.headers.buckets[i]; h;
-			     h = h->next) {
-				memcpy(write_base + pos, h->key, h->key_len);
-				pos += h->key_len;
-				write_base[pos++] = ':';
-				write_base[pos++] = ' ';
-				memcpy(write_base + pos, h->value, h->value_len);
-				pos += h->value_len;
-				write_base[pos++] = '\r';
-				write_base[pos++] = '\n';
-			}
-		}
+		pos = append_custom_headers(&client->ctx.response.headers, write_base, pos);
 
 		if (!use_chunked && !is_file) {
-			snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n%s", body);
+			size_t remain = response_len + 1 - pos;
+			snprintf(write_base + pos, remain, "\r\n%s", body);
 		} else {
-			snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+			size_t remain = response_len + 1 - pos;
+			snprintf(write_base + pos, remain, "\r\n");
 		}
 
 		_csilk_send_data(c,
@@ -800,43 +882,7 @@ _csilk_send_response(csilk_ctx_t* c)
 		return;
 	}
 
-	uv_timer_stop(&client->read_timer);
-
-	if (client->server->config.write_timeout_ms > 0) {
-		uv_timer_start(&client->write_timer,
-			       on_write_timeout,
-			       client->server->config.write_timeout_ms,
-			       0);
-	}
-
-	if (client->ctx.is_websocket) {
-	} else {
-		if (keep_alive) {
-			uv_timer_start(&client->timer,
-				       on_idle_timeout,
-				       client->server->config.idle_timeout_ms,
-				       0);
-			uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
-		} else {
-			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
-			}
-		}
-	}
-
-	int is_ws = client->ctx.is_websocket;
-	void* ws_msg_cb = client->ctx.on_ws_message;
-	void* ws_send_cb = client->ctx.on_ws_send;
-
-	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
-
-	csilk_ctx_cleanup(&client->ctx);
-
-	if (is_ws) {
-		client->ctx.is_websocket = is_ws;
-		client->ctx.on_ws_message = ws_msg_cb;
-		client->ctx.on_ws_send = ws_send_cb;
-	}
+	handle_post_response(client, keep_alive);
 }
 
 /* --- Request finalization --- */
