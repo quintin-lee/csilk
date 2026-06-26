@@ -266,7 +266,9 @@ static_work_cb(uv_work_t* req)
 
 	/* Path traversal protection: realpath() resolves all symlinks and ".."
      segments. If the resolved file path does not start with the resolved
-     root directory prefix, the request is outside the allowed tree. */
+     root directory prefix, or starts with a different directory that happens
+     to share the same prefix (e.g., root="/var/www/uploads" and
+     file="/var/www/uploads-extra/"), the request is outside the allowed tree. */
 	if (realpath(full_path, resolved_file) == nullptr) {
 		CSILK_LOG_D("Static: Requested file not found: resolved path '%s' is invalid",
 			    full_path);
@@ -274,12 +276,16 @@ static_work_cb(uv_work_t* req)
 		return;
 	}
 
-	if (strncmp(resolved_root, resolved_file, strlen(resolved_root)) != 0) {
-		CSILK_LOG_W("Static: Traversal attack blocked! Path '%s' is outside root '%s'",
-			    resolved_file,
-			    resolved_root);
-		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
-		return;
+	{
+		size_t root_len = strlen(resolved_root);
+		if (strncmp(resolved_root, resolved_file, root_len) != 0 ||
+		    (resolved_file[root_len] != '/' && resolved_file[root_len] != '\0')) {
+			CSILK_LOG_W("Static: Traversal attack blocked! Path '%s' is outside root '%s'",
+				    resolved_file,
+				    resolved_root);
+			csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
+			return;
+		}
 	}
 
 	uv_fs_t open_req;
