@@ -24,7 +24,9 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#ifdef TEST_OOM
 #include "csilk/test/test.h"
+#endif
 
 /* ================================================================
  * Sub-module headers

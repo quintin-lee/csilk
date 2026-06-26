@@ -12,7 +12,12 @@
 #ifndef CSILK_SERVER_INTERNAL_H
 #define CSILK_SERVER_INTERNAL_H
 
-#include <openssl/ssl.h>
+/* Forward declarations for OpenSSL types — full definition from <openssl/ssl.h>
+ * is only needed in tls.c, connection.c, and http1.c. */
+typedef struct ssl_st SSL;
+typedef struct ssl_ctx_st SSL_CTX;
+typedef struct bio_st BIO;
+
 #include <stdatomic.h>
 #include <uv.h>
 #include <llhttp.h>
