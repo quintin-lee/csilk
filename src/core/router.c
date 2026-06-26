@@ -642,6 +642,15 @@ router_add_full(csilk_router_t* r,
 		memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
 		mh->handlers[handler_count] = nullptr;
 		mh->path = path_pattern ? strdup(path_pattern) : nullptr;
+		if (path_pattern && !mh->path) {
+			CSILK_LOG_E("Router: failed to duplicate path pattern for route: %s %s",
+				    method,
+				    path);
+			free(mh->method);
+			free(mh->handlers);
+			free(mh);
+			return;
+		}
 		mh->input_type = input_type;
 		mh->output_type = output_type;
 		mh->summary = summary;

@@ -280,9 +280,10 @@ static_work_cb(uv_work_t* req)
 		size_t root_len = strlen(resolved_root);
 		if (strncmp(resolved_root, resolved_file, root_len) != 0 ||
 		    (resolved_file[root_len] != '/' && resolved_file[root_len] != '\0')) {
-			CSILK_LOG_W("Static: Traversal attack blocked! Path '%s' is outside root '%s'",
-				    resolved_file,
-				    resolved_root);
+			CSILK_LOG_W(
+			    "Static: Traversal attack blocked! Path '%s' is outside root '%s'",
+			    resolved_file,
+			    resolved_root);
 			csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
 			return;
 		}

@@ -169,7 +169,7 @@ csilk_set_cookie(csilk_ctx_t* c,
 		 int secure,
 		 int http_only)
 {
-	if (!c->arena) {
+	if (!c || !c->arena) {
 		return;
 	}
 	size_t buf_size = strlen(name) + strlen(value) + 256;

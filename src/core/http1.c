@@ -8,6 +8,8 @@
  * @copyright MIT License
  */
 
+#include <assert.h>
+#include <limits.h>
 #include <llhttp.h>
 #include <openssl/ssl.h>
 #include <stdio.h>
@@ -468,6 +470,9 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 		return;
 	}
 
+	/* Guard against size_t-to-int truncation for SSL_write and uv_buf_init. */
+	assert(len <= INT_MAX);
+
 	if (client->ssl) {
 		SSL_write(client->ssl, data, (int)len);
 		flush_tls_write(client);
@@ -532,6 +537,7 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 
 	if (client->ssl) {
+		assert(len <= INT_MAX);
 		SSL_write(client->ssl, (const uint8_t*)data, (int)len);
 		flush_tls_write(client);
 		free(data);
