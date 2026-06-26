@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 /** @brief Maximum number of AI driver backends that can be registered. */
-static constexpr int MAX_DRIVERS = 8;
+enum { MAX_DRIVERS = 8 };
 
 /**
  * @brief AI Engine statistics.

@@ -23,7 +23,7 @@
 #include "csilk/app/workflow.h"
 
 /** @brief Magic number identifying a WAL file ("WFAL" in ASCII). */
-static constexpr uint32_t CSILK_WF_MAGIC = 0x5746414C; /* "WFAL" */
+enum { CSILK_WF_MAGIC = 0x5746414C }; /* "WFAL" */
 
 /**
  * @brief Event types recorded in the workflow WAL.

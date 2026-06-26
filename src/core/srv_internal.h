@@ -22,23 +22,23 @@
 #include "core/ctx_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
-static constexpr int CSILK_DEFAULT_IDLE_TIMEOUT = 5000;
+enum { CSILK_DEFAULT_IDLE_TIMEOUT = 5000 };
 /** @brief Default maximum request body size in bytes. */
-static constexpr size_t CSILK_DEFAULT_MAX_BODY_SIZE = 1024UL * 1024UL;
+enum { CSILK_DEFAULT_MAX_BODY_SIZE = 1024UL * 1024UL };
 /** @brief Default maximum request header size in bytes. */
-static constexpr size_t CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL;
+enum { CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL };
 /** @brief Default maximum URL length in bytes. */
-static constexpr size_t CSILK_DEFAULT_MAX_URL_SIZE = 8192;
+enum { CSILK_DEFAULT_MAX_URL_SIZE = 8192 };
 /** @brief Default TCP listen backlog. */
-static constexpr int CSILK_DEFAULT_LISTEN_BACKLOG = 128;
+enum { CSILK_DEFAULT_LISTEN_BACKLOG = 128 };
 /** @brief Default request arena chunk size. */
-static constexpr size_t CSILK_DEFAULT_ARENA_SIZE = 4096;
+enum { CSILK_DEFAULT_ARENA_SIZE = 4096 };
 /** @brief Client connection object pool capacity.
  *
  * Controls the maximum number of idle client objects cached for reuse.
  * When pool is exhausted, new clients are allocated from heap and returned
  * to pool on connection close. Increase for high-concurrency scenarios. */
-static constexpr int CSILK_CLIENT_POOL_SIZE = 32;
+enum { CSILK_CLIENT_POOL_SIZE = 32 };
 
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {

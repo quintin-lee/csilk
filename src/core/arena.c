@@ -39,14 +39,14 @@
 
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */
-static constexpr int MAX_TLS_ARENA_CHUNKS = 16;
+enum { MAX_TLS_ARENA_CHUNKS = 16 };
 
 #ifdef DEBUG_ARENA
 /** @brief Redzone guard size for buffer overflow detection.
  * When DEBUG_ARENA is enabled, each allocation is padded with this many
  * bytes after the user data. The arena_free function checks that the redzone
  * bytes are unchanged (all 0xBE) to detect out-of-bounds writes. */
-static constexpr size_t ARENA_REDZONE_SIZE = 16;
+enum { ARENA_REDZONE_SIZE = 16 };
 #endif
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).

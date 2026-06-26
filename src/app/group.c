@@ -193,11 +193,11 @@ csilk_group_group(csilk_group_t* parent, const char* prefix)
  *                and should call csilk_next() to pass control forward.
  * @note Middleware from parent groups is automatically inherited by child
  *       groups and prepended before child middleware. */
-void
+int
 csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 {
 	if (!group) {
-		return;
+		return -1;
 	}
 	if (group->middleware_count >= group->middleware_capacity) {
 		size_t new_cap = group->middleware_capacity ? group->middleware_capacity * 2
@@ -207,7 +207,7 @@ csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 		if (!new_mw) {
 			CSILK_LOG_E("Group: realloc failed for middleware array on group '%s'",
 				    group->prefix);
-			return;
+			return -1;
 		}
 		group->middlewares = new_mw;
 		group->middleware_capacity = new_cap;
@@ -215,6 +215,7 @@ csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 	group->middlewares[group->middleware_count++] = handler;
 	CSILK_LOG_I(
 	    "Group: registered group middleware %p on prefix '%s'", (void*)handler, group->prefix);
+	return 0;
 }
 
 /** @brief Internal: recursively collect all middleware handlers from a group
@@ -280,14 +281,14 @@ gather_handlers(csilk_group_t* group, csilk_handler_t** handlers, size_t* count)
  * @param method  HTTP method (e.g., "GET", "POST").
  * @param path    Path relative to the group prefix (e.g., "/users").
  * @param handler The route handler function. */
-void
+int
 csilk_group_add_route(csilk_group_t* group,
 		      const char* method,
 		      const char* path,
 		      csilk_handler_t handler)
 {
 	csilk_handler_t handlers[] = {handler};
-	csilk_group_add_handlers(group, method, path, handlers, 1);
+	return csilk_group_add_handlers(group, method, path, handlers, 1);
 }
 
 /** @brief Register a route with OpenAPI metadata (input/output types, summary,
@@ -307,7 +308,7 @@ csilk_group_add_route(csilk_group_t* group,
  *                    or nullptr.
  * @param summary     Short description for OpenAPI operation summary.
  * @param description Detailed description for OpenAPI operation. */
-void
+int
 csilk_group_add_route_extended(csilk_group_t* group,
 			       const char* method,
 			       const char* path,
@@ -318,12 +319,12 @@ csilk_group_add_route_extended(csilk_group_t* group,
 			       const char* description)
 {
 	if (!group || !method || !path || !handler) {
-		return;
+		return -1;
 	}
 
 	char* full_path = join_path(group->prefix, path);
 	if (!full_path) {
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* combined_handlers = nullptr;
@@ -336,7 +337,7 @@ csilk_group_add_route_extended(csilk_group_t* group,
 			    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* new_handlers =
@@ -348,27 +349,28 @@ csilk_group_add_route_extended(csilk_group_t* group,
 		    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 	combined_handlers = new_handlers;
 	combined_handlers[combined_count] = handler;
 	combined_count++;
 
-	csilk_router_add_extended(group->router,
-				  method,
-				  full_path,
-				  combined_handlers,
-				  combined_count,
-				  full_path,
-				  input_type,
-				  output_type,
-				  summary,
-				  description);
+	int rc = csilk_router_add_extended(group->router,
+					   method,
+					   full_path,
+					   combined_handlers,
+					   combined_count,
+					   full_path,
+					   input_type,
+					   output_type,
+					   summary,
+					   description);
 
 	CSILK_LOG_I("Group: registered extended route %s %s", method, full_path);
 
 	free(full_path);
 	free(combined_handlers);
+	return rc;
 }
 
 /** @copydoc csilk_group_add_route_extended
@@ -377,7 +379,7 @@ csilk_group_add_route_extended(csilk_group_t* group,
  *
  *  Permission metadata is forwarded to the router which stores it alongside
  *  the route for authorization middleware to inspect at request time. */
-void
+int
 csilk_group_add_route_extended_perm(csilk_group_t* group,
 				    const char* method,
 				    const char* path,
@@ -390,12 +392,12 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
 				    const char* perm_resource)
 {
 	if (!group || !method || !path || !handler) {
-		return;
+		return -1;
 	}
 
 	char* full_path = join_path(group->prefix, path);
 	if (!full_path) {
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* combined_handlers = nullptr;
@@ -408,7 +410,7 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
 			    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* new_handlers =
@@ -420,7 +422,7 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
 			    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 	combined_handlers = new_handlers;
 	combined_handlers[combined_count] = handler;
@@ -469,7 +471,7 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
  * @param count    Number of handlers in the array.
  * @note The handlers array is combined with group middleware — group
  *       middleware always runs first, followed by the provided handlers. */
-void
+int
 csilk_group_add_handlers(csilk_group_t* group,
 			 const char* method,
 			 const char* path,
@@ -477,25 +479,25 @@ csilk_group_add_handlers(csilk_group_t* group,
 			 size_t count)
 {
 	if (!group || !handlers || count == 0) {
-		return;
+		return -1;
 	}
 
 	char* full_path = join_path(group->prefix, path);
 	if (!full_path) {
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* combined_handlers = nullptr;
 	size_t combined_count = 0;
 
 	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
-		CSILK_LOG_E(
-		    "Group: failed to prepare handler chain for route %s %s - gather failed",
-		    method,
-		    path);
+		CSILK_LOG_E("Group: failed to prepare handler chain for route %s %s - "
+			    "gather failed",
+			    method,
+			    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 
 	csilk_handler_t* new_handlers =
@@ -506,19 +508,21 @@ csilk_group_add_handlers(csilk_group_t* group,
 			    path);
 		free(full_path);
 		free(combined_handlers);
-		return;
+		return -1;
 	}
 	combined_handlers = new_handlers;
 	memcpy(combined_handlers + combined_count, handlers, count * sizeof(csilk_handler_t));
 	combined_count += count;
 
-	csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
+	int rc =
+	    csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
 
 	CSILK_LOG_I(
 	    "Group: registered route with %zu handlers: %s %s", combined_count, method, full_path);
 
 	free(full_path);
 	free(combined_handlers);
+	return rc;
 }
 
 /** @brief Free all resources associated with a route group.

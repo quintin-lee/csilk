@@ -53,11 +53,11 @@ csilk_router_t* csilk_router_new(void);
  * @param handlers      Array of handler function pointers.
  * @param handler_count Number of elements in @p handlers.
  */
-void csilk_router_add(csilk_router_t* r,
-		      const char* method,
-		      const char* path,
-		      csilk_handler_t* handlers,
-		      size_t handler_count);
+int csilk_router_add(csilk_router_t* r,
+		     const char* method,
+		     const char* path,
+		     csilk_handler_t* handlers,
+		     size_t handler_count);
 
 /**
  * @brief Match a raw method+path to handlers (standalone, no context).
@@ -147,16 +147,16 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router,
  * @param summary       Short summary of the operation (nullptr to omit from spec).
  * @param description   Detailed description of the operation (nullptr to omit).
  */
-void csilk_router_add_extended(csilk_router_t* r,
-			       const char* method,
-			       const char* path,
-			       csilk_handler_t* handlers,
-			       size_t handler_count,
-			       const char* path_pattern,
-			       const char* input_type,
-			       const char* output_type,
-			       const char* summary,
-			       const char* description);
+int csilk_router_add_extended(csilk_router_t* r,
+			      const char* method,
+			      const char* path,
+			      csilk_handler_t* handlers,
+			      size_t handler_count,
+			      const char* path_pattern,
+			      const char* input_type,
+			      const char* output_type,
+			      const char* summary,
+			      const char* description);
 
 /** @brief Register a route with permission metadata.
  *  @param r             Router instance.
@@ -166,13 +166,13 @@ void csilk_router_add_extended(csilk_router_t* r,
  *  @param handler_count Number of handlers.
  *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-void csilk_router_add_perm(csilk_router_t* r,
-			   const char* method,
-			   const char* path,
-			   csilk_handler_t* handlers,
-			   size_t handler_count,
-			   const char* perm_required,
-			   const char* perm_resource);
+int csilk_router_add_perm(csilk_router_t* r,
+			  const char* method,
+			  const char* path,
+			  csilk_handler_t* handlers,
+			  size_t handler_count,
+			  const char* perm_required,
+			  const char* perm_resource);
 
 /** @brief Register a route with full metadata including permissions.
  *  @param r             Router instance.
@@ -187,18 +187,18 @@ void csilk_router_add_perm(csilk_router_t* r,
  *  @param description   Detailed description (nullptr to omit).
  *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-void csilk_router_add_extended_perm(csilk_router_t* r,
-				    const char* method,
-				    const char* path,
-				    csilk_handler_t* handlers,
-				    size_t handler_count,
-				    const char* path_pattern,
-				    const char* input_type,
-				    const char* output_type,
-				    const char* summary,
-				    const char* description,
-				    const char* perm_required,
-				    const char* perm_resource);
+int csilk_router_add_extended_perm(csilk_router_t* r,
+				   const char* method,
+				   const char* path,
+				   csilk_handler_t* handlers,
+				   size_t handler_count,
+				   const char* path_pattern,
+				   const char* input_type,
+				   const char* output_type,
+				   const char* summary,
+				   const char* description,
+				   const char* perm_required,
+				   const char* perm_resource);
 
 /**
  * @brief Metadata for a route used to generate OpenAPI documentation.

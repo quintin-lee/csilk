@@ -32,20 +32,20 @@
 #include "csilk/csilk.h"
 
 /* Maximum call stack depth to capture */
-static constexpr int FG_MAX_DEPTH = 64;
+enum { FG_MAX_DEPTH = 64 };
 /* Default sampling duration in seconds */
-static constexpr int FG_DEFAULT_DURATION = 5;
+enum { FG_DEFAULT_DURATION = 5 };
 /* Sampling interval in microseconds (10ms = 100 samples/sec) */
-static constexpr int FG_SAMPLE_INTERVAL_US = 10000;
+enum { FG_SAMPLE_INTERVAL_US = 10000 };
 /* Maximum number of unique stacks to track in the hash map */
-static constexpr int FG_MAX_STACKS = 4096;
+enum { FG_MAX_STACKS = 4096 };
 /* Maximum function name length */
-static constexpr int FG_MAX_NAME = 256;
+enum { FG_MAX_NAME = 256 };
 /* Flame graph SVG dimensions */
-static constexpr int FG_FRAME_HEIGHT = 20;
-static constexpr int FG_TITLE_HEIGHT = 24;
-static constexpr int FG_FONT_SIZE = 12;
-static constexpr double FG_MIN_WIDTH = 0.5;
+enum { FG_FRAME_HEIGHT = 20 };
+enum { FG_TITLE_HEIGHT = 24 };
+enum { FG_FONT_SIZE = 12 };
+static const double FG_MIN_WIDTH = 0.5;
 
 typedef struct {
 	char stack[FG_MAX_DEPTH][FG_MAX_NAME]; /**< Function names from bottom to top. */
