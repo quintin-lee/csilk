@@ -1007,6 +1007,208 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
  * @return Pointer to the nullptr-terminated handler array, or nullptr if no match.
  * @note Parameter and wildcard values are strdup'd and must be freed by the
  *       caller (or during csilk_ctx_cleanup()). */
+
+static csilk_handler_t* match_node(csilk_router_node_t* node,
+				   const char* method,
+				   const char* path,
+				   csilk_ctx_t* ctx,
+				   csilk_method_handler_t** out_mh);
+
+/**
+ * @brief Try to match the current segment against a STATIC child node.
+ * ...
+ */
+
+/**
+ * @brief Try to match the current segment against a STATIC child node.
+ *
+ * Compares the segment exactly (with optional SIMD acceleration).  On success,
+ * recurses into the child node.  Returns the matched handler array or nullptr.
+ */
+static csilk_handler_t*
+try_match_static(csilk_router_node_t* child,
+		 const char* method,
+		 const char* seg,
+		 size_t len,
+		 const char* p,
+		 csilk_ctx_t* ctx,
+		 csilk_method_handler_t** out_mh,
+		 int use_simd)
+{
+	/* Fast-path: check length and first character before full comparison */
+	if (child->segment_len == len && child->segment[0] == seg[0]) {
+		int match = 0;
+		if (use_simd) {
+			match = csilk_memcmp_fast(child->segment, seg, len);
+		} else {
+			match = (strncmp(child->segment, seg, len) == 0);
+		}
+
+		if (match) {
+			CSILK_LOG_T("Router: STATIC child '%s' matches segment '%.*s', recursing",
+				    child->segment,
+				    (int)len,
+				    seg);
+			csilk_handler_t* r = match_node(child, method, p, ctx, out_mh);
+			if (r) {
+				return r;
+			}
+			CSILK_LOG_T("Router: backtrack - match failed deeper for STATIC child '%s'",
+				    child->segment);
+		}
+	}
+	return nullptr;
+}
+
+/**
+ * @brief Try to match the current segment against a PARAM child node.
+ *
+ * Always matches any segment value.  Captures the segment value as a named
+ * parameter on the context.  On backtrack (deeper match failure), rolls back
+ * the parameter capture.  Returns the matched handler array or nullptr.
+ */
+static csilk_handler_t*
+try_match_param(csilk_router_node_t* child,
+		const char* method,
+		const char* seg,
+		size_t len,
+		const char* p,
+		csilk_ctx_t* ctx,
+		csilk_method_handler_t** out_mh)
+{
+	/* PARAM node: always matches the current segment regardless of its value.
+	   Capture the segment into ctx->params using the child's segment name
+	   (without ':' prefix) as the key. */
+	int param_added = 0;
+	if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
+		if (ctx->arena) {
+			ctx->params[ctx->params_count].key =
+			    csilk_arena_strdup(ctx->arena, child->segment);
+			ctx->params[ctx->params_count].value =
+			    csilk_arena_strndup(ctx->arena, seg, len);
+		} else {
+			ctx->params[ctx->params_count].key = strdup(child->segment);
+			ctx->params[ctx->params_count].value = malloc(len + 1);
+			if (ctx->params[ctx->params_count].value) {
+				memcpy(ctx->params[ctx->params_count].value, seg, len);
+				ctx->params[ctx->params_count].value[len] = '\0';
+			}
+		}
+
+		if (ctx->params[ctx->params_count].key && ctx->params[ctx->params_count].value) {
+			ctx->params_count++;
+			param_added = 1;
+			CSILK_LOG_T("Router: PARAM child '%s' matched segment "
+				    "'%.*s', captured parameter",
+				    child->segment,
+				    (int)len,
+				    seg);
+		} else {
+			if (!ctx->arena) {
+				free(ctx->params[ctx->params_count].key);
+				free(ctx->params[ctx->params_count].value);
+			}
+			CSILK_LOG_E("Router: failed to allocate path parameter "
+				    "memory for key '%s'",
+				    child->segment);
+		}
+	} else if (ctx) {
+		CSILK_LOG_E("Router: path parameter limit (%d) exceeded while "
+			    "parsing key '%s'",
+			    CSILK_MAX_PARAMS,
+			    child->segment);
+	}
+
+	/* Recurse deeper with the remaining path */
+	csilk_handler_t* r = match_node(child, method, p, ctx, out_mh);
+
+	/* Backtracking rollback */
+	if (!r && param_added) {
+		CSILK_LOG_T("Router: backtrack - match failed deeper for PARAM "
+			    "child '%s', rolling back parameter",
+			    child->segment);
+		ctx->params_count--;
+		if (!ctx->arena) {
+			free(ctx->params[ctx->params_count].key);
+			free(ctx->params[ctx->params_count].value);
+		}
+	}
+	return r;
+}
+
+/**
+ * @brief Try to match the remaining path against a WILDCARD child node.
+ *
+ * Captures the entire remainder of the URL path (with leading '/' stripped)
+ * as a single parameter value, then searches the wildcard node's method
+ * handlers.  WILDCARD nodes are terminal — no deeper recursion occurs.
+ * Returns the matched handler array or nullptr.
+ */
+static csilk_handler_t*
+try_match_wildcard(csilk_router_node_t* child,
+		   const char* method,
+		   const char* path,
+		   csilk_ctx_t* ctx,
+		   csilk_method_handler_t** out_mh)
+{
+	/* WILDCARD node: matches the entire remainder of the URL path */
+	CSILK_LOG_T(
+	    "Router: WILDCARD child '%s' matches remaining path '%s'", child->segment, path);
+	if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
+		const char* val_start = path;
+		while (*val_start == '/') {
+			val_start++;
+		}
+
+		if (ctx->arena) {
+			ctx->params[ctx->params_count].key =
+			    csilk_arena_strdup(ctx->arena, child->segment);
+			ctx->params[ctx->params_count].value =
+			    csilk_arena_strdup(ctx->arena, val_start);
+		} else {
+			ctx->params[ctx->params_count].key = strdup(child->segment);
+			ctx->params[ctx->params_count].value = strdup(val_start);
+		}
+
+		if (ctx->params[ctx->params_count].key && ctx->params[ctx->params_count].value) {
+			ctx->params_count++;
+			CSILK_LOG_T("Router: captured wildcard parameter '%s' = '%s'",
+				    child->segment,
+				    val_start);
+		} else {
+			if (!ctx->arena) {
+				free(ctx->params[ctx->params_count].key);
+				free(ctx->params[ctx->params_count].value);
+			}
+			CSILK_LOG_E("Router: failed to allocate wildcard path parameter "
+				    "memory for key '%s'",
+				    child->segment);
+		}
+	} else if (ctx) {
+		CSILK_LOG_E("Router: path parameter limit (%d) exceeded while parsing "
+			    "wildcard key '%s'",
+			    CSILK_MAX_PARAMS,
+			    child->segment);
+	}
+
+	/* Directly check the wildcard node's handlers */
+	csilk_method_handler_t* mh = child->handlers;
+	while (mh) {
+		if (strcmp(mh->method, method) == 0) {
+			if (out_mh) {
+				*out_mh = mh;
+			}
+			CSILK_LOG_T("Router: matched handler for method '%s' at "
+				    "wildcard node '%s'",
+				    method,
+				    child->segment);
+			return mh->handlers;
+		}
+		mh = mh->next;
+	}
+	return nullptr;
+}
+
 static csilk_handler_t*
 match_node(csilk_router_node_t* node,
 	   const char* method,
@@ -1061,155 +1263,12 @@ match_node(csilk_router_node_t* node,
 	for (int i = 0; i < node->children_count; i++) {
 		csilk_router_node_t* child = node->children[i];
 		if (child->type == CSILK_NODE_STATIC) {
-			// Fast-path: check length and first character before full comparison
-			if (child->segment_len == len && child->segment[0] == seg[0]) {
-				int match = 0;
-				if (use_simd) {
-					match = csilk_memcmp_fast(child->segment, seg, len);
-				} else {
-					match = (strncmp(child->segment, seg, len) == 0);
-				}
-
-				if (match) {
-					CSILK_LOG_T("Router: STATIC child '%s' matches segment "
-						    "'%.*s', recursing",
-						    child->segment,
-						    (int)len,
-						    seg);
-					result = match_node(child, method, p, ctx, out_mh);
-					if (result) {
-						break;
-					}
-					CSILK_LOG_T("Router: backtrack - match failed deeper for "
-						    "STATIC child '%s'",
-						    child->segment);
-				}
-			}
+			result =
+			    try_match_static(child, method, seg, len, p, ctx, out_mh, use_simd);
 		} else if (child->type == CSILK_NODE_PARAM) {
-			// PARAM node: always matches the current segment regardless of
-			// its value. Capture the segment into ctx->params using the
-			// child's segment name (without ':' prefix) as the key.
-			int param_added = 0;
-			if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-				// Use arena for parameter strings if available (much faster
-				// than strdup)
-				if (ctx->arena) {
-					ctx->params[ctx->params_count].key =
-					    csilk_arena_strdup(ctx->arena, child->segment);
-					ctx->params[ctx->params_count].value =
-					    csilk_arena_strndup(ctx->arena, seg, len);
-				} else {
-					ctx->params[ctx->params_count].key = strdup(child->segment);
-					ctx->params[ctx->params_count].value = malloc(len + 1);
-					if (ctx->params[ctx->params_count].value) {
-						memcpy(
-						    ctx->params[ctx->params_count].value, seg, len);
-						ctx->params[ctx->params_count].value[len] = '\0';
-					}
-				}
-
-				if (ctx->params[ctx->params_count].key &&
-				    ctx->params[ctx->params_count].value) {
-					ctx->params_count++;
-					param_added = 1;
-					CSILK_LOG_T("Router: PARAM child '%s' matched segment "
-						    "'%.*s', captured parameter",
-						    child->segment,
-						    (int)len,
-						    seg);
-				} else {
-					// Cleanup on allocation failure (only if not using arena)
-					if (!ctx->arena) {
-						free(ctx->params[ctx->params_count].key);
-						free(ctx->params[ctx->params_count].value);
-					}
-					CSILK_LOG_E("Router: failed to allocate path parameter "
-						    "memory for key '%s'",
-						    child->segment);
-				}
-			} else if (ctx) {
-				CSILK_LOG_E("Router: path parameter limit (%d) exceeded while "
-					    "parsing key '%s'",
-					    CSILK_MAX_PARAMS,
-					    child->segment);
-			}
-			// Recurse deeper with the remaining path
-			result = match_node(child, method, p, ctx, out_mh);
-			// Backtracking rollback
-			if (!result && param_added) {
-				CSILK_LOG_T("Router: backtrack - match failed deeper for PARAM "
-					    "child '%s', rolling back parameter",
-					    child->segment);
-				ctx->params_count--;
-				if (!ctx->arena) {
-					free(ctx->params[ctx->params_count].key);
-					free(ctx->params[ctx->params_count].value);
-				}
-			} else if (result) {
-				break;
-			}
+			result = try_match_param(child, method, seg, len, p, ctx, out_mh);
 		} else if (child->type == CSILK_NODE_WILDCARD) {
-			// WILDCARD node: matches the entire remainder of the URL path
-			CSILK_LOG_T("Router: WILDCARD child '%s' matches remaining path '%s'",
-				    child->segment,
-				    path);
-			if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
-				// Skip leading '/' of remainder if present
-				const char* val_start = path;
-				while (*val_start == '/') {
-					val_start++;
-				}
-
-				if (ctx->arena) {
-					ctx->params[ctx->params_count].key =
-					    csilk_arena_strdup(ctx->arena, child->segment);
-					ctx->params[ctx->params_count].value =
-					    csilk_arena_strdup(ctx->arena, val_start);
-				} else {
-					ctx->params[ctx->params_count].key = strdup(child->segment);
-					ctx->params[ctx->params_count].value = strdup(val_start);
-				}
-
-				if (ctx->params[ctx->params_count].key &&
-				    ctx->params[ctx->params_count].value) {
-					ctx->params_count++;
-					CSILK_LOG_T(
-					    "Router: captured wildcard parameter '%s' = '%s'",
-					    child->segment,
-					    val_start);
-				} else {
-					if (!ctx->arena) {
-						free(ctx->params[ctx->params_count].key);
-						free(ctx->params[ctx->params_count].value);
-					}
-					CSILK_LOG_E(
-					    "Router: failed to allocate wildcard path parameter "
-					    "memory for key '%s'",
-					    child->segment);
-				}
-			} else if (ctx) {
-				CSILK_LOG_E(
-				    "Router: path parameter limit (%d) exceeded while parsing "
-				    "wildcard key '%s'",
-				    CSILK_MAX_PARAMS,
-				    child->segment);
-			}
-			// Directly check the wildcard node's handlers
-			csilk_method_handler_t* mh = child->handlers;
-			while (mh) {
-				if (strcmp(mh->method, method) == 0) {
-					if (out_mh) {
-						*out_mh = mh;
-					}
-					result = mh->handlers;
-					CSILK_LOG_T("Router: matched handler for method '%s' at "
-						    "wildcard node '%s'",
-						    method,
-						    child->segment);
-					break;
-				}
-				mh = mh->next;
-			}
+			result = try_match_wildcard(child, method, path, ctx, out_mh);
 		}
 		if (result) {
 			break;

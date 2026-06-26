@@ -425,7 +425,7 @@ on_body(llhttp_t* p, const char* at, size_t length)
  *
  * @param status HTTP status code.
  * @return A static string literal with the reason phrase. */
-static const char*
+const char*
 get_status_text(int status)
 {
 	switch (status) {
