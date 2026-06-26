@@ -9,6 +9,7 @@
  * @copyright MIT License
  */
 
+#include <ctype.h>
 #include <string.h>
 
 #include "core/ctx_internal.h"
@@ -111,6 +112,17 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 			    "application/x-www-form-urlencoded (got '%s')",
 			    ct);
 		return;
+	}
+	/* Verify the Content-Type ends cleanly — reject values that happen
+	 * to share the same 33-character prefix (e.g., "...-charset"). */
+	{
+		char sep = ct[33];
+		if (sep != ';' && sep != '\0' && !isspace((unsigned char)sep)) {
+			CSILK_LOG_D("Context: csilk_parse_form_urlencoded: suspicious Content-Type "
+				    "prefix match (got '%s')",
+				    ct);
+			return;
+		}
 	}
 
 	char* qs = csilk_arena_strndup(c->arena, body, body_len);
