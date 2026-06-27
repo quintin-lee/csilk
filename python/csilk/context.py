@@ -133,6 +133,19 @@ class CaseInsensitiveDict(dict):
         except KeyError:
             return default
 
+_dispatcher_map = {}
+
+@ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+def _python_dispatcher(arg):
+    func_id = arg
+    func = _dispatcher_map.pop(func_id, None)
+    if func:
+        try:
+            func()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
 class Context:
     def __init__(self, ctx_ptr):
         self._ctx = ctx_ptr
@@ -358,19 +371,6 @@ class Context:
 
         if not self._lib.csilk_is_async(self._ctx):
             self._lib.csilk_response_end(self._ctx)
-
-_dispatcher_map = {}
-
-@ctypes.CFUNCTYPE(None, ctypes.c_void_p)
-def _python_dispatcher(arg):
-    func_id = arg
-    func = _dispatcher_map.pop(func_id, None)
-    if func:
-        try:
-            func()
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
 
     def dispatch_async(self, coro, loop):
         """
