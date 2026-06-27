@@ -424,9 +424,39 @@ class App:
         self._groups.append(g)
         return g
 
+# Data validation decorator
+def validate(body=None, query=None):
+    """
+    Decorator to validate request body and/or query parameters using Pydantic models.
+    The validated models will be attached to ctx.validated_body and ctx.validated_query.
+    """
+    def decorator(handler):
+        def wrapper(ctx):
+            if body:
+                try:
+                    import json
+                    data = json.loads(ctx.body.decode('utf-8'))
+                    ctx.validated_body = body(**data)
+                except Exception as e:
+                    ctx.json_error(422, f"Validation Error (Body): {str(e)}")
+                    ctx.abort()
+                    return
+            if query:
+                try:
+                    q_dict = ctx.queries
+                    ctx.validated_query = query(**q_dict)
+                except Exception as e:
+                    ctx.json_error(422, f"Validation Error (Query): {str(e)}")
+                    ctx.abort()
+                    return
+            return handler(ctx)
+        return wrapper
+    return decorator
+
 # Built-in C middlewares wrappers
 def recovery_middleware(ctx):
     get_bindings().csilk_recovery_handler(ctx._ctx)
+
 
 def logger_middleware(ctx):
     get_bindings().csilk_logger_handler(ctx._ctx)

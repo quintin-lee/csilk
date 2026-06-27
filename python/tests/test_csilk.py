@@ -1029,6 +1029,66 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             app.stop()
             t.join(timeout=1.0)
 
+    def test_pydantic_validate_decorator(self):
+        from csilk.app import validate
+        app = App()
+
+        class MockModel:
+            def __init__(self, **kwargs):
+                for k, v in kwargs.items():
+                    setattr(self, k, v)
+        
+        @app.post("/validate-test")
+        @validate(body=MockModel, query=MockModel)
+        def handle_validation(ctx):
+            body_val = getattr(ctx.validated_body, 'name', 'missing')
+            query_val = getattr(ctx.validated_query, 'age', 'missing')
+            ctx.json(200, {"b_name": body_val, "q_age": query_val})
+
+        import socket
+        def run_server():
+            app.run(8089)
+        t = threading.Thread(target=run_server)
+        t.daemon = True
+        t.start()
+
+        for _ in range(15):
+            try:
+                with socket.create_connection(("127.0.0.1", 8089), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            self.fail("Server did not start in time")
+
+        proxy_handler = urllib.request.ProxyHandler({})
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
+        try:
+            # Test success
+            req = urllib.request.Request("http://127.0.0.1:8089/validate-test?age=30", data=b'{"name":"csilk"}', method="POST")
+            req.add_header('Content-Type', 'application/json')
+            res = urllib.request.urlopen(req)
+            self.assertEqual(res.status, 200)
+            data = json.loads(res.read().decode('utf-8'))
+            self.assertEqual(data["b_name"], "csilk")
+            self.assertEqual(data["q_age"], "30")
+
+            # Test failure
+            try:
+                req = urllib.request.Request("http://127.0.0.1:8089/validate-test?age=30", data=b'invalid json', method="POST")
+                req.add_header('Content-Type', 'application/json')
+                urllib.request.urlopen(req)
+                self.fail("Expected 422 Error")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 422)
+                
+        finally:
+            app.stop()
+            t.join(timeout=1.0)
+
 if __name__ == '__main__':
     unittest.main()
+
 
