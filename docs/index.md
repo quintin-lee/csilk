@@ -88,7 +88,7 @@ graph TB
 |----------|-------------|
 | [Getting Started](getting-started.md) | Build, install, and run your first server |
 | [Architecture](architecture.md) | High-level architecture, core design principles, and component dependency map |
-| [Module Design](module-design/) | Deep dives into core module internals: [AI](module-design/ai.md), [Workflow](module-design/workflow.md), [Reflection](module-design/reflection.md), [Context](module-design/context.md), [Router](module-design/router.md), [Middleware](module-design/middleware.md), [Crypto](module-design/crypto.md), [Hooks](module-design/hooks.md) |
+| [Module Design](module-design/) | Deep dives into core module internals: [Server](module-design/server.md), [App Layer](module-design/app.md), [Router](module-design/router.md), [Context](module-design/context.md), [Arena](module-design/arena.md), [Middleware](module-design/middleware.md), [Data](module-design/data.md), [Messaging](module-design/messaging.md), [Security](module-design/security.md), [Protocols](module-design/protocols.md), [Drivers](module-design/drivers.md), [Metrics](module-design/metrics.md), [AI](module-design/ai.md), [Workflow](module-design/workflow.md), [Reflection](module-design/reflection.md), [Crypto](module-design/crypto.md), [Hooks](module-design/hooks.md) |
 | [User Manual](user-manual/) | Configuration, middleware development, and advanced usage |
 | [Python Bindings Manual](user-manual/python.md) | Installation, classes reference, and AI workflow orchestration guides |
 | [API Reference](html/index.html) | Doxygen-generated API documentation |
