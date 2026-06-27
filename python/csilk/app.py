@@ -3,7 +3,7 @@ from csilk.lib import get_bindings, CsilkHandler, CsilkCtxPtr
 from csilk.context import Context
 
 class App:
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, asgi_app=None):
         self._lib = get_bindings()
         c_config = config_path.encode('utf-8') if config_path else None
         self._app = self._lib.csilk_app_new(c_config)
@@ -14,6 +14,7 @@ class App:
         self._hooks = []
         self._websocket_contexts = {}
         self._exception_handlers = {}
+        self._asgi_app = asgi_app
         self._lib.csilk_session_init()
 
         import asyncio
@@ -24,6 +25,9 @@ class App:
             self._loop.run_forever()
         self._loop_thread = threading.Thread(target=_run_loop, daemon=True)
         self._loop_thread.start()
+
+        if self._asgi_app:
+            self.mount_asgi("/*path", self._asgi_app)
 
         # Set up a hook on the server to clean up closed WebSocket contexts
         @ctypes.CFUNCTYPE(None, CsilkCtxPtr)
@@ -78,7 +82,7 @@ class App:
         import weakref
         
         handler = inject(handler)
-        is_coro = inspect.iscoroutinefunction(handler)
+        is_coro = inspect.iscoroutinefunction(handler) or (hasattr(handler, '__call__') and inspect.iscoroutinefunction(handler.__call__))
         app_ref = weakref.proxy(self)
 
         @CsilkHandler
@@ -364,7 +368,24 @@ class App:
 
     # Run / Stop
     def run(self, port):
-        return self._lib.csilk_app_run(self._app, port)
+        if getattr(self, "_asgi_app", None):
+            import asyncio
+            from csilk.asgi import LifespanManager
+            self._lifespan = LifespanManager(self._asgi_app)
+            future = asyncio.run_coroutine_threadsafe(self._lifespan.startup(), self._loop)
+            future.result() # Wait for startup to complete
+
+        try:
+            return self._lib.csilk_app_run(self._app, port)
+        finally:
+            if getattr(self, "_asgi_app", None):
+                import asyncio
+                future = asyncio.run_coroutine_threadsafe(self._lifespan.shutdown(), self._loop)
+                try:
+                    future.result(timeout=5.0)
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
 
     def stop(self):
         server = self._lib.csilk_app_server(self._app)
