@@ -275,13 +275,27 @@ def load_lib():
     if env_path:
         return ctypes.CDLL(env_path)
     
+    if sys.platform.startswith("win"):
+        lib_name = "csilk.dll"
+    elif sys.platform == "darwin":
+        lib_name = "libcsilk.dylib"
+    else:
+        lib_name = "libcsilk.so"
+
+    # 1. Look inside the current package directory (for wheels)
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    pkg_path = os.path.join(pkg_dir, lib_name)
+    if os.path.exists(pkg_path):
+        return ctypes.CDLL(pkg_path)
+        
+    # 2. Look in the build directory (for local dev)
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    lib_name = "libcsilk.so" if sys.platform != "darwin" else "libcsilk.dylib"
     build_path = os.path.join(base_dir, "build", lib_name)
     
     if os.path.exists(build_path):
         return ctypes.CDLL(build_path)
     
+    # 3. Fallback to system paths
     try:
         return ctypes.CDLL(lib_name)
     except OSError as e:
