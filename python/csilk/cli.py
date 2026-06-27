@@ -13,17 +13,18 @@ def main():
     run_parser.add_argument("app", help="App to run, e.g., main:app")
     run_parser.add_argument("--port", type=int, default=8080, help="Port to bind")
     run_parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
+    run_parser.add_argument("--asgi", action="store_true", help="Run application as an ASGI app")
     
     args = parser.parse_args()
     
     if args.command == "run":
         if args.reload:
             if os.environ.get("CSILK_RELOAD_PROCESS") == "true":
-                run_app(args.app, args.port)
+                run_app(args.app, args.port, asgi=args.asgi)
             else:
                 watch_and_reload(sys.argv)
         else:
-            run_app(args.app, args.port)
+            run_app(args.app, args.port, asgi=args.asgi)
 
 def watch_and_reload(argv):
     print("Watching for file changes with stat poller...")
@@ -60,11 +61,16 @@ def watch_and_reload(argv):
             process.terminate()
             sys.exit(0)
 
-def run_app(app_str, port):
+def run_app(app_str, port, asgi=False):
     module_name, app_name = app_str.split(":")
     sys.path.insert(0, os.getcwd())
     module = importlib.import_module(module_name)
     app = getattr(module, app_name)
+    
+    if asgi:
+        from csilk.app import App
+        app = App(asgi_app=app)
+        
     print(f"Starting {app_str} on port {port}...")
     app.run(port)
 
