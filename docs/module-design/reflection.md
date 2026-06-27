@@ -12,7 +12,7 @@ flowchart TB
     end
 
     subgraph marshal["fa:fa-arrow-up Marshal: C Struct -%gt; JSON"]
-        M1["fa:fa-code csilk_json_marshal('User', &amp;user)"]
+        M1["fa:fa-code csilk_json_marshal('User', &user)"]
         M2["fa:fa-search Find type entry in registry"]
         M3["fa:fa-repeat Iterate fields by offset"]
         M4["fa:fa-cube Build cJSON object"]
@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph unmarshal["fa:fa-arrow-down Unmarshal: JSON -%gt; C Struct"]
-        U1["fa:fa-code csilk_json_unmarshal('User', json_str, &amp;user)"]
+        U1["fa:fa-code csilk_json_unmarshal('User', json_str, &user)"]
         U2["fa:fa-search cJSON_Parse(json_str)"]
         U3["fa:fa-search Find type entry in registry"]
         U4["fa:fa-repeat Iterate fields by json_key"]
@@ -102,11 +102,11 @@ sequenceDiagram
     Server->>CTX: on_body() accumulates body
     Server->>CTX: on_message_complete()
 
-    Handler->>CTX: csilk_bind_reflect(ctx, "User", &amp;user)
-    CTX->>cJSON: cJSON_Parse(ctx-&gt;request.body)
+    Handler->>CTX: csilk_bind_reflect(ctx, "User", &user)
+    CTX->>cJSON: cJSON_Parse(request.body)
     cJSON-->>CTX: parsed JSON object
 
-    CTX->>Reflect: csilk_json_unmarshal("User", json_str, &amp;user)
+    CTX->>Reflect: csilk_json_unmarshal("User", json_str, &user)
     Reflect->>Reflect: Find "User" in type registry
     loop For each field in type entry
         Reflect->>cJSON: cJSON_GetObjectItem(json, "id")
@@ -134,13 +134,13 @@ sequenceDiagram
 
     Note over Struct: fa:fa-info-circle user.id = 1, user.name = "Alice"
 
-    Handler->>CTX: csilk_json_reflect(ctx, 200, "User", &amp;user)
-    CTX->>Reflect: csilk_json_marshal("User", &amp;user)
+    Handler->>CTX: csilk_json_reflect(ctx, 200, "User", &user)
+    CTX->>Reflect: csilk_json_marshal("User", &user)
     Reflect->>Reflect: Find "User" in type registry
 
     Reflect->>cJSON: cJSON_CreateObject()
     loop For each field in type entry
-        Reflect->>Struct: Read *(int64_t*)(ptr + offset) -%gt; 1
+        Reflect->>Struct: Read *(int64_t*)(ptr + offset) -> 1
         Reflect->>cJSON: cJSON_AddNumberToObject(json, "id", 1)
         Reflect->>Struct: Read string at offset
         Reflect->>cJSON: cJSON_AddStringToObject(json, "name", "Alice")
