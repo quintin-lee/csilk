@@ -13,6 +13,7 @@ class App:
         self._groups = []
         self._hooks = []
         self._websocket_contexts = {}
+        self._exception_handlers = {}
         self._lib.csilk_session_init()
 
         # Set up a hook on the server to clean up closed WebSocket contexts
@@ -37,6 +38,27 @@ class App:
         self._groups.clear()
         self._hooks.clear()
         self._websocket_contexts.clear()
+        self._exception_handlers.clear()
+
+    def exception_handler(self, exc_class):
+        """Decorator to register a global exception handler for a specific exception class."""
+        def decorator(handler):
+            self._exception_handlers[exc_class] = handler
+            return handler
+        return decorator
+
+    def _handle_exception(self, ctx, exc):
+        for exc_class, handler in self._exception_handlers.items():
+            if isinstance(exc, exc_class):
+                try:
+                    handler(ctx, exc)
+                    return True
+                except Exception as inner_e:
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error (Error in exception handler): {str(inner_e)}")
+                    return True
+        return False
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
         @CsilkHandler
@@ -46,9 +68,10 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
             finally:
                 self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
@@ -162,9 +185,10 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
             finally:
                 self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
@@ -178,9 +202,10 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
             finally:
                 self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
@@ -267,9 +292,10 @@ class App:
             try:
                 auth_middleware(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
 
         self._handlers.append(wrapper)
         self._lib.csilk_admin_serve_secure(self._app, path.encode('utf-8'), wrapper)
@@ -346,9 +372,10 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
                  
         self._handlers.append(wrapper)
         self._lib.csilk_server_set_not_found_handler(server, wrapper)
@@ -571,9 +598,10 @@ class Group:
             try:
                 middleware(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._app._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
         self._handlers.append(wrapper)
         self._lib.csilk_group_use(self._group, wrapper)
 
@@ -585,9 +613,10 @@ class Group:
             try:
                 handler(ctx)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                ctx.string(500, f"Internal Server Error: {str(e)}")
+                if not self._app._handle_exception(ctx, e):
+                    import traceback
+                    traceback.print_exc()
+                    ctx.string(500, f"Internal Server Error: {str(e)}")
             finally:
                 self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
             if ctx.is_websocket:
