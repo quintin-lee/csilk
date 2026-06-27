@@ -262,9 +262,17 @@ class Context:
     def write(self, data):
         if isinstance(data, str):
             c_data = data.encode('utf-8')
+            self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
+        elif isinstance(data, memoryview):
+            # Zero-copy pointer extraction from memoryview
+            arr = (ctypes.c_char * data.nbytes).from_buffer(data)
+            self._lib.csilk_response_write(self._ctx, arr, data.nbytes)
+        elif isinstance(data, bytearray):
+            arr = (ctypes.c_char * len(data)).from_buffer(data)
+            self._lib.csilk_response_write(self._ctx, arr, len(data))
         else:
             c_data = bytes(data)
-        self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
+            self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
 
     def response_end(self):
         if not getattr(self, '_response_ended', False):
@@ -365,14 +373,10 @@ class Context:
 
     # Streaming and H2 Push
     def response_write(self, data):
-        if isinstance(data, str):
-            c_data = data.encode('utf-8')
-        else:
-            c_data = bytes(data)
-        self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
+        self.write(data)
 
-        if not self._lib.csilk_is_async(self._ctx):
-            self._lib.csilk_response_end(self._ctx)
+        if not getattr(self, '_response_ended', False) and not self._lib.csilk_is_async(self._ctx):
+            self.response_end()
 
     def dispatch_async(self, coro, loop):
         """
@@ -524,12 +528,23 @@ class Context:
     def response_body(self, body):
         if isinstance(body, str):
             self._response_body_ref = body.encode('utf-8')
+            c_ptr, size = self._response_body_ref, len(self._response_body_ref)
+        elif isinstance(body, memoryview):
+            self._response_body_ref = body
+            c_ptr = (ctypes.c_char * body.nbytes).from_buffer(body)
+            size = body.nbytes
+        elif isinstance(body, bytearray):
+            self._response_body_ref = body
+            c_ptr = (ctypes.c_char * len(body)).from_buffer(body)
+            size = len(body)
         else:
             self._response_body_ref = bytes(body)
+            c_ptr, size = self._response_body_ref, len(self._response_body_ref)
+            
         self._lib.csilk_set_response_body(
             self._ctx,
-            self._response_body_ref,
-            len(self._response_body_ref),
+            c_ptr,
+            size,
             0
         )
 

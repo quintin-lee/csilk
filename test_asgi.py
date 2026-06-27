@@ -51,6 +51,15 @@ def test_asgi_bridge():
     @app.get("/")
     def home(ctx):
         ctx.string(200, "Native route")
+
+    @app.get("/zero-copy")
+    def zero_copy_test(ctx):
+        # We simulate a zero-copy buffer (must be writable for from_buffer)
+        mv = memoryview(bytearray(b"Zero-Copy Response Data"))
+        ctx.status_code = 200
+        ctx.add_header("Content-Type", "text/plain")
+        ctx.write(mv)
+        ctx.response_end()
         
     # Start server in thread
     t = threading.Thread(target=app.run, kwargs={"port": 8081})
@@ -66,6 +75,11 @@ def test_asgi_bridge():
         req = urllib.request.Request("http://127.0.0.1:8081/")
         with urllib.request.urlopen(req) as response:
             assert response.read() == b"Native route"
+
+        # Test zero-copy write
+        req = urllib.request.Request("http://127.0.0.1:8081/zero-copy")
+        with urllib.request.urlopen(req) as response:
+            assert response.read() == b"Zero-Copy Response Data"
             
         # Test ASGI GET
         req = urllib.request.Request("http://127.0.0.1:8081/test")
