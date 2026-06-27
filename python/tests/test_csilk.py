@@ -579,6 +579,7 @@ class TestCsilkIntegration(unittest.TestCase):
 
         finally:
             app.stop()
+            app.free()
             t.join(timeout=1.0)
 
 class TestCsilkAi(unittest.TestCase):
@@ -813,6 +814,7 @@ class TestCsilkGroups(unittest.TestCase):
             self.assertEqual(calls, ["middleware", "handler", "middleware", "admin_handler"])
         finally:
             app.stop()
+            app.free()
             t.join(timeout=1.0)
 
 class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
@@ -948,6 +950,7 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
 
         finally:
             app.stop()
+            app.free()
             t.join(timeout=1.0)
 
         # Check lifecycle hook triggers
@@ -1012,6 +1015,7 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertGreaterEqual(stats["active_connections"], 0)
             finally:
                 app.stop()
+                app.free()
                 t.join(timeout=1.0)
         finally:
             shutil.rmtree(temp_dir)
@@ -1060,6 +1064,7 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertEqual(e.read().decode('utf-8'), "Handled: test exception")
         finally:
             app.stop()
+            app.free()
             t.join(timeout=1.0)
 
     def test_pydantic_validate_decorator(self):
@@ -1119,6 +1124,7 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 
         finally:
             app.stop()
+            app.free()
             t.join(timeout=1.0)
 
 if __name__ == '__main__':
