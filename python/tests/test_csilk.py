@@ -1125,3 +1125,27 @@ if __name__ == '__main__':
     unittest.main()
 
 
+
+def test_asyncio_support():
+    import requests
+    import asyncio
+    
+    app = App()
+    
+    @app.get("/async_route")
+    async def handle_async(ctx):
+        await asyncio.sleep(0.1)
+        return {"async": "success"}
+
+    import threading
+    t = threading.Thread(target=app.run, args=(8086,), daemon=True)
+    t.start()
+    
+    import time
+    time.sleep(1) # wait for server to start
+    
+    response = requests.get("http://localhost:8086/async_route")
+    assert response.status_code == 200
+    assert response.json()["async"] == "success"
+    
+    app.free()
