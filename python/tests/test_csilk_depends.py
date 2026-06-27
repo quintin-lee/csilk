@@ -30,8 +30,8 @@ class TestCsilkDepends(unittest.TestCase):
             self.assertEqual(resp.json(), {"user": "User from DB"})
         finally:
             app.stop()
-            app.free()
             t.join(timeout=2)
+            app.free()
 
 if __name__ == '__main__':
     import gc, sys

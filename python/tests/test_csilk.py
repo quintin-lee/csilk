@@ -579,8 +579,8 @@ class TestCsilkIntegration(unittest.TestCase):
 
         finally:
             app.stop()
-            app.free()
             t.join(timeout=1.0)
+            app.free()
 
 class TestCsilkAi(unittest.TestCase):
     def test_ai_lifecycle(self):
@@ -814,8 +814,8 @@ class TestCsilkGroups(unittest.TestCase):
             self.assertEqual(calls, ["middleware", "handler", "middleware", "admin_handler"])
         finally:
             app.stop()
-            app.free()
             t.join(timeout=1.0)
+            app.free()
 
 class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
     def test_response_extensions_and_hooks(self):
@@ -950,8 +950,8 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
 
         finally:
             app.stop()
-            app.free()
             t.join(timeout=1.0)
+            app.free()
 
         # Check lifecycle hook triggers
         time.sleep(0.2)
@@ -1015,8 +1015,8 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertGreaterEqual(stats["active_connections"], 0)
             finally:
                 app.stop()
-                app.free()
                 t.join(timeout=1.0)
+                app.free()
         finally:
             shutil.rmtree(temp_dir)
 
@@ -1064,8 +1064,8 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertEqual(e.read().decode('utf-8'), "Handled: test exception")
         finally:
             app.stop()
-            app.free()
             t.join(timeout=1.0)
+            app.free()
 
     def test_pydantic_validate_decorator(self):
         from csilk.app import validate
@@ -1124,8 +1124,8 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 
         finally:
             app.stop()
-            app.free()
             t.join(timeout=1.0)
+            app.free()
 
 if __name__ == '__main__':
     import gc
