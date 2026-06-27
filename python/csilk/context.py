@@ -267,7 +267,9 @@ class Context:
         self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
 
     def response_end(self):
-        self._lib.csilk_response_end(self._ctx)
+        if not getattr(self, '_response_ended', False):
+            self._response_ended = True
+            self._lib.csilk_response_end(self._ctx)
 
     def string(self, code, text):
         self._lib.csilk_string(self._ctx, code, text.encode('utf-8'))
@@ -396,9 +398,11 @@ class Context:
                     
                 self.dispatch(_send)
             except Exception as e:
+                import traceback
                 traceback.print_exc()
+                error_msg = str(e)
                 def _send_error():
-                    self.string(500, f"Internal Server Error: {str(e)}")
+                    self.string(500, f"Internal Server Error: {error_msg}")
                     self.response_end()
                 self.dispatch(_send_error)
         
@@ -410,7 +414,9 @@ class Context:
         self._lib.csilk_dispatch(self._ctx, _python_dispatcher, func_id)
 
     def response_end(self):
-        self._lib.csilk_response_end(self._ctx)
+        if not getattr(self, '_response_ended', False):
+            self._response_ended = True
+            self._lib.csilk_response_end(self._ctx)
 
     def push_promise(self, method, path):
         return self._lib.csilk_push_promise(
