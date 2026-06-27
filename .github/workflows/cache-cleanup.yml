@@ -1,0 +1,115 @@
+name: Cache Cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'   # Every Monday at 3:00 AM UTC
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prune stale caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          echo "repo=$REPO"
+
+          # Track total deletions
+          DELETED=0
+
+          # Get active branches (plain branch names, no prefix)
+          echo ""
+          echo "=== Fetching active branches ==="
+          ACTIVE_BRANCHES=$(mktemp)
+          gh api "repos/${REPO}/branches?per_page=100" --jq '.[].name' | sort > "$ACTIVE_BRANCHES"
+          echo "  → $(wc -l < "$ACTIVE_BRANCHES") active branches"
+
+          # Get all caches with their ref + id
+          CACHE_LIST=$(mktemp)
+          gh cache list --repo "${REPO}" --limit 200 --json id,ref,key,createdAt --jq '.' > "$CACHE_LIST"
+
+          # ============================================================
+          # Step 1: Delete caches from deleted/stale branches
+          # ============================================================
+          echo ""
+          echo "=== [1/2] Deleting caches from deleted/stale branches ==="
+
+          for row in $(jq -c '.[]' "$CACHE_LIST"); do
+            CACHE_ID=$(echo "$row" | jq -r '.id')
+            CACHE_REF=$(echo "$row" | jq -r '.ref')
+
+            # Only process refs/heads/* (skip PR refs which get cleaned when branch is deleted)
+            case "$CACHE_REF" in
+              refs/heads/*)
+                BRANCH_NAME="${CACHE_REF#refs/heads/}"
+                if ! grep -qxF "$BRANCH_NAME" "$ACTIVE_BRANCHES"; then
+                  echo "  Delete #${CACHE_ID} (branch \"${BRANCH_NAME}\" no longer exists)"
+                  gh cache delete "$CACHE_ID" --repo "${REPO}" 2>/dev/null && DELETED=$((DELETED + 1)) || true
+                fi
+                ;;
+              refs/pull/*)
+                # PR caches — check if the PR branch still exists via the GitHub API
+                PR_NUMBER="${CACHE_REF#refs/pull/}"
+                PR_NUMBER="${PR_NUMBER%/merge}"
+                PR_BRANCH=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.ref' 2>/dev/null || echo "")
+                if [ -z "$PR_BRANCH" ] || ! grep -qxF "$PR_BRANCH" "$ACTIVE_BRANCHES"; then
+                  echo "  Delete #${CACHE_ID} (PR #${PR_NUMBER} branch deleted/closed)"
+                  gh cache delete "$CACHE_ID" --repo "${REPO}" 2>/dev/null && DELETED=$((DELETED + 1)) || true
+                fi
+                ;;
+            esac
+          done
+          echo "  → Removed ${DELETED} orphaned cache(s) so far"
+
+          # ============================================================
+          # Step 2: Per-branch cache count limit
+          # ============================================================
+          echo ""
+          echo "=== [2/2] Limiting cache count per branch ==="
+
+          while IFS= read -r BRANCH; do
+            REF="refs/heads/${BRANCH}"
+
+            # Count caches for this branch
+            BRANCH_COUNT=$(jq -c --arg ref "$REF" '[.[] | select(.ref == $ref)]' "$CACHE_LIST" | jq 'length')
+
+            # Default branches get a higher limit; feature/PR branches use a leaner one
+            LIMIT=8
+            for DEF in main master; do
+              if [ "$BRANCH" = "$DEF" ]; then
+                LIMIT=16
+                break
+              fi
+            done
+
+            if [ "$BRANCH_COUNT" -gt "$LIMIT" ]; then
+              EXCESS=$((BRANCH_COUNT - LIMIT))
+              echo "  Branch \"${BRANCH}\": ${BRANCH_COUNT} caches (limit ${LIMIT}), pruning ${EXCESS}"
+
+              jq -c --arg ref "$REF" '[.[] | select(.ref == $ref)]' "$CACHE_LIST" | \
+              jq -r --argjson limit "$LIMIT" \
+                'sort_by(.createdAt) | reverse | .[$limit:] | .[].id' > /tmp/excess_ids.txt
+
+              while read -r CACHE_ID; do
+                echo "    Prune #${CACHE_ID}"
+                gh cache delete "$CACHE_ID" --repo "${REPO}" 2>/dev/null && DELETED=$((DELETED + 1)) || true
+              done < /tmp/excess_ids.txt
+            fi
+          done < "$ACTIVE_BRANCHES"
+
+          # Cleanup temp files
+          rm -f "$ACTIVE_BRANCHES" "$CACHE_LIST"
+
+          echo ""
+          echo "=== Cache cleanup complete: ${DELETED} total cache(s) deleted ==="
