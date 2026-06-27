@@ -1,3 +1,9 @@
+"""Unified AI interface for chat, embeddings, and conversation context.
+
+Wraps the csilk C AI engine, which supports multiple AI providers
+(OpenAI, Ollama, etc.) through a pluggable driver system.
+"""
+
 import ctypes
 import json
 from csilk.lib import (
@@ -5,8 +11,31 @@ from csilk.lib import (
     CsilkAiEmbeddingsResponse, CsilkAiStats, CsilkAiStreamCb, CsilkAiContext
 )
 
+
 class AI:
-    def __init__(self, driver_name, api_key=None, base_url=None):
+    """High-level wrapper around the csilk AI engine.
+
+    Provides chat completions (with streaming and tool calls) and
+    text embeddings through a unified interface.
+
+    Usage::
+
+        ai = AI("openai", api_key="sk-...", base_url=None)
+        resp = ai.chat("gpt-4", [{"role": "user", "content": "hi"}])
+        vectors = ai.generate_embeddings("text-embedding-3-small", ["hello"])
+        print(AI.get_stats())
+    """
+
+    def __init__(self, driver_name: str, api_key: str = None, base_url: str = None):
+        """Open an AI driver instance.
+
+        Args:
+            driver_name: Driver identifier (e.g. ``"openai"``, ``"ollama"``).
+            api_key: Optional API key.
+            base_url: Optional custom base URL.
+        Raises:
+            RuntimeError: If the driver cannot be initialised.
+        """
         self._lib = get_bindings()
         c_driver = driver_name.encode('utf-8')
         c_key = api_key.encode('utf-8') if api_key else None
@@ -14,9 +43,10 @@ class AI:
         self._ai = self._lib.csilk_ai_new(c_driver, c_key, c_url)
         if not self._ai:
             raise RuntimeError(f"Failed to create AI instance for driver '{driver_name}'")
-        self._stream_callbacks = [] # Keep refs to prevent GC
+        self._stream_callbacks = []  # Keep refs to prevent GC
 
     def free(self):
+        """Release the AI driver and all associated resources."""
         if self._ai:
             self._lib.csilk_ai_free(self._ai)
             self._ai = None
@@ -25,7 +55,14 @@ class AI:
         self.free()
 
     @staticmethod
-    def get_stats():
+    def get_stats() -> dict:
+        """Return global AI engine statistics.
+
+        Returns:
+            A dict with ``requests_total``, ``tokens_total``,
+            ``prompt_tokens``, ``completion_tokens``, ``errors_total``,
+            and ``duration_us_total``.
+        """
         lib = get_bindings()
         stats = CsilkAiStats()
         lib.csilk_ai_get_stats(ctypes.byref(stats))
@@ -35,14 +72,35 @@ class AI:
             "prompt_tokens": stats.prompt_tokens,
             "completion_tokens": stats.completion_tokens,
             "errors_total": stats.errors_total,
-            "duration_us_total": stats.duration_us_total
+            "duration_us_total": stats.duration_us_total,
         }
 
     @staticmethod
     def register_monitor(ctx):
+        """Register a context for AI workflow monitoring."""
         get_bindings().csilk_ai_register_monitor(ctx._ctx)
 
-    def chat(self, model, messages, temperature=0.7, max_tokens=1024, on_chunk=None, timeout_ms=0):
+    def chat(self, model: str, messages: list, temperature: float = 0.7,
+             max_tokens: int = 1024, on_chunk=None, timeout_ms: int = 0) -> dict:
+        """Send a chat completion request.
+
+        Args:
+            model: Model identifier (e.g. ``"gpt-4"``, ``"llama3"``).
+            messages: List of message dicts, each with ``"role"`` and
+                ``"content"`` keys.
+            temperature: Sampling temperature (0.0 – 2.0).
+            max_tokens: Maximum tokens in the response.
+            on_chunk: Optional callback ``(chunk: str) -> None`` for
+                streaming responses.
+            timeout_ms: Request timeout in milliseconds (0 = no timeout).
+
+        Returns:
+            A dict with ``content``, ``tool_calls`` (list),
+            ``prompt_tokens``, ``completion_tokens``, ``total_tokens``.
+
+        Raises:
+            RuntimeError: If the API call fails.
+        """
         # messages is list of dicts: [{"role": "user", "content": "hi"}]
         c_msg_array = (CsilkAiMessage * len(messages))()
         for i, msg in enumerate(messages):
@@ -104,7 +162,19 @@ class AI:
         finally:
             self._lib.csilk_ai_chat_response_free(ctypes.byref(c_res))
 
-    def generate_embeddings(self, model, input_texts):
+    def generate_embeddings(self, model: str, input_texts: list) -> list:
+        """Generate embeddings for one or more input texts.
+
+        Args:
+            model: Embedding model identifier.
+            input_texts: A single string or a list of strings to embed.
+
+        Returns:
+            A list of embedding vectors, each being a list of floats.
+
+        Raises:
+            RuntimeError: If the embedding request fails.
+        """
         if isinstance(input_texts, str):
             input_texts = [input_texts]
 
@@ -113,8 +183,9 @@ class AI:
             c_arr[i] = text.encode('utf-8')
 
         c_res = CsilkAiEmbeddingsResponse()
-        res_code = self._lib.csilk_ai_embeddings(self._ai, model.encode('utf-8'), c_arr, len(input_texts), ctypes.byref(c_res))
-        
+        res_code = self._lib.csilk_ai_embeddings(self._ai, model.encode('utf-8'), c_arr,
+                                                  len(input_texts), ctypes.byref(c_res))
+
         if res_code != 0:
             err = c_res.error_message.decode('utf-8') if c_res.error_message else "Unknown embeddings error"
             self._lib.csilk_ai_embeddings_response_free(ctypes.byref(c_res))
@@ -131,14 +202,35 @@ class AI:
         finally:
             self._lib.csilk_ai_embeddings_response_free(ctypes.byref(c_res))
 
+
 class AIContext:
-    def __init__(self, max_history=0):
+    """Maintains a conversation history for chat interactions.
+
+    Usage::
+
+        ctx = AIContext(max_history=20)
+        ctx.add("user", "Hello")
+        ctx.add("assistant", "Hi! How can I help?")
+        for msg in ctx.messages:
+            print(msg["role"], ":", msg["content"])
+    """
+
+    def __init__(self, max_history: int = 0):
+        """Create a new AI conversation context.
+
+        Args:
+            max_history: Maximum number of messages to retain
+                (0 = unlimited).
+        Raises:
+            RuntimeError: If the context cannot be created.
+        """
         self._lib = get_bindings()
         self._ctx = self._lib.csilk_ai_context_new(max_history)
         if not self._ctx:
             raise RuntimeError("Failed to create AIContext")
 
     def free(self):
+        """Release the conversation context."""
         if self._ctx:
             self._lib.csilk_ai_context_free(self._ctx)
             self._ctx = None
@@ -146,21 +238,31 @@ class AIContext:
     def __del__(self):
         self.free()
 
-    def add(self, role, content):
+    def add(self, role: str, content: str):
+        """Append a message to the conversation history.
+
+        Args:
+            role: Message role (e.g. ``"user"``, ``"assistant"``,
+                ``"system"``).
+            content: Message content.
+        """
         self._lib.csilk_ai_context_add(self._ctx, role.encode('utf-8'), content.encode('utf-8'))
 
     def clear(self):
+        """Remove all messages from the conversation history."""
         self._lib.csilk_ai_context_clear(self._ctx)
 
     @property
-    def count(self):
+    def count(self) -> int:
+        """Return the number of messages in the history."""
         if not self._ctx:
             return 0
         ctx_struct = ctypes.cast(self._ctx, ctypes.POINTER(CsilkAiContext)).contents
         return ctx_struct.count
 
     @property
-    def messages(self):
+    def messages(self) -> list:
+        """Return a list of ``{"role": str, "content": str}`` dicts."""
         if not self._ctx:
             return []
         ctx_struct = ctypes.cast(self._ctx, ctypes.POINTER(CsilkAiContext)).contents

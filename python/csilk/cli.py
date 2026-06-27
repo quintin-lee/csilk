@@ -1,9 +1,18 @@
+"""Command-line interface for csilk.
+
+Provides the ``csilk`` CLI entry point with subcommands::
+
+    csilk run main:app --port 8080 --reload
+    csilk run-wf workflow.yaml --port 3000
+"""
+
 import argparse
 import sys
 import os
 import subprocess
 import time
 import importlib
+
 
 def main():
     parser = argparse.ArgumentParser(description="csilk CLI")
@@ -35,6 +44,7 @@ def main():
         run_workflow(args.file, args.input, args.port)
 
 def run_workflow(file_path, initial_input, port):
+    """Load a workflow from a YAML or JSON file and run it, optionally serving a UI."""
     from csilk.workflow import Workflow
     from csilk.app import App
     import threading
@@ -92,6 +102,7 @@ def run_workflow(file_path, initial_input, port):
         app.stop()
 
 def watch_and_reload(argv):
+    """Poll ``.py`` files for modifications and restart the server on change."""
     print("Watching for file changes with stat poller...")
     env = os.environ.copy()
     env["CSILK_RELOAD_PROCESS"] = "true"
@@ -127,6 +138,7 @@ def watch_and_reload(argv):
             sys.exit(0)
 
 def run_app(app_str, port, asgi=False):
+    """Import and run a csilk or ASGI application by ``module:attr`` name."""
     module_name, app_name = app_str.split(":")
     sys.path.insert(0, os.getcwd())
     module = importlib.import_module(module_name)
