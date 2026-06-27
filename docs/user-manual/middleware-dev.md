@@ -235,3 +235,16 @@ flowchart TB
     ERR3 --> REC_L
     REC_L --> RECOVER["csilk_string(c, 500)\ncsilk_abort(c)"]
 ```
+
+---
+
+## Further Reading
+
+For deep-dive architectural details of the middleware system and related components:
+
+| Topic | Module Design Document |
+|-------|----------------------|
+| Middleware Onion Model & Chain Assembly | [Middleware](../module-design/middleware.md) |
+| JWT / CSRF / CORS / WAF / Rate Limiter | [Security](../module-design/security.md) |
+| Context Lifecycle & Arena Allocator | [Context](../module-design/context.md) |
+| Server Hooks | [Hooks](../module-design/hooks.md) |

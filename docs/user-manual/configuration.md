@@ -64,19 +64,42 @@ database:
 admin:
   enabled: true
   path: "/admin"
+
+vector_db:
+  default_driver: "qdrant"          # "qdrant" or "milvus"
+  qdrant_endpoint: "http://localhost:6333"
+  milvus_endpoint: "http://localhost:19530"
+
+perm:
+  driver: "simple"                  # "simple" (in-memory RBAC)
+  config_path: "perms.yaml"         # Optional seed file for roles/permissions
+
+cipher:
+  key_file: "keys/cipher.key"       # AES-256-GCM key file
+  enable_aes: true
+  enable_rsa: true
+  rsa_public_key: "keys/rsa.pub"
+  rsa_private_key: "keys/rsa.pem"
 ```
 
 ## Programmatic Configuration (C API)
 
 ### 1. High-Level App Config
 
+The app layer accepts a YAML config path at creation time:
+
 ```c
-csilk_app_config_t config = {
-    .port = 8443,
-    .log_level = CSILK_LOG_DEBUG,
-    .worker_threads = 2
-};
-csilk_app_t* app = csilk_app_new(&config);
+csilk_app_t* app = csilk_app_new("config.yaml");
+// Pass nullptr for defaults (port 8080, stderr logging)
+csilk_app_t* app_default = csilk_app_new(nullptr);
+```
+
+Individual settings can be tuned after creation:
+
+```c
+csilk_app_log_level(app, CSILK_LOG_DEBUG);
+csilk_app_log_file(app, "logs/app.log", 10485760);
+csilk_app_enable_openapi(app, 1);
 ```
 
 ### 2. Low-Level Server Config
@@ -98,4 +121,27 @@ if (cfg) {
     csilk_server_apply_config(server, cfg);
     csilk_config_free(cfg);
 }
+
+---
+
+## Further Reading
+
+For deep-dive architectural details of each configurable subsystem, see:
+
+| Subsystem | Module Design Document |
+|-----------|----------------------|
+| Server / TLS / HTTP/2 | [Server Core](../module-design/server.md) |
+| App Layer & Static Files | [App Layer](../module-design/app.md) |
+| Router & Param Extraction | [Router](../module-design/router.md) |
+| Context & Arena | [Context & Arena](../module-design/context.md) |
+| Middleware Chain | [Middleware](../module-design/middleware.md) |
+| Database Drivers | [Data Layer](../module-design/data.md) |
+| AI Providers | [AI Engine](../module-design/ai.md) |
+| Driver Lifecycle | [Drivers](../module-design/drivers.md) |
+| RBAC / JWT / CSRF / WAF | [Security](../module-design/security.md) |
+| WebSocket / SSE | [Protocols](../module-design/protocols.md) |
+| Message Queue | [Messaging](../module-design/messaging.md) |
+| Prometheus Metrics | [Metrics](../module-design/metrics.md) |
+| Crypto & Cipher | [Crypto](../module-design/crypto.md) |
+| Lifecycle Hooks | [Hooks](../module-design/hooks.md) |
 ```
