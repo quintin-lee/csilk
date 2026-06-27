@@ -102,6 +102,24 @@ class App:
             return decorator
         self.route("GET", path, handler, **kwargs)
 
+    def ws(self, path, ws_class=None, **kwargs):
+        """Register a class-based WebSocket handler."""
+        def decorator(cls):
+            def handler(ctx):
+                instance = cls()
+                ctx.ws_handshake()
+                if hasattr(instance, "on_connect"):
+                    instance.on_connect(ctx)
+                if hasattr(instance, "on_message"):
+                    def on_msg(c, msg, op):
+                        instance.on_message(c, msg, op)
+                    ctx.set_on_ws_message(on_msg)
+            self.route("GET", path, handler, **kwargs)
+            return cls
+        if ws_class is None:
+            return decorator
+        return decorator(ws_class)
+
     def post(self, path, handler=None, **kwargs):
         if handler is None:
             def decorator(h):
@@ -677,6 +695,24 @@ class Group:
                 return h
             return decorator
         self.route("GET", path, handler, **kwargs)
+
+    def ws(self, path, ws_class=None, **kwargs):
+        """Register a class-based WebSocket handler."""
+        def decorator(cls):
+            def handler(ctx):
+                instance = cls()
+                ctx.ws_handshake()
+                if hasattr(instance, "on_connect"):
+                    instance.on_connect(ctx)
+                if hasattr(instance, "on_message"):
+                    def on_msg(c, msg, op):
+                        instance.on_message(c, msg, op)
+                    ctx.set_on_ws_message(on_msg)
+            self.route("GET", path, handler, **kwargs)
+            return cls
+        if ws_class is None:
+            return decorator
+        return decorator(ws_class)
 
     def post(self, path, handler=None, **kwargs):
         if handler is None:
