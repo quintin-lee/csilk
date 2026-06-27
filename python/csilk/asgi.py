@@ -7,17 +7,80 @@ class ASGIAdapter:
 
     async def __call__(self, ctx):
         ctx.is_async = True
+        loop = asyncio.get_running_loop()
 
+        if ctx.is_websocket:
+            scope = {
+                "type": "websocket",
+                "asgi": {"version": "3.0", "spec_version": "2.3"},
+                "http_version": "1.1",
+                "scheme": "ws",
+                "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
+                "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
+                "query_string": b"", 
+                "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
+                "client": None,
+                "server": None,
+                "subprotocols": []
+            }
+            
+            receive_queue = asyncio.Queue()
+            receive_queue.put_nowait({"type": "websocket.connect"})
+            
+            async def receive() -> Dict[str, Any]:
+                return await receive_queue.get()
+                
+            async def send(message: Dict[str, Any]) -> None:
+                if message["type"] == "websocket.accept":
+                    def _accept():
+                        ctx.ws_handshake()
+                    ctx.dispatch(_accept)
+                elif message["type"] == "websocket.send":
+                    text_data = message.get("text")
+                    bytes_data = message.get("bytes")
+                    def _send():
+                        if text_data is not None:
+                            ctx.ws_send(text_data, opcode=0x1)
+                        elif bytes_data is not None:
+                            ctx.ws_send(bytes_data, opcode=0x2)
+                    ctx.dispatch(_send)
+                elif message["type"] == "websocket.close":
+                    code = message.get("code", 1000)
+                    reason = message.get("reason", "")
+                    def _close():
+                        ctx.ws_close(code, reason)
+                    ctx.dispatch(_close)
+
+            def on_ws_message(c, payload, opcode):
+                if opcode == 0x8: # close
+                    loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.disconnect", "code": 1000})
+                elif opcode == 0x1: # text
+                    text = payload.decode('utf-8', errors='replace') if isinstance(payload, bytes) else payload
+                    loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "text": text})
+                else: # binary
+                    loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "bytes": payload})
+            
+            ctx.set_on_ws_message(on_ws_message)
+            
+            try:
+                await self.asgi_app(scope, receive, send)
+            except Exception as e:
+                def _err():
+                    import traceback
+                    traceback.print_exc()
+                    ctx.ws_close(1011, "Internal Error")
+                ctx.dispatch(_err)
+            return
+
+        # HTTP scope
         scope = {
             "type": "http",
             "asgi": {"version": "3.0", "spec_version": "2.3"},
             "http_version": "1.1",
             "method": ctx.method.decode('utf-8') if isinstance(ctx.method, bytes) else ctx.method,
-            "scheme": "http", # We assume http for now. TODO check tls
+            "scheme": "http",
             "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
             "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
-            # URL query is usually stored as bytes in ASGI
-            # csilk's context doesn't expose raw query string directly, so we can try getting it if it exists.
             "query_string": b"", 
             "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
             "client": None,
@@ -39,8 +102,6 @@ class ASGIAdapter:
                     "body": body_bytes,
                     "more_body": False,
                 }
-            # For simplicity, if we get called again after body is sent, we just disconnect.
-            # In a real streaming scenario we'd yield chunks.
             return {"type": "http.disconnect"}
 
         async def send(message: Dict[str, Any]) -> None:
