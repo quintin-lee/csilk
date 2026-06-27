@@ -74,10 +74,11 @@ class App:
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
         from csilk.depends import inject
         import asyncio
+        import inspect
         import weakref
         
         handler = inject(handler)
-        is_coro = asyncio.iscoroutinefunction(handler)
+        is_coro = inspect.iscoroutinefunction(handler)
         app_ref = weakref.proxy(self)
 
         @CsilkHandler
@@ -703,10 +704,11 @@ class Group:
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
         from csilk.depends import inject
         import asyncio
+        import inspect
         import weakref
         
         handler = inject(handler)
-        is_coro = asyncio.iscoroutinefunction(handler)
+        is_coro = inspect.iscoroutinefunction(handler)
         app_ref = weakref.proxy(self)
 
         @CsilkHandler
