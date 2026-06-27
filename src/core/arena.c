@@ -77,7 +77,10 @@ typedef struct csilk_arena_s {
 	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
 	size_t default_chunk_size; /**< Default size for new chunks. */
 	int align_64;		   /**< Non-zero to enable 64-byte alignment. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int)];
+	size_t max_total_bytes;	   /**< Maximum total bytes (0 = unlimited). */
+	size_t total_allocated;	   /**< Total allocated bytes since last reset. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int) -
+			 2 * sizeof(size_t)];
 } csilk_arena_t;
 
 /** @brief Thread-local cache structure with multiple size tiers.
@@ -205,6 +208,8 @@ csilk_arena_new(size_t default_chunk_size)
 	arena->head = nullptr;
 	arena->default_chunk_size = default_chunk_size;
 	arena->align_64 = 0;
+	arena->max_total_bytes = 0; /* Unlimited by default */
+	arena->total_allocated = 0; /* Reset counter on creation */
 	return arena;
 }
 
@@ -219,6 +224,36 @@ csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
 	if (arena) {
 		arena->align_64 = enabled;
 	}
+}
+
+/**
+ * @brief Set maximum total bytes for this arena.
+ *
+ * If set to 0 (default), the arena has no size limit and will grow
+ * unbounded until manually freed. If set to a non-zero value, allocations
+ * exceeding this limit will fail and return nullptr.
+ *
+ * @param arena    The arena to configure.
+ * @param max_bytes Maximum total bytes (0 = unlimited).
+ * @return 0 on success, -1 if arena is nullptr.
+ * @note Setting a limit resets the total_allocated counter to 0.
+ */
+int csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes);
+
+/**
+ * @brief Set maximum total bytes for this arena.
+ *
+ * Implementation of csilk_arena_set_max_bytes.
+ */
+int
+csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes)
+{
+	if (!arena) {
+		return -1;
+	}
+	arena->max_total_bytes = max_bytes;
+	arena->total_allocated = 0; /* Reset counter when limit is set */
+	return 0;
 }
 
 /** @brief Allocate memory from the arena with 8-byte alignment.
@@ -288,6 +323,13 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 		if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
 			return nullptr;
 		}
+
+		/* Check if allocation would exceed max_total_bytes limit */
+		if (arena->max_total_bytes > 0 &&
+		    (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
+			return nullptr;
+		}
+
 		chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
 	}
 
@@ -299,6 +341,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 	chunk->used = size;
 	chunk->next = arena->head;
 	arena->head = chunk;
+	arena->total_allocated += chunk_size;
 	return chunk->data;
 }
 
@@ -392,6 +435,9 @@ csilk_arena_free(csilk_arena_t* arena)
 			arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 		}
 
+		/* Track total allocated bytes (excluding chunk headers) */
+		arena->total_allocated -= curr->size;
+
 		curr = next;
 	}
 	arena_aligned_free(arena, sizeof(csilk_arena_t));
@@ -417,6 +463,7 @@ csilk_arena_reset(csilk_arena_t* arena)
 		curr->used = 0;
 		curr = curr->next;
 	}
+	arena->total_allocated = 0;
 }
 
 /** @brief Flush the thread-local arena chunk free list.
