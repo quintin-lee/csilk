@@ -230,6 +230,14 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
 
 /* --- Timer close --- */
 
+/** @brief Decrement active connections, clean up the request context, return
+ *  the arena and client struct to their respective pools.
+ *
+ *  This is the final teardown step for a client connection. It must only be
+ *  called when all references are released (all timers closed AND async_ref
+ *  zeroed).
+ *
+ *  @param client The client connection to destroy (must not be used after). */
 static void
 client_destroy(csilk_client_t* client)
 {
@@ -243,6 +251,14 @@ client_destroy(csilk_client_t* client)
 	pool_put(client->owner_pool, client);
 }
 
+/** @brief Get the libuv event loop associated with the request context.
+ *
+ *  Extracts the loop from the internal client's TCP handle.  Falls back to
+ *  uv_default_loop() if the context chain is incomplete (e.g. during early
+ *  initialization or in unit tests).
+ *
+ *  @param c The request context.
+ *  @return A pointer to the owning libuv event loop (never nullptr). */
 CSILK_INTERNAL uv_loop_t*
 _csilk_ctx_loop(csilk_ctx_t* c)
 {
@@ -253,6 +269,13 @@ _csilk_ctx_loop(csilk_ctx_t* c)
 	return client->handle.loop;
 }
 
+/** @brief Increment the async reference counter for the client connection.
+ *
+ *  Prevents premature client destruction while an async operation (e.g.
+ *  thread-pool work, streaming write) is in flight.  Each incr must be
+ *  paired with a matching decr.
+ *
+ *  @param c The request context. */
 CSILK_INTERNAL void
 _csilk_ctx_async_ref_incr(csilk_ctx_t* c)
 {
@@ -263,6 +286,14 @@ _csilk_ctx_async_ref_incr(csilk_ctx_t* c)
 	client->async_ref++;
 }
 
+/** @brief Decrement the async reference counter; destroy client if last ref.
+ *
+ *  When async_ref reaches 0 AND close_pending is 0 AND the connection is
+ *  already marked closed (conn_closed), the client is fully destroyed.
+ *  This prevents both leaks (abandoned clients) and use-after-free (relying
+ *  on just one condition).
+ *
+ *  @param c The request context. */
 CSILK_INTERNAL void
 _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 {
@@ -276,6 +307,14 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 	}
 }
 
+/** @brief libuv close callback for timer handles — decrements close_pending
+ *  and triggers client_destroy when all timers are closed.
+ *
+ *  Each of the four timers (idle, read, write, request) calls this once on
+ *  close.  Client destruction is deferred until all four have acknowledged
+ *  AND async_ref is zero.
+ *
+ *  @param handle The timer handle being closed (data points to csilk_client_t). */
 static void
 on_timer_close(uv_handle_t* handle)
 {
@@ -343,6 +382,13 @@ on_close(uv_handle_t* handle)
 
 /* --- Timer callbacks --- */
 
+/** @brief libuv timer callback: fired when no I/O activity occurs within the
+ *  idle timer window (keep-alive timeout).
+ *
+ *  Closes the connection gracefully, which triggers the on_close chain.
+ *  Skips close if already closing to avoid double-close.
+ *
+ *  @param handle The idle timer handle (data points to csilk_client_t). */
 void
 on_idle_timeout(uv_timer_t* handle)
 {
@@ -386,6 +432,14 @@ on_write_timeout(uv_timer_t* handle)
 
 /* --- Rejected connection --- */
 
+/** @brief libuv close callback for rejected (connection-limited) TCP handles.
+ *
+ *  When the server reaches max_connections, excess connections are accepted
+ *  and immediately closed. The handle (a temporary uv_tcp_t allocated in
+ *  on_new_connection) is freed here. This drains the kernel TCP backlog
+ *  without allocating a full csilk_client_t.
+ *
+ *  @param handle The temporary TCP handle to free. */
 static void
 on_rejected_close(uv_handle_t* handle)
 {

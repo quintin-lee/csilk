@@ -140,6 +140,14 @@ get_metric_slot(const char* method, const char* route, int status)
 
 /* --- Public API: Statistics Collection --- */
 
+/** @brief Read snapshot of the security-related atomic counters.
+ *
+ *  Atomically loads security_rate_limit_blocks, csrf_violations, and
+ *  auth_failures into the caller-provided struct.  Each counter is
+ *  independently atomic, so the snapshot may be inconsistent across
+ *  counters under concurrent updates — this is acceptable for telemetry.
+ *
+ *  @param[out] stats  Struct to populate (must not be nullptr). */
 void
 csilk_security_get_stats(csilk_security_stats_t* stats)
 {
@@ -552,12 +560,18 @@ csilk_metrics_handler(csilk_ctx_t* c)
 	CSILK_LOG_D("Metrics: scraped metrics response generated, length: %zu bytes", offset);
 }
 
+/** @brief Return the atomic global aggregated HTTP request counter.
+ *
+ *  @return Total number of HTTP requests processed since startup. */
 uint64_t
 csilk_metrics_get_total_requests(void)
 {
 	return atomic_load(&http_requests_total);
 }
 
+/** @brief Return the atomic global accumulated request duration.
+ *
+ *  @return Total microseconds spent handling HTTP requests since startup. */
 uint64_t
 csilk_metrics_get_total_duration(void)
 {

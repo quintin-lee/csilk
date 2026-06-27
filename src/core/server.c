@@ -35,6 +35,15 @@
 
 static void on_server_handle_close(uv_handle_t* handle);
 
+/** @brief libuv signal handler for SIGINT — initiates graceful shutdown.
+ *
+ *  Called when the process receives SIGINT (Ctrl+C).  Delegates to
+ *  csilk_server_stop() which performs the full multi-worker shutdown
+ *  sequence: stop listening, drain active connections, join worker
+ *  threads, and free resources.
+ *
+ *  @param handle The uv_signal_t handle (data points to csilk_server_t).
+ *  @param signum The signal number (ignored — only SIGINT is registered). */
 static void
 on_signal(uv_signal_t* handle, int signum)
 {

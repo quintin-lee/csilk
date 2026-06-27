@@ -174,6 +174,14 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
  *       root and requested paths, then verifies the requested path starts
  *       with the root prefix.
  */
+/** @brief Check if a string contains null bytes or ASCII control characters.
+ *
+ *  Sanitizes file paths by rejecting any string that contains a byte below
+ *  0x20 (control characters: null, tab, newline, etc.).  A nullptr input
+ *  is treated as unsafe (returns 1).
+ *
+ *  @param str  The string to scan (may be nullptr).
+ *  @return 1 if unsafe (nullptr or contains control chars), 0 if safe. */
 static int
 contains_null_or_control(const char* str)
 {
@@ -189,6 +197,17 @@ contains_null_or_control(const char* str)
 	return 0;
 }
 
+/** @brief Check if a path contains "../" or "..\" directory traversal
+ *  sequences.
+ *
+ *  Scans the path string for literal ".." segments (with '/' or '\'
+ *  separators).  This is a defense-in-depth check layered on top of the
+ *  realpath()-based canonicalisation in the static file handler.  A
+ *  nullptr input is treated as unsafe (returns 1).
+ *
+ *  @param path  The file path to scan (may be nullptr).
+ *  @return 1 if a traversal sequence is detected, 0 if the path appears
+ *          safe for this check. */
 static int
 contains_path_traversal(const char* path)
 {

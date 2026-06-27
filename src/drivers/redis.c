@@ -596,6 +596,11 @@ typedef struct {
 	csilk_db_pool_t* pool;
 } redis_storage_driver_t;
 
+/** @brief Store a value under a key in Redis (SET).
+ *
+ * @param c     Request context carrying the storage driver reference.
+ * @param key   Null-terminated key string.
+ * @param value Value pointer (assumed to be a null-terminated string). */
 static void
 redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
 {
@@ -619,6 +624,14 @@ redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
 	}
 }
 
+/** @brief Retrieve a value by key from Redis (GET).
+ *
+ * The returned string is arena-allocated (request-scoped) and must not be
+ * freed by the caller.
+ *
+ * @param c   Request context.
+ * @param key Null-terminated key.
+ * @return Value string, or nullptr if the key does not exist. */
 static void*
 redis_storage_get(csilk_ctx_t* c, const char* key)
 {
@@ -646,6 +659,10 @@ redis_storage_get(csilk_ctx_t* c, const char* key)
 	return result;
 }
 
+/** @brief Clear all stored data — unsupported for Redis.
+ *
+ * A global FLUSHDB is intentionally omitted because it is dangerous in a
+ * shared-Redis environment.  This function is a no-op. */
 static void
 redis_storage_clear(csilk_ctx_t* c)
 {
@@ -653,6 +670,15 @@ redis_storage_clear(csilk_ctx_t* c)
 	(void)c;
 }
 
+/** @brief Store a string value with optional TTL (SET … EX).
+ *
+ * Returns -1 on null parameters or on a Redis error reply.
+ *
+ * @param c       Request context.
+ * @param key     Null-terminated key.
+ * @param value   Null-terminated value.
+ * @param ttl_sec Time-to-live in seconds (≤ 0 means no expiry).
+ * @return 0 on success, -1 on error. */
 static int
 redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec)
 {
@@ -686,6 +712,15 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
 	return rc;
 }
 
+/** @brief Retrieve a string value by key from Redis (GET).
+ *
+ * The returned string is heap-allocated via strdup(); the caller must
+ * free() it.
+ *
+ * @param c   Request context.
+ * @param key Null-terminated key.
+ * @return Heap-allocated value string, or nullptr if the key does not
+ *         exist. */
 static char*
 redis_storage_get_string(csilk_ctx_t* c, const char* key)
 {
@@ -713,6 +748,15 @@ redis_storage_get_string(csilk_ctx_t* c, const char* key)
 	return result;
 }
 
+/** @brief Atomically increment a key (INCR) and optionally set a TTL.
+ *
+ * If the key did not exist before the increment (value becomes 1) and
+ * ttl_sec > 0, an EXPIRE command is issued so the counter auto-evicts.
+ *
+ * @param c       Request context.
+ * @param key     Null-terminated key.
+ * @param ttl_sec TTL to set on a newly-created counter (≤ 0 means none).
+ * @return The incremented value, or -1 on error. */
 static long long
 redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 {
@@ -748,6 +792,14 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 	return val;
 }
 
+/** @brief Create a new Redis-based storage driver instance.
+ *
+ * The returned driver wraps the given database pool and implements the
+ * csilk_storage_driver_t vtable via Redis SET/GET/INCR commands.
+ *
+ * @param pool An already-connected Redis database pool.
+ * @return A heap-allocated storage driver, or nullptr on allocation
+ *         failure or null pool. */
 csilk_storage_driver_t*
 csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
 {

@@ -33,6 +33,14 @@
  */
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/** @brief Encode binary data to standard Base64 (RFC 4648 §4).
+ *
+ * The output buffer must be large enough to hold the encoded string plus
+ * NUL terminator.  The required size is ((len + 2) / 3) * 4 + 1 bytes.
+ *
+ * @param src  Input binary data.
+ * @param len  Number of bytes to encode.
+ * @param[out] out  Output buffer (caller-allocated, see sizing note above). */
 void
 csilk_base64_encode(const uint8_t* src, size_t len, char* out)
 {
@@ -68,6 +76,15 @@ csilk_base64_encode(const uint8_t* src, size_t len, char* out)
 	out[j] = '\0';
 }
 
+/** @brief Encode binary data to Base64URL (RFC 4648 §5).
+ *
+ * Same as csilk_base64_encode() but substitutes '+' → '-', '/' → '_',
+ * and omits trailing '=' padding, making the result safe for use in
+ * URL query strings and JWT payloads without additional escaping.
+ *
+ * @param src  Input binary data.
+ * @param len  Number of bytes to encode.
+ * @param[out] out  Output buffer (same size as standard Base64). */
 void
 csilk_base64url_encode(const uint8_t* src, size_t len, char* out)
 {
@@ -87,6 +104,17 @@ csilk_base64url_encode(const uint8_t* src, size_t len, char* out)
 	}
 }
 
+/** @brief Decode a Base64URL string back to raw bytes (RFC 4648 §5).
+ *
+ * Reverses the URL-safe character substitutions ('-' → '+', '_' → '/'),
+ * restores padding, then decodes via a reverse-lookup table and bit-stream
+ * decoder.  Invalid characters or buffer overflow cause an early return.
+ *
+ * @param src     Null-terminated Base64URL input string.
+ * @param[out] out  Decoded binary output (caller-allocated).
+ * @param out_cap   Maximum bytes that can be written to @p out.
+ * @return The number of decoded bytes on success, or -1 on invalid input
+ *         or buffer overflow. */
 int
 csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap)
 {
@@ -112,21 +140,9 @@ csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap)
 	}
 	tmp[len] = '\0';
 
-	/**
-	 * @brief Reverse lookup table for O(1) Base64 character decoding.
-	 *
-	 * Maps every possible byte value (0-255) to its 6-bit Base64 value,
-	 * or -1 if the character is not valid in the Base64 alphabet.
-	 * This eliminates conditional branching in the hot decoding loop
-	 * and enables single-pass validation and decoding.
-	 *
-	 * The table is indexed directly by the character's byte value:
-	 *   A-Z (65-90)   → 0-25
-	 *   a-z (97-122)  → 26-51
-	 *   0-9 (48-57)   → 52-61
-	 *   '+' (43)      → 62
-	 *   '/' (47)      → 63
-	 *   All others    → -1 (invalid)
+	/*
+	 * Reverse lookup table for O(1) Base64 character decoding.
+	 * See the static array definition below for the layout.
 	 */
 	static const int8_t b64_rev_table[256] = {
 	    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
