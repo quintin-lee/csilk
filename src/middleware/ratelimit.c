@@ -12,6 +12,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "../core/ctx_internal.h"
 
 /**
 /**
@@ -35,7 +36,7 @@ static uv_mutex_t ratelimit_mutex;
 static uv_once_t ratelimit_once = UV_ONCE_INIT;
 
 /* Forward declaration for metrics counter — used in the rate-limit middleware */
-static void _csilk_metrics_inc_rate_limit_blocks(void);
+extern void _csilk_metrics_inc_rate_limit_blocks(void);
 
 /**
  * @brief Initialize the rate-limiting mutex (called once via uv_once).
@@ -141,26 +142,30 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	CSILK_LOG_T("RateLimit: Checking request %p from IP %s (limit: %d)", (void*)c, ip, limit);
 
 	/* Distributed rate limiting using storage driver */
-	char key[128];
-	snprintf(key, sizeof(key), "ratelimit:%s", ip);
-	long long current_count = csilk_incr(c, key, WINDOW_SIZE);
+	if (c->storage_driver) {
+		char key[128];
+		snprintf(key, sizeof(key), "ratelimit:%s", ip);
+		long long current_count = csilk_incr(c, key, WINDOW_SIZE);
 
-	if (current_count >= 0) {
-		if (current_count > limit) {
-			CSILK_LOG_W("RateLimit: [Distributed] Blocked request from IP %s: current "
+		if (current_count >= 0) {
+			if (current_count > limit) {
+				CSILK_LOG_W(
+				    "RateLimit: [Distributed] Blocked request from IP %s: current "
 				    "count %lld exceeds limit %d",
 				    ip,
 				    current_count,
 				    limit);
-			/* forward-declared at file scope */
-			_csilk_metrics_inc_rate_limit_blocks();
-			csilk_set_header(c, "Retry-After", "60");
-			csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
-			csilk_abort(c);
-		} else {
-			csilk_next(c);
+				/* forward-declared at file scope */
+				_csilk_metrics_inc_rate_limit_blocks();
+				csilk_set_header(c, "Retry-After", "60");
+				csilk_json_error(
+				    c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
+				csilk_abort(c);
+			} else {
+				csilk_next(c);
+			}
+			return;
 		}
-		return;
 	}
 
 	/* Local in-memory rate limiting fallback */
