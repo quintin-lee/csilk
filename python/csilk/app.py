@@ -75,7 +75,7 @@ class App:
         import asyncio
         import weakref
         is_coro = asyncio.iscoroutinefunction(handler)
-        app_ref = weakref.proxy(self)
+        app_ref = weakref.proxy(self._app)
 
         @CsilkHandler
         def wrapper(ctx_ptr):
@@ -239,7 +239,7 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                if not self._handle_exception(ctx, e):
+                if not app_ref._handle_exception(ctx, e):
                     import traceback
                     traceback.print_exc()
                     ctx.string(500, f"Internal Server Error: {str(e)}")
@@ -258,7 +258,7 @@ class App:
             try:
                 handler(ctx)
             except Exception as e:
-                if not self._handle_exception(ctx, e):
+                if not app_ref._handle_exception(ctx, e):
                     import traceback
                     traceback.print_exc()
                     ctx.string(500, f"Internal Server Error: {str(e)}")
@@ -342,13 +342,15 @@ class App:
         self._lib.csilk_admin_serve(self._app, path.encode('utf-8'))
 
     def admin_serve_secure(self, path, auth_middleware):
+        import weakref
+        app_ref = weakref.proxy(self)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
             try:
                 auth_middleware(ctx)
             except Exception as e:
-                if not self._handle_exception(ctx, e):
+                if not app_ref._handle_exception(ctx, e):
                     import traceback
                     traceback.print_exc()
                     ctx.string(500, f"Internal Server Error: {str(e)}")
@@ -422,13 +424,15 @@ class App:
             raise RuntimeError("Underlying server instance is not initialized")
         
         from csilk.lib import CsilkHandler
+        import weakref
+        app_ref = weakref.proxy(self)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
             try:
                 handler(ctx)
             except Exception as e:
-                if not self._handle_exception(ctx, e):
+                if not app_ref._handle_exception(ctx, e):
                     import traceback
                     traceback.print_exc()
                     ctx.string(500, f"Internal Server Error: {str(e)}")
