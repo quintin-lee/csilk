@@ -1,11 +1,32 @@
+"""ASGI adapter for mounting ASGI applications (FastAPI, Starlette, etc.)
+inside a csilk server.
+
+Provides ``ASGIAdapter`` (bridges HTTP and WebSocket scopes) and
+``LifespanManager`` for the ASGI lifespan protocol.
+"""
+
 import asyncio
 from typing import Dict, Any, Callable
 
+
 class ASGIAdapter:
+    """Adapter that translates between csilk ``Context`` and the ASGI 3.0
+    ``scope`` / ``receive`` / ``send`` interface.
+
+    Usage::
+
+        app = App()
+        app.mount_asgi("/*path", fastapi_app)
+    """
+
     def __init__(self, asgi_app: Callable):
         self.asgi_app = asgi_app
 
     async def __call__(self, ctx):
+        """Handle an incoming request via the wrapped ASGI app.
+
+        Automatically detects WebSocket vs HTTP from the context state.
+        """
         ctx.is_async = True
         loop = asyncio.get_running_loop()
 
@@ -17,19 +38,19 @@ class ASGIAdapter:
                 "scheme": "ws",
                 "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
                 "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
-                "query_string": b"", 
+                "query_string": b"",
                 "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
                 "client": None,
                 "server": None,
                 "subprotocols": []
             }
-            
+
             receive_queue = asyncio.Queue()
             receive_queue.put_nowait({"type": "websocket.connect"})
-            
+
             async def receive() -> Dict[str, Any]:
                 return await receive_queue.get()
-                
+
             async def send(message: Dict[str, Any]) -> None:
                 if message["type"] == "websocket.accept":
                     def _accept():
@@ -52,16 +73,16 @@ class ASGIAdapter:
                     ctx.dispatch(_close)
 
             def on_ws_message(c, payload, opcode):
-                if opcode == 0x8: # close
+                if opcode == 0x8:  # close
                     loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.disconnect", "code": 1000})
-                elif opcode == 0x1: # text
+                elif opcode == 0x1:  # text
                     text = payload.decode('utf-8', errors='replace') if isinstance(payload, bytes) else payload
                     loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "text": text})
-                else: # binary
+                else:  # binary
                     loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "bytes": payload})
-            
+
             ctx.set_on_ws_message(on_ws_message)
-            
+
             try:
                 await self.asgi_app(scope, receive, send)
             except Exception as e:
@@ -81,13 +102,12 @@ class ASGIAdapter:
             "scheme": "http",
             "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
             "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
-            "query_string": b"", 
+            "query_string": b"",
             "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
             "client": None,
             "server": None,
         }
 
-        # Retrieve request body
         body_bytes = ctx.body_view or b""
         if isinstance(body_bytes, str):
             body_bytes = body_bytes.encode('utf-8')
@@ -108,7 +128,7 @@ class ASGIAdapter:
             if message["type"] == "http.response.start":
                 status = message["status"]
                 headers = message.get("headers", [])
-                
+
                 def _start():
                     for k, v in headers:
                         ctx.set_header(k.decode('utf-8'), v.decode('utf-8'))
@@ -118,7 +138,7 @@ class ASGIAdapter:
             elif message["type"] == "http.response.body":
                 body = message.get("body", b"")
                 more_body = message.get("more_body", False)
-                
+
                 def _write():
                     if not hasattr(ctx, '_asgi_headers_sent'):
                         ctx.status_code = getattr(ctx, '_asgi_status', 200)
@@ -141,7 +161,13 @@ class ASGIAdapter:
                     ctx.response_end()
             ctx.dispatch(_err)
 
+
 class LifespanManager:
+    """Manages the ASGI lifespan protocol (startup / shutdown events).
+
+    Used internally by ``App.run()`` when an ASGI app is mounted.
+    """
+
     def __init__(self, app):
         self.app = app
         self.receive_queue = asyncio.Queue()
@@ -149,16 +175,17 @@ class LifespanManager:
         self.task = None
 
     async def startup(self):
+        """Send the ``lifespan.startup`` event and wait for completion."""
         scope = {
             'type': 'lifespan',
             'asgi': {'version': '3.0', 'spec_version': '2.0'},
         }
         self.task = asyncio.create_task(self.app(scope, self.receive_queue.get, self.send_queue.put))
         await self.receive_queue.put({'type': 'lifespan.startup'})
-        
+
         get_task = asyncio.create_task(self.send_queue.get())
         done, pending = await asyncio.wait([self.task, get_task], return_when=asyncio.FIRST_COMPLETED)
-        
+
         if get_task in done:
             message = get_task.result()
             if message['type'] == 'lifespan.startup.failed':
@@ -168,27 +195,23 @@ class LifespanManager:
             else:
                 raise RuntimeError(f"Unexpected ASGI message: {message['type']}")
         else:
-            # The app task completed or crashed before sending a message.
-            # This usually means the app doesn't support lifespan (e.g. simple functions).
             get_task.cancel()
             return
 
     async def shutdown(self):
+        """Send the ``lifespan.shutdown`` event and wait for completion."""
         if self.task is None or self.task.done():
             return
         await self.receive_queue.put({'type': 'lifespan.shutdown'})
-        
+
         get_task = asyncio.create_task(self.send_queue.get())
         done, pending = await asyncio.wait([self.task, get_task], return_when=asyncio.FIRST_COMPLETED)
-        
+
         if get_task in done:
             message = get_task.result()
             if message['type'] == 'lifespan.shutdown.failed':
                 raise RuntimeError(f"ASGI shutdown failed: {message.get('message', '')}")
-            elif message['type'] == 'lifespan.shutdown.complete':
-                pass
-        
-        # Wait for the task to finish
+
         try:
             await asyncio.wait_for(self.task, timeout=2.0)
         except asyncio.TimeoutError:

@@ -1,4 +1,21 @@
-"""csilk Python wrapper.
+"""
+csilk — Python bindings for the csilk C web framework.
+
+Provides high-level Pythonic wrappers around the native csilk C library,
+exposing routing, middleware, WebSocket, SSE, database pools, AI workflows,
+vector search, cryptography, permissions, and the internal event bus.
+
+Typical usage::
+
+    from csilk import App
+
+    app = App()
+
+    @app.get("/hello")
+    def hello(ctx):
+        ctx.string(200, "Hello from csilk!")
+
+    app.run(8080)
 """
 
 from csilk.context import Context

@@ -1,14 +1,32 @@
+"""Model Context Protocol (MCP) client for integrating external MCP servers
+with csilk workflows.
+
+Provides a lightweight, zero-dependency ``MCPStdioClient`` that communicates
+with MCP servers over stdio using JSON-RPC 2.0.
+"""
+
 import asyncio
 import json
 import subprocess
 from typing import Dict, Any, List, Optional
 import os
 
+
 class MCPStdioClient:
+    """A minimal MCP client that communicates with MCP servers via stdio.
+
+    Supports the standard MCP lifecycle (initialize, tool listing, tool call)
+    using JSON-RPC 2.0 messages over the child process's stdin/stdout.
+
+    Usage::
+
+        client = MCPStdioClient("npx", ["-y", "@modelcontextprotocol/server-filesystem"])
+        await client.connect()
+        tools = await client.list_tools()
+        result = await client.call_tool("read_file", {"path": "/tmp/test.txt"})
+        await client.close()
     """
-    A minimal zero-dependency Model Context Protocol (MCP) Client
-    that communicates with MCP servers via stdio.
-    """
+
     def __init__(self, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
         self.command = command
         self.args = args
@@ -45,16 +63,17 @@ class MCPStdioClient:
         return init_res
 
     async def _read_loop(self):
+        """Background task: read JSON-RPC responses from the server's stdout."""
         while True:
             line = await self.process.stdout.readline()
             if not line:
                 break
-            
+
             try:
                 msg = json.loads(line.decode('utf-8'))
             except json.JSONDecodeError:
                 continue
-                
+
             if "id" in msg and msg["id"] in self._pending_requests:
                 future = self._pending_requests.pop(msg["id"])
                 if not future.done():
@@ -64,25 +83,38 @@ class MCPStdioClient:
                         future.set_result(msg.get("result", {}))
 
     async def request(self, method: str, params: dict = None) -> dict:
+        """Send a JSON-RPC request and wait for the response.
+
+        Args:
+            method: The method name.
+            params: Optional parameters dict.
+
+        Returns:
+            The ``result`` field from the response.
+
+        Raises:
+            RuntimeError: If the server returns an error.
+        """
         self._msg_id += 1
         msg_id = self._msg_id
-        
+
         msg = {
             "jsonrpc": "2.0",
             "id": msg_id,
             "method": method,
             "params": params or {}
         }
-        
+
         future = self._loop.create_future()
         self._pending_requests[msg_id] = future
-        
+
         self.process.stdin.write(json.dumps(msg).encode('utf-8') + b'\n')
         await self.process.stdin.drain()
-        
+
         return await future
 
     async def notify(self, method: str, params: dict = None):
+        """Send a JSON-RPC notification (no response expected)."""
         msg = {
             "jsonrpc": "2.0",
             "method": method,
@@ -92,16 +124,30 @@ class MCPStdioClient:
         await self.process.stdin.drain()
 
     async def list_tools(self) -> List[dict]:
+        """List all tools exposed by the MCP server.
+
+        Returns:
+            A list of tool descriptor dicts (each with ``name``,
+            ``description``, ``inputSchema``, etc.).
+        """
         res = await self.request("tools/list")
         return res.get("tools", [])
 
     async def call_tool(self, name: str, arguments: dict) -> Any:
+        """Call a tool on the MCP server.
+
+        Args:
+            name: Tool name.
+            arguments: Tool arguments dict.
+
+        Returns:
+            Concatenated text content from the tool response.
+        """
         res = await self.request("tools/call", {
             "name": name,
             "arguments": arguments
         })
-        
-        # Format the result back into a single string for csilk
+
         content = res.get("content", [])
         output = ""
         for c in content:
@@ -110,6 +156,7 @@ class MCPStdioClient:
         return output
 
     async def close(self):
+        """Terminate the MCP server process."""
         if self.process:
             try:
                 self.process.terminate()

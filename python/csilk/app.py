@@ -1,9 +1,44 @@
+"""Application entry point, routing, middleware, and built-in middleware helpers.
+
+This module defines the primary ``App`` class that every csilk Python
+application uses, along with ``Group`` for route grouping and ``MQ`` /
+``MqContext`` for the internal event bus.
+
+Built-in middleware wrappers (``logger_middleware``, ``cors``, ``jwt_middleware``,
+etc.) are provided as module-level functions for convenience.
+"""
+
 import ctypes
 from csilk.lib import get_bindings, CsilkHandler, CsilkCtxPtr
 from csilk.context import Context
 
+
 class App:
+    """The csilk application — the main entry point for routing, middleware,
+    and server lifecycle management.
+
+    Usage::
+
+        app = App()
+
+        @app.get("/hello")
+        def hello(ctx: Context):
+            ctx.string(200, "Hello!")
+
+        if __name__ == "__main__":
+            app.run(8080)
+    """
+
     def __init__(self, config_path=None, asgi_app=None):
+        """Create a new csilk application.
+
+        Args:
+            config_path: Optional path to a YAML config file.
+            asgi_app: Optional ASGI application (FastAPI / Starlette) to
+                mount at ``/*path``.
+        Raises:
+            RuntimeError: If the underlying C app instance cannot be created.
+        """
         self._lib = get_bindings()
         c_config = config_path.encode('utf-8') if config_path else None
         self._app = self._lib.csilk_app_new(c_config)
@@ -42,6 +77,7 @@ class App:
             self._lib.csilk_server_add_hook(server, 3, on_conn_close)
 
     def free(self):
+        """Release all resources held by the application (C backend, handlers, event loop)."""
         if self._app:
             self._lib.csilk_app_free(self._app)
             self._app = None
@@ -59,7 +95,17 @@ class App:
                 pass
 
     def exception_handler(self, exc_class):
-        """Decorator to register a global exception handler for a specific exception class."""
+        """Decorator to register a global exception handler.
+
+        Usage::
+
+            @app.exception_handler(ValueError)
+            def handle_value_error(ctx, exc):
+                ctx.string(400, str(exc))
+
+        Args:
+            exc_class: The exception class to handle.
+        """
         def decorator(handler):
             self._exception_handlers[exc_class] = handler
             return handler
@@ -79,6 +125,19 @@ class App:
         return False
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        """Register a route with the given HTTP method and path.
+
+        Args:
+            method: HTTP method (``"GET"``, ``"POST"``, …).
+            path: URL path pattern (e.g. ``"/users/:id"``).
+            handler: Callback ``(Context) -> None``.
+            input_type: Expected content-type for request body.
+            output_type: Response content-type.
+            summary: Short description for OpenAPI docs.
+            description: Full description for OpenAPI docs.
+            perm_required: Permission name for access control.
+            perm_resource: Permission resource identifier.
+        """
         from csilk.depends import inject
         import asyncio
         import inspect
@@ -140,6 +199,11 @@ class App:
 
     # HTTP method decorators / shortcuts
     def get(self, path, handler=None, **kwargs):
+        """Decorator / register a ``GET`` route.
+
+        Can be used as ``@app.get("/path")`` or ``app.get("/path", handler)``.
+        Passes ``**kwargs`` through to :meth:`route`.
+        """
         if handler is None:
             def decorator(h):
                 self.route("GET", path, h, **kwargs)
@@ -148,7 +212,15 @@ class App:
         self.route("GET", path, handler, **kwargs)
 
     def ws(self, path, ws_class=None, **kwargs):
-        """Register a class-based WebSocket handler."""
+        """Register a class-based WebSocket handler.
+
+        Usage::
+
+            @app.ws("/ws")
+            class MyHandler:
+                def on_connect(self, ctx): ...
+                def on_message(self, ctx, msg, op): ...
+        """
         def decorator(cls):
             def handler(ctx):
                 instance = cls()
@@ -166,6 +238,7 @@ class App:
         return decorator(ws_class)
 
     def post(self, path, handler=None, **kwargs):
+        """Decorator / register a ``POST`` route."""
         if handler is None:
             def decorator(h):
                 self.route("POST", path, h, **kwargs)
@@ -174,6 +247,7 @@ class App:
         self.route("POST", path, handler, **kwargs)
 
     def put(self, path, handler=None, **kwargs):
+        """Decorator / register a ``PUT`` route."""
         if handler is None:
             def decorator(h):
                 self.route("PUT", path, h, **kwargs)
@@ -182,6 +256,7 @@ class App:
         self.route("PUT", path, handler, **kwargs)
 
     def delete(self, path, handler=None, **kwargs):
+        """Decorator / register a ``DELETE`` route."""
         if handler is None:
             def decorator(h):
                 self.route("DELETE", path, h, **kwargs)
@@ -190,6 +265,7 @@ class App:
         self.route("DELETE", path, handler, **kwargs)
 
     def patch(self, path, handler=None, **kwargs):
+        """Decorator / register a ``PATCH`` route."""
         if handler is None:
             def decorator(h):
                 self.route("PATCH", path, h, **kwargs)
@@ -198,6 +274,7 @@ class App:
         self.route("PATCH", path, handler, **kwargs)
 
     def options(self, path, handler=None, **kwargs):
+        """Decorator / register an ``OPTIONS`` route."""
         if handler is None:
             def decorator(h):
                 self.route("OPTIONS", path, h, **kwargs)
@@ -206,6 +283,7 @@ class App:
         self.route("OPTIONS", path, handler, **kwargs)
 
     def head(self, path, handler=None, **kwargs):
+        """Decorator / register a ``HEAD`` route."""
         if handler is None:
             def decorator(h):
                 self.route("HEAD", path, h, **kwargs)
@@ -219,6 +297,12 @@ class App:
         self._lib.csilk_app_log_level(self._app, int(level))
 
     def log_file(self, path, max_sz=0):
+        """Write log output to a file (optionally with rotation).
+
+        Args:
+            path: Log file path.
+            max_sz: Maximum file size in bytes before rotation (0 = no limit).
+        """
         self._lib.csilk_app_log_file(
             self._app, 
             path.encode('utf-8') if path else None, 
@@ -226,10 +310,21 @@ class App:
         )
 
     def log_json(self, enable=True):
+        """Enable or disable JSON-formatted log output.
+
+        Args:
+            enable: ``True`` for JSON, ``False`` for plain-text.
+        """
         self._lib.csilk_app_log_json(self._app, 1 if enable else 0)
 
     # Static files
     def static(self, prefix, root_dir):
+        """Serve static files from a directory.
+
+        Args:
+            prefix: URL path prefix (e.g. ``"/static"``).
+            root_dir: Local filesystem directory to serve.
+        """
         self._lib.csilk_app_static(
             self._app, 
             prefix.encode('utf-8'), 
@@ -238,10 +333,23 @@ class App:
 
     # OpenAPI
     def enable_openapi(self, enable=True):
+        """Enable or disable the OpenAPI spec endpoint.
+
+        Args:
+            enable: ``True`` to serve ``/openapi.json``.
+        """
         self._lib.csilk_app_enable_openapi(self._app, 1 if enable else 0)
 
     # Middleware registration
     def use(self, handler):
+        """Register global middleware.
+
+        The handler is called for every request and must call
+        ``ctx.next()`` to pass control to the next middleware/handler.
+
+        Args:
+            handler: Callback ``(Context) -> None``.
+        """
         import weakref
         app_ref = weakref.proxy(self)
         @CsilkHandler
@@ -261,6 +369,15 @@ class App:
         self._lib.csilk_app_use(self._app, wrapper)
 
     def use_group(self, prefix, handler):
+        """Register group-specific middleware.
+
+        The middleware runs for all routes under the given prefix.
+
+        Args:
+            prefix: URL path prefix.
+            handler: Callback ``(Context) -> None`` that must call
+                     ``ctx.next()``.
+        """
         import weakref
         app_ref = weakref.proxy(self)
         @CsilkHandler
@@ -281,32 +398,41 @@ class App:
 
 
     def apply_config(self):
+        """Apply YAML configuration (from the path passed to ``__init__``).
+
+        Must be called before :meth:`run`.
+        """
         self._lib.csilk_app_apply_config(self._app)
 
-    def set_server_config(self, 
-                          idle_timeout_ms=0, 
-                          read_timeout_ms=0, 
-                          write_timeout_ms=0, 
-                          request_timeout_ms=0, 
-                          max_body_size=0, 
-                          max_header_size=0, 
-                          max_url_size=0, 
-                          max_headers_count=0, 
-                          max_connections=0, 
-                          listen_backlog=0, 
-                          tcp_nodelay=0, 
-                          tcp_keepalive=0, 
-                          worker_threads=0, 
-                          enable_tls=0, 
-                          tls_cert_file=None, 
-                          tls_key_file=None, 
-                          tls_ca_file=None, 
-                          tls_verify_peer=0, 
-                          h2_push_enable=0, 
-                          h2_max_push_per_request=0, 
-                          enable_simd=0, 
-                          enable_arena_alignment=0, 
+    def set_server_config(self,
+                          idle_timeout_ms=0,
+                          read_timeout_ms=0,
+                          write_timeout_ms=0,
+                          request_timeout_ms=0,
+                          max_body_size=0,
+                          max_header_size=0,
+                          max_url_size=0,
+                          max_headers_count=0,
+                          max_connections=0,
+                          listen_backlog=0,
+                          tcp_nodelay=0,
+                          tcp_keepalive=0,
+                          worker_threads=0,
+                          enable_tls=0,
+                          tls_cert_file=None,
+                          tls_key_file=None,
+                          tls_ca_file=None,
+                          tls_verify_peer=0,
+                          h2_push_enable=0,
+                          h2_max_push_per_request=0,
+                          enable_simd=0,
+                          enable_arena_alignment=0,
                           enable_openapi=0):
+        """Configure low-level server options before calling :meth:`run`.
+
+        All parameters default to ``0`` / ``None``, meaning the C
+        runtime applies its own defaults.  Set only the values you need.
+        """
         from csilk.lib import CsilkServerConfig
         config = CsilkServerConfig(
             idle_timeout_ms=idle_timeout_ms,
@@ -337,6 +463,10 @@ class App:
 
     @property
     def mq(self):
+        """Access the server's built-in message queue (``MQ`` instance).
+
+        ``None`` if the server has not been initialised yet.
+        """
         if not hasattr(self, "_mq_obj"):
             server = self._lib.csilk_app_server(self._app)
             if server:
@@ -350,9 +480,21 @@ class App:
         return self._mq_obj
 
     def admin_serve(self, path):
+        """Serve the admin dashboard at the given URL path.
+
+        Args:
+            path: URL prefix (e.g. ``"/admin"``).
+        """
         self._lib.csilk_admin_serve(self._app, path.encode('utf-8'))
 
     def admin_serve_secure(self, path, auth_middleware):
+        """Serve the admin dashboard behind a custom auth middleware.
+
+        Args:
+            path: URL prefix (e.g. ``"/admin"``).
+            auth_middleware: Middleware ``(Context) -> None`` that
+                             rejects unauthorised requests.
+        """
         import weakref
         app_ref = weakref.proxy(self)
         @CsilkHandler
@@ -371,6 +513,14 @@ class App:
 
     # Run / Stop
     def run(self, port):
+        """Start the HTTP server (blocking).
+
+        If an ASGI app was mounted, its lifespan events are triggered
+        before and after the server runs.
+
+        Args:
+            port: TCP port to listen on.
+        """
         if getattr(self, "_asgi_app", None):
             import asyncio
             from csilk.asgi import LifespanManager
@@ -391,6 +541,7 @@ class App:
                     traceback.print_exc()
 
     def stop(self):
+        """Gracefully stop the server (non-blocking)."""
         server = self._lib.csilk_app_server(self._app)
         if server:
             self._lib.csilk_server_stop(server)
@@ -420,6 +571,7 @@ class App:
         self._register_hook(5, callback, server_level=False)
 
     def _register_hook(self, hook_type, callback, server_level=False):
+        """Internal: wrap and register a lifecycle hook on the server."""
         server = self._lib.csilk_app_server(self._app)
         if not server:
             raise RuntimeError("Underlying server instance is not initialized")
@@ -498,6 +650,7 @@ class App:
         }
 
     def __del__(self):
+        """Automatic resource cleanup when the App is garbage-collected."""
         self.free()
 
     def group(self, prefix):
@@ -543,36 +696,64 @@ def validate(body=None, query=None):
 
 # Built-in C middlewares wrappers
 def recovery_middleware(ctx):
+    """Recovery middleware — catches panics and returns 500."""
     get_bindings().csilk_recovery_handler(ctx._ctx)
 
 
 def logger_middleware(ctx):
+    """Request logging middleware — logs method, path, status, latency."""
     get_bindings().csilk_logger_handler(ctx._ctx)
 
 def waf_middleware(ctx):
+    """Web Application Firewall middleware — blocks malicious requests."""
     get_bindings().csilk_waf_middleware(ctx._ctx)
 
 def request_id_middleware(ctx):
+    """Injects/reads ``X-Request-Id`` for end-to-end tracing."""
     get_bindings().csilk_request_id_middleware(ctx._ctx)
 
 def health_check_handler(ctx):
+    """Built-in ``/healthz`` endpoint — returns 200."""
     get_bindings().csilk_health_check_handler(ctx._ctx)
 
 def ready_check_handler(ctx):
+    """Built-in ``/readyz`` endpoint — returns 200 when ready."""
     get_bindings().csilk_ready_check_handler(ctx._ctx)
 
 def csrf_middleware(ctx):
+    """CSRF protection middleware."""
     get_bindings().csilk_csrf_middleware(ctx._ctx)
 
 def gzip_middleware(ctx):
+    """Gzip response compression middleware."""
     get_bindings().csilk_gzip_middleware(ctx._ctx)
 
 def rate_limit(limit):
+    """Rate-limit middleware factory.
+
+    Args:
+        limit: Max requests per second per client.
+
+    Returns:
+        A ``(Context) -> None`` middleware that enforces the limit.
+    """
     def middleware(ctx):
         get_bindings().csilk_rate_limit_middleware(ctx._ctx, limit)
     return middleware
 
 def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allow_headers="Content-Type, Authorization", allow_credentials=False, max_age=86400):
+    """CORS middleware factory.
+
+    Args:
+        allow_origin: ``Access-Control-Allow-Origin`` value.
+        allow_methods: ``Access-Control-Allow-Methods`` value.
+        allow_headers: ``Access-Control-Allow-Headers`` value.
+        allow_credentials: Whether to allow credentials.
+        max_age: ``Access-Control-Max-Age`` in seconds.
+
+    Returns:
+        A ``(Context) -> None`` middleware that sets CORS headers.
+    """
     from csilk.lib import CsilkCorsConfig
     config = CsilkCorsConfig(
         allow_origin=allow_origin.encode('utf-8') if allow_origin else None,
@@ -586,6 +767,15 @@ def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allo
     return middleware
 
 def jwt_middleware(secret):
+    """JWT authentication middleware factory.
+
+    Args:
+        secret: HMAC secret key for token verification.
+
+    Returns:
+        A ``(Context) -> None`` middleware that rejects requests
+        without a valid ``Authorization: Bearer <token>`` header.
+    """
     c_secret = secret.encode('utf-8')
     def middleware(ctx):
         get_bindings().csilk_jwt_middleware(ctx._ctx, c_secret)
@@ -593,17 +783,24 @@ def jwt_middleware(secret):
 
 
 class MqContext:
+    """A message received from the internal event bus.
+
+    Wraps an opaque C ``csilk_mq_ctx_t`` pointer.
+    """
+
     def __init__(self, ctx_ptr):
         self._ctx = ctx_ptr
         self._lib = get_bindings()
 
     @property
     def topic(self):
+        """The topic string this message was published to."""
         res = self._lib.csilk_mq_get_topic(self._ctx)
         return res.decode('utf-8') if res else ""
 
     @property
     def payload(self):
+        """Raw binary payload of the message."""
         out_len = ctypes.c_size_t(0)
         res = self._lib.csilk_mq_get_payload(self._ctx, ctypes.byref(out_len))
         if res and out_len.value > 0:
@@ -611,18 +808,38 @@ class MqContext:
         return b""
 
     def next(self):
+        """Pass control to the next subscriber middleware."""
         self._lib.csilk_mq_next(self._ctx)
 
     def abort(self):
+        """Abort message delivery — stop processing by downstream subscribers."""
         self._lib.csilk_mq_abort(self._ctx)
 
 class MQ:
+    """Internal event bus — publish / subscribe message queue.
+
+    Use through the ``App.mq`` property.  Messages are delivered
+    asynchronously within the server process.
+    """
+
     def __init__(self, mq_ptr):
         self._mq = mq_ptr
         self._lib = get_bindings()
         self._handlers = []
 
     def subscribe(self, topic, handler=None):
+        """Register a subscriber for a topic.
+
+        Can be used as a decorator::
+
+            @mq.subscribe("events.user.created")
+            def handle(ctx: MqContext):
+                ...
+
+        Args:
+            topic: Topic string.
+            handler: Optional ``(MqContext) -> None`` callback.
+        """
         if handler is None:
             def decorator(h):
                 self.subscribe(topic, h)
@@ -642,6 +859,15 @@ class MQ:
         self._lib.csilk_mq_subscribe(self._mq, topic.encode('utf-8'), wrapper)
 
     def use(self, topic, handler=None):
+        """Register middleware for a topic.
+
+        Middleware runs before subscribers and may call ``ctx.next()``
+        to pass control or ``ctx.abort()`` to stop delivery.
+
+        Args:
+            topic: Topic filter (``None`` for all topics).
+            handler: ``(MqContext) -> None`` callback.
+        """
         if handler is None:
             def decorator(h):
                 self.use(topic, h)
@@ -662,6 +888,15 @@ class MQ:
         self._lib.csilk_mq_use(self._mq, c_topic, wrapper)
 
     def publish(self, topic, payload):
+        """Publish a message to a topic.
+
+        Args:
+            topic: Topic string.
+            payload: String, bytes, or JSON-serialisable object.
+
+        Returns:
+            C status code (0 on success).
+        """
         if isinstance(payload, str):
             c_payload = payload.encode('utf-8')
         elif isinstance(payload, bytes):
@@ -671,10 +906,23 @@ class MQ:
         return self._lib.csilk_mq_publish(self._mq, topic.encode('utf-8'), c_payload, len(c_payload))
 
     def set_persistence(self, wal_path):
+        """Enable WAL-based persistence for the message queue.
+
+        Args:
+            wal_path: Directory path for the write-ahead log.
+
+        Returns:
+            C status code (0 on success).
+        """
         return self._lib.csilk_mq_set_persistence(self._mq, wal_path.encode('utf-8'))
 
     @property
     def stats(self):
+        """Return a dict with queue statistics.
+
+        Keys: ``published_total``, ``delivered_total``, ``failed_total``,
+        ``queue_depth``, ``topic_count``.
+        """
         from csilk.lib import CsilkMqStats
         stats = CsilkMqStats()
         self._lib.csilk_mq_get_stats(self._mq, ctypes.byref(stats))
@@ -688,6 +936,11 @@ class MQ:
 
 
 class Group:
+    """A route group with an optional URL prefix.
+
+    Groups can nest and share common middleware.
+    """
+
     def __init__(self, app, prefix, group_ptr, parent=None):
         self._app = app
         self._prefix = prefix
@@ -697,6 +950,7 @@ class Group:
         self._lib = app._lib
 
     def free(self):
+        """Free the underlying C group and all subgroups."""
         if hasattr(self, "_subgroups"):
             for sg in self._subgroups:
                 sg.free()
@@ -707,9 +961,16 @@ class Group:
         self._handlers.clear()
 
     def __del__(self):
+        """Automatic cleanup on garbage collection."""
         self.free()
 
     def use(self, middleware):
+        """Register group-level middleware.
+
+        Args:
+            middleware: Callback ``(Context) -> None`` that must call
+                       ``ctx.next()``.
+        """
         import weakref
         app_ref = weakref.proxy(self)
         @CsilkHandler
@@ -726,6 +987,19 @@ class Group:
         self._lib.csilk_group_use(self._group, wrapper)
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        """Register a route on this group.
+
+        Args:
+            method: HTTP method (``"GET"``, ``"POST"``, …).
+            path: URL path relative to the group prefix.
+            handler: Callback ``(Context) -> None``.
+            input_type: Expected content-type for request body.
+            output_type: Response content-type.
+            summary: Short description for OpenAPI docs.
+            description: Full description for OpenAPI docs.
+            perm_required: Permission name for access control.
+            perm_resource: Permission resource identifier.
+        """
         from csilk.depends import inject
         import asyncio
         import inspect
@@ -775,6 +1049,7 @@ class Group:
 
     # HTTP method decorators / shortcuts
     def get(self, path, handler=None, **kwargs):
+        """Decorator / register a ``GET`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("GET", path, h, **kwargs)
@@ -783,7 +1058,7 @@ class Group:
         self.route("GET", path, handler, **kwargs)
 
     def ws(self, path, ws_class=None, **kwargs):
-        """Register a class-based WebSocket handler."""
+        """Register a class-based WebSocket handler on this group."""
         def decorator(cls):
             def handler(ctx):
                 instance = cls()
@@ -801,6 +1076,7 @@ class Group:
         return decorator(ws_class)
 
     def post(self, path, handler=None, **kwargs):
+        """Decorator / register a ``POST`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("POST", path, h, **kwargs)
@@ -809,6 +1085,7 @@ class Group:
         self.route("POST", path, handler, **kwargs)
 
     def put(self, path, handler=None, **kwargs):
+        """Decorator / register a ``PUT`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("PUT", path, h, **kwargs)
@@ -817,6 +1094,7 @@ class Group:
         self.route("PUT", path, handler, **kwargs)
 
     def delete(self, path, handler=None, **kwargs):
+        """Decorator / register a ``DELETE`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("DELETE", path, h, **kwargs)
@@ -825,6 +1103,7 @@ class Group:
         self.route("DELETE", path, handler, **kwargs)
 
     def patch(self, path, handler=None, **kwargs):
+        """Decorator / register a ``PATCH`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("PATCH", path, h, **kwargs)
@@ -833,6 +1112,7 @@ class Group:
         self.route("PATCH", path, handler, **kwargs)
 
     def options(self, path, handler=None, **kwargs):
+        """Decorator / register an ``OPTIONS`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("OPTIONS", path, h, **kwargs)
@@ -841,6 +1121,7 @@ class Group:
         self.route("OPTIONS", path, handler, **kwargs)
 
     def head(self, path, handler=None, **kwargs):
+        """Decorator / register a ``HEAD`` route on this group."""
         if handler is None:
             def decorator(h):
                 self.route("HEAD", path, h, **kwargs)

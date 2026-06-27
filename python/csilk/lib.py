@@ -1,3 +1,14 @@
+"""Low-level ctypes bindings for the csilk C library.
+
+This module is the bridge between Python and the native ``libcsilk.so`` / ``.dylib``.
+It defines all ``ctypes.Structure`` subclasses for C structs, callback function
+types (``CFUNCTYPE``), and the ``get_bindings()`` function that lazily loads the
+shared library and assigns ``argtypes`` / ``restype`` on every C function.
+
+Most users should **not** import this module directly; use the high-level
+wrappers in ``app``, ``context``, ``db``, ``ai``, ``workflow``, etc.
+"""
+
 import ctypes
 import os
 import sys
