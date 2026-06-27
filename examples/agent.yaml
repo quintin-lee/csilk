@@ -1,0 +1,23 @@
+name: "Stock Market AI Agent"
+steps:
+  - id: "query_input"
+    type: "handler"
+    handler: "process_input"
+    entry: true
+
+  - id: "stock_advisor"
+    type: "ai"
+    model: "gpt-4o"
+    system_msg: "You are an AI stock market advisor. You can use tools to fetch real-time market data."
+    prompt: "Please analyze the stock market for: {{node.value}}"
+    max_tokens: 1000
+
+  - id: "summary"
+    type: "handler"
+    handler: "format_output"
+
+edges:
+  - from: "query_input"
+    to: "stock_advisor"
+  - from: "stock_advisor"
+    to: "summary"
