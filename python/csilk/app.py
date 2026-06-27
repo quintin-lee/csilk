@@ -53,7 +53,10 @@ class App:
         self._websocket_contexts.clear()
         self._exception_handlers.clear()
         if hasattr(self, '_loop'):
-            self._loop.call_soon_threadsafe(self._loop.stop)
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            except RuntimeError:
+                pass
 
     def exception_handler(self, exc_class):
         """Decorator to register a global exception handler for a specific exception class."""
