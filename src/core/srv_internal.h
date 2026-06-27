@@ -36,6 +36,15 @@ enum { CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL };
 enum { CSILK_DEFAULT_MAX_URL_SIZE = 8192 };
 /** @brief Default TCP listen backlog. */
 enum { CSILK_DEFAULT_LISTEN_BACKLOG = 128 };
+/** @brief Arena chunk size tiers for adaptive caching.
+ *  Multiple tiers reduce large-request allocations while bounding memory overhead. */
+enum { CSILK_ARENA_TIER_SMALL = 0 };  /* 4KB - standard requests */
+enum { CSILK_ARENA_TIER_MEDIUM = 1 }; /* 16KB - large forms/JSON */
+enum { CSILK_ARENA_TIER_LARGE = 2 };  /* 64KB - file uploads/large responses */
+enum { CSILK_ARENA_TIER_COUNT = 3 };
+
+enum { MAX_TLS_CHUNKS_PER_TIER = 8 }; /* Max cached chunks per tier */
+
 /** @brief Default request arena chunk size. */
 enum { CSILK_DEFAULT_ARENA_SIZE = 4096 };
 /** @brief Client connection object pool capacity.

@@ -33,7 +33,6 @@
 #include <mach/mach_vm.h>
 #endif
 
-#include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "core/srv_internal.h"
 
@@ -41,13 +40,53 @@
  * This limit prevents unbounded memory growth in long-running threads. */
 enum { MAX_TLS_ARENA_CHUNKS = 16 };
 
-#ifdef DEBUG_ARENA
-/** @brief Redzone guard size for buffer overflow detection.
- * When DEBUG_ARENA is enabled, each allocation is padded with this many
- * bytes after the user data. The arena_free function checks that the redzone
- * bytes are unchanged (all 0xBE) to detect out-of-bounds writes. */
-enum { ARENA_REDZONE_SIZE = 16 };
-#endif
+/** @brief A single chunk in the arena linked list.
+ *
+ * Arena allocator manages memory in chunks. When a chunk is full, a new
+ * chunk is allocated. All memory is freed at once when the arena is freed,
+ * making it ideal for request-scoped allocations.
+ *
+ * @note This structure is padded to CSILK_CACHE_LINE_SIZE to ensure that
+ *       the data starts on a cache line boundary and to prevent false sharing
+ *       between arenas assigned to different threads.
+ */
+typedef struct csilk_arena_chunk_s {
+	struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
+	size_t size;			  /**< Total size of this chunk. */
+	size_t used;			  /**< Bytes used in this chunk. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
+	uint8_t data[]; /**< Flexible array for chunk data. */
+} csilk_arena_chunk_t;
+
+/** @brief Thread-local free list of arena chunks for reuse. */
+static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
+static _Thread_local int tls_chunk_count = 0;
+
+/** @brief Arena allocator for request-scoped memory.
+ *
+ * Arena allocators allocate memory in large chunks and never free individual
+ * allocations until the entire arena is freed. This eliminates fragmentation
+ * and is ideal for per-request memory management where all allocations are
+ * discarded together after processing.
+ *
+ * @note This structure is padded to CSILK_CACHE_LINE_SIZE to prevent false
+ *       sharing when multiple arena headers are allocated close to each other
+ *       in memory.
+ */
+typedef struct csilk_arena_s {
+	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
+	size_t default_chunk_size; /**< Default size for new chunks. */
+	int align_64;		   /**< Non-zero to enable 64-byte alignment. */
+	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int)];
+} csilk_arena_t;
+
+/** @brief Thread-local cache structure with multiple size tiers.
+ *  Each tier maintains an independent free list to avoid size mismatches. */
+typedef struct {
+	csilk_arena_chunk_t* chunks[CSILK_ARENA_TIER_COUNT]; /* Per-tier free lists */
+	int count[CSILK_ARENA_TIER_COUNT];		     /* Per-tier chunk counts */
+	size_t total_cached_bytes;			     /* Total cached memory */
+} arena_tls_cache_t;
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
  * Used for padding structures to prevent false sharing and improve
@@ -142,46 +181,6 @@ arena_check_redzone(uint8_t* data, size_t alloc_sz)
 	return 1; /* OK */
 }
 #endif
-
-/** @brief A single chunk in the arena linked list.
- *
- * Arena allocator manages memory in chunks. When a chunk is full, a new
- * chunk is allocated. All memory is freed at once when the arena is freed,
- * making it ideal for request-scoped allocations.
- *
- * @note This structure is padded to CSILK_CACHE_LINE_SIZE to ensure that
- *       the data starts on a cache line boundary and to prevent false sharing
- *       between arenas assigned to different threads.
- */
-typedef struct csilk_arena_chunk_s {
-	struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
-	size_t size;			  /**< Total size of this chunk. */
-	size_t used;			  /**< Bytes used in this chunk. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
-	uint8_t data[]; /**< Flexible array for chunk data. */
-} csilk_arena_chunk_t;
-
-/** @brief Thread-local free list of arena chunks for reuse. */
-static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
-static _Thread_local int tls_chunk_count = 0;
-
-/** @brief Arena allocator for request-scoped memory.
- *
- * Arena allocators allocate memory in large chunks and never free individual
- * allocations until the entire arena is freed. This eliminates fragmentation
- * and is ideal for per-request memory management where all allocations are
- * discarded together after processing.
- *
- * @note This structure is padded to CSILK_CACHE_LINE_SIZE to prevent false
- *       sharing when multiple arena headers are allocated close to each other
- *       in memory.
- */
-typedef struct csilk_arena_s {
-	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
-	size_t default_chunk_size; /**< Default size for new chunks. */
-	int align_64;		   /**< Non-zero to enable 64-byte alignment. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int)];
-} csilk_arena_t;
 
 /** @brief Create a new arena allocator.
  *
