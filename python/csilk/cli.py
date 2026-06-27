@@ -30,7 +30,9 @@ def watch_and_reload(argv):
     env = os.environ.copy()
     env["CSILK_RELOAD_PROCESS"] = "true"
     
-    process = subprocess.Popen(argv, env=env)
+    argv_to_run = [sys.executable, "-m", "csilk.cli"] + argv[1:]
+    
+    process = subprocess.Popen(argv_to_run, env=env)
     
     mtimes = {}
     while True:
@@ -51,7 +53,7 @@ def watch_and_reload(argv):
                 print("Changes detected, reloading...")
                 process.terminate()
                 process.wait()
-                process = subprocess.Popen(argv, env=env)
+                process = subprocess.Popen(argv_to_run, env=env)
             
             time.sleep(1)
         except KeyboardInterrupt:
