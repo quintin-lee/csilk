@@ -28,6 +28,7 @@ build_rel*/
 build-pkg/
 build-profile/
 build/
+build_cov/
 
 # Test executables in project root
 test_async_keepalive
