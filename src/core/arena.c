@@ -423,6 +423,12 @@ csilk_arena_free(csilk_arena_t* arena)
 		}
 #endif
 
+		/* Track total allocated bytes (excluding chunk headers).
+		 * MUST happen before the free below — after arena_aligned_free
+		 * the chunk memory is invalid and accessing curr->size is UB
+		 * (heap-use-after-free caught by ASAN/mach_vm_deallocate). */
+		arena->total_allocated -= curr->size;
+
 		/* Return standard-sized chunks to the thread-local free list if there is
 		room. This speeds up subsequent allocations on the same thread. */
 		if (curr->size == CSILK_DEFAULT_ARENA_SIZE &&
@@ -434,9 +440,6 @@ csilk_arena_free(csilk_arena_t* arena)
 		} else {
 			arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 		}
-
-		/* Track total allocated bytes (excluding chunk headers) */
-		arena->total_allocated -= curr->size;
 
 		curr = next;
 	}
