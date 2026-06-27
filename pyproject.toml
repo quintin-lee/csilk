@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "cmake>=3.15"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csilk"
+version = "0.5.0"
+description = "High-performance asynchronous web framework in C and Python."
+readme = "README.md"
+requires-python = ">=3.7"
+authors = [
+    { name = "csilk contributors" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows"
+]
+
+[project.scripts]
+csilk = "csilk.cli:main"
