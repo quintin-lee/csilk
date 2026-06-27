@@ -3,35 +3,57 @@
 ## Prerequisites
 
 - CMake 3.11+ (**MUST** be available in `$PATH`)
-- C compiler with C23 support (GCC 13+, Clang 19+)
+- C compiler with C23 support (GCC 13+ or Clang 19+)
 - Git
-- libyaml-dev
-- zlib1g-dev (for gzip middleware)
-- libssl-dev (for HTTPS/TLS, JWT, cipher drivers — **MUST** be OpenSSL 1.1.1+)
-- libcurl-dev 7.80.0+ (for AI driver HTTP transport)
-- libuv (auto-fetched via CMake if not present)
-- Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers)
+- libyaml-dev (**MUST** for YAML configuration parsing)
+- zlib1g-dev (for gzip compression middleware — **SHOULD** be enabled for production)
+- libssl-dev (**MUST** be OpenSSL 1.1.1+ for HTTPS/TLS, JWT, cipher drivers)
+- libcurl-dev 7.80.0+ (**MUST** for AI driver HTTP transport)
+- libuv (auto-fetched via CMake FetchContent if not present)
+- Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers — enable via `-DCSILK_USE_*` CMake flags)
 
 ## Build & Dependency Flow
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart LR
-    subgraph Host System
-        CC["C Compiler (C23)"]
-        SYS["libyaml-dev\nzlib1g-dev\npthread"]
+    subgraph Host_System["fa:fa-laptop Host System"]
+        CC["fa:fa-code C Compiler (C23)"]
+        SYS["fa:fa-cogs libyaml-dev\nzlib1g-dev\npthread"]
     end
 
-    subgraph "CMake FetchContent"
-        UV["libuv v1.48.0"]
-        LL["llhttp v9.4.1"]
-        CJ["cJSON v1.7.18"]
+    subgraph FetchContent["fa:fa-download CMake FetchContent"]
+        UV["fa:fa-sync-alt libuv v1.48.0"]
+        LL["fa:fa-file-code llhttp v9.4.1"]
+        CJ["fa:fa-file-code cJSON v1.7.18"]
     end
 
-    subgraph Build
-        CMAKE["CMakeLists.txt"]
-        OBJ["Object Files\nsrc/*.c"]
-        LIB["libcsilk.a\nlibcsilk.so"]
-        EXE["example_server\nexample_app\ntests/*"]
+    subgraph build["fa:fa-hammer Build"]
+        CMAKE["fa:fa-file-alt CMakeLists.txt"]
+        OBJ["fa:fa-cubes Object Files\nsrc/*.c"]
+        LIB["fa:fa-archive libcsilk.a\nlibcsilk.so"]
+        EXE["fa:fa-play example_server\nexample_app\ntests/*"]
     end
 
     CC --> OBJ
@@ -105,12 +127,33 @@ The generated project includes:
 ## Example Server Walkthrough
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant Main
-    participant Router as csilk_router_t
-    participant Group as csilk_group_t
-    participant Server as csilk_server_t
-    participant EvLoop as libuv Event Loop
+    participant Main as fa:fa-user Main
+    participant Router as fa:fa-sitemap csilk_router_t
+    participant Group as fa:fa-folder csilk_group_t
+    participant Server as fa:fa-server csilk_server_t
+    participant EvLoop as fa:fa-sync-alt libuv Event Loop
 
     Main->>Router: csilk_router_new()
     Main->>Group: csilk_group_new(router, "/api")

@@ -10,28 +10,54 @@ The Security module provides a **layered security architecture** spanning authen
 
 ## 2. Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Request Pipeline                       │
-│                                                          │
-│  ┌──────────┐  ┌──────┐  ┌─────────┐  ┌─────────────┐  │
-│  │ CORS     │→│ Rate │→│ JWT     │→│ CSRF        │  │
-│  │ MW       │  │Limit │  │ Auth MW │  │ Protection  │  │
-│  └──────────┘  └──────┘  └─────────┘  └─────────────┘  │
-│                                      │                  │
-│                                      ▼                  │
-│  ┌──────────────┐  ┌────────────┐  ┌──────────────┐    │
-│  │ WAF          │→│ Permission │→│ Route        │    │
-│  │ (SQLi/XSS/   │  │ Auto-MW    │  │ Handler      │    │
-│  │  Path Trav.) │  │ (RBAC)     │  │              │    │
-│  └──────────────┘  └────────────┘  └──────────────┘    │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              Permission Drivers                   │   │
-│  │  "simple" (built-in RBAC) │ custom (via plugin)  │   │
-│  │  csilk_perm_driver_t.check(ctx, perm, resource)  │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
+graph TB
+    subgraph request_pipeline["fa:fa-arrow-right Request Pipeline"]
+        direction LR
+        CORS["fa:fa-globe CORS MW"] --> RL["fa:fa-gauge-high Rate Limit"]
+        RL --> JWT["fa:fa-key JWT Auth MW"]
+        JWT --> CSRF["fa:fa-shield CSRF Protection"]
+        CSRF --> WAF["fa:fa-fire WAF<br/>(SQLi/XSS/Path Trav.)"]
+        WAF --> PERM["fa:fa-lock Permission Auto-MW<br/>(RBAC)"]
+        PERM --> RH["fa:fa-code Route Handler"]
+    end
+
+    subgraph perm_drivers["fa:fa-plug Permission Drivers"]
+        SIMPLE["fa:fa-user-shield 'simple' (built-in RBAC)<br/>csilk_perm_driver_t.check(ctx, perm, resource)"]
+        CUSTOM["fa:fa-puzzle-piece custom (via plugin)<br/>Casbin/OPA integration"]
+    end
+
+    PERM --> SIMPLE
+    PERM --> CUSTOM
+
+    style CORS fill:#81A1C1,stroke:#4C566A,color:#2E3440
+    style RL fill:#EBCB8B,stroke:#4C566A,color:#2E3440
+    style JWT fill:#81A1C1,stroke:#4C566A,color:#2E3440
+    style CSRF fill:#81A1C1,stroke:#4C566A,color:#2E3440
+    style WAF fill:#BF616A,stroke:#4C566A,color:#ECEFF4
+    style PERM fill:#A3BE8C,stroke:#4C566A,color:#2E3440
 ```
 
 ### Key Design Decisions
