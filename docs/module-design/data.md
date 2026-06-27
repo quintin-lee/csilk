@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Data layer provides a **pluggable, driver-based database abstraction** inspired by Go's `database/sql`. It separates the unified query/exec API from backend-specific wire protocols, enabling SQLite, MySQL, PostgreSQL, MongoDB, and Redis to be used interchangeably through a single interface.
+The Data layer provides a **pluggable, driver-based database abstraction** inspired by Go's `database/sql`. It separates the unified query/exec API from backend-specific wire protocols, enabling SQLite, MySQL, PostgreSQL, MongoDB, and Redis to be used interchangeably through a single interface. All DB drivers **MUST** implement the `csilk_db_driver_t` vtable. Connection pool operations **MUST** be thread-safe. Query results **MUST** be returned as `csilk_db_result_t` with arena-managed rows — callers **MUST NOT** free individual cells. Connection acquisition from pool **SHOULD** complete in ≤ 100ns (lock-free linked list pop).
 
 **Files**: `src/data/db.c`, `src/data/db_internal.h`, `include/csilk/drivers/db.h`
 

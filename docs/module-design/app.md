@@ -2,45 +2,46 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
 
-csilk 的 App Layer 是面向开发者的高级入口——将路由、服务器、配置、日志、中间件和 OpenAPI 整合为单一的 `csilk_app_t` 门面。它是框架的"电池 Included"封装，让用户无需手动拼装子组件即可快速构建生产级 HTTP 服务。
+csilk 的 App Layer 是面向开发者的高级入口——将路由、服务器、配置、日志、中间件和 OpenAPI 整合为单一的 `csilk_app_t` 门面。它是框架的"电池 Included"封装，让用户无需手动拼装子组件即可快速构建生产级 HTTP 服务。用户 **MUST** 通过 `csilk_app_t` 接口创建应用实例 —— 直接操作 `csilk_server_t` 和 `csilk_router_t` 仅适用于需要精细控制的高级场景。应用启动时间 ≤ 5ms (冷启动，含 YAML 解析 + 路由注册)。
 
 ---
 
 ## 1. 整体架构
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph TB
-    subgraph "csilk_app_t"
-        CFG["csilk_config_t config<br/>YAML config / defaults"]
-        RTR["csilk_router_t* router<br/>Radix tree router"]
-        SRV["csilk_server_t* server<br/>TCP/TLS listener + workers"]
-        RG["csilk_group_t* root_group<br/>Prefix '' root group<br/>Owned by app"]
+    subgraph app_t["fa:fa-cube csilk_app_t"]
+        CFG["fa:fa-cog csilk_config_t config<br/>YAML config / defaults"]
+        RTR["fa:fa-sitemap csilk_router_t* router<br/>Radix tree router"]
+        SRV["fa:fa-server csilk_server_t* server<br/>TCP/TLS listener + workers"]
+        RG["fa:fa-folder csilk_group_t* root_group<br/>Prefix '' root group<br/>Owned by app"]
 
-        subgraph "Cached Groups (groups[32])"
-            G0["group[0]: /api<br/>Prefix group"]
-            G1["group[1]: /admin<br/>Prefix group"]
-            G2["... up to 32 groups"]
+        subgraph cached_groups["fa:fa-folder-open Cached Groups (groups[32])"]
+            G0["fa:fa-tag group[0]: /api<br/>Prefix group"]
+            G1["fa:fa-tag group[1]: /admin<br/>Prefix group"]
+            G2["fa:fa-ellipsis-h ... up to 32 groups"]
         end
     end
 
-    subgraph "Globals (process-level)"
-        OAPI["s_openapi_router<br/>OpenAPI router ref<br/>Mutex-guarded"]
-        STATIC["g_static[32]<br/>Prefix→root_dir table<br/>Mutex-guarded"]
+    subgraph globals["fa:fa-globe Globals (process-level)"]
+        OAPI["fa:fa-book s_openapi_router<br/>OpenAPI router ref<br/>Mutex-guarded"]
+        STATIC["fa:fa-folder-open g_static[32]<br/>Prefix→root_dir table<br/>Mutex-guarded"]
     end
 
-    subgraph "Built-in Routes"
-        OAPI_EP["GET /openapi.json<br/>Generates OpenAPI 3.0 spec"]
-        DOCS["GET /docs<br/>Swagger UI HTML"]
-        CSILK_DOCS["GET /csilk-docs/*path<br/>Bundled Swagger assets"]
+    subgraph builtin_routes["fa:fa-route Built-in Routes"]
+        OAPI_EP["fa:fa-file-code GET /openapi.json<br/>Generates OpenAPI 3.0 spec"]
+        DOCS["fa:fa-book GET /docs<br/>Swagger UI HTML"]
+        CSILK_DOCS["fa:fa-folder GET /csilk-docs/*path<br/>Bundled Swagger assets"]
     end
 
-    subgraph "Bootstrap Sequence"
-        YAML["1. Load YAML config<br/>or defaults"]
-        LOG["2. Init logger<br/>from config"]
-        CORE["3. Create router + server<br/>wire together"]
-        MW["4. Install built-in MW<br/>recovery → logger"]
-        GROUP["5. Create root group<br/>prefix ''"]
-        ENDPOINTS["6. Register endpoints<br/>openapi.json, docs, swagger"]
+    subgraph bootstrap_seq["fa:fa-list Bootstrap Sequence"]
+        YAML["fa:fa-file-text 1. Load YAML config<br/>or defaults"]
+        LOG["fa:fa-pencil 2. Init logger<br/>from config"]
+        CORE["fa:fa-cogs 3. Create router + server<br/>wire together"]
+        MW["fa:fa-shield 4. Install built-in MW<br/>recovery -%gt; logger"]
+        GROUP["fa:fa-folder-open 5. Create root group<br/>prefix ''"]
+        ENDPOINTS["fa:fa-plug 6. Register endpoints<br/>openapi.json, docs, swagger"]
     end
 
     YAML --> LOG --> CORE --> MW --> GROUP --> ENDPOINTS
@@ -270,13 +271,14 @@ static int contains_path_traversal(const char* path)
 ## 6. 生命周期
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
-    participant User
-    participant App as csilk_app_t
-    participant Router as csilk_router_t
-    participant Server as csilk_server_t
-    participant Logger as csilk_logger
-    participant OAS as s_openapi_router
+    actor User
+    participant App as fa:fa-cube csilk_app_t
+    participant Router as fa:fa-sitemap Router
+    participant Server as fa:fa-server Server
+    participant Logger as fa:fa-pencil Logger
+    participant OAS as fa:fa-book OpenAPI
 
     User->>App: csilk_app_new("config.yaml")
     App->>App: load_config -> defaults

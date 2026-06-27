@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Messaging module provides an **in-process publish/subscribe event bus** (Message Queue) for internal communication within the csilk server. It enables decoupled communication between components — routes, middleware, AI workflows, WebSocket handlers, and custom modules — through topic-based message exchange.
+The Messaging module provides an **in-process publish/subscribe event bus** (Message Queue) for internal communication within the csilk server. It enables decoupled communication between components — routes, middleware, AI workflows, WebSocket handlers, and custom modules — through topic-based message exchange. Publish **MUST** be lock-free for single-producer scenarios; multi-producer publish **MUST** use atomic CAS. Subscribe handler **MUST NOT** block — long-running work **SHOULD** be offloaded to the libuv thread pool. Message delivery **MUST** be at-most-once semantics by default; exactly-once **SHOULD** be opt-in via WAL persistence and ACK tracking. Per-topic subscriber dispatch overhead **SHOULD** be ≤ 200ns per subscriber chain link.
 
 **Files**: `src/messaging/`, `include/csilk/mq.h`
 

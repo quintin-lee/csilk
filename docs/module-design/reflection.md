@@ -1,30 +1,31 @@
 # Reflection Engine
 
-The reflection engine bridges C structs and JSON, enabling automatic serialization and deserialization without manual JSON parsing code.
+The reflection engine bridges C structs and JSON, enabling automatic serialization and deserialization without manual JSON parsing code. All registered type metadata **MUST** be immutable after registration. Field lookup **MUST** complete within O(n) linear scan (n = registered fields, typically ≤ 32). Marshaling a flat struct (≤ 8 fields) **SHOULD** complete in ≤ 200ns. JSON binding **MUST NOT** call `malloc` outside the provided arena allocator.
 
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    subgraph "Type Registry"
-        REG["csilk_reflect_entry_t\n  name: 'User'\n  fields: [\n    {'id', INT64, offset: 0}\n    {'name', STRING, offset: 8}\n    {'email', STRING, offset: 16}\n  ]"]
+    subgraph registry["fa:fa-database Type Registry"]
+        REG["fa:fa-list csilk_reflect_entry_t<br/>  name: 'User'<br/>  fields: [<br/>    {'id', INT64, offset: 0}<br/>    {'name', STRING, offset: 8}<br/>    {'email', STRING, offset: 16}<br/>  ]"]
     end
 
-    subgraph "Marshal: C Struct → JSON"
-        M1["csilk_json_marshal('User', &user)"]
-        M2["Find type entry in registry"]
-        M3["Iterate fields by offset"]
-        M4["Build cJSON object"]
-        M5["cJSON_PrintUnformatted() → JSON string"]
+    subgraph marshal["fa:fa-arrow-up Marshal: C Struct -%gt; JSON"]
+        M1["fa:fa-code csilk_json_marshal('User', &amp;user)"]
+        M2["fa:fa-search Find type entry in registry"]
+        M3["fa:fa-repeat Iterate fields by offset"]
+        M4["fa:fa-cube Build cJSON object"]
+        M5["fa:fa-file-text cJSON_PrintUnformatted() -%gt; JSON string"]
         M1 --> M2 --> M3 --> M4 --> M5
     end
 
-    subgraph "Unmarshal: JSON → C Struct"
-        U1["csilk_json_unmarshal('User', json_str, &user)"]
-        U2["cJSON_Parse(json_str)"]
-        U3["Find type entry in registry"]
-        U4["Iterate fields by json_key"]
-        U5["Set struct fields by offset + type conversion"]
+    subgraph unmarshal["fa:fa-arrow-down Unmarshal: JSON -%gt; C Struct"]
+        U1["fa:fa-code csilk_json_unmarshal('User', json_str, &amp;user)"]
+        U2["fa:fa-search cJSON_Parse(json_str)"]
+        U3["fa:fa-search Find type entry in registry"]
+        U4["fa:fa-repeat Iterate fields by json_key"]
+        U5["fa:fa-edit Set struct fields by offset + type conversion"]
         U1 --> U2 --> U3 --> U4 --> U5
     end
 
@@ -88,23 +89,24 @@ char* json_s = csilk_marshal(&msg); // Result: "\"hello\""
 ## Data Flow: JSON Binding
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
-    participant CTX as csilk_ctx_t
+    participant CTX as fa:fa-cube csilk_ctx_t
     participant cJSON
     participant Reflect
-    participant Struct as User struct
+    participant Struct as fa:fa-database User struct
 
     Client->>Server: POST /users (JSON body: {"id":1,"name":"Alice"})
     Server->>CTX: on_body() accumulates body
     Server->>CTX: on_message_complete()
 
-    Handler->>CTX: csilk_bind_reflect(ctx, "User", &user)
-    CTX->>cJSON: cJSON_Parse(ctx->request.body)
+    Handler->>CTX: csilk_bind_reflect(ctx, "User", &amp;user)
+    CTX->>cJSON: cJSON_Parse(ctx-&gt;request.body)
     cJSON-->>CTX: parsed JSON object
 
-    CTX->>Reflect: csilk_json_unmarshal("User", json_str, &user)
+    CTX->>Reflect: csilk_json_unmarshal("User", json_str, &amp;user)
     Reflect->>Reflect: Find "User" in type registry
     loop For each field in type entry
         Reflect->>cJSON: cJSON_GetObjectItem(json, "id")
@@ -122,22 +124,23 @@ sequenceDiagram
 ## Data Flow: JSON Response via Reflection
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Handler
-    participant CTX as csilk_ctx_t
+    participant CTX as fa:fa-cube csilk_ctx_t
     participant Reflect
     participant cJSON
-    participant Struct as User struct
+    participant Struct as fa:fa-database User struct
 
-    Note over Struct: user.id = 1, user.name = "Alice"
+    Note over Struct: fa:fa-info-circle user.id = 1, user.name = "Alice"
 
-    Handler->>CTX: csilk_json_reflect(ctx, 200, "User", &user)
-    CTX->>Reflect: csilk_json_marshal("User", &user)
+    Handler->>CTX: csilk_json_reflect(ctx, 200, "User", &amp;user)
+    CTX->>Reflect: csilk_json_marshal("User", &amp;user)
     Reflect->>Reflect: Find "User" in type registry
 
     Reflect->>cJSON: cJSON_CreateObject()
     loop For each field in type entry
-        Reflect->>Struct: Read *(int64_t*)(ptr + offset) → 1
+        Reflect->>Struct: Read *(int64_t*)(ptr + offset) -%gt; 1
         Reflect->>cJSON: cJSON_AddNumberToObject(json, "id", 1)
         Reflect->>Struct: Read string at offset
         Reflect->>cJSON: cJSON_AddStringToObject(json, "name", "Alice")
@@ -193,14 +196,15 @@ CSILK_REGISTER_REFLECT(User, USER_FIELDS);
 ## Init Flow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    S["csilk_server_new()"] --> I["csilk_reflect_init()"]
-    I --> CHECK["Already initialized?"]
-    CHECK -->|No| ALLOC["Allocate global registry"]
-    ALLOC --> DONE["Ready"]
-    CHECK -->|Yes| DONE
-    DONE --> REG["CSILK_REGISTER_REFLECT macros\nCalled at global scope"]
-    REG --> STORE["Store entry in registry hash map"]
+    S["fa:fa-play csilk_server_new()"] --> I["fa:fa-cog csilk_reflect_init()"]
+    I --> CHECK{"fa:fa-question-circle Already initialized?"}
+    CHECK -->|"No"| ALLOC["fa:fa-database Allocate global registry"]
+    ALLOC --> DONE["fa:fa-check-circle Ready"]
+    CHECK -->|"Yes"| DONE
+    DONE --> REG["fa:fa-pencil-square-o CSILK_REGISTER_REFLECT macros<br/>Called at global scope"]
+    REG --> STORE["fa:fa-save Store entry in registry hash map"]
 ```
 
 ## Deep Freeing & Cyclic Reference Detection

@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Protocols module extends the HTTP/1.1 server with real-time, bidirectional, and interactive capabilities. It provides **WebSocket** (RFC 6455), **Server-Sent Events** (SSE, RFC 8895), **Swagger/OpenAPI UI**, and a **WebSocket Room** system for multi-client broadcast.
+The Protocols module extends the HTTP/1.1 server with real-time, bidirectional, and interactive capabilities. It provides **WebSocket** (RFC 6455), **Server-Sent Events** (SSE, RFC 8895), **Swagger/OpenAPI UI**, and a **WebSocket Room** system for multi-client broadcast. WebSocket upgrade **MUST** complete within the request handler without blocking. SSE connections **MUST** use chunked transfer encoding and **MUST NOT** buffer. Swagger UI assets **SHOULD** be served from embedded static data. WebSocket Room broadcast **MUST** be O(n) over connected clients and **SHOULD NOT** block the publishing thread.
 
 **Files**: `src/protocols/websocket.c`, `src/protocols/swagger.c`, `src/protocols/ws_room.c`, `src/middleware/sse.c`
 

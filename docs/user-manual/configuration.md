@@ -1,6 +1,6 @@
 # Configuration Guide
 
-csilk supports flexible configuration via YAML files or direct C structure manipulation. The configuration covers server, TLS, logger, CORS, rate limiting, static files, AI, database, and admin dashboard settings.
+csilk supports flexible configuration via YAML files or direct C structure manipulation. The configuration covers server, TLS, logger, CORS, rate limiting, static files, AI, database, and admin dashboard settings. Configuration files **MUST** be valid YAML 1.2. Server port **MUST** be in the range [1, 65535]. Worker threads **SHOULD** equal the number of CPU cores. TLS certificate and key files **MUST** be PEM-encoded. All timeout values **MUST** be specified in seconds (integer).
 
 ## YAML Configuration Schema
 

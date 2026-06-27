@@ -2,61 +2,83 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-24
 
-csilk is a lightweight, high-performance HTTP web framework written in C, adopting a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv, llhttp, nghttp2, and cJSON.
+csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv, llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
 
 ---
 
 ## 1. Layer Architecture
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph TB
-    subgraph "Layer 1: Application"
-        H["User Handlers & Business Logic"]
-        APP["csilk_app_t (Convenience Wrapper)"]
+    subgraph layer1["fa:fa-code Layer 1: Application"]
+        H["fa:fa-users User Handlers & Business Logic"]
+        APP["fa:fa-cube csilk_app_t (Convenience Wrapper)"]
     end
 
-    subgraph "Layer 2: Middleware"
-        MW["Recovery | Logger | CORS | Auth | JWT | WAF<br/>RateLimit | CSRF | Static | Gzip | SSE | Multipart<br/>Metrics | RequestID | Validate | Session"]
+    subgraph layer2["fa:fa-layer-group Layer 2: Middleware"]
+        MW["fa:fa-plug Recovery | Logger | CORS | Auth | JWT | WAF<br/>RateLimit | CSRF | Static | Gzip | SSE | Multipart<br/>Metrics | RequestID | Validate | Session"]
     end
 
-    subgraph "Layer 3: Core Engine"
-        subgraph "Request Processing"
-            CTX["Context (csilk_ctx_t)"]
-            ARENA["Arena Allocator"]
-            HOOKS["Hook System"]
+    subgraph layer3["fa:fa-cogs Layer 3: Core Engine"]
+        subgraph req_proc["fa:fa-bolt Request Processing"]
+            CTX["fa:fa-exchange-alt Context (csilk_ctx_t)"]
+            ARENA["fa:fa-memory Arena Allocator"]
+            HOOKS["fa:fa-anchor Hook System"]
         end
-        subgraph "AI & Data"
-            AI["AI Unified Engine"]
-            DB["DB Abstraction (SQLite/MySQL/PG/MongoDB)"]
-            REFL["Reflection Engine"]
+        subgraph ai_data["fa:fa-brain AI & Data"]
+            AI["fa:fa-robot AI Unified Engine"]
+            DB["fa:fa-database DB Abstraction (SQLite/MySQL/PG/MongoDB)"]
+            REFL["fa:fa-magic Reflection Engine"]
         end
-        subgraph "Routing"
-            RTR["Router (Radix Tree)"]
-            GRP["Group (Hierarchical)"]
+        subgraph routing["fa:fa-random Routing"]
+            RTR["fa:fa-sitemap Router (Radix Tree)"]
+            GRP["fa:fa-folder-open Group (Hierarchical)"]
         end
-        subgraph "Network & Protocol"
-            SRV["Server (libuv TCP)"]
-            HTTP["llhttp Parser"]
-            TLS["OpenSSL (TLS/SSL)"]
-            WS["WebSocket Engine"]
+        subgraph network["fa:fa-network-wired Network & Protocol"]
+            SRV["fa:fa-server Server (libuv TCP)"]
+            HTTP["fa:fa-code llhttp Parser"]
+            TLS["fa:fa-lock OpenSSL (TLS/SSL)"]
+            WS["fa:fa-plug WebSocket Engine"]
         end
     end
 
-    subgraph "Layer 4: Infrastructure"
-        UV["libuv\n(Event Loop + Thread Pool)"]
-        CJ["cJSON"]
-        YAML["libyaml"]
-        ZLIB["zlib"]
-        SSL["OpenSSL"]
-        CURL["libcurl"]
-        MQ["csilk_mq_t\n(Message Queue)"]
+    subgraph layer4["fa:fa-hdd Layer 4: Infrastructure"]
+        UV["fa:fa-sync-alt libuv\n(Event Loop + Thread Pool)"]
+        CJ["fa:fa-file-code cJSON"]
+        YAML["fa:fa-file-alt libyaml"]
+        ZLIB["fa:fa-compress zlib"]
+        SSL["fa:fa-key OpenSSL"]
+        CURL["fa:fa-download libcurl"]
+        MQ["fa:fa-envelope csilk_mq_t\n(Message Queue)"]
     end
 
-    subgraph "Observability"
-        METRICS["Prometheus /metrics"]
-        ADMIN["Admin Dashboard /admin"]
-        ADMIN_STATS["Admin Stats /admin/stats"]
-        ADMIN_WS["Admin WS /admin/ws"]
+    subgraph observability["fa:fa-chart-line Observability"]
+        METRICS["fa:fa-chart-bar Prometheus /metrics"]
+        ADMIN["fa:fa-tachometer-alt Admin Dashboard /admin"]
+        ADMIN_STATS["fa:fa-chart-pie Admin Stats /admin/stats"]
+        ADMIN_WS["fa:fa-comment-alt Admin WS /admin/ws"]
     end
 
     H --> CTX
@@ -91,20 +113,41 @@ graph TB
 ### 2.1 Reactor Event-Driven Model with Native TLS & ALPN
 The framework is built on `libuv`, ensuring all network I/O is non-blocking. 
 
-* **Protocol Dispatcher**: During TLS ALPN negotiation, a dispatcher routes decrypted traffic to either `llhttp` (HTTP/1.1) or `nghttp2` (HTTP/2) based on ALPN (`h2` vs `http/1.1`).
-* **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests. During parsing callbacks, `csilk` uses **Zero-copy HTTP parsing** using string views (`csilk_str_view_t`) that directly reference raw network receive buffers, completely eliminating dynamic `malloc`/`realloc`/`free` heap allocations for HTTP headers, URLs, and bodies.
-* **HTTP/2 parsing**: `nghttp2` processes binary HTTP/2 frames, HPACK headers, and handles multiplexed streams.
-* **Native TLS integration**: OpenSSL BIO-pairs handle encrypted network traffic directly on the event loop:
+* **Protocol Dispatcher**: During TLS ALPN negotiation, a dispatcher routes decrypted traffic to either `llhttp` (HTTP/1.1) or `nghttp2` (HTTP/2) based on ALPN (`h2` vs `http/1.1`). The dispatcher **MUST** negotiate ALPN before any application data is processed.
+* **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests. During parsing callbacks, `csilk` uses **Zero-copy HTTP parsing** using string views (`csilk_str_view_t`) that directly reference raw network receive buffers, completely eliminating dynamic `malloc`/`realloc`/`free` heap allocations for HTTP headers, URLs, and bodies. This achieves ~0 allocs per request for header processing (P99 ≤ 1µs parsing overhead).
+* **HTTP/2 parsing**: `nghttp2` processes binary HTTP/2 frames, HPACK headers, and handles multiplexed streams. Clients **SHOULD** use HTTP/2 for latency-sensitive applications requiring multiplexing.
+* **Native TLS integration**: OpenSSL BIO-pairs handle encrypted network traffic directly on the event loop. TLS 1.3 **MUST** be used for production deployments; TLS 1.2 **SHOULD** be accepted for legacy compatibility:
   - **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute` / `csilk_h2_process_data`
   - **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant K as Kernel
-    participant UV as libuv Event Loop
-    participant TCP as TCP Handle
-    participant LL as llhttp Parser
-    participant S as Server
+    participant K as fa:fa-linux Kernel
+    participant UV as fa:fa-sync-alt libuv Event Loop
+    participant TCP as fa:fa-plug TCP Handle
+    participant LL as fa:fa-code llhttp Parser
+    participant S as fa:fa-server Server
 
     K-->>UV: epoll/kqueue: new connection ready
     UV->>S: on_new_connection()
@@ -135,24 +178,46 @@ sequenceDiagram
 Middleware implements bidirectional request interception through the `csilk_next()` mechanism.
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart LR
-    REQ["Request"]
+    REQ["fa:fa-arrow-right Request"]
 
-    subgraph "Onion Layers"
+    subgraph onion["fa:fa-circle-nodes Onion Layers"]
         direction LR
-        L1i["Recovery (pre)<br/>setjmp()"] --> L2i["Logger (pre)<br/>start timer"]
-        L2i --> L3i["WAF (pre)<br/>check rules"]
-        L3i --> L4i["Auth (pre)<br/>check token"]
-        L4i --> L5i["RateLimit (pre)<br/>check quota"]
-        L5i --> CORE["Business Handler<br/>(csilk_string/json)"]
+        L1i["fa:fa-shield Recovery (pre)<br/>setjmp()"] --> L2i["fa:fa-clock Logger (pre)<br/>start timer"]
+        L2i --> L3i["fa:fa-shield-halved WAF (pre)<br/>check rules"]
+        L3i --> L4i["fa:fa-key Auth (pre)<br/>check token"]
+        L4i --> L5i["fa:fa-gauge-high RateLimit (pre)<br/>check quota"]
+        L5i --> CORE["fa:fa-gem Business Handler<br/>(csilk_string/json)"]
         CORE --> L5o["RateLimit (post)<br/>(no-op)"]
         L5o --> L4o["Auth (post)<br/>(no-op)"]
         L4o --> L3o["WAF (post)<br/>(no-op)"]
-        L3o --> L2o["Logger (post)<br/>log latency"]
-        L2o --> L1o["Recovery (post)<br/>cleanup"]
+        L3o --> L2o["fa:fa-clock Logger (post)<br/>log latency"]
+        L2o --> L1o["fa:fa-shield Recovery (post)<br/>cleanup"]
     end
 
-    L1o --> RES["Response"]
+    L1o --> RES["fa:fa-arrow-left Response"]
 ```
 
 ### 2.3 Hook System
@@ -162,10 +227,10 @@ In addition to onion middleware, a hook system allows non-blocking observation o
 * `CSILK_HOOK_REQUEST_BEGIN` / `CSILK_HOOK_REQUEST_END`
 
 ### 2.4 Opaque Context & ABI Stability
-Starting from v0.3.0, `csilk_ctx_t` is defined as an **opaque pointer**. The internal structure layout is hidden in `include/csilk/core/ctx_types.h`. This guarantees binary compatibility (ABI stability) for third-party middleware and user applications when the core engine structure undergoes internal modifications.
+Starting from v0.3.0, `csilk_ctx_t` is defined as an **opaque pointer**. The internal structure layout is hidden in `include/csilk/core/ctx_types.h`. Third-party middleware **MUST NOT** directly access `csilk_ctx_t` internals — all access goes through the public API (`csilk_get`/`csilk_set`/`csilk_string`). This guarantees binary compatibility (ABI stability) across minor version bumps.
 
 ### 2.5 Pluggable Drivers
-Services are pluggable through clean interfaces:
+Services are pluggable through clean vtables. Each driver **MUST** implement the interface defined in `include/csilk/drivers/`. Drivers **MAY** be registered at runtime via `csilk_driver_register()`. Driver selection is resolved at build time; providers not selected **SHOULD NOT** be linked into the final binary:
 * **Storage Driver**: Backing store for `csilk_set/get` session variables (e.g. SQLite, Redis).
 * **Crypto/Cipher Driver**: Interchangeable cryptography backends (e.g. OpenSSL).
 * **AI Driver**: Interface to generic LLM providers (e.g. OpenAI, Ollama).
@@ -175,21 +240,43 @@ Services are pluggable through clean interfaces:
 An Arena Allocator maps blocks (4KB default) per-connection. All allocations during request processing (headers, JSON parsing, URL splits) use pointer bump allocation.
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    subgraph "Request 1"
-        A1["Arena Block 1\n(4KB default)"]
-        A1 --> P1["Allocate via pointer bump\nHeaders, Body, Strings"]
-        P1 --> F1["Arena Reset (O(1))\nAfter response sent"]
+    subgraph req1["fa:fa-play Request 1"]
+        A1["fa:fa-cubes Arena Block 1\n(4KB default)"]
+        A1 --> P1["fa:fa-arrow-up Allocate via pointer bump\nHeaders, Body, Strings"]
+        P1 --> F1["fa:fa-undo Arena Reset (O(1))\nAfter response sent"]
     end
 
-    subgraph "Request 2 (Keep-Alive)"
-        A2["Arena Block 1 (Reused)\nMemory already mapped"]
-        A2 --> P2["Allocate via pointer bump\nHeaders, Body, Strings"]
-        P2 --> F2["Arena Reset (O(1))"]
+    subgraph req2["fa:fa-redo Request 2 (Keep-Alive)"]
+        A2["fa:fa-cubes Arena Block 1 (Reused)\nMemory already mapped"]
+        A2 --> P2["fa:fa-arrow-up Allocate via pointer bump\nHeaders, Body, Strings"]
+        P2 --> F2["fa:fa-undo Arena Reset (O(1))"]
     end
 
-    subgraph "Connection Close"
-        FREE["csilk_arena_free()\nRelease all chunks"]
+    subgraph conn_close["fa:fa-times-circle Connection Close"]
+        FREE["fa:fa-trash csilk_arena_free()\nRelease all chunks"]
     end
 
     A1 --> A2
@@ -197,35 +284,59 @@ flowchart TB
 ```
 
 **Key Advantages:**
-* Allocation is reduced to simple pointer arithmetic (no call to malloc/free per request object).
-* O(1) reset between requests (setting offset pointer `used = 0`).
+* Allocation is reduced to simple pointer arithmetic (~3 CPU instructions per alloc, no call to malloc/free per request object).
+* O(1) reset between requests (setting offset pointer `used = 0`) — typical cost ≤ 5ns.
 * Avoids heap fragmentation. Entire memory pool is freed in one pass when the TCP connection closes.
+* Users **MUST** avoid holding arena pointers across `csilk_next()` boundaries if the callee may reset the arena.
+* Long-lived allocations **SHOULD** use `malloc` directly or `csilk_arena_dup()` to copy out of the arena.
 
 ### 2.7 Radix Tree Routing
-Prefix tree routing with O(path_length) matching, support for static, parameterized, and wildcard routes.
+Prefix tree (Patricia trie) routing with O(path_length) matching, support for static, parameterized, and wildcard routes. On x86_64 with AVX2, SIMD-accelerated path matching achieves ~50ns per route lookup. Routes **MUST** be registered before server start; the router is read-only during request processing (lock-free reads). Wildcard routes **SHOULD** be placed last in the registration order to ensure static routes take priority.
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph TB
-    ROOT["/ (root)"]
+    ROOT["fa:fa-tree / (root)"]
 
-    subgraph "Static Routes"
-        ROOT --> A["api"]
-        A --> B["v1"]
-        B --> C["users (GET)"]
-        A --> D["v2"]
-        D --> E["users (GET)"]
+    subgraph static_routes["fa:fa-link Static Routes"]
+        ROOT --> A["fa:fa-folder api"]
+        A --> B["fa:fa-folder v1"]
+        B --> C["fa:fa-file users (GET)"]
+        A --> D["fa:fa-folder v2"]
+        D --> E["fa:fa-file users (GET)"]
     end
 
-    subgraph "Parameter Routes"
-        ROOT --> F["users"]
-        F --> G[":id (PARAM)"]
-        G --> H["profile (GET)"]
-        G --> I["posts (GET)"]
+    subgraph param_routes["fa:fa-hashtag Parameter Routes"]
+        ROOT --> F["fa:fa-folder users"]
+        F --> G["fa:fa-tag :id (PARAM)"]
+        G --> H["fa:fa-file profile (GET)"]
+        G --> I["fa:fa-file posts (GET)"]
     end
 
-    subgraph "Wildcard Routes"
-        ROOT --> J["static"]
-        J --> K["*filepath (WILDCARD)"]
+    subgraph wild_routes["fa:fa-asterisk Wildcard Routes"]
+        ROOT --> J["fa:fa-folder static"]
+        J --> K["fa:fa-file *filepath (WILDCARD)"]
     end
 
     C -.- S1["/api/v1/users"]
@@ -242,11 +353,32 @@ graph TB
 Lightweight exception handling routes panics cleanly back to the recovery middleware:
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant REC as Recovery MW
-    participant MW as Other Middleware
-    participant H as Business Handler
-    participant JB as jmp_buf (in ctx)
+    participant REC as fa:fa-shield Recovery MW
+    participant MW as fa:fa-cogs Other Middleware
+    participant H as fa:fa-code Business Handler
+    participant JB as fa:fa-bookmark jmp_buf (in ctx)
 
     REC->>JB: setjmp(ctx->jump_buffer) → 0
     Note over REC: First pass: proceed normally
@@ -256,7 +388,7 @@ sequenceDiagram
     alt Normal execution
         H->>H: csilk_string(ctx, 200, "OK")
         H-->>REC: Return through stack
-    else Panic case
+    else fa:fa-exclamation-triangle Panic case
         H->>H: csilk_panic(ctx)
         Note over H: Trigger longjmp!
         H-->>JB: longjmp(ctx->jump_buffer, 1)
@@ -276,12 +408,33 @@ sequenceDiagram
 ### 4.1 WebSocket Upgrade Flow
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant Client
-    participant Server
-    participant HTTP as llhttp
-    participant WS as WebSocket Engine
-    participant EvLoop as libuv
+    participant Client as fa:fa-user Client
+    participant Server as fa:fa-server Server
+    participant HTTP as fa:fa-code llhttp
+    participant WS as fa:fa-plug WebSocket Engine
+    participant EvLoop as fa:fa-sync-alt libuv
 
     Client->>Server: HTTP GET /ws (WebSocket upgrade)
     Note over Server,HTTP: Standard HTTP request parsed by llhttp
@@ -311,12 +464,34 @@ sequenceDiagram
 csilk provides a built-in topic-based message queue system enabling thread-safe communication:
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph LR
-    WT["Worker Thread /<br/>External Event"] -- csilk_mq_publish --> ASYNC["uv_async_t<br/>(Signaling)"]
-    ASYNC -- Loop Awake --> DISPATCH["MQ Dispatcher<br/>(Main Loop)"]
-    DISPATCH --> GMW["Global MQ Middleware"]
-    GMW --> TMW["Topic MQ Middleware"]
-    TMW --> SUB["Subscribers"]
+    WT["fa:fa-users Worker Thread /<br/>External Event"] -- csilk_mq_publish --> ASYNC["fa:fa-bolt uv_async_t<br/>(Signaling)"]
+    ASYNC -- Loop Awake --> DISPATCH["fa:fa-tasks MQ Dispatcher<br/>(Main Loop)"]
+    DISPATCH --> GMW["fa:fa-globe Global MQ Middleware"]
+    GMW --> TMW["fa:fa-tag Topic MQ Middleware"]
+    TMW --> SUB["fa:fa-rss Subscribers"]
 ```
 
 * `csilk_mq_publish` is safe to call from any thread. It signals the main loop using `uv_async_send`.
@@ -327,32 +502,54 @@ graph LR
 ## 5. Multi-Worker Architecture
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    subgraph "Main Thread"
-        ML["libuv Event Loop"]
-        MT["TCP Socket (SO_REUSEPORT)"]
-        MW["Global Middlewares\n(recovery, logger, ...)"]
+    subgraph main_thread["fa:fa-crown Main Thread"]
+        ML["fa:fa-sync-alt libuv Event Loop"]
+        MT["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
+        MW["fa:fa-layer-group Global Middlewares\n(recovery, logger, ...)"]
     end
 
-    subgraph "Worker 1"
-        W1L["libuv Event Loop"]
-        W1T["TCP Socket (SO_REUSEPORT)"]
-        W1M["Global Middlewares"]
+    subgraph worker1["fa:fa-microchip Worker 1"]
+        W1L["fa:fa-sync-alt libuv Event Loop"]
+        W1T["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
+        W1M["fa:fa-layer-group Global Middlewares"]
     end
 
-    subgraph "Worker 2"
-        W2L["libuv Event Loop"]
-        W2T["TCP Socket (SO_REUSEPORT)"]
-        W2M["Global Middlewares"]
+    subgraph worker2["fa:fa-microchip Worker 2"]
+        W2L["fa:fa-sync-alt libuv Event Loop"]
+        W2T["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
+        W2M["fa:fa-layer-group Global Middlewares"]
     end
 
-    subgraph "Worker N"
-        WNL["libuv Event Loop"]
-        WNT["TCP Socket (SO_REUSEPORT)"]
-        WNM["Global Middlewares"]
+    subgraph workern["fa:fa-microchip Worker N"]
+        WNL["fa:fa-sync-alt libuv Event Loop"]
+        WNT["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
+        WNM["fa:fa-layer-group Global Middlewares"]
     end
 
-    K["Kernel TCP Stack\n<code>SO_REUSEPORT</code> distributes connections"] --> MT
+    K["fa:fa-network-wired Kernel TCP Stack<br/><code>SO_REUSEPORT</code> distributes connections"] --> MT
     K --> W1T
     K --> W2T
     K --> WNT
@@ -368,16 +565,37 @@ Since connection requests run on whatever worker thread accepted them, a lock-fr
 The sequence diagram below shows the complete lifecycle of a request from client to network response:
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant Client
-    participant UV as libuv Event Loop
-    participant SSL as OpenSSL (TLS)
-    participant HTTP as llhttp Parser
-    participant Server as csilk_server_t
-    participant Router as Radix Tree Router
-    participant MW as Middleware Chain
-    participant Arena as Arena Allocator
-    participant Response
+    participant Client as fa:fa-user Client
+    participant UV as fa:fa-sync-alt libuv Event Loop
+    participant SSL as fa:fa-lock OpenSSL (TLS)
+    participant HTTP as fa:fa-code llhttp Parser
+    participant Server as fa:fa-server csilk_server_t
+    participant Router as fa:fa-sitemap Radix Tree Router
+    participant MW as fa:fa-layer-group Middleware Chain
+    participant Arena as fa:fa-memory Arena Allocator
+    participant Response as fa:fa-reply Response
 
     Client->>UV: TCP SYN
     UV->>Server: on_new_connection()
@@ -437,12 +655,12 @@ sequenceDiagram
 
 Unified database drivers implement a standard interface (`csilk/drivers/db.h`):
 
-| Driver | Source File | Protocol/Dependency | Connection Model |
-|--------|-------------|---------------------|------------------|
-| **SQLite** | `src/drivers/sqlite.c` | Local File (sqlite3) | Local DB instance |
-| **MySQL** | `src/drivers/mysql.c` | TCP Socket (libmysqlclient) | Thread pool connection pool |
-| **PostgreSQL** | `src/drivers/postgres.c` | TCP Socket (libpq) | Thread pool connection pool |
-| **MongoDB** | `src/drivers/mongodb.c` | TCP Socket (libmongoc) | Driver pool manager |
+| 维度 | SQLite | MySQL | PostgreSQL | MongoDB |
+|:-----|:------:|:-----:|:----------:|:------:|
+| **系统复杂度** | ⭐ 1/5 嵌入本地 | ⭐⭐⭐ 3/5 独立服务 | ⭐⭐⭐ 3/5 独立服务 | ⭐⭐⭐ 3/5 独立服务 |
+| **运维成本** | ⭐ 1/5 无守护进程 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 驱动池管理 |
+| **读写吞吐量** | ~10K QPS (单写入) | ~50K QPS (集群) | ~80K QPS (集群) | ~60K QPS (分片集群) |
+| **数据一致性** | 强一致 (单文件) | 最终一致 (异步复制) | 强一致 (WAL + Raft) | 最终一致 (副本集) |
 
 ---
 
@@ -457,17 +675,39 @@ Native metrics exposition format:
 ### 8.2 Admin Dashboard (/admin)
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph TB
-    subgraph "Admin Dashboard (/admin)"
-        UI["admin_ui.html<br/>Single-page Application"]
-        STATS["GET /admin/stats<br/>JSON metrics snapshot"]
-        WS["GET /admin/ws<br/>WebSocket live events"]
+    subgraph admin_dash["fa:fa-tachometer-alt Admin Dashboard (/admin)"]
+        UI["fa:fa-file-code admin_ui.html<br/>Single-page Application"]
+        STATS["fa:fa-chart-bar GET /admin/stats<br/>JSON metrics snapshot"]
+        WS["fa:fa-comment-alt GET /admin/ws<br/>WebSocket live events"]
     end
 
-    subgraph "Data Sources"
-        HTTP_M["HTTP Metrics<br/>(requests, latency)"]
-        WF_M["Workflow Metrics<br/>(executions, tokens)"]
-        MQ_M["MQ Metrics<br/>(messages, queues)"]
+    subgraph data_sources["fa:fa-database Data Sources"]
+        HTTP_M["fa:fa-exchange-alt HTTP Metrics<br/>(requests, latency)"]
+        WF_M["fa:fa-robot Workflow Metrics<br/>(executions, tokens)"]
+        MQ_M["fa:fa-envelope MQ Metrics<br/>(messages, queues)"]
     end
 
     UI --> STATS
@@ -532,65 +772,87 @@ int main() {
 ## 11. Component Dependency Map
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph TB
-    csilk.h["csilk.h<br/>(Public API)"] --> csilk/core/internal.h["csilk/core/internal.h<br/>(Internal API umbrella)"]
-    csilk/core/internal.h["csilk/core/internal.h"] --> csilk/core/hash.h["hash.h<br/>(SHA-1/SHA-256/HMAC)"]
-    csilk/core/internal.h --> csilk/core/codec.h["codec.h<br/>(Base64/URL-decode)"]
-    csilk/core/internal.h --> csilk/core/ws_frame.h["ws_frame.h<br/>(WebSocket frames)"]
-    csilk/core/internal.h --> csilk/core/crypto_dispatch.h["crypto_dispatch.h<br/>(Crypto stubs)"]
-    csilk/core/internal.h --> csilk/core/mq_types.h["mq_types.h<br/>(Message Queue)"]
-    csilk/app/app.h["csilk/app/app.h<br/>(High-Level API)"]
-    csilk/app/admin.h["csilk/app/admin.h<br/>(Admin Dashboard API)"]
+    csilk_h["fa:fa-book csilk.h<br/>(Public API)"] --> internal_h["fa:fa-cogs csilk/core/internal.h<br/>(Internal API umbrella)"]
+    internal_h --> hash_h["fa:fa-hashtag hash.h<br/>(SHA-1/SHA-256/HMAC)"]
+    internal_h --> codec_h["fa:fa-exchange-alt codec.h<br/>(Base64/URL-decode)"]
+    internal_h --> ws_h["fa:fa-plug ws_frame.h<br/>(WebSocket frames)"]
+    internal_h --> crypto_h["fa:fa-lock crypto_dispatch.h<br/>(Crypto stubs)"]
+    internal_h --> mq_h["fa:fa-envelope mq_types.h<br/>(Message Queue)"]
+    app_h["fa:fa-cube csilk/app/app.h<br/>(High-Level API)"]
+    admin_h["fa:fa-tachometer-alt csilk/app/admin.h<br/>(Admin Dashboard API)"]
 
-    subgraph src/core/
-        server.c["server.c<br/>TCP + HTTP + libuv"] --> router.c["router.c<br/>Radix Tree"]
-        server.c --> context.c["context.c<br/>Req/Res + Handlers"]
-        server.c --> websocket.c["websocket.c<br/>WS Handshake + Frames"]
-        context.c --> arena.c["arena.c<br/>Memory Pool"]
-        context.c --> url.c["url.c<br/>URL Parsing"]
-        server.c --> config.c["config.c<br/>YAML Config"]
-        server.c --> logger.c["logger.c<br/>Structured Logging"]
-        server.c --> reflect.c["reflect.c<br/>JSON <-> C Struct"]
-        ai.c["ai.c<br/>Unified AI Engine"] --> ai_openai.c["ai_openai.c<br/>OpenAI Driver"]
-        ai.c --> ai_ollama.c["ai_ollama.c<br/>Ollama Driver"]
-        utils.c["utils.c<br/>SHA1 + Base64"]
+    subgraph src_core["fa:fa-server src/core/"]
+        server_c["fa:fa-cogs server.c<br/>TCP + HTTP + libuv"] --> router_c["fa:fa-sitemap router.c<br/>Radix Tree"]
+        server_c --> context_c["fa:fa-exchange-alt context.c<br/>Req/Res + Handlers"]
+        server_c --> ws_c["fa:fa-plug websocket.c<br/>WS Handshake + Frames"]
+        context_c --> arena_c["fa:fa-memory arena.c<br/>Memory Pool"]
+        context_c --> url_c["fa:fa-link url.c<br/>URL Parsing"]
+        server_c --> config_c["fa:fa-file-alt config.c<br/>YAML Config"]
+        server_c --> logger_c["fa:fa-clock logger.c<br/>Structured Logging"]
+        server_c --> reflect_c["fa:fa-magic reflect.c<br/>JSON <-> C Struct"]
+        ai_c["fa:fa-robot ai.c<br/>Unified AI Engine"] --> ai_openai_c["fa:fa-cloud ai_openai.c<br/>OpenAI Driver"]
+        ai_c --> ai_ollama_c["fa:fa-box ai_ollama.c<br/>Ollama Driver"]
+        utils_c["fa:fa-tools utils.c<br/>SHA1 + Base64"]
     end
 
-    subgraph src/middleware/ (15 modules)
-        logger_mw.c["logger.c"] --> context.c
-        auth.c --> context.c
-        jwt.c["jwt.c<br/>JWT Auth"] --> context.c
-        cors.c --> context.c
-        ratelimit.c --> context.c
-        csrf.c --> context.c
-        static_mw.c["static.c"] --> context.c
-        gzip.c --> context.c
-        sse.c --> context.c
-        multipart.c --> context.c
-        metrics.c["metrics.c<br/>Prometheus"] --> context.c
-        request_id.c["request_id.c"] --> context.c
-        session.c["session.c"] --> context.c
-        validate.c["validate.c"] --> context.c
+    subgraph middleware_src["fa:fa-layer-group src/middleware/ (15 modules)"]
+        logger_mw["fa:fa-clock logger.c"] --> context_c
+        auth_mw["fa:fa-key auth.c"] --> context_c
+        jwt_mw["fa:fa-id-card jwt.c<br/>JWT Auth"] --> context_c
+        cors_mw["fa:fa-globe cors.c"] --> context_c
+        rl_mw["fa:fa-gauge ratelimit.c"] --> context_c
+        csrf_mw["fa:fa-shield csrf.c"] --> context_c
+        static_mw["fa:fa-folder static.c"] --> context_c
+        gzip_mw["fa:fa-compress gzip.c"] --> context_c
+        sse_mw["fa:fa-broadcast-tower sse.c"] --> context_c
+        multipart_mw["fa:fa-upload multipart.c"] --> context_c
+        metrics_mw["fa:fa-chart-bar metrics.c<br/>Prometheus"] --> context_c
+        reqid_mw["fa:fa-tag request_id.c"] --> context_c
+        session_mw["fa:fa-user session.c"] --> context_c
+        validate_mw["fa:fa-check-circle validate.c"] --> context_c
     end
 
-    subgraph src/app/
-        app.c["app.c<br/>High-Level Wrapper"] --> server.c
-        app.c --> router.c
-        app.c --> config.c
-        admin.c["admin.c<br/>Dashboard"] --> server.c
-        admin.c --> mq.c["mq.c<br/>Message Queue"]
+    subgraph app_src["fa:fa-cube src/app/"]
+        app_c["fa:fa-cubes app.c<br/>High-Level Wrapper"] --> server_c
+        app_c --> router_c
+        app_c --> config_c
+        admin_c["fa:fa-tachometer-alt admin.c<br/>Dashboard"] --> server_c
+        admin_c --> mq_c["fa:fa-envelope mq.c<br/>Message Queue"]
     end
 
-    subgraph src/drivers/
-        sqlite.c["sqlite.c"] --> data/db.c
-        mysql.c["mysql.c"] --> data/db.c
-        postgres.c["postgres.c"] --> data/db.c
-        mongodb.c["mongodb.c"] --> data/db.c
+    subgraph drivers_src["fa:fa-database src/drivers/"]
+        sqlite["fa:fa-database sqlite.c"] --> db_c["fa:fa-cogs data/db.c"]
+        mysql["fa:fa-database mysql.c"] --> db_c
+        postgres["fa:fa-database postgres.c"] --> db_c
+        mongodb["fa:fa-leaf mongodb.c"] --> db_c
     end
 
-    server.c --> libuv[libuv]
-    server.c --> llhttp[llhttp]
-    context.c --> cjson[cJSON]
+    server_c --> libuv["fa:fa-sync-alt libuv"]
+    server_c --> llhttp["fa:fa-code llhttp"]
+    context_c --> cjson["fa:fa-file-code cJSON"]
 ```
 
 ---

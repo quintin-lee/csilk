@@ -1,6 +1,6 @@
 # Python Bindings User Manual
 
-`csilk` provides high-performance, developer-friendly Python bindings using the Python standard library `ctypes` module. Developers can write high-performance web applications and AI workflows in Python while leveraging the underlying asynchronous speed of `csilk` (built on libuv, nghttp2, and OpenSSL).
+`csilk` provides high-performance, developer-friendly Python bindings using the Python standard library `ctypes` module. Developers can write high-performance web applications and AI workflows in Python while leveraging the underlying asynchronous speed of `csilk` (built on libuv, nghttp2, and OpenSSL). The shared library (`libcsilk.so`) **MUST** be discoverable via `LD_LIBRARY_PATH` or system library path. Python 3.8+ **MUST** be used (`ctypes.CDLL` with `RTLD_GLOBAL`). The Python interface **SHOULD** mirror the C API — all response methods (`string()`, `json()`, `file()`) are available with identical semantics. Asynchronous handlers **MUST NOT** block the GIL for more than 100ms.
 
 ---
 

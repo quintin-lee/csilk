@@ -59,31 +59,24 @@ Deep-dive architectural documentation for each core subsystem of csilk.
 
 ## Relationship Overview
 
-```
-                    ┌─────────────┐
-                    │  App Layer  │
-                    └──────┬──────┘
-                           │ owns
-              ┌────────────┼────────────────┐
-              ▼            ▼                ▼
-        ┌──────────┐ ┌──────────┐ ┌────────────────┐
-        │  Server  │ │  Router  │ │  Middleware     │
-        │  Core    │ │ (Radix)  │ │  Chain          │
-        └────┬─────┘ └──────────┘ └────────┬───────┘
-             │                              │
-    ┌────────┼────────┐              ┌──────┴──────┐
-    ▼        ▼        ▼              ▼             ▼
-┌──────┐ ┌────────┐ ┌──────┐ ┌──────────┐ ┌──────────┐
-│ TLS  │ │ HTTP/2 │ │  MQ  │ │ Security │ │Protocols │
-│/ALPN │ │(h2)    │ │(Bus) │ │(RBAC/JWT)│ │(WS/SSE)  │
-└──────┘ └────────┘ └──────┘ └──────────┘ └──────────┘
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
+graph TB
+    APP["fa:fa-cube App Layer"] --> SRV["fa:fa-server Server Core"]
+    APP --> RTR["fa:fa-sitemap Router (Radix)"]
+    APP --> MW["fa:fa-shield Middleware Chain"]
 
-    ┌──────────┬──────────┬────────────┐
-    ▼          ▼          ▼            ▼
-┌───────┐ ┌────────┐ ┌────────┐ ┌──────────┐
-│ Data  │ │   AI   │ │Crypto  │ │ Metrics  │
-│(DB)   │ │(Engine)│ │(Cipher)│ │(Prom)    │
-└───────┘ └────────┘ └────────┘ └──────────┘
+    SRV --> TLS["fa:fa-lock TLS/ALPN"]
+    SRV --> H2["fa:fa-code-fork HTTP/2 (h2)"]
+    SRV --> MQ["fa:fa-envelope MQ (Bus)"]
+
+    MW --> SEC["fa:fa-shield Security (RBAC/JWT)"]
+    MW --> PROT["fa:fa-plug Protocols (WS/SSE)"]
+
+    SRV --> DATA["fa:fa-database Data (DB)"]
+    SRV --> AI_MOD["fa:fa-robot AI (Engine)"]
+    SRV --> CRYPTO["fa:fa-key Crypto (Cipher)"]
+    SRV --> METRICS["fa:fa-dashboard Metrics (Prom)"]
 ```
 
 See also: [Architecture Overview](../architecture.md), [Getting Started](../getting-started.md).

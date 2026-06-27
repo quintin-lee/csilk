@@ -2,65 +2,67 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-24
 
-csilk is a lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON.
+csilk is a lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON. Developers **MUST** compile with C23 support (GCC 13+ or Clang 19+). Public API **MUST** be used through the `csilk_ctx_t*` opaque handle — direct struct access is **NOT** part of the stable ABI. All resource management **SHOULD** prefer arena allocation over heap `malloc`/`free`.
 
 ## Project Architecture Overview
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph TB
     subgraph Application
-        H["Business Handlers"]
-        APP["csilk_app_t (High-Level API)"]
+        H["fa:fa-code Business Handlers"]
+        APP["fa:fa-cube csilk_app_t (High-Level API)"]
     end
 
-    subgraph Middleware Layer
-        REC["Recovery"]
-        LOG["Logger"]
-        AUTH["Auth"]
-        CORS["CORS"]
-        RT["Rate Limit"]
-        CSRF["CSRF"]
-        ST["Static Files"]
-        GZ["Gzip"]
-        SSE["SSE"]
-        MP["Multipart"]
-        JWT["JWT"]
-        MET["Metrics"]
-        RID["RequestID"]
-        SES["Session"]
-        VAL["Validate"]
-        WAF["WAF"]
+    subgraph Middleware_Layer["fa:fa-shield Middleware Layer"]
+        REC["fa:fa-medkit Recovery"]
+        LOG["fa:fa-pencil Logger"]
+        AUTH["fa:fa-key Auth"]
+        CORS["fa:fa-globe CORS"]
+        RT["fa:fa-clock-o Rate Limit"]
+        CSRF["fa:fa-shield CSRF"]
+        ST["fa:fa-folder-open Static Files"]
+        GZ["fa:fa-archive Gzip"]
+        SSE["fa:fa-bullhorn SSE"]
+        MP["fa:fa-upload Multipart"]
+        JWT["fa:fa-tag JWT"]
+        MET["fa:fa-bar-chart Metrics"]
+        RID["fa:fa-tag RequestID"]
+        SES["fa:fa-cookie Session"]
+        VAL["fa:fa-check-square Validate"]
+        WAF["fa:fa-fire WAF"]
     end
 
-    subgraph Core Framework
-        S["Server (libuv event loop)"]
-        R["Router (Radix Tree)"]
-        G["Group (prefix routing)"]
-        C["Context (req/res lifecycle)"]
-        AR["Arena Allocator"]
-        WS["WebSocket"]
-        CFG["Config (YAML)"]
-        RF["Reflection Engine"]
-        AI["AI Unified Engine"]
-        end
+    subgraph Core_Framework["fa:fa-cogs Core Framework"]
+        S["fa:fa-server Server (libuv event loop)"]
+        R["fa:fa-sitemap Router (Radix Tree)"]
+        G["fa:fa-folder Group (prefix routing)"]
+        C["fa:fa-exchange Context (req/res lifecycle)"]
+        AR["fa:fa-database Arena Allocator"]
+        WS["fa:fa-plug WebSocket"]
+        CFG["fa:fa-cog Config (YAML)"]
+        RF["fa:fa-search Reflection Engine"]
+        AI_ENG["fa:fa-robot AI Unified Engine"]
+    end
 
-        subgraph Dependencies
-        UV["libuv (async I/O)"]
-        LL["llhttp (HTTP/1.1 parser)"]
-        NG["nghttp2 (HTTP/2 parser)"]
-        JSON["cJSON"]
-        YAML["libyaml"]
-        Z["zlib"]
-        CURL["libcurl"]
-        end
-        S --> CFG
-        S --> UV
-        S --> LL
-        RF --> JSON
-        AI --> CURL
-        AI --> JSON
-        GZ --> Z
-        C --> JSON
+    subgraph Dependencies
+        UV["fa:fa-cogs libuv (async I/O)"]
+        LL["fa:fa-file-code llhttp (HTTP/1.1 parser)"]
+        NG["fa:fa-code-fork nghttp2 (HTTP/2 parser)"]
+        JSON["fa:fa-code cJSON"]
+        YAML["fa:fa-file-text libyaml"]
+        Z["fa:fa-archive zlib"]
+        CURL["fa:fa-download libcurl"]
+    end
+
+    S --> CFG
+    S --> UV
+    S --> LL
+    RF --> JSON
+    AI_ENG --> CURL
+    AI_ENG --> JSON
+    GZ --> Z
+    C --> JSON
 
     CORS --> C
     RT --> C
@@ -74,12 +76,6 @@ graph TB
     G --> R
     C --> AR
     S --> WS
-    S --> CFG
-    S --> UV
-    S --> LL
-    RF --> JSON
-    GZ --> Z
-    C --> JSON
 ```
 
 ## Key Resources

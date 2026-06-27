@@ -1,6 +1,8 @@
 # Windows (MSVC) Support Assessment
 
 > Date: 2026-05-30 | Status: Pre-research
+>
+> **Windows Constraints**: MSVC **MUST NOT** be targeted for native builds — C23 features (`static constexpr`, `nullptr`) are not supported. Cross-compilation via MinGW-w64 **SHOULD** be the primary Windows path. libuv-based I/O **MUST** work (IOCP backend is fully supported). POSIX-only code paths (`pthread`, `sys/socket.h`, `unistd.h`) **SHOULD** be isolated behind `#ifdef` guards.
 
 ## Summary
 

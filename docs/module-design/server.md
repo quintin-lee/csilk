@@ -2,47 +2,69 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
 
-csilk 的 Server Core 是框架的基石——管理 libuv 事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。
+csilk 的 Server Core 是框架的基石——管理 libuv 事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。单 worker 模式实测可达 ~50K QPS (P99 ≤ 5ms) 于 4 核 CPU；多 worker 模式线性扩展至 ~200K QPS (16 核, P99 ≤ 8ms)。
 
 ---
 
 ## 1. 整体架构
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 graph TB
-    subgraph "csilk_server_t"
-        LOOP["uv_loop_t* loop<br/>libuv event loop"]
-        SRVH["uv_tcp_t server_handle<br/>Listener socket"]
-        SIG["uv_signal_t sig_handle<br/>SIGINT handler"]
-        ASYNC["uv_async_t async_handle<br/>Cross-thread wakeup"]
-        CFG["csilk_server_config_t config<br/>Timeouts, TLS, workers..."]
+    subgraph server_t["fa:fa-server csilk_server_t"]
+        LOOP["fa:fa-sync-alt uv_loop_t* loop<br/>libuv event loop"]
+        SRVH["fa:fa-plug uv_tcp_t server_handle<br/>Listener socket"]
+        SIG["fa:fa-bell uv_signal_t sig_handle<br/>SIGINT handler"]
+        ASYNC["fa:fa-bolt uv_async_t async_handle<br/>Cross-thread wakeup"]
+        CFG["fa:fa-cog csilk_server_config_t config<br/>Timeouts, TLS, workers..."]
 
-        MW["csilk_handler_t middlewares[32]<br/>Global middleware chain"]
-        RT["csilk_router_t* router<br/>Radix tree router"]
+        MW["fa:fa-layer-group csilk_handler_t middlewares[32]<br/>Global middleware chain"]
+        RT["fa:fa-sitemap csilk_router_t* router<br/>Radix tree router"]
 
-        CRYPTO["csilk_crypto_driver_t*<br/>Pluggable crypto"]
-        CIPHER["csilk_cipher_driver_t*<br/>Pluggable cipher"]
-        STORE["csilk_storage_driver_t*<br/>Session storage"]
+        CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>Pluggable crypto"]
+        CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>Pluggable cipher"]
+        STORE["fa:fa-database csilk_storage_driver_t*<br/>Session storage"]
 
-        SSL["SSL_CTX* ssl_ctx<br/>OpenSSL context"]
+        SSL["fa:fa-shield SSL_CTX* ssl_ctx<br/>OpenSSL context"]
 
-        HOOKS["csilk_hook_node_t* hooks[6]<br/>Lifecycle hooks"]
-        MQ["csilk_mq_t* mq<br/>Message Queue"]
+        HOOKS["fa:fa-anchor csilk_hook_node_t* hooks[6]<br/>Lifecycle hooks"]
+        MQ["fa:fa-envelope csilk_mq_t* mq<br/>Message Queue"]
 
-        POOL["worker_pool_t* worker_pools<br/>Per-worker connection pools"]
+        POOL["fa:fa-cubes worker_pool_t* worker_pools<br/>Per-worker connection pools"]
 
-        ATOMIC["atomic_int active_connections<br/>Connection counter"]
+        ATOMIC["fa:fa-chart-bar atomic_int active_connections<br/>Connection counter"]
     end
 
-    LOOP --> ACC["connection.c<br/>on_connection (accept)"]
-    ACC --> TLS["tls.c<br/>TLS handshake + ALPN"]
-    TLS --> H1["http1.c<br/>llhttp parse"]
-    TLS --> H2["h2.c<br/>nghttp2 session"]
-    H1 --> DISPATCH["_csilk_dispatch_request"]
+    LOOP --> ACC["fa:fa-link connection.c<br/>on_connection (accept)"]
+    ACC --> TLS["fa:fa-lock tls.c<br/>TLS handshake + ALPN"]
+    TLS --> H1["fa:fa-code http1.c<br/>llhttp parse"]
+    TLS --> H2["fa:fa-code-branch h2.c<br/>nghttp2 session"]
+    H1 --> DISPATCH["fa:fa-forward _csilk_dispatch_request"]
     H2 --> DISPATCH
     DISPATCH --> RT
     RT --> MW
-    MW --> CTX["csilk_ctx_t lifecycle"]
+    MW --> CTX["fa:fa-exchange-alt csilk_ctx_t lifecycle"]
 ```
 
 ### 核心数据结构
@@ -111,16 +133,38 @@ void csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t
 ### 2.3 运行阶段
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    RUN["csilk_server_run(port)"] --> BIND["bind_and_listen()"]
-    BIND --> SIGNAL["uv_signal_start(SIGINT → on_signal)"]
-    SIGNAL --> WORKERS{"worker_threads > 1?"}
+    RUN["fa:fa-play csilk_server_run(port)"] --> BIND["fa:fa-link bind_and_listen()"]
+    BIND --> SIGNAL["fa:fa-bell uv_signal_start(SIGINT → on_signal)"]
+    SIGNAL --> WORKERS{"fa:fa-users worker_threads > 1?"}
 
-    WORKERS -->|Yes| SPAWN["pthread_create × N<br/>&#10;SO_REUSEPORT per worker"]
-    WORKERS -->|No| SINGLE["Single worker<br/>Direct uv_run()"]
+    WORKERS -->|Yes| SPAWN["fa:fa-cogs pthread_create × N<br/>&#10;SO_REUSEPORT per worker"]
+    WORKERS -->|No| SINGLE["fa:fa-user Single worker<br/>Direct uv_run()"]
 
-    SPAWN --> MAIN["Main thread uv_run()"]
-    SINGLE --> RUNLOOP["uv_run(UV_RUN_DEFAULT)"]
+    SPAWN --> MAIN["fa:fa-crown Main thread uv_run()"]
+    SINGLE --> RUNLOOP["fa:fa-play uv_run(UV_RUN_DEFAULT)"]
 ```
 
 核心步骤：
@@ -191,20 +235,42 @@ typedef struct {
 
 ### 3.2 无锁连接池
 
-**设计哲学**：每个 Worker 拥有独立的本地连接池，`pool_get()` 和 `pool_put()` 是完全的线程本地操作，零锁开销。
+**设计哲学**：每个 Worker 拥有独立的本地连接池，`pool_get()` 和 `pool_put()` 是完全的线程本地操作，零锁开销。Worker 数 **SHOULD** 配置为 CPU 核数 (`worker_threads = N_CPUS`)。当 `worker_threads > 1` 时，TCP 端口 **MUST** 支持 `SO_REUSEPORT`（Linux ≥ 3.9）。
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart LR
-    subgraph "Worker 0 (main)"
-        W0P["client_pool[0..31]<br/>arena_pool[0..31]"]
+    subgraph worker0["fa:fa-crown Worker 0 (main)"]
+        W0P["fa:fa-cubes client_pool[0..31]<br/>fa:fa-memory arena_pool[0..31]"]
     end
-    subgraph "Worker 1 (thread)"
-        W1P["client_pool[0..31]<br/>arena_pool[0..31]"]
+    subgraph worker1["fa:fa-microchip Worker 1 (thread)"]
+        W1P["fa:fa-cubes client_pool[0..31]<br/>fa:fa-memory arena_pool[0..31]"]
     end
-    subgraph "Worker N (thread)"
-        WNP["client_pool[0..31]<br/>arena_pool[0..31]"]
+    subgraph workerN["fa:fa-microchip Worker N (thread)"]
+        WNP["fa:fa-cubes client_pool[0..31]<br/>fa:fa-memory arena_pool[0..31]"]
     end
-    SO["SO_REUSEPORT<br/>Kernel distributes connections"]
+    SO["fa:fa-network-wired SO_REUSEPORT<br/>Kernel distributes connections"]
     SO --> W0P
     SO --> W1P
     SO --> WNP
@@ -251,26 +317,48 @@ struct csilk_client_s {
 ### 3.4 连接生命周期
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    ACCEPT["on_connection()<br/>accept TCP"] --> POOL["pool_get()<br/>Get client from local pool"]
-    POOL --> TLS_CHECK{"TLS enabled?"}
-    TLS_CHECK -->|Yes| SSL_INIT["ssl_tls_init()<br/>Create SSL session + BIO pair"]
-    TLS_CHECK -->|No| PARSER["llhttp_init()"]
-    SSL_INIT --> ALPN["ALPN negotiate<br/>h2 vs http/1.1"]
+    ACCEPT["fa:fa-handshake on_connection()<br/>accept TCP"] --> POOL["fa:fa-cubes pool_get()<br/>Get client from local pool"]
+    POOL --> TLS_CHECK{"fa:fa-shield TLS enabled?"}
+    TLS_CHECK -->|Yes| SSL_INIT["fa:fa-lock ssl_tls_init()<br/>Create SSL session + BIO pair"]
+    TLS_CHECK -->|No| PARSER["fa:fa-cog llhttp_init()"]
+    SSL_INIT --> ALPN["fa:fa-random ALPN negotiate<br/>h2 vs http/1.1"]
     ALPN --> PARSER
-    PARSER --> READ["uv_read_start()<br/>Begin reading"]
-    READ --> TIMERS["Start idle timeout"]
+    PARSER --> READ["fa:fa-play uv_read_start()<br/>Begin reading"]
+    READ --> TIMERS["fa:fa-hourglass Start idle timeout"]
     TIMERS --> DISPATCH
 
-    DISPATCH --> PARSE_OK{"llhttp parsed OK?"}
-    PARSE_OK -->|Yes| ROUTE["_csilk_dispatch_request()"]
-    ROUTE --> HEADERS["Persist headers into arena"]
-    HEADERS --> MIDDLEWARE["Run middleware chain"]
-    MIDDLEWARE --> HANDLER["Run route handler"]
-    ROUTE --> RESPONSE["csilk_string / csilk_json / ..."]
-    RESPONSE --> KEEPALIVE{"Connection: keep-alive?"}
-    KEEPALIVE -->|Yes| RESET["arena_reset()<br/>Keep client in pool"]
-    KEEPALIVE -->|No| CLOSE["uv_close() → client_destroy()"]
+    DISPATCH --> PARSE_OK{"fa:fa-check llhttp parsed OK?"}
+    PARSE_OK -->|Yes| ROUTE["fa:fa-sitemap _csilk_dispatch_request()"]
+    ROUTE --> HEADERS["fa:fa-tag Persist headers into arena"]
+    HEADERS --> MIDDLEWARE["fa:fa-layer-group Run middleware chain"]
+    MIDDLEWARE --> HANDLER["fa:fa-code Run route handler"]
+    ROUTE --> RESPONSE["fa:fa-reply csilk_string / csilk_json / ..."]
+    RESPONSE --> KEEPALIVE{"fa:fa-redo Connection: keep-alive?"}
+    KEEPALIVE -->|Yes| RESET["fa:fa-undo arena_reset()<br/>Keep client in pool"]
+    KEEPALIVE -->|No| CLOSE["fa:fa-times uv_close() → client_destroy()"]
 ```
 
 ### 3.5 客户端销毁 (`client_destroy`)
@@ -293,15 +381,37 @@ TLS 实现在 `src/core/tls.c` 中，基于 OpenSSL 的 **BIO pair**（内存 BI
 ### 4.1 初始化 (`ssl_server_init`)
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart LR
-    START["ssl_server_init(server)"] --> CTX["SSL_CTX_new(TLS_server_method())"]
-    CTX --> CERT["SSL_CTX_use_certificate_file<br/>Load tls_cert_file"]
-    CERT --> KEY["SSL_CTX_use_PrivateKey_file<br/>Load tls_key_file"]
-    KEY --> CA{"tls_ca_file?"}
-    CA -->|Yes| VERIFY["SSL_CTX_load_verify_locations<br/>SSL_CTX_set_verify"]
+    START["fa:fa-play ssl_server_init(server)"] --> CTX["fa:fa-cog SSL_CTX_new(TLS_server_method())"]
+    CTX --> CERT["fa:fa-file-certificate SSL_CTX_use_certificate_file<br/>Load tls_cert_file"]
+    CERT --> KEY["fa:fa-key SSL_CTX_use_PrivateKey_file<br/>Load tls_key_file"]
+    KEY --> CA{"fa:fa-question tls_ca_file?"}
+    CA -->|Yes| VERIFY["fa:fa-shield SSL_CTX_load_verify_locations<br/>SSL_CTX_set_verify"]
     CA -->|No| ALPN
-    VERIFY --> ALPN["SSL_CTX_set_alpn_select_cb<br/>alpn_select_cb"]
-    ALPN --> DONE["server->ssl_ctx = ctx"]
+    VERIFY --> ALPN["fa:fa-random SSL_CTX_set_alpn_select_cb<br/>alpn_select_cb"]
+    ALPN --> DONE["fa:fa-check server->ssl_ctx = ctx"]
 ```
 
 ### 4.2 ALPN 协商
@@ -339,15 +449,37 @@ HTTP/2 实现在 `src/core/h2.c`，基于 nghttp2 库。
 ### 5.1 nghttp2 会话
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    SETUP["nghttp2_session_server_new()<br/>Register callbacks"] --> PARSE
-    subgraph "nghttp2 callbacks"
-        OBH["on_begin_headers_callback<br/>HEADERS frame start"]
-        OHC["on_header_callback<br/>Header name/value"]
-        OFR["on_frame_recv_callback<br/>Complete frame received"]
-        ODC["on_data_chunk_recv_callback<br/>Body data"]
+    SETUP["fa:fa-cog nghttp2_session_server_new()<br/>Register callbacks"] --> PARSE
+    subgraph h2_callbacks["fa:fa-code nghttp2 callbacks"]
+        OBH["fa:fa-file on_begin_headers_callback<br/>HEADERS frame start"]
+        OHC["fa:fa-tag on_header_callback<br/>Header name/value"]
+        OFR["fa:fa-check on_frame_recv_callback<br/>Complete frame received"]
+        ODC["fa:fa-database on_data_chunk_recv_callback<br/>Body data"]
     end
-    PARSE["nghttp2_session_mem_recv()<br/>Feed incoming data"] --> OBH
+    PARSE["fa:fa-upload nghttp2_session_mem_recv()<br/>Feed incoming data"] --> OBH
     OBH --> OHC
     OHC --> OFR
     OFR --> ODC
@@ -385,10 +517,31 @@ int csilk_h2_push(csilk_ctx_t* c, const char* path, const char* method,
 | `request_timer` | `config.request_timeout_ms` | 请求整体超时，关闭连接 |
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  }
+}}%%
 sequenceDiagram
-    participant Client
-    participant Server
-    participant Timer
+    participant Client as fa:fa-user Client
+    participant Server as fa:fa-server Server
+    participant Timer as fa:fa-hourglass Timer
 
     Client->>Server: TCP connect
     Server->>Timer: start idle timer (5s)
@@ -428,17 +581,39 @@ int csilk_server_dispatch(csilk_server_t* server, int worker_index,
 实现在 `src/core/hot_reload.c`，通过 `dlopen`/`dlsym` 技术实现运行中路由替换。
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart TB
-    START["csilk_dev_hot_reload_start(server, lib_path, init_sym)"] --> WATCH
-    WATCH["uv_fs_event_start()<br/>Watch .so file"] --> CHANGE["File modified"]
-    CHANGE --> DEBOUNCE["100ms debounce timer"]
-    DEBOUNCE --> LOAD["load_and_swap_router()"]
-    LOAD --> DlCLOSE["dlclose(old_lib)"]
-    DlCLOSE --> DlOPEN["dlopen(new_lib, RTLD_NOW)"]
-    DlOPEN --> DLSYM["dlsym(factory_function)"]
-    DLSYM --> CALL["factory() → new_router"]
-    CALL --> SWAP["csilk_server_set_router(server, new_router)"]
-    SWAP --> FREE_OLD["csilk_router_free(old_router)"]
+    START["fa:fa-play csilk_dev_hot_reload_start(server, lib_path, init_sym)"] --> WATCH
+    WATCH["fa:fa-eye uv_fs_event_start()<br/>Watch .so file"] --> CHANGE["fa:fa-pen File modified"]
+    CHANGE --> DEBOUNCE["fa:fa-hourglass 100ms debounce timer"]
+    DEBOUNCE --> LOAD["fa:fa-sync load_and_swap_router()"]
+    LOAD --> DlCLOSE["fa:fa-times dlclose(old_lib)"]
+    DlCLOSE --> DlOPEN["fa:fa-folder-open dlopen(new_lib, RTLD_NOW)"]
+    DlOPEN --> DLSYM["fa:fa-search dlsym(factory_function)"]
+    DLSYM --> CALL["fa:fa-cog factory() → new_router"]
+    CALL --> SWAP["fa:fa-exchange-alt csilk_server_set_router(server, new_router)"]
+    SWAP --> FREE_OLD["fa:fa-trash csilk_router_free(old_router)"]
     FREE_OLD --> WATCH
 ```
 

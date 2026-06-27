@@ -2,6 +2,8 @@
 
 > **Status**: Phase 1 (Session scaffolding), Phase 2 (Request dispatch/response), and Phase 3 (Server Push) complete.  
 > **Version**: v0.3.0+ | **Last updated**: 2026-05-31
+>
+> **HTTP/2 Rules**: ALPN negotiation **MUST** complete before any data routing. Stream contexts **MUST** use arena allocation — no individual `malloc`/`free` per stream. Server Push **MUST NOT** be advertised on HTTP/1.1 connections. HPACK dynamic table size **SHOULD** be tuned per deployment (default: nghttp2 4096 bytes).
 
 ## 1. Overview
 HTTP/2 (RFC 7540) introduces binary framing, multiplexing, and header compression (HPACK). The csilk framework has integrated `nghttp2` for frame parsing and generation.
