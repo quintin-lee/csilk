@@ -983,5 +983,52 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_global_exception_handler(self):
+        app = App()
+
+        class CustomError(Exception):
+            pass
+
+        @app.exception_handler(CustomError)
+        def handle_custom_error(ctx, exc):
+            ctx.string(400, f"Handled: {str(exc)}")
+
+        @app.get("/error")
+        def route_error(ctx):
+            raise CustomError("test exception")
+
+        import socket
+        def run_server():
+            app.run(8088)
+
+        t = threading.Thread(target=run_server)
+        t.daemon = True
+        t.start()
+
+        for _ in range(15):
+            try:
+                with socket.create_connection(("127.0.0.1", 8088), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            self.fail("Server did not start in time")
+
+        proxy_handler = urllib.request.ProxyHandler({})
+        opener = urllib.request.build_opener(proxy_handler)
+        urllib.request.install_opener(opener)
+
+        try:
+            try:
+                urllib.request.urlopen("http://127.0.0.1:8088/error")
+                self.fail("Expected HTTPError 400")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 400)
+                self.assertEqual(e.read().decode('utf-8'), "Handled: test exception")
+        finally:
+            app.stop()
+            t.join(timeout=1.0)
+
 if __name__ == '__main__':
     unittest.main()
+
