@@ -437,6 +437,10 @@ def get_bindings():
 
     lib.csilk_is_async.restype = ctypes.c_int
     lib.csilk_is_async.argtypes = [CsilkCtxPtr]
+
+    CsilkDispatchCb = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    lib.csilk_dispatch.restype = None
+    lib.csilk_dispatch.argtypes = [CsilkCtxPtr, CsilkDispatchCb, ctypes.c_void_p]
     
     # Response helpers
     lib.csilk_status.restype = None

@@ -335,6 +335,59 @@ class Context:
             c_data = bytes(data)
         self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
 
+        if not self._lib.csilk_is_async(self._ctx):
+            self._lib.csilk_response_end(self._ctx)
+
+_dispatcher_map = {}
+
+@ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+def _python_dispatcher(arg):
+    func_id = arg
+    func = _dispatcher_map.pop(func_id, None)
+    if func:
+        try:
+            func()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+    def dispatch_async(self, coro, loop):
+        """
+        Execute an asyncio coroutine and dispatch the response sending back to
+        the main C event loop thread safely.
+        """
+        import asyncio
+        import traceback
+
+        # Ensure async mode is set so C loop doesn't automatically close context
+        self.is_async = True
+
+        async def _runner():
+            try:
+                response_data = await coro(self)
+                
+                def _send():
+                    if isinstance(response_data, dict):
+                        self.json(200, response_data)
+                    elif response_data is not None:
+                        self.string(200, str(response_data))
+                    self.response_end()
+                    
+                self.dispatch(_send)
+            except Exception as e:
+                traceback.print_exc()
+                def _send_error():
+                    self.string(500, f"Internal Server Error: {str(e)}")
+                    self.response_end()
+                self.dispatch(_send_error)
+        
+        asyncio.run_coroutine_threadsafe(_runner(), loop)
+
+    def dispatch(self, func):
+        func_id = id(func)
+        _dispatcher_map[func_id] = func
+        self._lib.csilk_dispatch(self._ctx, _python_dispatcher, func_id)
+
     def response_end(self):
         self._lib.csilk_response_end(self._ctx)
 

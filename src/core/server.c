@@ -128,6 +128,11 @@ on_stop_async(uv_async_t* handle)
 	if (!uv_is_closing((uv_handle_t*)&server->sig_handle)) {
 		uv_close((uv_handle_t*)&server->sig_handle, on_server_handle_close);
 	}
+
+	if (!uv_is_closing((uv_handle_t*)&server->worker_pools[0].dispatch_async)) {
+		uv_close((uv_handle_t*)&server->worker_pools[0].dispatch_async, nullptr);
+	}
+
 	if (!uv_is_closing((uv_handle_t*)&server->async_handle)) {
 		uv_close((uv_handle_t*)&server->async_handle, on_server_handle_close);
 	}
@@ -604,6 +609,11 @@ on_worker_stop_async(uv_async_t* handle)
 
 	close_active_clients(server, loop);
 
+	int worker_idx = sd->worker_index;
+	if (!uv_is_closing((uv_handle_t*)&server->worker_pools[worker_idx].dispatch_async)) {
+		uv_close((uv_handle_t*)&server->worker_pools[worker_idx].dispatch_async, nullptr);
+	}
+
 	if (!uv_is_closing((uv_handle_t*)handle)) {
 		uv_close((uv_handle_t*)handle, nullptr);
 	}
@@ -618,6 +628,73 @@ on_worker_stop_async(uv_async_t* handle)
 		uv_run(loop, UV_RUN_NOWAIT);
 	}
 	uv_stop(loop);
+}
+
+static void
+on_dispatch_async(uv_async_t* handle)
+{
+	worker_pool_t* wp = (worker_pool_t*)handle->data;
+	if (!wp) {
+		return;
+	}
+
+	uv_mutex_lock(&wp->dispatch_mutex);
+	csilk_dispatch_task_t* task = wp->dispatch_head;
+	wp->dispatch_head = nullptr;
+	wp->dispatch_tail = nullptr;
+	uv_mutex_unlock(&wp->dispatch_mutex);
+
+	while (task) {
+		if (task->cb) {
+			task->cb(task->arg);
+		}
+		csilk_dispatch_task_t* next = task->next;
+		free(task);
+		task = next;
+	}
+}
+
+static void
+_csilk_worker_init_dispatch(worker_pool_t* wp, uv_loop_t* loop)
+{
+	uv_mutex_init(&wp->dispatch_mutex);
+	wp->dispatch_head = nullptr;
+	wp->dispatch_tail = nullptr;
+	uv_async_init(loop, &wp->dispatch_async, on_dispatch_async);
+	wp->dispatch_async.data = wp;
+}
+
+void
+csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
+{
+	if (!c || !c->_internal_client || !cb) {
+		return;
+	}
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	if (!client->owner_pool) {
+		return;
+	}
+	worker_pool_t* wp = client->owner_pool;
+
+	csilk_dispatch_task_t* task = malloc(sizeof(csilk_dispatch_task_t));
+	if (!task) {
+		return;
+	}
+	task->cb = cb;
+	task->arg = arg;
+	task->next = nullptr;
+
+	uv_mutex_lock(&wp->dispatch_mutex);
+	if (!wp->dispatch_head) {
+		wp->dispatch_head = task;
+		wp->dispatch_tail = task;
+	} else {
+		wp->dispatch_tail->next = task;
+		wp->dispatch_tail = task;
+	}
+	uv_mutex_unlock(&wp->dispatch_mutex);
+
+	uv_async_send(&wp->dispatch_async);
 }
 
 /** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode.
@@ -654,6 +731,7 @@ worker_thread(void* arg)
 	wp->server_handle.data = wp;
 
 	_csilk_worker_init_arena_pool(wp);
+	_csilk_worker_init_dispatch(wp, loop_ptr);
 
 	if (bind_and_listen(
 		loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) < 0) {
@@ -855,6 +933,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	server->server_handle.data = &server->worker_pools[0];
 
 	_csilk_worker_init_arena_pool(&server->worker_pools[0]);
+	_csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
 	if (server->config.tcp_keepalive > 0) {
 		uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);

@@ -66,6 +66,13 @@ typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk
 /** @brief Forward declaration for client connection structure. */
 typedef struct csilk_client_s csilk_client_t;
 
+/** @brief Task node for cross-thread dispatching. */
+typedef struct csilk_dispatch_task_s {
+	void (*cb)(void* arg);
+	void* arg;
+	struct csilk_dispatch_task_s* next;
+} csilk_dispatch_task_t;
+
 /**
  * @brief Per-worker connection pool and event-loop state.
  *
@@ -87,6 +94,10 @@ typedef struct {
 	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
 	csilk_arena_t* arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
 	int arena_pool_count;				   /**< Items in arena pool. */
+	uv_async_t dispatch_async;	      /**< Cross-thread task dispatch async handle. */
+	uv_mutex_t dispatch_mutex;	      /**< Mutex for dispatch queue. */
+	csilk_dispatch_task_t* dispatch_head; /**< Head of dispatch queue. */
+	csilk_dispatch_task_t* dispatch_tail; /**< Tail of dispatch queue. */
 } worker_pool_t;
 
 /**
