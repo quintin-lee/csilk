@@ -381,8 +381,15 @@ class TestWorkflow(unittest.TestCase):
         self.assertTrue("node2" in mermaid_graph)
         self.assertTrue("custom_cond" in mermaid_graph)
         self.assertTrue("loop_cond" in mermaid_graph)
+
+        # Test _repr_html_
+        repr_html = wf._repr_html_()
+        self.assertIsNotNone(repr_html)
+        self.assertTrue("mermaid" in repr_html)
+        self.assertTrue(mermaid_graph in repr_html)
         
         wf.free()
+
 
 if __name__ == '__main__':
     unittest.main()

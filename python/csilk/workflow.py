@@ -444,5 +444,20 @@ class Workflow:
             return val
         return None
 
+    def _repr_html_(self):
+        mermaid_code = self.to_mermaid()
+        if not mermaid_code:
+            return "<div>Empty Workflow</div>"
+        return f"""
+        <div class="mermaid">
+        {mermaid_code}
+        </div>
+        <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
+        </script>
+        """
+
     def register_monitor(self, ctx):
         self._lib.csilk_wf_register_monitor(self._wf, ctx._ctx)
+
