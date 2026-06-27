@@ -186,6 +186,18 @@ echo_handler(csilk_ctx_t* c)
 	}
 }
 
+static void
+ratelimit_target_handler(csilk_ctx_t* c)
+{
+	csilk_string(c, CSILK_STATUS_OK, "OK");
+}
+
+static void
+test_ratelimit_mw(csilk_ctx_t* c)
+{
+	csilk_rate_limit_middleware(c, 2);
+}
+
 /* ---- Server thread ---- */
 static volatile int server_ready = 0;
 
@@ -212,6 +224,8 @@ run_server(void* arg)
 	csilk_router_add(router, "GET", "/ws", h6, 1);
 	csilk_handler_t h7[] = {stream_handler};
 	csilk_router_add(router, "GET", "/stream", h7, 1);
+	csilk_handler_t h8[] = {test_ratelimit_mw, ratelimit_target_handler};
+	csilk_router_add(router, "GET", "/limited", h8, 2);
 
 	csilk_server_t* server = csilk_server_new(router);
 	server_ready = 1;
@@ -524,6 +538,41 @@ test_websocket_handshake()
 	close(sock);
 }
 
+static void
+test_ratelimit_integration()
+{
+	int sock1 = connect_server();
+	int sock2 = connect_server();
+	int sock3 = connect_server();
+	if (sock1 < 0 || sock2 < 0 || sock3 < 0) {
+		test_result("RateLimit (connect)", 0);
+		return;
+	}
+
+	const char* req = "GET /limited HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+
+	send_request(sock1, req);
+	char buf1[BUFSIZE] = {0};
+	recv_response(sock1, buf1, sizeof(buf1));
+	test_result("RateLimit 1 (status 200)", expect_status(buf1, CSILK_STATUS_OK));
+
+	send_request(sock2, req);
+	char buf2[BUFSIZE] = {0};
+	recv_response(sock2, buf2, sizeof(buf2));
+	test_result("RateLimit 2 (status 200)", expect_status(buf2, CSILK_STATUS_OK));
+
+	send_request(sock3, req);
+	char buf3[BUFSIZE] = {0};
+	recv_response(sock3, buf3, sizeof(buf3));
+	printf("DEBUG: buf3:\n%s\n", buf3);
+	test_result("RateLimit 3 (status 429)",
+		    expect_status(buf3, CSILK_STATUS_TOO_MANY_REQUESTS));
+
+	close(sock1);
+	close(sock2);
+	close(sock3);
+}
+
 int
 main()
 {
@@ -549,6 +598,7 @@ main()
 	test_keepalive();
 	test_streaming_response();
 	test_websocket_handshake();
+	test_ratelimit_integration();
 
 	printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed, g_tests_failed);
 	return g_tests_failed > 0 ? 1 : 0;
