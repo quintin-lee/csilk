@@ -25,7 +25,7 @@ class ASGIAdapter:
         }
 
         # Retrieve request body
-        body_bytes = ctx.body or b""
+        body_bytes = ctx.body_view or b""
         if isinstance(body_bytes, str):
             body_bytes = body_bytes.encode('utf-8')
         body_sent = False

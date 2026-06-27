@@ -150,11 +150,22 @@ class Context:
 
     @property
     def body(self):
-        out_len = ctypes.c_size_t(0)
-        res = self._lib.csilk_get_body(self._ctx, ctypes.byref(out_len))
-        if res and out_len.value > 0:
-            return ctypes.string_at(res, out_len.value)
+        length = ctypes.c_size_t()
+        ptr = self._lib.csilk_get_body(self._ctx, ctypes.byref(length))
+        if ptr and length.value > 0:
+            return ctypes.string_at(ptr, length.value)
         return b""
+
+    @property
+    def body_view(self):
+        """Zero-copy memoryview of the request body."""
+        length = ctypes.c_size_t()
+        ptr = self._lib.csilk_get_body(self._ctx, ctypes.byref(length))
+        if ptr and length.value > 0:
+            ArrayType = ctypes.c_char * length.value
+            array = ArrayType.from_address(ptr)
+            return memoryview(array)
+        return None
 
     @property
     def body_len(self):
