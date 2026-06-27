@@ -1,40 +1,41 @@
 # AI Workflow & Agentic Engine
 
-The workflow module provides a graph-based orchestration engine for building AI pipelines and autonomous agents on top of the csilk AI unified interface.
+The workflow module provides a graph-based orchestration engine for building AI pipelines and autonomous agents on top of the csilk AI unified interface. Each workflow **MUST** be a Directed Acyclic Graph (DAG) — cycles are detected at registration and **MUST** be rejected with an error code. Node scheduling **MUST** complete within ≤ 1µs per node; the full DAG scheduler overhead for 100 nodes **SHOULD** be ≤ 100µs. Hot-reload **MUST NOT** drop in-flight workflow executions.
 
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    subgraph "Public API (csilk/app/workflow.h)"
-        WF_NEW["csilk_wf_new()"]
-        WF_ADD["csilk_wf_add()"]
-        WF_ADD_AI["csilk_wf_add_ai()"]
-        WF_RUN["csilk_wf_run()"]
-        WF_BIND["csilk_wf_bind/on/on_loop()"]
-        WF_ROUTE["csilk_wf_route()"]
-        WF_REG_TOOL["csilk_wf_register_tool()"]
+    subgraph api["fa:fa-book Public API (csilk/app/workflow.h)"]
+        WF_NEW["fa:fa-plus-circle csilk_wf_new()"]
+        WF_ADD["fa:fa-plus-square csilk_wf_add()"]
+        WF_ADD_AI["fa:fa-robot csilk_wf_add_ai()"]
+        WF_RUN["fa:fa-play csilk_wf_run()"]
+        WF_BIND["fa:fa-link csilk_wf_bind/on/on_loop()"]
+        WF_ROUTE["fa:fa-code-fork csilk_wf_route()"]
+        WF_REG_TOOL["fa:fa-wrench csilk_wf_register_tool()"]
     end
 
-    subgraph "Execution Engine (workflow.c)"
-        SCHED["DAG Scheduler\n(libuv thread pool)"]
-        ARENA["Per-execution Arena\n(zero-free memory)"]
-        TEMPLATE["Template Engine\n({{node.value.path}})"]
-        AGENT["Agent Loop\n(tool calling + LLM)"]
-        TRACE["Tracing System\n(nanosecond precision)"]
-        MONITOR["WebSocket Monitor\n(live broadcast)"]
-        BUDGET["Budget Enforcer\n(token cap)"]
+    subgraph exec_engine["fa:fa-cogs Execution Engine (workflow.c)"]
+        SCHED["fa:fa-tasks DAG Scheduler<br/>(libuv thread pool)"]
+        ARENA["fa:fa-database Per-execution Arena<br/>(zero-free memory)"]
+        TEMPLATE["fa:fa-file-text Template Engine<br/>({{node.value.path}})"]
+        AGENT["fa:fa-repeat Agent Loop<br/>(tool calling + LLM)"]
+        TRACE["fa:fa-clock-o Tracing System<br/>(nanosecond precision)"]
+        MONITOR["fa:fa-tachometer WebSocket Monitor<br/>(live broadcast)"]
+        BUDGET["fa:fa-shield Budget Enforcer<br/>(token cap)"]
     end
 
-    subgraph "Persistence (workflow_wal.c)"
-        WAL["Binary WAL\n(fdatasync)"]
-        RESUME["Resume Engine\n(replay + continue)"]
+    subgraph persistence["fa:fa-save Persistence (workflow_wal.c)"]
+        WAL["fa:fa-hdd-o Binary WAL<br/>(fdatasync)"]
+        RESUME["fa:fa-repeat Resume Engine<br/>(replay + continue)"]
     end
 
-    subgraph "Declarative Layer (workflow_loader.c)"
-        YAML["YAML Loader\n(libyaml parser)"]
-        JSON["JSON Loader\n(cJSON parser)"]
-        REG["Global Handler Registry"]
+    subgraph declarative["fa:fa-file-code Declarative Layer (workflow_loader.c)"]
+        YAML["fa:fa-file-text YAML Loader<br/>(libyaml parser)"]
+        JSON["fa:fa-file-code JSON Loader<br/>(cJSON parser)"]
+        REG["fa:fa-list Global Handler Registry"]
     end
 
     WF_ADD_AI --> AGENT
@@ -166,10 +167,11 @@ csilk_wf_route(node, my_router);
 ### Agentic Loop with Conditional Edges
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart LR
-    N1["n1: Action"] --> N2["n2: Check"]
+    N1["fa:fa-play n1: Action"] --> N2["fa:fa-check-square n2: Check"]
     N2 -- "fail" --> N1
-    N2 -- "pass" --> N3["n3: Done"]
+    N2 -- "pass" --> N3["fa:fa-check-circle n3: Done"]
 ```
 
 ```c

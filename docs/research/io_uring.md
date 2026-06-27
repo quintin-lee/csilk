@@ -161,6 +161,8 @@ and benchmark the improvement. If significant (30%+ latency reduction), proceed
 with Option B. Otherwise, defer to a future release when io_uring adoption is
 more widespread.
 
+**io_uring Constraints**: Linux kernel **MUST** be ≥ 5.1 (≥ 5.6 recommended for polling mode). SQ polling **MUST** be gated behind `#ifdef CSILK_USE_IOURING`. libuv epoll fallback **MUST** remain functional when `CSILK_USE_IOURING` is not defined. io_uring **SHOULD** reduce CPU usage by ~50% at 100K RPS compared to epoll.
+
 ## 8. Quick Benchmark Setup (Option C)
 
 ```bash

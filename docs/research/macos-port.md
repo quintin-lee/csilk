@@ -1,6 +1,8 @@
 # macOS Platform Support Assessment
 
 > Date: 2026-05-31 | Status: **Supported** (macOS 14 ARM64 CI active as of 2026-05-31)
+>
+> **macOS Constraints**: CI **MUST** use Homebrew LLVM 19+ (`brew install llvm`) — Apple Clang does not support C23 `constexpr`. `pthread_barrier_t` is unavailable — multi-worker mode **SHOULD** use a POSIX semaphore-based fallback. All libuv-based I/O paths **MUST** work identically on macOS (kqueue backend).
 
 ## Background
 

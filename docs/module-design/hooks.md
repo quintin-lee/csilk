@@ -1,6 +1,6 @@
 # Hook System Design
 
-csilk provides a flexible Hook system that allows developers to listen to server and request lifecycle events. Unlike middleware, Hooks do not intercept the request flow but allow for side-effects like metrics gathering, custom logging, or resource cleanup.
+csilk provides a flexible Hook system that allows developers to listen to server and request lifecycle events. Unlike middleware, Hooks do not intercept the request flow but allow for side-effects like metrics gathering, custom logging, or resource cleanup. Hooks **MUST** be registered before `csilk_server_run()` is called — runtime Hook registration **SHOULD** be limited to event notifications. Hook callbacks **MUST NOT** block — any I/O or heavy computation **MUST** be deferred to the libuv thread pool. Hook execution order **SHOULD** match registration order within the same priority level.
 
 ## Hook Types
 

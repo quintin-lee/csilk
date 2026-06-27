@@ -2,13 +2,13 @@
 
 ## Prerequisites
 
-- CMake 3.11+
-- C compiler (C23 support)
+- CMake 3.11+ (**MUST** be available in `$PATH`)
+- C compiler with C23 support (GCC 13+, Clang 19+)
 - Git
 - libyaml-dev
 - zlib1g-dev (for gzip middleware)
-- libssl-dev (for HTTPS/TLS, JWT, cipher drivers)
-- libcurl-dev (for AI driver HTTP transport)
+- libssl-dev (for HTTPS/TLS, JWT, cipher drivers — **MUST** be OpenSSL 1.1.1+)
+- libcurl-dev 7.80.0+ (for AI driver HTTP transport)
 - libuv (auto-fetched via CMake if not present)
 - Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers)
 

@@ -1,6 +1,6 @@
 # Middleware Design Overview
 
-csilk ships with built-in middleware handlers covering authentication, security, observability, performance, and developer experience. The table below lists all middleware handlers exposed through `csilk/middleware.h`:
+csilk ships with 16 built-in middleware handlers covering authentication, security, observability, performance, and developer experience — all with **~0 allocs per request** on the hot path (headers parsed via zero-copy string views into the per-request arena). Middleware **MUST NOT** block the event loop; long-running operations **SHOULD** use the deferred work API or offload to worker threads. Each middleware **MAY** access and modify the request context (`csilk_ctx_t`) through the opaque API (`csilk_get`/`csilk_set`/`csilk_string`). The table below lists all middleware handlers exposed through `csilk/middleware.h`:
 
 | Middleware | File | Description |
 |-----------|------|-------------|
@@ -37,14 +37,36 @@ The JWT (JSON Web Token) middleware provides a secure way to handle stateless au
 ## Architecture
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'background': '#2E3440',
+    'primaryColor': '#81A1C1',
+    'primaryBorderColor': '#4C566A',
+    'primaryTextColor': '#ECEFF4',
+    'secondaryColor': '#3B4252',
+    'secondaryBorderColor': '#434C5E',
+    'secondaryTextColor': '#D8DEE9',
+    'lineColor': '#81A1C1',
+    'textColor': '#ECEFF4',
+    'mainBkg': '#3B4252',
+    'nodeBorder': '#4C566A',
+    'clusterBkg': '#2E3440',
+    'clusterBorder': '#4C566A',
+    'titleColor': '#ECEFF4',
+    'edgeLabelBackground': '#3B4252',
+    'nodeTextColor': '#ECEFF4'
+  },
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
+}}%%
 flowchart LR
-    A["Authorization: Bearer <token>"] --> B["JWT Middleware"]
-    B --> C{"Valid Signature?"}
-    C -- No --> D["401 Unauthorized"]
-    C -- Yes --> E{"Token Expired?"}
+    A["fa:fa-key Authorization: Bearer <token>"] --> B["fa:fa-cogs JWT Middleware"]
+    B --> C{"fa:fa-check Valid Signature?"}
+    C -- No --> D["fa:fa-ban 401 Unauthorized"]
+    C -- Yes --> E{"fa:fa-clock Token Expired?"}
     E -- Yes --> D
-    E -- No --> F["Store payload as 'jwt_payload'"]
-    F --> G["Next Handler"]
+    E -- No --> F["fa:fa-database Store payload as 'jwt_payload'"]
+    F --> G["fa:fa-arrow-right Next Handler"]
 ```
 
 ## API Reference

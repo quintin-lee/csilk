@@ -1,24 +1,25 @@
 # Custom Middleware Development
 
-Middleware in csilk is a function with signature `void handler(csilk_ctx_t* c)`. Middleware can intercept requests before and after the actual business handler executes.
+Middleware in csilk is a function with signature `void handler(csilk_ctx_t* c)`. Middleware can intercept requests before and after the actual business handler executes. Middleware **MUST** call `csilk_next(c)` to pass control to the next handler — omitting this **MUST** be intentional (short-circuit). Middleware **MUST NOT** block — any blocking I/O **MUST** use the libuv thread pool. Middleware **SHOULD NOT** allocate on the hot path; arena allocation **SHOULD** be preferred.
 
 ## Middleware Pattern
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    START["Request enters middleware"]
-    PRE["Pre-processing logic\n(e.g., validate token, check rate limit)"]
+    START["fa:fa-play Request enters middleware"]
+    PRE["fa:fa-cog Pre-processing logic<br/>(e.g., validate token, check rate limit)"]
 
-    DEC{"Condition met?"}
+    DEC{"fa:fa-question-circle Condition met?"}
 
-    NEXT["csilk_next(ctx)\n→ Delegate to next handler"]
+    NEXT["fa:fa-arrow-right csilk_next(ctx)<br/>-&gt; Delegate to next handler"]
 
-    POST["Post-processing logic\n(e.g., log latency, add headers)"]
+    POST["fa:fa-refresh Post-processing logic<br/>(e.g., log latency, add headers)"]
 
-    ABORT_VALID["Fail gracefully\ncsilk_json_error()\ncsilk_abort()"]
-    ABORT_PANIC["Fail hard\ncsilk_panic(ctx)\n→ Caught by Recovery"]
+    ABORT_VALID["fa:fa-times-circle Fail gracefully<br/>csilk_json_error()<br/>csilk_abort()"]
+    ABORT_PANIC["fa:fa-exclamation-triangle Fail hard<br/>csilk_panic(ctx)<br/>-&gt; Caught by Recovery"]
 
-    DONE["Done"]
+    DONE["fa:fa-check-circle Done"]
 
     START --> PRE
     PRE --> DEC
@@ -146,34 +147,36 @@ void trace_middleware(csilk_ctx_t* c) {
 ## Registration Methods
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    subgraph "Global Middleware"
-        G["csilk_server_use(server, handler)\n→ Applied to ALL routes\n→ Max 32 global middlewares"]
+    subgraph Global_MW["fa:fa-globe Global Middleware"]
+        G["csilk_server_use(server, handler)<br/>-&gt; Applied to ALL routes<br/>-&gt; Max 32 global middlewares"]
     end
 
-    subgraph "Group Middleware"
-        GRP["csilk_group_use(group, handler)\n→ Applied to routes in group\n→ Inherits parent group middlewares"]
+    subgraph Group_MW["fa:fa-folder Group Middleware"]
+        GRP["csilk_group_use(group, handler)<br/>-&gt; Applied to routes in group<br/>-&gt; Inherits parent group middlewares"]
     end
 
-    subgraph "Route Handlers"
-        R["csilk_router_add(r, method, path, [h1, h2, NULL], 2)\n→ Handlers specific to one route"]
+    subgraph Route_H["fa:fa-code Route Handlers"]
+        R["csilk_router_add(r, method, path, [h1, h2, NULL], 2)<br/>-&gt; Handlers specific to one route"]
     end
 
-    subgraph "Execution Order"
+    subgraph Exec_Order["fa:fa-sort-amount-asc Execution Order"]
         G --> GRP
         GRP --> R
-        Note["Combined chain:\nglobal[0] → global[1] → group[0] → route[0] → route[1]"]
+        Note["Combined chain:<br/>global[0] -&gt; global[1] -&gt; group[0] -&gt; route[0] -&gt; route[1]"]
     end
 ```
 
 ## Middleware Chain Assembly
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
-    participant S as csilk_server_t
-    participant G as csilk_group_t
-    participant R as csilk_router_t
-    participant C as csilk_ctx_t
+    participant S as fa:fa-server csilk_server_t
+    participant G as fa:fa-folder csilk_group_t
+    participant R as fa:fa-sitemap csilk_router_t
+    participant C as fa:fa-cube csilk_ctx_t
 
     Note over S: csilk_server_use(server, recovery)
     S->>S: middlewares[0] = recovery
@@ -184,14 +187,14 @@ sequenceDiagram
     S->>S: middleware_count = 2
 
     Note over G: csilk_group_use(api, auth)
-    G->>G: api->middlewares[0] = auth
-    G->>G: api->middleware_count = 1
+    G->>G: api-&gt;middlewares[0] = auth
+    G->>G: api-&gt;middleware_count = 1
 
     Note over R: csilk_group_add_route(api, GET, "/ping", handler)
 
     Note over C: At on_message_complete():
-    C->>R: csilk_router_match_ctx() → route_handlers = [auth, handler]
-    C->>S: Prepend global middlewares → [recovery, logger, auth, handler]
+    C->>R: csilk_router_match_ctx() -&gt; route_handlers = [auth, handler]
+    C->>S: Prepend global middlewares -&gt; [recovery, logger, auth, handler]
     C->>C: csilk_next() starts at index 0
 ```
 
@@ -212,26 +215,27 @@ sequenceDiagram
 ## Error Handling Flow
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    REQ["Request"]
+    REQ["fa:fa-play Request"]
 
-    REC["Recovery Middleware\n(setjmp here)"]
+    REC["fa:fa-medkit Recovery Middleware<br/>(setjmp here)"]
 
-    AUTH["Auth Middleware"]
+    AUTH["fa:fa-key Auth Middleware"]
 
-    HAND["Business Handler"]
+    HAND["fa:fa-code Business Handler"]
 
     REQ --> REC
     REC --> AUTH
 
     AUTH -- "Valid" --> HAND
-    AUTH -- "No token" --> ERR1["csilk_json_error(c, 401)\nreturn (skip csilk_next)"]
-    AUTH -- "Invalid token" --> ERR2["csilk_panic(c, 'bad token')"]
+    AUTH -- "No token" --> ERR1["fa:fa-times-circle csilk_json_error(c, 401)<br/>return (skip csilk_next)"]
+    AUTH -- "Invalid token" --> ERR2["fa:fa-bomb csilk_panic(c, 'bad token')"]
 
-    HAND -- "Normal" --> OK["csilk_string(c, 200, 'OK')"]
-    HAND -- "Crash" --> ERR3["csilk_panic(c, 'db error')"]
+    HAND -- "Normal" --> OK["fa:fa-check-circle csilk_string(c, 200, 'OK')"]
+    HAND -- "Crash" --> ERR3["fa:fa-bomb csilk_panic(c, 'db error')"]
 
-    ERR2 --> REC_L["longjmp → Recovery"]
+    ERR2 --> REC_L["fa:fa-arrow-right longjmp -&gt; Recovery"]
     ERR3 --> REC_L
     REC_L --> RECOVER["csilk_string(c, 500)\ncsilk_abort(c)"]
 ```

@@ -1,28 +1,29 @@
 # AI Unified Interface
 
-The AI module provides a provider-agnostic abstraction for integrating Large Language Models (LLMs) and other AI services into Csilk applications.
+The AI module provides a provider-agnostic abstraction for integrating Large Language Models (LLMs) and other AI services into Csilk applications. All AI drivers **MUST** implement the `csilk_ai_driver_t` vtable interface. Chat completion **MUST NOT** block the event loop — use `csilk_ai_chat_async()` for non-blocking invocation. Streaming responses **SHOULD** be delivered via Server-Sent Events (SSE). Embedding dimension mismatch between model and index **MUST** be rejected at runtime.
 
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 flowchart TB
-    subgraph "Public API (csilk/drivers/ai.h)"
-        NEW["csilk_ai_new(driver, key, base_url)"]
-        CHAT["csilk_ai_chat(ai, req, res)"]
-        ASYNC["csilk_ai_chat_async(ai, req, cb)"]
-        EMB["csilk_ai_embeddings(ai, model, input, ...)"]
+    subgraph api["fa:fa-book Public API (csilk/drivers/ai.h)"]
+        NEW["fa:fa-plus-circle csilk_ai_new(driver, key, base_url)"]
+        CHAT["fa:fa-comment csilk_ai_chat(ai, req, res)"]
+        ASYNC["fa:fa-bolt csilk_ai_chat_async(ai, req, cb)"]
+        EMB["fa:fa-cube csilk_ai_embeddings(ai, model, input, ...)"]
     end
 
-    subgraph "Core Engine (ai.c)"
-        REG["Driver Registry"]
-        POOL["libuv Thread Pool\n(for Async calls)"]
-        RETRY["Retry Mechanism\n(Exponential Backoff)"]
-        CTX["Context Manager\n(History Windowing)"]
+    subgraph engine["fa:fa-cogs Core Engine (ai.c)"]
+        REG["fa:fa-list Driver Registry"]
+        POOL["fa:fa-tasks libuv Thread Pool<br/>(for Async calls)"]
+        RETRY["fa:fa-repeat Retry Mechanism<br/>(Exponential Backoff)"]
+        CTX["fa:fa-folder-open Context Manager<br/>(History Windowing)"]
     end
 
-    subgraph "Drivers (src/drivers/)"
-        D1["OpenAI Driver\n(libcurl + cJSON)"]
-        D2["Ollama Driver\n(Local AI)"]
+    subgraph drivers["fa:fa-plug Drivers (src/drivers/)"]
+        D1["fa:fa-cloud OpenAI Driver<br/>(libcurl + cJSON)"]
+        D2["fa:fa-laptop Ollama Driver<br/>(Local AI)"]
     end
 
     NEW --> REG

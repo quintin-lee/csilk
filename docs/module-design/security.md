@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Security module provides a **layered security architecture** spanning authentication (JWT), authorization (pluggable permission/ACL drivers), request validation (WAF, CSRF), and transport-level protections (CORS, rate limiting). Each layer is implemented as middleware and can be independently enabled, configured, or replaced.
+The Security module provides a **layered security architecture** spanning authentication (JWT), authorization (pluggable permission/ACL drivers), request validation (WAF, CSRF), and transport-level protections (CORS, rate limiting). Each layer is implemented as middleware and can be independently enabled, configured, or replaced. Security middleware **MUST** be evaluated in the documented order: CORS → Rate Limiter → WAF → CSRF → JWT → Permission. Rate limiter **MUST** use sliding-window counters with atomic increments. JWT verification **MUST NOT** allocate on the hot path for valid tokens. WAF rules **SHOULD** be compiled to a deterministic finite automaton (DFA) for O(n) scanning with input length n.
 
 **Files**: `src/security/perm.c`, `src/middleware/jwt.c`, `src/middleware/waf.c`, `src/middleware/csrf.c`, `src/middleware/cors.c`, `include/csilk/drivers/perm.h`
 

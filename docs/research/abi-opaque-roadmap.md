@@ -1,6 +1,8 @@
 # ABI Stability Roadmap — v1.0 Context Opaque Conversion
 
 > Status: **Complete** | Completed: v0.3.0 | Based on: ABI_REPORT.md
+>
+> **ABI Rule**: All public API functions **MUST** take/return `csilk_ctx_t*` (opaque) — direct struct access **MUST NOT** be exposed in public headers. Accessor function call overhead **SHOULD** be zero when inlined (single pointer dereference, ≤ 1 CPU cycle).
 
 ## Current State
 

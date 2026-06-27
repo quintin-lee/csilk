@@ -2,39 +2,40 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
 
-csilk 的 Metrics 模块提供了一套**高性能、无锁、生产就绪**的可观测性系统——基于 Prometheus 标准格式暴露全维度遥测数据，包括 HTTP 请求计数、延迟直方图、系统资源、安全事件及各子系统的内部状态。
+csilk 的 Metrics 模块提供了一套**高性能、无锁、生产就绪**的可观测性系统——基于 Prometheus 标准格式暴露全维度遥测数据，包括 HTTP 请求计数、延迟直方图、系统资源、安全事件及各子系统的内部状态。计数器更新为原子操作（无锁，≤ 10ns），直方图使用原子桶递增（≤ 5ns 每桶）。**MUST NOT** 在热点路径上阻塞 —— 所有指标写入均为 lock-free。**SHOULD** 通过 `/metrics` 端点暴露，由 Prometheus 定期拉取。
 
 ---
 
 ## 1. 整体架构
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph TB
-    subgraph "Collection Layer"
-        MW["csilk_metrics_middleware<br/>Per-request hook"]
-        TIMER["uv_hrtime()<br/>High-res timer<br/>ns precision"]
-        SEC["Security Subsystem<br/>_csilk_metrics_inc_*"]
+    subgraph collection["fa:fa-dashboard Collection Layer"]
+        MW["fa:fa-filter csilk_metrics_middleware<br/>Per-request hook"]
+        TIMER["fa:fa-clock-o uv_hrtime()<br/>High-res timer<br/>ns precision"]
+        SEC["fa:fa-shield Security Subsystem<br/>_csilk_metrics_inc_*"]
     end
 
-    subgraph "Storage Layer (Lock-Free)"
-        GLOBAL["Global Aggregates<br/>_Atomic uint64_t<br/>http_requests_total<br/>http_request_duration_us"]
-        SEC_CTR["Security Counters<br/>_Atomic uint64_t<br/>rate_limit_blocks<br/>csrf_violations<br/>auth_failures"]
-        DIM["Dimensional Metrics<br/>Fixed-size Hash Table<br/>Open Addressing + CAS<br/>method × route × status"]
-        HIST["Histogram Buckets<br/>6 buckets + +Inf<br/>Per (method,route,status)"]
+    subgraph storage["fa:fa-database Storage Layer (Lock-Free)"]
+        GLOBAL["fa:fa-bar-chart Global Aggregates<br/>_Atomic uint64_t<br/>http_requests_total<br/>http_request_duration_us"]
+        SEC_CTR["fa:fa-exclamation-triangle Security Counters<br/>_Atomic uint64_t<br/>rate_limit_blocks<br/>csrf_violations<br/>auth_failures"]
+        DIM["fa:fa-th Dimensional Metrics<br/>Fixed-size Hash Table<br/>Open Addressing + CAS<br/>method x route x status"]
+        HIST["fa:fa-signal Histogram Buckets<br/>6 buckets + +Inf<br/>Per (method,route,status)"]
     end
 
-    subgraph "Exposition Layer"
-        HANDLER["csilk_metrics_handler<br/>GET /metrics"]
-        BUILDER["Dynamic String Builder<br/>append_metric()<br/>realloc-based"]
-        PROM["Prometheus Text Format<br/>text/plain; version=0.0.4"]
+    subgraph exposition["fa:fa-file-text Exposition Layer"]
+        HANDLER["fa:fa-hand-o-right csilk_metrics_handler<br/>GET /metrics"]
+        BUILDER["fa:fa-code Dynamic String Builder<br/>append_metric()<br/>realloc-based"]
+        PROM["fa:fa-tachometer Prometheus Text Format<br/>text/plain; version=0.0.4"]
     end
 
-    subgraph "System Telemetry Sources"
-        UV["libuv<br/>uv_resident_set_memory<br/>uv_getrusage"]
-        MQ["Message Queue Stats<br/>published/delivered/depth"]
-        AI["AI Engine Stats<br/>requests/tokens/errors"]
-        DB["Database Stats<br/>queries/execs/errors"]
-        SRV["Server Stats<br/>active/pooled connections"]
+    subgraph telemetry["fa:fa-cogs System Telemetry Sources"]
+        UV["fa:fa-server libuv<br/>uv_resident_set_memory<br/>uv_getrusage"]
+        MQ["fa:fa-envelope Message Queue Stats<br/>published/delivered/depth"]
+        AI_ENG["fa:fa-robot AI Engine Stats<br/>requests/tokens/errors"]
+        DB_ENG["fa:fa-database Database Stats<br/>queries/execs/errors"]
+        SRV["fa:fa-plug Server Stats<br/>active/pooled connections"]
     end
 
     MW --> TIMER
@@ -46,6 +47,8 @@ graph TB
     HANDLER --> GLOBAL
     HANDLER --> DIM
     HANDLER --> HIST
+
+    HANDLER --> PROM
     HANDLER --> SEC_CTR
     HANDLER --> UV
     HANDLER --> MQ

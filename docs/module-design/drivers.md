@@ -2,36 +2,37 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
 
-csilk 的 Drivers 层是**可插拔后端抽象**——通过统一的虚函数表（vtable）接口，让 AI、Cipher、DB、Perm、Vector、Crypto、Storage 等功能支持多种后端实现。每种驱动类型都有其独立的注册表、生命周期和查找机制，但遵循相同的"注册 → 查找 → init → 使用 → free"模式。
+csilk 的 Drivers 层是**可插拔后端抽象**——通过统一的虚函数表（vtable）接口，让 AI、Cipher、DB、Perm、Vector、Crypto、Storage 等功能支持多种后端实现。每种驱动类型都有其独立的注册表、生命周期和查找机制，但遵循相同的"注册 → 查找 → init → 使用 → free"模式。驱动注册 **MUST** 在 `csilk_server_run()` 调用之前完成 —— 运行时注册 **SHOULD** 由热加载机制触发。驱动表查找时间 ≤ 50ns（线性扫描，≤ 64 个已注册驱动）。
 
 ---
 
 ## 1. 整体架构
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph TB
-    subgraph "Driver Types"
-        AI["AI Drivers<br/>csilk_ai_driver_t<br/>chat, embeddings"]
-        CIPHER["Cipher Drivers<br/>csilk_cipher_driver_t<br/>encrypt, decrypt, sign, jwt"]
-        DB["DB Drivers<br/>csilk_db_driver_t<br/>connect, query, exec, txn"]
-        PERM["Perm Drivers<br/>csilk_perm_driver_t<br/>check"]
-        VECTOR["Vector DB Drivers<br/>csilk_vector_db_driver_t<br/>upsert, search"]
-        CRYPTO["Crypto Drivers<br/>csilk_crypto_driver_t<br/>sha256, hmac, uuid, random"]
-        STORAGE["Storage Drivers<br/>csilk_storage_driver_t<br/>set, get, incr"]
+    subgraph types["fa:fa-plug Driver Types"]
+        AI["fa:fa-robot AI Drivers<br/>csilk_ai_driver_t<br/>chat, embeddings"]
+        CIPHER["fa:fa-key Cipher Drivers<br/>csilk_cipher_driver_t<br/>encrypt, decrypt, sign, jwt"]
+        DB["fa:fa-database DB Drivers<br/>csilk_db_driver_t<br/>connect, query, exec, txn"]
+        PERM["fa:fa-shield Perm Drivers<br/>csilk_perm_driver_t<br/>check"]
+        VECTOR["fa:fa-search Vector DB Drivers<br/>csilk_vector_db_driver_t<br/>upsert, search"]
+        CRYPTO["fa:fa-lock Crypto Drivers<br/>csilk_crypto_driver_t<br/>sha256, hmac, uuid, random"]
+        STORAGE["fa:fa-hdd-o Storage Drivers<br/>csilk_storage_driver_t<br/>set, get, incr"]
     end
 
-    subgraph "Registration Pattern"
-        REG["Global Static Registry<br/>Array[DRIVER_MAX] + count"]
-        INIT["Lazy Init on First Use<br/>register built-in defaults"]
-        NEW["Factory: * _new(name, ...)<br/>lookup → driver->init → handle"]
-        FREE["Destructor: * _free(handle)<br/>driver->free(state) + free"]
+    subgraph registry["fa:fa-book Registration Pattern"]
+        REG["fa:fa-list Global Static Registry<br/>Array[DRIVER_MAX] + count"]
+        INIT["fa:fa-rocket Lazy Init on First Use<br/>register built-in defaults"]
+        NEW["fa:fa-wrench Factory: * _new(name, ...)<br/>lookup -%gt; driver-&gt;init -%gt; handle"]
+        FREE["fa:fa-trash Destructor: * _free(handle)<br/>driver-&gt;free(state) + free"]
     end
 
-    subgraph "Built-in Backends"
-        AI_BACKEND["OpenAI, Ollama"]
-        DB_BACKEND["SQLite, MySQL,<br/>PostgreSQL, MongoDB, Redis"]
-        PERM_BACKEND["Simple RBAC"]
-        VECTOR_BACKEND["Qdrant, Milvus"]
+    subgraph backends["fa:fa-cogs Built-in Backends"]
+        AI_BACKEND["fa:fa-cloud OpenAI, Ollama"]
+        DB_BACKEND["fa:fa-database SQLite, MySQL,<br/>PostgreSQL, MongoDB, Redis"]
+        PERM_BACKEND["fa:fa-check-circle Simple RBAC"]
+        VECTOR_BACKEND["fa:fa-cubes Qdrant, Milvus"]
     end
 
     REG --> NEW --> FREE
@@ -417,11 +418,12 @@ AI 驱动（OpenAI 通过 `libcurl`）和 Vector DB 驱动（Qdrant/Milvus）则
 ## 6. 生命周期
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
-    participant User
-    participant Registry as Driver Registry
-    participant Driver as Concrete Driver
-    participant Handle as Opaque Handle
+    actor User
+    participant Registry as fa:fa-book Driver Registry
+    participant Driver as fa:fa-plug Concrete Driver
+    participant Handle as fa:fa-cog Opaque Handle
 
     Note over User: 初始化阶段
     User->>Registry: csilk_db_init()

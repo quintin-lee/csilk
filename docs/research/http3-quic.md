@@ -75,3 +75,5 @@ adapted to libuv's event loop, similar to how nghttp2 already is.
 **Defer to v1.1+**. HTTP/3 is still < 30% of global web traffic (2026).
 csilk's current HTTP/2 support covers the vast majority of use cases.
 Revisit when ngtcp2/nghttp3 reach v1.0 and OpenSSL QUIC support stabilizes.
+
+**Requirements for v1.1+**: QUIC transport **MUST** use ngtcp2 (same organization as nghttp2). HTTP/3 mapping **MUST** use nghttp3. OpenSSL **MUST** be 3.2+ or quictls fork for QUIC crypto. Binary size increase **SHOULD NOT** exceed ~200KB (QPACK). UDP event loop integration **MUST NOT** block the main libuv thread.

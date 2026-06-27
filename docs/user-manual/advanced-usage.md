@@ -1,16 +1,19 @@
 # Advanced Usage
 
+This guide covers advanced csilk usage patterns: WebSocket, SSE, multipart uploads, gzip compression, static file serving, and multi-worker configuration. Code examples **SHOULD** be adapted to your specific use case. All middleware **MUST** be registered before `csilk_server_run()`.
+
 ## Route Groups
 
 Route groups allow prefix-based route organization and middleware scoping:
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph TB
-    subgraph "Router"
+    subgraph Router
         ROOT["/ "]
     end
 
-    subgraph "Group /api (auth middleware)"
+    subgraph api_group["Group /api (auth middleware)"]
         API["/api"]
         API --> V1["/api/v1"]
         API --> V2["/api/v2"]
@@ -21,7 +24,7 @@ graph TB
         Note1["Middleware: auth_handler\nApplied to all /api routes"]
     end
 
-    subgraph "Group /admin (auth + admin middleware)"
+    subgraph admin_group["Group /admin (auth + admin middleware)"]
         ADMIN["/admin"]
         ADMIN --> DASH["/admin/dashboard"]
         ADMIN --> SETTINGS["/admin/settings"]
@@ -48,12 +51,13 @@ csilk_GET(admin, "/dashboard", dashboard);
 ## WebSocket Protocol
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
-    participant HTTP as llhttp Parser
-    participant CTX as csilk_ctx_t
-    participant WS as WebSocket Engine
+    participant HTTP as fa:fa-file-code llhttp Parser
+    participant CTX as fa:fa-cube csilk_ctx_t
+    participant WS as fa:fa-plug WebSocket Engine
 
     Client->>Server: GET /ws (WebSocket upgrade request)
 
@@ -92,8 +96,9 @@ sequenceDiagram
 ### WebSocket Frame Format
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
 graph LR
-    subgraph "Frame Structure"
+    subgraph frame["fa:fa-th-large Frame Structure"]
         B0["Byte 0: FIN(1) + RSV(3) + Opcode(4)"]
         B1["Byte 1: MASK(1) + PayloadLen(7)"]
         EL["Extended Length: 0/2/8 bytes"]
@@ -106,10 +111,11 @@ graph LR
 ## Server-Sent Events (SSE)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
-    participant CTX as csilk_ctx_t
+    participant CTX as fa:fa-cube csilk_ctx_t
     participant SSE
 
     Client->>Server: GET /events
@@ -138,11 +144,12 @@ sequenceDiagram
 ## Multipart Form Data
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
-    participant CTX as csilk_ctx_t
-    participant MP as Multipart Middleware
+    participant CTX as fa:fa-cube csilk_ctx_t
+    participant MP as fa:fa-upload Multipart Middleware
     participant Handler as Part Callback
 
     Client->>Server: POST /upload (multipart, boundary=abc123)
@@ -165,12 +172,13 @@ sequenceDiagram
 ## Gzip Compression
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
     participant Context
-    participant Gzip MW as Gzip Middleware
-    participant TP as libuv Thread Pool
+    participant Gzip MW as fa:fa-archive Gzip Middleware
+    participant TP as fa:fa-tasks libuv Thread Pool
     participant Zlib
 
     Client->>Server: GET /data (with Accept-Encoding: gzip)
@@ -198,12 +206,13 @@ sequenceDiagram
 ## Static File Serving
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
     participant Client
     participant Server
     participant Context
-    participant SMW as Static Middleware
-    participant TP as libuv Thread Pool
+    participant SMW as fa:fa-folder-open Static Middleware
+    participant TP as fa:fa-tasks libuv Thread Pool
     participant FS as Filesystem
 
     Client->>Server: GET /static/css/app.css
@@ -276,9 +285,10 @@ csilk_db_pool_free(pool);
 The `csilk_app_t` wrapper simplifies server creation:
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4','actorBorder':'#81A1C1','actorBkg':'#3B4252','actorTextColor':'#ECEFF4','signalColor':'#81A1C1','signalTextColor':'#D8DEE9','noteBkgColor':'#434C5E','noteTextColor':'#D8DEE9','loopTextColor':'#81A1C1','sequenceNumberColor':'#ECEFF4'}, 'sequence': {'actorFontSize': 14, 'noteFontSize': 12, 'messageFontSize': 12, 'mirrorActors': false}}}%%
 sequenceDiagram
-    participant User
-    participant App as csilk_app_t
+    actor User
+    participant App as fa:fa-cube csilk_app_t
     participant Config
     participant Router
     participant Server
