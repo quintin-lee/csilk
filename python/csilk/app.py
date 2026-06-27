@@ -16,6 +16,15 @@ class App:
         self._exception_handlers = {}
         self._lib.csilk_session_init()
 
+        import asyncio
+        import threading
+        self._loop = asyncio.new_event_loop()
+        def _run_loop():
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_forever()
+        self._loop_thread = threading.Thread(target=_run_loop, daemon=True)
+        self._loop_thread.start()
+
         # Set up a hook on the server to clean up closed WebSocket contexts
         @ctypes.CFUNCTYPE(None, CsilkCtxPtr)
         def on_conn_close(ctx_ptr):
@@ -39,6 +48,8 @@ class App:
         self._hooks.clear()
         self._websocket_contexts.clear()
         self._exception_handlers.clear()
+        if hasattr(self, '_loop'):
+            self._loop.call_soon_threadsafe(self._loop.stop)
 
     def exception_handler(self, exc_class):
         """Decorator to register a global exception handler for a specific exception class."""
@@ -61,22 +72,29 @@ class App:
         return False
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        import asyncio
+        is_coro = asyncio.iscoroutinefunction(handler)
+
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
             ctx._register_ws = lambda: self._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
-            try:
-                handler(ctx)
-            except Exception as e:
-                if not self._handle_exception(ctx, e):
-                    import traceback
-                    traceback.print_exc()
-                    ctx.string(500, f"Internal Server Error: {str(e)}")
-            finally:
-                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
+            
+            if is_coro:
+                ctx.dispatch_async(handler, self._loop)
+            else:
+                try:
+                    handler(ctx)
+                except Exception as e:
+                    if not self._handle_exception(ctx, e):
+                        import traceback
+                        traceback.print_exc()
+                        ctx.string(500, f"Internal Server Error: {str(e)}")
+                finally:
+                    self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
 
-            if ctx.is_websocket:
-                self._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
+                if ctx.is_websocket:
+                    self._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
 
 
         self._handlers.append(wrapper)
@@ -654,21 +672,29 @@ class Group:
         self._lib.csilk_group_use(self._group, wrapper)
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        import asyncio
+        is_coro = asyncio.iscoroutinefunction(handler)
+
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
             ctx._register_ws = lambda: self._app._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
-            try:
-                handler(ctx)
-            except Exception as e:
-                if not self._app._handle_exception(ctx, e):
-                    import traceback
-                    traceback.print_exc()
-                    ctx.string(500, f"Internal Server Error: {str(e)}")
-            finally:
-                self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
-            if ctx.is_websocket:
-                self._app._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
+            
+            if is_coro:
+                ctx.dispatch_async(handler, self._app._loop)
+            else:
+                try:
+                    handler(ctx)
+                except Exception as e:
+                    if not self._app._handle_exception(ctx, e):
+                        import traceback
+                        traceback.print_exc()
+                        ctx.string(500, f"Internal Server Error: {str(e)}")
+                finally:
+                    self._lib.csilk_ctx_cleanup_jwt_payload(ctx_ptr)
+
+                if ctx.is_websocket:
+                    self._app._websocket_contexts[ctypes.addressof(ctx_ptr.contents)] = ctx
 
         # Keep callback reference alive in this group (and transitively in app)
         self._handlers.append(wrapper)

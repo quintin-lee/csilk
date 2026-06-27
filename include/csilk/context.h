@@ -270,6 +270,18 @@ void csilk_ctx_set_async(csilk_ctx_t* c, int is_async);
 int csilk_is_async(csilk_ctx_t* c);
 
 /**
+ * @brief Dispatch a callback to be executed on the event loop thread owning this context.
+ * 
+ * This allows background threads (e.g., Python asyncio threads) to safely execute
+ * code on the main libuv loop to send responses.
+ * 
+ * @param c The request context.
+ * @param cb The callback function to execute.
+ * @param arg Opaque argument passed to the callback.
+ */
+void csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
+
+/**
  * @brief Get the index of the currently executing handler in the chain.
  *
  * @param c  The request context.
