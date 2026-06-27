@@ -235,6 +235,16 @@ class Context:
     def status(self, code):
         self._lib.csilk_status(self._ctx, code)
 
+    def write(self, data):
+        if isinstance(data, str):
+            c_data = data.encode('utf-8')
+        else:
+            c_data = bytes(data)
+        self._lib.csilk_response_write(self._ctx, c_data, len(c_data))
+
+    def response_end(self):
+        self._lib.csilk_response_end(self._ctx)
+
     def string(self, code, text):
         self._lib.csilk_string(self._ctx, code, text.encode('utf-8'))
 

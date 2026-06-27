@@ -2,6 +2,7 @@
 """
 
 from csilk.context import Context
+from csilk.asgi import ASGIAdapter
 from csilk.app import (
     App,
     Group,
