@@ -21,3 +21,7 @@ dependencies = []
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["csilk*"]
+
+[tool.setuptools.package-data]
+"csilk" = ["*.pyi", "*.so", "*.dylib", "*.dll"]
+
