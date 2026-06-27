@@ -1122,7 +1122,11 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             t.join(timeout=1.0)
 
 if __name__ == '__main__':
-    unittest.main()
+    import gc
+    import sys
+    result = unittest.main(exit=False)
+    gc.collect()
+    sys.exit(not result.result.wasSuccessful())
 
 
 
