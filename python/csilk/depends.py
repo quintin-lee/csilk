@@ -23,7 +23,7 @@ async def resolve_async_dependency(dep_func, ctx: Context, cache: dict):
         elif param.annotation == Context or param_name == 'ctx':
             kwargs[param_name] = ctx
             
-    if asyncio.iscoroutinefunction(dep_func):
+    if inspect.iscoroutinefunction(dep_func):
         result = await dep_func(**kwargs)
     else:
         result = dep_func(**kwargs)
@@ -47,7 +47,7 @@ def resolve_sync_dependency(dep_func, ctx: Context, cache: dict):
         elif param.annotation == Context or param_name == 'ctx':
             kwargs[param_name] = ctx
             
-    if asyncio.iscoroutinefunction(dep_func):
+    if inspect.iscoroutinefunction(dep_func):
         raise RuntimeError(f"Cannot resolve async dependency '{dep_func.__name__}' in a synchronous handler.")
         
     result = dep_func(**kwargs)
@@ -67,7 +67,7 @@ def inject(handler):
     if not needs_injection:
         return handler
         
-    is_coro = asyncio.iscoroutinefunction(handler)
+    is_coro = inspect.iscoroutinefunction(handler)
     
     if is_coro:
         async def async_wrapper(ctx: Context, *args, **kwargs):
@@ -97,7 +97,12 @@ def inject(handler):
                     kwargs[param_name] = resolve_sync_dependency(dep_func, ctx, cache)
                 elif param.annotation == Context or param_name == 'ctx':
                     kwargs[param_name] = ctx
-            return handler(*args, **kwargs)
+            try:
+                return handler(*args, **kwargs)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise e
             
         sync_wrapper.__signature__ = sig
         sync_wrapper.__name__ = getattr(handler, '__name__', 'sync_wrapper')
