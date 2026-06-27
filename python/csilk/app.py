@@ -72,10 +72,13 @@ class App:
         return False
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        from csilk.depends import inject
         import asyncio
         import weakref
+        
+        handler = inject(handler)
         is_coro = asyncio.iscoroutinefunction(handler)
-        app_ref = weakref.proxy(self._app)
+        app_ref = weakref.proxy(self)
 
         @CsilkHandler
         def wrapper(ctx_ptr):
@@ -683,7 +686,7 @@ class Group:
 
     def use(self, middleware):
         import weakref
-        app_ref = weakref.proxy(self._app)
+        app_ref = weakref.proxy(self)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
@@ -698,10 +701,13 @@ class Group:
         self._lib.csilk_group_use(self._group, wrapper)
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
+        from csilk.depends import inject
         import asyncio
         import weakref
+        
+        handler = inject(handler)
         is_coro = asyncio.iscoroutinefunction(handler)
-        app_ref = weakref.proxy(self._app)
+        app_ref = weakref.proxy(self)
 
         @CsilkHandler
         def wrapper(ctx_ptr):
