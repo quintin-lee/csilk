@@ -111,6 +111,20 @@ class App:
             perm_resource.encode('utf-8') if perm_resource else None
         )
 
+    def mount_asgi(self, path: str, asgi_app):
+        """Mounts an ASGI application (like FastAPI or Starlette) under a wildcard route.
+        The path should ideally end with /*path to catch all sub-routes.
+        Example: app.mount_asgi("/*path", fastapi_app)
+        """
+        from .asgi import ASGIAdapter
+        adapter = ASGIAdapter(asgi_app)
+        self.route("GET", path, adapter)
+        self.route("POST", path, adapter)
+        self.route("PUT", path, adapter)
+        self.route("DELETE", path, adapter)
+        self.route("PATCH", path, adapter)
+        self.route("OPTIONS", path, adapter)
+
     # HTTP method decorators / shortcuts
     def get(self, path, handler=None, **kwargs):
         if handler is None:
