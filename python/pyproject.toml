@@ -25,3 +25,6 @@ include = ["csilk*"]
 [tool.setuptools.package-data]
 "csilk" = ["*.pyi", "*.so", "*.dylib", "*.dll"]
 
+[project.scripts]
+csilk = "csilk.cli:main"
+
