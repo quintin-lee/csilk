@@ -1,0 +1,9 @@
+from typing import Any, Callable, Dict, List, Optional, Union, Tuple, Type
+
+class Crypto:
+    @staticmethod
+    def random_bytes(length: Any) -> Any: ...
+    @staticmethod
+    def generate_uuid() -> Any: ...
+    @staticmethod
+    def generate_csrf_token() -> Any: ...
