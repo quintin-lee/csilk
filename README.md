@@ -180,6 +180,30 @@ cd build && cmake .. && make docs     # Or: doxygen Doxyfile
 
 Open `docs/html/index.html` in your browser to browse the API reference.
 
+### Module Design Documents
+
+Deep-dive architectural documentation for each core subsystem is available under `docs/module-design/`:
+
+| Module | Document | Covers |
+|--------|----------|--------|
+| Server Core | [server.md](docs/module-design/server.md) | libuv event loop, TLS/ALPN, HTTP/2, worker pool, graceful shutdown |
+| App Layer | [app.md](docs/module-design/app.md) | csilk_app_t facade, bootstrap sequence, route group matching, static files |
+| Router | [router.md](docs/module-design/router.md) | Radix tree (Patricia trie), SIMD-accelerated matching, param extraction |
+| Context | [context.md](docs/module-design/context.md) | Request/response lifecycle, arena allocator, deferred cleanup |
+| Arena | [arena.md](docs/module-design/arena.md) | Bump allocator, zero-copy headers, SIMD memcpy |
+| Middleware | [middleware.md](docs/module-design/middleware.md) | Onion model, chain assembly, 16 built-in middleware modules |
+| Data | [data.md](docs/module-design/data.md) | DB abstraction, pluggable drivers, connection pool, cJSON results |
+| Messaging | [messaging.md](docs/module-design/messaging.md) | Event bus, pub/sub, uv_async_t dispatch, WAL persistence |
+| Security | [security.md](docs/module-design/security.md) | RBAC, JWT, CSRF, CORS, WAF, rate limiter |
+| Protocols | [protocols.md](docs/module-design/protocols.md) | WebSocket, SSE, Swagger UI, WebSocket Rooms |
+| Drivers | [drivers.md](docs/module-design/drivers.md) | AI/Cipher/DB/Perm/Vector DB pluggable driver lifecycle |
+| Metrics | [metrics.md](docs/module-design/metrics.md) | Prometheus, lock-free counters, latency histograms |
+| AI Engine | [ai.md](docs/module-design/ai.md) | Unified chat/embeddings, tool calls, streaming |
+| Workflow | [workflow.md](docs/module-design/workflow.md) | DAG scheduler, hot reload, WAL resume, interactive nodes |
+| Reflection | [reflection.md](docs/module-design/reflection.md) | Runtime type introspection, JSON binding |
+| Crypto | [crypto.md](docs/module-design/crypto.md) | SHA-256, HMAC, UUID, random |
+| Hooks | [hooks.md](docs/module-design/hooks.md) | Server/Connection/Request lifecycle hooks |
+
 ### Documentation Coverage
 
 | Component | Status |
@@ -189,6 +213,7 @@ Open `docs/html/index.html` in your browser to browse the API reference.
 | `src/app/` (app layer) | Fully documented |
 | `src/ai/`, `src/data/`, `src/security/` | Fully documented |
 | `src/middleware/` (middleware) | Fully documented |
+| `src/drivers/` (driver implementations) | Fully documented |
 | `examples/` (example code) | Fully documented |
 
 ## Usage

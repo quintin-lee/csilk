@@ -329,3 +329,19 @@ establishment must be thread-safe:
 connections, then signals each worker thread to do the same via per-worker
 `uv_async_t` handles. The main thread joins all workers in
 `csilk_server_free()` after the event loop exits.
+
+---
+
+## Further Reading
+
+For deep-dive architectural details of features covered in this guide:
+
+| Feature | Module Design Document |
+|---------|----------------------|
+| Route Groups & Router Internals | [Router](../module-design/router.md) |
+| WebSocket Protocol | [Protocols](../module-design/protocols.md) |
+| SSE Protocol | [Protocols](../module-design/protocols.md) |
+| Message Queue / Event Bus | [Messaging](../module-design/messaging.md) |
+| Admin Dashboard | [App Layer](../module-design/app.md) |
+| Database Drivers | [Data Layer](../module-design/data.md) |
+| Server Multi-Worker & Shutdown | [Server Core](../module-design/server.md) |

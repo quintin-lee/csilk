@@ -184,6 +184,88 @@ print("Queries Executed:", stats["queries_total"])
 db.free()
 ```
 
+Supported drivers: `sqlite`, `mysql`, `postgres`, `mongodb`, `redis`.
+
+---
+
+## Permissions & RBAC (`Perm`)
+
+Role-based access control with the built-in in-memory RBAC driver:
+
+```python
+from csilk import Perm, Context
+
+# Initialise the permission subsystem
+Perm.init()
+Perm.simple_init()
+
+# Grant permissions: allow "admin" role to "write" on "orders:*"
+Perm.simple_allow("admin", "write", "orders:*")
+Perm.simple_allow("admin", "read", "orders:*")
+Perm.simple_allow("editor", "read", "orders:*")
+
+# Inside a middleware or handler
+def admin_only(ctx: Context):
+    # Check permission — aborts with 403 if denied
+    Perm.require(ctx, "write", "orders:123")
+
+# Or use declarative route metadata with auto middleware:
+Perm.set_default("simple")
+# Perm.auto_middleware reads perm_required + perm_resource
+# from route metadata registered via App
+```
+
+The permission system supports pluggable backends. The built-in `"simple"` driver stores `(role, permission, resource)` triples in memory.
+
+---
+
+## Message Queue (`MQ`)
+
+Asynchronous internal event bus for publish/subscribe messaging:
+
+```python
+from csilk import MQ, MqContext
+
+# Get the server's MQ instance from an App
+mq = app.get_mq()
+
+# Subscribe to a topic (supports fnmatch glob patterns)
+@mq.subscribe("order.*")
+def handle_order(ctx: MqContext, payload: str):
+    print(f"Received on {ctx.topic}: {payload}")
+
+# Publish a message asynchronously
+mq.publish("order.created", "Order #123 placed")
+
+# Configure WAL persistence on MQ creation
+mq_with_wal = MQ(wal_dir="/var/log/csilk/mq")
+```
+
+**Topic Patterns**: Supports `*` (match any), `?` (single char), `[seq]` (character class) via `fnmatch`.
+
+---
+
+## Vector Database (`VectorDB`)
+
+Interface for vector similarity search backends:
+
+```python
+from csilk import VectorDB
+
+# Connect to Qdrant
+vdb = VectorDB("qdrant", endpoint="http://localhost:6333", api_key="")
+
+# Upsert vectors
+vdb.upsert("my_collection", [
+    {"id": "doc1", "vector": [0.1, 0.2, ...], "payload": {"title": "Doc 1"}},
+])
+
+# Search by vector
+results = vdb.search("my_collection", query_vector=[0.1, 0.2, ...], limit=5)
+for r in results:
+    print(r.id, r.score, r.payload)
+```
+
 ---
 
 ## Cryptography & Security (`Crypto`)
@@ -202,3 +284,17 @@ uuid_str = Crypto.generate_uuid()
 # CSRF token generation (hex-encoded 32-character)
 token = Crypto.generate_csrf_token()
 ```
+
+---
+
+## Further Reading
+
+Deep-dive architectural documentation for the underlying C module implementations can be found in [`docs/module-design/`](../module-design/index.md):
+
+| Core | Data & AI | Security |
+|------|-----------|----------|
+| [Server Core](../module-design/server.md) | [Data Layer](../module-design/data.md) | [RBAC/Permissions](../module-design/security.md) |
+| [App Layer](../module-design/app.md) | [AI Engine](../module-design/ai.md) | [Crypto](../module-design/crypto.md) |
+| [Router](../module-design/router.md) | [Workflow](../module-design/workflow.md) | [JWT/CSRF/CORS](../module-design/security.md) |
+| [Context & Arena](../module-design/context.md) | [Messaging/MQ](../module-design/messaging.md) | [WebSocket/SSE](../module-design/protocols.md) |
+| [Middleware Models](../module-design/middleware.md) | [Drivers (DB/AI/Cipher)](../module-design/drivers.md) | [Metrics/Prometheus](../module-design/metrics.md) |
