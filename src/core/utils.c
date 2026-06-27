@@ -24,6 +24,7 @@
 #endif
 
 #include "core/ctx_internal.h"
+#include <stdlib.h>
 #include "csilk/core/internal.h"
 #include "csilk/crypto.h"
 #include "csilk/drivers/cipher.h"
