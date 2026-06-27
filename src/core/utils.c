@@ -14,6 +14,12 @@
  * @copyright MIT License
  */
 
+#include <time.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <wincrypt.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -342,7 +348,20 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 		return c->crypto_driver->fill_random(out, len);
 	}
 
-#if defined(__linux__)
+#if defined(_WIN32)
+	HCRYPTPROV hProvider;
+	if (CryptAcquireContext(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+		if (CryptGenRandom(hProvider, (DWORD)len, (BYTE*)out)) {
+			CryptReleaseContext(hProvider, 0);
+			return 0;
+		}
+		CryptReleaseContext(hProvider, 0);
+	}
+	return -1;
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+	arc4random_buf(out, len);
+	return 0;
+#elif defined(__linux__)
 	/* Try getrandom() first on Linux (modern, no FD needed) */
 	ssize_t ret = getrandom(out, len, 0);
 	if (ret == (ssize_t)len) {
@@ -350,6 +369,7 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 	}
 #endif
 
+#ifndef _WIN32
 	/* Fallback to /dev/urandom for older Linux or other POSIX systems */
 	FILE* f = fopen("/dev/urandom", "rb");
 	if (f) {
@@ -357,6 +377,7 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 		fclose(f);
 		return (n == len) ? 0 : -1;
 	}
+#endif
 
 	return -1;
 }

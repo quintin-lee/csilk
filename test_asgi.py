@@ -7,6 +7,14 @@ from csilk.app import App
 from csilk.asgi import ASGIAdapter
 
 async def dummy_asgi_app(scope, receive, send):
+    if scope['type'] == 'lifespan':
+        while True:
+            message = await receive()
+            if message['type'] == 'lifespan.startup':
+                await send({'type': 'lifespan.startup.complete'})
+            elif message['type'] == 'lifespan.shutdown':
+                await send({'type': 'lifespan.shutdown.complete'})
+                return
     assert scope['type'] == 'http'
     assert scope['method'] == 'GET' or scope['method'] == 'POST'
     
@@ -99,5 +107,80 @@ def test_asgi_bridge():
         t.join()
         app.free()
 
+def test_asgi_websocket():
+        # A simple ASGI websocket echo app
+        async def ws_echo_app(scope, receive, send):
+            if scope["type"] == "websocket":
+                while True:
+                    message = await receive()
+                    if message["type"] == "websocket.connect":
+                        await send({"type": "websocket.accept"})
+                    elif message["type"] == "websocket.receive":
+                        text = message.get("text")
+                        if text:
+                            await send({"type": "websocket.send", "text": "ECHO: " + text})
+                        else:
+                            await send({"type": "websocket.send", "bytes": message.get("bytes")})
+                    elif message["type"] == "websocket.disconnect":
+                        break
+            else:
+                await send({
+                    "type": "http.response.start",
+                    "status": 404,
+                })
+                await send({"type": "http.response.body", "body": b""})
+
+        # We can test the adapter directly by mocking the context
+        adapter = ASGIAdapter(ws_echo_app)
+        
+        class MockWSContext:
+            def __init__(self):
+                self.is_websocket = True
+                self.method = b"GET"
+                self.path = b"/ws"
+                self.headers = {"host": "localhost"}
+                self.body_view = b""
+                self.dispatched = []
+                self.ws_messages_sent = []
+                self.ws_cb = None
+
+            def ws_handshake(self):
+                self.ws_messages_sent.append("handshake")
+
+            def ws_send(self, payload, opcode):
+                self.ws_messages_sent.append(payload)
+
+            def set_on_ws_message(self, cb):
+                self.ws_cb = cb
+                
+            def dispatch(self, cb):
+                cb()
+
+        ctx = MockWSContext()
+        
+        async def run_test():
+            # Start adapter in a task
+            task = asyncio.create_task(adapter(ctx))
+            # Yield to let it process connect
+            await asyncio.sleep(0.01)
+            
+            # Simulate a message from C
+            if ctx.ws_cb:
+                ctx.ws_cb(ctx, b"Hello", 0x1)
+                
+            await asyncio.sleep(0.01)
+            
+            # Simulate close
+            if ctx.ws_cb:
+                ctx.ws_cb(ctx, b"", 0x8)
+                
+            await task
+            
+        asyncio.run(run_test())
+        assert "handshake" in ctx.ws_messages_sent
+        assert "ECHO: Hello" in ctx.ws_messages_sent
+
 if __name__ == '__main__':
     test_asgi_bridge()
+    test_asgi_websocket()
+    print("All ASGI tests (HTTP + WebSocket) passed!")
