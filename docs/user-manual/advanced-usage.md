@@ -177,8 +177,8 @@ sequenceDiagram
     participant Client
     participant Server
     participant Context
-    participant Gzip MW as fa:fa-archive Gzip Middleware
-    participant TP as fa:fa-tasks libuv Thread Pool
+    participant Gzip MW as Gzip Middleware
+    participant TP as libuv Thread Pool
     participant Zlib
 
     Client->>Server: GET /data (with Accept-Encoding: gzip)

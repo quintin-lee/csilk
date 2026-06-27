@@ -187,14 +187,14 @@ sequenceDiagram
     S->>S: middleware_count = 2
 
     Note over G: csilk_group_use(api, auth)
-    G->>G: api-&gt;middlewares[0] = auth
-    G->>G: api-&gt;middleware_count = 1
+    G->>G: api->middlewares[0] = auth
+    G->>G: api->middleware_count = 1
 
     Note over R: csilk_group_add_route(api, GET, "/ping", handler)
 
     Note over C: At on_message_complete():
-    C->>R: csilk_router_match_ctx() -&gt; route_handlers = [auth, handler]
-    C->>S: Prepend global middlewares -&gt; [recovery, logger, auth, handler]
+    C->>R: csilk_router_match_ctx() -> route_handlers = [auth, handler]
+    C->>S: Prepend global middlewares -> [recovery, logger, auth, handler]
     C->>C: csilk_next() starts at index 0
 ```
 
