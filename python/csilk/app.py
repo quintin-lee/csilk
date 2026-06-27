@@ -73,20 +73,22 @@ class App:
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
         import asyncio
+        import weakref
         is_coro = asyncio.iscoroutinefunction(handler)
+        app_ref = weakref.proxy(self)
 
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
-            ctx._register_ws = lambda: self._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
+            ctx._register_ws = lambda: app_ref._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
             
             if is_coro:
-                ctx.dispatch_async(handler, self._loop)
+                ctx.dispatch_async(handler, app_ref._loop)
             else:
                 try:
                     handler(ctx)
                 except Exception as e:
-                    if not self._handle_exception(ctx, e):
+                    if not app_ref._handle_exception(ctx, e):
                         import traceback
                         traceback.print_exc()
                         ctx.string(500, f"Internal Server Error: {str(e)}")
@@ -229,6 +231,8 @@ class App:
 
     # Middleware registration
     def use(self, handler):
+        import weakref
+        app_ref = weakref.proxy(self)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
@@ -246,6 +250,8 @@ class App:
         self._lib.csilk_app_use(self._app, wrapper)
 
     def use_group(self, prefix, handler):
+        import weakref
+        app_ref = weakref.proxy(self)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
@@ -672,13 +678,15 @@ class Group:
         self.free()
 
     def use(self, middleware):
+        import weakref
+        app_ref = weakref.proxy(self._app)
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
             try:
                 middleware(ctx)
             except Exception as e:
-                if not self._app._handle_exception(ctx, e):
+                if not app_ref._handle_exception(ctx, e):
                     import traceback
                     traceback.print_exc()
                     ctx.string(500, f"Internal Server Error: {str(e)}")
@@ -687,20 +695,22 @@ class Group:
 
     def route(self, method, path, handler, input_type=None, output_type=None, summary=None, description=None, perm_required=None, perm_resource=None):
         import asyncio
+        import weakref
         is_coro = asyncio.iscoroutinefunction(handler)
+        app_ref = weakref.proxy(self._app)
 
         @CsilkHandler
         def wrapper(ctx_ptr):
             ctx = Context(ctx_ptr)
-            ctx._register_ws = lambda: self._app._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
+            ctx._register_ws = lambda: app_ref._websocket_contexts.update({ctypes.addressof(ctx_ptr.contents): ctx})
             
             if is_coro:
-                ctx.dispatch_async(handler, self._app._loop)
+                ctx.dispatch_async(handler, app_ref._loop)
             else:
                 try:
                     handler(ctx)
                 except Exception as e:
-                    if not self._app._handle_exception(ctx, e):
+                    if not app_ref._handle_exception(ctx, e):
                         import traceback
                         traceback.print_exc()
                         ctx.string(500, f"Internal Server Error: {str(e)}")
