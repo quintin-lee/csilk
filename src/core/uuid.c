@@ -24,14 +24,20 @@
 #include "csilk/core/internal.h"
 #include "csilk/crypto.h"
 
+/** @brief Generate a version-4 (random) UUID string per RFC 4122.
+ *
+ * Fills @p buf with a 36-character UUID string (plus NUL terminator,
+ * total CSILK_UUID_BUF_SIZE bytes) of the form:
+ *   xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+ *
+ * The random bytes are sourced from csilk_crypto_fill_random().  On
+ * failure (no entropy) the function calls abort() — production callers
+ * should ensure the crypto subsystem is initialized before calling this.
+ *
+ * @param[out] buf  Output buffer, must be at least CSILK_UUID_BUF_SIZE bytes. */
 void
 csilk_generate_uuid(char* buf)
 {
-	/**
-	 * @brief Random byte buffer for UUID generation.
-	 *
-	 * UUID v4 requires 128 bits (16 bytes) of randomness.
-	 */
 	uint8_t random[16];
 	if (csilk_crypto_fill_random(random, 16) != 0) {
 		CSILK_LOG_F("FATAL: csilk_generate_uuid failed to get entropy.");

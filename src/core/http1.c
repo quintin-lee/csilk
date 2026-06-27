@@ -48,6 +48,18 @@ _csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk
 
 /* --- Sendfile completion --- */
 
+/** @brief libuv sendfile completion callback — handles keep-alive and
+ *  cleanup after a zero-copy file send.
+ *
+ *  Called by libuv's filesystem event loop when uv_fs_sendfile completes.
+ *  Frees the filesystem request, then checks the connection state:
+ *   - If keep-alive is negotiated, restarts the idle timer and resumes
+ *     reading (uv_read_start) for the next request.
+ *   - Otherwise, closes the TCP handle (uv_close).
+ *  In both cases, fires CSILK_HOOK_REQUEST_END and cleans up the context.
+ *
+ *  @param req The completed uv_fs_t request. req->data points to csilk_ctx_t.
+ *             The request and its associated buffer are freed by this callback. */
 static void
 on_sendfile_complete(uv_fs_t* req)
 {

@@ -282,18 +282,27 @@ mongodb_exec(csilk_db_pool_t* pool, const char* sql)
 	return success ? 0 : -1;
 }
 
+/** @brief Begin a transaction — no-op for MongoDB single-document atomicity.
+ *
+ * MongoDB operations on a single document are already atomic, so explicit
+ * multi-document transactions are not implemented.  This stub exists for
+ * API compatibility with the driver vtable. */
 static int
 mongodb_transaction_begin(csilk_db_pool_t* pool)
 {
 	(void)pool;
 	return 0;
 }
+
+/** @brief Commit a transaction — no-op (see mongodb_transaction_begin). */
 static int
 mongodb_transaction_commit(csilk_db_pool_t* pool)
 {
 	(void)pool;
 	return 0;
 }
+
+/** @brief Rollback a transaction — no-op (see mongodb_transaction_begin). */
 static int
 mongodb_transaction_rollback(csilk_db_pool_t* pool)
 {
@@ -313,6 +322,10 @@ csilk_db_driver_t csilk_db_mongodb_driver = {
     .free_result = mongodb_free_result,
 };
 
+/** @brief Register the MongoDB driver with the database pool subsystem.
+ *
+ * Must be called once before any MongoDB pool is created.  Idempotent —
+ * calling multiple times overwrites the prior registration. */
 void
 csilk_db_mongodb_init(void)
 {

@@ -58,18 +58,39 @@ struct csilk_header_map_s {
 typedef struct csilk_header_map_s csilk_header_map_t;
 
 /**
- * @brief Parsed HTTP request.
+ * @brief Parsed HTTP request — holds all data extracted from the incoming
+ *        HTTP request line and headers.
+ *
+ * Populated by the HTTP/1.1 (llhttp) or HTTP/2 (nghttp2) parser during
+ * request finalization.  String fields are arena-allocated and valid until
+ * csilk_ctx_cleanup().
  */
 struct csilk_request_s {
-	char* method;
-	char* path;
-	char* body;
-	size_t body_len;
-	csilk_header_map_t headers;
-	csilk_header_map_t query_params;
-	csilk_header_map_t form_params;
-	int body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
-	                          must be freed on cleanup. */
+	char* method;			 /**< HTTP method string (e.g., "GET", "POST", "PUT").
+                               Arena-allocated copy of the request method. */
+	char* path;			 /**< Decoded URL path (e.g., "/users/42").
+                               Percent-encoding removed, query string stripped.
+                               Arena-allocated. */
+	char* body;			 /**< Raw request body data.
+                               For H1: pointer into the recv buffer (not copied).
+                               For H2: heap-allocated copy. */
+	size_t body_len;		 /**< Byte length of @p body. 0 for GET/HEAD/DELETE
+                               or when no Content-Length or Transfer-Encoding
+                               is present. */
+	csilk_header_map_t headers;	 /**< Request headers (key → value) stored in a
+                                     fixed-size chained hash table.
+                                     Case-insensitive lookup via djb2
+                                     hash + strcasecmp. */
+	csilk_header_map_t query_params; /**< URL query-string parameters parsed
+                                          from the "?" portion of the request
+                                          URL. Populated by csilk_parse_query(). */
+	csilk_header_map_t form_params;	 /**< Form-urlencoded body parameters parsed
+                                        from application/x-www-form-urlencoded
+                                        body. Populated by
+                                        csilk_parse_form_urlencoded(). */
+	int body_is_managed;		 /**< Non-zero if body is heap-allocated (H2 realloc),
+	                          must be freed on cleanup. Zero for H1 bodies
+	                          (they reference the TCP recv buffer directly). */
 };
 typedef struct csilk_request_s csilk_request_t;
 
