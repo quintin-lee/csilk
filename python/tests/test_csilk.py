@@ -121,6 +121,15 @@ class TestCsilkIntegration(unittest.TestCase):
                 c.ws_send(payload, opcode)
             ctx.set_on_ws_message(on_msg)
 
+        # 8b. Class-based WebSocket Route
+        class MyWS:
+            def on_connect(self, ctx):
+                pass
+            def on_message(self, ctx, payload, opcode):
+                ctx.ws_send(b"CLASS:" + payload, opcode)
+        
+        app.ws("/ws-class", MyWS)
+
         # 9. Permission Route
         @app.get("/perm-check", perm_required="read", perm_resource="users:*")
         def handle_perm(ctx: Context):
@@ -382,6 +391,30 @@ class TestCsilkIntegration(unittest.TestCase):
             self.assertEqual(resp_frame[1], 0x05)
             self.assertEqual(resp_frame[2:], b"hello")
             s.close()
+
+            # 8b. Test Class-based WebSocket
+            s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s2.connect(("127.0.0.1", 8082))
+            handshake2 = (
+                "GET /ws-class HTTP/1.1\r\n"
+                "Host: 127.0.0.1:8082\r\n"
+                "Upgrade: websocket\r\n"
+                "Connection: Upgrade\r\n"
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                "Sec-WebSocket-Version: 13\r\n\r\n"
+            )
+            s2.sendall(handshake2.encode('utf-8'))
+            resp2 = s2.recv(4096).decode('utf-8')
+            self.assertIn("101 Switching Protocols", resp2)
+            
+            frame2 = bytes([0x81, 0x05]) + b"hello"
+            s2.sendall(frame2)
+            
+            resp_frame2 = s2.recv(1024)
+            self.assertEqual(resp_frame2[0], 0x81)
+            self.assertEqual(resp_frame2[1], 11)
+            self.assertEqual(resp_frame2[2:13], b"CLASS:hello")
+            s2.close()
 
             # 9. Test route registered with permissions
             res9 = request_with_retry("http://127.0.0.1:8082/perm-check")
