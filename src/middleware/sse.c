@@ -144,7 +144,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
        \n  */
 	size_t event_len = event ? strlen(event) : 0;
 	size_t data_len = data ? strlen(data) : 0;
-	size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 1;
+	size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 2;
 
 	CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
 		    event ? event : "",
