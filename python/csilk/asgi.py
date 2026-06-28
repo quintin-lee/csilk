@@ -1,13 +1,6 @@
-"""ASGI adapter for mounting ASGI applications (FastAPI, Starlette, etc.)
-inside a csilk server.
-
-Provides ``ASGIAdapter`` (bridges HTTP and WebSocket scopes) and
-``LifespanManager`` for the ASGI lifespan protocol.
-"""
-
 import asyncio
-from typing import Dict, Any, Callable
-
+from typing import Callable, Dict, Any
+from .context import Context
 
 class ASGIAdapter:
     """Adapter that translates between csilk ``Context`` and the ASGI 3.0
@@ -22,7 +15,7 @@ class ASGIAdapter:
     def __init__(self, asgi_app: Callable):
         self.asgi_app = asgi_app
 
-    async def __call__(self, ctx):
+    async def __call__(self, ctx: Context):
         """Handle an incoming request via the wrapped ASGI app.
 
         Automatically detects WebSocket vs HTTP from the context state.
@@ -30,16 +23,21 @@ class ASGIAdapter:
         ctx.is_async = True
         loop = asyncio.get_running_loop()
 
+        import urllib.parse
+        qs = urllib.parse.urlencode(ctx.queries)
+        query_string = qs.encode('utf-8')
+        path_str = ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path
+
         if ctx.is_websocket:
             scope = {
                 "type": "websocket",
                 "asgi": {"version": "3.0", "spec_version": "2.3"},
                 "http_version": "1.1",
                 "scheme": "ws",
-                "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
-                "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
-                "query_string": b"",
-                "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
+                "path": path_str,
+                "raw_path": path_str.encode('utf-8'),
+                "query_string": query_string,
+                "headers": [(k.lower().encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
                 "client": None,
                 "server": None,
                 "subprotocols": []
@@ -75,11 +73,15 @@ class ASGIAdapter:
             def on_ws_message(c, payload, opcode):
                 if opcode == 0x8:  # close
                     loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.disconnect", "code": 1000})
-                elif opcode == 0x1:  # text
-                    text = payload.decode('utf-8', errors='replace') if isinstance(payload, bytes) else payload
-                    loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "text": text})
-                else:  # binary
-                    loop.call_soon_threadsafe(receive_queue.put_nowait, {"type": "websocket.receive", "bytes": payload})
+                else:
+                    loop.call_soon_threadsafe(
+                        receive_queue.put_nowait,
+                        {
+                            "type": "websocket.receive",
+                            "bytes": payload if opcode == 0x2 else None,
+                            "text": payload.decode('utf-8') if opcode == 0x1 else None
+                        }
+                    )
 
             ctx.set_on_ws_message(on_ws_message)
 
@@ -98,19 +100,17 @@ class ASGIAdapter:
             "type": "http",
             "asgi": {"version": "3.0", "spec_version": "2.3"},
             "http_version": "1.1",
-            "method": ctx.method.decode('utf-8') if isinstance(ctx.method, bytes) else ctx.method,
+            "method": ctx.method.upper(),
             "scheme": "http",
-            "path": ctx.path.decode('utf-8') if isinstance(ctx.path, bytes) else ctx.path,
-            "raw_path": ctx.path if isinstance(ctx.path, bytes) else ctx.path.encode('utf-8'),
-            "query_string": b"",
-            "headers": [(k.encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
+            "path": path_str,
+            "raw_path": path_str.encode('utf-8'),
+            "query_string": query_string,
+            "headers": [(k.lower().encode('utf-8'), v.encode('utf-8')) for k, v in ctx.headers.items()],
             "client": None,
             "server": None,
         }
 
-        body_bytes = ctx.body_view or b""
-        if isinstance(body_bytes, str):
-            body_bytes = body_bytes.encode('utf-8')
+        body_bytes = ctx.body
         body_sent = False
 
         async def receive() -> Dict[str, Any]:
@@ -131,6 +131,9 @@ class ASGIAdapter:
 
                 def _start():
                     for k, v in headers:
+                        key = k.decode('utf-8').lower()
+                        if key == "content-length":
+                            continue
                         ctx.set_header(k.decode('utf-8'), v.decode('utf-8'))
                     ctx._asgi_status = status
                 ctx.dispatch(_start)

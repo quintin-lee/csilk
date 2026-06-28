@@ -578,6 +578,12 @@ csilk_response_end(csilk_ctx_t* c)
 	}
 
 	_csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
+
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	if (client && client->protocol == CSILK_PROTO_HTTP1) {
+		int keep_alive = !client_wants_close(c);
+		_csilk_handle_post_response(client, keep_alive);
+	}
 }
 
 /* --- HTTP/2 Server Push --- */

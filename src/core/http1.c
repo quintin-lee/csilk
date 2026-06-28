@@ -772,8 +772,8 @@ append_custom_headers(csilk_header_map_t* headers, char* buf, size_t pos)
  * @param client     The client connection.
  * @param keep_alive Non-zero to keep the connection alive.
  */
-static void
-handle_post_response(csilk_client_t* client, int keep_alive)
+CSILK_INTERNAL void
+_csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 {
 	uv_timer_stop(&client->read_timer);
 
@@ -802,11 +802,15 @@ handle_post_response(csilk_client_t* client, int keep_alive)
 		return;
 	}
 
+	CSILK_LOG_I("_csilk_handle_post_response called, keep_alive=%d", keep_alive);
 	if (keep_alive) {
+		CSILK_LOG_I("_csilk_handle_post_response: restarting read");
 		uv_timer_start(
 		    &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
+		llhttp_resume(&client->parser);
 		uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 	} else {
+		CSILK_LOG_I("_csilk_handle_post_response: closing handle");
 		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 			uv_close((uv_handle_t*)&client->handle, on_close);
 		}
@@ -894,7 +898,7 @@ _csilk_send_response(csilk_ctx_t* c)
 		return;
 	}
 
-	handle_post_response(client, keep_alive);
+	_csilk_handle_post_response(client, keep_alive);
 }
 
 /* --- Request finalization --- */
