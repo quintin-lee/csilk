@@ -434,7 +434,7 @@ csilk_ai_chat_async(csilk_ai_t* ai,
 	work->data = ar;
 	CSILK_LOG_D("Queueing async chat request for model '%s'",
 		    req->model ? req->model : "default");
-	uv_queue_work(uv_default_loop(), work, chat_work_cb, chat_after_work_cb);
+	uv_queue_work(csilk_io_default_loop(), work, chat_work_cb, chat_after_work_cb);
 }
 
 /** @brief Generate embeddings for a batch of input strings.
@@ -588,7 +588,7 @@ csilk_ai_embeddings_async(csilk_ai_t* ai,
 
 	work->data = ar;
 	CSILK_LOG_D("Queueing async embeddings request for model '%s' (inputs: %zu)", model, count);
-	uv_queue_work(uv_default_loop(), work, emb_work_cb, emb_after_work_cb);
+	uv_queue_work(csilk_io_default_loop(), work, emb_work_cb, emb_after_work_cb);
 }
 
 /** @brief Free an AI engine handle and its driver state.

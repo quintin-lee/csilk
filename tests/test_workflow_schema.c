@@ -61,7 +61,7 @@ test_workflow_schema_validation()
 
 	csilk_wf_run(wf, nullptr, on_schema_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_fallback_ran == 1);
 	assert(g_done == 1);

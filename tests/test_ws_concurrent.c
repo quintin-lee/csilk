@@ -53,7 +53,7 @@ test_ws_multi_room_broadcast(void)
 	csilk_ws_broadcast_room(g_clients[0], "lobby", "hello all");
 
 	for (int i = 0; i < 100; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	}
 
 	for (int i = 0; i < NUM_CLIENTS; i++) {
@@ -66,7 +66,7 @@ test_ws_multi_room_broadcast(void)
 	csilk_ws_broadcast_room(g_clients[1], "lobby", "without client0");
 
 	for (int i = 0; i < 100; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	}
 
 	assert(g_recv_counts[0] == 0);
@@ -112,7 +112,7 @@ test_ws_rapid_join_leave(void)
 		}
 		csilk_ws_broadcast_room(c1, "alpha", "cycle_msg");
 		for (int i = 0; i < 50; i++) {
-			uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+			csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 		}
 		for (int r = 0; r < num_rooms; r++) {
 			csilk_ws_leave_room(c1, rooms[r]);
@@ -157,7 +157,7 @@ test_ws_concurrent_rooms(void)
 	}
 
 	for (int i = 0; i < 200; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	}
 
 	for (int i = 0; i < NUM_CLIENTS; i++) {

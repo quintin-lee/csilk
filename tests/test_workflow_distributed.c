@@ -99,7 +99,7 @@ test_workflow_distributed_mq()
 
 	// Run the loop.
 	for (int i = 0; i < 200 && !g_done; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 		usleep(5000);
 	}
 

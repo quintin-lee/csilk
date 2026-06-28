@@ -79,7 +79,7 @@ events_handler(csilk_ctx_t* c)
 	stream->timer.data = stream;
 
 	/* Initialize and start the libuv timer on the default loop */
-	uv_loop_t* loop = uv_default_loop();
+	uv_loop_t* loop = csilk_io_default_loop();
 	uv_timer_init(loop, &stream->timer);
 	uv_timer_start(&stream->timer, on_sse_timer, 1000, 1000); /* every 1000ms */
 

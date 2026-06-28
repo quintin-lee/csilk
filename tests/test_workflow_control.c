@@ -55,7 +55,7 @@ test_workflow_error_branch()
 	csilk_wf_on_error(n_fail, n_fallback);
 
 	csilk_wf_run(wf, nullptr, nullptr);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_fallback_triggered == 1);
 	csilk_wf_free(wf);
@@ -106,7 +106,7 @@ test_workflow_dynamic_route()
 
 	csilk_data_t in = {"text", "magic", nullptr};
 	csilk_wf_run(wf, &in, nullptr);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_router_triggered == 1);
 	csilk_wf_free(wf);
@@ -155,7 +155,7 @@ test_workflow_or_join()
 
 	csilk_data_t in = {"text", "go", nullptr};
 	csilk_wf_run(wf, &in, nullptr);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Sometimes in async thread pool scheduling one branch might finish
 	// completely before the other even starts, causing the OR node to be

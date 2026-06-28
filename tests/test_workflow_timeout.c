@@ -73,7 +73,7 @@ test_workflow_node_timeout()
 
 	csilk_wf_run(wf, nullptr, on_timeout_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_fallback_ran == 1);
 	// Node 1 might still finish in the thread pool, but its output should have
@@ -107,7 +107,7 @@ test_workflow_global_ttl()
 
 	csilk_wf_run(wf, nullptr, on_timeout_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Each slow_handler takes 200ms. 5 nodes = 1 second.
 	// Wait, let's make it more extreme. 10 nodes = 2 seconds.

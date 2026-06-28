@@ -116,10 +116,10 @@ main()
 	/* Simulate doing other work */
 	for (int i = 0; i < 5; i++) {
 		printf("Doing other work... %d\n", i);
-		uv_run(uv_default_loop(), UV_RUN_ONCE);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_ONCE);
 	}
 	/* Ensure async callback is triggered */
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	/* 4. Embeddings */
 	printf("\n--- [4] Embeddings ---\n");

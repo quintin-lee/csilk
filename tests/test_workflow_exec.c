@@ -64,7 +64,7 @@ test_workflow_exec_sequential()
 
 	csilk_wf_run(wf, &initial_input, on_workflow_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_steps_completed == 2);
 	assert(g_final_result != nullptr);

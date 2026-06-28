@@ -34,7 +34,7 @@ test_csilk_file_serves_direct()
 	csilk_file(ctx, "./test_direct_file.txt");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
 	assert(csilk_get_file_fd(ctx) != -1);
@@ -52,7 +52,7 @@ test_csilk_file_not_found()
 	csilk_file(ctx, "./non_existent_file.txt");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_NOT_FOUND);
 

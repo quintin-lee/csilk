@@ -74,7 +74,7 @@ test_workflow_budget_enforcement()
 
 	csilk_wf_run(wf, nullptr, on_budget_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Node 1 used 100 tokens, budget was 50.
 	// Node 2 should NOT have ran.

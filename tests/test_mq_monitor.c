@@ -25,7 +25,7 @@ test_mq_monitoring_logic()
 	csilk_mq_publish(mq, "test.topic", (uint8_t*)"payload", 7);
 
 	// Let the loop process the async send
-	uv_run((uv_loop_t*)csilk_io_default_loop(), UV_RUN_NOWAIT);
+	csilk_io_run((uv_loop_t*)csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 
 	_csilk_mq_free(mq);
 	csilk_test_ctx_free(mock_ctx);

@@ -51,7 +51,7 @@ test_workflow_monitoring()
 	// Instead of full E2E, let's just run it and ensure no crashes.
 	csilk_wf_run(wf, nullptr, nullptr);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	csilk_wf_free(wf);
 	csilk_test_ctx_free(mock_ctx);

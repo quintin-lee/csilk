@@ -36,7 +36,7 @@ void
 test_mq_flow()
 {
 	printf("Testing MQ Flow...\n");
-	uv_loop_t* loop = uv_default_loop();
+	uv_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -49,11 +49,11 @@ test_mq_flow()
 	csilk_mq_publish(mq, "events", "hello", 5);
 
 	/* Run loop briefly to process async event */
-	/* Note: uv_run with UV_RUN_NOWAIT might need to be called multiple times
+	/* Note: uv_run with CSILK_IO_RUN_NOWAIT might need to be called multiple times
      to ensure the async wakeup and the subsequent processing are both handled.
    */
 	for (int i = 0; i < 5; i++) {
-		uv_run(loop, UV_RUN_NOWAIT);
+		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 	}
 
 	assert(global_mw_called == 1);
@@ -77,7 +77,7 @@ void
 test_mq_wildcard()
 {
 	printf("Testing MQ Wildcard Topic Matching...\n");
-	uv_loop_t* loop = uv_default_loop();
+	uv_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -96,7 +96,7 @@ test_mq_wildcard()
 	csilk_mq_publish(mq, "system.net.error", "net error", 9);
 
 	for (int i = 0; i < 10; i++) {
-		uv_run(loop, UV_RUN_NOWAIT);
+		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 	}
 
 	assert(wildcard_sub_called == 2);
@@ -130,7 +130,7 @@ void
 test_mq_offload()
 {
 	printf("Testing MQ Offload (Background Worker)...\n");
-	uv_loop_t* loop = uv_default_loop();
+	uv_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -145,7 +145,7 @@ test_mq_offload()
 	/* Run loop until worker is called.
      We need to give it some time as it runs in a thread pool. */
 	for (int i = 0; i < 50 && offload_worker_called == 0; i++) {
-		uv_run(loop, UV_RUN_NOWAIT);
+		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 		usleep(10000); /* 10ms */
 	}
 

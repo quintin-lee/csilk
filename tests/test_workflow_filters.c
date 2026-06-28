@@ -85,7 +85,7 @@ test_workflow_template_filters()
 
 	csilk_wf_run(wf, nullptr, on_filter_done);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_done == 1);
 	/*

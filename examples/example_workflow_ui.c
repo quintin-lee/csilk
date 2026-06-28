@@ -73,7 +73,7 @@ main()
 
 	/* 3. Run Workflow periodically for demo */
 	uv_timer_t timer;
-	uv_timer_init(uv_default_loop(), &timer);
+	uv_timer_init(csilk_io_default_loop(), &timer);
 	timer.data = g_wf;
 	uv_timer_start(&timer, trigger_wf, 1000, 10000); // Every 10s
 

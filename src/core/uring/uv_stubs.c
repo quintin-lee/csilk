@@ -61,12 +61,6 @@ uv_fs_req_cleanup(uv_fs_t* req)
 {
 }
 
-uv_loop_t*
-uv_default_loop(void)
-{
-	return NULL;
-}
-
 #endif
 
 /* Dummy callbacks for HTTP1 when CSILK_USE_URING is ON (un-refactored paths) */
@@ -150,7 +144,7 @@ csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
 	return -1;
 }
 int
-uv_run(uv_loop_t* loop, uv_run_mode mode)
+csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
 	return -1;
 }
