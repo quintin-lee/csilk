@@ -23,6 +23,7 @@ CSILK_INTERNAL void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_
 CSILK_INTERNAL void on_close(uv_handle_t* handle);
 #ifndef CSILK_USE_URING
 CSILK_INTERNAL void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
+CSILK_INTERNAL void on_new_connection(uv_stream_t* server_stream, int status);
 #else
 CSILK_INTERNAL void on_read(csilk_client_t* client, ssize_t nread);
 CSILK_INTERNAL void on_new_connection(worker_pool_t* wp, int client_fd);

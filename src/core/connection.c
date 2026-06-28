@@ -584,7 +584,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 					     0);
 		}
 
-		r = csilk_client_read_start(client);
+		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
 			CSILK_LOG_E("Connection: uv_read_start error: %s", uv_strerror(r));
 			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -726,17 +726,18 @@ csilk_get_client_ip(csilk_ctx_t* c)
 		}
 		return csilk_arena_strdup(c->arena, ip);
 	}
+
 	return nullptr;
 }
 
 void
 csilk_client_read_start(csilk_client_t* client)
 {
-	csilk_client_read_start(client);
+	uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
 }
 
 void
 csilk_client_read_stop(csilk_client_t* client)
 {
-	csilk_client_read_stop(client);
+	uv_read_stop((uv_stream_t*)&client->handle);
 }
