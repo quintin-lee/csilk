@@ -1,4 +1,5 @@
 #include <assert.h>
+#include "csilk/core/sync.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,9 +15,9 @@ struct csilk_wf_ctx_s {
 	int* node_input_counts;
 	int total_executions;
 	int nodes_active;
-	uv_mutex_t mutex;
+	csilk_mutex_t mutex;
 	csilk_arena_t* arena;
-	uv_mutex_t arena_mutex;
+	csilk_mutex_t arena_mutex;
 	csilk_data_t** node_outputs;
 };
 

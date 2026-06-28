@@ -230,7 +230,7 @@ contains_path_traversal(const char* path)
 }
 
 static void
-static_work_cb(uv_work_t* req)
+static_work_cb(csilk_io_work_t* req)
 {
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	const char* root_dir = (const char*)csilk_get(c, "static_root");
@@ -334,7 +334,7 @@ static_work_cb(uv_work_t* req)
  * @param req libuv work request. req->data points to the csilk_ctx_t.
  */
 static void
-file_work_cb(uv_work_t* req)
+file_work_cb(csilk_io_work_t* req)
 {
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	const char* file_path = (const char*)csilk_get(c, "serve_file_path");
@@ -371,7 +371,7 @@ file_work_cb(uv_work_t* req)
  * @param status  Work status — 0 on success, negative on cancellation.
  */
 static void
-static_after_work_cb(uv_work_t* req, int status)
+static_after_work_cb(csilk_io_work_t* req, int status)
 {
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	CSILK_LOG_T("Static: Work complete. Sending response to client (request: %p, status: %d)",
@@ -413,12 +413,12 @@ csilk_static(csilk_ctx_t* c, const char* root_dir)
 		    csilk_get(c, "static_prefix") ? (const char*)csilk_get(c, "static_prefix")
 						  : "none");
 	csilk_ctx_set_async(c, 1);
-	uv_work_t* req = csilk_get_work_req(c);
+	csilk_io_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "static_root", (void*)root_dir);
-	uv_loop_t* loop = _csilk_ctx_loop(c);
+	csilk_io_loop_t* loop = _csilk_ctx_loop(c);
 	_csilk_ctx_async_ref_incr(c);
-	int rc = uv_queue_work(loop, req, static_work_cb, static_after_work_cb);
+	int rc = csilk_io_queue_work(loop, req, static_work_cb, static_after_work_cb);
 	if (rc != 0) {
 		CSILK_LOG_E("Static: failed to queue work: %d", rc);
 		_csilk_ctx_async_ref_decr(c);
@@ -441,12 +441,12 @@ csilk_file(csilk_ctx_t* c, const char* file_path)
 {
 	CSILK_LOG_D("Static: Enqueuing async serve specific file request for path '%s'", file_path);
 	csilk_ctx_set_async(c, 1);
-	uv_work_t* req = csilk_get_work_req(c);
+	csilk_io_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_set(c, "serve_file_path", (void*)file_path);
-	uv_loop_t* loop = _csilk_ctx_loop(c);
+	csilk_io_loop_t* loop = _csilk_ctx_loop(c);
 	_csilk_ctx_async_ref_incr(c);
-	int rc = uv_queue_work(loop, req, file_work_cb, static_after_work_cb);
+	int rc = csilk_io_queue_work(loop, req, file_work_cb, static_after_work_cb);
 	if (rc != 0) {
 		CSILK_LOG_E("Static: failed to queue work: %d", rc);
 		_csilk_ctx_async_ref_decr(c);

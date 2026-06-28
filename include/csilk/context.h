@@ -1,3 +1,4 @@
+#include "csilk/core/sys_io.h"
 /**
  * @file context.h
  * @brief Per-request context accessors and mutators for the csilk framework.
@@ -296,9 +297,9 @@ int csilk_get_handler_index(csilk_ctx_t* c);
  * maintaining context state.
  *
  * @param c  The request context.
- * @return Pointer to the context's internal uv_work_t.
+ * @return Pointer to the context's internal csilk_io_work_t.
  */
-uv_work_t* csilk_get_work_req(csilk_ctx_t* c);
+csilk_io_work_t* csilk_get_work_req(csilk_ctx_t* c);
 
 /**
  * @brief Set the zero-copy file response parameters.
@@ -635,7 +636,7 @@ void csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver);
  * @endcode
  *
  * @param c   The request context.
- * @param fn  Cleanup function (e.g., free, close, uv_mutex_unlock).
+ * @param fn  Cleanup function (e.g., free, close, csilk_mutex_unlock).
  * @param arg Argument passed to @p fn.
  * @return 0 on success, -1 on allocation failure.
  */

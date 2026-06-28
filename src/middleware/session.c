@@ -11,6 +11,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 
 /**
@@ -53,37 +54,37 @@ static csilk_session_t* session_store = nullptr;
  * @brief Session store mutex — guards session_store and all linked-list
  *        operations against concurrent access.
  */
-static uv_mutex_t session_mutex;
+static csilk_mutex_t session_mutex;
 
 /**
  * @brief One-time initialization guard for session_mutex.
  *
- * Ensures uv_mutex_init is called exactly once across all threads,
+ * Ensures csilk_mutex_init is called exactly once across all threads,
  * regardless of which thread triggers the first session operation.
  */
-static uv_once_t session_mutex_once = UV_ONCE_INIT;
+static csilk_once_t session_mutex_once = CSILK_ONCE_INIT;
 
 /**
- * @brief Initialize the session store mutex (called once via uv_once).
+ * @brief Initialize the session store mutex (called once via csilk_once).
  */
 static void
 init_session_mutex(void)
 {
-	uv_mutex_init(&session_mutex);
+	csilk_mutex_init(&session_mutex);
 	CSILK_LOG_I("Session: Mutex initialized");
 }
 
 /**
  * @brief Lock the session store mutex.
  *
- * Ensures the mutex is initialized (via uv_once) before acquiring the lock.
+ * Ensures the mutex is initialized (via csilk_once) before acquiring the lock.
  * Blocks until the lock is held.
  */
 static void
 session_lock(void)
 {
-	uv_once(&session_mutex_once, init_session_mutex);
-	uv_mutex_lock(&session_mutex);
+	csilk_once(&session_mutex_once, init_session_mutex);
+	csilk_mutex_lock(&session_mutex);
 }
 
 /**
@@ -94,7 +95,7 @@ session_lock(void)
 static void
 session_unlock(void)
 {
-	uv_mutex_unlock(&session_mutex);
+	csilk_mutex_unlock(&session_mutex);
 }
 
 /** @brief Session cookie name. */

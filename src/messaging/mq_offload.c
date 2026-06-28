@@ -20,14 +20,14 @@
 
 /** @brief libuv work callback — runs on a thread pool thread.
  *
- * Extracts the work context from the uv_work_t and invokes the user's
+ * Extracts the work context from the csilk_io_work_t and invokes the user's
  * worker callback with the deep-copied topic and payload. This runs
  * outside the event loop thread — do NOT call any csilk_mq_* functions
  * or libuv handle operations inside the handler.
  *
  * @param req libuv work request (data points to csilk_mq_work_ctx_t). */
 static void
-worker_cb(uv_work_t* req)
+worker_cb(csilk_io_work_t* req)
 {
 	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
 	CSILK_LOG_T("MQ: Worker thread started processing offloaded task for topic '%s' (len: %zu)",
@@ -47,7 +47,7 @@ worker_cb(uv_work_t* req)
  * @param req    libuv work request (data points to csilk_mq_work_ctx_t).
  * @param status 0 on success, or a negative error code (unused here). */
 static void
-worker_after_cb(uv_work_t* req, int status)
+worker_after_cb(csilk_io_work_t* req, int status)
 {
 	csilk_mq_work_ctx_t* wctx = (csilk_mq_work_ctx_t*)req->data;
 	CSILK_LOG_T(
@@ -63,14 +63,14 @@ worker_after_cb(uv_work_t* req, int status)
  *
  * Deep-copies the topic and payload from the current message context into
  * a newly allocated csilk_mq_work_ctx_t, then dispatches it via
- * uv_queue_work(). The provided worker callback runs on a thread pool
+ * csilk_io_queue_work(). The provided worker callback runs on a thread pool
  * thread, and the main thread handler chain continues immediately via
  * csilk_mq_next().
  *
  * ## Lifecycle
  *   - The caller's handler on the main thread calls csilk_mq_offload()
  *     and then returns — csilk_mq_next() ensures the chain advances.
- *   - uv_queue_work() owns the wctx until worker_after_cb() runs.
+ *   - csilk_io_queue_work() owns the wctx until worker_after_cb() runs.
  *   - worker_after_cb() frees the deep copies and the wctx struct.
  *
  * ## Usage example
@@ -144,7 +144,7 @@ csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker)
 	 * worker_cb() runs on a thread pool thread.
 	 * worker_after_cb() runs on the main loop thread. */
 	CSILK_LOG_D("MQ: Queueing work on thread pool for topic '%s'", wctx->topic);
-	int rc = uv_queue_work(ctx->mq->async_handle.loop, &wctx->req, worker_cb, worker_after_cb);
+	int rc = csilk_io_queue_work(ctx->mq->loop, &wctx->req, worker_cb, worker_after_cb);
 	if (rc != 0) {
 		CSILK_LOG_E("MQ: Failed to queue work on thread pool (error: %d) for topic '%s'",
 			    rc,

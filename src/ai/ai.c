@@ -31,6 +31,7 @@
 
 #include "cJSON.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 /* --- Global AI Metrics --- */
 static atomic_uint_fast64_t ai_requests_total = 0;
@@ -43,7 +44,7 @@ static atomic_uint_fast64_t ai_duration_us_total = 0;
 /* --- AI Monitor Registry --- */
 static csilk_ctx_t* g_ai_monitors[16];
 static size_t g_ai_monitor_count = 0;
-static uv_mutex_t g_ai_monitor_mutex;
+static csilk_mutex_t g_ai_monitor_mutex;
 static atomic_int g_ai_monitor_init = 0;
 
 static void
@@ -51,7 +52,7 @@ ai_ensure_monitor_init(void)
 {
 	int expected = 0;
 	if (atomic_compare_exchange_strong(&g_ai_monitor_init, &expected, 1)) {
-		uv_mutex_init(&g_ai_monitor_mutex);
+		csilk_mutex_init(&g_ai_monitor_mutex);
 	}
 }
 
@@ -84,11 +85,11 @@ _ai_broadcast(const char* event,
 	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
 
 	char* json = cJSON_PrintUnformatted(root);
-	uv_mutex_lock(&g_ai_monitor_mutex);
+	csilk_mutex_lock(&g_ai_monitor_mutex);
 	for (size_t i = 0; i < g_ai_monitor_count; i++) {
 		csilk_ws_send(g_ai_monitors[i], (uint8_t*)json, strlen(json), 0x1);
 	}
-	uv_mutex_unlock(&g_ai_monitor_mutex);
+	csilk_mutex_unlock(&g_ai_monitor_mutex);
 	free(json);
 	cJSON_Delete(root);
 }
@@ -129,14 +130,14 @@ void
 csilk_ai_register_monitor(void* c)
 {
 	ai_ensure_monitor_init();
-	uv_mutex_lock(&g_ai_monitor_mutex);
+	csilk_mutex_lock(&g_ai_monitor_mutex);
 	if (g_ai_monitor_count < 16) {
 		g_ai_monitors[g_ai_monitor_count++] = (csilk_ctx_t*)c;
 		CSILK_LOG_I("Registered AI monitor: %p", c);
 	} else {
 		CSILK_LOG_E("Failed to register AI monitor: monitor registry is full");
 	}
-	uv_mutex_unlock(&g_ai_monitor_mutex);
+	csilk_mutex_unlock(&g_ai_monitor_mutex);
 }
 
 /** @brief Global registry of AI driver implementations.

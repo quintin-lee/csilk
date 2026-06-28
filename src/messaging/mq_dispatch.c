@@ -8,6 +8,7 @@
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/mq.h"
 #include "mq_internal.h"
 
@@ -33,11 +34,11 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 	cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
 	char* json = cJSON_PrintUnformatted(root);
 
-	uv_mutex_lock(&mq->monitor_mutex);
+	csilk_mutex_lock(&mq->monitor_mutex);
 	for (size_t i = 0; i < mq->monitor_count; i++) {
 		csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
 	}
-	uv_mutex_unlock(&mq->monitor_mutex);
+	csilk_mutex_unlock(&mq->monitor_mutex);
 
 	free(json);
 	cJSON_Delete(root);
@@ -75,7 +76,7 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 		msg->len = len;
 	}
 
-	uv_mutex_lock(&mq->queue_mutex);
+	csilk_mutex_lock(&mq->queue_mutex);
 	if (mq->queue_tail) {
 		mq->queue_tail->next = msg;
 	} else {
@@ -85,10 +86,10 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 
 	mq->published_total++;
 	mq->queue_depth++;
-	uv_mutex_unlock(&mq->queue_mutex);
+	csilk_mutex_unlock(&mq->queue_mutex);
 
 	_mq_broadcast(mq, "mq_published", topic, len);
-	uv_async_send(&mq->async_handle);
+	csilk_io_async_send(&mq->async_handle);
 	return 0;
 }
 
@@ -115,17 +116,17 @@ csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t 
 }
 
 CSILK_INTERNAL void
-on_mq_async(uv_async_t* handle)
+on_mq_async(csilk_io_async_t* handle)
 {
 	csilk_mq_t* mq = (csilk_mq_t*)handle->data;
 
-	uv_mutex_lock(&mq->queue_mutex);
+	csilk_mutex_lock(&mq->queue_mutex);
 	csilk_mq_msg_t* head = mq->queue_head;
 	mq->queue_head = nullptr;
 	mq->queue_tail = nullptr;
 	uint32_t count = mq->queue_depth;
 	mq->queue_depth = 0;
-	uv_mutex_unlock(&mq->queue_mutex);
+	csilk_mutex_unlock(&mq->queue_mutex);
 
 	CSILK_LOG_D("MQ: Async worker triggered processing %u messages from queue", count);
 
@@ -138,9 +139,9 @@ on_mq_async(uv_async_t* handle)
 			    msg->len);
 
 		_mq_broadcast(mq, "mq_delivered", msg->topic, msg->len);
-		uv_mutex_lock(&mq->queue_mutex);
+		csilk_mutex_lock(&mq->queue_mutex);
 		mq->delivered_total++;
-		uv_mutex_unlock(&mq->queue_mutex);
+		csilk_mutex_unlock(&mq->queue_mutex);
 
 		size_t total_handlers = mq->global_mw_count;
 		for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {

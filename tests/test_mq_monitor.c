@@ -14,7 +14,7 @@ test_mq_monitoring_logic()
 {
 	printf("Testing MQ real-time monitoring logic...\n");
 
-	csilk_mq_t* mq = _csilk_mq_new(uv_default_loop());
+	csilk_mq_t* mq = _csilk_mq_new(csilk_io_default_loop());
 
 	// Create a dummy context for the monitor
 	csilk_ctx_t* mock_ctx = csilk_test_ctx_new();
@@ -25,7 +25,7 @@ test_mq_monitoring_logic()
 	csilk_mq_publish(mq, "test.topic", (uint8_t*)"payload", 7);
 
 	// Let the loop process the async send
-	uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+	uv_run((uv_loop_t*)csilk_io_default_loop(), UV_RUN_NOWAIT);
 
 	_csilk_mq_free(mq);
 	csilk_test_ctx_free(mock_ctx);

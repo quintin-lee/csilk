@@ -6,6 +6,7 @@
 
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -61,7 +62,7 @@ csilk_wf_serve_ui(csilk_app_t* app, const char* path)
 /**
  * @brief Creates a new empty workflow configuration engine with the given name.
  *
- * Initializes sync mutexes and sets the execution event loop to uv_default_loop().
+ * Initializes sync mutexes and sets the execution event loop to csilk_io_default_loop().
  *
  * @param name The descriptive name of the workflow.
  * @return Pointer to the new workflow handle, or nullptr on allocation failure.
@@ -74,9 +75,9 @@ csilk_wf_new(const char* name)
 		return nullptr;
 	}
 	wf->name = strdup(name);
-	wf->loop = uv_default_loop();
-	uv_mutex_init(&wf->monitor_mutex);
-	uv_mutex_init(&wf->ctx_mutex);
+	wf->loop = csilk_io_default_loop();
+	csilk_mutex_init(&wf->monitor_mutex);
+	csilk_mutex_init(&wf->ctx_mutex);
 	CSILK_LOG_D("Workflow: created new workflow instance '%s'", name);
 	return wf;
 }
@@ -151,9 +152,9 @@ csilk_wf_free(csilk_wf_t* wf)
 		wf->monitors[i] = nullptr;
 	}
 	free(wf->monitors);
-	uv_mutex_destroy(&wf->monitor_mutex);
+	csilk_mutex_destroy(&wf->monitor_mutex);
 	free(wf->active_contexts);
-	uv_mutex_destroy(&wf->ctx_mutex);
+	csilk_mutex_destroy(&wf->ctx_mutex);
 	free(wf->wal_dir);
 	free(wf->name);
 	free(wf);
@@ -494,11 +495,11 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
 				// paused node
 
 				if (n) {
-					uv_mutex_lock(&active->mutex);
+					csilk_mutex_lock(&active->mutex);
 					active->node_approved[n->index] = 1;
 					active
 					    ->nodes_active--; // Decrement the count we added during offload
-					uv_mutex_unlock(&active->mutex);
+					csilk_mutex_unlock(&active->mutex);
 
 					csilk_data_t* out_data =
 					    csilk_wf_data_new(active,

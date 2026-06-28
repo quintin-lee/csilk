@@ -31,6 +31,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 #include "csilk/core/internal.h"
 
 /**
@@ -295,19 +296,19 @@ struct csilk_ctx_s {
 	    next_stream; /**< Linked list of active multiplexed contexts for a single client. */
 
 	/* === Internal I/O State === */
-	void* _internal_client; /**< Opaque pointer to the internal csilk_client_t.
+	void* _internal_client;	  /**< Opaque pointer to the internal csilk_client_t.
                              MUST NOT be used directly by handlers. Used
                              internally by _csilk_send_data() to route data
                              through TLS or raw TCP. */
-	int conn_closed;	/**< Non-zero if the connection has been closed/timed out. */
-	uv_work_t work_req;	/**< libuv work request structure for offloading async
+	int conn_closed;	  /**< Non-zero if the connection has been closed/timed out. */
+	csilk_io_work_t work_req; /**< libuv work request structure for offloading async
                              operations to the thread pool. Used by
                              csilk_ai_chat_async() and other async handlers. */
-	int is_async;		/**< Non-zero if the response will be sent asynchronously
+	int is_async;		  /**< Non-zero if the response will be sent asynchronously
                    (framework skips auto-send after handler chain returns).
                    Set by csilk_response_write() for streaming responses or
                    explicitly by csilk_ctx_set_async(). */
-	int response_started;	/**< Non-zero if chunked response headers have already
+	int response_started;	  /**< Non-zero if chunked response headers have already
                            been sent to the client. Used by
                            csilk_response_write() to avoid sending headers
                            multiple times in streaming mode. */
@@ -335,7 +336,7 @@ struct csilk_ctx_s {
 CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
 
 /* === Async/Multi-Worker Loop Support === */
-CSILK_INTERNAL uv_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);
+CSILK_INTERNAL csilk_io_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);
 CSILK_INTERNAL void _csilk_ctx_async_ref_incr(csilk_ctx_t* c);
 CSILK_INTERNAL void _csilk_ctx_async_ref_decr(csilk_ctx_t* c);
 

@@ -28,6 +28,7 @@
 #include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "core/srv_internal.h"
 #include "srv_impl.h"
 
@@ -68,7 +69,7 @@ on_signal(uv_signal_t* handle, int signum)
 static int
 close_active_clients(csilk_server_t* server, uv_loop_t* loop)
 {
-	uv_mutex_lock(&server->clients_mutex);
+	csilk_mutex_lock(&server->clients_mutex);
 	csilk_client_t* client = server->active_clients;
 	int count = 0;
 	while (client) {
@@ -90,7 +91,7 @@ close_active_clients(csilk_server_t* server, uv_loop_t* loop)
 		}
 		client = client->next;
 	}
-	uv_mutex_unlock(&server->clients_mutex);
+	csilk_mutex_unlock(&server->clients_mutex);
 	return count;
 }
 
@@ -203,7 +204,7 @@ csilk_server_new(csilk_router_t* router)
 	s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
 	s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
-	uv_mutex_init(&s->clients_mutex);
+	csilk_mutex_init(&s->clients_mutex);
 
 	s->mq = _csilk_mq_new(s->loop);
 
@@ -404,7 +405,7 @@ csilk_server_free(csilk_server_t* server)
 		}
 	}
 
-	uv_mutex_destroy(&server->clients_mutex);
+	csilk_mutex_destroy(&server->clients_mutex);
 	csilk_arena_flush_free_list();
 	free(server);
 }
@@ -647,28 +648,21 @@ on_dispatch_async(uv_async_t* handle)
 		return;
 	}
 
-	uv_mutex_lock(&wp->dispatch_mutex);
-	csilk_dispatch_task_t* task = wp->dispatch_head;
-	wp->dispatch_head = nullptr;
-	wp->dispatch_tail = nullptr;
-	uv_mutex_unlock(&wp->dispatch_mutex);
-
-	while (task) {
+	csilk_lfq_node_t* node = csilk_lfq_dequeue(&wp->dispatch_queue);
+	while (node) {
+		csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)node;
 		if (task->cb) {
 			task->cb(task->arg);
 		}
-		csilk_dispatch_task_t* next = task->next;
 		free(task);
-		task = next;
+		node = csilk_lfq_dequeue(&wp->dispatch_queue);
 	}
 }
 
 static void
 _csilk_worker_init_dispatch(worker_pool_t* wp, uv_loop_t* loop)
 {
-	uv_mutex_init(&wp->dispatch_mutex);
-	wp->dispatch_head = nullptr;
-	wp->dispatch_tail = nullptr;
+	csilk_lfq_init(&wp->dispatch_queue);
 	uv_async_init(loop, &wp->dispatch_async, on_dispatch_async);
 	wp->dispatch_async.data = wp;
 }
@@ -691,17 +685,7 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 	}
 	task->cb = cb;
 	task->arg = arg;
-	task->next = nullptr;
-
-	uv_mutex_lock(&wp->dispatch_mutex);
-	if (!wp->dispatch_head) {
-		wp->dispatch_head = task;
-		wp->dispatch_tail = task;
-	} else {
-		wp->dispatch_tail->next = task;
-		wp->dispatch_tail = task;
-	}
-	uv_mutex_unlock(&wp->dispatch_mutex);
+	csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
 
 	uv_async_send(&wp->dispatch_async);
 }
@@ -951,7 +935,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	if (workers > 1) {
 		CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
 		int nworkers = workers - 1;
-		server->worker_tids = malloc((size_t)nworkers * sizeof(uv_thread_t));
+		server->worker_tids = malloc((size_t)nworkers * sizeof(csilk_thread_t));
 		if (server->worker_tids) {
 			server->worker_count = nworkers;
 

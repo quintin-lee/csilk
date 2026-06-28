@@ -43,7 +43,7 @@ typedef struct {
  *       resources.
  */
 static void
-gzip_work_cb(uv_work_t* req)
+gzip_work_cb(csilk_io_work_t* req)
 {
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -111,7 +111,7 @@ gzip_work_cb(uv_work_t* req)
  *       heap-managed (body_is_managed == 1).
  */
 static void
-gzip_after_work_cb(uv_work_t* req, int status)
+gzip_after_work_cb(csilk_io_work_t* req, int status)
 {
 	(void)status;
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
@@ -236,16 +236,16 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 	}
 
 	csilk_set(c, "gzip_state", state);
-	uv_work_t* req = csilk_get_work_req(c);
+	csilk_io_work_t* req = csilk_get_work_req(c);
 	req->data = c;
 	csilk_ctx_set_async(c, 1);
 
 	CSILK_LOG_D("Gzip: scheduling asynchronous deflation of %zu bytes on thread pool",
 		    body_len);
 
-	uv_loop_t* loop = _csilk_ctx_loop(c);
+	csilk_io_loop_t* loop = _csilk_ctx_loop(c);
 	_csilk_ctx_async_ref_incr(c);
-	int rc = uv_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
+	int rc = csilk_io_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
 	if (rc != 0) {
 		CSILK_LOG_E("Gzip: failed to queue work: %d", rc);
 		_csilk_ctx_async_ref_decr(c);

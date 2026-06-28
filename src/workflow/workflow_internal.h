@@ -14,6 +14,8 @@
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/sys_io.h"
+#include "csilk/core/sync.h"
 #include "csilk/app/workflow_wal.h"
 #include "csilk/core/workflow_internal.h"
 #include "cJSON.h"
@@ -57,7 +59,7 @@ struct csilk_wf_s {
 	csilk_wf_node_t** nodes;
 	size_t node_count;
 	size_t node_capacity;
-	uv_loop_t* loop;
+	csilk_io_loop_t* loop;
 	char* wal_dir;
 	csilk_wf_tool_entry_t* tools;
 	size_t tool_count;
@@ -67,14 +69,14 @@ struct csilk_wf_s {
 	csilk_ctx_t** monitors;
 	size_t monitor_count;
 	size_t monitor_capacity;
-	uv_mutex_t monitor_mutex;
+	csilk_mutex_t monitor_mutex;
 	int max_tokens;
 	int ttl_sec;
 	csilk_mq_t* mq;
 	csilk_wf_ctx_t** active_contexts;
 	size_t active_context_count;
 	size_t active_context_capacity;
-	uv_mutex_t ctx_mutex;
+	csilk_mutex_t ctx_mutex;
 };
 
 struct csilk_wf_ctx_s {
@@ -85,30 +87,30 @@ struct csilk_wf_ctx_s {
 	int* node_input_counts;
 	int total_executions;
 	int nodes_active;
-	uv_mutex_t mutex;
+	csilk_mutex_t mutex;
 	csilk_arena_t* arena;
-	uv_mutex_t arena_mutex;
+	csilk_mutex_t arena_mutex;
 	csilk_data_t** node_outputs;
 	char exec_id[CSILK_UUID_BUF_SIZE];
 	char* wal_path;
 	csilk_wf_trace_t* trace;
-	uv_mutex_t trace_mutex;
+	csilk_mutex_t trace_mutex;
 	int total_tokens;
 	int is_terminated;
 	int is_paused;
 	int* node_approved;
-	uv_timer_t ttl_timer;
+	csilk_io_timer_t ttl_timer;
 	int is_ttl_expired;
 };
 
 typedef struct node_work_s {
-	uv_work_t req;
+	csilk_io_work_t req;
 	csilk_wf_ctx_t* ctx;
 	csilk_wf_node_t* node;
 	csilk_data_t* input;
 	csilk_data_t* output;
 	csilk_ai_meta_t* ai_meta;
-	uv_timer_t node_timer;
+	csilk_io_timer_t node_timer;
 	int is_timed_out;
 	int retry_count;
 	int timer_closing;

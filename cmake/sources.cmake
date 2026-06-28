@@ -17,7 +17,6 @@ set(CSILK_CORE_SOURCES
     src/core/arena.c
     src/core/bounded_buf.c
     src/core/config.c
-    src/core/connection.c
     src/core/context.c
     src/core/ctx_defer.c
     src/core/ctx_json.c
@@ -27,7 +26,6 @@ set(CSILK_CORE_SOURCES
     src/core/recovery.c
     src/core/response.c
     src/core/router.c
-    src/core/server.c
     src/core/test_utils.c
     src/core/tls.c
     src/core/url.c
@@ -41,6 +39,19 @@ set(CSILK_CORE_SOURCES
     src/core/kv_store.c
     src/core/query.c
 )
+
+if(CSILK_USE_URING)
+    list(APPEND CSILK_CORE_SOURCES
+        src/core/uring/uring_server.c
+        src/core/uring/uring_connection.c
+        src/core/uring/uv_stubs.c
+    )
+else()
+    list(APPEND CSILK_CORE_SOURCES
+        src/core/server.c
+        src/core/connection.c
+    )
+endif()
 
 set(CSILK_DATA_SOURCES
     src/data/db.c

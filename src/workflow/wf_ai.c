@@ -7,6 +7,7 @@
 #include "workflow_internal.h"
 
 #include <ctype.h>
+#include "csilk/core/sync.h"
 
 /* --- Memory Helpers --- */
 
@@ -27,9 +28,9 @@ csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 	if (!ctx) {
 		return nullptr;
 	}
-	uv_mutex_lock(&ctx->arena_mutex);
+	csilk_mutex_lock(&ctx->arena_mutex);
 	void* ptr = csilk_arena_alloc(ctx->arena, size);
-	uv_mutex_unlock(&ctx->arena_mutex);
+	csilk_mutex_unlock(&ctx->arena_mutex);
 	return ptr;
 }
 
@@ -403,7 +404,7 @@ typedef struct {
 	csilk_wf_ctx_t* ctx;		   /**< Workflow context (for tool registry lookup). */
 	csilk_ai_tool_call_t* tc;	   /**< Tool call arguments from the AI response. */
 	char* result;			   /**< Tool output string (allocated by tool fn). */
-	uv_mutex_t* mutex;		   /**< Shared mutex for the pending counter. */
+	csilk_mutex_t* mutex;		   /**< Shared mutex for the pending counter. */
 	uv_cond_t* cond;		   /**< Shared condition variable for completion. */
 	int* pending;			   /**< Shared atomic-like pending count. */
 	csilk_wf_tool_entry_t* discovered; /**< Dynamically discovered tools. */
@@ -412,7 +413,7 @@ typedef struct {
 
 /** @brief libuv thread-pool work callback for tool execution. */
 static void
-sub_worker_cb(uv_work_t* req)
+sub_worker_cb(csilk_io_work_t* req)
 {
 	sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
 	sw->result = nullptr;
@@ -434,14 +435,14 @@ sub_worker_cb(uv_work_t* req)
 
 /** @brief libuv after-work callback for tool execution. */
 static void
-after_sub_worker_cb(uv_work_t* req, int status)
+after_sub_worker_cb(csilk_io_work_t* req, int status)
 {
 	(void)status;
 	sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
-	uv_mutex_lock(sw->mutex);
+	csilk_mutex_lock(sw->mutex);
 	(*sw->pending)--;
 	uv_cond_signal(sw->cond);
-	uv_mutex_unlock(sw->mutex);
+	csilk_mutex_unlock(sw->mutex);
 }
 
 typedef struct {
@@ -642,13 +643,14 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 			msg_count++;
 
 			// Parallel Execution of Tool Calls
-			uv_mutex_t m;
+			csilk_mutex_t m;
 			uv_cond_t c;
 			int pending = (int)res.tool_call_count;
-			uv_mutex_init(&m);
+			csilk_mutex_init(&m);
 			uv_cond_init(&c);
 			sub_tool_work_t* sws = calloc(res.tool_call_count, sizeof(sub_tool_work_t));
-			uv_work_t* reqs = calloc(res.tool_call_count, sizeof(uv_work_t));
+			csilk_io_work_t* reqs =
+			    calloc(res.tool_call_count, sizeof(csilk_io_work_t));
 
 			for (size_t i = 0; i < res.tool_call_count; i++) {
 				sws[i].ctx = ctx;
@@ -659,15 +661,15 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 				sws[i].discovered = discovered;
 				sws[i].discovered_count = discovered_count;
 				reqs[i].data = &sws[i];
-				uv_queue_work(
+				csilk_io_queue_work(
 				    ctx->wf->loop, &reqs[i], sub_worker_cb, after_sub_worker_cb);
 			}
 
-			uv_mutex_lock(&m);
+			csilk_mutex_lock(&m);
 			while (pending > 0) {
 				uv_cond_wait(&c, &m);
 			}
-			uv_mutex_unlock(&m);
+			csilk_mutex_unlock(&m);
 
 			for (size_t i = 0; i < res.tool_call_count; i++) {
 				msgs[msg_count].role = "tool";
@@ -678,7 +680,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
 			free(sws);
 			free(reqs);
-			uv_mutex_destroy(&m);
+			csilk_mutex_destroy(&m);
 			uv_cond_destroy(&c);
 			csilk_ai_chat_response_free(&res);
 			continue;
@@ -886,7 +888,7 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 	if (!wf || !name || !fn) {
 		return;
 	}
-	uv_mutex_lock(&wf->monitor_mutex);
+	csilk_mutex_lock(&wf->monitor_mutex);
 	if (wf->tool_count >= wf->tool_capacity) {
 		size_t new_cap = wf->tool_capacity == 0 ? 4 : wf->tool_capacity * 2;
 		csilk_wf_tool_entry_t* new_tools =
@@ -904,7 +906,7 @@ csilk_wf_register_tool(csilk_wf_t* wf,
 		entry->fn = fn;
 		entry->user_data = user_data;
 	}
-	uv_mutex_unlock(&wf->monitor_mutex);
+	csilk_mutex_unlock(&wf->monitor_mutex);
 }
 
 /**
@@ -923,8 +925,8 @@ csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery
 	if (!wf) {
 		return;
 	}
-	uv_mutex_lock(&wf->monitor_mutex);
+	csilk_mutex_lock(&wf->monitor_mutex);
 	wf->tool_discovery = discovery;
 	wf->tool_discovery_user_data = user_data;
-	uv_mutex_unlock(&wf->monitor_mutex);
+	csilk_mutex_unlock(&wf->monitor_mutex);
 }

@@ -17,6 +17,8 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
+#include "csilk/core/sync.h"
 
 /**
  * @brief Internal: A single message in the MQ linked-list queue.
@@ -49,7 +51,7 @@ typedef struct csilk_mq_topic_s {
  *
  * Manages the message queue, topic registry, global middleware, and optional
  * WAL persistence.  Publishes are thread-safe (guarded by queue_mutex) and
- * are delivered asynchronously on the main event loop via a uv_async_t handle.
+ * are delivered asynchronously on the main event loop via a csilk_io_async_t handle.
  *
  * ## Lifecycle
  *   1. Created by _csilk_mq_new(loop).
@@ -64,11 +66,12 @@ typedef struct csilk_mq_topic_s {
  * Not intended for direct manipulation by user code.
  */
 struct csilk_mq_s {
-	uv_async_t async_handle;    /**< libuv async handle for bridging worker-thread
+	csilk_io_loop_t* loop;	       /**< Event loop */
+	csilk_io_async_t async_handle; /**< libuv async handle for bridging worker-thread
                                  publishes into the main loop. */
-	uv_mutex_t queue_mutex;	    /**< Mutex guarding the message linked list. */
-	csilk_mq_msg_t* queue_head; /**< Head of the pending-message linked list. */
-	csilk_mq_msg_t* queue_tail; /**< Tail of the pending-message linked list. */
+	csilk_mutex_t queue_mutex;     /**< Mutex guarding the message linked list. */
+	csilk_mq_msg_t* queue_head;    /**< Head of the pending-message linked list. */
+	csilk_mq_msg_t* queue_tail;    /**< Tail of the pending-message linked list. */
 
 	csilk_mq_topic_t* topics; /**< Linked list of registered topics. */
 
@@ -79,11 +82,11 @@ struct csilk_mq_s {
 	size_t global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
 
 	/* Persistence (WAL) */
-	uv_file wal_fd;	      /**< File descriptor for the Write-Ahead Log, or -1 if
+	uv_file wal_fd;		 /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
-	char* wal_path;	      /**< Path to the WAL file (heap-allocated copy, nullptr if
+	char* wal_path;		 /**< Path to the WAL file (heap-allocated copy, nullptr if
                            disabled). */
-	uv_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
+	csilk_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
 
 	/* Monitoring */
 	uint64_t published_total; /**< Total messages published. */
@@ -91,10 +94,10 @@ struct csilk_mq_s {
 	uint64_t failed_total;	  /**< Total messages failed. */
 	uint32_t queue_depth;	  /**< Current messages in memory. */
 
-	csilk_ctx_t** monitors;	  /**< WebSocket monitor connections. */
-	size_t monitor_count;	  /**< Number of monitors. */
-	size_t monitor_capacity;  /**< Monitor array capacity. */
-	uv_mutex_t monitor_mutex; /**< Protects monitor array. */
+	csilk_ctx_t** monitors;	     /**< WebSocket monitor connections. */
+	size_t monitor_count;	     /**< Number of monitors. */
+	size_t monitor_capacity;     /**< Monitor array capacity. */
+	csilk_mutex_t monitor_mutex; /**< Protects monitor array. */
 };
 
 /**
@@ -120,7 +123,7 @@ struct csilk_mq_ctx_s {
  * message offloading.
  */
 typedef struct {
-	uv_work_t req;		   /**< libuv work request (must be first for casting). */
+	csilk_io_work_t req;	   /**< libuv work request (must be first for casting). */
 	csilk_mq_worker_t handler; /**< User-provided worker function. */
 	char* topic;		   /**< Topic string (heap-allocated copy). */
 	void* payload;		   /**< Payload data (heap-allocated copy). */
@@ -133,7 +136,7 @@ typedef struct {
  * @param loop  The libuv event loop.
  * @return A new MQ instance (heap-allocated), or nullptr on failure.
  */
-CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(uv_loop_t* loop);
+CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(csilk_io_loop_t* loop);
 
 /**
  * @brief Internal: Destroy an MQ instance and release all resources.
