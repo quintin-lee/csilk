@@ -24,6 +24,10 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows"
 ]
+dependencies = [
+    "fastapi>=0.103.2",
+    "httpx>=0.24.1",
+]
 
 [project.scripts]
 csilk = "csilk.cli:main"
