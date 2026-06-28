@@ -546,6 +546,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 			uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
 		}
 		atomic_fetch_add(&server->active_connections, 1);
+		client->protocol = CSILK_PROTO_HTTP1;
 		llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
 		client->parser.data = client;
 
