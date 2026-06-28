@@ -255,16 +255,20 @@ class Workflow:
         """Serve the workflow visualisation UI at *path* on the given app."""
         get_bindings().csilk_wf_serve_ui(app._app, path.encode('utf-8'))
 
-    def add(self, node_id, handler_fn):
+    def add(self, node_id, handler_fn=None):
         """Add a custom handler node to the workflow.
 
         Args:
             node_id: Unique node identifier.
-            handler_fn: Callback ``(ctx: WorkflowContext, data: WorkflowData) -> ctypes.c_void_p``.
+            handler_fn: Callback ``(ctx: WorkflowContext, data: WorkflowData) -> ctypes.c_void_p``. Optional for remote nodes.
 
         Returns:
             A ``WorkflowNode``, or ``None`` on failure.
         """
+        if handler_fn is None:
+            node_ptr = self._lib.csilk_wf_add(self._wf, node_id.encode('utf-8'), None, None)
+            return WorkflowNode(node_ptr) if node_ptr else None
+
         @CsilkWfHandler
         def wrapper(ctx_ptr, input_ptr, user_data):
             res_ptr = handler_fn(WorkflowContext(ctx_ptr), WorkflowData(input_ptr))
