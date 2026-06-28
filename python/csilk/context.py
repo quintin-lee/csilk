@@ -498,6 +498,7 @@ class Context:
         import traceback
 
         self.is_async = True
+        self._lib.csilk_ctx_set_async(self._ctx, 1)
 
         async def _runner():
             try:
