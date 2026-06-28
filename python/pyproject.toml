@@ -16,7 +16,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "fastapi>=0.124.4",
+    "httpx>=0.28.1",
+    "pytest-asyncio>=0.24.0",
+    "requests>=2.32.4",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
