@@ -64,7 +64,11 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
 	char* json = cJSON_PrintUnformatted(msg);
 	uv_mutex_lock(&wf->monitor_mutex);
 	for (size_t i = 0; i < wf->monitor_count; i++) {
-		csilk_ws_send(wf->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+		if (csilk_is_sse(wf->monitors[i])) {
+			csilk_sse_send(wf->monitors[i], event, json);
+		} else {
+			csilk_ws_send(wf->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+		}
 	}
 	uv_mutex_unlock(&wf->monitor_mutex);
 	free(json);
