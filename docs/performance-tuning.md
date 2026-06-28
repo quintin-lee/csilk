@@ -31,7 +31,7 @@
     'edgeLabelBackground': '#3B4252',
     'nodeTextColor': '#ECEFF4'
   },
-  'flowchart': {'htmlLabels': true, 'curveSTATS·'curve': 'basis'}
+  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
 }}%%
 flowchart LR
     subgraph compiler["fa:fa-code Compiler Optimizations"]
@@ -202,7 +202,15 @@ vm.dirty_ratio = 40          # 延迟 flush，提升 I/O 吞吐
 vm.dirty_background_ratio = 10
 ```
 
-### 2.3 应用 sysctl打嗝 | 说明 | | 乡下的 | | 乡下的乡下的 TCP 延迟 | `tcp_slow_start_after_idle = 0`** | 禁用慢启动重启，长连接维持高拥塞窗口 | | 连接队列溢出 | `tcp_max_syn_backlog = 65535`** | 增大半连接队列，防止突发请求被拒绝 | | `SO_REUSEPORT` 不均匀 | `SO_ATTACH_REUSEPORT_EBPF`** | Linux 5.4+ 可用 eBPF 调度连接分布 | | 内存回收延迟 | `vm.swappiness = 10`** | 降低 SWAP 频率，保持热数据在 RAM | | 文件打开数不足 | `ulimit -n 1048576`** | 单进程 100W+ 并发连接需要大 ulimit |
+### 2.3 应用 sysctl
+
+| 问题 | 建议配置 | 说明 |
+|:-----|:---------|:-----|
+| TCP 延迟 | `tcp_slow_start_after_idle = 0` | 禁用慢启动重启，长连接维持高拥塞窗口 |
+| 连接队列溢出 | `tcp_max_syn_backlog = 65535` | 增大半连接队列，防止突发请求被拒绝 |
+| `SO_REUSEPORT` 不均匀 | `SO_ATTACH_REUSEPORT_EBPF` | Linux 5.4+ 可用 eBPF 调度连接分布 |
+| 内存回收延迟 | `vm.swappiness = 10` | 降低 SWAP 频率，保持热数据在 RAM |
+| 文件打开数不足 | `ulimit -n 1048576` | 单进程 100W+ 并发连接需要大 ulimit |
 
 ---
 

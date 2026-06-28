@@ -7,6 +7,70 @@
 
 ## 1. 项目架构总览
 
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
+graph TB
+    subgraph public_api["fa:fa-book Public API Layer (include/)"]
+        MAIN["fa:fa-file-code csilk.h (umbrella)"]
+        CORE_API["fa:fa-file-code csilk/core/ (server, router, ctx)"]
+        APP_API["fa:fa-cube csilk/app/ (app, admin, workflow)"]
+        DRV_API["fa:fa-plug csilk/drivers/ (AI, cipher, DB, perm)"]
+        REFL_API["fa:fa-tag csilk/reflection/ (reflect.h)"]
+        TEST_API["fa:fa-check-square-o csilk/test/ (OOM test framework)"]
+    end
+
+    subgraph app_layer["fa:fa-cogs Application Layer (src/)"]
+        APP["fa:fa-cube app/ (csilk_app_t facade)"]
+        AI["fa:fa-robot ai/ (Unified AI engine)"]
+        DATA["fa:fa-database data/ (DB abstraction)"]
+        WORKFLOW["fa:fa-code-fork app/workflow (DAG scheduler)"]
+    end
+
+    subgraph core["fa:fa-gears Core Engine (src/core/)"]
+        SRV["fa:fa-server server (libuv event loop)"]
+        RTR["fa:fa-sitemap router (Radix Tree + SIMD)"]
+        CTX["fa:fa-exchange context (csilk_ctx_t)"]
+        ARENA["fa:fa-database arena (bump allocator)"]
+        CFG["fa:fa-cog config (YAML parser)"]
+    end
+
+    subgraph extension["fa:fa-puzzle-piece Extensions"]
+        MID["fa:fa-shield middleware/ (16 modules)"]
+        PROTO["fa:fa-plug protocols/ (WebSocket, Swagger)"]
+        MSG["fa:fa-envelope messaging/ (Event bus)"]
+        SEC["fa:fa-lock security/ (RBAC, JWT)"]
+        CRYPTO["fa:fa-key crypto/ (AES, RSA, SHA, HMAC)"]
+        REFL["fa:fa-tag reflection/ (struct ↔ JSON)"]
+        DRV["fa:fa-hdd drivers/ (OpenAI, SQLite, MySQL, ...)"]
+    end
+
+    subgraph testing["fa:fa-flask Testing"]
+        TESTS["fa:fa-check-circle tests/ (120+ tests)"]
+        EXMPL["fa:fa-code examples/"]
+    end
+
+    MAIN --> CORE_API
+    MAIN --> APP_API
+    MAIN --> DRV_API
+    MAIN --> REFL_API
+    MAIN --> TEST_API
+    APP_API --> APP
+    APP --> SRV
+    APP --> AI
+    APP --> DATA
+    APP --> WORKFLOW
+    SRV --> RTR
+    SRV --> CTX
+    CTX --> ARENA
+    SRV --> MID
+    SRV --> PROTO
+    SRV --> MSG
+    SRV --> SEC
+    SRV --> REFL
+    DRV_API --> DRV
+    DRV --> CRYPTO
+```
+
 ```
 include/                        # 公共 + 内部头文件（14 个文件）
 include/csilk.h                 # 主入口（包含 csilk/csilk.h）

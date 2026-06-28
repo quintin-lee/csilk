@@ -232,6 +232,30 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with three jobs:
 
 ## Pull Request Process
 
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
+graph LR
+    A["fa:fa-code-fork Create feature branch<br/>git checkout -b feat/xxx"] --> B["fa:fa-wrench Implement + test<br/>Add tests & verify locally"]
+    B --> C["fa:fa-check-circle Verify<br/>ctest --output-on-failure<br/>cmake --build . --target tidy<br/>cmake --build . --target format"]
+    C --> D["fa:fa-upload Push to fork<br/>git push origin feat/xxx"]
+    D --> E{"fa:fa-github Open PR<br/>against main branch"}
+    E --> F["fa:fa-robot CI Checks<br/>build + test + fuzz<br/>Mermaid validation<br/>clang-tidy"]
+    F --> G{"fa:fa-comments Code Review"}
+    G -- "Changes requested" --> B
+    G -- "Approved" --> H["fa:fa-check-square-o Merge<br/>Squash & merge"]
+    H --> I["fa:fa-trash Clean up<br/>Delete feature branch"]
+
+    style A fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style B fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style C fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style D fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style E fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style F fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style G fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+    style H fill:#3B4252,stroke:#A3BE8C,color:#ECEFF4
+    style I fill:#3B4252,stroke:#BF616A,color:#ECEFF4
+```
+
 1. **Create a new branch** for your work:
    ```bash
    git checkout -b feature/your-feature-name

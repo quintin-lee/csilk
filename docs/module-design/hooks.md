@@ -2,6 +2,26 @@
 
 csilk provides a flexible Hook system that allows developers to listen to server and request lifecycle events. Unlike middleware, Hooks do not intercept the request flow but allow for side-effects like metrics gathering, custom logging, or resource cleanup. Hooks **MUST** be registered before `csilk_server_run()` is called — runtime Hook registration **SHOULD** be limited to event notifications. Hook callbacks **MUST NOT** block — any I/O or heavy computation **MUST** be deferred to the libuv thread pool. Hook execution order **SHOULD** match registration order within the same priority level.
 
+## Lifecycle
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg':'#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
+graph TB
+    START["fa:fa-play CSILK_HOOK_SERVER_START<br/>Just before uv_run()"] --> CONN_OPEN["fa:fa-plug CSILK_HOOK_CONN_OPEN<br/>After TCP accept"]
+    CONN_OPEN --> REQ_BEGIN["fa:fa-arrow-right CSILK_HOOK_REQUEST_BEGIN<br/>Headers parsed"]
+    REQ_BEGIN --> MIDDLEWARE["fa:fa-shield Middleware chain<br/>csilk_next()"]
+    MIDDLEWARE --> REQ_END["fa:fa-check CSILK_HOOK_REQUEST_END<br/>Response sent"]
+    REQ_END --> CONN_CLOSE{"fa:fa-question Keep-alive?"}
+    CONN_CLOSE -- "yes" --> REQ_BEGIN
+    CONN_CLOSE -- "no" --> CLOSE["fa:fa-power-off CSILK_HOOK_CONN_CLOSE<br/>Connection fully closed"]
+    CLOSE --> STOP["fa:fa-stop CSILK_HOOK_SERVER_STOP<br/>On csilk_server_stop()"]
+
+    style START fill:#3B4252,stroke:#A3BE8C,color:#ECEFF4
+    style CLOSE fill:#3B4252,stroke:#BF616A,color:#ECEFF4
+    style STOP fill:#3B4252,stroke:#BF616A,color:#ECEFF4
+    style REQ_END fill:#3B4252,stroke:#81A1C1,color:#ECEFF4
+```
+
 ## Hook Types
 
 | Enum Value | Trigger Point | Callback Type |
