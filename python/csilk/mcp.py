@@ -163,6 +163,14 @@ class MCPStdioClient:
             except OSError:
                 pass
             await self.process.wait()
+            
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+
+    def shutdown(self):
+        """Thread-safe synchronous shutdown for background loop clients."""
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(self.close(), self._loop)
 
 def bind_mcp_to_workflow(wf, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
     """
@@ -179,28 +187,43 @@ def bind_mcp_to_workflow(wf, command: str, args: List[str], env: Optional[Dict[s
                 future = asyncio.run_coroutine_threadsafe(client.call_tool(tool_name, args_dict), client._loop)
                 return future.result()
             else:
-                return asyncio.run(client.call_tool(tool_name, args_dict))
+                raise RuntimeError("MCP client loop is not running. Call connect() first.")
         return mcp_tool_handler
 
-    async def init_client():
-        await client.connect()
-        tools = await client.list_tools()
-        for t in tools:
-            name = t["name"]
-            desc = t.get("description", "")
-            schema = t.get("inputSchema", {})
-            schema_json = json.dumps(schema)
-            
-            # Register to C engine
-            wf.register_tool(name, desc, schema_json, tool_fn=create_tool_handler(name))
-            
-        return client
-
-    # Synchronous or Asynchronous initialization depending on context
-    try:
-        loop = asyncio.get_running_loop()
-        asyncio.create_task(init_client())
-    except RuntimeError:
-        asyncio.run(init_client())
+    # Since bind_mcp_to_workflow doesn't know how to run the background loop seamlessly without blocking,
+    # it's best to require the user to start the client before binding, OR we spawn a thread.
+    # We will spawn a background thread with its own event loop to manage the MCP client lifecycle.
+    
+    import threading
+    
+    def run_mcp_loop():
+        loop = asyncio.new_event_loop()
+        client._loop = loop
+        asyncio.set_event_loop(loop)
+        
+        async def init():
+            await client.connect()
+            tools = await client.list_tools()
+            for t in tools:
+                name = t["name"]
+                desc = t.get("description", "")
+                schema = t.get("inputSchema", {})
+                schema_json = json.dumps(schema)
+                wf.register_tool(name, desc, schema_json, tool_fn=create_tool_handler(name))
+                
+        loop.run_until_complete(init())
+        loop.run_forever()
+        
+    t = threading.Thread(target=run_mcp_loop, daemon=True)
+    t.start()
+    
+    # Wait for the client to be initialized
+    import time
+    timeout = 10.0
+    start = time.time()
+    while not client._loop or not client._loop.is_running() or not client.process:
+        if time.time() - start > timeout:
+            raise RuntimeError("MCP Client failed to initialize within timeout.")
+        time.sleep(0.05)
 
     return client
