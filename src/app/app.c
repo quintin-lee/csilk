@@ -38,6 +38,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "core/srv_internal.h"
 
@@ -69,18 +70,18 @@ typedef struct {
 
 /** @brief Router reference for the built-in OpenAPI handler. */
 static csilk_router_t* s_openapi_router = nullptr;
-static uv_mutex_t s_app_mutex;
-static uv_once_t s_app_mutex_once = UV_ONCE_INIT;
+static csilk_mutex_t s_app_mutex;
+static csilk_once_t s_app_mutex_once = CSILK_ONCE_INIT;
 
 /** @brief Internal: initialize the application-level mutex (called once via
- * uv_once).
+ * csilk_once).
  *
  * Creates the mutex that protects the shared OpenAPI router reference and
  * the static file route table. */
 static void
 init_app_mutex(void)
 {
-	uv_mutex_init(&s_app_mutex);
+	csilk_mutex_init(&s_app_mutex);
 }
 
 /** @brief Internal: safely retrieve the current OpenAPI router under the app
@@ -92,9 +93,9 @@ init_app_mutex(void)
 static csilk_router_t*
 get_openapi_router(void)
 {
-	uv_mutex_lock(&s_app_mutex);
+	csilk_mutex_lock(&s_app_mutex);
 	csilk_router_t* r = s_openapi_router;
-	uv_mutex_unlock(&s_app_mutex);
+	csilk_mutex_unlock(&s_app_mutex);
 	return r;
 }
 
@@ -105,9 +106,9 @@ get_openapi_router(void)
 static void
 set_openapi_router(csilk_router_t* r)
 {
-	uv_mutex_lock(&s_app_mutex);
+	csilk_mutex_lock(&s_app_mutex);
 	s_openapi_router = r;
-	uv_mutex_unlock(&s_app_mutex);
+	csilk_mutex_unlock(&s_app_mutex);
 }
 
 /** @brief Built-in handler for the /openapi.json endpoint.
@@ -300,20 +301,20 @@ static_serve(csilk_ctx_t* c)
 		return;
 	}
 
-	uv_mutex_lock(&s_app_mutex);
+	csilk_mutex_lock(&s_app_mutex);
 	int n = g_static_n;
 	for (int i = 0; i < n; i++) {
 		size_t plen = strlen(g_static[i].url_prefix);
 		if (!strncmp(path, g_static[i].url_prefix, plen)) {
 			const char* prefix = g_static[i].url_prefix;
 			const char* root = g_static[i].root_dir;
-			uv_mutex_unlock(&s_app_mutex);
+			csilk_mutex_unlock(&s_app_mutex);
 			csilk_set(c, "static_prefix", (void*)prefix);
 			csilk_static(c, root);
 			return;
 		}
 	}
-	uv_mutex_unlock(&s_app_mutex);
+	csilk_mutex_unlock(&s_app_mutex);
 	csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 }
 
@@ -328,7 +329,7 @@ static_serve(csilk_ctx_t* c)
  *
  *   Phase 1 — Config & Logging
  *   1. Allocate app struct (calloc). Set up the process-level app mutex
- *      (uv_once, thread-safe for concurrent csilk_app_new calls).
+ *      (csilk_once, thread-safe for concurrent csilk_app_new calls).
  *   2. Load YAML config from config_path, or apply hard-coded defaults
  *      (port 8080, info-level logging, 5 s idle timeout, 30 s I/O timeouts,
  *       1 MB max body, 64 KB max header, 8 KB max URL, 100 headers, 128
@@ -362,7 +363,7 @@ csilk_app_new(const char* config_path)
 		return nullptr;
 	}
 
-	uv_once(&s_app_mutex_once, init_app_mutex);
+	csilk_once(&s_app_mutex_once, init_app_mutex);
 	memset(&app->config, 0, sizeof(app->config));
 
 	if (config_path && csilk_load_config(config_path, &app->config) == 0) {
@@ -823,10 +824,10 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 		return;
 	}
 
-	uv_once(&s_app_mutex_once, init_app_mutex);
-	uv_mutex_lock(&s_app_mutex);
+	csilk_once(&s_app_mutex_once, init_app_mutex);
+	csilk_mutex_lock(&s_app_mutex);
 	if (g_static_n >= CSILK_MAX_STATIC) {
-		uv_mutex_unlock(&s_app_mutex);
+		csilk_mutex_unlock(&s_app_mutex);
 		CSILK_LOG_E(
 		    "Static route limit (%d) reached. Route dropped: %s", CSILK_MAX_STATIC, prefix);
 		return;
@@ -835,7 +836,7 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 	int idx = g_static_n++;
 	snprintf(g_static[idx].url_prefix, sizeof(g_static[idx].url_prefix), "%s", prefix);
 	snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s", root_dir);
-	uv_mutex_unlock(&s_app_mutex);
+	csilk_mutex_unlock(&s_app_mutex);
 
 	char wild[] = "/*path";
 	char idxrt[] = "/";

@@ -20,6 +20,7 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 typedef struct {
 	char* room_name;
@@ -32,7 +33,7 @@ typedef struct {
 	ws_room_t** rooms;
 	int rooms_count;
 	int rooms_capacity;
-	uv_mutex_t mutex;
+	csilk_mutex_t mutex;
 } ws_room_manager_t;
 
 static ws_room_manager_t g_room_manager;
@@ -50,7 +51,7 @@ ws_room_manager_init()
 		return;
 	}
 	memset(&g_room_manager, 0, sizeof(ws_room_manager_t));
-	uv_mutex_init(&g_room_manager.mutex);
+	csilk_mutex_init(&g_room_manager.mutex);
 	g_room_manager_initialized = 1;
 }
 
@@ -94,7 +95,7 @@ on_room_message(csilk_mq_ctx_t* ctx)
 
 	const char* room_name = topic + 8;
 
-	uv_mutex_lock(&g_room_manager.mutex);
+	csilk_mutex_lock(&g_room_manager.mutex);
 	ws_room_t* room = find_room(room_name);
 	if (room) {
 		for (int i = 0; i < room->clients_count; i++) {
@@ -102,7 +103,7 @@ on_room_message(csilk_mq_ctx_t* ctx)
 			csilk_ws_send(room->clients[i], payload, payload_len, 1);
 		}
 	}
-	uv_mutex_unlock(&g_room_manager.mutex);
+	csilk_mutex_unlock(&g_room_manager.mutex);
 }
 
 /** @brief Add the current WebSocket client to a named room.
@@ -119,7 +120,7 @@ void
 csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 {
 	ws_room_manager_init();
-	uv_mutex_lock(&g_room_manager.mutex);
+	csilk_mutex_lock(&g_room_manager.mutex);
 
 	ws_room_t* room = find_room(room_name);
 	if (!room) {
@@ -148,7 +149,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 	// Add client to room
 	for (int i = 0; i < room->clients_count; i++) {
 		if (room->clients[i] == c) {
-			uv_mutex_unlock(&g_room_manager.mutex);
+			csilk_mutex_unlock(&g_room_manager.mutex);
 			return; // Already in room
 		}
 	}
@@ -160,7 +161,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 	}
 	room->clients[room->clients_count++] = c;
 
-	uv_mutex_unlock(&g_room_manager.mutex);
+	csilk_mutex_unlock(&g_room_manager.mutex);
 }
 
 /** @brief Remove the current WebSocket client from a named room.
@@ -175,7 +176,7 @@ void
 csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
 {
 	ws_room_manager_init();
-	uv_mutex_lock(&g_room_manager.mutex);
+	csilk_mutex_lock(&g_room_manager.mutex);
 
 	ws_room_t* room = find_room(room_name);
 	if (room) {
@@ -188,7 +189,7 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
 		}
 	}
 
-	uv_mutex_unlock(&g_room_manager.mutex);
+	csilk_mutex_unlock(&g_room_manager.mutex);
 }
 
 /** @brief Publish a message to all clients in a named room via MQ.

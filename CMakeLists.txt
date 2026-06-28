@@ -63,6 +63,8 @@ endif()
 
 enable_testing()
 
+option(CSILK_USE_URING "Use io_uring backend instead of libuv" OFF)
+
 option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
 if(USE_ASAN)
     message(STATUS "AddressSanitizer enabled")
@@ -147,13 +149,27 @@ endif()
 
 include(FetchContent)
 
-# Fetch libuv
-FetchContent_Declare(
-  libuv
-  GIT_REPOSITORY https://github.com/libuv/libuv.git
-  GIT_TAG        v1.48.0
-)
-FetchContent_MakeAvailable(libuv)
+if(CSILK_USE_URING)
+  message(STATUS "io_uring backend selected — fetching liburing")
+  add_definitions(-DCSILK_USE_URING)
+  FetchContent_Declare(
+    liburing
+    GIT_REPOSITORY https://github.com/axboe/liburing.git
+    GIT_TAG        liburing-2.5
+  )
+  FetchContent_MakeAvailable(liburing)
+  if(liburing_SOURCE_DIR)
+    include_directories(${liburing_SOURCE_DIR}/src/include)
+  endif()
+else()
+  # Fetch libuv
+  FetchContent_Declare(
+    libuv
+    GIT_REPOSITORY https://github.com/libuv/libuv.git
+    GIT_TAG        v1.48.0
+  )
+  FetchContent_MakeAvailable(libuv)
+endif()
 
 # Prefer system llhttp; fallback to FetchContent from source
 find_library(LLHTTP_LIB NAMES llhttp libllhttp)
@@ -331,7 +347,11 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
 set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+if(CSILK_USE_URING)
+  target_link_libraries(csilk PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+else()
+  target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+endif()
 if(MYSQL_LIB)
   target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
 endif()

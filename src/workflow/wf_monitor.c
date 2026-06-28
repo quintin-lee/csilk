@@ -22,7 +22,7 @@ csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
 	if (!wf || !c) {
 		return;
 	}
-	uv_mutex_lock(&wf->monitor_mutex);
+	csilk_mutex_lock(&wf->monitor_mutex);
 	if (wf->monitor_count >= wf->monitor_capacity) {
 		size_t new_cap = wf->monitor_capacity == 0 ? 4 : wf->monitor_capacity * 2;
 		csilk_ctx_t** new_monitors = realloc(wf->monitors, sizeof(csilk_ctx_t*) * new_cap);
@@ -34,7 +34,7 @@ csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
 	if (wf->monitor_count < wf->monitor_capacity) {
 		wf->monitors[wf->monitor_count++] = c;
 	}
-	uv_mutex_unlock(&wf->monitor_mutex);
+	csilk_mutex_unlock(&wf->monitor_mutex);
 }
 
 /** @brief Internal: broadcast a JSON event to all registered WebSocket monitors.
@@ -62,7 +62,7 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
 		cJSON_AddStringToObject(msg, "data", payload);
 	}
 	char* json = cJSON_PrintUnformatted(msg);
-	uv_mutex_lock(&wf->monitor_mutex);
+	csilk_mutex_lock(&wf->monitor_mutex);
 	for (size_t i = 0; i < wf->monitor_count; i++) {
 		if (csilk_is_sse(wf->monitors[i])) {
 			csilk_sse_send(wf->monitors[i], event, json);
@@ -70,7 +70,7 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
 			csilk_ws_send(wf->monitors[i], (uint8_t*)json, strlen(json), 0x1);
 		}
 	}
-	uv_mutex_unlock(&wf->monitor_mutex);
+	csilk_mutex_unlock(&wf->monitor_mutex);
 	free(json);
 	cJSON_Delete(msg);
 }

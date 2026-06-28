@@ -177,7 +177,7 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 	if (write_req) {
 		uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)(header_len + len));
 		write_req->data = frame;
-		// The first member of csilk_client_t is uv_tcp_t handle
+		// The first member of csilk_client_t is csilk_io_tcp_t handle
 		uv_stream_t* stream = (uv_stream_t*)internal_client;
 		uv_write(write_req, stream, &buf, 1, on_ws_write);
 	} else {

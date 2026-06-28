@@ -36,6 +36,7 @@
 #include "csilk/drivers/db.h"
 #include "db_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -186,12 +187,12 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
 		return nullptr;
 	}
 
-	uv_mutex_init(&pool->mutex);
+	csilk_mutex_init(&pool->mutex);
 	pool->driver = driver;
 	if (driver->connect(pool, dsn) != 0) {
 		CSILK_LOG_E(
 		    "Database connection failed for driver '%s' (DSN: '%s')", driver_name, dsn);
-		uv_mutex_destroy(&pool->mutex);
+		csilk_mutex_destroy(&pool->mutex);
 		free(pool);
 		return nullptr;
 	}
@@ -221,7 +222,7 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
 	if (pool->driver && pool->driver->disconnect) {
 		pool->driver->disconnect(pool);
 	}
-	uv_mutex_destroy(&pool->mutex);
+	csilk_mutex_destroy(&pool->mutex);
 	free(pool);
 }
 
@@ -237,9 +238,9 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 	uint64_t start = uv_hrtime();
 	CSILK_LOG_D("Database query initiated: %s", sql);
 
-	uv_mutex_lock(&pool->mutex);
+	csilk_mutex_lock(&pool->mutex);
 	cJSON* result = csilk_db_query_json_locked(pool, sql);
-	uv_mutex_unlock(&pool->mutex);
+	csilk_mutex_unlock(&pool->mutex);
 
 	uint64_t duration = (uv_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
@@ -271,9 +272,9 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 	uint64_t start = uv_hrtime();
 	CSILK_LOG_D("Database exec initiated: %s", sql);
 
-	uv_mutex_lock(&pool->mutex);
+	csilk_mutex_lock(&pool->mutex);
 	int rc = pool->driver->exec(pool, sql);
-	uv_mutex_unlock(&pool->mutex);
+	csilk_mutex_unlock(&pool->mutex);
 
 	uint64_t duration = (uv_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
@@ -361,9 +362,9 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 	}
 	*p = '\0';
 
-	uv_mutex_lock(&pool->mutex);
+	csilk_mutex_lock(&pool->mutex);
 	cJSON* result = csilk_db_query_json_locked(pool, full_sql);
-	uv_mutex_unlock(&pool->mutex);
+	csilk_mutex_unlock(&pool->mutex);
 
 	uint64_t duration = (uv_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
@@ -389,14 +390,14 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 /** @brief Statically-sized registry of registered database drivers (max 16). */
 static csilk_db_driver_t* drivers[16];
 static int driver_count = 0;
-static uv_mutex_t registry_mutex;
+static csilk_mutex_t registry_mutex;
 static int registry_initialized = 0;
 
 static void
 ensure_registry_init(void)
 {
 	if (!registry_initialized) {
-		uv_mutex_init(&registry_mutex);
+		csilk_mutex_init(&registry_mutex);
 		registry_initialized = 1;
 	}
 }
@@ -443,15 +444,15 @@ csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
 	}
 	ensure_registry_init();
 
-	uv_mutex_lock(&registry_mutex);
+	csilk_mutex_lock(&registry_mutex);
 	if (driver_count >= 16) {
 		CSILK_LOG_E("Failed to register database driver '%s': registry is full", name);
-		uv_mutex_unlock(&registry_mutex);
+		csilk_mutex_unlock(&registry_mutex);
 		return -1;
 	}
 	drivers[driver_count++] = driver;
 	CSILK_LOG_I("Registered database driver: '%s'", name);
-	uv_mutex_unlock(&registry_mutex);
+	csilk_mutex_unlock(&registry_mutex);
 	return 0;
 }
 
@@ -470,13 +471,13 @@ csilk_db_get_driver(const char* name)
 	}
 	ensure_registry_init();
 
-	uv_mutex_lock(&registry_mutex);
+	csilk_mutex_lock(&registry_mutex);
 	for (int i = 0; i < driver_count; i++) {
 		if (strcmp(drivers[i]->name, name) == 0) {
-			uv_mutex_unlock(&registry_mutex);
+			csilk_mutex_unlock(&registry_mutex);
 			return drivers[i];
 		}
 	}
-	uv_mutex_unlock(&registry_mutex);
+	csilk_mutex_unlock(&registry_mutex);
 	return nullptr;
 }

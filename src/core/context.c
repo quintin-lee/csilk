@@ -554,8 +554,8 @@ csilk_set_request_id(csilk_ctx_t* c, const char* id)
 /** @brief Get the internal libuv work request.
  *
  * @param c The request context.
- * @return Pointer to uv_work_t. */
-uv_work_t*
+ * @return Pointer to csilk_io_work_t. */
+csilk_io_work_t*
 csilk_get_work_req(csilk_ctx_t* c)
 {
 	return c ? &c->work_req : nullptr;

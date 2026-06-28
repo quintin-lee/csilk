@@ -57,3 +57,8 @@ python/csilk.egg-info/
 uv.lock
 .coverage
 python/csilk/csilk/
+
+# Virtual environment
+.venv/
+venv/
+env/

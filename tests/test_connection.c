@@ -11,6 +11,7 @@
 #include "core/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "core/srv_internal.h"
 #include "csilk/test/test.h"
 
@@ -30,7 +31,7 @@ static csilk_server_t*
 mock_server(void)
 {
 	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
-	uv_mutex_init(&s->clients_mutex);
+	csilk_mutex_init(&s->clients_mutex);
 	s->worker_pools = calloc(1, sizeof(worker_pool_t));
 	s->worker_pools[0].server = s;
 	s->worker_pool_count = 1;
@@ -41,7 +42,7 @@ static void
 free_mock_server(csilk_server_t* s)
 {
 	free(s->worker_pools);
-	uv_mutex_destroy(&s->clients_mutex);
+	csilk_mutex_destroy(&s->clients_mutex);
 	free(s);
 }
 
@@ -74,8 +75,8 @@ test_server_mutexes_init(void)
 {
 	csilk_server_t* s = mock_server();
 	int ok = 1;
-	uv_mutex_lock(&s->clients_mutex);
-	uv_mutex_unlock(&s->clients_mutex);
+	csilk_mutex_lock(&s->clients_mutex);
+	csilk_mutex_unlock(&s->clients_mutex);
 	if (ok) {
 		PASS();
 	} else {

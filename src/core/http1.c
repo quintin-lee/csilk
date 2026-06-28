@@ -75,13 +75,13 @@ on_sendfile_complete(uv_fs_t* req)
 	int keep_alive = llhttp_should_keep_alive(&client->parser);
 
 	if (client->server->config.write_timeout_ms > 0) {
-		uv_timer_stop(&client->write_timer);
+		csilk_io_timer_stop(&client->write_timer);
 	}
 
 	if (keep_alive) {
-		uv_timer_start(
+		csilk_io_timer_start(
 		    &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
-		uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+		csilk_client_read_start(client);
 	} else {
 		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
 			uv_close((uv_handle_t*)&client->handle, on_close);
@@ -126,7 +126,7 @@ on_write(uv_write_t* req, int status)
 	if (req->handle) {
 		client = (csilk_client_t*)req->handle->data;
 		if (client) {
-			uv_timer_stop(&client->write_timer);
+			csilk_io_timer_stop(&client->write_timer);
 		}
 	}
 
@@ -183,11 +183,11 @@ on_message_begin(llhttp_t* p)
 	client->header_count = 0;
 
 	if (client->server->config.request_timeout_ms > 0) {
-		uv_timer_stop(&client->request_timer);
-		uv_timer_start(&client->request_timer,
-			       on_read_timeout,
-			       client->server->config.request_timeout_ms,
-			       0);
+		csilk_io_timer_stop(&client->request_timer);
+		csilk_io_timer_start(&client->request_timer,
+				     on_read_timeout,
+				     client->server->config.request_timeout_ms,
+				     0);
 	}
 
 	csilk_log_set_request_id(nullptr);
@@ -475,6 +475,7 @@ get_status_text(int status)
  * @param client The client connection.
  * @param data   Data buffer to send.
  * @param len    Length of data in bytes. */
+#ifndef CSILK_USE_URING
 void
 csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 {
@@ -507,6 +508,7 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 	req->data = buf_copy;
 	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
 }
+#endif
 
 /* --- Send data --- */
 
@@ -635,7 +637,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 	if (c->is_async) {
 		csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 		if (client && client->protocol == CSILK_PROTO_HTTP1) {
-			uv_read_stop((uv_stream_t*)&client->handle);
+			csilk_client_read_stop(client);
 		}
 	}
 
@@ -775,13 +777,13 @@ append_custom_headers(csilk_header_map_t* headers, char* buf, size_t pos)
 CSILK_INTERNAL void
 _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 {
-	uv_timer_stop(&client->read_timer);
+	csilk_io_timer_stop(&client->read_timer);
 
 	if (client->server->config.write_timeout_ms > 0) {
-		uv_timer_start(&client->write_timer,
-			       on_write_timeout,
-			       client->server->config.write_timeout_ms,
-			       0);
+		csilk_io_timer_start(&client->write_timer,
+				     on_write_timeout,
+				     client->server->config.write_timeout_ms,
+				     0);
 	}
 
 	int is_ws = client->ctx.is_websocket;
@@ -805,10 +807,10 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 	CSILK_LOG_I("_csilk_handle_post_response called, keep_alive=%d", keep_alive);
 	if (keep_alive) {
 		CSILK_LOG_I("_csilk_handle_post_response: restarting read");
-		uv_timer_start(
+		csilk_io_timer_start(
 		    &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
 		llhttp_resume(&client->parser);
-		uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+		csilk_client_read_start(client);
 	} else {
 		CSILK_LOG_I("_csilk_handle_post_response: closing handle");
 		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -830,7 +832,7 @@ _csilk_send_response(csilk_ctx_t* c)
 		return;
 	}
 
-	uv_timer_stop(&client->request_timer);
+	csilk_io_timer_stop(&client->request_timer);
 
 	int status = client->ctx.response.status ? client->ctx.response.status : 200;
 	const char* status_text = get_status_text(status);

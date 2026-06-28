@@ -24,6 +24,8 @@ typedef struct bio_st BIO;
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
+#include "lfqueue.h"
 #include "core/ctx_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
@@ -68,9 +70,9 @@ typedef struct csilk_client_s csilk_client_t;
 
 /** @brief Task node for cross-thread dispatching. */
 typedef struct csilk_dispatch_task_s {
+	csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
 	void (*cb)(void* arg);
 	void* arg;
-	struct csilk_dispatch_task_s* next;
 } csilk_dispatch_task_t;
 
 /**
@@ -86,18 +88,16 @@ typedef struct csilk_dispatch_task_s {
  */
 typedef struct {
 	csilk_server_t* server;				     /**< Owning server instance. */
-	uv_loop_t loop;					     /**< This worker's libuv event loop. */
-	uv_tcp_t server_handle;				     /**< Worker-local listen handle. */
+	csilk_io_loop_t loop;				     /**< This worker's libuv event loop. */
+	csilk_io_tcp_t server_handle;			     /**< Worker-local listen handle. */
 	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
 	int client_pool_count;				     /**< Items in local free list. */
-	uv_async_t stop_async;				     /**< Async for graceful worker stop. */
+	csilk_io_async_t stop_async;			     /**< Async for graceful worker stop. */
 	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
 	csilk_arena_t* arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
 	int arena_pool_count;				   /**< Items in arena pool. */
-	uv_async_t dispatch_async;	      /**< Cross-thread task dispatch async handle. */
-	uv_mutex_t dispatch_mutex;	      /**< Mutex for dispatch queue. */
-	csilk_dispatch_task_t* dispatch_head; /**< Head of dispatch queue. */
-	csilk_dispatch_task_t* dispatch_tail; /**< Tail of dispatch queue. */
+	csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
+	csilk_lfqueue_t dispatch_queue;	 /**< Lock-free MPSC dispatch queue. */
 } worker_pool_t;
 
 /**
@@ -108,18 +108,18 @@ typedef struct {
  * Thread-safe for multi-threaded operation via atomic counters and mutexes.
  */
 struct csilk_server_s {
-	uv_loop_t* loop;		 /**< libuv event loop. */
+	csilk_io_loop_t* loop;		 /**< libuv event loop. */
 	csilk_router_t* router;		 /**< Associated router instance. */
-	uv_tcp_t server_handle;		 /**< TCP server handle. */
-	uv_signal_t sig_handle;		 /**< SIGINT signal handler. */
-	uv_async_t async_handle;	 /**< Async handle for cross-thread wakeup. */
+	csilk_io_tcp_t server_handle;	 /**< TCP server handle. */
+	csilk_io_signal_t sig_handle;	 /**< SIGINT signal handler. */
+	csilk_io_async_t async_handle;	 /**< Async handle for cross-thread wakeup. */
 	llhttp_settings_t settings;	 /**< HTTP parser callback settings. */
 	csilk_server_config_t config;	 /**< Server configuration. */
 	csilk_handler_t middlewares[32]; /**< Global middlewares. */
 	int middleware_count;		 /**< Number of global middlewares. */
 	int max_connections;		 /**< Max concurrent connections (0=unlimited). */
 	atomic_int active_connections;	 /**< Current connection count (atomic). */
-	uv_thread_t* worker_tids;	 /**< Worker thread IDs (nullptr if single-thread). */
+	csilk_thread_t* worker_tids;	 /**< Worker thread IDs (nullptr if single-thread). */
 	int worker_count;		 /**< Number of worker threads created. */
 	worker_pool_t*
 	    worker_pools; /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
@@ -133,7 +133,7 @@ struct csilk_server_s {
 	csilk_mq_t* mq;				/**< Message Queue instance. */
 	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
 	csilk_client_t* active_clients;		    /**< Head of active connections list. */
-	uv_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
+	csilk_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.
@@ -143,13 +143,14 @@ struct csilk_server_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-	uv_tcp_t handle;	  /**< libuv TCP stream handle. */
-	uv_timer_t timer;	  /**< Connection idle (keep-alive) timer. */
-	uv_timer_t read_timer;	  /**< Read timeout timer. */
-	uv_timer_t write_timer;	  /**< Write timeout timer. */
-	uv_timer_t request_timer; /**< Request timeout timer. */
-	int close_pending;	  /**< Pending close refs before freeing client. */
-	int async_ref;		  /**< Active asynchronous tasks reference counter. */
+	csilk_io_tcp_t handle;		/**< libuv TCP stream handle. */
+	csilk_io_timer_t timer;		/**< Connection idle (keep-alive) timer. */
+	csilk_io_timer_t read_timer;	/**< Read timeout timer. */
+	csilk_io_timer_t write_timer;	/**< Write timeout timer. */
+	csilk_io_timer_t request_timer; /**< Request timeout timer. */
+	int close_pending;		/**< Pending close refs before freeing client. */
+	int async_ref;			/**< Active asynchronous tasks reference counter. */
+	int read_paused;
 
 	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */

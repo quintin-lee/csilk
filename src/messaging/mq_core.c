@@ -7,10 +7,11 @@
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/mq.h"
 #include "mq_internal.h"
 
-extern void on_mq_async(uv_async_t* handle);
+extern void on_mq_async(csilk_io_async_t* handle);
 
 void
 csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
@@ -18,7 +19,7 @@ csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
 	if (!mq || !stats) {
 		return;
 	}
-	uv_mutex_lock(&mq->queue_mutex);
+	csilk_mutex_lock(&mq->queue_mutex);
 	stats->published_total = mq->published_total;
 	stats->delivered_total = mq->delivered_total;
 	stats->failed_total = mq->failed_total;
@@ -29,7 +30,7 @@ csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
 		topics++;
 	}
 	stats->topic_count = topics;
-	uv_mutex_unlock(&mq->queue_mutex);
+	csilk_mutex_unlock(&mq->queue_mutex);
 }
 
 char*
@@ -56,26 +57,26 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 		CSILK_LOG_E("MQ: Failed to register monitor: invalid arguments");
 		return;
 	}
-	uv_mutex_lock(&mq->monitor_mutex);
+	csilk_mutex_lock(&mq->monitor_mutex);
 	if (mq->monitor_count >= mq->monitor_capacity) {
 		size_t new_cap;
 		if (mq->monitor_capacity == 0) {
 			new_cap = 4;
 		} else {
 			if (mq->monitor_capacity > SIZE_MAX / 2) {
-				uv_mutex_unlock(&mq->monitor_mutex);
+				csilk_mutex_unlock(&mq->monitor_mutex);
 				return;
 			}
 			new_cap = mq->monitor_capacity * 2;
 		}
 		if (new_cap > SIZE_MAX / sizeof(csilk_ctx_t*)) {
-			uv_mutex_unlock(&mq->monitor_mutex);
+			csilk_mutex_unlock(&mq->monitor_mutex);
 			return;
 		}
 		csilk_ctx_t** new_monitors = realloc(mq->monitors, new_cap * sizeof(csilk_ctx_t*));
 		if (!new_monitors) {
 			CSILK_LOG_E("MQ: Failed to allocate memory for monitor registration");
-			uv_mutex_unlock(&mq->monitor_mutex);
+			csilk_mutex_unlock(&mq->monitor_mutex);
 			return;
 		}
 		mq->monitors = new_monitors;
@@ -83,11 +84,11 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 	}
 	mq->monitors[mq->monitor_count++] = c;
 	CSILK_LOG_I("MQ: Monitor %p registered. Total monitors: %zu", (void*)c, mq->monitor_count);
-	uv_mutex_unlock(&mq->monitor_mutex);
+	csilk_mutex_unlock(&mq->monitor_mutex);
 }
 
 CSILK_INTERNAL csilk_mq_t*
-_csilk_mq_new(uv_loop_t* loop)
+_csilk_mq_new(csilk_io_loop_t* loop)
 {
 	csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
 	if (!mq) {
@@ -95,15 +96,16 @@ _csilk_mq_new(uv_loop_t* loop)
 		return nullptr;
 	}
 
-	uv_mutex_init(&mq->queue_mutex);
-	uv_mutex_init(&mq->monitor_mutex);
+	csilk_mutex_init(&mq->queue_mutex);
+	csilk_mutex_init(&mq->monitor_mutex);
+	mq->loop = loop;
 
-	uv_async_init(loop, &mq->async_handle, on_mq_async);
+	csilk_io_async_init(loop, &mq->async_handle, on_mq_async);
 	mq->async_handle.data = mq;
 
 	mq->wal_fd = -1;
 	mq->wal_path = nullptr;
-	uv_mutex_init(&mq->wal_mutex);
+	csilk_mutex_init(&mq->wal_mutex);
 
 	CSILK_LOG_I("MQ: Message queue initialized successfully");
 	return mq;
@@ -117,8 +119,8 @@ on_mq_close(uv_handle_t* handle)
 		return;
 	}
 
-	uv_mutex_destroy(&mq->queue_mutex);
-	uv_mutex_destroy(&mq->wal_mutex);
+	csilk_mutex_destroy(&mq->queue_mutex);
+	csilk_mutex_destroy(&mq->wal_mutex);
 
 	if (mq->wal_fd >= 0) {
 		uv_fs_t close_req;

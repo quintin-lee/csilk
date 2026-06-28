@@ -6,6 +6,7 @@
 
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 /* --- Active Context Management --- */
 
@@ -20,7 +21,7 @@
 static void
 register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 {
-	uv_mutex_lock(&wf->ctx_mutex);
+	csilk_mutex_lock(&wf->ctx_mutex);
 	if (wf->active_context_count >= wf->active_context_capacity) {
 		size_t new_cap =
 		    wf->active_context_capacity == 0 ? 8 : wf->active_context_capacity * 2;
@@ -34,7 +35,7 @@ register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 	if (wf->active_context_count < wf->active_context_capacity) {
 		wf->active_contexts[wf->active_context_count++] = ctx;
 	}
-	uv_mutex_unlock(&wf->ctx_mutex);
+	csilk_mutex_unlock(&wf->ctx_mutex);
 }
 
 /**
@@ -48,14 +49,14 @@ register_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 static void
 unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
 {
-	uv_mutex_lock(&wf->ctx_mutex);
+	csilk_mutex_lock(&wf->ctx_mutex);
 	for (size_t i = 0; i < wf->active_context_count; i++) {
 		if (wf->active_contexts[i] == ctx) {
 			wf->active_contexts[i] = wf->active_contexts[--wf->active_context_count];
 			break;
 		}
 	}
-	uv_mutex_unlock(&wf->ctx_mutex);
+	csilk_mutex_unlock(&wf->ctx_mutex);
 }
 
 /**
@@ -71,14 +72,14 @@ static csilk_wf_ctx_t*
 find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 {
 	csilk_wf_ctx_t* found = nullptr;
-	uv_mutex_lock(&wf->ctx_mutex);
+	csilk_mutex_lock(&wf->ctx_mutex);
 	for (size_t i = 0; i < wf->active_context_count; i++) {
 		if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
 			found = wf->active_contexts[i];
 			break;
 		}
 	}
-	uv_mutex_unlock(&wf->ctx_mutex);
+	csilk_mutex_unlock(&wf->ctx_mutex);
 	return found;
 }
 
@@ -87,10 +88,10 @@ cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
 {
 	csilk_wf_ctx_t* stale = find_active_ctx(wf, exec_id);
 	if (stale) {
-		uv_mutex_lock(&stale->mutex);
+		csilk_mutex_lock(&stale->mutex);
 		stale->is_terminated = 1;
 		int active = stale->nodes_active;
-		uv_mutex_unlock(&stale->mutex);
+		csilk_mutex_unlock(&stale->mutex);
 		if (active == 0) {
 			_wf_cleanup_ctx(stale);
 		} else {
@@ -124,9 +125,9 @@ _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 static void
 cleanup_ctx_now(csilk_wf_ctx_t* ctx)
 {
-	uv_mutex_destroy(&ctx->mutex);
-	uv_mutex_destroy(&ctx->arena_mutex);
-	uv_mutex_destroy(&ctx->trace_mutex);
+	csilk_mutex_destroy(&ctx->mutex);
+	csilk_mutex_destroy(&ctx->arena_mutex);
+	csilk_mutex_destroy(&ctx->trace_mutex);
 	csilk_arena_free(ctx->arena);
 	free(ctx->node_input_counts);
 	free(ctx->node_approved);
@@ -164,7 +165,7 @@ _wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
 	}
 	unregister_active_ctx(ctx->wf, ctx);
 	if (ctx->wf->ttl_sec > 0) {
-		uv_timer_stop(&ctx->ttl_timer);
+		csilk_io_timer_stop(&ctx->ttl_timer);
 		if (!uv_is_closing((uv_handle_t*)&ctx->ttl_timer)) {
 			ctx->ttl_timer.data = ctx;
 			uv_close((uv_handle_t*)&ctx->ttl_timer, on_ttl_timer_close);
@@ -229,7 +230,7 @@ wal_log_event(csilk_wf_ctx_t* ctx,
 /* --- Node Execution --- */
 
 static void execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input);
-static void after_worker_cb(uv_work_t* req, int status);
+static void after_worker_cb(csilk_io_work_t* req, int status);
 
 /** @brief libuv thread-pool work callback — executes a workflow node's
  *  handler on a background thread.
@@ -238,7 +239,7 @@ static void after_worker_cb(uv_work_t* req, int status);
  * handler function. The output is stored in the work request struct
  * for retrieval by after_worker_cb on the main loop thread. */
 static void
-worker_cb(uv_work_t* req)
+worker_cb(csilk_io_work_t* req)
 {
 	node_work_t* work = (node_work_t*)req->data;
 	_wf_broadcast(work->ctx->wf, "node_start", work->node->id, nullptr);
@@ -253,14 +254,14 @@ worker_cb(uv_work_t* req)
  * @param handle The libuv timer handle.
  */
 static void
-on_retry_timer(uv_timer_t* handle)
+on_retry_timer(csilk_io_timer_t* handle)
 {
 	node_work_t* work = (node_work_t*)handle->data;
 	CSILK_LOG_I("[Workflow] Retrying node '%s' (attempt %d/%d)...",
 		    work->node->id,
 		    work->retry_count,
 		    work->node->max_retries);
-	uv_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+	csilk_io_queue_work(work->ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
 /**
@@ -290,7 +291,7 @@ free_work(node_work_t* work)
 {
 	if (work->node->timeout_ms > 0 && !work->timer_closing) {
 		work->timer_closing = 1;
-		uv_timer_stop(&work->node_timer);
+		csilk_io_timer_stop(&work->node_timer);
 		work->node_timer.data = work;
 		uv_close((uv_handle_t*)&work->node_timer, on_work_timer_close);
 		return;
@@ -321,7 +322,7 @@ free_work(node_work_t* work)
  *    is complete: log WF_EV_END, deliver the final output via callback,
  *    and clean up the context. */
 static void
-after_worker_cb(uv_work_t* req, int status)
+after_worker_cb(csilk_io_work_t* req, int status)
 {
 	(void)status;
 	node_work_t* work = (node_work_t*)req->data;
@@ -341,12 +342,13 @@ after_worker_cb(uv_work_t* req, int status)
 			    node->retry_delay_ms);
 
 		if (node->retry_delay_ms > 0) {
-			uv_timer_init(ctx->wf->loop, &work->node_timer);
+			csilk_io_timer_init(ctx->wf->loop, &work->node_timer);
 			work->node_timer.data = work;
-			uv_timer_start(&work->node_timer, on_retry_timer, node->retry_delay_ms, 0);
+			csilk_io_timer_start(
+			    &work->node_timer, on_retry_timer, node->retry_delay_ms, 0);
 			return; // Wait for timer
 		} else {
-			uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+			csilk_io_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 			return;
 		}
 	}
@@ -379,14 +381,14 @@ after_worker_cb(uv_work_t* req, int status)
 		cJSON_Delete(data);
 	}
 
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 
 	ctx->node_outputs[node->index] = output;
 	if (output && output->meta) {
 		csilk_ai_meta_t* am = (csilk_ai_meta_t*)output->meta;
 		ctx->total_tokens += am->prompt_tokens + am->completion_tokens;
 	}
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 
 	wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
 	_wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : nullptr);
@@ -403,15 +405,15 @@ after_worker_cb(uv_work_t* req, int status)
 				work->trace_node->completion_tokens = am->completion_tokens;
 			}
 		}
-		uv_mutex_lock(&ctx->trace_mutex);
+		csilk_mutex_lock(&ctx->trace_mutex);
 		ctx->trace->nodes =
 		    realloc(ctx->trace->nodes,
 			    sizeof(csilk_wf_trace_node_t*) * (ctx->trace->node_count + 1));
 		ctx->trace->nodes[ctx->trace->node_count++] = work->trace_node;
-		uv_mutex_unlock(&ctx->trace_mutex);
+		csilk_mutex_unlock(&ctx->trace_mutex);
 	}
 
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 	if (ctx->wf->max_tokens > 0 && ctx->total_tokens > ctx->wf->max_tokens) {
 		ctx->is_terminated = 1;
 		CSILK_LOG_E("[Workflow] Budget exceeded: %d > %d. Terminating.",
@@ -419,13 +421,13 @@ after_worker_cb(uv_work_t* req, int status)
 			    ctx->wf->max_tokens);
 	}
 	int terminated = ctx->is_terminated;
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 
 	if (terminated) {
-		uv_mutex_lock(&ctx->mutex);
+		csilk_mutex_lock(&ctx->mutex);
 		ctx->nodes_active--;
 		int current_active = ctx->nodes_active;
-		uv_mutex_unlock(&ctx->mutex);
+		csilk_mutex_unlock(&ctx->mutex);
 		if (current_active == 0) {
 			if (ctx->trace_callback) {
 				ctx->trace_callback(nullptr, ctx->trace);
@@ -443,9 +445,9 @@ after_worker_cb(uv_work_t* req, int status)
 
 	if (output == nullptr && node->error_target) {
 		execute_node(ctx, node->error_target, nullptr);
-		uv_mutex_lock(&ctx->mutex);
+		csilk_mutex_lock(&ctx->mutex);
 		ctx->nodes_active--;
-		uv_mutex_unlock(&ctx->mutex);
+		csilk_mutex_unlock(&ctx->mutex);
 		free_work(work);
 		return;
 	}
@@ -481,7 +483,7 @@ after_worker_cb(uv_work_t* req, int status)
 			if (match) {
 				csilk_wf_node_t* target = edge->target;
 				int ready = 0;
-				uv_mutex_lock(&ctx->mutex);
+				csilk_mutex_lock(&ctx->mutex);
 				if (ctx->total_executions < MAX_WORKFLOW_STEPS) {
 					ctx->node_input_counts[target->index]++;
 					int threshold = target->incoming_count == 0
@@ -498,7 +500,7 @@ after_worker_cb(uv_work_t* req, int status)
 						ctx->node_input_counts[target->index] = 0;
 					}
 				}
-				uv_mutex_unlock(&ctx->mutex);
+				csilk_mutex_unlock(&ctx->mutex);
 				if (ready) {
 					CSILK_LOG_D("[Workflow] Triggering node '%s'", target->id);
 					execute_node(ctx, target, output);
@@ -508,10 +510,10 @@ after_worker_cb(uv_work_t* req, int status)
 		}
 	}
 
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 	ctx->nodes_active--;
 	int current_active = ctx->nodes_active;
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 	if (triggered_count == 0 && current_active == 0) {
 		wal_log_event(ctx, WF_EV_END, nullptr, nullptr);
 		_wf_broadcast(
@@ -540,7 +542,7 @@ after_worker_cb(uv_work_t* req, int status)
  *  after_worker_cb to treat the output as nullptr even if the handler
  *  eventually completes. */
 static void
-on_node_timeout(uv_timer_t* handle)
+on_node_timeout(csilk_io_timer_t* handle)
 {
 	node_work_t* work = (node_work_t*)handle->data;
 	work->is_timed_out = 1;
@@ -562,7 +564,7 @@ on_node_timeout(uv_timer_t* handle)
  *    trace node with start time and input dump.
  * 5. Increment total_executions and nodes_active counters.
  * 6. If the node has a per-node timeout, initialize and arm a uv_timer.
- * 7. Queue the work via uv_queue_work(). The node handler runs on a
+ * 7. Queue the work via csilk_io_queue_work(). The node handler runs on a
  *    background thread; after_worker_cb processes the result.
  *
  * @param ctx   Workflow execution context.
@@ -571,16 +573,16 @@ on_node_timeout(uv_timer_t* handle)
 static void
 execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 {
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 	if (ctx->is_terminated) {
-		uv_mutex_unlock(&ctx->mutex);
+		csilk_mutex_unlock(&ctx->mutex);
 		return;
 	}
 
 	// 1. Handle Interactive Nodes (Pause)
 	if (node->is_interactive && !ctx->node_approved[node->index]) {
 		ctx->is_paused = 1;
-		uv_mutex_unlock(&ctx->mutex);
+		csilk_mutex_unlock(&ctx->mutex);
 
 		wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
 		_wf_broadcast(
@@ -595,7 +597,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 		// We increment nodes_active even for remote tasks so the workflow doesn't
 		// finish while waiting for MQ. It acts as an "outstanding" task.
 		ctx->nodes_active++;
-		uv_mutex_unlock(&ctx->mutex);
+		csilk_mutex_unlock(&ctx->mutex);
 
 		cJSON* task = cJSON_CreateObject();
 		cJSON_AddStringToObject(task, "exec_id", ctx->exec_id);
@@ -616,7 +618,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 		cJSON_Delete(task);
 		return;
 	}
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 
 	wal_log_event(ctx, WF_EV_NODE_START, node->id, nullptr);
 	_wf_broadcast(ctx->wf, "node_queued", node->id, nullptr);
@@ -630,10 +632,10 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 		work->trace_node = tn;
 	}
 
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 	ctx->total_executions++;
 	ctx->nodes_active++;
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 
 	work->req.data = work;
 	work->ctx = ctx;
@@ -641,12 +643,12 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 	work->input = input;
 
 	if (node->timeout_ms > 0) {
-		uv_timer_init(ctx->wf->loop, &work->node_timer);
+		csilk_io_timer_init(ctx->wf->loop, &work->node_timer);
 		work->node_timer.data = work;
-		uv_timer_start(&work->node_timer, on_node_timeout, node->timeout_ms, 0);
+		csilk_io_timer_start(&work->node_timer, on_node_timeout, node->timeout_ms, 0);
 	}
 
-	uv_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
+	csilk_io_queue_work(ctx->wf->loop, &work->req, worker_cb, after_worker_cb);
 }
 
 /**
@@ -709,13 +711,13 @@ csilk_wf_run_traced(csilk_wf_t* wf,
  * @param handle The global TTL timer handle.
  */
 static void
-on_workflow_ttl(uv_timer_t* handle)
+on_workflow_ttl(csilk_io_timer_t* handle)
 {
 	csilk_wf_ctx_t* ctx = (csilk_wf_ctx_t*)handle->data;
-	uv_mutex_lock(&ctx->mutex);
+	csilk_mutex_lock(&ctx->mutex);
 	ctx->is_terminated = 1;
 	ctx->is_ttl_expired = 1;
-	uv_mutex_unlock(&ctx->mutex);
+	csilk_mutex_unlock(&ctx->mutex);
 	CSILK_LOG_W("[Workflow] TTL Expired for execution %s", ctx->exec_id);
 }
 
@@ -755,17 +757,17 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 	ctx->node_approved = calloc(wf->node_count, sizeof(int));
 	ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
 	ctx->arena = csilk_arena_new(0);
-	uv_mutex_init(&ctx->mutex);
-	uv_mutex_init(&ctx->arena_mutex);
-	uv_mutex_init(&ctx->trace_mutex);
+	csilk_mutex_init(&ctx->mutex);
+	csilk_mutex_init(&ctx->arena_mutex);
+	csilk_mutex_init(&ctx->trace_mutex);
 	csilk_generate_uuid(ctx->exec_id);
 
 	register_active_ctx(wf, ctx);
 
 	if (wf->ttl_sec > 0) {
-		uv_timer_init(wf->loop, &ctx->ttl_timer);
+		csilk_io_timer_init(wf->loop, &ctx->ttl_timer);
 		ctx->ttl_timer.data = ctx;
-		uv_timer_start(&ctx->ttl_timer, on_workflow_ttl, wf->ttl_sec * 1000, 0);
+		csilk_io_timer_start(&ctx->ttl_timer, on_workflow_ttl, wf->ttl_sec * 1000, 0);
 	}
 
 	_wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : nullptr);
@@ -847,9 +849,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
 	ctx->node_approved = calloc(wf->node_count, sizeof(int));
 	ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
 	ctx->arena = csilk_arena_new(0);
-	uv_mutex_init(&ctx->mutex);
-	uv_mutex_init(&ctx->arena_mutex);
-	uv_mutex_init(&ctx->trace_mutex);
+	csilk_mutex_init(&ctx->mutex);
+	csilk_mutex_init(&ctx->arena_mutex);
+	csilk_mutex_init(&ctx->trace_mutex);
 	snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
 	ctx->wal_path = strdup(wal_path);
 	int *node_started = calloc(wf->node_count, sizeof(int)),
@@ -992,9 +994,9 @@ csilk_wf_signal_continue(csilk_wf_t* wf,
 	ctx->node_approved = calloc(wf->node_count, sizeof(int));
 	ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
 	ctx->arena = csilk_arena_new(0);
-	uv_mutex_init(&ctx->mutex);
-	uv_mutex_init(&ctx->arena_mutex);
-	uv_mutex_init(&ctx->trace_mutex);
+	csilk_mutex_init(&ctx->mutex);
+	csilk_mutex_init(&ctx->arena_mutex);
+	csilk_mutex_init(&ctx->trace_mutex);
 	snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
 	ctx->wal_path = strdup(wal_path);
 

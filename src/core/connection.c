@@ -19,6 +19,7 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "core/srv_internal.h"
 #include "core/ctx_internal.h"
 #include "h2.h"
@@ -183,14 +184,14 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
-	uv_mutex_lock(&server->clients_mutex);
+	csilk_mutex_lock(&server->clients_mutex);
 	client->next = server->active_clients;
 	client->prev = nullptr;
 	if (server->active_clients) {
 		server->active_clients->prev = client;
 	}
 	server->active_clients = client;
-	uv_mutex_unlock(&server->clients_mutex);
+	csilk_mutex_unlock(&server->clients_mutex);
 }
 
 /** @brief Remove a client from the active list (no locking).
@@ -223,9 +224,9 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 static void
 client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
-	uv_mutex_lock(&server->clients_mutex);
+	csilk_mutex_lock(&server->clients_mutex);
 	client_list_remove_internal(server, client);
-	uv_mutex_unlock(&server->clients_mutex);
+	csilk_mutex_unlock(&server->clients_mutex);
 }
 
 /* --- Timer close --- */
@@ -353,10 +354,10 @@ on_close(uv_handle_t* handle)
 		_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
 		client_list_remove(client->server, client);
 		client->ctx.conn_closed = 1;
-		uv_timer_stop(&client->timer);
-		uv_timer_stop(&client->read_timer);
-		uv_timer_stop(&client->write_timer);
-		uv_timer_stop(&client->request_timer);
+		csilk_io_timer_stop(&client->timer);
+		csilk_io_timer_stop(&client->read_timer);
+		csilk_io_timer_stop(&client->write_timer);
+		csilk_io_timer_stop(&client->request_timer);
 
 		client->close_pending = 4;
 		uv_handle_t* timers[] = {(uv_handle_t*)&client->timer,
@@ -571,19 +572,19 @@ on_new_connection(uv_stream_t* server_stream, int status)
 
 		CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
 		if (server->config.read_timeout_ms > 0) {
-			uv_timer_start(&client->read_timer,
-				       on_read_timeout,
-				       server->config.read_timeout_ms,
-				       0);
+			csilk_io_timer_start(&client->read_timer,
+					     on_read_timeout,
+					     server->config.read_timeout_ms,
+					     0);
 		}
 		if (server->config.request_timeout_ms > 0) {
-			uv_timer_start(&client->request_timer,
-				       on_read_timeout,
-				       server->config.request_timeout_ms,
-				       0);
+			csilk_io_timer_start(&client->request_timer,
+					     on_read_timeout,
+					     server->config.request_timeout_ms,
+					     0);
 		}
 
-		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+		r = csilk_client_read_start(client);
 		if (r < 0) {
 			CSILK_LOG_E("Connection: uv_read_start error: %s", uv_strerror(r));
 			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
@@ -637,12 +638,12 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	csilk_client_t* client = (csilk_client_t*)stream->data;
 	char* base = buf->base;
 	int is_registered = 0;
-	uv_timer_stop(&client->timer);
+	csilk_io_timer_stop(&client->timer);
 	if (client->server->config.read_timeout_ms > 0) {
-		uv_timer_start(&client->read_timer,
-			       on_read_timeout,
-			       client->server->config.read_timeout_ms,
-			       0);
+		csilk_io_timer_start(&client->read_timer,
+				     on_read_timeout,
+				     client->server->config.read_timeout_ms,
+				     0);
 	}
 	if (nread > 0) {
 		if (client->ssl) {
@@ -726,4 +727,16 @@ csilk_get_client_ip(csilk_ctx_t* c)
 		return csilk_arena_strdup(c->arena, ip);
 	}
 	return nullptr;
+}
+
+void
+csilk_client_read_start(csilk_client_t* client)
+{
+	csilk_client_read_start(client);
+}
+
+void
+csilk_client_read_stop(csilk_client_t* client)
+{
+	csilk_client_read_stop(client);
 }

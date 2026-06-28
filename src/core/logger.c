@@ -54,6 +54,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 
 /* ---- internal logger state ---- */
@@ -64,7 +65,7 @@ typedef struct {
 	csilk_log_config_t config; /**< Logger configuration. */
 	FILE* fp;		   /**< Output file pointer. */
 	size_t current_size;	   /**< Current log file size. */
-	uv_mutex_t mutex;	   /**< Mutex for thread-safe logging. */
+	csilk_mutex_t mutex;	   /**< Mutex for thread-safe logging. */
 	int initialized;	   /**< Whether logger is initialized. */
 } csilk_logger_t;
 
@@ -345,7 +346,7 @@ csilk_log_init(csilk_log_config_t config)
 	if (g_logger.config.use_colors == -1) {
 		g_logger.config.use_colors = isatty(fileno(g_logger.fp));
 	}
-	if (uv_mutex_init(&g_logger.mutex) != 0) {
+	if (csilk_mutex_init(&g_logger.mutex) != 0) {
 		if (config.file_path) {
 			fclose(g_logger.fp);
 		}
@@ -390,7 +391,7 @@ _csilk_log_internal(
 		len = (int)sizeof(buf) - 1;
 	}
 
-	uv_mutex_lock(&g_logger.mutex);
+	csilk_mutex_lock(&g_logger.mutex);
 	if (g_logger.config.max_file_size > 0 &&
 	    g_logger.current_size >= g_logger.config.max_file_size) {
 		rotate_log_files();
@@ -402,7 +403,7 @@ _csilk_log_internal(
 	if (g_logger.config.file_path) {
 		g_logger.current_size += (size_t)n;
 	}
-	uv_mutex_unlock(&g_logger.mutex);
+	csilk_mutex_unlock(&g_logger.mutex);
 }
 
 /** @brief Internal: emit a structured JSON log entry with extra key-value
@@ -445,7 +446,7 @@ _csilk_log_structured(csilk_log_level_t lv,
 		len = (int)sizeof(buf) - 1;
 	}
 
-	uv_mutex_lock(&g_logger.mutex);
+	csilk_mutex_lock(&g_logger.mutex);
 	if (g_logger.config.max_file_size > 0 &&
 	    g_logger.current_size >= g_logger.config.max_file_size) {
 		rotate_log_files();
@@ -464,7 +465,7 @@ _csilk_log_structured(csilk_log_level_t lv,
 	if (g_logger.config.file_path) {
 		g_logger.current_size += (size_t)n;
 	}
-	uv_mutex_unlock(&g_logger.mutex);
+	csilk_mutex_unlock(&g_logger.mutex);
 }
 
 /** @brief Check whether the global logger is configured for structured JSON
@@ -530,11 +531,11 @@ csilk_log_close(void)
 	if (!g_logger.initialized) {
 		return;
 	}
-	uv_mutex_lock(&g_logger.mutex);
+	csilk_mutex_lock(&g_logger.mutex);
 	if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {
 		fclose(g_logger.fp);
 	}
 	g_logger.initialized = 0;
-	uv_mutex_unlock(&g_logger.mutex);
-	uv_mutex_destroy(&g_logger.mutex);
+	csilk_mutex_unlock(&g_logger.mutex);
+	csilk_mutex_destroy(&g_logger.mutex);
 }

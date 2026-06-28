@@ -11,6 +11,7 @@
 #include <uv.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "../core/ctx_internal.h"
 
@@ -32,14 +33,14 @@ typedef struct {
 static ip_entry_t ip_table[MAX_IP_ENTRIES];
 static int ip_count = 0;
 static time_t last_evict = 0;
-static uv_mutex_t ratelimit_mutex;
-static uv_once_t ratelimit_once = UV_ONCE_INIT;
+static csilk_mutex_t ratelimit_mutex;
+static csilk_once_t ratelimit_once = CSILK_ONCE_INIT;
 
 /* Forward declaration for metrics counter — used in the rate-limit middleware */
 extern void _csilk_metrics_inc_rate_limit_blocks(void);
 
 /**
- * @brief Initialize the rate-limiting mutex (called once via uv_once).
+ * @brief Initialize the rate-limiting mutex (called once via csilk_once).
  *
  * Creates the libuv mutex that protects the shared ip_table and ip_count
  * from concurrent access across worker threads.
@@ -47,7 +48,7 @@ extern void _csilk_metrics_inc_rate_limit_blocks(void);
 static void
 init_ratelimit_mutex()
 {
-	uv_mutex_init(&ratelimit_mutex);
+	csilk_mutex_init(&ratelimit_mutex);
 }
 
 /**
@@ -121,7 +122,7 @@ evict_oldest_entry(void)
  * @param limit Maximum number of requests allowed per IP within the
  *              WINDOW_SIZE (60-second) sliding window.
  *
- * @note The mutex is initialized once via uv_once on the first call.
+ * @note The mutex is initialized once via csilk_once on the first call.
  * @warning Rate limiting is per-worker-process. In multi-process
  *          deployments, each process maintains its own independent table
  *          unless an external store (Redis, etc.) is used instead.
@@ -169,11 +170,11 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	}
 
 	/* Local in-memory rate limiting fallback */
-	uv_once(&ratelimit_once, init_ratelimit_mutex);
+	csilk_once(&ratelimit_once, init_ratelimit_mutex);
 	time_t now = time(nullptr);
 	ip_entry_t* entry = nullptr;
 
-	uv_mutex_lock(&ratelimit_mutex);
+	csilk_mutex_lock(&ratelimit_mutex);
 
 	/* Periodic eviction of stale entries prevents the table from filling
      with one-shot visitors. EVICT_INTERVAL (300 s) is intentionally
@@ -223,7 +224,7 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 	entry->last_seen = now;
 
 	int local_count = entry->count;
-	uv_mutex_unlock(&ratelimit_mutex);
+	csilk_mutex_unlock(&ratelimit_mutex);
 
 	if (local_count > limit) {
 		CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %d "
