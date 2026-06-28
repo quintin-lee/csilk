@@ -97,7 +97,8 @@ class TestWorkflow(unittest.TestCase):
         # Dynamic router
         def my_router(inp: WorkflowData):
             val = inp.value
-            if val == "go_left":
+            print(f"ROUTER CALLED WITH: {repr(val)}")
+            if val == "go_left" or (isinstance(val, str) and "go_left" in val):
                 return "left_node"
             return "right_node"
 
