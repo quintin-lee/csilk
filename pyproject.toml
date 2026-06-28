@@ -27,3 +27,9 @@ classifiers = [
 
 [project.scripts]
 csilk = "csilk.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.4",
+    "pytest-cov>=4.1.0",
+]

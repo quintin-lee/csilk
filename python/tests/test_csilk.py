@@ -1158,4 +1158,6 @@ def test_asyncio_support():
     assert response.status_code == 200
     assert response.json()["async"] == "success"
     
+    app.stop()
+    t.join(timeout=2.0)
     app.free()

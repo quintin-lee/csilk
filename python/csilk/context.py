@@ -505,9 +505,13 @@ class Context:
 
                 def _send():
                     if isinstance(response_data, dict):
-                        self.json(200, response_data)
+                        import json
+                        self.set_header("Content-Type", "application/json")
+                        self.status_code = 200
+                        self.response_write(json.dumps(response_data))
                     elif response_data is not None:
-                        self.string(200, str(response_data))
+                        self.status_code = 200
+                        self.response_write(str(response_data))
                     self.response_end()
 
                 self.dispatch(_send)
