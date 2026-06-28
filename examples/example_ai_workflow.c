@@ -135,7 +135,7 @@ main()
 	csilk_data_t in = {"text", "Csilk Framework Overview", nullptr};
 	csilk_wf_run(wf, &in, on_workflow_done);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	csilk_wf_free(wf);
 	return 0;

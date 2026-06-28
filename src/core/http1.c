@@ -145,7 +145,7 @@ on_write(uv_write_t* req, int status)
 				size_t size = client->ctx.file_size;
 				client->ctx.file_fd = -1;
 
-				int r = uv_fs_sendfile(uv_default_loop(),
+				int r = uv_fs_sendfile(csilk_io_default_loop(),
 						       fs_req,
 						       sock_fd,
 						       fd,

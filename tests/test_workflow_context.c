@@ -93,7 +93,7 @@ test_workflow_context_truncation()
 
 	csilk_wf_run(wf, nullptr, on_context_done);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_done == 1);
 	// The message count should never have exceeded 4

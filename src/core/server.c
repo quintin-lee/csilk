@@ -629,13 +629,13 @@ on_worker_stop_async(uv_async_t* handle)
 	}
 
 	/* Drain pending close callbacks (including nested ones from e.g. client
-	 * timers), then stop the loop.  The UV_RUN_NOWAIT loop ensures all close
+	 * timers), then stop the loop.  The CSILK_IO_RUN_NOWAIT loop ensures all close
 	 * callbacks fire before uv_stop so the loop exits cleanly even under
 	 * slow conditions (e.g. GCC coverage builds).  The uv_stop fallback is
-	 * needed for io_uring compatibility where uv_run may not exit when all
+	 * needed for io_uring compatibility where csilk_io_run may not exit when all
 	 * user handles are closed. */
 	for (int i = 0; i < 8; i++) {
-		uv_run(loop, UV_RUN_NOWAIT);
+		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 	}
 	uv_stop(loop);
 }
@@ -698,7 +698,7 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
  *
  * The worker registers a per-worker uv_async_t in
  * server->worker_stop_async[idx] so the main thread can signal it to stop
- * gracefully.  After uv_run returns, the async handle and the server_handle
+ * gracefully.  After csilk_io_run returns, the async handle and the server_handle
  * are closed synchronously, then the loop is closed.
  *
  * @param arg Pointer to worker_data_t (freed when the function exits). */
@@ -743,7 +743,7 @@ worker_thread(void* arg)
 		uv_barrier_wait(barrier);
 	}
 
-	uv_run(loop_ptr, UV_RUN_DEFAULT);
+	csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
 	uv_loop_close(loop_ptr);
 }
 
@@ -847,11 +847,11 @@ bind_and_listen(uv_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bo
  *      each running their own libuv loop + accept loop (SO_REUSEPORT).
  *   6. SIGINT handler: register a libuv signal watcher.
  *   7. Fire CSILK_HOOK_SERVER_START.
- *   8. uv_run(): enter the event loop.
+ *   8. csilk_io_run(): enter the event loop.
  *
  * @param server The server instance.
  * @param port   TCP port to bind to.
- * @return The uv_run() return value on exit, or -1 on initialization failure.
+ * @return The csilk_io_run() return value on exit, or -1 on initialization failure.
  * @note When worker_threads > 1, the main thread runs the event loop and
  *       additional worker threads each run their own independent loop. */
 static void
@@ -991,7 +991,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
 	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
 
-	return uv_run(server->loop, UV_RUN_DEFAULT);
+	return csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
 }
 
 /* --- Accessors --- */

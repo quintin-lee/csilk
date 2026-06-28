@@ -255,7 +255,7 @@ generate_http_traffic(uv_timer_t* h)
 	batch->urls[4] = "http://localhost:8080/pub";
 	batch->count = 5;
 	work->data = batch;
-	uv_queue_work(uv_default_loop(), work, http_work_cb, http_after_cb);
+	uv_queue_work(csilk_io_default_loop(), work, http_work_cb, http_after_cb);
 }
 
 static void
@@ -323,28 +323,28 @@ main()
 
 	/* Background MQ Timer */
 	uv_timer_t mq_timer;
-	uv_timer_init(uv_default_loop(), &mq_timer);
+	uv_timer_init(csilk_io_default_loop(), &mq_timer);
 	mq_timer.data = csilk_server_get_mq(csilk_app_server(app));
 	uv_timer_start(&mq_timer, generate_bg_traffic, 1000, 5000);
 
 	/* Background DB Timer */
 	uv_timer_t db_timer;
-	uv_timer_init(uv_default_loop(), &db_timer);
+	uv_timer_init(csilk_io_default_loop(), &db_timer);
 	uv_timer_start(&db_timer, generate_db_traffic, 2000, 3000);
 
 	/* Background AI Timer */
 	uv_timer_t ai_timer;
-	uv_timer_init(uv_default_loop(), &ai_timer);
+	uv_timer_init(csilk_io_default_loop(), &ai_timer);
 	uv_timer_start(&ai_timer, generate_ai_traffic, 3000, 4000);
 
 	/* Background Security Timer */
 	uv_timer_t sec_timer;
-	uv_timer_init(uv_default_loop(), &sec_timer);
+	uv_timer_init(csilk_io_default_loop(), &sec_timer);
 	uv_timer_start(&sec_timer, generate_security_traffic, 1500, 6000);
 
 	/* Background HTTP Traffic Timer */
 	uv_timer_t http_timer;
-	uv_timer_init(uv_default_loop(), &http_timer);
+	uv_timer_init(csilk_io_default_loop(), &http_timer);
 	uv_timer_start(&http_timer, generate_http_traffic, 500, 2000);
 
 	/* Multi-Core Configuration */

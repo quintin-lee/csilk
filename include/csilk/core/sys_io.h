@@ -46,6 +46,10 @@ typedef void (*csilk_io_fs_event_cb)(csilk_io_fs_event_t* handle,
 				     int events,
 				     int status);
 
+typedef enum { CSILK_IO_RUN_DEFAULT = 0, CSILK_IO_RUN_ONCE, CSILK_IO_RUN_NOWAIT } csilk_io_run_mode;
+
+int csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode);
+
 int csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle);
 int csilk_io_timer_start(csilk_io_timer_t* handle,
 			 csilk_io_timer_cb cb,
@@ -73,6 +77,17 @@ typedef uv_work_t csilk_io_work_t;
 typedef uv_fs_event_t csilk_io_fs_event_t;
 typedef uv_timer_cb csilk_io_timer_cb;
 typedef uv_fs_event_cb csilk_io_fs_event_cb;
+
+typedef uv_run_mode csilk_io_run_mode;
+#define CSILK_IO_RUN_DEFAULT UV_RUN_DEFAULT
+#define CSILK_IO_RUN_ONCE UV_RUN_ONCE
+#define CSILK_IO_RUN_NOWAIT UV_RUN_NOWAIT
+
+static inline int
+csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
+{
+	return uv_run(loop, mode);
+}
 
 static inline int
 csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)

@@ -65,7 +65,7 @@ test_workflow_human_in_the_loop()
 	const char* id = csilk_wf_run(wf, nullptr, on_interactive_done);
 	strcpy(g_exec_id, id);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Should have ran node1, but paused at node2
 	assert(g_node1_ran == 1);
@@ -78,7 +78,7 @@ test_workflow_human_in_the_loop()
 	csilk_data_t human_input = {"text", "human_approved_data", nullptr, nullptr};
 	csilk_wf_signal_continue(wf, g_exec_id, &human_input, on_interactive_done);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_node2_ran == 1);
 	assert(g_done == 1);

@@ -52,7 +52,7 @@ test_ws_room_broadcast()
 
 	// 4. Run loop to process MQ
 	for (int i = 0; i < 100 && messages_received < 2; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	}
 
 	assert(messages_received == 2);
@@ -64,7 +64,7 @@ test_ws_room_broadcast()
 	csilk_ws_broadcast_room(c2, "lobby", "only c2");
 
 	for (int i = 0; i < 100 && messages_received < 1; i++) {
-		uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	}
 
 	assert(messages_received == 1);

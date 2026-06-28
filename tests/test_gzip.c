@@ -49,7 +49,7 @@ main()
 	assert(csilk_is_async(c) == 1);
 
 	printf("Waiting for async gzip to complete...\n");
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(response_sent == 1);
 

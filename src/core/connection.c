@@ -255,7 +255,7 @@ client_destroy(csilk_client_t* client)
 /** @brief Get the libuv event loop associated with the request context.
  *
  *  Extracts the loop from the internal client's TCP handle.  Falls back to
- *  uv_default_loop() if the context chain is incomplete (e.g. during early
+ *  csilk_io_default_loop() if the context chain is incomplete (e.g. during early
  *  initialization or in unit tests).
  *
  *  @param c The request context.
@@ -264,7 +264,7 @@ CSILK_INTERNAL uv_loop_t*
 _csilk_ctx_loop(csilk_ctx_t* c)
 {
 	if (!c || !c->server || !c->_internal_client) {
-		return uv_default_loop();
+		return csilk_io_default_loop();
 	}
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 	return client->handle.loop;
@@ -499,6 +499,10 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		max_conn = server->max_connections;
 	}
 	if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
+		printf("REJECTING CONNECTION max=%d active=%d\n",
+		       max_conn,
+		       atomic_load(&server->active_connections));
+		fflush(stdout);
 		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
 		if (tmp) {
 			uv_tcp_init(server_stream->loop, tmp);

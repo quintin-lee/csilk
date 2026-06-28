@@ -57,12 +57,12 @@ test_workflow_persistence()
 	// Then it queues Node B, which logs START.
 	// We want to stop BEFORE Node B runs its handler.
 	while (g_step_a_ran < 1) {
-		uv_run(uv_default_loop(), UV_RUN_ONCE);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_ONCE);
 	}
 
 	// Give it a bit more time to ensure after_worker_cb (which logs FINISH)
 	// has a chance to run on the main loop.
-	uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
 	usleep(50000);
 
 	printf("[Test] Interrupted. A_ran=%d, B_ran=%d\n", g_step_a_ran, g_step_b_ran);
@@ -74,7 +74,7 @@ test_workflow_persistence()
 	printf("[Test] Resuming execution %s...\n", g_exec_id);
 	csilk_wf_resume(wf, g_exec_id, nullptr);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	printf("[Test] Final counts: A_ran=%d, B_ran=%d\n", g_step_a_ran, g_step_b_ran);
 

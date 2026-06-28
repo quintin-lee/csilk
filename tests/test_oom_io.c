@@ -72,14 +72,14 @@ test_oom_http_parser()
 	 *
 	 * WARNING: Because client lives on the stack we MUST close the
 	 * timer handles before returning (see end of function), otherwise
-	 * the default loop still references them and a later uv_run()
+	 * the default loop still references them and a later csilk_io_run()
 	 * in another test will hit use-after-return.
 	 */
 	csilk_client_t client;
 	memset(&client, 0, sizeof(csilk_client_t));
 	client.server = s;
 
-	uv_loop_t* loop = uv_default_loop();
+	uv_loop_t* loop = csilk_io_default_loop();
 	uv_timer_init(loop, &client.request_timer);
 	uv_timer_init(loop, &client.timer);
 
@@ -200,7 +200,7 @@ test_oom_http_parser()
 	 */
 	uv_close((uv_handle_t*)&client.request_timer, nullptr);
 	uv_close((uv_handle_t*)&client.timer, nullptr);
-	uv_run(loop, UV_RUN_NOWAIT);
+	csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 
 	csilk_server_free(s);
 }
@@ -251,11 +251,11 @@ test_oom_static_file()
 		 * the file-read callback may fire later, accessing the
 		 * context after it has been freed — another UAF bug.
 		 *
-		 * UV_RUN_DEFAULT blocks until all active handles complete.
+		 * CSILK_IO_RUN_DEFAULT blocks until all active handles complete.
 		 * Because uv_queue_work was the only active request, the
 		 * loop returns promptly after the callback runs.
 		 */
-		uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 		g_oom_fail_after = -1;
 		csilk_test_ctx_free(c);

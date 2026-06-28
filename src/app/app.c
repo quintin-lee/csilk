@@ -899,12 +899,12 @@ csilk_app_config(csilk_app_t* app)
  * to csilk_server_run() which:
  *   1. Creates a TCP listener on the given port.
  *   2. Spawns worker threads (if thread pool is configured).
- *   3. Calls uv_run(UV_RUN_DEFAULT) — blocks until the loop stops.
+ *   3. Calls csilk_io_run(CSILK_IO_RUN_DEFAULT) — blocks until the loop stops.
  *
  * @param app  Application instance.
  * @param port TCP port to listen on. Pass 0 or negative to use the port
  *             from the application config (default 8080).
- * @return The uv_run() return value on exit, or -1 on error. */
+ * @return The csilk_io_run() return value on exit, or -1 on error. */
 int
 csilk_app_run(csilk_app_t* app, int port)
 {

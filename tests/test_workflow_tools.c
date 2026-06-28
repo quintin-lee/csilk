@@ -94,7 +94,7 @@ test_workflow_autonomous_tools()
 	// 3. Run
 	csilk_wf_run(wf, nullptr, nullptr);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Verify results
 	assert(g_tool_called == 1);

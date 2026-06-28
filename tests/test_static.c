@@ -37,7 +37,7 @@ test_static_serves_file()
 	csilk_static(ctx, "./test_public");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
 	assert(csilk_get_file_fd(ctx) != -1);
@@ -58,7 +58,7 @@ test_static_traversal_blocked()
 	csilk_static(ctx, "./test_public");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	// Should be blocked with 403 Forbidden (path traversal detected)
 	assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN);
@@ -80,7 +80,7 @@ test_static_range_first_5()
 	csilk_static(ctx, "./test_public");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
 	const char* cr = csilk_get_response_header(ctx, "Content-Range");
@@ -103,7 +103,7 @@ test_static_range_middle()
 	csilk_static(ctx, "./test_public");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
 	const char* cr = csilk_get_response_header(ctx, "Content-Range");
@@ -126,7 +126,7 @@ test_static_range_invalid()
 	csilk_static(ctx, "./test_public");
 
 	assert(csilk_is_async(ctx) == 1);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(csilk_get_status(ctx) == CSILK_STATUS_RANGE_NOT_SATISFIABLE);
 

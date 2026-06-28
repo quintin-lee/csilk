@@ -85,7 +85,7 @@ test_workflow_parallel_tools()
 
 	g_start_time = uv_hrtime();
 	csilk_wf_run(wf, nullptr, nullptr);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 	g_end_time = uv_hrtime();
 
 	double duration_ms = (double)(g_end_time - g_start_time) / 1000000.0;

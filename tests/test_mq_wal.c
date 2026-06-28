@@ -57,7 +57,7 @@ test_mq_wal_persistence_recovery()
 		csilk_router_free(router);
 
 		/* Ensure all libuv handles are closed and loop finishes */
-		uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 	}
 
 	/* Phase 2: Re-init and verify recovery */
@@ -76,7 +76,7 @@ test_mq_wal_persistence_recovery()
 		assert(rc == 0);
 
 		/* Run loop to process recovered messages */
-		uv_loop_t* loop = uv_default_loop();
+		uv_loop_t* loop = csilk_io_default_loop();
 
 		/* We expect 3 messages. Recovery usually queues them via uv_async or
      * similar. */
@@ -84,7 +84,7 @@ test_mq_wal_persistence_recovery()
      */
 		int retries = 0;
 		while (received_count < 3 && retries < 100) {
-			uv_run(loop, UV_RUN_NOWAIT);
+			csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 			usleep(10000);
 			retries++;
 		}
@@ -111,7 +111,7 @@ test_mq_wal_persistence_recovery()
 
 		csilk_server_free(server);
 		csilk_router_free(router);
-		uv_run(loop, UV_RUN_DEFAULT);
+		csilk_io_run(loop, CSILK_IO_RUN_DEFAULT);
 	}
 
 	unlink(wal_path);

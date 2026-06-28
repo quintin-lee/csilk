@@ -74,7 +74,7 @@ test_workflow_agentic()
 
 	csilk_wf_run(wf, nullptr, on_agent_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_n1_count == 3);
 	assert(g_done == 1);

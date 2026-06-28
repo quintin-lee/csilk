@@ -92,7 +92,7 @@ test_workflow_jsonpath_injection()
 
 	csilk_wf_run(wf, nullptr, on_jsonpath_complete);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
 	assert(g_done == 1);
 	assert(g_final_output != nullptr);
