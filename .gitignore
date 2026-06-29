@@ -48,6 +48,7 @@ GEMINI.md
 test_interactive_wals/
 openspec/
 build_new/
+.deepseek/
 
 # Swagger UI dist — downloaded at build time, not tracked
 share/swagger-ui/swagger-ui.css
