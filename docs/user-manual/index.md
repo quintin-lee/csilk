@@ -29,6 +29,8 @@ This manual provides detailed guides on configuring, extending, and using advanc
 - [Reflection](reflection.md): Compile-time struct introspection and automatic JSON serialization/deserialization.
 - [Admin Dashboard](admin.md): Web-based monitoring for HTTP, AI, MQ, and database metrics.
 - [Hooks](hooks.md): Lifecycle hook system — server start/stop, connection open/close, request begin/end.
+- [Arena](arena.md): Bump allocator — zero-fragmentation request-scoped memory management.
+- [Hot Reload](hot-reload.md): Live router swapping without restarting the server.
 
 ### Python
 - [Python Bindings](python.md): Installation and API reference for the Python bindings.
