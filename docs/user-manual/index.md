@@ -14,6 +14,7 @@ This manual provides detailed guides on configuring, extending, and using advanc
 
 ### AI
 - [AI Engine](ai-engine.md): Unified LLM interface — chat, streaming via SSE, embeddings, function calling, and conversation context.
+- [Workflow](workflow.md): Graph-based AI pipeline orchestration — DAG nodes, conditional routing, tool calling, WAL persistence, and distributed execution.
 
 ### 数据库
 - [Database](database.md): Unified database interface — SQLite, MySQL, PostgreSQL, MongoDB, Redis connection pools, queries, and transactions.
@@ -25,6 +26,8 @@ This manual provides detailed guides on configuring, extending, and using advanc
 - [Deployment](deployment.md): Docker, systemd, multi-worker tuning, TLS/HTTPS, Prometheus, health checks, and kernel tuning.
 
 ### 系统扩展
+- [Reflection](reflection.md): Compile-time struct introspection and automatic JSON serialization/deserialization.
+- [Admin Dashboard](admin.md): Web-based monitoring for HTTP, AI, MQ, and database metrics.
 - [Hooks](hooks.md): Lifecycle hook system — server start/stop, connection open/close, request begin/end.
 
 ### Python
