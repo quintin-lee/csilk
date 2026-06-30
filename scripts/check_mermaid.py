@@ -18,7 +18,7 @@ import sys
 
 
 # Mermaid keywords that open a block closed by 'end'
-BLOCK_OPENERS = {"subgraph", "alt", "loop", "opt", "par", "critical"}
+BLOCK_OPENERS = {"subgraph", "alt", "loop", "opt", "par", "critical", "rect"}
 
 
 def find_mermaid_blocks(filepath):
