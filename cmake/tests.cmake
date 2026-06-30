@@ -170,6 +170,7 @@ set(CSILK_MESSAGING_TESTS
 set(CSILK_EXTRA_TESTS
     test_extra
     test_integration
+    test_integration_ext
 )
 
 # Collect all test names for run_tests DEPENDS
