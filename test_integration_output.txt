@@ -1,0 +1,96 @@
+=== Extended Integration Tests ===
+
+2026-06-30 12:24:05 INFO  [mq_core.c:110] _csilk_mq_new(): MQ: Message queue initialized successfully
+2026-06-30 12:24:05 INFO  [app.c:243] find_or_create_group(): Created route group prefix: /csilk-docs
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /csilk-docs/*path
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /csilk-docs/
+2026-06-30 12:24:05 INFO  [app.c:853] csilk_app_static(): static: /csilk-docs -> /data/home/quintin/workspace/source/c/csilk/share/swagger-ui
+2026-06-30 12:24:05 INFO  [app.c:428] csilk_app_new(): csilk app initialized
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /
+2026-06-30 12:24:05 INFO  [app.c:666] csilk_app_add_route(): Route registered: GET /
+2026-06-30 12:24:05 INFO  [mq_pubsub.c:92] csilk_mq_use(): MQ: Registered subscription/middleware 0x563378b18d4d for topic 'test.topic'
+2026-06-30 12:24:05 INFO  [mq_pubsub.c:63] csilk_mq_use(): MQ: Registered global middleware 0x563378b18d58
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /mq/publish
+2026-06-30 12:24:05 INFO  [app.c:666] csilk_app_add_route(): Route registered: GET /mq/publish
+2026-06-30 12:24:05 INFO  [admin.c:289] csilk_admin_serve_secure(): Initializing admin dashboard on path '/admin'
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/stats
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/ws
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/topology
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/flamegraph
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/profile
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /admin/status
+2026-06-30 12:24:05 INFO  [app.c:666] csilk_app_add_route(): Route registered: GET /admin/status
+2026-06-30 12:24:05 INFO  [wf_lifecycle.c:201] csilk_wf_add(): Workflow: added node 'greet' to workflow 'integration_test'
+2026-06-30 12:24:05 INFO  [group.c:520] csilk_group_add_handlers(): Group: registered route with 1 handlers: GET /wf/run
+2026-06-30 12:24:05 INFO  [app.c:666] csilk_app_add_route(): Route registered: GET /wf/run
+2026-06-30 12:24:05 INFO  [app.c:915] csilk_app_run(): 
+  csilk server listening on http://localhost:8101
+
+
+2026-06-30 12:24:05 INFO  [server.c:990] csilk_server_run(): 
+  Server started on port 8101 with 1 worker(s)
+
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET / 200 0.000000 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: GET / (response)
+  PASS: ext: GET / (status 200)
+  PASS: ext: GET / (body)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /mq/publish
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /mq/publish 200 0.000002 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: MQ publish (response)
+  PASS: ext: MQ publish (status 200)
+  PASS: ext: MQ publish (body)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /admin/
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /admin/ 200 0.000063 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: Admin UI (response)
+  PASS: ext: Admin UI (status 200)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /admin/stats
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /admin/stats 200 0.000052 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: Admin stats (response)
+  PASS: ext: Admin stats (status 200)
+  PASS: ext: Admin stats (JSON)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /wf/run
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /wf/run 200 0.000006 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: WF run (response)
+  PASS: ext: WF run (status 200)
+  PASS: ext: WF run (body)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET / 200 0.000000 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=1
+2026-06-30 12:24:05 INFO  [http1.c:809] _csilk_handle_post_response(): _csilk_handle_post_response: restarting read
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /mq/publish
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /mq/publish 200 0.000001 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=1
+2026-06-30 12:24:05 INFO  [http1.c:809] _csilk_handle_post_response(): _csilk_handle_post_response: restarting read
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /admin/stats
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET /admin/stats 200 0.000012 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: keepalive req1: GET /
+  PASS: ext: keepalive req2: GET /mq/publish
+  PASS: ext: keepalive req3: GET /admin/stats
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /nonexistent
+2026-06-30 12:24:05 WARN  [http1.c:629] _csilk_dispatch_request(): Route not found: /nonexistent
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: 404 (response)
+  PASS: ext: 404 (status 404)
+2026-06-30 12:24:05 INFO  [http1.c:598] _csilk_dispatch_request(): Request: GET /
+2026-06-30 12:24:05 INFO  [logger.c:117] csilk_logger_handler(): [HTTP] GET / 200 0.000000 s
+2026-06-30 12:24:05 INFO  [http1.c:807] _csilk_handle_post_response(): _csilk_handle_post_response called, keep_alive=0
+2026-06-30 12:24:05 INFO  [http1.c:815] _csilk_handle_post_response(): _csilk_handle_post_response: closing handle
+  PASS: ext: GET with query (response)
+  PASS: ext: GET with query (status 200)
+
+=== Extended Integration Results: 21 passed, 0 failed ===
