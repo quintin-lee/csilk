@@ -13,17 +13,18 @@
 #define SRV_IMPL_H
 
 #include <llhttp.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include "csilk/csilk.h"
 #include "core/srv_internal.h"
 
 /* --- Connection pool & I/O (connection.c) --- */
 
-CSILK_INTERNAL void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf);
-CSILK_INTERNAL void on_close(uv_handle_t* handle);
+CSILK_INTERNAL void
+alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf);
+CSILK_INTERNAL void on_close(csilk_io_handle_t* handle);
 #ifndef CSILK_USE_URING
-CSILK_INTERNAL void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
-CSILK_INTERNAL void on_new_connection(uv_stream_t* server_stream, int status);
+CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf);
+CSILK_INTERNAL void on_new_connection(csilk_io_stream_t* server_stream, int status);
 #else
 CSILK_INTERNAL void on_read(csilk_client_t* client, ssize_t nread);
 CSILK_INTERNAL void on_new_connection(worker_pool_t* wp, int client_fd);
@@ -37,7 +38,7 @@ CSILK_INTERNAL void on_write_timeout(csilk_io_timer_t* handle);
 /* --- HTTP/1.1 callbacks & response (http1.c) --- */
 
 CSILK_INTERNAL const char* get_status_text(int status);
-CSILK_INTERNAL void on_write(uv_write_t* req, int status);
+CSILK_INTERNAL void on_write(csilk_io_write_t* req, int status);
 CSILK_INTERNAL void _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len);
 CSILK_INTERNAL int on_message_begin(llhttp_t* p);
 CSILK_INTERNAL int on_url(llhttp_t* p, const char* at, size_t length);

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/app/workflow.h"
 #include "csilk/drivers/ai.h"
@@ -83,10 +83,10 @@ test_workflow_parallel_tools()
 	    wf, "agent", &(csilk_ai_config_t){.model = "gpt-4", .prompt = "Do 3 slow things"});
 	csilk_wf_node_set_entry(n1, 1);
 
-	g_start_time = uv_hrtime();
+	g_start_time = csilk_io_hrtime();
 	csilk_wf_run(wf, nullptr, nullptr);
 	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
-	g_end_time = uv_hrtime();
+	g_end_time = csilk_io_hrtime();
 
 	double duration_ms = (double)(g_end_time - g_start_time) / 1000000.0;
 	printf("Execution took %.2f ms\n", duration_ms);

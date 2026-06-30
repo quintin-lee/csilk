@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/app/workflow.h"
 

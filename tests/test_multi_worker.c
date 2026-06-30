@@ -101,12 +101,15 @@ run_client(void* arg)
 					r->success_count++;
 				} else {
 					r->fail_count++;
+					printf("FAIL (wrong response): %s\n", buf);
 				}
 			} else {
 				r->fail_count++;
+				printf("FAIL (recv returned %d, errno %d)\n", n, errno);
 			}
 		} else {
 			r->fail_count++;
+			printf("FAIL (select returned %d, errno %d)\n", ret, errno);
 		}
 		close(sock);
 	}
@@ -114,8 +117,11 @@ run_client(void* arg)
 }
 
 int
-main()
+main(void)
 {
+	csilk_log_config_t lcfg = {0};
+	csilk_log_init(lcfg);
+	printf("TEST STARTING\n");
 	pthread_t srv;
 	pthread_create(&srv, nullptr, run_server, nullptr);
 

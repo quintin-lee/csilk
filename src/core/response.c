@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
 #include "core/ctx_internal.h"
@@ -350,10 +350,10 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
 /* --- Streaming / chunked response --- */
 
 static void
-on_stream_write(uv_write_t* req, int status)
+on_stream_write(csilk_io_write_t* req, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("Stream write error: %s", uv_strerror(status));
+		CSILK_LOG_E("Stream write error: %s", csilk_io_strerror(status));
 	}
 	if (req->data) {
 		free(req->data);
@@ -386,16 +386,16 @@ client_wants_close(csilk_ctx_t* c)
  * @param req    The completed write request (freed by this callback).
  * @param status UV status code (negative indicates error). */
 static void
-on_stream_end_write(uv_write_t* req, int status)
+on_stream_end_write(csilk_io_write_t* req, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("Stream end write error: %s", uv_strerror(status));
+		CSILK_LOG_E("Stream end write error: %s", csilk_io_strerror(status));
 	}
 	if (req->data) {
 		free(req->data);
 	}
 	if (req->handle) {
-		uv_close((uv_handle_t*)req->handle, nullptr);
+		csilk_io_close((csilk_io_handle_t*)req->handle, nullptr);
 	}
 	free(req);
 }
@@ -442,7 +442,7 @@ send_chunked_headers(csilk_ctx_t* c)
 	}
 
 	size_t response_len = (size_t)header_len + custom_headers_len + 2;
-	uv_write_t* req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 	if (!req) {
 		return -1;
 	}
@@ -474,10 +474,10 @@ send_chunked_headers(csilk_ctx_t* c)
 
 	snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
 
-	uv_buf_t buf = uv_buf_init(write_base, (size_t)pos + 2);
+	csilk_io_buf_t buf = csilk_io_buf_init(write_base, (size_t)pos + 2);
 	req->data = write_base;
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
-	uv_write(req, stream, &buf, 1, on_stream_write);
+	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+	csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_stream_write);
 	c->response_started = 1;
 	return 0;
 }
@@ -538,8 +538,6 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 		return;
 	}
 
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
-
 	if (!c->response_started) {
 		if (send_chunked_headers(c) != 0) {
 			return;
@@ -569,8 +567,6 @@ csilk_response_end(csilk_ctx_t* c)
 	if (!c || c->conn_closed || !c->_internal_client) {
 		return;
 	}
-
-	uv_stream_t* stream = (uv_stream_t*)c->_internal_client;
 
 	if (!c->response_started) {
 		send_chunked_headers(c);

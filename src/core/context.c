@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "core/ctx_internal.h"
 #include "core/header_map.h"
@@ -272,9 +272,9 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 	}
 
 	if (c->file_fd >= 0) {
-		uv_fs_t close_req;
-		uv_fs_close(nullptr, &close_req, c->file_fd, nullptr);
-		uv_fs_req_cleanup(&close_req);
+		csilk_io_fs_t close_req;
+		csilk_io_fs_close(nullptr, &close_req, c->file_fd, nullptr);
+		csilk_io_fs_req_cleanup(&close_req);
 		c->file_fd = -1;
 	}
 	c->file_offset = 0;

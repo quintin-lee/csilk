@@ -14,7 +14,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/sys_io.h"
@@ -82,7 +82,7 @@ struct csilk_mq_s {
 	size_t global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
 
 	/* Persistence (WAL) */
-	uv_file wal_fd;		 /**< File descriptor for the Write-Ahead Log, or -1 if
+	csilk_io_file_t wal_fd;	 /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
 	char* wal_path;		 /**< Path to the WAL file (heap-allocated copy, nullptr if
                            disabled). */

@@ -195,13 +195,27 @@ test_https_keepalive()
 				   "keep-alive\r\n\r\n";
 		SSL_write(ssl, req1, (int)strlen(req1));
 		char buf[BUFSIZE];
+		memset(buf, 0, BUFSIZE);
 		int n = SSL_read(ssl, buf, sizeof(buf) - 1);
+		if (n <= 0) {
+			int err = SSL_get_error(ssl, n);
+			fprintf(stderr, "  [CLIENT] Keep-Alive Req1 SSL_read error: %d\n", err);
+		} else {
+			printf("  [CLIENT] Keep-Alive Req1 received: %s\n", buf);
+		}
 		test_result("HTTPS Keep-Alive (Req 1)", n > 0 && strstr(buf, "200 OK"));
 
 		const char* req2 = "GET / HTTP/1.1\r\nHost: "
 				   "localhost\r\nConnection: close\r\n\r\n";
 		SSL_write(ssl, req2, (int)strlen(req2));
+		memset(buf, 0, BUFSIZE);
 		n = SSL_read(ssl, buf, sizeof(buf) - 1);
+		if (n <= 0) {
+			int err = SSL_get_error(ssl, n);
+			fprintf(stderr, "  [CLIENT] Keep-Alive Req2 SSL_read error: %d\n", err);
+		} else {
+			printf("  [CLIENT] Keep-Alive Req2 received: %s\n", buf);
+		}
 		test_result("HTTPS Keep-Alive (Req 2)", n > 0 && strstr(buf, "200 OK"));
 
 		SSL_shutdown(ssl);

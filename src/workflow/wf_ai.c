@@ -405,7 +405,7 @@ typedef struct {
 	csilk_ai_tool_call_t* tc;	   /**< Tool call arguments from the AI response. */
 	char* result;			   /**< Tool output string (allocated by tool fn). */
 	csilk_mutex_t* mutex;		   /**< Shared mutex for the pending counter. */
-	uv_cond_t* cond;		   /**< Shared condition variable for completion. */
+	csilk_cond_t* cond;		   /**< Shared condition variable for completion. */
 	int* pending;			   /**< Shared atomic-like pending count. */
 	csilk_wf_tool_entry_t* discovered; /**< Dynamically discovered tools. */
 	size_t discovered_count;	   /**< Number of discovered tools. */
@@ -441,7 +441,7 @@ after_sub_worker_cb(csilk_io_work_t* req, int status)
 	sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
 	csilk_mutex_lock(sw->mutex);
 	(*sw->pending)--;
-	uv_cond_signal(sw->cond);
+	csilk_cond_signal(sw->cond);
 	csilk_mutex_unlock(sw->mutex);
 }
 
@@ -644,10 +644,10 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
 			// Parallel Execution of Tool Calls
 			csilk_mutex_t m;
-			uv_cond_t c;
+			csilk_cond_t c;
 			int pending = (int)res.tool_call_count;
 			csilk_mutex_init(&m);
-			uv_cond_init(&c);
+			csilk_cond_init(&c);
 			sub_tool_work_t* sws = calloc(res.tool_call_count, sizeof(sub_tool_work_t));
 			csilk_io_work_t* reqs =
 			    calloc(res.tool_call_count, sizeof(csilk_io_work_t));
@@ -667,7 +667,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
 			csilk_mutex_lock(&m);
 			while (pending > 0) {
-				uv_cond_wait(&c, &m);
+				csilk_cond_wait(&c, &m);
 			}
 			csilk_mutex_unlock(&m);
 
@@ -681,7 +681,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 			free(sws);
 			free(reqs);
 			csilk_mutex_destroy(&m);
-			uv_cond_destroy(&c);
+			csilk_cond_destroy(&c);
 			csilk_ai_chat_response_free(&res);
 			continue;
 		}

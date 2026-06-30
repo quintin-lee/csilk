@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
@@ -20,15 +20,15 @@
  * completes (or fails). On failure, logs the error via CSILK_LOG_E.
  * In either case frees the write request and the associated buffer.
  *
- * @param req     The completed uv_write_t request. req->data points to the
+ * @param req     The completed csilk_io_write_t request. req->data points to the
  *                heap-allocated buffer that was written.
  * @param status  0 on success, negative on error (UV_E* codes).
  */
 static void
-on_sse_write(uv_write_t* req, int status)
+on_sse_write(csilk_io_write_t* req, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("SSE write error: %s", uv_strerror(status));
+		CSILK_LOG_E("SSE write error: %s", csilk_io_strerror(status));
 	} else {
 		CSILK_LOG_T("SSE: write completed successfully");
 	}
@@ -86,9 +86,9 @@ csilk_sse_init(csilk_ctx_t* c)
 			  "\r\n";
 
 	size_t hdr_len = strlen(hdr);
-	uv_write_t* req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 	if (!req) {
-		CSILK_LOG_E("SSE: malloc failed for uv_write_t request");
+		CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request");
 		return;
 	}
 
@@ -100,10 +100,10 @@ csilk_sse_init(csilk_ctx_t* c)
 	}
 	memcpy(buf, hdr, hdr_len);
 
-	uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)hdr_len);
+	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
 	req->data = buf;
-	uv_stream_t* stream = (uv_stream_t*)internal_client;
-	uv_write(req, stream, &uv_buf, 1, on_sse_write);
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
 /**
@@ -167,24 +167,24 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 	}
 	pos += snprintf(buf + pos, buf_size - pos, "\n");
 
-	uv_write_t* req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 	if (!req) {
-		CSILK_LOG_E("SSE: malloc failed for uv_write_t request structure");
+		CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request structure");
 		free(buf);
 		return;
 	}
 
-	uv_buf_t uv_buf = uv_buf_init(buf, (unsigned int)pos);
+	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
 	req->data = buf;
-	uv_stream_t* stream = (uv_stream_t*)internal_client;
-	uv_write(req, stream, &uv_buf, 1, on_sse_write);
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
 /**
  * @brief Close the SSE connection.
  *
  * Closes the underlying libuv stream handle for the SSE client connection.
- * Performs a graceful close via uv_close(). Any pending write requests will
+ * Performs a graceful close via csilk_io_close(). Any pending write requests will
  * complete before the handle is fully closed.
  *
  * @param c  The request context (must be in SSE mode with an active client).
@@ -200,8 +200,8 @@ csilk_sse_close(csilk_ctx_t* c)
 
 	CSILK_LOG_I("SSE: closing connection for request %p", (void*)c);
 
-	uv_stream_t* stream = (uv_stream_t*)internal_client;
-	if (!uv_is_closing((uv_handle_t*)stream)) {
-		uv_close((uv_handle_t*)stream, nullptr);
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+		csilk_io_close((csilk_io_handle_t*)stream, nullptr);
 	}
 }

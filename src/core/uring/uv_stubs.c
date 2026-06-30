@@ -1,94 +1,117 @@
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #ifdef CSILK_USE_URING
 
-uv_buf_t
-uv_buf_init(char* base, unsigned int len)
+#include <csilk/csilk.h>
+#include <csilk/server.h>
+#include <csilk/core/internal.h>
+#include "../srv_internal.h"
+#include "uring_internal.h"
+
+void csilk_client_close(csilk_client_t* client);
+
+int
+csilk_io_is_closing(const csilk_io_handle_t* handle)
 {
-	uv_buf_t buf;
-	buf.base = base;
-	buf.len = len;
-	return buf;
+	(void)handle;
+	/* io_uring backend has no libuv closing state machine.
+	 * Returns 0 (not closing) for all handles. */
+	return 0;
 }
 
 int
-uv_write(
-    uv_write_t* req, uv_stream_t* handle, const uv_buf_t bufs[], unsigned int nbufs, uv_write_cb cb)
+csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
 {
-	return -1;
+	if (!handle || !fd) {
+		return -1;
+	}
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)handle;
+	*fd = stream->fd;
+	return 0;
 }
 
 int
-uv_is_closing(const uv_handle_t* handle)
+csilk_io_write(csilk_io_write_t* req,
+	       csilk_io_stream_t* handle,
+	       const csilk_io_buf_t bufs[],
+	       unsigned int nbufs,
+	       csilk_io_write_cb cb)
 {
-	return 1;
+	if (!handle || !handle->data) {
+		return -1;
+	}
+	csilk_client_t* client = (csilk_client_t*)handle->data;
+	if (client->ctx.conn_closed) {
+		return -1;
+	}
+
+	struct io_uring* ring = client->owner_pool->loop_ptr;
+	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	if (!sqe) {
+		return -1;
+	}
+
+	req->cb = (void*)cb;
+	req->handle = handle;
+
+	struct iovec* iov = malloc(sizeof(struct iovec) * nbufs);
+	for (unsigned int i = 0; i < nbufs; ++i) {
+		iov[i].iov_base = bufs[i].base;
+		iov[i].iov_len = bufs[i].len;
+	}
+
+	io_uring_prep_writev(sqe, handle->fd, iov, nbufs, 0);
+
+	void** ctx = malloc(sizeof(void*) * 3);
+	ctx[0] = client;
+	ctx[1] = req;
+	ctx[2] = iov;
+	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_UV_WRITE, client, ctx));
+	atomic_fetch_add(&client->async_ref, 1);
+	io_uring_submit(ring);
+	return 0;
 }
 
 void
-uv_close(uv_handle_t* handle, uv_close_cb close_cb)
+csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
-	if (close_cb) {
-		close_cb(handle);
+	if (!handle) {
+		return;
+	}
+	/* In the uring backend, only TCP handles (csilk_io_tcp_t) wrap clients.
+	 * Distinguish by checking if data points to a valid client structure
+	 * (has ctx.conn_closed at a known offset). Async/timer handles have
+	 * different layouts and must not be cast to stream. */
+	if (handle->data && ((uintptr_t)handle->data > 0x1000)) {
+		csilk_io_stream_t* stream = (csilk_io_stream_t*)handle;
+		csilk_client_t* client = (csilk_client_t*)stream->data;
+		/* Verify this looks like a real client (not a random pointer) */
+		if (client && client->server && client->handle.fd >= 0) {
+			csilk_client_close(client);
+		}
+	}
+	/* For non-stream handles (async, timer, etc.) the callback is a no-op
+	 * since there's no libuv close semantics in the io_uring backend. */
+	if (cb && handle->data && ((uintptr_t)handle->data > 0x1000)) {
+		cb(handle);
 	}
 }
 
-int
-uv_fileno(const uv_handle_t* handle, uv_os_fd_t* fd)
-{
-	return -1;
-}
-
-int
-uv_fs_sendfile(uv_loop_t* loop,
-	       uv_fs_t* req,
-	       uv_file out_fd,
-	       uv_file in_fd,
-	       int64_t in_offset,
-	       size_t length,
-	       uv_fs_cb cb)
-{
-	return -1;
-}
-
-const char*
-uv_strerror(int err)
-{
-	return "libuv stripped";
-}
-
 void
-uv_fs_req_cleanup(uv_fs_t* req)
+on_close(csilk_io_handle_t* handle)
 {
 }
-
-#endif
-
-/* Dummy callbacks for HTTP1 when CSILK_USE_URING is ON (un-refactored paths) */
-#include "core/srv_internal.h"
-#include "core/ctx_internal.h"
-
 void
 on_idle_timeout(csilk_io_timer_t* handle)
 {
 }
-
+void
+on_read_timeout(csilk_io_timer_t* handle)
+{
+}
 void
 on_write_timeout(csilk_io_timer_t* handle)
 {
-}
-void
-on_close(uv_handle_t* handle)
-{
-}
-void
-alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
-{
-}
-
-int
-uv_fs_close(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb)
-{
-	return -1;
 }
 
 int
@@ -99,45 +122,11 @@ csilk_io_timer_start(csilk_io_timer_t* handle,
 {
 	return -1;
 }
-
 int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
 	return -1;
 }
-
-/* Also fs cleanup dummy because we need to link it */
-void
-on_read_timeout(csilk_io_timer_t* handle)
-{
-}
-
-int
-uv_fs_open(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags, int mode, uv_fs_cb cb)
-{
-	return -1;
-}
-int
-uv_fs_fstat(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb)
-{
-	return -1;
-}
-uint64_t
-uv_hrtime(void)
-{
-	return 0;
-}
-
-int
-uv_queue_work(uv_loop_t* loop, uv_work_t* req, uv_work_cb work_cb, uv_after_work_cb after_work_cb)
-{
-	return -1;
-}
-void
-uv_sleep(unsigned int msec)
-{
-}
-
 int
 csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
 {
@@ -148,47 +137,31 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
 	return -1;
 }
-int
-uv_cond_init(uv_cond_t* cond)
-{
-	return -1;
-}
-void
-uv_cond_signal(uv_cond_t* cond)
-{
-}
-void
-uv_cond_wait(uv_cond_t* cond, uv_mutex_t* mutex)
-{
-}
-void
-uv_cond_destroy(uv_cond_t* cond)
-{
-}
 
-int
-uv_resident_set_memory(size_t* rss)
-{
-	return -1;
-}
-int
-uv_getrusage(uv_rusage_t* rusage)
-{
-	return -1;
-}
+#endif
 
-int
-uv_timer_init(uv_loop_t* loop, uv_timer_t* handle)
+void
+csilk_uv_on_write_done(void* arg, ssize_t res)
 {
-	return -1;
-}
-int
-uv_timer_start(uv_timer_t* handle, uv_timer_cb cb, uint64_t timeout, uint64_t repeat)
-{
-	return -1;
-}
-int
-uv_timer_stop(uv_timer_t* handle)
-{
-	return -1;
+	void** ctx = (void**)arg;
+	if (!ctx) {
+		return;
+	}
+	csilk_client_t* client = (csilk_client_t*)ctx[0];
+	csilk_io_write_t* req = (csilk_io_write_t*)ctx[1];
+	struct iovec* iov = (struct iovec*)ctx[2];
+
+	if (iov) {
+		free(iov);
+	}
+	if (req && req->cb) {
+		csilk_io_write_cb cb = (csilk_io_write_cb)req->cb;
+		cb(req, (int)res);
+	}
+	free(ctx);
+
+	atomic_fetch_sub(&client->async_ref, 1);
+	if (client->close_pending && atomic_load(&client->async_ref) == 0) {
+		on_close_done(client);
+	}
 }

@@ -10,7 +10,9 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/mq.h"
-#include "mq_internal.h"
+
+/* Forward declaration for synchronous MQ dispatch in io_uring backend */
+void on_mq_async(csilk_io_async_t* handle);
 
 static void
 _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
@@ -90,6 +92,24 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 
 	_mq_broadcast(mq, "mq_published", topic, len);
 	csilk_io_async_send(&mq->async_handle);
+
+	/* In the io_uring backend, async_send is a no-op (eventfd write).
+	 * If no event loop is running, process the queue synchronously. */
+#ifndef CSILK_USE_URING
+	(void)0; /* libuv handles async dispatch automatically */
+#else
+	{
+		csilk_mutex_lock(&mq->queue_mutex);
+		int has_messages = (mq->queue_head != NULL);
+		csilk_mutex_unlock(&mq->queue_mutex);
+		if (has_messages) {
+			/* Simulate async wake by processing the queue directly */
+			csilk_io_async_t fake_async = {0};
+			fake_async.data = mq;
+			on_mq_async((csilk_io_async_t*)&fake_async);
+		}
+	}
+#endif
 	return 0;
 }
 

@@ -9,7 +9,7 @@ void
 test_mq_persistence_api()
 {
 	printf("Testing MQ Persistence API declaration...\n");
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
 	csilk_mq_t* mq = csilk_server_get_mq(server);

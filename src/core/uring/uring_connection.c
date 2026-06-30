@@ -23,6 +23,8 @@
 #include "core/ctx_internal.h"
 #include "../h2.h"
 #include "../srv_impl.h"
+#include <limits.h>
+#include <assert.h>
 #include "uring_internal.h"
 
 void csilk_client_close(csilk_client_t* client);
@@ -58,7 +60,9 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
 		client->h2_session = nullptr;
 	}
 	csilk_h2_free_streams(client);
+	uint8_t old_gen = client->generation;
 	memset(client, 0, sizeof(*client));
+	client->generation = old_gen + 1;
 	if (wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
 		wp->client_pool[wp->client_pool_count++] = client;
 	} else {
@@ -117,23 +121,30 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
-	csilk_mutex_lock(&server->clients_mutex);
-	client->next = server->active_clients;
+	(void)server;
+	worker_pool_t* wp = client->owner_pool;
+	client->next = wp->active_clients;
 	client->prev = nullptr;
-	if (server->active_clients) {
-		server->active_clients->prev = client;
+	if (wp->active_clients) {
+		wp->active_clients->prev = client;
 	}
-	server->active_clients = client;
-	csilk_mutex_unlock(&server->clients_mutex);
+	wp->active_clients = client;
 }
 
 static void
 client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 {
+	if (!server) {
+		return;
+	}
+	worker_pool_t* wp = client->owner_pool;
+	if (!wp) {
+		return;
+	}
 	if (client->prev) {
 		client->prev->next = client->next;
-	} else if (server->active_clients == client) {
-		server->active_clients = client->next;
+	} else if (wp->active_clients == client) {
+		wp->active_clients = client->next;
 	}
 	if (client->next) {
 		client->next->prev = client->prev;
@@ -144,20 +155,28 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 static void
 client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
-	csilk_mutex_lock(&server->clients_mutex);
 	client_list_remove_internal(server, client);
-	csilk_mutex_unlock(&server->clients_mutex);
 }
 
-static void
+void
 client_destroy(csilk_client_t* client)
 {
+	CSILK_LOG_D("client_destroy called, closing fd %d", client->handle.fd);
 	if (client->server) {
 		atomic_fetch_sub(&client->server->active_connections, 1);
+		client_list_remove_internal(client->server, client);
 	}
 	csilk_ctx_cleanup(&client->ctx);
+	if (client->handle.fd >= 0) {
+		close(client->handle.fd);
+		client->handle.fd = -1;
+	}
 	if (client->ctx.arena) {
 		pool_put_arena(client->owner_pool, client->ctx.arena);
+	}
+	if (client->read_buf) {
+		free(client->read_buf);
+		client->read_buf = NULL;
 	}
 	pool_put(client->owner_pool, client);
 }
@@ -169,7 +188,7 @@ _csilk_ctx_loop(csilk_ctx_t* c)
 		return NULL;
 	}
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	return &client->owner_pool->loop;
+	return client->owner_pool->loop_ptr;
 }
 
 CSILK_INTERNAL void
@@ -200,7 +219,7 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 static void
 submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms)
 {
-	struct io_uring* ring = &client->owner_pool->loop;
+	struct io_uring* ring = client->owner_pool->loop_ptr;
 	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 	if (!sqe) {
 		return;
@@ -215,24 +234,36 @@ submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms)
 	tmr->data = ts;
 
 	io_uring_prep_timeout(sqe, ts, 0, 0);
-	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_TIMEOUT, client));
+	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_TIMEOUT, client, client));
 }
 
 void
 csilk_client_read_start(csilk_client_t* client)
 {
-	struct io_uring* ring = &client->owner_pool->loop;
+	if (client->read_active) {
+		return;
+	}
+	struct io_uring* ring = client->owner_pool->loop_ptr;
 	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 	if (!sqe) {
+		CSILK_LOG_E("Failed to get SQE for read!");
 		return;
 	}
 
 	size_t suggested_size = 65536;
-	char* buf = malloc(suggested_size);
-	client->ctx.work_req.data = buf;
+	if (client->read_buf == nullptr) {
+		client->read_buf = malloc(suggested_size);
+	}
+	void* buf = client->read_buf;
 
 	io_uring_prep_recv(sqe, client->handle.fd, buf, suggested_size, 0);
-	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_READ, client));
+	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_READ, client, client));
+	int ret = io_uring_submit(ring);
+	if (ret < 0) {
+		CSILK_LOG_E("Failed to submit read! ret=%d", ret);
+	} else {
+		client->read_active = 1;
+	}
 }
 
 void
@@ -242,15 +273,75 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
 		return;
 	}
 
-	struct io_uring* ring = &client->owner_pool->loop;
+	if (client->ssl) {
+		assert(length <= INT_MAX);
+		SSL_write(client->ssl, data, (int)length);
+		flush_tls_write(client);
+		return;
+	}
+
+	struct io_uring* ring = client->owner_pool->loop_ptr;
 	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 	if (!sqe) {
 		return;
 	}
 
-	io_uring_prep_send(sqe, client->handle.fd, data, length, 0);
-	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_WRITE, client));
+	uring_write_req_t* req = malloc(sizeof(uring_write_req_t));
+	req->client = client;
+	req->data = malloc(length);
+	memcpy(req->data, data, length);
+
+	io_uring_prep_send(sqe, client->handle.fd, req->data, length, 0);
+	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_WRITE, client, req));
+	atomic_fetch_add(&client->async_ref, 1);
 	io_uring_submit(ring);
+}
+
+void
+on_write_done(void* arg, ssize_t res)
+{
+	uring_write_req_t* req = (uring_write_req_t*)arg;
+	if (!req) {
+		return;
+	}
+	csilk_client_t* client = req->client;
+	if (req->data) {
+		free(req->data);
+	}
+	free(req);
+
+	CSILK_LOG_D("on_write_done: res=%zd", res);
+	if (res < 0) {
+		if (res != -ECONNRESET && res != -EPIPE) {
+			CSILK_LOG_E("Connection: write error %zd", res);
+		}
+		csilk_client_close(client);
+	}
+
+	int outstanding = atomic_fetch_sub(&client->async_ref, 1) - 1;
+	CSILK_LOG_D(
+	    "on_write_done: async_ref=%d close_pending=%d", outstanding, client->close_pending);
+	if (outstanding == 0 && client->close_pending == 0 && client->ctx.conn_closed) {
+		client_destroy(client);
+	}
+}
+
+void
+on_close_done(csilk_client_t* client)
+{
+	if (!client) {
+		return;
+	}
+	if (client->close_pending > 0) {
+		client->close_pending--;
+	}
+	CSILK_LOG_D("on_close_done: close_pending=%d async_ref=%d",
+		    client->close_pending,
+		    atomic_load(&client->async_ref));
+	if (client->close_pending == 0 && atomic_load(&client->async_ref) <= 0 &&
+	    client->ctx.conn_closed) {
+		client_destroy(client);
+	}
 }
 
 void
@@ -259,6 +350,7 @@ csilk_client_close(csilk_client_t* client)
 	if (!client || client->ctx.conn_closed) {
 		return;
 	}
+	CSILK_LOG_D("csilk_client_close called");
 
 	CSILK_LOG_D("Connection: closed (client pointer: %p)", (void*)client);
 	_csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
@@ -282,35 +374,25 @@ csilk_client_close(csilk_client_t* client)
 		client->request_timer.data = NULL;
 	}
 
-	struct io_uring* ring = &client->owner_pool->loop;
+	struct io_uring* ring = client->owner_pool->loop_ptr;
 
-	// Cancel pending reads/writes/timeouts
-	uring_op_type_t ops_to_cancel[] = {URING_OP_READ, URING_OP_WRITE, URING_OP_TIMEOUT};
-	for (int i = 0; i < 3; i++) {
+	client->close_pending = 0;
+	// Cancel pending reads/timeouts (do not cancel writes, allow them to drain)
+	uring_op_type_t ops_to_cancel[] = {URING_OP_READ, URING_OP_TIMEOUT};
+	for (int i = 0; i < 2; i++) {
 		struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 		if (sqe) {
 			io_uring_prep_cancel(
-			    sqe, (void*)uring_encode_data(ops_to_cancel[i], client), 0);
-			io_uring_sqe_set_data(sqe,
-					      (void*)uring_encode_data(URING_OP_CLOSE, client));
+			    sqe, (void*)uring_encode_data(ops_to_cancel[i], client, client), 0);
+			io_uring_sqe_set_data(
+			    sqe, (void*)uring_encode_data(URING_OP_CLOSE, client, client));
+			client->close_pending++;
 		}
-	}
-
-	if (client->handle.fd >= 0) {
-		struct io_uring_sqe* close_sqe = io_uring_get_sqe(ring);
-		if (close_sqe) {
-			io_uring_prep_close(close_sqe, client->handle.fd);
-			io_uring_sqe_set_data(close_sqe,
-					      (void*)uring_encode_data(URING_OP_CLOSE, client));
-		} else {
-			close(client->handle.fd);
-		}
-		client->handle.fd = -1;
 	}
 
 	io_uring_submit(ring);
 
-	if (client->async_ref <= 0) {
+	if (client->close_pending == 0 && client->async_ref <= 0) {
 		client_destroy(client);
 	}
 }
@@ -354,7 +436,10 @@ on_new_connection(worker_pool_t* wp, int client_fd)
 
 	client_list_add(server, client);
 
-	CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)", (void*)client);
+	CSILK_LOG_D("Worker %d: accepted new TCP connection (fd: %d, client pointer: %p)",
+		    wp->worker_index,
+		    client_fd,
+		    (void*)client);
 
 	atomic_fetch_add(&server->active_connections, 1);
 	client->protocol = CSILK_PROTO_HTTP1;
@@ -383,15 +468,21 @@ on_new_connection(worker_pool_t* wp, int client_fd)
 		csilk_client_read_start(client);
 	}
 
-	struct io_uring* ring = &client->owner_pool->loop;
+	struct io_uring* ring = client->owner_pool->loop_ptr;
 	io_uring_submit(ring);
 }
 
 void
 on_read(csilk_client_t* client, ssize_t nread)
 {
-	char* base = client->ctx.work_req.data;
-	client->ctx.work_req.data = NULL;
+	CSILK_LOG_D("Worker: on_read nread=%zd (client=%p)", nread, (void*)client);
+	if (!client || client->ctx.conn_closed) {
+		return;
+	}
+
+	char* base = client->read_buf;
+	client->read_buf = NULL;
+	client->read_active = 0;
 	int is_registered = 0;
 
 	if (client->server->config.read_timeout_ms > 0) {
@@ -451,8 +542,10 @@ on_read(csilk_client_t* client, ssize_t nread)
 		}
 	}
 
-	struct io_uring* ring = &client->owner_pool->loop;
-	io_uring_submit(ring);
+	if (!client->ctx.conn_closed) {
+		struct io_uring* ring = client->owner_pool->loop_ptr;
+		io_uring_submit(ring);
+	}
 }
 
 const char*

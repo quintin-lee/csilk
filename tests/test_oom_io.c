@@ -79,7 +79,7 @@ test_oom_http_parser()
 	memset(&client, 0, sizeof(csilk_client_t));
 	client.server = s;
 
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 	uv_timer_init(loop, &client.request_timer);
 	uv_timer_init(loop, &client.timer);
 
@@ -191,15 +191,15 @@ test_oom_http_parser()
 	 * Close libuv timer handles before the stack frame goes away.
 	 *
 	 * uv_timer_init added the handles to the default loop's handle
-	 * list.  Even though we never called uv_timer_start, uv_close
+	 * list.  Even though we never called uv_timer_start, csilk_io_close
 	 * still adds them to the close-waiting queue.  If we do not
 	 * process that queue now, the next test function (which calls
 	 * uv_run) will try to remove the handles from the queue and
 	 * write to memory that has already been reclaimed — a textbook
 	 * stack-use-after-return ASAN error.
 	 */
-	uv_close((uv_handle_t*)&client.request_timer, nullptr);
-	uv_close((uv_handle_t*)&client.timer, nullptr);
+	csilk_io_close((csilk_io_handle_t*)&client.request_timer, nullptr);
+	csilk_io_close((csilk_io_handle_t*)&client.timer, nullptr);
 	csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 
 	csilk_server_free(s);

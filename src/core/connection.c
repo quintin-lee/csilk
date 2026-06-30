@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include <llhttp.h>
 
 #include "csilk/core/internal.h"
@@ -34,9 +34,9 @@
  *
  * @param handle          The libuv handle that will read into the buffer.
  * @param suggested_size  Recommended buffer size from libuv.
- * @param buf             [out] Pointer to the uv_buf_t to populate. */
+ * @param buf             [out] Pointer to the csilk_io_buf_t to populate. */
 void
-alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
+alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf)
 {
 	(void)handle;
 	buf->base = (char*)malloc(suggested_size);
@@ -184,14 +184,14 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
-	csilk_mutex_lock(&server->clients_mutex);
-	client->next = server->active_clients;
+	(void)server;
+	worker_pool_t* wp = client->owner_pool;
+	client->next = wp->active_clients;
 	client->prev = nullptr;
-	if (server->active_clients) {
-		server->active_clients->prev = client;
+	if (wp->active_clients) {
+		wp->active_clients->prev = client;
 	}
-	server->active_clients = client;
-	csilk_mutex_unlock(&server->clients_mutex);
+	wp->active_clients = client;
 }
 
 /** @brief Remove a client from the active list (no locking).
@@ -204,10 +204,12 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
 static void
 client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 {
+	(void)server;
+	worker_pool_t* wp = client->owner_pool;
 	if (client->prev) {
 		client->prev->next = client->next;
-	} else if (server->active_clients == client) {
-		server->active_clients = client->next;
+	} else if (wp->active_clients == client) {
+		wp->active_clients = client->next;
 	}
 	if (client->next) {
 		client->next->prev = client->prev;
@@ -224,9 +226,7 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 static void
 client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
-	csilk_mutex_lock(&server->clients_mutex);
 	client_list_remove_internal(server, client);
-	csilk_mutex_unlock(&server->clients_mutex);
 }
 
 /* --- Timer close --- */
@@ -260,7 +260,7 @@ client_destroy(csilk_client_t* client)
  *
  *  @param c The request context.
  *  @return A pointer to the owning libuv event loop (never nullptr). */
-CSILK_INTERNAL uv_loop_t*
+CSILK_INTERNAL csilk_io_loop_t*
 _csilk_ctx_loop(csilk_ctx_t* c)
 {
 	if (!c || !c->server || !c->_internal_client) {
@@ -317,7 +317,7 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
  *
  *  @param handle The timer handle being closed (data points to csilk_client_t). */
 static void
-on_timer_close(uv_handle_t* handle)
+on_timer_close(csilk_io_handle_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (!client) {
@@ -346,7 +346,7 @@ on_timer_close(uv_handle_t* handle)
  * @param handle The TCP handle being closed (data points to csilk_client_t).
  */
 CSILK_INTERNAL void
-on_close(uv_handle_t* handle)
+on_close(csilk_io_handle_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
 	if (client) {
@@ -360,16 +360,16 @@ on_close(uv_handle_t* handle)
 		csilk_io_timer_stop(&client->request_timer);
 
 		client->close_pending = 4;
-		uv_handle_t* timers[] = {(uv_handle_t*)&client->timer,
-					 (uv_handle_t*)&client->read_timer,
-					 (uv_handle_t*)&client->write_timer,
-					 (uv_handle_t*)&client->request_timer};
+		csilk_io_handle_t* timers[] = {(csilk_io_handle_t*)&client->timer,
+					       (csilk_io_handle_t*)&client->read_timer,
+					       (csilk_io_handle_t*)&client->write_timer,
+					       (csilk_io_handle_t*)&client->request_timer};
 		for (int i = 0; i < 4; i++) {
-			if (uv_is_closing(timers[i])) {
+			if (csilk_io_is_closing(timers[i])) {
 				client->close_pending--;
 			} else {
 				timers[i]->data = client;
-				uv_close(timers[i], on_timer_close);
+				csilk_io_close(timers[i], on_timer_close);
 			}
 		}
 		if (client->close_pending <= 0) {
@@ -394,9 +394,9 @@ void
 on_idle_timeout(uv_timer_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
-	if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+	if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
 		CSILK_LOG_D("Connection: closing connection due to idle timeout");
-		uv_close((uv_handle_t*)&client->handle, on_close);
+		csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 	}
 }
 
@@ -410,9 +410,9 @@ void
 on_read_timeout(uv_timer_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
-	if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+	if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
 		CSILK_LOG_D("Connection: closing connection due to read timeout");
-		uv_close((uv_handle_t*)&client->handle, on_close);
+		csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 	}
 }
 
@@ -426,8 +426,8 @@ void
 on_write_timeout(uv_timer_t* handle)
 {
 	csilk_client_t* client = (csilk_client_t*)handle->data;
-	if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-		uv_close((uv_handle_t*)&client->handle, on_close);
+	if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+		csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 	}
 }
 
@@ -442,7 +442,7 @@ on_write_timeout(uv_timer_t* handle)
  *
  *  @param handle The temporary TCP handle to free. */
 static void
-on_rejected_close(uv_handle_t* handle)
+on_rejected_close(csilk_io_handle_t* handle)
 {
 	free(handle);
 }
@@ -484,10 +484,10 @@ on_rejected_close(uv_handle_t* handle)
  * @param server_stream The listening server stream.
  * @param status        Connection status (negative on error). */
 void
-on_new_connection(uv_stream_t* server_stream, int status)
+on_new_connection(csilk_io_stream_t* server_stream, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("Connection: new connection error: %s", uv_strerror(status));
+		CSILK_LOG_E("Connection: new connection error: %s", csilk_io_strerror(status));
 		return;
 	}
 
@@ -506,10 +506,10 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
 		if (tmp) {
 			uv_tcp_init(server_stream->loop, tmp);
-			if (uv_accept(server_stream, (uv_stream_t*)tmp) == 0) {
-				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			if (uv_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
+				csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
 			} else {
-				uv_close((uv_handle_t*)tmp, on_rejected_close);
+				csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
 			}
 		}
 		return;
@@ -520,10 +520,10 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
 		if (tmp) {
 			uv_tcp_init(server_stream->loop, tmp);
-			if (uv_accept(server_stream, (uv_stream_t*)tmp) == 0) {
-				uv_close((uv_handle_t*)tmp, on_rejected_close);
+			if (uv_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
+				csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
 			} else {
-				uv_close((uv_handle_t*)tmp, on_rejected_close);
+				csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
 			}
 		}
 		return;
@@ -533,7 +533,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 	client->owner_pool = wp;
 	int r = uv_tcp_init(server_stream->loop, &client->handle);
 	if (r < 0) {
-		CSILK_LOG_E("Connection: uv_tcp_init error: %s", uv_strerror(r));
+		CSILK_LOG_E("Connection: uv_tcp_init error: %s", csilk_io_strerror(r));
 		pool_put(wp, client);
 		return;
 	}
@@ -544,7 +544,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 
 	client_list_add(server, client);
 
-	if (uv_accept(server_stream, (uv_stream_t*)&client->handle) == 0) {
+	if (uv_accept(server_stream, (csilk_io_stream_t*)&client->handle) == 0) {
 		CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)",
 			    (void*)client);
 		if (server->config.tcp_nodelay) {
@@ -560,7 +560,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
 		if (server->ssl_ctx) {
 			CSILK_LOG_D("Connection: setting up TLS for connection: %p", (void*)client);
 			if (setup_client_tls(client) < 0) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
+				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 				return;
 			}
 		}
@@ -588,16 +588,16 @@ on_new_connection(uv_stream_t* server_stream, int status)
 					     0);
 		}
 
-		r = uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+		r = uv_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
 		if (r < 0) {
-			CSILK_LOG_E("Connection: uv_read_start error: %s", uv_strerror(r));
-			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
+			CSILK_LOG_E("Connection: uv_read_start error: %s", csilk_io_strerror(r));
+			if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 			}
 		}
 	} else {
-		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-			uv_close((uv_handle_t*)&client->handle, on_close);
+		if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+			csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 		}
 	}
 }
@@ -637,7 +637,7 @@ on_new_connection(uv_stream_t* server_stream, int status)
  * @param nread  Number of bytes read (negative for error/EOF).
  * @param buf    The buffer that was read into (freed by this callback). */
 void
-on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
+on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
 {
 	csilk_client_t* client = (csilk_client_t*)stream->data;
 	char* base = buf->base;
@@ -681,8 +681,9 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 						    client->parser.reason ? client->parser.reason
 									  : "unknown reason");
 
-					if (!uv_is_closing((uv_handle_t*)stream)) {
-						uv_close((uv_handle_t*)stream, on_close);
+					if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+						csilk_io_close((csilk_io_handle_t*)stream,
+							       on_close);
 					}
 				}
 			}
@@ -691,8 +692,8 @@ on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		if (nread != UV_EOF) {
 			CSILK_LOG_E("Connection: read error: %s", uv_err_name((int)nread));
 		}
-		if (!uv_is_closing((uv_handle_t*)stream)) {
-			uv_close((uv_handle_t*)stream, on_close);
+		if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+			csilk_io_close((csilk_io_handle_t*)stream, on_close);
 		}
 	}
 
@@ -737,11 +738,11 @@ csilk_get_client_ip(csilk_ctx_t* c)
 void
 csilk_client_read_start(csilk_client_t* client)
 {
-	uv_read_start((uv_stream_t*)&client->handle, alloc_buffer, on_read);
+	uv_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
 }
 
 void
 csilk_client_read_stop(csilk_client_t* client)
 {
-	uv_read_stop((uv_stream_t*)&client->handle);
+	uv_read_stop((csilk_io_stream_t*)&client->handle);
 }
