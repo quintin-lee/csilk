@@ -35,8 +35,10 @@ test_mq_recovery()
 		csilk_server_free(server);
 		csilk_router_free(router);
 
-		/* Process close callbacks */
+		/* Process close callbacks (libuv only) */
+#ifndef CSILK_USE_URING
 		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
+#endif
 	}
 
 	printf("Server restarted, recovering...\n");
@@ -54,10 +56,12 @@ test_mq_recovery()
 		assert(rc == 0);
 
 		/* Process messages (they are queued in async handle) */
-		uv_loop_t* loop = csilk_io_default_loop();
+#ifndef CSILK_USE_URING
+		csilk_io_loop_t* loop = csilk_io_default_loop();
 		/* Need to run the loop to trigger the async callback */
 		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
+#endif
 
 		if (received_count != 2) {
 			printf("Error: received_count is %d, expected 2\n", received_count);
@@ -67,7 +71,9 @@ test_mq_recovery()
 
 		csilk_server_free(server);
 		csilk_router_free(router);
+#ifndef CSILK_USE_URING
 		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
+#endif
 	}
 
 	unlink(wal_path);

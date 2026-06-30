@@ -203,7 +203,14 @@ test_csilk_docs_static(void)
 	close(sock);
 	test_result("GET /csilk-docs/index.css (response received)", n > 0);
 	test_result("GET /csilk-docs/index.css (status 200)", expect_status(buf, 200));
-	test_result("GET /csilk-docs/index.css (CSS content)", expect_body(buf, "html"));
+	int has_html = expect_body(buf, "html");
+	if (!has_html) {
+		const char* hdr_end = strstr(buf, "\r\n\r\n");
+		if (hdr_end) {
+			printf("FAIL CSS: body=\n%s\n...\n", hdr_end + 4);
+		}
+	}
+	test_result("GET /csilk-docs/index.css (CSS content)", has_html);
 }
 
 static void

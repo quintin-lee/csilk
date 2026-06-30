@@ -36,7 +36,7 @@ void
 test_mq_flow()
 {
 	printf("Testing MQ Flow...\n");
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -77,7 +77,7 @@ void
 test_mq_wildcard()
 {
 	printf("Testing MQ Wildcard Topic Matching...\n");
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -130,7 +130,7 @@ void
 test_mq_offload()
 {
 	printf("Testing MQ Offload (Background Worker)...\n");
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);

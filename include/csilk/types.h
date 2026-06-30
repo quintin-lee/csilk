@@ -15,7 +15,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
 

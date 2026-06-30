@@ -200,6 +200,7 @@ test_ratelimit_mw(csilk_ctx_t* c)
 
 /* ---- Server thread ---- */
 static volatile int server_ready = 0;
+static csilk_server_t* test_server = NULL;
 
 static void*
 run_server(void* arg)
@@ -229,6 +230,7 @@ run_server(void* arg)
 
 	csilk_server_t* server = csilk_server_new(router);
 	server_ready = 1;
+	test_server = server;
 	csilk_server_run(server, PORT);
 
 	csilk_server_free(server);
@@ -599,6 +601,12 @@ main()
 	test_streaming_response();
 	test_websocket_handshake();
 	test_ratelimit_integration();
+
+	/* Stop the server and wait for the server thread to finish */
+	if (test_server) {
+		csilk_server_stop(test_server);
+	}
+	pthread_join(thread, nullptr);
 
 	printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed, g_tests_failed);
 	return g_tests_failed > 0 ? 1 : 0;

@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
@@ -167,11 +167,11 @@ csilk_process_get_stats(csilk_process_stats_t* stats)
 	}
 
 	/* Get resident memory (RSS) from libuv */
-	uv_resident_set_memory(&stats->rss_bytes);
+	csilk_io_resident_set_memory(&stats->rss_bytes);
 
 	/* Get CPU time (User/System) from libuv */
-	uv_rusage_t usage;
-	if (uv_getrusage(&usage) == 0) {
+	csilk_io_rusage_t usage;
+	if (csilk_io_getrusage(&usage) == 0) {
 		stats->cpu_user_time_sec =
 		    (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
 		stats->cpu_sys_time_sec =
@@ -215,13 +215,13 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 	CSILK_LOG_T("Metrics: middleware triggered for request %p", (void*)c);
 
 	/* Start high-resolution timer */
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 
 	/* Proceed with next middleware/handler */
 	csilk_next(c);
 
 	/* Calculate duration */
-	uint64_t duration_ns = uv_hrtime() - start;
+	uint64_t duration_ns = csilk_io_hrtime() - start;
 	double duration_sec = (double)duration_ns / 1e9;
 	uint64_t duration_us = duration_ns / 1000;
 

@@ -123,6 +123,10 @@ main()
 	}
 	fputs(yaml, f);
 	fclose(f);
+	csilk_log_config_t log_cfg;
+	memset(&log_cfg, 0, sizeof(log_cfg));
+	log_cfg.level = CSILK_LOG_DEBUG;
+	csilk_log_init(log_cfg);
 
 	pthread_t thread;
 	pthread_create(&thread, nullptr, run_server, nullptr);

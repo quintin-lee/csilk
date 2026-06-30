@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"

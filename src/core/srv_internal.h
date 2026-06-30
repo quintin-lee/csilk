@@ -19,7 +19,7 @@ typedef struct ssl_ctx_st SSL_CTX;
 typedef struct bio_st BIO;
 
 #include <stdatomic.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include <llhttp.h>
 #include <nghttp2/nghttp2.h>
 
@@ -89,6 +89,7 @@ typedef struct csilk_dispatch_task_s {
 typedef struct {
 	csilk_server_t* server;				     /**< Owning server instance. */
 	csilk_io_loop_t loop;				     /**< This worker's libuv event loop. */
+	csilk_io_loop_t* loop_ptr;			     /**< Pointer to the active loop. */
 	csilk_io_tcp_t server_handle;			     /**< Worker-local listen handle. */
 	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
 	int client_pool_count;				     /**< Items in local free list. */
@@ -98,6 +99,7 @@ typedef struct {
 	int arena_pool_count;				   /**< Items in arena pool. */
 	csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
 	csilk_lfqueue_t dispatch_queue;	 /**< Lock-free MPSC dispatch queue. */
+	csilk_client_t* active_clients;	 /**< Head of worker-local active connections list. */
 } worker_pool_t;
 
 /**
@@ -132,8 +134,6 @@ struct csilk_server_s {
 	SSL_CTX* ssl_ctx;			/**< OpenSSL context. */
 	csilk_mq_t* mq;				/**< Message Queue instance. */
 	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
-	csilk_client_t* active_clients;		    /**< Head of active connections list. */
-	csilk_mutex_t clients_mutex;		    /**< Mutex for active clients list. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.
@@ -143,6 +143,7 @@ struct csilk_server_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
+	uint8_t generation;
 	csilk_io_tcp_t handle;		/**< libuv TCP stream handle. */
 	csilk_io_timer_t timer;		/**< Connection idle (keep-alive) timer. */
 	csilk_io_timer_t read_timer;	/**< Read timeout timer. */
@@ -151,6 +152,8 @@ struct csilk_client_s {
 	int close_pending;		/**< Pending close refs before freeing client. */
 	int async_ref;			/**< Active asynchronous tasks reference counter. */
 	int read_paused;
+	int read_active; /**< Flag indicating if a read is currently in flight */
+	void* read_buf;	 /**< Pre-allocated read buffer for io_uring */
 
 	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */

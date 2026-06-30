@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
@@ -51,21 +51,21 @@ _csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk
 /** @brief libuv sendfile completion callback — handles keep-alive and
  *  cleanup after a zero-copy file send.
  *
- *  Called by libuv's filesystem event loop when uv_fs_sendfile completes.
+ *  Called by libuv's filesystem event loop when csilk_io_fs_sendfile completes.
  *  Frees the filesystem request, then checks the connection state:
  *   - If keep-alive is negotiated, restarts the idle timer and resumes
  *     reading (uv_read_start) for the next request.
- *   - Otherwise, closes the TCP handle (uv_close).
+ *   - Otherwise, closes the TCP handle (csilk_io_close).
  *  In both cases, fires CSILK_HOOK_REQUEST_END and cleans up the context.
  *
- *  @param req The completed uv_fs_t request. req->data points to csilk_ctx_t.
+ *  @param req The completed csilk_io_fs_t request. req->data points to csilk_ctx_t.
  *             The request and its associated buffer are freed by this callback. */
 static void
-on_sendfile_complete(uv_fs_t* req)
+on_sendfile_complete(csilk_io_fs_t* req)
 {
 	csilk_ctx_t* c = (csilk_ctx_t*)req->data;
 	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	uv_fs_req_cleanup(req);
+	csilk_io_fs_req_cleanup(req);
 	free(req);
 
 	if (!client) {
@@ -83,8 +83,8 @@ on_sendfile_complete(uv_fs_t* req)
 		    &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
 		csilk_client_read_start(client);
 	} else {
-		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-			uv_close((uv_handle_t*)&client->handle, on_close);
+		if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+			csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 		}
 	}
 
@@ -100,7 +100,7 @@ on_sendfile_complete(uv_fs_t* req)
  * socket, this callback orchestrates the next action:
  *
  *   1. If the response includes a file descriptor (file_fd >= 0), the
- *      sendfile pipeline is triggered: uv_fs_sendfile() is called to
+ *      sendfile pipeline is triggered: csilk_io_fs_sendfile() is called to
  *      stream file data directly from the kernel page cache to the socket.
  *      This path is only used for non-TLS connections.
  *
@@ -114,13 +114,13 @@ on_sendfile_complete(uv_fs_t* req)
  * The write request's data buffer (buf_copy) is freed here because it
  * was allocated by _csilk_send_data / flush_tls_write.
  *
- * @param req    The completed uv_write_t request.
+ * @param req    The completed csilk_io_write_t request.
  * @param status 0 on success, negative on error. */
 void
-on_write(uv_write_t* req, int status)
+on_write(csilk_io_write_t* req, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("Write error: %s", uv_strerror(status));
+		CSILK_LOG_E("Write error: %s", csilk_io_strerror(status));
 	}
 	csilk_client_t* client = nullptr;
 	if (req->handle) {
@@ -135,9 +135,9 @@ on_write(uv_write_t* req, int status)
 	}
 
 	if (client && client->ctx.file_fd >= 0) {
-		uv_os_fd_t sock_fd;
-		if (uv_fileno((const uv_handle_t*)&client->handle, &sock_fd) == 0) {
-			uv_fs_t* fs_req = malloc(sizeof(uv_fs_t));
+		csilk_io_os_fd_t sock_fd;
+		if (csilk_io_fileno((const csilk_io_handle_t*)&client->handle, &sock_fd) == 0) {
+			csilk_io_fs_t* fs_req = malloc(sizeof(csilk_io_fs_t));
 			if (fs_req) {
 				fs_req->data = &client->ctx;
 				int fd = client->ctx.file_fd;
@@ -145,13 +145,20 @@ on_write(uv_write_t* req, int status)
 				size_t size = client->ctx.file_size;
 				client->ctx.file_fd = -1;
 
-				int r = uv_fs_sendfile(csilk_io_default_loop(),
-						       fs_req,
-						       sock_fd,
-						       fd,
-						       offset,
-						       size,
-						       on_sendfile_complete);
+				printf("DEBUG: on_write calling csilk_io_fs_sendfile for fd %d, "
+				       "sock %d, size %zu\n",
+				       fd,
+				       sock_fd,
+				       size);
+				fflush(stdout);
+
+				int r = csilk_io_fs_sendfile(csilk_io_default_loop(),
+							     fs_req,
+							     sock_fd,
+							     fd,
+							     offset,
+							     size,
+							     on_sendfile_complete);
 				if (r < 0) {
 					free(fs_req);
 				} else {
@@ -159,7 +166,14 @@ on_write(uv_write_t* req, int status)
 					return;
 				}
 			}
+		} else {
+			printf("DEBUG: csilk_io_fileno failed!\n");
+			fflush(stdout);
 		}
+	} else {
+		printf("DEBUG: on_write called with file_fd=%d\n",
+		       client ? client->ctx.file_fd : -999);
+		fflush(stdout);
 	}
 
 	free(req);
@@ -483,7 +497,7 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 		return;
 	}
 
-	/* Guard against size_t-to-int truncation for SSL_write and uv_buf_init. */
+	/* Guard against size_t-to-int truncation for SSL_write and csilk_io_buf_init. */
 	assert(len <= INT_MAX);
 
 	if (client->ssl) {
@@ -492,7 +506,7 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 		return;
 	}
 
-	uv_write_t* req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 	if (!req) {
 		return;
 	}
@@ -504,9 +518,9 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 	}
 	memcpy(buf_copy, data, len);
 
-	uv_buf_t buf = uv_buf_init(buf_copy, (unsigned int)len);
+	csilk_io_buf_t buf = csilk_io_buf_init(buf_copy, (unsigned int)len);
 	req->data = buf_copy;
-	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+	csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
 }
 #endif
 
@@ -536,7 +550,7 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
  *
  *  Unlike _csilk_send_data() / csilk_client_write(), this does NOT make
  *  an internal copy. Instead the caller's heap buffer is passed directly
- *  to uv_write() and freed by on_write().  For TLS connections the buffer
+ *  to csilk_io_write() and freed by on_write().  For TLS connections the buffer
  *  is freed immediately after SSL_write(). */
 CSILK_INTERNAL void
 _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
@@ -558,15 +572,15 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
 		return;
 	}
 
-	uv_write_t* req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 	if (!req) {
 		free(data);
 		return;
 	}
 
 	req->data = data;
-	uv_buf_t buf = uv_buf_init(data, (unsigned int)len);
-	uv_write(req, (uv_stream_t*)&client->handle, &buf, 1, on_write);
+	csilk_io_buf_t buf = csilk_io_buf_init(data, (unsigned int)len);
+	csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
 }
 
 /* --- Request dispatch --- */
@@ -671,7 +685,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
  *                          response chunks over time.
  *   - File (sendfile):     Content-Length is set to file_size; the header
  *                          is sent via _csilk_send_data, then on_write
- *                          triggers uv_fs_sendfile for zero-copy file
+ *                          triggers csilk_io_fs_sendfile for zero-copy file
  *                          delivery. Only available on non-TLS connections.
  *   - WebSocket (101):     Minimal header; the caller manages frames via
  *                          csilk_ws_send(). See is_websocket branch.
@@ -679,7 +693,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
  * After the response is sent:
  *   - For sendfile: return early, defer cleanup to on_sendfile_complete.
  *   - For keep-alive: restart the idle timer, begin reading next request.
- *   - For close: initiate uv_close.
+ *   - For close: initiate csilk_io_close.
  *   - Fire CSILK_HOOK_REQUEST_END, clean up context.
  *
  * @param c Request context (must have _internal_client set).
@@ -813,8 +827,8 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 		csilk_client_read_start(client);
 	} else {
 		CSILK_LOG_I("_csilk_handle_post_response: closing handle");
-		if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-			uv_close((uv_handle_t*)&client->handle, on_close);
+		if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+			csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 		}
 	}
 }

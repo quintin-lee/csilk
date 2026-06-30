@@ -10,49 +10,50 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <uv.h>
+#include <pthread.h>
+#include <unistd.h>
 
 #include "csilk/csilk.h"
 
 /* Structure to track state for each SSE stream */
 typedef struct {
-	uv_timer_t timer;
+	pthread_t thread;
 	csilk_ctx_t* ctx;
 	int count;
 } sse_stream_t;
 
 /**
- * @brief Timer callback that streams SSE events to the client.
+ * @brief Thread that streams SSE events to the client.
  */
-static void
-on_sse_timer(uv_timer_t* handle)
+static void*
+sse_worker_thread(void* arg)
 {
-	sse_stream_t* stream = (sse_stream_t*)handle->data;
-	stream->count++;
+	sse_stream_t* stream = (sse_stream_t*)arg;
 
-	/* Format the event payload */
-	char payload[128];
-	snprintf(payload,
-		 sizeof(payload),
-		 "{\"tick\": %d, \"timestamp\": %ld}",
-		 stream->count,
-		 (long)time(NULL));
+	while (stream->count < 10) {
+		sleep(1);
+		stream->count++;
 
-	printf("[SSE Stream] Sending event #%d to client\n", stream->count);
+		/* Format the event payload */
+		char payload[128];
+		snprintf(payload,
+			 sizeof(payload),
+			 "{\"tick\": %d, \"timestamp\": %ld}",
+			 stream->count,
+			 (long)time(NULL));
 
-	/* Send event of type "message" (default) or "ticker" */
-	csilk_sse_send(stream->ctx, "ticker", payload);
+		printf("[SSE Stream] Sending event #%d to client\n", stream->count);
 
-	/* Close the stream after 10 ticks */
-	if (stream->count >= 10) {
-		printf("[SSE Stream] Stream completed, closing connection.\n");
-		csilk_sse_send(stream->ctx, "done", "Stream finished");
-		csilk_sse_close(stream->ctx);
-
-		/* Clean up the timer */
-		uv_timer_stop(handle);
-		free(stream);
+		/* Send event of type "message" (default) or "ticker" */
+		csilk_sse_send(stream->ctx, "ticker", payload);
 	}
+
+	printf("[SSE Stream] Stream completed, closing connection.\n");
+	csilk_sse_send(stream->ctx, "done", "Stream finished");
+	csilk_sse_close(stream->ctx);
+
+	free(stream);
+	return NULL;
 }
 
 /**
@@ -67,7 +68,7 @@ events_handler(csilk_ctx_t* c)
 	/* Send a welcome/connection message immediately */
 	csilk_sse_send(c, "welcome", "Connected to the SSE live stream!");
 
-	/* Set up a background libuv timer to push events every second */
+	/* Set up a background thread to push events every second */
 	sse_stream_t* stream = malloc(sizeof(sse_stream_t));
 	if (!stream) {
 		csilk_sse_close(c);
@@ -76,12 +77,10 @@ events_handler(csilk_ctx_t* c)
 
 	stream->ctx = c;
 	stream->count = 0;
-	stream->timer.data = stream;
 
-	/* Initialize and start the libuv timer on the default loop */
-	uv_loop_t* loop = csilk_io_default_loop();
-	uv_timer_init(loop, &stream->timer);
-	uv_timer_start(&stream->timer, on_sse_timer, 1000, 1000); /* every 1000ms */
+	/* Start thread */
+	pthread_create(&stream->thread, NULL, sse_worker_thread, stream);
+	pthread_detach(stream->thread);
 
 	printf("[SSE System] Stream connection initialized.\n");
 }

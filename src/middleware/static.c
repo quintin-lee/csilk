@@ -11,7 +11,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
@@ -88,8 +88,8 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 		    "Static: Range request unsatisfiable: missing dash (Range header: '%s')",
 		    range_hdr);
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
-		uv_fs_t close_req;
-		uv_fs_close(nullptr, &close_req, fd, nullptr);
+		csilk_io_fs_t close_req;
+		csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
 		return;
 	}
 
@@ -104,8 +104,8 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 				    "header: '%s')",
 				    range_hdr);
 			csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
-			uv_fs_t close_req;
-			uv_fs_close(nullptr, &close_req, fd, nullptr);
+			csilk_io_fs_t close_req;
+			csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
 			return;
 		}
 	}
@@ -124,8 +124,8 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 			    range_hdr,
 			    size);
 		csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
-		uv_fs_t close_req;
-		uv_fs_close(nullptr, &close_req, fd, nullptr);
+		csilk_io_fs_t close_req;
+		csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
 		return;
 	}
 	if (range_end >= (long long)size) {
@@ -308,19 +308,19 @@ static_work_cb(csilk_io_work_t* req)
 		}
 	}
 
-	uv_fs_t open_req;
-	int fd = uv_fs_open(nullptr, &open_req, resolved_file, O_RDONLY, 0, nullptr);
-	uv_fs_req_cleanup(&open_req);
+	csilk_io_fs_t open_req;
+	int fd = csilk_io_fs_open(nullptr, &open_req, resolved_file, O_RDONLY, 0, nullptr);
+	csilk_io_fs_req_cleanup(&open_req);
 	if (fd < 0) {
 		CSILK_LOG_D("Static: Failed to open file '%s' (error: %d)", resolved_file, fd);
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
 
-	uv_fs_t stat_req;
-	uv_fs_fstat(nullptr, &stat_req, fd, nullptr);
+	csilk_io_fs_t stat_req;
+	csilk_io_fs_fstat(nullptr, &stat_req, fd, nullptr);
 	size_t size = stat_req.statbuf.st_size;
-	uv_fs_req_cleanup(&stat_req);
+	csilk_io_fs_req_cleanup(&stat_req);
 
 	const char* mime_type = get_mime_type(resolved_file);
 	set_range_response(c, fd, size, mime_type);
@@ -341,19 +341,19 @@ file_work_cb(csilk_io_work_t* req)
 
 	CSILK_LOG_T("Static: Resolving specific file serve request for path '%s'", file_path);
 
-	uv_fs_t open_req;
-	int fd = uv_fs_open(nullptr, &open_req, file_path, O_RDONLY, 0, nullptr);
-	uv_fs_req_cleanup(&open_req);
+	csilk_io_fs_t open_req;
+	int fd = csilk_io_fs_open(nullptr, &open_req, file_path, O_RDONLY, 0, nullptr);
+	csilk_io_fs_req_cleanup(&open_req);
 	if (fd < 0) {
 		CSILK_LOG_D("Static: Failed to open specific file '%s' (error: %d)", file_path, fd);
 		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 		return;
 	}
 
-	uv_fs_t stat_req;
-	uv_fs_fstat(nullptr, &stat_req, fd, nullptr);
+	csilk_io_fs_t stat_req;
+	csilk_io_fs_fstat(nullptr, &stat_req, fd, nullptr);
 	size_t size = stat_req.statbuf.st_size;
-	uv_fs_req_cleanup(&stat_req);
+	csilk_io_fs_req_cleanup(&stat_req);
 
 	const char* mime_type = get_mime_type(file_path);
 	set_range_response(c, fd, size, mime_type);

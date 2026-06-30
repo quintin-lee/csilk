@@ -105,6 +105,9 @@ expect_body(const char* resp, const char* body)
 int
 main()
 {
+	csilk_log_config_t lcfg = {0};
+	csilk_log_init(lcfg);
+
 	pthread_t thread;
 	pthread_create(&thread, nullptr, run_server, nullptr);
 	while (!server_ready) {

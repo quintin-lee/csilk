@@ -7,7 +7,7 @@
 /** @brief Trace record for a single node execution. */
 typedef struct csilk_wf_trace_node_s {
 	char* node_id;
-	uint64_t start_time; /**< Microseconds (uv_hrtime) */
+	uint64_t start_time; /**< Microseconds (csilk_io_hrtime) */
 	uint64_t end_time;   /**< Microseconds */
 	char* input_dump;    /**< String representation of input */
 	char* output_dump;   /**< String representation of output */

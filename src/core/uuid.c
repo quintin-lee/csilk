@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include <string.h>
 
 #include "csilk/csilk.h"

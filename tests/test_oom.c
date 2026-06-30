@@ -73,7 +73,7 @@ test_oom_ws_send()
 	printf("Testing WS send OOM...\n");
 	csilk_ctx_t* ctx = csilk_test_ctx_new();
 
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 	uv_tcp_t client;
 	uv_tcp_init(loop, &client);
 	_csilk_set_internal_client(ctx, &client);

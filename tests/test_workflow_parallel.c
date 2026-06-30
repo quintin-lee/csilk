@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/app/workflow.h"
 

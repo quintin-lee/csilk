@@ -84,12 +84,12 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
 		}
 	}
 
-	uv_buf_t bufs[5];
-	bufs[0] = uv_buf_init((char*)&topic_len, 4);
-	bufs[1] = uv_buf_init((char*)topic, topic_len);
-	bufs[2] = uv_buf_init((char*)&payload_len, 4);
-	bufs[3] = uv_buf_init((char*)payload, payload_len);
-	bufs[4] = uv_buf_init((char*)&checksum, 4);
+	csilk_io_buf_t bufs[5];
+	bufs[0] = csilk_io_buf_init((char*)&topic_len, 4);
+	bufs[1] = csilk_io_buf_init((char*)topic, topic_len);
+	bufs[2] = csilk_io_buf_init((char*)&payload_len, 4);
+	bufs[3] = csilk_io_buf_init((char*)payload, payload_len);
+	bufs[4] = csilk_io_buf_init((char*)&checksum, 4);
 
 	CSILK_LOG_T("MQ: Appending message to WAL. Topic: '%s', Length: %zu, Checksum: 0x%08x",
 		    topic,
@@ -168,7 +168,7 @@ _mq_recovery(csilk_mq_t* mq)
 		int nread;
 
 		/* 1. Read topic_len (4 bytes) */
-		uv_buf_t buf = uv_buf_init((char*)&topic_len, 4);
+		csilk_io_buf_t buf = csilk_io_buf_init((char*)&topic_len, 4);
 		nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		csilk_io_fs_req_cleanup(&read_req);
 		if (nread < 4) {
@@ -189,7 +189,7 @@ _mq_recovery(csilk_mq_t* mq)
 			    (size_t)offset);
 			break;
 		}
-		buf = uv_buf_init(topic, topic_len);
+		buf = csilk_io_buf_init(topic, topic_len);
 		nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		csilk_io_fs_req_cleanup(&read_req);
 		if (nread < (int)topic_len) {
@@ -202,7 +202,7 @@ _mq_recovery(csilk_mq_t* mq)
 		offset += topic_len;
 
 		/* 3. Read payload_len (4 bytes) */
-		buf = uv_buf_init((char*)&payload_len, 4);
+		buf = csilk_io_buf_init((char*)&payload_len, 4);
 		nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		csilk_io_fs_req_cleanup(&read_req);
 		if (nread < 4) {
@@ -224,7 +224,7 @@ _mq_recovery(csilk_mq_t* mq)
 				free(topic);
 				break;
 			}
-			buf = uv_buf_init(payload, payload_len);
+			buf = csilk_io_buf_init(payload, payload_len);
 			nread = csilk_io_fs_read(
 			    mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 			csilk_io_fs_req_cleanup(&read_req);
@@ -240,7 +240,7 @@ _mq_recovery(csilk_mq_t* mq)
 		}
 
 		/* 5. Read stored checksum (4 bytes) */
-		buf = uv_buf_init((char*)&checksum, 4);
+		buf = csilk_io_buf_init((char*)&checksum, 4);
 		nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
 		csilk_io_fs_req_cleanup(&read_req);
 		if (nread < 4) {

@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
@@ -91,7 +91,7 @@ csilk_ws_handshake(csilk_ctx_t* c)
  * @param req    The completed write request (freed by this callback).
  * @param status UV status code (ignored). */
 static void
-on_ws_write(uv_write_t* req, int status)
+on_ws_write(csilk_io_write_t* req, int status)
 {
 	if (req->data) {
 		free(req->data);
@@ -173,13 +173,14 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 	}
 	memcpy(frame + header_len, payload, len);
 
-	uv_write_t* write_req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* write_req = malloc(sizeof(csilk_io_write_t));
 	if (write_req) {
-		uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)(header_len + len));
+		csilk_io_buf_t buf =
+		    csilk_io_buf_init((char*)frame, (unsigned int)(header_len + len));
 		write_req->data = frame;
 		// The first member of csilk_client_t is csilk_io_tcp_t handle
-		uv_stream_t* stream = (uv_stream_t*)internal_client;
-		uv_write(write_req, stream, &buf, 1, on_ws_write);
+		csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+		csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
 	} else {
 		free(frame);
 	}
@@ -193,10 +194,10 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
  * @param req    The completed write request (freed by this callback).
  * @param status UV status code (negative indicates error, logged to stderr). */
 static void
-on_close_write(uv_write_t* req, int status)
+on_close_write(csilk_io_write_t* req, int status)
 {
 	if (status < 0) {
-		CSILK_LOG_E("WS close write error: %s", uv_strerror(status));
+		CSILK_LOG_E("WS close write error: %s", csilk_io_strerror(status));
 	}
 	if (req->data) {
 		free(req->data);
@@ -263,12 +264,12 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 		memcpy(frame + offset, reason, reason_len);
 	}
 
-	uv_write_t* write_req = malloc(sizeof(uv_write_t));
+	csilk_io_write_t* write_req = malloc(sizeof(csilk_io_write_t));
 	if (write_req) {
-		uv_buf_t buf = uv_buf_init((char*)frame, (unsigned int)frame_len);
+		csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
 		write_req->data = frame;
-		uv_stream_t* stream = (uv_stream_t*)internal_client;
-		uv_write(write_req, stream, &buf, 1, on_close_write);
+		csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+		csilk_io_write(write_req, stream, &buf, 1, on_close_write);
 	} else {
 		free(frame);
 	}
@@ -379,9 +380,9 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 		csilk_ws_close(c, close_code, nullptr);
 		void* internal_client = _csilk_get_internal_client(c);
 		if (internal_client) {
-			uv_stream_t* stream = (uv_stream_t*)internal_client;
-			if (!uv_is_closing((uv_handle_t*)stream)) {
-				uv_close((uv_handle_t*)stream, nullptr);
+			csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+			if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+				csilk_io_close((csilk_io_handle_t*)stream, nullptr);
 			}
 		}
 		free(payload);

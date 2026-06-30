@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdatomic.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #if defined(__linux__)
 #include <sys/random.h>
 #endif
@@ -393,8 +393,8 @@ csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
 	if (csilk_crypto_fill_random(out, len) != 0) {
 		/* Monotonic unique fallback to ensure GCM safety (never reuse nonce)
-		 * if the system entropy source fails. Uses uv_hrtime() and atomic counter. */
-		uint64_t ts = uv_hrtime();
+		 * if the system entropy source fails. Uses csilk_io_hrtime() and atomic counter. */
+		uint64_t ts = csilk_io_hrtime();
 		uint32_t count = atomic_fetch_add(&g_nonce_counter, 1);
 		size_t i = 0;
 		for (; i < len && i < 8; i++) {

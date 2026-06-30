@@ -4,6 +4,8 @@
  *        WAL event logging, run/resume/signal entry points.
  */
 
+#include <stdatomic.h>
+
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
@@ -141,10 +143,10 @@ cleanup_ctx_now(csilk_wf_ctx_t* ctx)
  *
  * Triggers the final cleanup of the context after the libuv timer handle is closed.
  *
- * @param handle The uv_handle_t pointer of the TTL timer.
+ * @param handle The csilk_io_handle_t pointer of the TTL timer.
  */
 static void
-on_ttl_timer_close(uv_handle_t* handle)
+on_ttl_timer_close(csilk_io_handle_t* handle)
 {
 	csilk_wf_ctx_t* ctx = (csilk_wf_ctx_t*)handle->data;
 	cleanup_ctx_now(ctx);
@@ -166,9 +168,9 @@ _wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
 	unregister_active_ctx(ctx->wf, ctx);
 	if (ctx->wf->ttl_sec > 0) {
 		csilk_io_timer_stop(&ctx->ttl_timer);
-		if (!uv_is_closing((uv_handle_t*)&ctx->ttl_timer)) {
+		if (!csilk_io_is_closing((csilk_io_handle_t*)&ctx->ttl_timer)) {
 			ctx->ttl_timer.data = ctx;
-			uv_close((uv_handle_t*)&ctx->ttl_timer, on_ttl_timer_close);
+			csilk_io_close((csilk_io_handle_t*)&ctx->ttl_timer, on_ttl_timer_close);
 			return;
 		}
 	}
@@ -272,7 +274,7 @@ on_retry_timer(csilk_io_timer_t* handle)
  * @param handle The closed libuv handle.
  */
 static void
-on_work_timer_close(uv_handle_t* handle)
+on_work_timer_close(csilk_io_handle_t* handle)
 {
 	node_work_t* work = (node_work_t*)handle->data;
 	free(work);
@@ -293,7 +295,7 @@ free_work(node_work_t* work)
 		work->timer_closing = 1;
 		csilk_io_timer_stop(&work->node_timer);
 		work->node_timer.data = work;
-		uv_close((uv_handle_t*)&work->node_timer, on_work_timer_close);
+		csilk_io_close((csilk_io_handle_t*)&work->node_timer, on_work_timer_close);
 		return;
 	}
 	free(work);
@@ -394,7 +396,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
 	_wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : nullptr);
 
 	if (work->trace_node) {
-		work->trace_node->end_time = uv_hrtime() / 1000;
+		work->trace_node->end_time = csilk_io_hrtime() / 1000;
 		if (output) {
 			work->trace_node->output_dump =
 			    strdup(output->value ? (char*)output->value : "(null)");
@@ -519,7 +521,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
 		_wf_broadcast(
 		    ctx->wf, "workflow_end", nullptr, output ? (char*)output->value : nullptr);
 		if (ctx->trace) {
-			ctx->trace->end_time = uv_hrtime() / 1000;
+			ctx->trace->end_time = csilk_io_hrtime() / 1000;
 		}
 		if (ctx->trace_callback) {
 			ctx->trace_callback(output, ctx->trace);
@@ -627,7 +629,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
 	if (ctx->trace) {
 		csilk_wf_trace_node_t* tn = calloc(1, sizeof(csilk_wf_trace_node_t));
 		tn->node_id = strdup(node->id);
-		tn->start_time = uv_hrtime() / 1000;
+		tn->start_time = csilk_io_hrtime() / 1000;
 		tn->input_dump = strdup(input && input->value ? (char*)input->value : "(null)");
 		work->trace_node = tn;
 	}
@@ -784,9 +786,14 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 	if (trace_cb) {
 		ctx->trace = calloc(1, sizeof(csilk_wf_trace_t));
 		ctx->trace->exec_id = strdup(ctx->exec_id);
-		ctx->trace->start_time = uv_hrtime() / 1000;
+		ctx->trace->start_time = csilk_io_hrtime() / 1000;
 	}
 	int started = 0;
+	static __thread char ret_exec_id[CSILK_UUID_BUF_SIZE];
+	strcpy(ret_exec_id, ctx->exec_id);
+
+	atomic_fetch_add(&ctx->nodes_active, 1);
+
 	for (size_t i = 0; i < wf->node_count; i++) {
 		if (wf->nodes[i]->is_entry) {
 			execute_node(ctx, wf->nodes[i], input);
@@ -801,6 +808,9 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 			}
 		}
 	}
+
+	int active = atomic_fetch_sub(&ctx->nodes_active, 1) - 1;
+
 	if (!started) {
 		if (callback) {
 			callback(nullptr);
@@ -808,10 +818,17 @@ _wf_run_ext_internal(csilk_wf_t* wf,
 		if (trace_cb) {
 			trace_cb(nullptr, nullptr);
 		}
-		_wf_cleanup_ctx(ctx);
+		if (active == 0) {
+			_wf_cleanup_ctx(ctx);
+		}
 		return nullptr;
 	}
-	return ctx->exec_id;
+
+	if (active == 0) {
+		_wf_cleanup_ctx(ctx);
+	}
+
+	return ret_exec_id;
 }
 
 /* --- Resume & Signal --- */

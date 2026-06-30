@@ -42,7 +42,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
 
@@ -235,14 +235,14 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 		return nullptr;
 	}
 
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 	CSILK_LOG_D("Database query initiated: %s", sql);
 
 	csilk_mutex_lock(&pool->mutex);
 	cJSON* result = csilk_db_query_json_locked(pool, sql);
 	csilk_mutex_unlock(&pool->mutex);
 
-	uint64_t duration = (uv_hrtime() - start) / 1000;
+	uint64_t duration = (csilk_io_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
 
 	if (!result) {
@@ -269,14 +269,14 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 		return -1;
 	}
 
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 	CSILK_LOG_D("Database exec initiated: %s", sql);
 
 	csilk_mutex_lock(&pool->mutex);
 	int rc = pool->driver->exec(pool, sql);
 	csilk_mutex_unlock(&pool->mutex);
 
-	uint64_t duration = (uv_hrtime() - start) / 1000;
+	uint64_t duration = (csilk_io_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
 
 	if (rc != 0) {
@@ -322,7 +322,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 		return nullptr;
 	}
 
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 	CSILK_LOG_D("Parameterized database query initiated: %s", sql);
 
 	/* Pre-scan: compute output size with SQL-escaped param values.
@@ -366,7 +366,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 	cJSON* result = csilk_db_query_json_locked(pool, full_sql);
 	csilk_mutex_unlock(&pool->mutex);
 
-	uint64_t duration = (uv_hrtime() - start) / 1000;
+	uint64_t duration = (csilk_io_hrtime() - start) / 1000;
 	atomic_fetch_add(&db_duration_us_total, duration);
 
 	if (!result) {

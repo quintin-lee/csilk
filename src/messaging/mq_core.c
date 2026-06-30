@@ -112,7 +112,7 @@ _csilk_mq_new(csilk_io_loop_t* loop)
 }
 
 static void
-on_mq_close(uv_handle_t* handle)
+on_mq_close(csilk_io_handle_t* handle)
 {
 	csilk_mq_t* mq = (csilk_mq_t*)handle->data;
 	if (!mq) {
@@ -123,9 +123,9 @@ on_mq_close(uv_handle_t* handle)
 	csilk_mutex_destroy(&mq->wal_mutex);
 
 	if (mq->wal_fd >= 0) {
-		uv_fs_t close_req;
-		uv_fs_close(handle->loop, &close_req, mq->wal_fd, nullptr);
-		uv_fs_req_cleanup(&close_req);
+		csilk_io_fs_t close_req;
+		csilk_io_fs_close(handle->loop, &close_req, mq->wal_fd, nullptr);
+		csilk_io_fs_req_cleanup(&close_req);
 	}
 	if (mq->wal_path) {
 		free(mq->wal_path);
@@ -161,8 +161,8 @@ _csilk_mq_free(csilk_mq_t* mq)
 	if (!mq) {
 		return;
 	}
-	if (!uv_is_closing((uv_handle_t*)&mq->async_handle)) {
+	if (!csilk_io_is_closing((csilk_io_handle_t*)&mq->async_handle)) {
 		mq->async_handle.data = mq;
-		uv_close((uv_handle_t*)&mq->async_handle, on_mq_close);
+		csilk_io_close((csilk_io_handle_t*)&mq->async_handle, on_mq_close);
 	}
 }

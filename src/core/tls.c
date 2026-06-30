@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include <llhttp.h>
 
 #include "csilk/core/internal.h"
@@ -189,7 +189,7 @@ process_tls_read(csilk_client_t* client)
 	char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
 	if (!buf) {
 		CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
-		uv_close((uv_handle_t*)&client->handle, on_close);
+		csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 		return;
 	}
 	int n;
@@ -201,7 +201,7 @@ process_tls_read(csilk_client_t* client)
 			int err = SSL_get_error(client->ssl, r);
 			if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
 				CSILK_LOG_E("TLS: Handshake error: %d", err);
-				uv_close((uv_handle_t*)&client->handle, on_close);
+				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 			}
 			return;
 		}
@@ -213,7 +213,7 @@ process_tls_read(csilk_client_t* client)
 			CSILK_LOG_D("TLS: ALPN negotiated HTTP/2");
 			if (csilk_h2_init_session(client) != 0) {
 				CSILK_LOG_E("TLS: Failed to initialize HTTP/2 session");
-				uv_close((uv_handle_t*)&client->handle, on_close);
+				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 				return;
 			}
 		} else {
@@ -227,8 +227,9 @@ process_tls_read(csilk_client_t* client)
 		} else if (client->protocol == CSILK_PROTO_HTTP2) {
 			if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
 				CSILK_LOG_E("TLS: HTTP/2 processing error");
-				if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-					uv_close((uv_handle_t*)&client->handle, on_close);
+				if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+					csilk_io_close((csilk_io_handle_t*)&client->handle,
+						       on_close);
 				}
 				break;
 			}
@@ -245,8 +246,10 @@ process_tls_read(csilk_client_t* client)
 						    llhttp_errno_name(err),
 						    client->parser.reason ? client->parser.reason
 									  : "unknown reason");
-					if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-						uv_close((uv_handle_t*)&client->handle, on_close);
+					if (!csilk_io_is_closing(
+						(csilk_io_handle_t*)&client->handle)) {
+						csilk_io_close((csilk_io_handle_t*)&client->handle,
+							       on_close);
 					}
 					break;
 				}
@@ -259,8 +262,8 @@ process_tls_read(csilk_client_t* client)
 		if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
 		    err != SSL_ERROR_ZERO_RETURN) {
 			CSILK_LOG_E("TLS: Read error: %d", err);
-			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
+			if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
 			}
 		}
 	}
@@ -282,7 +285,7 @@ flush_tls_write(csilk_client_t* client)
 	int n;
 
 	while ((n = BIO_read(client->write_bio, buf, sizeof(buf))) > 0) {
-		uv_write_t* req = malloc(sizeof(uv_write_t));
+		csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
 		if (!req) {
 			break;
 		}
@@ -294,8 +297,8 @@ flush_tls_write(csilk_client_t* client)
 		}
 		memcpy(data, buf, (size_t)n);
 
-		uv_buf_t uv_buf = uv_buf_init(data, (unsigned int)n);
+		csilk_io_buf_t uv_buf = csilk_io_buf_init(data, (unsigned int)n);
 		req->data = data;
-		uv_write(req, (uv_stream_t*)&client->handle, &uv_buf, 1, on_write);
+		csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &uv_buf, 1, on_write);
 	}
 }

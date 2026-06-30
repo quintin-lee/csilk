@@ -517,8 +517,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(example_workflow_ui examples/example_workflow_ui.c)
   target_link_libraries(example_workflow_ui csilk)
 
-  add_executable(example_admin_dashboard examples/example_admin_dashboard.c)
-  target_link_libraries(example_admin_dashboard csilk)
+#  add_executable(example_admin_dashboard examples/example_admin_dashboard.c)
+#  target_link_libraries(example_admin_dashboard csilk)
 
   add_executable(example_db examples/example_db.c)
   target_link_libraries(example_db csilk)

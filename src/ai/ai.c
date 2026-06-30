@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
 #include "csilk/csilk.h"
@@ -275,7 +275,7 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 		return -1;
 	}
 
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 	atomic_fetch_add(&ai_requests_total, 1);
 
 	CSILK_LOG_D("AI chat request initiated. Model: '%s', Messages count: %zu, Tools count: %zu",
@@ -312,7 +312,7 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 					    wait_ms,
 					    retries,
 					    max_retries);
-				uv_sleep(wait_ms);
+				csilk_io_sleep(wait_ms);
 				csilk_ai_chat_response_free(res);
 				continue;
 			}
@@ -320,7 +320,7 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 		break;
 	}
 
-	uint64_t duration = (uv_hrtime() - start) / 1000; // us
+	uint64_t duration = (csilk_io_hrtime() - start) / 1000; // us
 	atomic_fetch_add(&ai_duration_us_total, duration);
 
 	if (status == 0) {
@@ -369,7 +369,7 @@ typedef struct {
 /** @brief libuv thread-pool work callback — runs csilk_ai_chat() off the main
  *  loop thread. The response is stored in the heap-allocated async context. */
 static void
-chat_work_cb(uv_work_t* req)
+chat_work_cb(csilk_io_work_t* req)
 {
 	async_chat_req_t* ar = (async_chat_req_t*)req->data;
 	ar->status = csilk_ai_chat(ar->ai, ar->req, &ar->res);
@@ -378,7 +378,7 @@ chat_work_cb(uv_work_t* req)
 /** @brief libuv after-work callback — delivers the result on the main loop
  *  thread via the user's callback, then frees the async context. */
 static void
-chat_after_work_cb(uv_work_t* req, int status)
+chat_after_work_cb(csilk_io_work_t* req, int status)
 {
 	(void)status;
 	async_chat_req_t* ar = (async_chat_req_t*)req->data;
@@ -391,7 +391,7 @@ chat_after_work_cb(uv_work_t* req, int status)
  *  pool.
  *
  *  Allocates a work request and an async context on the heap, queues the
- *  work via uv_queue_work(), and returns immediately. The callback fires
+ *  work via csilk_io_queue_work(), and returns immediately. The callback fires
  *  on the main loop thread after the driver's chat() completes. The response
  *  is valid only during the callback invocation.
  *
@@ -416,7 +416,7 @@ csilk_ai_chat_async(csilk_ai_t* ai,
 		return;
 	}
 
-	uv_work_t* work = malloc(sizeof(uv_work_t));
+	csilk_io_work_t* work = malloc(sizeof(csilk_io_work_t));
 	async_chat_req_t* ar = malloc(sizeof(async_chat_req_t));
 	if (!work || !ar) {
 		CSILK_LOG_E("Failed to allocate memory for async chat request");
@@ -434,7 +434,7 @@ csilk_ai_chat_async(csilk_ai_t* ai,
 	work->data = ar;
 	CSILK_LOG_D("Queueing async chat request for model '%s'",
 		    req->model ? req->model : "default");
-	uv_queue_work(csilk_io_default_loop(), work, chat_work_cb, chat_after_work_cb);
+	csilk_io_queue_work(csilk_io_default_loop(), work, chat_work_cb, chat_after_work_cb);
 }
 
 /** @brief Generate embeddings for a batch of input strings.
@@ -462,7 +462,7 @@ csilk_ai_embeddings(csilk_ai_t* ai,
 		return -1;
 	}
 
-	uint64_t start = uv_hrtime();
+	uint64_t start = csilk_io_hrtime();
 	atomic_fetch_add(&ai_requests_total, 1);
 
 	CSILK_LOG_D(
@@ -481,7 +481,7 @@ csilk_ai_embeddings(csilk_ai_t* ai,
 
 	int status = ai->driver->embeddings(ai->driver_state, model, input, count, res);
 
-	uint64_t duration = (uv_hrtime() - start) / 1000;
+	uint64_t duration = (csilk_io_hrtime() - start) / 1000;
 	atomic_fetch_add(&ai_duration_us_total, duration);
 
 	if (status == 0) {
@@ -523,7 +523,7 @@ typedef struct {
  *  Runs csilk_ai_embeddings() off the main loop thread, storing
  *  the result in the heap-allocated async context. */
 static void
-emb_work_cb(uv_work_t* req)
+emb_work_cb(csilk_io_work_t* req)
 {
 	async_emb_req_t* ar = (async_emb_req_t*)req->data;
 	ar->status = csilk_ai_embeddings(ar->ai, ar->model, ar->input, ar->count, &ar->res);
@@ -533,7 +533,7 @@ emb_work_cb(uv_work_t* req)
  *  result on the main loop thread via the user's callback, then frees
  *  the async context. */
 static void
-emb_after_work_cb(uv_work_t* req, int status)
+emb_after_work_cb(csilk_io_work_t* req, int status)
 {
 	(void)status;
 	async_emb_req_t* ar = (async_emb_req_t*)req->data;
@@ -545,7 +545,7 @@ emb_after_work_cb(uv_work_t* req, int status)
 /** @brief Generate embeddings asynchronously on the libuv thread pool.
  *
  * Allocates a work request and async context on the heap, queues
- * via uv_queue_work(), and returns immediately. The callback fires
+ * via csilk_io_queue_work(), and returns immediately. The callback fires
  * on the main loop thread after completion.
  *
  * @param ai         AI engine handle.
@@ -569,7 +569,7 @@ csilk_ai_embeddings_async(csilk_ai_t* ai,
 		return;
 	}
 
-	uv_work_t* work = malloc(sizeof(uv_work_t));
+	csilk_io_work_t* work = malloc(sizeof(csilk_io_work_t));
 	async_emb_req_t* ar = malloc(sizeof(async_emb_req_t));
 	if (!work || !ar) {
 		CSILK_LOG_E("Failed to allocate memory for async embeddings request");
@@ -588,7 +588,7 @@ csilk_ai_embeddings_async(csilk_ai_t* ai,
 
 	work->data = ar;
 	CSILK_LOG_D("Queueing async embeddings request for model '%s' (inputs: %zu)", model, count);
-	uv_queue_work(csilk_io_default_loop(), work, emb_work_cb, emb_after_work_cb);
+	csilk_io_queue_work(csilk_io_default_loop(), work, emb_work_cb, emb_after_work_cb);
 }
 
 /** @brief Free an AI engine handle and its driver state.

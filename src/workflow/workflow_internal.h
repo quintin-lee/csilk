@@ -6,7 +6,7 @@
 #ifndef CSILK_WORKFLOW_INTERNAL_CORE_H
 #define CSILK_WORKFLOW_INTERNAL_CORE_H
 
-#include <uv.h>
+#include <csilk/core/sys_io.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>

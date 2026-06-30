@@ -84,27 +84,26 @@ on_signal(csilk_server_t* server)
 /* --- Graceful shutdown --- */
 
 static int
-close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
+close_active_clients(csilk_server_t* server, struct io_uring* loop)
 {
-	csilk_mutex_lock(&server->clients_mutex);
-	csilk_client_t* client = server->active_clients;
 	int count = 0;
-	while (client) {
-		if (&client->owner_pool->loop == loop) {
-			count++;
+	for (int w = 0; w < server->worker_pool_count; w++) {
+		worker_pool_t* wp = &server->worker_pools[w];
+		csilk_client_t* client = wp->active_clients;
+		while (client) {
+			csilk_client_t* next = client->next;
 			if (client->ctx.is_websocket) {
 				csilk_ws_close(&client->ctx, 1001, "Server stopping");
-				close(client->handle.fd);
 			} else if (client->ctx.is_sse) {
 				csilk_sse_send(&client->ctx, "close", "Server stopping");
 				csilk_sse_close(&client->ctx);
-			} else {
-				close(client->handle.fd);
 			}
+			close(client->handle.fd);
+			client = next;
+			count++;
 		}
-		client = client->next;
+		wp->active_clients = NULL;
 	}
-	csilk_mutex_unlock(&server->clients_mutex);
 	return count;
 }
 
@@ -181,10 +180,11 @@ csilk_server_new(csilk_router_t* router)
 
 	s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
 	s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+	s->server_handle.fd = -1;
+	s->async_handle.event_fd = -1;
+	s->sig_handle.signal_fd = -1;
 	s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
 	s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
-
-	csilk_mutex_init(&s->clients_mutex);
 
 	// _csilk_mq_new uses loop implicitly internally if needed? Let's assume it handles io_uring loop.
 	s->mq = _csilk_mq_new(s->loop);
@@ -327,7 +327,6 @@ csilk_server_free(csilk_server_t* server)
 		}
 	}
 
-	csilk_mutex_destroy(&server->clients_mutex);
 	csilk_arena_flush_free_list();
 
 	if (server->loop) {
@@ -544,6 +543,7 @@ worker_thread(void* arg)
 	free(data);
 
 	csilk_io_loop_t* loop_ptr = &wp->loop;
+	wp->loop_ptr = loop_ptr;
 	io_uring_queue_init(256, loop_ptr, 0);
 
 	wp->server_handle.data = wp;
@@ -566,15 +566,17 @@ worker_thread(void* arg)
 
 	struct io_uring_sqe* stop_sqe = io_uring_get_sqe(loop_ptr);
 	io_uring_prep_poll_add(stop_sqe, wp->stop_async.event_fd, POLLIN);
-	io_uring_sqe_set_data64(stop_sqe, uring_encode_data(URING_OP_WAKEUP, &wp->stop_async));
+	io_uring_sqe_set_data64(stop_sqe,
+				uring_encode_data(URING_OP_WAKEUP, NULL, &wp->stop_async));
 
 	struct io_uring_sqe* disp_sqe = io_uring_get_sqe(loop_ptr);
 	io_uring_prep_poll_add(disp_sqe, wp->dispatch_async.event_fd, POLLIN);
-	io_uring_sqe_set_data64(disp_sqe, uring_encode_data(URING_OP_WAKEUP, &wp->dispatch_async));
+	io_uring_sqe_set_data64(disp_sqe,
+				uring_encode_data(URING_OP_WAKEUP, NULL, &wp->dispatch_async));
 
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(loop_ptr);
-	io_uring_prep_multishot_accept(acc_sqe, wp->server_handle.fd, NULL, NULL, 0);
-	io_uring_sqe_set_data64(acc_sqe, uring_encode_data(URING_OP_ACCEPT, &wp->server_handle));
+	io_uring_prep_poll_add(acc_sqe, wp->server_handle.fd, POLLIN);
+	io_uring_sqe_set_data64(acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
 
 	io_uring_submit(loop_ptr);
 
@@ -590,26 +592,70 @@ worker_thread(void* arg)
 			if (ret == -EINTR) {
 				continue;
 			}
+			CSILK_LOG_E("io_uring_wait_cqe failed: %d", ret);
 			break;
 		}
 
+		int res = cqe->res;
+		int flags = cqe->flags;
 		uring_op_type_t op;
 		void* ptr;
-		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr);
+		uint8_t gen = 0;
+		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr, &gen);
+		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE) {
+			csilk_client_t* client = (csilk_client_t*)ptr;
+			if (op == URING_OP_WRITE) {
+				client = ((uring_write_req_t*)ptr)->client;
+			} else if (op == URING_OP_UV_WRITE) {
+				client = (csilk_client_t*)(((void**)ptr)[0]);
+			}
+			if (client->generation != gen) {
+				CSILK_LOG_D("Worker: ignoring old CQE (op %d, res %d)", op, res);
+				io_uring_cqe_seen(loop_ptr, cqe);
+				continue;
+			}
+		}
+
+		io_uring_cqe_seen(loop_ptr, cqe);
+
+		CSILK_LOG_D("Worker %d: wait_cqe returned op %d, res %d, flags %d",
+			    wp->worker_index,
+			    op,
+			    res,
+			    flags);
 
 		if (op == URING_OP_ACCEPT) {
-			if (cqe->res >= 0) {
-				on_new_connection((worker_pool_t*)ptr, cqe->res);
-			}
-			if (!(cqe->flags & IORING_CQE_F_MORE)) {
-				acc_sqe = io_uring_get_sqe(loop_ptr);
-				if (acc_sqe) {
-					io_uring_prep_multishot_accept(
-					    acc_sqe, wp->server_handle.fd, NULL, NULL, 0);
-					io_uring_sqe_set_data64(
-					    acc_sqe, uring_encode_data(URING_OP_ACCEPT, ptr));
-					io_uring_submit(loop_ptr);
+			int listen_fd = wp->server_handle.fd;
+			if (res < 0) {
+				CSILK_LOG_E("Accept poll failed with %d", res);
+			} else {
+				while (1) {
+					int client_fd = accept(listen_fd, NULL, NULL);
+					if (client_fd < 0) {
+						if (errno == EAGAIN || errno == EWOULDBLOCK) {
+							break;
+						}
+						CSILK_LOG_E("Accept failed with %d", errno);
+						break;
+					}
+					on_new_connection((worker_pool_t*)ptr, client_fd);
 				}
+			}
+			acc_sqe = io_uring_get_sqe(loop_ptr);
+			if (acc_sqe) {
+				io_uring_prep_poll_add(acc_sqe, listen_fd, POLLIN);
+				io_uring_sqe_set_data64(
+				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
+				int submit_ret = io_uring_submit(loop_ptr);
+				if (submit_ret < 0) {
+					CSILK_LOG_E("io_uring_submit failed: %d", submit_ret);
+				} else {
+					CSILK_LOG_D("Worker %d: re-armed POLLIN, submitted %d",
+						    wp->worker_index,
+						    submit_ret);
+				}
+			} else {
+				CSILK_LOG_E("Failed to get SQE for accept!");
 			}
 		} else if (op == URING_OP_WAKEUP) {
 			if (ptr == &wp->dispatch_async) {
@@ -622,7 +668,8 @@ worker_thread(void* arg)
 					io_uring_prep_poll_add(
 					    poll_sqe, wp->dispatch_async.event_fd, POLLIN);
 					io_uring_sqe_set_data64(
-					    poll_sqe, uring_encode_data(URING_OP_WAKEUP, ptr));
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
 					io_uring_submit(loop_ptr);
 				}
 			} else if (ptr == &wp->stop_async) {
@@ -632,9 +679,17 @@ worker_thread(void* arg)
 					running = 0;
 				}
 			}
+		} else if (op == URING_OP_READ) {
+			on_read((csilk_client_t*)ptr, cqe->res);
+		} else if (op == URING_OP_WRITE) {
+			on_write_done(ptr, cqe->res);
+		} else if (op == URING_OP_UV_WRITE) {
+			csilk_uv_on_write_done(ptr, cqe->res);
+		} else if (op == URING_OP_TIMEOUT) {
+			on_timeout((csilk_client_t*)ptr);
+		} else if (op == URING_OP_CLOSE) {
+			on_close_done((csilk_client_t*)ptr);
 		}
-
-		io_uring_cqe_seen(loop_ptr, cqe);
 	}
 
 	io_uring_queue_exit(loop_ptr);
@@ -746,7 +801,7 @@ csilk_server_run(csilk_server_t* server, int port)
 			    &server->server_handle,
 			    port,
 			    server->config.listen_backlog,
-			    workers > 1) < 0) {
+			    workers > 0) < 0) {
 		CSILK_LOG_E("Server: failed to bind and listen on port %d", port);
 		close(server->async_handle.event_fd);
 		return -1;
@@ -762,6 +817,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	}
 	server->worker_pools[0].server = server;
 	server->worker_pools[0].worker_index = 0;
+	server->worker_pools[0].loop_ptr = server->loop;
 	server->server_handle.data = &server->worker_pools[0];
 
 	_csilk_worker_init_arena_pool(&server->worker_pools[0]);
@@ -816,21 +872,34 @@ csilk_server_run(csilk_server_t* server, int port)
 	struct io_uring_sqe* stop_sqe = io_uring_get_sqe(server->loop);
 	io_uring_prep_poll_add(stop_sqe, server->async_handle.event_fd, POLLIN);
 	io_uring_sqe_set_data64(stop_sqe,
-				uring_encode_data(URING_OP_WAKEUP, &server->async_handle));
+				uring_encode_data(URING_OP_WAKEUP, NULL, &server->async_handle));
 
 	struct io_uring_sqe* sig_sqe = io_uring_get_sqe(server->loop);
 	io_uring_prep_poll_add(sig_sqe, server->sig_handle.signal_fd, POLLIN);
-	io_uring_sqe_set_data64(sig_sqe, uring_encode_data(URING_OP_WAKEUP, &server->sig_handle));
+	io_uring_sqe_set_data64(sig_sqe,
+				uring_encode_data(URING_OP_WAKEUP, NULL, &server->sig_handle));
 
 	struct io_uring_sqe* disp_sqe = io_uring_get_sqe(server->loop);
 	io_uring_prep_poll_add(disp_sqe, server->worker_pools[0].dispatch_async.event_fd, POLLIN);
 	io_uring_sqe_set_data64(
-	    disp_sqe, uring_encode_data(URING_OP_WAKEUP, &server->worker_pools[0].dispatch_async));
+	    disp_sqe,
+	    uring_encode_data(URING_OP_WAKEUP, NULL, &server->worker_pools[0].dispatch_async));
+
+	/* Poll MQ async eventfd for message dispatch */
+	if (server->mq && server->mq->async_handle.event_fd >= 0) {
+		struct io_uring_sqe* mq_sqe = io_uring_get_sqe(server->loop);
+		if (mq_sqe) {
+			io_uring_prep_poll_add(mq_sqe, server->mq->async_handle.event_fd, POLLIN);
+			io_uring_sqe_set_data64(
+			    mq_sqe,
+			    uring_encode_data(URING_OP_WAKEUP, NULL, &server->mq->async_handle));
+		}
+	}
 
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(server->loop);
-	io_uring_prep_multishot_accept(acc_sqe, server->server_handle.fd, NULL, NULL, 0);
+	io_uring_prep_poll_add(acc_sqe, server->server_handle.fd, POLLIN);
 	io_uring_sqe_set_data64(acc_sqe,
-				uring_encode_data(URING_OP_ACCEPT, &server->server_handle));
+				uring_encode_data(URING_OP_ACCEPT, NULL, &server->worker_pools[0]));
 
 	io_uring_submit(server->loop);
 
@@ -846,26 +915,62 @@ csilk_server_run(csilk_server_t* server, int port)
 			if (ret == -EINTR) {
 				continue;
 			}
+			CSILK_LOG_E("io_uring_wait_cqe failed: %d", ret);
 			break;
 		}
 
+		int res = cqe->res;
+		int flags = cqe->flags;
 		uring_op_type_t op;
 		void* ptr;
-		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr);
+		uint8_t gen = 0;
+		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr, &gen);
+		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE) {
+			csilk_client_t* client = (csilk_client_t*)ptr;
+			if (op == URING_OP_WRITE) {
+				client = ((uring_write_req_t*)ptr)->client;
+			} else if (op == URING_OP_UV_WRITE) {
+				client = (csilk_client_t*)(((void**)ptr)[0]);
+			}
+			if (client->generation != gen) {
+				CSILK_LOG_D("Main: ignoring old CQE (op %d, res %d)", op, res);
+				io_uring_cqe_seen(server->loop, cqe);
+				continue;
+			}
+		}
+
+		io_uring_cqe_seen(server->loop, cqe);
+
+		CSILK_LOG_D("Worker 0: wait_cqe returned op %d, res %d, flags %d", op, res, flags);
 
 		if (op == URING_OP_ACCEPT) {
-			if (cqe->res >= 0) {
-				on_new_connection((worker_pool_t*)ptr, cqe->res);
-			}
-			if (!(cqe->flags & IORING_CQE_F_MORE)) {
-				acc_sqe = io_uring_get_sqe(server->loop);
-				if (acc_sqe) {
-					io_uring_prep_multishot_accept(
-					    acc_sqe, server->server_handle.fd, NULL, NULL, 0);
-					io_uring_sqe_set_data64(
-					    acc_sqe, uring_encode_data(URING_OP_ACCEPT, ptr));
-					io_uring_submit(server->loop);
+			int listen_fd = server->server_handle.fd;
+			if (res < 0) {
+				CSILK_LOG_E("Accept poll failed with %d", res);
+			} else {
+				while (1) {
+					int client_fd = accept(listen_fd, NULL, NULL);
+					if (client_fd < 0) {
+						if (errno == EAGAIN || errno == EWOULDBLOCK) {
+							break;
+						}
+						CSILK_LOG_E("Accept failed with %d", errno);
+						break;
+					}
+					on_new_connection((worker_pool_t*)ptr, client_fd);
 				}
+			}
+			acc_sqe = io_uring_get_sqe(server->loop);
+			if (acc_sqe) {
+				io_uring_prep_poll_add(acc_sqe, listen_fd, POLLIN);
+				io_uring_sqe_set_data64(
+				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, ptr));
+				int submit_ret = io_uring_submit(server->loop);
+				if (submit_ret < 0) {
+					CSILK_LOG_E("io_uring_submit failed: %d", submit_ret);
+				}
+			} else {
+				CSILK_LOG_E("Failed to get SQE for accept!");
 			}
 		} else if (op == URING_OP_WAKEUP) {
 			if (ptr == &server->async_handle) {
@@ -884,7 +989,8 @@ csilk_server_run(csilk_server_t* server, int port)
 					io_uring_prep_poll_add(
 					    poll_sqe, server->sig_handle.signal_fd, POLLIN);
 					io_uring_sqe_set_data64(
-					    poll_sqe, uring_encode_data(URING_OP_WAKEUP, ptr));
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
 					io_uring_submit(server->loop);
 				}
 			} else if (ptr == &server->worker_pools[0].dispatch_async) {
@@ -901,13 +1007,40 @@ csilk_server_run(csilk_server_t* server, int port)
 					    server->worker_pools[0].dispatch_async.event_fd,
 					    POLLIN);
 					io_uring_sqe_set_data64(
-					    poll_sqe, uring_encode_data(URING_OP_WAKEUP, ptr));
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
+					io_uring_submit(server->loop);
+				}
+			} else if (server->mq && ptr == &server->mq->async_handle) {
+				uint64_t val;
+				if (read(server->mq->async_handle.event_fd, &val, sizeof(val)) >
+				    0) {
+					if (server->mq->async_handle.cb) {
+						server->mq->async_handle.cb(
+						    &server->mq->async_handle);
+					}
+				}
+				struct io_uring_sqe* poll_sqe = io_uring_get_sqe(server->loop);
+				if (poll_sqe) {
+					io_uring_prep_poll_add(
+					    poll_sqe, server->mq->async_handle.event_fd, POLLIN);
+					io_uring_sqe_set_data64(
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
 					io_uring_submit(server->loop);
 				}
 			}
+		} else if (op == URING_OP_READ) {
+			on_read((csilk_client_t*)ptr, cqe->res);
+		} else if (op == URING_OP_WRITE) {
+			on_write_done(ptr, cqe->res);
+		} else if (op == URING_OP_UV_WRITE) {
+			csilk_uv_on_write_done(ptr, cqe->res);
+		} else if (op == URING_OP_TIMEOUT) {
+			on_timeout((csilk_client_t*)ptr);
+		} else if (op == URING_OP_CLOSE) {
+			on_close_done((csilk_client_t*)ptr);
 		}
-
-		io_uring_cqe_seen(server->loop, cqe);
 	}
 
 	return 0;

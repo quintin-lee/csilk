@@ -56,7 +56,7 @@ publisher_thread(void* arg)
 }
 
 static void
-drain_loop(uv_loop_t* loop, _Atomic int* counter, int target)
+drain_loop(csilk_io_loop_t* loop, _Atomic int* counter, int target)
 {
 	for (int i = 0; i < 10000; i++) {
 		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
@@ -73,7 +73,7 @@ test_mq_concurrent_publish(void)
 	       NUM_PUB_THREADS,
 	       MSGS_PER_THREAD);
 
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -138,7 +138,7 @@ test_mq_concurrent_stress(void)
 	       STRESS_THREADS,
 	       STRESS_MSGS);
 
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);
@@ -195,7 +195,7 @@ test_mq_rapid_publish(void)
 {
 	printf("Testing MQ Rapid Publish (burst from single thread)...\n");
 
-	uv_loop_t* loop = csilk_io_default_loop();
+	csilk_io_loop_t* loop = csilk_io_default_loop();
 
 	csilk_router_t* router = csilk_router_new();
 	csilk_server_t* server = csilk_server_new(router);

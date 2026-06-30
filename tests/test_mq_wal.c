@@ -50,14 +50,16 @@ test_mq_wal_persistence_recovery()
 		assert(rc == 0);
 
 		/* Wait a bit for WAL to be written if it's async (though usually it's sync
-     * in this impl) */
+	     * in this impl) */
 		usleep(100000);
 
 		csilk_server_free(server);
 		csilk_router_free(router);
 
-		/* Ensure all libuv handles are closed and loop finishes */
+		/* Ensure all libuv handles are closed and loop finishes (libuv only) */
+#ifndef CSILK_USE_URING
 		csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+#endif
 	}
 
 	/* Phase 2: Re-init and verify recovery */
@@ -75,19 +77,21 @@ test_mq_wal_persistence_recovery()
 		int rc = csilk_mq_set_persistence(mq, wal_path);
 		assert(rc == 0);
 
-		/* Run loop to process recovered messages */
-		uv_loop_t* loop = csilk_io_default_loop();
+		/* Run loop to process recovered messages (libuv only) */
+#ifndef CSILK_USE_URING
+		csilk_io_loop_t* loop = csilk_io_default_loop();
 
 		/* We expect 3 messages. Recovery usually queues them via uv_async or
-     * similar. */
+	     * similar. */
 		/* Run until no more active handles or requested number of messages received
-     */
+	     */
 		int retries = 0;
 		while (received_count < 3 && retries < 100) {
 			csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
 			usleep(10000);
 			retries++;
 		}
+#endif /* CSILK_USE_URING */
 
 		if (received_count != 3) {
 			printf("Error: received_count is %d, expected 3\n", received_count);
@@ -111,7 +115,9 @@ test_mq_wal_persistence_recovery()
 
 		csilk_server_free(server);
 		csilk_router_free(router);
+#ifndef CSILK_USE_URING
 		csilk_io_run(loop, CSILK_IO_RUN_DEFAULT);
+#endif
 	}
 
 	unlink(wal_path);

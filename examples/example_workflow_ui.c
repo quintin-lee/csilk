@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <uv.h>
+#include <pthread.h>
 
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
@@ -39,12 +39,16 @@ monitor_route_handler(csilk_ctx_t* c)
 	}
 }
 
-static void
-trigger_wf(uv_timer_t* h)
+static void*
+bg_trigger_thread(void* arg)
 {
-	csilk_wf_t* w = (csilk_wf_t*)h->data;
-	printf("[Server] Triggering workflow execution...\n");
-	csilk_wf_run(w, nullptr, nullptr);
+	csilk_wf_t* w = (csilk_wf_t*)arg;
+	while (1) {
+		sleep(10);
+		printf("[Server] Triggering workflow execution...\n");
+		csilk_wf_run(w, nullptr, nullptr);
+	}
+	return nullptr;
 }
 
 int
@@ -72,10 +76,8 @@ main()
 	csilk_app_get(app, "/monitor", monitor_route_handler);
 
 	/* 3. Run Workflow periodically for demo */
-	uv_timer_t timer;
-	uv_timer_init(csilk_io_default_loop(), &timer);
-	timer.data = g_wf;
-	uv_timer_start(&timer, trigger_wf, 1000, 10000); // Every 10s
+	pthread_t bg_thread;
+	pthread_create(&bg_thread, nullptr, bg_trigger_thread, g_wf);
 
 	/* 4. Start Server */
 	csilk_app_run(app, 8080);
