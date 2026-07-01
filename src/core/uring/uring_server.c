@@ -702,7 +702,12 @@ worker_thread(void* arg)
 			on_write_done(ptr, cqe->res);
 		} else if (op == URING_OP_UV_WRITE) {
 			csilk_uv_on_write_done(ptr, cqe->res);
-		} else if (op == URING_OP_TIMEOUT) {
+		} else if (op == URING_OP_TMR_READ || op == URING_OP_TMR_WRITE ||
+			   op == URING_OP_TMR_IDLE || op == URING_OP_TMR_REQ) {
+			/* All differentiated timer opcodes currently share the same
+			 * handler.  Future optimisations can schedule per-timer-type
+			 * actions (e.g. avoid closing on read-timeout if data just
+			 * arrived). */
 			on_timeout((csilk_client_t*)ptr);
 		} else if (op == URING_OP_CLOSE) {
 			on_close_done((csilk_client_t*)ptr);
@@ -1053,7 +1058,8 @@ csilk_server_run(csilk_server_t* server, int port)
 			on_write_done(ptr, cqe->res);
 		} else if (op == URING_OP_UV_WRITE) {
 			csilk_uv_on_write_done(ptr, cqe->res);
-		} else if (op == URING_OP_TIMEOUT) {
+		} else if (op == URING_OP_TMR_READ || op == URING_OP_TMR_WRITE ||
+			   op == URING_OP_TMR_IDLE || op == URING_OP_TMR_REQ) {
 			on_timeout((csilk_client_t*)ptr);
 		} else if (op == URING_OP_CLOSE) {
 			on_close_done((csilk_client_t*)ptr);

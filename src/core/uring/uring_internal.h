@@ -4,15 +4,22 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sys_io.h"
 
-// Define opcodes for user_data
+/* Define opcodes for user_data.
+ * High bit selects between I/O ops and timer ops so the CQE dispatch
+ * can quickly distinguish completion types without an indirect call. */
 typedef enum {
 	URING_OP_ACCEPT,
 	URING_OP_READ,
 	URING_OP_WRITE,
-	URING_OP_TIMEOUT,
+	URING_OP_TIMEOUT,	/* legacy — kept for migration; do NOT use for new timers */
 	URING_OP_WAKEUP,
 	URING_OP_CLOSE,
-	URING_OP_UV_WRITE
+	URING_OP_UV_WRITE,
+	/* Differentiated timer opcodes so on_timeout knows which timer fired */
+	URING_OP_TMR_READ,
+	URING_OP_TMR_WRITE,
+	URING_OP_TMR_IDLE,
+	URING_OP_TMR_REQ,
 } uring_op_type_t;
 
 typedef struct {
