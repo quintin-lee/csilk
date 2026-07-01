@@ -258,15 +258,20 @@ csilk_io_queue_work(csilk_io_loop_t* loop,
 #else
 typedef void (*csilk_io_work_cb)(csilk_io_work_t* req);
 typedef void (*csilk_io_after_work_cb)(csilk_io_work_t* req, int status);
+
+extern int
+_csilk_uring_queue_work(csilk_io_work_t* req,
+			csilk_io_work_cb work_cb,
+			csilk_io_after_work_cb after_work_cb);
+
 static inline int
 csilk_io_queue_work(csilk_io_loop_t* loop,
 		    csilk_io_work_t* req,
 		    csilk_io_work_cb work_cb,
 		    csilk_io_after_work_cb after_work_cb)
 {
-	work_cb(req);
-	after_work_cb(req, 0);
-	return 0;
+	(void)loop;
+	return _csilk_uring_queue_work(req, work_cb, after_work_cb);
 }
 #endif
 

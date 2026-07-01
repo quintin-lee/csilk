@@ -376,8 +376,11 @@ csilk_client_close(csilk_client_t* client)
 
 	client->close_pending = 0;
 	// Cancel pending reads/timeouts (do not cancel writes, allow them to drain)
-	uring_op_type_t ops_to_cancel[] = {
-	    URING_OP_READ, URING_OP_TMR_READ, URING_OP_TMR_WRITE, URING_OP_TMR_IDLE, URING_OP_TMR_REQ};
+	uring_op_type_t ops_to_cancel[] = {URING_OP_READ,
+					   URING_OP_TMR_READ,
+					   URING_OP_TMR_WRITE,
+					   URING_OP_TMR_IDLE,
+					   URING_OP_TMR_REQ};
 	for (int i = 0; i < 5; i++) {
 		struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
 		if (!sqe) {
@@ -385,8 +388,8 @@ csilk_client_close(csilk_client_t* client)
 		}
 		io_uring_prep_cancel(
 		    sqe, (void*)uring_encode_data(ops_to_cancel[i], client, client), 0);
-		io_uring_sqe_set_data(
-		    sqe, (void*)uring_encode_data(URING_OP_CLOSE, client, client));
+		io_uring_sqe_set_data(sqe,
+				      (void*)uring_encode_data(URING_OP_CLOSE, client, client));
 		client->close_pending++;
 	}
 
@@ -458,10 +461,14 @@ on_new_connection(worker_pool_t* wp, int client_fd)
 
 	CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
 	if (server->config.read_timeout_ms > 0) {
-		submit_timer(client, &client->read_timer, server->config.read_timeout_ms, URING_OP_TMR_READ);
+		submit_timer(
+		    client, &client->read_timer, server->config.read_timeout_ms, URING_OP_TMR_READ);
 	}
 	if (server->config.request_timeout_ms > 0) {
-		submit_timer(client, &client->request_timer, server->config.request_timeout_ms, URING_OP_TMR_REQ);
+		submit_timer(client,
+			     &client->request_timer,
+			     server->config.request_timeout_ms,
+			     URING_OP_TMR_REQ);
 	}
 
 	if (!client->read_paused) {
@@ -486,7 +493,10 @@ on_read(csilk_client_t* client, ssize_t nread)
 	int is_registered = 0;
 
 	if (client->server->config.read_timeout_ms > 0) {
-		submit_timer(client, &client->read_timer, client->server->config.read_timeout_ms, URING_OP_TMR_READ);
+		submit_timer(client,
+			     &client->read_timer,
+			     client->server->config.read_timeout_ms,
+			     URING_OP_TMR_READ);
 	}
 
 	if (nread > 0) {
