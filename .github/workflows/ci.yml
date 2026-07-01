@@ -193,14 +193,26 @@ jobs:
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev
 
-    - name: Configure
+    - name: Configure (libuv + io_uring)
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_OOM_TEST=ON
 
-    - name: Build
+    - name: Build (libuv + io_uring)
       run: cmake --build build -j$(nproc)
 
-    - name: Run tests with io_uring
+    - name: Run tests with UV_USE_IO_URING=1
       run: UV_USE_IO_URING=1 ctest --test-dir build --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+
+    - name: Configure (CSILK_USE_URING native)
+      run: cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON -DENABLE_OOM_TEST=ON
+
+    - name: Build (CSILK_USE_URING native)
+      run: cmake --build build_uring -j$(nproc)
+
+    - name: Run tests with CSILK_USE_URING
+      run: ctest --test-dir build_uring --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
