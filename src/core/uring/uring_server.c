@@ -760,7 +760,7 @@ worker_thread(void* arg)
 			on_close_done((csilk_client_t*)ptr);
 		}
 	}
-	
+
 	io_uring_queue_exit(loop_ptr);
 	return NULL;
 }
