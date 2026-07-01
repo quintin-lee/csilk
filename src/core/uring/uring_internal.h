@@ -24,7 +24,8 @@ typedef enum {
 
 typedef struct {
 	csilk_client_t* client;
-	void* data;
+	size_t len;
+	char data[];	/* flexible array member — single allocation */
 } uring_write_req_t;
 
 typedef struct {
