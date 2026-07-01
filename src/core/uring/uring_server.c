@@ -162,11 +162,20 @@ csilk_server_new(csilk_router_t* router)
 		free(s);
 		return nullptr;
 	}
-	if (io_uring_queue_init(256, s->loop, 0) < 0) {
-		free(s->loop);
-		free(s);
-		return nullptr;
+	int uring_flags = IORING_SETUP_SQPOLL;
+	int ret = io_uring_queue_init(4096, s->loop, uring_flags);
+	if (ret < 0) {
+		/* SQPOLL may require CAP_SYS_NICE or /proc/sys/kernel/io_uring_sqpoll_cred_limit=0.
+		 * Fall back to non-polling mode. */
+		CSILK_LOG_W("io_uring SQPOLL not available (ret=%d), falling back to non-polling", ret);
+		ret = io_uring_queue_init(4096, s->loop, 0);
+		if (ret < 0) {
+			free(s->loop);
+			free(s);
+			return nullptr;
+		}
 	}
+	CSILK_LOG_I("io_uring initialized (depth=4096, flags=0x%x)", uring_flags);
 
 	s->router = router;
 	llhttp_settings_init(&s->settings);
@@ -544,7 +553,15 @@ worker_thread(void* arg)
 
 	csilk_io_loop_t* loop_ptr = &wp->loop;
 	wp->loop_ptr = loop_ptr;
-	io_uring_queue_init(256, loop_ptr, 0);
+	int uring_flags_worker = IORING_SETUP_SQPOLL;
+	if (io_uring_queue_init(4096, loop_ptr, uring_flags_worker) < 0) {
+		CSILK_LOG_W("Worker %d: SQPOLL unavailable, falling back to non-polling", wp->worker_index);
+		if (io_uring_queue_init(4096, loop_ptr, 0) < 0) {
+			CSILK_LOG_E("Worker %d: io_uring_queue_init failed", wp->worker_index);
+			if (barrier) barrier_wait(barrier);
+			return NULL;
+		}
+	}
 
 	wp->server_handle.data = wp;
 
