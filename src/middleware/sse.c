@@ -12,6 +12,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
+#include "core/srv_internal.h"
 
 /**
  * @brief SSE write completion callback.
@@ -102,7 +103,8 @@ csilk_sse_init(csilk_ctx_t* c)
 
 	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
 	req->data = buf;
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	csilk_client_t* cl = (csilk_client_t*)internal_client;
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
@@ -176,7 +178,8 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 
 	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
 	req->data = buf;
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	csilk_client_t* cl = (csilk_client_t*)internal_client;
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
@@ -200,7 +203,8 @@ csilk_sse_close(csilk_ctx_t* c)
 
 	CSILK_LOG_I("SSE: closing connection for request %p", (void*)c);
 
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+	csilk_client_t* cl = (csilk_client_t*)internal_client;
+	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 	if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
 		csilk_io_close((csilk_io_handle_t*)stream, nullptr);
 	}
