@@ -49,6 +49,7 @@
 /*  next test function) start from a pristine state.                   */
 /* ------------------------------------------------------------------ */
 
+#ifndef CSILK_USE_URING
 void
 test_oom_http_parser()
 {
@@ -204,6 +205,7 @@ test_oom_http_parser()
 
 	csilk_server_free(s);
 }
+#endif
 
 /* ------------------------------------------------------------------ */
 /*  test_oom_static_file                                               */
@@ -274,7 +276,9 @@ test_oom_static_file()
 int
 main()
 {
+#ifndef CSILK_USE_URING
 	test_oom_http_parser();
+#endif
 	test_oom_static_file();
 	printf("All I/O OOM tests completed!\n");
 	return 0;
