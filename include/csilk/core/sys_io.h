@@ -70,16 +70,19 @@ int csilk_io_write(csilk_io_write_t* req,
 		   unsigned int nbufs,
 		   csilk_io_write_cb cb);
 
+// Forward declaration so csilk_io_timer_cb can use the pointer type.
+typedef struct csilk_io_timer_s csilk_io_timer_t;
+
 // Timer callback type (similar to uv_timer_cb)
 typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
-typedef struct {
+struct csilk_io_timer_s {
 	int fd;
 	void* data;
-	struct io_uring* ring;	  /**< io_uring ring for creating timeout SQEs. */
-	csilk_io_timer_cb cb;	  /**< Timer callback (set by csilk_io_timer_start). */
-	uint8_t generation;	  /**< Incremented each start to detect stale CQEs. */
-} csilk_io_timer_t;
+	struct io_uring* ring; /**< io_uring ring for creating timeout SQEs. */
+	csilk_io_timer_cb cb;  /**< Timer callback (set by csilk_io_timer_start). */
+	uint8_t generation;    /**< Incremented each start to detect stale CQEs. */
+};
 
 /* --- Forward declarations --- */
 typedef struct csilk_io_async_s csilk_io_async_t;

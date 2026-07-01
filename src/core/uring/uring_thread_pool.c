@@ -22,17 +22,17 @@
 
 /** @brief A single work or completion entry. */
 typedef struct {
-	csilk_io_work_t* work;		  /**< The user work handle. */
-	csilk_io_work_cb work_cb;	  /**< Work callback (runs on pool thread). */
+	csilk_io_work_t* work;		 /**< The user work handle. */
+	csilk_io_work_cb work_cb;	 /**< Work callback (runs on pool thread). */
 	csilk_io_after_work_cb after_cb; /**< After-work callback (runs on event loop). */
-	int status;			  /**< Result status passed to after_cb. */
+	int status;			 /**< Result status passed to after_cb. */
 } uring_tp_entry_t;
 
 /** @brief Thread pool state. */
 struct uring_thread_pool_s {
-	int thread_count;		 /**< Number of worker threads. */
-	volatile bool running;		 /**< Set to false during shutdown. */
-	pthread_t* threads;		 /**< Worker thread IDs. */
+	int thread_count;      /**< Number of worker threads. */
+	volatile bool running; /**< Set to false during shutdown. */
+	pthread_t* threads;    /**< Worker thread IDs. */
 
 	/* Work queue — single producer (event loop) → multiple consumers (threads). */
 	uring_tp_entry_t queue[URING_TP_MAX_WORK];
@@ -240,14 +240,14 @@ uring_tp_wakeup_fd(uring_thread_pool_t* tp)
 
 int
 _csilk_uring_queue_work(csilk_io_work_t* req,
-			 csilk_io_work_cb work_cb,
-			 csilk_io_after_work_cb after_cb)
+			csilk_io_work_cb work_cb,
+			csilk_io_after_work_cb after_cb)
 {
 	if (tls_current_tp) {
 		return uring_tp_enqueue(tls_current_tp, req, work_cb, after_cb);
 	}
 	/* Fallback: run synchronously if no thread pool is available. */
 	work_cb(req);
-	after_work_cb(req, 0);
+	after_cb(req, 0);
 	return 0;
 }

@@ -3,6 +3,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/sys_io.h"
+#include "../srv_internal.h" /* csilk_client_t full definition (for generation field access) */
 
 /* Define opcodes for user_data.
  * High bit selects between I/O ops and timer ops so the CQE dispatch
