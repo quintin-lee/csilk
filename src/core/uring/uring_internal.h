@@ -46,6 +46,19 @@ uring_encode_data(uring_op_type_t op, csilk_client_t* client, void* ptr)
 	return val;
 }
 
+/* When the Submission Queue is full, submit pending entries to the kernel
+ * to free SQE slots. Returns NULL only on ring-level failure. */
+static inline struct io_uring_sqe*
+uring_get_sqe_or_submit(struct io_uring* ring)
+{
+	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	if (!sqe) {
+		io_uring_submit(ring);
+		sqe = io_uring_get_sqe(ring);
+	}
+	return sqe;
+}
+
 static inline void
 uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint8_t* gen)
 {

@@ -220,7 +220,7 @@ static void
 submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms, uring_op_type_t op)
 {
 	struct io_uring* ring = client->owner_pool->loop_ptr;
-	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
 	if (!sqe) {
 		return;
 	}
@@ -244,7 +244,7 @@ csilk_client_read_start(csilk_client_t* client)
 		return;
 	}
 	struct io_uring* ring = client->owner_pool->loop_ptr;
-	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
 	if (!sqe) {
 		CSILK_LOG_E("Failed to get SQE for read!");
 		return;
@@ -281,7 +281,7 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
 	}
 
 	struct io_uring* ring = client->owner_pool->loop_ptr;
-	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
 	if (!sqe) {
 		return;
 	}
@@ -381,14 +381,15 @@ csilk_client_close(csilk_client_t* client)
 	uring_op_type_t ops_to_cancel[] = {
 	    URING_OP_READ, URING_OP_TMR_READ, URING_OP_TMR_WRITE, URING_OP_TMR_IDLE, URING_OP_TMR_REQ};
 	for (int i = 0; i < 5; i++) {
-		struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
-		if (sqe) {
-			io_uring_prep_cancel(
-			    sqe, (void*)uring_encode_data(ops_to_cancel[i], client, client), 0);
-			io_uring_sqe_set_data(
-			    sqe, (void*)uring_encode_data(URING_OP_CLOSE, client, client));
-			client->close_pending++;
+		struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+		if (!sqe) {
+			continue;
 		}
+		io_uring_prep_cancel(
+		    sqe, (void*)uring_encode_data(ops_to_cancel[i], client, client), 0);
+		io_uring_sqe_set_data(
+		    sqe, (void*)uring_encode_data(URING_OP_CLOSE, client, client));
+		client->close_pending++;
 	}
 
 	io_uring_submit(ring);

@@ -46,7 +46,7 @@ csilk_io_write(csilk_io_write_t* req,
 	}
 
 	struct io_uring* ring = client->owner_pool->loop_ptr;
-	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
 	if (!sqe) {
 		return -1;
 	}
