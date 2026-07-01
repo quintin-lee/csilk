@@ -161,6 +161,10 @@ if(CSILK_USE_URING)
   if(liburing_SOURCE_DIR)
     include_directories(${liburing_SOURCE_DIR}/src/include)
   endif()
+  if(liburing_BINARY_DIR)
+    # liburing 2.5 generates compat.h into the build tree via configure_file.
+    include_directories(${liburing_BINARY_DIR}/src/include)
+  endif()
 else()
   # Fetch libuv
   FetchContent_Declare(
