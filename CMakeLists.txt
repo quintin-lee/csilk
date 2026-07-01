@@ -158,14 +158,14 @@ if(CSILK_USE_URING)
     GIT_TAG        liburing-2.5
   )
   FetchContent_MakeAvailable(liburing)
-  if(liburing_SOURCE_DIR)
-    include_directories(${liburing_SOURCE_DIR}/src/include)
-  endif()
-  if(liburing_BINARY_DIR)
+  if(liburing_SOURCE_DIR AND liburing_BINARY_DIR)
     # liburing 2.5 ships without a CMakeLists.txt (only Makefile+configure).
-    # FetchContent downloads but does NOT run ./configure, so compat.h
-    # and io_uring_version.h (which ./configure generates into the source
-    # tree) are missing.  Generate them into the build tree here.
+    # FetchContent downloads but does NOT run ./configure, so the generated
+    # headers (compat.h, io_uring_version.h) are missing.  Generate them
+    # into the build tree, and compile liburing's .c files into a static
+    # library to satisfy the -luring link dependency.
+
+    # --- generate missing headers ---
     set(LIBURING_GEN_DIR "${liburing_BINARY_DIR}/src/include/liburing")
     file(MAKE_DIRECTORY "${LIBURING_GEN_DIR}")
     file(WRITE "${LIBURING_GEN_DIR}/compat.h"
@@ -202,7 +202,28 @@ struct __kernel_timespec {
 
 #endif /* LIBURING_VERSION_H */
 ")
+
+    # --- include paths ---
+    include_directories(${liburing_SOURCE_DIR}/src/include)
     include_directories(${liburing_BINARY_DIR}/src/include)
+    include_directories(${liburing_SOURCE_DIR}/src)  # for lib.h / int_flags.h
+
+    # --- build liburing as a static library from source ---
+    set(LIBURING_SOURCES
+      "${liburing_SOURCE_DIR}/src/queue.c"
+      "${liburing_SOURCE_DIR}/src/setup.c"
+      "${liburing_SOURCE_DIR}/src/syscall.c"
+      "${liburing_SOURCE_DIR}/src/register.c"
+      "${liburing_SOURCE_DIR}/src/ffi.c"
+      "${liburing_SOURCE_DIR}/src/nolibc.c"
+      "${liburing_SOURCE_DIR}/src/version.c"
+    )
+    add_library(uring STATIC ${LIBURING_SOURCES})
+    target_include_directories(uring PUBLIC
+      "${liburing_SOURCE_DIR}/src/include"
+      "${liburing_BINARY_DIR}/src/include"
+    )
+    target_compile_definitions(uring PRIVATE -D_GNU_SOURCE)
   endif()
 else()
   # Fetch libuv
