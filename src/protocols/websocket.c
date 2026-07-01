@@ -32,6 +32,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "core/ctx_internal.h"
+#include "core/srv_internal.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
  *
@@ -178,8 +179,8 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 		csilk_io_buf_t buf =
 		    csilk_io_buf_init((char*)frame, (unsigned int)(header_len + len));
 		write_req->data = frame;
-		// The first member of csilk_client_t is csilk_io_tcp_t handle
-		csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+		csilk_client_t* cl = (csilk_client_t*)internal_client;
+		csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 		csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
 	} else {
 		free(frame);
@@ -268,7 +269,8 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 	if (write_req) {
 		csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
 		write_req->data = frame;
-		csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+		csilk_client_t* cl = (csilk_client_t*)internal_client;
+		csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 		csilk_io_write(write_req, stream, &buf, 1, on_close_write);
 	} else {
 		free(frame);
@@ -378,9 +380,10 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 			close_code = (uint16_t)((payload[0] << 8) | payload[1]);
 		}
 		csilk_ws_close(c, close_code, nullptr);
-		void* internal_client = _csilk_get_internal_client(c);
-		if (internal_client) {
-			csilk_io_stream_t* stream = (csilk_io_stream_t*)internal_client;
+		void* close_client = _csilk_get_internal_client(c);
+		if (close_client) {
+			csilk_client_t* cl = (csilk_client_t*)close_client;
+			csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
 			if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
 				csilk_io_close((csilk_io_handle_t*)stream, nullptr);
 			}
