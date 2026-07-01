@@ -20,6 +20,7 @@ typedef enum {
 	URING_OP_TMR_WRITE,
 	URING_OP_TMR_IDLE,
 	URING_OP_TMR_REQ,
+	URING_OP_TMR_GENERIC, /**< Timer started via csilk_io_timer_start. */
 } uring_op_type_t;
 
 typedef struct {
@@ -60,6 +61,17 @@ uring_get_sqe_or_submit(struct io_uring* ring)
 	return sqe;
 }
 
+/** @brief Encode timer data with generation tracking for stale-CQE detection. */
+static inline __u64
+uring_encode_timer_data(uring_op_type_t op, csilk_io_timer_t* tmr)
+{
+	uint64_t val = (uint64_t)(void*)tmr;
+	val &= 0x0000FFFFFFFFFFFFULL;
+	val |= ((uint64_t)op) << 56;
+	val |= ((uint64_t)tmr->generation) << 48;
+	return val;
+}
+
 static inline void
 uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint8_t* gen)
 {
@@ -85,8 +97,10 @@ typedef struct uring_thread_pool_s uring_thread_pool_t;
 
 uring_thread_pool_t* uring_tp_init(int nthreads);
 void uring_tp_destroy(uring_thread_pool_t* tp);
-int uring_tp_enqueue(uring_thread_pool_t* tp, csilk_io_work_t* work,
-                     csilk_io_work_cb work_cb, csilk_io_after_work_cb after_cb);
+int uring_tp_enqueue(uring_thread_pool_t* tp,
+		     csilk_io_work_t* work,
+		     csilk_io_work_cb work_cb,
+		     csilk_io_after_work_cb after_cb);
 void uring_tp_drain(uring_thread_pool_t* tp);
 int uring_tp_wakeup_fd(uring_thread_pool_t* tp);
 void uring_tp_set_current(uring_thread_pool_t* tp);

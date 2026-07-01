@@ -581,13 +581,16 @@ worker_thread(void* arg)
 		int nprocs = (int)sysconf(_SC_NPROCESSORS_ONLN);
 		int nworkers = server->worker_pool_count;
 		int tp_nthreads = (nprocs > 0) ? nprocs / nworkers : 1;
-		if (tp_nthreads < 1) tp_nthreads = 1;
+		if (tp_nthreads < 1) {
+			tp_nthreads = 1;
+		}
 		wp->thread_pool = uring_tp_init(tp_nthreads);
 		if (wp->thread_pool) {
 			uring_tp_set_current((uring_thread_pool_t*)wp->thread_pool);
 		}
 		CSILK_LOG_I("Worker %d: thread pool initialised (%d threads)",
-			    wp->worker_index, tp_nthreads);
+			    wp->worker_index,
+			    tp_nthreads);
 	}
 
 	if (bind_and_listen(
@@ -620,8 +623,7 @@ worker_thread(void* arg)
 		if (tp_sqe && tp_fd >= 0) {
 			io_uring_prep_poll_add(tp_sqe, tp_fd, POLLIN);
 			io_uring_sqe_set_data64(
-			    tp_sqe,
-			    uring_encode_data(URING_OP_WAKEUP, NULL, wp->thread_pool));
+			    tp_sqe, uring_encode_data(URING_OP_WAKEUP, NULL, wp->thread_pool));
 		}
 	}
 
@@ -654,7 +656,8 @@ worker_thread(void* arg)
 		void* ptr;
 		uint8_t gen = 0;
 		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr, &gen);
-		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE) {
+		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE &&
+		    op != URING_OP_TMR_GENERIC) {
 			csilk_client_t* client = (csilk_client_t*)ptr;
 			if (op == URING_OP_WRITE) {
 				client = ((uring_write_req_t*)ptr)->client;
@@ -748,11 +751,16 @@ worker_thread(void* arg)
 			 * actions (e.g. avoid closing on read-timeout if data just
 			 * arrived). */
 			on_timeout((csilk_client_t*)ptr);
+		} else if (op == URING_OP_TMR_GENERIC) {
+			csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
+			if (tmr && tmr->generation == gen && tmr->cb) {
+				tmr->cb(tmr);
+			}
 		} else if (op == URING_OP_CLOSE) {
 			on_close_done((csilk_client_t*)ptr);
 		}
 	}
-
+	
 	io_uring_queue_exit(loop_ptr);
 	return NULL;
 }
@@ -888,12 +896,15 @@ csilk_server_run(csilk_server_t* server, int port)
 	{
 		int nprocs = (int)sysconf(_SC_NPROCESSORS_ONLN);
 		int tp_nthreads = (nprocs > 0) ? nprocs / workers : 1;
-		if (tp_nthreads < 1) tp_nthreads = 1;
+		if (tp_nthreads < 1) {
+			tp_nthreads = 1;
+		}
 		server->worker_pools[0].thread_pool = uring_tp_init(tp_nthreads);
 		if (server->worker_pools[0].thread_pool) {
 			uring_tp_set_current(server->worker_pools[0].thread_pool);
 		}
-		CSILK_LOG_I("Server: thread pool for worker 0 initialised (%d threads)", tp_nthreads);
+		CSILK_LOG_I("Server: thread pool for worker 0 initialised (%d threads)",
+			    tp_nthreads);
 	}
 
 	if (workers > 1) {
@@ -977,8 +988,8 @@ csilk_server_run(csilk_server_t* server, int port)
 			io_uring_prep_poll_add(tp_sqe, tp_fd, POLLIN);
 			io_uring_sqe_set_data64(
 			    tp_sqe,
-			    uring_encode_data(URING_OP_WAKEUP, NULL,
-					      server->worker_pools[0].thread_pool));
+			    uring_encode_data(
+				URING_OP_WAKEUP, NULL, server->worker_pools[0].thread_pool));
 		}
 	}
 
@@ -1012,7 +1023,8 @@ csilk_server_run(csilk_server_t* server, int port)
 		void* ptr;
 		uint8_t gen = 0;
 		uring_decode_data(io_uring_cqe_get_data64(cqe), &op, &ptr, &gen);
-		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE) {
+		if (ptr && op != URING_OP_ACCEPT && op != URING_OP_WAKEUP && op != URING_OP_CLOSE &&
+		    op != URING_OP_TMR_GENERIC) {
 			csilk_client_t* client = (csilk_client_t*)ptr;
 			if (op == URING_OP_WRITE) {
 				client = ((uring_write_req_t*)ptr)->client;
@@ -1135,6 +1147,11 @@ csilk_server_run(csilk_server_t* server, int port)
 		} else if (op == URING_OP_TMR_READ || op == URING_OP_TMR_WRITE ||
 			   op == URING_OP_TMR_IDLE || op == URING_OP_TMR_REQ) {
 			on_timeout((csilk_client_t*)ptr);
+		} else if (op == URING_OP_TMR_GENERIC) {
+			csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
+			if (tmr && tmr->generation == gen && tmr->cb) {
+				tmr->cb(tmr);
+			}
 		} else if (op == URING_OP_CLOSE) {
 			on_close_done((csilk_client_t*)ptr);
 		}

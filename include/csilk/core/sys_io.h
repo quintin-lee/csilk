@@ -70,9 +70,15 @@ int csilk_io_write(csilk_io_write_t* req,
 		   unsigned int nbufs,
 		   csilk_io_write_cb cb);
 
+// Timer callback type (similar to uv_timer_cb)
+typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
+
 typedef struct {
 	int fd;
 	void* data;
+	struct io_uring* ring;	  /**< io_uring ring for creating timeout SQEs. */
+	csilk_io_timer_cb cb;	  /**< Timer callback (set by csilk_io_timer_start). */
+	uint8_t generation;	  /**< Incremented each start to detect stale CQEs. */
 } csilk_io_timer_t;
 
 /* --- Forward declarations --- */
@@ -113,9 +119,6 @@ csilk_io_sleep(unsigned int ms)
 {
 	usleep(ms * 1000);
 }
-
-// Timer callback type (similar to uv_timer_cb)
-typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
 typedef void (*csilk_io_fs_event_cb)(csilk_io_fs_event_t* handle,
 				     const char* filename,
@@ -259,10 +262,9 @@ csilk_io_queue_work(csilk_io_loop_t* loop,
 typedef void (*csilk_io_work_cb)(csilk_io_work_t* req);
 typedef void (*csilk_io_after_work_cb)(csilk_io_work_t* req, int status);
 
-extern int
-_csilk_uring_queue_work(csilk_io_work_t* req,
-			csilk_io_work_cb work_cb,
-			csilk_io_after_work_cb after_work_cb);
+extern int _csilk_uring_queue_work(csilk_io_work_t* req,
+				   csilk_io_work_cb work_cb,
+				   csilk_io_after_work_cb after_work_cb);
 
 static inline int
 csilk_io_queue_work(csilk_io_loop_t* loop,
