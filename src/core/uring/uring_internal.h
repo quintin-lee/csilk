@@ -11,7 +11,7 @@ typedef enum {
 	URING_OP_ACCEPT,
 	URING_OP_READ,
 	URING_OP_WRITE,
-	URING_OP_TIMEOUT,	/* legacy — kept for migration; do NOT use for new timers */
+	URING_OP_TIMEOUT, /* legacy — kept for migration; do NOT use for new timers */
 	URING_OP_WAKEUP,
 	URING_OP_CLOSE,
 	URING_OP_UV_WRITE,
@@ -25,7 +25,7 @@ typedef enum {
 typedef struct {
 	csilk_client_t* client;
 	size_t len;
-	char data[];	/* flexible array member — single allocation */
+	char data[]; /* flexible array member — single allocation */
 } uring_write_req_t;
 
 typedef struct {
@@ -79,5 +79,16 @@ void on_timeout(csilk_client_t* client);
 void client_destroy(csilk_client_t* client);
 void csilk_client_close(csilk_client_t* client);
 void on_close_done(csilk_client_t* client);
+
+/* --- Thread pool for csilk_io_queue_work --- */
+typedef struct uring_thread_pool_s uring_thread_pool_t;
+
+uring_thread_pool_t* uring_tp_init(int nthreads);
+void uring_tp_destroy(uring_thread_pool_t* tp);
+int uring_tp_enqueue(uring_thread_pool_t* tp, csilk_io_work_t* work,
+                     csilk_io_work_cb work_cb, csilk_io_after_work_cb after_cb);
+void uring_tp_drain(uring_thread_pool_t* tp);
+int uring_tp_wakeup_fd(uring_thread_pool_t* tp);
+void uring_tp_set_current(uring_thread_pool_t* tp);
 
 #endif

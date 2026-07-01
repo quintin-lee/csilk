@@ -100,6 +100,7 @@ typedef struct {
 	csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
 	csilk_lfqueue_t dispatch_queue;	 /**< Lock-free MPSC dispatch queue. */
 	csilk_client_t* active_clients;	 /**< Head of worker-local active connections list. */
+	void* thread_pool;		 /**< io_uring thread pool (nullptr in libuv mode). */
 } worker_pool_t;
 
 /**

@@ -167,7 +167,8 @@ csilk_server_new(csilk_router_t* router)
 	if (ret < 0) {
 		/* SQPOLL may require CAP_SYS_NICE or /proc/sys/kernel/io_uring_sqpoll_cred_limit=0.
 		 * Fall back to non-polling mode. */
-		CSILK_LOG_W("io_uring SQPOLL not available (ret=%d), falling back to non-polling", ret);
+		CSILK_LOG_W("io_uring SQPOLL not available (ret=%d), falling back to non-polling",
+			    ret);
 		ret = io_uring_queue_init(4096, s->loop, 0);
 		if (ret < 0) {
 			free(s->loop);
@@ -311,6 +312,10 @@ csilk_server_free(csilk_server_t* server)
 	if (server->worker_pools) {
 		for (int w = 0; w < server->worker_pool_count; w++) {
 			worker_pool_t* wp = &server->worker_pools[w];
+			if (wp->thread_pool) {
+				uring_tp_destroy((uring_thread_pool_t*)wp->thread_pool);
+				wp->thread_pool = NULL;
+			}
 			for (int i = 0; i < wp->client_pool_count; i++) {
 				free(wp->client_pool[i]);
 			}
@@ -555,10 +560,13 @@ worker_thread(void* arg)
 	wp->loop_ptr = loop_ptr;
 	int uring_flags_worker = IORING_SETUP_SQPOLL;
 	if (io_uring_queue_init(4096, loop_ptr, uring_flags_worker) < 0) {
-		CSILK_LOG_W("Worker %d: SQPOLL unavailable, falling back to non-polling", wp->worker_index);
+		CSILK_LOG_W("Worker %d: SQPOLL unavailable, falling back to non-polling",
+			    wp->worker_index);
 		if (io_uring_queue_init(4096, loop_ptr, 0) < 0) {
 			CSILK_LOG_E("Worker %d: io_uring_queue_init failed", wp->worker_index);
-			if (barrier) barrier_wait(barrier);
+			if (barrier) {
+				barrier_wait(barrier);
+			}
 			return NULL;
 		}
 	}
@@ -567,6 +575,20 @@ worker_thread(void* arg)
 
 	_csilk_worker_init_arena_pool(wp);
 	_csilk_worker_init_dispatch(wp, loop_ptr);
+
+	/* Initialise this worker's thread pool. */
+	{
+		int nprocs = (int)sysconf(_SC_NPROCESSORS_ONLN);
+		int nworkers = server->worker_pool_count;
+		int tp_nthreads = (nprocs > 0) ? nprocs / nworkers : 1;
+		if (tp_nthreads < 1) tp_nthreads = 1;
+		wp->thread_pool = uring_tp_init(tp_nthreads);
+		if (wp->thread_pool) {
+			uring_tp_set_current((uring_thread_pool_t*)wp->thread_pool);
+		}
+		CSILK_LOG_I("Worker %d: thread pool initialised (%d threads)",
+			    wp->worker_index, tp_nthreads);
+	}
 
 	if (bind_and_listen(
 		loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) < 0) {
@@ -591,8 +613,21 @@ worker_thread(void* arg)
 	io_uring_sqe_set_data64(disp_sqe,
 				uring_encode_data(URING_OP_WAKEUP, NULL, &wp->dispatch_async));
 
+	/* Poll this worker's thread-pool wakeup eventfd. */
+	if (wp->thread_pool) {
+		int tp_fd = uring_tp_wakeup_fd((uring_thread_pool_t*)wp->thread_pool);
+		struct io_uring_sqe* tp_sqe = io_uring_get_sqe(loop_ptr);
+		if (tp_sqe && tp_fd >= 0) {
+			io_uring_prep_poll_add(tp_sqe, tp_fd, POLLIN);
+			io_uring_sqe_set_data64(
+			    tp_sqe,
+			    uring_encode_data(URING_OP_WAKEUP, NULL, wp->thread_pool));
+		}
+	}
+
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(loop_ptr);
-	io_uring_prep_accept(acc_sqe, wp->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+	io_uring_prep_accept(
+	    acc_sqe, wp->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 	io_uring_sqe_set_data64(acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
 
 	io_uring_submit(loop_ptr);
@@ -649,7 +684,11 @@ worker_thread(void* arg)
 			}
 			acc_sqe = io_uring_get_sqe(loop_ptr);
 			if (acc_sqe) {
-				io_uring_prep_accept(acc_sqe, wp->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+				io_uring_prep_accept(acc_sqe,
+						     wp->server_handle.fd,
+						     NULL,
+						     NULL,
+						     SOCK_NONBLOCK | SOCK_CLOEXEC);
 				io_uring_sqe_set_data64(
 				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
 				int submit_ret = io_uring_submit(loop_ptr);
@@ -669,6 +708,21 @@ worker_thread(void* arg)
 				if (poll_sqe) {
 					io_uring_prep_poll_add(
 					    poll_sqe, wp->dispatch_async.event_fd, POLLIN);
+					io_uring_sqe_set_data64(
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
+					io_uring_submit(loop_ptr);
+				}
+			} else if (wp->thread_pool && ptr == wp->thread_pool) {
+				uint64_t val;
+				uring_thread_pool_t* tp = (uring_thread_pool_t*)wp->thread_pool;
+				if (read(uring_tp_wakeup_fd(tp), &val, sizeof(val)) > 0) {
+					uring_tp_drain(tp);
+				}
+				int tp_fd = uring_tp_wakeup_fd(tp);
+				struct io_uring_sqe* poll_sqe = io_uring_get_sqe(loop_ptr);
+				if (poll_sqe && tp_fd >= 0) {
+					io_uring_prep_poll_add(poll_sqe, tp_fd, POLLIN);
 					io_uring_sqe_set_data64(
 					    poll_sqe,
 					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
@@ -830,6 +884,18 @@ csilk_server_run(csilk_server_t* server, int port)
 	_csilk_worker_init_arena_pool(&server->worker_pools[0]);
 	_csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
+	/* Initialise per-worker thread pool (shared pool threads = nprocs / workers). */
+	{
+		int nprocs = (int)sysconf(_SC_NPROCESSORS_ONLN);
+		int tp_nthreads = (nprocs > 0) ? nprocs / workers : 1;
+		if (tp_nthreads < 1) tp_nthreads = 1;
+		server->worker_pools[0].thread_pool = uring_tp_init(tp_nthreads);
+		if (server->worker_pools[0].thread_pool) {
+			uring_tp_set_current(server->worker_pools[0].thread_pool);
+		}
+		CSILK_LOG_I("Server: thread pool for worker 0 initialised (%d threads)", tp_nthreads);
+	}
+
 	if (workers > 1) {
 		CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
 		int nworkers = workers - 1;
@@ -903,8 +969,22 @@ csilk_server_run(csilk_server_t* server, int port)
 		}
 	}
 
+	/* Poll thread-pool wakeup eventfd for async work completions. */
+	if (server->worker_pools[0].thread_pool) {
+		int tp_fd = uring_tp_wakeup_fd(server->worker_pools[0].thread_pool);
+		struct io_uring_sqe* tp_sqe = io_uring_get_sqe(server->loop);
+		if (tp_sqe && tp_fd >= 0) {
+			io_uring_prep_poll_add(tp_sqe, tp_fd, POLLIN);
+			io_uring_sqe_set_data64(
+			    tp_sqe,
+			    uring_encode_data(URING_OP_WAKEUP, NULL,
+					      server->worker_pools[0].thread_pool));
+		}
+	}
+
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(server->loop);
-	io_uring_prep_accept(acc_sqe, server->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+	io_uring_prep_accept(
+	    acc_sqe, server->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 	io_uring_sqe_set_data64(acc_sqe,
 				uring_encode_data(URING_OP_ACCEPT, NULL, &server->worker_pools[0]));
 
@@ -958,7 +1038,11 @@ csilk_server_run(csilk_server_t* server, int port)
 			}
 			acc_sqe = io_uring_get_sqe(server->loop);
 			if (acc_sqe) {
-				io_uring_prep_accept(acc_sqe, server->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+				io_uring_prep_accept(acc_sqe,
+						     server->server_handle.fd,
+						     NULL,
+						     NULL,
+						     SOCK_NONBLOCK | SOCK_CLOEXEC);
 				io_uring_sqe_set_data64(
 				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, ptr));
 				int submit_ret = io_uring_submit(server->loop);
@@ -1020,6 +1104,22 @@ csilk_server_run(csilk_server_t* server, int port)
 				if (poll_sqe) {
 					io_uring_prep_poll_add(
 					    poll_sqe, server->mq->async_handle.event_fd, POLLIN);
+					io_uring_sqe_set_data64(
+					    poll_sqe,
+					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
+					io_uring_submit(server->loop);
+				}
+			} else if (ptr == server->worker_pools[0].thread_pool) {
+				uint64_t val;
+				uring_thread_pool_t* tp =
+				    (uring_thread_pool_t*)server->worker_pools[0].thread_pool;
+				if (read(uring_tp_wakeup_fd(tp), &val, sizeof(val)) > 0) {
+					uring_tp_drain(tp);
+				}
+				int tp_fd = uring_tp_wakeup_fd(tp);
+				struct io_uring_sqe* poll_sqe = io_uring_get_sqe(server->loop);
+				if (poll_sqe && tp_fd >= 0) {
+					io_uring_prep_poll_add(poll_sqe, tp_fd, POLLIN);
 					io_uring_sqe_set_data64(
 					    poll_sqe,
 					    uring_encode_data(URING_OP_WAKEUP, NULL, ptr));
