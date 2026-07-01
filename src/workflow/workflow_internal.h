@@ -86,7 +86,7 @@ struct csilk_wf_ctx_s {
 	void (*trace_callback)(csilk_data_t*, csilk_wf_trace_t*);
 	int* node_input_counts;
 	int total_executions;
-	int nodes_active;
+	_Atomic int nodes_active;
 	csilk_mutex_t mutex;
 	csilk_arena_t* arena;
 	csilk_mutex_t arena_mutex;
