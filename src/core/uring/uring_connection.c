@@ -217,7 +217,7 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 /* --- I/O Operations --- */
 
 static void
-submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms)
+submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms, uring_op_type_t op)
 {
 	struct io_uring* ring = client->owner_pool->loop_ptr;
 	struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
@@ -234,7 +234,7 @@ submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms)
 	tmr->data = ts;
 
 	io_uring_prep_timeout(sqe, ts, 0, 0);
-	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_TIMEOUT, client, client));
+	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(op, client, client));
 }
 
 void
@@ -378,8 +378,9 @@ csilk_client_close(csilk_client_t* client)
 
 	client->close_pending = 0;
 	// Cancel pending reads/timeouts (do not cancel writes, allow them to drain)
-	uring_op_type_t ops_to_cancel[] = {URING_OP_READ, URING_OP_TIMEOUT};
-	for (int i = 0; i < 2; i++) {
+	uring_op_type_t ops_to_cancel[] = {
+	    URING_OP_READ, URING_OP_TMR_READ, URING_OP_TMR_WRITE, URING_OP_TMR_IDLE, URING_OP_TMR_REQ};
+	for (int i = 0; i < 5; i++) {
 		struct io_uring_sqe* sqe = io_uring_get_sqe(ring);
 		if (sqe) {
 			io_uring_prep_cancel(
@@ -458,10 +459,10 @@ on_new_connection(worker_pool_t* wp, int client_fd)
 
 	CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
 	if (server->config.read_timeout_ms > 0) {
-		submit_timer(client, &client->read_timer, server->config.read_timeout_ms);
+		submit_timer(client, &client->read_timer, server->config.read_timeout_ms, URING_OP_TMR_READ);
 	}
 	if (server->config.request_timeout_ms > 0) {
-		submit_timer(client, &client->request_timer, server->config.request_timeout_ms);
+		submit_timer(client, &client->request_timer, server->config.request_timeout_ms, URING_OP_TMR_REQ);
 	}
 
 	if (!client->read_paused) {
@@ -486,7 +487,7 @@ on_read(csilk_client_t* client, ssize_t nread)
 	int is_registered = 0;
 
 	if (client->server->config.read_timeout_ms > 0) {
-		submit_timer(client, &client->read_timer, client->server->config.read_timeout_ms);
+		submit_timer(client, &client->read_timer, client->server->config.read_timeout_ms, URING_OP_TMR_READ);
 	}
 
 	if (nread > 0) {
