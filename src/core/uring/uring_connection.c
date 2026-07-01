@@ -286,9 +286,9 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
 		return;
 	}
 
-	uring_write_req_t* req = malloc(sizeof(uring_write_req_t));
+	uring_write_req_t* req = malloc(sizeof(uring_write_req_t) + length);
 	req->client = client;
-	req->data = malloc(length);
+	req->len = length;
 	memcpy(req->data, data, length);
 
 	io_uring_prep_send(sqe, client->handle.fd, req->data, length, 0);
@@ -305,9 +305,7 @@ on_write_done(void* arg, ssize_t res)
 		return;
 	}
 	csilk_client_t* client = req->client;
-	if (req->data) {
-		free(req->data);
-	}
+	/* req->data is the flexible array member, embedded in req */
 	free(req);
 
 	CSILK_LOG_D("on_write_done: res=%zd", res);
