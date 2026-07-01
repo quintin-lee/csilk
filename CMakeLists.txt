@@ -209,17 +209,20 @@ struct __kernel_timespec {
     include_directories(${liburing_SOURCE_DIR}/src)  # for lib.h / int_flags.h
 
     # --- build liburing as a static library from source ---
+    # nolibc.c intentionally omitted: it requires CONFIG_NOLIBC (no-libc build).
+    # ffi.c is included but unused by csilk (it adds io_uring_ffi symbols).
     set(LIBURING_SOURCES
       "${liburing_SOURCE_DIR}/src/queue.c"
       "${liburing_SOURCE_DIR}/src/setup.c"
       "${liburing_SOURCE_DIR}/src/syscall.c"
       "${liburing_SOURCE_DIR}/src/register.c"
       "${liburing_SOURCE_DIR}/src/ffi.c"
-      "${liburing_SOURCE_DIR}/src/nolibc.c"
       "${liburing_SOURCE_DIR}/src/version.c"
     )
     add_library(uring STATIC ${LIBURING_SOURCES})
-    target_include_directories(uring PUBLIC
+    # PRIVATE: only needed to compile uring itself; csilk picks up the same
+    #          paths from the include_directories() calls above (lines 207-209).
+    target_include_directories(uring PRIVATE
       "${liburing_SOURCE_DIR}/src/include"
       "${liburing_BINARY_DIR}/src/include"
     )
@@ -659,7 +662,12 @@ endif()
 
 # Install targets
 include(GNUInstallDirs)
-install(TARGETS csilk
+if(CSILK_USE_URING)
+    set(CSILK_INSTALL_TARGETS csilk uring)
+else()
+    set(CSILK_INSTALL_TARGETS csilk)
+endif()
+install(TARGETS ${CSILK_INSTALL_TARGETS}
     EXPORT csilk-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
