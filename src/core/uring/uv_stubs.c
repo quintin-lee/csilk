@@ -115,22 +115,70 @@ on_write_timeout(csilk_io_timer_t* handle)
 }
 
 int
+csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
+{
+	handle->fd = -1;
+	handle->data = NULL;
+	handle->ring = loop;
+	handle->cb = NULL;
+	handle->generation = 1; /* Start at 1 so the first start() is a new generation. */
+	return 0;
+}
+
+int
 csilk_io_timer_start(csilk_io_timer_t* handle,
 		     csilk_io_timer_cb cb,
 		     uint64_t timeout,
 		     uint64_t repeat)
 {
-	return -1;
+	if (!handle || !handle->ring) {
+		return -1;
+	}
+
+	/* Bump generation so stale CQEs from a previous interval are ignored. */
+	handle->generation++;
+
+	struct io_uring* ring = handle->ring;
+	struct __kernel_timespec ts;
+	ts.tv_sec = (__kernel_time64_t)(timeout / 1000);
+	ts.tv_nsec = (long long)(timeout % 1000) * 1000000LL;
+
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+	if (!sqe) {
+		return -1;
+	}
+
+	handle->cb = cb;
+	io_uring_prep_timeout(sqe, &ts, repeat ? 1 : 0, 0);
+	io_uring_sqe_set_data64(sqe, uring_encode_timer_data(URING_OP_TMR_GENERIC, handle));
+	io_uring_submit(ring);
+	return 0;
 }
+
 int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
-	return -1;
-}
-int
-csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
-{
-	return -1;
+	if (!handle || !handle->ring) {
+		return -1;
+	}
+
+	handle->cb = NULL;
+	handle->generation++;
+
+	/* Send a cancel request for the pending timeout.  The cancel completion
+	 * will arrive as a TMR_GENERIC CQE with the old generation, so the
+	 * handler will skip it (cb == NULL, or generation mismatch). */
+	struct io_uring* ring = handle->ring;
+	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+	if (!sqe) {
+		return -1;
+	}
+
+	uint64_t cancel_val = uring_encode_timer_data(URING_OP_TMR_GENERIC, handle);
+	io_uring_prep_cancel(sqe, (void*)cancel_val, 0);
+	io_uring_sqe_set_data64(sqe, cancel_val);
+	io_uring_submit(ring);
+	return 0;
 }
 int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
