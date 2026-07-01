@@ -592,7 +592,7 @@ worker_thread(void* arg)
 				uring_encode_data(URING_OP_WAKEUP, NULL, &wp->dispatch_async));
 
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(loop_ptr);
-	io_uring_prep_poll_add(acc_sqe, wp->server_handle.fd, POLLIN);
+	io_uring_prep_accept(acc_sqe, wp->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 	io_uring_sqe_set_data64(acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
 
 	io_uring_submit(loop_ptr);
@@ -642,34 +642,19 @@ worker_thread(void* arg)
 			    flags);
 
 		if (op == URING_OP_ACCEPT) {
-			int listen_fd = wp->server_handle.fd;
-			if (res < 0) {
-				CSILK_LOG_E("Accept poll failed with %d", res);
-			} else {
-				while (1) {
-					int client_fd = accept(listen_fd, NULL, NULL);
-					if (client_fd < 0) {
-						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-							break;
-						}
-						CSILK_LOG_E("Accept failed with %d", errno);
-						break;
-					}
-					on_new_connection((worker_pool_t*)ptr, client_fd);
-				}
+			if (res >= 0) {
+				on_new_connection((worker_pool_t*)ptr, res);
+			} else if (res != -EAGAIN && res != -ECANCELED) {
+				CSILK_LOG_E("Accept failed with %d", res);
 			}
 			acc_sqe = io_uring_get_sqe(loop_ptr);
 			if (acc_sqe) {
-				io_uring_prep_poll_add(acc_sqe, listen_fd, POLLIN);
+				io_uring_prep_accept(acc_sqe, wp->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 				io_uring_sqe_set_data64(
 				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, wp));
 				int submit_ret = io_uring_submit(loop_ptr);
 				if (submit_ret < 0) {
 					CSILK_LOG_E("io_uring_submit failed: %d", submit_ret);
-				} else {
-					CSILK_LOG_D("Worker %d: re-armed POLLIN, submitted %d",
-						    wp->worker_index,
-						    submit_ret);
 				}
 			} else {
 				CSILK_LOG_E("Failed to get SQE for accept!");
@@ -919,7 +904,7 @@ csilk_server_run(csilk_server_t* server, int port)
 	}
 
 	struct io_uring_sqe* acc_sqe = io_uring_get_sqe(server->loop);
-	io_uring_prep_poll_add(acc_sqe, server->server_handle.fd, POLLIN);
+	io_uring_prep_accept(acc_sqe, server->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 	io_uring_sqe_set_data64(acc_sqe,
 				uring_encode_data(URING_OP_ACCEPT, NULL, &server->worker_pools[0]));
 
@@ -966,25 +951,14 @@ csilk_server_run(csilk_server_t* server, int port)
 		CSILK_LOG_D("Worker 0: wait_cqe returned op %d, res %d, flags %d", op, res, flags);
 
 		if (op == URING_OP_ACCEPT) {
-			int listen_fd = server->server_handle.fd;
-			if (res < 0) {
-				CSILK_LOG_E("Accept poll failed with %d", res);
-			} else {
-				while (1) {
-					int client_fd = accept(listen_fd, NULL, NULL);
-					if (client_fd < 0) {
-						if (errno == EAGAIN || errno == EWOULDBLOCK) {
-							break;
-						}
-						CSILK_LOG_E("Accept failed with %d", errno);
-						break;
-					}
-					on_new_connection((worker_pool_t*)ptr, client_fd);
-				}
+			if (res >= 0) {
+				on_new_connection((worker_pool_t*)ptr, res);
+			} else if (res != -EAGAIN && res != -ECANCELED) {
+				CSILK_LOG_E("Accept failed with %d", res);
 			}
 			acc_sqe = io_uring_get_sqe(server->loop);
 			if (acc_sqe) {
-				io_uring_prep_poll_add(acc_sqe, listen_fd, POLLIN);
+				io_uring_prep_accept(acc_sqe, server->server_handle.fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 				io_uring_sqe_set_data64(
 				    acc_sqe, uring_encode_data(URING_OP_ACCEPT, NULL, ptr));
 				int submit_ret = io_uring_submit(server->loop);
