@@ -67,6 +67,7 @@ test_oom_header_map()
 	csilk_test_ctx_free(ctx);
 }
 
+#ifndef CSILK_USE_URING
 void
 test_oom_ws_send()
 {
@@ -86,6 +87,7 @@ test_oom_ws_send()
 	g_oom_fail_after = -1;
 	csilk_test_ctx_free(ctx);
 }
+#endif
 
 int
 main()
@@ -93,7 +95,9 @@ main()
 	test_oom_arena();
 	test_oom_context();
 	test_oom_header_map();
+#ifndef CSILK_USE_URING
 	test_oom_ws_send();
+#endif
 	printf("All OOM tests passed!\n");
 	return 0;
 }
