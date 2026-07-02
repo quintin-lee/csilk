@@ -17,7 +17,7 @@
 /**
  * @brief SSE write completion callback.
  *
- * Called by libuv after an asynchronous write to the SSE client socket
+ * Called after an asynchronous write to the SSE client socket
  * completes (or fails). On failure, logs the error via CSILK_LOG_E.
  * In either case frees the write request and the associated buffer.
  *
@@ -28,15 +28,15 @@
 static void
 on_sse_write(csilk_io_write_t* req, int status)
 {
-	if (status < 0) {
-		CSILK_LOG_E("SSE write error: %s", csilk_io_strerror(status));
-	} else {
-		CSILK_LOG_T("SSE: write completed successfully");
-	}
-	if (req->data) {
-		free(req->data);
-	}
-	free(req);
+    if (status < 0) {
+        CSILK_LOG_E("SSE write error: %s", csilk_io_strerror(status));
+    } else {
+        CSILK_LOG_T("SSE: write completed successfully");
+    }
+    if (req->data) {
+        free(req->data);
+    }
+    free(req);
 }
 
 /**
@@ -57,55 +57,54 @@ on_sse_write(csilk_io_write_t* req, int status)
 void
 csilk_sse_init(csilk_ctx_t* c)
 {
-	if (!c) {
-		return;
-	}
+    if (!c) {
+        return;
+    }
 
-	CSILK_LOG_I("SSE: initializing event-stream connection for request %p", (void*)c);
+    CSILK_LOG_I("SSE: initializing event-stream connection for request %p", (void*)c);
 
-	csilk_set_header(c, "Content-Type", "text/event-stream");
-	csilk_set_header(c, "Cache-Control", "no-cache");
-	csilk_set_header(c, "Connection", "keep-alive");
-	csilk_set_header(c, "X-Accel-Buffering", "no");
+    csilk_set_header(c, "Content-Type", "text/event-stream");
+    csilk_set_header(c, "Cache-Control", "no-cache");
+    csilk_set_header(c, "Connection", "keep-alive");
+    csilk_set_header(c, "X-Accel-Buffering", "no");
 
-	csilk_status(c, CSILK_STATUS_OK);
-	csilk_ctx_set_sse(c, 1);
+    csilk_status(c, CSILK_STATUS_OK);
+    csilk_ctx_set_sse(c, 1);
 
-	void* internal_client = _csilk_get_internal_client(c);
-	if (!internal_client) {
-		CSILK_LOG_E(
-		    "SSE: failed to initialize - internal client stream missing for request %p",
-		    (void*)c);
-		return;
-	}
+    void* internal_client = _csilk_get_internal_client(c);
+    if (!internal_client) {
+        CSILK_LOG_E("SSE: failed to initialize - internal client stream missing for request %p",
+                    (void*)c);
+        return;
+    }
 
-	const char* hdr = "HTTP/1.1 200 OK\r\n"
-			  "Content-Type: text/event-stream\r\n"
-			  "Cache-Control: no-cache\r\n"
-			  "Connection: keep-alive\r\n"
-			  "X-Accel-Buffering: no\r\n"
-			  "\r\n";
+    const char* hdr = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: text/event-stream\r\n"
+                      "Cache-Control: no-cache\r\n"
+                      "Connection: keep-alive\r\n"
+                      "X-Accel-Buffering: no\r\n"
+                      "\r\n";
 
-	size_t hdr_len = strlen(hdr);
-	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-	if (!req) {
-		CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request");
-		return;
-	}
+    size_t            hdr_len = strlen(hdr);
+    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+    if (!req) {
+        CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request");
+        return;
+    }
 
-	char* buf = malloc(hdr_len);
-	if (!buf) {
-		CSILK_LOG_E("SSE: malloc failed for header write buffer");
-		free(req);
-		return;
-	}
-	memcpy(buf, hdr, hdr_len);
+    char* buf = malloc(hdr_len);
+    if (!buf) {
+        CSILK_LOG_E("SSE: malloc failed for header write buffer");
+        free(req);
+        return;
+    }
+    memcpy(buf, hdr, hdr_len);
 
-	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
-	req->data = buf;
-	csilk_client_t* cl = (csilk_client_t*)internal_client;
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
+    req->data = buf;
+    csilk_client_t*    cl = (csilk_client_t*)internal_client;
+    csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+    csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
 /**
@@ -132,61 +131,60 @@ csilk_sse_init(csilk_ctx_t* c)
 void
 csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 {
-	void* internal_client = _csilk_get_internal_client(c);
-	if (!c || !internal_client) {
-		CSILK_LOG_W("SSE: send failed - context or client missing");
-		return;
-	}
+    void* internal_client = _csilk_get_internal_client(c);
+    if (!c || !internal_client) {
+        CSILK_LOG_W("SSE: send failed - context or client missing");
+        return;
+    }
 
-	/* Format the SSE message per RFC 8895 §2.
+    /* Format the SSE message per RFC 8895 §2.
      Each message consists of optional "event:" and "data:" fields,
      terminated by a blank line. Example:
        event: update\n
        data: {"key":"value"}\n
        \n  */
-	size_t event_len = event ? strlen(event) : 0;
-	size_t data_len = data ? strlen(data) : 0;
-	size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 2;
+    size_t event_len = event ? strlen(event) : 0;
+    size_t data_len = data ? strlen(data) : 0;
+    size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 2;
 
-	CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
-		    event ? event : "",
-		    data_len,
-		    (void*)c);
+    CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
+                event ? event : "",
+                data_len,
+                (void*)c);
 
-	char* buf = malloc(buf_size);
-	if (!buf) {
-		CSILK_LOG_E("SSE: failed to allocate memory for event buffer of size %zu",
-			    buf_size);
-		return;
-	}
+    char* buf = malloc(buf_size);
+    if (!buf) {
+        CSILK_LOG_E("SSE: failed to allocate memory for event buffer of size %zu", buf_size);
+        return;
+    }
 
-	int pos = 0;
-	if (event && event_len > 0) {
-		pos += snprintf(buf + pos, buf_size - pos, "event: %s\n", event);
-	}
-	if (data) {
-		pos += snprintf(buf + pos, buf_size - pos, "data: %s\n", data);
-	}
-	pos += snprintf(buf + pos, buf_size - pos, "\n");
+    int pos = 0;
+    if (event && event_len > 0) {
+        pos += snprintf(buf + pos, buf_size - pos, "event: %s\n", event);
+    }
+    if (data) {
+        pos += snprintf(buf + pos, buf_size - pos, "data: %s\n", data);
+    }
+    pos += snprintf(buf + pos, buf_size - pos, "\n");
 
-	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-	if (!req) {
-		CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request structure");
-		free(buf);
-		return;
-	}
+    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+    if (!req) {
+        CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request structure");
+        free(buf);
+        return;
+    }
 
-	csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
-	req->data = buf;
-	csilk_client_t* cl = (csilk_client_t*)internal_client;
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-	csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
+    req->data = buf;
+    csilk_client_t*    cl = (csilk_client_t*)internal_client;
+    csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+    csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
 
 /**
  * @brief Close the SSE connection.
  *
- * Closes the underlying libuv stream handle for the SSE client connection.
+ * Closes the underlying stream handle for the SSE client connection.
  * Performs a graceful close via csilk_io_close(). Any pending write requests will
  * complete before the handle is fully closed.
  *
@@ -195,17 +193,17 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 void
 csilk_sse_close(csilk_ctx_t* c)
 {
-	void* internal_client = _csilk_get_internal_client(c);
-	if (!c || !internal_client) {
-		CSILK_LOG_W("SSE: close ignored - context or client missing");
-		return;
-	}
+    void* internal_client = _csilk_get_internal_client(c);
+    if (!c || !internal_client) {
+        CSILK_LOG_W("SSE: close ignored - context or client missing");
+        return;
+    }
 
-	CSILK_LOG_I("SSE: closing connection for request %p", (void*)c);
+    CSILK_LOG_I("SSE: closing connection for request %p", (void*)c);
 
-	csilk_client_t* cl = (csilk_client_t*)internal_client;
-	csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-	if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
-		csilk_io_close((csilk_io_handle_t*)stream, nullptr);
-	}
+    csilk_client_t*    cl = (csilk_client_t*)internal_client;
+    csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+    if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+        csilk_io_close((csilk_io_handle_t*)stream, nullptr);
+    }
 }

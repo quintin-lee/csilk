@@ -139,7 +139,7 @@ void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_
 void csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* driver);
 
 /**
- * @brief Start the server and enter the libuv event loop.
+ * @brief Start the server and enter the I/O event loop (libuv or io_uring).
  *
  * This call blocks until the server is stopped (csilk_server_stop) or a
  * fatal error occurs.
@@ -282,12 +282,12 @@ void csilk_log_close();
  *  @param fmt     Printf-style format string for the log message.
  *  @param ...     Format arguments. */
 CSILK_INTERNAL void _csilk_log_structured(csilk_log_level_t lv,
-					  const char* file,
-					  int line,
-					  const char* func,
-					  cJSON* extra,
-					  const char* fmt,
-					  ...);
+                                          const char*       file,
+                                          int               line,
+                                          const char*       func,
+                                          cJSON*            extra,
+                                          const char*       fmt,
+                                          ...);
 
 /** @brief Check whether the logger is in JSON format mode.
  * @return 1 if json_format is enabled, 0 otherwise. */
@@ -318,22 +318,22 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  *  @{ */
 /** @brief Log a TRACE-level message. */
 #define CSILK_LOG_T(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a DEBUG-level message. */
 #define CSILK_LOG_D(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an INFO-level message. */
 #define CSILK_LOG_I(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a WARN-level message. */
 #define CSILK_LOG_W(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log an ERROR-level message. */
 #define CSILK_LOG_E(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 /** @brief Log a FATAL-level message. */
 #define CSILK_LOG_F(...)                                                                           \
-	_csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 /** @brief Log a structured JSON message (only meaningful when json_format is
  *  on).
@@ -341,7 +341,7 @@ cJSON* csilk_log_make_kv(const char* key, ...);
  *  @param extra  cJSON* with extra fields (can be nullptr).
  *  @param ...    printf-style format and args for the message string. */
 #define CSILK_LOG_STRUCT(level, extra, ...)                                                        \
-	_csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
+    _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
 /** @} */
 
 /* --- Arena API --- */

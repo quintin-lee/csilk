@@ -30,14 +30,14 @@ typedef struct csilk_ctx_s csilk_ctx_t;
  *       For database-backed drivers, use a fast cache or async offload.
  */
 struct csilk_perm_driver_s {
-	const char* name; /**< Driver identifier (e.g., "simple", "casbin"). */
-	/** @brief Evaluate whether the request is allowed.
+    const char* name; /**< Driver identifier (e.g., "simple", "casbin"). */
+    /** @brief Evaluate whether the request is allowed.
    *  @param c          Request context (used to identify the authenticated
    * user).
    *  @param permission Permission string (e.g., "read", "write", "delete").
    *  @param resource   Resource pattern (e.g., "users:*", "documents:42").
    *  @return 0 if allowed, non-zero if denied. */
-	int (*check)(csilk_ctx_t* c, const char* permission, const char* resource);
+    int (*check)(csilk_ctx_t* c, const char* permission, const char* resource);
 };
 
 typedef struct csilk_perm_driver_s csilk_perm_driver_t;
@@ -49,9 +49,9 @@ typedef struct csilk_perm_driver_s csilk_perm_driver_t;
  * Rules are managed via csilk_perm_simple_allow / csilk_perm_simple_clear.
  */
 typedef struct {
-	const char* role;	/**< Role identifier (e.g., "admin", "editor"). */
-	const char* permission; /**< Action/permission string (e.g., "read"). */
-	const char* resource;	/**< Resource pattern (e.g., "articles:*"). */
+    const char* role;       /**< Role identifier (e.g., "admin", "editor"). */
+    const char* permission; /**< Action/permission string (e.g., "read"). */
+    const char* resource;   /**< Resource pattern (e.g., "articles:*"). */
 } csilk_perm_rule_t;
 
 /** @brief Initialise the permission subsystem.

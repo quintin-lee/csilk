@@ -27,10 +27,10 @@
 static int
 on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
-	(void)session;
-	(void)frame;
-	(void)user_data;
-	return 0;
+    (void)session;
+    (void)frame;
+    (void)user_data;
+    return 0;
 }
 
 /** @brief Called by nghttp2 for each header name/value pair in a HEADERS frame.
@@ -52,52 +52,50 @@ on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, 
  *         context could not be created or allocated.
  */
 static int
-on_header_callback(nghttp2_session* session,
-		   const nghttp2_frame* frame,
-		   const uint8_t* name,
-		   size_t namelen,
-		   const uint8_t* value,
-		   size_t valuelen,
-		   uint8_t flags,
-		   void* user_data)
+on_header_callback(nghttp2_session*     session,
+                   const nghttp2_frame* frame,
+                   const uint8_t*       name,
+                   size_t               namelen,
+                   const uint8_t*       value,
+                   size_t               valuelen,
+                   uint8_t              flags,
+                   void*                user_data)
 {
-	(void)flags;
-	csilk_client_t* client = (csilk_client_t*)user_data;
-	if (frame->hd.type != NGHTTP2_HEADERS) {
-		return 0;
-	}
+    (void)flags;
+    csilk_client_t* client = (csilk_client_t*)user_data;
+    if (frame->hd.type != NGHTTP2_HEADERS) {
+        return 0;
+    }
 
-	csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
-	if (!c) {
-		return NGHTTP2_ERR_CALLBACK_FAILURE;
-	}
+    csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
+    if (!c) {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
 
-	if (name[0] == ':') {
-		/* Pseudo-headers */
-		if (strncmp((const char*)name, ":method", namelen) == 0) {
-			c->request.method =
-			    csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-		} else if (strncmp((const char*)name, ":path", namelen) == 0) {
-			/* Split path and query */
-			char* full_path =
-			    csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-			char* path;
-			char* query;
-			csilk_split_url(full_path, &path, &query);
-			c->request.path = path;
-			if (query) {
-				csilk_parse_query(c, query);
-				free(query); // query is malloc'd by split_url
-			}
-		}
-	} else {
-		/* Regular headers */
-		char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
-		char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-		csilk_set_request_header(c, h_name, h_value);
-	}
+    if (name[0] == ':') {
+        /* Pseudo-headers */
+        if (strncmp((const char*)name, ":method", namelen) == 0) {
+            c->request.method = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+        } else if (strncmp((const char*)name, ":path", namelen) == 0) {
+            /* Split path and query */
+            char* full_path = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+            char* path;
+            char* query;
+            csilk_split_url(full_path, &path, &query);
+            c->request.path = path;
+            if (query) {
+                csilk_parse_query(c, query);
+                free(query); // query is malloc'd by split_url
+            }
+        }
+    } else {
+        /* Regular headers */
+        char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
+        char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+        csilk_set_request_header(c, h_name, h_value);
+    }
 
-	return 0;
+    return 0;
 }
 
 /** @brief Called by nghttp2 after a complete frame has been received.
@@ -115,21 +113,21 @@ on_header_callback(nghttp2_session* session,
 static int
 on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
-	csilk_client_t* client = (csilk_client_t*)user_data;
+    csilk_client_t* client = (csilk_client_t*)user_data;
 
-	if (frame->hd.type == NGHTTP2_HEADERS && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
-		csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
-		if (c) {
-			_csilk_dispatch_request(c);
-		}
-	} else if (frame->hd.type == NGHTTP2_DATA && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
-		csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
-		if (c) {
-			_csilk_dispatch_request(c);
-		}
-	}
+    if (frame->hd.type == NGHTTP2_HEADERS && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
+        if (c) {
+            _csilk_dispatch_request(c);
+        }
+    } else if (frame->hd.type == NGHTTP2_DATA && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
+        if (c) {
+            _csilk_dispatch_request(c);
+        }
+    }
 
-	return 0;
+    return 0;
 }
 
 /** @brief Called by nghttp2 for each chunk of DATA frame payload.
@@ -151,37 +149,37 @@ on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, voi
  */
 static int
 on_data_chunk_recv_callback(nghttp2_session* session,
-			    uint8_t flags,
-			    int32_t stream_id,
-			    const uint8_t* data,
-			    size_t len,
-			    void* user_data)
+                            uint8_t          flags,
+                            int32_t          stream_id,
+                            const uint8_t*   data,
+                            size_t           len,
+                            void*            user_data)
 {
-	(void)session;
-	(void)flags;
-	csilk_client_t* client = (csilk_client_t*)user_data;
-	csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, stream_id);
-	if (!c) {
-		return 0;
-	}
+    (void)session;
+    (void)flags;
+    csilk_client_t* client = (csilk_client_t*)user_data;
+    csilk_ctx_t*    c = csilk_h2_get_or_create_stream(client, stream_id);
+    if (!c) {
+        return 0;
+    }
 
-	/* Accumulate body */
-	if (c->request.body_len + len > client->server->config.max_body_size) {
-		return NGHTTP2_ERR_CALLBACK_FAILURE;
-	}
+    /* Accumulate body */
+    if (c->request.body_len + len > client->server->config.max_body_size) {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
 
-	char* new_body = realloc(c->request.body, c->request.body_len + len + 1);
-	if (new_body) {
-		memcpy(new_body + c->request.body_len, data, len);
-		c->request.body_len += len;
-		new_body[c->request.body_len] = '\0';
-		c->request.body = new_body;
-		c->request.body_is_managed = 1;
-	} else {
-		return NGHTTP2_ERR_CALLBACK_FAILURE;
-	}
+    char* new_body = realloc(c->request.body, c->request.body_len + len + 1);
+    if (new_body) {
+        memcpy(new_body + c->request.body_len, data, len);
+        c->request.body_len += len;
+        new_body[c->request.body_len] = '\0';
+        c->request.body = new_body;
+        c->request.body_is_managed = 1;
+    } else {
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
 
-	return 0;
+    return 0;
 }
 
 /** @brief nghttp2 data_provider read callback for streaming response bodies.
@@ -205,48 +203,48 @@ on_data_chunk_recv_callback(nghttp2_session* session,
  *         Returning a negative value signals an error to nghttp2.
  */
 static ssize_t
-body_read_callback(nghttp2_session* session,
-		   int32_t stream_id,
-		   uint8_t* buf,
-		   size_t length,
-		   uint32_t* data_flags,
-		   nghttp2_data_source* source,
-		   void* user_data)
+body_read_callback(nghttp2_session*     session,
+                   int32_t              stream_id,
+                   uint8_t*             buf,
+                   size_t               length,
+                   uint32_t*            data_flags,
+                   nghttp2_data_source* source,
+                   void*                user_data)
 {
-	(void)session;
-	(void)stream_id;
-	(void)user_data;
-	csilk_ctx_t* c = (csilk_ctx_t*)source->ptr;
+    (void)session;
+    (void)stream_id;
+    (void)user_data;
+    csilk_ctx_t* c = (csilk_ctx_t*)source->ptr;
 
-	size_t body_len = c->response.body_len;
-	const char* body = (const char*)c->response.body;
+    size_t      body_len = c->response.body_len;
+    const char* body = (const char*)c->response.body;
 
-	if (!body) {
-		*data_flags |= NGHTTP2_DATA_FLAG_EOF;
-		return 0;
-	}
+    if (!body) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        return 0;
+    }
 
-	/* For simplicity in Phase 2, we assume the whole body fits or we track offset.
+    /* For simplicity in Phase 2, we assume the whole body fits or we track offset.
        Let's add a temporary storage item for offset. */
-	size_t offset = 0;
-	void* offset_ptr = csilk_get(c, "_h2_body_offset");
-	if (offset_ptr) {
-		offset = (size_t)(uintptr_t)offset_ptr;
-	}
+    size_t offset = 0;
+    void*  offset_ptr = csilk_get(c, "_h2_body_offset");
+    if (offset_ptr) {
+        offset = (size_t)(uintptr_t)offset_ptr;
+    }
 
-	size_t remaining = body_len - offset;
-	size_t to_copy = remaining < length ? remaining : length;
+    size_t remaining = body_len - offset;
+    size_t to_copy = remaining < length ? remaining : length;
 
-	memcpy(buf, body + offset, to_copy);
-	offset += to_copy;
+    memcpy(buf, body + offset, to_copy);
+    offset += to_copy;
 
-	csilk_set(c, "_h2_body_offset", (void*)(uintptr_t)offset);
+    csilk_set(c, "_h2_body_offset", (void*)(uintptr_t)offset);
 
-	if (offset >= body_len) {
-		*data_flags |= NGHTTP2_DATA_FLAG_EOF;
-	}
+    if (offset >= body_len) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    }
 
-	return (ssize_t)to_copy;
+    return (ssize_t)to_copy;
 }
 
 /** @brief Submit an HTTP/2 response for a stream and trigger immediate send.
@@ -272,62 +270,61 @@ body_read_callback(nghttp2_session* session,
 void
 csilk_h2_send_response(csilk_ctx_t* c)
 {
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client || !client->h2_session) {
-		return;
-	}
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client || !client->h2_session) {
+        return;
+    }
 
-	nghttp2_nv hdrs[32];
+    nghttp2_nv hdrs[32];
 
-	int header_count = 1; /* :status */
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-			header_count++;
-		}
-	}
+    int header_count = 1; /* :status */
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            header_count++;
+        }
+    }
 
-	nghttp2_nv* nva = malloc(sizeof(nghttp2_nv) * (size_t)header_count);
-	if (!nva) {
-		return;
-	}
+    nghttp2_nv* nva = malloc(sizeof(nghttp2_nv) * (size_t)header_count);
+    if (!nva) {
+        return;
+    }
 
-	char status_str[16];
-	snprintf(
-	    status_str, sizeof(status_str), "%d", c->response.status ? c->response.status : 200);
+    char status_str[16];
+    snprintf(status_str, sizeof(status_str), "%d", c->response.status ? c->response.status : 200);
 
-	nva[0].name = (uint8_t*)":status";
-	nva[0].namelen = 7;
-	nva[0].value = (uint8_t*)status_str;
-	nva[0].valuelen = strlen(status_str);
-	nva[0].flags = NGHTTP2_NV_FLAG_NONE;
+    nva[0].name = (uint8_t*)":status";
+    nva[0].namelen = 7;
+    nva[0].value = (uint8_t*)status_str;
+    nva[0].valuelen = strlen(status_str);
+    nva[0].flags = NGHTTP2_NV_FLAG_NONE;
 
-	int idx = 1;
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-			nva[idx].name = (uint8_t*)h->key;
-			nva[idx].namelen = h->key_len;
-			nva[idx].value = (uint8_t*)h->value;
-			nva[idx].valuelen = h->value_len;
-			nva[idx].flags = NGHTTP2_NV_FLAG_NONE;
-			idx++;
-		}
-	}
+    int idx = 1;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            nva[idx].name = (uint8_t*)h->key;
+            nva[idx].namelen = h->key_len;
+            nva[idx].value = (uint8_t*)h->value;
+            nva[idx].valuelen = h->value_len;
+            nva[idx].flags = NGHTTP2_NV_FLAG_NONE;
+            idx++;
+        }
+    }
 
-	nghttp2_data_provider prd;
-	nghttp2_data_provider* p_prd = nullptr;
+    nghttp2_data_provider  prd;
+    nghttp2_data_provider* p_prd = nullptr;
 
-	if (c->response.body_len > 0) {
-		prd.source.ptr = c;
-		prd.read_callback = body_read_callback;
-		p_prd = &prd;
-	}
+    if (c->response.body_len > 0) {
+        prd.source.ptr = c;
+        prd.read_callback = body_read_callback;
+        p_prd = &prd;
+    }
 
-	nghttp2_submit_response(client->h2_session, c->stream_id, nva, (size_t)header_count, p_prd);
-	free(nva);
+    nghttp2_submit_response(client->h2_session, c->stream_id, nva, (size_t)header_count, p_prd);
+    free(nva);
 
-	nghttp2_session_send(client->h2_session);
+    nghttp2_session_send(client->h2_session);
 
-	_csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
+    _csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
 }
 
 /** @brief Submit an HTTP/2 server push promise and dispatch the pushed stream.
@@ -349,122 +346,113 @@ csilk_h2_send_response(csilk_ctx_t* c)
 int32_t
 csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 {
-	if (!c || !method || !path) {
-		return -1;
-	}
+    if (!c || !method || !path) {
+        return -1;
+    }
 
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client || !client->h2_session) {
-		return -1;
-	}
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client || !client->h2_session) {
+        return -1;
+    }
 
-	csilk_server_t* server = client->server;
-	if (!server) {
-		return -1;
-	}
+    csilk_server_t* server = client->server;
+    if (!server) {
+        return -1;
+    }
 
-	if (!server->config.h2_push_enable) {
-		return -1;
-	}
+    if (!server->config.h2_push_enable) {
+        return -1;
+    }
 
-	/* Enforce per-request push limit */
-	int max_push = server->config.h2_max_push_per_request;
-	if (max_push <= 0) {
-		max_push = 10;
-	}
-	int push_count = 0;
-	void* count_ptr = csilk_get(c, "_h2_push_count");
-	if (count_ptr) {
-		push_count = (int)(uintptr_t)count_ptr;
-	}
-	if (push_count >= max_push) {
-		return -1;
-	}
+    /* Enforce per-request push limit */
+    int max_push = server->config.h2_max_push_per_request;
+    if (max_push <= 0) {
+        max_push = 10;
+    }
+    int   push_count = 0;
+    void* count_ptr = csilk_get(c, "_h2_push_count");
+    if (count_ptr) {
+        push_count = (int)(uintptr_t)count_ptr;
+    }
+    if (push_count >= max_push) {
+        return -1;
+    }
 
-	/* Extract :authority and :scheme from the original request, falling back */
-	const char* authority = csilk_get_header(c, ":authority");
-	const char* scheme = csilk_get_header(c, ":scheme");
-	if (!authority) {
-		authority = csilk_get_header(c, "host");
-	}
-	if (!authority || authority[0] == '\0') {
-		authority = "localhost";
-	}
-	if (!scheme || scheme[0] == '\0') {
-		scheme = (server->config.enable_tls) ? "https" : "http";
-	}
+    /* Extract :authority and :scheme from the original request, falling back */
+    const char* authority = csilk_get_header(c, ":authority");
+    const char* scheme = csilk_get_header(c, ":scheme");
+    if (!authority) {
+        authority = csilk_get_header(c, "host");
+    }
+    if (!authority || authority[0] == '\0') {
+        authority = "localhost";
+    }
+    if (!scheme || scheme[0] == '\0') {
+        scheme = (server->config.enable_tls) ? "https" : "http";
+    }
 
-	/* Build the request pseudo-headers for the pushed resource */
-	nghttp2_nv push_headers[] = {
-	    {(uint8_t*)":method",
-	     (uint8_t*)method,
-	     7,
-	     (uint8_t)strlen(method),
-	     NGHTTP2_NV_FLAG_NONE},
-	    {(uint8_t*)":path", (uint8_t*)path, 5, (uint8_t)strlen(path), NGHTTP2_NV_FLAG_NONE},
-	    {(uint8_t*)":authority",
-	     (uint8_t*)authority,
-	     10,
-	     (uint8_t)strlen(authority),
-	     NGHTTP2_NV_FLAG_NONE},
-	    {(uint8_t*)":scheme",
-	     (uint8_t*)scheme,
-	     7,
-	     (uint8_t)strlen(scheme),
-	     NGHTTP2_NV_FLAG_NONE},
-	};
+    /* Build the request pseudo-headers for the pushed resource */
+    nghttp2_nv push_headers[] = {
+        {(uint8_t*)":method",    (uint8_t*)method, 7, (uint8_t)strlen(method),    NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":path",      (uint8_t*)path,   5, (uint8_t)strlen(path),      NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":authority",
+         (uint8_t*)authority,
+         10,                                          (uint8_t)strlen(authority),
+         NGHTTP2_NV_FLAG_NONE                                                                         },
+        {(uint8_t*)":scheme",    (uint8_t*)scheme, 7, (uint8_t)strlen(scheme),    NGHTTP2_NV_FLAG_NONE},
+    };
 
-	/* Check if push is enabled by client */
-	if (nghttp2_session_get_remote_settings(client->h2_session, NGHTTP2_SETTINGS_ENABLE_PUSH) ==
-	    0) {
-		return -1;
-	}
+    /* Check if push is enabled by client */
+    if (nghttp2_session_get_remote_settings(client->h2_session, NGHTTP2_SETTINGS_ENABLE_PUSH) ==
+        0) {
+        return -1;
+    }
 
-	/* Submit the PUSH_PROMISE. nghttp2 returns the new stream ID on success.
-	 * The new stream is in "reserved" state — we can immediately submit a
-	 * response to it. */
-	int32_t promised_id =
-	    nghttp2_submit_push_promise(client->h2_session,
-					NGHTTP2_FLAG_NONE,
-					c->stream_id,
-					push_headers,
-					sizeof(push_headers) / sizeof(push_headers[0]),
-					nullptr);
+    /* Submit the PUSH_PROMISE. nghttp2 returns the new stream ID on success.
+     * The new stream is in "reserved" state — we can immediately submit a
+     * response to it. */
+    int32_t promised_id =
+        nghttp2_submit_push_promise(client->h2_session,
+                                    NGHTTP2_FLAG_NONE,
+                                    c->stream_id,
+                                    push_headers,
+                                    sizeof(push_headers) / sizeof(push_headers[0]),
+                                    nullptr);
 
-	if (promised_id < 0) {
-		return promised_id;
-	}
+    if (promised_id < 0) {
+        return promised_id;
+    }
 
-	/* Create a request context for the promised stream */
-	csilk_ctx_t* pushed_c = csilk_h2_get_or_create_stream(client, promised_id);
-	if (!pushed_c) {
-		return -1;
-	}
+    /* Create a request context for the promised stream */
+    csilk_ctx_t* pushed_c = csilk_h2_get_or_create_stream(client, promised_id);
+    if (!pushed_c) {
+        return -1;
+    }
 
-	/* Set up the synthesized request */
-	pushed_c->request.method = csilk_arena_strdup(pushed_c->arena, method);
-	char* path_heap = nullptr;
-	char* query_heap = nullptr;
-	csilk_split_url(path, &path_heap, &query_heap);
-	pushed_c->request.path = path_heap;
-	if (query_heap) {
-		csilk_parse_query(pushed_c, query_heap);
-		free(query_heap);
-	}
+    /* Set up the synthesized request */
+    pushed_c->request.method = csilk_arena_strdup(pushed_c->arena, method);
+    char* path_heap = nullptr;
+    char* query_heap = nullptr;
+    csilk_split_url(path, &path_heap, &query_heap);
+    pushed_c->request.path = path_heap;
+    if (query_heap) {
+        csilk_parse_query(pushed_c, query_heap);
+        free(query_heap);
+    }
 
-	/* Increment push counter on the original context */
-	csilk_set(c, "_h2_push_count", (void*)(uintptr_t)(push_count + 1));
+    /* Increment push counter on the original context */
+    csilk_set(c, "_h2_push_count", (void*)(uintptr_t)(push_count + 1));
 
-	/* Dispatch the pushed request through the router.
-	 * The handler chain will set pushed_c->response, and the response
-	 * will be sent by _csilk_send_response → csilk_h2_send_response
-	 * on the promised stream ID. */
-	_csilk_dispatch_request(pushed_c);
+    /* Dispatch the pushed request through the router.
+     * The handler chain will set pushed_c->response, and the response
+     * will be sent by _csilk_send_response → csilk_h2_send_response
+     * on the promised stream ID. */
+    _csilk_dispatch_request(pushed_c);
 
-	/* Flush everything: PUSH_PROMISE and the pushed response */
-	int rv = nghttp2_session_send(client->h2_session);
+    /* Flush everything: PUSH_PROMISE and the pushed response */
+    int rv = nghttp2_session_send(client->h2_session);
 
-	return promised_id;
+    return promised_id;
 }
 
 /** @brief Called by nghttp2 when a stream is closed.
@@ -483,32 +471,32 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
  */
 static int
 on_stream_close_callback(nghttp2_session* session,
-			 int32_t stream_id,
-			 uint32_t error_code,
-			 void* user_data)
+                         int32_t          stream_id,
+                         uint32_t         error_code,
+                         void*            user_data)
 {
-	(void)session;
-	(void)error_code;
-	csilk_client_t* client = (csilk_client_t*)user_data;
+    (void)session;
+    (void)error_code;
+    csilk_client_t* client = (csilk_client_t*)user_data;
 
-	/* Find and remove context from list */
-	csilk_ctx_t** curr = &client->h2_streams;
-	while (*curr) {
-		if ((*curr)->stream_id == stream_id) {
-			csilk_ctx_t* found = *curr;
-			*curr = found->next_stream;
+    /* Find and remove context from list */
+    csilk_ctx_t** curr = &client->h2_streams;
+    while (*curr) {
+        if ((*curr)->stream_id == stream_id) {
+            csilk_ctx_t* found = *curr;
+            *curr = found->next_stream;
 
-			csilk_ctx_cleanup(found);
-			if (found->arena) {
-				csilk_arena_free(found->arena);
-			}
-			free(found);
-			return 0;
-		}
-		curr = &((*curr)->next_stream);
-	}
+            csilk_ctx_cleanup(found);
+            if (found->arena) {
+                csilk_arena_free(found->arena);
+            }
+            free(found);
+            return 0;
+        }
+        curr = &((*curr)->next_stream);
+    }
 
-	return 0;
+    return 0;
 }
 
 /** @brief nghttp2 send callback for writing serialized frames to the client.
@@ -529,11 +517,11 @@ static ssize_t
 send_callback(
     nghttp2_session* session, const uint8_t* data, size_t length, int flags, void* user_data)
 {
-	(void)session;
-	(void)flags;
-	csilk_client_t* client = (csilk_client_t*)user_data;
-	csilk_client_write(client, data, length);
-	return (ssize_t)length;
+    (void)session;
+    (void)flags;
+    csilk_client_t* client = (csilk_client_t*)user_data;
+    csilk_client_write(client, data, length);
+    return (ssize_t)length;
 }
 
 /** @brief Look up an existing per-stream context, or create a new one.
@@ -559,33 +547,33 @@ send_callback(
 csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
-	csilk_ctx_t* curr = client->h2_streams;
-	while (curr) {
-		if (curr->stream_id == stream_id) {
-			return curr;
-		}
-		curr = curr->next_stream;
-	}
+    csilk_ctx_t* curr = client->h2_streams;
+    while (curr) {
+        if (curr->stream_id == stream_id) {
+            return curr;
+        }
+        curr = curr->next_stream;
+    }
 
-	/* Create new context for stream */
-	csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
-	if (!ctx) {
-		return nullptr;
-	}
+    /* Create new context for stream */
+    csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
+    if (!ctx) {
+        return nullptr;
+    }
 
-	_csilk_ctx_init(ctx, client->server, client);
-	ctx->stream_id = stream_id;
-	ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
-	if (client->server->config.enable_arena_alignment) {
-		csilk_arena_set_alignment(ctx->arena, 1);
-	}
+    _csilk_ctx_init(ctx, client->server, client);
+    ctx->stream_id = stream_id;
+    ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+    if (client->server->config.enable_arena_alignment) {
+        csilk_arena_set_alignment(ctx->arena, 1);
+    }
 
-	/* Prepend to list */
+    /* Prepend to list */
 
-	ctx->next_stream = client->h2_streams;
-	client->h2_streams = ctx;
+    ctx->next_stream = client->h2_streams;
+    client->h2_streams = ctx;
 
-	return ctx;
+    return ctx;
 }
 
 /** @brief Free all per-stream contexts associated with a client.
@@ -607,17 +595,17 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 void
 csilk_h2_free_streams(csilk_client_t* client)
 {
-	csilk_ctx_t* curr = client->h2_streams;
-	while (curr) {
-		csilk_ctx_t* next = curr->next_stream;
-		csilk_ctx_cleanup(curr);
-		if (curr->arena) {
-			csilk_arena_free(curr->arena);
-		}
-		free(curr);
-		curr = next;
-	}
-	client->h2_streams = nullptr;
+    csilk_ctx_t* curr = client->h2_streams;
+    while (curr) {
+        csilk_ctx_t* next = curr->next_stream;
+        csilk_ctx_cleanup(curr);
+        if (curr->arena) {
+            csilk_arena_free(curr->arena);
+        }
+        free(curr);
+        curr = next;
+    }
+    client->h2_streams = nullptr;
 }
 
 /** @brief Initialize an HTTP/2 server session for a client connection.
@@ -642,37 +630,38 @@ csilk_h2_free_streams(csilk_client_t* client)
 int
 csilk_h2_init_session(csilk_client_t* client)
 {
-	nghttp2_session_callbacks* callbacks;
-	if (nghttp2_session_callbacks_new(&callbacks) != 0) {
-		return -1;
-	}
+    nghttp2_session_callbacks* callbacks;
+    if (nghttp2_session_callbacks_new(&callbacks) != 0) {
+        return -1;
+    }
 
-	nghttp2_session_callbacks_set_send_callback(callbacks, send_callback);
-	nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, on_frame_recv_callback);
+    nghttp2_session_callbacks_set_send_callback(callbacks, send_callback);
+    nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, on_frame_recv_callback);
 
-	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
-								  on_data_chunk_recv_callback);
-	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, on_stream_close_callback);
-	nghttp2_session_callbacks_set_on_header_callback(callbacks, on_header_callback);
-	nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks,
-								on_begin_headers_callback);
+    nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
+                                                              on_data_chunk_recv_callback);
+    nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, on_stream_close_callback);
+    nghttp2_session_callbacks_set_on_header_callback(callbacks, on_header_callback);
+    nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, on_begin_headers_callback);
 
-	if (nghttp2_session_server_new(&client->h2_session, callbacks, client) != 0) {
-		nghttp2_session_callbacks_del(callbacks);
-		return -1;
-	}
+    if (nghttp2_session_server_new(&client->h2_session, callbacks, client) != 0) {
+        nghttp2_session_callbacks_del(callbacks);
+        return -1;
+    }
 
-	nghttp2_session_callbacks_del(callbacks);
+    nghttp2_session_callbacks_del(callbacks);
 
-	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
+    nghttp2_settings_entry iv[1] = {
+        {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}
+    };
 
-	if (nghttp2_submit_settings(client->h2_session, NGHTTP2_FLAG_NONE, iv, 1) != 0) {
-		return -1;
-	}
+    if (nghttp2_submit_settings(client->h2_session, NGHTTP2_FLAG_NONE, iv, 1) != 0) {
+        return -1;
+    }
 
-	nghttp2_session_send(client->h2_session);
+    nghttp2_session_send(client->h2_session);
 
-	return 0;
+    return 0;
 }
 
 /** @brief Feed incoming HTTP/2 data to the nghttp2 session for processing.
@@ -696,14 +685,14 @@ csilk_h2_init_session(csilk_client_t* client)
 int
 csilk_h2_process_data(csilk_client_t* client, const uint8_t* data, size_t len)
 {
-	ssize_t rv = nghttp2_session_mem_recv(client->h2_session, data, len);
-	if (rv < 0) {
-		return -1;
-	}
+    ssize_t rv = nghttp2_session_mem_recv(client->h2_session, data, len);
+    if (rv < 0) {
+        return -1;
+    }
 
-	if (nghttp2_session_send(client->h2_session) != 0) {
-		return -1;
-	}
+    if (nghttp2_session_send(client->h2_session) != 0) {
+        return -1;
+    }
 
-	return 0;
+    return 0;
 }

@@ -17,7 +17,7 @@
  * library (.so / .dylib) which exposes an initialization function.
  * This function loads the library, invokes the init function to get a
  * csilk_router_t, and attaches it to the server.
- * It also starts a file watcher (via libuv). When the shared library is
+ * It also starts a file watcher (via libuv / io_uring fs_event). When the shared library is
  * updated, it automatically reloads the library and hot-swaps the router
  * without dropping the listening socket.
  *

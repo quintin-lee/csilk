@@ -52,7 +52,7 @@ enum { CSILK_ES256_SIGNATURE_SIZE = 64 };
  * counterparts in internal.h so that the dispatch layer is transparent.
  */
 typedef struct {
-	/** @brief AES-256-GCM encryption.
+    /** @brief AES-256-GCM encryption.
    *  @param key            Encryption key (must be CSILK_AES256_KEY_SIZE
    * bytes).
    *  @param key_len        Key length (must be 32).
@@ -66,18 +66,18 @@ typedef struct {
    *  @param[out] tag       16-byte authentication tag buffer.
    *  @param tag_len        16.
    *  @return 0 on success, -1 on failure. */
-	int (*symmetric_encrypt)(const uint8_t* key,
-				 size_t key_len,
-				 const uint8_t* plaintext,
-				 size_t plaintext_len,
-				 const uint8_t* iv,
-				 size_t iv_len,
-				 uint8_t* ciphertext,
-				 size_t* ciphertext_len,
-				 uint8_t* tag,
-				 size_t tag_len);
+    int (*symmetric_encrypt)(const uint8_t* key,
+                             size_t         key_len,
+                             const uint8_t* plaintext,
+                             size_t         plaintext_len,
+                             const uint8_t* iv,
+                             size_t         iv_len,
+                             uint8_t*       ciphertext,
+                             size_t*        ciphertext_len,
+                             uint8_t*       tag,
+                             size_t         tag_len);
 
-	/** @brief AES-256-GCM decryption with authentication tag verification.
+    /** @brief AES-256-GCM decryption with authentication tag verification.
    *  @param key            Decryption key.
    *  @param key_len        Key length.
    *  @param ciphertext     Data to decrypt.
@@ -89,29 +89,26 @@ typedef struct {
    *  @param[out] plaintext   Output buffer (>= ciphertext_len bytes).
    *  @param[in,out] plaintext_len  In: capacity, Out: actual plaintext length.
    *  @return 0 on success, -1 on tag mismatch or error. */
-	int (*symmetric_decrypt)(const uint8_t* key,
-				 size_t key_len,
-				 const uint8_t* ciphertext,
-				 size_t ciphertext_len,
-				 const uint8_t* iv,
-				 size_t iv_len,
-				 const uint8_t* tag,
-				 size_t tag_len,
-				 uint8_t* plaintext,
-				 size_t* plaintext_len);
+    int (*symmetric_decrypt)(const uint8_t* key,
+                             size_t         key_len,
+                             const uint8_t* ciphertext,
+                             size_t         ciphertext_len,
+                             const uint8_t* iv,
+                             size_t         iv_len,
+                             const uint8_t* tag,
+                             size_t         tag_len,
+                             uint8_t*       plaintext,
+                             size_t*        plaintext_len);
 
-	/** @brief Generate an RSA-2048 key pair.
+    /** @brief Generate an RSA-2048 key pair.
    *  @param[out] public_key   PEM-encoded public key output buffer.
    *  @param[in,out] pub_len   In: capacity, Out: actual PEM length.
    *  @param[out] private_key  PEM-encoded private key output buffer.
    *  @param[in,out] priv_len  In: capacity, Out: actual PEM length.
    *  @return 0 on success, -1 on failure. */
-	int (*generate_keypair)(char* public_key,
-				size_t* pub_len,
-				char* private_key,
-				size_t* priv_len);
+    int (*generate_keypair)(char* public_key, size_t* pub_len, char* private_key, size_t* priv_len);
 
-	/** @brief RSA-OAEP encryption.
+    /** @brief RSA-OAEP encryption.
    *  @param public_key     PEM-encoded RSA public key.
    *  @param pub_len        Public key PEM length.
    *  @param plaintext      Data to encrypt (max ~190 bytes for RSA-2048).
@@ -120,14 +117,14 @@ typedef struct {
    *  @param[in,out] ciphertext_len  In: capacity, Out: actual ciphertext
    * length.
    *  @return 0 on success, -1 on failure. */
-	int (*asymmetric_encrypt)(const char* public_key,
-				  size_t pub_len,
-				  const uint8_t* plaintext,
-				  size_t plaintext_len,
-				  uint8_t* ciphertext,
-				  size_t* ciphertext_len);
+    int (*asymmetric_encrypt)(const char*    public_key,
+                              size_t         pub_len,
+                              const uint8_t* plaintext,
+                              size_t         plaintext_len,
+                              uint8_t*       ciphertext,
+                              size_t*        ciphertext_len);
 
-	/** @brief RSA-OAEP decryption.
+    /** @brief RSA-OAEP decryption.
    *  @param private_key    PEM-encoded RSA private key.
    *  @param priv_len       Private key PEM length.
    *  @param ciphertext     Data to decrypt.
@@ -135,14 +132,14 @@ typedef struct {
    *  @param[out] plaintext   Output buffer.
    *  @param[in,out] plaintext_len  In: capacity, Out: actual plaintext length.
    *  @return 0 on success, -1 on failure. */
-	int (*asymmetric_decrypt)(const char* private_key,
-				  size_t priv_len,
-				  const uint8_t* ciphertext,
-				  size_t ciphertext_len,
-				  uint8_t* plaintext,
-				  size_t* plaintext_len);
+    int (*asymmetric_decrypt)(const char*    private_key,
+                              size_t         priv_len,
+                              const uint8_t* ciphertext,
+                              size_t         ciphertext_len,
+                              uint8_t*       plaintext,
+                              size_t*        plaintext_len);
 
-	/** @brief RSA-PSS signature generation.
+    /** @brief RSA-PSS signature generation.
    *  @param private_key    PEM-encoded RSA private key.
    *  @param priv_len       Private key PEM length.
    *  @param data           Data to sign.
@@ -150,14 +147,14 @@ typedef struct {
    *  @param[out] signature   Output buffer (>= CSILK_RSA_SIGNATURE_SIZE bytes).
    *  @param[in,out] sig_len  In: capacity, Out: actual signature length.
    *  @return 0 on success, -1 on failure. */
-	int (*sign)(const char* private_key,
-		    size_t priv_len,
-		    const uint8_t* data,
-		    size_t data_len,
-		    uint8_t* signature,
-		    size_t* sig_len);
+    int (*sign)(const char*    private_key,
+                size_t         priv_len,
+                const uint8_t* data,
+                size_t         data_len,
+                uint8_t*       signature,
+                size_t*        sig_len);
 
-	/** @brief RSA-PSS signature verification.
+    /** @brief RSA-PSS signature verification.
    *  @param public_key     PEM-encoded RSA public key.
    *  @param pub_len        Public key PEM length.
    *  @param data           Original signed data.
@@ -165,49 +162,49 @@ typedef struct {
    *  @param signature      Signature to verify.
    *  @param sig_len        Signature length.
    *  @return 0 on valid signature, -1 on invalid or error. */
-	int (*verify)(const char* public_key,
-		      size_t pub_len,
-		      const uint8_t* data,
-		      size_t data_len,
-		      const uint8_t* signature,
-		      size_t sig_len);
+    int (*verify)(const char*    public_key,
+                  size_t         pub_len,
+                  const uint8_t* data,
+                  size_t         data_len,
+                  const uint8_t* signature,
+                  size_t         sig_len);
 
-	/** @brief JWT signing — supports HS256, RS256, ES256.
-	 *  For HS256, key is the raw secret string and sig_len is 32.
-	 *  For RS256, key is a PEM-encoded RSA private key.
-	 *  For ES256, key is a PEM-encoded EC private key.
-	 *  @param key         Signing key.
-	 *  @param key_len     Key length in bytes.
-	 *  @param data        Data to sign (the JWT signing input).
-	 *  @param data_len    Data length.
-	 *  @param[out] signature  Output buffer.
-	 *  @param[in,out] sig_len  In: capacity, Out: actual signature length.
-	 *  @param algorithm   JWT algorithm identifier.
-	 *  @return 0 on success, -1 on failure. */
-	int (*jwt_sign)(const char* key,
-			size_t key_len,
-			const uint8_t* data,
-			size_t data_len,
-			uint8_t* signature,
-			size_t* sig_len,
-			csilk_jwt_alg_t algorithm);
+    /** @brief JWT signing — supports HS256, RS256, ES256.
+     *  For HS256, key is the raw secret string and sig_len is 32.
+     *  For RS256, key is a PEM-encoded RSA private key.
+     *  For ES256, key is a PEM-encoded EC private key.
+     *  @param key         Signing key.
+     *  @param key_len     Key length in bytes.
+     *  @param data        Data to sign (the JWT signing input).
+     *  @param data_len    Data length.
+     *  @param[out] signature  Output buffer.
+     *  @param[in,out] sig_len  In: capacity, Out: actual signature length.
+     *  @param algorithm   JWT algorithm identifier.
+     *  @return 0 on success, -1 on failure. */
+    int (*jwt_sign)(const char*     key,
+                    size_t          key_len,
+                    const uint8_t*  data,
+                    size_t          data_len,
+                    uint8_t*        signature,
+                    size_t*         sig_len,
+                    csilk_jwt_alg_t algorithm);
 
-	/** @brief JWT signature verification.
-	 *  @param key         Verification key.
-	 *  @param key_len     Key length.
-	 *  @param data        Original signed data.
-	 *  @param data_len    Data length.
-	 *  @param signature   Signature to verify.
-	 *  @param sig_len     Signature length.
-	 *  @param algorithm   JWT algorithm identifier.
-	 *  @return 0 on valid signature, -1 on invalid or error. */
-	int (*jwt_verify)(const char* key,
-			  size_t key_len,
-			  const uint8_t* data,
-			  size_t data_len,
-			  const uint8_t* signature,
-			  size_t sig_len,
-			  csilk_jwt_alg_t algorithm);
+    /** @brief JWT signature verification.
+     *  @param key         Verification key.
+     *  @param key_len     Key length.
+     *  @param data        Original signed data.
+     *  @param data_len    Data length.
+     *  @param signature   Signature to verify.
+     *  @param sig_len     Signature length.
+     *  @param algorithm   JWT algorithm identifier.
+     *  @return 0 on valid signature, -1 on invalid or error. */
+    int (*jwt_verify)(const char*     key,
+                      size_t          key_len,
+                      const uint8_t*  data,
+                      size_t          data_len,
+                      const uint8_t*  signature,
+                      size_t          sig_len,
+                      csilk_jwt_alg_t algorithm);
 } csilk_cipher_driver_t;
 
 #ifdef __cplusplus

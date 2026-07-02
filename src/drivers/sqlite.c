@@ -24,7 +24,7 @@
 
 /** @brief Per-connection data for the SQLite driver. */
 typedef struct {
-	sqlite3* db;
+    sqlite3* db;
 } sqlite_conn_t;
 
 /** @brief Open a connection to a SQLite database file.
@@ -39,25 +39,24 @@ typedef struct {
 static int
 sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 {
-	if (!pool || !dsn) {
-		return -1;
-	}
+    if (!pool || !dsn) {
+        return -1;
+    }
 
-	sqlite_conn_t* conn = calloc(1, sizeof(sqlite_conn_t));
-	if (!conn) {
-		return -1;
-	}
+    sqlite_conn_t* conn = calloc(1, sizeof(sqlite_conn_t));
+    if (!conn) {
+        return -1;
+    }
 
-	int rc =
-	    sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
-	if (rc != SQLITE_OK) {
-		CSILK_LOG_E("csilk_db_sqlite: cannot open '%s': %s", dsn, sqlite3_errmsg(conn->db));
-		free(conn);
-		return -1;
-	}
+    int rc = sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr);
+    if (rc != SQLITE_OK) {
+        CSILK_LOG_E("csilk_db_sqlite: cannot open '%s': %s", dsn, sqlite3_errmsg(conn->db));
+        free(conn);
+        return -1;
+    }
 
-	csilk_db_pool_set_connection(pool, conn);
-	return 0;
+    csilk_db_pool_set_connection(pool, conn);
+    return 0;
 }
 
 /** @brief Close a SQLite connection and free the pool's connection data.
@@ -70,17 +69,17 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 sqlite_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool)) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return -1;
+    }
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
-	if (conn->db) {
-		sqlite3_close(conn->db);
-	}
-	free(conn);
-	csilk_db_pool_set_connection(pool, nullptr);
-	return 0;
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    if (conn->db) {
+        sqlite3_close(conn->db);
+    }
+    free(conn);
+    csilk_db_pool_set_connection(pool, nullptr);
+    return 0;
 }
 
 /** @brief Free all memory associated with a query result set.
@@ -95,28 +94,28 @@ sqlite_disconnect(csilk_db_pool_t* pool)
 static void
 sqlite_free_result(csilk_db_result_t* result)
 {
-	if (!result) {
-		return;
-	}
-	for (int i = 0; i < result->row_count; i++) {
-		csilk_db_row_t* row = result->rows[i];
-		if (row) {
-			for (int j = 0; j < row->count; j++) {
-				free(row->values[j]);
-			}
-			free(row->values);
-			free(row);
-		}
-	}
-	free(result->rows);
-	for (int i = 0; i < result->column_count; i++) {
-		free(result->column_names[i]);
-	}
-	free(result->column_names);
-	result->rows = nullptr;
-	result->column_names = nullptr;
-	result->row_count = 0;
-	result->column_count = 0;
+    if (!result) {
+        return;
+    }
+    for (int i = 0; i < result->row_count; i++) {
+        csilk_db_row_t* row = result->rows[i];
+        if (row) {
+            for (int j = 0; j < row->count; j++) {
+                free(row->values[j]);
+            }
+            free(row->values);
+            free(row);
+        }
+    }
+    free(result->rows);
+    for (int i = 0; i < result->column_count; i++) {
+        free(result->column_names[i]);
+    }
+    free(result->column_names);
+    result->rows = nullptr;
+    result->column_names = nullptr;
+    result->row_count = 0;
+    result->column_count = 0;
 }
 
 /** @brief Execute a SQL query and return the full result set.
@@ -145,68 +144,67 @@ sqlite_free_result(csilk_db_result_t* result)
 static int
 sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
+        return -1;
+    }
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
 
-	sqlite3_stmt* stmt = nullptr;
-	int rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, nullptr);
-	if (rc != SQLITE_OK) {
-		CSILK_LOG_E("csilk_db_sqlite: prepare failed: %s", sqlite3_errmsg(conn->db));
-		return -1;
-	}
+    sqlite3_stmt* stmt = nullptr;
+    int           rc = sqlite3_prepare_v2(conn->db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        CSILK_LOG_E("csilk_db_sqlite: prepare failed: %s", sqlite3_errmsg(conn->db));
+        return -1;
+    }
 
-	/* --- Extract column metadata before stepping --- */
-	result->row_count = 0;
-	result->column_count = sqlite3_column_count(stmt);
-	result->column_names = calloc(result->column_count, sizeof(char*));
-	if (!result->column_names && result->column_count > 0) {
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	for (int i = 0; i < result->column_count; i++) {
-		result->column_names[i] = strdup(sqlite3_column_name(stmt, i));
-	}
+    /* --- Extract column metadata before stepping --- */
+    result->row_count = 0;
+    result->column_count = sqlite3_column_count(stmt);
+    result->column_names = calloc(result->column_count, sizeof(char*));
+    if (!result->column_names && result->column_count > 0) {
+        sqlite3_finalize(stmt);
+        return -1;
+    }
+    for (int i = 0; i < result->column_count; i++) {
+        result->column_names[i] = strdup(sqlite3_column_name(stmt, i));
+    }
 
-	/* --- Step through all result rows --- */
-	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-		if (!row) {
-			sqlite3_finalize(stmt);
-			sqlite_free_result(result);
-			return -1;
-		}
+    /* --- Step through all result rows --- */
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+        if (!row) {
+            sqlite3_finalize(stmt);
+            sqlite_free_result(result);
+            return -1;
+        }
 
-		row->count = result->column_count;
-		row->values = calloc(result->column_count, sizeof(char*));
-		if (!row->values) {
-			free(row);
-			sqlite3_finalize(stmt);
-			sqlite_free_result(result);
-			return -1;
-		}
+        row->count = result->column_count;
+        row->values = calloc(result->column_count, sizeof(char*));
+        if (!row->values) {
+            free(row);
+            sqlite3_finalize(stmt);
+            sqlite_free_result(result);
+            return -1;
+        }
 
-		/* Copy each column as text; nullptr values become "" for consistency */
-		for (int i = 0; i < result->column_count; i++) {
-			const char* val = (const char*)sqlite3_column_text(stmt, i);
-			row->values[i] = val ? strdup(val) : strdup("");
-		}
+        /* Copy each column as text; nullptr values become "" for consistency */
+        for (int i = 0; i < result->column_count; i++) {
+            const char* val = (const char*)sqlite3_column_text(stmt, i);
+            row->values[i] = val ? strdup(val) : strdup("");
+        }
 
-		/* Append row to the dynamic result array */
-		result->rows =
-		    realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-		if (!result->rows) {
-			sqlite3_finalize(stmt);
-			sqlite_free_result(result);
-			return -1;
-		}
-		result->rows[result->row_count++] = row;
-	}
+        /* Append row to the dynamic result array */
+        result->rows = realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+        if (!result->rows) {
+            sqlite3_finalize(stmt);
+            sqlite_free_result(result);
+            return -1;
+        }
+        result->rows[result->row_count++] = row;
+    }
 
-	sqlite3_finalize(stmt);
-	return 0;
+    sqlite3_finalize(stmt);
+    return 0;
 }
 
 /** @brief Execute a SQL statement that returns no result rows.
@@ -226,21 +224,21 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 static int
 sqlite_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
+        return -1;
+    }
 
-	sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
-	char* err = nullptr;
-	int rc = sqlite3_exec(conn->db, sql, nullptr, nullptr, &err);
-	if (rc != SQLITE_OK) {
-		CSILK_LOG_E("csilk_db_sqlite: exec failed: %s", err ? err : "unknown");
-		if (err) {
-			sqlite3_free(err);
-		}
-		return -1;
-	}
-	return 0;
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    char*          err = nullptr;
+    int            rc = sqlite3_exec(conn->db, sql, nullptr, nullptr, &err);
+    if (rc != SQLITE_OK) {
+        CSILK_LOG_E("csilk_db_sqlite: exec failed: %s", err ? err : "unknown");
+        if (err) {
+            sqlite3_free(err);
+        }
+        return -1;
+    }
+    return 0;
 }
 
 /** @brief Begin a SQLite transaction (delegates to sqlite_exec).
@@ -250,7 +248,7 @@ sqlite_exec(csilk_db_pool_t* pool, const char* sql)
 static int
 sqlite_transaction_begin(csilk_db_pool_t* pool)
 {
-	return sqlite_exec(pool, "BEGIN TRANSACTION");
+    return sqlite_exec(pool, "BEGIN TRANSACTION");
 }
 
 /** @brief Commit the current SQLite transaction.
@@ -260,7 +258,7 @@ sqlite_transaction_begin(csilk_db_pool_t* pool)
 static int
 sqlite_transaction_commit(csilk_db_pool_t* pool)
 {
-	return sqlite_exec(pool, "COMMIT");
+    return sqlite_exec(pool, "COMMIT");
 }
 
 /** @brief Rollback the current SQLite transaction.
@@ -270,7 +268,7 @@ sqlite_transaction_commit(csilk_db_pool_t* pool)
 static int
 sqlite_transaction_rollback(csilk_db_pool_t* pool)
 {
-	return sqlite_exec(pool, "ROLLBACK");
+    return sqlite_exec(pool, "ROLLBACK");
 }
 
 /** @brief Pre-built driver vtable for the SQLite3 database backend.
@@ -298,5 +296,5 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
 void
 csilk_db_sqlite_init(void)
 {
-	csilk_db_register_driver("sqlite", &csilk_db_sqlite_driver);
+    csilk_db_register_driver("sqlite", &csilk_db_sqlite_driver);
 }

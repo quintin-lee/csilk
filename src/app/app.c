@@ -49,8 +49,8 @@
  * multiple times (e.g., csilk_app_use_group then csilk_app_add_route).
  * The cache is linear-scanned; CSILK_MAX_GROUPS (32) keeps it cheap. */
 typedef struct {
-	char prefix[128];     /**< URL path prefix — the lookup key. */
-	csilk_group_t* group; /**< Cached group handle — created lazily by
+    char           prefix[128]; /**< URL path prefix — the lookup key. */
+    csilk_group_t* group;       /**< Cached group handle — created lazily by
                          *   find_or_create_group(). Freed once in
                          *   csilk_app_free(). */
 } cached_group_t;
@@ -62,16 +62,16 @@ typedef struct {
  * handler scans the table on each request to find the matching root_dir
  * for the requested path. */
 typedef struct {
-	char url_prefix[128]; /**< URL path prefix for static files (e.g., "/static").
+    char url_prefix[128]; /**< URL path prefix for static files (e.g., "/static").
                          *   Used as the lookup key in static_serve(). */
-	char root_dir[256];   /**< Local filesystem directory path served for this
+    char root_dir[256];   /**< Local filesystem directory path served for this
                          *   prefix. Passed to csilk_static() at dispatch time. */
 } static_route_t;
 
 /** @brief Router reference for the built-in OpenAPI handler. */
 static csilk_router_t* s_openapi_router = nullptr;
-static csilk_mutex_t s_app_mutex;
-static csilk_once_t s_app_mutex_once = CSILK_ONCE_INIT;
+static csilk_mutex_t   s_app_mutex;
+static csilk_once_t    s_app_mutex_once = CSILK_ONCE_INIT;
 
 /** @brief Internal: initialize the application-level mutex (called once via
  * csilk_once).
@@ -81,7 +81,7 @@ static csilk_once_t s_app_mutex_once = CSILK_ONCE_INIT;
 static void
 init_app_mutex(void)
 {
-	csilk_mutex_init(&s_app_mutex);
+    csilk_mutex_init(&s_app_mutex);
 }
 
 /** @brief Internal: safely retrieve the current OpenAPI router under the app
@@ -93,10 +93,10 @@ init_app_mutex(void)
 static csilk_router_t*
 get_openapi_router(void)
 {
-	csilk_mutex_lock(&s_app_mutex);
-	csilk_router_t* r = s_openapi_router;
-	csilk_mutex_unlock(&s_app_mutex);
-	return r;
+    csilk_mutex_lock(&s_app_mutex);
+    csilk_router_t* r = s_openapi_router;
+    csilk_mutex_unlock(&s_app_mutex);
+    return r;
 }
 
 /** @brief Internal: atomically set the global OpenAPI router reference.
@@ -106,9 +106,9 @@ get_openapi_router(void)
 static void
 set_openapi_router(csilk_router_t* r)
 {
-	csilk_mutex_lock(&s_app_mutex);
-	s_openapi_router = r;
-	csilk_mutex_unlock(&s_app_mutex);
+    csilk_mutex_lock(&s_app_mutex);
+    s_openapi_router = r;
+    csilk_mutex_unlock(&s_app_mutex);
 }
 
 /** @brief Built-in handler for the /openapi.json endpoint.
@@ -121,17 +121,14 @@ set_openapi_router(csilk_router_t* r)
 static void
 openapi_handler(csilk_ctx_t* c)
 {
-	csilk_router_t* router = get_openapi_router();
+    csilk_router_t* router = get_openapi_router();
 
-	if (router) {
-		csilk_serve_openapi(c,
-				    router,
-				    "csilk API",
-				    CSILK_VERSION,
-				    "Auto-generated OpenAPI 3.0 specification");
-	} else {
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-	}
+    if (router) {
+        csilk_serve_openapi(
+            c, router, "csilk API", CSILK_VERSION, "Auto-generated OpenAPI 3.0 specification");
+    } else {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    }
 }
 
 /** @brief Built-in handler for the /docs endpoint — serves the Swagger UI HTML
@@ -144,13 +141,13 @@ openapi_handler(csilk_ctx_t* c)
 static void
 docs_handler(csilk_ctx_t* c)
 {
-	csilk_router_t* router = get_openapi_router();
+    csilk_router_t* router = get_openapi_router();
 
-	if (!router) {
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-		return;
-	}
-	csilk_serve_swagger_ui(c);
+    if (!router) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+    csilk_serve_swagger_ui(c);
 }
 
 /** @brief Main application structure containing config, router, server, and
@@ -159,30 +156,30 @@ docs_handler(csilk_ctx_t* c)
  * Lifecycle: created in csilk_app_new(), destroyed in csilk_app_free().
  * Ownership: owns everything except the OpenAPI router pointer (global). */
 struct csilk_app_s {
-	csilk_config_t config;			 /**< Application config (port, logger settings,
+    csilk_config_t  config;     /**< Application config (port, logger settings,
                               *   server timeouts, CORS, etc.). Populated from
                               *   YAML or defaults in csilk_app_new(). */
-	csilk_router_t* router;			 /**< Central router — all registered routes
+    csilk_router_t* router;     /**< Central router — all registered routes
                               *   (including static-file routes) converge here.
                               *   Created in csilk_app_new(), freed in
                               *   csilk_app_free(). */
-	csilk_server_t* server;			 /**< libuv-based HTTP server. Wired to the router
+    csilk_server_t* server;     /**< I/O event-loop based HTTP server. Wired to the router
                               *   at creation. Built-in middlewares (recovery,
                               *   logging) are injected via csilk_server_use(). */
-	csilk_group_t* root_group;		 /**< Root route group with prefix "". All routes
+    csilk_group_t*  root_group; /**< Root route group with prefix "". All routes
                               *   added via csilk_app_add_route*() go through
                               *   this group. Freed in csilk_app_free(). */
-	cached_group_t groups[CSILK_MAX_GROUPS]; /**< Prefix-to-group cache.
+    cached_group_t  groups[CSILK_MAX_GROUPS]; /**< Prefix-to-group cache.
                                             *   Linear-scanned array; avoids
                                             *   duplicating groups for the same
                                             *   prefix string. Indexed by
                                             *   group_count. */
-	int group_count; /**< Number of valid entries in groups[] (0..32). */
+    int             group_count;              /**< Number of valid entries in groups[] (0..32). */
 };
 
 /* ---- global static-route table ---- */
 static static_route_t g_static[CSILK_MAX_STATIC];
-static int g_static_n = 0;
+static int            g_static_n = 0;
 
 /* ===================================================================
  * internal helpers
@@ -205,43 +202,42 @@ static int g_static_n = 0;
 static csilk_group_t*
 find_or_create_group(csilk_app_t* app, const char* prefix)
 {
-	if (!prefix || !*prefix || !strcmp(prefix, "/")) {
-		if (!app->root_group) {
-			app->root_group = csilk_group_new(app->router, "");
-			CSILK_LOG_D("Created root route group");
-		}
-		return app->root_group;
-	}
-	for (int i = 0; i < app->group_count; i++) {
-		if (!strcmp(app->groups[i].prefix, prefix)) {
-			CSILK_LOG_T("Found existing group for prefix: %s", prefix);
-			return app->groups[i].group;
-		}
-	}
+    if (!prefix || !*prefix || !strcmp(prefix, "/")) {
+        if (!app->root_group) {
+            app->root_group = csilk_group_new(app->router, "");
+            CSILK_LOG_D("Created root route group");
+        }
+        return app->root_group;
+    }
+    for (int i = 0; i < app->group_count; i++) {
+        if (!strcmp(app->groups[i].prefix, prefix)) {
+            CSILK_LOG_T("Found existing group for prefix: %s", prefix);
+            return app->groups[i].group;
+        }
+    }
 
-	if (app->group_count >= CSILK_MAX_GROUPS) {
-		CSILK_LOG_E("Failed to create route group: max group limit (%d) reached",
-			    CSILK_MAX_GROUPS);
-		return nullptr;
-	}
+    if (app->group_count >= CSILK_MAX_GROUPS) {
+        CSILK_LOG_E("Failed to create route group: max group limit (%d) reached", CSILK_MAX_GROUPS);
+        return nullptr;
+    }
 
-	if (!app->root_group) {
-		app->root_group = csilk_group_new(app->router, "");
-		CSILK_LOG_D("Created root route group");
-	}
+    if (!app->root_group) {
+        app->root_group = csilk_group_new(app->router, "");
+        CSILK_LOG_D("Created root route group");
+    }
 
-	csilk_group_t* g = app->root_group ? csilk_group_group(app->root_group, prefix)
-					   : csilk_group_new(app->router, prefix);
-	if (!g) {
-		CSILK_LOG_E("Failed to create subgroup for prefix: %s", prefix);
-		return nullptr;
-	}
+    csilk_group_t* g = app->root_group ? csilk_group_group(app->root_group, prefix)
+                                       : csilk_group_new(app->router, prefix);
+    if (!g) {
+        CSILK_LOG_E("Failed to create subgroup for prefix: %s", prefix);
+        return nullptr;
+    }
 
-	int n = app->group_count++;
-	snprintf(app->groups[n].prefix, sizeof(app->groups[n].prefix), "%s", prefix);
-	app->groups[n].group = g;
-	CSILK_LOG_I("Created route group prefix: %s", prefix);
-	return g;
+    int n = app->group_count++;
+    snprintf(app->groups[n].prefix, sizeof(app->groups[n].prefix), "%s", prefix);
+    app->groups[n].group = g;
+    CSILK_LOG_I("Created route group prefix: %s", prefix);
+    return g;
 }
 
 /** @brief Internal static file serving handler.
@@ -269,53 +265,52 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
 static int
 contains_path_traversal(const char* path)
 {
-	if (!path) {
-		return 1;
-	}
-	const char* p = path;
-	while (*p) {
-		if (p[0] == '.' && p[1] == '.') {
-			char prev = (p == path) ? '/' : *(p - 1);
-			char next = *(p + 2);
-			/* Match "..", "/.." / "../", or ".." at end */
-			if ((prev == '/' || prev == '\0') &&
-			    (next == '/' || next == '\0' || next == '\0')) {
-				return 1;
-			}
-		}
-		++p;
-	}
-	return 0;
+    if (!path) {
+        return 1;
+    }
+    const char* p = path;
+    while (*p) {
+        if (p[0] == '.' && p[1] == '.') {
+            char prev = (p == path) ? '/' : *(p - 1);
+            char next = *(p + 2);
+            /* Match "..", "/.." / "../", or ".." at end */
+            if ((prev == '/' || prev == '\0') && (next == '/' || next == '\0' || next == '\0')) {
+                return 1;
+            }
+        }
+        ++p;
+    }
+    return 0;
 }
 
 static void
 static_serve(csilk_ctx_t* c)
 {
-	const char* path = csilk_get_path(c);
+    const char* path = csilk_get_path(c);
 
-	/* Reject paths containing traversal sequences before even looking up
+    /* Reject paths containing traversal sequences before even looking up
      the static route table. */
-	if (contains_path_traversal(path)) {
-		CSILK_LOG_W("Static: blocked path traversal attempt: %s", path);
-		csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
-		return;
-	}
+    if (contains_path_traversal(path)) {
+        CSILK_LOG_W("Static: blocked path traversal attempt: %s", path);
+        csilk_string(c, CSILK_STATUS_FORBIDDEN, "Forbidden");
+        return;
+    }
 
-	csilk_mutex_lock(&s_app_mutex);
-	int n = g_static_n;
-	for (int i = 0; i < n; i++) {
-		size_t plen = strlen(g_static[i].url_prefix);
-		if (!strncmp(path, g_static[i].url_prefix, plen)) {
-			const char* prefix = g_static[i].url_prefix;
-			const char* root = g_static[i].root_dir;
-			csilk_mutex_unlock(&s_app_mutex);
-			csilk_set(c, "static_prefix", (void*)prefix);
-			csilk_static(c, root);
-			return;
-		}
-	}
-	csilk_mutex_unlock(&s_app_mutex);
-	csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    csilk_mutex_lock(&s_app_mutex);
+    int n = g_static_n;
+    for (int i = 0; i < n; i++) {
+        size_t plen = strlen(g_static[i].url_prefix);
+        if (!strncmp(path, g_static[i].url_prefix, plen)) {
+            const char* prefix = g_static[i].url_prefix;
+            const char* root = g_static[i].root_dir;
+            csilk_mutex_unlock(&s_app_mutex);
+            csilk_set(c, "static_prefix", (void*)prefix);
+            csilk_static(c, root);
+            return;
+        }
+    }
+    csilk_mutex_unlock(&s_app_mutex);
+    csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 }
 
 /* ===================================================================
@@ -358,84 +353,83 @@ static_serve(csilk_ctx_t* c)
 csilk_app_t*
 csilk_app_new(const char* config_path)
 {
-	csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
-	if (!app) {
-		return nullptr;
-	}
+    csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
+    if (!app) {
+        return nullptr;
+    }
 
-	csilk_once(&s_app_mutex_once, init_app_mutex);
-	memset(&app->config, 0, sizeof(app->config));
+    csilk_once(&s_app_mutex_once, init_app_mutex);
+    memset(&app->config, 0, sizeof(app->config));
 
-	if (config_path && csilk_load_config(config_path, &app->config) == 0) {
-		CSILK_LOG_I("Loaded config from %s", config_path);
-	} else {
-		app->config.port = CSILK_DFL_PORT;
-		app->config.logger.level = CSILK_LOG_INFO;
-		app->config.logger.use_colors = -1;
-		app->config.server.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
-		app->config.server.read_timeout_ms = 30000;
-		app->config.server.write_timeout_ms = 30000;
-		app->config.server.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
-		app->config.server.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
-		app->config.server.max_url_size = CSILK_DEFAULT_MAX_URL_SIZE;
-		app->config.server.max_headers_count = 100;
-		app->config.server.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
-		app->config.server.tcp_nodelay = 1;
-	}
+    if (config_path && csilk_load_config(config_path, &app->config) == 0) {
+        CSILK_LOG_I("Loaded config from %s", config_path);
+    } else {
+        app->config.port = CSILK_DFL_PORT;
+        app->config.logger.level = CSILK_LOG_INFO;
+        app->config.logger.use_colors = -1;
+        app->config.server.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
+        app->config.server.read_timeout_ms = 30000;
+        app->config.server.write_timeout_ms = 30000;
+        app->config.server.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+        app->config.server.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
+        app->config.server.max_url_size = CSILK_DEFAULT_MAX_URL_SIZE;
+        app->config.server.max_headers_count = 100;
+        app->config.server.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
+        app->config.server.tcp_nodelay = 1;
+    }
 
-	if (csilk_log_init(app->config.logger) != 0) {
-		goto fail;
-	}
+    if (csilk_log_init(app->config.logger) != 0) {
+        goto fail;
+    }
 
-	app->router = csilk_router_new();
-	app->server = csilk_server_new(app->router);
-	if (!app->router || !app->server) {
-		goto fail;
-	}
+    app->router = csilk_router_new();
+    app->server = csilk_server_new(app->router);
+    if (!app->router || !app->server) {
+        goto fail;
+    }
 
-	csilk_server_set_config(app->server, &app->config.server);
-	csilk_server_use(app->server, csilk_recovery_handler);
-	csilk_server_use(app->server, csilk_logger_handler);
+    csilk_server_set_config(app->server, &app->config.server);
+    csilk_server_use(app->server, csilk_recovery_handler);
+    csilk_server_use(app->server, csilk_logger_handler);
 
-	app->root_group = csilk_group_new(app->router, "");
-	if (!app->root_group) {
-		goto fail;
-	}
+    app->root_group = csilk_group_new(app->router, "");
+    if (!app->root_group) {
+        goto fail;
+    }
 
-	/* Register built-in /openapi.json and /docs endpoints */
-	set_openapi_router(app->router);
-	{
-		csilk_handler_t openapi_h[] = {openapi_handler};
-		csilk_router_add_extended(
-		    app->router,
-		    "GET",
-		    "/openapi.json",
-		    openapi_h,
-		    1,
-		    "/openapi.json",
-		    nullptr,
-		    nullptr,
-		    "OpenAPI Specification",
-		    "Returns the OpenAPI 3.0 JSON specification for this API");
-	}
-	{
-		csilk_handler_t docs_h[] = {docs_handler};
-		csilk_router_add(app->router, "GET", "/docs", docs_h, 1);
-	}
-	/* Register static /csilk-docs/ serving the bundled Swagger UI files */
-	csilk_app_static(app, "/csilk-docs", CSILK_SWAGGER_UI_DIR);
+    /* Register built-in /openapi.json and /docs endpoints */
+    set_openapi_router(app->router);
+    {
+        csilk_handler_t openapi_h[] = {openapi_handler};
+        csilk_router_add_extended(app->router,
+                                  "GET",
+                                  "/openapi.json",
+                                  openapi_h,
+                                  1,
+                                  "/openapi.json",
+                                  nullptr,
+                                  nullptr,
+                                  "OpenAPI Specification",
+                                  "Returns the OpenAPI 3.0 JSON specification for this API");
+    }
+    {
+        csilk_handler_t docs_h[] = {docs_handler};
+        csilk_router_add(app->router, "GET", "/docs", docs_h, 1);
+    }
+    /* Register static /csilk-docs/ serving the bundled Swagger UI files */
+    csilk_app_static(app, "/csilk-docs", CSILK_SWAGGER_UI_DIR);
 
-	CSILK_LOG_I("csilk app initialized");
-	return app;
+    CSILK_LOG_I("csilk app initialized");
+    return app;
 
 fail:
-	if (app->router) {
-		csilk_router_free(app->router);
-	}
-	csilk_server_free(app->server);
-	csilk_config_free(&app->config);
-	free(app);
-	return nullptr;
+    if (app->router) {
+        csilk_router_free(app->router);
+    }
+    csilk_server_free(app->server);
+    csilk_config_free(&app->config);
+    free(app);
+    return nullptr;
 }
 
 /** @brief Free all application resources: server, router, groups, config, and
@@ -443,7 +437,7 @@ fail:
  *
  * ## Teardown order (reverse of init)
  * 1. Close logger — stops accepting log entries.
- * 2. Free server — joins worker threads, closes connections, stops libuv.
+ * 2. Free server — joins worker threads, closes connections, stops the I/O event loop.
  * 3. Free cached child groups (groups[] array).
  * 4. Free root group.
  * 5. Free router — releases all registered routes and OpenAPI metadata.
@@ -458,20 +452,20 @@ fail:
 void
 csilk_app_free(csilk_app_t* app)
 {
-	if (!app) {
-		return;
-	}
-	csilk_log_close();
-	csilk_server_free(app->server);
-	for (int i = 0; i < app->group_count; i++) {
-		csilk_group_free(app->groups[i].group);
-	}
-	if (app->root_group) {
-		csilk_group_free(app->root_group);
-	}
-	csilk_router_free(app->router);
-	csilk_config_free(&app->config);
-	free(app);
+    if (!app) {
+        return;
+    }
+    csilk_log_close();
+    csilk_server_free(app->server);
+    for (int i = 0; i < app->group_count; i++) {
+        csilk_group_free(app->groups[i].group);
+    }
+    if (app->root_group) {
+        csilk_group_free(app->root_group);
+    }
+    csilk_router_free(app->router);
+    csilk_config_free(&app->config);
+    free(app);
 }
 
 /* ---- logger ---- */
@@ -486,11 +480,11 @@ csilk_app_free(csilk_app_t* app)
 void
 csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level)
 {
-	if (!app) {
-		return;
-	}
-	app->config.logger.level = level;
-	(void)csilk_log_init(app->config.logger);
+    if (!app) {
+        return;
+    }
+    app->config.logger.level = level;
+    (void)csilk_log_init(app->config.logger);
 }
 
 /** @brief Enable logging to a file with an optional rotation threshold.
@@ -505,15 +499,15 @@ csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level)
 void
 csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
 {
-	if (!app) {
-		return;
-	}
-	if (app->config.logger.file_path) {
-		free((void*)app->config.logger.file_path);
-	}
-	app->config.logger.file_path = path ? strdup(path) : nullptr;
-	app->config.logger.max_file_size = max_sz;
-	(void)csilk_log_init(app->config.logger);
+    if (!app) {
+        return;
+    }
+    if (app->config.logger.file_path) {
+        free((void*)app->config.logger.file_path);
+    }
+    app->config.logger.file_path = path ? strdup(path) : nullptr;
+    app->config.logger.max_file_size = max_sz;
+    (void)csilk_log_init(app->config.logger);
 }
 
 /** @brief Enable or disable structured JSON log output format.
@@ -527,11 +521,11 @@ csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
 void
 csilk_app_log_json(csilk_app_t* app, int enable)
 {
-	if (!app) {
-		return;
-	}
-	app->config.logger.json_format = enable;
-	(void)csilk_log_init(app->config.logger);
+    if (!app) {
+        return;
+    }
+    app->config.logger.json_format = enable;
+    (void)csilk_log_init(app->config.logger);
 }
 
 /* ---- middleware ---- */
@@ -548,11 +542,11 @@ csilk_app_log_json(csilk_app_t* app, int enable)
 void
 csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 {
-	if (!app || !app->server) {
-		return;
-	}
-	csilk_server_use(app->server, h);
-	CSILK_LOG_I("Registered global middleware: %p", (void*)h);
+    if (!app || !app->server) {
+        return;
+    }
+    csilk_server_use(app->server, h);
+    CSILK_LOG_I("Registered global middleware: %p", (void*)h);
 }
 
 /** @brief Register a middleware handler scoped to a specific URL prefix group.
@@ -567,14 +561,14 @@ csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 void
 csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
 {
-	if (!app || !prefix) {
-		return;
-	}
-	csilk_group_t* g = find_or_create_group(app, prefix);
-	if (g) {
-		csilk_group_use(g, h);
-		CSILK_LOG_I("Registered group middleware for prefix '%s': %p", prefix, (void*)h);
-	}
+    if (!app || !prefix) {
+        return;
+    }
+    csilk_group_t* g = find_or_create_group(app, prefix);
+    if (g) {
+        csilk_group_use(g, h);
+        CSILK_LOG_I("Registered group middleware for prefix '%s': %p", prefix, (void*)h);
+    }
 }
 
 /** @brief Apply configuration-driven middleware settings.
@@ -587,15 +581,15 @@ csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
 void
 csilk_app_apply_config(csilk_app_t* app)
 {
-	if (!app) {
-		return;
-	}
-	if (app->config.static_files.enable && app->config.static_files.root_dir) {
-		csilk_app_static(app,
-				 app->config.static_files.prefix ? app->config.static_files.prefix
-								 : "/static",
-				 app->config.static_files.root_dir);
-	}
+    if (!app) {
+        return;
+    }
+    if (app->config.static_files.enable && app->config.static_files.root_dir) {
+        csilk_app_static(app,
+                         app->config.static_files.prefix ? app->config.static_files.prefix
+                                                         : "/static",
+                         app->config.static_files.root_dir);
+    }
 }
 
 /* ---- OpenAPI / Swagger ---- */
@@ -610,36 +604,36 @@ csilk_app_apply_config(csilk_app_t* app)
 void
 csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
-	(void)app;
-	set_openapi_router(enable ? app->router : nullptr);
-	CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
+    (void)app;
+    set_openapi_router(enable ? app->router : nullptr);
+    CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
 static csilk_group_t*
 find_matching_group_for_path(csilk_app_t* app, const char* path, const char** out_relative_path)
 {
-	csilk_group_t* best_group = app->root_group;
-	size_t best_len = 0;
-	*out_relative_path = path;
+    csilk_group_t* best_group = app->root_group;
+    size_t         best_len = 0;
+    *out_relative_path = path;
 
-	CSILK_LOG_T("Matching path '%s' against %d registered groups", path, app->group_count);
+    CSILK_LOG_T("Matching path '%s' against %d registered groups", path, app->group_count);
 
-	for (int i = 0; i < app->group_count; i++) {
-		const char* prefix = app->groups[i].prefix;
-		size_t prefix_len = strlen(prefix);
-		if (prefix_len > best_len && strncmp(path, prefix, prefix_len) == 0) {
-			/* Ensure it's a clean boundary, e.g. /api matches /api/test but not /apipending */
-			if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
-				best_group = app->groups[i].group;
-				best_len = prefix_len;
-				*out_relative_path = path + prefix_len;
-			}
-		}
-	}
-	CSILK_LOG_D("Matched best group with prefix length %zu, relative path: '%s'",
-		    best_len,
-		    *out_relative_path);
-	return best_group;
+    for (int i = 0; i < app->group_count; i++) {
+        const char* prefix = app->groups[i].prefix;
+        size_t      prefix_len = strlen(prefix);
+        if (prefix_len > best_len && strncmp(path, prefix, prefix_len) == 0) {
+            /* Ensure it's a clean boundary, e.g. /api matches /api/test but not /apipending */
+            if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
+                best_group = app->groups[i].group;
+                best_len = prefix_len;
+                *out_relative_path = path + prefix_len;
+            }
+        }
+    }
+    CSILK_LOG_D("Matched best group with prefix length %zu, relative path: '%s'",
+                best_len,
+                *out_relative_path);
+    return best_group;
 }
 
 /* ---- routes ---- */
@@ -653,17 +647,17 @@ find_matching_group_for_path(csilk_app_t* app, const char* path, const char** ou
 void
 csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csilk_handler_t handler)
 {
-	if (!app || !method || !path || !handler) {
-		return;
-	}
-	const char* relative_path = nullptr;
-	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
-	if (!g) {
-		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
-		return;
-	}
-	csilk_group_add_route(g, method, relative_path, handler);
-	CSILK_LOG_I("Route registered: %s %s", method, path);
+    if (!app || !method || !path || !handler) {
+        return;
+    }
+    const char*    relative_path = nullptr;
+    csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
+    if (!g) {
+        CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
+        return;
+    }
+    csilk_group_add_route(g, method, relative_path, handler);
+    CSILK_LOG_I("Route registered: %s %s", method, path);
 }
 
 /** @brief Register a route on the root group with a single handler and OpenAPI
@@ -678,68 +672,68 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
  * @param summary     Short description for the OpenAPI operation.
  * @param description Detailed description for the OpenAPI operation. */
 void
-csilk_app_add_route_extended(csilk_app_t* app,
-			     const char* method,
-			     const char* path,
-			     csilk_handler_t handler,
-			     const char* input_type,
-			     const char* output_type,
-			     const char* summary,
-			     const char* description)
+csilk_app_add_route_extended(csilk_app_t*    app,
+                             const char*     method,
+                             const char*     path,
+                             csilk_handler_t handler,
+                             const char*     input_type,
+                             const char*     output_type,
+                             const char*     summary,
+                             const char*     description)
 {
-	if (!app || !method || !path || !handler) {
-		return;
-	}
-	const char* relative_path = nullptr;
-	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
-	if (!g) {
-		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
-		return;
-	}
-	csilk_group_add_route_extended(
-	    g, method, relative_path, handler, input_type, output_type, summary, description);
-	CSILK_LOG_I("Route registered (with OpenAPI metadata): %s %s", method, path);
+    if (!app || !method || !path || !handler) {
+        return;
+    }
+    const char*    relative_path = nullptr;
+    csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
+    if (!g) {
+        CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
+        return;
+    }
+    csilk_group_add_route_extended(
+        g, method, relative_path, handler, input_type, output_type, summary, description);
+    CSILK_LOG_I("Route registered (with OpenAPI metadata): %s %s", method, path);
 }
 
 /** @copydoc csilk_app_add_route_extended
  *  @param perm_required  Permission required for this route, or nullptr.
  *  @param perm_resource  Resource pattern for permission check, or nullptr. */
 void
-csilk_app_add_route_extended_perm(csilk_app_t* app,
-				  const char* method,
-				  const char* path,
-				  csilk_handler_t handler,
-				  const char* input_type,
-				  const char* output_type,
-				  const char* summary,
-				  const char* description,
-				  const char* perm_required,
-				  const char* perm_resource)
+csilk_app_add_route_extended_perm(csilk_app_t*    app,
+                                  const char*     method,
+                                  const char*     path,
+                                  csilk_handler_t handler,
+                                  const char*     input_type,
+                                  const char*     output_type,
+                                  const char*     summary,
+                                  const char*     description,
+                                  const char*     perm_required,
+                                  const char*     perm_resource)
 {
-	if (!app || !method || !path || !handler) {
-		return;
-	}
-	const char* relative_path = nullptr;
-	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
-	if (!g) {
-		CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
-		return;
-	}
-	csilk_group_add_route_extended_perm(g,
-					    method,
-					    relative_path,
-					    handler,
-					    input_type,
-					    output_type,
-					    summary,
-					    description,
-					    perm_required,
-					    perm_resource);
-	CSILK_LOG_I("Route registered (with Perm/OpenAPI metadata): %s %s (perm: %s on %s)",
-		    method,
-		    path,
-		    perm_required ? perm_required : "none",
-		    perm_resource ? perm_resource : "none");
+    if (!app || !method || !path || !handler) {
+        return;
+    }
+    const char*    relative_path = nullptr;
+    csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
+    if (!g) {
+        CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
+        return;
+    }
+    csilk_group_add_route_extended_perm(g,
+                                        method,
+                                        relative_path,
+                                        handler,
+                                        input_type,
+                                        output_type,
+                                        summary,
+                                        description,
+                                        perm_required,
+                                        perm_resource);
+    CSILK_LOG_I("Route registered (with Perm/OpenAPI metadata): %s %s (perm: %s on %s)",
+                method,
+                path,
+                perm_required ? perm_required : "none",
+                perm_resource ? perm_resource : "none");
 }
 
 /** @brief Register a route with permission metadata.
@@ -750,23 +744,23 @@ csilk_app_add_route_extended_perm(csilk_app_t* app,
  *  @param perm_required  Permission identifier (e.g., "read"), or nullptr.
  *  @param perm_resource  Resource pattern (e.g., "users:*"), or nullptr. */
 void
-csilk_app_add_route_perm(csilk_app_t* app,
-			 const char* method,
-			 const char* path,
-			 csilk_handler_t handler,
-			 const char* perm_required,
-			 const char* perm_resource)
+csilk_app_add_route_perm(csilk_app_t*    app,
+                         const char*     method,
+                         const char*     path,
+                         csilk_handler_t handler,
+                         const char*     perm_required,
+                         const char*     perm_resource)
 {
-	csilk_app_add_route_extended_perm(app,
-					  method,
-					  path,
-					  handler,
-					  nullptr,
-					  nullptr,
-					  nullptr,
-					  nullptr,
-					  perm_required,
-					  perm_resource);
+    csilk_app_add_route_extended_perm(app,
+                                      method,
+                                      path,
+                                      handler,
+                                      nullptr,
+                                      nullptr,
+                                      nullptr,
+                                      nullptr,
+                                      perm_required,
+                                      perm_resource);
 }
 
 /** @brief Register a route with a custom handler chain on the root group.
@@ -780,17 +774,17 @@ void
 csilk_app_add_handlers(
     csilk_app_t* app, const char* method, const char* path, csilk_handler_t* handlers, size_t n)
 {
-	if (!app || !method || !path || !handlers || n == 0) {
-		return;
-	}
-	const char* relative_path = nullptr;
-	csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
-	if (!g) {
-		CSILK_LOG_E("Failed to add handler chain %s %s: group match failed", method, path);
-		return;
-	}
-	csilk_group_add_handlers(g, method, relative_path, handlers, n);
-	CSILK_LOG_I("Route chain registered: %s %s (handlers count: %zu)", method, path, n);
+    if (!app || !method || !path || !handlers || n == 0) {
+        return;
+    }
+    const char*    relative_path = nullptr;
+    csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
+    if (!g) {
+        CSILK_LOG_E("Failed to add handler chain %s %s: group match failed", method, path);
+        return;
+    }
+    csilk_group_add_handlers(g, method, relative_path, handlers, n);
+    CSILK_LOG_I("Route chain registered: %s %s (handlers count: %zu)", method, path, n);
 }
 
 /* ---- static files ---- */
@@ -820,37 +814,36 @@ csilk_app_add_handlers(
 void
 csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 {
-	if (!app || !prefix || !root_dir) {
-		return;
-	}
+    if (!app || !prefix || !root_dir) {
+        return;
+    }
 
-	csilk_once(&s_app_mutex_once, init_app_mutex);
-	csilk_mutex_lock(&s_app_mutex);
-	if (g_static_n >= CSILK_MAX_STATIC) {
-		csilk_mutex_unlock(&s_app_mutex);
-		CSILK_LOG_E(
-		    "Static route limit (%d) reached. Route dropped: %s", CSILK_MAX_STATIC, prefix);
-		return;
-	}
+    csilk_once(&s_app_mutex_once, init_app_mutex);
+    csilk_mutex_lock(&s_app_mutex);
+    if (g_static_n >= CSILK_MAX_STATIC) {
+        csilk_mutex_unlock(&s_app_mutex);
+        CSILK_LOG_E("Static route limit (%d) reached. Route dropped: %s", CSILK_MAX_STATIC, prefix);
+        return;
+    }
 
-	int idx = g_static_n++;
-	snprintf(g_static[idx].url_prefix, sizeof(g_static[idx].url_prefix), "%s", prefix);
-	snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s", root_dir);
-	csilk_mutex_unlock(&s_app_mutex);
+    int idx = g_static_n++;
+    snprintf(g_static[idx].url_prefix, sizeof(g_static[idx].url_prefix), "%s", prefix);
+    snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s", root_dir);
+    csilk_mutex_unlock(&s_app_mutex);
 
-	char wild[] = "/*path";
-	char idxrt[] = "/";
+    char wild[] = "/*path";
+    char idxrt[] = "/";
 
-	csilk_group_t* g = find_or_create_group(app, prefix);
-	if (!g) {
-		return;
-	}
+    csilk_group_t* g = find_or_create_group(app, prefix);
+    if (!g) {
+        return;
+    }
 
-	csilk_handler_t hs[] = {static_serve, nullptr};
-	csilk_group_add_handlers(g, "GET", wild, hs, 1);
-	csilk_group_add_handlers(g, "GET", idxrt, hs, 1);
+    csilk_handler_t hs[] = {static_serve, nullptr};
+    csilk_group_add_handlers(g, "GET", wild, hs, 1);
+    csilk_group_add_handlers(g, "GET", idxrt, hs, 1);
 
-	CSILK_LOG_I("static: %s -> %s", prefix, root_dir);
+    CSILK_LOG_I("static: %s -> %s", prefix, root_dir);
 }
 
 /* ---- config / run / accessors ---- */
@@ -865,11 +858,11 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 void
 csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c)
 {
-	if (!app || !app->server) {
-		return;
-	}
-	app->config.server = c;
-	csilk_server_set_config(app->server, &app->config.server);
+    if (!app || !app->server) {
+        return;
+    }
+    app->config.server = c;
+    csilk_server_set_config(app->server, &app->config.server);
 }
 
 /** @brief Get a heap-allocated copy of the current application configuration.
@@ -883,17 +876,17 @@ csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c)
 csilk_config_t*
 csilk_app_config(csilk_app_t* app)
 {
-	if (!app) {
-		return nullptr;
-	}
-	csilk_config_t* cp = malloc(sizeof(csilk_config_t));
-	if (cp) {
-		memcpy(cp, &app->config, sizeof(csilk_config_t));
-	}
-	return cp;
+    if (!app) {
+        return nullptr;
+    }
+    csilk_config_t* cp = malloc(sizeof(csilk_config_t));
+    if (cp) {
+        memcpy(cp, &app->config, sizeof(csilk_config_t));
+    }
+    return cp;
 }
 
-/** @brief Start the server and enter the libuv event loop (blocking).
+/** @brief Start the server and enter the I/O event loop (blocking, libuv or io_uring).
  *
  * This is the main entry point into the event-driven I/O loop. It delegates
  * to csilk_server_run() which:
@@ -908,12 +901,12 @@ csilk_app_config(csilk_app_t* app)
 int
 csilk_app_run(csilk_app_t* app, int port)
 {
-	if (!app) {
-		return -1;
-	}
-	int p = port > 0 ? port : app->config.port;
-	CSILK_LOG_I("\n  csilk server listening on http://localhost:%d\n\n", p);
-	return csilk_server_run(app->server, p);
+    if (!app) {
+        return -1;
+    }
+    int p = port > 0 ? port : app->config.port;
+    CSILK_LOG_I("\n  csilk server listening on http://localhost:%d\n\n", p);
+    return csilk_server_run(app->server, p);
 }
 
 /** @brief Get the underlying router handle from the application.
@@ -923,7 +916,7 @@ csilk_app_run(csilk_app_t* app, int port)
 csilk_router_t*
 csilk_app_router(csilk_app_t* app)
 {
-	return app ? app->router : nullptr;
+    return app ? app->router : nullptr;
 }
 
 /** @brief Get the underlying server handle from the application.
@@ -933,5 +926,5 @@ csilk_app_router(csilk_app_t* app)
 csilk_server_t*
 csilk_app_server(csilk_app_t* app)
 {
-	return app ? app->server : nullptr;
+    return app ? app->server : nullptr;
 }

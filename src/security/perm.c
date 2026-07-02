@@ -27,10 +27,10 @@
 
 /** @brief Global driver registry (fixed-size array, max 16). */
 static csilk_perm_driver_t* drivers[16];
-static int driver_count = 0;
+static int                  driver_count = 0;
 /** @brief Currently active default driver for authorization checks. */
 static csilk_perm_driver_t* default_driver = nullptr;
-static atomic_int perm_initialized = 0;
+static atomic_int           perm_initialized = 0;
 
 /** @brief Initialize the permission subsystem.
  *
@@ -40,11 +40,11 @@ static atomic_int perm_initialized = 0;
 void
 csilk_perm_init(void)
 {
-	int expected = 0;
-	if (atomic_compare_exchange_strong(&perm_initialized, &expected, 1)) {
-		CSILK_LOG_I("Permissions: Initializing permission subsystem");
-		csilk_perm_simple_init();
-	}
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&perm_initialized, &expected, 1)) {
+        CSILK_LOG_I("Permissions: Initializing permission subsystem");
+        csilk_perm_simple_init();
+    }
 }
 
 /** @brief Register a permission driver in the global registry.
@@ -57,21 +57,21 @@ csilk_perm_init(void)
 int
 csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
 {
-	if (!name || !driver || driver_count >= 16) {
-		CSILK_LOG_E("Permissions: Failed to register driver '%s': %s",
-			    name ? name : "NULL",
-			    (!name || !driver) ? "invalid arguments" : "registry is full");
-		return -1;
-	}
+    if (!name || !driver || driver_count >= 16) {
+        CSILK_LOG_E("Permissions: Failed to register driver '%s': %s",
+                    name ? name : "NULL",
+                    (!name || !driver) ? "invalid arguments" : "registry is full");
+        return -1;
+    }
 
-	driver->name = name;
-	drivers[driver_count++] = driver;
-	CSILK_LOG_I("Permissions: Registered driver '%s'", name);
-	if (!default_driver) {
-		default_driver = driver;
-		CSILK_LOG_I("Permissions: Set '%s' as the default driver", name);
-	}
-	return 0;
+    driver->name = name;
+    drivers[driver_count++] = driver;
+    CSILK_LOG_I("Permissions: Registered driver '%s'", name);
+    if (!default_driver) {
+        default_driver = driver;
+        CSILK_LOG_I("Permissions: Set '%s' as the default driver", name);
+    }
+    return 0;
 }
 
 /** @brief Look up a registered permission driver by name.
@@ -82,15 +82,15 @@ csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
 csilk_perm_driver_t*
 csilk_perm_get_driver(const char* name)
 {
-	if (!name) {
-		return nullptr;
-	}
-	for (int i = 0; i < driver_count; i++) {
-		if (strcmp(drivers[i]->name, name) == 0) {
-			return drivers[i];
-		}
-	}
-	return nullptr;
+    if (!name) {
+        return nullptr;
+    }
+    for (int i = 0; i < driver_count; i++) {
+        if (strcmp(drivers[i]->name, name) == 0) {
+            return drivers[i];
+        }
+    }
+    return nullptr;
 }
 
 /** @brief Set the default permission driver by name.
@@ -100,15 +100,14 @@ csilk_perm_get_driver(const char* name)
 int
 csilk_perm_set_default(const char* name)
 {
-	csilk_perm_driver_t* d = csilk_perm_get_driver(name);
-	if (!d) {
-		CSILK_LOG_E("Permissions: Failed to set default driver to '%s': driver not found",
-			    name);
-		return -1;
-	}
-	default_driver = d;
-	CSILK_LOG_I("Permissions: Set default driver to '%s'", name);
-	return 0;
+    csilk_perm_driver_t* d = csilk_perm_get_driver(name);
+    if (!d) {
+        CSILK_LOG_E("Permissions: Failed to set default driver to '%s': driver not found", name);
+        return -1;
+    }
+    default_driver = d;
+    CSILK_LOG_I("Permissions: Set default driver to '%s'", name);
+    return 0;
 }
 
 /** @brief Check a permission against the default driver.
@@ -121,11 +120,11 @@ csilk_perm_set_default(const char* name)
 int
 csilk_perm_check(csilk_ctx_t* c, const char* permission, const char* resource)
 {
-	if (!default_driver || !default_driver->check) {
-		CSILK_LOG_E("Permissions: Permission check failed: no default driver set");
-		return -1;
-	}
-	return default_driver->check(c, permission, resource);
+    if (!default_driver || !default_driver->check) {
+        CSILK_LOG_E("Permissions: Permission check failed: no default driver set");
+        return -1;
+    }
+    return default_driver->check(c, permission, resource);
 }
 
 /** @brief Require a permission and abort the request if denied.
@@ -138,20 +137,20 @@ csilk_perm_check(csilk_ctx_t* c, const char* permission, const char* resource)
 void
 csilk_perm_require(csilk_ctx_t* c, const char* permission, const char* resource)
 {
-	int rc = csilk_perm_check(c, permission, resource);
-	if (rc != 0) {
-		CSILK_LOG_W("Permissions: Access denied for request %p (required: %s on %s)",
-			    (void*)c,
-			    permission,
-			    resource ? resource : "none");
-		csilk_string(c, CSILK_STATUS_FORBIDDEN, "{\"error\":\"Forbidden\"}");
-		csilk_abort(c);
-	} else {
-		CSILK_LOG_D("Permissions: Access granted for request %p (required: %s on %s)",
-			    (void*)c,
-			    permission,
-			    resource ? resource : "none");
-	}
+    int rc = csilk_perm_check(c, permission, resource);
+    if (rc != 0) {
+        CSILK_LOG_W("Permissions: Access denied for request %p (required: %s on %s)",
+                    (void*)c,
+                    permission,
+                    resource ? resource : "none");
+        csilk_string(c, CSILK_STATUS_FORBIDDEN, "{\"error\":\"Forbidden\"}");
+        csilk_abort(c);
+    } else {
+        CSILK_LOG_D("Permissions: Access granted for request %p (required: %s on %s)",
+                    (void*)c,
+                    permission,
+                    resource ? resource : "none");
+    }
 }
 
 /** @brief Global middleware that auto-checks route-level permissions.
@@ -168,14 +167,13 @@ csilk_perm_require(csilk_ctx_t* c, const char* permission, const char* resource)
 void
 csilk_perm_auto_middleware(csilk_ctx_t* c)
 {
-	const char* perm = csilk_ctx_get_handler_perm_required(c);
-	if (!perm) {
-		return;
-	}
-	CSILK_LOG_T(
-	    "Permissions: Auto-middleware checking permission requirements (required: %s on %s)",
-	    perm,
-	    csilk_ctx_get_handler_perm_resource(c) ? csilk_ctx_get_handler_perm_resource(c)
-						   : "none");
-	csilk_perm_require(c, perm, csilk_ctx_get_handler_perm_resource(c));
+    const char* perm = csilk_ctx_get_handler_perm_required(c);
+    if (!perm) {
+        return;
+    }
+    CSILK_LOG_T(
+        "Permissions: Auto-middleware checking permission requirements (required: %s on %s)",
+        perm,
+        csilk_ctx_get_handler_perm_resource(c) ? csilk_ctx_get_handler_perm_resource(c) : "none");
+    csilk_perm_require(c, perm, csilk_ctx_get_handler_perm_resource(c));
 }

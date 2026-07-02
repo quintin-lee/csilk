@@ -30,18 +30,18 @@
 void
 csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler)
 {
-	if (!s || type < 0 || type >= CSILK_HOOK_COUNT || !handler) {
-		return;
-	}
+    if (!s || type < 0 || type >= CSILK_HOOK_COUNT || !handler) {
+        return;
+    }
 
-	csilk_hook_node_t* node = malloc(sizeof(csilk_hook_node_t));
-	if (!node) {
-		return;
-	}
+    csilk_hook_node_t* node = malloc(sizeof(csilk_hook_node_t));
+    if (!node) {
+        return;
+    }
 
-	node->handler = handler;
-	node->next = s->hooks[type];
-	s->hooks[type] = node;
+    node->handler = handler;
+    node->next = s->hooks[type];
+    s->hooks[type] = node;
 }
 
 /** @brief Internal: invoke all registered handlers for a given hook type.
@@ -56,19 +56,19 @@ csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler)
 CSILK_INTERNAL void
 _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
 {
-	if (!s || type < 0 || type >= CSILK_HOOK_COUNT) {
-		return;
-	}
+    if (!s || type < 0 || type >= CSILK_HOOK_COUNT) {
+        return;
+    }
 
-	csilk_hook_node_t* curr = s->hooks[type];
-	while (curr) {
-		if (type <= CSILK_HOOK_SERVER_STOP) {
-			((csilk_server_hook_handler_t)curr->handler)(s);
-		} else {
-			if (c) {
-				((csilk_ctx_hook_handler_t)curr->handler)(c);
-			}
-		}
-		curr = curr->next;
-	}
+    csilk_hook_node_t* curr = s->hooks[type];
+    while (curr) {
+        if (type <= CSILK_HOOK_SERVER_STOP) {
+            ((csilk_server_hook_handler_t)curr->handler)(s);
+        } else {
+            if (c) {
+                ((csilk_ctx_hook_handler_t)curr->handler)(c);
+            }
+        }
+        curr = curr->next;
+    }
 }

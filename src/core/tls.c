@@ -41,28 +41,24 @@
  * @return SSL_TLSEXT_ERR_OK on successful negotiation,
  *         SSL_TLSEXT_ERR_NOACK if no common protocol was found. */
 static int
-alpn_select_cb(SSL* ssl,
-	       const unsigned char** out,
-	       unsigned char* outlen,
-	       const unsigned char* in,
-	       unsigned int inlen,
-	       void* arg)
+alpn_select_cb(SSL*                  ssl,
+               const unsigned char** out,
+               unsigned char*        outlen,
+               const unsigned char*  in,
+               unsigned int          inlen,
+               void*                 arg)
 {
-	(void)ssl;
-	(void)arg;
+    (void)ssl;
+    (void)arg;
 
-	int rv = SSL_select_next_proto((unsigned char**)out,
-				       outlen,
-				       (const unsigned char*)"\x02h2\x08http/1.1",
-				       12,
-				       in,
-				       inlen);
+    int rv = SSL_select_next_proto(
+        (unsigned char**)out, outlen, (const unsigned char*)"\x02h2\x08http/1.1", 12, in, inlen);
 
-	if (rv != OPENSSL_NPN_NEGOTIATED) {
-		return SSL_TLSEXT_ERR_NOACK;
-	}
+    if (rv != OPENSSL_NPN_NEGOTIATED) {
+        return SSL_TLSEXT_ERR_NOACK;
+    }
 
-	return SSL_TLSEXT_ERR_OK;
+    return SSL_TLSEXT_ERR_OK;
 }
 
 /* --- TLS Init / Cleanup --- */
@@ -80,50 +76,48 @@ alpn_select_cb(SSL* ssl,
 void
 init_tls(csilk_server_t* s)
 {
-	SSL_load_error_strings();
-	OpenSSL_add_ssl_algorithms();
+    SSL_load_error_strings();
+    OpenSSL_add_ssl_algorithms();
 
-	const SSL_METHOD* method = TLS_server_method();
-	s->ssl_ctx = SSL_CTX_new(method);
-	if (!s->ssl_ctx) {
-		ERR_print_errors_fp(stderr);
-		return;
-	}
+    const SSL_METHOD* method = TLS_server_method();
+    s->ssl_ctx = SSL_CTX_new(method);
+    if (!s->ssl_ctx) {
+        ERR_print_errors_fp(stderr);
+        return;
+    }
 
-	SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, nullptr);
+    SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, nullptr);
 
-	if (s->config.tls_cert_file && s->config.tls_key_file) {
-		if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx, s->config.tls_cert_file) <= 0) {
-			ERR_print_errors_fp(stderr);
-			goto fail;
-		}
-		if (SSL_CTX_use_PrivateKey_file(
-			s->ssl_ctx, s->config.tls_key_file, SSL_FILETYPE_PEM) <= 0) {
-			ERR_print_errors_fp(stderr);
-			goto fail;
-		}
-	} else {
-		CSILK_LOG_E("TLS: TLS enabled but cert/key files missing");
-		goto fail;
-	}
+    if (s->config.tls_cert_file && s->config.tls_key_file) {
+        if (SSL_CTX_use_certificate_chain_file(s->ssl_ctx, s->config.tls_cert_file) <= 0) {
+            ERR_print_errors_fp(stderr);
+            goto fail;
+        }
+        if (SSL_CTX_use_PrivateKey_file(s->ssl_ctx, s->config.tls_key_file, SSL_FILETYPE_PEM) <=
+            0) {
+            ERR_print_errors_fp(stderr);
+            goto fail;
+        }
+    } else {
+        CSILK_LOG_E("TLS: TLS enabled but cert/key files missing");
+        goto fail;
+    }
 
-	if (s->config.tls_ca_file) {
-		if (SSL_CTX_load_verify_locations(s->ssl_ctx, s->config.tls_ca_file, nullptr) <=
-		    0) {
-			ERR_print_errors_fp(stderr);
-		}
-	}
+    if (s->config.tls_ca_file) {
+        if (SSL_CTX_load_verify_locations(s->ssl_ctx, s->config.tls_ca_file, nullptr) <= 0) {
+            ERR_print_errors_fp(stderr);
+        }
+    }
 
-	if (s->config.tls_verify_peer) {
-		SSL_CTX_set_verify(
-		    s->ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
-	}
+    if (s->config.tls_verify_peer) {
+        SSL_CTX_set_verify(s->ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+    }
 
-	return;
+    return;
 
 fail:
-	SSL_CTX_free(s->ssl_ctx);
-	s->ssl_ctx = nullptr;
+    SSL_CTX_free(s->ssl_ctx);
+    s->ssl_ctx = nullptr;
 }
 
 /** @brief Clean up the server's TLS/SSL context and global SSL state.
@@ -134,11 +128,11 @@ fail:
 void
 cleanup_tls(csilk_server_t* s)
 {
-	if (s->ssl_ctx) {
-		SSL_CTX_free(s->ssl_ctx);
-		s->ssl_ctx = nullptr;
-	}
-	EVP_cleanup();
+    if (s->ssl_ctx) {
+        SSL_CTX_free(s->ssl_ctx);
+        s->ssl_ctx = nullptr;
+    }
+    EVP_cleanup();
 }
 
 /* --- Per-client TLS --- */
@@ -154,24 +148,24 @@ cleanup_tls(csilk_server_t* s)
 int
 setup_client_tls(csilk_client_t* client)
 {
-	client->ssl = SSL_new(client->server->ssl_ctx);
-	if (!client->ssl) {
-		return -1;
-	}
+    client->ssl = SSL_new(client->server->ssl_ctx);
+    if (!client->ssl) {
+        return -1;
+    }
 
-	client->read_bio = BIO_new(BIO_s_mem());
-	client->write_bio = BIO_new(BIO_s_mem());
-	if (!client->read_bio || !client->write_bio) {
-		SSL_free(client->ssl);
-		client->ssl = nullptr;
-		return -1;
-	}
+    client->read_bio = BIO_new(BIO_s_mem());
+    client->write_bio = BIO_new(BIO_s_mem());
+    if (!client->read_bio || !client->write_bio) {
+        SSL_free(client->ssl);
+        client->ssl = nullptr;
+        return -1;
+    }
 
-	SSL_set_bio(client->ssl, client->read_bio, client->write_bio);
-	SSL_set_accept_state(client->ssl);
+    SSL_set_bio(client->ssl, client->read_bio, client->write_bio);
+    SSL_set_accept_state(client->ssl);
 
-	process_tls_read(client);
-	return 0;
+    process_tls_read(client);
+    return 0;
 }
 
 /** @brief Process incoming TLS data — complete the handshake or decrypt
@@ -186,94 +180,88 @@ setup_client_tls(csilk_client_t* client)
 void
 process_tls_read(csilk_client_t* client)
 {
-	char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
-	if (!buf) {
-		CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
-		csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
-		return;
-	}
-	int n;
+    char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
+    if (!buf) {
+        CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
+        csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+        return;
+    }
+    int n;
 
-	if (!SSL_is_init_finished(client->ssl)) {
-		int r = SSL_do_handshake(client->ssl);
-		flush_tls_write(client);
-		if (r <= 0) {
-			int err = SSL_get_error(client->ssl, r);
-			if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
-				CSILK_LOG_E("TLS: Handshake error: %d", err);
-				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
-			}
-			return;
-		}
-		const unsigned char* alpn_data;
-		unsigned int alpn_len;
-		SSL_get0_alpn_selected(client->ssl, &alpn_data, &alpn_len);
-		if (alpn_data && alpn_len == 2 && strncmp((const char*)alpn_data, "h2", 2) == 0) {
-			client->protocol = CSILK_PROTO_HTTP2;
-			CSILK_LOG_D("TLS: ALPN negotiated HTTP/2");
-			if (csilk_h2_init_session(client) != 0) {
-				CSILK_LOG_E("TLS: Failed to initialize HTTP/2 session");
-				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
-				return;
-			}
-		} else {
-			client->protocol = CSILK_PROTO_HTTP1;
-		}
-	}
+    if (!SSL_is_init_finished(client->ssl)) {
+        int r = SSL_do_handshake(client->ssl);
+        flush_tls_write(client);
+        if (r <= 0) {
+            int err = SSL_get_error(client->ssl, r);
+            if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+                CSILK_LOG_E("TLS: Handshake error: %d", err);
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
+            return;
+        }
+        const unsigned char* alpn_data;
+        unsigned int         alpn_len;
+        SSL_get0_alpn_selected(client->ssl, &alpn_data, &alpn_len);
+        if (alpn_data && alpn_len == 2 && strncmp((const char*)alpn_data, "h2", 2) == 0) {
+            client->protocol = CSILK_PROTO_HTTP2;
+            CSILK_LOG_D("TLS: ALPN negotiated HTTP/2");
+            if (csilk_h2_init_session(client) != 0) {
+                CSILK_LOG_E("TLS: Failed to initialize HTTP/2 session");
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+                return;
+            }
+        } else {
+            client->protocol = CSILK_PROTO_HTTP1;
+        }
+    }
 
-	while ((n = SSL_read(client->ssl, buf, 4096)) > 0) {
-		if (client->ctx.is_websocket) {
-			csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
-		} else if (client->protocol == CSILK_PROTO_HTTP2) {
-			if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
-				CSILK_LOG_E("TLS: HTTP/2 processing error");
-				if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-					csilk_io_close((csilk_io_handle_t*)&client->handle,
-						       on_close);
-				}
-				break;
-			}
-		} else {
-			enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
-			if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
-				if (err == HPE_CLOSED_CONNECTION) {
-					llhttp_init(&client->parser,
-						    HTTP_REQUEST,
-						    &client->server->settings);
-					client->parser.data = client;
-				} else {
-					CSILK_LOG_E("TLS: Parse error: %s %s",
-						    llhttp_errno_name(err),
-						    client->parser.reason ? client->parser.reason
-									  : "unknown reason");
-					if (!csilk_io_is_closing(
-						(csilk_io_handle_t*)&client->handle)) {
-						csilk_io_close((csilk_io_handle_t*)&client->handle,
-							       on_close);
-					}
-					break;
-				}
-			}
-		}
-	}
+    while ((n = SSL_read(client->ssl, buf, 4096)) > 0) {
+        if (client->ctx.is_websocket) {
+            csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
+        } else if (client->protocol == CSILK_PROTO_HTTP2) {
+            if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
+                CSILK_LOG_E("TLS: HTTP/2 processing error");
+                if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                    csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+                }
+                break;
+            }
+        } else {
+            enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
+            if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
+                if (err == HPE_CLOSED_CONNECTION) {
+                    llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
+                    client->parser.data = client;
+                } else {
+                    CSILK_LOG_E("TLS: Parse error: %s %s",
+                                llhttp_errno_name(err),
+                                client->parser.reason ? client->parser.reason : "unknown reason");
+                    if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                        csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 
-	if (n <= 0) {
-		int err = SSL_get_error(client->ssl, n);
-		if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
-		    err != SSL_ERROR_ZERO_RETURN) {
-			CSILK_LOG_E("TLS: Read error: %d", err);
-			if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-				csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
-			}
-		}
-	}
+    if (n <= 0) {
+        int err = SSL_get_error(client->ssl, n);
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE &&
+            err != SSL_ERROR_ZERO_RETURN) {
+            CSILK_LOG_E("TLS: Read error: %d", err);
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
+        }
+    }
 
-	flush_tls_write(client);
+    flush_tls_write(client);
 }
 
 /** @brief Flush buffered TLS encrypted data to the client socket.
  *
- * Reads encrypted data from the write BIO and sends it via libuv write
+ * Reads encrypted data from the write BIO and sends it via I/O write
  * requests. Must be called after SSL_write() or SSL_do_handshake() to
  * ensure the encrypted output is actually transmitted.
  *
@@ -281,24 +269,24 @@ process_tls_read(csilk_client_t* client)
 void
 flush_tls_write(csilk_client_t* client)
 {
-	char buf[4096];
-	int n;
+    char buf[4096];
+    int  n;
 
-	while ((n = BIO_read(client->write_bio, buf, sizeof(buf))) > 0) {
-		csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-		if (!req) {
-			break;
-		}
+    while ((n = BIO_read(client->write_bio, buf, sizeof(buf))) > 0) {
+        csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+        if (!req) {
+            break;
+        }
 
-		char* data = malloc((size_t)n);
-		if (!data) {
-			free(req);
-			break;
-		}
-		memcpy(data, buf, (size_t)n);
+        char* data = malloc((size_t)n);
+        if (!data) {
+            free(req);
+            break;
+        }
+        memcpy(data, buf, (size_t)n);
 
-		csilk_io_buf_t uv_buf = csilk_io_buf_init(data, (unsigned int)n);
-		req->data = data;
-		csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &uv_buf, 1, on_write);
-	}
+        csilk_io_buf_t uv_buf = csilk_io_buf_init(data, (unsigned int)n);
+        req->data = data;
+        csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &uv_buf, 1, on_write);
+    }
 }

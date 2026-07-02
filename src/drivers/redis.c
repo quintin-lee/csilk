@@ -36,7 +36,7 @@
 
 /** @brief Per-connection data for the Redis driver. */
 typedef struct {
-	redisContext* c; /**< hiredis connection context. */
+    redisContext* c; /**< hiredis connection context. */
 } redis_conn_t;
 
 /**
@@ -57,46 +57,46 @@ typedef struct {
 static void
 redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* db)
 {
-	*host = nullptr;
-	*port = 6379;
-	*password = nullptr;
-	*db = 0;
-	if (!dsn) {
-		return;
-	}
+    *host = nullptr;
+    *port = 6379;
+    *password = nullptr;
+    *db = 0;
+    if (!dsn) {
+        return;
+    }
 
-	char* buf = strdup(dsn);
-	if (!buf) {
-		return;
-	}
+    char* buf = strdup(dsn);
+    if (!buf) {
+        return;
+    }
 
-	char* token = strtok(buf, ";");
-	while (token) {
-		while (*token == ' ') {
-			token++;
-		}
-		char* eq = strchr(token, '=');
-		if (!eq) {
-			token = strtok(nullptr, ";");
-			continue;
-		}
-		*eq = '\0';
-		const char* key = token;
-		const char* val = eq + 1;
+    char* token = strtok(buf, ";");
+    while (token) {
+        while (*token == ' ') {
+            token++;
+        }
+        char* eq = strchr(token, '=');
+        if (!eq) {
+            token = strtok(nullptr, ";");
+            continue;
+        }
+        *eq = '\0';
+        const char* key = token;
+        const char* val = eq + 1;
 
-		if (strcmp(key, "host") == 0) {
-			*host = strdup(val);
-		} else if (strcmp(key, "port") == 0) {
-			*port = atoi(val);
-		} else if (strcmp(key, "password") == 0) {
-			*password = strdup(val);
-		} else if (strcmp(key, "db") == 0) {
-			*db = atoi(val);
-		}
+        if (strcmp(key, "host") == 0) {
+            *host = strdup(val);
+        } else if (strcmp(key, "port") == 0) {
+            *port = atoi(val);
+        } else if (strcmp(key, "password") == 0) {
+            *password = strdup(val);
+        } else if (strcmp(key, "db") == 0) {
+            *db = atoi(val);
+        }
 
-		token = strtok(nullptr, ";");
-	}
-	free(buf);
+        token = strtok(nullptr, ";");
+    }
+    free(buf);
 }
 
 /**
@@ -113,69 +113,67 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
 static int
 redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 {
-	if (!pool || !dsn) {
-		return -1;
-	}
+    if (!pool || !dsn) {
+        return -1;
+    }
 
-	char *host = nullptr, *password = nullptr;
-	int port = 6379, db = 0;
-	redis_parse_dsn(dsn, &host, &port, &password, &db);
+    char *host = nullptr, *password = nullptr;
+    int   port = 6379, db = 0;
+    redis_parse_dsn(dsn, &host, &port, &password, &db);
 
-	redis_conn_t* conn = calloc(1, sizeof(redis_conn_t));
-	if (!conn) {
-		free(host);
-		free(password);
-		return -1;
-	}
+    redis_conn_t* conn = calloc(1, sizeof(redis_conn_t));
+    if (!conn) {
+        free(host);
+        free(password);
+        return -1;
+    }
 
-	/* Connect with 5-second timeout */
-	struct timeval tv = {5, 0};
-	conn->c = redisConnectWithTimeout(host ? host : "127.0.0.1", port, tv);
-	free(host);
+    /* Connect with 5-second timeout */
+    struct timeval tv = {5, 0};
+    conn->c = redisConnectWithTimeout(host ? host : "127.0.0.1", port, tv);
+    free(host);
 
-	if (!conn->c || conn->c->err) {
-		CSILK_LOG_E("csilk_db_redis: connect failed: %s",
-			    conn->c ? conn->c->errstr : "allocation failed");
-		if (conn->c) {
-			redisFree(conn->c);
-		}
-		free(conn);
-		free(password);
-		return -1;
-	}
+    if (!conn->c || conn->c->err) {
+        CSILK_LOG_E("csilk_db_redis: connect failed: %s",
+                    conn->c ? conn->c->errstr : "allocation failed");
+        if (conn->c) {
+            redisFree(conn->c);
+        }
+        free(conn);
+        free(password);
+        return -1;
+    }
 
-	/* Authenticate if password provided */
-	if (password) {
-		redisReply* reply = redisCommand(conn->c, "AUTH %s", password);
-		free(password);
-		if (!reply || reply->type == REDIS_REPLY_ERROR) {
-			CSILK_LOG_E("csilk_db_redis: AUTH failed: %s",
-				    reply ? reply->str : "no reply");
-			freeReplyObject(reply);
-			redisFree(conn->c);
-			free(conn);
-			return -1;
-		}
-		freeReplyObject(reply);
-	}
+    /* Authenticate if password provided */
+    if (password) {
+        redisReply* reply = redisCommand(conn->c, "AUTH %s", password);
+        free(password);
+        if (!reply || reply->type == REDIS_REPLY_ERROR) {
+            CSILK_LOG_E("csilk_db_redis: AUTH failed: %s", reply ? reply->str : "no reply");
+            freeReplyObject(reply);
+            redisFree(conn->c);
+            free(conn);
+            return -1;
+        }
+        freeReplyObject(reply);
+    }
 
-	/* Select database index */
-	if (db > 0) {
-		redisReply* reply = redisCommand(conn->c, "SELECT %d", db);
-		if (!reply || reply->type == REDIS_REPLY_ERROR) {
-			CSILK_LOG_E("csilk_db_redis: SELECT %d failed: %s",
-				    db,
-				    reply ? reply->str : "no reply");
-			freeReplyObject(reply);
-			redisFree(conn->c);
-			free(conn);
-			return -1;
-		}
-		freeReplyObject(reply);
-	}
+    /* Select database index */
+    if (db > 0) {
+        redisReply* reply = redisCommand(conn->c, "SELECT %d", db);
+        if (!reply || reply->type == REDIS_REPLY_ERROR) {
+            CSILK_LOG_E(
+                "csilk_db_redis: SELECT %d failed: %s", db, reply ? reply->str : "no reply");
+            freeReplyObject(reply);
+            redisFree(conn->c);
+            free(conn);
+            return -1;
+        }
+        freeReplyObject(reply);
+    }
 
-	csilk_db_pool_set_connection(pool, conn);
-	return 0;
+    csilk_db_pool_set_connection(pool, conn);
+    return 0;
 }
 
 /**
@@ -189,17 +187,17 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 redis_drv_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool)) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return -1;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
-	if (conn->c) {
-		redisFree(conn->c);
-	}
-	free(conn);
-	csilk_db_pool_set_connection(pool, nullptr);
-	return 0;
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
+    if (conn->c) {
+        redisFree(conn->c);
+    }
+    free(conn);
+    csilk_db_pool_set_connection(pool, nullptr);
+    return 0;
 }
 
 /**
@@ -213,28 +211,28 @@ redis_drv_disconnect(csilk_db_pool_t* pool)
 static void
 redis_free_csilk_result(csilk_db_result_t* result)
 {
-	if (!result) {
-		return;
-	}
-	for (int i = 0; i < result->row_count; i++) {
-		csilk_db_row_t* row = result->rows[i];
-		if (row) {
-			for (int j = 0; j < row->count; j++) {
-				free(row->values[j]);
-			}
-			free(row->values);
-			free(row);
-		}
-	}
-	free(result->rows);
-	for (int i = 0; i < result->column_count; i++) {
-		free(result->column_names[i]);
-	}
-	free(result->column_names);
-	result->rows = nullptr;
-	result->column_names = nullptr;
-	result->row_count = 0;
-	result->column_count = 0;
+    if (!result) {
+        return;
+    }
+    for (int i = 0; i < result->row_count; i++) {
+        csilk_db_row_t* row = result->rows[i];
+        if (row) {
+            for (int j = 0; j < row->count; j++) {
+                free(row->values[j]);
+            }
+            free(row->values);
+            free(row);
+        }
+    }
+    free(result->rows);
+    for (int i = 0; i < result->column_count; i++) {
+        free(result->column_names[i]);
+    }
+    free(result->column_names);
+    result->rows = nullptr;
+    result->column_names = nullptr;
+    result->row_count = 0;
+    result->column_count = 0;
 }
 
 /**
@@ -252,26 +250,26 @@ redis_free_csilk_result(csilk_db_result_t* result)
 static csilk_db_row_t*
 redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count, int row_idx)
 {
-	(void)col_name;
-	(void)row_idx;
-	csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-	if (!row) {
-		return nullptr;
-	}
+    (void)col_name;
+    (void)row_idx;
+    csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+    if (!row) {
+        return nullptr;
+    }
 
-	row->count = col_count;
-	row->values = calloc(col_count, sizeof(char*));
-	if (!row->values) {
-		free(row);
-		return nullptr;
-	}
+    row->count = col_count;
+    row->values = calloc(col_count, sizeof(char*));
+    if (!row->values) {
+        free(row);
+        return nullptr;
+    }
 
-	if (reply->str) {
-		row->values[0] = strdup(reply->str);
-	} else {
-		row->values[0] = strdup(""); /* nullptr string → empty string */
-	}
-	return row;
+    if (reply->str) {
+        row->values[0] = strdup(reply->str);
+    } else {
+        row->values[0] = strdup(""); /* nullptr string → empty string */
+    }
+    return row;
 }
 
 /**
@@ -299,216 +297,212 @@ redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count,
 static int
 redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
+        return -1;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
-	redisReply* reply = redisCommand(conn->c, sql);
-	if (!reply) {
-		CSILK_LOG_E("csilk_db_redis: connection error: %s",
-			    conn->c ? conn->c->errstr : "unknown");
-		return -1;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
+    redisReply*   reply = redisCommand(conn->c, sql);
+    if (!reply) {
+        CSILK_LOG_E("csilk_db_redis: connection error: %s", conn->c ? conn->c->errstr : "unknown");
+        return -1;
+    }
 
-	if (reply->type == REDIS_REPLY_ERROR) {
-		CSILK_LOG_E("csilk_db_redis: command error: %s", reply->str);
-		freeReplyObject(reply);
-		return -1;
-	}
+    if (reply->type == REDIS_REPLY_ERROR) {
+        CSILK_LOG_E("csilk_db_redis: command error: %s", reply->str);
+        freeReplyObject(reply);
+        return -1;
+    }
 
-	/* Determine column layout based on reply type */
-	int is_hash = 0;
-	if (reply->type == REDIS_REPLY_ARRAY && reply->elements > 0) {
-		/* HGETALL returns alternating field/value pairs → even count */
-		is_hash = (reply->elements % 2 == 0) &&
-			  reply->element[0]->type == REDIS_REPLY_STRING &&
-			  reply->element[1]->type == REDIS_REPLY_STRING;
-	}
+    /* Determine column layout based on reply type */
+    int is_hash = 0;
+    if (reply->type == REDIS_REPLY_ARRAY && reply->elements > 0) {
+        /* HGETALL returns alternating field/value pairs → even count */
+        is_hash = (reply->elements % 2 == 0) && reply->element[0]->type == REDIS_REPLY_STRING &&
+                  reply->element[1]->type == REDIS_REPLY_STRING;
+    }
 
-	switch (reply->type) {
-	case REDIS_REPLY_STRING:
-	case REDIS_REPLY_STATUS: {
-		/* Single string/status reply → one row, one column */
-		result->column_count = 1;
-		result->column_names = calloc(1, sizeof(char*));
-		if (!result->column_names) {
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->column_names[0] = strdup("value");
+    switch (reply->type) {
+    case REDIS_REPLY_STRING:
+    case REDIS_REPLY_STATUS: {
+        /* Single string/status reply → one row, one column */
+        result->column_count = 1;
+        result->column_names = calloc(1, sizeof(char*));
+        if (!result->column_names) {
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->column_names[0] = strdup("value");
 
-		csilk_db_row_t* row = redis_reply_to_row(reply, "value", 1, 0);
-		if (!row) {
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->rows = malloc(sizeof(csilk_db_row_t*));
-		if (!result->rows) {
-			free(row->values);
-			free(row);
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->rows[0] = row;
-		result->row_count = 1;
-		break;
-	}
+        csilk_db_row_t* row = redis_reply_to_row(reply, "value", 1, 0);
+        if (!row) {
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->rows = malloc(sizeof(csilk_db_row_t*));
+        if (!result->rows) {
+            free(row->values);
+            free(row);
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->rows[0] = row;
+        result->row_count = 1;
+        break;
+    }
 
-	case REDIS_REPLY_INTEGER: {
-		/* Integer reply → one row, "value" column holds the stringified number */
-		char buf[32];
-		snprintf(buf, sizeof(buf), "%lld", reply->integer);
+    case REDIS_REPLY_INTEGER: {
+        /* Integer reply → one row, "value" column holds the stringified number */
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%lld", reply->integer);
 
-		result->column_count = 1;
-		result->column_names = calloc(1, sizeof(char*));
-		if (!result->column_names) {
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->column_names[0] = strdup("value");
+        result->column_count = 1;
+        result->column_names = calloc(1, sizeof(char*));
+        if (!result->column_names) {
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->column_names[0] = strdup("value");
 
-		csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-		if (!row) {
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
-		row->count = 1;
-		row->values = calloc(1, sizeof(char*));
-		if (!row->values) {
-			free(row);
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
-		row->values[0] = strdup(buf);
+        csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+        if (!row) {
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
+        row->count = 1;
+        row->values = calloc(1, sizeof(char*));
+        if (!row->values) {
+            free(row);
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
+        row->values[0] = strdup(buf);
 
-		result->rows = malloc(sizeof(csilk_db_row_t*));
-		if (!result->rows) {
-			free(row->values);
-			free(row);
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->rows[0] = row;
-		result->row_count = 1;
-		break;
-	}
+        result->rows = malloc(sizeof(csilk_db_row_t*));
+        if (!result->rows) {
+            free(row->values);
+            free(row);
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->rows[0] = row;
+        result->row_count = 1;
+        break;
+    }
 
-	case REDIS_REPLY_ARRAY: {
-		/* Array reply: determine column layout from data pattern */
-		int col_count = is_hash ? 2 : 1;
-		result->column_count = col_count;
-		result->column_names = calloc(col_count, sizeof(char*));
-		if (!result->column_names) {
-			freeReplyObject(reply);
-			return -1;
-		}
-		if (is_hash) {
-			result->column_names[0] = strdup("field");
-			result->column_names[1] = strdup("value");
-		} else {
-			result->column_names[0] = strdup("value");
-		}
+    case REDIS_REPLY_ARRAY: {
+        /* Array reply: determine column layout from data pattern */
+        int col_count = is_hash ? 2 : 1;
+        result->column_count = col_count;
+        result->column_names = calloc(col_count, sizeof(char*));
+        if (!result->column_names) {
+            freeReplyObject(reply);
+            return -1;
+        }
+        if (is_hash) {
+            result->column_names[0] = strdup("field");
+            result->column_names[1] = strdup("value");
+        } else {
+            result->column_names[0] = strdup("value");
+        }
 
-		result->row_count = is_hash ? (int)(reply->elements / 2) : (int)reply->elements;
-		result->rows = calloc(result->row_count, sizeof(csilk_db_row_t*));
-		if (!result->rows && result->row_count > 0) {
-			free(result->column_names);
-			freeReplyObject(reply);
-			return -1;
-		}
+        result->row_count = is_hash ? (int)(reply->elements / 2) : (int)reply->elements;
+        result->rows = calloc(result->row_count, sizeof(csilk_db_row_t*));
+        if (!result->rows && result->row_count > 0) {
+            free(result->column_names);
+            freeReplyObject(reply);
+            return -1;
+        }
 
-		if (is_hash) {
-			/* HGETALL: alternating field/value pairs */
-			int ri = 0;
-			for (size_t i = 0; i + 1 < reply->elements; i += 2) {
-				csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-				if (!row) {
-					redis_free_csilk_result(result);
-					freeReplyObject(reply);
-					return -1;
-				}
-				row->count = 2;
-				row->values = calloc(2, sizeof(char*));
-				if (!row->values) {
-					free(row);
-					redis_free_csilk_result(result);
-					freeReplyObject(reply);
-					return -1;
-				}
-				row->values[0] = reply->element[i]->str
-						     ? strdup(reply->element[i]->str)
-						     : strdup("");
-				row->values[1] = reply->element[i + 1]->str
-						     ? strdup(reply->element[i + 1]->str)
-						     : strdup("");
-				result->rows[ri++] = row;
-			}
-		} else {
-			/* Flat array: one column per element */
-			for (size_t i = 0; i < reply->elements; i++) {
-				csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-				if (!row) {
-					redis_free_csilk_result(result);
-					freeReplyObject(reply);
-					return -1;
-				}
-				row->count = 1;
-				row->values = calloc(1, sizeof(char*));
-				if (!row->values) {
-					free(row);
-					redis_free_csilk_result(result);
-					freeReplyObject(reply);
-					return -1;
-				}
+        if (is_hash) {
+            /* HGETALL: alternating field/value pairs */
+            int ri = 0;
+            for (size_t i = 0; i + 1 < reply->elements; i += 2) {
+                csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+                if (!row) {
+                    redis_free_csilk_result(result);
+                    freeReplyObject(reply);
+                    return -1;
+                }
+                row->count = 2;
+                row->values = calloc(2, sizeof(char*));
+                if (!row->values) {
+                    free(row);
+                    redis_free_csilk_result(result);
+                    freeReplyObject(reply);
+                    return -1;
+                }
+                row->values[0] =
+                    reply->element[i]->str ? strdup(reply->element[i]->str) : strdup("");
+                row->values[1] =
+                    reply->element[i + 1]->str ? strdup(reply->element[i + 1]->str) : strdup("");
+                result->rows[ri++] = row;
+            }
+        } else {
+            /* Flat array: one column per element */
+            for (size_t i = 0; i < reply->elements; i++) {
+                csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+                if (!row) {
+                    redis_free_csilk_result(result);
+                    freeReplyObject(reply);
+                    return -1;
+                }
+                row->count = 1;
+                row->values = calloc(1, sizeof(char*));
+                if (!row->values) {
+                    free(row);
+                    redis_free_csilk_result(result);
+                    freeReplyObject(reply);
+                    return -1;
+                }
 
-				const redisReply* elem = reply->element[i];
-				if (elem->type == REDIS_REPLY_STRING && elem->str) {
-					row->values[0] = strdup(elem->str);
-				} else if (elem->type == REDIS_REPLY_INTEGER) {
-					char buf[32];
-					snprintf(buf, sizeof(buf), "%lld", elem->integer);
-					row->values[0] = strdup(buf);
-				} else {
-					row->values[0] = strdup("");
-				}
-				result->rows[i] = row;
-			}
-		}
-		break;
-	}
+                const redisReply* elem = reply->element[i];
+                if (elem->type == REDIS_REPLY_STRING && elem->str) {
+                    row->values[0] = strdup(elem->str);
+                } else if (elem->type == REDIS_REPLY_INTEGER) {
+                    char buf[32];
+                    snprintf(buf, sizeof(buf), "%lld", elem->integer);
+                    row->values[0] = strdup(buf);
+                } else {
+                    row->values[0] = strdup("");
+                }
+                result->rows[i] = row;
+            }
+        }
+        break;
+    }
 
-	case REDIS_REPLY_NIL: {
-		/* Nil reply → empty result set (0 rows) */
-		result->column_count = 1;
-		result->column_names = calloc(1, sizeof(char*));
-		if (!result->column_names) {
-			freeReplyObject(reply);
-			return -1;
-		}
-		result->column_names[0] = strdup("value");
-		result->row_count = 0;
-		result->rows = nullptr;
-		break;
-	}
+    case REDIS_REPLY_NIL: {
+        /* Nil reply → empty result set (0 rows) */
+        result->column_count = 1;
+        result->column_names = calloc(1, sizeof(char*));
+        if (!result->column_names) {
+            freeReplyObject(reply);
+            return -1;
+        }
+        result->column_names[0] = strdup("value");
+        result->row_count = 0;
+        result->rows = nullptr;
+        break;
+    }
 
-	default: {
-		/* Unsupported reply type → treat as empty */
-		result->column_count = 0;
-		result->row_count = 0;
-		result->rows = nullptr;
-		result->column_names = nullptr;
-		break;
-	}
-	}
+    default: {
+        /* Unsupported reply type → treat as empty */
+        result->column_count = 0;
+        result->row_count = 0;
+        result->rows = nullptr;
+        result->column_names = nullptr;
+        break;
+    }
+    }
 
-	freeReplyObject(reply);
-	return 0;
+    freeReplyObject(reply);
+    return 0;
 }
 
 /**
@@ -523,45 +517,45 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 static int
 redis_drv_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
+        return -1;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
-	redisReply* reply = redisCommand(conn->c, sql);
-	if (!reply) {
-		CSILK_LOG_E("csilk_db_redis: exec connection error: %s",
-			    conn->c ? conn->c->errstr : "unknown");
-		return -1;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
+    redisReply*   reply = redisCommand(conn->c, sql);
+    if (!reply) {
+        CSILK_LOG_E("csilk_db_redis: exec connection error: %s",
+                    conn->c ? conn->c->errstr : "unknown");
+        return -1;
+    }
 
-	int rc = (reply->type == REDIS_REPLY_ERROR) ? -1 : 0;
-	if (rc != 0) {
-		CSILK_LOG_E("csilk_db_redis: exec error: %s", reply->str);
-	}
-	freeReplyObject(reply);
-	return rc;
+    int rc = (reply->type == REDIS_REPLY_ERROR) ? -1 : 0;
+    if (rc != 0) {
+        CSILK_LOG_E("csilk_db_redis: exec error: %s", reply->str);
+    }
+    freeReplyObject(reply);
+    return rc;
 }
 
 /** @brief Begin a Redis transaction (sends MULTI). */
 static int
 redis_drv_transaction_begin(csilk_db_pool_t* pool)
 {
-	return redis_drv_exec(pool, "MULTI");
+    return redis_drv_exec(pool, "MULTI");
 }
 
 /** @brief Commit the current transaction (sends EXEC). */
 static int
 redis_drv_transaction_commit(csilk_db_pool_t* pool)
 {
-	return redis_drv_exec(pool, "EXEC");
+    return redis_drv_exec(pool, "EXEC");
 }
 
 /** @brief Rollback the current transaction (sends DISCARD). */
 static int
 redis_drv_transaction_rollback(csilk_db_pool_t* pool)
 {
-	return redis_drv_exec(pool, "DISCARD");
+    return redis_drv_exec(pool, "DISCARD");
 }
 
 /** @brief Pre-built driver vtable for Redis. */
@@ -586,14 +580,14 @@ csilk_db_driver_t csilk_db_redis_driver = {
 void
 csilk_db_redis_init(void)
 {
-	csilk_db_register_driver("redis", &csilk_db_redis_driver);
+    csilk_db_register_driver("redis", &csilk_db_redis_driver);
 }
 
 /* --- Distributed Storage Driver Implementation --- */
 
 typedef struct {
-	csilk_storage_driver_t base;
-	csilk_db_pool_t* pool;
+    csilk_storage_driver_t base;
+    csilk_db_pool_t*       pool;
 } redis_storage_driver_t;
 
 /** @brief Store a value under a key in Redis (SET).
@@ -604,24 +598,24 @@ typedef struct {
 static void
 redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
 {
-	if (!c || !key || !value) {
-		return;
-	}
-	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
-	if (!drv || !drv->pool) {
-		return;
-	}
+    if (!c || !key || !value) {
+        return;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return;
+    }
 
-	/* Assumes value is a null-terminated string */
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
-	if (!conn || !conn->c) {
-		return;
-	}
+    /* Assumes value is a null-terminated string */
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return;
+    }
 
-	redisReply* reply = redisCommand(conn->c, "SET %s %s", key, (const char*)value);
-	if (reply) {
-		freeReplyObject(reply);
-	}
+    redisReply* reply = redisCommand(conn->c, "SET %s %s", key, (const char*)value);
+    if (reply) {
+        freeReplyObject(reply);
+    }
 }
 
 /** @brief Retrieve a value by key from Redis (GET).
@@ -635,28 +629,28 @@ redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
 static void*
 redis_storage_get(csilk_ctx_t* c, const char* key)
 {
-	if (!c || !key) {
-		return nullptr;
-	}
-	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
-	if (!drv || !drv->pool) {
-		return nullptr;
-	}
+    if (!c || !key) {
+        return nullptr;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return nullptr;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
-	if (!conn || !conn->c) {
-		return nullptr;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return nullptr;
+    }
 
-	void* result = nullptr;
-	redisReply* reply = redisCommand(conn->c, "GET %s", key);
-	if (reply) {
-		if (reply->type == REDIS_REPLY_STRING && reply->str && c->arena) {
-			result = csilk_arena_strdup(c->arena, reply->str);
-		}
-		freeReplyObject(reply);
-	}
-	return result;
+    void*       result = nullptr;
+    redisReply* reply = redisCommand(conn->c, "GET %s", key);
+    if (reply) {
+        if (reply->type == REDIS_REPLY_STRING && reply->str && c->arena) {
+            result = csilk_arena_strdup(c->arena, reply->str);
+        }
+        freeReplyObject(reply);
+    }
+    return result;
 }
 
 /** @brief Clear all stored data — unsupported for Redis.
@@ -666,8 +660,8 @@ redis_storage_get(csilk_ctx_t* c, const char* key)
 static void
 redis_storage_clear(csilk_ctx_t* c)
 {
-	/* Unsupported globally, would require FLUSHDB which is dangerous. */
-	(void)c;
+    /* Unsupported globally, would require FLUSHDB which is dangerous. */
+    (void)c;
 }
 
 /** @brief Store a string value with optional TTL (SET … EX).
@@ -682,34 +676,34 @@ redis_storage_clear(csilk_ctx_t* c)
 static int
 redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec)
 {
-	if (!c || !key || !value) {
-		return -1;
-	}
-	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
-	if (!drv || !drv->pool) {
-		return -1;
-	}
+    if (!c || !key || !value) {
+        return -1;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return -1;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
-	if (!conn || !conn->c) {
-		return -1;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return -1;
+    }
 
-	redisReply* reply = nullptr;
-	if (ttl_sec > 0) {
-		reply = redisCommand(conn->c, "SET %s %s EX %d", key, value, ttl_sec);
-	} else {
-		reply = redisCommand(conn->c, "SET %s %s", key, value);
-	}
+    redisReply* reply = nullptr;
+    if (ttl_sec > 0) {
+        reply = redisCommand(conn->c, "SET %s %s EX %d", key, value, ttl_sec);
+    } else {
+        reply = redisCommand(conn->c, "SET %s %s", key, value);
+    }
 
-	int rc = 0;
-	if (!reply || reply->type == REDIS_REPLY_ERROR) {
-		rc = -1;
-	}
-	if (reply) {
-		freeReplyObject(reply);
-	}
-	return rc;
+    int rc = 0;
+    if (!reply || reply->type == REDIS_REPLY_ERROR) {
+        rc = -1;
+    }
+    if (reply) {
+        freeReplyObject(reply);
+    }
+    return rc;
 }
 
 /** @brief Retrieve a string value by key from Redis (GET).
@@ -724,28 +718,28 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
 static char*
 redis_storage_get_string(csilk_ctx_t* c, const char* key)
 {
-	if (!c || !key) {
-		return nullptr;
-	}
-	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
-	if (!drv || !drv->pool) {
-		return nullptr;
-	}
+    if (!c || !key) {
+        return nullptr;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return nullptr;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
-	if (!conn || !conn->c) {
-		return nullptr;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return nullptr;
+    }
 
-	char* result = nullptr;
-	redisReply* reply = redisCommand(conn->c, "GET %s", key);
-	if (reply) {
-		if (reply->type == REDIS_REPLY_STRING && reply->str) {
-			result = strdup(reply->str); /* Heap-allocated as per API */
-		}
-		freeReplyObject(reply);
-	}
-	return result;
+    char*       result = nullptr;
+    redisReply* reply = redisCommand(conn->c, "GET %s", key);
+    if (reply) {
+        if (reply->type == REDIS_REPLY_STRING && reply->str) {
+            result = strdup(reply->str); /* Heap-allocated as per API */
+        }
+        freeReplyObject(reply);
+    }
+    return result;
 }
 
 /** @brief Atomically increment a key (INCR) and optionally set a TTL.
@@ -760,36 +754,35 @@ redis_storage_get_string(csilk_ctx_t* c, const char* key)
 static long long
 redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 {
-	if (!c || !key) {
-		return -1;
-	}
-	redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
-	if (!drv || !drv->pool) {
-		return -1;
-	}
+    if (!c || !key) {
+        return -1;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return -1;
+    }
 
-	redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
-	if (!conn || !conn->c) {
-		return -1;
-	}
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return -1;
+    }
 
-	long long val = -1;
-	redisReply* reply = redisCommand(conn->c, "INCR %s", key);
-	if (reply) {
-		if (reply->type == REDIS_REPLY_INTEGER) {
-			val = reply->integer;
-			/* If the value is 1, it's a new key, so set the TTL */
-			if (val == 1 && ttl_sec > 0) {
-				redisReply* exp_reply =
-				    redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
-				if (exp_reply) {
-					freeReplyObject(exp_reply);
-				}
-			}
-		}
-		freeReplyObject(reply);
-	}
-	return val;
+    long long   val = -1;
+    redisReply* reply = redisCommand(conn->c, "INCR %s", key);
+    if (reply) {
+        if (reply->type == REDIS_REPLY_INTEGER) {
+            val = reply->integer;
+            /* If the value is 1, it's a new key, so set the TTL */
+            if (val == 1 && ttl_sec > 0) {
+                redisReply* exp_reply = redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
+                if (exp_reply) {
+                    freeReplyObject(exp_reply);
+                }
+            }
+        }
+        freeReplyObject(reply);
+    }
+    return val;
 }
 
 /** @brief Create a new Redis-based storage driver instance.
@@ -803,23 +796,23 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 csilk_storage_driver_t*
 csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
 {
-	if (!pool) {
-		return nullptr;
-	}
-	redis_storage_driver_t* drv = calloc(1, sizeof(redis_storage_driver_t));
-	if (!drv) {
-		return nullptr;
-	}
+    if (!pool) {
+        return nullptr;
+    }
+    redis_storage_driver_t* drv = calloc(1, sizeof(redis_storage_driver_t));
+    if (!drv) {
+        return nullptr;
+    }
 
-	drv->base.set = redis_storage_set;
-	drv->base.get = redis_storage_get;
-	drv->base.clear = redis_storage_clear;
-	drv->base.set_string = redis_storage_set_string;
-	drv->base.get_string = redis_storage_get_string;
-	drv->base.incr = redis_storage_incr;
-	drv->pool = pool;
+    drv->base.set = redis_storage_set;
+    drv->base.get = redis_storage_get;
+    drv->base.clear = redis_storage_clear;
+    drv->base.set_string = redis_storage_set_string;
+    drv->base.get_string = redis_storage_get_string;
+    drv->base.incr = redis_storage_incr;
+    drv->pool = pool;
 
-	return (csilk_storage_driver_t*)drv;
+    return (csilk_storage_driver_t*)drv;
 }
 
 #endif /* HAS_REDIS */

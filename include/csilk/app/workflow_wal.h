@@ -33,13 +33,13 @@ enum { CSILK_WF_MAGIC = 0x5746414C }; /* "WFAL" */
  * partially-completed executions.
  */
 typedef enum {
-	WF_EV_START = 1,       /**< Workflow execution started. */
-	WF_EV_NODE_START = 2,  /**< A specific node began executing (carries node ID
+    WF_EV_START = 1,       /**< Workflow execution started. */
+    WF_EV_NODE_START = 2,  /**< A specific node began executing (carries node ID
                             and input in payload). */
-	WF_EV_NODE_FINISH = 3, /**< A specific node completed (carries node ID and
+    WF_EV_NODE_FINISH = 3, /**< A specific node completed (carries node ID and
                             output in payload). */
-	WF_EV_PAUSE = 4,       /**< Workflow execution paused for manual input. */
-	WF_EV_END = 5	       /**< Workflow execution completed or was aborted. */
+    WF_EV_PAUSE = 4,       /**< Workflow execution paused for manual input. */
+    WF_EV_END = 5          /**< Workflow execution completed or was aborted. */
 } csilk_wf_event_type_t;
 
 /**
@@ -52,10 +52,10 @@ typedef enum {
  *       consistent across architectures and compilers.
  */
 typedef struct __attribute__((packed)) {
-	uint32_t magic;	      /**< Must equal CSILK_WF_MAGIC for file validation. */
-	uint8_t type;	      /**< csilk_wf_event_type_t value. */
-	uint64_t timestamp;   /**< Unix timestamp (seconds since epoch) of the event. */
-	uint32_t payload_len; /**< Byte length of the payload that follows this header. */
+    uint32_t magic;       /**< Must equal CSILK_WF_MAGIC for file validation. */
+    uint8_t  type;        /**< csilk_wf_event_type_t value. */
+    uint64_t timestamp;   /**< Unix timestamp (seconds since epoch) of the event. */
+    uint32_t payload_len; /**< Byte length of the payload that follows this header. */
 } csilk_wf_wal_header_t;
 
 /**

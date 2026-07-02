@@ -38,20 +38,20 @@
  * followed by this group's middleware, followed by the route handlers.
  */
 struct csilk_group_s {
-	char* prefix;		      /**< URL prefix for routes in this group.
+    char*            prefix;              /**< URL prefix for routes in this group.
                            *   Combined with parent prefix at creation
                            *   via join_path(). Freed in csilk_group_free().
                            *   e.g., parent="/api", child="/v1" → "/api/v1". */
-	csilk_router_t* router;	      /**< Router where routes are registered. Inherited
+    csilk_router_t*  router;              /**< Router where routes are registered. Inherited
                            *   from parent or set explicitly in
                            *   csilk_group_new(). Not owned by the group. */
-	csilk_handler_t* middlewares; /**< Dynamically-grown array of middleware
+    csilk_handler_t* middlewares;         /**< Dynamically-grown array of middleware
                                  *   handlers for this group. Grown by
                                  *   doubling (initial cap = 4). Freed in
                                  *   csilk_group_free(). */
-	size_t middleware_count;      /**< Current number of middleware handlers. */
-	size_t middleware_capacity;   /**< Allocated capacity (always ≥ count). */
-	csilk_group_t* parent;	      /**< Parent group in the nesting tree, or nullptr
+    size_t           middleware_count;    /**< Current number of middleware handlers. */
+    size_t           middleware_capacity; /**< Allocated capacity (always ≥ count). */
+    csilk_group_t*   parent;              /**< Parent group in the nesting tree, or nullptr
                                  *   for root groups. Used by gather_handlers()
                                  *   to walk up the tree. Not owned. */
 };
@@ -79,41 +79,41 @@ struct csilk_group_s {
 static char*
 join_path(const char* p1, const char* p2)
 {
-	if (!p1 || *p1 == '\0') {
-		return strdup(p2 ? p2 : "/");
-	}
-	if (!p2 || *p2 == '\0') {
-		return strdup(p1);
-	}
+    if (!p1 || *p1 == '\0') {
+        return strdup(p2 ? p2 : "/");
+    }
+    if (!p2 || *p2 == '\0') {
+        return strdup(p1);
+    }
 
-	size_t l1 = strlen(p1);
-	while (l1 > 0 && p1[l1 - 1] == '/') {
-		l1--;
-	}
+    size_t l1 = strlen(p1);
+    while (l1 > 0 && p1[l1 - 1] == '/') {
+        l1--;
+    }
 
-	const char* p2_start = p2;
-	while (*p2_start == '/') {
-		p2_start++;
-	}
+    const char* p2_start = p2;
+    while (*p2_start == '/') {
+        p2_start++;
+    }
 
-	size_t l2 = strlen(p2_start);
+    size_t l2 = strlen(p2_start);
 
-	char* res = malloc(l1 + l2 + 2);
-	if (!res) {
-		return nullptr;
-	}
+    char* res = malloc(l1 + l2 + 2);
+    if (!res) {
+        return nullptr;
+    }
 
-	if (l1 > 0) {
-		memcpy(res, p1, l1);
-		res[l1] = '/';
-		memcpy(res + l1 + 1, p2_start, l2);
-		res[l1 + 1 + l2] = '\0';
-	} else {
-		res[0] = '/';
-		memcpy(res + 1, p2_start, l2);
-		res[1 + l2] = '\0';
-	}
-	return res;
+    if (l1 > 0) {
+        memcpy(res, p1, l1);
+        res[l1] = '/';
+        memcpy(res + l1 + 1, p2_start, l2);
+        res[l1 + 1 + l2] = '\0';
+    } else {
+        res[0] = '/';
+        memcpy(res + 1, p2_start, l2);
+        res[1 + l2] = '\0';
+    }
+    return res;
 }
 
 /** @brief Create a new root route group with the given URL prefix.
@@ -129,19 +129,19 @@ join_path(const char* p1, const char* p2)
 csilk_group_t*
 csilk_group_new(csilk_router_t* router, const char* prefix)
 {
-	csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
-	if (!group) {
-		return nullptr;
-	}
+    csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
+    if (!group) {
+        return nullptr;
+    }
 
-	group->router = router;
-	group->prefix = strdup(prefix ? prefix : "/");
-	if (!group->prefix) {
-		free(group);
-		return nullptr;
-	}
-	CSILK_LOG_D("Group: created new root route group with prefix: '%s'", group->prefix);
-	return group;
+    group->router = router;
+    group->prefix = strdup(prefix ? prefix : "/");
+    if (!group->prefix) {
+        free(group);
+        return nullptr;
+    }
+    CSILK_LOG_D("Group: created new root route group with prefix: '%s'", group->prefix);
+    return group;
 }
 
 /** @brief Create a child subgroup nested under a parent group.
@@ -158,27 +158,27 @@ csilk_group_new(csilk_router_t* router, const char* prefix)
 csilk_group_t*
 csilk_group_group(csilk_group_t* parent, const char* prefix)
 {
-	if (!parent) {
-		return nullptr;
-	}
+    if (!parent) {
+        return nullptr;
+    }
 
-	csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
-	if (!group) {
-		return nullptr;
-	}
+    csilk_group_t* group = calloc(1, sizeof(csilk_group_t));
+    if (!group) {
+        return nullptr;
+    }
 
-	group->parent = parent;
-	group->router = parent->router;
-	group->prefix = join_path(parent->prefix, prefix);
+    group->parent = parent;
+    group->router = parent->router;
+    group->prefix = join_path(parent->prefix, prefix);
 
-	if (!group->prefix) {
-		free(group);
-		return nullptr;
-	}
-	CSILK_LOG_D("Group: created nested group under '%s' with combined prefix: '%s'",
-		    parent->prefix,
-		    group->prefix);
-	return group;
+    if (!group->prefix) {
+        free(group);
+        return nullptr;
+    }
+    CSILK_LOG_D("Group: created nested group under '%s' with combined prefix: '%s'",
+                parent->prefix,
+                group->prefix);
+    return group;
 }
 
 /** @brief Register a middleware handler that applies to all routes in this
@@ -196,26 +196,24 @@ csilk_group_group(csilk_group_t* parent, const char* prefix)
 int
 csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 {
-	if (!group) {
-		return -1;
-	}
-	if (group->middleware_count >= group->middleware_capacity) {
-		size_t new_cap = group->middleware_capacity ? group->middleware_capacity * 2
-							    : CSILK_GROUP_MW_INIT_CAP;
-		csilk_handler_t* new_mw =
-		    realloc(group->middlewares, new_cap * sizeof(csilk_handler_t));
-		if (!new_mw) {
-			CSILK_LOG_E("Group: realloc failed for middleware array on group '%s'",
-				    group->prefix);
-			return -1;
-		}
-		group->middlewares = new_mw;
-		group->middleware_capacity = new_cap;
-	}
-	group->middlewares[group->middleware_count++] = handler;
-	CSILK_LOG_I(
-	    "Group: registered group middleware %p on prefix '%s'", (void*)handler, group->prefix);
-	return 0;
+    if (!group) {
+        return -1;
+    }
+    if (group->middleware_count >= group->middleware_capacity) {
+        size_t new_cap =
+            group->middleware_capacity ? group->middleware_capacity * 2 : CSILK_GROUP_MW_INIT_CAP;
+        csilk_handler_t* new_mw = realloc(group->middlewares, new_cap * sizeof(csilk_handler_t));
+        if (!new_mw) {
+            CSILK_LOG_E("Group: realloc failed for middleware array on group '%s'", group->prefix);
+            return -1;
+        }
+        group->middlewares = new_mw;
+        group->middleware_capacity = new_cap;
+    }
+    group->middlewares[group->middleware_count++] = handler;
+    CSILK_LOG_I(
+        "Group: registered group middleware %p on prefix '%s'", (void*)handler, group->prefix);
+    return 0;
 }
 
 /** @brief Internal: recursively collect all middleware handlers from a group
@@ -248,27 +246,27 @@ csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 static int
 gather_handlers(csilk_group_t* group, csilk_handler_t** handlers, size_t* count)
 {
-	if (group->parent) {
-		if (gather_handlers(group->parent, handlers, count) != 0) {
-			return -1;
-		}
-	}
+    if (group->parent) {
+        if (gather_handlers(group->parent, handlers, count) != 0) {
+            return -1;
+        }
+    }
 
-	if (group->middleware_count > 0) {
-		csilk_handler_t* new_handlers = realloc(
-		    *handlers, (*count + group->middleware_count) * sizeof(csilk_handler_t));
-		if (!new_handlers) {
-			CSILK_LOG_E("Group: realloc failed while gathering handlers for group '%s'",
-				    group->prefix);
-			return -1;
-		}
-		*handlers = new_handlers;
-		memcpy(*handlers + *count,
-		       group->middlewares,
-		       group->middleware_count * sizeof(csilk_handler_t));
-		*count += group->middleware_count;
-	}
-	return 0;
+    if (group->middleware_count > 0) {
+        csilk_handler_t* new_handlers =
+            realloc(*handlers, (*count + group->middleware_count) * sizeof(csilk_handler_t));
+        if (!new_handlers) {
+            CSILK_LOG_E("Group: realloc failed while gathering handlers for group '%s'",
+                        group->prefix);
+            return -1;
+        }
+        *handlers = new_handlers;
+        memcpy(*handlers + *count,
+               group->middlewares,
+               group->middleware_count * sizeof(csilk_handler_t));
+        *count += group->middleware_count;
+    }
+    return 0;
 }
 
 /** @brief Register a route on this group with a single handler.
@@ -282,13 +280,13 @@ gather_handlers(csilk_group_t* group, csilk_handler_t** handlers, size_t* count)
  * @param path    Path relative to the group prefix (e.g., "/users").
  * @param handler The route handler function. */
 int
-csilk_group_add_route(csilk_group_t* group,
-		      const char* method,
-		      const char* path,
-		      csilk_handler_t handler)
+csilk_group_add_route(csilk_group_t*  group,
+                      const char*     method,
+                      const char*     path,
+                      csilk_handler_t handler)
 {
-	csilk_handler_t handlers[] = {handler};
-	return csilk_group_add_handlers(group, method, path, handlers, 1);
+    csilk_handler_t handlers[] = {handler};
+    return csilk_group_add_handlers(group, method, path, handlers, 1);
 }
 
 /** @brief Register a route with OpenAPI metadata (input/output types, summary,
@@ -309,68 +307,67 @@ csilk_group_add_route(csilk_group_t* group,
  * @param summary     Short description for OpenAPI operation summary.
  * @param description Detailed description for OpenAPI operation. */
 int
-csilk_group_add_route_extended(csilk_group_t* group,
-			       const char* method,
-			       const char* path,
-			       csilk_handler_t handler,
-			       const char* input_type,
-			       const char* output_type,
-			       const char* summary,
-			       const char* description)
+csilk_group_add_route_extended(csilk_group_t*  group,
+                               const char*     method,
+                               const char*     path,
+                               csilk_handler_t handler,
+                               const char*     input_type,
+                               const char*     output_type,
+                               const char*     summary,
+                               const char*     description)
 {
-	if (!group || !method || !path || !handler) {
-		return -1;
-	}
+    if (!group || !method || !path || !handler) {
+        return -1;
+    }
 
-	char* full_path = join_path(group->prefix, path);
-	if (!full_path) {
-		return -1;
-	}
+    char* full_path = join_path(group->prefix, path);
+    if (!full_path) {
+        return -1;
+    }
 
-	csilk_handler_t* combined_handlers = nullptr;
-	size_t combined_count = 0;
+    csilk_handler_t* combined_handlers = nullptr;
+    size_t           combined_count = 0;
 
-	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
-		CSILK_LOG_E("Group: failed to prepare handler chain for extended route %s %s - "
-			    "gather failed",
-			    method,
-			    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
+    if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
+        CSILK_LOG_E("Group: failed to prepare handler chain for extended route %s %s - "
+                    "gather failed",
+                    method,
+                    path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
 
-	csilk_handler_t* new_handlers =
-	    realloc(combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
-	if (!new_handlers) {
-		CSILK_LOG_E(
-		    "Group: realloc failed for combined handler chain on extended route %s %s",
-		    method,
-		    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
-	combined_handlers = new_handlers;
-	combined_handlers[combined_count] = handler;
-	combined_count++;
+    csilk_handler_t* new_handlers =
+        realloc(combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
+    if (!new_handlers) {
+        CSILK_LOG_E("Group: realloc failed for combined handler chain on extended route %s %s",
+                    method,
+                    path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
+    combined_handlers = new_handlers;
+    combined_handlers[combined_count] = handler;
+    combined_count++;
 
-	int rc = csilk_router_add_extended(group->router,
-					   method,
-					   full_path,
-					   combined_handlers,
-					   combined_count,
-					   full_path,
-					   input_type,
-					   output_type,
-					   summary,
-					   description);
+    int rc = csilk_router_add_extended(group->router,
+                                       method,
+                                       full_path,
+                                       combined_handlers,
+                                       combined_count,
+                                       full_path,
+                                       input_type,
+                                       output_type,
+                                       summary,
+                                       description);
 
-	CSILK_LOG_I("Group: registered extended route %s %s", method, full_path);
+    CSILK_LOG_I("Group: registered extended route %s %s", method, full_path);
 
-	free(full_path);
-	free(combined_handlers);
-	return rc;
+    free(full_path);
+    free(combined_handlers);
+    return rc;
 }
 
 /** @copydoc csilk_group_add_route_extended
@@ -380,75 +377,75 @@ csilk_group_add_route_extended(csilk_group_t* group,
  *  Permission metadata is forwarded to the router which stores it alongside
  *  the route for authorization middleware to inspect at request time. */
 int
-csilk_group_add_route_extended_perm(csilk_group_t* group,
-				    const char* method,
-				    const char* path,
-				    csilk_handler_t handler,
-				    const char* input_type,
-				    const char* output_type,
-				    const char* summary,
-				    const char* description,
-				    const char* perm_required,
-				    const char* perm_resource)
+csilk_group_add_route_extended_perm(csilk_group_t*  group,
+                                    const char*     method,
+                                    const char*     path,
+                                    csilk_handler_t handler,
+                                    const char*     input_type,
+                                    const char*     output_type,
+                                    const char*     summary,
+                                    const char*     description,
+                                    const char*     perm_required,
+                                    const char*     perm_resource)
 {
-	if (!group || !method || !path || !handler) {
-		return -1;
-	}
+    if (!group || !method || !path || !handler) {
+        return -1;
+    }
 
-	char* full_path = join_path(group->prefix, path);
-	if (!full_path) {
-		return -1;
-	}
+    char* full_path = join_path(group->prefix, path);
+    if (!full_path) {
+        return -1;
+    }
 
-	csilk_handler_t* combined_handlers = nullptr;
-	size_t combined_count = 0;
+    csilk_handler_t* combined_handlers = nullptr;
+    size_t           combined_count = 0;
 
-	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
-		CSILK_LOG_E("Group: failed to prepare handler chain for extended route with perm "
-			    "%s %s - gather failed",
-			    method,
-			    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
+    if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
+        CSILK_LOG_E("Group: failed to prepare handler chain for extended route with perm "
+                    "%s %s - gather failed",
+                    method,
+                    path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
 
-	csilk_handler_t* new_handlers =
-	    realloc(combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
-	if (!new_handlers) {
-		CSILK_LOG_E("Group: realloc failed for combined handler chain on extended route "
-			    "with perm %s %s",
-			    method,
-			    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
-	combined_handlers = new_handlers;
-	combined_handlers[combined_count] = handler;
-	combined_count++;
+    csilk_handler_t* new_handlers =
+        realloc(combined_handlers, (combined_count + 1) * sizeof(csilk_handler_t));
+    if (!new_handlers) {
+        CSILK_LOG_E("Group: realloc failed for combined handler chain on extended route "
+                    "with perm %s %s",
+                    method,
+                    path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
+    combined_handlers = new_handlers;
+    combined_handlers[combined_count] = handler;
+    combined_count++;
 
-	csilk_router_add_extended_perm(group->router,
-				       method,
-				       full_path,
-				       combined_handlers,
-				       combined_count,
-				       full_path,
-				       input_type,
-				       output_type,
-				       summary,
-				       description,
-				       perm_required,
-				       perm_resource);
+    csilk_router_add_extended_perm(group->router,
+                                   method,
+                                   full_path,
+                                   combined_handlers,
+                                   combined_count,
+                                   full_path,
+                                   input_type,
+                                   output_type,
+                                   summary,
+                                   description,
+                                   perm_required,
+                                   perm_resource);
 
-	CSILK_LOG_I("Group: registered route with perm: %s %s (perm: %s on %s)",
-		    method,
-		    full_path,
-		    perm_required ? perm_required : "none",
-		    perm_resource ? perm_resource : "none");
+    CSILK_LOG_I("Group: registered route with perm: %s %s (perm: %s on %s)",
+                method,
+                full_path,
+                perm_required ? perm_required : "none",
+                perm_resource ? perm_resource : "none");
 
-	free(full_path);
-	free(combined_handlers);
+    free(full_path);
+    free(combined_handlers);
 }
 
 /** @brief Register a route with a custom chain of handlers (middleware + route
@@ -472,57 +469,55 @@ csilk_group_add_route_extended_perm(csilk_group_t* group,
  * @note The handlers array is combined with group middleware — group
  *       middleware always runs first, followed by the provided handlers. */
 int
-csilk_group_add_handlers(csilk_group_t* group,
-			 const char* method,
-			 const char* path,
-			 csilk_handler_t* handlers,
-			 size_t count)
+csilk_group_add_handlers(csilk_group_t*   group,
+                         const char*      method,
+                         const char*      path,
+                         csilk_handler_t* handlers,
+                         size_t           count)
 {
-	if (!group || !handlers || count == 0) {
-		return -1;
-	}
+    if (!group || !handlers || count == 0) {
+        return -1;
+    }
 
-	char* full_path = join_path(group->prefix, path);
-	if (!full_path) {
-		return -1;
-	}
+    char* full_path = join_path(group->prefix, path);
+    if (!full_path) {
+        return -1;
+    }
 
-	csilk_handler_t* combined_handlers = nullptr;
-	size_t combined_count = 0;
+    csilk_handler_t* combined_handlers = nullptr;
+    size_t           combined_count = 0;
 
-	if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
-		CSILK_LOG_E("Group: failed to prepare handler chain for route %s %s - "
-			    "gather failed",
-			    method,
-			    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
+    if (gather_handlers(group, &combined_handlers, &combined_count) != 0) {
+        CSILK_LOG_E("Group: failed to prepare handler chain for route %s %s - "
+                    "gather failed",
+                    method,
+                    path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
 
-	csilk_handler_t* new_handlers =
-	    realloc(combined_handlers, (combined_count + count) * sizeof(csilk_handler_t));
-	if (!new_handlers) {
-		CSILK_LOG_E("Group: realloc failed for combined handler chain on route %s %s",
-			    method,
-			    path);
-		free(full_path);
-		free(combined_handlers);
-		return -1;
-	}
-	combined_handlers = new_handlers;
-	memcpy(combined_handlers + combined_count, handlers, count * sizeof(csilk_handler_t));
-	combined_count += count;
+    csilk_handler_t* new_handlers =
+        realloc(combined_handlers, (combined_count + count) * sizeof(csilk_handler_t));
+    if (!new_handlers) {
+        CSILK_LOG_E(
+            "Group: realloc failed for combined handler chain on route %s %s", method, path);
+        free(full_path);
+        free(combined_handlers);
+        return -1;
+    }
+    combined_handlers = new_handlers;
+    memcpy(combined_handlers + combined_count, handlers, count * sizeof(csilk_handler_t));
+    combined_count += count;
 
-	int rc =
-	    csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
+    int rc = csilk_router_add(group->router, method, full_path, combined_handlers, combined_count);
 
-	CSILK_LOG_I(
-	    "Group: registered route with %zu handlers: %s %s", combined_count, method, full_path);
+    CSILK_LOG_I(
+        "Group: registered route with %zu handlers: %s %s", combined_count, method, full_path);
 
-	free(full_path);
-	free(combined_handlers);
-	return rc;
+    free(full_path);
+    free(combined_handlers);
+    return rc;
 }
 
 /** @brief Free all resources associated with a route group.
@@ -536,10 +531,10 @@ csilk_group_add_handlers(csilk_group_t* group,
 void
 csilk_group_free(csilk_group_t* group)
 {
-	if (!group) {
-		return;
-	}
-	free(group->prefix);
-	free(group->middlewares);
-	free(group);
+    if (!group) {
+        return;
+    }
+    free(group->prefix);
+    free(group->middlewares);
+    free(group);
 }

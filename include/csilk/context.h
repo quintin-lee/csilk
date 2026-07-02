@@ -274,7 +274,7 @@ int csilk_is_async(csilk_ctx_t* c);
  * @brief Dispatch a callback to be executed on the event loop thread owning this context.
  * 
  * This allows background threads (e.g., Python asyncio threads) to safely execute
- * code on the main libuv loop to send responses.
+ * code on the main I/O event loop (libuv or io_uring) to send responses.
  * 
  * @param c The request context.
  * @param cb The callback function to execute.
@@ -291,7 +291,7 @@ void csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
 int csilk_get_handler_index(csilk_ctx_t* c);
 
 /**
- * @brief Get the libuv work request associated with the context.
+ * @brief Get the I/O work request associated with the context.
  *
  * Use this to offload long-running operations to the thread pool while
  * maintaining context state.
@@ -581,10 +581,10 @@ void csilk_set_on_ws_send(
  * @param c  The request context.
  * @return The callback function pointer, or nullptr if none is set.
  */
-void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t* c,
-						const uint8_t* payload,
-						size_t len,
-						int opcode);
+void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t*   c,
+                                                const uint8_t* payload,
+                                                size_t         len,
+                                                int            opcode);
 
 /**
  * @brief Release all memory and resources associated with a request context.

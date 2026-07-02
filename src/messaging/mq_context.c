@@ -34,28 +34,28 @@
 void
 csilk_mq_next(csilk_mq_ctx_t* ctx)
 {
-	/* If the context is nullptr or the chain was aborted, stop */
-	if (!ctx) {
-		return;
-	}
-	if (ctx->aborted) {
-		CSILK_LOG_T("MQ: Chain execution skipped: context is aborted (topic: '%s')",
-			    ctx->msg ? ctx->msg->topic : "");
-		return;
-	}
+    /* If the context is nullptr or the chain was aborted, stop */
+    if (!ctx) {
+        return;
+    }
+    if (ctx->aborted) {
+        CSILK_LOG_T("MQ: Chain execution skipped: context is aborted (topic: '%s')",
+                    ctx->msg ? ctx->msg->topic : "");
+        return;
+    }
 
-	/* Advance to the next handler in the chain and invoke it */
-	ctx->handler_index++;
-	CSILK_LOG_T("MQ: Advancing to handler index %d/%zu in chain for topic '%s'",
-		    ctx->handler_index,
-		    ctx->handler_count,
-		    ctx->msg ? ctx->msg->topic : "");
+    /* Advance to the next handler in the chain and invoke it */
+    ctx->handler_index++;
+    CSILK_LOG_T("MQ: Advancing to handler index %d/%zu in chain for topic '%s'",
+                ctx->handler_index,
+                ctx->handler_count,
+                ctx->msg ? ctx->msg->topic : "");
 
-	if (ctx->handler_index < (int)ctx->handler_count) {
-		ctx->handlers[ctx->handler_index](ctx);
-	}
-	/* If handler_index == handler_count, the chain is complete —
-	 * the message processing ends naturally here. */
+    if (ctx->handler_index < (int)ctx->handler_count) {
+        ctx->handlers[ctx->handler_index](ctx);
+    }
+    /* If handler_index == handler_count, the chain is complete —
+     * the message processing ends naturally here. */
 }
 
 /** @brief Short-circuit the handler chain for the current message.
@@ -73,13 +73,13 @@ csilk_mq_next(csilk_mq_ctx_t* ctx)
 void
 csilk_mq_abort(csilk_mq_ctx_t* ctx)
 {
-	if (ctx) {
-		CSILK_LOG_I("MQ: Aborting handler chain at index %d/%zu for topic '%s'",
-			    ctx->handler_index,
-			    ctx->handler_count,
-			    ctx->msg ? ctx->msg->topic : "");
-		ctx->aborted = 1;
-	}
+    if (ctx) {
+        CSILK_LOG_I("MQ: Aborting handler chain at index %d/%zu for topic '%s'",
+                    ctx->handler_index,
+                    ctx->handler_count,
+                    ctx->msg ? ctx->msg->topic : "");
+        ctx->aborted = 1;
+    }
 }
 
 /** @brief Get the topic string of the current message.
@@ -90,7 +90,7 @@ csilk_mq_abort(csilk_mq_ctx_t* ctx)
 const char*
 csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 {
-	return (ctx && ctx->msg) ? ctx->msg->topic : nullptr;
+    return (ctx && ctx->msg) ? ctx->msg->topic : nullptr;
 }
 
 /** @brief Get the payload data and length of the current message.
@@ -105,11 +105,11 @@ csilk_mq_get_topic(csilk_mq_ctx_t* ctx)
 const void*
 csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len)
 {
-	if (!ctx || !ctx->msg) {
-		return nullptr;
-	}
-	if (len) {
-		*len = ctx->msg->len;
-	}
-	return ctx->msg->payload;
+    if (!ctx || !ctx->msg) {
+        return nullptr;
+    }
+    if (len) {
+        *len = ctx->msg->len;
+    }
+    return ctx->msg->payload;
 }

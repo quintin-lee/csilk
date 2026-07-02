@@ -78,13 +78,13 @@ void csilk_add_header(csilk_ctx_t* c, const char* key, const char* value);
  * @param http_only Non-zero adds the HttpOnly flag (not accessible to JS).
  */
 void csilk_set_cookie(csilk_ctx_t* c,
-		      const char* name,
-		      const char* value,
-		      int max_age,
-		      const char* path,
-		      const char* domain,
-		      int secure,
-		      int http_only);
+                      const char*  name,
+                      const char*  value,
+                      int          max_age,
+                      const char*  path,
+                      const char*  domain,
+                      int          secure,
+                      int          http_only);
 
 /**
  * @brief Send a JSON response (takes ownership of the cJSON object).
