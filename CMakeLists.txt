@@ -425,7 +425,6 @@ target_compile_options(csilk PRIVATE
     "${CSILK_DEBUG_FLAGS}"
     "${CSILK_AVX2_FLAGS}"
     "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
-    "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
     "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
 )
 target_compile_definitions(csilk PRIVATE
@@ -437,6 +436,10 @@ target_compile_definitions(csilk PRIVATE
     "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
     "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
     "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
+)
+target_link_options(csilk PRIVATE
+    "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
+    "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
 )
 
 # Linker flags: gc-sections in Release removes dead code
