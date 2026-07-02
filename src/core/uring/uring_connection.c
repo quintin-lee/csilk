@@ -317,11 +317,7 @@ on_write_done(void* arg, ssize_t res)
 			CSILK_LOG_E("Connection: write error %zd", res);
 		}
 		csilk_client_close(client);
-		return;
-	}
-
-	/* After headers are written, check if there's a file to send via sendfile */
-	if (client->ctx.file_fd >= 0 && !client->ssl) {
+	} else if (client->ctx.file_fd >= 0 && !client->ssl) {
 		int fd = client->ctx.file_fd;
 		size_t offset = client->ctx.file_offset;
 		size_t size = client->ctx.file_size;
@@ -339,29 +335,22 @@ on_write_done(void* arg, ssize_t res)
 						     offset,
 						     size,
 						     on_sendfile_complete);
-			if (r < 0) {
-				CSILK_LOG_W("Sendfile failed: fd=%d err=%d", fd, errno);
-				free(fs_req);
-				/* Fall through to post-response handling */
-			} else {
-				/* sendfile succeeded synchronously; post-response handled by on_sendfile_complete */
+			if (r >= 0) {
 				return;
 			}
+			free(fs_req);
 		}
 	}
 
-	/* Non-file response or sendfile fallback: handle post-response */
 	int keep_alive = llhttp_should_keep_alive(&client->parser);
 	if (client->server->config.write_timeout_ms > 0) {
 		csilk_io_timer_stop(&client->write_timer);
 	}
 
-	/* Decrement async_ref for the completed write */
 	int outstanding = atomic_fetch_sub(&client->async_ref, 1) - 1;
 
 	_csilk_handle_post_response(client, keep_alive);
 
-	/* Check if connection should be destroyed */
 	if (outstanding == 0 && client->close_pending == 0 && client->ctx.conn_closed) {
 		client_destroy(client);
 	}
@@ -388,8 +377,14 @@ on_sendfile_complete(csilk_io_fs_t* req)
 		csilk_io_timer_stop(&client->write_timer);
 	}
 
-	CSILK_LOG_D("Sendfile complete: keep_alive=%d", keep_alive);
+	int outstanding = atomic_fetch_sub(&client->async_ref, 1) - 1;
+
+	CSILK_LOG_D("Sendfile complete: keep_alive=%d outstanding=%d", keep_alive, outstanding);
 	_csilk_handle_post_response(client, keep_alive);
+
+	if (outstanding == 0 && client->close_pending == 0 && client->ctx.conn_closed) {
+		client_destroy(client);
+	}
 }
 
 void
