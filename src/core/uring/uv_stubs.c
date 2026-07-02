@@ -114,6 +114,29 @@ on_write_timeout(csilk_io_timer_t* handle)
 {
 }
 
+/* --- Default ring + pending-SQE tracker --- */
+
+/* Lazy-init singleton io_uring ring used by csilk_io_default_loop().
+ *
+ * This ring is the DEFAULT loop — it is distinct from the per-worker
+ * rings the server creates inside uring_thread().  Its main purpose in
+ * test / CLI programs is to give csilk_io_timer_start() a valid ring so
+ * timeout SQEs can be submitted.  The ring is NOT thread-safe; callers
+ * must ensure no concurrent sqe/cqe access (the default is single-
+ * threaded test or CLI use). */
+static struct io_uring g_default_ring;
+static int g_default_ring_inited = 0;
+
+/* Counter: how many SQEs have been submitted to the default ring (via
+ * csilk_io_timer_start/stop) but whose completion CQEs have not yet
+ * been consumed by csilk_io_run().  Accessed from test/CLI code only
+ * (single thread), so no locking is required. */
+static int g_default_pending = 0;
+
+/* Pointer to the default ring so timer functions can check whether
+ * they are submitting to the default ring (vs a per-worker ring). */
+static struct io_uring* g_default_ring_ptr = NULL;
+
 int
 csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
 {
@@ -152,6 +175,9 @@ csilk_io_timer_start(csilk_io_timer_t* handle,
 	io_uring_prep_timeout(sqe, &ts, repeat ? 1 : 0, 0);
 	io_uring_sqe_set_data64(sqe, uring_encode_timer_data(URING_OP_TMR_GENERIC, handle));
 	io_uring_submit(ring);
+	if (ring == g_default_ring_ptr) {
+		g_default_pending++;
+	}
 	return 0;
 }
 
@@ -178,12 +204,109 @@ csilk_io_timer_stop(csilk_io_timer_t* handle)
 	io_uring_prep_cancel(sqe, (void*)cancel_val, 0);
 	io_uring_sqe_set_data64(sqe, cancel_val);
 	io_uring_submit(ring);
+	/* Don't track pending for cancel ops — the CQE will be skipped
+	 * (generation mismatch), so we'd never decrement g_default_pending. */
 	return 0;
 }
+
+csilk_io_loop_t*
+csilk_io_default_loop(void)
+{
+	if (!g_default_ring_inited) {
+		g_default_ring_inited = 1;
+		if (io_uring_queue_init(1024, &g_default_ring, 0) != 0) {
+			return NULL;
+		}
+		g_default_ring_ptr = &g_default_ring;
+	}
+	return (csilk_io_loop_t*)&g_default_ring;
+}
+
 int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
-	return -1;
+	if (!loop) {
+		loop = csilk_io_default_loop();
+		if (!loop) {
+			return -1;
+		}
+	}
+
+	struct io_uring* ring = (struct io_uring*)loop;
+	int total = 0;
+
+	do {
+		/* 1. Drain deferred after-work callbacks (iteratively). */
+		int n;
+		while ((n = _uring_deferred_drain_all()) > 0) {
+			total += n;
+		}
+
+		/* 2. Process io_uring CQEs on the ring.  In test/CLI mode
+		 *    these are TMR_GENERIC timer completions. */
+		struct io_uring_cqe* cqe;
+		unsigned head;
+		unsigned cq_count = 0;
+		io_uring_for_each_cqe(ring, head, cqe)
+		{
+			cq_count++;
+			uint8_t gen;
+			void* ptr;
+			uring_op_type_t op;
+			uring_decode_data(cqe->user_data, &op, &ptr, &gen);
+			if (op == URING_OP_TMR_GENERIC) {
+				csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
+				if (tmr && tmr->generation == gen && tmr->cb) {
+					tmr->cb(tmr);
+				}
+			}
+		}
+		if (cq_count > 0) {
+			io_uring_cq_advance(ring, cq_count);
+			/* Each CQE consumed means one SQE submission completed. */
+			if (ring == g_default_ring_ptr) {
+				g_default_pending -= (int)cq_count;
+				if (g_default_pending < 0) {
+					g_default_pending = 0;
+				}
+			}
+
+			/* Timer callbacks may queue deferred work — drain again. */
+			while ((n = _uring_deferred_drain_all()) > 0) {
+				total += n;
+			}
+		}
+
+		/* 3. Mode-specific decision */
+		if (mode == CSILK_IO_RUN_NOWAIT) {
+			break;
+		}
+
+		if (mode == CSILK_IO_RUN_ONCE) {
+			if (cq_count == 0) {
+				/* Wait briefly (10 ms) for a timer completion. */
+				struct __kernel_timespec ts = {0, 10000000};
+				io_uring_wait_cqe_timeout(ring, &cqe, &ts);
+			}
+			break;
+		}
+
+		/* CSILK_IO_RUN_DEFAULT */
+		if (cq_count == 0) {
+			if (ring == g_default_ring_ptr && g_default_pending > 0) {
+				/* There are SQEs in-flight — wait for their CQEs.
+				 * Use a short timeout so we re-check the deferred queue
+				 * and the counter periodically. */
+				struct __kernel_timespec ts = {0, 10000000}; /* 10 ms */
+				io_uring_wait_cqe_timeout(ring, &cqe, &ts);
+			} else {
+				/* No pending work on this ring — we are done. */
+				break;
+			}
+		}
+	} while (1);
+
+	return total > 0 ? 0 : -1;
 }
 
 #endif

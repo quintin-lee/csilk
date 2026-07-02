@@ -77,8 +77,8 @@ typedef struct csilk_io_timer_s csilk_io_timer_t;
 typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
 struct csilk_io_timer_s {
-	int fd;
 	void* data;
+	int fd;
 	struct io_uring* ring; /**< io_uring ring for creating timeout SQEs. */
 	csilk_io_timer_cb cb;  /**< Timer callback (set by csilk_io_timer_start). */
 	uint8_t generation;    /**< Incremented each start to detect stale CQEs. */
@@ -392,17 +392,51 @@ csilk_io_fs_sendfile(csilk_io_loop_t* loop,
 		     void* cb)
 {
 #ifdef __linux__
-	off_t offset = in_offset;
-	req->result = sendfile(out_fd, in_fd, &offset, length);
-	if (req->result >= 0) {
+	if (length == 0) {
+		req->result = 0;
 		if (cb) {
 			void (*callback)(csilk_io_fs_t*) = (void (*)(csilk_io_fs_t*))cb;
 			callback(req);
 		}
 		return 0;
-	} else {
-		return -1;
 	}
+
+	off_t offset = in_offset;
+	ssize_t total_sent = 0;
+	size_t remaining = length;
+	int retries = 0;
+	const int max_retries = 500;
+
+	while (remaining > 0 && retries < max_retries) {
+		req->result = sendfile(out_fd, in_fd, &offset, remaining);
+		if (req->result > 0) {
+			total_sent += req->result;
+			remaining -= (size_t)req->result;
+			retries = 0;
+		} else if (req->result == 0) {
+			/* Zero-length transfer; yield and retry */
+			usleep(100);
+			retries++;
+		} else {
+			/* EAGAIN/EWOULDBLOCK: socket buffer full, yield and retry */
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				usleep(100);
+				retries++;
+			} else {
+				break; /* real error */
+			}
+		}
+	}
+
+	req->result = total_sent;
+	if (total_sent > 0) {
+		if (cb) {
+			void (*callback)(csilk_io_fs_t*) = (void (*)(csilk_io_fs_t*))cb;
+			callback(req);
+		}
+		return 0;
+	}
+	return -1;
 #else
 	return -1;
 #endif
@@ -425,11 +459,7 @@ csilk_io_fs_req_cleanup(csilk_io_fs_t* req)
 typedef uv_rusage_t csilk_io_rusage_t;
 #define csilk_io_getrusage uv_getrusage
 #else
-static inline csilk_io_loop_t*
-csilk_io_default_loop(void)
-{
-	return NULL;
-}
+csilk_io_loop_t* csilk_io_default_loop(void);
 #include <sys/resource.h>
 typedef struct rusage csilk_io_rusage_t;
 static inline int
