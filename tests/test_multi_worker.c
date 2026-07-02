@@ -88,7 +88,7 @@ run_client(void* arg)
 		send(sock, req, strlen(req), 0);
 
 		fd_set fds;
-		struct timeval tv = {5, 0};
+		struct timeval tv = {10, 0};
 		FD_ZERO(&fds);
 		FD_SET(sock, &fds);
 		char buf[1024] = {0};
