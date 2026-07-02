@@ -9,11 +9,11 @@ function(add_csilk_test name source)
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
       "${CSILK_COMMON_FLAGS}"
-      "$<$<BOOL:USE_ASAN>:${CSILK_ASAN_FLAGS}>"
-      "$<$<BOOL:USE_COVERAGE>:--coverage;-O0;-g>"
+      "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
+      "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
   )
   target_compile_definitions(${name} PRIVATE
-      "$<$<BOOL:ENABLE_OOM_TEST>:TEST_OOM>"
+      "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
   )
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
