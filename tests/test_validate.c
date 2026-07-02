@@ -9,139 +9,148 @@
 static void
 test_validate_required()
 {
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_valid_rule_t rules[] = {{"name", CSILK_VALID_REQUIRED, 0, 0, nullptr},
-				      {nullptr, 0, 0, 0, nullptr}};
+    csilk_valid_rule_t rules[] = {
+        {"name",  CSILK_VALID_REQUIRED, 0, 0, nullptr},
+        {nullptr, 0,                    0, 0, nullptr}
+    };
 
-	const char* err = csilk_validate(c, rules);
-	assert(err != nullptr);
-	assert(strcmp(err, "name") == 0);
+    const char* err = csilk_validate(c, rules);
+    assert(err != nullptr);
+    assert(strcmp(err, "name") == 0);
 
-	csilk_parse_query(c, "name=John");
-	err = csilk_validate(c, rules);
-	assert(err == nullptr);
+    csilk_parse_query(c, "name=John");
+    err = csilk_validate(c, rules);
+    assert(err == nullptr);
 
-	csilk_test_ctx_free(c);
-	printf("test_validate_required passed\n");
+    csilk_test_ctx_free(c);
+    printf("test_validate_required passed\n");
 }
 
 static void
 test_validate_int()
 {
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_valid_rule_t rules[] = {
-	    {"age", CSILK_VALID_INT | CSILK_VALID_REQUIRED, 18, 150, nullptr},
-	    {nullptr, 0, 0, 0, nullptr}};
+    csilk_valid_rule_t rules[] = {
+        {"age",   CSILK_VALID_INT | CSILK_VALID_REQUIRED, 18, 150, nullptr},
+        {nullptr, 0,                                      0,  0,   nullptr}
+    };
 
-	const char* err = csilk_validate(c, rules);
-	assert(err != nullptr);
-	assert(strcmp(err, "age") == 0);
+    const char* err = csilk_validate(c, rules);
+    assert(err != nullptr);
+    assert(strcmp(err, "age") == 0);
 
-	csilk_parse_query(c, "age=abc");
-	err = csilk_validate(c, rules);
-	assert(err != nullptr);
+    csilk_parse_query(c, "age=abc");
+    err = csilk_validate(c, rules);
+    assert(err != nullptr);
 
-	csilk_parse_query(c, "age=10");
-	err = csilk_validate(c, rules);
-	assert(err != nullptr);
+    csilk_parse_query(c, "age=10");
+    err = csilk_validate(c, rules);
+    assert(err != nullptr);
 
-	csilk_parse_query(c, "age=200");
-	err = csilk_validate(c, rules);
-	assert(err != nullptr);
+    csilk_parse_query(c, "age=200");
+    err = csilk_validate(c, rules);
+    assert(err != nullptr);
 
-	csilk_parse_query(c, "age=25");
-	err = csilk_validate(c, rules);
-	assert(err == nullptr);
+    csilk_parse_query(c, "age=25");
+    err = csilk_validate(c, rules);
+    assert(err == nullptr);
 
-	csilk_test_ctx_free(c);
-	printf("test_validate_int passed\n");
+    csilk_test_ctx_free(c);
+    printf("test_validate_int passed\n");
 }
 
 static void
 test_validate_string_length()
 {
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_valid_rule_t rules[] = {
-	    {"name", CSILK_VALID_STRING | CSILK_VALID_REQUIRED, 2, 10, nullptr},
-	    {nullptr, 0, 0, 0, nullptr}};
+    csilk_valid_rule_t rules[] = {
+        {"name",  CSILK_VALID_STRING | CSILK_VALID_REQUIRED, 2, 10, nullptr},
+        {nullptr, 0,                                         0, 0,  nullptr}
+    };
 
-	csilk_parse_query(c, "name=A");
-	assert(csilk_validate(c, rules) != nullptr);
+    csilk_parse_query(c, "name=A");
+    assert(csilk_validate(c, rules) != nullptr);
 
-	csilk_parse_query(c, "name=Hello");
-	assert(csilk_validate(c, rules) == nullptr);
+    csilk_parse_query(c, "name=Hello");
+    assert(csilk_validate(c, rules) == nullptr);
 
-	csilk_parse_query(c, "name=ThisIsTooLong");
-	assert(csilk_validate(c, rules) != nullptr);
+    csilk_parse_query(c, "name=ThisIsTooLong");
+    assert(csilk_validate(c, rules) != nullptr);
 
-	csilk_test_ctx_free(c);
-	printf("test_validate_string_length passed\n");
+    csilk_test_ctx_free(c);
+    printf("test_validate_string_length passed\n");
 }
 
 static void
 test_validate_email()
 {
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	csilk_valid_rule_t rules[] = {
-	    {"email", CSILK_VALID_EMAIL | CSILK_VALID_REQUIRED, 0, 0, nullptr},
-	    {nullptr, 0, 0, 0, nullptr}};
+    csilk_valid_rule_t rules[] = {
+        {"email", CSILK_VALID_EMAIL | CSILK_VALID_REQUIRED, 0, 0, nullptr},
+        {nullptr, 0,                                        0, 0, nullptr}
+    };
 
-	csilk_parse_query(c, "email=invalid");
-	assert(csilk_validate(c, rules) != nullptr);
+    csilk_parse_query(c, "email=invalid");
+    assert(csilk_validate(c, rules) != nullptr);
 
-	csilk_parse_query(c, "email=user@example.com");
-	assert(csilk_validate(c, rules) == nullptr);
+    csilk_parse_query(c, "email=user@example.com");
+    assert(csilk_validate(c, rules) == nullptr);
 
-	csilk_parse_query(c, "email=@domain.com");
-	assert(csilk_validate(c, rules) != nullptr);
+    csilk_parse_query(c, "email=@domain.com");
+    assert(csilk_validate(c, rules) != nullptr);
 
-	csilk_test_ctx_free(c);
-	printf("test_validate_email passed\n");
+    csilk_test_ctx_free(c);
+    printf("test_validate_email passed\n");
 }
 
 static void
 test_validate_null_safety()
 {
-	assert(csilk_validate(nullptr, nullptr) == nullptr);
+    assert(csilk_validate(nullptr, nullptr) == nullptr);
 
-	csilk_valid_rule_t rules[] = {{"f", CSILK_VALID_REQUIRED, 0, 0, nullptr},
-				      {nullptr, 0, 0, 0, nullptr}};
-	assert(csilk_validate(nullptr, rules) == nullptr);
-	printf("test_validate_null_safety passed\n");
+    csilk_valid_rule_t rules[] = {
+        {"f",     CSILK_VALID_REQUIRED, 0, 0, nullptr},
+        {nullptr, 0,                    0, 0, nullptr}
+    };
+    assert(csilk_validate(nullptr, rules) == nullptr);
+    printf("test_validate_null_safety passed\n");
 }
 
 static void
 test_validate_source_form()
 {
-	csilk_ctx_t* c = csilk_test_ctx_new();
-	const char* body = "field=fromform";
-	csilk_test_ctx_set_body(c, body, strlen(body));
-	csilk_set_request_header(c, "Content-Type", "application/x-www-form-urlencoded");
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    const char*  body = "field=fromform";
+    csilk_test_ctx_set_body(c, body, strlen(body));
+    csilk_set_request_header(c, "Content-Type", "application/x-www-form-urlencoded");
 
-	csilk_valid_rule_t rules[] = {{"field", CSILK_VALID_REQUIRED, 0, 0, "form"},
-				      {nullptr, 0, 0, 0, nullptr}};
+    csilk_valid_rule_t rules[] = {
+        {"field", CSILK_VALID_REQUIRED, 0, 0, "form" },
+        {nullptr, 0,                    0, 0, nullptr}
+    };
 
-	csilk_parse_form_urlencoded(c);
-	const char* err = csilk_validate(c, rules);
-	assert(err == nullptr);
+    csilk_parse_form_urlencoded(c);
+    const char* err = csilk_validate(c, rules);
+    assert(err == nullptr);
 
-	csilk_test_ctx_free(c);
-	printf("test_validate_source_form passed\n");
+    csilk_test_ctx_free(c);
+    printf("test_validate_source_form passed\n");
 }
 
 int
 main()
 {
-	test_validate_required();
-	test_validate_int();
-	test_validate_string_length();
-	test_validate_email();
-	test_validate_null_safety();
-	test_validate_source_form();
-	printf("test_validate: ALL PASSED\n");
-	return 0;
+    test_validate_required();
+    test_validate_int();
+    test_validate_string_length();
+    test_validate_email();
+    test_validate_null_safety();
+    test_validate_source_form();
+    printf("test_validate: ALL PASSED\n");
+    return 0;
 }

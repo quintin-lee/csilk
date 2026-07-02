@@ -13,10 +13,10 @@ static int g_or_triggered = 0;
 csilk_data_t*
 mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)ctx;
-	(void)input;
-	(void)user_data;
-	return nullptr;
+    (void)ctx;
+    (void)input;
+    (void)user_data;
+    return nullptr;
 }
 
 /* --- Error Handling Test --- */
@@ -24,42 +24,42 @@ mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 csilk_data_t*
 failing_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)ctx;
-	(void)input;
-	(void)user_data;
-	printf("Executing Failing Node -> returns nullptr\n");
-	return nullptr;
+    (void)ctx;
+    (void)input;
+    (void)user_data;
+    printf("Executing Failing Node -> returns nullptr\n");
+    return nullptr;
 }
 
 csilk_data_t*
 fallback_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)ctx;
-	(void)input;
-	(void)user_data;
-	printf("Executing Fallback Node\n");
-	g_fallback_triggered = 1;
-	return nullptr;
+    (void)ctx;
+    (void)input;
+    (void)user_data;
+    printf("Executing Fallback Node\n");
+    g_fallback_triggered = 1;
+    return nullptr;
 }
 
 void
 test_workflow_error_branch()
 {
-	printf("Testing error branch (on_error)...\n");
-	g_fallback_triggered = 0;
-	csilk_wf_t* wf = csilk_wf_new("error_wf");
+    printf("Testing error branch (on_error)...\n");
+    g_fallback_triggered = 0;
+    csilk_wf_t* wf = csilk_wf_new("error_wf");
 
-	csilk_wf_node_t* n_fail = csilk_wf_add(wf, "fail", failing_handler, nullptr);
-	csilk_wf_node_t* n_fallback = csilk_wf_add(wf, "fallback", fallback_handler, nullptr);
+    csilk_wf_node_t* n_fail = csilk_wf_add(wf, "fail", failing_handler, nullptr);
+    csilk_wf_node_t* n_fallback = csilk_wf_add(wf, "fallback", fallback_handler, nullptr);
 
-	csilk_wf_on_error(n_fail, n_fallback);
+    csilk_wf_on_error(n_fail, n_fallback);
 
-	csilk_wf_run(wf, nullptr, nullptr);
-	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    csilk_wf_run(wf, nullptr, nullptr);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-	assert(g_fallback_triggered == 1);
-	csilk_wf_free(wf);
-	printf("test_workflow_error_branch: PASS\n");
+    assert(g_fallback_triggered == 1);
+    csilk_wf_free(wf);
+    printf("test_workflow_error_branch: PASS\n");
 }
 
 /* --- Dynamic Routing Test --- */
@@ -67,50 +67,50 @@ test_workflow_error_branch()
 const char*
 my_router(csilk_data_t* input)
 {
-	if (input && input->value && strcmp((char*)input->value, "magic") == 0) {
-		return "magic_node";
-	}
-	return "normal_node";
+    if (input && input->value && strcmp((char*)input->value, "magic") == 0) {
+        return "magic_node";
+    }
+    return "normal_node";
 }
 
 csilk_data_t*
 start_router_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)user_data;
-	return csilk_wf_data_new(ctx, "text", csilk_wf_strdup(ctx, (char*)input->value));
+    (void)user_data;
+    return csilk_wf_data_new(ctx, "text", csilk_wf_strdup(ctx, (char*)input->value));
 }
 
 csilk_data_t*
 magic_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)ctx;
-	(void)input;
-	(void)user_data;
-	printf("Magic Node triggered!\n");
-	g_router_triggered = 1;
-	return nullptr;
+    (void)ctx;
+    (void)input;
+    (void)user_data;
+    printf("Magic Node triggered!\n");
+    g_router_triggered = 1;
+    return nullptr;
 }
 
 void
 test_workflow_dynamic_route()
 {
-	printf("Testing dynamic routing (csilk_wf_route)...\n");
-	g_router_triggered = 0;
-	csilk_wf_t* wf = csilk_wf_new("route_wf");
+    printf("Testing dynamic routing (csilk_wf_route)...\n");
+    g_router_triggered = 0;
+    csilk_wf_t* wf = csilk_wf_new("route_wf");
 
-	csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
-	csilk_wf_add(wf, "magic_node", magic_handler, nullptr);
-	csilk_wf_add(wf, "normal_node", mock_handler, nullptr);
+    csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
+    csilk_wf_add(wf, "magic_node", magic_handler, nullptr);
+    csilk_wf_add(wf, "normal_node", mock_handler, nullptr);
 
-	csilk_wf_route(n_start, my_router);
+    csilk_wf_route(n_start, my_router);
 
-	csilk_data_t in = {"text", "magic", nullptr};
-	csilk_wf_run(wf, &in, nullptr);
-	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    csilk_data_t in = {"text", "magic", nullptr};
+    csilk_wf_run(wf, &in, nullptr);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-	assert(g_router_triggered == 1);
-	csilk_wf_free(wf);
-	printf("test_workflow_dynamic_route: PASS\n");
+    assert(g_router_triggered == 1);
+    csilk_wf_free(wf);
+    printf("test_workflow_dynamic_route: PASS\n");
 }
 
 /* --- OR Join Test --- */
@@ -118,60 +118,60 @@ test_workflow_dynamic_route()
 csilk_data_t*
 fast_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)user_data;
-	printf("Fast node done\n");
-	return csilk_wf_data_new(ctx, "signal", nullptr);
+    (void)user_data;
+    printf("Fast node done\n");
+    return csilk_wf_data_new(ctx, "signal", nullptr);
 }
 
 csilk_data_t*
 or_join_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-	(void)ctx;
-	(void)input;
-	(void)user_data;
-	printf("OR Join node triggered!\n");
-	g_or_triggered++;
-	return nullptr;
+    (void)ctx;
+    (void)input;
+    (void)user_data;
+    printf("OR Join node triggered!\n");
+    g_or_triggered++;
+    return nullptr;
 }
 
 void
 test_workflow_or_join()
 {
-	printf("Testing OR Join policy...\n");
-	g_or_triggered = 0;
-	csilk_wf_t* wf = csilk_wf_new("or_wf");
+    printf("Testing OR Join policy...\n");
+    g_or_triggered = 0;
+    csilk_wf_t* wf = csilk_wf_new("or_wf");
 
-	csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
-	csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", fast_handler, nullptr);
-	csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", fast_handler, nullptr);
-	csilk_wf_node_t* n_or = csilk_wf_add(wf, "or_node", or_join_handler, nullptr);
+    csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
+    csilk_wf_node_t* n1 = csilk_wf_add(wf, "n1", fast_handler, nullptr);
+    csilk_wf_node_t* n2 = csilk_wf_add(wf, "n2", fast_handler, nullptr);
+    csilk_wf_node_t* n_or = csilk_wf_add(wf, "or_node", or_join_handler, nullptr);
 
-	csilk_wf_node_set_join(n_or, CSILK_WF_JOIN_OR);
+    csilk_wf_node_set_join(n_or, CSILK_WF_JOIN_OR);
 
-	csilk_wf_bind(n_start, n1);
-	csilk_wf_bind(n_start, n2);
-	csilk_wf_bind(n1, n_or);
-	csilk_wf_bind(n2, n_or);
+    csilk_wf_bind(n_start, n1);
+    csilk_wf_bind(n_start, n2);
+    csilk_wf_bind(n1, n_or);
+    csilk_wf_bind(n2, n_or);
 
-	csilk_data_t in = {"text", "go", nullptr};
-	csilk_wf_run(wf, &in, nullptr);
-	csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    csilk_data_t in = {"text", "go", nullptr};
+    csilk_wf_run(wf, &in, nullptr);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-	// Sometimes in async thread pool scheduling one branch might finish
-	// completely before the other even starts, causing the OR node to be
-	// triggered once or twice depending on timing. We assert it's triggered at
-	// least once.
-	assert(g_or_triggered >= 1);
+    // Sometimes in async thread pool scheduling one branch might finish
+    // completely before the other even starts, causing the OR node to be
+    // triggered once or twice depending on timing. We assert it's triggered at
+    // least once.
+    assert(g_or_triggered >= 1);
 
-	csilk_wf_free(wf);
-	printf("test_workflow_or_join: PASS\n");
+    csilk_wf_free(wf);
+    printf("test_workflow_or_join: PASS\n");
 }
 
 int
 main()
 {
-	test_workflow_error_branch();
-	test_workflow_dynamic_route();
-	test_workflow_or_join();
-	return 0;
+    test_workflow_error_branch();
+    test_workflow_dynamic_route();
+    test_workflow_or_join();
+    return 0;
 }
