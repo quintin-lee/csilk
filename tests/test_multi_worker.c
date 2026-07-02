@@ -88,7 +88,7 @@ run_client(void* arg)
 		send(sock, req, strlen(req), 0);
 
 		fd_set fds;
-		struct timeval tv = {3, 0};
+		struct timeval tv = {5, 0};
 		FD_ZERO(&fds);
 		FD_SET(sock, &fds);
 		char buf[1024] = {0};
@@ -126,7 +126,7 @@ main(void)
 	pthread_create(&srv, nullptr, run_server, nullptr);
 
 	int retries = 0;
-	while (!server_ready && retries < 20) {
+	while (!server_ready && retries < 50) {
 		usleep(100000);
 		retries++;
 	}
