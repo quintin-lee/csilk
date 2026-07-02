@@ -424,19 +424,19 @@ target_compile_options(csilk PRIVATE
     "${CSILK_RELEASE_FLAGS}"
     "${CSILK_DEBUG_FLAGS}"
     "${CSILK_AVX2_FLAGS}"
-    "$<$<BOOL:CSILK_HAS_AVX512>:-DCSILK_HAS_AVX512>"
-    "$<$<BOOL:USE_ASAN>:${CSILK_ASAN_FLAGS}>"
-    "$<$<BOOL:USE_COVERAGE>:--coverage;-O0;-g>"
+    "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
+    "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
+    "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
 )
 target_compile_definitions(csilk PRIVATE
     CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-    "$<$<BOOL:CSILK_USE_URING_ONLY>:CSILK_USE_URING>"
-    "$<$<BOOL:CSILK_HAS_MYSQL>:HAS_MYSQL>"
-    "$<$<BOOL:CSILK_HAS_POSTGRES>:HAS_POSTGRES>"
-    "$<$<BOOL:HAS_MONGODB>:HAS_MONGODB>"
-    "$<$<BOOL:CSILK_HAS_REDIS>:HAS_REDIS>"
-    "$<$<BOOL:ENABLE_OOM_TEST>:TEST_OOM>"
-    "$<$<BOOL:DEBUG_ARENA>:DEBUG_ARENA>"
+    "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
+    "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+    "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+    "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+    "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+    "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
+    "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
 )
 
 # Linker flags: gc-sections in Release removes dead code
@@ -530,21 +530,21 @@ if(CSILK_BUILD_SHARED)
         "${CSILK_RELEASE_FLAGS}"
         "${CSILK_DEBUG_FLAGS}"
         "${CSILK_AVX2_FLAGS}"
-        "$<$<BOOL:CSILK_HAS_AVX512>:-DCSILK_HAS_AVX512>"
+        "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
     )
     target_compile_definitions(csilk_shared PRIVATE
         CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-        "$<$<BOOL:CSILK_USE_URING_ONLY>:CSILK_USE_URING>"
-        "$<$<BOOL:CSILK_HAS_MYSQL>:HAS_MYSQL>"
-        "$<$<BOOL:CSILK_HAS_POSTGRES>:HAS_POSTGRES>"
-        "$<$<BOOL:HAS_MONGODB>:HAS_MONGODB>"
-        "$<$<BOOL:CSILK_HAS_REDIS>:HAS_REDIS>"
-        "$<$<BOOL:ENABLE_OOM_TEST>:TEST_OOM>"
-        "$<$<BOOL:DEBUG_ARENA>:DEBUG_ARENA>"
+        "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
+        "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+        "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+        "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+        "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+        "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
+        "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
     )
     target_compile_options(csilk_shared PRIVATE
-        "$<$<BOOL:USE_ASAN>:${CSILK_ASAN_FLAGS}>"
-        "$<$<BOOL:USE_COVERAGE>:--coverage;-O0;-g>"
+        "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
+        "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
     )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
