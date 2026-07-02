@@ -163,16 +163,16 @@ LDFLAGS = -L$(CSILK_DIR)/build -lcsilk
 all: dev_server libroutes.so
 
 libroutes.so: routers/user_routes.c
-	gcc -shared $(CFLAGS) -o $@ $^ $(LDFLAGS)
+    gcc -shared $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 dev_server: main.c
-	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
+    gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: watch
 watch:
-	while inotifywait -e close_write libroutes.so; do \
-		echo "Reloaded!"; \
-	done
+    while inotifywait -e close_write libroutes.so; do \
+        echo "Reloaded!"; \
+    done
 ```
 
 ---

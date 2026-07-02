@@ -2,9 +2,14 @@
 BasedOnStyle: LLVM
 AccessModifierOffset: -8
 AlignAfterOpenBracket: Align
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignArrayOfStructures: Left
 AlignTrailingComments:
   Kind: Always
-  OverEmptyLines: 0
+  OverEmptyLines: 2
 AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
@@ -17,13 +22,13 @@ BreakBeforeBraces: Linux
 ColumnLimit: 100
 DerivePointerAlignment: false
 IndentCaseLabels: false
-IndentWidth: 8
+IndentWidth: 4
 InsertBraces: true
 MaxEmptyLinesToKeep: 1
 PointerAlignment: Left
 ReflowComments: false
 SortIncludes: false
 SpaceBeforeParens: ControlStatements
-TabWidth: 8
-UseTab: Always
+TabWidth: 4
+UseTab: Never
 ...
