@@ -481,8 +481,6 @@ target_include_directories(csilk PUBLIC
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   set_target_properties(csilk PROPERTIES
       INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
-      C_VISIBILITY_PRESET hidden
-      VISIBILITY_INLINES_HIDDEN TRUE
   )
 endif()
 if(MYSQL_LIB)
@@ -553,8 +551,6 @@ if(CSILK_BUILD_SHARED)
         OUTPUT_NAME csilk
         INTERFACE_COMPILE_FEATURES c_std_23
         INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
-        C_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN TRUE
     )
     if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
         target_precompile_headers(csilk_shared PRIVATE
