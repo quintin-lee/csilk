@@ -2,7 +2,7 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-24
 
-csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv, llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
+csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv (default) or io_uring (optional, Linux-only), llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
 
 ---
 
@@ -57,7 +57,7 @@ graph TB
             GRP["fa:fa-folder-open Group (Hierarchical)"]
         end
         subgraph network["fa:fa-network-wired Network & Protocol"]
-            SRV["fa:fa-server Server (libuv TCP)"]
+            SRV["fa:fa-server Server (libuv TCP / io_uring)"]
             HTTP["fa:fa-code llhttp Parser"]
             TLS["fa:fa-lock OpenSSL (TLS/SSL)"]
             WS["fa:fa-plug WebSocket Engine"]
@@ -65,7 +65,7 @@ graph TB
     end
 
     subgraph layer4["fa:fa-hdd Layer 4: Infrastructure"]
-        UV["fa:fa-sync-alt libuv\n(Event Loop + Thread Pool)"]
+        UV["fa:fa-sync-alt libuv / io_uring\n(Event Loop + Thread Pool)"]
         CJ["fa:fa-file-code cJSON"]
         YAML["fa:fa-file-alt libyaml"]
         ZLIB["fa:fa-compress zlib"]
@@ -111,7 +111,7 @@ graph TB
 ## 2. Core Design Principles
 
 ### 2.1 Reactor Event-Driven Model with Native TLS & ALPN
-The framework is built on `libuv`, ensuring all network I/O is non-blocking. 
+The framework is built on `libuv` (default) or `io_uring` (optional, Linux-only via `-DCSILK_USE_URING=ON`), ensuring all network I/O is non-blocking. An abstract `csilk_io_loop_t` type (`include/csilk/core/sys_io.h`) wraps either `uv_loop_t*` or `struct io_uring*`, allowing the server core to be compiled against either backend without source changes.
 
 * **Protocol Dispatcher**: During TLS ALPN negotiation, a dispatcher routes decrypted traffic to either `llhttp` (HTTP/1.1) or `nghttp2` (HTTP/2) based on ALPN (`h2` vs `http/1.1`). The dispatcher **MUST** negotiate ALPN before any application data is processed.
 * **HTTP/1.1 parsing**: `llhttp` drives a state-machine parser to process HTTP/1.1 requests. During parsing callbacks, `csilk` uses **Zero-copy HTTP parsing** using string views (`csilk_str_view_t`) that directly reference raw network receive buffers, completely eliminating dynamic `malloc`/`realloc`/`free` heap allocations for HTTP headers, URLs, and bodies. This achieves ~0 allocs per request for header processing (P99 ≤ 1µs parsing overhead).
@@ -149,7 +149,7 @@ sequenceDiagram
     participant LL as fa:fa-code llhttp Parser
     participant S as fa:fa-server Server
 
-    K-->>UV: epoll/kqueue: new connection ready
+    K-->>UV: epoll/kqueue/io_uring: new connection ready
     UV->>S: on_new_connection()
     S->>TCP: uv_tcp_init() + uv_accept()
     S->>LL: llhttp_init(parser, HTTP_REQUEST, settings)
@@ -157,7 +157,7 @@ sequenceDiagram
 
     Note over UV: Event loop idle, waiting
 
-    K-->>UV: epoll/kqueue: data available
+    K-->>UV: epoll/kqueue/io_uring: data available
     UV->>S: on_read()
     S->>LL: llhttp_execute(parser, buf, nread)
 
@@ -526,25 +526,25 @@ graph LR
 }}%%
 flowchart TB
     subgraph main_thread["fa:fa-crown Main Thread"]
-        ML["fa:fa-sync-alt libuv Event Loop"]
+        ML["fa:fa-sync-alt libuv / io_uring Event Loop"]
         MT["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
         MW["fa:fa-layer-group Global Middlewares\n(recovery, logger, ...)"]
     end
 
     subgraph worker1["fa:fa-microchip Worker 1"]
-        W1L["fa:fa-sync-alt libuv Event Loop"]
+        W1L["fa:fa-sync-alt libuv / io_uring Event Loop"]
         W1T["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
         W1M["fa:fa-layer-group Global Middlewares"]
     end
 
     subgraph worker2["fa:fa-microchip Worker 2"]
-        W2L["fa:fa-sync-alt libuv Event Loop"]
+        W2L["fa:fa-sync-alt libuv / io_uring Event Loop"]
         W2T["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
         W2M["fa:fa-layer-group Global Middlewares"]
     end
 
     subgraph workern["fa:fa-microchip Worker N"]
-        WNL["fa:fa-sync-alt libuv Event Loop"]
+        WNL["fa:fa-sync-alt libuv / io_uring Event Loop"]
         WNT["fa:fa-plug TCP Socket (SO_REUSEPORT)"]
         WNM["fa:fa-layer-group Global Middlewares"]
     end
@@ -588,7 +588,7 @@ The sequence diagram below shows the complete lifecycle of a request from client
 }}%%
 sequenceDiagram
     participant Client as fa:fa-user Client
-    participant UV as fa:fa-sync-alt libuv Event Loop
+    participant UV as fa:fa-sync-alt libuv / io_uring Event Loop
     participant SSL as fa:fa-lock OpenSSL (TLS)
     participant HTTP as fa:fa-code llhttp Parser
     participant Server as fa:fa-server csilk_server_t
@@ -805,7 +805,7 @@ graph TB
     admin_h["fa:fa-tachometer-alt csilk/app/admin.h<br/>(Admin Dashboard API)"]
 
     subgraph src_core["fa:fa-server src/core/"]
-        server_c["fa:fa-cogs server.c<br/>TCP + HTTP + libuv"] --> router_c["fa:fa-sitemap router.c<br/>Radix Tree"]
+        server_c["fa:fa-cogs server.c<br/>TCP + HTTP + libuv/io_uring"] --> router_c["fa:fa-sitemap router.c<br/>Radix Tree"]
         server_c --> context_c["fa:fa-exchange-alt context.c<br/>Req/Res + Handlers"]
         server_c --> ws_c["fa:fa-plug websocket.c<br/>WS Handshake + Frames"]
         context_c --> arena_c["fa:fa-memory arena.c<br/>Memory Pool"]
@@ -850,7 +850,7 @@ graph TB
         mongodb["fa:fa-leaf mongodb.c"] --> db_c
     end
 
-    server_c --> libuv["fa:fa-sync-alt libuv"]
+    server_c --> libuv["fa:fa-sync-alt libuv / io_uring"]
     server_c --> llhttp["fa:fa-code llhttp"]
     context_c --> cjson["fa:fa-file-code cJSON"]
 ```
@@ -932,6 +932,12 @@ csilk/
 │   │   ├── admin.c                # Admin dashboard
 │   │   ├── srv_impl.h             # Cross-file declarations for server split
 │   │   └── srv_internal.h         # Internal server types
+│   │   └── uring/                 # io_uring backend (Linux-only, optional)
+│   │       ├── uring_server.c
+│   │       ├── uring_connection.c
+│   │       ├── uring_thread_pool.c
+│   │       ├── uring_internal.h
+│   │       └── uv_stubs.c
 │   ├── app/                       # Thin app wrappers
 │   │   ├── app.c
 │   │   └── group.c

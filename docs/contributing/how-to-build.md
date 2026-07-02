@@ -93,7 +93,19 @@ cmake -B build_pgo_final -S . -DCMAKE_BUILD_TYPE=Release \
 make -C build_pgo_final -j$(nproc)
 ```
 
-### 2.4 静态库 vs 动态库
+### 2.4 io_uring 后端构建（Linux-only）
+
+csilk 支持可选的 io_uring 后端，在 Linux 5.1+ 上提供更高的 I/O 性能：
+
+```bash
+# 使用 io_uring 后端构建
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON
+make -j$(nproc)
+```
+
+> **注意**: io_uring 后端需要 Linux 内核 ≥ 5.1（推荐 ≥ 5.6 以获得轮询模式支持）。libuv 后端在所有平台均可使用，是默认选项。
+
+### 2.5 静态库 vs 动态库
 
 ```bash
 # 静态库（默认，~150KB）
@@ -112,6 +124,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 | 选项 | 默认值 | 说明 | 推荐生产环境 |
 |:-----|:------:|------|:------------:|
 | `CMAKE_BUILD_TYPE` | Release | Debug / Release / RelWithDebInfo | Release |
+| `CSILK_USE_URING` | OFF | 启用 io_uring 后端替代 libuv（仅 Linux）| 需要时 |
 | `CSILK_BUILD_SHARED` | OFF | 启用动态库 | Release 时启用 |
 | `USE_ASAN` | OFF | 启用 AddressSanitizer | 调试时 |
 | `USE_FUZZER` | OFF | 启用 libFuzzer | CI 测试 |
