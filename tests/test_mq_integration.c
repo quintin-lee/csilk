@@ -7,20 +7,20 @@
 int
 main()
 {
-	csilk_router_t* router = csilk_router_new();
-	csilk_server_t* server = csilk_server_new(router);
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
 
-	assert(server != nullptr);
+    assert(server != nullptr);
 
-	csilk_mq_t* mq = csilk_server_get_mq(server);
-	assert(mq != nullptr);
+    csilk_mq_t* mq = csilk_server_get_mq(server);
+    assert(mq != nullptr);
 
-	printf("MQ instance successfully retrieved from server\n");
+    printf("MQ instance successfully retrieved from server\n");
 
-	csilk_server_free(server);
-	csilk_router_free(router);
+    csilk_server_free(server);
+    csilk_router_free(router);
 
-	printf("Server and MQ successfully freed\n");
+    printf("Server and MQ successfully freed\n");
 
-	return 0;
+    return 0;
 }

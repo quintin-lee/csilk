@@ -17,127 +17,126 @@
 void
 test_jwt_core()
 {
-	printf("Testing JWT core generation and verification...\n");
+    printf("Testing JWT core generation and verification...\n");
 
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "sub", "1234567890");
-	cJSON_AddStringToObject(payload, "name", "John Doe");
-	cJSON_AddNumberToObject(payload, "iat", 1516239022);
+    cJSON* payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "sub", "1234567890");
+    cJSON_AddStringToObject(payload, "name", "John Doe");
+    cJSON_AddNumberToObject(payload, "iat", 1516239022);
 
-	const char* secret = "secret";
+    const char* secret = "secret";
 
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	char* token = csilk_jwt_generate(c, payload, secret);
-	assert(token != nullptr);
-	printf("Generated Token: %s\n", token);
+    char* token = csilk_jwt_generate(c, payload, secret);
+    assert(token != nullptr);
+    printf("Generated Token: %s\n", token);
 
-	cJSON* verified_payload = csilk_jwt_verify(c, token, secret);
-	assert(verified_payload != nullptr);
+    cJSON* verified_payload = csilk_jwt_verify(c, token, secret);
+    assert(verified_payload != nullptr);
 
-	assert(cJSON_HasObjectItem(verified_payload, "sub"));
-	assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "1234567890") ==
-	       0);
+    assert(cJSON_HasObjectItem(verified_payload, "sub"));
+    assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "1234567890") == 0);
 
-	// Test invalid secret
-	cJSON* invalid_payload = csilk_jwt_verify(c, token, "wrong_secret");
-	assert(invalid_payload == nullptr);
+    // Test invalid secret
+    cJSON* invalid_payload = csilk_jwt_verify(c, token, "wrong_secret");
+    assert(invalid_payload == nullptr);
 
-	// Test tampered token
-	token[strlen(token) - 1] ^= 0xFF; // Flip a bit in signature
-	cJSON* tampered_payload = csilk_jwt_verify(c, token, secret);
-	assert(tampered_payload == nullptr);
+    // Test tampered token
+    token[strlen(token) - 1] ^= 0xFF; // Flip a bit in signature
+    cJSON* tampered_payload = csilk_jwt_verify(c, token, secret);
+    assert(tampered_payload == nullptr);
 
-	free(token);
-	cJSON_Delete(payload);
-	cJSON_Delete(verified_payload);
-	csilk_test_ctx_free(c);
+    free(token);
+    cJSON_Delete(payload);
+    cJSON_Delete(verified_payload);
+    csilk_test_ctx_free(c);
 }
 
 void
 dummy_handler(csilk_ctx_t* c)
 {
-	(void)c;
+    (void)c;
 }
 
 void
 test_jwt_middleware()
 {
-	printf("Testing JWT middleware...\n");
+    printf("Testing JWT middleware...\n");
 
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	// Setup handlers for csilk_next
-	csilk_handler_t handlers[] = {dummy_handler, dummy_handler, nullptr};
-	csilk_test_ctx_set_handlers(c, handlers);
+    // Setup handlers for csilk_next
+    csilk_handler_t handlers[] = {dummy_handler, dummy_handler, nullptr};
+    csilk_test_ctx_set_handlers(c, handlers);
 
-	const char* secret = "supersecret";
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "user", "admin");
-	char* token = csilk_jwt_generate(c, payload, secret);
+    const char* secret = "supersecret";
+    cJSON*      payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "user", "admin");
+    char* token = csilk_jwt_generate(c, payload, secret);
 
-	char auth_header[512];
-	sprintf(auth_header, "Bearer %s", token);
+    char auth_header[512];
+    sprintf(auth_header, "Bearer %s", token);
 
-	// 1. Success case
-	csilk_set_request_header(c, "Authorization", auth_header);
-	csilk_jwt_middleware(c, secret);
-	assert(csilk_is_aborted(c) == 0);
+    // 1. Success case
+    csilk_set_request_header(c, "Authorization", auth_header);
+    csilk_jwt_middleware(c, secret);
+    assert(csilk_is_aborted(c) == 0);
 
-	cJSON* stored_payload = (cJSON*)csilk_get(c, "jwt_payload");
-	assert(stored_payload != nullptr);
-	assert(strcmp(cJSON_GetObjectItem(stored_payload, "user")->valuestring, "admin") == 0);
-	cJSON_Delete(stored_payload);
+    cJSON* stored_payload = (cJSON*)csilk_get(c, "jwt_payload");
+    assert(stored_payload != nullptr);
+    assert(strcmp(cJSON_GetObjectItem(stored_payload, "user")->valuestring, "admin") == 0);
+    cJSON_Delete(stored_payload);
 
-	// 2. Failure case: missing header
-	csilk_test_ctx_free(c);
-	c = csilk_test_ctx_new();
-	csilk_test_ctx_set_handlers(c, handlers);
-	csilk_jwt_middleware(c, secret);
-	assert(csilk_is_aborted(c) == 1);
-	assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
+    // 2. Failure case: missing header
+    csilk_test_ctx_free(c);
+    c = csilk_test_ctx_new();
+    csilk_test_ctx_set_handlers(c, handlers);
+    csilk_jwt_middleware(c, secret);
+    assert(csilk_is_aborted(c) == 1);
+    assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
 
-	// 3. Failure case: invalid token
-	csilk_test_ctx_free(c);
-	c = csilk_test_ctx_new();
-	csilk_test_ctx_set_handlers(c, handlers);
-	csilk_set_request_header(c, "Authorization", "Bearer invalid.token.here");
-	csilk_jwt_middleware(c, secret);
-	assert(csilk_is_aborted(c) == 1);
-	assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
+    // 3. Failure case: invalid token
+    csilk_test_ctx_free(c);
+    c = csilk_test_ctx_new();
+    csilk_test_ctx_set_handlers(c, handlers);
+    csilk_set_request_header(c, "Authorization", "Bearer invalid.token.here");
+    csilk_jwt_middleware(c, secret);
+    assert(csilk_is_aborted(c) == 1);
+    assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
 
-	free(token);
-	cJSON_Delete(payload);
-	csilk_test_ctx_free(c);
+    free(token);
+    cJSON_Delete(payload);
+    csilk_test_ctx_free(c);
 }
 
 void
 test_jwt_expiration()
 {
-	printf("Testing JWT expiration...\n");
+    printf("Testing JWT expiration...\n");
 
-	csilk_ctx_t* c = csilk_test_ctx_new();
-	csilk_handler_t handlers[] = {dummy_handler, nullptr};
-	csilk_test_ctx_set_handlers(c, handlers);
+    csilk_ctx_t*    c = csilk_test_ctx_new();
+    csilk_handler_t handlers[] = {dummy_handler, nullptr};
+    csilk_test_ctx_set_handlers(c, handlers);
 
-	const char* secret = "secret";
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddNumberToObject(payload, "exp",
-				(double)time(nullptr) - 10); // Expired 10s ago
+    const char* secret = "secret";
+    cJSON*      payload = cJSON_CreateObject();
+    cJSON_AddNumberToObject(payload, "exp",
+                            (double)time(nullptr) - 10); // Expired 10s ago
 
-	char* token = csilk_jwt_generate(c, payload, secret);
-	char auth_header[512];
-	sprintf(auth_header, "Bearer %s", token);
+    char* token = csilk_jwt_generate(c, payload, secret);
+    char  auth_header[512];
+    sprintf(auth_header, "Bearer %s", token);
 
-	csilk_set_request_header(c, "Authorization", auth_header);
-	csilk_jwt_middleware(c, secret);
+    csilk_set_request_header(c, "Authorization", auth_header);
+    csilk_jwt_middleware(c, secret);
 
-	assert(csilk_is_aborted(c) == 1);
-	assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
+    assert(csilk_is_aborted(c) == 1);
+    assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
 
-	free(token);
-	cJSON_Delete(payload);
-	csilk_test_ctx_free(c);
+    free(token);
+    cJSON_Delete(payload);
+    csilk_test_ctx_free(c);
 }
 
 static const char* rsa_private_key =
@@ -197,75 +196,73 @@ static const char* ec_public_key =
 void
 test_jwt_rs256()
 {
-	printf("Testing JWT RS256 generation and verification...\n");
+    printf("Testing JWT RS256 generation and verification...\n");
 
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "sub", "admin-rs256");
+    cJSON* payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "sub", "admin-rs256");
 
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	char* token = csilk_jwt_generate_ex(
-	    c, payload, rsa_private_key, strlen(rsa_private_key), CSILK_JWT_RS256);
-	assert(token != nullptr);
+    char* token = csilk_jwt_generate_ex(
+        c, payload, rsa_private_key, strlen(rsa_private_key), CSILK_JWT_RS256);
+    assert(token != nullptr);
 
-	cJSON* verified_payload =
-	    csilk_jwt_verify_ex(c, token, rsa_public_key, strlen(rsa_public_key), CSILK_JWT_RS256);
-	assert(verified_payload != nullptr);
-	assert(cJSON_HasObjectItem(verified_payload, "sub"));
-	assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "admin-rs256") ==
-	       0);
+    cJSON* verified_payload =
+        csilk_jwt_verify_ex(c, token, rsa_public_key, strlen(rsa_public_key), CSILK_JWT_RS256);
+    assert(verified_payload != nullptr);
+    assert(cJSON_HasObjectItem(verified_payload, "sub"));
+    assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "admin-rs256") == 0);
 
-	// Test invalid public key
-	cJSON* invalid_payload =
-	    csilk_jwt_verify_ex(c, token, ec_public_key, strlen(ec_public_key), CSILK_JWT_RS256);
-	assert(invalid_payload == nullptr);
+    // Test invalid public key
+    cJSON* invalid_payload =
+        csilk_jwt_verify_ex(c, token, ec_public_key, strlen(ec_public_key), CSILK_JWT_RS256);
+    assert(invalid_payload == nullptr);
 
-	free(token);
-	cJSON_Delete(payload);
-	cJSON_Delete(verified_payload);
-	csilk_test_ctx_free(c);
+    free(token);
+    cJSON_Delete(payload);
+    cJSON_Delete(verified_payload);
+    csilk_test_ctx_free(c);
 }
 
 void
 test_jwt_es256()
 {
-	printf("Testing JWT ES256 generation and verification...\n");
+    printf("Testing JWT ES256 generation and verification...\n");
 
-	cJSON* payload = cJSON_CreateObject();
-	cJSON_AddStringToObject(payload, "sub", "admin-es256");
+    cJSON* payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "sub", "admin-es256");
 
-	csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t* c = csilk_test_ctx_new();
 
-	char* token = csilk_jwt_generate_ex(
-	    c, payload, ec_private_key, strlen(ec_private_key), CSILK_JWT_ES256);
-	assert(token != nullptr);
+    char* token =
+        csilk_jwt_generate_ex(c, payload, ec_private_key, strlen(ec_private_key), CSILK_JWT_ES256);
+    assert(token != nullptr);
 
-	cJSON* verified_payload =
-	    csilk_jwt_verify_ex(c, token, ec_public_key, strlen(ec_public_key), CSILK_JWT_ES256);
-	assert(verified_payload != nullptr);
-	assert(cJSON_HasObjectItem(verified_payload, "sub"));
-	assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "admin-es256") ==
-	       0);
+    cJSON* verified_payload =
+        csilk_jwt_verify_ex(c, token, ec_public_key, strlen(ec_public_key), CSILK_JWT_ES256);
+    assert(verified_payload != nullptr);
+    assert(cJSON_HasObjectItem(verified_payload, "sub"));
+    assert(strcmp(cJSON_GetObjectItem(verified_payload, "sub")->valuestring, "admin-es256") == 0);
 
-	// Test invalid public key
-	cJSON* invalid_payload =
-	    csilk_jwt_verify_ex(c, token, rsa_public_key, strlen(rsa_public_key), CSILK_JWT_ES256);
-	assert(invalid_payload == nullptr);
+    // Test invalid public key
+    cJSON* invalid_payload =
+        csilk_jwt_verify_ex(c, token, rsa_public_key, strlen(rsa_public_key), CSILK_JWT_ES256);
+    assert(invalid_payload == nullptr);
 
-	free(token);
-	cJSON_Delete(payload);
-	cJSON_Delete(verified_payload);
-	csilk_test_ctx_free(c);
+    free(token);
+    cJSON_Delete(payload);
+    cJSON_Delete(verified_payload);
+    csilk_test_ctx_free(c);
 }
 
 int
 main()
 {
-	test_jwt_core();
-	test_jwt_middleware();
-	test_jwt_expiration();
-	test_jwt_rs256();
-	test_jwt_es256();
-	printf("All JWT tests passed!\n");
-	return 0;
+    test_jwt_core();
+    test_jwt_middleware();
+    test_jwt_expiration();
+    test_jwt_rs256();
+    test_jwt_es256();
+    printf("All JWT tests passed!\n");
+    return 0;
 }

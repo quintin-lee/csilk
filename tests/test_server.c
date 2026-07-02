@@ -7,20 +7,20 @@
 void
 test_server_init()
 {
-	printf("Testing server initialization...\n");
-	csilk_router_t* router = csilk_router_new();
-	csilk_server_t* server = csilk_server_new(router);
-	assert(server != nullptr);
+    printf("Testing server initialization...\n");
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
+    assert(server != nullptr);
 
-	csilk_server_free(server);
-	csilk_router_free(router);
-	printf("Server initialization test passed.\n");
+    csilk_server_free(server);
+    csilk_router_free(router);
+    printf("Server initialization test passed.\n");
 }
 
 int
 main()
 {
-	test_server_init();
-	printf("All server tests passed!\n");
-	return 0;
+    test_server_init();
+    printf("All server tests passed!\n");
+    return 0;
 }
