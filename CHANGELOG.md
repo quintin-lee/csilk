@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **io_uring backend (Linux-only, optional)**: Full event loop, accept, read, write, and timer implementation using `CSILK_USE_URING=ON` at build time. Square-submission-polling (SQPOLL) with automatic fallback. Per-worker thread pools with lock-free dispatch queue. All 122 tests pass.
+- **Documentation**: Updated all docs (architecture, build guide, test guide, deployment, performance tuning, troubleshooting, design) with comprehensive io_uring backend coverage.
 - **Zero-copy HTTP Parsing** — Integrated C23-style string views (`csilk_str_view_t`) for HTTP headers, URLs, and bodies, referencing network receive buffers directly to eliminate heap malloc/free churn.
 - **Deep struct freeing** — Added `csilk_struct_free_reflect` to recursively free nested struct pointers inside the reflection engine.
 - **Static cyclic reference detection** — Added compile/startup-time DFS graph cycle-finding algorithm to validate registered reflection types and prevent recursion stack overflows.
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin storage limit test**: Fixed `test_admin` storage overflow to store non-null values.
 
 ### Fixed
+- **io_uring SQE starvation**: `csilk_client_write` could silently drop responses when the io_uring Submission Queue ring was full. Added retry loop with backoff.
+- **Stale keep_alive in on_write_done**: llhttp 9.3.1 clears `F_CONNECTION_CLOSE` after `on_message_complete` returns, causing `llhttp_should_keep_alive()` in write-completion callbacks to return the wrong value. Cached the decision in `client->keep_alive` when it's computed in `_csilk_send_response`.
 - **Zero-copy form body parsing**: Fixed `csilk_parse_form_urlencoded` to use explicit body length (`csilk_arena_strndup` instead of `csilk_arena_strdup`) when zero-copy HTTP body references llhttp's TCP buffer which is not null-terminated at the body boundary.
 - **ASan leaks**: Resolved memory leaks in new tests and Doxyfile generation.
 - **macOS compatibility**: `fdatasync` → `fsync`, `SOCK_NONBLOCK` handling.

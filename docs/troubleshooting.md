@@ -104,6 +104,25 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 
 ---
 
+
+### 1.4 io_uring 构建问题
+
+**问题**: 使用 `-DCSILK_USE_URING=ON` 时 build 失败
+
+**原因**: liburing 需要 Linux ≥ 5.1 内核，且需要内核支持 io_uring
+
+**方案**:
+```bash
+# 检查内核版本（需要 ≥ 5.1）
+uname -r
+
+# 检查 io_uring 是否被禁用
+cat /proc/sys/kernel/io_uring_disabled  # 应为 0
+
+# 如不支持，退回到默认的 libuv 后端
+cmake .. -DCSILK_USE_URING=OFF
+```
+
 ## 2. 运行时错误
 
 ### 2.1 内存泄漏（ASan 报告）

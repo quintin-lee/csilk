@@ -310,17 +310,26 @@ HEAPPROFILE=/tmp/csilk.heap ./example_server
 
 ### 4.4 io_uring 评估
 
-libuv v1.48.0 已支持 io_uring（Linux Kernel 6.1+）：
+csilk 支持两种 io_uring 使用方式：
 
-```bash
-UV_USE_IO_URING=1 ./example_server
-```
+1. **libuv io_uring 轮询后端**（自动，无需代码修改）：
+   ```bash
+   UV_USE_IO_URING=1 ./example_server
+   ```
+   这利用 libuv v1.48.0+ 内置的 io_uring 支持（Linux Kernel 6.1+）。
 
-| 指标 | epoll | io_uring | 说明 |
-|:-----|:-----:|:--------:|------|
-| 单核 QPS | 基准 | **+5~10%** | 减少系统调用次数 |
-| 上下文切换 | 基准 | **-15%** | 异步系统调用 |
-| 兼容性 | 所有 Linux | Kernel 6.1+ | 需确认部署环境 |
+2. **原生 io_uring 后端**（编译时切换，更高性能）：
+   ```bash
+   cmake .. -DCSILK_USE_URING=ON -DCMAKE_BUILD_TYPE=Release
+   make -j$(nproc)
+   ```
+   用 `csilk_io_loop_t` 抽象直接操作 liburing 的 SQ/CQ 环，跳过 libuv 事件循环层。需要 Linux 5.1+。
+
+| 指标 | epoll | libuv io_uring 轮询 | 原生 io_uring 后端 | 说明 |
+|:-----|:-----:|:-------------------:|:------------------:|------|
+| 单核 QPS | 基准 | **+5~10%** | **+10~20%** | 减少系统调用次数 |
+| 上下文切换 | 基准 | **-15%** | **-30%** | 异步系统调用 |
+| 兼容性 | 所有 Linux | Kernel 6.1+ | Kernel 5.1+ | 需确认部署环境 |
 
 ---
 

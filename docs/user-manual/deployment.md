@@ -414,6 +414,8 @@ logger:
 
 ## 9. 内核参数调优
 
+### 9.1 通用网络调优
+
 ```bash
 # /etc/sysctl.d/99-csilk.conf
 # TCP Fast Open
@@ -445,6 +447,22 @@ fs.file-max = 2097152
 * hard nofile 1048576
 ```
 
+### 9.2 io_uring 内核要求
+
+如果使用 io_uring 后端（`-DCSILK_USE_URING=ON`），需要以下内核支持：
+
+| 条件 | 最低版本 | 推荐版本 | 说明 |
+|:-----|:--------:|:--------:|------|
+| Linux Kernel | 5.1 | **6.1+** | 5.1 引入基础 io_uring；5.6+ 支持轮询模式；6.1+ 为生产稳定版本 |
+| io_uring 启用 | — | — | 内核默认启用（`/proc/sys/kernel/io_uring_disabled = 0`） |
+| liburing | — | v2.5+ | CMake FetchContent 自动获取 |
+
+验证内核支持：
+```bash
+uname -r                     # 应输出 ≥ 5.1
+cat /proc/sys/kernel/io_uring_disabled  # 应为 0
+```
+
 ---
 
 ## 10. 最佳实践
@@ -461,6 +479,7 @@ fs.file-max = 2097152
 | **MAY** 集成 Prometheus | 通过 `/admin/stats` 端点采集 |
 | **MUST NOT** 在生产使用 `-Ofast` | 浮点语义差异可能导致非预期行为 |
 | **MUST** 生产构建使用 Release 模式 | `-DCMAKE_BUILD_TYPE=Release` |
+| **MAY** 使用 io_uring 后端提升性能 | Linux 5.1+ 可用；构建时加 `-DCSILK_USE_URING=ON`；详见 [构建指南](../contributing/how-to-build.md) |
 
 ---
 

@@ -9,7 +9,8 @@
 - zlib1g-dev (for gzip compression middleware — **SHOULD** be enabled for production)
 - libssl-dev (**MUST** be OpenSSL 1.1.1+ for HTTPS/TLS, JWT, cipher drivers)
 - libcurl-dev 7.80.0+ (**MUST** for AI driver HTTP transport)
-- libuv (auto-fetched via CMake FetchContent if not present)
+- libuv (auto-fetched via CMake FetchContent for libuv backend)
+- liburing (auto-fetched via CMake FetchContent when `-DCSILK_USE_URING=ON`)
 - Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers — enable via `-DCSILK_USE_*` CMake flags)
 
 ## Build & Dependency Flow
@@ -44,7 +45,8 @@ flowchart LR
     end
 
     subgraph FetchContent["fa:fa-download CMake FetchContent"]
-        UV["fa:fa-sync-alt libuv v1.48.0"]
+        UV["fa:fa-sync-alt libuv v1.48.0 (default)"]
+        URING["fa:fa-tachometer liburing v2.5 (optional, -DCSILK_USE_URING=ON)"]
         LL["fa:fa-file-code llhttp v9.4.1"]
         CJ["fa:fa-file-code cJSON v1.7.18"]
     end
@@ -81,6 +83,7 @@ make -j$(nproc)
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `CSILK_USE_URING` | OFF | Use io_uring backend instead of libuv (Linux-only) |
 | `CMAKE_BUILD_TYPE` | - | `Debug`, `Release`, `RelWithDebInfo` |
 | `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
 | `USE_ASAN` | OFF | Enable AddressSanitizer |

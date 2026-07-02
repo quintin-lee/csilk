@@ -2,7 +2,7 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
 
-csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Built on libuv, llhttp, nghttp2, and cJSON, it achieves ~50K QPS throughput (4-core single worker) with linear scaling to ~200K QPS on 16-core multi-worker mode. Developers **MUST** compile with C23 support (GCC 13+ or Clang 19+). Public API **MUST** be used through the `csilk_ctx_t*` opaque handle — direct struct access is **NOT** part of the stable ABI. All resource management **SHOULD** prefer arena allocation (~3 CPU instructions per alloc, ≤ 5ns reset) over heap `malloc`/`free`.
+csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Built on **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and cJSON, it achieves ~50K QPS throughput (4-core single worker) with linear scaling to ~200K QPS on 16-core multi-worker mode. Developers **MUST** compile with C23 support (GCC 13+ or Clang 19+). Public API **MUST** be used through the `csilk_ctx_t*` opaque handle — direct struct access is **NOT** part of the stable ABI. All resource management **SHOULD** prefer arena allocation (~3 CPU instructions per alloc, ≤ 5ns reset) over heap `malloc`/`free`.
 
 ## Project Architecture Overview
 
@@ -34,7 +34,7 @@ graph TB
     end
 
     subgraph Core_Framework["fa:fa-cogs Core Framework"]
-        S["fa:fa-server Server (libuv event loop)"]
+        S["fa:fa-server Server (libuv / io_uring backend)"]
         R["fa:fa-sitemap Router (Radix Tree)"]
         G["fa:fa-folder Group (prefix routing)"]
         C["fa:fa-exchange Context (req/res lifecycle)"]
@@ -46,7 +46,7 @@ graph TB
     end
 
     subgraph Dependencies
-        UV["fa:fa-cogs libuv (async I/O)"]
+        UV["fa:fa-cogs libuv / io_uring (async I/O)"]
         LL["fa:fa-file-code llhttp (HTTP/1.1 parser)"]
         NG["fa:fa-code-fork nghttp2 (HTTP/2 parser)"]
         JSON["fa:fa-code cJSON"]

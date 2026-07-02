@@ -269,6 +269,12 @@ void test_concurrent_access(void) {
 
 ### 7.1 GitHub Actions 测试矩阵
 
+csilk 的 CI 包含三个测试矩阵：
+
+1. **libuv 后端**（默认）— Linux + macOS，Debug 和 Release 模式
+2. **io_uring 后端**（可选）— Linux only，专用 `io_uring` job
+3. **Fuzz 测试** — clang-19 仅 Linux
+
 ```yaml
 # .github/workflows/ci.yml
 name: CI
@@ -294,11 +300,28 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+  build_uring:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y cmake gcc-13 libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev
+
+      - name: Configure with io_uring
+        run: cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON
+
+      - name: Build
+        run: cmake --build build_uring -j$(nproc)
+
+      - name: Run tests
+        run: ctest --test-dir build_uring --output-on-failure
 ```
 
 ### 7.2 测试通过条件
 
-- [ ] 所有 116 个单元测试通过
+- [ ] 所有 122+ 个单元测试通过（libuv 后端 122 个；io_uring 后端 120 个）
 - [ ] ASan 检查无泄漏（Debug 构建时）
 - [ ] 测试覆盖率 ≥ 85%（Release 构建时）
 - [ ] 多平台测试通过（Linux + macOS）
