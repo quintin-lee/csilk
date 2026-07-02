@@ -73,6 +73,7 @@ on_sendfile_complete(csilk_io_fs_t* req)
 	}
 
 	int keep_alive = llhttp_should_keep_alive(&client->parser);
+	client->keep_alive = (int)keep_alive;
 
 	if (client->server->config.write_timeout_ms > 0) {
 		csilk_io_timer_stop(&client->write_timer);
@@ -866,6 +867,7 @@ _csilk_send_response(csilk_ctx_t* c)
 	const char* body = client->ctx.response.body ? client->ctx.response.body : "";
 
 	int keep_alive = llhttp_should_keep_alive(&client->parser);
+	client->keep_alive = (int)keep_alive;
 	const char* connection_val = keep_alive ? "keep-alive" : "close";
 
 	/* Serialise status line (NULL/0 computes required length) */

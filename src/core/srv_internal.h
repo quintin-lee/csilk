@@ -153,8 +153,12 @@ struct csilk_client_s {
 	int close_pending;		/**< Pending close refs before freeing client. */
 	int async_ref;			/**< Active asynchronous tasks reference counter. */
 	int read_paused;
-	int read_active; /**< Flag indicating if a read is currently in flight */
-	void* read_buf;	 /**< Pre-allocated read buffer for io_uring */
+	unsigned read_active : 1;
+	unsigned keep_alive : 1; /**< Cached keep-alive decision from
+				   * _csilk_send_response, used by on_write_done
+				   * because llhttp clears F_CONNECTION_CLOSE
+				   * after on_message_complete returns. */
+	void* read_buf;		 /**< Pre-allocated read buffer for io_uring */
 
 	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
