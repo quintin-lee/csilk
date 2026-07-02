@@ -397,21 +397,18 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
     return res;
 }
 
-/** @brief Per-tool-call context for parallel tool execution within an
- *  AI node. Each tool call runs on its own thread-pool worker.
 typedef struct {
-    csilk_wf_ctx_t* ctx;           /**< Workflow context (for tool registry lookup). */
-csilk_ai_tool_call_t*  tc;               /**< Tool call arguments from the AI response. */
-char*                  result;           /**< Tool output string (allocated by tool fn). */
-csilk_mutex_t*         mutex;            /**< Shared mutex for the pending counter. */
-csilk_cond_t*          cond;             /**< Shared condition variable for completion. */
-int*                   pending;          /**< Shared atomic-like pending count. */
-csilk_wf_tool_entry_t* discovered;       /**< Dynamically discovered tools. */
-size_t                 discovered_count; /**< Number of discovered tools. */
-}
-sub_tool_work_t;
+    csilk_wf_ctx_t*        ctx;              /**< Workflow context (for tool registry lookup). */
+    csilk_ai_tool_call_t*  tc;               /**< Tool call arguments from the AI response. */
+    char*                  result;           /**< Tool output string (allocated by tool fn). */
+    csilk_mutex_t*         mutex;            /**< Shared mutex for the pending counter. */
+    csilk_cond_t*          cond;             /**< Shared condition variable for completion. */
+    int*                   pending;          /**< Shared atomic-like pending count. */
+    csilk_wf_tool_entry_t* discovered;       /**< Dynamically discovered tools. */
+    size_t                 discovered_count; /**< Number of discovered tools. */
+} sub_tool_work_t;
 
-/** @brief Thread-pool work callback for tool execution.
+/** @brief Thread-pool work callback for tool execution. */
 static void
 sub_worker_cb(csilk_io_work_t* req)
 {
@@ -419,21 +416,19 @@ sub_worker_cb(csilk_io_work_t* req)
     sw->result = nullptr;
     for (size_t j = 0; j < sw->ctx->wf->tool_count; j++) {
         if (strcmp(sw->ctx->wf->tools[j].name, sw->tc->name) == 0) {
-            sw->result = sw->ctx->wf->tools[j].fn(sw->tc->arguments,
-                                  sw->ctx->wf->tools[j].user_data);
+            sw->result =
+                sw->ctx->wf->tools[j].fn(sw->tc->arguments, sw->ctx->wf->tools[j].user_data);
             return;
         }
     }
     for (size_t j = 0; j < sw->discovered_count; j++) {
         if (strcmp(sw->discovered[j].name, sw->tc->name) == 0) {
-            sw->result =
-                sw->discovered[j].fn(sw->tc->arguments, sw->discovered[j].user_data);
+            sw->result = sw->discovered[j].fn(sw->tc->arguments, sw->discovered[j].user_data);
             return;
         }
     }
 }
-
-/** @brief After-work callback for tool execution.
+/** @brief After-work callback for tool execution. */
 static void
 after_sub_worker_cb(csilk_io_work_t* req, int status)
 {
@@ -447,7 +442,7 @@ after_sub_worker_cb(csilk_io_work_t* req, int status)
 
 typedef struct {
     csilk_wf_ctx_t* ctx;
-    const char* node_id;
+    const char*     node_id;
 } stream_ctx_t;
 
 /**
