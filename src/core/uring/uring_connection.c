@@ -283,16 +283,32 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
 		return;
 	}
 
-	struct io_uring* ring = client->owner_pool->loop_ptr;
-	struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-	if (!sqe) {
+	uring_write_req_t* req = malloc(sizeof(uring_write_req_t) + length);
+	if (!req) {
 		return;
 	}
-
-	uring_write_req_t* req = malloc(sizeof(uring_write_req_t) + length);
 	req->client = client;
 	req->len = length;
 	memcpy(req->data, data, length);
+
+	struct io_uring* ring = client->owner_pool->loop_ptr;
+	struct io_uring_sqe* sqe = NULL;
+	int retries = 0;
+	while (!sqe && retries < 100) {
+		sqe = uring_get_sqe_or_submit(ring);
+		if (!sqe) {
+			retries++;
+			/* Brief pause to let the kernel drain in-flight SQEs */
+			usleep(10);
+		}
+	}
+	if (!sqe) {
+		CSILK_LOG_E("csilk_client_write: cannot get SQE after %d retries — "
+			    "response dropped!",
+			    retries);
+		free(req);
+		return;
+	}
 
 	io_uring_prep_send(sqe, client->handle.fd, req->data, length, 0);
 	io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_WRITE, client, req));
@@ -342,7 +358,7 @@ on_write_done(void* arg, ssize_t res)
 		}
 	}
 
-	int keep_alive = llhttp_should_keep_alive(&client->parser);
+	int keep_alive = client->keep_alive;
 	if (client->server->config.write_timeout_ms > 0) {
 		csilk_io_timer_stop(&client->write_timer);
 	}
@@ -371,7 +387,7 @@ on_sendfile_complete(csilk_io_fs_t* req)
 		return;
 	}
 
-	int keep_alive = llhttp_should_keep_alive(&client->parser);
+	int keep_alive = client->keep_alive;
 
 	if (client->server->config.write_timeout_ms > 0) {
 		csilk_io_timer_stop(&client->write_timer);
