@@ -2,7 +2,7 @@
 
 > **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
 
-csilk 的 Server Core 是框架的基石——管理 libuv 事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。单 worker 模式实测可达 ~50K QPS (P99 ≤ 5ms) 于 4 核 CPU；多 worker 模式线性扩展至 ~200K QPS (16 核, P99 ≤ 8ms)。
+csilk 的 Server Core 是框架的基石——管理 libuv（默认）或 io_uring（可选）事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。单 worker 模式实测可达 ~50K QPS (P99 ≤ 5ms) 于 4 核 CPU；多 worker 模式线性扩展至 ~200K QPS (16 核, P99 ≤ 8ms)。
 
 ---
 

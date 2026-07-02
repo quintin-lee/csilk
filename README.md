@@ -1,11 +1,11 @@
 # csilk
 
-A lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and cJSON.
+A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Inspired by Gin (Golang) and built on top of **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and cJSON.
 
 
 ## Features
 
-- 🚀 **P99 latency ≤ 5ms under 10K QPS** using libuv for asynchronous I/O
+- 🚀 **P99 latency ≤ 5ms under 10K QPS** using libuv (default) or io_uring (optional, Linux-only) for asynchronous I/O
 - **Zero-copy HTTP Parsing** — Directly references TCP/SSL receive buffers using string views (`csilk_str_view_t`), avoiding heap `malloc`/`free` churn for HTTP URLs, headers, and bodies.
 - **Zero-copy Static File Serving** via `sendfile` integration
 - **SIMD-accelerated routing** — AVX2 (x86_64): ~50ns/route, NEON (aarch64): ~80ns/route
@@ -99,7 +99,7 @@ graph TB
     end
 
     subgraph infra["fa:fa-hdd Infrastructure"]
-        UV["fa:fa-sync-alt libuv (Async I/O)"]
+        UV["fa:fa-sync-alt libuv / io_uring (Async I/O)"]
         LL["fa:fa-file-code llhttp (HTTP/1.1)"]
         CJ["fa:fa-file-code cJSON"]
         YM["fa:fa-file-text libyaml"]
@@ -138,7 +138,7 @@ graph TB
 
 ## Dependencies
 
-- [libuv](https://github.com/libuv/libuv) - Asynchronous I/O library
+- [libuv](https://github.com/libuv/libuv) or [liburing](https://github.com/axboe/liburing) - Asynchronous I/O library
 - [llhttp](https://github.com/nodejs/llhttp) - HTTP/1.1 parser
 - [nghttp2](https://github.com/nghttp2/nghttp2) - HTTP/2 library
 - [cJSON](https://github.com/DaveGamble/cJSON) - JSON parser
@@ -148,7 +148,7 @@ graph TB
 - [libcurl](https://curl.se/libcurl/) - HTTP client (AI drivers)
 - [sqlite3](https://www.sqlite.org/) - Embedded SQL database
 
-libuv, nghttp2, and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml, OpenSSL, zlib, libcurl, and sqlite3 must be installed as system dependencies.
+libuv (default), liburing (optional, `-DCSILK_USE_URING=ON`), nghttp2, and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml, OpenSSL, zlib, libcurl, and sqlite3 must be installed as system dependencies.
 
 ### Installation (Debian/Ubuntu)
 ```bash
@@ -216,7 +216,10 @@ cmake ..
 # Build
 make
 
-# By default, csilk builds as a static library.
+# By default, csilk builds as a static library with the libuv backend.
+# To build the io_uring backend (Linux-only), use:
+# cmake .. -DCSILK_USE_URING=ON
+#
 # To build as a shared library, use:
 # cmake .. -DBUILD_SHARED_LIBS=ON
 #
@@ -431,7 +434,8 @@ int main() {
 
 ```
 src/
-  ├── core/           # Kernel (libuv TCP, Router, Arena, Logger, Config)
+  ├── core/           # Kernel (libuv/io_uring TCP, Router, Arena, Logger, Config)
+  │   └── uring/      # io_uring backend (Linux-only, optional)
   ├── app/            # Application Layer (app, admin dashboard, workflow engine)
   ├── ai/             # AI Unified Interface Engine
   ├── data/           # Database Abstraction Layer
