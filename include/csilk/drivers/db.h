@@ -22,10 +22,10 @@
  * @brief Database statistics.
  */
 typedef struct {
-	uint64_t queries_total;	    /**< Total SELECT queries executed. */
-	uint64_t execs_total;	    /**< Total non-query statements (INSERT/UPDATE/etc). */
-	uint64_t errors_total;	    /**< Total failed operations. */
-	uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
+    uint64_t queries_total;     /**< Total SELECT queries executed. */
+    uint64_t execs_total;       /**< Total non-query statements (INSERT/UPDATE/etc). */
+    uint64_t errors_total;      /**< Total failed operations. */
+    uint64_t duration_us_total; /**< Cumulative duration in microseconds. */
 } csilk_db_stats_t;
 
 /**
@@ -66,9 +66,9 @@ void csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn);
  * nullptr database values are represented as nullptr pointers in the values array.
  */
 typedef struct {
-	char** values; /**< Array of NUL-terminated string values, one per column.
+    char** values; /**< Array of NUL-terminated string values, one per column.
                     nullptr if the SQL value was nullptr. */
-	int count;     /**< Number of columns (length of @p values). */
+    int    count;  /**< Number of columns (length of @p values). */
 } csilk_db_row_t;
 
 /**
@@ -78,11 +78,11 @@ typedef struct {
  * Allocated by the driver's query function and freed by free_result.
  */
 typedef struct {
-	csilk_db_row_t** rows; /**< Array of row pointers (length @p row_count). */
-	char** column_names;   /**< Array of column name strings (length @p
+    csilk_db_row_t** rows;         /**< Array of row pointers (length @p row_count). */
+    char**           column_names; /**< Array of column name strings (length @p
                             column_count). */
-	int row_count;	       /**< Number of rows in @p rows. */
-	int column_count;      /**< Number of columns (length of @p column_names and each
+    int              row_count;    /**< Number of rows in @p rows. */
+    int              column_count; /**< Number of columns (length of @p column_names and each
                        row's @p values). */
 } csilk_db_result_t;
 
@@ -92,53 +92,53 @@ typedef struct {
  * All function pointers must be non-nullptr except where noted.
  */
 struct csilk_db_driver_s {
-	const char* name; /**< Driver identifier string (e.g., "sqlite", "postgres").
+    const char* name; /**< Driver identifier string (e.g., "sqlite", "postgres").
                        Matches the name passed to csilk_db_pool_new. */
 
-	/** @brief Open a connection to the database.
+    /** @brief Open a connection to the database.
    *  @param pool  Pool whose @p connection field should be populated.
    *  @param dsn   Driver-specific data source name.
    *  @return 0 on success, -1 on failure. */
-	int (*connect)(csilk_db_pool_t* pool, const char* dsn);
+    int (*connect)(csilk_db_pool_t* pool, const char* dsn);
 
-	/** @brief Close the database connection.
+    /** @brief Close the database connection.
    *  @param pool  Pool whose @p connection should be closed and freed.
    *  @return 0 on success, -1 on failure. */
-	int (*disconnect)(csilk_db_pool_t* pool);
+    int (*disconnect)(csilk_db_pool_t* pool);
 
-	/** @brief Execute a SELECT query and produce a result set.
+    /** @brief Execute a SELECT query and produce a result set.
    *  @param pool   Connection pool (mutex is held by the caller).
    *  @param sql    SQL query string.
    *  @param[out] result  Caller-allocated csilk_db_result_t to populate.
    *                      Set to zero-initialised (the driver allocates rows +
    *                      strings internally).
    *  @return 0 on success, -1 on failure. */
-	int (*query)(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result);
+    int (*query)(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result);
 
-	/** @brief Execute a statement that returns no result rows.
+    /** @brief Execute a statement that returns no result rows.
    *  @param pool  Connection pool (mutex is held by the caller).
    *  @param sql   SQL statement (INSERT, UPDATE, DELETE, DDL, etc.).
    *  @return 0 on success, -1 on failure. */
-	int (*exec)(csilk_db_pool_t* pool, const char* sql);
+    int (*exec)(csilk_db_pool_t* pool, const char* sql);
 
-	/** @brief Begin a database transaction.
+    /** @brief Begin a database transaction.
    *  @param pool  Connection pool (mutex is held by the caller).
    *  @return 0 on success, -1 on failure. */
-	int (*transaction_begin)(csilk_db_pool_t* pool);
+    int (*transaction_begin)(csilk_db_pool_t* pool);
 
-	/** @brief Commit the current transaction.
+    /** @brief Commit the current transaction.
    *  @param pool  Connection pool (mutex is held by the caller).
    *  @return 0 on success, -1 on failure. */
-	int (*transaction_commit)(csilk_db_pool_t* pool);
+    int (*transaction_commit)(csilk_db_pool_t* pool);
 
-	/** @brief Roll back the current transaction.
+    /** @brief Roll back the current transaction.
    *  @param pool  Connection pool (mutex is held by the caller).
    *  @return 0 on success, -1 on failure. */
-	int (*transaction_rollback)(csilk_db_pool_t* pool);
+    int (*transaction_rollback)(csilk_db_pool_t* pool);
 
-	/** @brief Free a result set and all associated memory.
+    /** @brief Free a result set and all associated memory.
    *  @param result  Result set to free (must not be nullptr). */
-	void (*free_result)(csilk_db_result_t* result);
+    void (*free_result)(csilk_db_result_t* result);
 };
 
 /**

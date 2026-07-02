@@ -54,11 +54,11 @@ extern int g_oom_count;
 static inline void*
 csilk_test_malloc(size_t size)
 {
-	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return nullptr;
-	}
-	g_oom_count++;
-	return malloc(size);
+    if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+        return nullptr;
+    }
+    g_oom_count++;
+    return malloc(size);
 }
 
 /**
@@ -72,11 +72,11 @@ csilk_test_malloc(size_t size)
 static inline void*
 csilk_test_calloc(size_t nmemb, size_t size)
 {
-	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return nullptr;
-	}
-	g_oom_count++;
-	return calloc(nmemb, size);
+    if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+        return nullptr;
+    }
+    g_oom_count++;
+    return calloc(nmemb, size);
 }
 
 /**
@@ -90,11 +90,11 @@ csilk_test_calloc(size_t nmemb, size_t size)
 static inline void*
 csilk_test_realloc(void* ptr, size_t size)
 {
-	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return nullptr;
-	}
-	g_oom_count++;
-	return realloc(ptr, size);
+    if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+        return nullptr;
+    }
+    g_oom_count++;
+    return realloc(ptr, size);
 }
 
 /**
@@ -139,8 +139,8 @@ void csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* 
  *  @param perm_required  Permission string. Not copied.
  *  @param perm_resource  Resource pattern. Not copied. */
 void csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
-					 const char* perm_required,
-					 const char* perm_resource);
+                                         const char*  perm_required,
+                                         const char*  perm_resource);
 
 /** @brief Manually set the request body for testing.
  *  @param c    The request context.

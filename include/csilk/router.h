@@ -25,7 +25,7 @@
  *       must be registered before csilk_server_run.
  */
 typedef struct csilk_router_s {
-	csilk_router_node_t* root; /**< Root node of the radix (Patricia) trie. */
+    csilk_router_node_t* root; /**< Root node of the radix (Patricia) trie. */
 } csilk_router_t;
 
 /**
@@ -53,11 +53,11 @@ csilk_router_t* csilk_router_new(void);
  * @param handlers      Array of handler function pointers.
  * @param handler_count Number of elements in @p handlers.
  */
-int csilk_router_add(csilk_router_t* r,
-		     const char* method,
-		     const char* path,
-		     csilk_handler_t* handlers,
-		     size_t handler_count);
+int csilk_router_add(csilk_router_t*  r,
+                     const char*      method,
+                     const char*      path,
+                     csilk_handler_t* handlers,
+                     size_t           handler_count);
 
 /**
  * @brief Match a raw method+path to handlers (standalone, no context).
@@ -123,9 +123,9 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r);
  *         free with cJSON_Delete.
  */
 cJSON* csilk_generate_openapi_json(csilk_router_t* router,
-				   const char* title,
-				   const char* version,
-				   const char* description);
+                                   const char*     title,
+                                   const char*     version,
+                                   const char*     description);
 
 /**
  * @brief Register a route with full OpenAPI/reflection metadata.
@@ -147,16 +147,16 @@ cJSON* csilk_generate_openapi_json(csilk_router_t* router,
  * @param summary       Short summary of the operation (nullptr to omit from spec).
  * @param description   Detailed description of the operation (nullptr to omit).
  */
-int csilk_router_add_extended(csilk_router_t* r,
-			      const char* method,
-			      const char* path,
-			      csilk_handler_t* handlers,
-			      size_t handler_count,
-			      const char* path_pattern,
-			      const char* input_type,
-			      const char* output_type,
-			      const char* summary,
-			      const char* description);
+int csilk_router_add_extended(csilk_router_t*  r,
+                              const char*      method,
+                              const char*      path,
+                              csilk_handler_t* handlers,
+                              size_t           handler_count,
+                              const char*      path_pattern,
+                              const char*      input_type,
+                              const char*      output_type,
+                              const char*      summary,
+                              const char*      description);
 
 /** @brief Register a route with permission metadata.
  *  @param r             Router instance.
@@ -166,13 +166,13 @@ int csilk_router_add_extended(csilk_router_t* r,
  *  @param handler_count Number of handlers.
  *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-int csilk_router_add_perm(csilk_router_t* r,
-			  const char* method,
-			  const char* path,
-			  csilk_handler_t* handlers,
-			  size_t handler_count,
-			  const char* perm_required,
-			  const char* perm_resource);
+int csilk_router_add_perm(csilk_router_t*  r,
+                          const char*      method,
+                          const char*      path,
+                          csilk_handler_t* handlers,
+                          size_t           handler_count,
+                          const char*      perm_required,
+                          const char*      perm_resource);
 
 /** @brief Register a route with full metadata including permissions.
  *  @param r             Router instance.
@@ -187,27 +187,27 @@ int csilk_router_add_perm(csilk_router_t* r,
  *  @param description   Detailed description (nullptr to omit).
  *  @param perm_required Permission identifier (e.g., "read"), or nullptr.
  *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
-int csilk_router_add_extended_perm(csilk_router_t* r,
-				   const char* method,
-				   const char* path,
-				   csilk_handler_t* handlers,
-				   size_t handler_count,
-				   const char* path_pattern,
-				   const char* input_type,
-				   const char* output_type,
-				   const char* summary,
-				   const char* description,
-				   const char* perm_required,
-				   const char* perm_resource);
+int csilk_router_add_extended_perm(csilk_router_t*  r,
+                                   const char*      method,
+                                   const char*      path,
+                                   csilk_handler_t* handlers,
+                                   size_t           handler_count,
+                                   const char*      path_pattern,
+                                   const char*      input_type,
+                                   const char*      output_type,
+                                   const char*      summary,
+                                   const char*      description,
+                                   const char*      perm_required,
+                                   const char*      perm_resource);
 
 /**
  * @brief Metadata for a route used to generate OpenAPI documentation.
  */
 typedef struct {
-	const char* input_type;	 /**< Request body type name. */
-	const char* output_type; /**< Response type name. */
-	const char* summary;	 /**< Short summary. */
-	const char* description; /**< Detailed description. */
+    const char* input_type;  /**< Request body type name. */
+    const char* output_type; /**< Response type name. */
+    const char* summary;     /**< Short summary. */
+    const char* description; /**< Detailed description. */
 } csilk_route_metadata_t;
 
 /**
@@ -218,31 +218,23 @@ typedef struct {
  */
 #define CSILK_ROUTE(                                                                               \
     r, method, path, handlers, handler_count, input_type, output_type, summary, desc)              \
-	csilk_router_add_extended(r,                                                               \
-				  method,                                                          \
-				  path,                                                            \
-				  handlers,                                                        \
-				  handler_count,                                                   \
-				  path,                                                            \
-				  input_type,                                                      \
-				  output_type,                                                     \
-				  summary,                                                         \
-				  desc)
+    csilk_router_add_extended(                                                                     \
+        r, method, path, handlers, handler_count, path, input_type, output_type, summary, desc)
 
 /**
  * @brief Register a route with a metadata struct for OpenAPI documentation.
  */
 #define CSILK_REGISTER_ROUTE_DOC(r, method, path, handlers, handler_count, meta)                   \
-	csilk_router_add_extended(r,                                                               \
-				  method,                                                          \
-				  path,                                                            \
-				  handlers,                                                        \
-				  handler_count,                                                   \
-				  path,                                                            \
-				  (meta).input_type,                                               \
-				  (meta).output_type,                                              \
-				  (meta).summary,                                                  \
-				  (meta).description)
+    csilk_router_add_extended(r,                                                                   \
+                              method,                                                              \
+                              path,                                                                \
+                              handlers,                                                            \
+                              handler_count,                                                       \
+                              path,                                                                \
+                              (meta).input_type,                                                   \
+                              (meta).output_type,                                                  \
+                              (meta).summary,                                                      \
+                              (meta).description)
 
 /**
  * @brief Serve the OpenAPI JSON specification as the response.
@@ -261,11 +253,11 @@ typedef struct {
  * @param version     API version.
  * @param description API description (optional, pass nullptr to omit).
  */
-void csilk_serve_openapi(csilk_ctx_t* c,
-			 csilk_router_t* r,
-			 const char* title,
-			 const char* version,
-			 const char* description);
+void csilk_serve_openapi(csilk_ctx_t*    c,
+                         csilk_router_t* r,
+                         const char*     title,
+                         const char*     version,
+                         const char*     description);
 
 /**
  * @brief Serve the embedded Swagger UI page.

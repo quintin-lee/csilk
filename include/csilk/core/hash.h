@@ -29,10 +29,10 @@
  *       (RFC 6455).  Do not use for security-critical hashing.
  */
 typedef struct {
-	uint32_t state[5];  /**< 160-bit intermediate hash state (5 × 32-bit words). */
-	uint32_t count[2];  /**< Total message length in bits (64-bit, split into two
+    uint32_t state[5];   /**< 160-bit intermediate hash state (5 × 32-bit words). */
+    uint32_t count[2];   /**< Total message length in bits (64-bit, split into two
                            32-bit halves). */
-	uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
+    uint8_t  buffer[64]; /**< 512-bit block buffer for data not yet processed. */
 } csilk_sha1_ctx;
 
 /**
@@ -72,9 +72,9 @@ void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]);
  * computation.  Use csilk_sha256_init / _update / _final.
  */
 typedef struct {
-	uint32_t state[8];  /**< 256-bit intermediate hash state (8 × 32-bit words). */
-	uint64_t count;	    /**< Total message length in bits. */
-	uint8_t buffer[64]; /**< 512-bit block buffer for data not yet processed. */
+    uint32_t state[8];   /**< 256-bit intermediate hash state (8 × 32-bit words). */
+    uint64_t count;      /**< Total message length in bits. */
+    uint8_t  buffer[64]; /**< 512-bit block buffer for data not yet processed. */
 } csilk_sha256_ctx;
 
 /**

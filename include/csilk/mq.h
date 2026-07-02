@@ -2,7 +2,7 @@
  * @file mq.h
  * @brief In-process Message Queue (pub/sub event bus) for the csilk framework.
  *
- * Provides an in-process pub/sub system built on libuv async handles.
+ * Provides an in-process pub/sub system built on the I/O event loop.
  * Thread-safe publishing allows worker threads to send messages to the
  * main event loop.  Supports middleware chains, persistence via WAL, and
  * background offloading.
@@ -19,7 +19,7 @@
 /**
  * @brief Opaque Message Queue (event bus) instance.
  *
- * Provides an in-process pub/sub system built on libuv async handles.
+ * Provides an in-process pub/sub system built on the I/O event loop.
  * Thread-safe publishing allows worker threads to send messages to the
  * main event loop.  Supports middleware chains, persistence via WAL, and
  * background offloading.
@@ -91,7 +91,7 @@ void csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t su
  *
  * The payload is **copied** internally so the caller can reuse the buffer
  * immediately.  The message is enqueued and processed asynchronously on the
- * main event loop via a libuv async handle, making this function thread-safe.
+ * main event loop via an I/O async handle (libuv or io_uring), making this function thread-safe.
  *
  * @param mq      The MQ instance.
  * @param topic   Target topic name.
@@ -143,7 +143,7 @@ const void* csilk_mq_get_payload(csilk_mq_ctx_t* ctx, size_t* len);
 /**
  * @brief Offload message processing to a background thread.
  *
- * Hands off the current message to libuv's thread pool for processing.
+ * Hands off the current message to the thread pool for processing.
  * csilk_mq_next is called internally so the chain continues immediately.
  * The @p worker runs on a separate thread — it must be thread-safe and must
  * NOT call back into the MQ or context APIs.
@@ -158,11 +158,11 @@ void csilk_mq_offload(csilk_mq_ctx_t* ctx, csilk_mq_worker_t worker);
  * @brief Message Queue statistics.
  */
 typedef struct {
-	uint64_t published_total; /**< Total messages published since startup. */
-	uint64_t delivered_total; /**< Total messages delivered to subscribers. */
-	uint64_t failed_total;	  /**< Total messages that failed processing. */
-	uint32_t queue_depth;	  /**< Number of messages currently in memory queue. */
-	uint32_t topic_count;	  /**< Number of registered topics. */
+    uint64_t published_total; /**< Total messages published since startup. */
+    uint64_t delivered_total; /**< Total messages delivered to subscribers. */
+    uint64_t failed_total;    /**< Total messages that failed processing. */
+    uint32_t queue_depth;     /**< Number of messages currently in memory queue. */
+    uint32_t topic_count;     /**< Number of registered topics. */
 } csilk_mq_stats_t;
 
 /**

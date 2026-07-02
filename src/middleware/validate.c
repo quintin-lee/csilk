@@ -24,13 +24,13 @@
 static const char*
 str_find(const char* s, char c)
 {
-	while (s && *s) {
-		if (*s == c) {
-			return s;
-		}
-		s++;
-	}
-	return nullptr;
+    while (s && *s) {
+        if (*s == c) {
+            return s;
+        }
+        s++;
+    }
+    return nullptr;
 }
 
 /**
@@ -52,40 +52,40 @@ str_find(const char* s, char c)
 static int
 is_valid_email(const char* s)
 {
-	if (!s || !*s) {
-		return 0;
-	}
-	/* Basic email syntax check:
+    if (!s || !*s) {
+        return 0;
+    }
+    /* Basic email syntax check:
      1. Exactly one '@' character.
      2. No whitespace allowed (RFC 5321 §4.1.2).
      3. Local part and domain must both be non-empty.
      4. Domain must contain at least one dot with non-empty TLD segment.
      This is intentionally simple — does NOT validate quoted locals,
      IP literals, or special characters per RFC 5322. */
-	int at_count = 0;
-	const char* at_ptr = nullptr;
+    int         at_count = 0;
+    const char* at_ptr = nullptr;
 
-	for (const char* p = s; *p; p++) {
-		if (*p == '@') {
-			at_count++;
-			at_ptr = p;
-		} else if (isspace((unsigned char)*p)) {
-			return 0; /* No whitespace in email addresses. */
-		}
-	}
+    for (const char* p = s; *p; p++) {
+        if (*p == '@') {
+            at_count++;
+            at_ptr = p;
+        } else if (isspace((unsigned char)*p)) {
+            return 0; /* No whitespace in email addresses. */
+        }
+    }
 
-	/* Must have exactly one '@' and both sides must be non-empty. */
-	if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') {
-		return 0;
-	}
+    /* Must have exactly one '@' and both sides must be non-empty. */
+    if (at_count != 1 || at_ptr == s || at_ptr[1] == '\0') {
+        return 0;
+    }
 
-	/* Domain must contain at least one '.' with non-empty TLD. */
-	const char* dot = strrchr(at_ptr + 1, '.');
-	if (!dot || dot == at_ptr + 1 || dot[1] == '\0') {
-		return 0;
-	}
+    /* Domain must contain at least one '.' with non-empty TLD. */
+    const char* dot = strrchr(at_ptr + 1, '.');
+    if (!dot || dot == at_ptr + 1 || dot[1] == '\0') {
+        return 0;
+    }
 
-	return 1;
+    return 1;
 }
 
 /**
@@ -118,116 +118,114 @@ is_valid_email(const char* s)
 const char*
 csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 {
-	if (!c || !rules) {
-		return nullptr;
-	}
+    if (!c || !rules) {
+        return nullptr;
+    }
 
-	CSILK_LOG_T("Validate: starting validation for request %p", (void*)c);
+    CSILK_LOG_T("Validate: starting validation for request %p", (void*)c);
 
-	for (const csilk_valid_rule_t* r = rules; r->field; r++) {
-		const char* value = nullptr;
+    for (const csilk_valid_rule_t* r = rules; r->field; r++) {
+        const char* value = nullptr;
 
-		if (r->source && strcmp(r->source, "query") == 0) {
-			value = csilk_get_query(c, r->field);
-		} else if (r->source && strcmp(r->source, "form") == 0) {
-			value = csilk_get_form_field(c, r->field);
-		} else if (r->source && strcmp(r->source, "header") == 0) {
-			value = csilk_get_header(c, r->field);
-		} else if (r->source && strcmp(r->source, "cookie") == 0) {
-			value = csilk_get_cookie(c, r->field);
-		} else {
-			/* Default source: check query string first, fall back to form body.
+        if (r->source && strcmp(r->source, "query") == 0) {
+            value = csilk_get_query(c, r->field);
+        } else if (r->source && strcmp(r->source, "form") == 0) {
+            value = csilk_get_form_field(c, r->field);
+        } else if (r->source && strcmp(r->source, "header") == 0) {
+            value = csilk_get_header(c, r->field);
+        } else if (r->source && strcmp(r->source, "cookie") == 0) {
+            value = csilk_get_cookie(c, r->field);
+        } else {
+            /* Default source: check query string first, fall back to form body.
          This allows e.g. GET ?name=value and POST form fields to be
          validated with the same rule. */
-			value = csilk_get_query(c, r->field);
-			if (!value) {
-				value = csilk_get_form_field(c, r->field);
-			}
-		}
+            value = csilk_get_query(c, r->field);
+            if (!value) {
+                value = csilk_get_form_field(c, r->field);
+            }
+        }
 
-		CSILK_LOG_T("Validate: checking field '%s' (source: %s, flags: 0x%X, val: '%s')",
-			    r->field,
-			    r->source ? r->source : "default",
-			    r->flags,
-			    value ? value : "(null)");
+        CSILK_LOG_T("Validate: checking field '%s' (source: %s, flags: 0x%X, val: '%s')",
+                    r->field,
+                    r->source ? r->source : "default",
+                    r->flags,
+                    value ? value : "(null)");
 
-		if (!value && (r->flags & CSILK_VALID_REQUIRED)) {
-			CSILK_LOG_W(
-			    "Validate: validation failed - field '%s' is required but not provided",
-			    r->field);
-			return r->field;
-		}
+        if (!value && (r->flags & CSILK_VALID_REQUIRED)) {
+            CSILK_LOG_W("Validate: validation failed - field '%s' is required but not provided",
+                        r->field);
+            return r->field;
+        }
 
-		if (!value) {
-			CSILK_LOG_D(
-			    "Validate: field '%s' is missing but not required, skipping checks",
-			    r->field);
-			continue;
-		}
+        if (!value) {
+            CSILK_LOG_D("Validate: field '%s' is missing but not required, skipping checks",
+                        r->field);
+            continue;
+        }
 
-		if (r->flags & CSILK_VALID_INT) {
-			const char* p = value;
-			if (*p == '-') {
-				p++;
-			}
-			if (!*p) {
-				CSILK_LOG_W("Validate: validation failed - field '%s' has empty or "
-					    "sign-only int value '%s'",
-					    r->field,
-					    value);
-				return r->field;
-			}
-			while (*p) {
-				if (!isdigit((unsigned char)*p)) {
-					CSILK_LOG_W("Validate: validation failed - field '%s' has "
-						    "non-numeric char '%c' in value '%s'",
-						    r->field,
-						    *p,
-						    value);
-					return r->field;
-				}
-				p++;
-			}
-			long num = atol(value);
-			if (r->min < r->max) {
-				if (num < (long)r->min || num > (long)r->max) {
-					CSILK_LOG_W("Validate: validation failed - field '%s' "
-						    "integer value %ld is out of range [%d, %d]",
-						    r->field,
-						    num,
-						    r->min,
-						    r->max);
-					return r->field;
-				}
-			}
-		}
+        if (r->flags & CSILK_VALID_INT) {
+            const char* p = value;
+            if (*p == '-') {
+                p++;
+            }
+            if (!*p) {
+                CSILK_LOG_W("Validate: validation failed - field '%s' has empty or "
+                            "sign-only int value '%s'",
+                            r->field,
+                            value);
+                return r->field;
+            }
+            while (*p) {
+                if (!isdigit((unsigned char)*p)) {
+                    CSILK_LOG_W("Validate: validation failed - field '%s' has "
+                                "non-numeric char '%c' in value '%s'",
+                                r->field,
+                                *p,
+                                value);
+                    return r->field;
+                }
+                p++;
+            }
+            long num = atol(value);
+            if (r->min < r->max) {
+                if (num < (long)r->min || num > (long)r->max) {
+                    CSILK_LOG_W("Validate: validation failed - field '%s' "
+                                "integer value %ld is out of range [%d, %d]",
+                                r->field,
+                                num,
+                                r->min,
+                                r->max);
+                    return r->field;
+                }
+            }
+        }
 
-		if (r->flags & CSILK_VALID_STRING) {
-			size_t slen = strlen(value);
-			if (r->min < r->max) {
-				if ((int)slen < r->min || (int)slen > r->max) {
-					CSILK_LOG_W("Validate: validation failed - field '%s' "
-						    "string length %zu is out of range [%d, %d]",
-						    r->field,
-						    slen,
-						    r->min,
-						    r->max);
-					return r->field;
-				}
-			}
-		}
+        if (r->flags & CSILK_VALID_STRING) {
+            size_t slen = strlen(value);
+            if (r->min < r->max) {
+                if ((int)slen < r->min || (int)slen > r->max) {
+                    CSILK_LOG_W("Validate: validation failed - field '%s' "
+                                "string length %zu is out of range [%d, %d]",
+                                r->field,
+                                slen,
+                                r->min,
+                                r->max);
+                    return r->field;
+                }
+            }
+        }
 
-		if (r->flags & CSILK_VALID_EMAIL) {
-			if (!is_valid_email(value)) {
-				CSILK_LOG_W("Validate: validation failed - field '%s' value '%s' "
-					    "is not a valid email address",
-					    r->field,
-					    value);
-				return r->field;
-			}
-		}
-	}
+        if (r->flags & CSILK_VALID_EMAIL) {
+            if (!is_valid_email(value)) {
+                CSILK_LOG_W("Validate: validation failed - field '%s' value '%s' "
+                            "is not a valid email address",
+                            r->field,
+                            value);
+                return r->field;
+            }
+        }
+    }
 
-	CSILK_LOG_D("Validate: all validation rules passed successfully for request %p", (void*)c);
-	return nullptr;
+    CSILK_LOG_D("Validate: all validation rules passed successfully for request %p", (void*)c);
+    return nullptr;
 }

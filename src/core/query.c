@@ -33,39 +33,39 @@ static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* 
 static void
 parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
 {
-	char* pos = qs;
-	while (pos && *pos) {
-		char* amp = strchr(pos, '&');
-		if (amp) {
-			*amp = '\0';
-		}
+    char* pos = qs;
+    while (pos && *pos) {
+        char* amp = strchr(pos, '&');
+        if (amp) {
+            *amp = '\0';
+        }
 
-		char* eq = strchr(pos, '=');
-		char* key = pos;
-		char* value = nullptr;
+        char* eq = strchr(pos, '=');
+        char* key = pos;
+        char* value = nullptr;
 
-		if (eq) {
-			*eq = '\0';
-			value = eq + 1;
-		} else {
-			value = "";
-		}
+        if (eq) {
+            *eq = '\0';
+            value = eq + 1;
+        } else {
+            value = "";
+        }
 
-		if (*key != '\0') {
-			csilk_url_decode(key);
-			if (value && *value != '\0') {
-				csilk_url_decode(value);
-			}
-			map_add(c, target_map, key, value);
-			CSILK_LOG_T("Context: parsed %s = %s", key, value);
-		}
+        if (*key != '\0') {
+            csilk_url_decode(key);
+            if (value && *value != '\0') {
+                csilk_url_decode(value);
+            }
+            map_add(c, target_map, key, value);
+            CSILK_LOG_T("Context: parsed %s = %s", key, value);
+        }
 
-		if (amp) {
-			pos = amp + 1;
-		} else {
-			pos = nullptr;
-		}
-	}
+        if (amp) {
+            pos = amp + 1;
+        } else {
+            pos = nullptr;
+        }
+    }
 }
 
 /** @brief Parse a raw query string into the context's query_params hash map.
@@ -83,18 +83,18 @@ parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
 void
 csilk_parse_query(csilk_ctx_t* c, const char* query_string)
 {
-	if (!query_string || *query_string == '\0' || !c->arena) {
-		return;
-	}
+    if (!query_string || *query_string == '\0' || !c->arena) {
+        return;
+    }
 
-	char* qs = csilk_arena_strdup(c->arena, query_string);
-	if (!qs) {
-		CSILK_LOG_E("Context: failed to allocate arena memory to parse query string: %s",
-			    query_string);
-		return;
-	}
+    char* qs = csilk_arena_strdup(c->arena, query_string);
+    if (!qs) {
+        CSILK_LOG_E("Context: failed to allocate arena memory to parse query string: %s",
+                    query_string);
+        return;
+    }
 
-	parse_key_value_pairs(c, qs, &c->request.query_params);
+    parse_key_value_pairs(c, qs, &c->request.query_params);
 }
 
 /** @brief Parse the request body as application/x-www-form-urlencoded.
@@ -111,47 +111,47 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
 void
 csilk_parse_form_urlencoded(csilk_ctx_t* c)
 {
-	if (!c || !c->arena) {
-		return;
-	}
-	size_t body_len;
-	const char* body = csilk_get_body(c, &body_len);
-	if (!body || body_len == 0) {
-		CSILK_LOG_D("Context: csilk_parse_form_urlencoded: empty request body");
-		return;
-	}
+    if (!c || !c->arena) {
+        return;
+    }
+    size_t      body_len;
+    const char* body = csilk_get_body(c, &body_len);
+    if (!body || body_len == 0) {
+        CSILK_LOG_D("Context: csilk_parse_form_urlencoded: empty request body");
+        return;
+    }
 
-	const char* ct = csilk_get_header(c, "Content-Type");
-	if (!ct) {
-		CSILK_LOG_D("Context: csilk_parse_form_urlencoded: missing Content-Type");
-		return;
-	}
-	if (strncmp(ct, "application/x-www-form-urlencoded", 33) != 0) {
-		CSILK_LOG_D("Context: csilk_parse_form_urlencoded: Content-Type is not "
-			    "application/x-www-form-urlencoded (got '%s')",
-			    ct);
-		return;
-	}
-	/* Verify the Content-Type ends cleanly — reject values that happen
-	 * to share the same 33-character prefix (e.g., "...-charset"). */
-	{
-		char sep = ct[33];
-		if (sep != ';' && sep != '\0' && !isspace((unsigned char)sep)) {
-			CSILK_LOG_D("Context: csilk_parse_form_urlencoded: suspicious Content-Type "
-				    "prefix match (got '%s')",
-				    ct);
-			return;
-		}
-	}
+    const char* ct = csilk_get_header(c, "Content-Type");
+    if (!ct) {
+        CSILK_LOG_D("Context: csilk_parse_form_urlencoded: missing Content-Type");
+        return;
+    }
+    if (strncmp(ct, "application/x-www-form-urlencoded", 33) != 0) {
+        CSILK_LOG_D("Context: csilk_parse_form_urlencoded: Content-Type is not "
+                    "application/x-www-form-urlencoded (got '%s')",
+                    ct);
+        return;
+    }
+    /* Verify the Content-Type ends cleanly — reject values that happen
+     * to share the same 33-character prefix (e.g., "...-charset"). */
+    {
+        char sep = ct[33];
+        if (sep != ';' && sep != '\0' && !isspace((unsigned char)sep)) {
+            CSILK_LOG_D("Context: csilk_parse_form_urlencoded: suspicious Content-Type "
+                        "prefix match (got '%s')",
+                        ct);
+            return;
+        }
+    }
 
-	char* qs = csilk_arena_strndup(c->arena, body, body_len);
-	if (!qs) {
-		CSILK_LOG_E("Context: failed to allocate arena memory to parse form urlencoded "
-			    "request body");
-		return;
-	}
+    char* qs = csilk_arena_strndup(c->arena, body, body_len);
+    if (!qs) {
+        CSILK_LOG_E("Context: failed to allocate arena memory to parse form urlencoded "
+                    "request body");
+        return;
+    }
 
-	parse_key_value_pairs(c, qs, &c->request.form_params);
+    parse_key_value_pairs(c, qs, &c->request.form_params);
 }
 
 /** @brief Get a form urlencoded field value by key.
@@ -166,8 +166,8 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
 const char*
 csilk_get_form_field(csilk_ctx_t* c, const char* key)
 {
-	if (!c || !key) {
-		return nullptr;
-	}
-	return map_get(&c->request.form_params, key);
+    if (!c || !key) {
+        return nullptr;
+    }
+    return map_get(&c->request.form_params, key);
 }

@@ -51,16 +51,16 @@ enum { MAX_TLS_ARENA_CHUNKS = 16 };
  *       between arenas assigned to different threads.
  */
 typedef struct csilk_arena_chunk_s {
-	struct csilk_arena_chunk_s* next; /**< Pointer to next chunk. */
-	size_t size;			  /**< Total size of this chunk. */
-	size_t used;			  /**< Bytes used in this chunk. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
-	uint8_t data[]; /**< Flexible array for chunk data. */
+    struct csilk_arena_chunk_s* next;   /**< Pointer to next chunk. */
+    size_t                      size;   /**< Total size of this chunk. */
+    size_t                      used;   /**< Bytes used in this chunk. */
+    uint8_t                     _padding[CSILK_CACHE_LINE_SIZE - (3 * sizeof(size_t))];
+    uint8_t                     data[]; /**< Flexible array for chunk data. */
 } csilk_arena_chunk_t;
 
 /** @brief Thread-local free list of arena chunks for reuse. */
 static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
-static _Thread_local int tls_chunk_count = 0;
+static _Thread_local int                  tls_chunk_count = 0;
 
 /** @brief Arena allocator for request-scoped memory.
  *
@@ -74,21 +74,21 @@ static _Thread_local int tls_chunk_count = 0;
  *       in memory.
  */
 typedef struct csilk_arena_s {
-	csilk_arena_chunk_t* head; /**< Head of chunk linked list. */
-	size_t default_chunk_size; /**< Default size for new chunks. */
-	int align_64;		   /**< Non-zero to enable 64-byte alignment. */
-	size_t max_total_bytes;	   /**< Maximum total bytes (0 = unlimited). */
-	size_t total_allocated;	   /**< Total allocated bytes since last reset. */
-	uint8_t _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int) -
-			 2 * sizeof(size_t)];
+    csilk_arena_chunk_t* head;               /**< Head of chunk linked list. */
+    size_t               default_chunk_size; /**< Default size for new chunks. */
+    int                  align_64;           /**< Non-zero to enable 64-byte alignment. */
+    size_t               max_total_bytes;    /**< Maximum total bytes (0 = unlimited). */
+    size_t               total_allocated;    /**< Total allocated bytes since last reset. */
+    uint8_t
+        _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int) - 2 * sizeof(size_t)];
 } csilk_arena_t;
 
 /** @brief Thread-local cache structure with multiple size tiers.
  *  Each tier maintains an independent free list to avoid size mismatches. */
 typedef struct {
-	csilk_arena_chunk_t* chunks[CSILK_ARENA_TIER_COUNT]; /* Per-tier free lists */
-	int count[CSILK_ARENA_TIER_COUNT];		     /* Per-tier chunk counts */
-	size_t total_cached_bytes;			     /* Total cached memory */
+    csilk_arena_chunk_t* chunks[CSILK_ARENA_TIER_COUNT]; /* Per-tier free lists */
+    int                  count[CSILK_ARENA_TIER_COUNT];  /* Per-tier chunk counts */
+    size_t               total_cached_bytes;             /* Total cached memory */
 } arena_tls_cache_t;
 
 /** @brief Cache line size (typically 64 bytes on modern CPUs).
@@ -102,60 +102,60 @@ static void*
 arena_aligned_alloc(size_t size)
 {
 #ifdef TEST_OOM
-	if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-		return nullptr;
-	}
-	g_oom_count++;
+    if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
+        return nullptr;
+    }
+    g_oom_count++;
 #endif
 
-	void* ptr = nullptr;
-	/* Guard (size + CLS - 1) against overflow. size is already bounded
-	 * by callers but this provides defense-in-depth. */
-	if (size > SIZE_MAX - (CSILK_CACHE_LINE_SIZE - 1)) {
-		return nullptr;
-	}
-	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
+    void* ptr = nullptr;
+    /* Guard (size + CLS - 1) against overflow. size is already bounded
+     * by callers but this provides defense-in-depth. */
+    if (size > SIZE_MAX - (CSILK_CACHE_LINE_SIZE - 1)) {
+        return nullptr;
+    }
+    size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
 
 #if defined(__APPLE__)
-	mach_vm_address_t addr = 0;
-	if (mach_vm_allocate(
-		mach_task_self(), &addr, (mach_vm_size_t)aligned_size, VM_FLAGS_ANYWHERE) !=
-	    KERN_SUCCESS) {
-		return nullptr;
-	}
-	ptr = (void*)addr;
+    mach_vm_address_t addr = 0;
+    if (mach_vm_allocate(
+            mach_task_self(), &addr, (mach_vm_size_t)aligned_size, VM_FLAGS_ANYWHERE) !=
+        KERN_SUCCESS) {
+        return nullptr;
+    }
+    ptr = (void*)addr;
 #elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
-	/* posix_memalign is preferred over C11 aligned_alloc because it is
-	 * available on a wider range of platforms (POSIX 2001), including
-	 * musl-based systems where aligned_alloc may not exist despite the
-	 * compiler advertising C11 conformance. */
-	if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
-		return nullptr;
-	}
+    /* posix_memalign is preferred over C11 aligned_alloc because it is
+     * available on a wider range of platforms (POSIX 2001), including
+     * musl-based systems where aligned_alloc may not exist despite the
+     * compiler advertising C11 conformance. */
+    if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
+        return nullptr;
+    }
 #elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-	ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
+    ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
 #else
-	/* Fallback to standard malloc if no aligned allocation is available.
+    /* Fallback to standard malloc if no aligned allocation is available.
      The structure padding still provides some benefit by ensuring headers
      don't share a cache line if they are large enough. */
-	ptr = malloc(aligned_size);
+    ptr = malloc(aligned_size);
 #endif
-	return ptr;
+    return ptr;
 }
 
 /** @brief Helper for freeing cache-line aligned allocations. */
 static void
 arena_aligned_free(void* ptr, size_t size)
 {
-	if (!ptr) {
-		return;
-	}
-	size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
+    if (!ptr) {
+        return;
+    }
+    size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
 
 #if defined(__APPLE__)
-	mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)ptr, (mach_vm_size_t)aligned_size);
+    mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)ptr, (mach_vm_size_t)aligned_size);
 #else
-	free(ptr);
+    free(ptr);
 #endif
 }
 
@@ -164,24 +164,24 @@ arena_aligned_free(void* ptr, size_t size)
 static void
 arena_fill_redzone(uint8_t* data, size_t size, size_t alloc_sz)
 {
-	/* Fill 16 bytes after user data with 0xBE pattern */
-	const uint8_t pattern = 0xBE;
-	for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
-		data[alloc_sz + i] = pattern;
-	}
+    /* Fill 16 bytes after user data with 0xBE pattern */
+    const uint8_t pattern = 0xBE;
+    for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
+        data[alloc_sz + i] = pattern;
+    }
 }
 
 /** @brief Verify redzone bytes haven't been corrupted. */
 static int
 arena_check_redzone(uint8_t* data, size_t alloc_sz)
 {
-	const uint8_t pattern = 0xBE;
-	for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
-		if (data[alloc_sz + i] != pattern) {
-			return 0; /* Corrupted */
-		}
-	}
-	return 1; /* OK */
+    const uint8_t pattern = 0xBE;
+    for (size_t i = 0; i < ARENA_REDZONE_SIZE; i++) {
+        if (data[alloc_sz + i] != pattern) {
+            return 0; /* Corrupted */
+        }
+    }
+    return 1;         /* OK */
 }
 #endif
 
@@ -201,16 +201,16 @@ arena_check_redzone(uint8_t* data, size_t alloc_sz)
 csilk_arena_t*
 csilk_arena_new(size_t default_chunk_size)
 {
-	csilk_arena_t* arena = arena_aligned_alloc(sizeof(csilk_arena_t));
-	if (!arena) {
-		return nullptr;
-	}
-	arena->head = nullptr;
-	arena->default_chunk_size = default_chunk_size;
-	arena->align_64 = 0;
-	arena->max_total_bytes = 0; /* Unlimited by default */
-	arena->total_allocated = 0; /* Reset counter on creation */
-	return arena;
+    csilk_arena_t* arena = arena_aligned_alloc(sizeof(csilk_arena_t));
+    if (!arena) {
+        return nullptr;
+    }
+    arena->head = nullptr;
+    arena->default_chunk_size = default_chunk_size;
+    arena->align_64 = 0;
+    arena->max_total_bytes = 0; /* Unlimited by default */
+    arena->total_allocated = 0; /* Reset counter on creation */
+    return arena;
 }
 
 /** @brief Enable or disable 64-byte alignment for this arena.
@@ -221,9 +221,9 @@ csilk_arena_new(size_t default_chunk_size)
 void
 csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
 {
-	if (arena) {
-		arena->align_64 = enabled;
-	}
+    if (arena) {
+        arena->align_64 = enabled;
+    }
 }
 
 /**
@@ -248,12 +248,12 @@ int csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes);
 int
 csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes)
 {
-	if (!arena) {
-		return -1;
-	}
-	arena->max_total_bytes = max_bytes;
-	arena->total_allocated = 0; /* Reset counter when limit is set */
-	return 0;
+    if (!arena) {
+        return -1;
+    }
+    arena->max_total_bytes = max_bytes;
+    arena->total_allocated = 0; /* Reset counter when limit is set */
+    return 0;
 }
 
 /** @brief Allocate memory from the arena with 8-byte alignment.
@@ -271,78 +271,77 @@ csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes)
 void*
 csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 {
-	if (!arena) {
-		return nullptr;
-	}
-	size_t alignment = arena->align_64 ? CSILK_CACHE_LINE_SIZE : 8;
-	if (size > SIZE_MAX - (alignment - 1)) {
-		return nullptr;
-	}
+    if (!arena) {
+        return nullptr;
+    }
+    size_t alignment = arena->align_64 ? CSILK_CACHE_LINE_SIZE : 8;
+    if (size > SIZE_MAX - (alignment - 1)) {
+        return nullptr;
+    }
 
-	/* Zero-size allocation: return a non-null sentinel to prevent
-	 * degenerate (zero-capacity) chunks from being created. This
-	 * matches the spirit of malloc(0) returning a unique pointer. */
-	if (size == 0) {
-		return (void*)(uintptr_t)1;
-	}
+    /* Zero-size allocation: return a non-null sentinel to prevent
+     * degenerate (zero-capacity) chunks from being created. This
+     * matches the spirit of malloc(0) returning a unique pointer. */
+    if (size == 0) {
+        return (void*)(uintptr_t)1;
+    }
 
-	size = (size + alignment - 1) & ~(alignment - 1);
+    size = (size + alignment - 1) & ~(alignment - 1);
 
 #ifdef DEBUG_ARENA
-	size_t alloc_size = size;
-	size += ARENA_REDZONE_SIZE;
+    size_t alloc_size = size;
+    size += ARENA_REDZONE_SIZE;
 #endif
 
-	if (arena->head) {
-		size_t aligned_used = (arena->head->used + alignment - 1) & ~(alignment - 1);
-		if ((arena->head->size - aligned_used) >= size) {
-			void* ptr = arena->head->data + aligned_used;
+    if (arena->head) {
+        size_t aligned_used = (arena->head->used + alignment - 1) & ~(alignment - 1);
+        if ((arena->head->size - aligned_used) >= size) {
+            void* ptr = arena->head->data + aligned_used;
 #ifdef DEBUG_ARENA
-			arena_fill_redzone(
-			    arena->head->data, arena->head->size, aligned_used + alloc_size);
+            arena_fill_redzone(arena->head->data, arena->head->size, aligned_used + alloc_size);
 #endif
-			arena->head->used = aligned_used + size;
-			return ptr;
-		}
-	}
+            arena->head->used = aligned_used + size;
+            return ptr;
+        }
+    }
 
-	size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
-	csilk_arena_chunk_t* chunk = nullptr;
+    size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
+    csilk_arena_chunk_t* chunk = nullptr;
 
-	/* Try to reuse a chunk from the thread-local free list if it matches the
+    /* Try to reuse a chunk from the thread-local free list if it matches the
      standard size. This avoids expensive aligned_alloc syscalls in the
      hot path. */
-	if (chunk_size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_free_list) {
-		chunk = tls_chunk_free_list;
-		tls_chunk_free_list = chunk->next;
-		tls_chunk_count--;
-	} else {
-		/* Guard sizeof(chunk) + chunk_size against integer overflow.
-		 * In practice this is unreachable (requires allocating ~18 EB)
-		 * but provides formal correctness for all SIZE_MAX inputs. */
-		if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
-			return nullptr;
-		}
+    if (chunk_size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_free_list) {
+        chunk = tls_chunk_free_list;
+        tls_chunk_free_list = chunk->next;
+        tls_chunk_count--;
+    } else {
+        /* Guard sizeof(chunk) + chunk_size against integer overflow.
+         * In practice this is unreachable (requires allocating ~18 EB)
+         * but provides formal correctness for all SIZE_MAX inputs. */
+        if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
+            return nullptr;
+        }
 
-		/* Check if allocation would exceed max_total_bytes limit */
-		if (arena->max_total_bytes > 0 &&
-		    (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
-			return nullptr;
-		}
+        /* Check if allocation would exceed max_total_bytes limit */
+        if (arena->max_total_bytes > 0 &&
+            (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
+            return nullptr;
+        }
 
-		chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
-	}
+        chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
+    }
 
-	if (!chunk) {
-		return nullptr;
-	}
+    if (!chunk) {
+        return nullptr;
+    }
 
-	chunk->size = chunk_size;
-	chunk->used = size;
-	chunk->next = arena->head;
-	arena->head = chunk;
-	arena->total_allocated += chunk_size;
-	return chunk->data;
+    chunk->size = chunk_size;
+    chunk->used = size;
+    chunk->next = arena->head;
+    arena->head = chunk;
+    arena->total_allocated += chunk_size;
+    return chunk->data;
 }
 
 /** @brief Duplicate a null-terminated string using the arena allocator.
@@ -359,15 +358,15 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 char*
 csilk_arena_strdup(csilk_arena_t* arena, const char* s)
 {
-	if (!s) {
-		return nullptr;
-	}
-	size_t len = strlen(s);
-	char* news = csilk_arena_alloc(arena, len + 1);
-	if (news) {
-		memcpy(news, s, len + 1);
-	}
-	return news;
+    if (!s) {
+        return nullptr;
+    }
+    size_t len = strlen(s);
+    char*  news = csilk_arena_alloc(arena, len + 1);
+    if (news) {
+        memcpy(news, s, len + 1);
+    }
+    return news;
 }
 
 /** @brief Duplicate @p n bytes of a string using the arena allocator.
@@ -383,15 +382,15 @@ csilk_arena_strdup(csilk_arena_t* arena, const char* s)
 char*
 csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n)
 {
-	if (!s) {
-		return nullptr;
-	}
-	char* news = csilk_arena_alloc(arena, n + 1);
-	if (news) {
-		memcpy(news, s, n);
-		news[n] = '\0';
-	}
-	return news;
+    if (!s) {
+        return nullptr;
+    }
+    char* news = csilk_arena_alloc(arena, n + 1);
+    if (news) {
+        memcpy(news, s, n);
+        news[n] = '\0';
+    }
+    return news;
 }
 
 /** @brief Free all arena chunks and the arena structure itself.
@@ -404,46 +403,45 @@ csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n)
 void
 csilk_arena_free(csilk_arena_t* arena)
 {
-	if (!arena) {
-		return;
-	}
-	csilk_arena_chunk_t* curr = arena->head;
-	while (curr) {
-		csilk_arena_chunk_t* next = curr->next;
+    if (!arena) {
+        return;
+    }
+    csilk_arena_chunk_t* curr = arena->head;
+    while (curr) {
+        csilk_arena_chunk_t* next = curr->next;
 #ifdef DEBUG_ARENA
-		if (curr->used > ARENA_REDZONE_SIZE && curr->used <= curr->size) {
-			if (!arena_check_redzone(curr->data, curr->used - ARENA_REDZONE_SIZE)) {
-				fprintf(stderr,
-					"ARENA REDZONE CORRUPTED: chunk %p used=%zu size=%zu\n",
-					(void*)curr,
-					curr->used,
-					curr->size);
-				abort();
-			}
-		}
+        if (curr->used > ARENA_REDZONE_SIZE && curr->used <= curr->size) {
+            if (!arena_check_redzone(curr->data, curr->used - ARENA_REDZONE_SIZE)) {
+                fprintf(stderr,
+                        "ARENA REDZONE CORRUPTED: chunk %p used=%zu size=%zu\n",
+                        (void*)curr,
+                        curr->used,
+                        curr->size);
+                abort();
+            }
+        }
 #endif
 
-		/* Track total allocated bytes (excluding chunk headers).
-		 * MUST happen before the free below — after arena_aligned_free
-		 * the chunk memory is invalid and accessing curr->size is UB
-		 * (heap-use-after-free caught by ASAN/mach_vm_deallocate). */
-		arena->total_allocated -= curr->size;
+        /* Track total allocated bytes (excluding chunk headers).
+         * MUST happen before the free below — after arena_aligned_free
+         * the chunk memory is invalid and accessing curr->size is UB
+         * (heap-use-after-free caught by ASAN/mach_vm_deallocate). */
+        arena->total_allocated -= curr->size;
 
-		/* Return standard-sized chunks to the thread-local free list if there is
-		room. This speeds up subsequent allocations on the same thread. */
-		if (curr->size == CSILK_DEFAULT_ARENA_SIZE &&
-		    tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
-			curr->next = tls_chunk_free_list;
-			curr->used = 0;
-			tls_chunk_free_list = curr;
-			tls_chunk_count++;
-		} else {
-			arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
-		}
+        /* Return standard-sized chunks to the thread-local free list if there is
+        room. This speeds up subsequent allocations on the same thread. */
+        if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
+            curr->next = tls_chunk_free_list;
+            curr->used = 0;
+            tls_chunk_free_list = curr;
+            tls_chunk_count++;
+        } else {
+            arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+        }
 
-		curr = next;
-	}
-	arena_aligned_free(arena, sizeof(csilk_arena_t));
+        curr = next;
+    }
+    arena_aligned_free(arena, sizeof(csilk_arena_t));
 }
 
 /** @brief Reset arena for reuse without freeing underlying chunks.
@@ -458,15 +456,15 @@ csilk_arena_free(csilk_arena_t* arena)
 void
 csilk_arena_reset(csilk_arena_t* arena)
 {
-	if (!arena) {
-		return;
-	}
-	csilk_arena_chunk_t* curr = arena->head;
-	while (curr) {
-		curr->used = 0;
-		curr = curr->next;
-	}
-	arena->total_allocated = 0;
+    if (!arena) {
+        return;
+    }
+    csilk_arena_chunk_t* curr = arena->head;
+    while (curr) {
+        curr->used = 0;
+        curr = curr->next;
+    }
+    arena->total_allocated = 0;
 }
 
 /** @brief Flush the thread-local arena chunk free list.
@@ -477,14 +475,14 @@ csilk_arena_reset(csilk_arena_t* arena)
 void
 csilk_arena_flush_free_list(void)
 {
-	csilk_arena_chunk_t* curr = tls_chunk_free_list;
-	while (curr) {
-		csilk_arena_chunk_t* next = curr->next;
-		arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
-		curr = next;
-	}
-	tls_chunk_free_list = nullptr;
-	tls_chunk_count = 0;
+    csilk_arena_chunk_t* curr = tls_chunk_free_list;
+    while (curr) {
+        csilk_arena_chunk_t* next = curr->next;
+        arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+        curr = next;
+    }
+    tls_chunk_free_list = nullptr;
+    tls_chunk_count = 0;
 }
 
 /** @brief Initialize arena subsystem with automatic TLS cleanup.
@@ -495,22 +493,22 @@ csilk_arena_flush_free_list(void)
 static void
 arena_tls_cleanup(void* unused)
 {
-	(void)unused;
-	csilk_arena_flush_free_list();
+    (void)unused;
+    csilk_arena_flush_free_list();
 }
 
 static void
 arena_init_tls_key(void)
 {
-	static pthread_key_t tls_key;
-	pthread_key_create(&tls_key, arena_tls_cleanup);
+    static pthread_key_t tls_key;
+    pthread_key_create(&tls_key, arena_tls_cleanup);
 }
 
 void
 csilk_arena_init(void)
 {
-	static pthread_once_t once = PTHREAD_ONCE_INIT;
-	pthread_once(&once, arena_init_tls_key);
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, arena_init_tls_key);
 }
 
 #ifdef TEST_OOM
@@ -519,7 +517,7 @@ csilk_arena_init(void)
 int
 csilk_arena_get_tls_chunk_count(void)
 {
-	return tls_chunk_count;
+    return tls_chunk_count;
 }
 #endif
 
@@ -535,15 +533,15 @@ csilk_arena_get_tls_chunk_count(void)
 void
 csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used)
 {
-	if (!arena || !total_size || !total_used) {
-		return;
-	}
-	*total_size = 0;
-	*total_used = 0;
-	csilk_arena_chunk_t* curr = arena->head;
-	while (curr) {
-		*total_size += curr->size;
-		*total_used += curr->used;
-		curr = curr->next;
-	}
+    if (!arena || !total_size || !total_used) {
+        return;
+    }
+    *total_size = 0;
+    *total_used = 0;
+    csilk_arena_chunk_t* curr = arena->head;
+    while (curr) {
+        *total_size += curr->size;
+        *total_used += curr->used;
+        curr = curr->next;
+    }
 }

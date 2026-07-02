@@ -21,19 +21,19 @@
  * server and request lifecycle without modifying the framework code.
  */
 typedef enum {
-	CSILK_HOOK_SERVER_START,  /**< Invoked just before the event loop starts
+    CSILK_HOOK_SERVER_START,  /**< Invoked just before the event loop starts
                                (server-level). */
-	CSILK_HOOK_SERVER_STOP,	  /**< Invoked when the server is shutting down
+    CSILK_HOOK_SERVER_STOP,   /**< Invoked when the server is shutting down
                                (server-level). */
-	CSILK_HOOK_CONN_OPEN,	  /**< Invoked when a new TCP connection is accepted
+    CSILK_HOOK_CONN_OPEN,     /**< Invoked when a new TCP connection is accepted
                                (context-level). */
-	CSILK_HOOK_CONN_CLOSE,	  /**< Invoked when a TCP connection is closed
+    CSILK_HOOK_CONN_CLOSE,    /**< Invoked when a TCP connection is closed
                                (context-level). */
-	CSILK_HOOK_REQUEST_BEGIN, /**< Invoked when the full HTTP request has been
+    CSILK_HOOK_REQUEST_BEGIN, /**< Invoked when the full HTTP request has been
                                parsed (context-level). */
-	CSILK_HOOK_REQUEST_END,	  /**< Invoked after the response has been sent
+    CSILK_HOOK_REQUEST_END,   /**< Invoked after the response has been sent
                                (context-level). */
-	CSILK_HOOK_COUNT	  /**< Sentinel — total number of hook types. Not a valid hook
+    CSILK_HOOK_COUNT          /**< Sentinel — total number of hook types. Not a valid hook
                       type. */
 } csilk_hook_type_t;
 

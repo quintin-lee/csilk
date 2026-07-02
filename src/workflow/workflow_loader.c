@@ -15,9 +15,9 @@
 /* --- Global Handler Registry --- */
 
 typedef struct handler_entry_s {
-	char* name;
-	csilk_wf_handler_t handler;
-	struct handler_entry_s* next;
+    char*                   name;
+    csilk_wf_handler_t      handler;
+    struct handler_entry_s* next;
 } handler_entry_t;
 
 static handler_entry_t* g_handlers = nullptr;
@@ -25,19 +25,19 @@ static handler_entry_t* g_handlers = nullptr;
 void
 csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
 {
-	if (!name || !handler) {
-		return;
-	}
-	handler_entry_t* entry = calloc(1, sizeof(handler_entry_t));
-	if (!entry) {
-		CSILK_LOG_E("WorkflowLoader: failed to allocate memory for handler entry");
-		return;
-	}
-	entry->name = strdup(name);
-	entry->handler = handler;
-	entry->next = g_handlers;
-	g_handlers = entry;
-	CSILK_LOG_D("WorkflowLoader: registered custom handler '%s'", name);
+    if (!name || !handler) {
+        return;
+    }
+    handler_entry_t* entry = calloc(1, sizeof(handler_entry_t));
+    if (!entry) {
+        CSILK_LOG_E("WorkflowLoader: failed to allocate memory for handler entry");
+        return;
+    }
+    entry->name = strdup(name);
+    entry->handler = handler;
+    entry->next = g_handlers;
+    g_handlers = entry;
+    CSILK_LOG_D("WorkflowLoader: registered custom handler '%s'", name);
 }
 
 /** @brief Internal: look up a handler by name in the singly-linked list
@@ -47,14 +47,14 @@ csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
 static csilk_wf_handler_t
 find_handler(const char* name)
 {
-	handler_entry_t* curr = g_handlers;
-	while (curr) {
-		if (strcmp(curr->name, name) == 0) {
-			return curr->handler;
-		}
-		curr = curr->next;
-	}
-	return nullptr;
+    handler_entry_t* curr = g_handlers;
+    while (curr) {
+        if (strcmp(curr->name, name) == 0) {
+            return curr->handler;
+        }
+        curr = curr->next;
+    }
+    return nullptr;
 }
 
 /* --- JSON Parser --- */
@@ -79,180 +79,170 @@ find_handler(const char* name)
 csilk_wf_t*
 csilk_wf_from_json(const char* json_str)
 {
-	if (!json_str) {
-		return nullptr;
-	}
+    if (!json_str) {
+        return nullptr;
+    }
 
-	CSILK_LOG_T("WorkflowLoader: parsing workflow from JSON string");
+    CSILK_LOG_T("WorkflowLoader: parsing workflow from JSON string");
 
-	cJSON* root = cJSON_Parse(json_str);
-	if (!root) {
-		CSILK_LOG_E("WorkflowLoader: failed to parse JSON string");
-		return nullptr;
-	}
+    cJSON* root = cJSON_Parse(json_str);
+    if (!root) {
+        CSILK_LOG_E("WorkflowLoader: failed to parse JSON string");
+        return nullptr;
+    }
 
-	cJSON* name_item = cJSON_GetObjectItem(root, "name");
-	const char* wf_name =
-	    (cJSON_IsString(name_item)) ? name_item->valuestring : "DeclarativeWF";
+    cJSON*      name_item = cJSON_GetObjectItem(root, "name");
+    const char* wf_name = (cJSON_IsString(name_item)) ? name_item->valuestring : "DeclarativeWF";
 
-	csilk_wf_t* wf = csilk_wf_new(wf_name);
-	if (!wf) {
-		CSILK_LOG_E("WorkflowLoader: failed to create workflow instance '%s'", wf_name);
-		cJSON_Delete(root);
-		return nullptr;
-	}
+    csilk_wf_t* wf = csilk_wf_new(wf_name);
+    if (!wf) {
+        CSILK_LOG_E("WorkflowLoader: failed to create workflow instance '%s'", wf_name);
+        cJSON_Delete(root);
+        return nullptr;
+    }
 
-	cJSON* steps = cJSON_GetObjectItem(root, "steps");
-	if (cJSON_IsArray(steps)) {
-		int count = cJSON_GetArraySize(steps);
-		for (int i = 0; i < count; i++) {
-			cJSON* step = cJSON_GetArrayItem(steps, i);
-			cJSON* id_item = cJSON_GetObjectItem(step, "id");
-			cJSON* type_item = cJSON_GetObjectItem(step, "type");
+    cJSON* steps = cJSON_GetObjectItem(root, "steps");
+    if (cJSON_IsArray(steps)) {
+        int count = cJSON_GetArraySize(steps);
+        for (int i = 0; i < count; i++) {
+            cJSON* step = cJSON_GetArrayItem(steps, i);
+            cJSON* id_item = cJSON_GetObjectItem(step, "id");
+            cJSON* type_item = cJSON_GetObjectItem(step, "type");
 
-			if (!cJSON_IsString(id_item)) {
-				CSILK_LOG_W("WorkflowLoader: step skipped - missing 'id' field");
-				continue;
-			}
-			const char* id = id_item->valuestring;
-			const char* type =
-			    cJSON_IsString(type_item) ? type_item->valuestring : "handler";
+            if (!cJSON_IsString(id_item)) {
+                CSILK_LOG_W("WorkflowLoader: step skipped - missing 'id' field");
+                continue;
+            }
+            const char* id = id_item->valuestring;
+            const char* type = cJSON_IsString(type_item) ? type_item->valuestring : "handler";
 
-			csilk_wf_node_t* node = nullptr;
-			if (strcmp(type, "ai") == 0) {
-				cJSON* config = cJSON_GetObjectItem(step, "config");
-				csilk_ai_config_t aic = {0};
-				if (cJSON_IsObject(config)) {
-					cJSON* model = cJSON_GetObjectItem(config, "model");
-					cJSON* prompt = cJSON_GetObjectItem(config, "prompt");
-					cJSON* sys = cJSON_GetObjectItem(config, "system_msg");
-					if (cJSON_IsString(model)) {
-						aic.model = model->valuestring;
-					}
-					if (cJSON_IsString(prompt)) {
-						aic.prompt = prompt->valuestring;
-					}
-					if (cJSON_IsString(sys)) {
-						aic.system_msg = sys->valuestring;
-					}
-				}
-				node = csilk_wf_add_ai(wf, id, &aic);
-			} else {
-				cJSON* handler_item = cJSON_GetObjectItem(step, "handler");
-				if (cJSON_IsString(handler_item)) {
-					csilk_wf_handler_t h =
-					    find_handler(handler_item->valuestring);
-					if (h) {
-						node = csilk_wf_add(wf, id, h, nullptr);
-					} else {
-						CSILK_LOG_W("WorkflowLoader: handler '%s' not "
-							    "registered for step '%s'",
-							    handler_item->valuestring,
-							    id);
-					}
-				}
-			}
+            csilk_wf_node_t* node = nullptr;
+            if (strcmp(type, "ai") == 0) {
+                cJSON*            config = cJSON_GetObjectItem(step, "config");
+                csilk_ai_config_t aic = {0};
+                if (cJSON_IsObject(config)) {
+                    cJSON* model = cJSON_GetObjectItem(config, "model");
+                    cJSON* prompt = cJSON_GetObjectItem(config, "prompt");
+                    cJSON* sys = cJSON_GetObjectItem(config, "system_msg");
+                    if (cJSON_IsString(model)) {
+                        aic.model = model->valuestring;
+                    }
+                    if (cJSON_IsString(prompt)) {
+                        aic.prompt = prompt->valuestring;
+                    }
+                    if (cJSON_IsString(sys)) {
+                        aic.system_msg = sys->valuestring;
+                    }
+                }
+                node = csilk_wf_add_ai(wf, id, &aic);
+            } else {
+                cJSON* handler_item = cJSON_GetObjectItem(step, "handler");
+                if (cJSON_IsString(handler_item)) {
+                    csilk_wf_handler_t h = find_handler(handler_item->valuestring);
+                    if (h) {
+                        node = csilk_wf_add(wf, id, h, nullptr);
+                    } else {
+                        CSILK_LOG_W("WorkflowLoader: handler '%s' not "
+                                    "registered for step '%s'",
+                                    handler_item->valuestring,
+                                    id);
+                    }
+                }
+            }
 
-			if (node) {
-				CSILK_LOG_D(
-				    "WorkflowLoader: loaded step '%s' (type: '%s')", id, type);
+            if (node) {
+                CSILK_LOG_D("WorkflowLoader: loaded step '%s' (type: '%s')", id, type);
 
-				cJSON* entry_item = cJSON_GetObjectItem(step, "entry");
-				if (cJSON_IsTrue(entry_item)) {
-					csilk_wf_node_set_entry(node, 1);
-					CSILK_LOG_D(
-					    "WorkflowLoader: step '%s' marked as entry point", id);
-				}
+                cJSON* entry_item = cJSON_GetObjectItem(step, "entry");
+                if (cJSON_IsTrue(entry_item)) {
+                    csilk_wf_node_set_entry(node, 1);
+                    CSILK_LOG_D("WorkflowLoader: step '%s' marked as entry point", id);
+                }
 
-				cJSON* join_item = cJSON_GetObjectItem(step, "join");
-				if (cJSON_IsString(join_item) &&
-				    strcmp(join_item->valuestring, "or") == 0) {
-					csilk_wf_node_set_join(node, CSILK_WF_JOIN_OR);
-					CSILK_LOG_D(
-					    "WorkflowLoader: step '%s' join policy set to OR", id);
-				}
-			} else {
-				CSILK_LOG_W("WorkflowLoader: failed to add step '%s'", id);
-			}
-		}
-	}
+                cJSON* join_item = cJSON_GetObjectItem(step, "join");
+                if (cJSON_IsString(join_item) && strcmp(join_item->valuestring, "or") == 0) {
+                    csilk_wf_node_set_join(node, CSILK_WF_JOIN_OR);
+                    CSILK_LOG_D("WorkflowLoader: step '%s' join policy set to OR", id);
+                }
+            } else {
+                CSILK_LOG_W("WorkflowLoader: failed to add step '%s'", id);
+            }
+        }
+    }
 
-	// Pass 2: Connections
-	cJSON* conns = cJSON_GetObjectItem(root, "connections");
-	if (cJSON_IsArray(conns)) {
-		int count = cJSON_GetArraySize(conns);
-		for (int i = 0; i < count; i++) {
-			cJSON* conn = cJSON_GetArrayItem(conns, i);
-			cJSON* from_item = cJSON_GetObjectItem(conn, "from");
-			cJSON* to_item = cJSON_GetObjectItem(conn, "to");
-			if (!cJSON_IsString(from_item) || !cJSON_IsString(to_item)) {
-				CSILK_LOG_W("WorkflowLoader: connection skipped - missing or "
-					    "invalid 'from'/'to' fields");
-				continue;
-			}
+    // Pass 2: Connections
+    cJSON* conns = cJSON_GetObjectItem(root, "connections");
+    if (cJSON_IsArray(conns)) {
+        int count = cJSON_GetArraySize(conns);
+        for (int i = 0; i < count; i++) {
+            cJSON* conn = cJSON_GetArrayItem(conns, i);
+            cJSON* from_item = cJSON_GetObjectItem(conn, "from");
+            cJSON* to_item = cJSON_GetObjectItem(conn, "to");
+            if (!cJSON_IsString(from_item) || !cJSON_IsString(to_item)) {
+                CSILK_LOG_W("WorkflowLoader: connection skipped - missing or "
+                            "invalid 'from'/'to' fields");
+                continue;
+            }
 
-			csilk_wf_node_t* n_from = csilk_wf_get_node(wf, from_item->valuestring);
-			csilk_wf_node_t* n_to = csilk_wf_get_node(wf, to_item->valuestring);
+            csilk_wf_node_t* n_from = csilk_wf_get_node(wf, from_item->valuestring);
+            csilk_wf_node_t* n_to = csilk_wf_get_node(wf, to_item->valuestring);
 
-			if (n_from && n_to) {
-				cJSON* cond_item = cJSON_GetObjectItem(conn, "condition");
-				cJSON* loop_item = cJSON_GetObjectItem(conn, "loop");
-				const char* cond =
-				    cJSON_IsString(cond_item) ? cond_item->valuestring : nullptr;
+            if (n_from && n_to) {
+                cJSON*      cond_item = cJSON_GetObjectItem(conn, "condition");
+                cJSON*      loop_item = cJSON_GetObjectItem(conn, "loop");
+                const char* cond = cJSON_IsString(cond_item) ? cond_item->valuestring : nullptr;
 
-				if (cJSON_IsTrue(loop_item)) {
-					csilk_wf_on_loop(n_from, cond, n_to);
-				} else if (cond) {
-					csilk_wf_on(n_from, cond, n_to);
-				} else {
-					csilk_wf_bind(n_from, n_to);
-				}
-				CSILK_LOG_D("WorkflowLoader: loaded connection '%s' -> '%s' "
-					    "(condition: '%s', loop: %d)",
-					    from_item->valuestring,
-					    to_item->valuestring,
-					    cond ? cond : "none",
-					    cJSON_IsTrue(loop_item));
-			} else {
-				CSILK_LOG_W("WorkflowLoader: connection skipped - failed to find "
-					    "nodes for connection '%s' -> '%s'",
-					    from_item->valuestring,
-					    to_item->valuestring);
-			}
-		}
-	}
+                if (cJSON_IsTrue(loop_item)) {
+                    csilk_wf_on_loop(n_from, cond, n_to);
+                } else if (cond) {
+                    csilk_wf_on(n_from, cond, n_to);
+                } else {
+                    csilk_wf_bind(n_from, n_to);
+                }
+                CSILK_LOG_D("WorkflowLoader: loaded connection '%s' -> '%s' "
+                            "(condition: '%s', loop: %d)",
+                            from_item->valuestring,
+                            to_item->valuestring,
+                            cond ? cond : "none",
+                            cJSON_IsTrue(loop_item));
+            } else {
+                CSILK_LOG_W("WorkflowLoader: connection skipped - failed to find "
+                            "nodes for connection '%s' -> '%s'",
+                            from_item->valuestring,
+                            to_item->valuestring);
+            }
+        }
+    }
 
-	// Pass 3: Error Targets
-	if (cJSON_IsArray(steps)) {
-		int count = cJSON_GetArraySize(steps);
-		for (int i = 0; i < count; i++) {
-			cJSON* step = cJSON_GetArrayItem(steps, i);
-			cJSON* id_item = cJSON_GetObjectItem(step, "id");
-			cJSON* err_item = cJSON_GetObjectItem(step, "on_error");
-			if (cJSON_IsString(id_item) && cJSON_IsString(err_item)) {
-				csilk_wf_node_t* n = csilk_wf_get_node(wf, id_item->valuestring);
-				csilk_wf_node_t* err_target =
-				    csilk_wf_get_node(wf, err_item->valuestring);
-				if (n && err_target) {
-					csilk_wf_on_error(n, err_target);
-					CSILK_LOG_D(
-					    "WorkflowLoader: registered error route '%s' -> '%s'",
-					    id_item->valuestring,
-					    err_item->valuestring);
-				} else {
-					CSILK_LOG_W("WorkflowLoader: failed to set error target - "
-						    "step '%s' or error step '%s' not found",
-						    id_item->valuestring,
-						    err_item->valuestring);
-				}
-			}
-		}
-	}
+    // Pass 3: Error Targets
+    if (cJSON_IsArray(steps)) {
+        int count = cJSON_GetArraySize(steps);
+        for (int i = 0; i < count; i++) {
+            cJSON* step = cJSON_GetArrayItem(steps, i);
+            cJSON* id_item = cJSON_GetObjectItem(step, "id");
+            cJSON* err_item = cJSON_GetObjectItem(step, "on_error");
+            if (cJSON_IsString(id_item) && cJSON_IsString(err_item)) {
+                csilk_wf_node_t* n = csilk_wf_get_node(wf, id_item->valuestring);
+                csilk_wf_node_t* err_target = csilk_wf_get_node(wf, err_item->valuestring);
+                if (n && err_target) {
+                    csilk_wf_on_error(n, err_target);
+                    CSILK_LOG_D("WorkflowLoader: registered error route '%s' -> '%s'",
+                                id_item->valuestring,
+                                err_item->valuestring);
+                } else {
+                    CSILK_LOG_W("WorkflowLoader: failed to set error target - "
+                                "step '%s' or error step '%s' not found",
+                                id_item->valuestring,
+                                err_item->valuestring);
+                }
+            }
+        }
+    }
 
-	CSILK_LOG_I("WorkflowLoader: workflow '%s' successfully loaded from JSON", wf_name);
+    CSILK_LOG_I("WorkflowLoader: workflow '%s' successfully loaded from JSON", wf_name);
 
-	cJSON_Delete(root);
-	return wf;
+    cJSON_Delete(root);
+    return wf;
 }
 
 /* --- YAML Loader --- */
@@ -280,128 +270,127 @@ csilk_wf_from_json(const char* json_str)
 static cJSON*
 parse_yaml_file(const char* path)
 {
-	FILE* fh = fopen(path, "rb");
-	if (!fh) {
-		CSILK_LOG_E("WorkflowLoader: failed to open YAML file '%s'", path);
-		return nullptr;
-	}
+    FILE* fh = fopen(path, "rb");
+    if (!fh) {
+        CSILK_LOG_E("WorkflowLoader: failed to open YAML file '%s'", path);
+        return nullptr;
+    }
 
-	yaml_parser_t parser;
-	if (!yaml_parser_initialize(&parser)) {
-		CSILK_LOG_E("WorkflowLoader: failed to initialize YAML parser");
-		fclose(fh);
-		return nullptr;
-	}
-	yaml_parser_set_input_file(&parser, fh);
+    yaml_parser_t parser;
+    if (!yaml_parser_initialize(&parser)) {
+        CSILK_LOG_E("WorkflowLoader: failed to initialize YAML parser");
+        fclose(fh);
+        return nullptr;
+    }
+    yaml_parser_set_input_file(&parser, fh);
 
-	cJSON* root = nullptr;
-	cJSON* stack[64];
-	int stack_ptr = 0;
+    cJSON* root = nullptr;
+    cJSON* stack[64];
+    int    stack_ptr = 0;
 
-	// To handle mapping keys:
-	char* current_key = nullptr;
+    // To handle mapping keys:
+    char* current_key = nullptr;
 
-	yaml_event_t event;
-	int done = 0;
-	while (!done) {
-		if (!yaml_parser_parse(&parser, &event)) {
-			CSILK_LOG_E("WorkflowLoader: YAML parse error in file '%s'", path);
-			break;
-		}
+    yaml_event_t event;
+    int          done = 0;
+    while (!done) {
+        if (!yaml_parser_parse(&parser, &event)) {
+            CSILK_LOG_E("WorkflowLoader: YAML parse error in file '%s'", path);
+            break;
+        }
 
-		switch (event.type) {
-		case YAML_MAPPING_START_EVENT: {
-			cJSON* obj = cJSON_CreateObject();
-			if (!root) {
-				root = obj;
-				stack[stack_ptr++] = obj;
-			} else {
-				cJSON* parent = stack[stack_ptr - 1];
-				if (cJSON_IsArray(parent)) {
-					cJSON_AddItemToArray(parent, obj);
-				} else if (cJSON_IsObject(parent) && current_key) {
-					cJSON_AddItemToObject(parent, current_key, obj);
-					free(current_key);
-					current_key = nullptr;
-				}
-				stack[stack_ptr++] = obj;
-			}
-			break;
-		}
-		case YAML_SEQUENCE_START_EVENT: {
-			cJSON* arr = cJSON_CreateArray();
-			if (!root) {
-				root = arr;
-				stack[stack_ptr++] = arr;
-			} else {
-				cJSON* parent = stack[stack_ptr - 1];
-				if (cJSON_IsArray(parent)) {
-					cJSON_AddItemToArray(parent, arr);
-				} else if (cJSON_IsObject(parent) && current_key) {
-					cJSON_AddItemToObject(parent, current_key, arr);
-					free(current_key);
-					current_key = nullptr;
-				}
-				stack[stack_ptr++] = arr;
-			}
-			break;
-		}
-		case YAML_SCALAR_EVENT: {
-			cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
-			if (parent) {
-				if (cJSON_IsObject(parent)) {
-					if (!current_key) {
-						current_key =
-						    strdup((char*)event.data.scalar.value);
-					} else {
-						const char* val = (char*)event.data.scalar.value;
-						cJSON* scalar = nullptr;
-						if (strcmp(val, "true") == 0) {
-							scalar = cJSON_CreateBool(1);
-						} else if (strcmp(val, "false") == 0) {
-							scalar = cJSON_CreateBool(0);
-						} else {
-							scalar = cJSON_CreateString(val);
-						}
-						cJSON_AddItemToObject(parent, current_key, scalar);
-						free(current_key);
-						current_key = nullptr;
-					}
-				} else if (cJSON_IsArray(parent)) {
-					const char* val = (char*)event.data.scalar.value;
-					cJSON* scalar = nullptr;
-					if (strcmp(val, "true") == 0) {
-						scalar = cJSON_CreateBool(1);
-					} else if (strcmp(val, "false") == 0) {
-						scalar = cJSON_CreateBool(0);
-					} else {
-						scalar = cJSON_CreateString(val);
-					}
-					cJSON_AddItemToArray(parent, scalar);
-				}
-			}
-			break;
-		}
-		case YAML_MAPPING_END_EVENT:
-		case YAML_SEQUENCE_END_EVENT:
-			if (stack_ptr > 0) {
-				stack_ptr--;
-			}
-			break;
-		case YAML_STREAM_END_EVENT:
-			done = 1;
-			break;
-		default:
-			break;
-		}
-		yaml_event_delete(&event);
-	}
-	yaml_parser_delete(&parser);
-	fclose(fh);
-	if (current_key) {
-		free(current_key);
-	}
-	return root;
+        switch (event.type) {
+        case YAML_MAPPING_START_EVENT: {
+            cJSON* obj = cJSON_CreateObject();
+            if (!root) {
+                root = obj;
+                stack[stack_ptr++] = obj;
+            } else {
+                cJSON* parent = stack[stack_ptr - 1];
+                if (cJSON_IsArray(parent)) {
+                    cJSON_AddItemToArray(parent, obj);
+                } else if (cJSON_IsObject(parent) && current_key) {
+                    cJSON_AddItemToObject(parent, current_key, obj);
+                    free(current_key);
+                    current_key = nullptr;
+                }
+                stack[stack_ptr++] = obj;
+            }
+            break;
+        }
+        case YAML_SEQUENCE_START_EVENT: {
+            cJSON* arr = cJSON_CreateArray();
+            if (!root) {
+                root = arr;
+                stack[stack_ptr++] = arr;
+            } else {
+                cJSON* parent = stack[stack_ptr - 1];
+                if (cJSON_IsArray(parent)) {
+                    cJSON_AddItemToArray(parent, arr);
+                } else if (cJSON_IsObject(parent) && current_key) {
+                    cJSON_AddItemToObject(parent, current_key, arr);
+                    free(current_key);
+                    current_key = nullptr;
+                }
+                stack[stack_ptr++] = arr;
+            }
+            break;
+        }
+        case YAML_SCALAR_EVENT: {
+            cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+            if (parent) {
+                if (cJSON_IsObject(parent)) {
+                    if (!current_key) {
+                        current_key = strdup((char*)event.data.scalar.value);
+                    } else {
+                        const char* val = (char*)event.data.scalar.value;
+                        cJSON*      scalar = nullptr;
+                        if (strcmp(val, "true") == 0) {
+                            scalar = cJSON_CreateBool(1);
+                        } else if (strcmp(val, "false") == 0) {
+                            scalar = cJSON_CreateBool(0);
+                        } else {
+                            scalar = cJSON_CreateString(val);
+                        }
+                        cJSON_AddItemToObject(parent, current_key, scalar);
+                        free(current_key);
+                        current_key = nullptr;
+                    }
+                } else if (cJSON_IsArray(parent)) {
+                    const char* val = (char*)event.data.scalar.value;
+                    cJSON*      scalar = nullptr;
+                    if (strcmp(val, "true") == 0) {
+                        scalar = cJSON_CreateBool(1);
+                    } else if (strcmp(val, "false") == 0) {
+                        scalar = cJSON_CreateBool(0);
+                    } else {
+                        scalar = cJSON_CreateString(val);
+                    }
+                    cJSON_AddItemToArray(parent, scalar);
+                }
+            }
+            break;
+        }
+        case YAML_MAPPING_END_EVENT:
+        case YAML_SEQUENCE_END_EVENT:
+            if (stack_ptr > 0) {
+                stack_ptr--;
+            }
+            break;
+        case YAML_STREAM_END_EVENT:
+            done = 1;
+            break;
+        default:
+            break;
+        }
+        yaml_event_delete(&event);
+    }
+    yaml_parser_delete(&parser);
+    fclose(fh);
+    if (current_key) {
+        free(current_key);
+    }
+    return root;
 }
 
 /** @brief Load a workflow from a YAML file on disk.
@@ -417,15 +406,15 @@ parse_yaml_file(const char* path)
 csilk_wf_t*
 csilk_wf_load_yaml(const char* path)
 {
-	CSILK_LOG_I("WorkflowLoader: loading declarative workflow from YAML file '%s'", path);
-	cJSON* root = parse_yaml_file(path);
-	if (!root) {
-		CSILK_LOG_E("WorkflowLoader: failed to parse YAML structure from file '%s'", path);
-		return nullptr;
-	}
-	char* json_str = cJSON_PrintUnformatted(root);
-	cJSON_Delete(root);
-	csilk_wf_t* wf = csilk_wf_from_json(json_str);
-	free(json_str);
-	return wf;
+    CSILK_LOG_I("WorkflowLoader: loading declarative workflow from YAML file '%s'", path);
+    cJSON* root = parse_yaml_file(path);
+    if (!root) {
+        CSILK_LOG_E("WorkflowLoader: failed to parse YAML structure from file '%s'", path);
+        return nullptr;
+    }
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    csilk_wf_t* wf = csilk_wf_from_json(json_str);
+    free(json_str);
+    return wf;
 }

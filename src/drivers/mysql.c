@@ -26,18 +26,18 @@
 static inline char*
 csilk_strndup(const char* s, size_t n)
 {
-	size_t len = strnlen(s, n);
-	char* copy = (char*)malloc(len + 1);
-	if (copy) {
-		memcpy(copy, s, len);
-		copy[len] = '\0';
-	}
-	return copy;
+    size_t len = strnlen(s, n);
+    char*  copy = (char*)malloc(len + 1);
+    if (copy) {
+        memcpy(copy, s, len);
+        copy[len] = '\0';
+    }
+    return copy;
 }
 
 /** @brief Per-connection data for the MySQL driver. */
 typedef struct {
-	MYSQL* db; /**< libmysqlclient connection handle. */
+    MYSQL* db; /**< libmysqlclient connection handle. */
 } mysql_conn_t;
 
 /**
@@ -59,49 +59,49 @@ static void
 mysql_parse_dsn(
     const char* dsn, char** host, int* port, char** user, char** password, char** dbname)
 {
-	*host = nullptr;
-	*port = 3306;
-	*user = nullptr;
-	*password = nullptr;
-	*dbname = nullptr;
-	if (!dsn) {
-		return;
-	}
+    *host = nullptr;
+    *port = 3306;
+    *user = nullptr;
+    *password = nullptr;
+    *dbname = nullptr;
+    if (!dsn) {
+        return;
+    }
 
-	char* buf = strdup(dsn);
-	if (!buf) {
-		return;
-	}
+    char* buf = strdup(dsn);
+    if (!buf) {
+        return;
+    }
 
-	char* token = strtok(buf, ";");
-	while (token) {
-		while (*token == ' ') {
-			token++;
-		}
-		char* eq = strchr(token, '=');
-		if (!eq) {
-			token = strtok(nullptr, ";");
-			continue;
-		}
-		*eq = '\0';
-		const char* key = token;
-		const char* val = eq + 1;
+    char* token = strtok(buf, ";");
+    while (token) {
+        while (*token == ' ') {
+            token++;
+        }
+        char* eq = strchr(token, '=');
+        if (!eq) {
+            token = strtok(nullptr, ";");
+            continue;
+        }
+        *eq = '\0';
+        const char* key = token;
+        const char* val = eq + 1;
 
-		if (strcmp(key, "host") == 0) {
-			*host = strdup(val);
-		} else if (strcmp(key, "port") == 0) {
-			*port = atoi(val);
-		} else if (strcmp(key, "user") == 0) {
-			*user = strdup(val);
-		} else if (strcmp(key, "password") == 0) {
-			*password = strdup(val);
-		} else if (strcmp(key, "dbname") == 0) {
-			*dbname = strdup(val);
-		}
+        if (strcmp(key, "host") == 0) {
+            *host = strdup(val);
+        } else if (strcmp(key, "port") == 0) {
+            *port = atoi(val);
+        } else if (strcmp(key, "user") == 0) {
+            *user = strdup(val);
+        } else if (strcmp(key, "password") == 0) {
+            *password = strdup(val);
+        } else if (strcmp(key, "dbname") == 0) {
+            *dbname = strdup(val);
+        }
 
-		token = strtok(nullptr, ";");
-	}
-	free(buf);
+        token = strtok(nullptr, ";");
+    }
+    free(buf);
 }
 
 /**
@@ -114,42 +114,42 @@ mysql_parse_dsn(
 static int
 mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 {
-	if (!pool || !dsn) {
-		return -1;
-	}
+    if (!pool || !dsn) {
+        return -1;
+    }
 
-	mysql_conn_t* conn = calloc(1, sizeof(mysql_conn_t));
-	if (!conn) {
-		return -1;
-	}
+    mysql_conn_t* conn = calloc(1, sizeof(mysql_conn_t));
+    if (!conn) {
+        return -1;
+    }
 
-	conn->db = mysql_init(nullptr);
-	if (!conn->db) {
-		CSILK_LOG_E("csilk_db_mysql: mysql_init failed");
-		free(conn);
-		return -1;
-	}
+    conn->db = mysql_init(nullptr);
+    if (!conn->db) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_init failed");
+        free(conn);
+        return -1;
+    }
 
-	char *host = nullptr, *user = nullptr, *password = nullptr, *dbname = nullptr;
-	int port = 3306;
-	mysql_parse_dsn(dsn, &host, &port, &user, &password, &dbname);
+    char *host = nullptr, *user = nullptr, *password = nullptr, *dbname = nullptr;
+    int   port = 3306;
+    mysql_parse_dsn(dsn, &host, &port, &user, &password, &dbname);
 
-	/* TCP connection; no client flags set */
-	MYSQL* ret = mysql_real_connect(conn->db, host, user, password, dbname, port, nullptr, 0);
-	free(host);
-	free(user);
-	free(password);
-	free(dbname);
+    /* TCP connection; no client flags set */
+    MYSQL* ret = mysql_real_connect(conn->db, host, user, password, dbname, port, nullptr, 0);
+    free(host);
+    free(user);
+    free(password);
+    free(dbname);
 
-	if (!ret) {
-		CSILK_LOG_E("csilk_db_mysql: connect failed: %s", mysql_error(conn->db));
-		mysql_close(conn->db);
-		free(conn);
-		return -1;
-	}
+    if (!ret) {
+        CSILK_LOG_E("csilk_db_mysql: connect failed: %s", mysql_error(conn->db));
+        mysql_close(conn->db);
+        free(conn);
+        return -1;
+    }
 
-	csilk_db_pool_set_connection(pool, conn);
-	return 0;
+    csilk_db_pool_set_connection(pool, conn);
+    return 0;
 }
 
 /**
@@ -158,17 +158,17 @@ mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn)
 static int
 mysql_drv_disconnect(csilk_db_pool_t* pool)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool)) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return -1;
+    }
 
-	mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
-	if (conn->db) {
-		mysql_close(conn->db);
-	}
-	free(conn);
-	csilk_db_pool_set_connection(pool, nullptr);
-	return 0;
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    if (conn->db) {
+        mysql_close(conn->db);
+    }
+    free(conn);
+    csilk_db_pool_set_connection(pool, nullptr);
+    return 0;
 }
 
 /**
@@ -181,28 +181,28 @@ mysql_drv_disconnect(csilk_db_pool_t* pool)
 static void
 mysql_free_csilk_result(csilk_db_result_t* result)
 {
-	if (!result) {
-		return;
-	}
-	for (int i = 0; i < result->row_count; i++) {
-		csilk_db_row_t* row = result->rows[i];
-		if (row) {
-			for (int j = 0; j < row->count; j++) {
-				free(row->values[j]);
-			}
-			free(row->values);
-			free(row);
-		}
-	}
-	free(result->rows);
-	for (int i = 0; i < result->column_count; i++) {
-		free(result->column_names[i]);
-	}
-	free(result->column_names);
-	result->rows = nullptr;
-	result->column_names = nullptr;
-	result->row_count = 0;
-	result->column_count = 0;
+    if (!result) {
+        return;
+    }
+    for (int i = 0; i < result->row_count; i++) {
+        csilk_db_row_t* row = result->rows[i];
+        if (row) {
+            for (int j = 0; j < row->count; j++) {
+                free(row->values[j]);
+            }
+            free(row->values);
+            free(row);
+        }
+    }
+    free(result->rows);
+    for (int i = 0; i < result->column_count; i++) {
+        free(result->column_names[i]);
+    }
+    free(result->column_names);
+    result->rows = nullptr;
+    result->column_names = nullptr;
+    result->row_count = 0;
+    result->column_count = 0;
 }
 
 /**
@@ -224,79 +224,79 @@ mysql_free_csilk_result(csilk_db_result_t* result)
 static int
 mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql || !result) {
+        return -1;
+    }
 
-	mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
 
-	if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
-		CSILK_LOG_E("csilk_db_mysql: query failed: %s", mysql_error(conn->db));
-		return -1;
-	}
+    if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: query failed: %s", mysql_error(conn->db));
+        return -1;
+    }
 
-	/* Buffer the entire result set client-side */
-	MYSQL_RES* mysql_res = mysql_store_result(conn->db);
-	if (!mysql_res) {
-		return 0;
-	}
+    /* Buffer the entire result set client-side */
+    MYSQL_RES* mysql_res = mysql_store_result(conn->db);
+    if (!mysql_res) {
+        return 0;
+    }
 
-	/* --- Extract column metadata --- */
-	MYSQL_FIELD* fields = mysql_fetch_fields(mysql_res);
-	unsigned int num_fields = mysql_num_fields(mysql_res);
+    /* --- Extract column metadata --- */
+    MYSQL_FIELD* fields = mysql_fetch_fields(mysql_res);
+    unsigned int num_fields = mysql_num_fields(mysql_res);
 
-	result->column_count = (int)num_fields;
-	result->column_names = calloc(num_fields, sizeof(char*));
-	if (!result->column_names) {
-		mysql_free_result(mysql_res);
-		return -1;
-	}
-	for (unsigned int i = 0; i < num_fields; i++) {
-		result->column_names[i] = strdup(fields[i].name);
-	}
+    result->column_count = (int)num_fields;
+    result->column_names = calloc(num_fields, sizeof(char*));
+    if (!result->column_names) {
+        mysql_free_result(mysql_res);
+        return -1;
+    }
+    for (unsigned int i = 0; i < num_fields; i++) {
+        result->column_names[i] = strdup(fields[i].name);
+    }
 
-	/* --- Iterate rows --- */
-	MYSQL_ROW row;
-	while ((row = mysql_fetch_row(mysql_res))) {
-		unsigned long* lengths = mysql_fetch_lengths(mysql_res);
+    /* --- Iterate rows --- */
+    MYSQL_ROW row;
+    while ((row = mysql_fetch_row(mysql_res))) {
+        unsigned long* lengths = mysql_fetch_lengths(mysql_res);
 
-		csilk_db_row_t* drow = calloc(1, sizeof(csilk_db_row_t));
-		if (!drow) {
-			mysql_free_result(mysql_res);
-			mysql_free_csilk_result(result);
-			return -1;
-		}
+        csilk_db_row_t* drow = calloc(1, sizeof(csilk_db_row_t));
+        if (!drow) {
+            mysql_free_result(mysql_res);
+            mysql_free_csilk_result(result);
+            return -1;
+        }
 
-		drow->count = (int)num_fields;
-		drow->values = calloc(num_fields, sizeof(char*));
-		if (!drow->values) {
-			free(drow);
-			mysql_free_result(mysql_res);
-			mysql_free_csilk_result(result);
-			return -1;
-		}
+        drow->count = (int)num_fields;
+        drow->values = calloc(num_fields, sizeof(char*));
+        if (!drow->values) {
+            free(drow);
+            mysql_free_result(mysql_res);
+            mysql_free_csilk_result(result);
+            return -1;
+        }
 
-		/* Copy each field using the binary-safe length from mysql_fetch_lengths */
-		for (unsigned int i = 0; i < num_fields; i++) {
-			drow->values[i] = row[i] ? csilk_strndup(row[i], lengths[i]) : nullptr;
-		}
+        /* Copy each field using the binary-safe length from mysql_fetch_lengths */
+        for (unsigned int i = 0; i < num_fields; i++) {
+            drow->values[i] = row[i] ? csilk_strndup(row[i], lengths[i]) : nullptr;
+        }
 
-		/* Append row to the result array */
-		csilk_db_row_t** new_rows =
-		    realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-		if (!new_rows) {
-			free(drow->values);
-			free(drow);
-			mysql_free_result(mysql_res);
-			mysql_free_csilk_result(result);
-			return -1;
-		}
-		result->rows = new_rows;
-		result->rows[result->row_count++] = drow;
-	}
+        /* Append row to the result array */
+        csilk_db_row_t** new_rows =
+            realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+        if (!new_rows) {
+            free(drow->values);
+            free(drow);
+            mysql_free_result(mysql_res);
+            mysql_free_csilk_result(result);
+            return -1;
+        }
+        result->rows = new_rows;
+        result->rows[result->row_count++] = drow;
+    }
 
-	mysql_free_result(mysql_res);
-	return 0;
+    mysql_free_result(mysql_res);
+    return 0;
 }
 
 /**
@@ -309,46 +309,46 @@ mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 static int
 mysql_drv_exec(csilk_db_pool_t* pool, const char* sql)
 {
-	if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
-		return -1;
-	}
+    if (!pool || !csilk_db_pool_get_connection(pool) || !sql) {
+        return -1;
+    }
 
-	mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
 
-	if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
-		CSILK_LOG_E("csilk_db_mysql: exec failed: %s", mysql_error(conn->db));
-		return -1;
-	}
+    if (mysql_real_query(conn->db, sql, strlen(sql)) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: exec failed: %s", mysql_error(conn->db));
+        return -1;
+    }
 
-	/* Drain any remaining result (important for multi-statement or
+    /* Drain any remaining result (important for multi-statement or
    * statements that unexpectedly produce rows) */
-	MYSQL_RES* res = mysql_store_result(conn->db);
-	if (res) {
-		mysql_free_result(res);
-	}
+    MYSQL_RES* res = mysql_store_result(conn->db);
+    if (res) {
+        mysql_free_result(res);
+    }
 
-	return 0;
+    return 0;
 }
 
 /** @brief Begin a transaction (sends "BEGIN"). */
 static int
 mysql_drv_transaction_begin(csilk_db_pool_t* pool)
 {
-	return mysql_drv_exec(pool, "BEGIN");
+    return mysql_drv_exec(pool, "BEGIN");
 }
 
 /** @brief Commit the current transaction (sends "COMMIT"). */
 static int
 mysql_drv_transaction_commit(csilk_db_pool_t* pool)
 {
-	return mysql_drv_exec(pool, "COMMIT");
+    return mysql_drv_exec(pool, "COMMIT");
 }
 
 /** @brief Rollback the current transaction (sends "ROLLBACK"). */
 static int
 mysql_drv_transaction_rollback(csilk_db_pool_t* pool)
 {
-	return mysql_drv_exec(pool, "ROLLBACK");
+    return mysql_drv_exec(pool, "ROLLBACK");
 }
 
 /** @brief Pre-built driver vtable for MySQL. */
@@ -371,7 +371,7 @@ csilk_db_driver_t csilk_db_mysql_driver = {
 void
 csilk_db_mysql_init(void)
 {
-	csilk_db_register_driver("mysql", &csilk_db_mysql_driver);
+    csilk_db_register_driver("mysql", &csilk_db_mysql_driver);
 }
 
 #endif /* HAS_MYSQL */

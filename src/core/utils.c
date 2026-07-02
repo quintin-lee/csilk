@@ -104,52 +104,52 @@ static const uint32_t k256[] = {
 static void
 sha256_transform(uint32_t state[8], const uint8_t data[64])
 {
-	uint32_t a, b, c, d, e, f, g, h, t1, t2, w[64];
+    uint32_t a, b, c, d, e, f, g, h, t1, t2, w[64];
 
-	/* Message schedule: first 16 words = big-endian message block */
-	for (int i = 0; i < 16; i++) {
-		w[i] = (uint32_t)data[i * 4] << 24 | (uint32_t)data[i * 4 + 1] << 16 |
-		       (uint32_t)data[i * 4 + 2] << 8 | (uint32_t)data[i * 4 + 3];
-	}
-	/* Message schedule expansion (w[16..63]) using the lowercase sigma
+    /* Message schedule: first 16 words = big-endian message block */
+    for (int i = 0; i < 16; i++) {
+        w[i] = (uint32_t)data[i * 4] << 24 | (uint32_t)data[i * 4 + 1] << 16 |
+               (uint32_t)data[i * 4 + 2] << 8 | (uint32_t)data[i * 4 + 3];
+    }
+    /* Message schedule expansion (w[16..63]) using the lowercase sigma
    * functions for diffusion across the entire message. */
-	for (int i = 16; i < 64; i++) {
-		w[i] = gamma1(w[i - 2]) + w[i - 7] + gamma0(w[i - 15]) + w[i - 16];
-	}
+    for (int i = 16; i < 64; i++) {
+        w[i] = gamma1(w[i - 2]) + w[i - 7] + gamma0(w[i - 15]) + w[i - 16];
+    }
 
-	a = state[0];
-	b = state[1];
-	c = state[2];
-	d = state[3];
-	e = state[4];
-	f = state[5];
-	g = state[6];
-	h = state[7];
+    a = state[0];
+    b = state[1];
+    c = state[2];
+    d = state[3];
+    e = state[4];
+    f = state[5];
+    g = state[6];
+    h = state[7];
 
-	/* 64 rounds of the SHA-256 compression function.
+    /* 64 rounds of the SHA-256 compression function.
    * Each round mixes the working variables through Sigma, Ch, Maj, and
    * the round constant K[i] for both diffusion and Confusion. */
-	for (int i = 0; i < 64; i++) {
-		t1 = h + sigma1(e) + ch(e, f, g) + k256[i] + w[i];
-		t2 = sigma0(a) + maj(a, b, c);
-		h = g;
-		g = f;
-		f = e;
-		e = d + t1;
-		d = c;
-		c = b;
-		b = a;
-		a = t1 + t2;
-	}
+    for (int i = 0; i < 64; i++) {
+        t1 = h + sigma1(e) + ch(e, f, g) + k256[i] + w[i];
+        t2 = sigma0(a) + maj(a, b, c);
+        h = g;
+        g = f;
+        f = e;
+        e = d + t1;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2;
+    }
 
-	state[0] += a;
-	state[1] += b;
-	state[2] += c;
-	state[3] += d;
-	state[4] += e;
-	state[5] += f;
-	state[6] += g;
-	state[7] += h;
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+    state[5] += f;
+    state[6] += g;
+    state[7] += h;
 }
 
 /** @brief Initialize a SHA-256 hashing context with the standard initial hash
@@ -162,15 +162,15 @@ sha256_transform(uint32_t state[8], const uint8_t data[64])
 void
 csilk_sha256_init(csilk_sha256_ctx* context)
 {
-	context->state[0] = 0x6a09e667;
-	context->state[1] = 0xbb67ae85;
-	context->state[2] = 0x3c6ef372;
-	context->state[3] = 0xa54ff53a;
-	context->state[4] = 0x510e527f;
-	context->state[5] = 0x9b05688c;
-	context->state[6] = 0x1f83d9ab;
-	context->state[7] = 0x5be0cd19;
-	context->count = 0;
+    context->state[0] = 0x6a09e667;
+    context->state[1] = 0xbb67ae85;
+    context->state[2] = 0x3c6ef372;
+    context->state[3] = 0xa54ff53a;
+    context->state[4] = 0x510e527f;
+    context->state[5] = 0x9b05688c;
+    context->state[6] = 0x1f83d9ab;
+    context->state[7] = 0x5be0cd19;
+    context->count = 0;
 }
 
 /** @brief Feed data into the SHA-256 hashing context for incremental hashing.
@@ -184,20 +184,20 @@ csilk_sha256_init(csilk_sha256_ctx* context)
 void
 csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data, size_t len)
 {
-	uint32_t i, idx = (uint32_t)((context->count >> 3) & 0x3F);
-	context->count += (uint64_t)len << 3;
+    uint32_t i, idx = (uint32_t)((context->count >> 3) & 0x3F);
+    context->count += (uint64_t)len << 3;
 
-	if (64 - idx <= len) {
-		memcpy(context->buffer + idx, data, 64 - idx);
-		sha256_transform(context->state, context->buffer);
-		for (i = 64 - idx; i + 63 < len; i += 64) {
-			sha256_transform(context->state, data + i);
-		}
-		idx = 0;
-	} else {
-		i = 0;
-	}
-	memcpy(context->buffer + idx, data + i, len - i);
+    if (64 - idx <= len) {
+        memcpy(context->buffer + idx, data, 64 - idx);
+        sha256_transform(context->state, context->buffer);
+        for (i = 64 - idx; i + 63 < len; i += 64) {
+            sha256_transform(context->state, data + i);
+        }
+        idx = 0;
+    } else {
+        i = 0;
+    }
+    memcpy(context->buffer + idx, data + i, len - i);
 }
 
 /** @brief Finalize the SHA-256 hash and produce the 32-byte digest.
@@ -210,20 +210,20 @@ csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data, size_t len)
 void
 csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32])
 {
-	uint8_t finalcount[8];
-	for (int i = 0; i < 8; i++) {
-		finalcount[i] = (uint8_t)((context->count >> (56 - i * 8)) & 0xFF);
-	}
+    uint8_t finalcount[8];
+    for (int i = 0; i < 8; i++) {
+        finalcount[i] = (uint8_t)((context->count >> (56 - i * 8)) & 0xFF);
+    }
 
-	uint32_t left = (uint32_t)((context->count >> 3) % 64);
-	uint32_t pad_len = (left < 56) ? (56 - left) : (120 - left);
-	uint8_t padding[128] = {0x80};
-	csilk_sha256_update(context, padding, pad_len);
-	csilk_sha256_update(context, finalcount, 8);
+    uint32_t left = (uint32_t)((context->count >> 3) % 64);
+    uint32_t pad_len = (left < 56) ? (56 - left) : (120 - left);
+    uint8_t  padding[128] = {0x80};
+    csilk_sha256_update(context, padding, pad_len);
+    csilk_sha256_update(context, finalcount, 8);
 
-	for (int i = 0; i < 32; i++) {
-		digest[i] = (uint8_t)((context->state[i >> 2] >> (24 - (i & 3) * 8)) & 0xFF);
-	}
+    for (int i = 0; i < 32; i++) {
+        digest[i] = (uint8_t)((context->state[i >> 2] >> (24 - (i & 3) * 8)) & 0xFF);
+    }
 }
 
 /** @brief Compute HMAC-SHA256 as defined in RFC 2104.
@@ -252,36 +252,36 @@ void
 csilk_hmac_sha256(
     const uint8_t* key, size_t key_len, const uint8_t* data, size_t data_len, uint8_t out[32])
 {
-	csilk_sha256_ctx ctx;
-	uint8_t k_ipad[64], k_opad[64], tk[32];
+    csilk_sha256_ctx ctx;
+    uint8_t          k_ipad[64], k_opad[64], tk[32];
 
-	if (key_len > 64) {
-		csilk_sha256_init(&ctx);
-		csilk_sha256_update(&ctx, key, key_len);
-		csilk_sha256_final(&ctx, tk);
-		key = tk;
-		key_len = 32;
-	}
+    if (key_len > 64) {
+        csilk_sha256_init(&ctx);
+        csilk_sha256_update(&ctx, key, key_len);
+        csilk_sha256_final(&ctx, tk);
+        key = tk;
+        key_len = 32;
+    }
 
-	memset(k_ipad, 0, 64);
-	memset(k_opad, 0, 64);
-	memcpy(k_ipad, key, key_len);
-	memcpy(k_opad, key, key_len);
+    memset(k_ipad, 0, 64);
+    memset(k_opad, 0, 64);
+    memcpy(k_ipad, key, key_len);
+    memcpy(k_opad, key, key_len);
 
-	for (int i = 0; i < 64; i++) {
-		k_ipad[i] ^= 0x36;
-		k_opad[i] ^= 0x5c;
-	}
+    for (int i = 0; i < 64; i++) {
+        k_ipad[i] ^= 0x36;
+        k_opad[i] ^= 0x5c;
+    }
 
-	csilk_sha256_init(&ctx);
-	csilk_sha256_update(&ctx, k_ipad, 64);
-	csilk_sha256_update(&ctx, data, data_len);
-	csilk_sha256_final(&ctx, out);
+    csilk_sha256_init(&ctx);
+    csilk_sha256_update(&ctx, k_ipad, 64);
+    csilk_sha256_update(&ctx, data, data_len);
+    csilk_sha256_final(&ctx, out);
 
-	csilk_sha256_init(&ctx);
-	csilk_sha256_update(&ctx, k_opad, 64);
-	csilk_sha256_update(&ctx, out, 32);
-	csilk_sha256_final(&ctx, out);
+    csilk_sha256_init(&ctx);
+    csilk_sha256_update(&ctx, k_opad, 64);
+    csilk_sha256_update(&ctx, out, 32);
+    csilk_sha256_final(&ctx, out);
 }
 
 /** @brief Context-aware HMAC-SHA256 — delegates to the crypto driver if
@@ -304,18 +304,18 @@ csilk_hmac_sha256(
  * @param data_len Data length.
  * @param out      [out] 32-byte HMAC output buffer. */
 CSILK_INTERNAL void
-_csilk_hmac_sha256(csilk_ctx_t* c,
-		   const uint8_t* key,
-		   size_t key_len,
-		   const uint8_t* data,
-		   size_t data_len,
-		   uint8_t out[32])
+_csilk_hmac_sha256(csilk_ctx_t*   c,
+                   const uint8_t* key,
+                   size_t         key_len,
+                   const uint8_t* data,
+                   size_t         data_len,
+                   uint8_t        out[32])
 {
-	if (c && c->crypto_driver && c->crypto_driver->hmac_sha256) {
-		c->crypto_driver->hmac_sha256(key, key_len, data, data_len, out);
-	} else {
-		csilk_hmac_sha256(key, key_len, data, data_len, out);
-	}
+    if (c && c->crypto_driver && c->crypto_driver->hmac_sha256) {
+        c->crypto_driver->hmac_sha256(key, key_len, data, data_len, out);
+    } else {
+        csilk_hmac_sha256(key, key_len, data, data_len, out);
+    }
 }
 
 /** @brief Context-aware UUID generation — delegates to the crypto driver if
@@ -334,76 +334,76 @@ _csilk_hmac_sha256(csilk_ctx_t* c,
 CSILK_INTERNAL void
 _csilk_generate_uuid(csilk_ctx_t* c, char buf[CSILK_UUID_BUF_SIZE])
 {
-	if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
-		c->crypto_driver->generate_uuid(buf);
-	} else {
-		csilk_generate_uuid(buf);
-	}
+    if (c && c->crypto_driver && c->crypto_driver->generate_uuid) {
+        c->crypto_driver->generate_uuid(buf);
+    } else {
+        csilk_generate_uuid(buf);
+    }
 }
 
 CSILK_INTERNAL int
 _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 {
-	if (c && c->crypto_driver && c->crypto_driver->fill_random) {
-		return c->crypto_driver->fill_random(out, len);
-	}
+    if (c && c->crypto_driver && c->crypto_driver->fill_random) {
+        return c->crypto_driver->fill_random(out, len);
+    }
 
 #if defined(_WIN32)
-	HCRYPTPROV hProvider;
-	if (CryptAcquireContext(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
-		if (CryptGenRandom(hProvider, (DWORD)len, (BYTE*)out)) {
-			CryptReleaseContext(hProvider, 0);
-			return 0;
-		}
-		CryptReleaseContext(hProvider, 0);
-	}
-	return -1;
+    HCRYPTPROV hProvider;
+    if (CryptAcquireContext(&hProvider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+        if (CryptGenRandom(hProvider, (DWORD)len, (BYTE*)out)) {
+            CryptReleaseContext(hProvider, 0);
+            return 0;
+        }
+        CryptReleaseContext(hProvider, 0);
+    }
+    return -1;
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-	arc4random_buf(out, len);
-	return 0;
+    arc4random_buf(out, len);
+    return 0;
 #elif defined(__linux__)
-	/* Try getrandom() first on Linux (modern, no FD needed) */
-	ssize_t ret = getrandom(out, len, 0);
-	if (ret == (ssize_t)len) {
-		return 0;
-	}
+    /* Try getrandom() first on Linux (modern, no FD needed) */
+    ssize_t ret = getrandom(out, len, 0);
+    if (ret == (ssize_t)len) {
+        return 0;
+    }
 #endif
 
 #ifndef _WIN32
-	/* Fallback to /dev/urandom for older Linux or other POSIX systems */
-	FILE* f = fopen("/dev/urandom", "rb");
-	if (f) {
-		size_t n = fread(out, 1, len, f);
-		fclose(f);
-		return (n == len) ? 0 : -1;
-	}
+    /* Fallback to /dev/urandom for older Linux or other POSIX systems */
+    FILE* f = fopen("/dev/urandom", "rb");
+    if (f) {
+        size_t n = fread(out, 1, len, f);
+        fclose(f);
+        return (n == len) ? 0 : -1;
+    }
 #endif
 
-	return -1;
+    return -1;
 }
 
 int
 csilk_crypto_fill_random(void* out, size_t len)
 {
-	return _csilk_fill_random(nullptr, out, len);
+    return _csilk_fill_random(nullptr, out, len);
 }
 
 void
 csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
-	if (csilk_crypto_fill_random(out, len) != 0) {
-		/* Monotonic unique fallback to ensure GCM safety (never reuse nonce)
-		 * if the system entropy source fails. Uses csilk_io_hrtime() and atomic counter. */
-		uint64_t ts = csilk_io_hrtime();
-		uint32_t count = atomic_fetch_add(&g_nonce_counter, 1);
-		size_t i = 0;
-		for (; i < len && i < 8; i++) {
-			out[i] = (uint8_t)(ts >> (i * 8));
-		}
-		for (; i < len; i++) {
-			out[i] = (uint8_t)(count >> ((i - 8) * 8));
-		}
-	}
+    if (csilk_crypto_fill_random(out, len) != 0) {
+        /* Monotonic unique fallback to ensure GCM safety (never reuse nonce)
+         * if the system entropy source fails. Uses csilk_io_hrtime() and atomic counter. */
+        uint64_t ts = csilk_io_hrtime();
+        uint32_t count = atomic_fetch_add(&g_nonce_counter, 1);
+        size_t   i = 0;
+        for (; i < len && i < 8; i++) {
+            out[i] = (uint8_t)(ts >> (i * 8));
+        }
+        for (; i < len; i++) {
+            out[i] = (uint8_t)(count >> ((i - 8) * 8));
+        }
+    }
 }
 
 extern csilk_cipher_driver_t csilk_default_cipher_driver;
@@ -422,10 +422,10 @@ extern csilk_cipher_driver_t csilk_default_cipher_driver;
 static csilk_cipher_driver_t*
 resolve_cipher(csilk_ctx_t* c)
 {
-	if (c && c->cipher_driver) {
-		return c->cipher_driver;
-	}
-	return &csilk_default_cipher_driver;
+    if (c && c->cipher_driver) {
+        return c->cipher_driver;
+    }
+    return &csilk_default_cipher_driver;
 }
 
 /** @brief Symmetric encryption dispatcher.
@@ -451,32 +451,32 @@ resolve_cipher(csilk_ctx_t* c)
  *       driver set.
  */
 CSILK_INTERNAL int
-_csilk_symmetric_encrypt(csilk_ctx_t* c,
-			 const uint8_t* key,
-			 size_t key_len,
-			 const uint8_t* plaintext,
-			 size_t plaintext_len,
-			 const uint8_t* iv,
-			 size_t iv_len,
-			 uint8_t* ciphertext,
-			 size_t* ciphertext_len,
-			 uint8_t* tag,
-			 size_t tag_len)
+_csilk_symmetric_encrypt(csilk_ctx_t*   c,
+                         const uint8_t* key,
+                         size_t         key_len,
+                         const uint8_t* plaintext,
+                         size_t         plaintext_len,
+                         const uint8_t* iv,
+                         size_t         iv_len,
+                         uint8_t*       ciphertext,
+                         size_t*        ciphertext_len,
+                         uint8_t*       tag,
+                         size_t         tag_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->symmetric_encrypt) {
-		return -1;
-	}
-	return d->symmetric_encrypt(key,
-				    key_len,
-				    plaintext,
-				    plaintext_len,
-				    iv,
-				    iv_len,
-				    ciphertext,
-				    ciphertext_len,
-				    tag,
-				    tag_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->symmetric_encrypt) {
+        return -1;
+    }
+    return d->symmetric_encrypt(key,
+                                key_len,
+                                plaintext,
+                                plaintext_len,
+                                iv,
+                                iv_len,
+                                ciphertext,
+                                ciphertext_len,
+                                tag,
+                                tag_len);
 }
 
 /** @brief Symmetric decryption dispatcher.
@@ -502,32 +502,32 @@ _csilk_symmetric_encrypt(csilk_ctx_t* c,
  *       driver set.
  */
 CSILK_INTERNAL int
-_csilk_symmetric_decrypt(csilk_ctx_t* c,
-			 const uint8_t* key,
-			 size_t key_len,
-			 const uint8_t* ciphertext,
-			 size_t ciphertext_len,
-			 const uint8_t* iv,
-			 size_t iv_len,
-			 const uint8_t* tag,
-			 size_t tag_len,
-			 uint8_t* plaintext,
-			 size_t* plaintext_len)
+_csilk_symmetric_decrypt(csilk_ctx_t*   c,
+                         const uint8_t* key,
+                         size_t         key_len,
+                         const uint8_t* ciphertext,
+                         size_t         ciphertext_len,
+                         const uint8_t* iv,
+                         size_t         iv_len,
+                         const uint8_t* tag,
+                         size_t         tag_len,
+                         uint8_t*       plaintext,
+                         size_t*        plaintext_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->symmetric_decrypt) {
-		return -1;
-	}
-	return d->symmetric_decrypt(key,
-				    key_len,
-				    ciphertext,
-				    ciphertext_len,
-				    iv,
-				    iv_len,
-				    tag,
-				    tag_len,
-				    plaintext,
-				    plaintext_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->symmetric_decrypt) {
+        return -1;
+    }
+    return d->symmetric_decrypt(key,
+                                key_len,
+                                ciphertext,
+                                ciphertext_len,
+                                iv,
+                                iv_len,
+                                tag,
+                                tag_len,
+                                plaintext,
+                                plaintext_len);
 }
 
 /** @brief Asymmetric key-pair generation dispatcher.
@@ -550,11 +550,11 @@ int
 _csilk_generate_keypair(
     csilk_ctx_t* c, char* public_key, size_t* pub_len, char* private_key, size_t* priv_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->generate_keypair) {
-		return -1;
-	}
-	return d->generate_keypair(public_key, pub_len, private_key, priv_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->generate_keypair) {
+        return -1;
+    }
+    return d->generate_keypair(public_key, pub_len, private_key, priv_len);
 }
 
 /** @brief Asymmetric encryption dispatcher.
@@ -575,20 +575,20 @@ _csilk_generate_keypair(
  *       driver set.
  */
 int
-_csilk_asymmetric_encrypt(csilk_ctx_t* c,
-			  const char* public_key,
-			  size_t pub_len,
-			  const uint8_t* plaintext,
-			  size_t plaintext_len,
-			  uint8_t* ciphertext,
-			  size_t* ciphertext_len)
+_csilk_asymmetric_encrypt(csilk_ctx_t*   c,
+                          const char*    public_key,
+                          size_t         pub_len,
+                          const uint8_t* plaintext,
+                          size_t         plaintext_len,
+                          uint8_t*       ciphertext,
+                          size_t*        ciphertext_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->asymmetric_encrypt) {
-		return -1;
-	}
-	return d->asymmetric_encrypt(
-	    public_key, pub_len, plaintext, plaintext_len, ciphertext, ciphertext_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->asymmetric_encrypt) {
+        return -1;
+    }
+    return d->asymmetric_encrypt(
+        public_key, pub_len, plaintext, plaintext_len, ciphertext, ciphertext_len);
 }
 
 /** @brief Asymmetric decryption dispatcher.
@@ -610,20 +610,20 @@ _csilk_asymmetric_encrypt(csilk_ctx_t* c,
  *       driver set.
  */
 int
-_csilk_asymmetric_decrypt(csilk_ctx_t* c,
-			  const char* private_key,
-			  size_t priv_len,
-			  const uint8_t* ciphertext,
-			  size_t ciphertext_len,
-			  uint8_t* plaintext,
-			  size_t* plaintext_len)
+_csilk_asymmetric_decrypt(csilk_ctx_t*   c,
+                          const char*    private_key,
+                          size_t         priv_len,
+                          const uint8_t* ciphertext,
+                          size_t         ciphertext_len,
+                          uint8_t*       plaintext,
+                          size_t*        plaintext_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->asymmetric_decrypt) {
-		return -1;
-	}
-	return d->asymmetric_decrypt(
-	    private_key, priv_len, ciphertext, ciphertext_len, plaintext, plaintext_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->asymmetric_decrypt) {
+        return -1;
+    }
+    return d->asymmetric_decrypt(
+        private_key, priv_len, ciphertext, ciphertext_len, plaintext, plaintext_len);
 }
 
 /** @brief Digital signature creation dispatcher.
@@ -644,19 +644,19 @@ _csilk_asymmetric_decrypt(csilk_ctx_t* c,
  *       driver set.
  */
 int
-_csilk_sign(csilk_ctx_t* c,
-	    const char* private_key,
-	    size_t priv_len,
-	    const uint8_t* data,
-	    size_t data_len,
-	    uint8_t* signature,
-	    size_t* sig_len)
+_csilk_sign(csilk_ctx_t*   c,
+            const char*    private_key,
+            size_t         priv_len,
+            const uint8_t* data,
+            size_t         data_len,
+            uint8_t*       signature,
+            size_t*        sig_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->sign) {
-		return -1;
-	}
-	return d->sign(private_key, priv_len, data, data_len, signature, sig_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->sign) {
+        return -1;
+    }
+    return d->sign(private_key, priv_len, data, data_len, signature, sig_len);
 }
 
 /** @brief Digital signature verification dispatcher.
@@ -676,71 +676,71 @@ _csilk_sign(csilk_ctx_t* c,
  *       driver set.
  */
 int
-_csilk_verify(csilk_ctx_t* c,
-	      const char* public_key,
-	      size_t pub_len,
-	      const uint8_t* data,
-	      size_t data_len,
-	      const uint8_t* signature,
-	      size_t sig_len)
+_csilk_verify(csilk_ctx_t*   c,
+              const char*    public_key,
+              size_t         pub_len,
+              const uint8_t* data,
+              size_t         data_len,
+              const uint8_t* signature,
+              size_t         sig_len)
 {
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->verify) {
-		return -1;
-	}
-	return d->verify(public_key, pub_len, data, data_len, signature, sig_len);
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->verify) {
+        return -1;
+    }
+    return d->verify(public_key, pub_len, data, data_len, signature, sig_len);
 }
 
 void*
 csilk_malloc(size_t size)
 {
-	return malloc(size);
+    return malloc(size);
 }
 
 void
 csilk_free(void* ptr)
 {
-	free(ptr);
+    free(ptr);
 }
 
 char*
 csilk_strdup(const char* s)
 {
-	return s ? strdup(s) : nullptr;
+    return s ? strdup(s) : nullptr;
 }
 
 CSILK_INTERNAL int
-_csilk_jwt_sign(csilk_ctx_t* c,
-		const char* key,
-		size_t key_len,
-		const uint8_t* data,
-		size_t data_len,
-		uint8_t* signature,
-		size_t* sig_len,
-		csilk_jwt_alg_t algorithm)
+_csilk_jwt_sign(csilk_ctx_t*    c,
+                const char*     key,
+                size_t          key_len,
+                const uint8_t*  data,
+                size_t          data_len,
+                uint8_t*        signature,
+                size_t*         sig_len,
+                csilk_jwt_alg_t algorithm)
 {
-	(void)c;
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->jwt_sign) {
-		return -1;
-	}
-	return d->jwt_sign(key, key_len, data, data_len, signature, sig_len, algorithm);
+    (void)c;
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->jwt_sign) {
+        return -1;
+    }
+    return d->jwt_sign(key, key_len, data, data_len, signature, sig_len, algorithm);
 }
 
 CSILK_INTERNAL int
-_csilk_jwt_verify(csilk_ctx_t* c,
-		  const char* key,
-		  size_t key_len,
-		  const uint8_t* data,
-		  size_t data_len,
-		  const uint8_t* signature,
-		  size_t sig_len,
-		  csilk_jwt_alg_t algorithm)
+_csilk_jwt_verify(csilk_ctx_t*    c,
+                  const char*     key,
+                  size_t          key_len,
+                  const uint8_t*  data,
+                  size_t          data_len,
+                  const uint8_t*  signature,
+                  size_t          sig_len,
+                  csilk_jwt_alg_t algorithm)
 {
-	(void)c;
-	csilk_cipher_driver_t* d = resolve_cipher(c);
-	if (!d || !d->jwt_verify) {
-		return -1;
-	}
-	return d->jwt_verify(key, key_len, data, data_len, signature, sig_len, algorithm);
+    (void)c;
+    csilk_cipher_driver_t* d = resolve_cipher(c);
+    if (!d || !d->jwt_verify) {
+        return -1;
+    }
+    return d->jwt_verify(key, key_len, data, data_len, signature, sig_len, algorithm);
 }

@@ -54,10 +54,10 @@ CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
  * @note The key and value are duplicated into arena memory. If the arena is
  *       nullptr this function silently does nothing.
  */
-CSILK_INTERNAL void map_set_view(csilk_ctx_t* c,
-				 csilk_header_map_t* map,
-				 const csilk_str_view_t* key,
-				 const csilk_str_view_t* value);
+CSILK_INTERNAL void map_set_view(csilk_ctx_t*            c,
+                                 csilk_header_map_t*     map,
+                                 const csilk_str_view_t* key,
+                                 const csilk_str_view_t* value);
 
 CSILK_INTERNAL void
 map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);

@@ -23,17 +23,16 @@
 void
 csilk_recovery_handler(csilk_ctx_t* c)
 {
-	CSILK_LOG_T("Recovery: executing handler chain");
-	csilk_next(c);
-	if (c->panicked) {
-		/* Panic path: a downstream handler called csilk_panic().
-		   Execute deferred cleanups to release heap memory, file
-		   descriptors, and mutexes, then send a generic 500. */
-		CSILK_LOG_W(
-		    "Recovery: panic recovered in request handler! Executing deferred cleanups.");
-		csilk_ctx_defer_free(c);
-		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
-	}
+    CSILK_LOG_T("Recovery: executing handler chain");
+    csilk_next(c);
+    if (c->panicked) {
+        /* Panic path: a downstream handler called csilk_panic().
+           Execute deferred cleanups to release heap memory, file
+           descriptors, and mutexes, then send a generic 500. */
+        CSILK_LOG_W("Recovery: panic recovered in request handler! Executing deferred cleanups.");
+        csilk_ctx_defer_free(c);
+        csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    }
 }
 
 /**
@@ -47,12 +46,12 @@ csilk_recovery_handler(csilk_ctx_t* c)
 void
 csilk_panic(csilk_ctx_t* c)
 {
-	if (!c) {
-		CSILK_LOG_F("Recovery: fatal - csilk_panic called with null context.");
-		exit(1);
-	}
-	CSILK_LOG_W("Recovery: triggering panic (safe error propagation)");
-	c->panicked = 1;
-	c->aborted = 1;
-	csilk_ctx_defer_free(c);
+    if (!c) {
+        CSILK_LOG_F("Recovery: fatal - csilk_panic called with null context.");
+        exit(1);
+    }
+    CSILK_LOG_W("Recovery: triggering panic (safe error propagation)");
+    c->panicked = 1;
+    c->aborted = 1;
+    csilk_ctx_defer_free(c);
 }

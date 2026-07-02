@@ -40,10 +40,10 @@ extern "C" {
  * and the overflow flag is set.
  */
 typedef struct {
-	char* buf;	 /**< Caller-provided backing buffer. */
-	size_t capacity; /**< Total capacity (including room for '\0'). */
-	size_t len;	 /**< Current string length (excluding '\0'). */
-	int overflow;	 /**< Non-zero if an append was truncated. */
+    char*  buf;      /**< Caller-provided backing buffer. */
+    size_t capacity; /**< Total capacity (including room for '\0'). */
+    size_t len;      /**< Current string length (excluding '\0'). */
+    int    overflow; /**< Non-zero if an append was truncated. */
 } csilk_bounded_buf_t;
 
 /** @brief Initialise a bounded buffer.
@@ -94,8 +94,8 @@ void csilk_bounded_buf_putf(csilk_bounded_buf_t* b, double d, int precision);
  * error responses, health checks, and small status objects.
  */
 typedef struct {
-	csilk_bounded_buf_t buf; /**< Primary bounded buffer. */
-	int comma;		 /**< Non-zero if a comma separator is pending. */
+    csilk_bounded_buf_t buf;   /**< Primary bounded buffer. */
+    int                 comma; /**< Non-zero if a comma separator is pending. */
 } csilk_bounded_json_t;
 
 /** @brief Initialise a bounded JSON builder.
