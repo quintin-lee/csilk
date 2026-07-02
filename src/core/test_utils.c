@@ -21,13 +21,13 @@
 csilk_ctx_t*
 csilk_test_ctx_new(void)
 {
-	csilk_ctx_t* c = calloc(1, sizeof(csilk_ctx_t));
-	if (c) {
-		c->handler_index = -1;
-		c->arena = csilk_arena_new(4096);
-		c->file_fd = -1;
-	}
-	return c;
+    csilk_ctx_t* c = calloc(1, sizeof(csilk_ctx_t));
+    if (c) {
+        c->handler_index = -1;
+        c->arena = csilk_arena_new(4096);
+        c->file_fd = -1;
+    }
+    return c;
 }
 
 /** @brief Free a test context and all its resources.
@@ -40,13 +40,13 @@ csilk_test_ctx_new(void)
 void
 csilk_test_ctx_free(csilk_ctx_t* c)
 {
-	if (c) {
-		csilk_ctx_cleanup(c);
-		if (c->arena) {
-			csilk_arena_free(c->arena);
-		}
-		free(c);
-	}
+    if (c) {
+        csilk_ctx_cleanup(c);
+        if (c->arena) {
+            csilk_arena_free(c->arena);
+        }
+        free(c);
+    }
 }
 
 /** @brief Attach a handler array to a test context.
@@ -57,9 +57,9 @@ csilk_test_ctx_free(csilk_ctx_t* c)
 void
 csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers)
 {
-	if (c) {
-		c->handlers = handlers;
-	}
+    if (c) {
+        c->handlers = handlers;
+    }
 }
 
 /** @brief Set the HTTP method and path on a test context.
@@ -74,13 +74,13 @@ csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers)
 void
 csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* path)
 {
-	if (c) {
-		c->request.method = (char*)method;
-		if (c->request.path) {
-			free((void*)c->request.path);
-		}
-		c->request.path = path ? strdup(path) : nullptr;
-	}
+    if (c) {
+        c->request.method = (char*)method;
+        if (c->request.path) {
+            free((void*)c->request.path);
+        }
+        c->request.path = path ? strdup(path) : nullptr;
+    }
 }
 
 /** @brief Set permission metadata on the current handler.
@@ -94,22 +94,21 @@ csilk_test_ctx_set_request(csilk_ctx_t* c, const char* method, const char* path)
  */
 void
 csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
-				    const char* perm_required,
-				    const char* perm_resource)
+                                    const char*  perm_required,
+                                    const char*  perm_resource)
 {
-	if (c) {
-		if (!c->current_handler) {
-			c->current_handler =
-			    csilk_arena_alloc(c->arena, sizeof(csilk_method_handler_t));
-			if (c->current_handler) {
-				memset(c->current_handler, 0, sizeof(csilk_method_handler_t));
-			}
-		}
-		if (c->current_handler) {
-			c->current_handler->perm_required = (char*)perm_required;
-			c->current_handler->perm_resource = (char*)perm_resource;
-		}
-	}
+    if (c) {
+        if (!c->current_handler) {
+            c->current_handler = csilk_arena_alloc(c->arena, sizeof(csilk_method_handler_t));
+            if (c->current_handler) {
+                memset(c->current_handler, 0, sizeof(csilk_method_handler_t));
+            }
+        }
+        if (c->current_handler) {
+            c->current_handler->perm_required = (char*)perm_required;
+            c->current_handler->perm_resource = (char*)perm_resource;
+        }
+    }
 }
 
 /** @brief Set the request body on a test context.
@@ -124,21 +123,21 @@ csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
 void
 csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len)
 {
-	if (c) {
-		if (c->arena && body) {
-			char* arena_body = csilk_arena_alloc(c->arena, len + 1);
-			if (arena_body) {
-				memcpy(arena_body, body, len);
-				arena_body[len] = '\0';
-				c->request.body = arena_body;
-			} else {
-				c->request.body = nullptr;
-			}
-		} else {
-			c->request.body = (char*)body;
-		}
-		c->request.body_len = len;
-	}
+    if (c) {
+        if (c->arena && body) {
+            char* arena_body = csilk_arena_alloc(c->arena, len + 1);
+            if (arena_body) {
+                memcpy(arena_body, body, len);
+                arena_body[len] = '\0';
+                c->request.body = arena_body;
+            } else {
+                c->request.body = nullptr;
+            }
+        } else {
+            c->request.body = (char*)body;
+        }
+        c->request.body_len = len;
+    }
 }
 
 /** @brief Add a key-value parameter to the test context.
@@ -155,16 +154,16 @@ csilk_test_ctx_set_body(csilk_ctx_t* c, const char* body, size_t len)
 void
 csilk_test_ctx_add_param(csilk_ctx_t* c, const char* key, const char* value)
 {
-	if (c && c->params_count < CSILK_MAX_PARAMS) {
-		if (c->arena) {
-			c->params[c->params_count].key = csilk_arena_strdup(c->arena, key);
-			c->params[c->params_count].value = csilk_arena_strdup(c->arena, value);
-		} else {
-			c->params[c->params_count].key = strdup(key);
-			c->params[c->params_count].value = strdup(value);
-		}
-		c->params_count++;
-	}
+    if (c && c->params_count < CSILK_MAX_PARAMS) {
+        if (c->arena) {
+            c->params[c->params_count].key = csilk_arena_strdup(c->arena, key);
+            c->params[c->params_count].value = csilk_arena_strdup(c->arena, value);
+        } else {
+            c->params[c->params_count].key = strdup(key);
+            c->params[c->params_count].value = strdup(value);
+        }
+        c->params_count++;
+    }
 }
 
 /** @brief Count response headers matching a key and optional value.
@@ -182,20 +181,20 @@ csilk_test_ctx_add_param(csilk_ctx_t* c, const char* key, const char* value)
 int
 csilk_test_ctx_count_response_headers(csilk_ctx_t* c, const char* key, const char* value_contains)
 {
-	if (!c || !key) {
-		return 0;
-	}
-	int count = 0;
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		csilk_header_t* h = c->response.headers.buckets[i];
-		while (h) {
-			if (strcasecmp(h->key, key) == 0) {
-				if (!value_contains || strstr(h->value, value_contains)) {
-					count++;
-				}
-			}
-			h = h->next;
-		}
-	}
-	return count;
+    if (!c || !key) {
+        return 0;
+    }
+    int count = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        csilk_header_t* h = c->response.headers.buckets[i];
+        while (h) {
+            if (strcasecmp(h->key, key) == 0) {
+                if (!value_contains || strstr(h->value, value_contains)) {
+                    count++;
+                }
+            }
+            h = h->next;
+        }
+    }
+    return count;
 }

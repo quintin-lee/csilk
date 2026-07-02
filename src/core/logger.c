@@ -62,11 +62,11 @@
 /** @brief Internal logger singleton — holds configuration, file pointer, mutex,
  * and current file size. */
 typedef struct {
-	csilk_log_config_t config; /**< Logger configuration. */
-	FILE* fp;		   /**< Output file pointer. */
-	size_t current_size;	   /**< Current log file size. */
-	csilk_mutex_t mutex;	   /**< Mutex for thread-safe logging. */
-	int initialized;	   /**< Whether logger is initialized. */
+    csilk_log_config_t config;       /**< Logger configuration. */
+    FILE*              fp;           /**< Output file pointer. */
+    size_t             current_size; /**< Current log file size. */
+    csilk_mutex_t      mutex;        /**< Mutex for thread-safe logging. */
+    int                initialized;  /**< Whether logger is initialized. */
 } csilk_logger_t;
 
 static csilk_logger_t g_logger = {{0}, nullptr, 0, {0}, 0};
@@ -76,7 +76,7 @@ static _Thread_local char tl_request_id[CSILK_UUID_BUF_SIZE];
 static char*
 get_tl_request_id(void)
 {
-	return tl_request_id;
+    return tl_request_id;
 }
 
 static const char* level_names[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"};
@@ -88,8 +88,8 @@ static const char* level_colors[] = {
  * Avoids calling time() (system call) and localtime_r() (tz lock) on
  * every log line.  Thread-local so each writer thread has its own cache. */
 static _Thread_local struct {
-	time_t last_sec;
-	char text[20]; /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
+    time_t last_sec;
+    char   text[20]; /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
 } tls_time_cache = {0, {0}};
 
 /* ---- rotation ---- */
@@ -105,15 +105,15 @@ static _Thread_local struct {
 static void
 rotate_log_files(void)
 {
-	if (!g_logger.config.file_path) {
-		return;
-	}
-	fclose(g_logger.fp);
-	char old[512];
-	snprintf(old, sizeof(old), "%s.1", g_logger.config.file_path);
-	rename(g_logger.config.file_path, old);
-	g_logger.fp = fopen(g_logger.config.file_path, "a");
-	g_logger.current_size = 0;
+    if (!g_logger.config.file_path) {
+        return;
+    }
+    fclose(g_logger.fp);
+    char old[512];
+    snprintf(old, sizeof(old), "%s.1", g_logger.config.file_path);
+    rename(g_logger.config.file_path, old);
+    g_logger.fp = fopen(g_logger.config.file_path, "a");
+    g_logger.current_size = 0;
 }
 
 /* ---- text-format output ---- */
@@ -134,54 +134,53 @@ rotate_log_files(void)
  * @return Number of bytes written to g_logger.fp. */
 static int
 log_text(csilk_log_level_t lv,
-	 const char* file,
-	 int line,
-	 const char* func,
-	 const char* msg,
-	 int msg_len)
+         const char*       file,
+         int               line,
+         const char*       func,
+         const char*       msg,
+         int               msg_len)
 {
-	const char* fn = strrchr(file, '/');
-	fn = fn ? fn + 1 : file;
+    const char* fn = strrchr(file, '/');
+    fn = fn ? fn + 1 : file;
 
-	/* Refresh cached timestamp once per second to avoid repeated
-	 * time() system calls and localtime_r() tz-lock contention. */
-	time_t now = time(nullptr);
-	if (now != tls_time_cache.last_sec) {
-		tls_time_cache.last_sec = now;
-		struct tm tm;
-		localtime_r(&now, &tm);
-		strftime(
-		    tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
-	}
+    /* Refresh cached timestamp once per second to avoid repeated
+     * time() system calls and localtime_r() tz-lock contention. */
+    time_t now = time(nullptr);
+    if (now != tls_time_cache.last_sec) {
+        tls_time_cache.last_sec = now;
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
+    }
 
-	int n = 0;
-	if (g_logger.config.use_colors) {
-		n += fprintf(g_logger.fp,
-			     "%s %s%s\x1b[0m [%s:%d] %s(): ",
-			     tls_time_cache.text,
-			     level_colors[lv],
-			     level_names[lv],
-			     fn,
-			     line,
-			     func);
-	} else {
-		n += fprintf(g_logger.fp,
-			     "%s %s [%s:%d] %s(): ",
-			     tls_time_cache.text,
-			     level_names[lv],
-			     fn,
-			     line,
-			     func);
-	}
+    int n = 0;
+    if (g_logger.config.use_colors) {
+        n += fprintf(g_logger.fp,
+                     "%s %s%s\x1b[0m [%s:%d] %s(): ",
+                     tls_time_cache.text,
+                     level_colors[lv],
+                     level_names[lv],
+                     fn,
+                     line,
+                     func);
+    } else {
+        n += fprintf(g_logger.fp,
+                     "%s %s [%s:%d] %s(): ",
+                     tls_time_cache.text,
+                     level_names[lv],
+                     fn,
+                     line,
+                     func);
+    }
 
-	char* tl_request_id = get_tl_request_id();
-	if (tl_request_id[0] != '\0') {
-		n += fprintf(g_logger.fp, "<%s> ", tl_request_id);
-	}
+    char* tl_request_id = get_tl_request_id();
+    if (tl_request_id[0] != '\0') {
+        n += fprintf(g_logger.fp, "<%s> ", tl_request_id);
+    }
 
-	n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
-	n += fprintf(g_logger.fp, "\n");
-	return n;
+    n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
+    n += fprintf(g_logger.fp, "\n");
+    return n;
 }
 
 /* ---- JSON-format output (uses reflect) ---- */
@@ -201,52 +200,51 @@ log_text(csilk_log_level_t lv,
  * @note The returned cJSON must be freed by the caller with cJSON_Delete(). */
 static cJSON*
 build_json_entry(csilk_log_level_t lv,
-		 const char* file,
-		 int line,
-		 const char* func,
-		 const char* msg,
-		 int msg_len)
+                 const char*       file,
+                 int               line,
+                 const char*       func,
+                 const char*       msg,
+                 int               msg_len)
 {
-	const char* fn = strrchr(file, '/');
-	fn = fn ? fn + 1 : file;
+    const char* fn = strrchr(file, '/');
+    fn = fn ? fn + 1 : file;
 
-	cJSON* root = cJSON_CreateObject();
-	if (!root) {
-		return nullptr;
-	}
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        return nullptr;
+    }
 
-	/* Refresh cached time once per second (shared with log_text) */
-	time_t now = time(nullptr);
-	if (now != tls_time_cache.last_sec) {
-		tls_time_cache.last_sec = now;
-		struct tm tm;
-		localtime_r(&now, &tm);
-		strftime(
-		    tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
-	}
+    /* Refresh cached time once per second (shared with log_text) */
+    time_t now = time(nullptr);
+    if (now != tls_time_cache.last_sec) {
+        tls_time_cache.last_sec = now;
+        struct tm tm;
+        localtime_r(&now, &tm);
+        strftime(tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
+    }
 
-	cJSON_AddNumberToObject(root, "time_epoch", (double)(int64_t)now);
-	cJSON_AddStringToObject(root, "level", level_names[lv]);
+    cJSON_AddNumberToObject(root, "time_epoch", (double)(int64_t)now);
+    cJSON_AddStringToObject(root, "level", level_names[lv]);
 
-	char* tl_request_id = get_tl_request_id();
-	cJSON_AddStringToObject(root, "request_id", tl_request_id);
+    char* tl_request_id = get_tl_request_id();
+    cJSON_AddStringToObject(root, "request_id", tl_request_id);
 
-	cJSON_AddStringToObject(root, "file", fn);
-	cJSON_AddNumberToObject(root, "line", line);
-	cJSON_AddStringToObject(root, "func", func);
+    cJSON_AddStringToObject(root, "file", fn);
+    cJSON_AddNumberToObject(root, "line", line);
+    cJSON_AddStringToObject(root, "func", func);
 
-	if (msg && msg_len > 0) {
-		/* Truncate to fit the message field limit (same as before) */
-		size_t cp = (size_t)msg_len < 1023 ? (size_t)msg_len : 1023;
-		char buf[1024];
-		memcpy(buf, msg, cp);
-		buf[cp] = '\0';
-		cJSON_AddStringToObject(root, "msg", buf);
-	} else {
-		cJSON_AddStringToObject(root, "msg", "");
-	}
+    if (msg && msg_len > 0) {
+        /* Truncate to fit the message field limit (same as before) */
+        size_t cp = (size_t)msg_len < 1023 ? (size_t)msg_len : 1023;
+        char   buf[1024];
+        memcpy(buf, msg, cp);
+        buf[cp] = '\0';
+        cJSON_AddStringToObject(root, "msg", buf);
+    } else {
+        cJSON_AddStringToObject(root, "msg", "");
+    }
 
-	return root;
+    return root;
 }
 
 /** @brief Format and write a structured JSON log line with optional extra
@@ -268,38 +266,38 @@ build_json_entry(csilk_log_level_t lv,
  * @return Number of bytes written, or 0 on failure. */
 static int
 log_json(csilk_log_level_t lv,
-	 const char* file,
-	 int line,
-	 const char* func,
-	 cJSON* extra,
-	 const char* msg,
-	 int msg_len)
+         const char*       file,
+         int               line,
+         const char*       func,
+         cJSON*            extra,
+         const char*       msg,
+         int               msg_len)
 {
-	cJSON* root = build_json_entry(lv, file, line, func, msg, msg_len);
-	if (!root) {
-		return 0;
-	}
+    cJSON* root = build_json_entry(lv, file, line, func, msg, msg_len);
+    if (!root) {
+        return 0;
+    }
 
-	if (extra) {
-		cJSON* child = extra->child;
-		while (child) {
-			cJSON* dupe = cJSON_Duplicate(child, 1);
-			if (dupe) {
-				cJSON_AddItemToObject(root, child->string, dupe);
-			}
-			child = child->next;
-		}
-		cJSON_Delete(extra);
-	}
+    if (extra) {
+        cJSON* child = extra->child;
+        while (child) {
+            cJSON* dupe = cJSON_Duplicate(child, 1);
+            if (dupe) {
+                cJSON_AddItemToObject(root, child->string, dupe);
+            }
+            child = child->next;
+        }
+        cJSON_Delete(extra);
+    }
 
-	char* line_str = cJSON_PrintUnformatted(root);
-	int n = 0;
-	if (line_str) {
-		n = fprintf(g_logger.fp, "%s\n", line_str);
-		free(line_str);
-	}
-	cJSON_Delete(root);
-	return n;
+    char* line_str = cJSON_PrintUnformatted(root);
+    int   n = 0;
+    if (line_str) {
+        n = fprintf(g_logger.fp, "%s\n", line_str);
+        free(line_str);
+    }
+    cJSON_Delete(root);
+    return n;
 }
 
 /* ================================================================
@@ -326,34 +324,34 @@ log_json(csilk_log_level_t lv,
 int
 csilk_log_init(csilk_log_config_t config)
 {
-	if (g_logger.initialized) {
-		csilk_log_close();
-	}
-	g_logger.config = config;
-	if (config.file_path) {
-		g_logger.fp = fopen(config.file_path, "a");
-		if (!g_logger.fp) {
-			return -1;
-		}
-		struct stat st;
-		if (stat(config.file_path, &st) == 0) {
-			g_logger.current_size = (size_t)st.st_size;
-		}
-	} else {
-		g_logger.fp = stdout;
-		g_logger.config.max_file_size = 0;
-	}
-	if (g_logger.config.use_colors == -1) {
-		g_logger.config.use_colors = isatty(fileno(g_logger.fp));
-	}
-	if (csilk_mutex_init(&g_logger.mutex) != 0) {
-		if (config.file_path) {
-			fclose(g_logger.fp);
-		}
-		return -1;
-	}
-	g_logger.initialized = 1;
-	return 0;
+    if (g_logger.initialized) {
+        csilk_log_close();
+    }
+    g_logger.config = config;
+    if (config.file_path) {
+        g_logger.fp = fopen(config.file_path, "a");
+        if (!g_logger.fp) {
+            return -1;
+        }
+        struct stat st;
+        if (stat(config.file_path, &st) == 0) {
+            g_logger.current_size = (size_t)st.st_size;
+        }
+    } else {
+        g_logger.fp = stdout;
+        g_logger.config.max_file_size = 0;
+    }
+    if (g_logger.config.use_colors == -1) {
+        g_logger.config.use_colors = isatty(fileno(g_logger.fp));
+    }
+    if (csilk_mutex_init(&g_logger.mutex) != 0) {
+        if (config.file_path) {
+            fclose(g_logger.fp);
+        }
+        return -1;
+    }
+    g_logger.initialized = 1;
+    return 0;
 }
 
 /** @brief Internal: format and emit a log message to the global logger.
@@ -375,35 +373,35 @@ CSILK_INTERNAL void
 _csilk_log_internal(
     csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...)
 {
-	if (!g_logger.initialized || lv < g_logger.config.level) {
-		return;
-	}
+    if (!g_logger.initialized || lv < g_logger.config.level) {
+        return;
+    }
 
-	va_list args;
-	va_start(args, fmt);
-	char buf[4096];
-	int len = vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-	if (len < 0) {
-		len = 0;
-	}
-	if (len >= (int)sizeof(buf)) {
-		len = (int)sizeof(buf) - 1;
-	}
+    va_list args;
+    va_start(args, fmt);
+    char buf[4096];
+    int  len = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (len < 0) {
+        len = 0;
+    }
+    if (len >= (int)sizeof(buf)) {
+        len = (int)sizeof(buf) - 1;
+    }
 
-	csilk_mutex_lock(&g_logger.mutex);
-	if (g_logger.config.max_file_size > 0 &&
-	    g_logger.current_size >= g_logger.config.max_file_size) {
-		rotate_log_files();
-	}
+    csilk_mutex_lock(&g_logger.mutex);
+    if (g_logger.config.max_file_size > 0 &&
+        g_logger.current_size >= g_logger.config.max_file_size) {
+        rotate_log_files();
+    }
 
-	int n = g_logger.config.json_format ? log_json(lv, file, line, func, nullptr, buf, len)
-					    : log_text(lv, file, line, func, buf, len);
+    int n = g_logger.config.json_format ? log_json(lv, file, line, func, nullptr, buf, len)
+                                        : log_text(lv, file, line, func, buf, len);
 
-	if (g_logger.config.file_path) {
-		g_logger.current_size += (size_t)n;
-	}
-	csilk_mutex_unlock(&g_logger.mutex);
+    if (g_logger.config.file_path) {
+        g_logger.current_size += (size_t)n;
+    }
+    csilk_mutex_unlock(&g_logger.mutex);
 }
 
 /** @brief Internal: emit a structured JSON log entry with extra key-value
@@ -423,49 +421,49 @@ _csilk_log_internal(
  * @note Use the CSILK_LOG_KV macro instead of calling this directly. */
 CSILK_INTERNAL void
 _csilk_log_structured(csilk_log_level_t lv,
-		      const char* file,
-		      int line,
-		      const char* func,
-		      cJSON* extra,
-		      const char* fmt,
-		      ...)
+                      const char*       file,
+                      int               line,
+                      const char*       func,
+                      cJSON*            extra,
+                      const char*       fmt,
+                      ...)
 {
-	if (!g_logger.initialized || lv < g_logger.config.level) {
-		return;
-	}
+    if (!g_logger.initialized || lv < g_logger.config.level) {
+        return;
+    }
 
-	va_list args;
-	va_start(args, fmt);
-	char buf[4096];
-	int len = vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-	if (len < 0) {
-		len = 0;
-	}
-	if (len >= (int)sizeof(buf)) {
-		len = (int)sizeof(buf) - 1;
-	}
+    va_list args;
+    va_start(args, fmt);
+    char buf[4096];
+    int  len = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (len < 0) {
+        len = 0;
+    }
+    if (len >= (int)sizeof(buf)) {
+        len = (int)sizeof(buf) - 1;
+    }
 
-	csilk_mutex_lock(&g_logger.mutex);
-	if (g_logger.config.max_file_size > 0 &&
-	    g_logger.current_size >= g_logger.config.max_file_size) {
-		rotate_log_files();
-	}
+    csilk_mutex_lock(&g_logger.mutex);
+    if (g_logger.config.max_file_size > 0 &&
+        g_logger.current_size >= g_logger.config.max_file_size) {
+        rotate_log_files();
+    }
 
-	int n;
-	if (g_logger.config.json_format) {
-		n = log_json(lv, file, line, func, extra, buf, len);
-	} else {
-		if (extra) {
-			cJSON_Delete(extra);
-		}
-		n = log_text(lv, file, line, func, buf, len);
-	}
+    int n;
+    if (g_logger.config.json_format) {
+        n = log_json(lv, file, line, func, extra, buf, len);
+    } else {
+        if (extra) {
+            cJSON_Delete(extra);
+        }
+        n = log_text(lv, file, line, func, buf, len);
+    }
 
-	if (g_logger.config.file_path) {
-		g_logger.current_size += (size_t)n;
-	}
-	csilk_mutex_unlock(&g_logger.mutex);
+    if (g_logger.config.file_path) {
+        g_logger.current_size += (size_t)n;
+    }
+    csilk_mutex_unlock(&g_logger.mutex);
 }
 
 /** @brief Check whether the global logger is configured for structured JSON
@@ -478,7 +476,7 @@ _csilk_log_structured(csilk_log_level_t lv,
 int
 csilk_log_is_json(void)
 {
-	return g_logger.initialized && g_logger.config.json_format;
+    return g_logger.initialized && g_logger.config.json_format;
 }
 
 /** @brief Set the Request ID for the current thread.
@@ -489,12 +487,12 @@ csilk_log_is_json(void)
 void
 csilk_log_set_request_id(const char* request_id)
 {
-	char* tl_request_id = get_tl_request_id();
-	if (request_id) {
-		snprintf(tl_request_id, CSILK_UUID_BUF_SIZE, "%s", request_id);
-	} else {
-		tl_request_id[0] = '\0';
-	}
+    char* tl_request_id = get_tl_request_id();
+    if (request_id) {
+        snprintf(tl_request_id, CSILK_UUID_BUF_SIZE, "%s", request_id);
+    } else {
+        tl_request_id[0] = '\0';
+    }
 }
 
 /** @brief Build a key-value cJSON object for structured logging.
@@ -504,22 +502,22 @@ csilk_log_set_request_id(const char* request_id)
 cJSON*
 csilk_log_make_kv(const char* key, ...)
 {
-	cJSON* obj = cJSON_CreateObject();
-	if (!obj) {
-		return nullptr;
-	}
-	va_list args;
-	va_start(args, key);
-	const char* k = key;
-	while (k) {
-		const char* v = va_arg(args, const char*);
-		if (v) {
-			cJSON_AddStringToObject(obj, k, v);
-		}
-		k = va_arg(args, const char*);
-	}
-	va_end(args);
-	return obj;
+    cJSON* obj = cJSON_CreateObject();
+    if (!obj) {
+        return nullptr;
+    }
+    va_list args;
+    va_start(args, key);
+    const char* k = key;
+    while (k) {
+        const char* v = va_arg(args, const char*);
+        if (v) {
+            cJSON_AddStringToObject(obj, k, v);
+        }
+        k = va_arg(args, const char*);
+    }
+    va_end(args);
+    return obj;
 }
 
 /** @brief Close the global logger and release resources.
@@ -528,14 +526,14 @@ csilk_log_make_kv(const char* key, ...)
 void
 csilk_log_close(void)
 {
-	if (!g_logger.initialized) {
-		return;
-	}
-	csilk_mutex_lock(&g_logger.mutex);
-	if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {
-		fclose(g_logger.fp);
-	}
-	g_logger.initialized = 0;
-	csilk_mutex_unlock(&g_logger.mutex);
-	csilk_mutex_destroy(&g_logger.mutex);
+    if (!g_logger.initialized) {
+        return;
+    }
+    csilk_mutex_lock(&g_logger.mutex);
+    if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {
+        fclose(g_logger.fp);
+    }
+    g_logger.initialized = 0;
+    csilk_mutex_unlock(&g_logger.mutex);
+    csilk_mutex_destroy(&g_logger.mutex);
 }

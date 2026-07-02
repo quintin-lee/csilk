@@ -50,12 +50,12 @@ CSILK_INTERNAL void _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t
  * @param data_len Input length.
  * @param[out] out 32-byte HMAC output.
  */
-CSILK_INTERNAL void _csilk_hmac_sha256(csilk_ctx_t* c,
-				       const uint8_t* key,
-				       size_t key_len,
-				       const uint8_t* data,
-				       size_t data_len,
-				       uint8_t out[32]);
+CSILK_INTERNAL void _csilk_hmac_sha256(csilk_ctx_t*   c,
+                                       const uint8_t* key,
+                                       size_t         key_len,
+                                       const uint8_t* data,
+                                       size_t         data_len,
+                                       uint8_t        out[32]);
 
 /**
  * @brief Internal: Generate a random UUID v4 string using the crypto driver
@@ -110,17 +110,17 @@ CSILK_INTERNAL void _csilk_set_internal_client(csilk_ctx_t* c, void* client);
  * @param tag_len        Tag buffer size (must be 16).
  * @return 0 on success, -1 on failure.
  */
-CSILK_INTERNAL int _csilk_symmetric_encrypt(csilk_ctx_t* c,
-					    const uint8_t* key,
-					    size_t key_len,
-					    const uint8_t* plaintext,
-					    size_t plaintext_len,
-					    const uint8_t* iv,
-					    size_t iv_len,
-					    uint8_t* ciphertext,
-					    size_t* ciphertext_len,
-					    uint8_t* tag,
-					    size_t tag_len);
+CSILK_INTERNAL int _csilk_symmetric_encrypt(csilk_ctx_t*   c,
+                                            const uint8_t* key,
+                                            size_t         key_len,
+                                            const uint8_t* plaintext,
+                                            size_t         plaintext_len,
+                                            const uint8_t* iv,
+                                            size_t         iv_len,
+                                            uint8_t*       ciphertext,
+                                            size_t*        ciphertext_len,
+                                            uint8_t*       tag,
+                                            size_t         tag_len);
 
 /**
  * @brief Internal: Symmetric decrypt using the context's cipher driver
@@ -140,17 +140,17 @@ CSILK_INTERNAL int _csilk_symmetric_encrypt(csilk_ctx_t* c,
  * @param[in,out] plaintext_len  In: capacity, Out: actual plaintext length.
  * @return 0 on success, -1 on failure (including tag mismatch).
  */
-CSILK_INTERNAL int _csilk_symmetric_decrypt(csilk_ctx_t* c,
-					    const uint8_t* key,
-					    size_t key_len,
-					    const uint8_t* ciphertext,
-					    size_t ciphertext_len,
-					    const uint8_t* iv,
-					    size_t iv_len,
-					    const uint8_t* tag,
-					    size_t tag_len,
-					    uint8_t* plaintext,
-					    size_t* plaintext_len);
+CSILK_INTERNAL int _csilk_symmetric_decrypt(csilk_ctx_t*   c,
+                                            const uint8_t* key,
+                                            size_t         key_len,
+                                            const uint8_t* ciphertext,
+                                            size_t         ciphertext_len,
+                                            const uint8_t* iv,
+                                            size_t         iv_len,
+                                            const uint8_t* tag,
+                                            size_t         tag_len,
+                                            uint8_t*       plaintext,
+                                            size_t*        plaintext_len);
 
 /**
  * @brief Internal: Generate an RSA-2048 key pair using the context's cipher
@@ -181,13 +181,13 @@ CSILK_INTERNAL int _csilk_generate_keypair(
  * @param[in,out] ciphertext_len  In: capacity, Out: actual length.
  * @return 0 on success, -1 on failure.
  */
-CSILK_INTERNAL int _csilk_asymmetric_encrypt(csilk_ctx_t* c,
-					     const char* public_key,
-					     size_t pub_len,
-					     const uint8_t* plaintext,
-					     size_t plaintext_len,
-					     uint8_t* ciphertext,
-					     size_t* ciphertext_len);
+CSILK_INTERNAL int _csilk_asymmetric_encrypt(csilk_ctx_t*   c,
+                                             const char*    public_key,
+                                             size_t         pub_len,
+                                             const uint8_t* plaintext,
+                                             size_t         plaintext_len,
+                                             uint8_t*       ciphertext,
+                                             size_t*        ciphertext_len);
 
 /**
  * @brief Internal: Asymmetric decrypt using the context's cipher driver
@@ -202,13 +202,13 @@ CSILK_INTERNAL int _csilk_asymmetric_encrypt(csilk_ctx_t* c,
  * @param[in,out] plaintext_len  In: capacity, Out: actual length.
  * @return 0 on success, -1 on failure.
  */
-CSILK_INTERNAL int _csilk_asymmetric_decrypt(csilk_ctx_t* c,
-					     const char* private_key,
-					     size_t priv_len,
-					     const uint8_t* ciphertext,
-					     size_t ciphertext_len,
-					     uint8_t* plaintext,
-					     size_t* plaintext_len);
+CSILK_INTERNAL int _csilk_asymmetric_decrypt(csilk_ctx_t*   c,
+                                             const char*    private_key,
+                                             size_t         priv_len,
+                                             const uint8_t* ciphertext,
+                                             size_t         ciphertext_len,
+                                             uint8_t*       plaintext,
+                                             size_t*        plaintext_len);
 
 /**
  * @brief Internal: Sign data using the context's cipher driver
@@ -223,13 +223,13 @@ CSILK_INTERNAL int _csilk_asymmetric_decrypt(csilk_ctx_t* c,
  * @param[in,out] sig_len  In: capacity, Out: actual signature length.
  * @return 0 on success, -1 on failure.
  */
-CSILK_INTERNAL int _csilk_sign(csilk_ctx_t* c,
-			       const char* private_key,
-			       size_t priv_len,
-			       const uint8_t* data,
-			       size_t data_len,
-			       uint8_t* signature,
-			       size_t* sig_len);
+CSILK_INTERNAL int _csilk_sign(csilk_ctx_t*   c,
+                               const char*    private_key,
+                               size_t         priv_len,
+                               const uint8_t* data,
+                               size_t         data_len,
+                               uint8_t*       signature,
+                               size_t*        sig_len);
 
 /**
  * @brief Internal: Verify a signature using the context's cipher driver
@@ -244,33 +244,33 @@ CSILK_INTERNAL int _csilk_sign(csilk_ctx_t* c,
  * @param sig_len     Signature length.
  * @return 0 on valid signature, -1 on invalid or error.
  */
-CSILK_INTERNAL int _csilk_verify(csilk_ctx_t* c,
-				 const char* public_key,
-				 size_t pub_len,
-				 const uint8_t* data,
-				 size_t data_len,
-				 const uint8_t* signature,
-				 size_t sig_len);
+CSILK_INTERNAL int _csilk_verify(csilk_ctx_t*   c,
+                                 const char*    public_key,
+                                 size_t         pub_len,
+                                 const uint8_t* data,
+                                 size_t         data_len,
+                                 const uint8_t* signature,
+                                 size_t         sig_len);
 
 #include "csilk/crypto.h"
 
-CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t* c,
-				   const char* key,
-				   size_t key_len,
-				   const uint8_t* data,
-				   size_t data_len,
-				   uint8_t* signature,
-				   size_t* sig_len,
-				   csilk_jwt_alg_t algorithm);
+CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t*    c,
+                                   const char*     key,
+                                   size_t          key_len,
+                                   const uint8_t*  data,
+                                   size_t          data_len,
+                                   uint8_t*        signature,
+                                   size_t*         sig_len,
+                                   csilk_jwt_alg_t algorithm);
 
-CSILK_INTERNAL int _csilk_jwt_verify(csilk_ctx_t* c,
-				     const char* key,
-				     size_t key_len,
-				     const uint8_t* data,
-				     size_t data_len,
-				     const uint8_t* signature,
-				     size_t sig_len,
-				     csilk_jwt_alg_t algorithm);
+CSILK_INTERNAL int _csilk_jwt_verify(csilk_ctx_t*    c,
+                                     const char*     key,
+                                     size_t          key_len,
+                                     const uint8_t*  data,
+                                     size_t          data_len,
+                                     const uint8_t*  signature,
+                                     size_t          sig_len,
+                                     csilk_jwt_alg_t algorithm);
 
 /**
  * @brief Generate a random UUID v4 string (standalone, no context needed).

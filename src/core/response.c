@@ -34,10 +34,10 @@
 void
 csilk_status(csilk_ctx_t* c, int status)
 {
-	if (!c) {
-		return;
-	}
-	c->response.status = status;
+    if (!c) {
+        return;
+    }
+    c->response.status = status;
 }
 
 /** @brief Set the response body as plain text with a status code.
@@ -55,25 +55,25 @@ csilk_status(csilk_ctx_t* c, int status)
 void
 csilk_string(csilk_ctx_t* c, int status, const char* msg)
 {
-	if (!c) {
-		CSILK_LOG_E("Response: csilk_string called with null context");
-		return;
-	}
-	c->response.status = status;
-	size_t msg_len = msg ? strlen(msg) : 0;
-	if (c->arena) {
-		c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : nullptr;
-		c->response.body_len = msg_len;
-		c->response.body_is_managed = 0;
-	} else {
-		if (c->response.body && c->response.body_is_managed) {
-			free((void*)c->response.body);
-		}
-		char* body = msg ? strdup(msg) : nullptr;
-		c->response.body = body;
-		c->response.body_len = body ? msg_len : 0;
-		c->response.body_is_managed = body ? 1 : 0;
-	}
+    if (!c) {
+        CSILK_LOG_E("Response: csilk_string called with null context");
+        return;
+    }
+    c->response.status = status;
+    size_t msg_len = msg ? strlen(msg) : 0;
+    if (c->arena) {
+        c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : nullptr;
+        c->response.body_len = msg_len;
+        c->response.body_is_managed = 0;
+    } else {
+        if (c->response.body && c->response.body_is_managed) {
+            free((void*)c->response.body);
+        }
+        char* body = msg ? strdup(msg) : nullptr;
+        c->response.body = body;
+        c->response.body_len = body ? msg_len : 0;
+        c->response.body_is_managed = body ? 1 : 0;
+    }
 }
 
 /* --- Response header setters --- */
@@ -86,7 +86,7 @@ csilk_string(csilk_ctx_t* c, int status, const char* msg)
 void
 csilk_set_header(csilk_ctx_t* c, const char* key, const char* value)
 {
-	map_set(c, &c->response.headers, key, value);
+    map_set(c, &c->response.headers, key, value);
 }
 
 /** @brief Add a response header (allows multiple values for the same key).
@@ -100,7 +100,7 @@ csilk_set_header(csilk_ctx_t* c, const char* key, const char* value)
 void
 csilk_add_header(csilk_ctx_t* c, const char* key, const char* value)
 {
-	map_add(c, &c->response.headers, key, value);
+    map_add(c, &c->response.headers, key, value);
 }
 
 /* --- Redirect --- */
@@ -118,15 +118,15 @@ csilk_add_header(csilk_ctx_t* c, const char* key, const char* value)
 void
 csilk_redirect(csilk_ctx_t* c, int status, const char* location)
 {
-	if (!c || !location) {
-		return;
-	}
-	if (status < 300 || status > 308) {
-		status = CSILK_STATUS_FOUND;
-	}
-	csilk_set_header(c, "Location", location);
-	c->response.status = status;
-	csilk_abort(c);
+    if (!c || !location) {
+        return;
+    }
+    if (status < 300 || status > 308) {
+        status = CSILK_STATUS_FOUND;
+    }
+    csilk_set_header(c, "Location", location);
+    c->response.status = status;
+    csilk_abort(c);
 }
 
 /** @brief Redirect to another URL using the default status code 302 (Found).
@@ -138,7 +138,7 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
 void
 csilk_redirect_simple(csilk_ctx_t* c, const char* url)
 {
-	csilk_redirect(c, CSILK_STATUS_FOUND, url);
+    csilk_redirect(c, CSILK_STATUS_FOUND, url);
 }
 
 /* --- Cookie --- */
@@ -162,57 +162,57 @@ csilk_redirect_simple(csilk_ctx_t* c, const char* url)
  *       should not contain characters that break cookie formatting. */
 void
 csilk_set_cookie(csilk_ctx_t* c,
-		 const char* name,
-		 const char* value,
-		 int max_age,
-		 const char* path,
-		 const char* domain,
-		 int secure,
-		 int http_only)
+                 const char*  name,
+                 const char*  value,
+                 int          max_age,
+                 const char*  path,
+                 const char*  domain,
+                 int          secure,
+                 int          http_only)
 {
-	if (!c || !c->arena) {
-		return;
-	}
-	size_t buf_size = strlen(name) + strlen(value) + 256;
-	if (path) {
-		buf_size += strlen(path);
-	}
-	if (domain) {
-		buf_size += strlen(domain);
-	}
+    if (!c || !c->arena) {
+        return;
+    }
+    size_t buf_size = strlen(name) + strlen(value) + 256;
+    if (path) {
+        buf_size += strlen(path);
+    }
+    if (domain) {
+        buf_size += strlen(domain);
+    }
 
-	char* buf = csilk_arena_alloc(c->arena, buf_size);
-	if (!buf) {
-		return;
-	}
+    char* buf = csilk_arena_alloc(c->arena, buf_size);
+    if (!buf) {
+        return;
+    }
 
-	int pos = snprintf(buf, buf_size, "%s=%s", name, value);
+    int pos = snprintf(buf, buf_size, "%s=%s", name, value);
 
-	if (max_age > 0) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=%d", max_age);
-	} else if (max_age < 0) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=0");
-	}
+    if (max_age > 0) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=%d", max_age);
+    } else if (max_age < 0) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Max-Age=0");
+    }
 
-	if (path) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=%s", path);
-	} else {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=/");
-	}
+    if (path) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=%s", path);
+    } else {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Path=/");
+    }
 
-	if (domain) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Domain=%s", domain);
-	}
+    if (domain) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Domain=%s", domain);
+    }
 
-	if (secure) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Secure");
-	}
+    if (secure) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; Secure");
+    }
 
-	if (http_only) {
-		pos += snprintf(buf + pos, buf_size - (size_t)pos, "; HttpOnly");
-	}
+    if (http_only) {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; HttpOnly");
+    }
 
-	csilk_add_header(c, "Set-Cookie", buf);
+    csilk_add_header(c, "Set-Cookie", buf);
 }
 
 /* --- JSON --- */
@@ -233,32 +233,32 @@ csilk_set_cookie(csilk_ctx_t* c,
 void
 csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 {
-	if (!c || !json) {
-		if (!c) {
-			CSILK_LOG_E("Response: csilk_json called with null context");
-		}
-		if (!json) {
-			CSILK_LOG_E("Response: csilk_json called with null json");
-		}
-		return;
-	}
+    if (!c || !json) {
+        if (!c) {
+            CSILK_LOG_E("Response: csilk_json called with null context");
+        }
+        if (!json) {
+            CSILK_LOG_E("Response: csilk_json called with null json");
+        }
+        return;
+    }
 
-	c->response.status = status;
-	csilk_set_header(c, "Content-Type", "application/json");
+    c->response.status = status;
+    csilk_set_header(c, "Content-Type", "application/json");
 
-	if (c->response.body && c->response.body_is_managed) {
-		free((void*)c->response.body);
-		c->response.body = nullptr;
-		c->response.body_is_managed = 0;
-	}
+    if (c->response.body && c->response.body_is_managed) {
+        free((void*)c->response.body);
+        c->response.body = nullptr;
+        c->response.body_is_managed = 0;
+    }
 
-	char* body = cJSON_PrintUnformatted(json);
-	if (body) {
-		c->response.body = body;
-		c->response.body_len = strlen(body);
-		c->response.body_is_managed = 1;
-	}
-	cJSON_Delete(json);
+    char* body = cJSON_PrintUnformatted(json);
+    if (body) {
+        c->response.body = body;
+        c->response.body_len = strlen(body);
+        c->response.body_is_managed = 1;
+    }
+    cJSON_Delete(json);
 }
 
 /** @brief Send a JSON error response containing an "error" field (no-heap
@@ -273,38 +273,38 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
 void
 csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 {
-	if (!c || !c->arena) {
-		return;
-	}
+    if (!c || !c->arena) {
+        return;
+    }
 
-	if (!message) {
-		message = "Unknown error";
-	}
+    if (!message) {
+        message = "Unknown error";
+    }
 
-	char buf[256];
-	csilk_bounded_json_t j;
-	csilk_bounded_json_error(&j, buf, sizeof(buf), message);
+    char                 buf[256];
+    csilk_bounded_json_t j;
+    csilk_bounded_json_error(&j, buf, sizeof(buf), message);
 
-	csilk_set_header(c, "Content-Type", "application/json");
-	c->response.status = status;
+    csilk_set_header(c, "Content-Type", "application/json");
+    c->response.status = status;
 
-	const char* body = csilk_bounded_json_str(&j);
-	size_t body_len = csilk_bounded_buf_len(&j.buf);
+    const char* body = csilk_bounded_json_str(&j);
+    size_t      body_len = csilk_bounded_buf_len(&j.buf);
 
-	if (csilk_bounded_json_overflow(&j)) {
-		/* Fall back to cJSON for unusually long messages */
-		cJSON* err = cJSON_CreateObject();
-		if (err) {
-			cJSON_AddStringToObject(err, "error", message);
-			csilk_json(c, status, err);
-		}
-		return;
-	}
+    if (csilk_bounded_json_overflow(&j)) {
+        /* Fall back to cJSON for unusually long messages */
+        cJSON* err = cJSON_CreateObject();
+        if (err) {
+            cJSON_AddStringToObject(err, "error", message);
+            csilk_json(c, status, err);
+        }
+        return;
+    }
 
-	char* arena_body = csilk_arena_strndup(c->arena, body, body_len);
-	if (arena_body) {
-		csilk_set_response_body(c, arena_body, body_len, 0);
-	}
+    char* arena_body = csilk_arena_strndup(c->arena, body, body_len);
+    if (arena_body) {
+        csilk_set_response_body(c, arena_body, body_len, 0);
+    }
 }
 
 /* --- JSON reflect --- */
@@ -325,26 +325,26 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 void
 csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr)
 {
-	if (!c || !ptr) {
-		return;
-	}
-	if (!type_name && c->current_handler) {
-		type_name = c->current_handler->output_type;
-	}
-	if (!type_name) {
-		return;
-	}
-	char* json_str = csilk_json_marshal(type_name, ptr);
-	if (json_str) {
-		c->response.status = status;
-		csilk_set_header(c, "Content-Type", "application/json");
-		if (c->response.body && c->response.body_is_managed) {
-			free((void*)c->response.body);
-		}
-		c->response.body = json_str;
-		c->response.body_len = strlen(json_str);
-		c->response.body_is_managed = 1;
-	}
+    if (!c || !ptr) {
+        return;
+    }
+    if (!type_name && c->current_handler) {
+        type_name = c->current_handler->output_type;
+    }
+    if (!type_name) {
+        return;
+    }
+    char* json_str = csilk_json_marshal(type_name, ptr);
+    if (json_str) {
+        c->response.status = status;
+        csilk_set_header(c, "Content-Type", "application/json");
+        if (c->response.body && c->response.body_is_managed) {
+            free((void*)c->response.body);
+        }
+        c->response.body = json_str;
+        c->response.body_len = strlen(json_str);
+        c->response.body_is_managed = 1;
+    }
 }
 
 /* --- Streaming / chunked response --- */
@@ -352,13 +352,13 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
 static void
 on_stream_write(csilk_io_write_t* req, int status)
 {
-	if (status < 0) {
-		CSILK_LOG_E("Stream write error: %s", csilk_io_strerror(status));
-	}
-	if (req->data) {
-		free(req->data);
-	}
-	free(req);
+    if (status < 0) {
+        CSILK_LOG_E("Stream write error: %s", csilk_io_strerror(status));
+    }
+    if (req->data) {
+        free(req->data);
+    }
+    free(req);
 }
 
 /** @brief Check if the client requested "Connection: close" in the request.
@@ -373,11 +373,11 @@ on_stream_write(csilk_io_write_t* req, int status)
 static int
 client_wants_close(csilk_ctx_t* c)
 {
-	const char* connection = csilk_get_header(c, "Connection");
-	return connection && strcasecmp(connection, "close") == 0;
+    const char* connection = csilk_get_header(c, "Connection");
+    return connection && strcasecmp(connection, "close") == 0;
 }
 
-/** @brief libuv write completion callback for a terminal chunk — closes the
+/** @brief Write completion callback for a terminal chunk — closes the
  * connection.
  *
  * Frees the write buffer and request structure, then closes the underlying
@@ -388,16 +388,16 @@ client_wants_close(csilk_ctx_t* c)
 static void
 on_stream_end_write(csilk_io_write_t* req, int status)
 {
-	if (status < 0) {
-		CSILK_LOG_E("Stream end write error: %s", csilk_io_strerror(status));
-	}
-	if (req->data) {
-		free(req->data);
-	}
-	if (req->handle) {
-		csilk_io_close((csilk_io_handle_t*)req->handle, nullptr);
-	}
-	free(req);
+    if (status < 0) {
+        CSILK_LOG_E("Stream end write error: %s", csilk_io_strerror(status));
+    }
+    if (req->data) {
+        free(req->data);
+    }
+    if (req->handle) {
+        csilk_io_close((csilk_io_handle_t*)req->handle, nullptr);
+    }
+    free(req);
 }
 
 /** @brief Send HTTP response headers with Transfer-Encoding: chunked.
@@ -413,73 +413,70 @@ on_stream_end_write(csilk_io_write_t* req, int status)
 static int
 send_chunked_headers(csilk_ctx_t* c)
 {
-	if (!c || c->conn_closed || !c->_internal_client) {
-		return -1;
-	}
+    if (!c || c->conn_closed || !c->_internal_client) {
+        return -1;
+    }
 
-	int status = c->response.status ? c->response.status : CSILK_STATUS_OK;
-	const char* status_text = get_status_text(status);
-	int want_close = client_wants_close(c);
-	const char* conn_val = want_close ? "close" : "keep-alive";
+    int         status = c->response.status ? c->response.status : CSILK_STATUS_OK;
+    const char* status_text = get_status_text(status);
+    int         want_close = client_wants_close(c);
+    const char* conn_val = want_close ? "close" : "keep-alive";
 
-	size_t custom_headers_len = 0;
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-			custom_headers_len += h->key_len + 2 + h->value_len + 2;
-		}
-	}
+    size_t custom_headers_len = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            custom_headers_len += h->key_len + 2 + h->value_len + 2;
+        }
+    }
 
-	int header_len = snprintf(nullptr,
-				  0,
-				  "HTTP/1.1 %d %s\r\n"
-				  "Transfer-Encoding: chunked\r\n"
-				  "Connection: %s\r\n",
-				  status,
-				  status_text,
-				  conn_val);
-	if (header_len < 0) {
-		return -1;
-	}
+    int header_len = snprintf(nullptr,
+                              0,
+                              "HTTP/1.1 %d %s\r\n"
+                              "Transfer-Encoding: chunked\r\n"
+                              "Connection: %s\r\n",
+                              status,
+                              status_text,
+                              conn_val);
+    if (header_len < 0) {
+        return -1;
+    }
 
-	size_t response_len = (size_t)header_len + custom_headers_len + 2;
-	csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-	if (!req) {
-		return -1;
-	}
+    size_t            response_len = (size_t)header_len + custom_headers_len + 2;
+    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+    if (!req) {
+        return -1;
+    }
 
-	char* write_base = malloc(response_len + 1);
-	if (!write_base) {
-		free(req);
-		return -1;
-	}
+    char* write_base = malloc(response_len + 1);
+    if (!write_base) {
+        free(req);
+        return -1;
+    }
 
-	int pos = snprintf(write_base,
-			   response_len + 1,
-			   "HTTP/1.1 %d %s\r\n"
-			   "Transfer-Encoding: chunked\r\n"
-			   "Connection: %s\r\n",
-			   status,
-			   status_text,
-			   conn_val);
+    int pos = snprintf(write_base,
+                       response_len + 1,
+                       "HTTP/1.1 %d %s\r\n"
+                       "Transfer-Encoding: chunked\r\n"
+                       "Connection: %s\r\n",
+                       status,
+                       status_text,
+                       conn_val);
 
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-			pos += snprintf(write_base + pos,
-					response_len + 1 - (size_t)pos,
-					"%s: %s\r\n",
-					h->key,
-					h->value);
-		}
-	}
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            pos += snprintf(
+                write_base + pos, response_len + 1 - (size_t)pos, "%s: %s\r\n", h->key, h->value);
+        }
+    }
 
-	snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
+    snprintf(write_base + pos, response_len + 1 - (size_t)pos, "\r\n");
 
-	csilk_io_buf_t buf = csilk_io_buf_init(write_base, (size_t)pos + 2);
-	req->data = write_base;
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_stream_write);
-	c->response_started = 1;
-	return 0;
+    csilk_io_buf_t buf = csilk_io_buf_init(write_base, (size_t)pos + 2);
+    req->data = write_base;
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_stream_write);
+    c->response_started = 1;
+    return 0;
 }
 
 /** @brief Write a single chunked transfer frame: [hex-size]\\r\\n[data]\\r\\n.
@@ -496,26 +493,26 @@ send_chunked_headers(csilk_ctx_t* c)
 static void
 write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
-	char size_buf[32];
-	int size_len = snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);
-	if (size_len <= 0) {
-		return;
-	}
+    char size_buf[32];
+    int  size_len = snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);
+    if (size_len <= 0) {
+        return;
+    }
 
-	size_t total = (size_t)size_len + len + 2;
-	char* buf = malloc(total);
-	if (!buf) {
-		return;
-	}
+    size_t total = (size_t)size_len + len + 2;
+    char*  buf = malloc(total);
+    if (!buf) {
+        return;
+    }
 
-	memcpy(buf, size_buf, (size_t)size_len);
-	if (len > 0 && data) {
-		memcpy(buf + (size_t)size_len, data, len);
-	}
-	buf[(size_t)size_len + len] = '\r';
-	buf[(size_t)size_len + len + 1] = '\n';
+    memcpy(buf, size_buf, (size_t)size_len);
+    if (len > 0 && data) {
+        memcpy(buf + (size_t)size_len, data, len);
+    }
+    buf[(size_t)size_len + len] = '\r';
+    buf[(size_t)size_len + len + 1] = '\n';
 
-	_csilk_send_data_owned(c, buf, total);
+    _csilk_send_data_owned(c, buf, total);
 }
 
 /** @brief Write data to a streaming response using chunked transfer encoding.
@@ -534,22 +531,22 @@ write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
 void
 csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
-	if (!c || c->conn_closed || !c->_internal_client) {
-		return;
-	}
+    if (!c || c->conn_closed || !c->_internal_client) {
+        return;
+    }
 
-	if (!c->response_started) {
-		if (send_chunked_headers(c) != 0) {
-			return;
-		}
-		c->response_started = 1;
-		c->is_async = 1;
-	}
+    if (!c->response_started) {
+        if (send_chunked_headers(c) != 0) {
+            return;
+        }
+        c->response_started = 1;
+        c->is_async = 1;
+    }
 
-	if (len == 0) {
-		return;
-	}
-	write_chunk_frame(c, data, len);
+    if (len == 0) {
+        return;
+    }
+    write_chunk_frame(c, data, len);
 }
 
 /** @brief Finalize a streaming response by sending the terminal chunk.
@@ -564,22 +561,22 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 void
 csilk_response_end(csilk_ctx_t* c)
 {
-	if (!c || c->conn_closed || !c->_internal_client) {
-		return;
-	}
+    if (!c || c->conn_closed || !c->_internal_client) {
+        return;
+    }
 
-	if (!c->response_started) {
-		send_chunked_headers(c);
-		c->is_async = 1;
-	}
+    if (!c->response_started) {
+        send_chunked_headers(c);
+        c->is_async = 1;
+    }
 
-	_csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
+    _csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
 
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (client && client->protocol == CSILK_PROTO_HTTP1) {
-		int keep_alive = !client_wants_close(c);
-		_csilk_handle_post_response(client, keep_alive);
-	}
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client && client->protocol == CSILK_PROTO_HTTP1) {
+        int keep_alive = !client_wants_close(c);
+        _csilk_handle_post_response(client, keep_alive);
+    }
 }
 
 /* --- HTTP/2 Server Push --- */
@@ -597,12 +594,12 @@ csilk_response_end(csilk_ctx_t* c)
 int32_t
 csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path)
 {
-	if (!c || c->conn_closed || !c->_internal_client) {
-		return -1;
-	}
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (client->protocol != CSILK_PROTO_HTTP2) {
-		return -1;
-	}
-	return csilk_h2_submit_push(c, method, path);
+    if (!c || c->conn_closed || !c->_internal_client) {
+        return -1;
+    }
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->protocol != CSILK_PROTO_HTTP2) {
+        return -1;
+    }
+    return csilk_h2_submit_push(c, method, path);
 }

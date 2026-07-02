@@ -28,7 +28,7 @@
  * ## Thread Safety
  * Workflow definitions are read-only during execution (all mutation must
  * happen before csilk_wf_run).  The runtime is single-threaded on the
- * libuv event loop.
+ * libuv event loop (libuv or io_uring).
  *
  * @copyright MIT License
  */
@@ -57,8 +57,8 @@ typedef struct csilk_wf_ctx_s csilk_wf_ctx_t;
  * @brief Join policies for nodes with multiple incoming dependencies.
  */
 typedef enum {
-	CSILK_WF_JOIN_AND, /**< Default: Trigger only when ALL inputs arrive. */
-	CSILK_WF_JOIN_OR   /**< Trigger when ANY input arrives. */
+    CSILK_WF_JOIN_AND, /**< Default: Trigger only when ALL inputs arrive. */
+    CSILK_WF_JOIN_OR   /**< Trigger when ANY input arrives. */
 } csilk_wf_join_policy_t;
 
 /**
@@ -72,14 +72,14 @@ typedef enum {
  * counts, timing metrics) and is NOT freed by the engine.
  */
 typedef struct {
-	char* type;		/**< MIME-like type identifier (e.g., "text/plain",
+    char* type;             /**< MIME-like type identifier (e.g., "text/plain",
                              "application/json"). */
-	void* value;		/**< Opaque data pointer.  Ownership semantics
+    void* value;            /**< Opaque data pointer.  Ownership semantics
                              depend on @p free_fn. */
-	void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
+    void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
                              when the data is consumed.  nullptr means the
                              engine does NOT take ownership. */
-	void* meta;		/**< Optional metadata pointer (not freed by the
+    void* meta;             /**< Optional metadata pointer (not freed by the
                              engine).  Common use: AI token usage stats. */
 } csilk_data_t;
 
@@ -100,13 +100,13 @@ typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
  * @brief Configuration for built-in AI nodes.
  */
 typedef struct {
-	const char* model;	/**< AI model identifier. */
-	const char* system_msg; /**< Optional system prompt. */
-	const char* prompt;	/**< User prompt (supports {{node.value}} templates). */
-	double temperature;
-	int max_tokens;
-	int stream;		  /**< Enable token streaming to monitors. */
-	int max_history_messages; /**< Max messages to keep in history (0 =
+    const char* model;                /**< AI model identifier. */
+    const char* system_msg;           /**< Optional system prompt. */
+    const char* prompt;               /**< User prompt (supports {{node.value}} templates). */
+    double      temperature;
+    int         max_tokens;
+    int         stream;               /**< Enable token streaming to monitors. */
+    int         max_history_messages; /**< Max messages to keep in history (0 =
                                unlimited). */
 } csilk_ai_config_t;
 
@@ -114,12 +114,12 @@ typedef struct {
  * @brief Configuration for built-in Vector Search nodes.
  */
 typedef struct {
-	csilk_ai_t* ai;		     /**< AI handle for generating embeddings. */
-	const char* embedding_model; /**< Model name for embeddings. */
-	csilk_vector_db_t* db;	     /**< Vector DB handle. */
-	const char* collection;	     /**< Collection/Index name. */
-	int limit;		     /**< Max results to return. */
-	const char* input_template;  /**< Optional template for embedding input. */
+    csilk_ai_t*        ai;              /**< AI handle for generating embeddings. */
+    const char*        embedding_model; /**< Model name for embeddings. */
+    csilk_vector_db_t* db;              /**< Vector DB handle. */
+    const char*        collection;      /**< Collection/Index name. */
+    int                limit;           /**< Max results to return. */
+    const char*        input_template;  /**< Optional template for embedding input. */
 } csilk_vector_search_config_t;
 
 /**
@@ -129,8 +129,8 @@ typedef struct {
  * @param user_data Opaque pointer passed during node creation.
  */
 typedef csilk_data_t* (*csilk_wf_handler_t)(csilk_wf_ctx_t* ctx,
-					    csilk_data_t* input,
-					    void* user_data);
+                                            csilk_data_t*   input,
+                                            void*           user_data);
 
 /** @brief Opaque handle for a single node in a workflow. */
 typedef struct csilk_wf_node_s csilk_wf_node_t;
@@ -208,9 +208,9 @@ csilk_wf_node_t* csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_
  * @param config Vector search configuration (copied internally).
  * @return Node handle.
  */
-csilk_wf_node_t* csilk_wf_add_vector_search(csilk_wf_t* wf,
-					    const char* id,
-					    const csilk_vector_search_config_t* config);
+csilk_wf_node_t* csilk_wf_add_vector_search(csilk_wf_t*                         wf,
+                                            const char*                         id,
+                                            const csilk_vector_search_config_t* config);
 
 /* --- Tool Calling --- */
 
@@ -232,11 +232,11 @@ typedef char* (*csilk_wf_tool_fn)(const char* args_json, void* user_data);
  * after the AI node completes.
  */
 typedef struct {
-	char* name;	       /**< Tool name exposed to the LLM. */
-	char* description;     /**< Human-readable description (for tool schema). */
-	char* parameters_json; /**< JSON Schema string for the tool's parameters. */
-	csilk_wf_tool_fn fn;   /**< C callback invoked for tool execution. */
-	void* user_data;       /**< Opaque context forwarded to @p fn. */
+    char*            name;            /**< Tool name exposed to the LLM. */
+    char*            description;     /**< Human-readable description (for tool schema). */
+    char*            parameters_json; /**< JSON Schema string for the tool's parameters. */
+    csilk_wf_tool_fn fn;              /**< C callback invoked for tool execution. */
+    void*            user_data;       /**< Opaque context forwarded to @p fn. */
 } csilk_wf_tool_entry_t;
 
 /**
@@ -248,12 +248,12 @@ typedef struct {
  * @param fn C function to execute.
  * @param user_data Context for the function.
  */
-void csilk_wf_register_tool(csilk_wf_t* wf,
-			    const char* name,
-			    const char* description,
-			    const char* parameters_json,
-			    csilk_wf_tool_fn fn,
-			    void* user_data);
+void csilk_wf_register_tool(csilk_wf_t*      wf,
+                            const char*      name,
+                            const char*      description,
+                            const char*      parameters_json,
+                            csilk_wf_tool_fn fn,
+                            void*            user_data);
 
 /**
  * @brief Dynamic tool discovery callback (MCP-like protocol).
@@ -280,12 +280,12 @@ void csilk_wf_register_tool(csilk_wf_t* wf,
  * @param[out] discovered_count_out Number of discovered tools.
  * @param user_data      Opaque pointer from csilk_wf_set_tool_discovery.
  * @return 0 on success, -1 on failure (static tools still work). */
-typedef int (*csilk_wf_tool_discovery_fn)(csilk_wf_t* wf,
-					  const csilk_wf_tool_entry_t* static_tools,
-					  size_t static_count,
-					  csilk_wf_tool_entry_t** discovered_out,
-					  size_t* discovered_count_out,
-					  void* user_data);
+typedef int (*csilk_wf_tool_discovery_fn)(csilk_wf_t*                  wf,
+                                          const csilk_wf_tool_entry_t* static_tools,
+                                          size_t                       static_count,
+                                          csilk_wf_tool_entry_t**      discovered_out,
+                                          size_t*                      discovered_count_out,
+                                          void*                        user_data);
 
 /**
  * @brief Set a dynamic tool discovery callback.
@@ -387,10 +387,10 @@ void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema);
  * @param input    Optional replacement input (e.g., human-edited prompt).
  * @param callback Callback for when the resumed workflow finishes.
  */
-void csilk_wf_signal_continue(csilk_wf_t* wf,
-			      const char* exec_id,
-			      csilk_data_t* input,
-			      void (*callback)(csilk_data_t* result));
+void csilk_wf_signal_continue(csilk_wf_t*   wf,
+                              const char*   exec_id,
+                              csilk_data_t* input,
+                              void (*callback)(csilk_data_t* result));
 
 /**
  * @brief Set a timeout for a specific node.
@@ -461,9 +461,9 @@ void csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk
  * @param input Initial input.
  * @param callback Callback receiving final result and the full trace.
  */
-void csilk_wf_run_traced(csilk_wf_t* wf,
-			 csilk_data_t* input,
-			 void (*callback)(csilk_data_t* result, csilk_wf_trace_t* trace));
+void csilk_wf_run_traced(csilk_wf_t*   wf,
+                         csilk_data_t* input,
+                         void (*callback)(csilk_data_t* result, csilk_wf_trace_t* trace));
 
 /**
  * @brief Convert a trace object to a JSON string.

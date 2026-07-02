@@ -36,7 +36,7 @@
 
 static void on_server_handle_close(csilk_io_handle_t* handle);
 
-/** @brief libuv signal handler for SIGINT — initiates graceful shutdown.
+/** @brief Signal handler for SIGINT — initiates graceful shutdown.
  *
  *  Called when the process receives SIGINT (Ctrl+C).  Delegates to
  *  csilk_server_stop() which performs the full multi-worker shutdown
@@ -48,9 +48,9 @@ static void on_server_handle_close(csilk_io_handle_t* handle);
 static void
 on_signal(uv_signal_t* handle, int signum)
 {
-	(void)signum;
-	csilk_server_t* server = (csilk_server_t*)handle->data;
-	csilk_server_stop(server);
+    (void)signum;
+    csilk_server_t* server = (csilk_server_t*)handle->data;
+    csilk_server_stop(server);
 }
 
 /* --- Graceful shutdown --- */
@@ -69,38 +69,38 @@ on_signal(uv_signal_t* handle, int signum)
 static int
 close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
 {
-	int count = 0;
-	worker_pool_t* wp = NULL;
-	for (int i = 0; i < server->worker_pool_count; i++) {
-		if (&server->worker_pools[i].loop == loop) {
-			wp = &server->worker_pools[i];
-			break;
-		}
-	}
-	if (!wp) {
-		return 0;
-	}
+    int            count = 0;
+    worker_pool_t* wp = NULL;
+    for (int i = 0; i < server->worker_pool_count; i++) {
+        if (&server->worker_pools[i].loop == loop) {
+            wp = &server->worker_pools[i];
+            break;
+        }
+    }
+    if (!wp) {
+        return 0;
+    }
 
-	csilk_client_t* client = wp->active_clients;
-	while (client) {
-		count++;
-		if (client->ctx.is_websocket) {
-			csilk_ws_close(&client->ctx, 1001, "Server stopping");
-			uv_close((uv_handle_t*)&client->handle, on_close);
-		} else if (client->ctx.is_sse) {
-			csilk_sse_send(&client->ctx, "close", "Server stopping");
-			csilk_sse_close(&client->ctx);
-		} else {
-			if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-				uv_close((uv_handle_t*)&client->handle, on_close);
-			}
-		}
-		client = client->next;
-	}
-	return count;
+    csilk_client_t* client = wp->active_clients;
+    while (client) {
+        count++;
+        if (client->ctx.is_websocket) {
+            csilk_ws_close(&client->ctx, 1001, "Server stopping");
+            uv_close((uv_handle_t*)&client->handle, on_close);
+        } else if (client->ctx.is_sse) {
+            csilk_sse_send(&client->ctx, "close", "Server stopping");
+            csilk_sse_close(&client->ctx);
+        } else {
+            if (!uv_is_closing((uv_handle_t*)&client->handle)) {
+                uv_close((uv_handle_t*)&client->handle, on_close);
+            }
+        }
+        client = client->next;
+    }
+    return count;
 }
 
-/** @brief libuv async callback to stop the server gracefully.
+/** @brief Async callback to stop the server gracefully.
  *
  * This function performs the full shutdown sequence:
  *
@@ -119,50 +119,49 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
  * when each TCP handle finishes closing. This avoids blocking the event
  * loop for connection draining.
  *
- * @param handle libuv async handle (data points to csilk_server_t). */
+ * @param handle I/O async handle (data points to csilk_server_t). */
 static void
 on_stop_async(uv_async_t* handle)
 {
-	csilk_server_t* server = (csilk_server_t*)handle->data;
-	CSILK_LOG_I("Server: initiating graceful shutdown");
+    csilk_server_t* server = (csilk_server_t*)handle->data;
+    CSILK_LOG_I("Server: initiating graceful shutdown");
 
-	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
+    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
-		CSILK_LOG_D("Server: closing server socket listener");
-		csilk_io_close((csilk_io_handle_t*)&server->server_handle, on_server_handle_close);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
+        CSILK_LOG_D("Server: closing server socket listener");
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, on_server_handle_close);
+    }
 
-	{
-		int n = close_active_clients(server, server->loop);
-		if (n > 0) {
-			CSILK_LOG_I("Server: closed %d active client connection(s)", n);
-		}
-	}
+    {
+        int n = close_active_clients(server, server->loop);
+        if (n > 0) {
+            CSILK_LOG_I("Server: closed %d active client connection(s)", n);
+        }
+    }
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)&server->sig_handle)) {
-		csilk_io_close((csilk_io_handle_t*)&server->sig_handle, on_server_handle_close);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)&server->sig_handle)) {
+        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, on_server_handle_close);
+    }
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async)) {
-		csilk_io_close((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async,
-			       nullptr);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async)) {
+        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async, nullptr);
+    }
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)&server->async_handle)) {
-		csilk_io_close((csilk_io_handle_t*)&server->async_handle, on_server_handle_close);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)&server->async_handle)) {
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, on_server_handle_close);
+    }
 
-	for (int i = 1; i < server->worker_pool_count; i++) {
-		CSILK_LOG_D("Server: signaling worker thread %d to stop", i);
-		uv_async_send(&server->worker_pools[i].stop_async);
-	}
+    for (int i = 1; i < server->worker_pool_count; i++) {
+        CSILK_LOG_D("Server: signaling worker thread %d to stop", i);
+        uv_async_send(&server->worker_pools[i].stop_async);
+    }
 
-	if (server->mq) {
-		CSILK_LOG_D("Server: freeing message queue");
-		_csilk_mq_free(server->mq);
-		server->mq = nullptr;
-	}
+    if (server->mq) {
+        CSILK_LOG_D("Server: freeing message queue");
+        _csilk_mq_free(server->mq);
+        server->mq = nullptr;
+    }
 }
 
 /* --- Server creation --- */
@@ -172,7 +171,7 @@ on_stop_async(uv_async_t* handle)
 /** @brief Create a new server instance associated with a router.
  *
  * Initializes the reflection system, allocates the server struct, sets up
- * the libuv default loop, configures the llhttp parser callbacks, applies
+ * the default I/O event loop, configures the llhttp parser callbacks, applies
  * default server configuration (timeouts, buffer limits, backlog), creates
  * a clients mutex and a pool mutex, and creates the internal message queue
  * (MQ) instance.
@@ -184,35 +183,35 @@ on_stop_async(uv_async_t* handle)
 csilk_server_t*
 csilk_server_new(csilk_router_t* router)
 {
-	csilk_reflect_init();
-	csilk_arena_init();
-	csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
-	if (!s) {
-		return nullptr;
-	}
-	s->loop = uv_default_loop();
-	if (!s->loop) {
-		free(s);
-		return nullptr;
-	}
-	s->router = router;
-	llhttp_settings_init(&s->settings);
-	s->settings.on_message_begin = on_message_begin;
-	s->settings.on_url = on_url;
-	s->settings.on_header_field = on_header_field;
-	s->settings.on_header_value = on_header_value;
-	s->settings.on_headers_complete = on_headers_complete;
-	s->settings.on_body = on_body;
-	s->settings.on_message_complete = on_message_complete;
+    csilk_reflect_init();
+    csilk_arena_init();
+    csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
+    if (!s) {
+        return nullptr;
+    }
+    s->loop = uv_default_loop();
+    if (!s->loop) {
+        free(s);
+        return nullptr;
+    }
+    s->router = router;
+    llhttp_settings_init(&s->settings);
+    s->settings.on_message_begin = on_message_begin;
+    s->settings.on_url = on_url;
+    s->settings.on_header_field = on_header_field;
+    s->settings.on_header_value = on_header_value;
+    s->settings.on_headers_complete = on_headers_complete;
+    s->settings.on_body = on_body;
+    s->settings.on_message_complete = on_message_complete;
 
-	s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
-	s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
-	s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
-	s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
+    s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
+    s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+    s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
+    s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
-	s->mq = _csilk_mq_new(s->loop);
+    s->mq = _csilk_mq_new(s->loop);
 
-	return s;
+    return s;
 }
 
 /* --- SPA fallback --- */
@@ -229,47 +228,47 @@ csilk_server_new(csilk_router_t* router)
 static void
 spa_fallback_handler(csilk_ctx_t* c)
 {
-	const char* method = csilk_get_method(c);
-	if (!method || strcmp(method, "GET") != 0) {
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-		return;
-	}
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client || !client->server || !client->server->spa_doc_root) {
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-		return;
-	}
-	char path[PATH_MAX];
-	snprintf(path, sizeof(path), "%s/index.html", client->server->spa_doc_root);
+    const char* method = csilk_get_method(c);
+    if (!method || strcmp(method, "GET") != 0) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client || !client->server || !client->server->spa_doc_root) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/index.html", client->server->spa_doc_root);
 
-	FILE* f = fopen(path, "rb");
-	if (!f) {
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-		return;
-	}
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	if (fsize <= 0) {
-		fclose(f);
-		csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-		return;
-	}
-	rewind(f);
-	char* body = malloc((size_t)fsize + 1);
-	if (!body) {
-		fclose(f);
-		csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
-		return;
-	}
-	size_t nread = fread(body, 1, (size_t)fsize, f);
-	fclose(f);
-	body[nread] = '\0';
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    if (fsize <= 0) {
+        fclose(f);
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+    rewind(f);
+    char* body = malloc((size_t)fsize + 1);
+    if (!body) {
+        fclose(f);
+        csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
+        return;
+    }
+    size_t nread = fread(body, 1, (size_t)fsize, f);
+    fclose(f);
+    body[nread] = '\0';
 
-	csilk_set_header(c, "Content-Type", "text/html");
-	c->response.body = body;
-	c->response.body_len = nread;
-	c->response.body_is_managed = 1;
-	csilk_status(c, CSILK_STATUS_OK);
+    csilk_set_header(c, "Content-Type", "text/html");
+    c->response.body = body;
+    c->response.body_len = nread;
+    c->response.body_is_managed = 1;
+    csilk_status(c, CSILK_STATUS_OK);
 }
 
 /* --- Server configuration --- */
@@ -284,10 +283,10 @@ spa_fallback_handler(csilk_ctx_t* c)
 void
 csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handler)
 {
-	if (!server) {
-		return;
-	}
-	server->not_found_handler = handler;
+    if (!server) {
+        return;
+    }
+    server->not_found_handler = handler;
 }
 
 /** @brief Enable SPA fallback: all unmatched GET requests serve index.html
@@ -304,14 +303,14 @@ csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handl
 void
 csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
 {
-	if (!server || !doc_root) {
-		return;
-	}
-	free(server->spa_doc_root);
-	server->spa_doc_root = strdup(doc_root);
-	if (server->spa_doc_root) {
-		server->not_found_handler = spa_fallback_handler;
-	}
+    if (!server || !doc_root) {
+        return;
+    }
+    free(server->spa_doc_root);
+    server->spa_doc_root = strdup(doc_root);
+    if (server->spa_doc_root) {
+        server->not_found_handler = spa_fallback_handler;
+    }
 }
 
 /** @brief Register a global middleware handler that runs before every request.
@@ -326,22 +325,22 @@ csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
 int
 csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 {
-	if (!server || !handler) {
-		return -1;
-	}
-	if (server->middleware_count >= 32) {
-		CSILK_LOG_E("Server: global middleware limit (32) reached. Middleware "
-			    "dropped.");
-		return -1;
-	}
-	server->middlewares[server->middleware_count++] = handler;
-	CSILK_LOG_D("Server: registered global middleware %p (count: %d)",
-		    (void*)handler,
-		    server->middleware_count);
-	return 0;
+    if (!server || !handler) {
+        return -1;
+    }
+    if (server->middleware_count >= 32) {
+        CSILK_LOG_E("Server: global middleware limit (32) reached. Middleware "
+                    "dropped.");
+        return -1;
+    }
+    server->middlewares[server->middleware_count++] = handler;
+    CSILK_LOG_D("Server: registered global middleware %p (count: %d)",
+                (void*)handler,
+                server->middleware_count);
+    return 0;
 }
 
-/** @brief libuv close callback for server-level handles during shutdown.
+/** @brief Close callback for server-level handles during shutdown (libuv path).
  *
  * Currently a no-op placeholder. Called when the server, signal, or async
  * handles finish closing.
@@ -350,7 +349,7 @@ csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 static void
 on_server_handle_close(csilk_io_handle_t* handle)
 {
-	(void)handle;
+    (void)handle;
 }
 
 /* --- Server free --- */
@@ -368,49 +367,49 @@ on_server_handle_close(csilk_io_handle_t* handle)
 void
 csilk_server_free(csilk_server_t* server)
 {
-	if (!server) {
-		return;
-	}
+    if (!server) {
+        return;
+    }
 
-	if (server->worker_tids) {
-		for (int i = 0; i < server->worker_count; i++) {
-			uv_thread_join(&server->worker_tids[i]);
-		}
-		free(server->worker_tids);
-		server->worker_tids = nullptr;
-	}
+    if (server->worker_tids) {
+        for (int i = 0; i < server->worker_count; i++) {
+            uv_thread_join(&server->worker_tids[i]);
+        }
+        free(server->worker_tids);
+        server->worker_tids = nullptr;
+    }
 
-	free(server->spa_doc_root);
-	if (server->worker_pools) {
-		for (int w = 0; w < server->worker_pool_count; w++) {
-			worker_pool_t* wp = &server->worker_pools[w];
-			for (int i = 0; i < wp->client_pool_count; i++) {
-				free(wp->client_pool[i]);
-			}
-			for (int i = 0; i < wp->arena_pool_count; i++) {
-				csilk_arena_free(wp->arena_pool[i]);
-			}
-		}
-		free(server->worker_pools);
-	}
+    free(server->spa_doc_root);
+    if (server->worker_pools) {
+        for (int w = 0; w < server->worker_pool_count; w++) {
+            worker_pool_t* wp = &server->worker_pools[w];
+            for (int i = 0; i < wp->client_pool_count; i++) {
+                free(wp->client_pool[i]);
+            }
+            for (int i = 0; i < wp->arena_pool_count; i++) {
+                csilk_arena_free(wp->arena_pool[i]);
+            }
+        }
+        free(server->worker_pools);
+    }
 
-	cleanup_tls(server);
+    cleanup_tls(server);
 
-	if (server->mq) {
-		_csilk_mq_free(server->mq);
-	}
+    if (server->mq) {
+        _csilk_mq_free(server->mq);
+    }
 
-	for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
-		csilk_hook_node_t* curr = server->hooks[i];
-		while (curr) {
-			csilk_hook_node_t* next = curr->next;
-			free(curr);
-			curr = next;
-		}
-	}
+    for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
+        csilk_hook_node_t* curr = server->hooks[i];
+        while (curr) {
+            csilk_hook_node_t* next = curr->next;
+            free(curr);
+            curr = next;
+        }
+    }
 
-	csilk_arena_flush_free_list();
-	free(server);
+    csilk_arena_flush_free_list();
+    free(server);
 }
 
 /* --- Server stop --- */
@@ -426,10 +425,10 @@ csilk_server_free(csilk_server_t* server)
 void
 csilk_server_stop(csilk_server_t* server)
 {
-	if (!server) {
-		return;
-	}
-	uv_async_send(&server->async_handle);
+    if (!server) {
+        return;
+    }
+    uv_async_send(&server->async_handle);
 }
 
 /* --- Server stats --- */
@@ -447,19 +446,19 @@ csilk_server_stop(csilk_server_t* server)
 void
 csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn)
 {
-	if (!server) {
-		return;
-	}
-	if (active_conn) {
-		*active_conn = atomic_load(&server->active_connections);
-	}
-	if (pooled_conn) {
-		int total = 0;
-		for (int w = 0; w < server->worker_pool_count; w++) {
-			total += server->worker_pools[w].client_pool_count;
-		}
-		*pooled_conn = total;
-	}
+    if (!server) {
+        return;
+    }
+    if (active_conn) {
+        *active_conn = atomic_load(&server->active_connections);
+    }
+    if (pooled_conn) {
+        int total = 0;
+        for (int w = 0; w < server->worker_pool_count; w++) {
+            total += server->worker_pools[w].client_pool_count;
+        }
+        *pooled_conn = total;
+    }
 }
 
 /* --- Server config --- */
@@ -475,30 +474,30 @@ csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_con
 void
 csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* config)
 {
-	if (!server || !config) {
-		return;
-	}
+    if (!server || !config) {
+        return;
+    }
 
-	csilk_server_config_t old = server->config;
+    csilk_server_config_t old = server->config;
 
-	server->config = *config;
+    server->config = *config;
 
-	if (server->config.idle_timeout_ms == 0) {
-		server->config.idle_timeout_ms =
-		    old.idle_timeout_ms ? old.idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT;
-	}
-	if (server->config.max_body_size == 0) {
-		server->config.max_body_size =
-		    old.max_body_size ? old.max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
-	}
-	if (server->config.max_header_size == 0) {
-		server->config.max_header_size =
-		    old.max_header_size ? old.max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE;
-	}
-	if (server->config.listen_backlog == 0) {
-		server->config.listen_backlog =
-		    old.listen_backlog ? old.listen_backlog : CSILK_DEFAULT_LISTEN_BACKLOG;
-	}
+    if (server->config.idle_timeout_ms == 0) {
+        server->config.idle_timeout_ms =
+            old.idle_timeout_ms ? old.idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT;
+    }
+    if (server->config.max_body_size == 0) {
+        server->config.max_body_size =
+            old.max_body_size ? old.max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
+    }
+    if (server->config.max_header_size == 0) {
+        server->config.max_header_size =
+            old.max_header_size ? old.max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE;
+    }
+    if (server->config.listen_backlog == 0) {
+        server->config.listen_backlog =
+            old.listen_backlog ? old.listen_backlog : CSILK_DEFAULT_LISTEN_BACKLOG;
+    }
 }
 
 /* --- Max connections --- */
@@ -514,12 +513,12 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
 int
 csilk_server_set_max_connections(csilk_server_t* server, int max)
 {
-	if (!server) {
-		return -1;
-	}
-	int prev = server->max_connections;
-	server->max_connections = max;
-	return prev;
+    if (!server) {
+        return -1;
+    }
+    int prev = server->max_connections;
+    server->max_connections = max;
+    return prev;
 }
 
 /* --- Driver injection --- */
@@ -535,9 +534,9 @@ csilk_server_set_max_connections(csilk_server_t* server, int max)
 void
 csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* driver)
 {
-	if (server) {
-		server->storage_driver = driver;
-	}
+    if (server) {
+        server->storage_driver = driver;
+    }
 }
 
 /** @brief Set the pluggable cryptographic driver for the server.
@@ -550,9 +549,9 @@ csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* 
 void
 csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* driver)
 {
-	if (server) {
-		server->crypto_driver = driver;
-	}
+    if (server) {
+        server->crypto_driver = driver;
+    }
 }
 
 /** @brief Set the pluggable cipher driver for the server.
@@ -568,9 +567,9 @@ csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* dr
 void
 csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver)
 {
-	if (server) {
-		server->cipher_driver = driver;
-	}
+    if (server) {
+        server->cipher_driver = driver;
+    }
 }
 
 /* --- Worker thread internals --- */
@@ -583,16 +582,16 @@ bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backl
  *
  * Passed to worker_thread() when spawning multiple accept loops. */
 typedef struct {
-	worker_pool_t* wp; /**< Pre-allocated worker pool (index 1..N-1). */
-	int port;
-	uv_barrier_t* barrier;
+    worker_pool_t* wp; /**< Pre-allocated worker pool (index 1..N-1). */
+    int            port;
+    uv_barrier_t*  barrier;
 } worker_data_t;
 
 typedef struct {
-	csilk_io_loop_t* loop;
-	uv_tcp_t* listen_handle;
-	csilk_server_t* server;
-	int worker_index;
+    csilk_io_loop_t* loop;
+    uv_tcp_t*        listen_handle;
+    csilk_server_t*  server;
+    int              worker_index;
 } worker_stop_data_t;
 
 /** @brief Async callback for stopping a worker's event loop gracefully.
@@ -608,96 +607,96 @@ typedef struct {
 static void
 on_worker_stop_async(uv_async_t* handle)
 {
-	worker_stop_data_t* sd = (worker_stop_data_t*)handle->data;
-	if (!sd) {
-		return;
-	}
+    worker_stop_data_t* sd = (worker_stop_data_t*)handle->data;
+    if (!sd) {
+        return;
+    }
 
-	csilk_server_t* server = sd->server;
-	csilk_io_loop_t* loop = sd->loop;
+    csilk_server_t*  server = sd->server;
+    csilk_io_loop_t* loop = sd->loop;
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)sd->listen_handle)) {
-		csilk_io_close((csilk_io_handle_t*)sd->listen_handle, nullptr);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)sd->listen_handle)) {
+        csilk_io_close((csilk_io_handle_t*)sd->listen_handle, nullptr);
+    }
 
-	close_active_clients(server, loop);
+    close_active_clients(server, loop);
 
-	int worker_idx = sd->worker_index;
-	if (!csilk_io_is_closing(
-		(csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async)) {
-		csilk_io_close((csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async,
-			       nullptr);
-	}
+    int worker_idx = sd->worker_index;
+    if (!csilk_io_is_closing(
+            (csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async)) {
+        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async,
+                       nullptr);
+    }
 
-	if (!csilk_io_is_closing((csilk_io_handle_t*)handle)) {
-		csilk_io_close((csilk_io_handle_t*)handle, nullptr);
-	}
+    if (!csilk_io_is_closing((csilk_io_handle_t*)handle)) {
+        csilk_io_close((csilk_io_handle_t*)handle, nullptr);
+    }
 
-	/* Drain pending close callbacks (including nested ones from e.g. client
-	 * timers), then stop the loop.  The CSILK_IO_RUN_NOWAIT loop ensures all close
-	 * callbacks fire before uv_stop so the loop exits cleanly even under
-	 * slow conditions (e.g. GCC coverage builds).  The uv_stop fallback is
-	 * needed for io_uring compatibility where csilk_io_run may not exit when all
-	 * user handles are closed. */
-	for (int i = 0; i < 8; i++) {
-		csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
-	}
-	uv_stop(loop);
+    /* Drain pending close callbacks (including nested ones from e.g. client
+     * timers), then stop the loop.  The CSILK_IO_RUN_NOWAIT loop ensures all close
+     * callbacks fire before uv_stop so the loop exits cleanly even under
+     * slow conditions (e.g. GCC coverage builds).  The uv_stop fallback is
+     * needed for io_uring compatibility where csilk_io_run may not exit when all
+     * user handles are closed. */
+    for (int i = 0; i < 8; i++) {
+        csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
+    }
+    uv_stop(loop);
 }
 
 static void
 on_dispatch_async(uv_async_t* handle)
 {
-	worker_pool_t* wp = (worker_pool_t*)handle->data;
-	if (!wp) {
-		return;
-	}
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    if (!wp) {
+        return;
+    }
 
-	csilk_lfq_node_t* node = csilk_lfq_dequeue(&wp->dispatch_queue);
-	while (node) {
-		csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)node;
-		if (task->cb) {
-			task->cb(task->arg);
-		}
-		free(task);
-		node = csilk_lfq_dequeue(&wp->dispatch_queue);
-	}
+    csilk_lfq_node_t* node = csilk_lfq_dequeue(&wp->dispatch_queue);
+    while (node) {
+        csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)node;
+        if (task->cb) {
+            task->cb(task->arg);
+        }
+        free(task);
+        node = csilk_lfq_dequeue(&wp->dispatch_queue);
+    }
 }
 
 static void
 _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
 {
-	csilk_lfq_init(&wp->dispatch_queue);
-	uv_async_init(loop, &wp->dispatch_async, on_dispatch_async);
-	wp->dispatch_async.data = wp;
+    csilk_lfq_init(&wp->dispatch_queue);
+    uv_async_init(loop, &wp->dispatch_async, on_dispatch_async);
+    wp->dispatch_async.data = wp;
 }
 
 void
 csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 {
-	if (!c || !c->_internal_client || !cb) {
-		return;
-	}
-	csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-	if (!client->owner_pool) {
-		return;
-	}
-	worker_pool_t* wp = client->owner_pool;
+    if (!c || !c->_internal_client || !cb) {
+        return;
+    }
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client->owner_pool) {
+        return;
+    }
+    worker_pool_t* wp = client->owner_pool;
 
-	csilk_dispatch_task_t* task = malloc(sizeof(csilk_dispatch_task_t));
-	if (!task) {
-		return;
-	}
-	task->cb = cb;
-	task->arg = arg;
-	csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
+    csilk_dispatch_task_t* task = malloc(sizeof(csilk_dispatch_task_t));
+    if (!task) {
+        return;
+    }
+    task->cb = cb;
+    task->arg = arg;
+    csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
 
-	uv_async_send(&wp->dispatch_async);
+    uv_async_send(&wp->dispatch_async);
 }
 
 /** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode.
  *
- * Each worker runs its own libuv event loop and accept loop, sharing the
+ * Each worker runs its own I/O event loop (libuv or io_uring) and accept loop, sharing the
  * same port via SO_REUSEPORT. The kernel distributes incoming connections
  * across worker threads. The worker_data_t argument is freed by this function.
  *
@@ -710,47 +709,47 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 static void
 worker_thread(void* arg)
 {
-	worker_data_t* data = (worker_data_t*)arg;
-	worker_pool_t* wp = data->wp;
-	csilk_server_t* server = wp->server;
-	int port = data->port;
-	uv_barrier_t* barrier = data->barrier;
-	free(data);
+    worker_data_t*  data = (worker_data_t*)arg;
+    worker_pool_t*  wp = data->wp;
+    csilk_server_t* server = wp->server;
+    int             port = data->port;
+    uv_barrier_t*   barrier = data->barrier;
+    free(data);
 
-	csilk_io_loop_t* loop_ptr = &wp->loop;
+    csilk_io_loop_t* loop_ptr = &wp->loop;
 
 #ifdef __APPLE__
-	/* Optimize kqueue for OOB data handling on macOS */
-	setenv("UV_KQUEUE_OOB", "1", 0);
+    /* Optimize kqueue for OOB data handling on macOS */
+    setenv("UV_KQUEUE_OOB", "1", 0);
 #endif
 
-	uv_loop_init(loop_ptr);
+    uv_loop_init(loop_ptr);
 
-	wp->loop_ptr = loop_ptr;
-	wp->server_handle.data = wp;
+    wp->loop_ptr = loop_ptr;
+    wp->server_handle.data = wp;
 
-	_csilk_worker_init_arena_pool(wp);
-	_csilk_worker_init_dispatch(wp, loop_ptr);
+    _csilk_worker_init_arena_pool(wp);
+    _csilk_worker_init_dispatch(wp, loop_ptr);
 
-	if (bind_and_listen(
-		loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) < 0) {
-		if (barrier) {
-			uv_barrier_wait(barrier);
-		}
-		uv_loop_close(loop_ptr);
-		return;
-	}
+    if (bind_and_listen(loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) <
+        0) {
+        if (barrier) {
+            uv_barrier_wait(barrier);
+        }
+        uv_loop_close(loop_ptr);
+        return;
+    }
 
-	worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
-	wp->stop_async.data = &sd;
-	uv_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
+    worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
+    wp->stop_async.data = &sd;
+    uv_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
 
-	if (barrier) {
-		uv_barrier_wait(barrier);
-	}
+    if (barrier) {
+        uv_barrier_wait(barrier);
+    }
 
-	csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
-	uv_loop_close(loop_ptr);
+    csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
+    uv_loop_close(loop_ptr);
 }
 
 #ifndef UV_HANDLE_BOUND
@@ -766,12 +765,12 @@ worker_thread(void* arg)
  *   SO_REUSEPORT path (reuseport=true, non-Windows):
  *     Creates a raw socket with socket(AF_INET, SOCK_STREAM|SOCK_NONBLOCK),
  *     sets SO_REUSEADDR and SO_REUSEPORT, binds, and listens. The socket
- *     fd is then handed to libuv via uv_tcp_open(). This is used in
+ *     fd is then handed to the I/O backend via uv_tcp_open() (libuv) or adapted (io_uring). This is used in
  *     multi-worker mode so each worker thread has its own accept loop
  *     sharing the same port.
  *
  *   Standard path (reuseport=false or Windows):
- *     Uses libuv's standard uv_tcp_bind() + uv_listen() sequence.
+ *     Uses standard uv_tcp_bind() + uv_listen() (libuv) or equivalent (io_uring).
  *
  * @param loop       Event loop to attach the TCP handle to.
  * @param out_handle [out] Initialized TCP handle.
@@ -783,58 +782,58 @@ static int
 bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bool reuseport)
 {
 #ifndef _WIN32
-	if (reuseport) {
-		int fd;
+    if (reuseport) {
+        int fd;
 #ifdef __APPLE__
-		fd = socket(AF_INET, SOCK_STREAM, 0);
-		if (fd >= 0) {
-			int flags = fcntl(fd, F_GETFL, 0);
-			fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-		}
+        fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd >= 0) {
+            int flags = fcntl(fd, F_GETFL, 0);
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
 #else
-		fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+        fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 #endif
-		if (fd < 0) {
-			return -1;
-		}
-		int on = 1;
-		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-		setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-		struct sockaddr_in addr;
-		uv_ip4_addr("0.0.0.0", port, &addr);
-		if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-			close(fd);
-			return -1;
-		}
-		if (listen(fd, backlog) < 0) {
-			close(fd);
-			return -1;
-		}
-		int r = uv_tcp_init(loop, out_handle);
-		if (r < 0) {
-			close(fd);
-			return -1;
-		}
-		r = uv_tcp_open(out_handle, (uv_os_sock_t)fd);
-		if (r < 0) {
-			close(fd);
-			return -1;
-		}
-		out_handle->flags |= UV_HANDLE_BOUND;
-		return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
-	}
+        if (fd < 0) {
+            return -1;
+        }
+        int on = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+        struct sockaddr_in addr;
+        uv_ip4_addr("0.0.0.0", port, &addr);
+        if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            close(fd);
+            return -1;
+        }
+        if (listen(fd, backlog) < 0) {
+            close(fd);
+            return -1;
+        }
+        int r = uv_tcp_init(loop, out_handle);
+        if (r < 0) {
+            close(fd);
+            return -1;
+        }
+        r = uv_tcp_open(out_handle, (uv_os_sock_t)fd);
+        if (r < 0) {
+            close(fd);
+            return -1;
+        }
+        out_handle->flags |= UV_HANDLE_BOUND;
+        return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
+    }
 #endif
-	int r = uv_tcp_init(loop, out_handle);
-	if (r < 0) {
-		return -1;
-	}
-	struct sockaddr_in addr;
-	uv_ip4_addr("0.0.0.0", port, &addr);
-	r = uv_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
-	if (r < 0) {
-		return -1;
-	}
-	return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
+    int r = uv_tcp_init(loop, out_handle);
+    if (r < 0) {
+        return -1;
+    }
+    struct sockaddr_in addr;
+    uv_ip4_addr("0.0.0.0", port, &addr);
+    r = uv_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
+    if (r < 0) {
+        return -1;
+    }
+    return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
 }
 
 /* --- Server run --- */
@@ -850,8 +849,8 @@ bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backl
  *      worker_threads > 1, otherwise standard single-socket bind.
  *   4. TCP keepalive: if configured, enable TCP keepalive probes.
  *   5. Worker threads: if worker_threads > 1, spawn N-1 worker threads
- *      each running their own libuv loop + accept loop (SO_REUSEPORT).
- *   6. SIGINT handler: register a libuv signal watcher.
+ *      each running their own I/O loop + accept loop (libuv or io_uring) (SO_REUSEPORT).
+ *   6. SIGINT handler: register a signal watcher on the event loop.
  *   7. Fire CSILK_HOOK_SERVER_START.
  *   8. csilk_io_run(): enter the event loop.
  *
@@ -863,143 +862,136 @@ bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backl
 static void
 openapi_json_handler(csilk_ctx_t* c)
 {
-	csilk_server_t* server = csilk_ctx_get_server(c);
-	if (server && server->router) {
-		csilk_serve_openapi(c,
-				    server->router,
-				    "Csilk API",
-				    "1.0.0",
-				    "Auto-generated OpenAPI documentation.");
-	} else {
-		csilk_set_status(c, 500);
-	}
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    if (server && server->router) {
+        csilk_serve_openapi(
+            c, server->router, "Csilk API", "1.0.0", "Auto-generated OpenAPI documentation.");
+    } else {
+        csilk_set_status(c, 500);
+    }
 }
 
 int
 csilk_server_run(csilk_server_t* server, int port)
 {
-	if (!server) {
-		return -1;
-	}
+    if (!server) {
+        return -1;
+    }
 
-	if (server->config.enable_openapi && server->router) {
-		static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
-		csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
-		CSILK_LOG_I(
-		    "Server: OpenAPI endpoint automatically registered at GET /openapi.json");
-	}
+    if (server->config.enable_openapi && server->router) {
+        static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
+        csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
+        CSILK_LOG_I("Server: OpenAPI endpoint automatically registered at GET /openapi.json");
+    }
 
-	if (server->config.enable_tls) {
-		init_tls(server);
-		if (!server->ssl_ctx) {
-			CSILK_LOG_E("Server: failed to initialize TLS context");
-			return -1;
-		}
-	}
+    if (server->config.enable_tls) {
+        init_tls(server);
+        if (!server->ssl_ctx) {
+            CSILK_LOG_E("Server: failed to initialize TLS context");
+            return -1;
+        }
+    }
 
-	int workers = server->config.worker_threads;
-	if (workers <= 0) {
-		workers = 1;
-	}
+    int workers = server->config.worker_threads;
+    if (workers <= 0) {
+        workers = 1;
+    }
 
-	int r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
-	if (r < 0) {
-		CSILK_LOG_E("Server: failed to initialize async handle: %s", csilk_io_strerror(r));
-		return -1;
-	}
-	server->async_handle.data = server;
+    int r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to initialize async handle: %s", csilk_io_strerror(r));
+        return -1;
+    }
+    server->async_handle.data = server;
 
-	r = bind_and_listen(
-	    server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1);
-	if (r < 0) {
-		CSILK_LOG_E(
-		    "Server: failed to bind and listen on port %d: %s", port, csilk_io_strerror(r));
-		return -1;
-	}
+    r = bind_and_listen(
+        server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to bind and listen on port %d: %s", port, csilk_io_strerror(r));
+        return -1;
+    }
 
-	/* Create per-worker pools. Index 0 = main loop (already has loop + server_handle
-	 * set up). Worker thread indices 1..workers-1 get their own pools. */
-	server->worker_pool_count = workers;
-	server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
-	if (!server->worker_pools) {
-		CSILK_LOG_E("Server: failed to allocate memory for worker pools");
-		csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-		csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
-		return -1;
-	}
-	server->worker_pools[0].server = server;
-	server->worker_pools[0].worker_index = 0;
-	server->server_handle.data = &server->worker_pools[0];
+    /* Create per-worker pools. Index 0 = main loop (already has loop + server_handle
+     * set up). Worker thread indices 1..workers-1 get their own pools. */
+    server->worker_pool_count = workers;
+    server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
+    if (!server->worker_pools) {
+        CSILK_LOG_E("Server: failed to allocate memory for worker pools");
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        return -1;
+    }
+    server->worker_pools[0].server = server;
+    server->worker_pools[0].worker_index = 0;
+    server->server_handle.data = &server->worker_pools[0];
 
-	server->worker_pools[0].loop_ptr = server->loop;
-	_csilk_worker_init_arena_pool(&server->worker_pools[0]);
-	_csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
+    server->worker_pools[0].loop_ptr = server->loop;
+    _csilk_worker_init_arena_pool(&server->worker_pools[0]);
+    _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
-	if (server->config.tcp_keepalive > 0) {
-		uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
-	}
+    if (server->config.tcp_keepalive > 0) {
+        uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
+    }
 
-	if (workers > 1) {
-		CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
-		int nworkers = workers - 1;
-		server->worker_tids = malloc((size_t)nworkers * sizeof(csilk_thread_t));
-		if (server->worker_tids) {
-			server->worker_count = nworkers;
+    if (workers > 1) {
+        CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
+        int nworkers = workers - 1;
+        server->worker_tids = malloc((size_t)nworkers * sizeof(csilk_thread_t));
+        if (server->worker_tids) {
+            server->worker_count = nworkers;
 
-			uv_barrier_t barrier;
-			uv_barrier_init(&barrier, (unsigned int)workers);
+            uv_barrier_t barrier;
+            uv_barrier_init(&barrier, (unsigned int)workers);
 
-			for (int i = 0; i < nworkers; i++) {
-				int idx = i + 1;
-				server->worker_pools[idx].server = server;
-				server->worker_pools[idx].worker_index = idx;
+            for (int i = 0; i < nworkers; i++) {
+                int idx = i + 1;
+                server->worker_pools[idx].server = server;
+                server->worker_pools[idx].worker_index = idx;
 
-				worker_data_t* data = malloc(sizeof(worker_data_t));
-				if (!data) {
-					CSILK_LOG_E("Server: failed to allocate memory for worker "
-						    "thread data");
-					continue;
-				}
-				data->wp = &server->worker_pools[idx];
-				data->port = port;
-				data->barrier = &barrier;
-				uv_thread_create(&server->worker_tids[i], worker_thread, data);
-			}
+                worker_data_t* data = malloc(sizeof(worker_data_t));
+                if (!data) {
+                    CSILK_LOG_E("Server: failed to allocate memory for worker "
+                                "thread data");
+                    continue;
+                }
+                data->wp = &server->worker_pools[idx];
+                data->port = port;
+                data->barrier = &barrier;
+                uv_thread_create(&server->worker_tids[i], worker_thread, data);
+            }
 
-			uv_barrier_wait(&barrier);
-			uv_barrier_destroy(&barrier);
-			CSILK_LOG_I("Server: all %d worker threads spawned successfully",
-				    workers - 1);
-		} else {
-			CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
-			free(server->worker_tids);
-			server->worker_tids = nullptr;
-		}
-	}
+            uv_barrier_wait(&barrier);
+            uv_barrier_destroy(&barrier);
+            CSILK_LOG_I("Server: all %d worker threads spawned successfully", workers - 1);
+        } else {
+            CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
+            free(server->worker_tids);
+            server->worker_tids = nullptr;
+        }
+    }
 
-	r = uv_signal_init(server->loop, &server->sig_handle);
-	if (r < 0) {
-		CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
-		csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-		csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
-		return -1;
-	}
-	server->sig_handle.data = server;
-	r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
-	if (r < 0) {
-		CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s",
-			    csilk_io_strerror(r));
-		csilk_io_close((csilk_io_handle_t*)&server->sig_handle, nullptr);
-		csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-		csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
-		return -1;
-	}
+    r = uv_signal_init(server->loop, &server->sig_handle);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        return -1;
+    }
+    server->sig_handle.data = server;
+    r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", csilk_io_strerror(r));
+        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        return -1;
+    }
 
-	CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
+    CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
 
-	_csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
+    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
 
-	return csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
+    return csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
 }
 
 /* --- Accessors --- */
@@ -1014,7 +1006,7 @@ csilk_server_run(csilk_server_t* server, int port)
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
-	return server ? server->mq : nullptr;
+    return server ? server->mq : nullptr;
 }
 
 /** @brief Get the server's radix-tree router.
@@ -1027,7 +1019,7 @@ csilk_server_get_mq(csilk_server_t* server)
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
-	return server ? server->router : nullptr;
+    return server ? server->router : nullptr;
 }
 
 /** @brief Swap the router instance attached to a server.
@@ -1037,12 +1029,12 @@ csilk_server_get_router(csilk_server_t* server)
 void
 csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
 {
-	if (!server || !router) {
-		return;
-	}
-	csilk_router_t* old_router = server->router;
-	server->router = router;
-	if (old_router) {
-		csilk_router_free(old_router);
-	}
+    if (!server || !router) {
+        return;
+    }
+    csilk_router_t* old_router = server->router;
+    server->router = router;
+    if (old_router) {
+        csilk_router_free(old_router);
+    }
 }

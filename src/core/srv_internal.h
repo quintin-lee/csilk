@@ -14,9 +14,9 @@
 
 /* Forward declarations for OpenSSL types — full definition from <openssl/ssl.h>
  * is only needed in tls.c, connection.c, and http1.c. */
-typedef struct ssl_st SSL;
+typedef struct ssl_st     SSL;
 typedef struct ssl_ctx_st SSL_CTX;
-typedef struct bio_st BIO;
+typedef struct bio_st     BIO;
 
 #include <stdatomic.h>
 #include <csilk/core/sys_io.h>
@@ -58,8 +58,8 @@ enum { CSILK_CLIENT_POOL_SIZE = 32 };
 
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {
-	void* handler;
-	struct csilk_hook_node_s* next;
+    void*                     handler;
+    struct csilk_hook_node_s* next;
 } csilk_hook_node_t;
 
 /** @brief Protocol type for a client connection. */
@@ -70,9 +70,9 @@ typedef struct csilk_client_s csilk_client_t;
 
 /** @brief Task node for cross-thread dispatching. */
 typedef struct csilk_dispatch_task_s {
-	csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
-	void (*cb)(void* arg);
-	void* arg;
+    csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
+    void (*cb)(void* arg);
+    void* arg;
 } csilk_dispatch_task_t;
 
 /**
@@ -87,106 +87,106 @@ typedef struct csilk_dispatch_task_s {
  * the pool works identically to the old shared-pool model.
  */
 typedef struct {
-	csilk_server_t* server;				     /**< Owning server instance. */
-	csilk_io_loop_t loop;				     /**< This worker's libuv event loop. */
-	csilk_io_loop_t* loop_ptr;			     /**< Pointer to the active loop. */
-	csilk_io_tcp_t server_handle;			     /**< Worker-local listen handle. */
-	csilk_client_t* client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
-	int client_pool_count;				     /**< Items in local free list. */
-	csilk_io_async_t stop_async;			     /**< Async for graceful worker stop. */
-	int worker_index; /**< 0 = main loop, 1+ = worker threads. */
-	csilk_arena_t* arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
-	int arena_pool_count;				   /**< Items in arena pool. */
-	csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
-	csilk_lfqueue_t dispatch_queue;	 /**< Lock-free MPSC dispatch queue. */
-	csilk_client_t* active_clients;	 /**< Head of worker-local active connections list. */
-	void* thread_pool;		 /**< io_uring thread pool (nullptr in libuv mode). */
+    csilk_server_t*  server;        /**< Owning server instance. */
+    csilk_io_loop_t  loop;          /**< This worker's I/O event loop (libuv or io_uring). */
+    csilk_io_loop_t* loop_ptr;      /**< Pointer to the active loop. */
+    csilk_io_tcp_t   server_handle; /**< Worker-local listen handle. */
+    csilk_client_t*  client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
+    int              client_pool_count;                   /**< Items in local free list. */
+    csilk_io_async_t stop_async;                          /**< Async for graceful worker stop. */
+    int              worker_index;                       /**< 0 = main loop, 1+ = worker threads. */
+    csilk_arena_t*   arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
+    int              arena_pool_count;                   /**< Items in arena pool. */
+    csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
+    csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
+    csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
+    void*            thread_pool;    /**< io_uring thread pool (nullptr in libuv mode). */
 } worker_pool_t;
 
 /**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
- * Manages the libuv event loop, HTTP listener, configuration, global
+ * Manages the I/O event loop (libuv or io_uring), HTTP listener, configuration, global
  * middleware chain, hook registrations, and client connection pooling.
  * Thread-safe for multi-threaded operation via atomic counters and mutexes.
  */
 struct csilk_server_s {
-	csilk_io_loop_t* loop;		 /**< libuv event loop. */
-	csilk_router_t* router;		 /**< Associated router instance. */
-	csilk_io_tcp_t server_handle;	 /**< TCP server handle. */
-	csilk_io_signal_t sig_handle;	 /**< SIGINT signal handler. */
-	csilk_io_async_t async_handle;	 /**< Async handle for cross-thread wakeup. */
-	llhttp_settings_t settings;	 /**< HTTP parser callback settings. */
-	csilk_server_config_t config;	 /**< Server configuration. */
-	csilk_handler_t middlewares[32]; /**< Global middlewares. */
-	int middleware_count;		 /**< Number of global middlewares. */
-	int max_connections;		 /**< Max concurrent connections (0=unlimited). */
-	atomic_int active_connections;	 /**< Current connection count (atomic). */
-	csilk_thread_t* worker_tids;	 /**< Worker thread IDs (nullptr if single-thread). */
-	int worker_count;		 /**< Number of worker threads created. */
-	worker_pool_t*
-	    worker_pools; /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
-	int worker_pool_count;			/**< Number of worker pools (= worker_threads). */
-	csilk_handler_t not_found_handler;	/**< Custom 404 handler (nullptr = default). */
-	char* spa_doc_root;			/**< SPA fallback doc root (nullptr = disabled). */
-	csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
-	csilk_crypto_driver_t* crypto_driver;	/**< Crypto algorithm driver. */
-	csilk_cipher_driver_t* cipher_driver;	/**< Cipher algorithm driver. */
-	SSL_CTX* ssl_ctx;			/**< OpenSSL context. */
-	csilk_mq_t* mq;				/**< Message Queue instance. */
-	csilk_hook_node_t* hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
+    csilk_io_loop_t*      loop;               /**< I/O event loop (libuv or io_uring). */
+    csilk_router_t*       router;             /**< Associated router instance. */
+    csilk_io_tcp_t        server_handle;      /**< TCP server handle. */
+    csilk_io_signal_t     sig_handle;         /**< SIGINT signal handler. */
+    csilk_io_async_t      async_handle;       /**< Async handle for cross-thread wakeup. */
+    llhttp_settings_t     settings;           /**< HTTP parser callback settings. */
+    csilk_server_config_t config;             /**< Server configuration. */
+    csilk_handler_t       middlewares[32];    /**< Global middlewares. */
+    int                   middleware_count;   /**< Number of global middlewares. */
+    int                   max_connections;    /**< Max concurrent connections (0=unlimited). */
+    atomic_int            active_connections; /**< Current connection count (atomic). */
+    csilk_thread_t*       worker_tids;        /**< Worker thread IDs (nullptr if single-thread). */
+    int                   worker_count;       /**< Number of worker threads created. */
+    worker_pool_t*
+        worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
+    int worker_pool_count; /**< Number of worker pools (= worker_threads). */
+    csilk_handler_t         not_found_handler; /**< Custom 404 handler (nullptr = default). */
+    char*                   spa_doc_root;      /**< SPA fallback doc root (nullptr = disabled). */
+    csilk_storage_driver_t* storage_driver;    /**< Context storage driver. */
+    csilk_crypto_driver_t*  crypto_driver;     /**< Crypto algorithm driver. */
+    csilk_cipher_driver_t*  cipher_driver;     /**< Cipher algorithm driver. */
+    SSL_CTX*                ssl_ctx;           /**< OpenSSL context. */
+    csilk_mq_t*             mq;                /**< Message Queue instance. */
+    csilk_hook_node_t*      hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.
  *
- * Holds the libuv stream handle, HTTP parser state, timers for keep-alive
+ * Holds the I/O stream handle (libuv or io_uring), HTTP parser state, timers for keep-alive
  * and timeouts, TLS context (if HTTPS), and the request/response context.
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-	uint8_t generation;
-	csilk_io_tcp_t handle;		/**< libuv TCP stream handle. */
-	csilk_io_timer_t timer;		/**< Connection idle (keep-alive) timer. */
-	csilk_io_timer_t read_timer;	/**< Read timeout timer. */
-	csilk_io_timer_t write_timer;	/**< Write timeout timer. */
-	csilk_io_timer_t request_timer; /**< Request timeout timer. */
-	int close_pending;		/**< Pending close refs before freeing client. */
-	int async_ref;			/**< Active asynchronous tasks reference counter. */
-	int read_paused;
-	unsigned read_active : 1;
-	unsigned keep_alive : 1; /**< Cached keep-alive decision from
-				   * _csilk_send_response, used by on_write_done
-				   * because llhttp clears F_CONNECTION_CLOSE
-				   * after on_message_complete returns. */
-	void* read_buf;		 /**< Pre-allocated read buffer for io_uring */
+    uint8_t          generation;
+    csilk_io_tcp_t   handle;           /**< I/O stream handle (libuv or io_uring). */
+    csilk_io_timer_t timer;            /**< Connection idle (keep-alive) timer. */
+    csilk_io_timer_t read_timer;       /**< Read timeout timer. */
+    csilk_io_timer_t write_timer;      /**< Write timeout timer. */
+    csilk_io_timer_t request_timer;    /**< Request timeout timer. */
+    int              close_pending;    /**< Pending close refs before freeing client. */
+    int              async_ref;        /**< Active asynchronous tasks reference counter. */
+    int              read_paused;
+    unsigned         read_active : 1;
+    unsigned         keep_alive : 1;   /**< Cached keep-alive decision from
+                   * _csilk_send_response, used by on_write_done
+                   * because llhttp clears F_CONNECTION_CLOSE
+                   * after on_message_complete returns. */
+    void*            read_buf;         /**< Pre-allocated read buffer for io_uring */
 
-	csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
-	nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
-	csilk_ctx_t* h2_streams;     /**< Linked list of active HTTP/2 stream contexts. */
+    csilk_protocol_t protocol;         /**< Protocol negotiated for this connection. */
+    nghttp2_session* h2_session;       /**< HTTP/2 session state (if HTTP/2). */
+    csilk_ctx_t*     h2_streams;       /**< Linked list of active HTTP/2 stream contexts. */
 
-	llhttp_t parser; /**< HTTP request parser (if HTTP/1.1). */
+    llhttp_t parser;                   /**< HTTP request parser (if HTTP/1.1). */
 
-	csilk_server_t* server;	   /**< Owning server instance. */
-	worker_pool_t* owner_pool; /**< Per-worker pool that owns this client. */
-	csilk_ctx_t ctx;	   /**< Request context for this connection. */
-	size_t total_header_size;  /**< Total size of headers parsed so far. */
-	size_t header_count;	   /**< Number of headers parsed so far. */
+    csilk_server_t* server;            /**< Owning server instance. */
+    worker_pool_t*  owner_pool;        /**< Per-worker pool that owns this client. */
+    csilk_ctx_t     ctx;               /**< Request context for this connection. */
+    size_t          total_header_size; /**< Total size of headers parsed so far. */
+    size_t          header_count;      /**< Number of headers parsed so far. */
 
-	/** @name Zero-Copy Parsing State
-	 *  HTTP parser callbacks store direct references to the receive buffer
-	 *  instead of allocating and copying. Eliminates all heap allocations
-	 *  during header parsing. */
-	/**@{*/
-	csilk_str_view_t current_url;	       /**< Current URL (zero-copy ref to buf). */
-	csilk_str_view_t current_header_field; /**< Current header field name. */
-	csilk_str_view_t current_header_value; /**< Current header value. */
-	/**@}*/
+    /** @name Zero-Copy Parsing State
+     *  HTTP parser callbacks store direct references to the receive buffer
+     *  instead of allocating and copying. Eliminates all heap allocations
+     *  during header parsing. */
+    /**@{*/
+    csilk_str_view_t current_url;          /**< Current URL (zero-copy ref to buf). */
+    csilk_str_view_t current_header_field; /**< Current header field name. */
+    csilk_str_view_t current_header_value; /**< Current header value. */
+    /**@}*/
 
-	SSL* ssl;		     /**< OpenSSL session object. */
-	BIO* read_bio;		     /**< BIO for reading encrypted data. */
-	BIO* write_bio;		     /**< BIO for writing encrypted data. */
-	struct csilk_client_s* next; /**< Next client in active list. */
-	struct csilk_client_s* prev; /**< Previous client in active list. */
+    SSL*                   ssl;       /**< OpenSSL session object. */
+    BIO*                   read_bio;  /**< BIO for reading encrypted data. */
+    BIO*                   write_bio; /**< BIO for writing encrypted data. */
+    struct csilk_client_s* next;      /**< Next client in active list. */
+    struct csilk_client_s* prev;      /**< Previous client in active list. */
 };
 
 /**

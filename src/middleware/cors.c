@@ -33,64 +33,63 @@
 void
 csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
 {
-	if (!c || !config) {
-		CSILK_LOG_E("CORS: Middleware error: invalid arguments (c: %p, config: %p)",
-			    (void*)c,
-			    (void*)config);
-		if (c) {
-			csilk_next(c);
-		}
-		return;
-	}
+    if (!c || !config) {
+        CSILK_LOG_E("CORS: Middleware error: invalid arguments (c: %p, config: %p)",
+                    (void*)c,
+                    (void*)config);
+        if (c) {
+            csilk_next(c);
+        }
+        return;
+    }
 
-	const char* origin = csilk_get_header(c, "Origin");
-	CSILK_LOG_T("CORS: Middleware triggered for request %p (Origin: %s, Method: %s)",
-		    (void*)c,
-		    origin ? origin : "none",
-		    csilk_get_method(c) ? csilk_get_method(c) : "none");
+    const char* origin = csilk_get_header(c, "Origin");
+    CSILK_LOG_T("CORS: Middleware triggered for request %p (Origin: %s, Method: %s)",
+                (void*)c,
+                origin ? origin : "none",
+                csilk_get_method(c) ? csilk_get_method(c) : "none");
 
-	/* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
+    /* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
      so caches do not serve CORS responses across different origins. */
-	if (config->allow_origin) {
-		CSILK_LOG_T("CORS: Setting CORS header Access-Control-Allow-Origin: %s",
-			    config->allow_origin);
-		csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
-		if (strcmp(config->allow_origin, "*") != 0) {
-			csilk_set_header(c, "Vary", "Origin");
-		}
-	}
+    if (config->allow_origin) {
+        CSILK_LOG_T("CORS: Setting CORS header Access-Control-Allow-Origin: %s",
+                    config->allow_origin);
+        csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
+        if (strcmp(config->allow_origin, "*") != 0) {
+            csilk_set_header(c, "Vary", "Origin");
+        }
+    }
 
-	if (config->allow_methods) {
-		csilk_set_header(c, "Access-Control-Allow-Methods", config->allow_methods);
-	}
+    if (config->allow_methods) {
+        csilk_set_header(c, "Access-Control-Allow-Methods", config->allow_methods);
+    }
 
-	if (config->allow_headers) {
-		csilk_set_header(c, "Access-Control-Allow-Headers", config->allow_headers);
-	}
+    if (config->allow_headers) {
+        csilk_set_header(c, "Access-Control-Allow-Headers", config->allow_headers);
+    }
 
-	if (config->allow_credentials) {
-		csilk_set_header(c, "Access-Control-Allow-Credentials", "true");
-	}
+    if (config->allow_credentials) {
+        csilk_set_header(c, "Access-Control-Allow-Credentials", "true");
+    }
 
-	if (config->max_age > 0) {
-		char buf[32];
-		int n = snprintf(buf, sizeof(buf), "%d", config->max_age);
-		if (n > 0 && (size_t)n < sizeof(buf)) {
-			csilk_set_header(c, "Access-Control-Max-Age", buf);
-		}
-	}
+    if (config->max_age > 0) {
+        char buf[32];
+        int  n = snprintf(buf, sizeof(buf), "%d", config->max_age);
+        if (n > 0 && (size_t)n < sizeof(buf)) {
+            csilk_set_header(c, "Access-Control-Max-Age", buf);
+        }
+    }
 
-	/* Preflight detection: OPTIONS + Access-Control-Request-Method indicates
+    /* Preflight detection: OPTIONS + Access-Control-Request-Method indicates
      a CORS preflight request (Fetch §4.6). Short-circuit with 204 instead
      of forwarding to the actual route handler. */
-	const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
-	if (csilk_get_method(c) && strcmp(csilk_get_method(c), "OPTIONS") == 0 && req_method) {
-		CSILK_LOG_D(
-		    "CORS: Handling preflight OPTIONS request for request %p, returning 204",
-		    (void*)c);
-		csilk_string(c, CSILK_STATUS_NO_CONTENT, "");
-		csilk_abort(c);
-		return;
-	}
-	csilk_next(c);
+    const char* req_method = csilk_get_header(c, "Access-Control-Request-Method");
+    if (csilk_get_method(c) && strcmp(csilk_get_method(c), "OPTIONS") == 0 && req_method) {
+        CSILK_LOG_D("CORS: Handling preflight OPTIONS request for request %p, returning 204",
+                    (void*)c);
+        csilk_string(c, CSILK_STATUS_NO_CONTENT, "");
+        csilk_abort(c);
+        return;
+    }
+    csilk_next(c);
 }

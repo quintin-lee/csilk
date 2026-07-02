@@ -19,56 +19,56 @@
  * Apply via csilk_server_set_config before calling csilk_server_run.
  */
 typedef struct csilk_server_config_s {
-	unsigned int idle_timeout_ms;	 /**< HTTP keep-alive idle timeout in milliseconds.
+    unsigned int idle_timeout_ms;    /**< HTTP keep-alive idle timeout in milliseconds.
                           Connection closed when no new request arrives within
                           this window. 0 = use default (typically 30 s). */
-	unsigned int read_timeout_ms;	 /**< Maximum time in milliseconds to wait for the full
+    unsigned int read_timeout_ms;    /**< Maximum time in milliseconds to wait for the full
                           request headers+body (0 = disabled). */
-	unsigned int write_timeout_ms;	 /**< Maximum time in milliseconds to send the
+    unsigned int write_timeout_ms;   /**< Maximum time in milliseconds to send the
                                     response (0 = disabled). */
-	unsigned int request_timeout_ms; /**< Maximum time in milliseconds for a complete
+    unsigned int request_timeout_ms; /**< Maximum time in milliseconds for a complete
                                request/response cycle (0 = disabled). Overrides
                                read/write timeouts if set. */
-	size_t max_body_size;		 /**< Maximum allowed request body size in bytes.
+    size_t       max_body_size;      /**< Maximum allowed request body size in bytes.
                                Requests exceeding this get 413 Payload Too Large. */
-	size_t max_header_size;		 /**< Maximum total size of all request headers in
+    size_t       max_header_size;    /**< Maximum total size of all request headers in
                                bytes. */
-	size_t max_url_size;		 /**< Maximum URL length in bytes (0 = disabled). */
-	size_t max_headers_count;	 /**< Maximum number of individual header fields (0 =
+    size_t       max_url_size;       /**< Maximum URL length in bytes (0 = disabled). */
+    size_t       max_headers_count;  /**< Maximum number of individual header fields (0 =
                                unlimited). */
-	int max_connections;		 /**< Maximum concurrent client connections (0 =
+    int          max_connections;    /**< Maximum concurrent client connections (0 =
                                unlimited). */
-	int listen_backlog;		 /**< TCP listen(2) backlog hint passed to the kernel. */
-	int tcp_nodelay;		 /**< Non-zero enables TCP_NODELAY (disable Nagle's
+    int          listen_backlog;     /**< TCP listen(2) backlog hint passed to the kernel. */
+    int          tcp_nodelay;        /**< Non-zero enables TCP_NODELAY (disable Nagle's
                          algorithm). */
-	int tcp_keepalive;		 /**< TCP keep-alive probe interval in seconds (0 =
+    int          tcp_keepalive;      /**< TCP keep-alive probe interval in seconds (0 =
                          disabled). */
-	int worker_threads;		 /**< Number of worker threads for SO_REUSEPORT listener
+    int          worker_threads;     /**< Number of worker threads for SO_REUSEPORT listener
                          sockets. 0 = number of CPUs. */
 
-	/* TLS configuration */
-	int enable_tls;	     /**< Non-zero enables HTTPS via TLS.  Requires @p
+    /* TLS configuration */
+    int   enable_tls;      /**< Non-zero enables HTTPS via TLS.  Requires @p
                           tls_cert_file and @p tls_key_file. */
-	char* tls_cert_file; /**< Path to the SSL/TLS certificate file (PEM format).
+    char* tls_cert_file;   /**< Path to the SSL/TLS certificate file (PEM format).
                           Must be set if @p enable_tls is 1. */
-	char* tls_key_file;  /**< Path to the SSL/TLS private key file (PEM format).
+    char* tls_key_file;    /**< Path to the SSL/TLS private key file (PEM format).
                           Must be set if @p enable_tls is 1. */
-	char* tls_ca_file;   /**< Path to the CA certificate bundle for
+    char* tls_ca_file;     /**< Path to the CA certificate bundle for
                           client-certificate verification (optional). */
-	int tls_verify_peer; /**< Non-zero to require and verify a client certificate.
+    int   tls_verify_peer; /**< Non-zero to require and verify a client certificate.
                            Requires @p tls_ca_file. */
 
-	/* HTTP/2 server push */
-	int h2_push_enable;	     /**< Non-zero to enable HTTP/2 server push. */
-	int h2_max_push_per_request; /**< Maximum push promises per request (0 = default
-				      10). */
+    /* HTTP/2 server push */
+    int h2_push_enable;          /**< Non-zero to enable HTTP/2 server push. */
+    int h2_max_push_per_request; /**< Maximum push promises per request (0 = default
+                      10). */
 
-	/* Performance optimizations */
-	int enable_simd; /**< Non-zero to enable SIMD-accelerated routing (if supported). */
-	int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
+    /* Performance optimizations */
+    int enable_simd;            /**< Non-zero to enable SIMD-accelerated routing (if supported). */
+    int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
 
-	/* Ecosystem */
-	int enable_openapi; /**< Non-zero to automatically serve /openapi.json. */
+    /* Ecosystem */
+    int enable_openapi; /**< Non-zero to automatically serve /openapi.json. */
 } csilk_server_config_t;
 
 /**
@@ -78,44 +78,44 @@ typedef struct csilk_server_config_s {
  * Typically populated from a YAML file via csilk_load_config.
  */
 typedef struct {
-	int port;		      /**< TCP port the server listens on. */
-	int http3_port;		      /**< UDP port for HTTP/3 (0 = disabled). */
-	csilk_server_config_t server; /**< Low-level server/connection settings. */
-	csilk_log_config_t logger;    /**< Logger initialisation settings. */
-	struct {
-		int enable;		    /**< Non-zero to install the CORS middleware. */
-		csilk_cors_config_t config; /**< CORS header values when enabled. */
-	} cors;				    /**< Cross-Origin Resource Sharing settings. */
-	struct {
-		int enable;		 /**< Non-zero to install the rate-limiter middleware. */
-		int requests_per_minute; /**< Maximum requests/minute/IP when enabled. */
-	} rate_limit;			 /**< Per-IP rate limiting settings. */
-	struct {
-		int enable;	/**< Non-zero to enable static file serving. */
-		char* root_dir; /**< Absolute or relative path to the local directory to
+    int                   port;       /**< TCP port the server listens on. */
+    int                   http3_port; /**< UDP port for HTTP/3 (0 = disabled). */
+    csilk_server_config_t server;     /**< Low-level server/connection settings. */
+    csilk_log_config_t    logger;     /**< Logger initialisation settings. */
+    struct {
+        int                 enable;   /**< Non-zero to install the CORS middleware. */
+        csilk_cors_config_t config;   /**< CORS header values when enabled. */
+    } cors;                           /**< Cross-Origin Resource Sharing settings. */
+    struct {
+        int enable;                   /**< Non-zero to install the rate-limiter middleware. */
+        int requests_per_minute;      /**< Maximum requests/minute/IP when enabled. */
+    } rate_limit;                     /**< Per-IP rate limiting settings. */
+    struct {
+        int   enable;                 /**< Non-zero to enable static file serving. */
+        char* root_dir;               /**< Absolute or relative path to the local directory to
                        serve. */
-		char* prefix;	/**< URL prefix for static files (e.g., "/static"). */
-	} static_files;		/**< Static file server settings. */
-	struct {
-		int enable_logger;   /**< Non-zero to install the request-logging middleware.
+        char* prefix;                 /**< URL prefix for static files (e.g., "/static"). */
+    } static_files;                   /**< Static file server settings. */
+    struct {
+        int   enable_logger;          /**< Non-zero to install the request-logging middleware.
                         */
-		int enable_recovery; /**< Non-zero to install the panic-recovery middleware.
+        int   enable_recovery;        /**< Non-zero to install the panic-recovery middleware.
                           */
-		int enable_csrf;     /**< Non-zero to install the CSRF-protection middleware. */
-		int enable_auth;     /**< Non-zero to install the token-auth middleware. */
-		char* auth_token;    /**< Expected bearer token when @p enable_auth is 1 (nullptr
+        int   enable_csrf;            /**< Non-zero to install the CSRF-protection middleware. */
+        int   enable_auth;            /**< Non-zero to install the token-auth middleware. */
+        char* auth_token;             /**< Expected bearer token when @p enable_auth is 1 (nullptr
                          = disabled even if enabled). */
-	} middleware;		     /**< Built-in middleware toggles. */
-	struct {
-		char* driver;	/**< AI driver name (e.g., "openai", "claude"). */
-		char* model;	/**< AI model identifier (e.g., "gpt-4", "claude-3"). */
-		char* api_key;	/**< API key for the AI service. */
-		char* base_url; /**< Optional base URL for API requests. */
-	} ai;			/**< AI integration settings. */
-	struct {
-		int enable;   /**< Non-zero to enable cipher functionality. */
-		char* driver; /**< Cipher driver name (e.g., "openssl"). */
-	} cipher;	      /**< Cipher/cryptography settings. */
+    } middleware;                     /**< Built-in middleware toggles. */
+    struct {
+        char* driver;                 /**< AI driver name (e.g., "openai", "claude"). */
+        char* model;                  /**< AI model identifier (e.g., "gpt-4", "claude-3"). */
+        char* api_key;                /**< API key for the AI service. */
+        char* base_url;               /**< Optional base URL for API requests. */
+    } ai;                             /**< AI integration settings. */
+    struct {
+        int   enable;                 /**< Non-zero to enable cipher functionality. */
+        char* driver;                 /**< Cipher driver name (e.g., "openssl"). */
+    } cipher;                         /**< Cipher/cryptography settings. */
 } csilk_config_t;
 
 /**

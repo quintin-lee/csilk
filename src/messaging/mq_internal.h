@@ -25,12 +25,12 @@
  * Messages are heap-allocated and linked via @p next.
  */
 typedef struct csilk_mq_msg_s {
-	char* topic;   /**< NUL-terminated topic string (heap-allocated copy). */
-	void* payload; /**< Message payload bytes (heap-allocated copy of published
+    char*  topic;   /**< NUL-terminated topic string (heap-allocated copy). */
+    void*  payload; /**< Message payload bytes (heap-allocated copy of published
                     data). */
-	size_t len;    /**< Byte length of @p payload. */
-	struct csilk_mq_msg_s*
-	    next; /**< Pointer to the next message in the queue (nullptr for tail). */
+    size_t len;     /**< Byte length of @p payload. */
+    struct csilk_mq_msg_s*
+        next;       /**< Pointer to the next message in the queue (nullptr for tail). */
 } csilk_mq_msg_t;
 
 /**
@@ -38,12 +38,12 @@ typedef struct csilk_mq_msg_s {
  * Holds the topic name and its associated middleware + subscriber chain.
  */
 typedef struct csilk_mq_topic_s {
-	char* name;		       /**< NUL-terminated topic name (e.g., "user.created"). */
-	csilk_mq_handler_t* handlers;  /**< Dynamically-grown array of handler function
+    char*                    name;     /**< NUL-terminated topic name (e.g., "user.created"). */
+    csilk_mq_handler_t*      handlers; /**< Dynamically-grown array of handler function
                                    pointers (middleware + subscribers). */
-	size_t handler_count;	       /**< Number of handlers currently registered. */
-	size_t handler_capacity;       /**< Allocated capacity of @p handlers. */
-	struct csilk_mq_topic_s* next; /**< Pointer to the next topic in the linked list. */
+    size_t                   handler_count;    /**< Number of handlers currently registered. */
+    size_t                   handler_capacity; /**< Allocated capacity of @p handlers. */
+    struct csilk_mq_topic_s* next;             /**< Pointer to the next topic in the linked list. */
 } csilk_mq_topic_t;
 
 /**
@@ -66,38 +66,38 @@ typedef struct csilk_mq_topic_s {
  * Not intended for direct manipulation by user code.
  */
 struct csilk_mq_s {
-	csilk_io_loop_t* loop;	       /**< Event loop */
-	csilk_io_async_t async_handle; /**< libuv async handle for bridging worker-thread
+    csilk_io_loop_t* loop;         /**< Event loop */
+    csilk_io_async_t async_handle; /**< Async handle for bridging worker-thread
                                  publishes into the main loop. */
-	csilk_mutex_t queue_mutex;     /**< Mutex guarding the message linked list. */
-	csilk_mq_msg_t* queue_head;    /**< Head of the pending-message linked list. */
-	csilk_mq_msg_t* queue_tail;    /**< Tail of the pending-message linked list. */
+    csilk_mutex_t    queue_mutex;  /**< Mutex guarding the message linked list. */
+    csilk_mq_msg_t*  queue_head;   /**< Head of the pending-message linked list. */
+    csilk_mq_msg_t*  queue_tail;   /**< Tail of the pending-message linked list. */
 
-	csilk_mq_topic_t* topics; /**< Linked list of registered topics. */
+    csilk_mq_topic_t* topics;      /**< Linked list of registered topics. */
 
-	/* Global middlewares */
-	csilk_mq_handler_t* global_middlewares; /**< Array of global middleware
+    /* Global middlewares */
+    csilk_mq_handler_t* global_middlewares; /**< Array of global middleware
                                              (intercepts every topic). */
-	size_t global_mw_count;	   /**< Number of global middleware handlers registered. */
-	size_t global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
+    size_t              global_mw_count;    /**< Number of global middleware handlers registered. */
+    size_t              global_mw_capacity; /**< Allocated capacity of @p global_middlewares. */
 
-	/* Persistence (WAL) */
-	csilk_io_file_t wal_fd;	 /**< File descriptor for the Write-Ahead Log, or -1 if
+    /* Persistence (WAL) */
+    csilk_io_file_t wal_fd;    /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
-	char* wal_path;		 /**< Path to the WAL file (heap-allocated copy, nullptr if
+    char*           wal_path;  /**< Path to the WAL file (heap-allocated copy, nullptr if
                            disabled). */
-	csilk_mutex_t wal_mutex; /**< Mutex guarding WAL append operations. */
+    csilk_mutex_t   wal_mutex; /**< Mutex guarding WAL append operations. */
 
-	/* Monitoring */
-	uint64_t published_total; /**< Total messages published. */
-	uint64_t delivered_total; /**< Total messages delivered. */
-	uint64_t failed_total;	  /**< Total messages failed. */
-	uint32_t queue_depth;	  /**< Current messages in memory. */
+    /* Monitoring */
+    uint64_t published_total;       /**< Total messages published. */
+    uint64_t delivered_total;       /**< Total messages delivered. */
+    uint64_t failed_total;          /**< Total messages failed. */
+    uint32_t queue_depth;           /**< Current messages in memory. */
 
-	csilk_ctx_t** monitors;	     /**< WebSocket monitor connections. */
-	size_t monitor_count;	     /**< Number of monitors. */
-	size_t monitor_capacity;     /**< Monitor array capacity. */
-	csilk_mutex_t monitor_mutex; /**< Protects monitor array. */
+    csilk_ctx_t** monitors;         /**< WebSocket monitor connections. */
+    size_t        monitor_count;    /**< Number of monitors. */
+    size_t        monitor_capacity; /**< Monitor array capacity. */
+    csilk_mutex_t monitor_mutex;    /**< Protects monitor array. */
 };
 
 /**
@@ -107,33 +107,33 @@ struct csilk_mq_s {
  * the current position in the chain.
  */
 struct csilk_mq_ctx_s {
-	csilk_mq_t* mq;		      /**< Owning MQ instance. */
-	csilk_mq_msg_t* msg;	      /**< The message being processed. */
-	csilk_mq_handler_t* handlers; /**< Combined handler array (global mw + topic
+    csilk_mq_t*         mq;            /**< Owning MQ instance. */
+    csilk_mq_msg_t*     msg;           /**< The message being processed. */
+    csilk_mq_handler_t* handlers;      /**< Combined handler array (global mw + topic
                                    mw + subscribers). */
-	size_t handler_count;	      /**< Total number of handlers in @p handlers. */
-	int handler_index;	      /**< Index of the next handler to invoke. */
-	int aborted;		      /**< Non-zero if csilk_mq_abort was called. */
+    size_t              handler_count; /**< Total number of handlers in @p handlers. */
+    int                 handler_index; /**< Index of the next handler to invoke. */
+    int                 aborted;       /**< Non-zero if csilk_mq_abort was called. */
 };
 
 /**
- * @brief Internal: Context passed to libuv's thread-pool work callback.
+ * @brief Internal: Context passed to the thread-pool work callback.
  *
  * Carries the topic, payload, and worker function pointer for background
  * message offloading.
  */
 typedef struct {
-	csilk_io_work_t req;	   /**< libuv work request (must be first for casting). */
-	csilk_mq_worker_t handler; /**< User-provided worker function. */
-	char* topic;		   /**< Topic string (heap-allocated copy). */
-	void* payload;		   /**< Payload data (heap-allocated copy). */
-	size_t len;		   /**< Byte length of @p payload. */
+    csilk_io_work_t   req;     /**< I/O work request (must be first for casting). */
+    csilk_mq_worker_t handler; /**< User-provided worker function. */
+    char*             topic;   /**< Topic string (heap-allocated copy). */
+    void*             payload; /**< Payload data (heap-allocated copy). */
+    size_t            len;     /**< Byte length of @p payload. */
 } csilk_mq_work_ctx_t;
 
 /**
- * @brief Internal: Create a new MQ instance bound to a libuv loop.
+ * @brief Internal: Create a new MQ instance bound to the event loop.
  *
- * @param loop  The libuv event loop.
+ * @param loop  The I/O event loop (libuv or io_uring).
  * @return A new MQ instance (heap-allocated), or nullptr on failure.
  */
 CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(csilk_io_loop_t* loop);

@@ -199,7 +199,7 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
  *
  * @param c  The request context.
  */
-void csilk_metrics_handler(csilk_ctx_t* c);
+void     csilk_metrics_handler(csilk_ctx_t* c);
 uint64_t csilk_metrics_get_total_requests(void);
 uint64_t csilk_metrics_get_total_duration(void);
 
@@ -342,7 +342,7 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
 
 /* --- JWT Payload Accessors --- */
 char* csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c);
-void csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
+void  csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
 char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);
 
 #endif /* CSILK_MIDDLEWARE_H */

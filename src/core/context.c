@@ -62,13 +62,13 @@
 void
 csilk_next(csilk_ctx_t* c)
 {
-	if (c->aborted || c->panicked || c->handlers == nullptr) {
-		return;
-	}
-	c->handler_index++;
-	if (c->handlers[c->handler_index] != nullptr) {
-		c->handlers[c->handler_index](c);
-	}
+    if (c->aborted || c->panicked || c->handlers == nullptr) {
+        return;
+    }
+    c->handler_index++;
+    if (c->handlers[c->handler_index] != nullptr) {
+        c->handlers[c->handler_index](c);
+    }
 }
 
 /** @brief Abort the handler chain immediately.
@@ -82,7 +82,7 @@ csilk_next(csilk_ctx_t* c)
 void
 csilk_abort(csilk_ctx_t* c)
 {
-	c->aborted = 1;
+    c->aborted = 1;
 }
 
 /** @brief Get a URL path parameter value by name.
@@ -98,15 +98,15 @@ csilk_abort(csilk_ctx_t* c)
 const char*
 csilk_get_param(csilk_ctx_t* c, const char* key)
 {
-	if (!c || !key) {
-		return nullptr;
-	}
-	for (int i = 0; i < c->params_count; i++) {
-		if (strcmp(c->params[i].key, key) == 0) {
-			return c->params[i].value;
-		}
-	}
-	return nullptr;
+    if (!c || !key) {
+        return nullptr;
+    }
+    for (int i = 0; i < c->params_count; i++) {
+        if (strcmp(c->params[i].key, key) == 0) {
+            return c->params[i].value;
+        }
+    }
+    return nullptr;
 }
 
 /** @brief Get the count of path parameters.
@@ -116,7 +116,7 @@ csilk_get_param(csilk_ctx_t* c, const char* key)
 int
 csilk_get_params_count(csilk_ctx_t* c)
 {
-	return c ? c->params_count : 0;
+    return c ? c->params_count : 0;
 }
 
 /** @brief Get the name of a parameter by index.
@@ -127,10 +127,10 @@ csilk_get_params_count(csilk_ctx_t* c)
 const char*
 csilk_get_param_key(csilk_ctx_t* c, int index)
 {
-	if (c && index >= 0 && index < c->params_count) {
-		return c->params[index].key;
-	}
-	return nullptr;
+    if (c && index >= 0 && index < c->params_count) {
+        return c->params[index].key;
+    }
+    return nullptr;
 }
 
 /** @brief Get the value of a parameter by index.
@@ -141,10 +141,10 @@ csilk_get_param_key(csilk_ctx_t* c, int index)
 const char*
 csilk_get_param_value(csilk_ctx_t* c, int index)
 {
-	if (c && index >= 0 && index < c->params_count) {
-		return c->params[index].value;
-	}
-	return nullptr;
+    if (c && index >= 0 && index < c->params_count) {
+        return c->params[index].value;
+    }
+    return nullptr;
 }
 
 /** @brief Get a request header value by key (case-insensitive).
@@ -160,7 +160,7 @@ csilk_get_param_value(csilk_ctx_t* c, int index)
 const char*
 csilk_get_header(csilk_ctx_t* c, const char* key)
 {
-	return map_get(&c->request.headers, key);
+    return map_get(&c->request.headers, key);
 }
 
 /** @brief Get a response header value by key (case-insensitive).
@@ -176,7 +176,7 @@ csilk_get_header(csilk_ctx_t* c, const char* key)
 const char*
 csilk_get_response_header(csilk_ctx_t* c, const char* key)
 {
-	return map_get(&c->response.headers, key);
+    return map_get(&c->response.headers, key);
 }
 
 /** @brief Get a query parameter value by key.
@@ -193,7 +193,7 @@ csilk_get_response_header(csilk_ctx_t* c, const char* key)
 const char*
 csilk_get_query(csilk_ctx_t* c, const char* key)
 {
-	return map_get(&c->request.query_params, key);
+    return map_get(&c->request.query_params, key);
 }
 
 /** @brief Set a request header, overwriting any existing value for the same
@@ -207,7 +207,7 @@ csilk_get_query(csilk_ctx_t* c, const char* key)
 void
 csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value)
 {
-	map_set(c, &c->request.headers, key, value);
+    map_set(c, &c->request.headers, key, value);
 }
 
 /** @brief Clean up request context resources between requests.
@@ -221,80 +221,80 @@ csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value)
 void
 csilk_ctx_cleanup(csilk_ctx_t* c)
 {
-	if (!c) {
-		return;
-	}
+    if (!c) {
+        return;
+    }
 
-	csilk_ctx_defer_free(c);
+    csilk_ctx_defer_free(c);
 
-	if (c->arena) {
-		csilk_arena_reset(c->arena);
-	} else {
-		for (int i = 0; i < c->params_count; i++) {
-			free(c->params[i].key);
-			free(c->params[i].value);
-		}
-	}
-	c->params_count = 0;
+    if (c->arena) {
+        csilk_arena_reset(c->arena);
+    } else {
+        for (int i = 0; i < c->params_count; i++) {
+            free(c->params[i].key);
+            free(c->params[i].value);
+        }
+    }
+    c->params_count = 0;
 
-	/*
-	 * request.path is always strdup'd (malloc'd) by
-	 * csilk_split_url (or test_utils).  csilk_arena_reset
-	 * above does NOT free it — we must free it here.
-	 */
-	free(c->request.path);
-	c->request.path = nullptr;
+    /*
+     * request.path is always strdup'd (malloc'd) by
+     * csilk_split_url (or test_utils).  csilk_arena_reset
+     * above does NOT free it — we must free it here.
+     */
+    free(c->request.path);
+    c->request.path = nullptr;
 
-	if (c->request.body && c->request.body_is_managed) {
-		free(c->request.body);
-	}
-	c->request.body = nullptr;
-	c->request.body_len = 0;
-	c->request.body_is_managed = 0;
+    if (c->request.body && c->request.body_is_managed) {
+        free(c->request.body);
+    }
+    c->request.body = nullptr;
+    c->request.body_len = 0;
+    c->request.body_is_managed = 0;
 
-	for (int i = 0; i < c->read_buffers_count; i++) {
-		if (c->read_buffers[i]) {
-			free(c->read_buffers[i]);
-			c->read_buffers[i] = nullptr;
-		}
-	}
-	c->read_buffers_count = 0;
+    for (int i = 0; i < c->read_buffers_count; i++) {
+        if (c->read_buffers[i]) {
+            free(c->read_buffers[i]);
+            c->read_buffers[i] = nullptr;
+        }
+    }
+    c->read_buffers_count = 0;
 
-	memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
-	memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
-	memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
-	memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
+    memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
+    memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
+    memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
+    memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
 
-	if (c->response.body && c->response.body_is_managed) {
-		free((void*)c->response.body);
-		c->response.body = nullptr;
-		c->response.body_is_managed = 0;
-	}
+    if (c->response.body && c->response.body_is_managed) {
+        free((void*)c->response.body);
+        c->response.body = nullptr;
+        c->response.body_is_managed = 0;
+    }
 
-	if (c->file_fd >= 0) {
-		csilk_io_fs_t close_req;
-		csilk_io_fs_close(nullptr, &close_req, c->file_fd, nullptr);
-		csilk_io_fs_req_cleanup(&close_req);
-		c->file_fd = -1;
-	}
-	c->file_offset = 0;
-	c->file_size = 0;
+    if (c->file_fd >= 0) {
+        csilk_io_fs_t close_req;
+        csilk_io_fs_close(nullptr, &close_req, c->file_fd, nullptr);
+        csilk_io_fs_req_cleanup(&close_req);
+        c->file_fd = -1;
+    }
+    c->file_offset = 0;
+    c->file_size = 0;
 
-	if (c->storage_driver && c->storage_driver->clear) {
-		c->storage_driver->clear(c);
-	}
-	c->storage_head = nullptr;
+    if (c->storage_driver && c->storage_driver->clear) {
+        c->storage_driver->clear(c);
+    }
+    c->storage_head = nullptr;
 
-	c->aborted = 0;
-	c->panicked = 0;
-	c->is_websocket = 0;
-	c->is_sse = 0;
-	c->is_async = 0;
-	c->response_started = 0;
-	c->handler_index = -1;
-	c->current_handler = nullptr;
-	c->on_ws_message = nullptr;
-	memset(c->request_id, 0, sizeof(c->request_id));
+    c->aborted = 0;
+    c->panicked = 0;
+    c->is_websocket = 0;
+    c->is_sse = 0;
+    c->is_async = 0;
+    c->response_started = 0;
+    c->handler_index = -1;
+    c->current_handler = nullptr;
+    c->on_ws_message = nullptr;
+    memset(c->request_id, 0, sizeof(c->request_id));
 }
 
 /** @brief Get the HTTP method of the current request.
@@ -308,7 +308,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 const char*
 csilk_get_method(csilk_ctx_t* c)
 {
-	return c ? c->request.method : nullptr;
+    return c ? c->request.method : nullptr;
 }
 
 /** @brief Get the URL path of the current request.
@@ -323,7 +323,7 @@ csilk_get_method(csilk_ctx_t* c)
 const char*
 csilk_get_path(csilk_ctx_t* c)
 {
-	return c ? c->request.path : nullptr;
+    return c ? c->request.path : nullptr;
 }
 
 /** @brief Get the request body data and optionally its length.
@@ -336,10 +336,10 @@ csilk_get_path(csilk_ctx_t* c)
 const char*
 csilk_get_body(csilk_ctx_t* c, size_t* out_len)
 {
-	if (out_len) {
-		*out_len = c ? c->request.body_len : 0;
-	}
-	return c ? c->request.body : nullptr;
+    if (out_len) {
+        *out_len = c ? c->request.body_len : 0;
+    }
+    return c ? c->request.body : nullptr;
 }
 
 /** @brief Get the length of the request body.
@@ -350,7 +350,7 @@ csilk_get_body(csilk_ctx_t* c, size_t* out_len)
 size_t
 csilk_get_body_len(csilk_ctx_t* c)
 {
-	return c ? c->request.body_len : 0;
+    return c ? c->request.body_len : 0;
 }
 
 /** @brief Check if the current request is a WebSocket upgrade.
@@ -361,7 +361,7 @@ csilk_get_body_len(csilk_ctx_t* c)
 int
 csilk_is_websocket(csilk_ctx_t* c)
 {
-	return c ? c->is_websocket : 0;
+    return c ? c->is_websocket : 0;
 }
 
 /** @brief Enable/disable WebSocket mode.
@@ -371,9 +371,9 @@ csilk_is_websocket(csilk_ctx_t* c)
 void
 csilk_ctx_set_websocket(csilk_ctx_t* c, int is_websocket)
 {
-	if (c) {
-		c->is_websocket = is_websocket;
-	}
+    if (c) {
+        c->is_websocket = is_websocket;
+    }
 }
 
 /** @brief Check if the current connection is a Server-Sent Events stream.
@@ -384,7 +384,7 @@ csilk_ctx_set_websocket(csilk_ctx_t* c, int is_websocket)
 int
 csilk_is_sse(csilk_ctx_t* c)
 {
-	return c ? c->is_sse : 0;
+    return c ? c->is_sse : 0;
 }
 
 /** @brief Enable/disable SSE mode.
@@ -394,9 +394,9 @@ csilk_is_sse(csilk_ctx_t* c)
 void
 csilk_ctx_set_sse(csilk_ctx_t* c, int is_sse)
 {
-	if (c) {
-		c->is_sse = is_sse;
-	}
+    if (c) {
+        c->is_sse = is_sse;
+    }
 }
 
 /** @brief Get the internal client connection handle.
@@ -406,7 +406,7 @@ csilk_ctx_set_sse(csilk_ctx_t* c, int is_sse)
 void*
 _csilk_get_internal_client(csilk_ctx_t* c)
 {
-	return c ? c->_internal_client : nullptr;
+    return c ? c->_internal_client : nullptr;
 }
 
 /** @brief Set the internal client connection handle.
@@ -416,9 +416,9 @@ _csilk_get_internal_client(csilk_ctx_t* c)
 void
 _csilk_set_internal_client(csilk_ctx_t* c, void* client)
 {
-	if (c) {
-		c->_internal_client = client;
-	}
+    if (c) {
+        c->_internal_client = client;
+    }
 }
 
 /** @brief Get the unique request ID string.
@@ -434,7 +434,7 @@ _csilk_set_internal_client(csilk_ctx_t* c, void* client)
 const char*
 csilk_get_request_id(csilk_ctx_t* c)
 {
-	return c ? c->request_id : nullptr;
+    return c ? c->request_id : nullptr;
 }
 
 /** @brief Get the arena allocator associated with the context.
@@ -450,7 +450,7 @@ csilk_get_request_id(csilk_ctx_t* c)
 csilk_arena_t*
 csilk_get_arena(csilk_ctx_t* c)
 {
-	return c ? c->arena : nullptr;
+    return c ? c->arena : nullptr;
 }
 
 /** @brief Get the currently set response status code.
@@ -461,21 +461,21 @@ csilk_get_arena(csilk_ctx_t* c)
 int
 csilk_get_status(csilk_ctx_t* c)
 {
-	return c ? c->response.status : 0;
+    return c ? c->response.status : 0;
 }
 
 void
 csilk_set_status(csilk_ctx_t* c, int status)
 {
-	if (c) {
-		c->response.status = status;
-	}
+    if (c) {
+        c->response.status = status;
+    }
 }
 
 csilk_header_map_t*
 csilk_get_headers(csilk_ctx_t* c)
 {
-	return c ? &c->request.headers : nullptr;
+    return c ? &c->request.headers : nullptr;
 }
 
 /** @brief Mark the response as asynchronous (sent later, not automatically).
@@ -492,9 +492,9 @@ csilk_get_headers(csilk_ctx_t* c)
 void
 csilk_ctx_set_async(csilk_ctx_t* c, int is_async)
 {
-	if (c) {
-		c->is_async = is_async;
-	}
+    if (c) {
+        c->is_async = is_async;
+    }
 }
 
 /** @brief Get the server instance owning this context.
@@ -504,7 +504,7 @@ csilk_ctx_set_async(csilk_ctx_t* c, int is_async)
 csilk_server_t*
 csilk_ctx_get_server(csilk_ctx_t* c)
 {
-	return c ? (csilk_server_t*)c->server : nullptr;
+    return c ? (csilk_server_t*)c->server : nullptr;
 }
 
 /** @brief Get the internal MQ instance from the context.
@@ -514,7 +514,7 @@ csilk_ctx_get_server(csilk_ctx_t* c)
 csilk_mq_t*
 csilk_ctx_get_mq(csilk_ctx_t* c)
 {
-	return (c && c->server) ? c->server->mq : nullptr;
+    return (c && c->server) ? c->server->mq : nullptr;
 }
 
 /** @brief Check if the response is in async mode.
@@ -526,7 +526,7 @@ csilk_ctx_get_mq(csilk_ctx_t* c)
 int
 csilk_is_async(csilk_ctx_t* c)
 {
-	return c ? c->is_async : 0;
+    return c ? c->is_async : 0;
 }
 
 /** @brief Get the handler chain index.
@@ -536,7 +536,7 @@ csilk_is_async(csilk_ctx_t* c)
 int
 csilk_get_handler_index(csilk_ctx_t* c)
 {
-	return c ? c->handler_index : -1;
+    return c ? c->handler_index : -1;
 }
 
 /** @brief Set the request UUID.
@@ -546,19 +546,19 @@ csilk_get_handler_index(csilk_ctx_t* c)
 void
 csilk_set_request_id(csilk_ctx_t* c, const char* id)
 {
-	if (c && id) {
-		snprintf(c->request_id, sizeof(c->request_id), "%s", id);
-	}
+    if (c && id) {
+        snprintf(c->request_id, sizeof(c->request_id), "%s", id);
+    }
 }
 
-/** @brief Get the internal libuv work request.
+/** @brief Get the internal I/O work request.
  *
  * @param c The request context.
  * @return Pointer to csilk_io_work_t. */
 csilk_io_work_t*
 csilk_get_work_req(csilk_ctx_t* c)
 {
-	return c ? &c->work_req : nullptr;
+    return c ? &c->work_req : nullptr;
 }
 
 /** @brief Configure zero-copy file transmission.
@@ -570,11 +570,11 @@ csilk_get_work_req(csilk_ctx_t* c)
 void
 csilk_set_file_response(csilk_ctx_t* c, int fd, size_t offset, size_t size)
 {
-	if (c) {
-		c->file_fd = fd;
-		c->file_offset = offset;
-		c->file_size = size;
-	}
+    if (c) {
+        c->file_fd = fd;
+        c->file_offset = offset;
+        c->file_size = size;
+    }
 }
 
 /** @brief Get the zero-copy file descriptor.
@@ -584,7 +584,7 @@ csilk_set_file_response(csilk_ctx_t* c, int fd, size_t offset, size_t size)
 int
 csilk_get_file_fd(csilk_ctx_t* c)
 {
-	return c ? c->file_fd : -1;
+    return c ? c->file_fd : -1;
 }
 
 /** @brief Get the route pattern for the current request.
@@ -594,7 +594,7 @@ csilk_get_file_fd(csilk_ctx_t* c)
 const char*
 csilk_ctx_get_handler_path(csilk_ctx_t* c)
 {
-	return (c && c->current_handler) ? c->current_handler->path : nullptr;
+    return (c && c->current_handler) ? c->current_handler->path : nullptr;
 }
 
 /** @brief Get the permission required by the current handler.
@@ -604,7 +604,7 @@ csilk_ctx_get_handler_path(csilk_ctx_t* c)
 const char*
 csilk_ctx_get_handler_perm_required(csilk_ctx_t* c)
 {
-	return (c && c->current_handler) ? c->current_handler->perm_required : nullptr;
+    return (c && c->current_handler) ? c->current_handler->perm_required : nullptr;
 }
 
 /** @brief Get the resource pattern for the current handler's permission check.
@@ -614,7 +614,7 @@ csilk_ctx_get_handler_perm_required(csilk_ctx_t* c)
 const char*
 csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c)
 {
-	return (c && c->current_handler) ? c->current_handler->perm_resource : nullptr;
+    return (c && c->current_handler) ? c->current_handler->perm_resource : nullptr;
 }
 
 /** @brief Get the response body data and optionally its length.
@@ -627,16 +627,16 @@ csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c)
 const char*
 csilk_get_response_body(csilk_ctx_t* c, size_t* out_len)
 {
-	if (!c) {
-		if (out_len) {
-			*out_len = 0;
-		}
-		return nullptr;
-	}
-	if (out_len) {
-		*out_len = c->response.body_len;
-	}
-	return c->response.body;
+    if (!c) {
+        if (out_len) {
+            *out_len = 0;
+        }
+        return nullptr;
+    }
+    if (out_len) {
+        *out_len = c->response.body_len;
+    }
+    return c->response.body;
 }
 
 /** @brief Set the response body directly with explicit ownership semantics.
@@ -655,15 +655,15 @@ csilk_get_response_body(csilk_ctx_t* c, size_t* out_len)
 void
 csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int managed)
 {
-	if (!c) {
-		return;
-	}
-	if (c->response.body && c->response.body_is_managed) {
-		free((void*)c->response.body);
-	}
-	c->response.body = body;
-	c->response.body_len = len;
-	c->response.body_is_managed = managed;
+    if (!c) {
+        return;
+    }
+    if (c->response.body && c->response.body_is_managed) {
+        free((void*)c->response.body);
+    }
+    c->response.body = body;
+    c->response.body_len = len;
+    c->response.body_is_managed = managed;
 }
 
 /** @brief Check if the client has disconnected (connection aborted).
@@ -675,49 +675,49 @@ csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int manage
 int
 csilk_is_aborted(csilk_ctx_t* c)
 {
-	return c ? c->aborted : 0;
+    return c ? c->aborted : 0;
 }
 
 /** @brief Internal helper to iterate over all entries in a header map. */
 static void
 for_each_in_map(csilk_header_map_t* map, csilk_header_cb cb, void* arg)
 {
-	if (!map || !cb) {
-		return;
-	}
-	for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-		csilk_header_t* h = map->buckets[i];
-		while (h) {
-			if (!cb(h->key, h->value, arg)) {
-				return;
-			}
-			h = h->next;
-		}
-	}
+    if (!map || !cb) {
+        return;
+    }
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        csilk_header_t* h = map->buckets[i];
+        while (h) {
+            if (!cb(h->key, h->value, arg)) {
+                return;
+            }
+            h = h->next;
+        }
+    }
 }
 
 void
 csilk_for_each_header(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
 {
-	if (c) {
-		for_each_in_map(&c->request.headers, cb, arg);
-	}
+    if (c) {
+        for_each_in_map(&c->request.headers, cb, arg);
+    }
 }
 
 void
 csilk_for_each_query(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
 {
-	if (c) {
-		for_each_in_map(&c->request.query_params, cb, arg);
-	}
+    if (c) {
+        for_each_in_map(&c->request.query_params, cb, arg);
+    }
 }
 
 void
 csilk_for_each_form_field(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
 {
-	if (c) {
-		for_each_in_map(&c->request.form_params, cb, arg);
-	}
+    if (c) {
+        for_each_in_map(&c->request.form_params, cb, arg);
+    }
 }
 
 /** @brief Register a callback for incoming WebSocket messages.
@@ -737,9 +737,9 @@ csilk_set_on_ws_message(
     csilk_ctx_t* c,
     void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode))
 {
-	if (c) {
-		c->on_ws_message = callback;
-	}
+    if (c) {
+        c->on_ws_message = callback;
+    }
 }
 
 /** @brief Set a callback for outgoing WebSocket frames (testing hook).
@@ -759,9 +759,9 @@ csilk_set_on_ws_send(
     csilk_ctx_t* c,
     void (*callback)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode))
 {
-	if (c) {
-		c->on_ws_send = callback;
-	}
+    if (c) {
+        c->on_ws_send = callback;
+    }
 }
 
 /** @brief Initialize a request context.
@@ -775,19 +775,19 @@ csilk_set_on_ws_send(
 CSILK_INTERNAL void
 _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
 {
-	if (!c) {
-		return;
-	}
-	memset(c, 0, sizeof(csilk_ctx_t));
-	c->handler_index = -1;
-	c->file_fd = -1;
-	c->_internal_client = client;
-	c->server = s;
-	if (s) {
-		c->storage_driver = s->storage_driver;
-		c->crypto_driver = s->crypto_driver;
-		c->cipher_driver = s->cipher_driver;
-	}
+    if (!c) {
+        return;
+    }
+    memset(c, 0, sizeof(csilk_ctx_t));
+    c->handler_index = -1;
+    c->file_fd = -1;
+    c->_internal_client = client;
+    c->server = s;
+    if (s) {
+        c->storage_driver = s->storage_driver;
+        c->crypto_driver = s->crypto_driver;
+        c->cipher_driver = s->cipher_driver;
+    }
 }
 
 /** @brief Set the storage driver.
@@ -797,9 +797,9 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
 void
 csilk_ctx_set_storage_driver(csilk_ctx_t* c, csilk_storage_driver_t* driver)
 {
-	if (c) {
-		c->storage_driver = driver;
-	}
+    if (c) {
+        c->storage_driver = driver;
+    }
 }
 
 /** @brief Set the crypto driver.
@@ -809,9 +809,9 @@ csilk_ctx_set_storage_driver(csilk_ctx_t* c, csilk_storage_driver_t* driver)
 void
 csilk_ctx_set_crypto_driver(csilk_ctx_t* c, csilk_crypto_driver_t* driver)
 {
-	if (c) {
-		c->crypto_driver = driver;
-	}
+    if (c) {
+        c->crypto_driver = driver;
+    }
 }
 
 /** @brief Set the cipher driver.
@@ -821,19 +821,19 @@ csilk_ctx_set_crypto_driver(csilk_ctx_t* c, csilk_crypto_driver_t* driver)
 void
 csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver)
 {
-	if (c) {
-		c->cipher_driver = driver;
-	}
+    if (c) {
+        c->cipher_driver = driver;
+    }
 }
 
 /** @brief Get the registered WebSocket callback.
  *
  * @param c The request context.
  * @return Function pointer or nullptr. */
-void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t* c,
-						const uint8_t* payload,
-						size_t len,
-						int opcode)
+void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t*   c,
+                                                const uint8_t* payload,
+                                                size_t         len,
+                                                int            opcode)
 {
-	return c ? c->on_ws_message : nullptr;
+    return c ? c->on_ws_message : nullptr;
 }
