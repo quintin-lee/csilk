@@ -1,17 +1,28 @@
 # CMakeLists.txt
 cmake_minimum_required(VERSION 3.11)
+cmake_policy(VERSION 3.11)
+
 project(c_csilk_framework C)
 
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-# cJSON defines true/false macros conflicting with C23 keywords, and
-# Apple's SDK deprecates sprintf. These flags suppress benign warnings
-# from third-party code (cJSON, nghttp2, libuv).
-# GCC and older Clang silently ignore unsupported -Wno-* flags.
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-keyword-macro -Wno-deprecated-declarations")
+# Default to Release build — critical for performance libraries.
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Common optimization flags (no -Werror; controlled per-target).
+# Release: -O2 + LTO + native arch tuning for the build machine.
+# Debug/RelWithDebInfo/MinSizeRel: -O2 without LTO.
+set(CSILK_COMMON_FLAGS "")
+set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer;-march=native>")
+set(CSILK_DEBUG_FLAGS   "$<$<NOT:$<CONFIG:Release>>:-O2>")
+
+
+# Suppress benign third-party warnings (cJSON macros, nghttp2/libuv deprecations).
+add_compile_options(-Wno-keyword-macro -Wno-deprecated-declarations)
 
 # SIMD acceleration for router path matching (AVX2/AVX-512 on x86_64, NEON on aarch64)
 include(CheckCSourceCompiles)
@@ -26,11 +37,12 @@ check_c_source_compiles("
 " CSILK_HAS_AVX2)
 set(CMAKE_REQUIRED_FLAGS "")
 if(CSILK_HAS_AVX2)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mavx2 -D__AVX2__")
   message(STATUS "AVX2 SIMD enabled for router path matching")
 else()
   message(STATUS "AVX2 not available — using word-aligned fast path")
 endif()
+
+set(CSILK_AVX2_FLAGS "")
 
 set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512bw")
 check_c_source_compiles("
@@ -43,7 +55,6 @@ check_c_source_compiles("
 " CSILK_HAS_AVX512)
 set(CMAKE_REQUIRED_FLAGS "")
 if(CSILK_HAS_AVX512)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCSILK_HAS_AVX512")
   message(STATUS "AVX-512 SIMD enabled for router path matching")
 endif()
 
@@ -68,39 +79,22 @@ option(CSILK_USE_URING "Use io_uring backend instead of libuv" OFF)
 option(USE_ASAN "Enable AddressSanitizer for memory leak detection" OFF)
 if(USE_ASAN)
     message(STATUS "AddressSanitizer enabled")
-    # Use -static-libasan to avoid manual LD_PRELOAD issues in some environments.
-    # Note: For clang, static linking is often the default or handled via -fsanitize=address.
-    # For GCC, -static-libasan is explicit.
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
-    
+    set(CSILK_ASAN_FLAGS "-fsanitize=address;-fno-omit-frame-pointer")
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libasan")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libasan")
+      list(APPEND CSILK_ASAN_FLAGS -static-libasan)
     endif()
 endif()
 
 option(USE_COVERAGE "Enable code coverage with gcov" OFF)
 if(USE_COVERAGE)
     message(STATUS "Code coverage enabled")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -O0 -g")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --coverage")
 endif()
 
 # Option to enable OOM testing
 option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
-if(ENABLE_OOM_TEST)
-    message(STATUS "OOM testing enabled")
-    add_definitions(-DTEST_OOM)
-endif()
 
+# Option to enable arena redzone guards for buffer overflow detection
 option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
-if(DEBUG_ARENA)
-    message(STATUS "Arena debug mode enabled")
-    add_definitions(-DDEBUG_ARENA)
-endif()
 
 # 查找 clang-format
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
@@ -116,8 +110,8 @@ if(CLANG_FORMAT_EXECUTABLE)
         COMMENT "Formatting C/H files with clang-format..."
     )
 
-    # 设置 clang-format 选项
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=implicit-function-declaration")
+    # Treat implicit function declarations as errors (caught by clang-format scan)
+    add_compile_options(-Werror=implicit-function-declaration)
 endif()
 
 # 查找 doxygen
@@ -151,7 +145,7 @@ include(FetchContent)
 
 if(CSILK_USE_URING)
   message(STATUS "io_uring backend selected — fetching liburing")
-  add_definitions(-DCSILK_USE_URING)
+  set(CSILK_USE_URING_ONLY TRUE)
   FetchContent_Declare(
     liburing
     GIT_REPOSITORY https://github.com/axboe/liburing.git
@@ -302,6 +296,11 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
   @ONLY
 )
+configure_file(
+  include/csilk/version.h.in
+  ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
+  @ONLY
+)
 
 # Find MySQL (optional)
 find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
@@ -352,17 +351,16 @@ include(cmake/sources.cmake)
 # Conditional driver sources
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/data/drivers/mysql.c)
-  add_definitions(-DHAS_MYSQL)
+  set(CSILK_HAS_MYSQL TRUE)
 endif()
 
 if(PQ_LIB AND PQ_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/data/drivers/postgres.c)
-  add_definitions(-DHAS_POSTGRES)
+  set(CSILK_HAS_POSTGRES TRUE)
 endif()
 
 if(HAS_MONGODB)
   list(APPEND CSILK_SOURCES src/data/drivers/mongodb.c)
-  add_definitions(-DHAS_MONGODB)
 endif()
 
 # Find Redis (hiredis) (optional)
@@ -374,7 +372,7 @@ if(HIREDIS_LIB)
     include_directories(${HIREDIS_INCLUDE_DIR})
     message(STATUS "Found hiredis include dir: ${HIREDIS_INCLUDE_DIR}")
     list(APPEND CSILK_SOURCES src/data/drivers/redis.c)
-    add_definitions(-DHAS_REDIS)
+    set(CSILK_HAS_REDIS TRUE)
   endif()
 else()
   message(STATUS "hiredis library not found — redis driver will not build")
@@ -414,8 +412,54 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 # Build static library
 add_library(csilk STATIC ${CSILK_SOURCES})
 set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Optimization flags per-configuration via generator expressions
+set(CSILK_AVX2_FLAGS "")
+if(CSILK_HAS_AVX2)
+  set(CSILK_AVX2_FLAGS "-mavx2;-D__AVX2__")
+endif()
+
+target_compile_options(csilk PRIVATE
+    "${CSILK_COMMON_FLAGS}"
+    "${CSILK_RELEASE_FLAGS}"
+    "${CSILK_DEBUG_FLAGS}"
+    "${CSILK_AVX2_FLAGS}"
+    "$<$<BOOL:CSILK_HAS_AVX512>:-DCSILK_HAS_AVX512>"
+    "$<$<BOOL:USE_ASAN>:${CSILK_ASAN_FLAGS}>"
+    "$<$<BOOL:USE_COVERAGE>:--coverage;-O0;-g>"
+)
+target_compile_definitions(csilk PRIVATE
+    CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
+    "$<$<BOOL:CSILK_USE_URING_ONLY>:CSILK_USE_URING>"
+    "$<$<BOOL:CSILK_HAS_MYSQL>:HAS_MYSQL>"
+    "$<$<BOOL:CSILK_HAS_POSTGRES>:HAS_POSTGRES>"
+    "$<$<BOOL:HAS_MONGODB>:HAS_MONGODB>"
+    "$<$<BOOL:CSILK_HAS_REDIS>:HAS_REDIS>"
+    "$<$<BOOL:ENABLE_OOM_TEST>:TEST_OOM>"
+    "$<$<BOOL:DEBUG_ARENA>:DEBUG_ARENA>"
+)
+
+# Linker flags: gc-sections in Release removes dead code
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  target_link_options(csilk PRIVATE
+      "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+  )
+endif()
+
+# Linker flags need per-target scope too (Release LTO via generator expression)
+set_target_properties(csilk PROPERTIES
+    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
+    VERSION "${CSILK_VERSION}"
+    SOVERSION "${CSILK_VERSION_MAJOR}"
+    OUTPUT_NAME csilk
+    INTERFACE_COMPILE_FEATURES c_std_23
+)
+
 if(CSILK_USE_URING)
   target_link_libraries(csilk PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+  if(NOT APPLE)
+    target_compile_options(csilk PUBLIC "-D_GNU_SOURCE")
+  endif()
 else()
   target_link_libraries(csilk PUBLIC uv cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
 endif()
@@ -433,43 +477,23 @@ target_include_directories(csilk PUBLIC
     $<INSTALL_INTERFACE:include>
     $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
 )
-target_compile_definitions(csilk PRIVATE
-    CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-)
-# Download Swagger UI distribution at configure time (not tracked in git).
-# Only the 3 essential runtime files are fetched (~1.2 MB total);
-# custom index.css stays in the repository.
-# Primary CDN: jsdelivr; fallback: unpkg.
-set(SWAGGER_UI_VERSION "5.17.14")
-set(SWAGGER_UI_CDN "https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_VERSION}")
-set(SWAGGER_UI_FALLBACK "https://unpkg.com/swagger-ui-dist@${SWAGGER_UI_VERSION}")
-foreach(swagger_file swagger-ui.css swagger-ui-bundle.js swagger-ui-standalone-preset.js)
-  set(swagger_dest "${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui/${swagger_file}")
-  if(NOT EXISTS "${swagger_dest}")
-    file(DOWNLOAD "${SWAGGER_UI_CDN}/${swagger_file}" "${swagger_dest}"
-         STATUS swagger_dl_status
-         TIMEOUT 15)
-    list(GET swagger_dl_status 0 swagger_dl_code)
-    if(NOT swagger_dl_code EQUAL 0)
-      message(WARNING "jsdelivr failed for ${swagger_file}, trying unpkg...")
-      file(DOWNLOAD "${SWAGGER_UI_FALLBACK}/${swagger_file}" "${swagger_dest}"
-           STATUS swagger_dl_status
-           TIMEOUT 30)
-      list(GET swagger_dl_status 0 swagger_dl_code)
-    endif()
-    if(NOT swagger_dl_code EQUAL 0)
-      message(WARNING "Failed to download ${swagger_file} — Swagger UI will be unavailable at runtime")
-    else()
-      message(STATUS "Downloaded ${swagger_file}")
-    endif()
-  endif()
-endforeach()
-set_target_properties(csilk PROPERTIES
-    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "${CSILK_VERSION}"
-    SOVERSION "${CSILK_VERSION_MAJOR}"
-    OUTPUT_NAME csilk
-)
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  set_target_properties(csilk PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
+      C_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN TRUE
+  )
+endif()
+if(MYSQL_LIB)
+  target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
+endif()
+if(PQ_LIB)
+  target_link_libraries(csilk PRIVATE ${PQ_LIB})
+endif()
+if(HIREDIS_LIB)
+  target_link_libraries(csilk PRIVATE ${HIREDIS_LIB})
+endif()
 
 # Precompiled Headers (PCH) — accelerate builds by pre-including stable headers
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
@@ -501,18 +525,53 @@ if(CSILK_BUILD_SHARED)
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
     )
+    target_compile_options(csilk_shared PRIVATE
+        "${CSILK_COMMON_FLAGS}"
+        "${CSILK_RELEASE_FLAGS}"
+        "${CSILK_DEBUG_FLAGS}"
+        "${CSILK_AVX2_FLAGS}"
+        "$<$<BOOL:CSILK_HAS_AVX512>:-DCSILK_HAS_AVX512>"
+    )
+    target_compile_definitions(csilk_shared PRIVATE
+        CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
+        "$<$<BOOL:CSILK_USE_URING_ONLY>:CSILK_USE_URING>"
+        "$<$<BOOL:CSILK_HAS_MYSQL>:HAS_MYSQL>"
+        "$<$<BOOL:CSILK_HAS_POSTGRES>:HAS_POSTGRES>"
+        "$<$<BOOL:HAS_MONGODB>:HAS_MONGODB>"
+        "$<$<BOOL:CSILK_HAS_REDIS>:HAS_REDIS>"
+        "$<$<BOOL:ENABLE_OOM_TEST>:TEST_OOM>"
+        "$<$<BOOL:DEBUG_ARENA>:DEBUG_ARENA>"
+    )
+    target_compile_options(csilk_shared PRIVATE
+        "$<$<BOOL:USE_ASAN>:${CSILK_ASAN_FLAGS}>"
+        "$<$<BOOL:USE_COVERAGE>:--coverage;-O0;-g>"
+    )
     set_target_properties(csilk_shared PROPERTIES
         PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
         VERSION "${CSILK_VERSION}"
         SOVERSION "${CSILK_VERSION_MAJOR}"
         OUTPUT_NAME csilk
+        INTERFACE_COMPILE_FEATURES c_std_23
+        INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
+        C_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN TRUE
+    )
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
+        target_precompile_headers(csilk_shared PRIVATE
+            <stdio.h>
+            <stdlib.h>
+            <string.h>
+            <stdint.h>
+            <time.h>
+            <errno.h>
+        )
+    endif()
+    target_link_options(csilk_shared PRIVATE
+        "$<$<CONFIG:Release>:-Wl,--gc-sections>"
     )
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
         target_link_options(csilk_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libcsilk.map")
     endif()
-    target_compile_definitions(csilk_shared PRIVATE
-        CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-    )
     message(STATUS "Shared library build enabled: libcsilk.so")
 endif()
 
