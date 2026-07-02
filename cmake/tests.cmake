@@ -12,6 +12,9 @@ function(add_csilk_test name source)
       "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
       "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
   )
+  target_link_options(${name} PRIVATE
+      "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
+  )
   target_compile_definitions(${name} PRIVATE
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
   )
