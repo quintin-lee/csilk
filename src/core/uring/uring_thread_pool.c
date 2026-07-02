@@ -236,7 +236,64 @@ uring_tp_wakeup_fd(uring_thread_pool_t* tp)
 	return tp ? tp->wakeup_fd : -1;
 }
 
+/* ---- Deferred callback queue (sync-fallback path) ---- */
+/* When no thread pool is available, _csilk_uring_queue_work runs the work
+ * callback inline but defers the after-work callback so that it fires during
+ * csilk_io_run(). This preserves the async contract expected by subsystems
+ * such as the workflow scheduler that use csilk_io_queue_work.
+ *
+ * The queue is thread-local — no synchronisation needed. */
+static _Thread_local uring_deferred_t* tls_deferred_head = NULL;
+static _Thread_local uring_deferred_t* tls_deferred_tail = NULL;
+
+void
+_uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status)
+{
+	uring_deferred_t* d = (uring_deferred_t*)malloc(sizeof(uring_deferred_t));
+	if (!d) {
+		return;
+	}
+	d->work = work;
+	d->after_cb = after_cb;
+	d->status = status;
+	d->next = NULL;
+
+	if (tls_deferred_tail) {
+		tls_deferred_tail->next = d;
+	} else {
+		tls_deferred_head = d;
+	}
+	tls_deferred_tail = d;
+}
+
+int
+_uring_deferred_drain_all(void)
+{
+	int count = 0;
+	uring_deferred_t* d = tls_deferred_head;
+	tls_deferred_head = NULL;
+	tls_deferred_tail = NULL;
+
+	while (d) {
+		uring_deferred_t* next = d->next;
+		if (d->after_cb && d->work) {
+			d->after_cb(d->work, d->status);
+		}
+		free(d);
+		d = next;
+		count++;
+	}
+	return count;
+}
+
 /* ---- Integration with csilk_io_queue_work ---- */
+
+/* Depth counter: tracks nested csilk_io_queue_work calls in the synchronous
+ * fallback path (no thread pool).  Top-level calls defer after_cb so it runs
+ * during csilk_io_run() (required by the workflow scheduler lifecycle).
+ * Nested calls (e.g. tool execution inside an AI node) run after_cb
+ * immediately to unblock csilk_cond_wait in the caller. */
+static _Thread_local int tls_queue_work_depth = 0;
 
 int
 _csilk_uring_queue_work(csilk_io_work_t* req,
@@ -246,8 +303,18 @@ _csilk_uring_queue_work(csilk_io_work_t* req,
 	if (tls_current_tp) {
 		return uring_tp_enqueue(tls_current_tp, req, work_cb, after_cb);
 	}
-	/* Fallback: run synchronously if no thread pool is available. */
+
+	tls_queue_work_depth++;
 	work_cb(req);
-	after_cb(req, 0);
+	int is_nested = tls_queue_work_depth > 1;
+	tls_queue_work_depth--;
+
+	if (is_nested) {
+		if (after_cb) {
+			after_cb(req, 0);
+		}
+	} else {
+		_uring_deferred_push(req, after_cb, 0);
+	}
 	return 0;
 }

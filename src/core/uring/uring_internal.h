@@ -106,4 +106,15 @@ void uring_tp_drain(uring_thread_pool_t* tp);
 int uring_tp_wakeup_fd(uring_thread_pool_t* tp);
 void uring_tp_set_current(uring_thread_pool_t* tp);
 
+/* --- Deferred callback queue for sync-fallback path --- */
+typedef struct uring_deferred_s {
+	struct uring_deferred_s* next;
+	csilk_io_work_t* work;
+	csilk_io_after_work_cb after_cb;
+	int status;
+} uring_deferred_t;
+
+void _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status);
+int _uring_deferred_drain_all(void);
+
 #endif
