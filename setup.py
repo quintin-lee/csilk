@@ -42,6 +42,10 @@ class CMakeBuild(build_ext):
             # Ensure it is built as a shared library
             "-DBUILD_SHARED_LIBS=ON"
         ]
+
+        if platform.system() == "Darwin":
+            brew_prefix = subprocess.check_output(["brew", "--prefix"], text=True).strip()
+            cmake_args.append(f"-DCMAKE_PREFIX_PATH={brew_prefix};{brew_prefix}/opt/openssl;{brew_prefix}/opt/libyaml;{brew_prefix}/opt/zlib;{brew_prefix}/opt/curl;{brew_prefix}/opt/sqlite3")
         
         build_args = ["--config", cfg, "--parallel"]
 
