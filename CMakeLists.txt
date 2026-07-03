@@ -429,7 +429,6 @@ target_compile_options(csilk PRIVATE
 )
 target_compile_definitions(csilk PRIVATE
     CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-    "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
     "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
     "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
     "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
@@ -437,6 +436,10 @@ target_compile_definitions(csilk PRIVATE
     "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
     "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
 )
+target_compile_definitions(csilk INTERFACE
+    "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
+)
+
 target_link_options(csilk PUBLIC
     "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
     "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
