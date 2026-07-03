@@ -446,7 +446,7 @@ target_link_options(csilk PUBLIC
 )
 
 # Linker flags: gc-sections in Release removes dead code
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
   target_link_options(csilk PRIVATE
       "$<$<CONFIG:Release>:-Wl,--gc-sections>"
   )
@@ -569,7 +569,7 @@ if(CSILK_BUILD_SHARED)
         )
     endif()
     target_link_options(csilk_shared PRIVATE
-        "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+        "$<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:APPLE>>>>:-Wl,--gc-sections>"
         "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
     )
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
