@@ -437,7 +437,7 @@ target_compile_definitions(csilk PRIVATE
     "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
     "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
 )
-target_link_options(csilk PRIVATE
+target_link_options(csilk PUBLIC
     "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
     "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
 )
