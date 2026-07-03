@@ -59,10 +59,33 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
             
-        print(f"Running: cmake {ext.sourcedir} {' '.join(cmake_args)}")
-        subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
-        print(f"Running: cmake --build . {' '.join(build_args)}")
-        subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=self.build_temp)
+        print(f"[csilk] cmake configure: cmake {ext.sourcedir} {' '.join(cmake_args)}", flush=True)
+        sys.stderr.write(f"[csilk] cmake configure: cmake {ext.sourcedir} {' '.join(cmake_args)}\n")
+        sys.stderr.flush()
+        result = subprocess.run(
+            ["cmake", ext.sourcedir] + cmake_args,
+            cwd=self.build_temp,
+            capture_output=True,
+            text=True
+        )
+        sys.stderr.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        sys.stderr.flush()
+        result.check_returncode()
+        
+        print(f"[csilk] cmake build: cmake --build . {' '.join(build_args)}", flush=True)
+        sys.stderr.write(f"[csilk] cmake build: cmake --build . {' '.join(build_args)}\n")
+        sys.stderr.flush()
+        result2 = subprocess.run(
+            ["cmake", "--build", "."] + build_args,
+            cwd=self.build_temp,
+            capture_output=True,
+            text=True
+        )
+        sys.stderr.write(result2.stdout)
+        sys.stderr.write(result2.stderr)
+        sys.stderr.flush()
+        result2.check_returncode()
 
 setup(
     name="csilk",
