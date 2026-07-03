@@ -281,8 +281,8 @@ if(nghttp2_SOURCE_DIR)
   include_directories(${nghttp2_BINARY_DIR}/lib/includes)
 endif()
 
-# Find CURL (>= 7.80.0 for HTTP/2 support)
-find_package(CURL 7.80.0 REQUIRED)
+# Find CURL (HTTP/2 support via nghttp2)
+find_package(CURL REQUIRED)
 
 include_directories(include)
 include_directories(src)   # for internal headers (ctx_types.h moved from include/)
