@@ -41,6 +41,15 @@ cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
 
 # Extract version from CMake cache
 CSILK_VERSION=$(grep '^CSILK_VERSION:' "$BUILD_DIR"/CMakeCache.txt | cut -d= -f2-)
+if [ -z "$CSILK_VERSION" ]; then
+  CSILK_VERSION=$(grep '^CSILK_VERSION_MAJOR:' "$BUILD_DIR"/CMakeCache.txt | cut -d= -f2-)
+  CSILK_VERSION="${CSILK_VERSION}.$(grep '^CSILK_VERSION_MINOR:' "$BUILD_DIR"/CMakeCache.txt | cut -d= -f2-)"
+  CSILK_VERSION="${CSILK_VERSION}.$(grep '^CSILK_VERSION_PATCH:' "$BUILD_DIR"/CMakeCache.txt | cut -d= -f2-)"
+fi
+if [ -z "$CSILK_VERSION" ]; then
+  echo "ERROR: Could not determine CSILK_VERSION from CMake cache" >&2
+  exit 1
+fi
 echo "=== Version: ${CSILK_VERSION} ==="
 
 # 2. Install to staging
