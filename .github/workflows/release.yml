@@ -100,9 +100,13 @@ jobs:
 
     - name: Download wheel artifacts from Build Wheels workflow
       run: |
-        WHEELS_RUN_ID=$(gh run list --workflow wheels.yml --branch "$GITHUB_REF_NAME" --limit 1 --json databaseId --jq '.[0].databaseId')
+        echo "Looking for wheel artifacts..."
+        WHEELS_RUN_ID=$(gh run list --workflow wheels.yml --limit 5 --json databaseId --jq '.[0].databaseId')
+        echo "Found wheels run ID: $WHEELS_RUN_ID"
         if [ -n "$WHEELS_RUN_ID" ]; then
-          gh run download "$WHEELS_RUN_ID" --dir wheelhouse
+          mkdir -p wheelhouse
+          gh run download "$WHEELS_RUN_ID" --dir wheelhouse || echo "Download failed"
+          ls -la wheelhouse/ || echo "wheelhouse empty"
         else
           echo "No wheel artifacts found"
         fi
