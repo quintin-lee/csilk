@@ -567,6 +567,7 @@ if(CSILK_BUILD_SHARED)
     endif()
     target_link_options(csilk_shared PRIVATE
         "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+        "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
     )
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
         target_link_options(csilk_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libcsilk.map")
