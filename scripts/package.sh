@@ -22,13 +22,18 @@ done
 
 # 1. Configure & build (Release)
 echo "=== Configuring (Release) ==="
+EXTRA_FLAGS=""
+if [ -n "${CSILK_EXTRA_CMAKE_FLAGS:-}" ]; then
+  EXTRA_FLAGS="${CSILK_EXTRA_CMAKE_FLAGS}"
+fi
 cmake -B "$BUILD_DIR" -S "$ROOT_DIR" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$STAGING_DIR" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCSILK_BUILD_SHARED="$CSILK_BUILD_SHARED" \
     -DENABLE_OOM_TEST=OFF \
-    -DCJSON_INSTALL=OFF
+    -DCJSON_INSTALL=OFF \
+    ${EXTRA_FLAGS}
 
 echo "=== Building ==="
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
