@@ -97,7 +97,13 @@ tar -C "$BUILD_DIR" -czvf "${BUILD_DIR}/${PKG_NAME}.tar.gz" "$PKG_NAME"
 # 7. Also create checksum
 echo "=== Creating checksum ==="
 cd "$BUILD_DIR"
-sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+else
+  echo "WARNING: no sha256 utility found, skipping checksum" >&2
+fi
 
 echo ""
 echo "=== Package ready ==="
