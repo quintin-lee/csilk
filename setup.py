@@ -35,6 +35,7 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={csilk_pkg_dir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
             "-DCSILK_BUILD_TESTS=OFF",
             "-DCSILK_BUILD_EXAMPLES=OFF",
             "-DCSILK_BUILD_FUZZERS=OFF",
