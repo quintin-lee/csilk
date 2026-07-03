@@ -28,7 +28,7 @@
  * JSON and the Swagger UI HTML page.
  *
  * @copyright MIT License
- * @version 0.2.1
+ * @version 0.3.0
  */
 
 #include "csilk/app/app.h"
