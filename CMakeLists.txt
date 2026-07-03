@@ -436,7 +436,7 @@ target_compile_definitions(csilk PRIVATE
     "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
     "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
 )
-target_compile_definitions(csilk INTERFACE
+target_compile_definitions(csilk PUBLIC
     "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
 )
 
