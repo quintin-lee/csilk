@@ -54,6 +54,16 @@ jobs:
       run: |
         brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 ccache
 
+    - name: Set macOS build env
+      if: runner.os == 'macOS'
+      run: |
+        BREW_PREFIX=$(brew --prefix)
+        LLVM_PREFIX=$(brew --prefix llvm)
+        echo "BREW_PREFIX=${BREW_PREFIX}" >> "$GITHUB_ENV"
+        echo "LLVM_PREFIX=${LLVM_PREFIX}" >> "$GITHUB_ENV"
+        echo "LDFLAGS=-L${BREW_PREFIX}/opt/openssl/lib" >> "$GITHUB_ENV"
+        echo "CSILK_EXTRA_CMAKE_FLAGS=-DCMAKE_C_COMPILER=${LLVM_PREFIX}/bin/clang -DCMAKE_PREFIX_PATH=${BREW_PREFIX};${BREW_PREFIX}/opt/openssl;${BREW_PREFIX}/opt/libyaml;${BREW_PREFIX}/opt/zlib;${BREW_PREFIX}/opt/curl;${BREW_PREFIX}/opt/sqlite3" >> "$GITHUB_ENV"
+
     - name: Build and package (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -61,11 +71,7 @@ jobs:
 
     - name: Build and package (macOS)
       if: runner.os == 'macOS'
-      env:
-        CFLAGS: "-Wno-deprecated-declarations"
       run: |
-        export LDFLAGS="-L$(brew --prefix openssl)/lib"
-        export CSILK_EXTRA_CMAKE_FLAGS="-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang -DCMAKE_PREFIX_PATH=$(brew --prefix);$(brew --prefix)/opt/openssl;$(brew --prefix)/opt/libyaml;$(brew --prefix)/opt/zlib;$(brew --prefix)/opt/curl;$(brew --prefix)/opt/sqlite3"
         ./scripts/package.sh --shared
 
     - name: Upload artifacts
