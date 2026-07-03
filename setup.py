@@ -59,18 +59,21 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
             
-        print(f"[csilk] cmake configure: cmake {ext.sourcedir} {' '.join(cmake_args)}", flush=True)
-        sys.stderr.write(f"[csilk] cmake configure: cmake {ext.sourcedir} {' '.join(cmake_args)}\n")
-        sys.stderr.flush()
+        print(f"[csilk] cmake configure: cmake {' '.join(cmake_args)} {ext.sourcedir}", flush=True)
         result = subprocess.run(
-            ["cmake", ext.sourcedir] + cmake_args,
+            ["cmake"] + cmake_args + [ext.sourcedir],
             cwd=self.build_temp,
             capture_output=True,
             text=True
         )
-        sys.stderr.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        sys.stderr.flush()
+        log_path = os.path.join(self.build_temp, "cmake_configure.log")
+        with open(log_path, "w") as f:
+            f.write("=== STDOUT ===\n")
+            f.write(result.stdout or "")
+            f.write("\n=== STDERR ===\n")
+            f.write(result.stderr or "")
+            f.write(f"\n=== RETURN CODE: {result.returncode} ===\n")
+        print(f"[csilk] cmake configure output:\n{result.stdout}\n{result.stderr}", flush=True)
         result.check_returncode()
         
         print(f"[csilk] cmake build: cmake --build . {' '.join(build_args)}", flush=True)
