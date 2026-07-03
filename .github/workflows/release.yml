@@ -63,11 +63,9 @@ jobs:
       if: runner.os == 'macOS'
       env:
         CFLAGS: "-Wno-deprecated-declarations"
-        LDFLAGS: "-L$(brew --prefix openssl)/lib"
-        CSILK_EXTRA_CMAKE_FLAGS: >
-          -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
-          -DCMAKE_PREFIX_PATH=$(brew --prefix);$(brew --prefix)/opt/openssl;$(brew --prefix)/opt/libyaml;$(brew --prefix)/opt/zlib;$(brew --prefix)/opt/curl;$(brew --prefix)/opt/sqlite3
       run: |
+        export LDFLAGS="-L$(brew --prefix openssl)/lib"
+        export CSILK_EXTRA_CMAKE_FLAGS="-DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang -DCMAKE_PREFIX_PATH=$(brew --prefix);$(brew --prefix)/opt/openssl;$(brew --prefix)/opt/libyaml;$(brew --prefix)/opt/zlib;$(brew --prefix)/opt/curl;$(brew --prefix)/opt/sqlite3"
         ./scripts/package.sh --shared
 
     - name: Upload artifacts
