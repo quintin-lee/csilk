@@ -96,6 +96,15 @@ jobs:
       with:
         merge-multiple: true
 
+    - name: Download wheel artifacts from Build Wheels workflow
+      run: |
+        WHEELS_RUN_ID=$(gh run list --workflow wheels.yml --branch "$GITHUB_REF_NAME" --limit 1 --json databaseId --jq '.[0].databaseId')
+        if [ -n "$WHEELS_RUN_ID" ]; then
+          gh run download "$WHEELS_RUN_ID" --dir wheelhouse
+        else
+          echo "No wheel artifacts found"
+        fi
+
     - name: Generate release notes
       id: notes
       run: |
@@ -116,6 +125,7 @@ jobs:
     - name: List artifacts
       run: |
         ls -lh csilk-*.tar.gz* || echo "(no packages found)"
+        ls -lh wheelhouse/*.whl || echo "(no wheels found)"
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -125,5 +135,6 @@ jobs:
         body_path: ${{ steps.notes.outputs.notes_file }}
         files: |
           csilk-*.tar.gz*
+          wheelhouse/*.whl
         fail_on_unmatched_files: false
         generate_release_notes: false
