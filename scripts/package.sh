@@ -6,6 +6,7 @@
 # Builds in Release mode, installs to a staging directory,
 # and creates a tarball suitable for GitHub Releases.
 set -euo pipefail
+set -x
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/build-pkg"
@@ -44,11 +45,11 @@ echo "=== Version: ${CSILK_VERSION} ==="
 
 # 2. Install to staging
 echo "=== Installing to staging ==="
-cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR"
+cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR" --verbose
 
 if [ "$CSILK_BUILD_SHARED" = "ON" ]; then
-    # Also install csilk_shared
-    cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR" --component csilk_shared 2>/dev/null || true
+    echo "=== Installing csilk_shared component ==="
+    cmake --install "$BUILD_DIR" --prefix "$STAGING_DIR" --component csilk_shared --verbose 2>/dev/null || echo "(csilk_shared component not found, skipping)"
 fi
 
 # 3. Determine platform label
@@ -72,18 +73,20 @@ PKG_DIR="${BUILD_DIR}/${PKG_NAME}"
 mv "$STAGING_DIR" "$PKG_DIR"
 
 # 5. Strip debug symbols from libraries (Release already strips, but enforce)
+echo "=== Stripping debug symbols ==="
 if [ -f "$PKG_DIR/lib/libcsilk.a" ]; then
-    strip --strip-debug "$PKG_DIR/lib/libcsilk.a" 2>/dev/null || true
+    strip --strip-debug "$PKG_DIR/lib/libcsilk.a" 2>/dev/null || echo "(strip failed for libcsilk.a)"
 fi
 if [ -f "$PKG_DIR/lib/libcsilk.so" ]; then
-    strip --strip-unneeded "$PKG_DIR/lib/libcsilk.so" 2>/dev/null || true
+    strip --strip-unneeded "$PKG_DIR/lib/libcsilk.so" 2>/dev/null || echo "(strip failed for libcsilk.so)"
 fi
 
 # 6. Create tarball
 echo "=== Creating tarball: ${PKG_NAME}.tar.gz ==="
-tar -C "$BUILD_DIR" -czf "${BUILD_DIR}/${PKG_NAME}.tar.gz" "$PKG_NAME"
+tar -C "$BUILD_DIR" -czvf "${BUILD_DIR}/${PKG_NAME}.tar.gz" "$PKG_NAME"
 
 # 7. Also create checksum
+echo "=== Creating checksum ==="
 cd "$BUILD_DIR"
 sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
 
