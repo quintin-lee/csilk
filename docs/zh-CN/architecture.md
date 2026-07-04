@@ -274,13 +274,13 @@ flowchart TB
     subgraph req1["fa:fa-play 请求 1"]
         A1["fa:fa-cubes Arena 块 1<br/>（4KB 默认）"]
         A1 --> P1["fa:fa-arrow-up 指针碰撞分配<br/>头、正文、字符串"]
-        P1 --> F1["fa:fa-undo Arena 重置（O(1）<br/>响应发送后"]
+        P1 --> F1["fa:fa-undo Arena 重置（O(1)）<br/>响应发送后"]
     end
 
     subgraph req2["fa:fa-redo 请求 2（Keep-Alive）"]
         A2["fa:fa-cubes Arena 块 1（复用）<br/>内存已映射"]
         A2 --> P2["fa:fa-arrow-up 指针碰撞分配<br/>头、正文、字符串"]
-        P2 --> F2["fa:fa-undo Arena 重置（O(1))"]
+        P2 --> F2["fa:fa-undo Arena 重置（O(1)）"]
     end
 
     subgraph conn_close["fa:fa-times-circle 连接关闭"]
