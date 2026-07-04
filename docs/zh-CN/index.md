@@ -1,8 +1,8 @@
-[English](README.md) | [中文](README.zh-CN.md)
-
 # csilk 文档
 
-> **版本**: 0.3.0 | **最后更新**: 2026-06-29
+> **版本**: 0.3.0 | **最后更新**: 2026-07-04
+
+[English](../index.md) | [中文](index.md)
 
 csilk 是一个轻量级（静态二进制文件约 150KB，每 1 万个保持连接约 < 2MB RSS）的 C 语言 HTTP Web 框架，在通用硬件上实现了 **10K QPS 下 P99 延迟 ≤ 5ms**。基于 **libuv（默认）或 io_uring（可选，仅 Linux）**、llhttp、nghttp2 和 cJSON 构建，单工作线程模式下可实现约 50K QPS 的吞吐量，16 核多工作线程模式下线性扩展至约 200K QPS。开发者 **必须**使用支持 C23 的编译器（GCC 13+ 或 Clang 19+）进行编译。公共 API **必须**通过 `csilk_ctx_t*` 不透明句柄使用——直接访问结构体 **不属于** 稳定 ABI 的一部分。所有资源管理 **应该**优先使用 arena 分配（每次分配约 3 条 CPU 指令，重置 ≤ 5ns）而非堆 `malloc`/`free`。
 

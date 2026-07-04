@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper & Technical Manual
 
-> **Version**: 0.3.0 | **Last updated**: 2026-06-24
+> **Version**: 0.3.0 | **Last updated**: 2026-07-04
 
 csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv (default) or io_uring (optional, Linux-only), llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
 
