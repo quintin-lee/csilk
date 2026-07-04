@@ -62,6 +62,13 @@ set(CSILK_CORE_TESTS
     test_utils_ext
     test_codec_prop
     test_hash_prop
+    test_timeout
+)
+set(CSILK_CORE_TEST_DIRS
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core
 )
 
 # -- Application tests --
@@ -75,6 +82,9 @@ set(CSILK_APP_TESTS
     test_group
     test_group_ext
     test_hooks
+)
+set(CSILK_APP_TEST_DIRS
+    app;app;app;app;app;app;app;app;app
 )
 
 # -- Workflow tests --
@@ -103,6 +113,11 @@ set(CSILK_WORKFLOW_TESTS
     test_workflow_tools
     test_workflow_tracing
 )
+set(CSILK_WORKFLOW_TEST_DIRS
+    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow;workflow;workflow;workflow
+)
 
 # -- Middleware tests --
 set(CSILK_MIDDLEWARE_TESTS
@@ -130,6 +145,11 @@ set(CSILK_MIDDLEWARE_TESTS
     test_validate
     test_waf
 )
+set(CSILK_MIDDLEWARE_TEST_DIRS
+    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
+    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
+    middleware;middleware;middleware
+)
 
 # -- Protocol tests --
 set(CSILK_PROTOCOL_TESTS
@@ -140,11 +160,17 @@ set(CSILK_PROTOCOL_TESTS
     test_ws_concurrent
     test_h2
 )
+set(CSILK_PROTOCOL_TEST_DIRS
+    protocols;protocols;protocols;protocols;protocols;protocols
+)
 
 # -- Security tests --
 set(CSILK_SECURITY_TESTS
     test_perm
     test_perm_ext
+)
+set(CSILK_SECURITY_TEST_DIRS
+    security;security
 )
 
 # -- Data / driver tests --
@@ -154,16 +180,25 @@ set(CSILK_DATA_TESTS
     test_db
     test_mongodb
 )
+set(CSILK_DATA_TEST_DIRS
+    data;data;data;data
+)
 
 # -- AI tests --
 set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
 )
+set(CSILK_AI_TEST_DIRS
+    drivers;drivers
+)
 
 # -- Reflection tests --
 set(CSILK_REFLECTION_TESTS
     test_reflect
+)
+set(CSILK_REFLECTION_TEST_DIRS
+    reflection
 )
 
 # -- Messaging tests --
@@ -177,12 +212,18 @@ set(CSILK_MESSAGING_TESTS
     test_mq_wal_write
     test_mq_concurrent
 )
+set(CSILK_MESSAGING_TEST_DIRS
+    mq;mq;mq;mq;mq;mq;mq;mq
+)
 
 # -- Extra / integration tests --
 set(CSILK_EXTRA_TESTS
     test_extra
     test_integration
     test_integration_ext
+)
+set(CSILK_EXTRA_TEST_DIRS
+    integration;integration;integration
 )
 
 # Collect all test names for run_tests DEPENDS
@@ -200,7 +241,74 @@ set(CSILK_ALL_TEST_NAMES
     ${CSILK_EXTRA_TESTS}
 )
 
-# Register all tests — each follows tests/<name>.c convention
-foreach(name ${CSILK_ALL_TEST_NAMES})
-    add_csilk_test(${name} tests/${name}.c)
+# Register tests using per-module source directories
+foreach(_name _dir IN ZIP_LISTS CSILK_CORE_TESTS CSILK_CORE_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
 endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_APP_TESTS CSILK_APP_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_WORKFLOW_TESTS CSILK_WORKFLOW_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_MIDDLEWARE_TESTS CSILK_MIDDLEWARE_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_PROTOCOL_TESTS CSILK_PROTOCOL_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_SECURITY_TESTS CSILK_SECURITY_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_DATA_TESTS CSILK_DATA_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_AI_TESTS CSILK_AI_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_REFLECTION_TESTS CSILK_REFLECTION_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_MESSAGING_TESTS CSILK_MESSAGING_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+foreach(_name _dir IN ZIP_LISTS CSILK_EXTRA_TESTS CSILK_EXTRA_TEST_DIRS)
+    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+endforeach()
+
+# OOM tests
+add_executable(test_oom tests/core/test_oom.c)
+target_compile_definitions(test_oom PRIVATE TEST_OOM)
+target_link_libraries(test_oom csilk pthread)
+add_test(NAME test_oom COMMAND test_oom)
+
+add_executable(test_oom_io tests/core/test_oom_io.c)
+target_compile_definitions(test_oom_io PRIVATE TEST_OOM)
+target_link_libraries(test_oom_io csilk pthread)
+add_test(NAME test_oom_io COMMAND test_oom_io)
+
+# Fuzz tests
+add_executable(fuzz_test fuzz/fuzz_test.c)
+target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer -std=c23)
+target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+target_link_libraries(fuzz_test csilk)
+
+add_executable(fuzz_yaml fuzz/fuzz_yaml.c)
+target_compile_options(fuzz_yaml PRIVATE -fsanitize=fuzzer -std=c23)
+target_link_options(fuzz_yaml PRIVATE -fsanitize=fuzzer)
+target_link_libraries(fuzz_yaml csilk)
+
+add_executable(fuzz_url fuzz/fuzz_url.c)
+target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
+target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
+target_link_libraries(fuzz_url csilk)
