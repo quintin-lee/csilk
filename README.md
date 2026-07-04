@@ -1,5 +1,7 @@
 # csilk
 
+[English](README.md) | [中文](README.zh-CN.md)
+
 ![License](https://img.shields.io/github/license/quintin-lee/csilk)
 ![CI](https://github.com/quintin-lee/csilk/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/quintin-lee/csilk/actions/workflows/release.yml/badge.svg)
