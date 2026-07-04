@@ -1,6 +1,6 @@
 # Metrics / Prometheus Observability
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
+> **Version**: 0.3.0 | **Last updated**: 2026-06-27
 
 csilk 的 Metrics 模块提供了一套**高性能、无锁、生产就绪**的可观测性系统——基于 Prometheus 标准格式暴露全维度遥测数据，包括 HTTP 请求计数、延迟直方图、系统资源、安全事件及各子系统的内部状态。计数器更新为原子操作（无锁，≤ 10ns），直方图使用原子桶递增（≤ 5ns 每桶）。**MUST NOT** 在热点路径上阻塞 —— 所有指标写入均为 lock-free。**SHOULD** 通过 `/metrics` 端点暴露，由 Prometheus 定期拉取。
 

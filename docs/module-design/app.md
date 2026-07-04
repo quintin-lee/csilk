@@ -1,6 +1,6 @@
 # App Layer Design
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
+> **Version**: 0.3.0 | **Last updated**: 2026-06-27
 
 csilk 的 App Layer 是面向开发者的高级入口——将路由、服务器、配置、日志、中间件和 OpenAPI 整合为单一的 `csilk_app_t` 门面。它是框架的"电池 Included"封装，让用户无需手动拼装子组件即可快速构建生产级 HTTP 服务。用户 **MUST** 通过 `csilk_app_t` 接口创建应用实例 —— 直接操作 `csilk_server_t` 和 `csilk_router_t` 仅适用于需要精细控制的高级场景。应用启动时间 ≤ 5ms (冷启动，含 YAML 解析 + 路由注册)。
 

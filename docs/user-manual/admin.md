@@ -1,6 +1,6 @@
 # Admin Dashboard 使用指南
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
+> **Version**: 0.3.0 | **Last updated**: 2026-06-29
 
 csilk 的 Admin Dashboard 是一个统一的 Web 管理界面，提供对 HTTP 指标、AI 引擎、消息队列（MQ）和数据库运行状态的实时监控。
 
@@ -253,7 +253,7 @@ void admin_login(csilk_ctx_t* c) {
 // 自定义统计数据端点
 void custom_health(csilk_ctx_t* c) {
     cJSON* json = cJSON_CreateObject();
-    cJSON_AddStringToObject(json, "version", "0.5.0-dev");
+    cJSON_AddStringToObject(json, "version", "0.3.0");
     cJSON_AddNumberToObject(json, "uptime_sec", uv_now(uv_default_loop()) / 1000);
     csilk_json(c, 200, json);
     cJSON_Delete(json);

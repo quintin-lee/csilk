@@ -1,6 +1,6 @@
 # AI Workflow 引擎使用指南
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
+> **Version**: 0.3.0 | **Last updated**: 2026-06-29
 
 csilk 的 Workflow 引擎是一个基于有向图的 AI 管道编排引擎，支持顺序执行、并行扇出、条件路由、智能体循环、WAL 持久化和分布式执行。每个 Workflow 由**节点**（Node）和**边**（Edge）构成 DAG。
 
