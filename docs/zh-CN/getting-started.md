@@ -1,19 +1,19 @@
-# Getting Started
+# 快速入门
 
-## Prerequisites
+## 先决条件
 
-- CMake 3.11+ (**MUST** be available in `$PATH`)
-- C compiler with C23 support (GCC 13+ or Clang 19+)
+- CMake 3.11+（**必须**在 `$PATH` 中可用）
+- 支持 C23 的 C 编译器（GCC 13+ 或 Clang 19+）
 - Git
-- libyaml-dev (**MUST** for YAML configuration parsing)
-- zlib1g-dev (for gzip compression middleware — **SHOULD** be enabled for production)
-- libssl-dev (**MUST** be OpenSSL 1.1.1+ for HTTPS/TLS, JWT, cipher drivers)
-- libcurl-dev 7.80.0+ (**MUST** for AI driver HTTP transport)
-- libuv (auto-fetched via CMake FetchContent for libuv backend)
-- liburing (auto-fetched via CMake FetchContent when `-DCSILK_USE_URING=ON`)
-- Optional: libmysqlclient-dev, libpq-dev, libmongoc-dev (for database drivers — enable via `-DCSILK_USE_*` CMake flags)
+- libyaml-dev（**必须**用于 YAML 配置解析）
+- zlib1g-dev（用于 gzip 压缩中间件 — **应该**在生产环境中启用）
+- libssl-dev（**必须**是 OpenSSL 1.1.1+ 用于 HTTPS/TLS、JWT、密码驱动）
+- libcurl-dev 7.80.0+（**必须**用于 AI 驱动 HTTP 传输）
+- libuv（通过 CMake FetchContent 自动获取，用于 libuv 后端）
+- liburing（当 `-DCSILK_USE_URING=ON` 时通过 CMake FetchContent 自动获取）
+- 可选：libmysqlclient-dev、libpq-dev、libmongoc-dev（用于数据库驱动 — 通过 `-DCSILK_USE_*` CMake 标志启用）
 
-## Build & Dependency Flow
+## 构建与依赖流程
 
 ```mermaid
 %%{init: {
@@ -69,7 +69,7 @@ flowchart LR
     LIB --> EXE
 ```
 
-## Build from Source
+## 从源代码构建
 
 ```bash
 git clone https://github.com/username/csilk.git
@@ -79,30 +79,30 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
-### Build Options
+### 构建选项
 
-| Option | Default | Description |
+| 选项 | 默认值 | 说明 |
 |--------|---------|-------------|
-| `CSILK_USE_URING` | OFF | Use io_uring backend instead of libuv (Linux-only) |
-| `CMAKE_BUILD_TYPE` | - | `Debug`, `Release`, `RelWithDebInfo` |
-| `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
-| `USE_ASAN` | OFF | Enable AddressSanitizer |
-| `USE_FUZZER` | OFF | Build fuzz test harness |
-| `USE_COVERAGE` | OFF | Enable gcov coverage reporting |
-| `CSILK_USE_MYSQL` | OFF | Enable MySQL database driver |
-| `CSILK_USE_POSTGRES` | OFF | Enable PostgreSQL database driver |
-| `CSILK_USE_MONGODB` | OFF | Enable MongoDB database driver |
-| `ENABLE_OOM_TEST` | OFF | Enable out-of-memory simulation tests |
+| `CSILK_USE_URING` | OFF | 使用 io_uring 后端替代 libuv（仅 Linux） |
+| `CMAKE_BUILD_TYPE` | - | `Debug`、`Release`、`RelWithDebInfo` |
+| `CSILK_BUILD_SHARED` | OFF | 构建共享库（`libcsilk.so`） |
+| `USE_ASAN` | OFF | 启用 AddressSanitizer |
+| `USE_FUZZER` | OFF | 构建模糊测试工具 |
+| `USE_COVERAGE` | OFF | 启用 gcov 覆盖率报告 |
+| `CSILK_USE_MYSQL` | OFF | 启用 MySQL 数据库驱动 |
+| `CSILK_USE_POSTGRES` | OFF | 启用 PostgreSQL 数据库驱动 |
+| `CSILK_USE_MONGODB` | OFF | 启用 MongoDB 数据库驱动 |
+| `ENABLE_OOM_TEST` | OFF | 启用 out-of-memory 模拟测试 |
 
-## Create a New Project
+## 创建新项目
 
-Csilk provides a scaffolding tool `csilkskel` to quickly generate a new project with a professional, layered architecture and built-in Swagger UI and Admin Dashboard.
+Csilk 提供了脚手架工具 `csilkskel`，可快速生成具有专业分层架构的新项目，并内置 Swagger UI 和 Admin Dashboard。
 
 ```bash
-# Generate a new project (interactive Python tool)
+# 生成新项目（交互式 Python 工具）
 python3 scripts/csilkskel -n my-service
 
-# Build and run the new project
+# 构建并运行新项目
 cd my-service
 mkdir build && cd build
 cmake ..
@@ -110,24 +110,24 @@ make
 ./my-service
 ```
 
-The generated project includes:
-- **Layered Architecture**: Dedicated directories for API handlers, service logic, and data models.
-- **Interactive Documentation**: Built-in Swagger UI available at `http://localhost:8080/`.
-- **Admin Dashboard**: Real-time monitoring at `http://localhost:8080/admin/`.
-- **Reflection Example**: A complete User service demonstrating automatic JSON binding.
+生成的项目包括：
+- **分层架构**：专门的目录用于 API 处理程序、服务逻辑和数据模型。
+- **交互式文档**：内置 Swagger UI，可在 `http://localhost:8080/` 访问。
+- **Admin 仪表板**：实时监控可在 `http://localhost:8080/admin/` 访问。
+- **反射示例**：一个完整的 User 服务，演示自动 JSON 绑定。
 
-## Run Example
+## 运行示例
 ...
 
 ```bash
-# Low-level API demo
+# 低级 API 演示
 ./build/example_server
 
-# High-level app API demo
+# 高级应用 API 演示
 ./build/example_app
 ```
 
-## Example Server Walkthrough
+## 示例服务器 walkthrough
 
 ```mermaid
 %%{init: {
@@ -169,13 +169,13 @@ sequenceDiagram
     Note over EvLoop: Accepting connections...
 ```
 
-## Running Tests
+## 运行测试
 
 ```bash
 cd build && ctest --output-on-failure
 ```
 
-## Minimal Server Program
+## 最小服务器程序
 
 ```c
 #include "csilk/csilk.h"
@@ -197,22 +197,22 @@ int main() {
 }
 ```
 
-## Python Bindings Quickstart
+## Python 绑定快速入门
 
-If you prefer Python, you can write `csilk` applications in Python using the `ctypes` wrapper package:
+如果您更喜欢 Python，可以使用 `ctypes` 包装器来编写 `csilk` 应用程序：
 
-1. Compile the `csilk` shared library:
+1. 编译 `csilk` 共享库：
 ```bash
 cmake .. -DCSILK_BUILD_SHARED=ON
 make
 ```
 
-2. Install the python package in development mode:
+2. 以开发模式安装 python 包：
 ```bash
 pip install -e ./python
 ```
 
-3. Create a simple `app.py` script:
+3. 创建简单的 `app.py` 脚本：
 ```python
 from csilk import App, Context
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     app.run(8080)
 ```
 
-4. Run the application:
+4. 运行应用程序：
 ```bash
 python3 app.py
 ```
