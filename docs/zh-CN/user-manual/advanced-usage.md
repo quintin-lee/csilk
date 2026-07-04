@@ -378,7 +378,7 @@ csilk_router_add(router, "GET", "/ws/{room_id}", ws_handlers, 1);
 
 ---
 
-## SSE 流式推送 (SSE 流式推送)
+## SSE 流式推送
 
 SSE 必须设置 `Content-Type: text/event-stream` 和 `Cache-Control: no-cache`：
 
@@ -418,7 +418,7 @@ void sse_stream_handler(csilk_ctx_t* c) {
 
 ---
 
-## AI 工作流编排 (AI 工作流编排)
+## AI 工作流编排
 
 csilk 的 AI 引擎支持工具调用（Function Calling），结合 Python 实现复杂工作流：
 
