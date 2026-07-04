@@ -43,7 +43,7 @@ graph TB
 
     subgraph layer3["fa:fa-cogs 层 3: 核心引擎"]
         subgraph req_proc["fa:fa-bolt 请求处理"]
-            CTX["fa:fa-exchange-alt Context (csilk_ctx_t)"]
+            CTX["fa:fa-exchange-alt 上下文 (csilk_ctx_t)"]
             ARENA["fa:fa-memory Arena 分配器"]
             HOOKS["fa:fa-anchor Hook 系统"]
         end
