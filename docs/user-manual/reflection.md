@@ -1,6 +1,6 @@
 # Reflection 引擎使用指南
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
+> **Version**: 0.3.0 | **Last updated**: 2026-06-29
 
 csilk 的 Reflection（反射）引擎提供**编译期结构体内省**和**自动 JSON 绑定**。通过宏在编译时注册 C 结构体的字段布局，实现 struct ↔ JSON 的自动序列化/反序列化，无需手写 `cJSON_GetObjectItem` / `cJSON_Add*` 样板代码。
 

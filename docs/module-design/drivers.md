@@ -1,6 +1,6 @@
 # Drivers Architecture
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
+> **Version**: 0.3.0 | **Last updated**: 2026-06-27
 
 csilk 的 Drivers 层是**可插拔后端抽象**——通过统一的虚函数表（vtable）接口，让 AI、Cipher、DB、Perm、Vector、Crypto、Storage 等功能支持多种后端实现。每种驱动类型都有其独立的注册表、生命周期和查找机制，但遵循相同的"注册 → 查找 → init → 使用 → free"模式。驱动注册 **MUST** 在 `csilk_server_run()` 调用之前完成 —— 运行时注册 **SHOULD** 由热加载机制触发。驱动表查找时间 ≤ 50ns（线性扫描，≤ 64 个已注册驱动）。
 

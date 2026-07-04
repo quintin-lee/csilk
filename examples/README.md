@@ -38,7 +38,7 @@ cd build && cmake .. && make -j$(nproc)
 
 | Example | Build Target | Demonstrates |
 |---------|-------------|--------------|
-| [example_admin_dashboard.c](example_admin_dashboard.c) | `example_admin_dashboard` | Admin dashboard: real-time HTTP metrics, multi-worker stats, MQ monitoring |
+| [example_admin_dashboard.c](example_admin_dashboard.c) | — (commented out) | Admin dashboard: real-time HTTP metrics, multi-worker stats, MQ monitoring |
 
 ### AI & Workflow
 
@@ -75,7 +75,6 @@ cd build
 ./example_tls             # HTTPS on :8443 (requires cert files)
 ./example_websocket       # WebSocket on :8080/ws
 ./example_ws_tls_mq       # WSS + MQ on :8443
-./example_admin_dashboard # Dashboard on :8080/admin
 
 # Python example
 python3 examples/workflow_agent.py

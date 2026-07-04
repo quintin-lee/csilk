@@ -1,7 +1,7 @@
 # csilk Performance Benchmark Report
 
 > **Date**: 2026-06-29
-> **Version**: 0.5.0-dev (Release mode, LTO enabled)
+> **Version**: 0.3.0 (Release mode, LTO enabled)
 > **Hardware**: AMD EPYC 9454, Linux 6.12.91, GCC 13.2
 
 ## Methodology

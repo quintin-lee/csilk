@@ -1,6 +1,6 @@
 # 消息队列 (MQ) 使用指南
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
+> **Version**: 0.3.0 | **Last updated**: 2026-06-29
 
 csilk 的内置消息队列（Message Queue, MQ）是一个基于 libuv `uv_async_t` 的进程内发布/订阅事件总线。支持主题路由、中间件链、后台 offload、WAL 持久化，以及 WebSocket 实时监控。
 
