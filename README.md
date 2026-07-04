@@ -1,5 +1,9 @@
 # csilk
 
+![License](https://img.shields.io/github/license/quintin-lee/csilk)
+![CI](https://github.com/quintin-lee/csilk/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/quintin-lee/csilk/actions/workflows/release.yml/badge.svg)
+
 A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Inspired by Gin (Golang) and built on top of **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and cJSON.
 
 
