@@ -1,6 +1,6 @@
 # io_uring Integration Feasibility Study
 
-> Date: 2026-06-05 | Version: 0.5.0 | Status: **Implemented (Option B completed)**
+> Date: 2026-06-05 | Version: 0.3.0 | Status: **Implemented (Option B completed)**
 
 > **Update (2026-07)**: A full native io_uring backend has been implemented as `src/core/uring/` (see [`uring_server.c`, `uring_connection.c`, `uring_thread_pool.c`, `uv_stubs.c`]). Build with `-DCSILK_USE_URING=ON` (Linux-only). All 120 io_uring-specific tests pass. This document is preserved as a design record; for current usage, see the [build guide](../contributing/how-to-build.md) and [architecture whitepaper](../architecture.md).
 
@@ -158,7 +158,7 @@ void csilk_uring_close(csilk_uring_t* ring);
 
 ## 7. Recommendation
 
-**Option B (native io_uring backend) has been implemented** as of v0.5.0-dev. 
+**Option B (native io_uring backend) has been implemented** as of v0.3.0. 
 The `src/core/uring/` module provides:
 - `uring_server.c` — io_uring-based server accept loop and SQE submission
 - `uring_connection.c` — `io_uring_prep_read`/`io_uring_prep_send` with fixed/registered buffers

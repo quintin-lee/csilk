@@ -40,20 +40,25 @@ void test_basic_function(void) {
 }
 
 void test_with_context(void) {
-    // Arrange
-    csilk_ctx_t* c = csilk_ctx_new();
+     // Arrange: 创建 Router 并获取 Context
+     csilk_router_t* router = csilk_router_new();
+     csilk_server_t* server = csilk_server_new(router);
+     
+     // 创建客户端上下文（用于测试）
+     // 注意：实际请求上下文通过服务端创建，此处仅作示例
+     csilk_ctx_t* c = _csilk_ctx_new_for_test(router, server);
 
-    // Act
-    csilk_set(c, "test_key", "test_value");
-    csilk_str_view_t value = csilk_get(c, "test_key");
+     // Act
+     csilk_set(c, "test_key", "test_value");
+     csilk_str_view_t value = csilk_get(c, "test_key");
 
-    // Assert
-    assert(value.len == 10);
-    assert(memcmp(value.data, "test_value", 10) == 0);
-    csilk_ctx_free(c);
+     // Assert
+     assert(value.len == 10);
+     assert(memcmp(value.data, "test_value", 10) == 0);
+     _csilk_ctx_free(c);
 
-    printf("✓ test_with_context passed\n");
-}
+     printf("✓ test_with_context passed\n");
+ }
 
 int main() {
     test_basic_function();
@@ -246,7 +251,11 @@ void test_concurrent_access(void) {
     const int num_threads = 16;
 
     pthread_t threads[num_threads];
-    csilk_ctx_t* c = csilk_ctx_new();
+    
+    // 创建服务端上下文用于测试（实际应用中由请求触发）
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
+    csilk_ctx_t* c = _csilk_ctx_new_for_test(router, server);
 
     // 启动多个线程并发访问
     for (int i = 0; i < num_threads; i++) {
@@ -258,9 +267,11 @@ void test_concurrent_access(void) {
         pthread_join(threads[i], NULL);
     }
 
-    csilk_ctx_free(c);
+    _csilk_ctx_free(c);
+    csilk_router_free(router);
+    csilk_server_free(server);
     printf("✓ test_concurrent_access passed\n");
-}
+ }
 ```
 
 ---
@@ -371,7 +382,7 @@ add_test(NAME test_new_feature COMMAND test_new_feature)
 - [ ] 包含必要的 `<assert.h>` 或 `CSILK_TEST_ASSERT`
 - [ ] 包含 `main()` 函数
 - [ ] 每个测试以 `✓` 前缀输出
-- [ ] 清理资源（`csilk_arena_free`, `csilk_ctx_free` 等）
+- [ ] 清理资源（`csilk_router_free`, `csilk_server_free`, `_csilk_ctx_free` 等）
 
 ---
 

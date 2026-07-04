@@ -177,7 +177,7 @@ csilk **MUST** be compiled with a C23-compatible compiler (`static constexpr`, `
 | Platform          | Status      | Notes                                                       |
 |-------------------|:-----------:|-------------------------------------------------------------|
 | **Linux**         | Supported   | Ubuntu 24.04 (CI), Debian 12+, any glibc-based distro.      |
-| **macOS**         | Planned     | Missing `pthread_barrier_t` in multi-worker mode.           |
+| **macOS**         | Supported (single-worker) | Missing `pthread_barrier_t` in multi-worker mode on macOS-14. |
 | **Windows**       | Not planned | POSIX dependency surface too large (libuv may enable).      |
 | **musl / Alpine** | Untested    | Likely compatible; no CI coverage.                          |
 
@@ -225,7 +225,7 @@ make
 # cmake .. -DCSILK_USE_URING=ON
 #
 # To build as a shared library, use:
-# cmake .. -DBUILD_SHARED_LIBS=ON
+# cmake .. -DCSILK_BUILD_SHARED=ON
 #
 # Other available options:
 #   -DUSE_ASAN=ON          Enable AddressSanitizer (default OFF)
@@ -266,6 +266,12 @@ Csilk provides a scaffolding tool (`csilkskel`) to quickly bootstrap a new proje
 
 ```bash
 # Generate a new project (interactive Python tool)
+python3 tools/csilk-scaffold/csilk-scaffold -n my-service
+```
+
+Or use the shortcut script:
+
+```bash
 python3 scripts/csilkskel -n my-service
 ```
 
@@ -438,17 +444,17 @@ int main() {
 
 ```
 src/
-  ├── core/           # Kernel (libuv/io_uring TCP, Router, Arena, Logger, Config)
-  │   └── uring/      # io_uring backend (Linux-only, optional)
-  ├── app/            # Application Layer (app, admin dashboard, workflow engine)
-  ├── ai/             # AI Unified Interface Engine
-  ├── data/           # Database Abstraction Layer
-  ├── messaging/      # Internal Event Bus (Message Queue)
-  ├── security/       # Permission & Security Core
-  ├── reflection/     # Reflection Engine implementation
-  ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
-  ├── drivers/        # Concrete Drivers (OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB, Redis, Qdrant)
-  └── middleware/     # 16 built-in middleware modules
+   ├── core/           # Kernel (libuv/io_uring TCP, Router, Arena, Logger, Config)
+   │   └── uring/      # io_uring backend (Linux-only, optional)
+   ├── app/            # Application Layer (app, admin dashboard, workflow engine)
+   ├── ai/             # AI Unified Interface Engine
+   ├── data/           # Database Abstraction Layer
+   │   └── drivers/    # Concrete DB Drivers (SQLite, MySQL, PostgreSQL, MongoDB, Redis)
+   ├── messaging/      # Internal Event Bus (Message Queue)
+   ├── security/       # Permission & Security Core
+   ├── reflection/     # Reflection Engine implementation
+   ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
+   └── middleware/     # 16 built-in middleware modules
 
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions

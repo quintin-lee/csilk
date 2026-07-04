@@ -1,6 +1,6 @@
 # Arena Allocator Design
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-27
+> **Version**: 0.3.0 | **Last updated**: 2026-06-27
 
 csilk 的 Arena Allocator（竞技场分配器）是整个框架零拷贝内存模型的基石。它通过 bump 指针分配和批量释放策略，消除了逐次 malloc/free 带来的碎片化和性能开销。Arena 分配 **MUST NOT** 调用系统 `malloc`/`free` 在热点路径上 —— 仅按需从预分配 chunk 中 bump 分配。指针生命周期 **MUST** 限定在请求范围内 —— 跨请求持有时 **MUST** 使用 `arena_strdup()` 拷贝到堆内存。每次分配开销 **SHOULD** ≤ 3 CPU 指令（bump + 边界对齐检查）。
 

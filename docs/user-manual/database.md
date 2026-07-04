@@ -1,6 +1,6 @@
 # 数据库驱动使用指南
 
-> **Version**: 0.5.0-dev | **Last updated**: 2026-06-29
+> **Version**: 0.3.0 | **Last updated**: 2026-06-29
 
 csilk 提供了一个统一的数据库驱动接口，支持多种后端通过相同的 API 操作。内置驱动包括 **SQLite**、**MySQL**、**PostgreSQL**、**MongoDB** 和 **Redis**，也支持通过 `csilk_db_register_driver` 注册自定义驱动。
 
