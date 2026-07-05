@@ -671,13 +671,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(example_custom_driver examples/example_custom_driver.c)
   target_link_libraries(example_custom_driver csilk)
 
-  # Scaffold Tool (TUI)
-  file(GLOB SCAFFOLD_SOURCES tools/csilk-scaffold/*.c)
-  if(SCAFFOLD_SOURCES)
-      add_executable(csilk-scaffold ${SCAFFOLD_SOURCES})
-      target_include_directories(csilk-scaffold PRIVATE tools/csilk-scaffold)
-      message(STATUS "Built scaffold tool: csilk-scaffold")
-  endif()
 endif()
 
 # Add run_tests custom target

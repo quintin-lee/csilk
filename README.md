@@ -267,13 +267,6 @@ docker run -p 8080:8080 -v $(pwd)/custom_config.yaml:/etc/csilk/config.yaml csil
 Csilk provides a scaffolding tool (`csilkskel`) to quickly bootstrap a new project with a professional layered architecture, built-in Swagger UI, and Admin Dashboard.
 
 ```bash
-# Generate a new project (interactive Python tool)
-python3 tools/csilk-scaffold/csilk-scaffold -n my-service
-```
-
-Or use the shortcut script:
-
-```bash
 python3 scripts/csilkskel -n my-service
 ```
 
@@ -466,7 +459,7 @@ include/csilk/        # Public Hierarchical Headers
   ├── test/           # OOM simulation test framework
   └── csilk.h         # Main entry point (includes all modules)
 
-tools/                  # Developer tools (csilkskel scaffold generator)
+scripts/                # Developer tools (csilkskel scaffold generator, benchmarks, packaging)
 tests/                  # 120+ comprehensive unit tests
 examples/               # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
 ```
