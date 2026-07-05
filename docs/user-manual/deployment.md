@@ -491,4 +491,4 @@ cat /proc/sys/kernel/io_uring_disabled  # 应为 0
 | [性能调优指南](../performance-tuning.md) | 编译器优化、内核参数、PGO 全攻略 |
 | [模块设计 — Server Core](../../docs/module-design/server.md) | 多 Worker 实现细节 |
 | [故障排查手册](../troubleshooting.md) | 常见问题与调试技巧 |
-| [Dockerfile](../../Dockerfile) | 官方 Docker 构建文件 |
+| [Dockerfile](../../docker/Dockerfile) | 官方 Docker 构建文件 |
