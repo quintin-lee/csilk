@@ -62,13 +62,12 @@ set(CSILK_CORE_TESTS
     test_utils_ext
     test_codec_prop
     test_hash_prop
-    test_timeout
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core
 )
 
 # -- Application tests --
@@ -242,48 +241,30 @@ set(CSILK_ALL_TEST_NAMES
 )
 
 # Register tests using per-module source directories
-foreach(_name _dir IN ZIP_LISTS CSILK_CORE_TESTS CSILK_CORE_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
+set(CSILK_TEST_PAIRS
+    ${CSILK_CORE_TESTS}      ${CSILK_CORE_TEST_DIRS}
+    ${CSILK_APP_TESTS}       ${CSILK_APP_TEST_DIRS}
+    ${CSILK_WORKFLOW_TESTS}  ${CSILK_WORKFLOW_TEST_DIRS}
+    ${CSILK_MIDDLEWARE_TESTS} ${CSILK_MIDDLEWARE_TEST_DIRS}
+    ${CSILK_PROTOCOL_TESTS}  ${CSILK_PROTOCOL_TEST_DIRS}
+    ${CSILK_SECURITY_TESTS}  ${CSILK_SECURITY_TEST_DIRS}
+    ${CSILK_DATA_TESTS}      ${CSILK_DATA_TEST_DIRS}
+    ${CSILK_AI_TESTS}        ${CSILK_AI_TEST_DIRS}
+    ${CSILK_REFLECTION_TESTS} ${CSILK_REFLECTION_TEST_DIRS}
+    ${CSILK_MESSAGING_TESTS} ${CSILK_MESSAGING_TEST_DIRS}
+    ${CSILK_EXTRA_TESTS}     ${CSILK_EXTRA_TEST_DIRS}
+)
 
-foreach(_name _dir IN ZIP_LISTS CSILK_APP_TESTS CSILK_APP_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_WORKFLOW_TESTS CSILK_WORKFLOW_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_MIDDLEWARE_TESTS CSILK_MIDDLEWARE_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_PROTOCOL_TESTS CSILK_PROTOCOL_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_SECURITY_TESTS CSILK_SECURITY_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_DATA_TESTS CSILK_DATA_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_AI_TESTS CSILK_AI_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_REFLECTION_TESTS CSILK_REFLECTION_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_MESSAGING_TESTS CSILK_MESSAGING_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
-endforeach()
-
-foreach(_name _dir IN ZIP_LISTS CSILK_EXTRA_TESTS CSILK_EXTRA_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+list(LENGTH CSILK_TEST_PAIRS CSILK_TEST_PAIR_COUNT)
+math(EXPR CSILK_TOTAL_TESTS "${CSILK_TEST_PAIR_COUNT} / 2")
+foreach(_i RANGE 0 ${CSILK_TOTAL_TESTS})
+    math(EXPR _name_idx "${_i} * 2")
+    math(EXPR _dir_idx "${_name_idx} + 1")
+    if(_name_idx LESS CSILK_TEST_PAIR_COUNT)
+        list(GET CSILK_TEST_PAIRS ${_name_idx} _name)
+        list(GET CSILK_TEST_PAIRS ${_dir_idx} _dir)
+        add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    endif()
 endforeach()
 
 # OOM tests

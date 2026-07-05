@@ -22,7 +22,7 @@ csilk 使用 **CMake Test Driver** 框架，所有测试通过 `ctest` 运行。
 ### 2.1 基础测试模板
 
 ```c
-// tests/test_my_module.c
+// tests/core/test_my_module.c
 #include "csilk/csilk.h"
 #include <assert.h>
 #include <string.h>
@@ -106,7 +106,7 @@ CSILK_TEST_ASSERT_NONNULL(ptr, "Pointer is NULL");
 ### 3.1 完整请求处理流程
 
 ```c
-// tests/test_integration_request_flow.c
+// tests/integration/test_integration_request_flow.c
 #include "csilk/csilk.h"
 #include <assert.h>
 
@@ -203,7 +203,7 @@ cd build && ./fuzz_test
 ### 5.1 OOM 测试框架
 
 ```c
-// tests/test_oom.c
+// tests/core/test_oom.c
 #include "csilk/csilk.h"
 #include <assert.h>
 
@@ -235,7 +235,7 @@ void test_oom_scenario(void) {
 ### 6.1 多线程测试
 
 ```c
-// tests/test_concurrent.c
+// tests/middleware/test_concurrent.c
 #include "csilk/csilk.h"
 #include <pthread.h>
 
@@ -358,10 +358,10 @@ jobs:
 
 ```bash
 # 创建测试文件
-touch tests/test_new_feature.c
+touch tests/core/test_new_feature.c
 
 # 在 CMakeLists.txt 中添加
-add_executable(test_new_feature tests/test_new_feature.c)
+add_executable(test_new_feature tests/core/test_new_feature.c)
 target_link_libraries(test_new_feature csilk pthread)
 add_test(NAME test_new_feature COMMAND test_new_feature)
 ```
