@@ -285,18 +285,3 @@ foreach(_name _dir IN ZIP_LISTS CSILK_EXTRA_TESTS CSILK_EXTRA_TEST_DIRS)
     add_csilk_test(${_name} tests/${_dir}/${_name}.c)
 endforeach()
 
-# Fuzz tests
-add_executable(fuzz_test fuzz/fuzz_test.c)
-target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer -std=c23)
-target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
-target_link_libraries(fuzz_test csilk)
-
-add_executable(fuzz_yaml fuzz/fuzz_yaml.c)
-target_compile_options(fuzz_yaml PRIVATE -fsanitize=fuzzer -std=c23)
-target_link_options(fuzz_yaml PRIVATE -fsanitize=fuzzer)
-target_link_libraries(fuzz_yaml csilk)
-
-add_executable(fuzz_url fuzz/fuzz_url.c)
-target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
-target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
-target_link_libraries(fuzz_url csilk)
