@@ -578,7 +578,7 @@
   - `.github/workflows/release.yml`: 在 `v*` tag push 时构建 Release，产出 Linux (x86_64) 和 macOS (arm64) 静态/动态库 + 头文件 + CMake 配置包的 `.tar.gz`
   - `scripts/package.sh`: 本地打包脚本，`cmake --install` 到临时目录后打包 tarball + SHA256
   - 发布操作: `git tag v0.3.1 && git push origin v0.3.1` 自动触发
-- [x] 9.18 创建 vcpkg port — `ports/csilk/portfile.cmake` + `vcpkg.json` 已存在
+- [x] 9.18 创建 vcpkg port — `cmake/ports/csilk/portfile.cmake` + `vcpkg.json` 已存在
 
 ### P3 — 远期
 
