@@ -343,7 +343,7 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 | `src/middleware/cors.c` | CORS header middleware |
 | `src/middleware/rate_limit.c` | Token-bucket rate limiter |
 | `src/middleware/request_id.c` | X-Request-Id tracing middleware |
-| `tests/test_perm.c` | Permission system tests (14 test cases, all passing) |
+| `tests/security/test_perm.c` | Permission system tests (14 test cases, all passing) |
 
 ---
 
