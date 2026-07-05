@@ -1,6 +1,6 @@
 # ABI Stability Assessment Report
 
-> Updated: 2026-05-31 | Assessment of `csilk_ctx_s` opaque type conversion (PLAN.md P2-1)
+> Updated: 2026-05-31 | Assessment of `csilk_ctx_s` opaque type conversion (docs/meta/PLAN.md P2-1)
 
 ## Summary
 

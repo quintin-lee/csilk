@@ -246,7 +246,7 @@
 
 ### P2 — API 设计问题
 - [x] **P2-1: csilk_ctx_s 结构体完全暴露** — `include/csilk/core/ctx_types.h`
-> 已评估并制定路线图（见 ABI_REPORT.md）。当前通过访问器 API 提供 ABI 保护。
+> 已评估并制定路线图（见 docs/meta/ABI_REPORT.md）。当前通过访问器 API 提供 ABI 保护。
 > 完全不透明化推迟至 v1.0（需迁移 30+ 测试文件）。
 - [x] **P2-2: csilk_cors_middleware 按值传结构体** — `include/csilk.h:311`
   72 字节按值传递，已改为 `const csilk_cors_config_t*`。
@@ -378,7 +378,7 @@
 - **动作**: 更新 P6 全量文档（README, ARCH.md, Doxygen, 示例注释）。
 - **动作**: 新增 P7 功能（Multipart, Gzip, SSE 中间件）。
 - **动作**: 性能阶段七优化完成（uv_queue_work, header 哈希表, arena 复用, SO_REUSEPORT, TCP_NODELAY）。
-- **动作**: 生成 CODEPEC.md（AI 编码规范）和 ANALYSIS.md（问题清单）。
+- **动作**: 生成 docs/meta/CODEPEC.md（AI 编码规范）和 ANALYSIS.md（问题清单）。
 
 ### [2026-05-25] 生产加固阶段 (v0.4.0) 核心功能完成
 - **动作**: 深度集成 OpenSSL，实现 native HTTPS/TLS 支持。
@@ -391,7 +391,7 @@
 - **动作**: 完成全部 37 个源文件/头文件的 Doxygen 注释扩展（@brief, @param, @return, @note）。
 - **动作**: 修复 Doxygen 注释引入的编译错误（6 处缺失函数签名、嵌套注释问题）。
 - **动作**: 将 `context_internal.h` 从 `src/core/` 移至 `include/`，清理 CMakeLists.txt。
-- **动作**: 同步更新所有技术文档（README, ARCH.md, CHANGELOG, CODEPEC, ANALYSIS, OPTIMIZE, PLAN）。
+- **动作**: 同步更新所有技术文档（README, ARCH.md, CHANGELOG, docs/meta/CODEPEC, ANALYSIS, OPTIMIZE, PLAN）。
 
 ### [2026-05-28] 阶段十一：统一可观测性与管理面板
 - **动作**: 实现统一管理面板 (admin.c) — Web 界面整合 HTTP/Workflow/MQ 监控。
@@ -400,7 +400,7 @@
 - **动作**: 实现全局 DB 遥测 — 连接池状态、查询延迟跟踪。
 - **动作**: 实现 MQ 消息状态监控 — 实时事件、队列深度、JSON 统计。
 - **动作**: 修复 MQ 恢复回归、admin 结构体隐私、Mermaid 语法兼容性。
-- **动作**: 全量文档同步更新（README, ARCH.md, architecture.md, module-design, user-manual, CODEPEC, PLAN）。
+- **动作**: 全量文档同步更新（README, ARCH.md, architecture.md, module-design, user-manual, docs/meta/CODEPEC, PLAN）。
 
 ### [2026-06-05] OOM I/O 测试修复 — stack-use-after-return & 内存泄漏
 - **动作**: 修复 `test_oom_io.c` 中 `test_oom_http_parser` 的 stack-use-after-return ASAN 错误：
@@ -420,7 +420,7 @@
   添加 `uv_mutex_t pool_mutex` 保护所有池操作。
   CI coverage build（带 `-fprofile-arcs -ftest-coverage`）因时序暴露此问题，
   Build and Test 在正常优化下偶现。
-- **动作**: 全量文档同步更新（CHANGELOG, PLAN, CODEPEC, ARCH.md,
+- **动作**: 全量文档同步更新（CHANGELOG, PLAN, docs/meta/CODEPEC, ARCH.md,
   architecture.md, index.md, Doxygen）。
 
 ---
@@ -532,7 +532,7 @@
 | **6** | Drivers 重组 + 删 `src/crypto/` | `drivers/ai/` / `drivers/perm/` / `drivers/cipher/` 子目录; `cipher.c` → `drivers/cipher/openssl.c` |
 | **7** | 模块化 `csilk.h` (2683 行 → 14+ 头文件) | `types.h` / `server.h` / `context.h` / `response.h` / `router.h` / `app.h` / `group.h` / `middleware.h` / `websocket.h` / `sse.h` / `mq.h` / `workflow.h` / `hooks.h` / `admin.h` / `errors.h` / `config.h` / `version.h` |
 | **8** | 构建审计 + Doxygen 验证 | 全量构建 + 108 测试 + Doxygen 文档生成 (0 警告) + #include 路径审计 |
-| **9** | `NULL` → `nullptr` 迁移 (~1000 处) | 脚本化替换; `CODEPEC.md` 更新; 编译 + 测试验证 |
+| **9** | `NULL` → `nullptr` 迁移 (~1000 处) | 脚本化替换; `docs/meta/CODEPEC.md` 更新; 编译 + 测试验证 |
 | **10** | `docs/ARCH.md` 最终更新 | 新增 Section 11 (最终目录树); 验证所有路径引用 |
 
 每个阶段独立提交 (`Phase N: <title>`)，编译 + 测试验证 (`cmake --build && ctest`)。
