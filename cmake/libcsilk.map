@@ -1,0 +1,6 @@
+{
+  global:
+    csilk_*;
+  local:
+    *;
+};

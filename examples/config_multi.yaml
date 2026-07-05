@@ -1,0 +1,19 @@
+port: 8080
+server:
+  idle_timeout_ms: 5000
+  read_timeout_ms: 30000
+  write_timeout_ms: 30000
+  max_body_size: 1048576
+  max_header_size: 65536
+  max_url_size: 8192
+  max_headers_count: 100
+  max_connections: 0
+  listen_backlog: 128
+  tcp_nodelay: 1
+  tcp_keepalive: 0
+  worker_threads: 4
+logger:
+  level: INFO
+middleware:
+  enable_logger: 1
+  enable_recovery: 1
