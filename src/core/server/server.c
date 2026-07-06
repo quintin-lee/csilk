@@ -25,12 +25,12 @@
 #include <fcntl.h>
 #endif
 
-#include "core/ctx_internal.h"
+#include "../ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "core/srv_internal.h"
-#include "srv_impl.h"
+#include "../srv_internal.h"
+#include "../srv_impl.h"
 
 /* --- Signal handler --- */
 

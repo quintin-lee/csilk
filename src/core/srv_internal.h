@@ -25,7 +25,7 @@ typedef struct bio_st     BIO;
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "lfqueue.h"
+#include "primitives/lfqueue.h"
 #include "core/ctx_internal.h"
 
 /** @brief Default idle timeout in milliseconds. */
