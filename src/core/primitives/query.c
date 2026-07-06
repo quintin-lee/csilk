@@ -12,8 +12,8 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "core/ctx_internal.h"
-#include "core/header_map.h"
+#include "../ctx_internal.h"
+#include "../primitives/header_map.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
