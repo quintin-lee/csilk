@@ -15,14 +15,14 @@
 #include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
-#include "core/ctx_internal.h"
-#include "core/srv_impl.h"
+#include "../ctx_internal.h"
+#include "../srv_impl.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_internal.h"
-#include "core/srv_impl.h"
-#include "core/header_map.h"
-#include "h2.h"
+#include "../srv_internal.h"
+#include "../srv_impl.h"
+#include "../primitives/header_map.h"
+#include "../http/h2.h"
 
 /* --- Status & string --- */
 

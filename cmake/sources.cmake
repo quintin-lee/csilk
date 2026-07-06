@@ -13,31 +13,31 @@ set(CSILK_APP_SOURCES
 )
 
 set(CSILK_CORE_SOURCES
-    src/core/admin.c
-    src/core/arena.c
-    src/core/bounded_buf.c
-    src/core/config.c
-    src/core/context.c
-    src/core/ctx_defer.c
-    src/core/ctx_json.c
-    src/core/h2.c
-    src/core/http1.c
-    src/core/logger.c
-    src/core/recovery.c
-    src/core/response.c
-    src/core/router.c
+    src/core/config/admin.c
+    src/core/server/arena.c
+    src/core/primitives/bounded_buf.c
+    src/core/config/config.c
+    src/core/ctx/context.c
+    src/core/ctx/ctx_defer.c
+    src/core/ctx/ctx_json.c
+    src/core/http/h2.c
+    src/core/http/http1.c
+    src/core/config/logger.c
+    src/core/primitives/recovery.c
+    src/core/primitives/response.c
+    src/core/primitives/router.c
     src/core/test_utils.c
-    src/core/tls.c
-    src/core/url.c
-    src/core/utils.c
-    src/core/sha1.c
-    src/core/base64.c
-    src/core/uuid.c
-    src/core/hot_reload.c
-    src/core/header_map.c
-    src/core/hooks.c
-    src/core/kv_store.c
-    src/core/query.c
+    src/core/http/tls.c
+    src/core/server/url.c
+    src/core/server/utils.c
+    src/core/server/sha1.c
+    src/core/server/base64.c
+    src/core/server/uuid.c
+    src/core/config/hot_reload.c
+    src/core/primitives/header_map.c
+    src/core/config/hooks.c
+    src/core/primitives/kv_store.c
+    src/core/primitives/query.c
 )
 
 if(CSILK_USE_URING)
@@ -49,8 +49,8 @@ if(CSILK_USE_URING)
     )
 else()
     list(APPEND CSILK_CORE_SOURCES
-        src/core/server.c
-        src/core/connection.c
+        src/core/server/server.c
+        src/core/server/connection.c
     )
 endif()
 

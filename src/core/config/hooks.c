@@ -13,7 +13,7 @@
 #include <stdlib.h>
 
 #include "csilk/csilk.h"
-#include "core/srv_internal.h"
+#include "../srv_internal.h"
 
 /** @brief Register a lifecycle hook on the server.
  *

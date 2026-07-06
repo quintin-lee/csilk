@@ -33,12 +33,12 @@
 #include <strings.h>
 #include <csilk/core/sys_io.h>
 
-#include "core/ctx_internal.h"
-#include "core/header_map.h"
-#include "core/query.h"
+#include "../ctx_internal.h"
+#include "../primitives/header_map.h"
+#include "../primitives/query.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/srv_internal.h"
+#include "../srv_internal.h"
 
 /** @brief Advance to the next handler in the chain and invoke it.
  *
