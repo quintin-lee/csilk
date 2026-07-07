@@ -21,7 +21,7 @@
 #include "csilk/core/sys_io.h"
 #include "core/srv_internal.h"
 #include "core/ctx_internal.h"
-#include "../h2.h"
+#include "../http/h2.h"
 #include "../srv_impl.h"
 #include <limits.h>
 #include <assert.h>
