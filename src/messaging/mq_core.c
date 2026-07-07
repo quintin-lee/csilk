@@ -8,7 +8,7 @@
 #include "mq_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "csilk/mq.h"
+#include "csilk/messaging/mq.h"
 #include "mq_internal.h"
 
 extern void on_mq_async(csilk_io_async_t* handle);

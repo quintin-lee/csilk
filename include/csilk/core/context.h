@@ -14,7 +14,7 @@
 #ifndef CSILK_CONTEXT_H
 #define CSILK_CONTEXT_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Get the HTTP method of the current request.

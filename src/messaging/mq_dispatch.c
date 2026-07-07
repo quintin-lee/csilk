@@ -9,7 +9,7 @@
 #include "mq_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "csilk/mq.h"
+#include "csilk/messaging/mq.h"
 
 /* Forward declaration for synchronous MQ dispatch in io_uring backend */
 void on_mq_async(csilk_io_async_t* handle);

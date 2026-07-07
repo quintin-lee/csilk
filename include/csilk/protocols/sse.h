@@ -9,7 +9,7 @@
 #ifndef CSILK_SSE_H
 #define CSILK_SSE_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Initialise a Server-Sent Events connection.

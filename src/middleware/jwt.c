@@ -11,7 +11,7 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "csilk/crypto.h"
+#include "csilk/core/crypto.h"
 
 /**
  * @brief Map a JWT algorithm to its RFC 7518 "alg" header value.
