@@ -15,7 +15,7 @@
 #include <csilk/core/sys_io.h>
 
 #include "cJSON.h"
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "../srv_impl.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "core/srv_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"

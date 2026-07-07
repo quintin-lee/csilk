@@ -20,7 +20,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/core/sys_io.h"
 #include "core/srv_internal.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "../http/h2.h"
 #include "../srv_impl.h"
 #include <limits.h>

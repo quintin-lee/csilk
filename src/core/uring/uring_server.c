@@ -29,7 +29,7 @@
 #include <signal.h>
 #endif
 
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"

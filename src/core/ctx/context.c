@@ -33,7 +33,7 @@
 #include <strings.h>
 #include <csilk/core/sys_io.h>
 
-#include "../ctx_internal.h"
+#include "ctx_internal.h"
 #include "../primitives/header_map.h"
 #include "../primitives/query.h"
 #include "csilk/core/internal.h"

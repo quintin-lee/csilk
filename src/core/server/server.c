@@ -25,7 +25,7 @@
 #include <fcntl.h>
 #endif
 
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"

@@ -56,7 +56,7 @@
 #include <arm_neon.h>
 #endif
 
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "../srv_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"

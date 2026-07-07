@@ -11,7 +11,7 @@
  * @copyright MIT License
  */
 
-#include "../ctx_internal.h"
+#include "ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 

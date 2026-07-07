@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "cJSON.h"
-#include "../ctx_internal.h"
+#include "ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 

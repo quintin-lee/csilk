@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
