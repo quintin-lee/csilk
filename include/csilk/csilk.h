@@ -27,7 +27,7 @@
 #include "csilk/sse.h"
 #include "csilk/mq.h"
 #include "csilk/server.h"
-#include "csilk/workflow.h"
+#include "csilk/app/workflow.h"
 #include "csilk/admin.h"
 #include "csilk/hot_reload.h"
 
