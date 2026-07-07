@@ -85,13 +85,13 @@ jobs:
       run: ctest --test-dir build -E test_integration --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
     - name: Run integration tests
       run: ctest --test-dir build -R test_integration --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
     - name: Run Python integration tests
       if: matrix.build_type == 'Release' || runner.os == 'Linux'
@@ -108,7 +108,7 @@ jobs:
         python3 python/tests/test_csilk.py
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
   lint:
     name: Lint & Static Analysis
@@ -204,7 +204,7 @@ jobs:
       run: UV_USE_IO_URING=1 ctest --test-dir build --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
     - name: Configure (CSILK_USE_URING native)
       run: cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON -DENABLE_OOM_TEST=ON
@@ -216,7 +216,7 @@ jobs:
       run: ctest --test-dir build_uring --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
-        LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
   benchmark:
     name: Performance Benchmarks
