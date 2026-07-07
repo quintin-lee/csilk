@@ -38,10 +38,10 @@
 #ifndef CSILK_APP_H
 #define CSILK_APP_H
 
-#include "csilk/csilk.h"
-
 /** @brief Opaque application handle. */
 typedef struct csilk_app_s csilk_app_t;
+
+#include "csilk/csilk.h"
 
 /* ---- Lifecycle ---- */
 
