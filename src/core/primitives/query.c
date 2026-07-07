@@ -12,7 +12,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "../primitives/header_map.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"

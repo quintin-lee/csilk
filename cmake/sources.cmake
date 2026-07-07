@@ -14,7 +14,7 @@ set(CSILK_APP_SOURCES
 
 set(CSILK_CORE_SOURCES
     src/core/config/admin.c
-    src/core/server/arena.c
+    src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
     src/core/config/config.c
     src/core/ctx/context.c

@@ -12,7 +12,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 
 /* See include/csilk/core/internal.h for CSILK_GZIP_CHUNK and CSILK_GZIP_MIN_LENGTH. */
 

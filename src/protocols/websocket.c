@@ -31,7 +31,7 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "core/srv_internal.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.

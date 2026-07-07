@@ -23,7 +23,7 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "csilk/core/internal.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "core/srv_impl.h"
 
 /*
