@@ -32,7 +32,7 @@
 #include "../ctx/ctx_internal.h"
 #include <stdlib.h>
 #include "csilk/core/internal.h"
-#include "csilk/crypto.h"
+#include "csilk/core/crypto.h"
 #include "csilk/drivers/cipher.h"
 
 static _Atomic uint32_t g_nonce_counter = 0;

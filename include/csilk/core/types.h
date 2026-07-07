@@ -19,7 +19,7 @@
 
 #include "cJSON.h"
 
-#include "csilk/errors.h"
+#include "csilk/core/errors.h"
 #include "csilk/version.h"
 
 /** @brief Internal visibility macro for symbols not part of the public API. */

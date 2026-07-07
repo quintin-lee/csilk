@@ -9,7 +9,7 @@
 #ifndef CSILK_CONFIG_H
 #define CSILK_CONFIG_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Low-level server configuration options.

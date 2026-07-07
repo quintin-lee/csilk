@@ -14,7 +14,7 @@
 #ifndef CSILK_MQ_H
 #define CSILK_MQ_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Opaque Message Queue (event bus) instance.

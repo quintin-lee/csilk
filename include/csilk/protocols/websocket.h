@@ -9,7 +9,7 @@
 #ifndef CSILK_WEBSOCKET_H
 #define CSILK_WEBSOCKET_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Perform the WebSocket upgrade handshake (HTTP Upgrade request).

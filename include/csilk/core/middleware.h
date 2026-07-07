@@ -14,10 +14,10 @@
 #ifndef CSILK_MIDDLEWARE_H
 #define CSILK_MIDDLEWARE_H
 
-#include "csilk/types.h"
-#include "csilk/context.h"
-#include "csilk/response.h"
-#include "csilk/crypto.h"
+#include "csilk/core/types.h"
+#include "csilk/core/context.h"
+#include "csilk/core/response.h"
+#include "csilk/core/crypto.h"
 
 /**
  * @brief Pass control to the next handler in the middleware/handler chain.

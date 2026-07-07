@@ -16,7 +16,7 @@
 
 #include "mq_internal.h"
 #include "csilk/csilk.h"
-#include "csilk/mq.h"
+#include "csilk/messaging/mq.h"
 
 /** @brief Work callback — runs on a thread pool thread.
  *
