@@ -10,7 +10,7 @@
 #ifndef CSILK_APP_ADMIN_H
 #define CSILK_APP_ADMIN_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 struct csilk_app_s;
 typedef struct csilk_app_s csilk_app_t;

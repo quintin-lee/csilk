@@ -12,7 +12,7 @@
 #ifndef CSILK_HOOKS_H
 #define CSILK_HOOKS_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Lifecycle hook types for the server and individual requests.

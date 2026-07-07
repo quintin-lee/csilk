@@ -5,7 +5,7 @@
  */
 
 #include "csilk/csilk.h"
-#include "csilk/hot_reload.h"
+#include "csilk/core/hot_reload.h"
 #include "csilk/core/internal.h"
 #include "../srv_internal.h"
 

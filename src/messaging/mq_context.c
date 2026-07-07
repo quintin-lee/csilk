@@ -12,7 +12,7 @@
  */
 #include "mq_internal.h"
 #include "csilk/csilk.h"
-#include "csilk/mq.h"
+#include "csilk/messaging/mq.h"
 
 /** @brief Advance to the next handler in the middleware chain.
  *

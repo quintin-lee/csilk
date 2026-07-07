@@ -12,8 +12,8 @@
 #ifndef CSILK_ROUTER_H
 #define CSILK_ROUTER_H
 
-#include "csilk/types.h"
-#include "csilk/context.h"
+#include "csilk/core/types.h"
+#include "csilk/core/context.h"
 
 /**
  * @brief The main HTTP router.

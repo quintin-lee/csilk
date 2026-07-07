@@ -252,7 +252,7 @@ CSILK_INTERNAL int _csilk_verify(csilk_ctx_t*   c,
                                  const uint8_t* signature,
                                  size_t         sig_len);
 
-#include "csilk/crypto.h"
+#include "csilk/core/crypto.h"
 
 CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t*    c,
                                    const char*     key,

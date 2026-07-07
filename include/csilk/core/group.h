@@ -12,7 +12,7 @@
 #ifndef CSILK_GROUP_H
 #define CSILK_GROUP_H
 
-#include "csilk/router.h"
+#include "csilk/core/router.h"
 
 /**
  * @brief Create a new route group with a URL prefix.

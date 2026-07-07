@@ -12,7 +12,7 @@
 #ifndef CSILK_RESPONSE_H
 #define CSILK_RESPONSE_H
 
-#include "csilk/types.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Set the HTTP response status code.

@@ -9,9 +9,9 @@
 #ifndef CSILK_SERVER_H
 #define CSILK_SERVER_H
 
-#include "csilk/router.h"
-#include "csilk/middleware.h"
-#include "csilk/hooks.h"
+#include "csilk/core/router.h"
+#include "csilk/core/middleware.h"
+#include "csilk/core/hooks.h"
 
 /**
  * @brief Create a new server instance.

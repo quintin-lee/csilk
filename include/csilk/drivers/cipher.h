@@ -23,7 +23,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/crypto.h"
+#include "csilk/core/crypto.h"
 
 #ifdef __cplusplus
 extern "C" {
