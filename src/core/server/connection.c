@@ -21,7 +21,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "../srv_internal.h"
-#include "../ctx_internal.h"
+#include "../ctx/ctx_internal.h"
 #include "../http/h2.h"
 #include "../srv_impl.h"
 

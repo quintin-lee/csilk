@@ -15,7 +15,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 
 /**
  * @brief Internal helper to get MIME type from file path.
