@@ -3,7 +3,7 @@
 # Requires: -DSRC_DIR=<path> -DBIN_DIR=<path> -DCSILK_VERSION=<ver>
 
 configure_file(
-  "${SRC_DIR}/Doxyfile.in"
+  "${SRC_DIR}/docs/Doxyfile.in"
   "${BIN_DIR}/Doxyfile"
   @ONLY
 )
