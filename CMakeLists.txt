@@ -223,13 +223,23 @@ struct __kernel_timespec {
     target_compile_definitions(uring PRIVATE -D_GNU_SOURCE)
   endif()
 else()
-  # Fetch libuv
-  FetchContent_Declare(
-    libuv
-    GIT_REPOSITORY https://github.com/libuv/libuv.git
-    GIT_TAG        v1.48.0
-  )
-  FetchContent_MakeAvailable(libuv)
+  # Force use system libuv to bypass network issues
+  find_library(LIBUV_LIB NAMES uv)
+  find_path(LIBUV_INCLUDE_DIR uv.h)
+  if(LIBUV_LIB AND LIBUV_INCLUDE_DIR)
+    message(STATUS "Found system libuv: ${LIBUV_LIB}")
+    set(libuv_LIBRARIES ${LIBUV_LIB})
+    include_directories(${LIBUV_INCLUDE_DIR})
+  else()
+    message(FATAL_ERROR "libuv not found on system. Please install libuv-dev.")
+  endif()
+  # Comment out FetchContent to ensure it's not called
+  # FetchContent_Declare(
+  #   libuv
+  #   GIT_REPOSITORY https://github.com/libuv/libuv.git
+  #   GIT_TAG        v1.48.0
+  # )
+  # FetchContent_MakeAvailable(libuv)
 endif()
 
 # Prefer system llhttp; fallback to FetchContent from source
@@ -630,46 +640,46 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_link_libraries(fuzz_url csilk)
   endif()
 
-  # Examples
-  add_executable(example_server examples/example_server.c)
-  target_link_libraries(example_server csilk)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/examples/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
+# Examples
+add_executable(example_server examples/basic/example_server.c)
+target_link_libraries(example_server csilk)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/examples/advanced/config_multi.yaml ${CMAKE_CURRENT_BINARY_DIR}/config.yaml COPYONLY)
 
-  add_executable(example_app examples/example_app.c)
-  target_link_libraries(example_app csilk)
+add_executable(example_app examples/basic/example_app.c)
+target_link_libraries(example_app csilk)
 
-  add_executable(example_ai examples/example_ai.c)
-  target_link_libraries(example_ai csilk)
+add_executable(example_ai examples/ai/example_ai.c)
+target_link_libraries(example_ai csilk)
 
-  add_executable(example_ai_providers examples/example_ai_providers.c)
-  target_link_libraries(example_ai_providers csilk)
+add_executable(example_ai_providers examples/ai/example_ai_providers.c)
+target_link_libraries(example_ai_providers csilk)
 
-  add_executable(example_ai_workflow examples/example_ai_workflow.c)
-  target_link_libraries(example_ai_workflow csilk)
+add_executable(example_ai_workflow examples/ai/example_ai_workflow.c)
+target_link_libraries(example_ai_workflow csilk)
 
-  add_executable(example_workflow_ui examples/example_workflow_ui.c)
-  target_link_libraries(example_workflow_ui csilk)
+add_executable(example_workflow_ui examples/ai/example_workflow_ui.c)
+target_link_libraries(example_workflow_ui csilk)
 
-#  add_executable(example_admin_dashboard examples/example_admin_dashboard.c)
+#  add_executable(example_admin_dashboard examples/middleware/example_admin_dashboard.c)
 #  target_link_libraries(example_admin_dashboard csilk)
 
-  add_executable(example_db examples/example_db.c)
-  target_link_libraries(example_db csilk)
+add_executable(example_db examples/database/example_db.c)
+target_link_libraries(example_db csilk)
 
-  add_executable(example_ws_tls_mq examples/example_ws_tls_mq.c)
-  target_link_libraries(example_ws_tls_mq csilk)
+add_executable(example_ws_tls_mq examples/websocket/example_ws_tls_mq.c)
+target_link_libraries(example_ws_tls_mq csilk)
 
-  add_executable(example_websocket examples/example_websocket.c)
-  target_link_libraries(example_websocket csilk)
+add_executable(example_websocket examples/websocket/example_websocket.c)
+target_link_libraries(example_websocket csilk)
 
-  add_executable(example_sse examples/example_sse.c)
-  target_link_libraries(example_sse csilk)
+add_executable(example_sse examples/middleware/example_sse.c)
+target_link_libraries(example_sse csilk)
 
-  add_executable(example_tls examples/example_tls.c)
-  target_link_libraries(example_tls csilk)
+add_executable(example_tls examples/advanced/example_tls.c)
+target_link_libraries(example_tls csilk)
 
-  add_executable(example_custom_driver examples/example_custom_driver.c)
-  target_link_libraries(example_custom_driver csilk)
+add_executable(example_custom_driver examples/advanced/example_custom_driver.c)
+target_link_libraries(example_custom_driver csilk)
 
 endif()
 
