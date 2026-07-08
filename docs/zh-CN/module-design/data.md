@@ -4,7 +4,7 @@
 
 数据层提供了一种 **可插拔、基于驱动的数据库抽象**，灵感来自 Go 的 `database/sql`。它将统一的查询/执行 API 与后端特定的线路协议分离，使得 SQLite、MySQL、PostgreSQL、MongoDB 和 Redis 可以通过单一接口互换使用。所有数据库驱动 **MUST** 实现 `csilk_db_driver_t` vtable。连接池操作 **MUST** 是线程安全的。查询结果 **MUST** 以 arena 管理的行形式返回 `csilk_db_result_t` — 调用者 **MUST NOT** 释放单个单元格。从池中获取连接 **SHOULD** 在 ≤ 100ns 内完成（无锁链表弹出）。
 
-**文件**: `src/data/db.c`, `src/data/db_internal.h`, `include/csilk/drivers/db.h`
+**文件**: `src/drivers/db/db.c`, `src/drivers/db/db_internal.h`, `include/csilk/drivers/db.h`
 
 ---
 
@@ -56,7 +56,7 @@
 ### 3.1 `csilk_db_pool_t` (不透明)
 
 ```c
-// src/data/db_internal.h
+// src/drivers/db/db_internal.h
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;   // 指向全局注册表
     void* connection;             // 驱动特定句柄
@@ -316,8 +316,8 @@ csilk_db_pool_free(db);
 
 | 文件 | 角色 |
 |---|---|
-| `src/data/db.c` | 池生命周期，查询/exec，驱动注册，指标 |
-| `src/data/db_internal.h` | 内部池结构定义 |
+| `src/drivers/db/db.c` | 池生命周期，查询/exec，驱动注册，指标 |
+| `src/drivers/db/db_internal.h` | 内部池结构定义 |
 | `include/csilk/drivers/db.h` | 公共 API — 驱动 vtable，池函数，注册 |
 | `src/drivers/sqlite.c` | SQLite3 驱动实现 |
 | `src/drivers/mysql.c` | MySQL 驱动（条件性） |

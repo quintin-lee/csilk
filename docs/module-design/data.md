@@ -4,7 +4,7 @@
 
 The Data layer provides a **pluggable, driver-based database abstraction** inspired by Go's `database/sql`. It separates the unified query/exec API from backend-specific wire protocols, enabling SQLite, MySQL, PostgreSQL, MongoDB, and Redis to be used interchangeably through a single interface. All DB drivers **MUST** implement the `csilk_db_driver_t` vtable. Connection pool operations **MUST** be thread-safe. Query results **MUST** be returned as `csilk_db_result_t` with arena-managed rows — callers **MUST NOT** free individual cells. Connection acquisition from pool **SHOULD** complete in ≤ 100ns (lock-free linked list pop).
 
-**Files**: `src/data/db.c`, `src/data/db_internal.h`, `include/csilk/drivers/db.h`
+**Files**: `src/drivers/db/db.c`, `src/drivers/db/db_internal.h`, `include/csilk/drivers/db.h`
 
 ---
 
@@ -55,7 +55,7 @@ The Data layer provides a **pluggable, driver-based database abstraction** inspi
 ### 3.1 `csilk_db_pool_t` (opaque)
 
 ```c
-// src/data/db_internal.h
+// src/drivers/db/db_internal.h
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;   // Points into global registry
     void* connection;             // Driver-specific handle
@@ -309,8 +309,8 @@ csilk_db_pool_free(db);
 
 | File | Role |
 |---|---|
-| `src/data/db.c` | Pool lifecycle, query/exec, driver registry, metrics |
-| `src/data/db_internal.h` | Internal pool struct definition |
+| `src/drivers/db/db.c` | Pool lifecycle, query/exec, driver registry, metrics |
+| `src/drivers/db/db_internal.h` | Internal pool struct definition |
 | `include/csilk/drivers/db.h` | Public API — driver vtable, pool functions, registration |
 | `src/drivers/sqlite.c` | SQLite3 driver implementation |
 | `src/drivers/mysql.c` | MySQL driver (conditional) |
