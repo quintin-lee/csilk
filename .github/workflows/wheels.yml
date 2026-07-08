@@ -28,7 +28,7 @@ jobs:
         
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3
+        run: brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 libuv
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
@@ -45,6 +45,7 @@ jobs:
             libcurl-devel
             zlib-devel
             sqlite-devel
+            libuv-devel
             pkgconfig
           
       - uses: actions/upload-artifact@v4
