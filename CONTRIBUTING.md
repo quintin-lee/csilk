@@ -78,32 +78,60 @@ sudo apt-get install -y cmake clang clang-format clang-tidy libyaml-dev \
 
 ```
 csilk/
-├── include/           # Public API headers
-│   ├── csilk.h        # Main framework API
-│   └── csilk/         # Module headers
-│       ├── app/       # Application layer (admin, workflow)
-│       ├── core/      # Internal structures
-│       ├── drivers/   # DB/AI driver interfaces
-│       └── reflection/ # Runtime reflection
-├── src/               # Implementation
-│   ├── core/          # Engine: server, router, context, arena, config, logger, URL
+├── include/csilk/     # Public API (installed)
+│   ├── csilk.h        # Top-level framework API
+│   ├── app/           # app.h, admin.h, workflow.h, workflow_wal.h
+│   ├── core/          # Core API: server, router, context, middleware, ...
+│   ├── drivers/       # DB/AI/crypto/perm/vector driver interfaces
+│   ├── messaging/     # Message Queue API
+│   ├── protocols/     # WebSocket, SSE
+│   ├── reflection/    # Runtime reflection
+│   └── test/          # Test helpers
+├── src/               # Implementation (not installed)
+│   ├── core/          # Engine: server, router, context, arena, config, http, uring, ...
+│   │   └── internal/  # Private server headers (srv_impl.h, srv_internal.h)
 │   ├── app/           # High-level API: app, admin dashboard, workflow engine
-│   ├── middleware/    # Built-in middleware (16 modules)
+│   ├── middleware/    # Built-in middleware (15 modules)
 │   ├── protocols/     # WebSocket, Swagger
-│   ├── drivers/       # DB (SQLite/MySQL/PG/Mongo/Redis) & AI (OpenAI/Ollama)
-│   ├── ai/            # AI unified interface
-│   ├── crypto/        # Encryption utilities
-│   ├── data/          # Database abstraction
+│   ├── drivers/       # Non-DB drivers: ai, cipher, perm, vector
+│   ├── data/          # DB drivers (SQLite/MySQL/PG/Mongo/Redis)
+│   ├── ai/            # AI engine
 │   ├── messaging/     # Message Queue (MQ)
 │   ├── reflection/    # Runtime type reflection
-│   └── security/      # Permission system
-├── tests/             # 120+ unit/integration tests
-├── examples/          # Example applications
+│   ├── security/      # Permission system
+│   ├── util/          # Internal utilities
+│   └── workflow/      # Workflow engine
+├── tests/             # 120+ unit/integration tests (mirrors src/)
+├── examples/          # Example apps (basic/ advanced/ ai/ database/ middleware/ websocket/)
+├── python/            # Python bindings
 ├── share/             # Runtime assets (admin UI, Swagger UI)
 ├── docs/              # Documentation (architecture.md, user-manual)
 ├── scripts/           # Utility scripts (Mermaid validation)
-└── cmake/             # CMake modules (sources, tests)
+├── cmake/             # CMake modules (sources, tests)
+└── fuzz/              # Fuzz targets
 ```
+
+### Module map (src ↔ include)
+
+csilk separates **public** headers (`include/csilk/`, installed) from
+**internal** implementation (`src/`, never installed). A `src/` module's
+public API does not always sit in a same-named `include/csilk/` directory;
+the table maps each implementation module to where its public surface lives:
+
+| `src/` module | Public headers (`include/csilk/`) | Notes |
+|---|---|---|
+| app | `app/`, `app/admin.h`, `app/workflow.h`, `app/workflow_wal.h` | |
+| core | `core/` | |
+| middleware | `core/middleware.h` | middleware API is part of core |
+| protocols | `protocols/` | |
+| drivers (ai/cipher/perm/vector) | `drivers/` | |
+| data (DB drivers) | `drivers/db.h` | DB drivers share the `drivers/` namespace |
+| security (perm.c) | `drivers/perm.h` | perm API is exposed via `drivers/` |
+| messaging | `messaging/mq.h` | |
+| reflection | `reflection/reflect.h` | |
+| ai | `drivers/ai.h` | AI engine; driver interface under `drivers/` |
+| workflow | `app/workflow.h`, `app/workflow_wal.h` | workflow API lives under `app/` |
+| util | — (internal only) | no public API |
 
 **Key architectural concepts:**
 
