@@ -55,7 +55,7 @@ else()
 endif()
 
 set(CSILK_DATA_SOURCES
-    src/data/db.c
+    src/drivers/db/db.c
 )
 
 set(CSILK_DRIVER_SOURCES
@@ -63,7 +63,7 @@ set(CSILK_DRIVER_SOURCES
     src/drivers/ai/openai.c
     src/drivers/cipher/openssl.c
     src/drivers/perm/simple.c
-    src/data/drivers/sqlite.c
+    src/drivers/db/sqlite.c
     src/drivers/vector/vector.c
     src/drivers/vector/qdrant.c
     src/drivers/vector/milvus.c
