@@ -2,7 +2,7 @@ import sys
 import os
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'python')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'python')))
 from csilk.workflow import Workflow, WorkflowContext, WorkflowData
 from csilk.app import App
 import threading
