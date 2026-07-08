@@ -4,7 +4,7 @@
 # are appended by CMakeLists.txt after dependency detection.
 
 set(CSILK_AI_SOURCES
-    src/ai/ai.c
+    src/drivers/ai/ai.c
 )
 
 set(CSILK_APP_SOURCES

@@ -286,7 +286,7 @@ csilk_app_run(app, 8080);
 | `src/core/admin.c` | Admin dashboard（读取 metrics 做实时可视化） |
 | `src/drivers/perm/perm.c` | 权限驱动（安全计数器） |
 | `src/drivers/db/db.c` | DB 统计收集 |
-| `src/ai/ai.c` | AI 统计收集 |
+| `src/drivers/ai/ai.c` | AI 统计收集 |
 | `src/messaging/mq.c` | MQ 统计收集 |
 | `src/core/server.c` | 服务器连接统计 |
 | `docs/module-design/messaging.md` | MQ 设计文档 |
