@@ -155,7 +155,7 @@ void csilk_ai_free(csilk_ai_t* ai) {
 
 ### 3.1 AI Driver
 
-**文件**: `include/csilk/drivers/ai.h` | `src/ai/ai.c` | `src/drivers/ai/`
+**文件**: `include/csilk/drivers/ai.h` | `src/drivers/ai/ai.c` | `src/drivers/ai/`
 
 **虚表**:
 
@@ -459,7 +459,7 @@ sequenceDiagram
 | `include/csilk/drivers/perm.h` | Perm 驱动虚表定义 + RBAC API |
 | `include/csilk/drivers/vector.h` | Vector DB 驱动虚表定义 |
 | `include/csilk/types.h` | Crypto 和 Storage 驱动虚表定义 |
-| `src/ai/ai.c` | AI 驱动注册表 + 工厂 + `chat`/`embeddings` 封装 |
+| `src/drivers/ai/ai.c` | AI 驱动注册表 + 工厂 + `chat`/`embeddings` 封装 |
 | `src/drivers/db/db.c` | DB 驱动注册表 + 连接池核心 + 结果转换 |
 | `src/drivers/perm/perm.c` | Perm 驱动注册表 + 简单 RBAC 实现 |
 | `src/drivers/ai/openai.c` | OpenAI 驱动实现 (libcurl) |
