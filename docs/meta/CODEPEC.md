@@ -95,7 +95,7 @@ src/messaging/                  # 内部事件总线（Message Queue）
 src/security/                   # 权限与安全核心
 src/reflection/                 # 反射引擎实现
 src/crypto/                     # 密码驱动实现（AES/RSA 加解密，已合并至 src/drivers/cipher/）
-src/data/                       # 数据库抽象层（连接池管理）
+src/drivers/db/                       # 数据库抽象层（连接池管理）
 src/drivers/                    # 具体驱动实现（OpenAI, Ollama, SQLite, MySQL, PostgreSQL, MongoDB）
 src/ai/                         # AI 统一接口引擎
 tests/                          # 单元测试（98+ 个测试文件）

@@ -213,7 +213,7 @@ csilk_server_set_cipher_driver(server, &my_cipher_driver);
 
 ### 3.3 DB Driver
 
-**文件**: `include/csilk/drivers/db.h` | `src/data/db.c` | `src/drivers/*.c`
+**文件**: `include/csilk/drivers/db.h` | `src/drivers/db/db.c` | `src/drivers/*.c`
 
 **虚表**:
 
@@ -393,7 +393,7 @@ endif()
 ```
 
 ```c
-// src/data/db.c
+// src/drivers/db/db.c
 void csilk_db_init(void) {
     csilk_db_sqlite_init();
 #ifdef HAS_MYSQL
@@ -460,7 +460,7 @@ sequenceDiagram
 | `include/csilk/drivers/vector.h` | Vector DB 驱动虚表定义 |
 | `include/csilk/types.h` | Crypto 和 Storage 驱动虚表定义 |
 | `src/ai/ai.c` | AI 驱动注册表 + 工厂 + `chat`/`embeddings` 封装 |
-| `src/data/db.c` | DB 驱动注册表 + 连接池核心 + 结果转换 |
+| `src/drivers/db/db.c` | DB 驱动注册表 + 连接池核心 + 结果转换 |
 | `src/security/perm.c` | Perm 驱动注册表 + 简单 RBAC 实现 |
 | `src/drivers/ai/openai.c` | OpenAI 驱动实现 (libcurl) |
 | `src/drivers/ai/ollama.c` | Ollama 驱动实现 (libcurl) |

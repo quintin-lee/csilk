@@ -285,7 +285,7 @@ csilk_app_run(app, 8080);
 | `src/middleware/metrics.c` | 核心实现（579 行）——计数器、哈希表、中间件、handler |
 | `src/core/admin.c` | Admin dashboard（读取 metrics 做实时可视化） |
 | `src/security/perm.c` | 权限驱动（安全计数器） |
-| `src/data/db.c` | DB 统计收集 |
+| `src/drivers/db/db.c` | DB 统计收集 |
 | `src/ai/ai.c` | AI 统计收集 |
 | `src/messaging/mq.c` | MQ 统计收集 |
 | `src/core/server.c` | 服务器连接统计 |
