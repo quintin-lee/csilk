@@ -40,7 +40,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
-#include "core/srv_internal.h"
+#include "core/internal/srv_internal.h"
 
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
  * mapping.

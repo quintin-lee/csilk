@@ -24,7 +24,7 @@
 #include "csilk/test/test.h"
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
-#include "core/srv_impl.h"
+#include "core/internal/srv_impl.h"
 
 /*
  * Guard: this test is compiled only when TEST_OOM is defined (typically

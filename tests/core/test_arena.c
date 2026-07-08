@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#include "core/srv_internal.h"
+#include "core/internal/srv_internal.h"
 #include "csilk/csilk.h"
 
 void

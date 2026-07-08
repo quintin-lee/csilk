@@ -318,5 +318,5 @@ arena_new() → 32 allocs → arena_reset() → 20 allocs → arena_free()
 | `src/core/arena.c` | Arena 分配器：创建、分配、重置、释放、TLS 缓存 |
 | `src/core/ctx_defer.c` | 延迟清理注册与执行 (`csilk_ctx_defer`) |
 | `src/core/connection.c` | Worker 级 arena 池初始化 (`_csilk_worker_init_arena_pool`) |
-| `src/core/srv_internal.h` | `worker_pool_t` 定义（包含 arena_pool 数组） |
+| `src/core/internal/srv_internal.h` | `worker_pool_t` 定义（包含 arena_pool 数组） |
 | `src/core/ctx_internal.h` | `csilk_ctx_t` 定义（包含 `arena` 和 `defer_head`） |

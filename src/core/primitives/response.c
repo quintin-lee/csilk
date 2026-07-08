@@ -16,11 +16,11 @@
 
 #include "cJSON.h"
 #include "../ctx/ctx_internal.h"
-#include "../srv_impl.h"
+#include "../internal/srv_impl.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "../srv_internal.h"
-#include "../srv_impl.h"
+#include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 #include "../primitives/header_map.h"
 #include "../http/h2.h"
 
