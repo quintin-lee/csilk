@@ -47,12 +47,12 @@ jobs:
         sudo apt-get install -y \
           cmake clang ccache \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev
+          libpq-dev libsqlite3-dev libuv-dev
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 ccache
+        brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 ccache libuv
 
     - name: Set macOS build env
       if: runner.os == 'macOS'
