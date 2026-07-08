@@ -31,7 +31,7 @@ jobs:
             doxygen graphviz \
             libyaml-dev zlib1g-dev \
             libcurl4-openssl-dev \
-            libpq-dev libuv-dev
+            libpq-dev libuv1-dev
 
       - name: Validate Mermaid diagrams
         run: python3 scripts/check_mermaid.py .
