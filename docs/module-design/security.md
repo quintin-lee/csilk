@@ -4,7 +4,7 @@
 
 The Security module provides a **layered security architecture** spanning authentication (JWT), authorization (pluggable permission/ACL drivers), request validation (WAF, CSRF), and transport-level protections (CORS, rate limiting). Each layer is implemented as middleware and can be independently enabled, configured, or replaced. Security middleware **MUST** be evaluated in the documented order: CORS → Rate Limiter → WAF → CSRF → JWT → Permission. Rate limiter **MUST** use sliding-window counters with atomic increments. JWT verification **MUST NOT** allocate on the hot path for valid tokens. WAF rules **SHOULD** be compiled to a deterministic finite automaton (DFA) for O(n) scanning with input length n.
 
-**Files**: `src/security/perm.c`, `src/middleware/jwt.c`, `src/middleware/waf.c`, `src/middleware/csrf.c`, `src/middleware/cors.c`, `include/csilk/drivers/perm.h`
+**Files**: `src/drivers/perm/perm.c`, `src/middleware/jwt.c`, `src/middleware/waf.c`, `src/middleware/csrf.c`, `src/middleware/cors.c`, `include/csilk/drivers/perm.h`
 
 ---
 
@@ -334,7 +334,7 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 
 | File | Role |
 |---|---|
-| `src/security/perm.c` | Permission subsystem: driver registry, check, require, auto-middleware |
+| `src/drivers/perm/perm.c` | Permission subsystem: driver registry, check, require, auto-middleware |
 | `include/csilk/drivers/perm.h` | Public API: perm_driver_t, registration, check/require |
 | `src/drivers/perm/simple.c` | Built-in in-memory RBAC driver with wildcard pattern matching |
 | `src/middleware/jwt.c` | JWT HS256 authentication middleware + token generation |

@@ -4,7 +4,7 @@
 
 安全模块提供了一个 **分层安全架构**，跨越身份验证（JWT）、授权（可插拔权限/ACL 驱动）、请求验证（WAF、CSRF）以及传输级保护（CORS、速率限制）。每一层都实现为中间件，可以独立启用、配置或替换。安全中间件 **MUST** 按文档中所述的顺序进行评估：CORS → 速率限制器 → WAF → CSRF → JWT → 权限。速率限制器 **MUST** 使用滑动窗口计数器进行原子递增。JWT 验证 **MUST NOT** 在热路径（有效令牌）上分配。WAF 规则 **SHOULD** 编译为确定性有限自动机 (DFA)，以进行 O(n) 扫描（其中 n 为输入长度）。
 
-**文件**: `src/security/perm.c`, `src/middleware/jwt.c`, `src/middleware/waf.c`, `src/middleware/csrf.c`, `src/middleware/cors.c`, `include/csilk/drivers/perm.h`
+**文件**: `src/drivers/perm/perm.c`, `src/middleware/jwt.c`, `src/middleware/waf.c`, `src/middleware/csrf.c`, `src/middleware/cors.c`, `include/csilk/drivers/perm.h`
 
 ---
 
@@ -326,7 +326,7 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 
 | 文件 | 角色 |
 |---|---|
-| `src/security/perm.c` | 权限子系统：驱动注册表、检查、要求、自动中间件 |
+| `src/drivers/perm/perm.c` | 权限子系统：驱动注册表、检查、要求、自动中间件 |
 | `include/csilk/drivers/perm.h` | 公共 API：perm_driver_t、注册、检查/要求 |
 | `src/drivers/perm/simple.c` | 内置内存中的 RBAC 驱动，带有通配符模式匹配 |
 | `src/middleware/jwt.c` | JWT HS256 身份认证中间件 + 令牌生成 |
