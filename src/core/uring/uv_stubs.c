@@ -3,7 +3,7 @@
 #ifdef CSILK_USE_URING
 
 #include <csilk/csilk.h>
-#include <csilk/server.h>
+#include <csilk/core/server.h>
 #include <csilk/core/internal.h>
 #include "../srv_internal.h"
 #include "uring_internal.h"

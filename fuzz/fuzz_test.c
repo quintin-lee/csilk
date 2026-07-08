@@ -8,7 +8,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
-#include "core/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 
 // Fuzz test for csilk_split_url, csilk_parse_query, and routing
 
