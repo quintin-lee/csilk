@@ -38,7 +38,7 @@
 #include "../primitives/query.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "../srv_internal.h"
+#include "../internal/srv_internal.h"
 
 /** @brief Advance to the next handler in the chain and invoke it.
  *

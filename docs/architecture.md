@@ -930,8 +930,9 @@ csilk/
 │   │   ├── hot_reload.c           # File-watch hot-reload (inotify)
 │   │   ├── test_utils.c           # Test OOM utilities
 │   │   ├── admin.c                # Admin dashboard
-│   │   ├── srv_impl.h             # Cross-file declarations for server split
-│   │   └── srv_internal.h         # Internal server types
+ │   │   ├── internal/              # Internal server headers (not installed)
+ │   │   │   ├── srv_impl.h          # Cross-file declarations for server split
+ │   │   │   └── srv_internal.h      # Internal server types
 │   │   └── uring/                 # io_uring backend (Linux-only, optional)
 │   │       ├── uring_server.c
 │   │       ├── uring_connection.c

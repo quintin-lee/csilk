@@ -5,7 +5,7 @@
 #include <csilk/core/sys_io.h>
 
 #include "core/ctx/ctx_internal.h"
-#include "core/srv_internal.h"
+#include "core/internal/srv_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 

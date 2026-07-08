@@ -7,7 +7,7 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "core/ctx/ctx_internal.h"
-#include "core/srv_internal.h"
+#include "core/internal/srv_internal.h"
 
 #define NUM_CLIENTS 8
 

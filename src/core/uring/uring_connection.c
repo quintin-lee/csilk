@@ -19,10 +19,10 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/sys_io.h"
-#include "core/srv_internal.h"
+#include "core/internal/srv_internal.h"
 #include "core/ctx/ctx_internal.h"
 #include "../http/h2.h"
-#include "../srv_impl.h"
+#include "../internal/srv_impl.h"
 #include <limits.h>
 #include <assert.h>
 #include "uring_internal.h"

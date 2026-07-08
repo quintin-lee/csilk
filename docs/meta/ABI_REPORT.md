@@ -23,7 +23,7 @@ typedef struct csilk_ctx_s csilk_ctx_t;  // include/csilk/types.h — opaque han
 ```
 src/core/ctx_types.h    — csilk_ctx_s layout (30+ fields)
 src/core/srv_types.h    — csilk_server_s layout
-src/core/srv_impl.h     — Internal server implementation details
+src/core/internal/srv_impl.h     — Internal server implementation details
 ```
 
 ### Accessor API (complete coverage)

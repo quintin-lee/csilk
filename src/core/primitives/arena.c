@@ -34,7 +34,7 @@
 #endif
 
 #include "csilk/core/internal.h"
-#include "../srv_internal.h"
+#include "../internal/srv_internal.h"
 
 /** @brief Maximum number of chunks to keep in the thread-local free list.
  * This limit prevents unbounded memory growth in long-running threads. */
