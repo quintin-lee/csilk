@@ -107,7 +107,7 @@ set(CSILK_REFLECTION_SOURCES
 )
 
 set(CSILK_SECURITY_SOURCES
-    src/security/perm.c
+    src/drivers/perm/perm.c
 )
 
 set(CSILK_UTIL_SOURCES

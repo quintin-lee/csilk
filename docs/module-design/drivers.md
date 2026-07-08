@@ -260,7 +260,7 @@ void csilk_db_init(void) {
 
 ### 3.4 Perm Driver
 
-**文件**: `include/csilk/drivers/perm.h` | `src/security/perm.c`
+**文件**: `include/csilk/drivers/perm.h` | `src/drivers/perm/perm.c`
 
 **虚表**:
 
@@ -461,7 +461,7 @@ sequenceDiagram
 | `include/csilk/types.h` | Crypto 和 Storage 驱动虚表定义 |
 | `src/ai/ai.c` | AI 驱动注册表 + 工厂 + `chat`/`embeddings` 封装 |
 | `src/drivers/db/db.c` | DB 驱动注册表 + 连接池核心 + 结果转换 |
-| `src/security/perm.c` | Perm 驱动注册表 + 简单 RBAC 实现 |
+| `src/drivers/perm/perm.c` | Perm 驱动注册表 + 简单 RBAC 实现 |
 | `src/drivers/ai/openai.c` | OpenAI 驱动实现 (libcurl) |
 | `src/drivers/ai/ollama.c` | Ollama 驱动实现 (libcurl) |
 | `src/drivers/sqlite.c` | SQLite 驱动实现 |
