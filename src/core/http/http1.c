@@ -19,11 +19,11 @@
 
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
-#include "../srv_internal.h"
+#include "../internal/srv_internal.h"
 #include "../ctx/ctx_internal.h"
 #include "../primitives/header_map.h"
 #include "h2.h"
-#include "../srv_impl.h"
+#include "../internal/srv_impl.h"
 
 /* --- Zero-copy header persistence --- */
 

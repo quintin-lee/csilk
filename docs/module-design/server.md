@@ -69,7 +69,7 @@ graph TB
 
 ### 核心数据结构
 
-`csilk_server_t`（定义在 `src/core/srv_internal.h`）是服务器的中心结构体：
+`csilk_server_t`（定义在 `src/core/internal/srv_internal.h`）是服务器的中心结构体：
 
 | 字段 | 类型 | 作用 |
 |------|------|------|
@@ -678,8 +678,8 @@ typedef struct {
 | 文件 | 职责 |
 |------|------|
 | `src/core/server.c` | Server 生命周期：创建、配置、运行、停止、释放、驱动注入 |
-| `src/core/srv_internal.h` | 内部类型：`csilk_server_t`、`csilk_client_t`、`worker_pool_t` |
-| `src/core/srv_impl.h` | 内部函数声明：`_csilk_dispatch_request()`、`csilk_client_write()` |
+| `src/core/internal/srv_internal.h` | 内部类型：`csilk_server_t`、`csilk_client_t`、`worker_pool_t` |
+| `src/core/internal/srv_impl.h` | 内部函数声明：`_csilk_dispatch_request()`、`csilk_client_write()` |
 | `src/core/connection.c` | TCP 接受连接、连接池、客户端创建/销毁 |
 | `src/core/tls.c` | TLS/SSL 初始化、ALPN 协商、BIO pair I/O |
 | `src/core/h2.c` | HTTP/2 会话、nghttp2 回调、流管理、服务器推送 |

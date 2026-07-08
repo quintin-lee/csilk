@@ -947,8 +947,9 @@ csilk/
 │   │   ├── hot_reload.c           # 文件监视热重载（inotify）
 │   │   ├── test_utils.c           # 测试 OOM 实用工具
 │   │   ├── admin.c                # Admin 仪表板
-│   │   ├── srv_impl.h             # 跨文件声明（服务器拆分）
-│   │   └── srv_internal.h         # 内部服务器类型
+ │   │   ├── internal/              # 内部服务器头文件（不安装）
+ │   │   │   ├── srv_impl.h          # 跨文件声明（服务器拆分）
+ │   │   │   └── srv_internal.h      # 内部服务器类型
 │   │   └── uring/                 # io_uring 后端（仅 Linux，可选）
 │   │       ├── uring_server.c
 │   │       ├── uring_connection.c

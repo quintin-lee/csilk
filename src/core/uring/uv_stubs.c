@@ -5,7 +5,7 @@
 #include <csilk/csilk.h>
 #include <csilk/core/server.h>
 #include <csilk/core/internal.h>
-#include "../srv_internal.h"
+#include "../internal/srv_internal.h"
 #include "uring_internal.h"
 
 void csilk_client_close(csilk_client_t* client);

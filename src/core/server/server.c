@@ -29,8 +29,8 @@
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "../srv_internal.h"
-#include "../srv_impl.h"
+#include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 
 /* --- Signal handler --- */
 

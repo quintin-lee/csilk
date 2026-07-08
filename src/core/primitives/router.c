@@ -57,7 +57,7 @@
 #endif
 
 #include "../ctx/ctx_internal.h"
-#include "../srv_internal.h"
+#include "../internal/srv_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 
