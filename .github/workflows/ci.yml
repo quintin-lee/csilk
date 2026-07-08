@@ -49,7 +49,7 @@ jobs:
         sudo apt-get install -y \
           cmake clang clang-tidy ccache \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv-dev
+          libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
@@ -130,7 +130,7 @@ jobs:
         sudo apt-get install -y \
           cmake clang clang-tidy \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv-dev
+          libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
@@ -161,7 +161,7 @@ jobs:
         sudo apt-get install -y \
           cmake clang-19 \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv-dev
+          libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
@@ -192,7 +192,7 @@ jobs:
         sudo apt-get install -y \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv-dev
+          libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure (libuv + io_uring)
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_OOM_TEST=ON
@@ -276,7 +276,7 @@ jobs:
         sudo apt-get install -y \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev curl libuv-dev
+          libpq-dev libsqlite3-dev curl libuv1-dev
 
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
