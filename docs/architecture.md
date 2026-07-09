@@ -844,7 +844,7 @@ graph TB
     end
 
     subgraph drivers_src["fa:fa-database src/drivers/"]
-        sqlite["fa:fa-database sqlite.c"] --> db_c["fa:fa-cogs data/db.c"]
+        sqlite["fa:fa-database sqlite.c"] --> db_c["fa:fa-cogs drivers/db/db.c"]
         mysql["fa:fa-database mysql.c"] --> db_c
         postgres["fa:fa-database postgres.c"] --> db_c
         mongodb["fa:fa-leaf mongodb.c"] --> db_c
@@ -894,8 +894,7 @@ csilk/
 │       │   ├── ws_frame.h         # WebSocket frame parsing
 │       │   ├── crypto_dispatch.h  # Crypto/cipher dispatch stubs
 │       │   ├── mq_types.h         # Internal MQ data structures
-│       │   ├── ctx_types.h        # csilk_ctx_s struct layout
-│       │   └── srv_types.h        # csilk_server_s / csilk_client_s layouts
+│       │   └── ctx_types.h        # csilk_ctx_s struct layout
 │       ├── drivers/
 │       │   ├── ai.h               # AI driver interface
 │       │   ├── db.h               # DB driver interface
@@ -942,11 +941,6 @@ csilk/
 │   ├── app/                       # Thin app wrappers
 │   │   ├── app.c
 │   │   └── group.c
-│   ├── data/                      # Database abstraction
-│   │   ├── db.c                   # Pool lifecycle, query/exec dispatch
-│   │   └── db_internal.h          # csilk_db_pool_s private struct
-│   ├── ai/                        # AI unified interface
-│   │   └── ai.c
 │   ├── workflow/                  # AI workflow engine
 │   │   ├── wf_ai.c                # AI chat nodes, memory helper, templates
 │   │   ├── wf_lifecycle.c         # Lifecycle: creation, destruction, registration
@@ -959,9 +953,29 @@ csilk/
 │   ├── middleware/                # Built-in middleware modules
 │   ├── protocols/                 # WebSocket, Swagger
 │   ├── drivers/                   # Driver implementations
+│   │   ├── ai/                    # AI engine + OpenAI/Ollama backends
+│   │   │   ├── ai.c
+│   │   │   ├── openai.c
+│   │   │   └── ollama.c
+│   │   ├── cipher/                # Cipher driver (OpenSSL)
+│   │   │   └── openssl.c
+│   │   ├── perm/                  # Permission driver (manager + simple backend)
+│   │   │   ├── perm.c
+│   │   │   └── simple.c
+│   │   ├── db/                    # Database abstraction + backends
+│   │   │   ├── db.c               # Pool lifecycle, query/exec dispatch
+│   │   │   ├── db_internal.h      # csilk_db_pool_s private struct
+│   │   │   ├── sqlite.c
+│   │   │   ├── mysql.c
+│   │   │   ├── postgres.c
+│   │   │   ├── redis.c
+│   │   │   └── mongodb.c
+│   │   └── vector/                # Vector DB drivers
+│   │       ├── vector.c
+│   │       ├── qdrant.c
+│   │       └── milvus.c
 │   ├── messaging/                 # Message Queue
 │   ├── reflection/                # Runtime type reflection
-│   ├── security/                  # Permission system
 │   └── util/                      # Utility modules
 ├── tests/                         # Unit/integration/fuzz tests
 ├── examples/                      # Example applications

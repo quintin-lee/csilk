@@ -18,7 +18,7 @@ Deep-dive architectural documentation for each core subsystem of csilk.
 | Document | Focus |
 |----------|-------|
 | [App Layer](app.md) | `csilk_app_t` facade, bootstrap sequence, route group matching, admin dashboard, workflow engine |
-| [Middleware](middleware.md) | Onion model, chain assembly, 16 built-in middleware modules |
+| [Middleware](middleware.md) | Onion model, chain assembly, 15 built-in middleware modules |
 
 ## Protocols & Messaging
 

@@ -326,7 +326,7 @@ csilk_db_pool_free(db);
 | `src/drivers/redis.c` | Redis 驱动 + 存储驱动（条件性） |
 | `src/drivers/vector/vector.c` | 向量 DB 插件系统（单独注册表） |
 | `include/csilk/drivers/vector.h` | 向量 DB 公共 API |
-| `examples/example_custom_driver.c` | 自定义驱动注册示例 + 测试 |
+| `examples/advanced/example_custom_driver.c` | 自定义驱动注册示例 + 测试 |
 | `python/csilk/db.py` | Python ctypes 绑定的 DB 层 |
 
 ---

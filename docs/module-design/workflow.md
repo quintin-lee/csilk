@@ -380,4 +380,4 @@ The `_wf_wal_append()` function in `workflow_wal.c` uses raw POSIX I/O (`open`/`
 | `src/app/workflow_loader.c` | Declarative loader (268 lines) |
 | `tests/workflow/test_workflow_agentic.c` | Agentic loop test |
 | `tests/workflow/test_workflow_monitor.c` | Monitor integration test |
-| `examples/example_ai_workflow.c` | Full workflow example |
+| `examples/ai/example_ai_workflow.c` | Full workflow example |

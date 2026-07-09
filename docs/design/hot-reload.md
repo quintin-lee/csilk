@@ -143,4 +143,4 @@ The shared library **MUST** link against the same version of `libcsilk` as the l
 | [User Manual — Hot Reload](../user-manual/hot-reload.md) | Usage guide, development workflow, Makefile |
 | [Module Design — Server](../module-design/server.md) | Router swap mechanism in server lifecycle |
 | [Source — hot_reload.c](../../src/core/hot_reload.c) | Implementation |
-| [Example — hot_reload_app.c](../../examples/hot_reload_app.c) | Hot-reloadable module template |
+| [Example — hot_reload_app.c](../../examples/advanced/hot_reload_app.c) | Hot-reloadable module template |

@@ -861,7 +861,7 @@ graph TB
     end
 
     subgraph drivers_src["fa:fa-database src/drivers/"]
-        sqlite["fa:fa-database sqlite.c"] --> db_c["fa:fa-cogs data/db.c"]
+        sqlite["fa:fa-database sqlite.c"] --> db_c["fa:fa-cogs drivers/db/db.c"]
         mysql["fa:fa-database mysql.c"] --> db_c
         postgres["fa:fa-database postgres.c"] --> db_c
         mongodb["fa:fa-leaf mongodb.c"] --> db_c
@@ -911,8 +911,7 @@ csilk/
 │       │   ├── ws_frame.h         # WebSocket 帧解析
 │       │   ├── crypto_dispatch.h  # 加密/密码分发存根
 │       │   ├── mq_types.h         # 内部 MQ 数据结构
-│       │   ├── ctx_types.h        # csilk_ctx_s 结构布局
-│       │   └── srv_types.h        # csilk_server_s / csilk_client_s 布局
+│       │   └── ctx_types.h        # csilk_ctx_s 结构布局
 │       ├── drivers/
 │       │   ├── ai.h               # AI 驱动接口
 │       │   ├── db.h               # 数据库驱动接口
@@ -959,11 +958,6 @@ csilk/
 │   ├── app/                       # 轻量级应用包装
 │   │   ├── app.c
 │   │   └── group.c
-│   ├── data/                      # 数据库抽象
-│   │   ├── db.c                   # 池生命周期、查询/执行分发
-│   │   └── db_internal.h          # csilk_db_pool_s 私有结构
-│   ├── ai/                        # AI 统一接口
-│   │   └── ai.c
 │   ├── workflow/                  # AI 工作流引擎
 │   │   ├── wf_ai.c                # AI 聊天节点、内存助手、模板
 │   │   ├── wf_lifecycle.c         # 生命周期：创建、销毁、注册
@@ -976,9 +970,29 @@ csilk/
 │   ├── middleware/                # 内置中间件模块
 │   ├── protocols/                 # WebSocket、Swagger
 │   ├── drivers/                   # 驱动实现
+│   │   ├── ai/                    # AI 引擎 + OpenAI/Ollama 后端
+│   │   │   ├── ai.c
+│   │   │   ├── openai.c
+│   │   │   └── ollama.c
+│   │   ├── cipher/                # 密码驱动（OpenSSL）
+│   │   │   └── openssl.c
+│   │   ├── perm/                  # 权限驱动（管理器 + simple 后端）
+│   │   │   ├── perm.c
+│   │   │   └── simple.c
+│   │   ├── db/                    # 数据库抽象 + 后端
+│   │   │   ├── db.c               # 池生命周期、查询/执行分发
+│   │   │   ├── db_internal.h      # csilk_db_pool_s 私有结构
+│   │   │   ├── sqlite.c
+│   │   │   ├── mysql.c
+│   │   │   ├── postgres.c
+│   │   │   ├── redis.c
+│   │   │   └── mongodb.c
+│   │   └── vector/                # 向量数据库驱动
+│   │       ├── vector.c
+│   │       ├── qdrant.c
+│   │       └── milvus.c
 │   ├── messaging/                 # 消息队列
 │   ├── reflection/                # 运行时类型反射
-│   ├── security/                  # 权限系统
 │   └── util/                      # 实用模块
 ├── tests/                         # 单元/集成/模糊测试
 ├── examples/                      # 示例应用程序

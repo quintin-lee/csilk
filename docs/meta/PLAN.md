@@ -262,13 +262,13 @@
 ### P3 — 代码质量
 - [x] **P3-1: on_message_complete 函数过长（165 行）** — `src/core/server.c:225-390`
   已拆分为多个辅助函数提升可读性。
-- [x] **P3-2: advanced_server.c 未释放 group** — `examples/advanced_server.c:125-132`
+- [x] **P3-2: advanced_server.c 未释放 group** — `examples/advanced/advanced_server.c:125-132`
 - [x] **P3-3: 查询参数未做 URL 解码** — `src/core/url.c:35-86`
   %48%65%6C%6C%6F 不会被解码为 "Hello"。已实现 URL 解码。
 - [x] **P3-4: test_main.c 死代码** — `tests/test_main.c` 未在 CMakeLists.txt 引用。已清理。
 - [x] **P3-5: 测试使用假指针 (void*)0x1** — `tests/test_ip.c:31`
   已在 `test_gzip.c` 等文件中改为使用真实变量地址的 Mock 方式。
-- [x] **P3-6: example_server.c 中冗余赋值** — `examples/example_server.c:284`
+- [x] **P3-6: example_server.c 中冗余赋值** — `examples/basic/example_server.c:284`
 - [x] **P3-7: SHA1 count[0] 在超大消息时回绕** — `src/core/utils.c:71`
 - [x] **P3-8: SHA1 使用 uint32_t len 限制更新大小** — `src/core/utils.c:68`
 
@@ -525,7 +525,7 @@
 |---|---|---|
 | **0** | C23 + 版本 0.3.0 + 常量化 | `CMAKE_C_STANDARD 23`; 版本号全局同步 (18 处); `#define` → `static constexpr` (11 个常量); 删 `#include <stdbool.h>` (6 处) |
 | **1** | 拆分 `internal.h` (552 行 → 5 文件) | `hash.h` / `codec.h` / `ws_frame.h` / `crypto_dispatch.h` / `mq_types.h` |
-| **2** | 迁移内部头文件至 `include/csilk/core/` | `context_internal.h` → `ctx_types.h`; `server_internal.h` → `srv_types.h`; 修复相对 include 路径 |
+| **2** | 迁移内部头文件至 `include/csilk/core/` | `context_internal.h` → `ctx_types.h`; `server_internal.h` → `srv_internal.h`; 修复相对 include 路径 |
 | **3** | 拆分 `server.c` (2600 行 → 4 文件) | `server.c` (生命周期) / `connection.c` / `http1.c` / `tls.c` |
 | **4** | 拆分 `context.c` (1761 行 → 2 文件) | `context.c` (请求读取) / `response.c` (响应写入) |
 | **5** | 拆分 `workflow.c` + 移动 `admin.c` | `src/workflow/engine.c` / `steps.c` / `parallel.c`; `admin.c` → `src/core/` |
