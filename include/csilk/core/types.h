@@ -43,16 +43,22 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
  * @brief Maximum number of URL path parameters that can be extracted from a
  * single request.  Parameters beyond this limit are silently ignored.
  * Tune if your routes contain more than 20 dynamic segments.
+ * Overridable via CMake -DCSILK_MAX_PARAMS=<N> or by defining before include.
  */
-enum { CSILK_MAX_PARAMS = 20 };
+#ifndef CSILK_MAX_PARAMS
+#define CSILK_MAX_PARAMS 20
+#endif
 
 /**
  * @brief Maximum number of items that can be stored in the context key-value storage.
  *
  * This limit prevents uncontrolled memory consumption in the request arena
  * by preventing a single request from setting an excessive number of keys.
+ * Overridable via CMake -DCSILK_MAX_STORAGE=<N> or by defining before include.
  */
-enum { CSILK_MAX_STORAGE = 64 };
+#ifndef CSILK_MAX_STORAGE
+#define CSILK_MAX_STORAGE 64
+#endif
 
 /**
  * @brief Opaque request context type.

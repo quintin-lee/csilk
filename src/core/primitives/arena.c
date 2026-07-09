@@ -36,9 +36,7 @@
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
 
-/** @brief Maximum number of chunks to keep in the thread-local free list.
- * This limit prevents unbounded memory growth in long-running threads. */
-enum { MAX_TLS_ARENA_CHUNKS = 16 };
+/* MAX_TLS_ARENA_CHUNKS is now CSILK_MAX_TLS_CHUNKS (from srv_internal.h or CMake) */
 
 /** @brief A single chunk in the arena linked list.
  *
@@ -430,7 +428,7 @@ csilk_arena_free(csilk_arena_t* arena)
 
         /* Return standard-sized chunks to the thread-local free list if there is
         room. This speeds up subsequent allocations on the same thread. */
-        if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
+        if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
             curr->next = tls_chunk_free_list;
             curr->used = 0;
             tls_chunk_free_list = curr;
