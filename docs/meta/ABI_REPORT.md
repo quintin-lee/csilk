@@ -7,7 +7,7 @@
 **Status: COMPLETE** — The opaque type conversion has been fully implemented as of v0.3.0.
 
 Internal struct definitions (`csilk_ctx_s`, `csilk_client_t`, `csilk_server_s`) have been
-moved from `include/csilk/core/` to `src/core/` (`ctx_types.h`, `srv_impl.h`, `srv_types.h`).
+moved from `include/csilk/core/` to `src/core/` (`ctx_types.h`, `srv_impl.h`, `srv_internal.h`).
 All non-framework code accesses context state exclusively through the public accessor API.
 
 ---
@@ -22,7 +22,7 @@ typedef struct csilk_ctx_s csilk_ctx_t;  // include/csilk/types.h — opaque han
 ### Internal Definitions (hidden from public include/)
 ```
 src/core/ctx_types.h    — csilk_ctx_s layout (30+ fields)
-src/core/srv_types.h    — csilk_server_s layout
+src/core/internal/srv_internal.h    — csilk_server_s layout
 src/core/internal/srv_impl.h     — Internal server implementation details
 ```
 

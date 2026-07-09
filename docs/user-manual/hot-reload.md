@@ -54,7 +54,7 @@ csilk_app_init(void) {
 编译为共享库：
 
 ```bash
-gcc -shared -fPIC -o libhot_app.so examples/hot_reload_app.c \
+gcc -shared -fPIC -o libhot_app.so examples/advanced/hot_reload_app.c \
     -Iinclude -Lbuild -lcsilk
 ```
 
@@ -104,7 +104,7 @@ mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j$(nproc)
 
 # 2. 编译可热重载模块
 cd ..
-gcc -shared -fPIC -o libhot_app.so examples/hot_reload_app.c \
+gcc -shared -fPIC -o libhot_app.so examples/advanced/hot_reload_app.c \
     -Iinclude -Lbuild -lcsilk
 
 # 3. 编译启动器
@@ -116,7 +116,7 @@ gcc -o dev_server main.c -Iinclude -Lbuild -lcsilk
 # 5. 在另一个终端编辑 hot_reload_app.c，修改处理器代码
 
 # 6. 重新编译模块
-gcc -shared -fPIC -o libhot_app.so examples/hot_reload_app.c \
+gcc -shared -fPIC -o libhot_app.so examples/advanced/hot_reload_app.c \
     -Iinclude -Lbuild -lcsilk
 
 # 7. 服务器自动检测到 libhot_app.so 变化，热替换路由器
@@ -207,6 +207,6 @@ watch:
 
 | 文档 | 内容 |
 |:-----|:------|
-| [示例 — hot_reload_app.c](../../examples/hot_reload_app.c) | 可热重载模块示例 |
-| [示例 — hot_reload_launcher.c](../../examples/hot_reload_launcher.c) | 热重载启动器示例 |
+| [示例 — hot_reload_app.c](../../examples/advanced/hot_reload_app.c) | 可热重载模块示例 |
+| [示例 — hot_reload_launcher.c](../../examples/advanced/hot_reload_launcher.c) | 热重载启动器示例 |
 | [快速开始](../getting-started.md) | 构建 csilk 库的基础步骤 |
