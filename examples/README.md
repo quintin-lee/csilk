@@ -11,8 +11,7 @@ examples/
 ├── database/           # Database driver examples
 ├── websocket/          # WebSocket and real-time communication
 ├── ai/                 # AI integration and workflow examples
-├── advanced/           # Advanced features and integrations
-└── benchmark/          # Performance benchmarks
+└── advanced/           # Advanced features (TLS, hot-reload, custom drivers)
 ```
 
 ## Quick Start
@@ -84,7 +83,7 @@ cd build && cmake .. && make -j$(nproc)
 
 | Example | Path | Demonstrates |
 |---------|------|-------------|
-| [workflow_agent.py](workflow_agent.py) | `workflow_agent.py` | AI workflow agent in Python: multi-step research using the `csilk.workflow` module |
+| [workflow_agent.py](ai/workflow_agent.py) | `ai/workflow_agent.py` | AI workflow agent in Python: multi-step research using the `csilk.workflow` module |
 | [agent.yaml](ai/agent.yaml) | `ai/agent.yaml` | YAML workflow definition consumed by `workflow_agent.py` |
 
 ## Running Examples
@@ -101,10 +100,10 @@ cd build
 ./examples/websocket/example_ws_tls_mq   # WSS + MQ on :8443
 
 # Python example
-python3 examples/workflow_agent.py
+python3 examples/ai/workflow_agent.py
 ```
 
-> **Note**: TLS examples require certificate files. See [examples/advanced/example_tls.c](examples/advanced/example_tls.c) for details.
+> **Note**: TLS examples require certificate files. See [advanced/example_tls.c](advanced/example_tls.c) for details.
 > Hot-reload examples require manual compilation as shared libraries — see comments in the source files.
 
 ## CMake Build Targets
