@@ -166,7 +166,7 @@ int main() {
 
 ### 默认实现
 
-内置默认实现（`csilk_default_cipher_driver` 在 `src/crypto/cipher.c`）使用：
+内置默认实现（`csilk_default_cipher_driver` 在 `src/drivers/cipher/openssl.c`）使用：
 
 - **OpenSSL EVP API** 进行所有算法
 - **AES-256-GCM** 通过 `EVP_aes_256_gcm()`
