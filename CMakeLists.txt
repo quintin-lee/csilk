@@ -306,9 +306,10 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
   @ONLY
 )
+# Generate Python _version.py for distribution (single version source)
 configure_file(
-  include/csilk/version.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
+  python/csilk/_version.py.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/python/csilk/_version.py
   @ONLY
 )
 
@@ -419,176 +420,124 @@ message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 # Option to also build as shared library
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
 
-# Build static library
-add_library(csilk STATIC ${CSILK_SOURCES})
-set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# ── Configurable compile-time constants ──────────────────────────────────
+# Users can override on the cmake command line, e.g. -DCSILK_HEADER_BUCKETS=128
+set(CSILK_HEADER_BUCKETS 64  CACHE STRING "Header hash-table bucket count")
+set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request")
+set(CSILK_MAX_STORAGE    64  CACHE STRING "Max context key-value storage entries")
+set(CSILK_DEFAULT_ARENA_SIZE 4096 CACHE STRING "Default arena chunk size in bytes")
+set(CSILK_ARENA_TIER_COUNT 3   CACHE STRING "Number of arena chunk size tiers")
+set(CSILK_MAX_TLS_CHUNKS  8   CACHE STRING "Max cached arena chunks per tier")
 
-# Optimization flags per-configuration via generator expressions
+# ── Helper function: apply common compile/link/profile to a target ────────
+# Usage: csilk_target_setup(csilk PUBLIC  STATIC)
+#        csilk_target_setup(csilk_shared PUBLIC SHARED)
+function(csilk_target_setup TARGET VISIBILITY TYPE)
+  target_compile_options(${TARGET} PRIVATE
+      "${CSILK_COMMON_FLAGS}"
+      "${CSILK_RELEASE_FLAGS}"
+      "${CSILK_DEBUG_FLAGS}"
+      "${CSILK_AVX2_FLAGS}"
+      "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
+      "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
+  )
+  target_compile_definitions(${TARGET} PRIVATE
+      CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
+      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+      "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
+      "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
+      # Configurable compile-time constants (from CMake cache)
+      "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
+      "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
+      "CSILK_MAX_STORAGE=${CSILK_MAX_STORAGE}"
+      "CSILK_DEFAULT_ARENA_SIZE=${CSILK_DEFAULT_ARENA_SIZE}"
+      "CSILK_ARENA_TIER_COUNT=${CSILK_ARENA_TIER_COUNT}"
+      "CSILK_MAX_TLS_CHUNKS=${CSILK_MAX_TLS_CHUNKS}"
+  )
+  target_compile_definitions(${TARGET} PUBLIC
+      "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
+  )
+  target_link_options(${TARGET} PUBLIC
+      "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
+      "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
+  )
+
+  # gc-sections in Release removes dead code
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
+    target_link_options(${TARGET} PRIVATE
+        "$<$<CONFIG:Release>:-Wl,--gc-sections>"
+    )
+  endif()
+
+  # Version-script only for shared library
+  if(TYPE STREQUAL "SHARED")
+    if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
+        target_link_options(${TARGET} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/libcsilk.map")
+    endif()
+  endif()
+
+  set_target_properties(${TARGET} PROPERTIES
+      PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
+      VERSION "${CSILK_VERSION}"
+      SOVERSION "${CSILK_VERSION_MAJOR}"
+      OUTPUT_NAME csilk
+      INTERFACE_COMPILE_FEATURES c_std_23
+  )
+
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    set_target_properties(${TARGET} PROPERTIES
+        INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
+    )
+  endif()
+
+  # Common link libraries
+  if(CSILK_USE_URING)
+    target_link_libraries(${TARGET} PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+    if(NOT APPLE)
+      target_compile_options(${TARGET} PUBLIC "-D_GNU_SOURCE")
+    endif()
+  else()
+    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+  endif()
+
+  # Optional DB client libraries
+  foreach(DB_LIB MYSQL_LIB PQ_LIB HIREDIS_LIB)
+    if(${DB_LIB})
+      target_link_libraries(${TARGET} PRIVATE ${${DB_LIB}})
+    endif()
+  endforeach()
+
+  target_include_directories(${TARGET} PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<INSTALL_INTERFACE:include>
+      $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
+  )
+
+  # Precompiled Headers
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
+      target_precompile_headers(${TARGET} PRIVATE
+          <stdio.h> <stdlib.h> <string.h> <stdint.h> <time.h> <errno.h>
+      )
+  endif()
+endfunction()
+
+# ── csilk static library ─────────────────────────────────────────────────
 set(CSILK_AVX2_FLAGS "")
 if(CSILK_HAS_AVX2)
   set(CSILK_AVX2_FLAGS "-mavx2;-D__AVX2__")
 endif()
 
-target_compile_options(csilk PRIVATE
-    "${CSILK_COMMON_FLAGS}"
-    "${CSILK_RELEASE_FLAGS}"
-    "${CSILK_DEBUG_FLAGS}"
-    "${CSILK_AVX2_FLAGS}"
-    "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
-    "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
-)
-target_compile_definitions(csilk PRIVATE
-    CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-    "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
-    "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
-    "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
-    "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-    "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
-    "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
-)
-target_compile_definitions(csilk PUBLIC
-    "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
-)
+add_library(csilk STATIC ${CSILK_SOURCES})
+set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
+csilk_target_setup(csilk PUBLIC STATIC)
 
-target_link_options(csilk PUBLIC
-    "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
-    "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
-)
-
-# Linker flags: gc-sections in Release removes dead code
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
-  target_link_options(csilk PRIVATE
-      "$<$<CONFIG:Release>:-Wl,--gc-sections>"
-  )
-endif()
-
-# Linker flags need per-target scope too (Release LTO via generator expression)
-set_target_properties(csilk PROPERTIES
-    PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-    VERSION "${CSILK_VERSION}"
-    SOVERSION "${CSILK_VERSION_MAJOR}"
-    OUTPUT_NAME csilk
-    INTERFACE_COMPILE_FEATURES c_std_23
-)
-
-if(CSILK_USE_URING)
-  target_link_libraries(csilk PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
-  if(NOT APPLE)
-    target_compile_options(csilk PUBLIC "-D_GNU_SOURCE")
-  endif()
-else()
-  target_link_libraries(csilk PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
-endif()
-if(MYSQL_LIB)
-  target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
-endif()
-if(PQ_LIB)
-  target_link_libraries(csilk PRIVATE ${PQ_LIB})
-endif()
-if(HIREDIS_LIB)
-  target_link_libraries(csilk PRIVATE ${HIREDIS_LIB})
-endif()
-target_include_directories(csilk PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
-)
-
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-  set_target_properties(csilk PROPERTIES
-      INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
-  )
-endif()
-if(MYSQL_LIB)
-  target_link_libraries(csilk PRIVATE ${MYSQL_LIB})
-endif()
-if(PQ_LIB)
-  target_link_libraries(csilk PRIVATE ${PQ_LIB})
-endif()
-if(HIREDIS_LIB)
-  target_link_libraries(csilk PRIVATE ${HIREDIS_LIB})
-endif()
-
-# Precompiled Headers (PCH) — accelerate builds by pre-including stable headers
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-    target_precompile_headers(csilk PRIVATE
-        <stdio.h>
-        <stdlib.h>
-        <string.h>
-        <stdint.h>
-        <time.h>
-        <errno.h>
-    )
-endif()
-
-# Build shared library if requested
+# ── csilk shared library (optional) ──────────────────────────────────────
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
-    target_link_libraries(csilk_shared PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
-    if(MYSQL_LIB)
-      target_link_libraries(csilk_shared PRIVATE ${MYSQL_LIB})
-    endif()
-    if(PQ_LIB)
-      target_link_libraries(csilk_shared PRIVATE ${PQ_LIB})
-    endif()
-    if(HIREDIS_LIB)
-      target_link_libraries(csilk_shared PRIVATE ${HIREDIS_LIB})
-    endif()
-    target_include_directories(csilk_shared PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-        $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
-    )
-    target_compile_options(csilk_shared PRIVATE
-        "${CSILK_COMMON_FLAGS}"
-        "${CSILK_RELEASE_FLAGS}"
-        "${CSILK_DEBUG_FLAGS}"
-        "${CSILK_AVX2_FLAGS}"
-        "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
-    )
-    target_compile_definitions(csilk_shared PRIVATE
-        CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-        "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
-        "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
-        "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
-        "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
-        "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-        "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
-        "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
-    )
-    target_compile_options(csilk_shared PRIVATE
-        "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
-        "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
-    )
-    set_target_properties(csilk_shared PROPERTIES
-        PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
-        VERSION "${CSILK_VERSION}"
-        SOVERSION "${CSILK_VERSION_MAJOR}"
-        OUTPUT_NAME csilk
-        INTERFACE_COMPILE_FEATURES c_std_23
-        INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
-    )
-    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-        target_precompile_headers(csilk_shared PRIVATE
-            <stdio.h>
-            <stdlib.h>
-            <string.h>
-            <stdint.h>
-            <time.h>
-            <errno.h>
-        )
-    endif()
-    target_link_options(csilk_shared PRIVATE
-        "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
-    )
-    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
-        target_link_options(csilk_shared PRIVATE
-            "$<$<CONFIG:Release>:-Wl,--gc-sections>"
-        )
-    endif()
-    if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
-        target_link_options(csilk_shared PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/libcsilk.map")
-    endif()
+    csilk_target_setup(csilk_shared PUBLIC SHARED)
     message(STATUS "Shared library build enabled: libcsilk.so")
 endif()
 

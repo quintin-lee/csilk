@@ -90,9 +90,17 @@ class CMakeBuild(build_ext):
         sys.stderr.flush()
         result2.check_returncode()
 
+# Read version from CMake-generated version file (single source of truth)
+_version_py = os.path.join(os.path.dirname(__file__), "python", "csilk", "_version.py")
+if os.path.exists(_version_py):
+    with open(_version_py) as f:
+        __version__ = f.read().split("=")[1].strip().strip('"')
+else:
+    __version__ = "0.0.0"
+
 setup(
     name="csilk",
-    version="0.5.0",
+    version=__version__,
     author="csilk contributors",
     description="High-performance asynchronous web framework in C and Python.",
     long_description=open("README.md", encoding="utf-8").read(),
