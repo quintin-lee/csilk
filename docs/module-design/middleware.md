@@ -1,6 +1,6 @@
 # Middleware Design Overview
 
-csilk ships with 16 built-in middleware handlers covering authentication, security, observability, performance, and developer experience — all with **~0 allocs per request** on the hot path (headers parsed via zero-copy string views into the per-request arena). Middleware **MUST NOT** block the event loop; long-running operations **SHOULD** use the deferred work API or offload to worker threads. Each middleware **MAY** access and modify the request context (`csilk_ctx_t`) through the opaque API (`csilk_get`/`csilk_set`/`csilk_string`). The table below lists all middleware handlers exposed through `csilk/middleware.h`:
+csilk ships with 15 built-in middleware handlers covering authentication, security, observability, performance, and developer experience — all with **~0 allocs per request** on the hot path (headers parsed via zero-copy string views into the per-request arena). Middleware **MUST NOT** block the event loop; long-running operations **SHOULD** use the deferred work API or offload to worker threads. Each middleware **MAY** access and modify the request context (`csilk_ctx_t`) through the opaque API (`csilk_get`/`csilk_set`/`csilk_string`). The table below lists all middleware handlers exposed through `csilk/middleware.h`:
 
 | Middleware | File | Description |
 |-----------|------|-------------|

@@ -319,7 +319,7 @@ csilk_db_pool_free(db);
 | `src/drivers/redis.c` | Redis driver + storage driver (conditional) |
 | `src/drivers/vector/vector.c` | Vector DB plug-in system (separate registry) |
 | `include/csilk/drivers/vector.h` | Vector DB public API |
-| `examples/example_custom_driver.c` | Custom driver registration example + test |
+| `examples/advanced/example_custom_driver.c` | Custom driver registration example + test |
 | `python/csilk/db.py` | Python ctypes bindings for the DB layer |
 
 ---

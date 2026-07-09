@@ -18,7 +18,7 @@ csilk 核心子系统的深度架构文档。
 | 文档 | 焦点 |
 |------|------|
 | [App Layer](app.md) | `csilk_app_t` 外观、启动序列、路由组匹配、管理后台、工作流引擎 |
-| [Middleware](middleware.md) | 洋葱模型、链组装、16 个内置中间件模块 |
+| [Middleware](middleware.md) | 洋葱模型、链组装、15 个内置中间件模块 |
 
 ## 协议与消息
 

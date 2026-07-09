@@ -269,14 +269,16 @@ src/
    ├── core/           # 内核（libuv/io_uring TCP、Router、Arena、Logger、Config）
    │   └── uring/      # io_uring 后端（仅 Linux，可选）
    ├── app/            # 应用层（app、admin dashboard、workflow engine）
-   ├── ai/             # AI 统一接口引擎
-   ├── data/           # 数据库抽象层
-   │   └── drivers/    # 具体数据库驱动（SQLite、MySQL、PostgreSQL、MongoDB、Redis）
+   ├── drivers/        # 驱动实现
+   │   ├── ai/         # AI 引擎 + OpenAI/Ollama 后端
+   │   ├── cipher/     # 密码驱动（OpenSSL）
+   │   ├── perm/       # 权限驱动（管理器 + simple 后端）
+   │   ├── db/         # 数据库抽象 + 后端（SQLite、MySQL、PG、Mongo、Redis）
+   │   └── vector/     # 向量数据库驱动（Qdrant、Milvus）
    ├── messaging/      # 内部事件总线（消息队列）
-   ├── security/       # 权限与安全内核
    ├── reflection/     # 反射引擎实现
    ├── protocols/      # 协议扩展（WebSocket、Swagger）
-   └── middleware/     # 16 个内置中间件模块
+   └── middleware/     # 15 个内置中间件模块
 
 include/csilk/        # 公共分层头文件
   ├── core/           # 核心内部定义

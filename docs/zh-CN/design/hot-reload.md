@@ -143,4 +143,4 @@ typedef struct {
 | [用户手册 — 热重载](../user-manual/hot-reload.md) | 使用指南、开发工作流、Makefile |
 | [模块设计 — 服务器](../module-design/server.md) | 服务器生命周期中的路由交换机制 |
 | [源码 — hot_reload.c](../../src/core/hot_reload.c) | 实现 |
-| [示例 — hot_reload_app.c](../../examples/hot_reload_app.c) | 可热重载模块模板 |
+| [示例 — hot_reload_app.c](../../examples/advanced/hot_reload_app.c) | 可热重载模块模板 |

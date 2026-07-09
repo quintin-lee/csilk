@@ -379,4 +379,4 @@ int main() {
 |:-----|:------|
 | [模块设计 — Reflection 引擎](../../docs/module-design/reflection.md) | Reflection 内部实现、类型注册、懒加载 |
 | [配置指南 — OpenAPI](./configuration.md) | OpenAPI 文档生成相关配置 |
-| [示例程序](../../examples/example_app.c) | 含 Reflection 使用的完整应用示例 |
+| [示例程序](../../examples/basic/example_app.c) | 含 Reflection 使用的完整应用示例 |

@@ -295,7 +295,7 @@ Deep-dive architectural documentation for each core subsystem is available under
 | Router | [router.md](docs/module-design/router.md) | Radix tree (Patricia trie), SIMD-accelerated matching, param extraction |
 | Context | [context.md](docs/module-design/context.md) | Request/response lifecycle, arena allocator, deferred cleanup |
 | Arena | [arena.md](docs/module-design/arena.md) | Bump allocator, zero-copy headers, SIMD memcpy |
-| Middleware | [middleware.md](docs/module-design/middleware.md) | Onion model, chain assembly, 16 built-in middleware modules |
+| Middleware | [middleware.md](docs/module-design/middleware.md) | Onion model, chain assembly, 15 built-in middleware modules |
 | Data | [data.md](docs/module-design/data.md) | DB abstraction, pluggable drivers, connection pool, cJSON results |
 | Messaging | [messaging.md](docs/module-design/messaging.md) | Event bus, pub/sub, uv_async_t dispatch, WAL persistence |
 | Security | [security.md](docs/module-design/security.md) | RBAC, JWT, CSRF, CORS, WAF, rate limiter |
@@ -315,7 +315,7 @@ Deep-dive architectural documentation for each core subsystem is available under
 | `include/csilk/` (public API hierarchy) | Fully documented |
 | `src/core/` (kernel implementation) | Fully documented |
 | `src/app/` (app layer) | Fully documented |
-| `src/ai/`, `src/data/`, `src/security/` | Fully documented |
+| `src/drivers/ai/`, `src/drivers/db/`, `src/drivers/perm/` | Fully documented |
 | `src/middleware/` (middleware) | Fully documented |
 | `src/drivers/` (driver implementations) | Fully documented |
 | `examples/` (example code) | Fully documented |
@@ -442,14 +442,16 @@ src/
    ├── core/           # Kernel (libuv/io_uring TCP, Router, Arena, Logger, Config)
    │   └── uring/      # io_uring backend (Linux-only, optional)
    ├── app/            # Application Layer (app, admin dashboard, workflow engine)
-   ├── ai/             # AI Unified Interface Engine
-   ├── data/           # Database Abstraction Layer
-   │   └── drivers/    # Concrete DB Drivers (SQLite, MySQL, PostgreSQL, MongoDB, Redis)
+   ├── drivers/        # Driver implementations
+   │   ├── ai/         # AI engine + OpenAI/Ollama backends
+   │   ├── cipher/     # Cipher driver (OpenSSL)
+   │   ├── perm/       # Permission driver (manager + simple backend)
+   │   ├── db/         # Database abstraction + backends (SQLite, MySQL, PG, Mongo, Redis)
+   │   └── vector/     # Vector DB drivers (Qdrant, Milvus)
    ├── messaging/      # Internal Event Bus (Message Queue)
-   ├── security/       # Permission & Security Core
    ├── reflection/     # Reflection Engine implementation
    ├── protocols/      # Protocol Extensions (WebSocket, Swagger)
-   └── middleware/     # 16 built-in middleware modules
+   └── middleware/     # 15 built-in middleware modules
 
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions

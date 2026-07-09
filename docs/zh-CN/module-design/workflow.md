@@ -396,4 +396,4 @@ csilk_wf_t* wf = csilk_wf_load_yaml("workflow.yaml");
 | `src/app/workflow_loader.c` | 声明式加载器 (268 行) |
 | `tests/workflow/test_workflow_agentic.c` | 代理循环测试 |
 | `tests/workflow/test_workflow_monitor.c` | 监控集成测试 |
-| `examples/example_ai_workflow.c` | 完整工作流示例 |
+| `examples/ai/example_ai_workflow.c` | 完整工作流示例 |
