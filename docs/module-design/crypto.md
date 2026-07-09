@@ -166,7 +166,7 @@ int main() {
 
 ### Default Implementation
 
-The built-in default (`csilk_default_cipher_driver` in `src/crypto/cipher.c`) uses:
+The built-in default (`csilk_default_cipher_driver` in `src/drivers/cipher/openssl.c`) uses:
 
 - **OpenSSL EVP API** for all algorithms
 - **AES-256-GCM** via `EVP_aes_256_gcm()`
