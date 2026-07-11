@@ -1,0 +1,9 @@
+server:
+  port: 8080
+  workers: 4
+logger:
+  level: info
+cors:
+  enabled: true
+  origins:
+    - "*"

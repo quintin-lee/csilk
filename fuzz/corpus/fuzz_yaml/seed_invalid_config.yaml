@@ -1,0 +1,6 @@
+server:
+  port: not_a_number
+  workers: -1
+rate_limit:
+  rate: 0
+  burst: -5
