@@ -392,26 +392,34 @@ endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-# Find system libyaml (>= 0.2.0)
-find_library(YAML_LIB NAMES yaml libyaml REQUIRED)
-if(NOT YAML_LIB)
-  message(FATAL_ERROR "libyaml library not found. Install libyaml-dev (>= 0.2.0)")
+# Find system libyaml (>= 0.2.0) — prefer pkg-config, fallback to find_library
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(YAML QUIET yaml>=0.2.0)
 endif()
-message(STATUS "Found libyaml: ${YAML_LIB}")
+if(NOT YAML_FOUND)
+  find_library(YAML_LIB NAMES yaml libyaml)
+  find_path(YAML_INCLUDE_DIR yaml.h PATH_SUFFIXES yaml)
+  if(YAML_LIB AND YAML_INCLUDE_DIR)
+    set(YAML_FOUND TRUE)
+    set(YAML_LIBRARIES ${YAML_LIB})
+    set(YAML_INCLUDE_DIRS ${YAML_INCLUDE_DIR})
+  endif()
+endif()
+if(NOT YAML_FOUND)
+  message(FATAL_ERROR "libyaml >= 0.2.0 not found. Install libyaml-dev.\n"
+    "  Debian/Ubuntu: sudo apt install libyaml-dev\n"
+    "  macOS: brew install libyaml")
+endif()
+message(STATUS "Found libyaml: ${YAML_LIBRARIES}")
 
 # Find system zlib (>= 1.2.0)
-find_library(ZLIB_LIB NAMES z libz REQUIRED)
-if(NOT ZLIB_LIB)
-  message(FATAL_ERROR "zlib library not found. Install zlib1g-dev (>= 1.2.0)")
-endif()
-message(STATUS "Found zlib: ${ZLIB_LIB}")
+find_package(ZLIB 1.2 REQUIRED)
+message(STATUS "Found zlib: ${ZLIB_VERSION_STRING}")
 
 # Find system sqlite3 (>= 3.20.0)
-find_library(SQLITE3_LIB NAMES sqlite3 REQUIRED)
-if(NOT SQLITE3_LIB)
-  message(FATAL_ERROR "sqlite3 library not found. Install libsqlite3-dev (>= 3.20.0)")
-endif()
-message(STATUS "Found sqlite3: ${SQLITE3_LIB}")
+find_package(SQLite3 3.20 REQUIRED)
+message(STATUS "Found sqlite3: ${SQLite3_VERSION}")
 
 # Find OpenSSL (>= 1.1.1 for TLS 1.3)
 find_package(OpenSSL 1.1.1 REQUIRED)
@@ -495,12 +503,12 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
 
   # Common link libraries
   if(CSILK_USE_URING)
-    target_link_libraries(${TARGET} PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+    target_link_libraries(${TARGET} PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
     if(NOT APPLE)
       target_compile_options(${TARGET} PUBLIC "-D_GNU_SOURCE")
     endif()
   else()
-    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLITE3_LIB} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIB} ${ZLIB_LIB} nghttp2)
+    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
   endif()
 
   # Optional DB client libraries
@@ -587,6 +595,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
       target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
       target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
       target_link_libraries(fuzz_url csilk)
+
+      add_executable(fuzz_headers fuzz/fuzz_headers.c)
+      target_compile_options(fuzz_headers PRIVATE -fsanitize=fuzzer -std=c23)
+      target_link_options(fuzz_headers PRIVATE -fsanitize=fuzzer)
+      target_link_libraries(fuzz_headers csilk)
   endif()
 
 # Examples
@@ -713,23 +726,18 @@ install(EXPORT csilk-targets
 # or install csilk and use find_package instead.
 # export(EXPORT csilk-targets FILE "${CMAKE_BINARY_DIR}/cmake/csilk-config.cmake" NAMESPACE csilk::)
 
-# clang-tidy
+# clang-tidy — reads checks/warnings from .clang-tidy at project root
 find_program(CLANG_TIDY_EXECUTABLE clang-tidy)
 if(CLANG_TIDY_EXECUTABLE)
-    set(CSILK_TIDY_CHECKS "clang-analyzer-*,performance-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-performance-no-int-to-ptr")
     add_custom_target(tidy
         COMMAND ${CLANG_TIDY_EXECUTABLE}
             --quiet
-            --checks=-*,${CSILK_TIDY_CHECKS}
             --warnings-as-errors="*"
             --extra-arg=-Wno-everything
+            -p ${CMAKE_CURRENT_BINARY_DIR}
             ${CSILK_SOURCES}
-            -- -I${CMAKE_CURRENT_SOURCE_DIR}/include
-            -I${CMAKE_CURRENT_BINARY_DIR}
-            -I${cjson_SOURCE_DIR}
-            -I${cjson_BINARY_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Running clang-tidy on source files"
+        COMMENT "Running clang-tidy on source files (using .clang-tidy config)"
     )
     message(STATUS "Found clang-tidy: ${CLANG_TIDY_EXECUTABLE}")
 else()
