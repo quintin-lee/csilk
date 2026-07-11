@@ -13,7 +13,6 @@
 
 #include "ctx_internal.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /** @brief Register a cleanup function to run on panic.
  *

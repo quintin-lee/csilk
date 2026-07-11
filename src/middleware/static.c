@@ -11,9 +11,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <csilk/core/sys_io.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
 

@@ -7,7 +7,6 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /**
  * @brief Request ID middleware handler.

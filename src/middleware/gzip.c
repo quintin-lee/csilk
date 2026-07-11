@@ -10,7 +10,6 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
 

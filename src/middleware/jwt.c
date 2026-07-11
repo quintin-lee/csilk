@@ -10,7 +10,6 @@
 #include <time.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/crypto.h"
 
 /**
