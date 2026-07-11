@@ -15,6 +15,7 @@
 #define CSILK_CONTEXT_H
 
 #include "csilk/core/types.h"
+#include "csilk/core/crypto.h"
 #include "csilk/drivers/cipher.h"
 
 /**
