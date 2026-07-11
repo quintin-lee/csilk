@@ -16,7 +16,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/csilk.h"
+#include "cJSON.h"
+
+/* Forward declarations — avoids pulling the entire public API via csilk.h.
+   types.h defines csilk_storage_driver_t which this header needs. */
+#include "csilk/core/types.h"
 
 /**
  * @brief Database statistics.

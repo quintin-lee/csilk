@@ -10,6 +10,9 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 
+/** @brief Maximum workflow steps per definition. */
+enum { MAX_WORKFLOW_STEPS = 1000 };
+
 /* --- Active Context Management --- */
 
 /**

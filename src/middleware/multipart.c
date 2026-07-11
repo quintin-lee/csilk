@@ -11,6 +11,13 @@
 
 #include "csilk/core/internal.h"
 
+/** @brief Maximum multipart form part headers. */
+enum { CSILK_MAX_PART_HEADERS = 32 };
+/** @brief Maximum multipart form part name length. */
+enum { CSILK_MAX_PART_NAME = 128 };
+/** @brief Maximum multipart form part filename length. */
+enum { CSILK_MAX_PART_FILENAME = 256 };
+
 /**
  * @brief Parse a multipart/form-data request body and invoke a handler for
  *        each part.

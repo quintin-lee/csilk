@@ -12,6 +12,9 @@
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 
+/** @brief Default session TTL in seconds. */
+enum { SESSION_TTL = 3600 };
+
 /**
  * @brief Session data item (key-value pair).
  *

@@ -29,16 +29,6 @@
 #define CSILK_INTERNAL
 #endif
 
-/* Forward declarations to break circular dependency:
-   csilk/drivers/db.h includes csilk.h, so types defined in db.h
-   must be forward-declared here before the include. */
-typedef struct csilk_db_pool_s csilk_db_pool_t;
-
-#include "csilk/drivers/ai.h"
-#include "csilk/drivers/cipher.h"
-#include "csilk/drivers/perm.h"
-#include "csilk/reflection/reflect.h"
-
 /**
  * @brief Maximum number of URL path parameters that can be extracted from a
  * single request.  Parameters beyond this limit are silently ignored.
@@ -350,10 +340,6 @@ typedef struct {
    *  @return 0 on success, -1 on failure. */
     int (*fill_random)(void* out, size_t len);
 } csilk_crypto_driver_t;
-
-/* Include db.h last — it pulls in csilk/csilk.h and must see all core
-   types already defined to avoid circular-definition errors. */
-#include "csilk/drivers/db.h"
 
 /**
  * @brief Zero-copy string view — references external memory without allocation.

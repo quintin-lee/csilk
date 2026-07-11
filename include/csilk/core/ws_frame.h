@@ -13,7 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/csilk.h"
+/* Forward declaration — avoids pulling the entire public API via csilk.h. */
+typedef struct csilk_ctx_s csilk_ctx_t;
 
 /**
  * @brief Parse an incoming WebSocket frame from the raw TCP stream.

@@ -45,6 +45,7 @@ if(CSILK_USE_URING)
         src/core/uring/uring_server.c
         src/core/uring/uring_connection.c
         src/core/uring/uring_thread_pool.c
+        src/core/uring/uring_fs.c
         src/core/uring/uv_stubs.c
     )
 else()

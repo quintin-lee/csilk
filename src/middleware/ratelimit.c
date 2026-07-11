@@ -13,6 +13,13 @@
 #include "csilk/core/internal.h"
 #include "../core/ctx/ctx_internal.h"
 
+/** @brief Maximum number of distinct IP addresses tracked concurrently. */
+enum { MAX_IP_ENTRIES = 1024 };
+/** @brief Rate limiting sliding window size in seconds. */
+enum { WINDOW_SIZE = 60 };
+/** @brief Interval at which ratelimit stale entries are garbage-collected. */
+enum { EVICT_INTERVAL = 300 };
+
 /**
 /**
  * @brief Rate-limit tracking entry for a single IP address.

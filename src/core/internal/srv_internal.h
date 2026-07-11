@@ -24,6 +24,7 @@ typedef struct bio_st     BIO;
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
+#include "csilk/drivers/cipher.h"
 #include "csilk/core/sync.h"
 #include "../primitives/lfqueue.h"
 #include "core/ctx/ctx_internal.h"

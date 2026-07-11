@@ -29,6 +29,9 @@
 
 #include "csilk/core/internal.h"
 
+/** @brief Initial capacity for group middleware array. */
+enum { CSILK_GROUP_MW_INIT_CAP = 4 };
+
 /** @brief Route group — holds a URL prefix, middleware chain, and optional
  * parent group for nesting.
  *

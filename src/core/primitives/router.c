@@ -60,6 +60,9 @@
 #include "../internal/srv_internal.h"
 #include "csilk/core/internal.h"
 
+/** @brief Maximum number of children per router tree node. */
+enum { CSILK_MAX_CHILDREN = 128 };
+
 /** @brief Node type for router trie.
  *
  * CSILK_NODE_STATIC  - Matches a literal path segment (e.g., "users").

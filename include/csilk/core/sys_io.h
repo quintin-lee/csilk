@@ -382,65 +382,13 @@ csilk_io_fs_fstat(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
     return req->result;
 }
 
-static inline int
-csilk_io_fs_sendfile(csilk_io_loop_t* loop,
-                     csilk_io_fs_t*   req,
-                     int              out_fd,
-                     int              in_fd,
-                     int64_t          in_offset,
-                     size_t           length,
-                     void*            cb)
-{
-#ifdef __linux__
-    if (length == 0) {
-        req->result = 0;
-        if (cb) {
-            void (*callback)(csilk_io_fs_t*) = (void (*)(csilk_io_fs_t*))cb;
-            callback(req);
-        }
-        return 0;
-    }
-
-    off_t     offset = in_offset;
-    ssize_t   total_sent = 0;
-    size_t    remaining = length;
-    int       retries = 0;
-    const int max_retries = 500;
-
-    while (remaining > 0 && retries < max_retries) {
-        req->result = sendfile(out_fd, in_fd, &offset, remaining);
-        if (req->result > 0) {
-            total_sent += req->result;
-            remaining -= (size_t)req->result;
-            retries = 0;
-        } else if (req->result == 0) {
-            /* Zero-length transfer; yield and retry */
-            usleep(100);
-            retries++;
-        } else {
-            /* EAGAIN/EWOULDBLOCK: socket buffer full, yield and retry */
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                usleep(100);
-                retries++;
-            } else {
-                break; /* real error */
-            }
-        }
-    }
-
-    req->result = total_sent;
-    if (total_sent > 0) {
-        if (cb) {
-            void (*callback)(csilk_io_fs_t*) = (void (*)(csilk_io_fs_t*))cb;
-            callback(req);
-        }
-        return 0;
-    }
-    return -1;
-#else
-    return -1;
-#endif
-}
+int csilk_io_fs_sendfile(csilk_io_loop_t* loop,
+                         csilk_io_fs_t*   req,
+                         int              out_fd,
+                         int              in_fd,
+                         int64_t          in_offset,
+                         size_t           length,
+                         void*            cb);
 
 #endif
 
