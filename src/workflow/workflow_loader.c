@@ -285,7 +285,8 @@ parse_yaml_file(const char* path)
     yaml_parser_set_input_file(&parser, fh);
 
     cJSON* root = nullptr;
-    cJSON* stack[64];
+    enum { WF_YAML_MAX_DEPTH = 64 };
+    cJSON* stack[WF_YAML_MAX_DEPTH] = {nullptr};
     int    stack_ptr = 0;
 
     // To handle mapping keys:
@@ -301,39 +302,47 @@ parse_yaml_file(const char* path)
 
         switch (event.type) {
         case YAML_MAPPING_START_EVENT: {
+            if (stack_ptr >= WF_YAML_MAX_DEPTH) {
+                CSILK_LOG_E("WorkflowLoader: YAML nesting too deep in file '%s'", path);
+                done = 1;
+                break;
+            }
             cJSON* obj = cJSON_CreateObject();
             if (!root) {
                 root = obj;
-                stack[stack_ptr++] = obj;
             } else {
-                cJSON* parent = stack[stack_ptr - 1];
-                if (cJSON_IsArray(parent)) {
+                cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                if (parent && cJSON_IsArray(parent)) {
                     cJSON_AddItemToArray(parent, obj);
-                } else if (cJSON_IsObject(parent) && current_key) {
+                } else if (parent && cJSON_IsObject(parent) && current_key) {
                     cJSON_AddItemToObject(parent, current_key, obj);
                     free(current_key);
                     current_key = nullptr;
                 }
-                stack[stack_ptr++] = obj;
             }
+            stack[stack_ptr++] = obj;
             break;
         }
         case YAML_SEQUENCE_START_EVENT: {
+            if (stack_ptr >= WF_YAML_MAX_DEPTH) {
+                CSILK_LOG_E("WorkflowLoader: YAML nesting too deep in file '%s'", path);
+                done = 1;
+                break;
+            }
             cJSON* arr = cJSON_CreateArray();
             if (!root) {
                 root = arr;
-                stack[stack_ptr++] = arr;
             } else {
-                cJSON* parent = stack[stack_ptr - 1];
-                if (cJSON_IsArray(parent)) {
+                cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                if (parent && cJSON_IsArray(parent)) {
                     cJSON_AddItemToArray(parent, arr);
-                } else if (cJSON_IsObject(parent) && current_key) {
+                } else if (parent && cJSON_IsObject(parent) && current_key) {
                     cJSON_AddItemToObject(parent, current_key, arr);
                     free(current_key);
                     current_key = nullptr;
                 }
-                stack[stack_ptr++] = arr;
             }
+            stack[stack_ptr++] = arr;
             break;
         }
         case YAML_SCALAR_EVENT: {

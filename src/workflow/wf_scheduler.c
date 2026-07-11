@@ -778,7 +778,7 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
     }
     int                  started = 0;
     static __thread char ret_exec_id[CSILK_UUID_BUF_SIZE];
-    strcpy(ret_exec_id, ctx->exec_id);
+    snprintf(ret_exec_id, sizeof(ret_exec_id), "%s", ctx->exec_id);
 
     atomic_fetch_add(&ctx->nodes_active, 1);
 
