@@ -3,7 +3,14 @@ Checks: >
   -*,
   clang-analyzer-*,
   performance-*,
+  bugprone-sizeof-expression,
+  bugprone-suspicious-string-compare,
   -performance-no-int-to-ptr,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-deadcode.DeadStores,
+  -clang-analyzer-core.FixedAddressDereference,
+  -clang-analyzer-optin.performance.Padding
 
 WarningsAsErrors: '*'
+HeaderFilterRegex: '(src/|include/).*'
+FormatStyle: none

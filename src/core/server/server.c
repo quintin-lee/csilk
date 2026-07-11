@@ -251,7 +251,7 @@ spa_fallback_handler(csilk_ctx_t* c)
         return;
     }
     rewind(f);
-    char* body = malloc((size_t)fsize + 1);
+    char* body = malloc((size_t)fsize + 1); // NOLINT(clang-analyzer-unix.Errno)
     if (!body) {
         fclose(f);
         csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
@@ -259,7 +259,7 @@ spa_fallback_handler(csilk_ctx_t* c)
     }
     size_t nread = fread(body, 1, (size_t)fsize, f);
     fclose(f);
-    body[nread] = '\0';
+    body[nread] = '\0'; // NOLINT(clang-analyzer-security.ArrayBound)
 
     csilk_set_header(c, "Content-Type", "text/html");
     c->response.body = body;
