@@ -173,13 +173,13 @@ jobs:
       run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers -j$(nproc)
 
     - name: Fuzz — fuzz_test (HTTP routing + query parsing)
-      run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_test
+      run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_test
 
     - name: Fuzz — fuzz_url (URL decoding)
-      run: cd build && ./fuzz_url -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_url
+      run: cd build && ./fuzz_url -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_url
 
     - name: Fuzz — fuzz_yaml (YAML config)
-      run: cd build && ./fuzz_yaml -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_yaml
+      run: cd build && ./fuzz_yaml -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_yaml
 
     - name: Fuzz — fuzz_headers (form parsing + headers)
       run: cd build && ./fuzz_headers -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict
@@ -192,6 +192,7 @@ jobs:
 
     - name: Install cross-compilation toolchain
       run: |
+        sudo dpkg --add-architecture arm64
         sudo apt-get update
         sudo apt-get install -y \
           cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
