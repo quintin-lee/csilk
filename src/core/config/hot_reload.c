@@ -4,7 +4,6 @@
  * @copyright MIT License
  */
 
-#include "csilk/csilk.h"
 #include "csilk/core/hot_reload.h"
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
@@ -12,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sys_io.h>
 
 #ifdef _WIN32
 #include <windows.h>

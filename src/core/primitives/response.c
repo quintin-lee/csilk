@@ -12,13 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <csilk/core/sys_io.h>
-
 #include "cJSON.h"
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "../primitives/header_map.h"

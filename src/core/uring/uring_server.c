@@ -145,8 +145,6 @@ on_stop_async(csilk_io_async_t* handle)
 
 /* --- Server creation --- */
 
-#include "csilk/reflection/reflect.h"
-
 csilk_server_t*
 csilk_server_new(csilk_router_t* router)
 {

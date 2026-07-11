@@ -6,7 +6,6 @@
 #include "cJSON.h"
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
 #include "mq_internal.h"

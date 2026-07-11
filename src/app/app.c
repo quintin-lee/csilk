@@ -37,7 +37,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
