@@ -229,7 +229,7 @@ jobs:
       run: cmake --build build_arm64 -j$(nproc)
 
     - name: Verify binary architecture
-      run: 'file build_arm64/libcsilk.a | grep -q ARM || (echo "ERROR: binary is not ARM64" && exit 1)'
+      run: 'readelf -h build_arm64/libcsilk.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)'
 
   io_uring:
     name: io_uring compatibility
