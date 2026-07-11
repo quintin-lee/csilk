@@ -14,9 +14,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <csilk/core/sys_io.h>
-
-#include "csilk/csilk.h"
+#include "csilk/messaging/mq.h"
 #include "csilk/core/sys_io.h"
 #include "csilk/core/sync.h"
 

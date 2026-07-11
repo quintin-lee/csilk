@@ -8,7 +8,7 @@
 #ifndef CSILK_HOT_RELOAD_H
 #define CSILK_HOT_RELOAD_H
 
-#include "csilk/csilk.h"
+typedef struct csilk_server_s csilk_server_t;
 
 /**
  * @brief Initialize and start watching a shared library for hot-reloading.
