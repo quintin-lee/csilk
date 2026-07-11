@@ -51,9 +51,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <csilk/core/sys_io.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 

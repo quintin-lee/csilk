@@ -9,7 +9,6 @@
 
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /**
  * @brief Panic recovery middleware — catches panics and returns 500.

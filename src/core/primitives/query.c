@@ -15,7 +15,6 @@
 #include "../ctx/ctx_internal.h"
 #include "../primitives/header_map.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /* Forward declaration */
 static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map);
