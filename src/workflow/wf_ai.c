@@ -796,17 +796,6 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
     return out;
 }
 
-/**
- * @brief Adds a built-in AI Chat node to the workflow.
- *
- * Creates a duplicate of the AI configuration structure and registers a node with the
- * built-in ai_node_handler. Sets the destructor to automatically clean up the configuration.
- *
- * @param wf     The workflow definition instance.
- * @param id     A unique identifier for the new node.
- * @param config The AI configuration settings (copied).
- * @return A pointer to the newly created node, or nullptr on failure.
- */
 csilk_wf_node_t*
 csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 {
@@ -850,71 +839,4 @@ csilk_wf_add_vector_search(csilk_wf_t*                         wf,
         node->user_data_free = vector_search_config_free;
     }
     return node;
-}
-
-/**
- * @brief Registers a static function tool that AI nodes can invoke.
- *
- * Registered tools are exposed to LLMs in AI nodes. When the LLM decides to call a tool,
- * the workflow engine schedules and runs the C callback function on the thread pool.
- *
- * @param wf              The workflow definition instance.
- * @param name            The tool function name exposed to the LLM (must be unique).
- * @param description     A detailed description of what the tool does.
- * @param parameters_json An optional JSON Schema string describing tool parameters.
- * @param fn              The C function callback to execute.
- * @param user_data       Opaque context pointer passed to the callback.
- */
-void
-csilk_wf_register_tool(csilk_wf_t*      wf,
-                       const char*      name,
-                       const char*      description,
-                       const char*      parameters_json,
-                       csilk_wf_tool_fn fn,
-                       void*            user_data)
-{
-    if (!wf || !name || !fn) {
-        return;
-    }
-    csilk_mutex_lock(&wf->monitor_mutex);
-    if (wf->tool_count >= wf->tool_capacity) {
-        size_t                 new_cap = wf->tool_capacity == 0 ? 4 : wf->tool_capacity * 2;
-        csilk_wf_tool_entry_t* new_tools =
-            realloc(wf->tools, sizeof(csilk_wf_tool_entry_t) * new_cap);
-        if (new_tools) {
-            wf->tools = new_tools;
-            wf->tool_capacity = new_cap;
-        }
-    }
-    if (wf->tool_count < wf->tool_capacity) {
-        csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
-        entry->name = strdup(name);
-        entry->description = description ? strdup(description) : nullptr;
-        entry->parameters_json = parameters_json ? strdup(parameters_json) : nullptr;
-        entry->fn = fn;
-        entry->user_data = user_data;
-    }
-    csilk_mutex_unlock(&wf->monitor_mutex);
-}
-
-/**
- * @brief Sets a callback for dynamic, runtime tool discovery.
- *
- * The callback is executed during AI node invocations to augment the statically
- * registered tool list with dynamically discovered tools (e.g., via MCP servers).
- *
- * @param wf        The workflow definition instance.
- * @param discovery The discovery callback function (nullptr to disable).
- * @param user_data Opaque context pointer passed to the callback.
- */
-void
-csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery, void* user_data)
-{
-    if (!wf) {
-        return;
-    }
-    csilk_mutex_lock(&wf->monitor_mutex);
-    wf->tool_discovery = discovery;
-    wf->tool_discovery_user_data = user_data;
-    csilk_mutex_unlock(&wf->monitor_mutex);
 }
