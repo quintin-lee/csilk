@@ -498,10 +498,6 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
         max_conn = server->max_connections;
     }
     if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
-        printf("REJECTING CONNECTION max=%d active=%d\n",
-               max_conn,
-               atomic_load(&server->active_connections));
-        fflush(stdout);
         uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
         if (tmp) {
             uv_tcp_init(server_stream->loop, tmp);
