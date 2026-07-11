@@ -41,7 +41,8 @@
 /** @brief Opaque application handle. */
 typedef struct csilk_app_s csilk_app_t;
 
-#include "csilk/csilk.h"
+#include "csilk/core/types.h"
+#include "csilk/core/config.h"
 
 /* ---- Lifecycle ---- */
 
