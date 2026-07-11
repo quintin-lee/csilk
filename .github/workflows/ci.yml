@@ -135,11 +135,14 @@ jobs:
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
 
+    - name: Check version sync (CMake vs git tag)
+      run: ./scripts/check_version_sync.sh
+
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 
     - name: clang-tidy
-      run: cmake --build build --target tidy || true
+      run: cmake --build build --target tidy
 
   fuzz:
     name: Fuzz Testing
@@ -166,11 +169,51 @@ jobs:
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
-    - name: Build Fuzzer
-      run: cmake --build build --target fuzz_test -j$(nproc)
+    - name: Build Fuzzers
+      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers -j$(nproc)
 
-    - name: Run Fuzzer
-      run: cd build && ./fuzz_test -max_total_time=10
+    - name: Fuzz — fuzz_test (HTTP routing + query parsing)
+      run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_test
+
+    - name: Fuzz — fuzz_url (URL decoding)
+      run: cd build && ./fuzz_url -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_url
+
+    - name: Fuzz — fuzz_yaml (YAML config)
+      run: cd build && ./fuzz_yaml -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict fuzz/corpus/fuzz_yaml
+
+    - name: Fuzz — fuzz_headers (form parsing + headers)
+      run: cd build && ./fuzz_headers -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict
+
+  arm64:
+    name: ARM64 Cross-Compile
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install cross-compilation toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          libyaml-dev:arm64 zlib1g-dev:arm64 libcurl4-openssl-dev:arm64 \
+          libpq-dev:arm64 libsqlite3-dev:arm64 libuv1-dev:arm64
+
+    - name: Configure (ARM64 cross-compile)
+      run: |
+        cmake -B build_arm64 -S . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+
+    - name: Build (ARM64)
+      run: cmake --build build_arm64 -j$(nproc)
+
+    - name: Verify binary architecture
+      run: file build_arm64/libcsilk.a | grep -q ARM || (echo "ERROR: binary is not ARM64" && exit 1)
 
   io_uring:
     name: io_uring compatibility
@@ -221,7 +264,6 @@ jobs:
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
-    if: github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -241,14 +283,18 @@ jobs:
         sudo apt-get install -y \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev wrk
+          libpq-dev libsqlite3-dev libuv1-dev wrk
 
     - name: Run benchmarks (save)
       run: ./scripts/run_benchmarks.sh --save
 
     - name: Compare with baseline
+      if: github.event_name == 'pull_request'
       run: ./scripts/run_benchmarks.sh --compare
-      continue-on-error: true
+
+    - name: Regression check (PR only, fail on >5% regression)
+      if: github.event_name == 'pull_request'
+      run: ./scripts/run_benchmarks.sh --ci
 
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
