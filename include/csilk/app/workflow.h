@@ -37,7 +37,6 @@
 #define CSILK_WORKFLOW_H
 
 #include "csilk/app/app.h"
-#include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/drivers/vector.h"
 
