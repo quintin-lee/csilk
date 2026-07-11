@@ -196,14 +196,13 @@ jobs:
         sudo sed -i 's/Types: deb/Types: deb\nArchitectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources
         
         # Add ports repository for arm64 architecture
-        cat <<EOF | sudo tee /etc/apt/sources.list.d/ports.sources
-Types: deb
-URIs: http://ports.ubuntu.com/ubuntu-ports/
-Suites: noble noble-updates noble-backports noble-security
-Components: main restricted universe multiverse
-Architectures: arm64
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
+        printf "%s\n" \
+          "Types: deb" \
+          "URIs: http://ports.ubuntu.com/ubuntu-ports/" \
+          "Suites: noble noble-updates noble-backports noble-security" \
+          "Components: main restricted universe multiverse" \
+          "Architectures: arm64" \
+          "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee /etc/apt/sources.list.d/ports.sources
         
         sudo dpkg --add-architecture arm64
         sudo apt-get update
