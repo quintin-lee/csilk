@@ -56,6 +56,38 @@ void csilk_crypto_generate_nonce(uint8_t* out, size_t len);
  */
 int csilk_crypto_fill_random(void* out, size_t len);
 
+/**
+ * @brief Pluggable cryptographic primitive driver.
+ *
+ * Allows users to replace the default software implementations of SHA256,
+ * HMAC-SHA256, and UUID generation (e.g., with hardware-accelerated or
+ * FIPS-compliant versions).  All function pointers must be non-nullptr.
+ */
+typedef struct {
+    /** @brief Compute the SHA-256 hash of a buffer.
+   *  @param data  Input data.
+   *  @param len   Input length.
+   *  @param[out] out  32-byte hash output. */
+    void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
+    /** @brief Compute HMAC-SHA256.
+   *  @param key       HMAC key.
+   *  @param key_len   Key length.
+   *  @param data      Input data.
+   *  @param data_len  Input length.
+   *  @param[out] out  32-byte HMAC output. */
+    void (*hmac_sha256)(
+        const uint8_t* key, size_t key_len, const uint8_t* data, size_t data_len, uint8_t out[32]);
+    /** @brief Generate a random version-4 UUID string.
+   *  @param[out] buf  Output buffer of at least 37 bytes.  Populated with a
+   *                   NUL-terminated UUID string. */
+    void (*generate_uuid)(char buf[37]);
+    /** @brief Fill a buffer with cryptographically secure random bytes.
+   *  @param[out] out  Buffer to fill.
+   *  @param      len  Number of bytes to generate.
+   *  @return 0 on success, -1 on failure. */
+    int (*fill_random)(void* out, size_t len);
+} csilk_crypto_driver_t;
+
 #ifdef __cplusplus
 }
 #endif

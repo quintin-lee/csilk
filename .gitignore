@@ -77,3 +77,4 @@ python/.venv/
 # AI assistant configs (untracked)
 .gemini/
 .opencode/
+.kilo/

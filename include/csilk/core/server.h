@@ -12,6 +12,7 @@
 #include "csilk/core/router.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/hooks.h"
+#include "csilk/core/crypto.h"
 #include "csilk/drivers/cipher.h"
 #include "csilk/drivers/db.h"
 
