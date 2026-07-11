@@ -10,6 +10,7 @@
 #include "cJSON.h"
 #include "ctx_internal.h"
 #include "csilk/core/internal.h"
+#include "csilk/reflection/reflect.h"
 
 /** @brief Parse the request body as JSON using cJSON.
  *

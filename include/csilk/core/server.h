@@ -12,6 +12,8 @@
 #include "csilk/core/router.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/hooks.h"
+#include "csilk/drivers/cipher.h"
+#include "csilk/drivers/db.h"
 
 /**
  * @brief Create a new server instance.

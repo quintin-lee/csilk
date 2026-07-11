@@ -22,7 +22,10 @@
 #include <string.h>
 
 #include "csilk/drivers/perm.h"
-#include "csilk/core/internal.h"
+#include "csilk/csilk.h"
+
+/** @brief Maximum permission rules per simple driver. */
+enum { MAX_RULES = 128 };
 
 /** @brief Global rule table.  Populated at startup by
  * csilk_perm_simple_allow(). */

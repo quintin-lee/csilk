@@ -15,6 +15,7 @@
 #define CSILK_CONTEXT_H
 
 #include "csilk/core/types.h"
+#include "csilk/drivers/cipher.h"
 
 /**
  * @brief Get the HTTP method of the current request.

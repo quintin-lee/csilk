@@ -13,7 +13,10 @@
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
 
-/* See include/csilk/core/internal.h for CSILK_GZIP_CHUNK and CSILK_GZIP_MIN_LENGTH. */
+/** @brief Gzip compression chunk size in bytes. */
+enum { CSILK_GZIP_CHUNK = 16384 };
+/** @brief Minimum content length to enable gzip compression. */
+enum { CSILK_GZIP_MIN_LENGTH = 1024 };
 
 /**
  * @brief State for asynchronous gzip compression offloading.

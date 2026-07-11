@@ -41,6 +41,13 @@
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
 
+/** @brief Maximum number of route groups per app. */
+enum { CSILK_MAX_GROUPS = 32 };
+/** @brief Maximum number of static file routes per app. */
+enum { CSILK_MAX_STATIC = 32 };
+/** @brief Default HTTP listen port. */
+enum { CSILK_DFL_PORT = 8080 };
+
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
  * mapping.
  *

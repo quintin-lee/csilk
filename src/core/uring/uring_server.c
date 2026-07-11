@@ -32,6 +32,7 @@
 #include "core/ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
+#include "csilk/reflection/reflect.h"
 #include "core/internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "uring_internal.h"
