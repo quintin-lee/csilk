@@ -13,11 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sys_io.h>
 #include <llhttp.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 #include "../internal/srv_internal.h"
 #include "h2.h"
 #include "../internal/srv_impl.h"

@@ -12,7 +12,6 @@
 #include <unistd.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /**
  * @brief Stateless CSRF protection middleware (cookie + header token

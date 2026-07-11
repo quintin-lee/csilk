@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sys_io.h>
 #ifndef _WIN32
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -27,7 +26,6 @@
 
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
@@ -165,8 +163,6 @@ on_stop_async(uv_async_t* handle)
 }
 
 /* --- Server creation --- */
-
-#include "csilk/reflection/reflect.h"
 
 /** @brief Create a new server instance associated with a router.
  *

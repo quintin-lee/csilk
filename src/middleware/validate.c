@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /**
  * @brief Find the first occurrence of a character in a string (helper).
