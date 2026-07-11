@@ -1,79 +1,79 @@
 # Fuzz dictionary for libFuzzer — HTTP, JSON, URL, YAML keywords
 
 # HTTP methods
-GET
-POST
-PUT
-DELETE
-PATCH
-HEAD
-OPTIONS
+"GET"
+"POST"
+"PUT"
+"DELETE"
+"PATCH"
+"HEAD"
+"OPTIONS"
 
 # HTTP headers
-Host:
-Content-Type:
-Content-Length:
-Authorization:
-Accept:
-User-Agent:
-Connection:
-Keep-Alive:
-Transfer-Encoding:
-Cache-Control:
-Cookie:
-Set-Cookie:
-X-Request-Id:
-X-Forwarded-For:
+"Host:"
+"Content-Type:"
+"Content-Length:"
+"Authorization:"
+"Accept:"
+"User-Agent:"
+"Connection:"
+"Keep-Alive:"
+"Transfer-Encoding:"
+"Cache-Control:"
+"Cookie:"
+"Set-Cookie:"
+"X-Request-Id:"
+"X-Forwarded-For:"
 
 # HTTP versions
-HTTP/1.0
-HTTP/1.1
-HTTP/2
+"HTTP/1.0"
+"HTTP/1.1"
+"HTTP/2"
 
 # Status codes
-200
-201
-204
-301
-302
-304
-400
-401
-403
-404
-405
-500
-502
-503
+"200"
+"201"
+"204"
+"301"
+"302"
+"304"
+"400"
+"401"
+"403"
+"404"
+"405"
+"500"
+"502"
+"503"
 
 # Content types
-application/json
-application/x-www-form-urlencoded
-multipart/form-data
-text/html
-text/plain
-text/css
-application/javascript
+"application/json"
+"application/x-www-form-urlencoded"
+"multipart/form-data"
+"text/html"
+"text/plain"
+"text/css"
+"application/javascript"
 
 # JSON tokens
-null
-true
-false
+"null"
+"true"
+"false"
 
 # Common URL patterns
-/api/
-/api/v1/
-/healthz
-/ping
-/index.html
-/static/
+"/api/"
+"/api/v1/"
+"/healthz"
+"/ping"
+"/index.html"
+"/static/"
 
 # YAML tokens
-server:
-logger:
-cors:
-rate_limit:
+"server:"
+"logger:"
+"cors:"
+"rate_limit:"
 
 # JWT tokens
-Bearer
-eyJ
+"Bearer"
+"eyJ"
