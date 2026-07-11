@@ -13,8 +13,6 @@
 #include <time.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
-#include "csilk/reflection/reflect.h"
 
 /* ------------------------------------------------------------------ */
 /*  Reflectable request-log struct                                    */

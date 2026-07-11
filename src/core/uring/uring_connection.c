@@ -16,9 +16,7 @@
 #include <llhttp.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "csilk/core/sys_io.h"
 #include "core/internal/srv_internal.h"
 #include "core/ctx/ctx_internal.h"
 #include "../http/h2.h"

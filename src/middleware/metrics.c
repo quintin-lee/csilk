@@ -19,9 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sys_io.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 
 /**

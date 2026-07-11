@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /**
  * @brief Parse a multipart/form-data request body and invoke a handler for

@@ -16,10 +16,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <csilk/core/sys_io.h>
 #include <string.h>
 
-#include "csilk/csilk.h"
 #include "csilk/core/crypto_dispatch.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/crypto.h"
