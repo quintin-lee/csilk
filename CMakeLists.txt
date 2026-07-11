@@ -17,7 +17,11 @@ endif()
 # Release: -O2 + LTO + native arch tuning for the build machine.
 # Debug/RelWithDebInfo/MinSizeRel: -O2 without LTO.
 set(CSILK_COMMON_FLAGS "")
-set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer;-march=native>")
+if(CMAKE_CROSSCOMPILING)
+  set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer>")
+else()
+  set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer;-march=native>")
+endif()
 set(CSILK_DEBUG_FLAGS   "$<$<NOT:$<CONFIG:Release>>:-O2>")
 
 
