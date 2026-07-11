@@ -144,13 +144,6 @@ on_write(csilk_io_write_t* req, int status)
                 size_t size = client->ctx.file_size;
                 client->ctx.file_fd = -1;
 
-                printf("DEBUG: on_write calling csilk_io_fs_sendfile for fd %d, "
-                       "sock %d, size %zu\n",
-                       fd,
-                       sock_fd,
-                       size);
-                fflush(stdout);
-
                 int r = csilk_io_fs_sendfile(csilk_io_default_loop(),
                                              fs_req,
                                              sock_fd,
@@ -165,13 +158,7 @@ on_write(csilk_io_write_t* req, int status)
                     return;
                 }
             }
-        } else {
-            printf("DEBUG: csilk_io_fileno failed!\n");
-            fflush(stdout);
         }
-    } else {
-        printf("DEBUG: on_write called with file_fd=%d\n", client ? client->ctx.file_fd : -999);
-        fflush(stdout);
     }
 
     free(req);
