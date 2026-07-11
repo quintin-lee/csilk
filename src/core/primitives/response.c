@@ -13,6 +13,7 @@
 #include <string.h>
 #include <strings.h>
 #include "cJSON.h"
+#include "csilk/reflection/reflect.h"
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/core/internal.h"

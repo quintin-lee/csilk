@@ -22,6 +22,11 @@
 
 #include "csilk/core/internal.h"
 
+/** @brief Maximum number of metrics entries tracked. */
+enum { CSILK_METRICS_MAX_ENTRIES = 1024 };
+/** @brief Number of histogram buckets for latency metrics. */
+enum { CSILK_METRICS_BUCKET_COUNT = 6 };
+
 /**
  * @brief Latency buckets in seconds for P99/P95 analysis.
  *

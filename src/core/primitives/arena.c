@@ -38,6 +38,9 @@
 
 /* MAX_TLS_ARENA_CHUNKS is now CSILK_MAX_TLS_CHUNKS (from srv_internal.h or CMake) */
 
+/** @brief CPU cache line size hint for arena alignment. */
+enum { CSILK_CACHE_LINE_SIZE = 64 };
+
 /** @brief A single chunk in the arena linked list.
  *
  * Arena allocator manages memory in chunks. When a chunk is full, a new

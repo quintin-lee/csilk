@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/drivers/perm.h"
 #include "csilk/test/test.h"
 
 // Mock handler for middleware testing
