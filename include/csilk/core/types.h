@@ -306,8 +306,6 @@ typedef struct csilk_mq_s csilk_mq_t;
 /** @brief Opaque Message Queue context. */
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
 
-/* --- Crypto Driver Interface --- */
-
 /**
  * @brief Zero-copy string view — references external memory without allocation.
  *
