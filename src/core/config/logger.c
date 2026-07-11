@@ -375,10 +375,10 @@ _csilk_log_internal(
         return;
     }
 
+    char    buf[4096];
     va_list args;
     va_start(args, fmt);
-    char buf[4096];
-    int  len = vsnprintf(buf, sizeof(buf), fmt, args);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     if (len < 0) {
         len = 0;
@@ -430,10 +430,10 @@ _csilk_log_structured(csilk_log_level_t lv,
         return;
     }
 
+    char    buf[4096];
     va_list args;
     va_start(args, fmt);
-    char buf[4096];
-    int  len = vsnprintf(buf, sizeof(buf), fmt, args);
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     if (len < 0) {
         len = 0;
@@ -504,9 +504,9 @@ csilk_log_make_kv(const char* key, ...)
     if (!obj) {
         return nullptr;
     }
-    va_list args;
-    va_start(args, key);
     const char* k = key;
+    va_list     args;
+    va_start(args, key);
     while (k) {
         const char* v = va_arg(args, const char*);
         if (v) {
