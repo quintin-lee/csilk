@@ -88,14 +88,18 @@ mysql_parse_dsn(
         const char* val = eq + 1;
 
         if (strcmp(key, "host") == 0) {
+            free(*host);
             *host = strdup(val);
         } else if (strcmp(key, "port") == 0) {
             *port = atoi(val);
         } else if (strcmp(key, "user") == 0) {
+            free(*user);
             *user = strdup(val);
         } else if (strcmp(key, "password") == 0) {
+            free(*password);
             *password = strdup(val);
         } else if (strcmp(key, "dbname") == 0) {
+            free(*dbname);
             *dbname = strdup(val);
         }
 

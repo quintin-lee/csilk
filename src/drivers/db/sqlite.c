@@ -97,17 +97,19 @@ sqlite_free_result(csilk_db_result_t* result)
     if (!result) {
         return;
     }
-    for (int i = 0; i < result->row_count; i++) {
-        csilk_db_row_t* row = result->rows[i];
-        if (row) {
-            for (int j = 0; j < row->count; j++) {
-                free(row->values[j]);
+    if (result->rows) {
+        for (int i = 0; i < result->row_count; i++) {
+            csilk_db_row_t* row = result->rows[i];
+            if (row) {
+                for (int j = 0; j < row->count; j++) {
+                    free(row->values[j]);
+                }
+                free(row->values);
+                free(row);
             }
-            free(row->values);
-            free(row);
         }
+        free(result->rows);
     }
-    free(result->rows);
     for (int i = 0; i < result->column_count; i++) {
         free(result->column_names[i]);
     }
@@ -194,12 +196,21 @@ sqlite_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
         }
 
         /* Append row to the dynamic result array */
-        result->rows = realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
-        if (!result->rows) {
+        csilk_db_row_t** new_rows =
+            realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+        if (!new_rows) {
+            /* realloc failed: free the not-yet-stored row to avoid a leak,
+             * then release the partial result set. */
+            for (int i = 0; i < row->count; i++) {
+                free(row->values[i]);
+            }
+            free(row->values);
+            free(row);
             sqlite3_finalize(stmt);
             sqlite_free_result(result);
             return -1;
         }
+        result->rows = new_rows;
         result->rows[result->row_count++] = row;
     }
 

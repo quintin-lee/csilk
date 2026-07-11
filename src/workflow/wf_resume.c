@@ -44,6 +44,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
         }
         switch (header.type) {
         case WF_EV_NODE_START:
+            if (!payload) {
+                break;
+            }
             for (size_t i = 0; i < wf->node_count; i++) {
                 if (strcmp(wf->nodes[i]->id, payload) == 0) {
                     node_started[i] = 1;
@@ -52,6 +55,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
             }
             break;
         case WF_EV_NODE_FINISH: {
+            if (!payload) {
+                break;
+            }
             char*  node_id = payload;
             size_t nid_len = strlen(node_id);
             if (nid_len + 1 >= header.payload_len) {
@@ -79,6 +85,9 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
             break;
         }
         case WF_EV_PAUSE: {
+            if (!payload) {
+                break;
+            }
             for (size_t i = 0; i < wf->node_count; i++) {
                 if (strcmp(wf->nodes[i]->id, payload) == 0) {
                     ctx->is_paused = 1;
@@ -178,6 +187,9 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
         }
         switch (header.type) {
         case WF_EV_NODE_FINISH: {
+            if (!payload) {
+                break;
+            }
             char*  node_id = payload;
             size_t nid_len = strlen(node_id);
             if (nid_len + 1 >= header.payload_len) {
@@ -204,6 +216,9 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
             break;
         }
         case WF_EV_PAUSE:
+            if (!payload) {
+                break;
+            }
             free(paused_node_id);
             paused_node_id = strdup(payload);
             break;
