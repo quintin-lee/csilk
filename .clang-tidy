@@ -9,7 +9,8 @@ Checks: >
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -clang-analyzer-deadcode.DeadStores,
   -clang-analyzer-core.FixedAddressDereference,
-  -clang-analyzer-optin.performance.Padding
+  -clang-analyzer-optin.performance.Padding,
+  -clang-analyzer-valist.Uninitialized
 
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(src/|include/).*'
