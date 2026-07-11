@@ -218,7 +218,7 @@ jobs:
           -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
           -DCMAKE_SYSTEM_NAME=Linux \
           -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-          -DCMAKE_FIND_ROOT_PATH=/usr/aarch64-linux-gnu \
+          -DCMAKE_FIND_ROOT_PATH="/usr/aarch64-linux-gnu;/usr" \
           -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
           -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 
