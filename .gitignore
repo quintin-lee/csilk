@@ -73,3 +73,7 @@ python/csilk/csilk/
 venv/
 env/
 python/.venv/
+
+# AI assistant configs (untracked)
+.gemini/
+.opencode/
