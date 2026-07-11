@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdatomic.h>
-#include <csilk/core/sys_io.h>
 #if defined(__linux__)
 #include <sys/random.h>
 #endif

@@ -15,7 +15,6 @@
 
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /** @brief Store a value in the context's key-value storage.
  *

@@ -28,7 +28,6 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#include "csilk/csilk.h"
 
 /** @brief Route group — holds a URL prefix, middleware chain, and optional
  * parent group for nesting.

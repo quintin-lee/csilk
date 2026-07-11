@@ -21,7 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/csilk.h"
 #include "csilk/drivers/perm.h"
 #include "csilk/core/internal.h"
 

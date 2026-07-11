@@ -28,10 +28,6 @@
 #ifndef CSILK_CONTEXT_INTERNAL_H
 #define CSILK_CONTEXT_INTERNAL_H
 
-#include <csilk/core/sys_io.h>
-
-#include "csilk/csilk.h"
-#include "csilk/core/sys_io.h"
 #include "csilk/core/internal.h"
 
 /**

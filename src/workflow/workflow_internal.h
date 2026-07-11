@@ -6,7 +6,6 @@
 #ifndef CSILK_WORKFLOW_INTERNAL_CORE_H
 #define CSILK_WORKFLOW_INTERNAL_CORE_H
 
-#include <csilk/core/sys_io.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +13,6 @@
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/sys_io.h"
 #include "csilk/core/sync.h"
 #include "csilk/app/workflow_wal.h"
 #include "cJSON.h"

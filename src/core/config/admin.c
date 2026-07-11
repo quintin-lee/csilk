@@ -5,7 +5,6 @@
 
 #include "csilk/app/admin.h"
 #include "csilk/app/app.h"
-#include "csilk/csilk.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
