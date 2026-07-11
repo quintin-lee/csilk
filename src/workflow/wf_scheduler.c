@@ -86,8 +86,8 @@ find_active_ctx(csilk_wf_t* wf, const char* exec_id)
     return found;
 }
 
-static void
-cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
+void
+_wf_cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
 {
     csilk_wf_ctx_t* stale = find_active_ctx(wf, exec_id);
     if (stale) {
@@ -192,11 +192,11 @@ _wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
  * @param node_id Originating node ID, or nullptr for workflow-level events.
  * @param data    Associated data (may be nullptr for simple events).
  * @note This is a no-op if ctx has no WAL path configured. */
-static void
-wal_log_event(csilk_wf_ctx_t*       ctx,
-              csilk_wf_event_type_t type,
-              const char*           node_id,
-              csilk_data_t*         data)
+void
+_wf_wal_log_event(csilk_wf_ctx_t*       ctx,
+                  csilk_wf_event_type_t type,
+                  const char*           node_id,
+                  csilk_data_t*         data)
 {
     if (!ctx->wal_path) {
         return;
@@ -390,7 +390,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
     }
     csilk_mutex_unlock(&ctx->mutex);
 
-    wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
+    _wf_wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
     _wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : nullptr);
 
     if (work->trace_node) {
@@ -508,7 +508,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
     int current_active = ctx->nodes_active;
     csilk_mutex_unlock(&ctx->mutex);
     if (triggered_count == 0 && current_active == 0) {
-        wal_log_event(ctx, WF_EV_END, nullptr, nullptr);
+        _wf_wal_log_event(ctx, WF_EV_END, nullptr, nullptr);
         _wf_broadcast(ctx->wf, "workflow_end", nullptr, output ? (char*)output->value : nullptr);
         if (ctx->trace) {
             ctx->trace->end_time = csilk_io_hrtime() / 1000;
@@ -576,7 +576,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         ctx->is_paused = 1;
         csilk_mutex_unlock(&ctx->mutex);
 
-        wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
+        _wf_wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
         _wf_broadcast(ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : nullptr);
         CSILK_LOG_I("[Workflow] Execution %s paused at node '%s'", ctx->exec_id, node->id);
         return;
@@ -599,7 +599,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         char* json = cJSON_PrintUnformatted(task);
 
         csilk_mq_publish(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
-        wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
+        _wf_wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
         _wf_broadcast(ctx->wf, "node_remote_queued", node->id, json);
 
         CSILK_LOG_I("[Workflow] Execution %s offloaded node '%s' to MQ", ctx->exec_id, node->id);
@@ -610,7 +610,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
     }
     csilk_mutex_unlock(&ctx->mutex);
 
-    wal_log_event(ctx, WF_EV_NODE_START, node->id, nullptr);
+    _wf_wal_log_event(ctx, WF_EV_NODE_START, node->id, nullptr);
     _wf_broadcast(ctx->wf, "node_queued", node->id, nullptr);
 
     node_work_t* work = calloc(1, sizeof(node_work_t));
@@ -769,7 +769,7 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
         char path[512];
         snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, ctx->exec_id);
         ctx->wal_path = strdup(path);
-        wal_log_event(ctx, WF_EV_START, nullptr, input);
+        _wf_wal_log_event(ctx, WF_EV_START, nullptr, input);
     }
     if (trace_cb) {
         ctx->trace = calloc(1, sizeof(csilk_wf_trace_t));
@@ -817,252 +817,4 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
     }
 
     return ret_exec_id;
-}
-
-/* --- Resume & Signal --- */
-
-/**
- * @brief Resumes an interrupted workflow execution from its Write-Ahead Log (WAL).
- *
- * Re-reads the WAL file to reconstruct the execution state (which nodes completed and
- * their outputs, which nodes were active/paused), reinstantiates the context, and
- * schedules remaining nodes to resume execution.
- *
- * @param wf       The workflow definition instance.
- * @param exec_id  The UUID of the workflow execution to recover and resume.
- * @param callback Callback function invoked with the final output when the resumed run completes.
- */
-void
-csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data_t* result))
-{
-    if (!wf || !exec_id || !wf->wal_dir) {
-        return;
-    }
-
-    cleanup_stale_ctx(wf, exec_id);
-
-    char wal_path[512];
-    snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
-    FILE* f = fopen(wal_path, "rb");
-    if (!f) {
-        return;
-    }
-    csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
-    ctx->wf = wf;
-    ctx->callback = callback;
-    ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
-    ctx->node_approved = calloc(wf->node_count, sizeof(int));
-    ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
-    ctx->arena = csilk_arena_new(0);
-    csilk_mutex_init(&ctx->mutex);
-    csilk_mutex_init(&ctx->arena_mutex);
-    csilk_mutex_init(&ctx->trace_mutex);
-    snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
-    ctx->wal_path = strdup(wal_path);
-    int *node_started = calloc(wf->node_count, sizeof(int)),
-        *node_finished = calloc(wf->node_count, sizeof(int));
-    int                   wf_ended = 0;
-    csilk_wf_wal_header_t header;
-    while (fread(&header, sizeof(header), 1, f) == 1) {
-        if (header.magic != CSILK_WF_MAGIC) {
-            break;
-        }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
-        if (payload && fread(payload, header.payload_len, 1, f) != 1) {
-            free(payload);
-            break;
-        }
-        switch (header.type) {
-        case WF_EV_NODE_START:
-            for (size_t i = 0; i < wf->node_count; i++) {
-                if (strcmp(wf->nodes[i]->id, payload) == 0) {
-                    node_started[i] = 1;
-                    break;
-                }
-            }
-            break;
-        case WF_EV_NODE_FINISH: {
-            char*  node_id = payload;
-            size_t nid_len = strlen(node_id);
-            if (nid_len + 1 >= header.payload_len) {
-                break;
-            }
-            char*  data_type = node_id + nid_len + 1;
-            size_t dtype_len = strlen(data_type);
-            if (nid_len + 1 + dtype_len + 1 >= header.payload_len) {
-                break;
-            }
-            char* data_val = data_type + dtype_len + 1;
-
-            for (size_t i = 0; i < wf->node_count; i++) {
-                if (strcmp(wf->nodes[i]->id, node_id) == 0) {
-                    node_finished[i] = 1;
-                    ctx->node_outputs[i] =
-                        csilk_wf_data_new(ctx, data_type, csilk_wf_strdup(ctx, data_val));
-                    csilk_wf_node_t* n = wf->nodes[i];
-                    for (size_t j = 0; j < n->edge_count; j++) {
-                        ctx->node_input_counts[n->edges[j].target->index]++;
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-        case WF_EV_PAUSE: {
-            for (size_t i = 0; i < wf->node_count; i++) {
-                if (strcmp(wf->nodes[i]->id, payload) == 0) {
-                    ctx->is_paused = 1;
-                    break;
-                }
-            }
-            break;
-        }
-        case WF_EV_END:
-            wf_ended = 1;
-            break;
-        }
-        free(payload);
-    }
-    fclose(f);
-    if (wf_ended) {
-        if (callback) {
-            callback(nullptr);
-        }
-        _wf_cleanup_ctx(ctx);
-    } else if (ctx->is_paused) {
-        _wf_cleanup_ctx(ctx);
-    } else {
-        for (size_t i = 0; i < wf->node_count; i++) {
-            csilk_wf_node_t* n = wf->nodes[i];
-            int              trigger = 0;
-            csilk_data_t*    trigger_input = ctx->initial_input;
-            if (node_started[i] && !node_finished[i]) {
-                trigger = 1;
-            } else if (!node_started[i]) {
-                int threshold = n->incoming_count == 0 ? 1 : n->incoming_count;
-                if (ctx->node_input_counts[n->index] >= threshold) {
-                    trigger = 1;
-                }
-            }
-            if (trigger) {
-                for (size_t j = 0; j < wf->node_count; j++) {
-                    csilk_wf_node_t* p = wf->nodes[j];
-                    for (size_t k = 0; k < p->edge_count; k++) {
-                        if (p->edges[k].target == n && node_finished[j]) {
-                            trigger_input = ctx->node_outputs[j];
-                            break;
-                        }
-                    }
-                }
-                execute_node(ctx, n, trigger_input);
-            }
-        }
-    }
-    free(node_started);
-    free(node_finished);
-}
-
-/**
- * @brief Signals a paused workflow context to resume execution.
- *
- * Used for interactive nodes that paused execution waiting for approval or human input.
- * Reconstructs state from the WAL, sets the paused node as approved, and resumes run.
- *
- * @param wf       The workflow definition instance.
- * @param exec_id  The unique execution ID (UUID) that is currently paused.
- * @param input    Optional new/edited input data to feed to the resuming node.
- * @param callback Callback function invoked when the workflow run eventually completes.
- */
-void
-csilk_wf_signal_continue(csilk_wf_t*   wf,
-                         const char*   exec_id,
-                         csilk_data_t* input,
-                         void (*callback)(csilk_data_t* result))
-{
-    if (!wf || !exec_id || !wf->wal_dir) {
-        return;
-    }
-
-    cleanup_stale_ctx(wf, exec_id);
-
-    char wal_path[512];
-    snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
-    FILE* f = fopen(wal_path, "rb");
-    if (!f) {
-        return;
-    }
-
-    csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
-    ctx->wf = wf;
-    ctx->callback = callback;
-    ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
-    ctx->node_approved = calloc(wf->node_count, sizeof(int));
-    ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
-    ctx->arena = csilk_arena_new(0);
-    csilk_mutex_init(&ctx->mutex);
-    csilk_mutex_init(&ctx->arena_mutex);
-    csilk_mutex_init(&ctx->trace_mutex);
-    snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
-    ctx->wal_path = strdup(wal_path);
-
-    char* paused_node_id = nullptr;
-
-    csilk_wf_wal_header_t header;
-    while (fread(&header, sizeof(header), 1, f) == 1) {
-        if (header.magic != CSILK_WF_MAGIC) {
-            break;
-        }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
-        if (payload && fread(payload, header.payload_len, 1, f) != 1) {
-            free(payload);
-            break;
-        }
-        switch (header.type) {
-        case WF_EV_NODE_FINISH: {
-            char*  node_id = payload;
-            size_t nid_len = strlen(node_id);
-            if (nid_len + 1 >= header.payload_len) {
-                break;
-            }
-            char*  data_type = node_id + nid_len + 1;
-            size_t dtype_len = strlen(data_type);
-            if (nid_len + 1 + dtype_len + 1 >= header.payload_len) {
-                break;
-            }
-            char* data_val = data_type + dtype_len + 1;
-
-            for (size_t i = 0; i < wf->node_count; i++) {
-                if (strcmp(wf->nodes[i]->id, node_id) == 0) {
-                    ctx->node_outputs[i] =
-                        csilk_wf_data_new(ctx, data_type, csilk_wf_strdup(ctx, data_val));
-                    csilk_wf_node_t* n = wf->nodes[i];
-                    for (size_t j = 0; j < n->edge_count; j++) {
-                        ctx->node_input_counts[n->edges[j].target->index]++;
-                    }
-                    break;
-                }
-            }
-            break;
-        }
-        case WF_EV_PAUSE:
-            free(paused_node_id);
-            paused_node_id = strdup(payload);
-            break;
-        case WF_EV_END:
-            break;
-        }
-        free(payload);
-    }
-    fclose(f);
-
-    if (paused_node_id) {
-        csilk_wf_node_t* n = csilk_wf_get_node(wf, paused_node_id);
-        if (n) {
-            ctx->node_approved[n->index] = 1;
-            execute_node(ctx, n, input);
-        }
-        free(paused_node_id);
-    } else {
-        _wf_cleanup_ctx(ctx);
-    }
 }
