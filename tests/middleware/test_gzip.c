@@ -45,11 +45,14 @@ main()
     // Run middleware via next
     csilk_next(c);
 
-    // Since it's async, we need to run the loop
-    assert(csilk_is_async(c) == 1);
-
-    printf("Waiting for async gzip to complete...\n");
-    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    // Since Gzip has a hybrid sync/async path, only run the loop if async
+    if (csilk_is_async(c)) {
+        printf("Waiting for async gzip to complete...\n");
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    } else {
+        printf("Sync gzip completed inline.\n");
+        _csilk_send_response(c);
+    }
 
     assert(response_sent == 1);
 
