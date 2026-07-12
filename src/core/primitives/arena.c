@@ -460,12 +460,27 @@ csilk_arena_reset(csilk_arena_t* arena)
     if (!arena) {
         return;
     }
-    csilk_arena_chunk_t* curr = arena->head;
-    while (curr) {
-        curr->used = 0;
-        curr = curr->next;
+    csilk_arena_chunk_t* head = arena->head;
+    if (head) {
+        head->used = 0;
+        csilk_arena_chunk_t* curr = head->next;
+        head->next = nullptr;
+        while (curr) {
+            csilk_arena_chunk_t* next = curr->next;
+            if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
+                curr->next = tls_chunk_free_list;
+                curr->used = 0;
+                tls_chunk_free_list = curr;
+                tls_chunk_count++;
+            } else {
+                arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+            }
+            curr = next;
+        }
+        arena->total_allocated = head->size;
+    } else {
+        arena->total_allocated = 0;
     }
-    arena->total_allocated = 0;
 }
 
 /** @brief Flush the thread-local arena chunk free list.
