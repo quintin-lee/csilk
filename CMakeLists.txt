@@ -14,10 +14,13 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Common optimization flags (no -Werror; controlled per-target).
-# Release: -O2 + LTO + native arch tuning for the build machine.
+# Release: -O2 + LTO. Native arch tuning (-march=native) is ON by default
+# for maximum performance on the build machine. Set -DCSILK_PORTABLE=ON
+# to produce a portable binary that runs on any x86_64/aarch64 CPU.
 # Debug/RelWithDebInfo/MinSizeRel: -O2 without LTO.
+option(CSILK_PORTABLE "Build portable binary (disable -march=native)" OFF)
 set(CSILK_COMMON_FLAGS "")
-if(CMAKE_CROSSCOMPILING)
+if(CMAKE_CROSSCOMPILING OR CSILK_PORTABLE)
   set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer>")
 else()
   set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-flto;-fomit-frame-pointer;-march=native>")
