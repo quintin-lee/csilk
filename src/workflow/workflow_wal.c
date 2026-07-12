@@ -26,24 +26,101 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 
-/** @brief Append an event record to the workflow Write-Ahead Log.
- *
- * Algorithm:
- * 1. Open (or create) the WAL file in O_WRONLY | O_APPEND mode.
- * 2. Write a fixed-size csilk_wf_wal_header_t (magic, type, timestamp,
- *    payload_len).
- * 3. If payload_len > 0 and payload is non-nullptr, write the payload
- *    bytes immediately after the header.
- * 4. fdatasync() the file to flush the data to disk before closing.
- *
- * @param wal_path Absolute path to the WAL file.
- * @param type     Event type (e.g., WF_EV_START, WF_EV_NODE_FINISH).
- * @param payload  Opaque payload data to persist (may be nullptr if len is 0).
- * @param len      Number of payload bytes.
- * @return 0 on success, -1 if wal_path is nullptr or any write fails.
- * @note Not thread-safe for concurrent writes to the same file —
- *       callers should serialize access at the workflow context level. */
+typedef struct wal_task_s {
+    char*                 wal_path;
+    csilk_wf_event_type_t type;
+    void*                 payload;
+    size_t                len;
+    struct wal_task_s*    next;
+} wal_task_t;
+
+static wal_task_t*     g_wal_queue_head = NULL;
+static wal_task_t*     g_wal_queue_tail = NULL;
+static pthread_mutex_t g_wal_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_wal_cond = PTHREAD_COND_INITIALIZER;
+static pthread_t       g_wal_thread;
+static int             g_wal_thread_started = 0;
+static int             g_wal_shutdown = 0;
+
+static void*
+wal_writer_thread(void* arg)
+{
+    (void)arg;
+    while (1) {
+        pthread_mutex_lock(&g_wal_mutex);
+        while (g_wal_queue_head == NULL && !g_wal_shutdown) {
+            pthread_cond_wait(&g_wal_cond, &g_wal_mutex);
+        }
+        if (g_wal_shutdown && g_wal_queue_head == NULL) {
+            pthread_mutex_unlock(&g_wal_mutex);
+            break;
+        }
+
+        // Pop task
+        wal_task_t* task = g_wal_queue_head;
+        g_wal_queue_head = task->next;
+        if (g_wal_queue_head == NULL) {
+            g_wal_queue_tail = NULL;
+        }
+        pthread_mutex_unlock(&g_wal_mutex);
+
+        // Process task
+        int fd = open(task->wal_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (fd >= 0) {
+            csilk_wf_wal_header_t header;
+            header.magic = CSILK_WF_MAGIC;
+            header.type = (uint8_t)task->type;
+            header.timestamp = (uint64_t)time(nullptr);
+            header.payload_len = (uint32_t)task->len;
+
+            if (write(fd, &header, sizeof(header)) == sizeof(header)) {
+                if (task->len > 0 && task->payload) {
+                    (void)write(fd, task->payload, task->len);
+                }
+            }
+#ifdef __APPLE__
+            fsync(fd);
+#else
+            fdatasync(fd);
+#endif
+            close(fd);
+        }
+
+        // Free task
+        free(task->wal_path);
+        free(task->payload);
+        free(task);
+    }
+    return NULL;
+}
+
+static void
+wal_cleanup(void)
+{
+    pthread_mutex_lock(&g_wal_mutex);
+    g_wal_shutdown = 1;
+    pthread_cond_signal(&g_wal_cond);
+    pthread_mutex_unlock(&g_wal_mutex);
+
+    if (g_wal_thread_started) {
+        pthread_join(g_wal_thread, NULL);
+    }
+}
+
+CSILK_INTERNAL void
+_wf_wal_flush(void)
+{
+    pthread_mutex_lock(&g_wal_mutex);
+    while (g_wal_queue_head != NULL) {
+        pthread_mutex_unlock(&g_wal_mutex);
+        usleep(1000); // 1ms
+        pthread_mutex_lock(&g_wal_mutex);
+    }
+    pthread_mutex_unlock(&g_wal_mutex);
+}
+
 CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len)
 {
@@ -51,34 +128,42 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
         return -1;
     }
 
-    int fd = open(wal_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
-    if (fd < 0) {
-        return -1;
-    }
-
-    csilk_wf_wal_header_t header;
-    header.magic = CSILK_WF_MAGIC;
-    header.type = (uint8_t)type;
-    header.timestamp = (uint64_t)time(nullptr);
-    header.payload_len = (uint32_t)len;
-
-    if (write(fd, &header, sizeof(header)) != sizeof(header)) {
-        close(fd);
-        return -1;
-    }
-
-    if (len > 0 && payload) {
-        if (write(fd, payload, len) != (ssize_t)len) {
-            close(fd);
-            return -1;
+    pthread_mutex_lock(&g_wal_mutex);
+    if (!g_wal_thread_started && !g_wal_shutdown) {
+        if (pthread_create(&g_wal_thread, NULL, wal_writer_thread, NULL) == 0) {
+            g_wal_thread_started = 1;
+            atexit(wal_cleanup);
         }
     }
+    pthread_mutex_unlock(&g_wal_mutex);
 
-#ifdef __APPLE__
-    fsync(fd);
-#else
-    fdatasync(fd);
-#endif
-    close(fd);
+    wal_task_t* task = malloc(sizeof(wal_task_t));
+    if (!task) {
+        return -1;
+    }
+    task->wal_path = strdup(wal_path);
+    task->type = type;
+    task->len = len;
+    if (len > 0 && payload) {
+        task->payload = malloc(len);
+        if (task->payload) {
+            memcpy(task->payload, payload, len);
+        }
+    } else {
+        task->payload = NULL;
+    }
+    task->next = NULL;
+
+    pthread_mutex_lock(&g_wal_mutex);
+    if (g_wal_queue_tail) {
+        g_wal_queue_tail->next = task;
+        g_wal_queue_tail = task;
+    } else {
+        g_wal_queue_head = task;
+        g_wal_queue_tail = task;
+    }
+    pthread_cond_signal(&g_wal_cond);
+    pthread_mutex_unlock(&g_wal_mutex);
+
     return 0;
 }
