@@ -76,6 +76,14 @@ static pthread_cond_t  g_mq_wal_cond = PTHREAD_COND_INITIALIZER;
 static pthread_t       g_mq_wal_thread;
 static int             g_mq_wal_thread_started = 0;
 static int             g_mq_wal_shutdown = 0;
+/** @brief True while the writer thread is actively flushing a batch to disk.
+ *
+ *  Set under @c g_mq_wal_mutex immediately after a batch is dequeued, and
+ *  cleared (again under the mutex, after the fsync) once the batch is durable.
+ *  This lets @c _mq_wal_flush() distinguish "queue is empty but writes are
+ *  still in flight" from "truly idle", so callers (e.g. MQ close) don't close
+ *  the WAL fd while the writer thread is mid-write. */
+static int g_mq_wal_writing = 0;
 
 /** @brief WAL flush timeout in milliseconds.
  *
@@ -108,7 +116,6 @@ mq_wal_writer_thread(void* arg)
                 ts.tv_nsec -= 1000000000L;
             }
             pthread_cond_timedwait(&g_mq_wal_cond, &g_mq_wal_mutex, &ts);
-            break;
         }
         if (g_mq_wal_shutdown && g_mq_wal_queue_head == NULL) {
             pthread_mutex_unlock(&g_mq_wal_mutex);
@@ -119,6 +126,7 @@ mq_wal_writer_thread(void* arg)
         mq_wal_task_t* batch = g_mq_wal_queue_head;
         g_mq_wal_queue_head = NULL;
         g_mq_wal_queue_tail = NULL;
+        g_mq_wal_writing = 1;
         pthread_mutex_unlock(&g_mq_wal_mutex);
 
         int            last_fd = -1;
@@ -167,6 +175,13 @@ mq_wal_writer_thread(void* arg)
             fdatasync(last_fd);
 #endif
         }
+
+        /* Mark idle and wake any _mq_wal_flush() callers waiting for this
+         * batch to become durable. */
+        pthread_mutex_lock(&g_mq_wal_mutex);
+        g_mq_wal_writing = 0;
+        pthread_cond_broadcast(&g_mq_wal_cond);
+        pthread_mutex_unlock(&g_mq_wal_mutex);
     }
     return NULL;
 }
@@ -188,10 +203,12 @@ CSILK_INTERNAL void
 _mq_wal_flush(void)
 {
     pthread_mutex_lock(&g_mq_wal_mutex);
-    while (g_mq_wal_queue_head != NULL) {
-        pthread_mutex_unlock(&g_mq_wal_mutex);
-        usleep(1000); // 1ms
-        pthread_mutex_lock(&g_mq_wal_mutex);
+    /* Wait until the queue is empty AND the writer thread has finished
+     * flushing its current batch to disk. Only then is it safe to close
+     * a WAL fd or to read back a WAL file, since otherwise in-flight writes
+     * (which run outside the mutex) could race with the close/read. */
+    while (g_mq_wal_queue_head != NULL || g_mq_wal_writing) {
+        pthread_cond_wait(&g_mq_wal_cond, &g_mq_wal_mutex);
     }
     pthread_mutex_unlock(&g_mq_wal_mutex);
 }
