@@ -118,6 +118,8 @@ on_mq_close(csilk_io_handle_t* handle)
         return;
     }
 
+    _mq_wal_flush();
+
     csilk_mutex_destroy(&mq->queue_mutex);
     csilk_mutex_destroy(&mq->wal_mutex);
 

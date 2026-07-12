@@ -30,6 +30,9 @@ test_mq_wal_write()
     assert(rc == 0);
 
     /* Verify WAL file content */
+    extern void _mq_wal_flush(void);
+    _mq_wal_flush();
+
     int fd = open(wal_path, O_RDONLY);
     assert(fd >= 0);
 
