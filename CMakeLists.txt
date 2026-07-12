@@ -89,6 +89,15 @@ if(USE_ASAN)
     endif()
 endif()
 
+option(USE_TSAN "Enable ThreadSanitizer for data race detection" OFF)
+if(USE_TSAN)
+    if(USE_ASAN)
+        message(FATAL_ERROR "ASAN and TSAN cannot be enabled simultaneously")
+    endif()
+    message(STATUS "ThreadSanitizer enabled")
+    set(CSILK_TSAN_FLAGS "-fsanitize=thread;-fno-omit-frame-pointer;-g")
+endif()
+
 option(USE_COVERAGE "Enable code coverage with gcov" OFF)
 if(USE_COVERAGE)
     message(STATUS "Code coverage enabled")
@@ -452,6 +461,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "${CSILK_AVX2_FLAGS}"
       "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
       "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
+      "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
   )
   target_compile_definitions(${TARGET} PRIVATE
       CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
@@ -475,6 +485,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   target_link_options(${TARGET} PUBLIC
       "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
       "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
+      "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
   )
 
   # gc-sections in Release removes dead code
