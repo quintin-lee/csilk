@@ -286,7 +286,7 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
     char    dummy[1];
     va_list args;
     va_start(args, fmt);
-    int n = vsnprintf(dummy, sizeof(dummy), fmt, args);
+    int n = vsnprintf(dummy, sizeof(dummy), fmt, args); // NOLINT
     va_end(args);
 
     if (n < 0) {
