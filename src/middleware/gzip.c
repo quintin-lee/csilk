@@ -227,6 +227,42 @@ csilk_gzip_middleware(csilk_ctx_t* c)
         return;
     }
 
+    if (body_len < 32768) {
+        /* Compress synchronously for small bodies to avoid thread-offloading overhead */
+        z_stream strm;
+        memset(&strm, 0, sizeof(strm));
+        if (deflateInit2(
+                &strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) == Z_OK) {
+            size_t   dest_cap = deflateBound(&strm, (uLong)body_len);
+            uint8_t* dest = malloc(dest_cap);
+            if (dest) {
+                strm.next_in = (Bytef*)body;
+                strm.avail_in = (uInt)body_len;
+                strm.next_out = dest;
+                strm.avail_out = (uInt)dest_cap;
+
+                int    ret = deflate(&strm, Z_FINISH);
+                size_t compressed_len = dest_cap - strm.avail_out;
+                deflateEnd(&strm);
+
+                if (ret == Z_STREAM_END) {
+                    CSILK_LOG_D("Gzip: inline deflation complete, ratio: %.2f%% (%zu -> %zu bytes)",
+                                (double)compressed_len / (body_len ? body_len : 1) * 100.0,
+                                body_len,
+                                compressed_len);
+                    csilk_set_response_body(c, (const char*)dest, compressed_len, 1);
+                    csilk_set_header(c, "Content-Encoding", "gzip");
+                    csilk_set_header(c, "Vary", "Accept-Encoding");
+                    return;
+                } else {
+                    free(dest);
+                }
+            } else {
+                deflateEnd(&strm);
+            }
+        }
+    }
+
     /* Offload compression to thread pool so the event loop is not
      blocked. State is attached to the context via csilk_set() and picked up
      by gzip_work_cb / gzip_after_work_cb. */
