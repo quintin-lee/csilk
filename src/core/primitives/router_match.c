@@ -264,16 +264,26 @@ int
 csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 {
 #if defined(CSILK_HAS_AVX512)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+    static int has_avx512 = -1;
+    if (has_avx512 < 0) {
+        has_avx512 = __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw");
+    }
+    if (n >= 64 && has_avx512) {
         return csilk_memcmp_avx512(s1, s2, n);
     }
 #endif
 #if defined(__x86_64__)
-    if (__builtin_cpu_supports("avx2")) {
+    static int has_avx2 = -1;
+    if (has_avx2 < 0) {
+        has_avx2 = __builtin_cpu_supports("avx2");
+    }
+    if (n >= 32 && has_avx2) {
         return csilk_memcmp_avx2(s1, s2, n);
     }
 #elif defined(__ARM_NEON)
-    return csilk_memcmp_neon(s1, s2, n);
+    if (n >= 16) {
+        return csilk_memcmp_neon(s1, s2, n);
+    }
 #endif
 
     if (n == 0) {
