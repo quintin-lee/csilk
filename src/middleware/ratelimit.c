@@ -34,11 +34,32 @@ typedef struct {
     time_t last_seen;  /**< Timestamp of last request (for LRU eviction). */
 } ip_entry_t;
 
-static ip_entry_t    ip_table[MAX_IP_ENTRIES];
-static int           ip_count = 0;
-static time_t        last_evict = 0;
-static csilk_mutex_t ratelimit_mutex;
-static csilk_once_t  ratelimit_once = CSILK_ONCE_INIT;
+/**
+ * @name Thread-safety contract (ratelimit module)
+ *
+ * All file-scope mutable state below is protected by @c ratelimit_mutex.
+ * The mutex is lazily initialized exactly once via csilk_once() on the
+ * first call to csilk_rate_limit_middleware().
+ *
+ * Every access to ip_table, ip_count, and last_evict MUST occur while
+ * holding ratelimit_mutex.  The lock is acquired once at entry to the
+ * middleware and released after the count decision, so the critical
+ * section is small and contention is minimal.
+ *
+ * @note In multi-process deployments (fork-based workers) each process
+ *       has its own copy of these globals.  For cross-process rate
+ *       limiting, use the distributed path (storage_driver) instead.
+ * @{
+ */
+static ip_entry_t
+    ip_table[MAX_IP_ENTRIES]; /**< Bounded IP tracking table. Protected by ratelimit_mutex. */
+static int    ip_count = 0;   /**< Active entries in ip_table. Protected by ratelimit_mutex. */
+static time_t last_evict =
+    0; /**< Timestamp of last stale-entry eviction. Protected by ratelimit_mutex. */
+static csilk_mutex_t ratelimit_mutex; /**< Mutex guarding all mutable state above. */
+static csilk_once_t  ratelimit_once =
+    CSILK_ONCE_INIT;                  /**< One-time initialization guard for ratelimit_mutex. */
+/** @} */
 
 /* Forward declaration for metrics counter — used in the rate-limit middleware */
 extern void _csilk_metrics_inc_rate_limit_blocks(void);
