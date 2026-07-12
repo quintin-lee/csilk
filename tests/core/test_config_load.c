@@ -14,7 +14,7 @@
 #define CONFIG_LOAD_PORT 8098
 #define TEST_YAML "test_config_load_tmp.yaml"
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 
 static void

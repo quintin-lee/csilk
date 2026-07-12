@@ -62,7 +62,8 @@ pushed_handler(csilk_ctx_t* c)
 }
 
 /* ---- Server thread ---- */
-static volatile int server_ready = 0;
+static _Atomic int     server_ready = 0;
+static csilk_server_t* g_server = nullptr;
 
 static void*
 run_server(void* arg)
@@ -84,6 +85,7 @@ run_server(void* arg)
     csilk_router_add(router, "GET", "/pushed.css", h_pushed, 1);
 
     csilk_server_t* server = csilk_server_new(router);
+    g_server = server;
 
     csilk_server_config_t config;
     memset(&config, 0, sizeof(config));
@@ -217,6 +219,13 @@ main()
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed, g_tests_failed);
 
-    // Exit the process (will kill the server thread)
+    /* Stop the server and join its thread so all OpenSSL/library locks are
+     * released before process exit (atexit handlers), avoiding a TSan data
+     * race from the previously-abandoned server thread. */
+    if (g_server) {
+        csilk_server_stop(g_server);
+        pthread_join(thread, nullptr);
+    }
+
     return g_tests_failed > 0 ? 1 : 0;
 }

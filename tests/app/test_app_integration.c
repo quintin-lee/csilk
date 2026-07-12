@@ -15,7 +15,7 @@
 #define PORT 8101
 #define BUFSIZE 65536
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 static csilk_app_t*    g_app = nullptr;
 

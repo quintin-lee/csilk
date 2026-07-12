@@ -13,7 +13,7 @@
 #define PORT 8096
 #define BUFSIZE 4096
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 
 static void

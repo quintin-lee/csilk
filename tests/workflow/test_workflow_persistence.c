@@ -8,9 +8,9 @@
 
 #include "csilk/app/workflow.h"
 
-static int  g_step_a_ran = 0;
-static int  g_step_b_ran = 0;
-static char g_exec_id[37];
+static _Atomic int g_step_a_ran = 0;
+static _Atomic int g_step_b_ran = 0;
+static char        g_exec_id[37];
 
 csilk_data_t*
 step_a_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -65,7 +65,7 @@ test_workflow_persistence()
     csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
     usleep(50000);
 
-    printf("[Test] Interrupted. A_ran=%d, B_ran=%d\n", g_step_a_ran, g_step_b_ran);
+    printf("[Test] Interrupted. A_ran=%d, B_ran=%d\n", (int)g_step_a_ran, (int)g_step_b_ran);
 
     /* Part 2: Recovery.
      In a real scenario, this would be a new process.
@@ -76,7 +76,7 @@ test_workflow_persistence()
 
     csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-    printf("[Test] Final counts: A_ran=%d, B_ran=%d\n", g_step_a_ran, g_step_b_ran);
+    printf("[Test] Final counts: A_ran=%d, B_ran=%d\n", (int)g_step_a_ran, (int)g_step_b_ran);
 
     // Node A should ran at least once. It might run again if the FINISH event
     // was not flushed to the WAL before resume.
