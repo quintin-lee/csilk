@@ -135,6 +135,11 @@ jobs:
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
 
+    - name: Check code formatting
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+        cmake --build build --target check-format
+
     - name: Check version sync (CMake vs git tag)
       run: ./scripts/check_version_sync.sh
 
