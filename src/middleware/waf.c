@@ -10,41 +10,58 @@
 
 #include "csilk/csilk.h"
 
+typedef struct {
+    const char* pattern;
+    size_t      len;
+} waf_pattern_t;
+
 /** @brief Common patterns for SQL Injection attacks. */
-static const char* sql_patterns[] = {"UNION SELECT",
-                                     "SELECT FROM",
-                                     "INSERT INTO",
-                                     "UPDATE SET",
-                                     "DELETE FROM",
-                                     "DROP TABLE",
-                                     "OR '1'='1",
-                                     "OR \"1\"=\"1",
-                                     "WAITFOR DELAY",
-                                     "SLEEP(",
-                                     "PG_SLEEP(",
-                                     nullptr};
+static waf_pattern_t sql_rules[] = {
+    {"UNION SELECT",  sizeof("UNION SELECT") - 1 },
+    {"SELECT FROM",   sizeof("SELECT FROM") - 1  },
+    {"INSERT INTO",   sizeof("INSERT INTO") - 1  },
+    {"UPDATE SET",    sizeof("UPDATE SET") - 1   },
+    {"DELETE FROM",   sizeof("DELETE FROM") - 1  },
+    {"DROP TABLE",    sizeof("DROP TABLE") - 1   },
+    {"OR '1'='1",     sizeof("OR '1'='1") - 1    },
+    {"OR \"1\"=\"1",  sizeof("OR \"1\"=\"1") - 1 },
+    {"WAITFOR DELAY", sizeof("WAITFOR DELAY") - 1},
+    {"SLEEP(",        sizeof("SLEEP(") - 1       },
+    {"PG_SLEEP(",     sizeof("PG_SLEEP(") - 1    },
+    {nullptr,         0                          }
+};
 
 /** @brief Common patterns for Cross-Site Scripting (XSS) attacks. */
-static const char* xss_patterns[] = {
-    "<SCRIPT", "ONERROR=", "ONLOAD=", "JAVASCRIPT:", "ALERT(", nullptr};
+static waf_pattern_t xss_rules[] = {
+    {"<SCRIPT",     sizeof("<SCRIPT") - 1    },
+    {"ONERROR=",    sizeof("ONERROR=") - 1   },
+    {"ONLOAD=",     sizeof("ONLOAD=") - 1    },
+    {"JAVASCRIPT:", sizeof("JAVASCRIPT:") - 1},
+    {"ALERT(",      sizeof("ALERT(") - 1     },
+    {nullptr,       0                        }
+};
 
 /** @brief Common patterns for Directory Traversal attacks. */
-static const char* traversal_patterns[] = {"../", "..\\", nullptr};
+static waf_pattern_t traversal_rules[] = {
+    {"../",   sizeof("../") - 1 },
+    {"..\\",  sizeof("..\\") - 1},
+    {nullptr, 0                 }
+};
 
 /**
  * @brief Simple case-insensitive search for a pattern in a string.
  *
  * @param haystack String to search in.
  * @param needle   Pattern to search for (must be uppercase).
+ * @param needle_len Length of the pattern.
  * @return 1 if found, 0 otherwise.
  */
 static int
-_csilk_strcasestr_pattern(const char* haystack, const char* needle)
+_csilk_strcasestr_pattern(const char* haystack, const char* needle, size_t needle_len)
 {
     if (!haystack || !needle) {
         return 0;
     }
-    size_t needle_len = strlen(needle);
     size_t haystack_len = strlen(haystack);
 
     if (needle_len > haystack_len) {
@@ -65,13 +82,6 @@ _csilk_strcasestr_pattern(const char* haystack, const char* needle)
     return 0;
 }
 
-/**
- * @brief Check if a string contains any of the specified patterns.
- *
- * @param input    The string to check.
- * @param patterns Null-terminated array of uppercase pattern strings.
- * @return 1 if any pattern is found, 0 otherwise.
- */
 typedef struct {
     csilk_ctx_t* c;
     int          blocked;
@@ -91,36 +101,36 @@ check_pattern_cb(const char* key, const char* value, void* arg)
     waf_check_ctx_t* wctx = (waf_check_ctx_t*)arg;
 
     /* Check SQL Injection */
-    for (int i = 0; sql_patterns[i]; i++) {
-        if (_csilk_strcasestr_pattern(value, sql_patterns[i])) {
+    for (int i = 0; sql_rules[i].pattern; i++) {
+        if (_csilk_strcasestr_pattern(value, sql_rules[i].pattern, sql_rules[i].len)) {
             wctx->blocked = 1;
             wctx->matched_key = key;
             wctx->matched_val = value;
-            wctx->matched_pattern = sql_patterns[i];
+            wctx->matched_pattern = sql_rules[i].pattern;
             wctx->attack_type = "SQL Injection";
             return 0; /* Stop iteration */
         }
     }
 
     /* Check XSS */
-    for (int i = 0; xss_patterns[i]; i++) {
-        if (_csilk_strcasestr_pattern(value, xss_patterns[i])) {
+    for (int i = 0; xss_rules[i].pattern; i++) {
+        if (_csilk_strcasestr_pattern(value, xss_rules[i].pattern, xss_rules[i].len)) {
             wctx->blocked = 1;
             wctx->matched_key = key;
             wctx->matched_val = value;
-            wctx->matched_pattern = xss_patterns[i];
+            wctx->matched_pattern = xss_rules[i].pattern;
             wctx->attack_type = "XSS";
             return 0; /* Stop iteration */
         }
     }
 
     /* Check Directory Traversal */
-    for (int i = 0; traversal_patterns[i]; i++) {
-        if (_csilk_strcasestr_pattern(value, traversal_patterns[i])) {
+    for (int i = 0; traversal_rules[i].pattern; i++) {
+        if (_csilk_strcasestr_pattern(value, traversal_rules[i].pattern, traversal_rules[i].len)) {
             wctx->blocked = 1;
             wctx->matched_key = key;
             wctx->matched_val = value;
-            wctx->matched_pattern = traversal_patterns[i];
+            wctx->matched_pattern = traversal_rules[i].pattern;
             wctx->attack_type = "Directory Traversal";
             return 0; /* Stop iteration */
         }
@@ -154,13 +164,13 @@ csilk_waf_middleware(csilk_ctx_t* c)
         "WAF: Middleware inspecting request %p (path: '%s')", (void*)c, path ? path : "none");
 
     /* Check path for directory traversal */
-    for (int i = 0; traversal_patterns[i]; i++) {
-        if (_csilk_strcasestr_pattern(path, traversal_patterns[i])) {
+    for (int i = 0; traversal_rules[i].pattern; i++) {
+        if (_csilk_strcasestr_pattern(path, traversal_rules[i].pattern, traversal_rules[i].len)) {
             CSILK_LOG_W("WAF: Blocked request %p: Directory Traversal attack detected "
                         "in path '%s' (pattern: '%s')",
                         (void*)c,
                         path ? path : "",
-                        traversal_patterns[i]);
+                        traversal_rules[i].pattern);
             blocked = 1;
             break;
         }
