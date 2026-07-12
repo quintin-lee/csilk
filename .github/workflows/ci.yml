@@ -277,6 +277,40 @@ jobs:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
+  tsan:
+    name: ThreadSanitizer
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-tsan-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-tsan-deps-
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev libuv1-dev
+
+    - name: Configure
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DUSE_TSAN=ON -DENABLE_OOM_TEST=ON
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run unit tests
+      run: ctest --test-dir build -E test_integration --output-on-failure
+      env:
+        TSAN_OPTIONS: halt_on_error=1:print_suppressions=0:suppressions=${{ github.workspace }}/cmake/.tsan-suppressions
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04

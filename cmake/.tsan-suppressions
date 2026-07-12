@@ -1,0 +1,16 @@
+## ThreadSanitizer suppressions for known false positives.
+## See: https://github.com/google/sanitizers/wiki/ThreadSanitizerCppManual
+
+## OpenSSL internal locking (CRYPTO_THREAD_* callbacks are designed for this)
+race:CRYPTO_
+race:SSL_
+race:BIO_
+race:EVP_
+race:OPENSSL_
+
+## libuv internal state
+race:uv__
+race:uv_
+
+## nghttp2 internals
+race:nghttp2_
