@@ -148,7 +148,8 @@ CSILK_INTERNAL void _csilk_mq_free(csilk_mq_t* mq);
 /* --- Internal WAL / dispatch (cross-file helpers) --- */
 CSILK_INTERNAL int
 _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
-CSILK_INTERNAL int _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
-CSILK_INTERNAL int _mq_recovery(csilk_mq_t* mq);
+CSILK_INTERNAL int  _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
+CSILK_INTERNAL int  _mq_recovery(csilk_mq_t* mq);
+CSILK_INTERNAL void _mq_wal_flush(void);
 
 #endif /* CSILK_MQ_TYPES_H */
