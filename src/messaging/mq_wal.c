@@ -77,63 +77,96 @@ static pthread_t       g_mq_wal_thread;
 static int             g_mq_wal_thread_started = 0;
 static int             g_mq_wal_shutdown = 0;
 
+/** @brief WAL flush timeout in milliseconds.
+ *
+ *  When the queue is empty, the writer thread waits up to this many
+ *  milliseconds before returning to the wait loop. This bounds the
+ *  latency of a single isolated message to ~1ms. */
+enum { MQ_WAL_FLUSH_TIMEOUT_MS = 1 };
+
 static void*
 mq_wal_writer_thread(void* arg)
 {
     (void)arg;
+
     while (1) {
         pthread_mutex_lock(&g_mq_wal_mutex);
+
+        /* Wait for work or shutdown.
+         *
+         * Use timedwait so a single message that arrives while the
+         * thread is idle gets flushed within MQ_WAL_FLUSH_TIMEOUT_MS.
+         * Under burst load the cond_signal from each publish wakes
+         * the thread immediately, so the timeout only affects the
+         * idle-to-first-message latency. */
         while (g_mq_wal_queue_head == NULL && !g_mq_wal_shutdown) {
-            pthread_cond_wait(&g_mq_wal_cond, &g_mq_wal_mutex);
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_nsec += (long)MQ_WAL_FLUSH_TIMEOUT_MS * 1000000L;
+            if (ts.tv_nsec >= 1000000000L) {
+                ts.tv_sec += 1;
+                ts.tv_nsec -= 1000000000L;
+            }
+            pthread_cond_timedwait(&g_mq_wal_cond, &g_mq_wal_mutex, &ts);
+            break;
         }
         if (g_mq_wal_shutdown && g_mq_wal_queue_head == NULL) {
             pthread_mutex_unlock(&g_mq_wal_mutex);
             break;
         }
 
-        // Pop task
-        mq_wal_task_t* task = g_mq_wal_queue_head;
-        g_mq_wal_queue_head = task->next;
-        if (g_mq_wal_queue_head == NULL) {
-            g_mq_wal_queue_tail = NULL;
-        }
+        /* --- Group commit: drain the entire queue at once --- */
+        mq_wal_task_t* batch = g_mq_wal_queue_head;
+        g_mq_wal_queue_head = NULL;
+        g_mq_wal_queue_tail = NULL;
         pthread_mutex_unlock(&g_mq_wal_mutex);
 
-        // Process task
-        uint32_t topic_len = (uint32_t)strlen(task->topic);
-        uint32_t payload_len = (uint32_t)task->len;
-        uint32_t checksum = 0;
+        int            last_fd = -1;
+        mq_wal_task_t* task = batch;
+        while (task) {
+            mq_wal_task_t* next = task->next;
 
-        for (uint32_t i = 0; i < topic_len; i++) {
-            checksum ^= (uint8_t)task->topic[i];
-        }
-        const uint8_t* p = (const uint8_t*)task->payload;
-        if (p) {
-            for (uint32_t i = 0; i < payload_len; i++) {
-                checksum ^= p[i];
+            uint32_t topic_len = (uint32_t)strlen(task->topic);
+            uint32_t payload_len = (uint32_t)task->len;
+            uint32_t checksum = 0;
+
+            for (uint32_t i = 0; i < topic_len; i++) {
+                checksum ^= (uint8_t)task->topic[i];
             }
-        }
-
-        // Write sequentially
-        if (write(task->fd, &topic_len, 4) == 4) {
-            (void)write(task->fd, task->topic, topic_len);
-            (void)write(task->fd, &payload_len, 4);
-            if (payload_len > 0 && task->payload) {
-                (void)write(task->fd, task->payload, payload_len);
+            const uint8_t* p = (const uint8_t*)task->payload;
+            if (p) {
+                for (uint32_t i = 0; i < payload_len; i++) {
+                    checksum ^= p[i];
+                }
             }
-            (void)write(task->fd, &checksum, 4);
+
+            /* Write frame */
+            if (write(task->fd, &topic_len, 4) == 4) {
+                (void)write(task->fd, task->topic, topic_len);
+                (void)write(task->fd, &payload_len, 4);
+                if (payload_len > 0 && task->payload) {
+                    (void)write(task->fd, task->payload, payload_len);
+                }
+                (void)write(task->fd, &checksum, 4);
+            }
+
+            last_fd = task->fd;
+
+            free(task->topic);
+            free(task->payload);
+            free(task);
+            task = next;
         }
 
+        /* Single fsync for the entire batch — this is the key
+         * performance win: N messages, 1 disk sync instead of N. */
+        if (last_fd >= 0) {
 #ifdef __APPLE__
-        fsync(task->fd);
+            fsync(last_fd);
 #else
-        fdatasync(task->fd);
+            fdatasync(last_fd);
 #endif
-
-        // Free task
-        free(task->topic);
-        free(task->payload);
-        free(task);
+        }
     }
     return NULL;
 }
