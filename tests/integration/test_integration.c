@@ -198,7 +198,7 @@ test_ratelimit_mw(csilk_ctx_t* c)
 }
 
 /* ---- Server thread ---- */
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* test_server = NULL;
 
 static void*

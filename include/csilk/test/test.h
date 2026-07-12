@@ -34,7 +34,7 @@
  * When >= 0, allocations at or beyond this count return nullptr.
  * Set to -1 to disable OOM simulation.
  */
-extern int g_oom_fail_after;
+extern _Atomic int g_oom_fail_after;
 
 /**
  * @brief Global: number of allocations attempted so far.
@@ -42,7 +42,7 @@ extern int g_oom_fail_after;
  * Incremented on every call to the mock allocation functions.
  * Reset to 0 at the start of each test case.
  */
-extern int g_oom_count;
+extern _Atomic int g_oom_count;
 
 /**
  * @brief Mock malloc that fails after g_oom_fail_after calls.

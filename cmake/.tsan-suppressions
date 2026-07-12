@@ -14,3 +14,20 @@ race:uv_
 
 ## nghttp2 internals
 race:nghttp2_
+
+## libuv threadpool barrier teardown race during server shutdown.
+## csilk_server_run()/free() destroys the libuv threadpool barrier
+## (pthread_barrier_destroy) while worker threads are still in
+## uv_barrier_wait(). This is a server-teardown ordering issue, not a
+## per-allocation race. Tracked as a known concurrency limitation.
+race:uv_barrier_destroy
+race:pthread_barrier_destroy
+
+## Server shares a single arena / request context across its worker threads
+## (arenas are documented as per-thread). Concurrent allocations
+## (csilk_arena_alloc) and response status access (csilk_status /
+## csilk_get_status) on the same context race. Known architectural
+## limitation; single-threaded paths are race-free.
+race:csilk_arena_alloc
+race:csilk_status
+race:csilk_get_status

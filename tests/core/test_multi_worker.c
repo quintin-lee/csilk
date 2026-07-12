@@ -15,7 +15,7 @@
 #define NUM_CLIENTS 8
 #define NUM_WORKERS 3
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 
 static void

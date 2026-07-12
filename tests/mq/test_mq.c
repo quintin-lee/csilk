@@ -106,18 +106,15 @@ test_mq_wildcard()
     printf("test_mq_wildcard: PASS\n");
 }
 
-static int  offload_worker_called = 0;
-static char offload_payload[32];
+static _Atomic int offload_worker_called = 0;
 
 void
 my_worker(const char* topic, const void* payload, size_t len)
 {
     offload_worker_called++;
-    if (payload && len > 0) {
-        size_t copy_len = len < 31 ? len : 31;
-        memcpy(offload_payload, payload, copy_len);
-        offload_payload[copy_len] = '\0';
-    }
+    /* Validate the delivered payload inside the worker thread, which owns
+     * the data, instead of sharing a buffer with the main thread. */
+    assert(len == 4 && memcmp(payload, "work", 4) == 0);
 }
 
 void
@@ -137,7 +134,6 @@ test_mq_offload()
     csilk_mq_t*     mq = csilk_server_get_mq(server);
 
     offload_worker_called = 0;
-    memset(offload_payload, 0, sizeof(offload_payload));
     csilk_mq_subscribe(mq, "offload", offload_sub);
 
     csilk_mq_publish(mq, "offload", "work", 4);
@@ -150,7 +146,6 @@ test_mq_offload()
     }
 
     assert(offload_worker_called == 1);
-    assert(strcmp(offload_payload, "work") == 0);
 
     csilk_server_free(server);
     csilk_router_free(router);
