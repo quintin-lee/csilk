@@ -21,7 +21,6 @@ enum { WINDOW_SIZE = 60 };
 enum { EVICT_INTERVAL = 300 };
 
 /**
-/**
  * @brief Rate-limit tracking entry for a single IP address.
  *
  * Each entry stores the IP string, the request count within the current
