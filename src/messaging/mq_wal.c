@@ -15,12 +15,12 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <unistd.h>
 #include "mq_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
-
-#include "mq_internal.h"
 
 /** @brief Append a message frame to the WAL file on disk.
  *
@@ -61,6 +61,108 @@
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on write or fsync failure.
  * @threadsafe Serialized via wal_mutex. */
+typedef struct mq_wal_task_s {
+    int                   fd;
+    char*                 topic;
+    void*                 payload;
+    size_t                len;
+    struct mq_wal_task_s* next;
+} mq_wal_task_t;
+
+static mq_wal_task_t*  g_mq_wal_queue_head = NULL;
+static mq_wal_task_t*  g_mq_wal_queue_tail = NULL;
+static pthread_mutex_t g_mq_wal_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  g_mq_wal_cond = PTHREAD_COND_INITIALIZER;
+static pthread_t       g_mq_wal_thread;
+static int             g_mq_wal_thread_started = 0;
+static int             g_mq_wal_shutdown = 0;
+
+static void*
+mq_wal_writer_thread(void* arg)
+{
+    (void)arg;
+    while (1) {
+        pthread_mutex_lock(&g_mq_wal_mutex);
+        while (g_mq_wal_queue_head == NULL && !g_mq_wal_shutdown) {
+            pthread_cond_wait(&g_mq_wal_cond, &g_mq_wal_mutex);
+        }
+        if (g_mq_wal_shutdown && g_mq_wal_queue_head == NULL) {
+            pthread_mutex_unlock(&g_mq_wal_mutex);
+            break;
+        }
+
+        // Pop task
+        mq_wal_task_t* task = g_mq_wal_queue_head;
+        g_mq_wal_queue_head = task->next;
+        if (g_mq_wal_queue_head == NULL) {
+            g_mq_wal_queue_tail = NULL;
+        }
+        pthread_mutex_unlock(&g_mq_wal_mutex);
+
+        // Process task
+        uint32_t topic_len = (uint32_t)strlen(task->topic);
+        uint32_t payload_len = (uint32_t)task->len;
+        uint32_t checksum = 0;
+
+        for (uint32_t i = 0; i < topic_len; i++) {
+            checksum ^= (uint8_t)task->topic[i];
+        }
+        const uint8_t* p = (const uint8_t*)task->payload;
+        if (p) {
+            for (uint32_t i = 0; i < payload_len; i++) {
+                checksum ^= p[i];
+            }
+        }
+
+        // Write sequentially
+        if (write(task->fd, &topic_len, 4) == 4) {
+            (void)write(task->fd, task->topic, topic_len);
+            (void)write(task->fd, &payload_len, 4);
+            if (payload_len > 0 && task->payload) {
+                (void)write(task->fd, task->payload, payload_len);
+            }
+            (void)write(task->fd, &checksum, 4);
+        }
+
+#ifdef __APPLE__
+        fsync(task->fd);
+#else
+        fdatasync(task->fd);
+#endif
+
+        // Free task
+        free(task->topic);
+        free(task->payload);
+        free(task);
+    }
+    return NULL;
+}
+
+static void
+mq_wal_cleanup(void)
+{
+    pthread_mutex_lock(&g_mq_wal_mutex);
+    g_mq_wal_shutdown = 1;
+    pthread_cond_signal(&g_mq_wal_cond);
+    pthread_mutex_unlock(&g_mq_wal_mutex);
+
+    if (g_mq_wal_thread_started) {
+        pthread_join(g_mq_wal_thread, NULL);
+    }
+}
+
+CSILK_INTERNAL void
+_mq_wal_flush(void)
+{
+    pthread_mutex_lock(&g_mq_wal_mutex);
+    while (g_mq_wal_queue_head != NULL) {
+        pthread_mutex_unlock(&g_mq_wal_mutex);
+        usleep(1000); // 1ms
+        pthread_mutex_lock(&g_mq_wal_mutex);
+    }
+    pthread_mutex_unlock(&g_mq_wal_mutex);
+}
+
 CSILK_INTERNAL int
 _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
@@ -68,49 +170,44 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
         return 0;
     }
 
-    csilk_mutex_lock(&mq->wal_mutex);
-
-    uint32_t topic_len = (uint32_t)strlen(topic);
-    uint32_t payload_len = (uint32_t)len;
-    uint32_t checksum = 0;
-
-    for (uint32_t i = 0; i < topic_len; i++) {
-        checksum ^= (uint8_t)topic[i];
-    }
-    const uint8_t* p = (const uint8_t*)payload;
-    if (p) {
-        for (uint32_t i = 0; i < payload_len; i++) {
-            checksum ^= p[i];
+    pthread_mutex_lock(&g_mq_wal_mutex);
+    if (!g_mq_wal_thread_started && !g_mq_wal_shutdown) {
+        if (pthread_create(&g_mq_wal_thread, NULL, mq_wal_writer_thread, NULL) == 0) {
+            g_mq_wal_thread_started = 1;
+            atexit(mq_wal_cleanup);
         }
     }
+    pthread_mutex_unlock(&g_mq_wal_mutex);
 
-    csilk_io_buf_t bufs[5];
-    bufs[0] = csilk_io_buf_init((char*)&topic_len, 4);
-    bufs[1] = csilk_io_buf_init((char*)topic, topic_len);
-    bufs[2] = csilk_io_buf_init((char*)&payload_len, 4);
-    bufs[3] = csilk_io_buf_init((char*)payload, payload_len);
-    bufs[4] = csilk_io_buf_init((char*)&checksum, 4);
-
-    CSILK_LOG_T("MQ: Appending message to WAL. Topic: '%s', Length: %zu, Checksum: 0x%08x",
-                topic,
-                len,
-                checksum);
-
-    csilk_io_fs_t write_req;
-    int result = csilk_io_fs_write(mq->loop, &write_req, mq->wal_fd, bufs, 5, -1, nullptr);
-    csilk_io_fs_req_cleanup(&write_req);
-
-    if (result >= 0) {
-        csilk_io_fs_t sync_req;
-        csilk_io_fs_fsync(mq->loop, &sync_req, mq->wal_fd, nullptr);
-        csilk_io_fs_req_cleanup(&sync_req);
-        CSILK_LOG_D("MQ: Successfully appended and synced message to WAL for topic '%s'", topic);
-    } else {
-        CSILK_LOG_E("MQ: Failed to write message to WAL (error: %d) for topic '%s'", result, topic);
+    mq_wal_task_t* task = malloc(sizeof(mq_wal_task_t));
+    if (!task) {
+        return -1;
     }
+    task->fd = mq->wal_fd;
+    task->topic = strdup(topic);
+    task->len = len;
+    if (len > 0 && payload) {
+        task->payload = malloc(len);
+        if (task->payload) {
+            memcpy(task->payload, payload, len);
+        }
+    } else {
+        task->payload = NULL;
+    }
+    task->next = NULL;
 
-    csilk_mutex_unlock(&mq->wal_mutex);
-    return (result >= 0) ? 0 : -1;
+    pthread_mutex_lock(&g_mq_wal_mutex);
+    if (g_mq_wal_queue_tail) {
+        g_mq_wal_queue_tail->next = task;
+        g_mq_wal_queue_tail = task;
+    } else {
+        g_mq_wal_queue_head = task;
+        g_mq_wal_queue_tail = task;
+    }
+    pthread_cond_signal(&g_mq_wal_cond);
+    pthread_mutex_unlock(&g_mq_wal_mutex);
+
+    return 0;
 }
 
 /** @brief Recover undelivered messages from the WAL on startup.
@@ -150,6 +247,8 @@ _mq_recovery(csilk_mq_t* mq)
     if (!mq || mq->wal_fd < 0) {
         return 0;
     }
+
+    _mq_wal_flush();
 
     CSILK_LOG_I("MQ: Starting WAL recovery from path '%s'",
                 mq->wal_path ? mq->wal_path : "unknown");
@@ -334,6 +433,8 @@ csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
     CSILK_LOG_I("MQ: Enabling WAL persistence at path '%s'", wal_path);
 
     csilk_mutex_lock(&mq->wal_mutex);
+
+    _mq_wal_flush();
 
     if (mq->wal_fd >= 0) {
         CSILK_LOG_I("MQ: Closing active WAL file descriptor: %d", mq->wal_fd);
