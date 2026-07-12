@@ -10,7 +10,7 @@
 
 #define PORT 8899
 
-static volatile int server_ready = 0;
+static _Atomic int server_ready = 0;
 
 static void
 test_handler(csilk_ctx_t* c)

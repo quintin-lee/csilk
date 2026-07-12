@@ -23,7 +23,7 @@ dummy_handler(csilk_ctx_t* c)
     csilk_string(c, CSILK_STATUS_OK, "OK");
 }
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* global_server = nullptr;
 
 static void*

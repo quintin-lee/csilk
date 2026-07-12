@@ -141,7 +141,7 @@ struct csilk_server_s {
     csilk_server_config_t config;             /**< Server configuration. */
     csilk_handler_t       middlewares[32];    /**< Global middlewares. */
     int                   middleware_count;   /**< Number of global middlewares. */
-    int                   max_connections;    /**< Max concurrent connections (0=unlimited). */
+    atomic_int            max_connections;    /**< Max concurrent connections (0=unlimited). */
     atomic_int            active_connections; /**< Current connection count (atomic). */
     csilk_thread_t*       worker_tids;        /**< Worker thread IDs (nullptr if single-thread). */
     int                   worker_count;       /**< Number of worker threads created. */

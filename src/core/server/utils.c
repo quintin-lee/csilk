@@ -37,8 +37,8 @@
 static _Atomic uint32_t g_nonce_counter = 0;
 
 #ifdef TEST_OOM
-int g_oom_fail_after = -1;
-int g_oom_count = 0;
+_Atomic int g_oom_fail_after = -1;
+_Atomic int g_oom_count = 0;
 #endif
 
 /* --- SHA256 Implementation --- */

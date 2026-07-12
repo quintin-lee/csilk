@@ -13,7 +13,7 @@
 #define PORT 8103
 #define BUFSIZE 8192
 
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 
 static void

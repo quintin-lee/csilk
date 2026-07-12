@@ -155,7 +155,7 @@ admin_stats_check(csilk_ctx_t* c)
 
 /* ---- Server thread ---- */
 
-static volatile int server_ready = 0;
+static _Atomic int server_ready = 0;
 
 static void*
 run_server(void* arg)

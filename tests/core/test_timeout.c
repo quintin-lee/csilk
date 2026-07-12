@@ -14,7 +14,7 @@
 #define TEST_PORT 8111
 
 static csilk_server_t* g_server = nullptr;
-static volatile int    server_ready = 0;
+static _Atomic int     server_ready = 0;
 
 void
 idle_handler(csilk_ctx_t* c)
