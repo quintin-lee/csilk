@@ -9,6 +9,8 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
         return;
     }
 
+    _wf_wal_flush();
+
     _wf_cleanup_stale_ctx(wf, exec_id);
 
     char wal_path[512];
@@ -150,6 +152,8 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
     if (!wf || !exec_id || !wf->wal_dir) {
         return;
     }
+
+    _wf_wal_flush();
 
     _wf_cleanup_stale_ctx(wf, exec_id);
 

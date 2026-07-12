@@ -74,4 +74,6 @@ typedef struct __attribute__((packed)) {
 CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len);
 
+CSILK_INTERNAL void _wf_wal_flush(void);
+
 #endif /* CSILK_WORKFLOW_WAL_H */
