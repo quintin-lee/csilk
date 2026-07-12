@@ -113,14 +113,27 @@ option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" O
 find_program(CLANG_FORMAT_EXECUTABLE clang-format)
 if(CLANG_FORMAT_EXECUTABLE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
-    
-    add_custom_target(format ALL
+
+    # Collect all C/H source files for formatting checks
+    file(GLOB_RECURSE CSILK_FORMAT_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+    )
+
+    add_custom_target(format
         COMMAND ${CMAKE_COMMAND}
             -DCLANG_FORMAT=${CLANG_FORMAT_EXECUTABLE}
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/format.cmake
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Formatting C/H files with clang-format..."
+    )
+
+    add_custom_target(check-format
+        COMMAND ${CLANG_FORMAT_EXECUTABLE} --dry-run --Werror ${CSILK_FORMAT_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Checking code formatting (dry-run)..."
     )
 
     # Treat implicit function declarations as errors (caught by clang-format scan)
