@@ -172,7 +172,7 @@ struct csilk_client_s {
     csilk_io_timer_t write_timer;      /**< Write timeout timer. */
     csilk_io_timer_t request_timer;    /**< Request timeout timer. */
     int              close_pending;    /**< Pending close refs before freeing client. */
-    int              async_ref;        /**< Active asynchronous tasks reference counter. */
+    _Atomic int      async_ref;        /**< Active asynchronous tasks reference counter. */
     int              read_paused;
     unsigned         read_active : 1;
     unsigned         keep_alive : 1;   /**< Cached keep-alive decision from
