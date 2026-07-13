@@ -15,11 +15,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       # We need ninja and cmake installed
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
           
@@ -28,6 +28,8 @@ jobs:
         
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
         run: brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 libuv
 
       - name: Build wheels
@@ -48,7 +50,7 @@ jobs:
             libuv-devel
             pkgconfig
           
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: cibw-wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -57,10 +59,10 @@ jobs:
     name: Make SDist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build SDist
         run: pipx run build --sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: cibw-sdist
           path: dist/*.tar.gz

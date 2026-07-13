@@ -17,15 +17,15 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-${{ matrix.build_type }}-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -33,7 +33,7 @@ jobs:
           ${{ runner.os }}-${{ matrix.build_type }}-deps-
 
     - name: Cache ccache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cache/ccache
@@ -53,6 +53,8 @@ jobs:
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
+      env:
+        HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
       run: |
         brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 ccache libuv
 
@@ -114,10 +116,10 @@ jobs:
     name: Lint & Static Analysis
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-lint-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -153,10 +155,10 @@ jobs:
     name: Fuzz Testing
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-fuzz-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -193,7 +195,7 @@ jobs:
     name: ARM64 Cross-Compile
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Install cross-compilation toolchain
       run: |
@@ -240,10 +242,10 @@ jobs:
     name: io_uring compatibility
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-uring-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -286,10 +288,10 @@ jobs:
     name: ThreadSanitizer
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-tsan-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -320,12 +322,12 @@ jobs:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build_bench/_deps
         key: ${{ runner.os }}-bench-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
@@ -352,7 +354,7 @@ jobs:
       run: ./scripts/run_benchmarks.sh --ci
 
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: benchmark-results
         path: benchmarks/results/
@@ -361,10 +363,10 @@ jobs:
     name: Examples Smoke Test
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: build/_deps
         key: ${{ runner.os }}-examples-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
