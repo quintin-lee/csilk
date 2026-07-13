@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file crypto.h
  * @brief Cryptographic utility functions for secure randomness and nonces.
@@ -8,9 +9,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_CRYPTO_H
-#define CSILK_CRYPTO_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -91,5 +89,3 @@ typedef struct {
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* CSILK_CRYPTO_H */

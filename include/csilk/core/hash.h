@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file hash.h
  * @brief Hashing primitives — SHA-1, SHA-256, HMAC-SHA256.
@@ -11,9 +12,6 @@
  *       (RFC 6455).  Do not use for security-critical hashing.
  * @copyright MIT License
  */
-
-#ifndef CSILK_HASH_H
-#define CSILK_HASH_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -114,5 +112,3 @@ void csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32]);
  */
 void csilk_hmac_sha256(
     const uint8_t* key, size_t key_len, const uint8_t* data, size_t data_len, uint8_t out[32]);
-
-#endif /* CSILK_HASH_H */

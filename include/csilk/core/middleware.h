@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file middleware.h
  * @brief Built-in middleware and utility handlers for the csilk framework.
@@ -10,9 +11,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_MIDDLEWARE_H
-#define CSILK_MIDDLEWARE_H
 
 #include "csilk/core/types.h"
 #include "csilk/core/context.h"
@@ -344,5 +342,3 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
 char* csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c);
 void  csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
 char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);
-
-#endif /* CSILK_MIDDLEWARE_H */

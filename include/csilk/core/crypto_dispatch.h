@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file crypto_dispatch.h
  * @brief Internal crypto/cipher dispatch stubs and helpers.
@@ -8,9 +9,6 @@
  * helpers used by protocol implementations.
  * @copyright MIT License
  */
-
-#ifndef CSILK_CRYPTO_DISPATCH_H
-#define CSILK_CRYPTO_DISPATCH_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -283,5 +281,3 @@ CSILK_INTERNAL int _csilk_jwt_verify(csilk_ctx_t*    c,
  *                  NUL-terminated UUID string.
  */
 void csilk_generate_uuid(char* buf);
-
-#endif /* CSILK_CRYPTO_DISPATCH_H */

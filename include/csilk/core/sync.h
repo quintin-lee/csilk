@@ -1,5 +1,4 @@
-#ifndef CSILK_SYNC_H
-#define CSILK_SYNC_H
+#pragma once
 
 #ifdef CSILK_USE_URING
 #include <pthread.h>
@@ -110,5 +109,3 @@ csilk_cond_destroy(csilk_cond_t* cond)
     uv_cond_destroy(cond);
 }
 #endif
-
-#endif /* CSILK_SYNC_H */

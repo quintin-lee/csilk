@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file csilk_test.h
  * @brief Test helpers for out-of-memory (OOM) simulation and mock allocation.
@@ -20,9 +21,6 @@
  * functions).
  * @copyright MIT License
  */
-
-#ifndef CSILK_TEST_H
-#define CSILK_TEST_H
 
 #include <stdlib.h>
 
@@ -163,5 +161,3 @@ int
 csilk_test_ctx_count_response_headers(csilk_ctx_t* c, const char* key, const char* value_contains);
 
 /** @} */
-
-#endif /* CSILK_TEST_H */

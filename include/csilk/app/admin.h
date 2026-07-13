@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file admin.h
  * @brief Unified administration and monitoring controller for the csilk
@@ -6,9 +7,6 @@
  * Provides a web-based dashboard for real-time observability of HTTP metrics,
  * AI Workflows, and the Internal Message Queue.
  */
-
-#ifndef CSILK_APP_ADMIN_H
-#define CSILK_APP_ADMIN_H
 
 #include "csilk/core/types.h"
 
@@ -42,5 +40,3 @@ void csilk_admin_serve(csilk_app_t* app, const char* path);
  * @param auth_middleware The middleware to use for authentication.
  */
 void csilk_admin_serve_secure(csilk_app_t* app, const char* path, csilk_handler_t auth_middleware);
-
-#endif /* CSILK_APP_ADMIN_H */

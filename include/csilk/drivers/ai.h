@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file ai.h
  * @brief Unified pluggable interface for AI/LLM service integration.
@@ -22,9 +23,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_AI_H
-#define CSILK_AI_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -271,5 +269,3 @@ void csilk_ai_context_clear(csilk_ai_context_t* ctx);
 
 /** @brief Free a conversation context. */
 void csilk_ai_context_free(csilk_ai_context_t* ctx);
-
-#endif /* CSILK_AI_H */

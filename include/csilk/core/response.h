@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file response.h
  * @brief HTTP response functions for the csilk framework.
@@ -8,9 +9,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_RESPONSE_H
-#define CSILK_RESPONSE_H
 
 #include "csilk/core/types.h"
 
@@ -207,5 +205,3 @@ void csilk_response_end(csilk_ctx_t* c);
  * @return The promised stream ID on success, or < 0 on error.
  */
 int32_t csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path);
-
-#endif /* CSILK_RESPONSE_H */

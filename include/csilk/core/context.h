@@ -1,3 +1,4 @@
+#pragma once
 #include "csilk/core/sys_io.h"
 /**
  * @file context.h
@@ -10,9 +11,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_CONTEXT_H
-#define CSILK_CONTEXT_H
 
 #include "csilk/core/types.h"
 #include "csilk/core/crypto.h"
@@ -668,5 +666,3 @@ void csilk_ctx_defer_free(csilk_ctx_t* c);
  *                   or nullptr if no query was present.
  */
 void csilk_split_url(const char* url, char** path, char** query);
-
-#endif /* CSILK_CONTEXT_H */

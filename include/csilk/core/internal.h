@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file internal.h
  * @brief Internal framework primitives — umbrella header.
@@ -14,9 +15,6 @@
  *   - **mq_internal.h** — Message Queue types and internal API.
  * @copyright MIT License
  */
-
-#ifndef CSILK_INTERNAL_H
-#define CSILK_INTERNAL_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -47,5 +45,3 @@ enum { CSILK_UUID_STR_LEN = 36 };
 
 /** @brief Full buffer size for a UUID v4 string (str_len + null terminator). */
 enum { CSILK_UUID_BUF_SIZE = 37 };
-
-#endif

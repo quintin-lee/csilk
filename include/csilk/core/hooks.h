@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file hooks.h
  * @brief Lifecycle hook system for the csilk server framework.
@@ -8,9 +9,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_HOOKS_H
-#define CSILK_HOOKS_H
 
 #include "csilk/core/types.h"
 
@@ -64,5 +62,3 @@ typedef void (*csilk_ctx_hook_handler_t)(csilk_ctx_t* c);
  *                SERVER_*, csilk_ctx_hook_handler_t for others).
  */
 void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler);
-
-#endif /* CSILK_HOOKS_H */

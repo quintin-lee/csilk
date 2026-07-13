@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file vector.h
  * @brief Unified pluggable interface for Vector Database integration.
@@ -6,9 +7,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_VECTOR_H
-#define CSILK_VECTOR_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -111,5 +109,3 @@ void csilk_vector_search_response_free(csilk_vector_search_response_t* res);
 
 /** @brief Register a driver. */
 void csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver);
-
-#endif /* CSILK_VECTOR_H */

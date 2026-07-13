@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file workflow.h
  * @brief AI Workflow engine for the csilk framework.
@@ -32,9 +33,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_WORKFLOW_H
-#define CSILK_WORKFLOW_H
 
 #include "csilk/app/app.h"
 #include "csilk/drivers/ai.h"
@@ -521,5 +519,3 @@ void csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c);
  * @param max_tokens Maximum total tokens (prompt + completion) allowed.
  */
 void csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens);
-
-#endif /* CSILK_WORKFLOW_H */
