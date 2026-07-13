@@ -77,7 +77,7 @@ jobs:
         ./scripts/package.sh --shared
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: packages-${{ runner.os }}
         path: build-pkg/csilk-*.tar.gz*
@@ -96,7 +96,7 @@ jobs:
         fetch-depth: 0
 
     - name: Download all build artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v6
       with:
         merge-multiple: true
 
