@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file csilk_db.h
  * @brief Unified pluggable database interface for the csilk web framework.
@@ -9,9 +10,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_DB_H
-#define CSILK_DB_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -300,5 +298,3 @@ csilk_storage_driver_t* csilk_redis_storage_driver_new(csilk_db_pool_t* pool);
  * Safe to call multiple times.
  */
 void csilk_db_init(void);
-
-#endif /* CSILK_DB_H */

@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file ws_frame.h
  * @brief WebSocket frame parsing and dispatch (RFC 6455).
@@ -6,9 +7,6 @@
  * to handle incoming WebSocket data on an established connection.
  * @copyright MIT License
  */
-
-#ifndef CSILK_WS_FRAME_H
-#define CSILK_WS_FRAME_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -28,5 +26,3 @@ typedef struct csilk_ctx_s csilk_ctx_t;
  * @param nread Number of bytes in @p buf.
  */
 void csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread);
-
-#endif /* CSILK_WS_FRAME_H */

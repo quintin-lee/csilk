@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file csilk_reflect.h
  * @brief Csilk compile-time reflection and JSON binding engine.
@@ -9,9 +10,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_REFLECT_H
-#define CSILK_REFLECT_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -322,5 +320,3 @@ void csilk_struct_free_reflect(const char* type_name, void* ptr);
         size_t count = (sizeof(struct_type##_meta) / sizeof(csilk_field_desc_t)) - 1;              \
         csilk_reflect_register(#struct_type, struct_type##_meta, count);                           \
     }
-
-#endif

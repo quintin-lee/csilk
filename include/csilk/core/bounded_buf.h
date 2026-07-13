@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file bounded_buf.h
  * @brief Bounded string buffer with a stack-friendly JSON builder.
@@ -16,9 +17,6 @@
  * payloads.
  * @copyright MIT License
  */
-
-#ifndef CSILK_BOUNDED_BUF_H
-#define CSILK_BOUNDED_BUF_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -163,5 +161,3 @@ csilk_bounded_json_error(csilk_bounded_json_t* j, char* buf, size_t capacity, co
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* CSILK_BOUNDED_BUF_H */

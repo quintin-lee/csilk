@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file codec.h
  * @brief Encoding/decoding primitives — Base64, Base64URL, URL percent-decode.
@@ -7,9 +8,6 @@
  * and WebSocket handshake key computation (Base64).
  * @copyright MIT License
  */
-
-#ifndef CSILK_CODEC_H
-#define CSILK_CODEC_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -64,5 +62,3 @@ int csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap);
  *         of the original).
  */
 size_t csilk_url_decode(char* str);
-
-#endif /* CSILK_CODEC_H */

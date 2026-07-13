@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file admin.h
  * @brief Administration dashboard and monitoring controller.
@@ -10,9 +11,4 @@
  * @copyright MIT License
  */
 
-#ifndef CSILK_ADMIN_H
-#define CSILK_ADMIN_H
-
 #include "csilk/app/admin.h"
-
-#endif /* CSILK_ADMIN_H */

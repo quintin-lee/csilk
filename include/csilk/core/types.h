@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file types.h
  * @brief Core data types for the csilk HTTP web framework.
@@ -9,9 +10,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_TYPES_H
-#define CSILK_TYPES_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -347,5 +345,3 @@ const char* csilk_str_view_persist(csilk_ctx_t* c, const csilk_str_view_t* view)
 void* csilk_malloc(size_t size);
 void  csilk_free(void* ptr);
 char* csilk_strdup(const char* s);
-
-#endif /* CSILK_TYPES_H */

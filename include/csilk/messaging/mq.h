@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file mq.h
  * @brief In-process Message Queue (pub/sub event bus) for the csilk framework.
@@ -10,9 +11,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_MQ_H
-#define CSILK_MQ_H
 
 #include "csilk/core/types.h"
 
@@ -198,5 +196,3 @@ void csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c);
  * @return 0 on success, non-zero on file-open failure.
  */
 int csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path);
-
-#endif /* CSILK_MQ_H */

@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file cipher.h
  * @brief Pluggable cryptographic primitive driver interface.
@@ -16,9 +17,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_CIPHER_H
-#define CSILK_CIPHER_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -209,6 +207,4 @@ typedef struct {
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
