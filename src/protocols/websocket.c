@@ -72,10 +72,12 @@ csilk_ws_handshake(csilk_ctx_t* c)
 
     char accept_key[32];
     csilk_base64_encode(digest, 20, accept_key);
+    explicit_bzero(digest, sizeof(digest));
 
     csilk_set_header(c, "Upgrade", "websocket");
     csilk_set_header(c, "Connection", "Upgrade");
     csilk_set_header(c, "Sec-WebSocket-Accept", accept_key);
+    explicit_bzero(accept_key, sizeof(accept_key));
 
     csilk_status(c, CSILK_STATUS_SWITCHING_PROTOCOLS);
     csilk_ctx_set_websocket(c, 1);

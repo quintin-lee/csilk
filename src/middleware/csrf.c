@@ -53,6 +53,7 @@ csilk_csrf_middleware(csilk_ctx_t* c)
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
                 csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", nullptr, 0, 1);
             }
+            explicit_bzero(token_buf, sizeof(token_buf));
         }
         csilk_next(c);
         return;
@@ -132,6 +133,7 @@ csilk_csrf_generate_token(char* buf, size_t buf_size)
     } else {
         uint8_t random[16];
         if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
+            explicit_bzero(random, sizeof(random));
             fclose(fp);
             return -1;
         }
@@ -156,6 +158,7 @@ csilk_csrf_generate_token(char* buf, size_t buf_size)
                  random[13],
                  random[14],
                  random[15]);
+        explicit_bzero(random, sizeof(random));
     }
     return 0;
 }

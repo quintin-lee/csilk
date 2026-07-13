@@ -125,6 +125,7 @@ jwt_generate_internal(
         _csilk_hmac_sha256(
             c, (const uint8_t*)key, key_len, (const uint8_t*)sign_input, strlen(sign_input), sig);
         csilk_base64url_encode(sig, 32, sig_b64);
+        explicit_bzero(sig, sizeof(sig));
     } else {
         size_t sig_len =
             (algorithm == CSILK_JWT_ES256) ? CSILK_ES256_SIGNATURE_SIZE : CSILK_RSA_SIGNATURE_SIZE;
@@ -144,6 +145,7 @@ jwt_generate_internal(
             return nullptr;
         }
         csilk_base64url_encode(sig, sig_len, sig_b64);
+        explicit_bzero(sig, sizeof(sig));
     }
 
     /* Step 5: Assemble final token */
@@ -155,6 +157,7 @@ jwt_generate_internal(
     free(header_b64);
     free(payload_b64);
     free(sign_input);
+    explicit_bzero(sig_b64, sizeof(sig_b64));
     return token;
 }
 
@@ -207,6 +210,7 @@ jwt_verify_internal(
             c, (const uint8_t*)key, key_len, (const uint8_t*)token, sign_input_len, sig_actual);
         char sig_expected_b64[45];
         csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
+        explicit_bzero(sig_actual, sizeof(sig_actual));
         size_t sig_len = strlen(sig_ptr);
         sig_ok = (sig_len == strlen(sig_expected_b64)) &&
                  (constant_time_compare(
@@ -225,6 +229,7 @@ jwt_verify_internal(
                                         (size_t)dec_len,
                                         algorithm) == 0);
         }
+        explicit_bzero(sig_decoded, sizeof(sig_decoded));
     }
 
     if (!sig_ok) {
