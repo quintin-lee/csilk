@@ -427,18 +427,18 @@ csilk_group_add_route_extended_perm(csilk_group_t*  group,
     combined_handlers[combined_count] = handler;
     combined_count++;
 
-    csilk_router_add_extended_perm(group->router,
-                                   method,
-                                   full_path,
-                                   combined_handlers,
-                                   combined_count,
-                                   full_path,
-                                   input_type,
-                                   output_type,
-                                   summary,
-                                   description,
-                                   perm_required,
-                                   perm_resource);
+    int rc = csilk_router_add_extended_perm(group->router,
+                                            method,
+                                            full_path,
+                                            combined_handlers,
+                                            combined_count,
+                                            full_path,
+                                            input_type,
+                                            output_type,
+                                            summary,
+                                            description,
+                                            perm_required,
+                                            perm_resource);
 
     CSILK_LOG_I("Group: registered route with perm: %s %s (perm: %s on %s)",
                 method,
@@ -448,6 +448,7 @@ csilk_group_add_route_extended_perm(csilk_group_t*  group,
 
     free(full_path);
     free(combined_handlers);
+    return rc;
 }
 
 /** @brief Register a route with a custom chain of handlers (middleware + route

@@ -288,18 +288,18 @@ csilk_router_add_extended(csilk_router_t*  r,
                           const char*      summary,
                           const char*      description)
 {
-    router_add_full(r,
-                    method,
-                    path,
-                    handlers,
-                    handler_count,
-                    path_pattern,
-                    input_type,
-                    output_type,
-                    summary,
-                    description,
-                    nullptr,
-                    nullptr);
+    return router_add_full(r,
+                           method,
+                           path,
+                           handlers,
+                           handler_count,
+                           path_pattern,
+                           input_type,
+                           output_type,
+                           summary,
+                           description,
+                           nullptr,
+                           nullptr);
 }
 
 int
@@ -322,18 +322,18 @@ csilk_router_add_perm(csilk_router_t*  r,
                       const char*      perm_required,
                       const char*      perm_resource)
 {
-    router_add_full(r,
-                    method,
-                    path,
-                    handlers,
-                    handler_count,
-                    path,
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    perm_required,
-                    perm_resource);
+    return router_add_full(r,
+                           method,
+                           path,
+                           handlers,
+                           handler_count,
+                           path,
+                           nullptr,
+                           nullptr,
+                           nullptr,
+                           nullptr,
+                           perm_required,
+                           perm_resource);
 }
 
 int
@@ -350,18 +350,18 @@ csilk_router_add_extended_perm(csilk_router_t*  r,
                                const char*      perm_required,
                                const char*      perm_resource)
 {
-    router_add_full(r,
-                    method,
-                    path,
-                    handlers,
-                    handler_count,
-                    path_pattern,
-                    input_type,
-                    output_type,
-                    summary,
-                    description,
-                    perm_required,
-                    perm_resource);
+    return router_add_full(r,
+                           method,
+                           path,
+                           handlers,
+                           handler_count,
+                           path_pattern,
+                           input_type,
+                           output_type,
+                           summary,
+                           description,
+                           perm_required,
+                           perm_resource);
 }
 
 csilk_handler_t*
