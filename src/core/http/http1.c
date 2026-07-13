@@ -678,6 +678,8 @@ _csilk_dispatch_request(csilk_ctx_t* c)
  *   - Fire CSILK_HOOK_REQUEST_END, clean up context.
  *
  * @param c Request context (must have _internal_client set).
+ */
+
 /**
  * @brief Serialize the HTTP/1.1 status line and headers into a buffer.
  *
