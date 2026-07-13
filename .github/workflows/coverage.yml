@@ -45,7 +45,7 @@ jobs:
         gcovr -r . build/ --html-details build/coverage/index.html --xml build/coverage/coverage.xml --print-summary --filter src/ --gcov-ignore-parse-errors=negative_hits.warn
 
     - name: Upload coverage report
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: coverage-report
         path: build/coverage/

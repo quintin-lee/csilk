@@ -49,7 +49,7 @@ jobs:
           bash ../scripts/run_benchmarks.sh --save
 
       - name: Upload Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-results-${{ github.sha }}
           path: benchmarks/results/latest.json
@@ -124,7 +124,7 @@ jobs:
             --output profile-output
 
       - name: Upload FlameGraph
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: flamegraph
           path: profile-output/flamegraph.svg

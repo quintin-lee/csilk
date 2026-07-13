@@ -50,7 +50,7 @@ jobs:
             libuv-devel
             pkgconfig
           
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: cibw-wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build SDist
         run: pipx run build --sdist
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: cibw-sdist
           path: dist/*.tar.gz
