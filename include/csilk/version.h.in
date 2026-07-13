@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file version.h
  * @brief Csilk framework version identifier.
@@ -6,8 +7,6 @@
  * @copyright MIT License
  */
 
-#ifndef CSILK_VERSION_H
-#define CSILK_VERSION_H
 
 /**
  * @brief Csilk framework version string (MAJOR.MINOR.PATCH).
@@ -15,5 +14,4 @@
  */
 #define CSILK_VERSION "@CSILK_VERSION@"
 
-#endif /* CSILK_VERSION_H */
 

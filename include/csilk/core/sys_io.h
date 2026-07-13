@@ -1,5 +1,4 @@
-#ifndef CSILK_SYS_IO_H
-#define CSILK_SYS_IO_H
+#pragma once
 
 #ifdef CSILK_USE_URING
 
@@ -422,5 +421,3 @@ csilk_io_getrusage(csilk_io_rusage_t* rusage)
     return getrusage(RUSAGE_SELF, rusage);
 }
 #endif
-
-#endif /* CSILK_SYS_IO_H */

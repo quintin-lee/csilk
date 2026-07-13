@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file perm.h
  * @brief Pluggable permission/access-control (ACL) driver interface.
@@ -13,9 +14,6 @@
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_PERM_H
-#define CSILK_PERM_H
 
 /** @brief Forward declaration of the request context (defined in csilk.h). */
 typedef struct csilk_ctx_s csilk_ctx_t;
@@ -111,5 +109,3 @@ void csilk_perm_simple_clear(void);
  *  403 if the check fails.  Safe to call even if the route has no
  *  permission metadata (passes through). */
 void csilk_perm_auto_middleware(csilk_ctx_t* c);
-
-#endif

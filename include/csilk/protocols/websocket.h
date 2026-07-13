@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file websocket.h
  * @brief WebSocket upgrade, framing, and room management for the csilk framework.
@@ -5,9 +6,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_WEBSOCKET_H
-#define CSILK_WEBSOCKET_H
 
 #include "csilk/core/types.h"
 
@@ -72,5 +70,3 @@ void csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name);
 void csilk_ws_broadcast_room(csilk_ctx_t* c, const char* room_name, const char* message);
 
 /** @} */
-
-#endif /* CSILK_WEBSOCKET_H */

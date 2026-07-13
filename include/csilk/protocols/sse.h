@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file sse.h
  * @brief Server-Sent Events (SSE) functions for the csilk framework.
@@ -5,9 +6,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_SSE_H
-#define CSILK_SSE_H
 
 #include "csilk/core/types.h"
 
@@ -43,5 +41,3 @@ void csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data);
  * @param c  The request context.
  */
 void csilk_sse_close(csilk_ctx_t* c);
-
-#endif /* CSILK_SSE_H */

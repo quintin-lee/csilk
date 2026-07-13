@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file csilk_app.h
  * @brief High-level convenience API for the csilk framework.
@@ -34,9 +35,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_APP_H
-#define CSILK_APP_H
 
 /** @brief Opaque application handle. */
 typedef struct csilk_app_s csilk_app_t;
@@ -369,5 +367,3 @@ csilk_router_t* csilk_app_router(csilk_app_t* app);
  * @param app Application handle.
  * @return Server handle. */
 csilk_server_t* csilk_app_server(csilk_app_t* app);
-
-#endif /* CSILK_APP_H */

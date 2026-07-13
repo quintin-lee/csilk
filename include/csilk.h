@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file csilk.h
  * @brief Umbrella header for the csilk web framework.
@@ -9,9 +10,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_H
-#define CSILK_H
 
 #include "csilk/version.h"
 #include "csilk/core/errors.h"
@@ -32,5 +30,3 @@
 #include "csilk/app/workflow.h"
 #include "csilk/core/admin.h"
 #include "csilk/core/hot_reload.h"
-
-#endif /* CSILK_H */

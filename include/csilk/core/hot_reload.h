@@ -1,12 +1,10 @@
+#pragma once
 /**
  * @file hot_reload.h
  * @brief Live-reload (Hot Reload) development mechanism for csilk.
  *
  * @copyright MIT License
  */
-
-#ifndef CSILK_HOT_RELOAD_H
-#define CSILK_HOT_RELOAD_H
 
 typedef struct csilk_server_s csilk_server_t;
 
@@ -28,5 +26,3 @@ typedef struct csilk_server_s csilk_server_t;
  * @return 0 on success, -1 on failure.
  */
 int csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const char* init_sym);
-
-#endif /* CSILK_HOT_RELOAD_H */

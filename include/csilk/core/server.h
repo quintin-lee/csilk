@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file server.h
  * @brief Server lifecycle: creation, configuration, execution, and shutdown.
@@ -5,9 +6,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_SERVER_H
-#define CSILK_SERVER_H
 
 #include "csilk/core/router.h"
 #include "csilk/core/middleware.h"
@@ -428,5 +426,3 @@ void csilk_arena_reset(csilk_arena_t* arena);
 void csilk_arena_set_alignment(csilk_arena_t* arena, int enabled);
 
 void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
-
-#endif /* CSILK_SERVER_H */

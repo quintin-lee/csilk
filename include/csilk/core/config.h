@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file config.h
  * @brief Server and application configuration for the csilk framework.
@@ -5,9 +6,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_CONFIG_H
-#define CSILK_CONFIG_H
 
 #include "csilk/core/types.h"
 
@@ -154,5 +152,3 @@ int csilk_config_validate(const csilk_config_t* config, const char** error_msg);
  * freed.
  */
 void csilk_config_free(csilk_config_t* config);
-
-#endif /* CSILK_CONFIG_H */

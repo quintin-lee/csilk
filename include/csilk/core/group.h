@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file group.h
  * @brief Route group abstraction for prefix-scoped route registration.
@@ -8,9 +9,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_GROUP_H
-#define CSILK_GROUP_H
 
 #include "csilk/core/router.h"
 
@@ -172,5 +170,3 @@ void csilk_group_free(csilk_group_t* group);
         csilk_group_add_route(group, "HEAD", path, handler);                                       \
     } while (0)
 /** @} */
-
-#endif /* CSILK_GROUP_H */

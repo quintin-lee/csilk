@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file errors.h
  * @brief Standard HTTP status codes and validation flags for csilk.
@@ -5,9 +6,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_ERRORS_H
-#define CSILK_ERRORS_H
 
 /** @name HTTP Status Codes
  *  Standardized constants for common HTTP response status codes.
@@ -52,5 +50,3 @@ enum { CSILK_VALID_INT = 1 << 1 };
 enum { CSILK_VALID_STRING = 1 << 2 };
 enum { CSILK_VALID_EMAIL = 1 << 3 };
 /** @} */
-
-#endif /* CSILK_ERRORS_H */

@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file router.h
  * @brief High-performance HTTP router based on a compressed radix tree.
@@ -8,9 +9,6 @@
  * @version 0.3.0
  * @copyright MIT License
  */
-
-#ifndef CSILK_ROUTER_H
-#define CSILK_ROUTER_H
 
 #include "csilk/core/types.h"
 #include "csilk/core/context.h"
@@ -275,5 +273,3 @@ void csilk_serve_openapi(csilk_ctx_t*    c,
  * @param c  The request context.
  */
 void csilk_serve_swagger_ui(csilk_ctx_t* c);
-
-#endif /* CSILK_ROUTER_H */
