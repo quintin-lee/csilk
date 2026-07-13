@@ -52,7 +52,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: benchmark-results-${{ github.sha }}
-          path: benchmarks/results/latest.json
+          path: benchmarks/results/*.json
 
       - name: Compare (PR only)
         if: github.event_name == 'pull_request'
