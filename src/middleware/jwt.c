@@ -80,6 +80,10 @@ jwt_generate_internal(
 
     /* Step 1: Base64url-encode the JWT header. */
     size_t h_len = strlen(header_json);
+    if (h_len > SIZE_MAX / 4 - 1) {
+        free(header_json);
+        return nullptr;
+    }
     size_t h_b64_len = ((h_len + 2) / 3) * 4 + 1;
     header_b64 = malloc(h_b64_len);
     if (!header_b64) {
@@ -96,6 +100,11 @@ jwt_generate_internal(
         return nullptr;
     }
     size_t p_len = strlen(payload_str);
+    if (p_len > SIZE_MAX / 4 - 1) {
+        free(header_b64);
+        free(payload_str);
+        return nullptr;
+    }
     size_t p_b64_len = ((p_len + 2) / 3) * 4 + 1;
     payload_b64 = malloc(p_b64_len);
     if (!payload_b64) {
@@ -107,7 +116,14 @@ jwt_generate_internal(
     free(payload_str);
 
     /* Step 3: Build signing input: header.payload */
-    size_t sign_input_len = strlen(header_b64) + 1 + strlen(payload_b64) + 1;
+    size_t hb64_len = strlen(header_b64);
+    size_t pb64_len = strlen(payload_b64);
+    if (hb64_len > SIZE_MAX - 2 - pb64_len) {
+        free(header_b64);
+        free(payload_b64);
+        return nullptr;
+    }
+    size_t sign_input_len = hb64_len + 1 + pb64_len + 1;
     char*  sign_input = malloc(sign_input_len);
     if (!sign_input) {
         free(header_b64);
@@ -149,9 +165,18 @@ jwt_generate_internal(
     }
 
     /* Step 5: Assemble final token */
-    token = malloc(strlen(sign_input) + 1 + strlen(sig_b64) + 1);
+    size_t si_len = strlen(sign_input);
+    size_t sb_len = strlen(sig_b64);
+    if (si_len > SIZE_MAX - 2 - sb_len) {
+        free(header_b64);
+        free(payload_b64);
+        free(sign_input);
+        explicit_bzero(sig_b64, sizeof(sig_b64));
+        return nullptr;
+    }
+    token = malloc(si_len + 1 + sb_len + 1);
     if (token) {
-        snprintf(token, strlen(sign_input) + 1 + strlen(sig_b64) + 1, "%s.%s", sign_input, sig_b64);
+        snprintf(token, si_len + 1 + sb_len + 1, "%s.%s", sign_input, sig_b64);
     }
 
     free(header_b64);
