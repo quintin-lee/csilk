@@ -406,6 +406,7 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
 
     char s_key[128];
     snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
+    explicit_bzero(s_key, sizeof(s_key));
     char* val = csilk_get_string(c, s_key);
     if (val) {
         csilk_arena_t* arena = csilk_get_arena(c);
