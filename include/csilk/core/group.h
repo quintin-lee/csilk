@@ -137,19 +137,40 @@ void csilk_group_free(csilk_group_t* group);
  *  Convenience macros for adding routes to groups.
  *  @{ */
 /** @brief Register a GET route on the group. */
-#define csilk_GET(group, path, handler) csilk_group_add_route(group, "GET", path, handler)
+#define csilk_GET(group, path, handler)                                                            \
+    do {                                                                                           \
+        csilk_group_add_route(group, "GET", path, handler);                                        \
+    } while (0)
 /** @brief Register a POST route on the group. */
-#define csilk_POST(group, path, handler) csilk_group_add_route(group, "POST", path, handler)
+#define csilk_POST(group, path, handler)                                                           \
+    do {                                                                                           \
+        csilk_group_add_route(group, "POST", path, handler);                                       \
+    } while (0)
 /** @brief Register a PUT route on the group. */
-#define csilk_PUT(group, path, handler) csilk_group_add_route(group, "PUT", path, handler)
+#define csilk_PUT(group, path, handler)                                                            \
+    do {                                                                                           \
+        csilk_group_add_route(group, "PUT", path, handler);                                        \
+    } while (0)
 /** @brief Register a DELETE route on the group. */
-#define csilk_DELETE(group, path, handler) csilk_group_add_route(group, "DELETE", path, handler)
+#define csilk_DELETE(group, path, handler)                                                         \
+    do {                                                                                           \
+        csilk_group_add_route(group, "DELETE", path, handler);                                     \
+    } while (0)
 /** @brief Register a PATCH route on the group. */
-#define csilk_PATCH(group, path, handler) csilk_group_add_route(group, "PATCH", path, handler)
+#define csilk_PATCH(group, path, handler)                                                          \
+    do {                                                                                           \
+        csilk_group_add_route(group, "PATCH", path, handler);                                      \
+    } while (0)
 /** @brief Register an OPTIONS route on the group. */
-#define csilk_OPTIONS(group, path, handler) csilk_group_add_route(group, "OPTIONS", path, handler)
+#define csilk_OPTIONS(group, path, handler)                                                        \
+    do {                                                                                           \
+        csilk_group_add_route(group, "OPTIONS", path, handler);                                    \
+    } while (0)
 /** @brief Register a HEAD route on the group. */
-#define csilk_HEAD(group, path, handler) csilk_group_add_route(group, "HEAD", path, handler)
+#define csilk_HEAD(group, path, handler)                                                           \
+    do {                                                                                           \
+        csilk_group_add_route(group, "HEAD", path, handler);                                       \
+    } while (0)
 /** @} */
 
 #endif /* CSILK_GROUP_H */
