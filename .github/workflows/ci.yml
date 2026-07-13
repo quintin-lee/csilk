@@ -354,7 +354,7 @@ jobs:
       run: ./scripts/run_benchmarks.sh --ci
 
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: benchmark-results
         path: benchmarks/results/
