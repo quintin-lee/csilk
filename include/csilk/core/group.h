@@ -90,6 +90,17 @@ int csilk_group_add_route_extended(csilk_group_t*  group,
                                    const char*     summary,
                                    const char*     description);
 
+/** @brief Register a route with full metadata including permissions.
+ *  @param group         The route group.
+ *  @param method        HTTP method.
+ *  @param path          Path relative to the group prefix.
+ *  @param handler       The route handler function.
+ *  @param input_type    Registered type name for request-body binding (nullptr if none).
+ *  @param output_type   Registered type name for response serialisation (nullptr if none).
+ *  @param summary       Short operation summary for OpenAPI (nullptr to omit).
+ *  @param description   Detailed operation description for OpenAPI (nullptr to omit).
+ *  @param perm_required Permission identifier (e.g., "write"), or nullptr.
+ *  @param perm_resource Resource pattern (e.g., "users:*"), or nullptr. */
 int csilk_group_add_route_extended_perm(csilk_group_t*  group,
                                         const char*     method,
                                         const char*     path,

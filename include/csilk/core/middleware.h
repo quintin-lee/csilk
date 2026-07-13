@@ -197,8 +197,12 @@ void csilk_metrics_middleware(csilk_ctx_t* c, const char* arg);
  *
  * @param c  The request context.
  */
-void     csilk_metrics_handler(csilk_ctx_t* c);
+void csilk_metrics_handler(csilk_ctx_t* c);
+/** @brief Get the total number of requests processed.
+ *  @return Total request count since the server started. */
 uint64_t csilk_metrics_get_total_requests(void);
+/** @brief Get the cumulative request processing duration.
+ *  @return Total duration in microseconds since the server started. */
 uint64_t csilk_metrics_get_total_duration(void);
 
 /**
@@ -284,7 +288,11 @@ void csilk_session_destroy(csilk_ctx_t* c);
  */
 const char* csilk_session_get_id(csilk_ctx_t* c);
 
+/** @brief Get security-related request statistics.
+ *  @param[out] stats Pointer to receive the current security stats. */
 void csilk_security_get_stats(csilk_security_stats_t* stats);
+/** @brief Get process-level statistics (memory, CPU).
+ *  @param[out] stats Pointer to receive the current process stats. */
 void csilk_process_get_stats(csilk_process_stats_t* stats);
 
 /**
@@ -331,14 +339,43 @@ cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
 
 /* --- Extended JWT API (RS256, ES256 support) --- */
 
+/** @brief Generate a signed JWT with an explicit algorithm.
+ *  @param c         Request context (for crypto-driver access).
+ *  @param payload   cJSON claims object (not modified; caller retains ownership).
+ *  @param key       Signing key (HMAC secret or PEM private key).
+ *  @param key_len   Length of @p key in bytes.
+ *  @param algorithm JWT algorithm (CSILK_JWT_HS256, CSILK_JWT_RS256, etc.).
+ *  @return Heap-allocated JWT string (caller must free), or nullptr on failure. */
 char* csilk_jwt_generate_ex(
     csilk_ctx_t* c, cJSON* payload, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+/** @brief Verify a JWT with an explicit algorithm.
+ *  @param c         Request context.
+ *  @param token     The JWT string to verify.
+ *  @param key       Verification key (HMAC secret or PEM public key).
+ *  @param key_len   Length of @p key in bytes.
+ *  @param algorithm Expected JWT algorithm.
+ *  @return Heap-allocated cJSON payload (caller must cJSON_Delete), or nullptr if invalid/expired. */
 cJSON* csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+/** @brief JWT middleware with explicit algorithm support (RS256, ES256).
+ *  @param c         Request context.
+ *  @param key       Verification key (HMAC secret or PEM public key).
+ *  @param key_len   Length of @p key in bytes.
+ *  @param algorithm Expected JWT algorithm. */
 void
 csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
 
 /* --- JWT Payload Accessors --- */
+/** @brief Get the JWT payload as a raw JSON string.
+ *  @param c  Request context (after successful JWT verification).
+ *  @return Heap-allocated JSON string of the payload (caller must free), or nullptr. */
 char* csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c);
-void  csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
+/** @brief Free the cached JWT payload string.
+ *  @param c  Request context. */
+void csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
+/** @brief Generate a JWT from a raw JSON payload string.
+ *  @param c             Request context.
+ *  @param payload_json  NUL-terminated JSON string for the claims.
+ *  @param secret        HMAC signing secret.
+ *  @return Heap-allocated JWT string (caller must free), or nullptr on failure. */
 char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);

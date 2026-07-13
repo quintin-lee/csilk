@@ -81,6 +81,10 @@ void csilk_server_free(csilk_server_t* server);
  * @param server Server instance.
  */
 void csilk_server_stop(csilk_server_t* server);
+/** @brief Get the current connection pool statistics.
+ *  @param server      Server instance.
+ *  @param[out] active_conn  Pointer to receive active connection count (may be nullptr).
+ *  @param[out] pooled_conn  Pointer to receive pooled connection count (may be nullptr). */
 void csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn);
 
 /**
@@ -425,4 +429,8 @@ void csilk_arena_reset(csilk_arena_t* arena);
  */
 void csilk_arena_set_alignment(csilk_arena_t* arena, int enabled);
 
+/** @brief Get arena allocator usage statistics.
+ *  @param arena            The arena allocator.
+ *  @param[out] total_size  Pointer to receive total allocated bytes (may be nullptr).
+ *  @param[out] total_used  Pointer to receive bytes actually used (may be nullptr). */
 void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
