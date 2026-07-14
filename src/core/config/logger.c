@@ -504,6 +504,9 @@ csilk_log_make_kv(const char* key, ...)
     if (!obj) {
         return nullptr;
     }
+    if (!key) {
+        return obj;
+    }
     const char* k = key;
     va_list     args;
     va_start(args, key);

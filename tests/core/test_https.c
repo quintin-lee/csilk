@@ -115,7 +115,13 @@ test_https_get()
         return;
     }
 
-    int                sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("  [CLIENT] Socket creation failed");
+        test_result("HTTPS GET (socket)", 0);
+        SSL_CTX_free(ctx);
+        return;
+    }
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -174,7 +180,12 @@ test_https_keepalive()
     const SSL_METHOD* method = TLS_client_method();
     SSL_CTX*          ctx = SSL_CTX_new(method);
 
-    int                sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        test_result("HTTPS Keep-Alive (socket)", 0);
+        SSL_CTX_free(ctx);
+        return;
+    }
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
