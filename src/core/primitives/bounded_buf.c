@@ -131,7 +131,7 @@ uint64_to_str(char* end, uint64_t n)
 void
 csilk_bounded_buf_puti(csilk_bounded_buf_t* b, int64_t n)
 {
-    char  tmp[24];
+    char  tmp[25]; /* 20 digits + sign + null terminator */
     char* end = tmp + sizeof(tmp);
     if (n < 0) {
         csilk_bounded_buf_putc(b, '-');
@@ -145,7 +145,7 @@ csilk_bounded_buf_puti(csilk_bounded_buf_t* b, int64_t n)
 void
 csilk_bounded_buf_putu(csilk_bounded_buf_t* b, uint64_t n)
 {
-    char  tmp[24];
+    char  tmp[25]; /* 20 digits + sign + null terminator */
     char* end = uint64_to_str(tmp + sizeof(tmp), n);
     csilk_bounded_buf_puts(b, end);
 }

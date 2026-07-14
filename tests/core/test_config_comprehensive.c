@@ -110,6 +110,9 @@ test_level_parsing(void)
                        "  level: WARN\n";
 
     FILE* f = fopen("test_level_warn.yaml", "w");
+    if (!f) {
+        return;
+    }
     fputs(yaml, f);
     fclose(f);
 
@@ -129,6 +132,9 @@ test_level_error(void)
                        "  level: ERROR\n";
 
     FILE* f = fopen("test_level_error.yaml", "w");
+    if (!f) {
+        return;
+    }
     fputs(yaml, f);
     fclose(f);
 
@@ -148,6 +154,9 @@ test_level_fatal(void)
                        "  level: FATAL\n";
 
     FILE* f = fopen("test_level_fatal.yaml", "w");
+    if (!f) {
+        return;
+    }
     fputs(yaml, f);
     fclose(f);
 
@@ -167,6 +176,9 @@ test_level_unknown(void)
                        "  level: UNKNOWN\n";
 
     FILE* f = fopen("test_level_unknown.yaml", "w");
+    if (!f) {
+        return;
+    }
     fputs(yaml, f);
     fclose(f);
 

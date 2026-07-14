@@ -61,7 +61,14 @@ main()
         retries++;
     }
 
-    int                sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        printf("FAIL: socket creation\n");
+        csilk_server_stop(g_server);
+        pthread_join(thread, nullptr);
+        return 1;
+    }
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");

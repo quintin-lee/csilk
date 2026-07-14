@@ -30,6 +30,9 @@ main()
                                "  prefix: /static\n";
 
     FILE* f = fopen("test_config_ext.yaml", "w");
+    if (!f) {
+        return 1;
+    }
     fputs(yaml_content, f);
     fclose(f);
 

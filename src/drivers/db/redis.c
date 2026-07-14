@@ -85,10 +85,12 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
         const char* val = eq + 1;
 
         if (strcmp(key, "host") == 0) {
+            free(*host);
             *host = strdup(val);
         } else if (strcmp(key, "port") == 0) {
             *port = atoi(val);
         } else if (strcmp(key, "password") == 0) {
+            free(*password);
             *password = strdup(val);
         } else if (strcmp(key, "db") == 0) {
             *db = atoi(val);
@@ -412,7 +414,9 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
         }
 
         result->row_count = is_hash ? (int)(reply->elements / 2) : (int)reply->elements;
-        result->rows = calloc(result->row_count, sizeof(csilk_db_row_t*));
+        result->rows = result->row_count > 0
+                           ? calloc((size_t)result->row_count, sizeof(csilk_db_row_t*))
+                           : nullptr;
         if (!result->rows && result->row_count > 0) {
             free(result->column_names);
             freeReplyObject(reply);
