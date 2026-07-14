@@ -16,6 +16,9 @@ main()
                                "  tls_verify_peer: 1\n";
 
     FILE* f = fopen("test_config_tls.yaml", "w");
+    if (!f) {
+        return 1;
+    }
     fputs(yaml_content, f);
     fclose(f);
 

@@ -20,6 +20,9 @@ static void
 setup_test_file()
 {
     FILE* f = fopen("./test_direct_file.txt", "w");
+    if (!f) {
+        return;
+    }
     fputs("Direct file content", f);
     fclose(f);
 }

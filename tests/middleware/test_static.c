@@ -21,6 +21,9 @@ setup_test_file()
 {
     mkdir("./test_public", 0777);
     FILE* f = fopen("./test_public/hello.txt", "w");
+    if (!f) {
+        return;
+    }
     fputs("Hello, Csilk!", f);
     fclose(f);
 }

@@ -38,14 +38,16 @@ admin_ui_handler(csilk_ctx_t* c)
             fseek(f, 0, SEEK_END);
             long sz = ftell(f);
             fseek(f, 0, SEEK_SET);
-            char* buf = malloc(sz + 1);
-            if (buf) {
-                if (fread(buf, 1, sz, f) == (size_t)sz) {
-                    buf[sz] = '\0';
-                    csilk_set_header(c, "Content-Type", "text/html");
-                    csilk_string(c, 200, buf);
+            if (sz > 0) {
+                char* buf = malloc((size_t)sz + 1);
+                if (buf) {
+                    if (fread(buf, 1, (size_t)sz, f) == (size_t)sz) {
+                        buf[sz] = '\0';
+                        csilk_set_header(c, "Content-Type", "text/html");
+                        csilk_string(c, 200, buf);
+                    }
+                    free(buf);
                 }
-                free(buf);
             }
             fclose(f);
             return;
