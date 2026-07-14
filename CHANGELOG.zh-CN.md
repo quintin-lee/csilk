@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### 安全
+- **敏感缓冲区清零**：在 csrf、jwt、session 和 websocket 模块中使用后清零敏感缓冲区，防止数据泄漏。
+- **JWT 整数溢出保护**：在 JWT 解析中为 base64 长度计算添加溢出保护。
+
+### 修复
+- **clang-tidy 警告**：解决源文件和测试文件中的静态分析警告，包括数组越界、内存泄漏和空指针解引用。
+- **路由宏安全性**：将路由宏包装在 `do { } while(0)` 中，以便在控制流语句中安全使用。
+- **CI 兼容性**：升级 upload/download-artifact 到 v6 以支持 Node 24，在未收集到样本时跳过 FlameGraph 上传，修复 benchmark-results 上传路径。
+- **macOS 兼容性**：为 macOS 构建添加可移植的 `explicit_bzero` 兼容层。
+
+### 变更
+- **头文件保护现代化**：将所有 38 个公共头文件中的 `#ifndef`/`#define` 头文件保护替换为 `#pragma once`。
+- **API 文档**：为 middleware、server 和 group 头文件中未文档化的公共 API 函数添加 Doxygen 文档。
+
 ## [0.3.0] - 2026-06-27
 
 ### 新增
