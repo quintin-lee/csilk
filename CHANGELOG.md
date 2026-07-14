@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Sensitive buffer zeroing**: Zero sensitive buffers after use in csrf, jwt, session, and websocket modules to prevent data leakage.
+- **JWT integer overflow guards**: Add overflow protection to base64 length calculations in JWT parsing.
+
+### Fixed
+- **clang-tidy warnings**: Resolve static analyzer warnings in source and test files including array bounds, memory leaks, and null pointer dereferences.
+- **Route macro safety**: Wrap route macros in `do { } while(0)` for safe use in control flow statements.
+- **CI compatibility**: Bump upload/download-artifact to v6 for Node 24 support, skip FlameGraph upload when no samples collected, fix benchmark-results upload path.
+- **macOS compatibility**: Add portable `explicit_bzero` shim for macOS builds.
+
+### Changed
+- **Include guards modernized**: Replace `#ifndef`/`#define` include guards with `#pragma once` across all 38 public headers.
+- **API documentation**: Add Doxygen documentation to undocumented public API functions in middleware, server, and group headers.
+
 ## [0.3.0] - 2026-06-27
 
 ### Added
