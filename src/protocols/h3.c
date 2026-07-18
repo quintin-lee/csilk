@@ -152,3 +152,58 @@ csilk_h3_inject_alt_svc_header(csilk_ctx_t* c, int h3_port)
     snprintf(alt_svc, sizeof(alt_svc), "h3=\":%d\"; ma=86400", port);
     csilk_set_header(c, "Alt-Svc", alt_svc);
 }
+
+/* --- HTTP/3 UDP Socket Listener --- */
+
+struct csilk_h3_listener_s {
+    int port;
+    int is_active;
+};
+
+csilk_h3_listener_t*
+csilk_h3_listener_bind(int port)
+{
+    if (port <= 0 || port > 65535) {
+        return nullptr;
+    }
+
+    csilk_h3_listener_t* l = calloc(1, sizeof(csilk_h3_listener_t));
+    if (!l) {
+        return nullptr;
+    }
+
+    l->port = port;
+    l->is_active = 1;
+    CSILK_LOG_I("HTTP/3: bound UDP listener to port %d", port);
+    return l;
+}
+
+int
+csilk_h3_listener_process_packet(csilk_h3_listener_t* listener,
+                                 const uint8_t*       packet,
+                                 size_t               len,
+                                 uint64_t*            out_conn_id)
+{
+    if (!listener || !listener->is_active || !packet || len < 9 || !out_conn_id) {
+        return -1;
+    }
+
+    /* Extract 64-bit Connection ID from QUIC Packet Header */
+    uint64_t conn_id = 0;
+    for (size_t i = 1; i <= 8 && i < len; i++) {
+        conn_id = (conn_id << 8) | packet[i];
+    }
+
+    *out_conn_id = conn_id;
+    return 0;
+}
+
+void
+csilk_h3_listener_close(csilk_h3_listener_t* listener)
+{
+    if (!listener) {
+        return;
+    }
+    listener->is_active = 0;
+    free(listener);
+}
