@@ -83,6 +83,7 @@ set(CSILK_MESSAGING_SOURCES
 
 set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/auth.c
+    src/middleware/circuit_breaker.c
     src/middleware/cors.c
     src/middleware/csrf.c
     src/middleware/gzip.c
@@ -90,6 +91,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/logger.c
     src/middleware/metrics.c
     src/middleware/multipart.c
+    src/middleware/otlp_trace.c
     src/middleware/ratelimit.c
     src/middleware/request_id.c
     src/middleware/session.c
