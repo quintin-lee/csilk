@@ -149,6 +149,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_sse_concurrent
     test_static
     test_trace_circuit_breaker
+    test_otlp_exporter
     test_file
     test_validate
     test_waf
@@ -156,7 +157,7 @@ set(CSILK_MIDDLEWARE_TESTS
 set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware
+    middleware;middleware;middleware;middleware;middleware;middleware
 )
 
 # -- Protocol tests --

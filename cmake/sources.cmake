@@ -91,6 +91,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/logger.c
     src/middleware/metrics.c
     src/middleware/multipart.c
+    src/middleware/otlp_exporter.c
     src/middleware/otlp_trace.c
     src/middleware/ratelimit.c
     src/middleware/request_id.c
