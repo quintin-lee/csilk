@@ -111,6 +111,42 @@ test_db_sqlite_transactions(void)
     printf("test_db_sqlite_transactions passed\n");
 }
 
+static int async_called = 0;
+static void
+on_async_query(cJSON* result, void* user_data)
+{
+    (void)user_data;
+    assert(result != nullptr);
+    assert(cJSON_GetArraySize(result) == 1);
+    cJSON_Delete(result);
+    async_called = 1;
+}
+
+void
+test_db_sqlite_async_query(void)
+{
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "test_async_db.db");
+    assert(pool != nullptr);
+
+    csilk_db_exec(pool, "CREATE TABLE IF NOT EXISTS async_test (id INTEGER PRIMARY KEY, msg TEXT)");
+    csilk_db_exec(pool, "INSERT INTO async_test (msg) VALUES ('async ok')");
+
+    async_called = 0;
+    int rc = csilk_db_query_json_async(pool, "SELECT * FROM async_test", on_async_query, nullptr);
+    assert(rc == 0);
+
+    /* Run default loop to allow thread pool callback to return */
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    assert(async_called == 1);
+
+    csilk_db_pool_free(pool);
+    remove("test_async_db.db");
+    remove("test_async_db.db-journal");
+    printf("test_db_sqlite_async_query passed\n");
+}
+
 int
 main(void)
 {
@@ -118,6 +154,7 @@ main(void)
     test_db_sqlite_create_table();
     test_db_sqlite_insert_query();
     test_db_sqlite_transactions();
+    test_db_sqlite_async_query();
     printf("All db tests passed\n");
     return 0;
 }
