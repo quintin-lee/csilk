@@ -38,6 +38,7 @@
  */
 
 #include "csilk/reflection/reflect.h"
+#include "csilk/core/server.h"
 
 #include <stdio.h>
 #include "csilk/core/sync.h"
@@ -653,6 +654,30 @@ csilk_json_marshal(const char* type_name, const void* ptr)
     char* out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     return out;
+}
+
+char*
+csilk_json_marshal_arena(csilk_arena_t* arena,
+                         const char*    type_name,
+                         const void*    ptr,
+                         size_t*        out_len)
+{
+    char* str = csilk_json_marshal(type_name, ptr);
+    if (!str) {
+        return nullptr;
+    }
+    size_t len = strlen(str);
+    char*  arena_str = nullptr;
+    if (arena) {
+        arena_str = csilk_arena_strndup(arena, str, len);
+    } else {
+        arena_str = strdup(str);
+    }
+    free(str);
+    if (out_len) {
+        *out_len = len;
+    }
+    return arena_str;
 }
 
 /** @brief Deserialize a JSON string into a registered struct or basic type

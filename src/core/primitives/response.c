@@ -332,7 +332,8 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
     if (!type_name) {
         return;
     }
-    char* json_str = csilk_json_marshal(type_name, ptr);
+    size_t body_len = 0;
+    char*  json_str = csilk_json_marshal_arena(c->arena, type_name, ptr, &body_len);
     if (json_str) {
         c->response.status = status;
         csilk_set_header(c, "Content-Type", "application/json");
@@ -340,8 +341,8 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
             free((void*)c->response.body);
         }
         c->response.body = json_str;
-        c->response.body_len = strlen(json_str);
-        c->response.body_is_managed = 1;
+        c->response.body_len = body_len;
+        c->response.body_is_managed = c->arena ? 0 : 1;
     }
 }
 
