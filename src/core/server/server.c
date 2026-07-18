@@ -501,6 +501,21 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
     }
 }
 
+int
+csilk_server_check_backpressure(csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    if (server->config.backpressure_max_queue_depth > 0) {
+        size_t total_active = (size_t)atomic_load(&server->active_connections);
+        if (total_active > server->config.backpressure_max_queue_depth) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* --- Max connections --- */
 
 /** @brief Set the maximum number of concurrent client connections.
