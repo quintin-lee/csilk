@@ -11,18 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static _Thread_local csilk_ctx_t* tls_h2_ctx_free_list = nullptr;
-
-static void
-csilk_h2_tls_cleanup(void)
-{
-    while (tls_h2_ctx_free_list) {
-        csilk_ctx_t* next = tls_h2_ctx_free_list->next_stream;
-        free(tls_h2_ctx_free_list);
-        tls_h2_ctx_free_list = next;
-    }
-}
-
 /** @brief Called by nghttp2 when a HEADERS frame is received and parsing begins.
  *
  * Triggered at the start of header block processing for any HEADERS frame
@@ -504,9 +492,7 @@ on_stream_close_callback(nghttp2_session* session,
                 found->arena = nullptr;
             }
 
-            /* Recycle stream context into thread-local free list */
-            found->next_stream = tls_h2_ctx_free_list;
-            tls_h2_ctx_free_list = found;
+            free(found);
             return 0;
         }
         curr = &((*curr)->next_stream);
@@ -563,12 +549,6 @@ send_callback(
 csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
-    static _Thread_local int cleanup_registered = 0;
-    if (!cleanup_registered) {
-        atexit(csilk_h2_tls_cleanup);
-        cleanup_registered = 1;
-    }
-
     csilk_ctx_t* curr = client->h2_streams;
     while (curr) {
         if (curr->stream_id == stream_id) {
@@ -577,17 +557,10 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         curr = curr->next_stream;
     }
 
-    /* Allocate from thread-local free list or fallback to heap malloc */
-    csilk_ctx_t* ctx = nullptr;
-    if (tls_h2_ctx_free_list) {
-        ctx = tls_h2_ctx_free_list;
-        tls_h2_ctx_free_list = ctx->next_stream;
-        memset(ctx, 0, sizeof(csilk_ctx_t));
-    } else {
-        ctx = malloc(sizeof(csilk_ctx_t));
-        if (!ctx) {
-            return nullptr;
-        }
+    /* Create new context for stream */
+    csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
+    if (!ctx) {
+        return nullptr;
     }
 
     _csilk_ctx_init(ctx, client->server, client);
@@ -616,8 +589,7 @@ csilk_h2_free_streams(csilk_client_t* client)
             csilk_arena_free(curr->arena);
             curr->arena = nullptr;
         }
-        curr->next_stream = tls_h2_ctx_free_list;
-        tls_h2_ctx_free_list = curr;
+        free(curr);
         curr = next;
     }
     client->h2_streams = nullptr;
