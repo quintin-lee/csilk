@@ -39,6 +39,7 @@ set(CSILK_CORE_SOURCES
     src/core/config/hooks.c
     src/core/primitives/kv_store.c
     src/core/primitives/query.c
+    src/core/cache/mvcc_cache.c
 )
 
 if(CSILK_USE_URING)
