@@ -436,3 +436,25 @@ int csilk_circuit_breaker_get_state(const csilk_circuit_breaker_t* cb);
 /** @brief Free a Circuit Breaker handle.
  * @param cb Circuit Breaker handle. */
 void csilk_circuit_breaker_free(csilk_circuit_breaker_t* cb);
+
+/* --- Sliding Window Rate Limiter Middleware --- */
+
+/** @brief Opaque Sliding Window Rate Limiter handle. */
+typedef struct csilk_sliding_limiter_s csilk_sliding_limiter_t;
+
+/** @brief Create a new Sliding Window Rate Limiter instance.
+ * @param limit_per_window Maximum requests allowed per window.
+ * @param window_ms Window duration in milliseconds (e.g., 60000ms for 1 min).
+ * @return Sliding window rate limiter handle. */
+csilk_sliding_limiter_t* csilk_sliding_limiter_new(int limit_per_window, uint64_t window_ms);
+
+/** @brief Sliding Window Rate Limiting middleware.
+ * Prevents window-boundary burst traffic using weighted sliding window counts.
+ * If exceeded, responds with 429 Too Many Requests and sets Retry-After header.
+ * @param c Request context.
+ * @param limiter Limiter handle. */
+void csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t* limiter);
+
+/** @brief Free a Sliding Window Rate Limiter handle.
+ * @param limiter Limiter handle. */
+void csilk_sliding_limiter_free(csilk_sliding_limiter_t* limiter);
