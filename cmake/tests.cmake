@@ -169,9 +169,10 @@ set(CSILK_PROTOCOL_TESTS
     test_ws_room
     test_ws_concurrent
     test_h2
+    test_h3
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
