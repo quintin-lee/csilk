@@ -270,7 +270,7 @@ csilk_waf_middleware(ctx):
 
 ### 7.2 速率限制中间件
 
-**文件**: `src/middleware/rate_limit.c`
+**文件**: `src/middleware/ratelimit.c`
 
 每个客户端 IP 的令牌桶速率限制器。可配置的最大请求数每秒。超过限制时返回 429 Too Many Requests。
 
@@ -333,7 +333,7 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 | `src/middleware/waf.c` | WAF 中间件：SQLi/XSS/遍历模式检测 |
 | `src/middleware/csrf.c` | 双重提交 Cookie CSRF 保护 |
 | `src/middleware/cors.c` | CORS 头中间件 |
-| `src/middleware/rate_limit.c` | 令牌桶速率限制器 |
+| `src/middleware/ratelimit.c` | 令牌桶速率限制器 |
 | `src/middleware/request_id.c` | X-Request-Id 跟踪中间件 |
 | `tests/security/test_perm.c` | 权限系统测试（14 个测试用例，全部通过） |
 
