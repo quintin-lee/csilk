@@ -588,6 +588,14 @@ csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* dr
     }
 }
 
+void
+csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* transport)
+{
+    if (server) {
+        server->quic_transport = (void*)transport;
+    }
+}
+
 /* --- Worker thread internals --- */
 
 static int bind_and_listen(csilk_io_loop_t* loop,
