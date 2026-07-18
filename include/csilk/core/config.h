@@ -64,6 +64,7 @@ typedef struct csilk_server_config_s {
     /* Performance & Backpressure optimizations */
     int enable_simd;            /**< Non-zero to enable SIMD-accelerated routing (if supported). */
     int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
+    int enable_uring_sqpoll; /**< Non-zero to enable io_uring SQPOLL kernel thread polling (0 = default auto). */
     size_t
         backpressure_max_queue_depth; /**< Max queued async tasks limit before 503 backpressure (0 = disabled). */
     unsigned int
