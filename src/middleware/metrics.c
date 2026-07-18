@@ -122,18 +122,22 @@ get_metric_slot(const char* method, const char* route, int status)
         uint32_t              idx = (start_idx + i) % CSILK_METRICS_MAX_ENTRIES;
         csilk_route_metric_t* slot = &route_metrics[idx];
 
-        /* Attempt to claim the slot if it's currently empty (in_use == 0) */
-        int expected = 0;
-        if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
-            /* Success: We claimed a new slot. Initialize its keys. */
-            snprintf(slot->method, sizeof(slot->method), "%s", method);
-            snprintf(slot->route, sizeof(slot->route), "%s", route);
-            slot->status = status;
-            return slot;
+        int state = atomic_load(&slot->in_use);
+        if (state == 0) {
+            int expected = 0;
+            if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
+                /* Success: We claimed a new slot. Initialize its keys. */
+                snprintf(slot->method, sizeof(slot->method), "%s", method);
+                snprintf(slot->route, sizeof(slot->route), "%s", route);
+                slot->status = status;
+                atomic_store(&slot->in_use, 2);
+                return slot;
+            }
+            state = atomic_load(&slot->in_use);
         }
 
-        /* Slot is already occupied. Check if it matches our keys. */
-        if (slot->status == status && strcmp(slot->method, method) == 0 &&
+        /* Slot is fully ready (state == 2). Check if it matches our keys. */
+        if (state == 2 && slot->status == status && strcmp(slot->method, method) == 0 &&
             strcmp(slot->route, route) == 0) {
             return slot;
         }
