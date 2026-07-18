@@ -6,9 +6,11 @@
 
 #include "csilk/app/workflow.h"
 
-static int g_fallback_triggered = 0;
-static int g_router_triggered = 0;
-static int g_or_triggered = 0;
+#include <stdatomic.h>
+
+static atomic_int g_fallback_triggered = 0;
+static atomic_int g_router_triggered = 0;
+static atomic_int g_or_triggered = 0;
 
 csilk_data_t*
 mock_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -38,7 +40,7 @@ fallback_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     (void)input;
     (void)user_data;
     printf("Executing Fallback Node\n");
-    g_fallback_triggered = 1;
+    atomic_store(&g_fallback_triggered, 1);
     return nullptr;
 }
 
@@ -46,7 +48,7 @@ void
 test_workflow_error_branch()
 {
     printf("Testing error branch (on_error)...\n");
-    g_fallback_triggered = 0;
+    atomic_store(&g_fallback_triggered, 0);
     csilk_wf_t* wf = csilk_wf_new("error_wf");
 
     csilk_wf_node_t* n_fail = csilk_wf_add(wf, "fail", failing_handler, nullptr);
@@ -57,7 +59,7 @@ test_workflow_error_branch()
     csilk_wf_run(wf, nullptr, nullptr);
     csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-    assert(g_fallback_triggered == 1);
+    assert(atomic_load(&g_fallback_triggered) == 1);
     csilk_wf_free(wf);
     printf("test_workflow_error_branch: PASS\n");
 }
@@ -87,7 +89,7 @@ magic_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     (void)input;
     (void)user_data;
     printf("Magic Node triggered!\n");
-    g_router_triggered = 1;
+    atomic_store(&g_router_triggered, 1);
     return nullptr;
 }
 
@@ -95,7 +97,7 @@ void
 test_workflow_dynamic_route()
 {
     printf("Testing dynamic routing (csilk_wf_route)...\n");
-    g_router_triggered = 0;
+    atomic_store(&g_router_triggered, 0);
     csilk_wf_t* wf = csilk_wf_new("route_wf");
 
     csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
@@ -108,7 +110,7 @@ test_workflow_dynamic_route()
     csilk_wf_run(wf, &in, nullptr);
     csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
 
-    assert(g_router_triggered == 1);
+    assert(atomic_load(&g_router_triggered) == 1);
     csilk_wf_free(wf);
     printf("test_workflow_dynamic_route: PASS\n");
 }
@@ -130,7 +132,7 @@ or_join_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     (void)input;
     (void)user_data;
     printf("OR Join node triggered!\n");
-    g_or_triggered++;
+    atomic_fetch_add(&g_or_triggered, 1);
     return nullptr;
 }
 
@@ -138,7 +140,7 @@ void
 test_workflow_or_join()
 {
     printf("Testing OR Join policy...\n");
-    g_or_triggered = 0;
+    atomic_store(&g_or_triggered, 0);
     csilk_wf_t* wf = csilk_wf_new("or_wf");
 
     csilk_wf_node_t* n_start = csilk_wf_add(wf, "start", start_router_handler, nullptr);
@@ -161,7 +163,7 @@ test_workflow_or_join()
     // completely before the other even starts, causing the OR node to be
     // triggered once or twice depending on timing. We assert it's triggered at
     // least once.
-    assert(g_or_triggered >= 1);
+    assert(atomic_load(&g_or_triggered) >= 1);
 
     csilk_wf_free(wf);
     printf("test_workflow_or_join: PASS\n");
