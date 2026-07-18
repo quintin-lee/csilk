@@ -20,6 +20,7 @@
 ### 变更
 - **头文件保护现代化**：将所有 38 个公共头文件中的 `#ifndef`/`#define` 头文件保护替换为 `#pragma once`。
 - **API 文档**：为 middleware、server 和 group 头文件中未文档化的公共 API 函数添加 Doxygen 文档。
+- **tag-release.sh**：扩展以覆盖所有版本位置——`src/` `.c` `@version`、`python/csilk/_version.py`、`cmake/ports/csilk/vcpkg.json`、`vX.Y.Z+` 文档头部、`| Version: X.Y.Z` 元数据、ASCII 图版本以及 `version: X.Y.Z` 代码块引用。
 
 ## [0.3.0] - 2026-06-27
 

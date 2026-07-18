@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Include guards modernized**: Replace `#ifndef`/`#define` include guards with `#pragma once` across all 38 public headers.
 - **API documentation**: Add Doxygen documentation to undocumented public API functions in middleware, server, and group headers.
+- **tag-release.sh**: Extend to cover all version locations — `src/` `.c` `@version`, `python/csilk/_version.py`, `cmake/ports/csilk/vcpkg.json`, `vX.Y.Z+` doc headers, `| Version: X.Y.Z` metadata, ASCII diagram versions, and `version: X.Y.Z` code-block references.
 
 ## [0.3.0] - 2026-06-27
 
