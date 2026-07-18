@@ -658,3 +658,32 @@ csilk_simd_find_char(const char* s, size_t len, char target)
     }
     return nullptr;
 }
+
+size_t
+csilk_common_prefix_len_fast(const char* s1, const char* s2, size_t max_len)
+{
+    size_t i = 0;
+
+#if defined(__x86_64__) || defined(__aarch64__)
+    while (i + 8 <= max_len) {
+        uint64_t v1, v2;
+        memcpy(&v1, s1 + i, 8);
+        memcpy(&v2, s2 + i, 8);
+        if (v1 != v2) {
+            uint64_t diff = v1 ^ v2;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            int diff_byte = __builtin_clzll(diff) / 8;
+#else
+            int diff_byte = __builtin_ctzll(diff) / 8;
+#endif
+            return i + (size_t)diff_byte;
+        }
+        i += 8;
+    }
+#endif
+
+    while (i < max_len && s1[i] == s2[i]) {
+        i++;
+    }
+    return i;
+}
