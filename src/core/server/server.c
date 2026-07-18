@@ -575,8 +575,12 @@ csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* dr
 
 /* --- Worker thread internals --- */
 
-static int
-bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bool reuseport);
+static int bind_and_listen(csilk_io_loop_t* loop,
+                           uv_tcp_t*        out_handle,
+                           int              port,
+                           int              backlog,
+                           bool             reuseport,
+                           int              worker_index);
 
 /** @brief Per-worker thread initialization data for SO_REUSEPORT multi-loop
  *         mode.
@@ -759,8 +763,12 @@ worker_thread(void* arg)
     _csilk_worker_init_arena_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
-    if (bind_and_listen(loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true) <
-        0) {
+    if (bind_and_listen(loop_ptr,
+                        &wp->server_handle,
+                        port,
+                        server->config.listen_backlog,
+                        true,
+                        wp->worker_index) < 0) {
         if (barrier) {
             uv_barrier_wait(barrier);
         }
@@ -807,7 +815,12 @@ worker_thread(void* arg)
  * @param reuseport  Enable SO_REUSEPORT for multi-process/thread socket sharing.
  * @return 0 on success, -1 on socket/bind/listen error. */
 static int
-bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backlog, bool reuseport)
+bind_and_listen(csilk_io_loop_t* loop,
+                uv_tcp_t*        out_handle,
+                int              port,
+                int              backlog,
+                bool             reuseport,
+                int              worker_index)
 {
 #ifndef _WIN32
     if (reuseport) {
@@ -827,6 +840,16 @@ bind_and_listen(csilk_io_loop_t* loop, uv_tcp_t* out_handle, int port, int backl
         int on = 1;
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
         setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+
+#if defined(__linux__) && defined(SO_INCOMING_CPU)
+        if (worker_index >= 0) {
+            long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+            if (num_cores > 0) {
+                int cpu = (int)(worker_index % num_cores);
+                setsockopt(fd, SOL_SOCKET, SO_INCOMING_CPU, &cpu, sizeof(cpu));
+            }
+        }
+#endif
         struct sockaddr_in addr;
         uv_ip4_addr("0.0.0.0", port, &addr);
         if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
@@ -933,7 +956,7 @@ csilk_server_run(csilk_server_t* server, int port)
     server->async_handle.data = server;
 
     r = bind_and_listen(
-        server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1);
+        server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1, 0);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to bind and listen on port %d: %s", port, csilk_io_strerror(r));
         return -1;
