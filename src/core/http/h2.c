@@ -13,6 +13,16 @@
 
 static _Thread_local csilk_ctx_t* tls_h2_ctx_free_list = nullptr;
 
+static void
+csilk_h2_tls_cleanup(void)
+{
+    while (tls_h2_ctx_free_list) {
+        csilk_ctx_t* next = tls_h2_ctx_free_list->next_stream;
+        free(tls_h2_ctx_free_list);
+        tls_h2_ctx_free_list = next;
+    }
+}
+
 /** @brief Called by nghttp2 when a HEADERS frame is received and parsing begins.
  *
  * Triggered at the start of header block processing for any HEADERS frame
@@ -553,6 +563,12 @@ send_callback(
 csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
+    static _Thread_local int cleanup_registered = 0;
+    if (!cleanup_registered) {
+        atexit(csilk_h2_tls_cleanup);
+        cleanup_registered = 1;
+    }
+
     csilk_ctx_t* curr = client->h2_streams;
     while (curr) {
         if (curr->stream_id == stream_id) {
