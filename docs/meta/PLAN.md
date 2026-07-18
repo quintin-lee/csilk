@@ -621,3 +621,12 @@
 - **动作**: WAF 4→9, Session 5→8, Recovery 1→4, CSRF 3→7, WF Lifecycle 1→3
 - **动作**: 文档补全：`bounded_buf.c`, `hot_reload.c`, `flamegraph.c`, `db.c`, `context.c`
 - **动作**: 全部 117 测试通过（ASAN Debug + Release + io_uring + Coverage）
+
+### [2026-07-18] v0.6.0 AI 工作流与 Agent 生态拓展
+- **动作**: 实现 ReAct 推理节点 (`csilk_wf_add_agent_react`) 与 Reflexion 自我修正节点 (`csilk_wf_add_agent_reflexion`)
+- **动作**: 实现 Context 短时 Key-Value 记忆存储 API (`csilk_wf_ctx_set_memory`/`csilk_wf_ctx_get_memory`)
+- **动作**: 实现 Vector 长期语义记忆存储 API (`csilk_agent_memory_new`/`csilk_agent_memory_store`/`csilk_agent_memory_recall`)
+- **动作**: 实现基于 MQ 的多 Agent 任务解耦派发与 Sub-task 监听 Worker (`csilk_agent_publish_task`/`csilk_wf_add_agent_worker`)
+- **动作**: 实现 Human-in-the-Loop (HITL) 人工介入与评估拦截节点 (`csilk_wf_add_agent_hitl`)
+- **动作**: 补充 `test_workflow_agent_engine.c`, `test_workflow_agent_multi.c`, `test_workflow_agent_hitl.c` 单元测试，全量 124/124 测试无缝通过
+
