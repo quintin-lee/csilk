@@ -254,6 +254,62 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
     return result;
 }
 
+typedef struct {
+    csilk_io_work_t   req;
+    csilk_db_pool_t*  pool;
+    char*             sql;
+    csilk_db_async_cb cb;
+    void*             user_data;
+    cJSON*            result;
+} db_async_work_ctx_t;
+
+static void
+db_async_work_cb(csilk_io_work_t* req)
+{
+    db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
+    ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
+}
+
+static void
+db_async_after_work_cb(csilk_io_work_t* req, int status)
+{
+    (void)status;
+    db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
+    if (ctx->cb) {
+        ctx->cb(ctx->result, ctx->user_data);
+    }
+    free(ctx->sql);
+    free(ctx);
+}
+
+int
+csilk_db_query_json_async(csilk_db_pool_t*  pool,
+                          const char*       sql,
+                          csilk_db_async_cb cb,
+                          void*             user_data)
+{
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+    db_async_work_ctx_t* ctx = calloc(1, sizeof(db_async_work_ctx_t));
+    if (!ctx) {
+        return -1;
+    }
+    ctx->pool = pool;
+    ctx->sql = strdup(sql);
+    ctx->cb = cb;
+    ctx->user_data = user_data;
+
+    csilk_io_loop_t* loop = csilk_io_default_loop();
+    int rc = csilk_io_queue_work(loop, &ctx->req, db_async_work_cb, db_async_after_work_cb);
+    if (rc != 0) {
+        free(ctx->sql);
+        free(ctx);
+        return -1;
+    }
+    return 0;
+}
+
 /** @brief Execute a SQL statement (INSERT, UPDATE, DELETE, DDL) that does not
  * return rows. */
 int

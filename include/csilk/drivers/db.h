@@ -181,6 +181,26 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  */
 cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
+/** @brief Callback type for async database query execution. */
+typedef void (*csilk_db_async_cb)(cJSON* result, void* user_data);
+
+/**
+ * @brief Execute a SQL query asynchronously without blocking the event loop.
+ *
+ * Offloads the database query to the I/O thread pool and invokes @p cb on the
+ * event loop thread when complete.
+ *
+ * @param pool      Connection pool.
+ * @param sql       SQL query string.
+ * @param cb        Callback to invoke with the query result (cJSON*).
+ * @param user_data Opaque user data pointer.
+ * @return 0 if offloaded successfully, -1 on failure.
+ */
+int csilk_db_query_json_async(csilk_db_pool_t*  pool,
+                              const char*       sql,
+                              csilk_db_async_cb cb,
+                              void*             user_data);
+
 /**
  * @brief Execute a statement that produces no result rows.
  *
