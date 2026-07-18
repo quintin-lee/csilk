@@ -5,6 +5,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/wasm_plugin.h"
+#include "csilk/test/test.h"
 
 static void
 test_wasm_plugin_load_invalid()
@@ -39,11 +40,40 @@ test_wasm_plugin_load_valid()
     printf("test_wasm_plugin_load_valid: PASS\n");
 }
 
+static void
+test_wasm_host_api()
+{
+    printf("Testing WASM Host C-ABI context interaction...\n");
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    assert(ctx != NULL);
+    csilk_test_ctx_set_request(ctx, "GET", "/test");
+    csilk_test_ctx_add_param(ctx, "user", "alice");
+
+    int res = csilk_wasm_host_set_header(ctx, "X-WASM-Filter", "PASSED");
+    assert(res == 0);
+    const char* val = csilk_wasm_host_get_header(ctx, "X-WASM-Filter");
+    assert(val != NULL);
+    assert(strcmp(val, "PASSED") == 0);
+
+    const char* param = csilk_wasm_host_get_param(ctx, "user");
+    assert(param != NULL);
+    assert(strcmp(param, "alice") == 0);
+
+    res = csilk_wasm_host_set_status(ctx, 403);
+    assert(res == 0);
+    assert(csilk_get_status(ctx) == 403);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_wasm_host_api: PASS\n");
+}
+
 int
 main()
 {
     test_wasm_plugin_load_invalid();
     test_wasm_plugin_load_valid();
+    test_wasm_host_api();
     printf("All WASM Plugin tests passed successfully!\n");
     return 0;
 }

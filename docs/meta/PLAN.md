@@ -644,5 +644,6 @@
 - **动作**: 强化 `csilk_wf_serve_ui` 内嵌 HTML5/Tailwind/Mermaid Dashboard 降级，提供无依赖零配置的 AI Agent DAG 可视化拓扑与 WebSocket 监控流
 - **动作**: 扩充 `csilk_storage_driver_t` 驱动接口 `sync_state` 原子方法，于 `redis.c` 落地分布式 Circuit Breaker 与 Rate Limiter 跨节点状态自动同步
 - **动作**: 实现 WebAssembly (WASM) 动态插件沙箱引擎 (`csilk_wasm_plugin_load`/`csilk_wasm_plugin_execute`)，支持 WASM 魔数校验与热插拔扩展
+- **动作**: 扩充 WebAssembly (WASM) Host C-ABI 上下文 API (`csilk_wasm_host_get_header`/`csilk_wasm_host_set_header`/`csilk_wasm_host_get_param`/`csilk_wasm_host_set_status`)，支持沙箱动态标头拦截与状态码操控
 - **动作**: 补充 `test_trace_circuit_breaker.c`, `test_simd_router_arena.c`, `test_sliding_ratelimit.c`, `test_otlp_exporter.c`, `test_grpc_gateway.c`, `test_h3.c`, `test_uring_buf.c`, `test_wasm_plugin.c` 单元测试，全量 132/132 CTest 测试与 Python Binding 测试 100% 通过
 

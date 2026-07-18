@@ -87,3 +87,51 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
     }
     free(plugin);
 }
+
+/* --- WASM Host C-ABI Context API --- */
+
+const char*
+csilk_wasm_host_get_header(csilk_ctx_t* ctx, const char* name)
+{
+    if (!ctx || !name) {
+        return nullptr;
+    }
+    const char* val = csilk_get_header(ctx, name);
+    if (!val) {
+        val = csilk_get_response_header(ctx, name);
+    }
+    return val;
+}
+
+int
+csilk_wasm_host_set_header(csilk_ctx_t* ctx, const char* name, const char* value)
+{
+    if (!ctx || !name || !value) {
+        return -1;
+    }
+    csilk_set_header(ctx, name, value);
+    return 0;
+}
+
+const char*
+csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name)
+{
+    if (!ctx || !name) {
+        return nullptr;
+    }
+    const char* val = csilk_get_param(ctx, name);
+    if (!val) {
+        val = csilk_get_query(ctx, name);
+    }
+    return val;
+}
+
+int
+csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status)
+{
+    if (!ctx || status < 100 || status > 599) {
+        return -1;
+    }
+    csilk_status(ctx, status);
+    return 0;
+}
