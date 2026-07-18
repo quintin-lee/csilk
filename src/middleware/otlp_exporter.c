@@ -1,6 +1,10 @@
 /**
  * @file otlp_exporter.c
  * @brief OpenTelemetry (OTLP) Tracing Span exporter implementation.
+ *
+ * Provides batching, thread-safe queuing, and formatting of OpenTelemetry spans
+ * into standard OTLP/JSON format (`resourceSpans` / `scopeSpans` schema) for consumption
+ * by OpenTelemetry Collectors, Jaeger, or Zipkin.
  */
 
 #include "csilk/csilk.h"
@@ -11,14 +15,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Internal OTLP Exporter state structure.
+ */
 struct csilk_otlp_exporter_s {
-    char               endpoint_url[256];
-    int                batch_size;
-    csilk_otlp_span_t* spans;
-    int                count;
-    csilk_mutex_t      mutex;
+    char               endpoint_url[256]; /**< Exporter HTTP/gRPC endpoint URL */
+    int                batch_size;        /**< Maximum spans buffer capacity */
+    csilk_otlp_span_t* spans;             /**< Array of buffered spans */
+    int                count;             /**< Current buffered span count */
+    csilk_mutex_t      mutex;             /**< Mutex protecting span buffer */
 };
 
+/**
+ * @brief Create a new OpenTelemetry Span Exporter instance.
+ *
+ * @param endpoint_url OTLP Collector endpoint URL (e.g. "http://localhost:4318/v1/traces").
+ * @param batch_size Maximum buffer size for span batching before flushing.
+ * @return Exporter handle, or NULL on memory allocation failure.
+ */
 csilk_otlp_exporter_t*
 csilk_otlp_exporter_new(const char* endpoint_url, int batch_size)
 {
@@ -37,6 +51,12 @@ csilk_otlp_exporter_new(const char* endpoint_url, int batch_size)
     return exp;
 }
 
+/**
+ * @brief Record a finished span into the exporter's queue.
+ *
+ * @param exp Exporter instance.
+ * @param span Pointer to completed span record to copy into buffer.
+ */
 void
 csilk_otlp_exporter_record_span(csilk_otlp_exporter_t* exp, const csilk_otlp_span_t* span)
 {
@@ -51,6 +71,16 @@ csilk_otlp_exporter_record_span(csilk_otlp_exporter_t* exp, const csilk_otlp_spa
     csilk_mutex_unlock(&exp->mutex);
 }
 
+/**
+ * @brief Serialize buffered spans into OpenTelemetry OTLP/JSON payload (`resourceSpans`).
+ *
+ * Flushes the current queue upon successful formatting.
+ *
+ * @param exp Exporter instance.
+ * @param[out] out_buf Destination character buffer.
+ * @param buf_size Capacity of @p out_buf.
+ * @return Number of exported spans, or -1 on error.
+ */
 int
 csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_t buf_size)
 {
@@ -60,6 +90,7 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     csilk_mutex_lock(&exp->mutex);
     int exported_count = exp->count;
 
+    /* Build OTLP JSON hierarchy: root -> resourceSpans -> scopeSpans -> spans */
     cJSON* root = cJSON_CreateObject();
     cJSON* resource_spans = cJSON_CreateArray();
     cJSON_AddItemToObject(root, "resourceSpans", resource_spans);
@@ -97,11 +128,17 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     }
     cJSON_Delete(root);
 
-    exp->count = 0; // Reset queue after flush
+    /* Reset buffer count after flush */
+    exp->count = 0;
     csilk_mutex_unlock(&exp->mutex);
     return exported_count;
 }
 
+/**
+ * @brief Free resources associated with an OTLP Exporter.
+ *
+ * @param exp Exporter instance.
+ */
 void
 csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp)
 {
