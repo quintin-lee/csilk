@@ -40,6 +40,7 @@ void                 node_free(csilk_router_node_t* node);
 const char* get_next_segment(const char** p, size_t* len);
 const char* csilk_simd_find_char(const char* s, size_t len, char target);
 int         csilk_memcmp_fast(const char* s1, const char* s2, size_t n);
+size_t      csilk_common_prefix_len_fast(const char* s1, const char* s2, size_t max_len);
 
 csilk_handler_t* match_node(csilk_router_node_t*     node,
                             const char*              method,

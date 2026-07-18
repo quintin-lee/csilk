@@ -65,12 +65,13 @@ set(CSILK_CORE_TESTS
     test_utils_ext
     test_codec_prop
     test_hash_prop
+    test_simd_router_arena
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
 )
 
 # -- Application tests --
