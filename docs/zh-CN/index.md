@@ -1,6 +1,6 @@
 # csilk 文档
 
-> **版本**: 0.3.0 | **最后更新**: 2026-07-04
+> **版本**: 0.7.0 | **最后更新**: 2026-07-18
 
 [English](../index.md) | [中文](index.md)
 
@@ -22,6 +22,10 @@ graph TB
         AUTH["fa:fa-key Auth"]
         CORS["fa:fa-globe CORS"]
         RT["fa:fa-clock-o Rate Limit"]
+        SLIM["fa:fa-sliders Sliding Limiter"]
+        CB["fa:fa-bolt Circuit Breaker"]
+        OTLP["fa:fa-eye OTLP Trace & Exporter"]
+        GRPC["fa:fa-exchange gRPC Gateway"]
         CSRF["fa:fa-shield CSRF"]
         ST["fa:fa-folder-open Static Files"]
         GZ["fa:fa-archive Gzip"]
