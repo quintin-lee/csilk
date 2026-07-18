@@ -156,6 +156,7 @@ struct csilk_server_s {
     SSL_CTX*                ssl_ctx;           /**< OpenSSL context. */
     csilk_mq_t*             mq;                /**< Message Queue instance. */
     csilk_hook_node_t*      hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
+    void*                   quic_transport; /**< Optional QUIC transport callbacks for HTTP/3. */
 };
 
 /** @brief Client connection structure — represents a single TCP connection.

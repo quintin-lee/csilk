@@ -138,6 +138,24 @@ void csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_
  */
 void csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver);
 
+/** @brief QUIC transport vtable for HTTP/3 integration. */
+typedef struct csilk_quic_transport_s {
+    const char* name;
+    int (*on_stream_recv)(csilk_server_t* server,
+                          int64_t         stream_id,
+                          const uint8_t*  data,
+                          size_t          len);
+    int (*on_stream_send)(csilk_server_t* server,
+                          int64_t         stream_id,
+                          const uint8_t*  data,
+                          size_t          len);
+} csilk_quic_transport_t;
+
+/** @brief Register a UDP QUIC transport engine for HTTP/3.
+ *  @param server Server instance.
+ *  @param transport Pointer to a csilk_quic_transport_t (or nullptr to clear). */
+void csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* transport);
+
 /**
  * @brief Replace the context key-value storage driver.
  *
