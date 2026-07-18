@@ -279,6 +279,78 @@ csilk_wf_node_t* csilk_wf_add_agent_reflexion(csilk_wf_t*                       
                                               const char*                           id,
                                               const csilk_agent_reflexion_config_t* config);
 
+/* --- Agent Long-Term Memory Store --- */
+
+/** @brief Opaque handle for Agent Long-Term Memory Store. */
+typedef struct csilk_agent_memory_s csilk_agent_memory_t;
+
+/**
+ * @brief Create a long-term memory store backed by AI Embeddings & Vector DB.
+ * @param ai AI model handle for embedding generation.
+ * @param embedding_model Model name (e.g., "text-embedding-ada-002").
+ * @param db Vector DB handle.
+ * @param collection Collection name.
+ * @return Memory store handle.
+ */
+csilk_agent_memory_t* csilk_agent_memory_new(csilk_ai_t*        ai,
+                                             const char*        embedding_model,
+                                             csilk_vector_db_t* db,
+                                             const char*        collection);
+
+/**
+ * @brief Store a semantic memory entry into long-term memory.
+ * @param mem Memory store handle.
+ * @param id Memory ID string (UUID or custom).
+ * @param text Content text to embed and store.
+ * @param metadata_json Optional JSON metadata string.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_agent_memory_store(csilk_agent_memory_t* mem,
+                             const char*           id,
+                             const char*           text,
+                             const char*           metadata_json);
+
+/**
+ * @brief Recall similar semantic memories given a text query.
+ * @param mem Memory store handle.
+ * @param query Query text string.
+ * @param limit Max results to recall.
+ * @param res [out] Vector search response.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_agent_memory_recall(csilk_agent_memory_t*           mem,
+                              const char*                     query,
+                              int                             limit,
+                              csilk_vector_search_response_t* res);
+
+/**
+ * @brief Free the Agent memory store handle.
+ */
+void csilk_agent_memory_free(csilk_agent_memory_t* mem);
+
+/* --- Multi-Agent Task Dispatcher --- */
+
+/**
+ * @brief Publish an Agent sub-task to an MQ topic for parallel Multi-Agent execution.
+ * @param wf Workflow definition handle.
+ * @param topic MQ topic (e.g., "agent.task.code").
+ * @param task_json JSON task payload string.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_agent_publish_task(csilk_wf_t* wf, const char* topic, const char* task_json);
+
+/**
+ * @brief Add a Worker Agent node that listens on an MQ topic for sub-tasks.
+ * @param wf Workflow handle.
+ * @param id Unique node ID.
+ * @param topic MQ topic to listen on.
+ * @param handler Node handler callback when a sub-task is received.
+ * @param user_data User context.
+ * @return Node handle.
+ */
+csilk_wf_node_t* csilk_wf_add_agent_worker(
+    csilk_wf_t* wf, const char* id, const char* topic, csilk_wf_handler_t handler, void* user_data);
+
 /* --- Tool Calling --- */
 
 /**
