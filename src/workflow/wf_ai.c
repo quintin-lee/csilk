@@ -840,3 +840,180 @@ csilk_wf_add_vector_search(csilk_wf_t*                         wf,
     }
     return node;
 }
+
+/* --- Short-Term Context Memory Store --- */
+
+void
+csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* value)
+{
+    if (!ctx || !key) {
+        return;
+    }
+    csilk_mutex_lock(&ctx->mutex);
+    csilk_wf_mem_node_t* curr = ctx->memory_head;
+    while (curr) {
+        if (strcmp(curr->key, key) == 0) {
+            curr->value = value ? csilk_wf_strdup(ctx, value) : nullptr;
+            csilk_mutex_unlock(&ctx->mutex);
+            return;
+        }
+        curr = curr->next;
+    }
+    csilk_wf_mem_node_t* node = csilk_wf_alloc(ctx, sizeof(csilk_wf_mem_node_t));
+    if (node) {
+        node->key = csilk_wf_strdup(ctx, key);
+        node->value = value ? csilk_wf_strdup(ctx, value) : nullptr;
+        node->next = ctx->memory_head;
+        ctx->memory_head = node;
+    }
+    csilk_mutex_unlock(&ctx->mutex);
+}
+
+const char*
+csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key)
+{
+    if (!ctx || !key) {
+        return nullptr;
+    }
+    csilk_mutex_lock(&ctx->mutex);
+    csilk_wf_mem_node_t* curr = ctx->memory_head;
+    while (curr) {
+        if (strcmp(curr->key, key) == 0) {
+            const char* val = curr->value;
+            csilk_mutex_unlock(&ctx->mutex);
+            return val;
+        }
+        curr = curr->next;
+    }
+    csilk_mutex_unlock(&ctx->mutex);
+    return nullptr;
+}
+
+/* --- ReAct & Reflexion Agent Node Handlers --- */
+
+static void
+agent_react_config_free(void* ptr)
+{
+    csilk_agent_react_config_t* c = (csilk_agent_react_config_t*)ptr;
+    free((void*)c->model);
+    free((void*)c->system_prompt);
+    free((void*)c->prompt);
+    free(c);
+}
+
+static csilk_data_t*
+agent_react_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    (void)input;
+    csilk_agent_react_config_t* config = (csilk_agent_react_config_t*)user_data;
+    if (!config) {
+        return nullptr;
+    }
+    const char* default_sys = "You are an AI ReAct Reasoning Agent. Follow the Thought, Action, "
+                              "Action Input, Observation cycle to solve the problem.";
+    csilk_ai_config_t ai_cfg = {
+        .model = config->model ? config->model : "gpt-3.5-turbo",
+        .system_msg = config->system_prompt ? config->system_prompt : default_sys,
+        .prompt = config->prompt ? config->prompt : "{{node.value}}",
+        .temperature = config->temperature > 0 ? config->temperature : 0.7,
+        .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
+        .stream = 0,
+        .max_history_messages = config->max_iterations > 0 ? config->max_iterations * 2 : 20};
+    return ai_node_handler(ctx, input, &ai_cfg);
+}
+
+csilk_wf_node_t*
+csilk_wf_add_agent_react(csilk_wf_t* wf, const char* id, const csilk_agent_react_config_t* config)
+{
+    if (!wf || !id || !config) {
+        return nullptr;
+    }
+    csilk_agent_react_config_t* copy = malloc(sizeof(csilk_agent_react_config_t));
+    memcpy(copy, config, sizeof(csilk_agent_react_config_t));
+    copy->model = config->model ? strdup(config->model) : nullptr;
+    copy->system_prompt = config->system_prompt ? strdup(config->system_prompt) : nullptr;
+    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_react_node_handler, copy);
+    if (node) {
+        node->user_data_free = agent_react_config_free;
+    }
+    return node;
+}
+
+static void
+agent_reflexion_config_free(void* ptr)
+{
+    csilk_agent_reflexion_config_t* c = (csilk_agent_reflexion_config_t*)ptr;
+    free((void*)c->model);
+    free((void*)c->prompt);
+    free(c);
+}
+
+static csilk_data_t*
+agent_reflexion_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    csilk_agent_reflexion_config_t* config = (csilk_agent_reflexion_config_t*)user_data;
+    if (!config) {
+        return nullptr;
+    }
+    int           max_reflections = config->max_reflections > 0 ? config->max_reflections : 3;
+    int           reflection_count = 0;
+    csilk_data_t* current_output = nullptr;
+
+    while (reflection_count < max_reflections) {
+        reflection_count++;
+        csilk_ai_config_t ai_cfg = {
+            .model = config->model ? config->model : "gpt-3.5-turbo",
+            .system_msg = "You are an AI Agent with Reflexion and Self-Correction capability.",
+            .prompt = config->prompt ? config->prompt : "{{node.value}}",
+            .temperature = 0.7,
+            .max_tokens = 1024,
+            .stream = 0,
+            .max_history_messages = 10};
+        current_output = ai_node_handler(ctx, input, &ai_cfg);
+        if (!current_output || !current_output->value) {
+            break;
+        }
+
+        if (config->eval_fn) {
+            char* feedback = nullptr;
+            int   pass = config->eval_fn(
+                (const char*)current_output->value, &feedback, config->eval_user_data);
+            if (pass) {
+                if (feedback) {
+                    free(feedback);
+                }
+                break;
+            } else {
+                if (feedback) {
+                    csilk_wf_ctx_set_memory(ctx, "reflexion_feedback", feedback);
+                    free(feedback);
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    return current_output;
+}
+
+csilk_wf_node_t*
+csilk_wf_add_agent_reflexion(csilk_wf_t*                           wf,
+                             const char*                           id,
+                             const csilk_agent_reflexion_config_t* config)
+{
+    if (!wf || !id || !config) {
+        return nullptr;
+    }
+    csilk_agent_reflexion_config_t* copy = malloc(sizeof(csilk_agent_reflexion_config_t));
+    memcpy(copy, config, sizeof(csilk_agent_reflexion_config_t));
+    copy->model = config->model ? strdup(config->model) : nullptr;
+    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_reflexion_node_handler, copy);
+    if (node) {
+        node->user_data_free = agent_reflexion_config_free;
+    }
+    return node;
+}
