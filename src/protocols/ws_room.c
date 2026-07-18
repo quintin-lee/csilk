@@ -37,6 +37,37 @@ static ws_room_manager_t g_room_manager;
 static int               g_room_manager_initialized = 0;
 
 static void
+ws_room_manager_cleanup(void)
+{
+    if (!g_room_manager_initialized) {
+        return;
+    }
+    csilk_mutex_lock(&g_room_manager.mutex);
+    for (int i = 0; i < g_room_manager.rooms_count; i++) {
+        ws_room_t* room = g_room_manager.rooms[i];
+        if (room) {
+            ws_room_snapshot_t* snap = atomic_load(&room->snapshot);
+            if (snap) {
+                if (snap->clients) {
+                    free(snap->clients);
+                }
+                free(snap);
+            }
+            free(room->room_name);
+            csilk_mutex_destroy(&room->mutex);
+            free(room);
+        }
+    }
+    free(g_room_manager.rooms);
+    g_room_manager.rooms = NULL;
+    g_room_manager.rooms_count = 0;
+    g_room_manager.rooms_capacity = 0;
+    csilk_mutex_unlock(&g_room_manager.mutex);
+    csilk_mutex_destroy(&g_room_manager.mutex);
+    g_room_manager_initialized = 0;
+}
+
+static void
 ws_room_manager_init(void)
 {
     if (g_room_manager_initialized) {
@@ -45,6 +76,7 @@ ws_room_manager_init(void)
     memset(&g_room_manager, 0, sizeof(ws_room_manager_t));
     csilk_mutex_init(&g_room_manager.mutex);
     g_room_manager_initialized = 1;
+    atexit(ws_room_manager_cleanup);
 }
 
 static ws_room_t*
@@ -148,6 +180,12 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     new_snap->clients[count] = c;
 
     atomic_store(&room->snapshot, new_snap);
+    if (old_snap) {
+        if (old_snap->clients) {
+            free(old_snap->clients);
+        }
+        free(old_snap);
+    }
 
     csilk_mutex_unlock(&room->mutex);
     csilk_mutex_unlock(&g_room_manager.mutex);
@@ -190,6 +228,10 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
                     }
                 }
                 atomic_store(&room->snapshot, new_snap);
+                if (old_snap->clients) {
+                    free(old_snap->clients);
+                }
+                free(old_snap);
             }
         }
 
