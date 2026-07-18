@@ -1017,3 +1017,159 @@ csilk_wf_add_agent_reflexion(csilk_wf_t*                           wf,
     }
     return node;
 }
+
+/* --- Agent Long-Term Memory Store --- */
+
+struct csilk_agent_memory_s {
+    csilk_ai_t*        ai;
+    char*              embedding_model;
+    csilk_vector_db_t* db;
+    char*              collection;
+};
+
+csilk_agent_memory_t*
+csilk_agent_memory_new(csilk_ai_t*        ai,
+                       const char*        embedding_model,
+                       csilk_vector_db_t* db,
+                       const char*        collection)
+{
+    if (!ai || !db || !collection) {
+        return nullptr;
+    }
+    csilk_agent_memory_t* mem = malloc(sizeof(csilk_agent_memory_t));
+    if (!mem) {
+        return nullptr;
+    }
+    mem->ai = ai;
+    mem->embedding_model =
+        embedding_model ? strdup(embedding_model) : strdup("text-embedding-ada-002");
+    mem->db = db;
+    mem->collection = strdup(collection);
+    return mem;
+}
+
+int
+csilk_agent_memory_store(csilk_agent_memory_t* mem,
+                         const char*           id,
+                         const char*           text,
+                         const char*           metadata_json)
+{
+    if (!mem || !id || !text) {
+        return -1;
+    }
+    csilk_ai_embeddings_response_t eres = {0};
+    const char*                    texts[1] = {text};
+    if (csilk_ai_embeddings(mem->ai, mem->embedding_model, texts, 1, &eres) != 0) {
+        csilk_ai_embeddings_response_free(&eres);
+        return -1;
+    }
+    if (eres.count == 0 || eres.dimension == 0) {
+        csilk_ai_embeddings_response_free(&eres);
+        return -1;
+    }
+
+    cJSON* payload = metadata_json ? cJSON_Parse(metadata_json) : cJSON_CreateObject();
+    if (!payload) {
+        payload = cJSON_CreateObject();
+    }
+    cJSON_AddStringToObject(payload, "text", text);
+
+    csilk_vector_point_t pt = {
+        .id = id, .vector = eres.values, .dimension = eres.dimension, .payload = payload};
+
+    int rc = csilk_vector_db_upsert(mem->db, mem->collection, &pt, 1);
+    cJSON_Delete(payload);
+    csilk_ai_embeddings_response_free(&eres);
+    return rc;
+}
+
+int
+csilk_agent_memory_recall(csilk_agent_memory_t*           mem,
+                          const char*                     query,
+                          int                             limit,
+                          csilk_vector_search_response_t* res)
+{
+    if (!mem || !query || !res) {
+        return -1;
+    }
+    csilk_ai_embeddings_response_t eres = {0};
+    const char*                    texts[1] = {query};
+    if (csilk_ai_embeddings(mem->ai, mem->embedding_model, texts, 1, &eres) != 0) {
+        csilk_ai_embeddings_response_free(&eres);
+        return -1;
+    }
+    if (eres.count == 0 || eres.dimension == 0) {
+        csilk_ai_embeddings_response_free(&eres);
+        return -1;
+    }
+
+    int rc = csilk_vector_db_search(
+        mem->db, mem->collection, eres.values, eres.dimension, limit > 0 ? limit : 5, res);
+    csilk_ai_embeddings_response_free(&eres);
+    return rc;
+}
+
+void
+csilk_agent_memory_free(csilk_agent_memory_t* mem)
+{
+    if (!mem) {
+        return;
+    }
+    free(mem->embedding_model);
+    free(mem->collection);
+    free(mem);
+}
+
+/* --- Multi-Agent Task Dispatcher --- */
+
+int
+csilk_agent_publish_task(csilk_wf_t* wf, const char* topic, const char* task_json)
+{
+    if (!wf || !wf->mq || !topic || !task_json) {
+        return -1;
+    }
+    return csilk_mq_publish(wf->mq, topic, task_json, strlen(task_json));
+}
+
+typedef struct {
+    char*              topic;
+    csilk_wf_handler_t handler;
+    void*              user_data;
+} worker_config_t;
+
+static void
+worker_config_free(void* ptr)
+{
+    worker_config_t* wc = (worker_config_t*)ptr;
+    free(wc->topic);
+    free(wc);
+}
+
+static csilk_data_t*
+agent_worker_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    worker_config_t* wc = (worker_config_t*)user_data;
+    if (!wc || !wc->handler) {
+        return nullptr;
+    }
+    return wc->handler(ctx, input, wc->user_data);
+}
+
+csilk_wf_node_t*
+csilk_wf_add_agent_worker(
+    csilk_wf_t* wf, const char* id, const char* topic, csilk_wf_handler_t handler, void* user_data)
+{
+    if (!wf || !id || !topic || !handler) {
+        return nullptr;
+    }
+    worker_config_t* wc = malloc(sizeof(worker_config_t));
+    wc->topic = strdup(topic);
+    wc->handler = handler;
+    wc->user_data = user_data;
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_worker_node_handler, wc);
+    if (node) {
+        node->user_data_free = worker_config_free;
+    }
+    return node;
+}
