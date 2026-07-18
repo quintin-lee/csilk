@@ -1173,3 +1173,67 @@ csilk_wf_add_agent_worker(
     }
     return node;
 }
+
+/* --- Human-in-the-Loop (HITL) Agent Nodes --- */
+
+static void
+agent_hitl_config_free(void* ptr)
+{
+    csilk_agent_hitl_config_t* c = (csilk_agent_hitl_config_t*)ptr;
+    free((void*)c->model);
+    free((void*)c->prompt);
+    free(c);
+}
+
+static csilk_data_t*
+agent_hitl_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    csilk_agent_hitl_config_t* config = (csilk_agent_hitl_config_t*)user_data;
+    if (!config) {
+        return nullptr;
+    }
+    csilk_ai_config_t ai_cfg = {
+        .model = config->model ? config->model : "gpt-3.5-turbo",
+        .system_msg = "You are an AI Agent operating under Human-in-the-Loop supervision.",
+        .prompt = config->prompt ? config->prompt : "{{node.value}}",
+        .temperature = 0.7,
+        .max_tokens = 1024,
+        .stream = 0,
+        .max_history_messages = 10};
+    csilk_data_t* output = ai_node_handler(ctx, input, &ai_cfg);
+    if (!output || !output->value) {
+        return output;
+    }
+
+    if (config->eval_fn) {
+        csilk_hitl_decision_t decision =
+            config->eval_fn((const char*)output->value, config->eval_user_data);
+        if (decision == CSILK_HITL_REQUIRES_HUMAN) {
+            csilk_wf_ctx_set_memory(ctx, "hitl_status", "requires_approval");
+        } else if (decision == CSILK_HITL_APPROVED) {
+            csilk_wf_ctx_set_memory(ctx, "hitl_status", "approved");
+        } else {
+            csilk_wf_ctx_set_memory(ctx, "hitl_status", "rejected");
+        }
+    }
+    return output;
+}
+
+csilk_wf_node_t*
+csilk_wf_add_agent_hitl(csilk_wf_t* wf, const char* id, const csilk_agent_hitl_config_t* config)
+{
+    if (!wf || !id || !config) {
+        return nullptr;
+    }
+    csilk_agent_hitl_config_t* copy = malloc(sizeof(csilk_agent_hitl_config_t));
+    memcpy(copy, config, sizeof(csilk_agent_hitl_config_t));
+    copy->model = config->model ? strdup(config->model) : nullptr;
+    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_hitl_node_handler, copy);
+    if (node) {
+        node->user_data_free = agent_hitl_config_free;
+        csilk_wf_node_set_interactive(node, 1);
+    }
+    return node;
+}
