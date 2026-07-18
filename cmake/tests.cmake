@@ -38,6 +38,7 @@ set(CSILK_CORE_TESTS
     test_context_reflect_ext
     test_edge
     test_get_param
+    test_mvcc_cache
     test_headers
     test_https
     test_ip
@@ -69,7 +70,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core
 )
 
 # -- Application tests --
