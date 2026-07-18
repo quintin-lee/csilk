@@ -87,6 +87,11 @@ void csilk_server_stop(csilk_server_t* server);
  *  @param[out] pooled_conn  Pointer to receive pooled connection count (may be nullptr). */
 void csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn);
 
+/** @brief Check whether system adaptive backpressure limit is currently exceeded.
+ *  @param server Server instance.
+ *  @return 1 if backpressure limit (queue depth / latency) is active, 0 otherwise. */
+int csilk_server_check_backpressure(csilk_server_t* server);
+
 /**
  * @brief Apply server configuration options.
  *

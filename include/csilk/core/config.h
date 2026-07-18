@@ -61,9 +61,13 @@ typedef struct csilk_server_config_s {
     int h2_max_push_per_request; /**< Maximum push promises per request (0 = default
                       10). */
 
-    /* Performance optimizations */
+    /* Performance & Backpressure optimizations */
     int enable_simd;            /**< Non-zero to enable SIMD-accelerated routing (if supported). */
     int enable_arena_alignment; /**< Non-zero to enable 64-byte cache-line alignment in Arena. */
+    size_t
+        backpressure_max_queue_depth; /**< Max queued async tasks limit before 503 backpressure (0 = disabled). */
+    unsigned int
+        backpressure_max_latency_us; /**< Max task latency limit in us before backpressure (0 = disabled). */
 
     /* Ecosystem */
     int enable_openapi; /**< Non-zero to automatically serve /openapi.json. */
