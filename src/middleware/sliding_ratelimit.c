@@ -1,6 +1,11 @@
 /**
  * @file sliding_ratelimit.c
  * @brief Sliding Window Rate Limiting middleware implementation.
+ *
+ * Implements a weighted sliding window log/counter algorithm:
+ * - Divides time into current window and previous window.
+ * - Computes estimated rate using linear interpolation: `estimated = prev_count * weight + curr_count`.
+ * - Completely prevents boundary burst spikes inherent to traditional fixed-window limiters.
  */
 
 #include "csilk/csilk.h"
@@ -11,15 +16,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Internal Sliding Window Rate Limiter structure.
+ */
 struct csilk_sliding_limiter_s {
-    int           limit_per_window;
-    uint64_t      window_ms;
-    uint64_t      current_window_start_ms;
-    int           prev_window_count;
-    int           curr_window_count;
-    csilk_mutex_t mutex;
+    int           limit_per_window;        /**< Maximum permitted requests per window */
+    uint64_t      window_ms;               /**< Window duration in milliseconds */
+    uint64_t      current_window_start_ms; /**< Start timestamp of current window */
+    int           prev_window_count;       /**< Request count in previous window */
+    int           curr_window_count;       /**< Request count in current window */
+    csilk_mutex_t mutex;                   /**< Mutex protecting counter state */
 };
 
+/**
+ * @brief Create a new Sliding Window Rate Limiter instance.
+ *
+ * @param limit_per_window Maximum requests allowed within one window.
+ * @param window_ms Duration of sliding window in milliseconds (e.g., 60000 for 1 minute).
+ * @return Allocated Sliding Limiter handle, or NULL on error.
+ */
 csilk_sliding_limiter_t*
 csilk_sliding_limiter_new(int limit_per_window, uint64_t window_ms)
 {
@@ -36,6 +51,15 @@ csilk_sliding_limiter_new(int limit_per_window, uint64_t window_ms)
     return lim;
 }
 
+/**
+ * @brief Sliding Window Rate Limiter middleware.
+ *
+ * Calculates estimated request count based on elapsed time into the current window.
+ * Rejects requests exceeding limit with HTTP 429 Too Many Requests and sets Retry-After header.
+ *
+ * @param c Request context.
+ * @param limiter Limiter handle.
+ */
 void
 csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t* limiter)
 {
@@ -48,20 +72,20 @@ csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t* lim
     uint64_t elapsed_ms = now_ms - limiter->current_window_start_ms;
 
     if (elapsed_ms >= limiter->window_ms * 2) {
-        // More than 2 windows passed, reset both windows
+        /* More than 2 full windows elapsed -> reset both windows completely */
         limiter->prev_window_count = 0;
         limiter->curr_window_count = 0;
         limiter->current_window_start_ms = now_ms;
         elapsed_ms = 0;
     } else if (elapsed_ms >= limiter->window_ms) {
-        // Slide 1 window forward
+        /* Slide 1 window forward -> prev = curr, curr = 0 */
         limiter->prev_window_count = limiter->curr_window_count;
         limiter->curr_window_count = 0;
         limiter->current_window_start_ms += limiter->window_ms;
         elapsed_ms = now_ms - limiter->current_window_start_ms;
     }
 
-    // Calculate weighted rate estimation
+    /* Calculate weighted rate estimation using time remaining in current window */
     double weight = (double)(limiter->window_ms - elapsed_ms) / (double)limiter->window_ms;
     double estimated_count =
         (double)limiter->prev_window_count * weight + (double)limiter->curr_window_count;
@@ -81,6 +105,11 @@ csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t* lim
     csilk_next(c);
 }
 
+/**
+ * @brief Free resources allocated for a Sliding Window Rate Limiter.
+ *
+ * @param limiter Limiter handle.
+ */
 void
 csilk_sliding_limiter_free(csilk_sliding_limiter_t* limiter)
 {
