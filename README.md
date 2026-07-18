@@ -46,6 +46,12 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - **Opaque Context API** for ABI stability
 - **Built-in Health Check** handler (/healthz)
 - **Request ID middleware** for end-to-end tracing (X-Request-Id)
+- 📊 **OpenTelemetry W3C Tracing & OTLP Exporter** — Parse/propagate `traceparent` & `X-Trace-Id` headers with OTLP JSON batch exporter (`csilk_otlp_exporter_export_json`) for Jaeger/Zipkin
+- ⚡ **Circuit Breaker Middleware** — CLOSED, OPEN, HALF_OPEN fault-tolerant protection (`csilk_circuit_breaker_middleware`)
+- ⏳ **Sliding Window Rate Limiter** — Boundary-burst protection via weighted log/counter sliding windows (`csilk_sliding_rate_limit_middleware`)
+- 🌐 **HTTP/JSON <-> gRPC Transcoding Gateway** — Zero-copy 5-byte frame encoder (`csilk_grpc_frame_encode`) and HTTP/JSON to gRPC transcoding (`csilk_grpc_gateway_middleware`)
+- 🚀 **SWAR/SIMD Parallel Prefix Matching** — 64-bit parallel SWAR comparison (`csilk_common_prefix_len_fast`) and 64-byte cache-line aligned Arena memory pool
+- 🐍 **Python CFFI/ctypes Bindings** — Native Python wrappers (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
 - **WAF (Web Application Firewall)** middleware
 
 ## Architecture Overview

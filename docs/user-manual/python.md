@@ -287,6 +287,45 @@ token = Crypto.generate_csrf_token()
 
 ---
 
+## Middleware & Tracing (`csilk.middleware`)
+
+`csilk.middleware` provides high-level Python wrappers for fault tolerance, rate limiting, and observability:
+
+```python
+from csilk import Context
+from csilk.middleware import CircuitBreaker, SlidingLimiter, trace_middleware
+
+# 1. Circuit Breaker for downstream resilience
+cb = CircuitBreaker(failure_threshold=5, recovery_timeout_ms=10000)
+
+def handle_request(ctx: Context):
+    if cb.state == 1: # OPEN state
+        ctx.string(503, "Service Unavailable (Circuit Open)")
+        return
+    try:
+        # Business logic...
+        cb.record_success()
+    except Exception:
+        cb.record_failure()
+
+# 2. Sliding Window Rate Limiter
+limiter = SlidingLimiter(limit_per_window=100, window_ms=60000)
+
+def rate_limited_handler(ctx: Context):
+    limiter.middleware(ctx)
+    if ctx.status_code == 429:
+        return
+    ctx.string(200, "Request allowed")
+
+# 3. OpenTelemetry W3C Tracing
+def traced_handler(ctx: Context):
+    trace_middleware(ctx)
+    print("Trace ID:", ctx.trace_id)
+    print("Span ID:", ctx.span_id)
+```
+
+---
+
 ## Further Reading
 
 Deep-dive architectural documentation for the underlying C module implementations can be found in [`docs/module-design/`](../module-design/index.md):
