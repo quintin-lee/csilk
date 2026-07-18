@@ -17,7 +17,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #ifndef _WIN32
+#include <sched.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -703,6 +707,31 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
  * are closed synchronously, then the loop is closed.
  *
  * @param arg Pointer to worker_data_t (freed when the function exits). */
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
+static void
+pin_thread_to_core(int core_id)
+{
+#ifndef _WIN32
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (num_cores <= 0) {
+        return;
+    }
+    int  target_core = (int)(core_id % num_cores);
+    char cpuset[128] = {0};
+    if (target_core < 128) {
+        cpuset[target_core] = 1;
+        uv_thread_t tid = uv_thread_self();
+        uv_thread_setaffinity(&tid, cpuset, NULL, 128);
+        CSILK_LOG_I("Server: Pinned worker thread %d to CPU core %d", core_id, target_core);
+    }
+#else
+    (void)core_id;
+#endif
+}
+
 static void
 worker_thread(void* arg)
 {
@@ -712,6 +741,8 @@ worker_thread(void* arg)
     int             port = data->port;
     uv_barrier_t*   barrier = data->barrier;
     free(data);
+
+    pin_thread_to_core(wp->worker_index);
 
     csilk_io_loop_t* loop_ptr = &wp->loop;
 
