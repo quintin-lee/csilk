@@ -26,6 +26,15 @@
 #define CSILK_INTERNAL
 #endif
 
+/** @brief 64-byte Cache-Line Alignment macro to prevent False Sharing across CPU cores. */
+#if defined(_MSC_VER)
+#define CSILK_CACHE_ALIGNED __declspec(align(64))
+#elif defined(__GNUC__) || defined(__clang__)
+#define CSILK_CACHE_ALIGNED __attribute__((aligned(64)))
+#else
+#define CSILK_CACHE_ALIGNED
+#endif
+
 /**
  * @brief Maximum number of URL path parameters that can be extracted from a
  * single request.  Parameters beyond this limit are silently ignored.
