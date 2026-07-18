@@ -46,6 +46,12 @@
 - **不透明上下文 API**（Opaque Context API）— 确保 ABI 稳定性
 - **内置健康检查** 处理器（/healthz）
 - **请求 ID 中间件** — 端到端追踪（X-Request-Id）
+- 📊 **OpenTelemetry W3C 链路追踪与 OTLP 导出器** — 自动解析/透传 `traceparent` 与 `X-Trace-Id` 标头，支持 OTLP JSON 批量导出 (`csilk_otlp_exporter_export_json`) 对接 Jaeger/Zipkin
+- ⚡ **Circuit Breaker 熔断器中间件** — 支持 CLOSED/OPEN/HALF_OPEN 三态健康防护 (`csilk_circuit_breaker_middleware`)
+- ⏳ **Sliding Window 滑动窗口限流器** — 加权平滑计算，防范窗口边界突发流量 (`csilk_sliding_rate_limit_middleware`)
+- 🌐 **HTTP/JSON <-> gRPC 零拷贝转码网关** — 5-Byte 大端帧编码器 (`csilk_grpc_frame_encode`) 与 JSON 到 gRPC 二进制转码 (`csilk_grpc_gateway_middleware`)
+- 🚀 **SWAR/SIMD 向量化公共前缀匹配** — 64 位并行比较 (`csilk_common_prefix_len_fast`) 与 64-Byte Cache-Line 对齐 Arena 内存池
+- 🐍 **Python CFFI/ctypes 绑定封装** — 原生 Python 封装类 (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
 - **WAF（Web 应用防火墙）** 中间件
 
 ## 架构概览
