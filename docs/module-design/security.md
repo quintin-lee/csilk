@@ -278,7 +278,7 @@ Handles preflight `OPTIONS` requests automatically.
 
 ### 7.2 Rate Limiting Middleware
 
-**File**: `src/middleware/rate_limit.c`
+**File**: `src/middleware/ratelimit.c`
 
 Token-bucket rate limiter per client IP. Configurable max requests per second. When the limit is exceeded, returns 429 Too Many Requests.
 
@@ -341,7 +341,7 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 | `src/middleware/waf.c` | WAF middleware: SQLi/XSS/traversal pattern detection |
 | `src/middleware/csrf.c` | CSRF double-submit cookie protection |
 | `src/middleware/cors.c` | CORS header middleware |
-| `src/middleware/rate_limit.c` | Token-bucket rate limiter |
+| `src/middleware/ratelimit.c` | Token-bucket rate limiter |
 | `src/middleware/request_id.c` | X-Request-Id tracing middleware |
 | `tests/security/test_perm.c` | Permission system tests (14 test cases, all passing) |
 
