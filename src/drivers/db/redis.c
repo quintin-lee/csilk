@@ -789,6 +789,39 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
     return val;
 }
 
+static int
+redis_storage_sync_state(csilk_ctx_t* c, const char* key, int state, int ttl_sec)
+{
+    if (!c || !key) {
+        return -1;
+    }
+    redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
+    if (!drv || !drv->pool) {
+        return -1;
+    }
+
+    redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
+    if (!conn || !conn->c) {
+        return -1;
+    }
+
+    redisReply* reply = nullptr;
+    if (ttl_sec > 0) {
+        reply = redisCommand(conn->c, "SET %s %d EX %d", key, state, ttl_sec);
+    } else {
+        reply = redisCommand(conn->c, "SET %s %d", key, state);
+    }
+
+    int rc = 0;
+    if (!reply || reply->type == REDIS_REPLY_ERROR) {
+        rc = -1;
+    }
+    if (reply) {
+        freeReplyObject(reply);
+    }
+    return rc;
+}
+
 /** @brief Create a new Redis-based storage driver instance.
  *
  * The returned driver wraps the given database pool and implements the
@@ -814,6 +847,7 @@ csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
     drv->base.set_string = redis_storage_set_string;
     drv->base.get_string = redis_storage_get_string;
     drv->base.incr = redis_storage_incr;
+    drv->base.sync_state = redis_storage_sync_state;
     drv->pool = pool;
 
     return (csilk_storage_driver_t*)drv;
