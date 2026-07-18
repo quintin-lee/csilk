@@ -110,6 +110,14 @@ typedef struct {
    *  @param ttl_sec  Time-to-live in seconds (set only if key is newly created; 0 = no expiry).
    *  @return The new value after incrementing, or -1 on error. */
     long long (*incr)(csilk_ctx_t* c, const char* key, int ttl_sec);
+
+    /** @brief Atomic distributed cluster state synchronization (Circuit Breaker / Sliding Rate Limiter).
+   *  @param c        Owning request context.
+   *  @param key      NUL-terminated state key string.
+   *  @param state    Current integer state value (e.g. 0=CLOSED, 1=OPEN, 2=HALF_OPEN).
+   *  @param ttl_sec  Time-to-live in seconds for state eviction (0 = no expiry).
+   *  @return 0 on successful synchronization, non-zero on error. */
+    int (*sync_state)(csilk_ctx_t* c, const char* key, int state, int ttl_sec);
 } csilk_storage_driver_t;
 
 /**
