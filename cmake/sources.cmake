@@ -41,6 +41,7 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/query.c
     src/core/cache/mvcc_cache.c
     src/core/uring/uring_buf.c
+    src/core/plugin/wasm_plugin.c
 )
 
 if(CSILK_USE_URING)

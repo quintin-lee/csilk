@@ -67,13 +67,14 @@ set(CSILK_CORE_TESTS
     test_hash_prop
     test_simd_router_arena
     test_uring_buf
+    test_wasm_plugin
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core
+    core;core
 )
 
 # -- Application tests --
