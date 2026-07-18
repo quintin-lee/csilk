@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static _Thread_local csilk_ctx_t* tls_h2_ctx_free_list = nullptr;
+
 /** @brief Called by nghttp2 when a HEADERS frame is received and parsing begins.
  *
  * Triggered at the start of header block processing for any HEADERS frame
@@ -489,8 +491,12 @@ on_stream_close_callback(nghttp2_session* session,
             csilk_ctx_cleanup(found);
             if (found->arena) {
                 csilk_arena_free(found->arena);
+                found->arena = nullptr;
             }
-            free(found);
+
+            /* Recycle stream context into thread-local free list */
+            found->next_stream = tls_h2_ctx_free_list;
+            tls_h2_ctx_free_list = found;
             return 0;
         }
         curr = &((*curr)->next_stream);
@@ -555,10 +561,17 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         curr = curr->next_stream;
     }
 
-    /* Create new context for stream */
-    csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
-    if (!ctx) {
-        return nullptr;
+    /* Allocate from thread-local free list or fallback to heap malloc */
+    csilk_ctx_t* ctx = nullptr;
+    if (tls_h2_ctx_free_list) {
+        ctx = tls_h2_ctx_free_list;
+        tls_h2_ctx_free_list = ctx->next_stream;
+        memset(ctx, 0, sizeof(csilk_ctx_t));
+    } else {
+        ctx = malloc(sizeof(csilk_ctx_t));
+        if (!ctx) {
+            return nullptr;
+        }
     }
 
     _csilk_ctx_init(ctx, client->server, client);
@@ -576,22 +589,6 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
     return ctx;
 }
 
-/** @brief Free all per-stream contexts associated with a client.
- *
- * Public API: iterates the client's h2_streams linked list and deallocates
- * every csilk_ctx_t in it. Each context is cleaned up via
- * csilk_ctx_cleanup(), its arena allocator is freed, and the struct itself
- * is freed. The stream list is set to nullptr after draining.
- *
- * Typically called during client disconnection to release all remaining
- * stream resources that were not yet closed via on_stream_close_callback.
- *
- * @param client The client connection whose streams should be freed.
- *
- * @note This function performs cleanup only; it does not send RST_STREAM
- *       frames or otherwise notify the peer. Callers should ensure the
- *       nghttp2 session is already torn down or closing.
- */
 void
 csilk_h2_free_streams(csilk_client_t* client)
 {
@@ -601,8 +598,10 @@ csilk_h2_free_streams(csilk_client_t* client)
         csilk_ctx_cleanup(curr);
         if (curr->arena) {
             csilk_arena_free(curr->arena);
+            curr->arena = nullptr;
         }
-        free(curr);
+        curr->next_stream = tls_h2_ctx_free_list;
+        tls_h2_ctx_free_list = curr;
         curr = next;
     }
     client->h2_streams = nullptr;
