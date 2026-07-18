@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/sendfile.h>
+#endif
 
 int
 csilk_io_fs_sendfile(csilk_io_loop_t* loop,
@@ -27,28 +30,26 @@ csilk_io_fs_sendfile(csilk_io_loop_t* loop,
         return 0;
     }
 
-    off_t     offset = in_offset;
-    ssize_t   total_sent = 0;
-    size_t    remaining = length;
-    int       retries = 0;
-    const int max_retries = 500;
+    off_t        offset = in_offset;
+    ssize_t      total_sent = 0;
+    size_t       remaining = length;
+    const size_t CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunking for optimal TCP windowing
 
-    while (remaining > 0 && retries < max_retries) {
-        req->result = sendfile(out_fd, in_fd, &offset, remaining);
-        if (req->result > 0) {
-            total_sent += req->result;
-            remaining -= (size_t)req->result;
-            retries = 0;
-        } else if (req->result == 0) {
-            usleep(100);
-            retries++;
-        } else {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                usleep(100);
-                retries++;
-            } else {
-                break;
+    while (remaining > 0) {
+        size_t  to_send = (remaining > CHUNK_SIZE) ? CHUNK_SIZE : remaining;
+        ssize_t sent = sendfile(out_fd, in_fd, &offset, to_send);
+        if (sent > 0) {
+            total_sent += sent;
+            remaining -= (size_t)sent;
+        } else if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                /* Non-blocking socket buffer full or interrupted, yield and continue */
+                continue;
             }
+            break;
+        } else {
+            /* EOF reached prematurely */
+            break;
         }
     }
 
