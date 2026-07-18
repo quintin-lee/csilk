@@ -95,6 +95,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/ratelimit.c
     src/middleware/request_id.c
     src/middleware/session.c
+    src/middleware/sliding_ratelimit.c
     src/middleware/sse.c
     src/middleware/static.c
     src/middleware/validate.c
