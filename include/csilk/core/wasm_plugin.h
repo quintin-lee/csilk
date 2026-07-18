@@ -54,6 +54,41 @@ int csilk_wasm_plugin_is_valid(const csilk_wasm_plugin_t* plugin);
  */
 void csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin);
 
+/* --- WASM Host C-ABI Context API --- */
+
+/**
+ * @brief WASM Host API: Get request header value by name.
+ * @param ctx Request context.
+ * @param name Header key name.
+ * @return Header string value or NULL if not present.
+ */
+const char* csilk_wasm_host_get_header(csilk_ctx_t* ctx, const char* name);
+
+/**
+ * @brief WASM Host API: Set or modify response header.
+ * @param ctx Request context.
+ * @param name Header key name.
+ * @param value Header value string.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_wasm_host_set_header(csilk_ctx_t* ctx, const char* name, const char* value);
+
+/**
+ * @brief WASM Host API: Get request URL query or path parameter.
+ * @param ctx Request context.
+ * @param name Parameter name.
+ * @return Parameter value string or NULL if not found.
+ */
+const char* csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name);
+
+/**
+ * @brief WASM Host API: Set response status code from WASM plugin.
+ * @param ctx Request context.
+ * @param status HTTP status code (e.g., 200, 403, 500).
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status);
+
 #ifdef __cplusplus
 }
 #endif
