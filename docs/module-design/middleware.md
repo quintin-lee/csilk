@@ -4,7 +4,7 @@ csilk ships with 15 built-in middleware handlers covering authentication, securi
 
 | Middleware | File | Description |
 |-----------|------|-------------|
-| Recovery | `src/middleware/recovery.c` | Crash recovery via setjmp/longjmp |
+| Recovery | `src/core/primitives/recovery.c` | Crash recovery via setjmp/longjmp |
 | Logger | `src/middleware/logger.c` | Structured request logging |
 | Auth | `src/middleware/auth.c` | Token-based authentication |
 | CORS | `src/middleware/cors.c` | Cross-origin resource sharing |
