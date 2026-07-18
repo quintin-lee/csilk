@@ -57,7 +57,7 @@ static _Atomic uint64_t security_auth_failures = 0;
  * Tracks requests that match a specific HTTP method, status code, and
  * route pattern (e.g., GET 200 /api/users/:id).
  */
-typedef struct {
+typedef struct CSILK_CACHE_ALIGNED {
     char             method[12];  /**< HTTP method (GET, POST, etc.) */
     char             route[128];  /**< Matched route pattern (e.g., "/users/:id") */
     int              status;      /**< HTTP response status code */

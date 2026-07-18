@@ -107,7 +107,7 @@ typedef struct csilk_dispatch_task_s {
  * For single-worker mode (worker_threads <= 1), only pool[0] is used and
  * the pool works identically to the old shared-pool model.
  */
-typedef struct {
+typedef struct CSILK_CACHE_ALIGNED {
     csilk_server_t*  server;        /**< Owning server instance. */
     csilk_io_loop_t  loop;          /**< This worker's I/O event loop (libuv or io_uring). */
     csilk_io_loop_t* loop_ptr;      /**< Pointer to the active loop. */
