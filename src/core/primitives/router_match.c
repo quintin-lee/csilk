@@ -552,3 +552,109 @@ match_node(csilk_router_node_t*     node,
 
     return result;
 }
+
+#if defined(CSILK_HAS_AVX512)
+__attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
+csilk_simd_find_char_avx512(const char* curr, const char* end, char target)
+{
+    __m512i target_vec = _mm512_set1_epi8(target);
+    while (curr + 64 <= end) {
+        uintptr_t addr = (uintptr_t)curr;
+        if ((addr & 4095) <= 4096 - 64) {
+            __m512i   data = _mm512_loadu_si512((const __m512i*)curr);
+            __mmask64 cmp = _mm512_cmpeq_epi8_mask(data, target_vec);
+            if (cmp != 0) {
+                int idx = __builtin_ctzll(cmp);
+                return curr + idx;
+            }
+            curr += 64;
+        } else {
+            break;
+        }
+    }
+    return curr;
+}
+#endif
+
+#if defined(__x86_64__)
+__attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
+csilk_simd_find_char_avx2(const char* curr, const char* end, char target)
+{
+    __m256i target_vec = _mm256_set1_epi8(target);
+    while (curr + 32 <= end) {
+        uintptr_t addr = (uintptr_t)curr;
+        if ((addr & 4095) <= 4096 - 32) {
+            __m256i  data = _mm256_loadu_si256((const __m256i*)curr);
+            __m256i  cmp = _mm256_cmpeq_epi8(data, target_vec);
+            uint32_t mask = (uint32_t)_mm256_movemask_epi8(cmp);
+            if (mask != 0) {
+                int idx = __builtin_ctz(mask);
+                return curr + idx;
+            }
+            curr += 32;
+        } else {
+            break;
+        }
+    }
+    return curr;
+}
+#endif
+
+const char*
+csilk_simd_find_char(const char* s, size_t len, char target)
+{
+    if (!s || len == 0) {
+        return nullptr;
+    }
+    const char* curr = s;
+    const char* end = s + len;
+
+#if defined(CSILK_HAS_AVX512)
+    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+        const char* res = csilk_simd_find_char_avx512(curr, end, target);
+        if (res != curr && res < end && *res == target) {
+            return res;
+        }
+        curr = res;
+    }
+#endif
+
+#if defined(__x86_64__)
+    if (__builtin_cpu_supports("avx2")) {
+        const char* res = csilk_simd_find_char_avx2(curr, end, target);
+        if (res != curr && res < end && *res == target) {
+            return res;
+        }
+        curr = res;
+    }
+#elif defined(__ARM_NEON)
+    uint8x16_t target_vec = vdupq_n_u8((uint8_t)target);
+    while (curr + 16 <= end) {
+        uintptr_t addr = (uintptr_t)curr;
+        if ((addr & 4095) <= 4096 - 16) {
+            uint8x16_t data = vld1q_u8((const uint8_t*)curr);
+            uint8x16_t cmp = vceqq_u8(data, target_vec);
+            uint64_t   mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
+            uint64_t   mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
+            if (mask_low != 0) {
+                int idx = __builtin_ctzll(mask_low) / 8;
+                return curr + idx;
+            } else if (mask_high != 0) {
+                int idx = __builtin_ctzll(mask_high) / 8;
+                return curr + 8 + idx;
+            }
+            curr += 16;
+        } else {
+            break;
+        }
+    }
+#endif
+
+    while (curr < end) {
+        if (*curr == target) {
+            return curr;
+        }
+        curr++;
+    }
+    return nullptr;
+}
