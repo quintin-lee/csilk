@@ -10,17 +10,17 @@
 #include <string.h>
 
 typedef struct csilk_mvcc_node_s {
-    char*    key;
-    void*    val;
-    size_t   val_len;
-    uint64_t version;
-    struct csilk_mvcc_node_s* _Atomic next;
+    char*                              key;
+    void*                              val;
+    size_t                             val_len;
+    uint64_t                           version;
+    _Atomic(struct csilk_mvcc_node_s*) next;
 } csilk_mvcc_node_t;
 
 struct csilk_mvcc_cache_s {
-    size_t               capacity;
-    atomic_uint_fast64_t global_epoch;
-    csilk_mvcc_node_t* _Atomic buckets[];
+    size_t                      capacity;
+    atomic_uint_fast64_t        global_epoch;
+    _Atomic(csilk_mvcc_node_t*) buckets[];
 };
 
 static uint64_t
