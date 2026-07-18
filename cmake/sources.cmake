@@ -86,6 +86,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/circuit_breaker.c
     src/middleware/cors.c
     src/middleware/csrf.c
+    src/middleware/grpc_gateway.c
     src/middleware/gzip.c
     src/middleware/jwt.c
     src/middleware/logger.c
