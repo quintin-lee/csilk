@@ -98,28 +98,35 @@ struct csilk_wf_s {
     csilk_mutex_t              ctx_mutex;
 };
 
+typedef struct csilk_wf_mem_node_s {
+    char*                       key;
+    char*                       value;
+    struct csilk_wf_mem_node_s* next;
+} csilk_wf_mem_node_t;
+
 struct csilk_wf_ctx_s {
     csilk_wf_t*   wf;
     csilk_data_t* initial_input;
     void (*callback)(csilk_data_t*);
     void (*trace_callback)(csilk_data_t*, csilk_wf_trace_t*);
-    int*              node_input_counts;
-    int               total_executions;
-    _Atomic int       nodes_active;
-    csilk_mutex_t     mutex;
-    csilk_arena_t*    arena;
-    csilk_mutex_t     arena_mutex;
-    csilk_data_t**    node_outputs;
-    char              exec_id[CSILK_UUID_BUF_SIZE];
-    char*             wal_path;
-    csilk_wf_trace_t* trace;
-    csilk_mutex_t     trace_mutex;
-    int               total_tokens;
-    int               is_terminated;
-    int               is_paused;
-    int*              node_approved;
-    csilk_io_timer_t  ttl_timer;
-    int               is_ttl_expired;
+    int*                 node_input_counts;
+    int                  total_executions;
+    _Atomic int          nodes_active;
+    csilk_mutex_t        mutex;
+    csilk_arena_t*       arena;
+    csilk_mutex_t        arena_mutex;
+    csilk_data_t**       node_outputs;
+    char                 exec_id[CSILK_UUID_BUF_SIZE];
+    char*                wal_path;
+    csilk_wf_trace_t*    trace;
+    csilk_mutex_t        trace_mutex;
+    int                  total_tokens;
+    int                  is_terminated;
+    int                  is_paused;
+    int*                 node_approved;
+    csilk_io_timer_t     ttl_timer;
+    int                  is_ttl_expired;
+    csilk_wf_mem_node_t* memory_head;
 };
 
 typedef struct node_work_s {

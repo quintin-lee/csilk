@@ -92,6 +92,7 @@ set(CSILK_APP_TEST_DIRS
 # -- Workflow tests --
 set(CSILK_WORKFLOW_TESTS
     test_workflow_agentic
+    test_workflow_agent_engine
     test_workflow_budget
     test_workflow_context
     test_workflow_control
@@ -118,7 +119,7 @@ set(CSILK_WORKFLOW_TESTS
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow;workflow;workflow
+    workflow;workflow;workflow;workflow
 )
 
 # -- Middleware tests --
