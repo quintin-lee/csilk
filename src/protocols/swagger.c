@@ -32,6 +32,7 @@
 #include <strings.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/reflection/reflect.h"
 
 /** @brief Convert a csilk path pattern to OpenAPI 3.0 path format.
@@ -602,6 +603,16 @@ csilk_generate_openapi_json(csilk_router_t* router,
  * @param description API description.
  * @note The response is sent synchronously via csilk_json(). On failure, a
  *       500 error response is sent. */
+static char*         g_openapi_cache_json = nullptr;
+static csilk_once_t  g_openapi_cache_once = CSILK_ONCE_INIT;
+static csilk_mutex_t g_openapi_cache_mutex;
+
+static void
+init_openapi_cache_mutex(void)
+{
+    csilk_mutex_init(&g_openapi_cache_mutex);
+}
+
 void
 csilk_serve_openapi(csilk_ctx_t*    c,
                     csilk_router_t* r,
@@ -613,9 +624,21 @@ csilk_serve_openapi(csilk_ctx_t*    c,
         return;
     }
 
-    cJSON* doc = csilk_generate_openapi_json(r, title, version, description);
-    if (doc) {
-        csilk_json(c, CSILK_STATUS_OK, doc);
+    csilk_once(&g_openapi_cache_once, init_openapi_cache_mutex);
+
+    csilk_mutex_lock(&g_openapi_cache_mutex);
+    if (!g_openapi_cache_json) {
+        cJSON* doc = csilk_generate_openapi_json(r, title, version, description);
+        if (doc) {
+            g_openapi_cache_json = cJSON_PrintUnformatted(doc);
+            cJSON_Delete(doc);
+        }
+    }
+    const char* cached_json = g_openapi_cache_json;
+    csilk_mutex_unlock(&g_openapi_cache_mutex);
+
+    if (cached_json) {
+        csilk_json_string(c, CSILK_STATUS_OK, cached_json);
     } else {
         csilk_json_error(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Failed to generate OpenAPI spec");
     }

@@ -259,6 +259,27 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
     cJSON_Delete(json);
 }
 
+void
+csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
+{
+    if (!c || !json_str) {
+        return;
+    }
+
+    c->response.status = status;
+    csilk_set_header(c, "Content-Type", "application/json");
+
+    if (c->response.body && c->response.body_is_managed) {
+        free((void*)c->response.body);
+        c->response.body = nullptr;
+        c->response.body_is_managed = 0;
+    }
+
+    c->response.body = json_str;
+    c->response.body_len = strlen(json_str);
+    c->response.body_is_managed = 0;
+}
+
 /** @brief Send a JSON error response containing an "error" field (no-heap
  *  hot path).
  *

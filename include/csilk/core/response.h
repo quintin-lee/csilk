@@ -99,6 +99,15 @@ void csilk_set_cookie(csilk_ctx_t* c,
 void csilk_json(csilk_ctx_t* c, int status, cJSON* json);
 
 /**
+ * @brief Send a raw JSON string response without AST building or heap allocation.
+ *
+ * @param c        The request context.
+ * @param status   HTTP status code.
+ * @param json_str Static or unmanaged JSON string.
+ */
+void csilk_json_string(csilk_ctx_t* c, int status, const char* json_str);
+
+/**
  * @brief Send a JSON-formatted error response.
  *
  * Produces {"error": "<message>"} with the given status code.
