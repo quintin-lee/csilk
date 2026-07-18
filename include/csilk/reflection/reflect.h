@@ -15,6 +15,7 @@
 #include <stdint.h>
 
 #include "cJSON.h"
+#include "csilk/core/types.h"
 
 /**
  * @brief Supported C data types for struct field reflection.
@@ -162,6 +163,23 @@ void csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data);
  *         with free()), or nullptr on error.
  */
 char* csilk_json_marshal(const char* type_name, const void* ptr);
+
+/**
+ * @brief Marshal a reflected struct directly into arena memory.
+ *
+ * Performs zero-heap-allocation JSON serialization directly into the provided
+ * arena.
+ *
+ * @param arena     Request memory arena.
+ * @param type_name Registered type name string.
+ * @param ptr       Pointer to the struct instance.
+ * @param out_len   Optional pointer to store string length.
+ * @return Pointer to NUL-terminated JSON string inside arena, or nullptr.
+ */
+char* csilk_json_marshal_arena(csilk_arena_t* arena,
+                               const char*    type_name,
+                               const void*    ptr,
+                               size_t*        out_len);
 
 /**
  * @brief Deserialise a JSON string into a reflected struct.
