@@ -1,15 +1,15 @@
 /**
  * @file ratelimit.c
- * @brief Simple IP-based rate limiting middleware implementation.
+ * @brief Lockless IP-based rate limiting middleware implementation.
  * @copyright MIT License
  */
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "../core/ctx/ctx_internal.h"
 
@@ -17,143 +17,77 @@
 enum { MAX_IP_ENTRIES = 1024 };
 /** @brief Rate limiting sliding window size in seconds. */
 enum { WINDOW_SIZE = 60 };
-/** @brief Interval at which ratelimit stale entries are garbage-collected. */
-enum { EVICT_INTERVAL = 300 };
 
 /**
- * @brief Rate-limit tracking entry for a single IP address.
- *
- * Each entry stores the IP string, the request count within the current
- * window, the timestamp when the counting window started, and the timestamp
- * of the most recent request (used for LRU eviction when the table is full).
+ * @brief Rate-limit tracking entry for a single IP address (Lockless).
  */
 typedef struct {
-    char   ip[46];     /**< Client IP address string. */
-    int    count;      /**< Request count in current window. */
-    time_t last_reset; /**< Timestamp when the window started. */
-    time_t last_seen;  /**< Timestamp of last request (for LRU eviction). */
-} ip_entry_t;
+    char             ip[46];     /**< Client IP address string. */
+    _Atomic uint32_t count;      /**< Request count in current window. */
+    _Atomic time_t   last_reset; /**< Timestamp when the window started. */
+    _Atomic time_t   last_seen;  /**< Timestamp of last request. */
+    _Atomic int      in_use;     /**< 0: empty, 1: initializing, 2: ready */
+} atomic_ip_entry_t;
 
-/**
- * @name Thread-safety contract (ratelimit module)
- *
- * All file-scope mutable state below is protected by @c ratelimit_mutex.
- * The mutex is lazily initialized exactly once via csilk_once() on the
- * first call to csilk_rate_limit_middleware().
- *
- * Every access to ip_table, ip_count, and last_evict MUST occur while
- * holding ratelimit_mutex.  The lock is acquired once at entry to the
- * middleware and released after the count decision, so the critical
- * section is small and contention is minimal.
- *
- * @note In multi-process deployments (fork-based workers) each process
- *       has its own copy of these globals.  For cross-process rate
- *       limiting, use the distributed path (storage_driver) instead.
- * @{
- */
-static ip_entry_t
-    ip_table[MAX_IP_ENTRIES]; /**< Bounded IP tracking table. Protected by ratelimit_mutex. */
-static int    ip_count = 0;   /**< Active entries in ip_table. Protected by ratelimit_mutex. */
-static time_t last_evict =
-    0; /**< Timestamp of last stale-entry eviction. Protected by ratelimit_mutex. */
-static csilk_mutex_t ratelimit_mutex; /**< Mutex guarding all mutable state above. */
-static csilk_once_t  ratelimit_once =
-    CSILK_ONCE_INIT;                  /**< One-time initialization guard for ratelimit_mutex. */
-/** @} */
+static atomic_ip_entry_t ip_table[MAX_IP_ENTRIES];
 
 /* Forward declaration for metrics counter — used in the rate-limit middleware */
 extern void _csilk_metrics_inc_rate_limit_blocks(void);
 
-/**
- * @brief Initialize the rate-limiting mutex (called once via csilk_once).
- *
- * Creates the mutex that protects the shared ip_table and ip_count
- * from concurrent access across worker threads.
- */
-static void
-init_ratelimit_mutex()
+static uint32_t
+ip_hash(const char* ip)
 {
-    csilk_mutex_init(&ratelimit_mutex);
+    uint32_t hash = 5381;
+    int      c;
+    while ((c = (unsigned char)*ip++)) {
+        hash = ((hash << 5) + hash) + c;
+    }
+    return hash % MAX_IP_ENTRIES;
 }
 
-/**
- * @brief Compact the IP table by removing entries whose last_seen timestamp
- *        is older than WINDOW_SIZE seconds.
- *
- * Iterates over the table and compacts it in-place, updating ip_count to
- * reflect the number of remaining active entries.
- *
- * @param now  The current time to compare against last_seen.
- */
-static void
-evict_stale_entries(time_t now)
+static atomic_ip_entry_t*
+get_or_create_ip_entry(const char* ip, time_t now)
 {
-    int orig = ip_count;
-    int write_idx = 0;
-    for (int read_idx = 0; read_idx < ip_count; read_idx++) {
-        if (now - ip_table[read_idx].last_seen <= WINDOW_SIZE) {
-            if (write_idx != read_idx) {
-                ip_table[write_idx] = ip_table[read_idx];
+    uint32_t start_idx = ip_hash(ip);
+
+    for (uint32_t i = 0; i < MAX_IP_ENTRIES; i++) {
+        uint32_t           idx = (start_idx + i) % MAX_IP_ENTRIES;
+        atomic_ip_entry_t* slot = &ip_table[idx];
+
+        int state = atomic_load(&slot->in_use);
+        if (state == 0) {
+            int expected = 0;
+            if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
+                snprintf(slot->ip, sizeof(slot->ip), "%s", ip);
+                atomic_store(&slot->count, 0);
+                atomic_store(&slot->last_reset, now);
+                atomic_store(&slot->last_seen, now);
+                atomic_store(&slot->in_use, 2);
+                return slot;
             }
-            write_idx++;
+            state = atomic_load(&slot->in_use);
+        }
+
+        if (state == 2 && strcmp(slot->ip, ip) == 0) {
+            atomic_store(&slot->last_seen, now);
+            return slot;
         }
     }
-    ip_count = write_idx;
-    if (orig != ip_count) {
-        CSILK_LOG_D("RateLimit: Evicted %d stale IP entry/entries. Active count: %d",
-                    orig - ip_count,
-                    ip_count);
-    }
+
+    /* Table saturated — fallback to index hash slot */
+    return &ip_table[start_idx];
 }
 
 /**
- * @brief Evict the single oldest entry from the IP table (LRU policy).
+ * @brief IP-based rate limiting middleware with lockless sliding window.
  *
- * Scans the ip_table for the entry with the smallest last_seen value and
- * replaces it with the last entry in the table, decrementing ip_count.
- * Called when the table is full and a new IP needs to be tracked.
- */
-static void
-evict_oldest_entry(void)
-{
-    if (ip_count <= 0) {
-        return;
-    }
-    int oldest = 0;
-    for (int i = 1; i < ip_count; i++) {
-        if (ip_table[i].last_seen < ip_table[oldest].last_seen) {
-            oldest = i;
-        }
-    }
-    CSILK_LOG_D("RateLimit: IP table full. Evicting oldest entry for IP '%s' (last seen: %ld)",
-                ip_table[oldest].ip,
-                (long)ip_table[oldest].last_seen);
-    ip_table[oldest] = ip_table[ip_count - 1];
-    ip_count--;
-}
-
-/**
- * @brief IP-based rate limiting middleware with sliding window.
- *
- * Tracks request counts per client IP address within a configurable window.
+ * Tracks request counts per client IP address within a 60-second sliding window.
  * If the number of requests from a given IP exceeds the limit, a 429 Too
  * Many Requests response is sent (with a Retry-After header) and the
  * pipeline is aborted.
  *
- * The IP table is protected by a mutex for thread safety. Stale
- * entries are periodically evicted to prevent unbounded memory growth.
- *
  * @param c     The request context.
- * @param limit Maximum number of requests allowed per IP within the
- *              WINDOW_SIZE (60-second) sliding window.
- *
- * @note The mutex is initialized once via csilk_once on the first call.
- * @warning Rate limiting is per-worker-process. In multi-process
- *          deployments, each process maintains its own independent table
- *          unless an external store (Redis, etc.) is used instead.
- * @warning If csilk_get_client_ip() returns nullptr (e.g. in tests or certain
- *          proxy setups), the request is passed through without rate
- *          limiting.
+ * @param limit Maximum number of requests allowed per IP within the 60-second window.
  */
 void
 csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
@@ -180,7 +114,6 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
                             ip,
                             current_count,
                             limit);
-                /* forward-declared at file scope */
                 _csilk_metrics_inc_rate_limit_blocks();
                 csilk_set_header(c, "Retry-After", "60");
                 csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
@@ -192,70 +125,30 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
         }
     }
 
-    /* Local in-memory rate limiting fallback */
-    csilk_once(&ratelimit_once, init_ratelimit_mutex);
-    time_t      now = time(nullptr);
-    ip_entry_t* entry = nullptr;
+    /* Lockless in-memory rate limiting fallback */
+    time_t             now = time(NULL);
+    atomic_ip_entry_t* entry = get_or_create_ip_entry(ip, now);
 
-    csilk_mutex_lock(&ratelimit_mutex);
+    time_t   reset = atomic_load(&entry->last_reset);
+    uint32_t current_count = 0;
 
-    /* Periodic eviction of stale entries prevents the table from filling
-     with one-shot visitors. EVICT_INTERVAL (300 s) is intentionally
-     longer than WINDOW_SIZE (60 s) to avoid excessive compaction. */
-    if (now - last_evict > EVICT_INTERVAL) {
-        evict_stale_entries(now);
-        last_evict = now;
-    }
-
-    /* Linear scan for existing IP entry. The table is bounded by
-     MAX_IP_ENTRIES (1024), so O(n) lookup is acceptable. */
-    for (int i = 0; i < ip_count; i++) {
-        if (strcmp(ip_table[i].ip, ip) == 0) {
-            entry = &ip_table[i];
-            break;
-        }
-    }
-
-    if (!entry) {
-        if (ip_count < MAX_IP_ENTRIES) {
-            /* Slot available: create new entry, reset count to 1. */
-            entry = &ip_table[ip_count++];
-            snprintf(entry->ip, sizeof(entry->ip), "%s", ip);
-            entry->count = 0;
-            entry->last_reset = now;
+    if (now - reset > WINDOW_SIZE) {
+        if (atomic_compare_exchange_strong(&entry->last_reset, &reset, now)) {
+            atomic_store(&entry->count, 1);
+            current_count = 1;
         } else {
-            /* Table full: evict the LRU entry (oldest last_seen). */
-            evict_oldest_entry();
-            entry = &ip_table[ip_count++];
-            snprintf(entry->ip, sizeof(entry->ip), "%s", ip);
-            entry->count = 0;
-            entry->last_reset = now;
+            current_count = atomic_fetch_add(&entry->count, 1) + 1;
         }
-    }
-
-    /* Sliding window algorithm: if the window has expired since the last
-     reset, start a new window with count=1. Otherwise increment the
-     counter within the current window. This is a "fixed-window" variant
-     that slides on the first request after expiry, avoiding the burst
-     at the boundary of pure fixed-window schemes. */
-    if (now - entry->last_reset > WINDOW_SIZE) {
-        entry->count = 1;
-        entry->last_reset = now;
     } else {
-        entry->count++;
+        current_count = atomic_fetch_add(&entry->count, 1) + 1;
     }
-    entry->last_seen = now;
 
-    int local_count = entry->count;
-    csilk_mutex_unlock(&ratelimit_mutex);
-
-    if (local_count > limit) {
-        CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %d "
+    if ((int)current_count > limit) {
+        CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %u "
                     "exceeds limit %d",
                     ip,
-                    local_count,
+                    current_count,
                     limit);
-        /* forward-declared at file scope */
         _csilk_metrics_inc_rate_limit_blocks();
         csilk_set_header(c, "Retry-After", "60");
         csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
