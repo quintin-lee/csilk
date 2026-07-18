@@ -25,6 +25,21 @@ CsilkAppPtr = ctypes.POINTER(CsilkApp)
 CsilkCtxPtr = ctypes.POINTER(CsilkCtx)
 CsilkServerPtr = ctypes.POINTER(CsilkServer)
 
+class CsilkCircuitBreaker(ctypes.Structure):
+    pass
+CsilkCircuitBreakerPtr = ctypes.POINTER(CsilkCircuitBreaker)
+
+class CsilkCircuitBreakerConfig(ctypes.Structure):
+    _fields_ = [
+        ("failure_threshold", ctypes.c_int),
+        ("recovery_timeout_ms", ctypes.c_int)
+    ]
+CsilkCircuitBreakerConfigPtr = ctypes.POINTER(CsilkCircuitBreakerConfig)
+
+class CsilkSlidingLimiter(ctypes.Structure):
+    pass
+CsilkSlidingLimiterPtr = ctypes.POINTER(CsilkSlidingLimiter)
+
 class CsilkCorsConfig(ctypes.Structure):
     _fields_ = [
         ("allow_origin", ctypes.c_char_p),
@@ -1003,6 +1018,45 @@ def get_bindings():
 
     lib.csilk_vector_search_response_free.restype = None
     lib.csilk_vector_search_response_free.argtypes = [ctypes.POINTER(CsilkVectorSearchResponse)]
+
+    # OpenTelemetry W3C Tracing
+    lib.csilk_trace_middleware.restype = None
+    lib.csilk_trace_middleware.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_ctx_get_trace_id.restype = ctypes.c_char_p
+    lib.csilk_ctx_get_trace_id.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_ctx_get_span_id.restype = ctypes.c_char_p
+    lib.csilk_ctx_get_span_id.argtypes = [CsilkCtxPtr]
+
+    # Circuit Breaker
+    lib.csilk_circuit_breaker_new.restype = CsilkCircuitBreakerPtr
+    lib.csilk_circuit_breaker_new.argtypes = [CsilkCircuitBreakerConfigPtr]
+
+    lib.csilk_circuit_breaker_middleware.restype = None
+    lib.csilk_circuit_breaker_middleware.argtypes = [CsilkCtxPtr, CsilkCircuitBreakerPtr]
+
+    lib.csilk_circuit_breaker_record_success.restype = None
+    lib.csilk_circuit_breaker_record_success.argtypes = [CsilkCircuitBreakerPtr]
+
+    lib.csilk_circuit_breaker_record_failure.restype = None
+    lib.csilk_circuit_breaker_record_failure.argtypes = [CsilkCircuitBreakerPtr]
+
+    lib.csilk_circuit_breaker_get_state.restype = ctypes.c_int
+    lib.csilk_circuit_breaker_get_state.argtypes = [CsilkCircuitBreakerPtr]
+
+    lib.csilk_circuit_breaker_free.restype = None
+    lib.csilk_circuit_breaker_free.argtypes = [CsilkCircuitBreakerPtr]
+
+    # Sliding Window Rate Limiter
+    lib.csilk_sliding_limiter_new.restype = CsilkSlidingLimiterPtr
+    lib.csilk_sliding_limiter_new.argtypes = [ctypes.c_int, ctypes.c_uint64]
+
+    lib.csilk_sliding_rate_limit_middleware.restype = None
+    lib.csilk_sliding_rate_limit_middleware.argtypes = [CsilkCtxPtr, CsilkSlidingLimiterPtr]
+
+    lib.csilk_sliding_limiter_free.restype = None
+    lib.csilk_sliding_limiter_free.argtypes = [CsilkSlidingLimiterPtr]
 
     _cached_lib = lib
     return lib
