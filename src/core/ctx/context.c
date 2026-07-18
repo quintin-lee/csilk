@@ -208,6 +208,17 @@ csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value)
     map_set(c, &c->request.headers, key, value);
 }
 
+static _Thread_local char* tls_large_body_pool = nullptr;
+
+static void
+tls_large_body_pool_cleanup(void)
+{
+    if (tls_large_body_pool) {
+        free(tls_large_body_pool);
+        tls_large_body_pool = nullptr;
+    }
+}
+
 /** @brief Clean up request context resources between requests.
  *
  * Resets the arena allocator for reuse, frees URL path parameters, request
@@ -244,7 +255,16 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->request.path = nullptr;
 
     if (c->request.body && c->request.body_is_managed) {
-        free(c->request.body);
+        if (!tls_large_body_pool && c->request.body_len >= 65536) {
+            tls_large_body_pool = c->request.body;
+            static _Thread_local int cleanup_registered = 0;
+            if (!cleanup_registered) {
+                atexit(tls_large_body_pool_cleanup);
+                cleanup_registered = 1;
+            }
+        } else {
+            free(c->request.body);
+        }
     }
     c->request.body = nullptr;
     c->request.body_len = 0;
