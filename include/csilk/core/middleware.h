@@ -379,3 +379,60 @@ void csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c);
  *  @param secret        HMAC signing secret.
  *  @return Heap-allocated JWT string (caller must free), or nullptr on failure. */
 char* csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret);
+
+/* --- OpenTelemetry (OTLP) Tracing Middleware --- */
+
+/** @brief OpenTelemetry W3C Trace Context middleware.
+ * Parses incoming W3C 'traceparent' header or generates a new trace ID & span ID,
+ * sets response headers ('traceparent' & 'X-Trace-Id'), and stores trace context in storage.
+ * @param c Request context. */
+void csilk_trace_middleware(csilk_ctx_t* c);
+
+/** @brief Get the active W3C trace ID from request context.
+ * @param c Request context.
+ * @return Hex string of the 16-byte trace_id. */
+const char* csilk_ctx_get_trace_id(csilk_ctx_t* c);
+
+/** @brief Get the active W3C span ID from request context.
+ * @param c Request context.
+ * @return Hex string of the 8-byte span_id. */
+const char* csilk_ctx_get_span_id(csilk_ctx_t* c);
+
+/* --- Circuit Breaker Middleware --- */
+
+/** @brief Opaque Circuit Breaker instance handle. */
+typedef struct csilk_circuit_breaker_s csilk_circuit_breaker_t;
+
+/** @brief Circuit Breaker configuration settings. */
+typedef struct {
+    int failure_threshold;   /**< Consecutive failures before opening (default 5). */
+    int recovery_timeout_ms; /**< Time in ms before attempting HALF_OPEN probe (default 5000ms). */
+} csilk_circuit_breaker_config_t;
+
+/** @brief Create a new Circuit Breaker.
+ * @param config Configuration options.
+ * @return Circuit breaker handle. */
+csilk_circuit_breaker_t* csilk_circuit_breaker_new(const csilk_circuit_breaker_config_t* config);
+
+/** @brief Circuit Breaker middleware handler.
+ * If breaker is OPEN, aborts chain with 503 Service Unavailable.
+ * @param c Request context.
+ * @param cb Circuit Breaker handle. */
+void csilk_circuit_breaker_middleware(csilk_ctx_t* c, csilk_circuit_breaker_t* cb);
+
+/** @brief Record a successful downstream operation on the Circuit Breaker.
+ * @param cb Circuit Breaker handle. */
+void csilk_circuit_breaker_record_success(csilk_circuit_breaker_t* cb);
+
+/** @brief Record a failed downstream operation on the Circuit Breaker.
+ * @param cb Circuit Breaker handle. */
+void csilk_circuit_breaker_record_failure(csilk_circuit_breaker_t* cb);
+
+/** @brief Get current state of the Circuit Breaker.
+ * @param cb Circuit Breaker handle.
+ * @return 0 = CLOSED, 1 = OPEN, 2 = HALF_OPEN. */
+int csilk_circuit_breaker_get_state(const csilk_circuit_breaker_t* cb);
+
+/** @brief Free a Circuit Breaker handle.
+ * @param cb Circuit Breaker handle. */
+void csilk_circuit_breaker_free(csilk_circuit_breaker_t* cb);
