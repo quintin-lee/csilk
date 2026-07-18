@@ -636,5 +636,6 @@
 - **动作**: 实现 Sliding Window (滑动窗口) 限流中间件 (`csilk_sliding_rate_limit_middleware`)，防范固定窗口边界爆发流量
 - **动作**: 实现 SWAR/SIMD 向量化公共前缀匹配算法 (`csilk_common_prefix_len_fast`)，加速 Radix Tree 路由查找
 - **动作**: 强化 Arena 内存池 Cache-Line (64-Byte) 边界对齐，消除多 Worker 并发伪共享 (False Sharing)
-- **动作**: 补充 `test_trace_circuit_breaker.c`, `test_simd_router_arena.c`, `test_sliding_ratelimit.c` 单元测试，全量 127/127 CTest 测试 100% 通过
+- **动作**: 强化 Python CFFI/ctypes 绑定网络与中间件 API 导出，新增 `python/csilk/middleware.py` (包含 `CircuitBreaker`, `SlidingLimiter`, `trace_middleware`) 及 `python/tests/test_middleware_bindings.py` 单元测试
+- **动作**: 补充 `test_trace_circuit_breaker.c`, `test_simd_router_arena.c`, `test_sliding_ratelimit.c` 单元测试，全量 127/127 CTest 测试与 Python Binding 测试 100% 通过
 

@@ -804,6 +804,18 @@ class Context:
             return val
         return ctypes.string_at(ptr).decode('utf-8')
 
+    @property
+    def trace_id(self):
+        """Get the active OpenTelemetry W3C trace ID from context, or None."""
+        res = self._lib.csilk_ctx_get_trace_id(self._ctx)
+        return res.decode('utf-8') if res else None
+
+    @property
+    def span_id(self):
+        """Get the active OpenTelemetry W3C span ID from context, or None."""
+        res = self._lib.csilk_ctx_get_span_id(self._ctx)
+        return res.decode('utf-8') if res else None
+
     # ── Test utilities ──────────────────────────────────────────────
 
     @classmethod
