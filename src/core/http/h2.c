@@ -275,8 +275,6 @@ csilk_h2_send_response(csilk_ctx_t* c)
         return;
     }
 
-    nghttp2_nv hdrs[32];
-
     int header_count = 1; /* :status */
     for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
         for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
@@ -284,9 +282,13 @@ csilk_h2_send_response(csilk_ctx_t* c)
         }
     }
 
-    nghttp2_nv* nva = malloc(sizeof(nghttp2_nv) * (size_t)header_count);
-    if (!nva) {
-        return;
+    nghttp2_nv  stack_hdrs[32];
+    nghttp2_nv* nva = stack_hdrs;
+    if (header_count > 32) {
+        nva = malloc(sizeof(nghttp2_nv) * (size_t)header_count);
+        if (!nva) {
+            return;
+        }
     }
 
     char status_str[16];
@@ -320,7 +322,9 @@ csilk_h2_send_response(csilk_ctx_t* c)
     }
 
     nghttp2_submit_response(client->h2_session, c->stream_id, nva, (size_t)header_count, p_prd);
-    free(nva);
+    if (nva != stack_hdrs) {
+        free(nva);
+    }
 
     nghttp2_session_send(client->h2_session);
 
