@@ -458,3 +458,41 @@ void csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t
 /** @brief Free a Sliding Window Rate Limiter handle.
  * @param limiter Limiter handle. */
 void csilk_sliding_limiter_free(csilk_sliding_limiter_t* limiter);
+
+/* --- OpenTelemetry (OTLP) Span Exporter --- */
+
+/** @brief OpenTelemetry Span record structure. */
+typedef struct {
+    char     trace_id[33];       /**< Hex 16-byte Trace ID. */
+    char     span_id[17];        /**< Hex 8-byte Span ID. */
+    char     parent_span_id[17]; /**< Parent Span ID or empty string. */
+    char     name[128];          /**< Span operation name (e.g., "GET /api/v1/users"). */
+    uint64_t start_time_ns;      /**< Start timestamp in nanoseconds. */
+    uint64_t end_time_ns;        /**< End timestamp in nanoseconds. */
+    int      status_code;        /**< HTTP status code (200, 500, etc.). */
+} csilk_otlp_span_t;
+
+/** @brief Opaque OTLP Exporter instance handle. */
+typedef struct csilk_otlp_exporter_s csilk_otlp_exporter_t;
+
+/** @brief Create a new OTLP Span Exporter instance.
+ * @param endpoint_url Collector endpoint URL (e.g., "http://localhost:4318/v1/traces").
+ * @param batch_size Maximum spans to buffer before flush.
+ * @return Exporter handle. */
+csilk_otlp_exporter_t* csilk_otlp_exporter_new(const char* endpoint_url, int batch_size);
+
+/** @brief Buffer a span for export.
+ * @param exp Exporter handle.
+ * @param span Span data to record. */
+void csilk_otlp_exporter_record_span(csilk_otlp_exporter_t* exp, const csilk_otlp_span_t* span);
+
+/** @brief Format buffered spans as OpenTelemetry JSON payload (resourceSpans).
+ * @param exp Exporter handle.
+ * @param[out] out_buf Output buffer.
+ * @param buf_size Output buffer capacity.
+ * @return Number of formatted spans, or -1 on error. */
+int csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_t buf_size);
+
+/** @brief Free an OTLP Exporter instance.
+ * @param exp Exporter handle. */
+void csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp);
