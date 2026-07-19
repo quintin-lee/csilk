@@ -37,10 +37,40 @@ test_otlp_exporter_basic()
     printf("test_otlp_exporter_basic: PASS\n");
 }
 
+static void
+test_otlp_exporter_export_grpc()
+{
+    printf("Testing OpenTelemetry OTLP/gRPC Exporter...\n");
+
+    csilk_otlp_exporter_t* exp = csilk_otlp_exporter_new("http://localhost:4317", 10);
+    assert(exp != NULL);
+
+    csilk_otlp_span_t span1 = {.trace_id = "4bf92f3577b34da6a3ce929d0e0e4736",
+                               .span_id = "00f067aa0ba902b7",
+                               .parent_span_id = "",
+                               .name = "POST /api/v1/grpc",
+                               .start_time_ns = 1700000000000000000ULL,
+                               .end_time_ns = 1700000000050000000ULL,
+                               .status_code = 200};
+
+    csilk_otlp_exporter_record_span(exp, &span1);
+
+    uint8_t grpc_buf[2048] = {0};
+    int     frame_len = csilk_otlp_exporter_export_grpc(exp, grpc_buf, sizeof(grpc_buf));
+
+    assert(frame_len > 5);
+    /* Verify 5-byte gRPC prefix header: Compressed-Flag = 0 */
+    assert(grpc_buf[0] == 0x00);
+
+    csilk_otlp_exporter_free(exp);
+    printf("test_otlp_exporter_export_grpc: PASS\n");
+}
+
 int
 main()
 {
     test_otlp_exporter_basic();
+    test_otlp_exporter_export_grpc();
     printf("All OTLP Exporter tests passed successfully!\n");
     return 0;
 }
