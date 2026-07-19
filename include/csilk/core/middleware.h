@@ -493,6 +493,13 @@ void csilk_otlp_exporter_record_span(csilk_otlp_exporter_t* exp, const csilk_otl
  * @return Number of formatted spans, or -1 on error. */
 int csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_t buf_size);
 
+/** @brief Encapsulate buffered OTLP spans into a 5-byte gRPC binary frame for OTLP/gRPC collectors.
+ * @param exp Exporter handle.
+ * @param[out] out_buf Output binary buffer.
+ * @param buf_size Capacity of output buffer.
+ * @return Total binary gRPC frame length in bytes, or -1 on error. */
+int csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, size_t buf_size);
+
 /** @brief Free an OTLP Exporter instance.
  * @param exp Exporter handle. */
 void csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp);
