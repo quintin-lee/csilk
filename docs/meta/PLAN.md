@@ -646,5 +646,6 @@
 - **动作**: 实现 WebAssembly (WASM) 动态插件沙箱引擎 (`csilk_wasm_plugin_load`/`csilk_wasm_plugin_execute`)，支持 WASM 魔数校验与热插拔扩展
 - **动作**: 扩充 WebAssembly (WASM) Host C-ABI 上下文 API (`csilk_wasm_host_get_header`/`csilk_wasm_host_set_header`/`csilk_wasm_host_get_param`/`csilk_wasm_host_set_status`)，支持沙箱动态标头拦截与状态码操控
 - **动作**: 实现 HTTP/3 原生 UDP 套接字监听器 (`csilk_h3_listener_bind`/`csilk_h3_listener_process_packet`)，支持 QUIC 报文解析与 64-Bit Connection ID 提取路由
+- **动作**: 实现 OpenTelemetry OTLP/gRPC Protobuf 二进制流式导出管道 (`csilk_otlp_exporter_export_grpc`)，基于 5-Byte 大端 gRPC 帧支持无缝对接到 OpenTelemetry Collector
 - **动作**: 补充 `test_trace_circuit_breaker.c`, `test_simd_router_arena.c`, `test_sliding_ratelimit.c`, `test_otlp_exporter.c`, `test_grpc_gateway.c`, `test_h3.c`, `test_uring_buf.c`, `test_wasm_plugin.c` 单元测试，全量 132/132 CTest 测试与 Python Binding 测试 100% 通过
 

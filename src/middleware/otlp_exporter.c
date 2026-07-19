@@ -134,6 +134,24 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     return exported_count;
 }
 
+int
+csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, size_t buf_size)
+{
+    if (!exp || !out_buf || buf_size < 16) {
+        return -1;
+    }
+
+    char json_buf[4096] = {0};
+    int  count = csilk_otlp_exporter_export_json(exp, json_buf, sizeof(json_buf));
+    if (count <= 0) {
+        return -1;
+    }
+
+    size_t json_len = strlen(json_buf);
+    int frame_len = csilk_grpc_frame_encode((const uint8_t*)json_buf, json_len, out_buf, buf_size);
+    return frame_len;
+}
+
 /**
  * @brief Free resources associated with an OTLP Exporter.
  *
