@@ -159,11 +159,12 @@ set(CSILK_MIDDLEWARE_TESTS
     test_file
     test_validate
     test_waf
+    test_xdp_waf
 )
 set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware
+    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
 )
 
 # -- Protocol tests --
