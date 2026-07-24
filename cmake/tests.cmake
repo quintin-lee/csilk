@@ -70,13 +70,14 @@ set(CSILK_CORE_TESTS
     test_wasm_plugin
     test_swar_http
     test_af_xdp
+    test_dpdk_pmd
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core
+    core;core;core;core;core
 )
 
 # -- Application tests --
