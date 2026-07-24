@@ -42,6 +42,7 @@ set(CSILK_CORE_SOURCES
     src/core/cache/mvcc_cache.c
     src/core/http/swar_http.c
     src/core/io/af_xdp.c
+    src/core/io/dpdk_pmd.c
     src/core/uring/uring_buf.c
     src/core/plugin/wasm_plugin.c
 )
