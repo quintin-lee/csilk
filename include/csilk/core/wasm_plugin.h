@@ -89,6 +89,25 @@ const char* csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name);
  */
 int csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status);
 
+/**
+ * @brief Map shared linear memory buffer between Host and WASM plugin sandbox.
+ *
+ * @param plugin WASM plugin instance handle.
+ * @param buf Pointer to host memory buffer.
+ * @param len Size of memory buffer in bytes.
+ * @return 0 on success, -1 on invalid plugin or buffer.
+ */
+int csilk_wasm_plugin_map_memory(csilk_wasm_plugin_t* plugin, void* buf, size_t len);
+
+/**
+ * @brief WASM Host API: Retrieve shared linear memory mapping view.
+ *
+ * @param plugin WASM plugin instance handle.
+ * @param[out] len Receives length of mapped linear memory.
+ * @return Pointer to mapped linear memory buffer, or NULL if not mapped.
+ */
+void* csilk_wasm_host_get_mapped_buffer(const csilk_wasm_plugin_t* plugin, size_t* len);
+
 #ifdef __cplusplus
 }
 #endif

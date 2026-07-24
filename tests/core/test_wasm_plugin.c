@@ -68,12 +68,35 @@ test_wasm_host_api()
     printf("test_wasm_host_api: PASS\n");
 }
 
+static void
+test_wasm_shared_mem()
+{
+    printf("Testing WASM zero-copy shared memory mapping...\n");
+
+    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    assert(plugin != NULL);
+
+    char host_buf[256] = "Shared Memory Data";
+    assert(csilk_wasm_plugin_map_memory(plugin, host_buf, sizeof(host_buf)) == 0);
+
+    size_t mapped_len = 0;
+    void*  mapped_ptr = csilk_wasm_host_get_mapped_buffer(plugin, &mapped_len);
+    assert(mapped_ptr == host_buf);
+    assert(mapped_len == sizeof(host_buf));
+    assert(strcmp((const char*)mapped_ptr, "Shared Memory Data") == 0);
+
+    csilk_wasm_plugin_free(plugin);
+    printf("test_wasm_shared_mem: PASS\n");
+}
+
 int
 main()
 {
     test_wasm_plugin_load_invalid();
     test_wasm_plugin_load_valid();
     test_wasm_host_api();
+    test_wasm_shared_mem();
     printf("All WASM Plugin tests passed successfully!\n");
     return 0;
 }
