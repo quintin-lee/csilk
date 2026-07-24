@@ -19,6 +19,8 @@ struct csilk_wasm_plugin_s {
     uint8_t* bytecode;
     size_t   size;
     int      is_valid;
+    void*    shared_mem;
+    size_t   shared_len;
 };
 
 csilk_wasm_plugin_t*
@@ -134,4 +136,30 @@ csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status)
     }
     csilk_status(ctx, status);
     return 0;
+}
+
+int
+csilk_wasm_plugin_map_memory(csilk_wasm_plugin_t* plugin, void* buf, size_t len)
+{
+    if (!plugin || !buf || len == 0) {
+        return -1;
+    }
+    plugin->shared_mem = buf;
+    plugin->shared_len = len;
+    return 0;
+}
+
+void*
+csilk_wasm_host_get_mapped_buffer(const csilk_wasm_plugin_t* plugin, size_t* len)
+{
+    if (!plugin) {
+        if (len) {
+            *len = 0;
+        }
+        return nullptr;
+    }
+    if (len) {
+        *len = plugin->shared_len;
+    }
+    return plugin->shared_mem;
 }
