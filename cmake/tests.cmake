@@ -229,9 +229,10 @@ set(CSILK_MESSAGING_TESTS
     test_mq_wal
     test_mq_wal_write
     test_mq_concurrent
+    test_raft_wal
 )
 set(CSILK_MESSAGING_TEST_DIRS
-    mq;mq;mq;mq;mq;mq;mq;mq
+    mq;mq;mq;mq;mq;mq;mq;mq;mq
 )
 
 # -- Extra / integration tests --
