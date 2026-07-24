@@ -84,6 +84,7 @@ set(CSILK_MESSAGING_SOURCES
     src/messaging/mq_context.c
     src/messaging/mq_offload.c
     src/messaging/mq_wal.c
+    src/messaging/raft_wal.c
 )
 
 set(CSILK_MIDDLEWARE_SOURCES
