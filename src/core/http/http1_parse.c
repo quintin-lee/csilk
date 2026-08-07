@@ -1,0 +1,451 @@
+/**
+ * @file http1_parse.c
+ * @brief HTTP/1.1 request parsing: llhttp callbacks, header processing,
+ *        body accumulation, and request dispatch.
+ *
+ * @copyright MIT License
+ */
+
+#include <assert.h>
+#include <limits.h>
+#include <llhttp.h>
+#include <openssl/ssl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "csilk/core/internal.h"
+#include "../internal/srv_internal.h"
+#include "../ctx/ctx_internal.h"
+#include "../primitives/header_map.h"
+#include "h2.h"
+#include "../internal/srv_impl.h"
+
+/* --- Zero-copy header persistence --- */
+
+/** @brief Persist a zero-copy header field+value pair into the request header map.
+ *
+ * Copies the header field and value from string views into the request arena
+ * and inserts them into the request header hash map. This is the single point
+ * where zero-copy references are materialized into persistent arena memory.
+ *
+ * @param c     Request context (for arena allocation).
+ * @param field Header field name (zero-copy reference to recv buffer).
+ * @param value Header value (zero-copy reference to recv buffer). */
+void
+_csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk_str_view_t* value)
+{
+    if (!c || !c->arena || !field || !field->data || !value || !value->data) {
+        return;
+    }
+    /* Use the zero-copy-aware map_set variant that copies from views. */
+    map_set_view(c, &c->request.headers, field, value);
+}
+
+/* --- llHTTP parser callbacks --- */
+
+/** @brief llhttp callback: HTTP message start.
+ *
+ * Called at the beginning of each HTTP request message (including
+ * keep-alive connections). Resets header tracking counters and restarts
+ * the request timeout timer.
+ *
+ * @param p The llhttp parser instance (data points to csilk_client_t).
+ * @return 0 (HPE_OK) to continue parsing. */
+int
+on_message_begin(llhttp_t* p)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    client->total_header_size = 0;
+    client->header_count = 0;
+
+    if (client->server->config.request_timeout_ms > 0) {
+        csilk_io_timer_stop(&client->request_timer);
+        csilk_io_timer_start(
+            &client->request_timer, on_read_timeout, client->server->config.request_timeout_ms, 0);
+    }
+
+    csilk_log_set_request_id(nullptr);
+    return 0;
+}
+
+/** @brief llhttp callback: URL data received.
+ *
+ * Stores a zero-copy reference to the URL in the receive buffer.
+ * The URL pointer points directly into the receive buffer and is valid
+ * until the request is fully processed. No heap allocation occurs.
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to the URL data.
+ * @param length Length of the URL data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if URL exceeds max_url_size. */
+int
+on_url(llhttp_t* p, const char* at, size_t length)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    size_t          max_url = client->server->config.max_url_size;
+    if (max_url > 0 && length > max_url) {
+        CSILK_LOG_W("URL length (%zu) exceeds max_url_size limit (%zu)", length, max_url);
+        client->current_url.data = nullptr;
+        client->current_url.len = 0;
+        return HPE_USER;
+    }
+    if (client->current_url.data && at == client->current_url.data + client->current_url.len) {
+        /* URL continues — extend the reference. */
+        client->current_url.len += length;
+    } else if (client->current_url.data) {
+        /* Split URL: must allocate and copy. */
+        char* new_url = csilk_arena_alloc(client->ctx.arena, client->current_url.len + length + 1);
+        if (!new_url) {
+            client->current_url.data = nullptr;
+            client->current_url.len = 0;
+            return HPE_USER;
+        }
+        memcpy(new_url, client->current_url.data, client->current_url.len);
+        memcpy(new_url + client->current_url.len, at, length);
+        client->current_url.data = new_url;
+        client->current_url.len += length;
+    } else {
+        /* First chunk of URL */
+        client->current_url.data = at;
+        client->current_url.len = length;
+    }
+    return 0;
+}
+
+/** @brief llhttp callback: header field name received.
+ *
+ * Stores a zero-copy reference to the header field name in the receive
+ * buffer. When a previous field+value pair is complete, stores it in
+ * the request header map (via arena, single copy). Enforces
+ * max_header_size and max_headers_count limits.
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to header field data.
+ * @param length Length of the header field data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if size/count limits are exceeded. */
+int
+on_header_field(llhttp_t* p, const char* at, size_t length)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    client->total_header_size += length;
+    if (client->total_header_size > client->server->config.max_header_size) {
+        CSILK_LOG_W("Total header size limit exceeded on header field");
+        return HPE_USER;
+    }
+    client->header_count++;
+    if (client->server->config.max_headers_count > 0 &&
+        client->header_count > client->server->config.max_headers_count) {
+        CSILK_LOG_W("Total header count limit exceeded (%zu)", client->header_count);
+        return HPE_USER;
+    }
+
+    /* If we have a complete field+value pair from a previous header,
+     * persist it into the request header map before starting a new one. */
+    if (client->current_header_field.data && client->current_header_value.data) {
+        _csilk_persist_header(
+            &client->ctx, &client->current_header_field, &client->current_header_value);
+        client->current_header_field.data = nullptr;
+        client->current_header_field.len = 0;
+        client->current_header_value.data = nullptr;
+        client->current_header_value.len = 0;
+    } else if (client->current_header_field.data) {
+        /* Previous field had no value — discard it. */
+        client->current_header_field.data = nullptr;
+        client->current_header_field.len = 0;
+    }
+
+    client->current_header_field.data = at;
+    client->current_header_field.len = length;
+    return 0;
+}
+
+/** @brief Grow a heap-allocated buffer to at least @p needed bytes.
+ *
+ * Uses realloc with capacity doubling for amortized O(1) growth. If @p buf
+ * is nullptr and *@p cap is 0, this acts as a malloc. On realloc failure the
+ * original buffer is NOT freed (caller must free it).
+ *
+ * @param buf    Existing allocation (may be nullptr).
+ * @param cap    [in,out] Current capacity — updated on success.
+ * @param needed Minimum required size in bytes.
+ * @return Pointer to the resized buffer, or nullptr on allocation failure. */
+static char*
+buf_grow(char* buf, size_t* cap, size_t needed)
+{
+    if (needed <= *cap) {
+        return buf;
+    }
+    size_t new_cap = *cap ? *cap : 32;
+    while (new_cap < needed) {
+        if (new_cap > SIZE_MAX / 2) {
+            return nullptr;
+        }
+        new_cap *= 2;
+    }
+    char* new_buf = realloc(buf, new_cap);
+    if (!new_buf) {
+        return nullptr;
+    }
+    *cap = new_cap;
+    return new_buf;
+}
+
+/** @brief llhttp callback: header value data received.
+ *
+ * Accumulates a zero-copy reference to the header value. If a previous
+ * header value exists (split across multiple buffers), the references are
+ * merged into a single arena-allocated copy before updating the view.
+ * This ensures each header is stored only once (in the arena hash map).
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to header value data.
+ * @param length Length of header value data.
+ * @return 0 (HPE_OK) on success, HPE_USER if size limit is exceeded. */
+int
+on_header_value(llhttp_t* p, const char* at, size_t length)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    client->total_header_size += length;
+    if (client->total_header_size > client->server->config.max_header_size) {
+        CSILK_LOG_W("Total header size limit exceeded on header value");
+        client->current_header_field.data = nullptr;
+        client->current_header_field.len = 0;
+        client->current_header_value.data = nullptr;
+        client->current_header_value.len = 0;
+        return HPE_USER;
+    }
+
+    /* llhttp guarantees that header values arrives contiguously, so
+     * we can simply update the reference end point. */
+    if (client->current_header_value.data &&
+        at == client->current_header_value.data + client->current_header_value.len) {
+        /* Value continues — extend the reference. */
+        client->current_header_value.len += length;
+    } else {
+        /* First chunk of this value. */
+        client->current_header_value.data = at;
+        client->current_header_value.len = length;
+    }
+    return 0;
+}
+
+/** @brief llhttp callback: all HTTP headers have been received.
+ *
+ * Flushes any remaining header field+value pair into the request context.
+ *
+ * @param p The llhttp parser instance.
+ * @return 0 (HPE_OK) to continue parsing. */
+int
+on_headers_complete(llhttp_t* p)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    if (client->current_header_field.data && client->current_header_value.data) {
+        _csilk_persist_header(
+            &client->ctx, &client->current_header_field, &client->current_header_value);
+        client->current_header_field.data = nullptr;
+        client->current_header_field.len = 0;
+        client->current_header_value.data = nullptr;
+        client->current_header_value.len = 0;
+    }
+    return 0;
+}
+
+/** @brief llhttp callback: body data received.
+ *
+ * Appends body data to the request body buffer (realloc as needed). Enforces
+ * max_body_size limit (returns HPE_USER if exceeded). On realloc failure,
+ * the existing body is freed and HPE_USER is returned.
+ *
+ * @param p      The llhttp parser instance.
+ * @param at     Pointer to body data.
+ * @param length Length of body data in bytes.
+ * @return 0 (HPE_OK) on success, HPE_USER if the body exceeds max_body_size. */
+int
+on_body(llhttp_t* p, const char* at, size_t length)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
+        return HPE_USER;
+    }
+
+    /* Overflow check for size calculation: body_len + length + 1 */
+    if (length > SIZE_MAX - client->ctx.request.body_len - 1) {
+        return HPE_USER;
+    }
+
+    /* Zero-copy body: reference the data directly in the read buffer.
+     * The body pointer is valid until the request completes (I/O
+     * guarantees the buffer lifetime across the read callback). */
+    if (client->ctx.request.body_len == 0) {
+        /* First body chunk — store the direct reference. */
+        client->ctx.request.body = (char*)at;
+        client->ctx.request.body_len = length;
+    } else if (client->ctx.request.body + client->ctx.request.body_len == at) {
+        /* Contiguous body — extend the reference. */
+        client->ctx.request.body_len += length;
+    } else {
+        /* Non-contiguous: must copy. This path is rare (e.g., body
+         * split across multiple TCP packets with intervening data).
+         * Fall back to arena allocation. */
+        char* new_body =
+            csilk_arena_alloc(client->ctx.arena, client->ctx.request.body_len + length + 1);
+        if (!new_body) {
+            client->ctx.request.body = nullptr;
+            client->ctx.request.body_len = 0;
+            return HPE_USER;
+        }
+        memcpy(new_body, client->ctx.request.body, client->ctx.request.body_len);
+        memcpy(new_body + client->ctx.request.body_len, at, length);
+        client->ctx.request.body_len += length;
+        new_body[client->ctx.request.body_len] = '\0';
+        client->ctx.request.body = new_body;
+    }
+    return 0;
+}
+
+/* --- Request dispatch --- */
+
+/** @brief Dispatch an incoming request through the middleware and routing
+ * pipeline.
+ *
+ * Triggers the CSILK_HOOK_REQUEST_BEGIN lifecycle hook, then attempts to
+ * match the request path against the server's radix-tree router.  On a
+ * match the route-level handlers are prepended with any registered global
+ * middlewares and execution begins via csilk_next().  On a miss the
+ * not-found handler (or a default 404 string response) is invoked.
+ *
+ * After dispatch the function handles the async / sync split: for async
+ * handlers the HTTP/1 connection read loop is stopped (the handler is
+ * responsible for sending the response later); for sync handlers the
+ * response is sent immediately via _csilk_send_response().
+ *
+ * @param c The request context populated by the HTTP parser. */
+CSILK_INTERNAL void
+_csilk_dispatch_request(csilk_ctx_t* c)
+{
+    if (!c || !c->server) {
+        return;
+    }
+
+    csilk_server_t* server = (csilk_server_t*)c->server;
+
+    CSILK_LOG_I("Request: %s %s", c->request.method, c->request.path);
+
+    _csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
+
+    if (csilk_router_match_ctx(server->router, c)) {
+        CSILK_LOG_D("Route matched, calling next handler");
+
+        if (server->middleware_count > 0) {
+            int route_handler_count = 0;
+            while (c->handlers[route_handler_count] != nullptr) {
+                route_handler_count++;
+            }
+
+            int              total_count = server->middleware_count + route_handler_count;
+            csilk_handler_t* arena_handlers =
+                csilk_arena_alloc(c->arena, (total_count + 1) * sizeof(csilk_handler_t));
+            if (arena_handlers) {
+                for (int i = 0; i < server->middleware_count; i++) {
+                    arena_handlers[i] = server->middlewares[i];
+                }
+                for (int i = 0; i < route_handler_count; i++) {
+                    arena_handlers[server->middleware_count + i] = c->handlers[i];
+                }
+                arena_handlers[total_count] = nullptr;
+                c->handlers = arena_handlers;
+            }
+        }
+
+        csilk_next(c);
+    } else {
+        CSILK_LOG_W("Route not found: %s", c->request.path);
+        if (server->not_found_handler) {
+            server->not_found_handler(c);
+        } else {
+            csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        }
+    }
+
+    if (c->is_async) {
+        csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+        if (client && client->protocol == CSILK_PROTO_HTTP1) {
+            csilk_client_read_stop(client);
+        }
+    }
+
+    if (!c->is_async) {
+        _csilk_send_response(c);
+    }
+}
+
+/* --- Request finalization --- */
+
+/** @brief Finalize the parsed request data before routing.
+ *
+ * Stores any remaining header field+value pair, splits the URL into path
+ * and query string, URL-decodes the path, parses query parameters into the
+ * context's query_params map, and sets the HTTP method on the context.
+ *
+ * @param client The client connection.
+ * @param p      The llhttp parser instance. */
+static void
+finalize_request(csilk_client_t* client, llhttp_t* p)
+{
+    /* Persist any remaining header field+value pair into the request context. */
+    if (client->current_header_field.data && client->current_header_value.data) {
+        _csilk_persist_header(
+            &client->ctx, &client->current_header_field, &client->current_header_value);
+        client->current_header_field.data = nullptr;
+        client->current_header_field.len = 0;
+        client->current_header_value.data = nullptr;
+        client->current_header_value.len = 0;
+    }
+
+    /* Process the URL: copy to arena (for null-termination), then split. */
+    if (client->current_url.data && client->current_url.len > 0) {
+        char* url_copy = csilk_arena_strndup(
+            client->ctx.arena, client->current_url.data, client->current_url.len);
+        if (url_copy) {
+            char* path = nullptr;
+            char* query = nullptr;
+            csilk_split_url(url_copy, &path, &query);
+            client->ctx.request.path = path;
+            if (query) {
+                csilk_parse_query(&client->ctx, query);
+                free(query);
+            }
+        }
+        client->current_url.data = nullptr;
+        client->current_url.len = 0;
+    }
+
+    client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
+}
+
+/* --- Message complete --- */
+
+/** @brief llhttp callback: the full HTTP request message has been parsed.
+ *
+ * This is the main request dispatch point. It executes the following
+ * pipeline for every incoming HTTP request:
+ *
+ *   1. finalize_request(): store remaining headers, split URL into path
+ *      and query, URL-decode the path, parse query parameters.
+ *
+ *   2. _csilk_dispatch_request(): trigger hooks, match route, prepend
+ *      global middlewares, execute handler chain, send response.
+ *
+ * @param p The llhttp parser instance.
+ * @return 0 (HPE_OK) on success, non-zero to abort parsing. */
+int
+on_message_complete(llhttp_t* p)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+
+    finalize_request(client, p);
+    _csilk_dispatch_request(&client->ctx);
+
+    return 0;
+}
