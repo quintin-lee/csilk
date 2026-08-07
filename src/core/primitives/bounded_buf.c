@@ -114,9 +114,10 @@ csilk_bounded_buf_puts(csilk_bounded_buf_t* b, const char* s)
  * @param n     Unsigned 64-bit value to format.
  * @return      Pointer to the first character of the formatted number. */
 static char*
-uint64_to_str(char* end, uint64_t n)
+uint64_to_str(char* buf, size_t size, uint64_t n)
 {
-    *end = '\0';
+    char* end = buf + size;
+    *--end = '\0';
     if (n == 0) {
         *--end = '0';
         return end;
@@ -132,12 +133,12 @@ void
 csilk_bounded_buf_puti(csilk_bounded_buf_t* b, int64_t n)
 {
     char  tmp[25]; /* 20 digits + sign + null terminator */
-    char* end = tmp + sizeof(tmp);
+    char* end;
     if (n < 0) {
         csilk_bounded_buf_putc(b, '-');
-        end = uint64_to_str(end, (uint64_t)(-(n + 1)) + 1);
+        end = uint64_to_str(tmp, sizeof(tmp), (uint64_t)(-(n + 1)) + 1);
     } else {
-        end = uint64_to_str(end, (uint64_t)n);
+        end = uint64_to_str(tmp, sizeof(tmp), (uint64_t)n);
     }
     csilk_bounded_buf_puts(b, end);
 }
@@ -146,7 +147,7 @@ void
 csilk_bounded_buf_putu(csilk_bounded_buf_t* b, uint64_t n)
 {
     char  tmp[25]; /* 20 digits + sign + null terminator */
-    char* end = uint64_to_str(tmp + sizeof(tmp), n);
+    char* end = uint64_to_str(tmp, sizeof(tmp), n);
     csilk_bounded_buf_puts(b, end);
 }
 
