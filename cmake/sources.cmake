@@ -18,6 +18,7 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/bounded_buf.c
     src/core/config/config.c
     src/core/ctx/context.c
+    src/core/ctx/ctx_accessors.c
     src/core/ctx/ctx_defer.c
     src/core/ctx/ctx_json.c
     src/core/http/h2.c
