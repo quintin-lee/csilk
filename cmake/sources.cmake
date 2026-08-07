@@ -9,6 +9,7 @@ set(CSILK_AI_SOURCES
 
 set(CSILK_APP_SOURCES
     src/app/app.c
+    src/app/app_routes.c
     src/app/group.c
 )
 
