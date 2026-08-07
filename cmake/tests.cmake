@@ -186,9 +186,12 @@ set(CSILK_PROTOCOL_TEST_DIRS
 set(CSILK_SECURITY_TESTS
     test_perm
     test_perm_ext
+    test_crypto_primitives
+    test_jwt_security
+    test_uuid
 )
 set(CSILK_SECURITY_TEST_DIRS
-    security;security
+    security;security;security;security;security
 )
 
 # -- Data / driver tests --
@@ -197,18 +200,21 @@ set(CSILK_DATA_TESTS
     test_crypto_driver
     test_db
     test_mongodb
+    test_db_sqlite
+    test_db_registry
 )
 set(CSILK_DATA_TEST_DIRS
-    data;data;data;data
+    data;data;data;data;drivers;drivers
 )
 
-# -- AI tests --
+# -- AI / driver tests --
 set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
+    test_vector_db
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers
+    drivers;drivers;drivers
 )
 
 # -- Reflection tests --
