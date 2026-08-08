@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Embedded SIMD Vector Index Engine**: 32-byte aligned AVX2 SIMD distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index engine (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
+- **eBPF XDP Dynamic WAF & OTLP APM Dashboard**: BPF-Map hot-reloading dynamic WAF rule engine (`csilk_xdp_waf_add_ip_rule`), W3C trace context middleware with 2048-span ring buffer (`csilk_otlp_tracer_start_span`), and single-page embedded Web APM Dashboard (`share/csilk/apm_ui.html`, `/admin/apm`).
+
 ### Security
 - **Sensitive buffer zeroing**: Zero sensitive buffers after use in csrf, jwt, session, and websocket modules to prevent data leakage.
 - **JWT integer overflow guards**: Add overflow protection to base64 length calculations in JWT parsing.

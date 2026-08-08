@@ -53,6 +53,8 @@
 - 🚀 **SWAR/SIMD 向量化公共前缀匹配** — 64 位并行比较 (`csilk_common_prefix_len_fast`) 与 64-Byte Cache-Line 对齐 Arena 内存池
 - 🐍 **Python CFFI/ctypes 绑定封装** — 原生 Python 封装类 (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
 - **WAF（Web 应用防火墙）** 中间件
+- 🧬 **原生内嵌式 SIMD 向量检索索引引擎** — 32 字节内存对齐 AVX2 SIMD 距离算子（Cosine / L2 / 向量点积）与多层 HNSW 跳表图索引 (`csilk_hnsw_index_t`)，实现 $O(\log N)$ ANN 近似最近邻向量检索与全零依赖内嵌驱动 (`csilk_vector_db_new_embedded`)
+- 🛡️ **eBPF XDP 动态规则 WAF 与 OTLP 全链路追踪 Web 仪表盘** — BPF-Map 无缝热加载内核防火墙规则 (`csilk_xdp_waf_add_ip_rule`) 与 2048-Span W3C 链路追踪无锁环形缓冲区 (`csilk_otlp_tracer_start_span`)，搭配单页嵌入式 Web APM Dashboard (`/admin/apm`)
 
 ## 架构概览
 

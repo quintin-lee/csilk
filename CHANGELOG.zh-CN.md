@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### 新增
+- **原生内嵌式 SIMD 向量检索索引引擎**：32 字节内存对齐 AVX2 SIMD 距离算子（Cosine / L2 / 点积）与多层 HNSW 跳表图索引 (`csilk_hnsw_index_t`)，实现 $O(\log N)$ ANN 近似最近邻向量检索与全零依赖内嵌驱动 (`csilk_vector_db_new_embedded`)。
+- **eBPF XDP 动态规则 WAF 与 OTLP 全链路追踪 Web 仪表盘**：BPF-Map 无缝热加载内核防火墙规则 (`csilk_xdp_waf_add_ip_rule`)、W3C 链路追踪 2048-Span 无锁环形缓冲区 (`csilk_otlp_tracer_start_span`)，以及单页嵌入式 Web APM Dashboard (`share/csilk/apm_ui.html`, `/admin/apm`)。
+
 ### 安全
 - **敏感缓冲区清零**：在 csrf、jwt、session 和 websocket 模块中使用后清零敏感缓冲区，防止数据泄漏。
 - **JWT 整数溢出保护**：在 JWT 解析中为 base64 长度计算添加溢出保护。
