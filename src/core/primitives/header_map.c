@@ -52,6 +52,9 @@ hash_key(const char* key)
 const char*
 map_get(csilk_header_map_t* map, const char* key)
 {
+    if (!map || !key) {
+        return nullptr;
+    }
     uint32_t        bucket = hash_key(key);
     csilk_header_t* h = map->buckets[bucket];
     while (h) {

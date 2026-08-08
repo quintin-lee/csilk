@@ -33,12 +33,22 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
     csilk_mutex_init(&plugin->mutex);
     plugin->bytecode_size = size;
     plugin->bytecode = calloc(1, size);
-    if (plugin->bytecode) {
-        memcpy(plugin->bytecode, wasm_bytes, size);
+    if (!plugin->bytecode) {
+        csilk_mutex_destroy(&plugin->mutex);
+        free(plugin);
+        return NULL;
     }
+    memcpy(plugin->bytecode, wasm_bytes, size);
+
     plugin->memory.initial_pages = 1;
     plugin->memory.current_size = CSILK_WASM_PAGE_SIZE;
     plugin->memory.data = calloc(1, plugin->memory.current_size);
+    if (!plugin->memory.data) {
+        free(plugin->bytecode);
+        csilk_mutex_destroy(&plugin->mutex);
+        free(plugin);
+        return NULL;
+    }
     return plugin;
 }
 
