@@ -54,6 +54,8 @@ set(CSILK_CORE_SOURCES
     src/core/uring/uring_sqpoll.c
     src/core/uring/uring_vector.c
     src/core/plugin/wasm_plugin.c
+    src/core/plugin/wasm_vm.c
+    src/core/plugin/wasm_wasi.c
 )
 
 if(CSILK_USE_URING)
