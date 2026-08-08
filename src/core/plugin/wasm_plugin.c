@@ -158,6 +158,9 @@ csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_fil
 
     csilk_wf_node_t* node =
         csilk_wf_add(wf, node_id, csilk_wasm_node_handler, strdup(wasm_filepath));
+    if (node) {
+        csilk_wf_node_set_free(node, free);
+    }
     return node != NULL ? 0 : -1;
 }
 
