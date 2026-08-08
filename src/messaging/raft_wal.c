@@ -25,7 +25,7 @@ csilk_raft_node_new(const csilk_raft_config_t* config)
         node->config.cluster_size = 3;
     }
 
-    node->role = CSILK_RAFT_ROLE_LEADER;
+    node->role = CSILK_RAFT_ROLE_FOLLOWER;
     node->current_term = 1;
     node->last_log_index = 0;
     node->commit_index = 0;

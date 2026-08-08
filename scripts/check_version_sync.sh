@@ -11,8 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Extract version from CMakeLists.txt
-CMAKE_VERSION=$(grep -E '^set\(CSILK_VERSION_(MAJOR|MINOR|PATCH)' "$PROJECT_DIR/CMakeLists.txt" \
+# Extract version from CMakeLists.txt / cmake/options.cmake
+CMAKE_VERSION=$(grep -E '^set\(CSILK_VERSION_(MAJOR|MINOR|PATCH)' "$PROJECT_DIR/CMakeLists.txt" "$PROJECT_DIR/cmake/options.cmake" 2>/dev/null \
   | grep -oE '[0-9]+' \
   | tr '\n' '.' \
   | sed 's/\.$//')
