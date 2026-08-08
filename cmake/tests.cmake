@@ -130,11 +130,12 @@ set(CSILK_WORKFLOW_TESTS
     test_workflow_tracing
     test_workflow_dsl
     test_workflow_hotreload
+    test_wf_cluster_sm
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
 )
 
 # -- Middleware tests --
@@ -252,9 +253,12 @@ set(CSILK_MESSAGING_TESTS
     test_mq_wal_write
     test_mq_concurrent
     test_raft_wal
+    test_raft_rpc
+    test_raft_consensus
+    test_raft_failover
 )
 set(CSILK_MESSAGING_TEST_DIRS
-    mq;mq;mq;mq;mq;mq;mq;mq;mq
+    mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging;messaging;messaging
 )
 
 # -- Extra / integration tests --
