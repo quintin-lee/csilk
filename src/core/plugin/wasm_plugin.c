@@ -78,7 +78,14 @@ csilk_wasm_host_set_header(csilk_ctx_t* ctx, const char* name, const char* value
 const char*
 csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name)
 {
-    return csilk_get_param(ctx, name);
+    if (!ctx || !name) {
+        return NULL;
+    }
+    const char* val = csilk_get_param(ctx, name);
+    if (!val) {
+        val = csilk_get_query(ctx, name);
+    }
+    return val;
 }
 
 int
