@@ -53,6 +53,7 @@ set(CSILK_CORE_SOURCES
 if(CSILK_USE_URING)
     list(APPEND CSILK_CORE_SOURCES
         src/core/uring/uring_server.c
+        src/core/uring/uring_event_loop.c
         src/core/uring/uring_connection.c
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
