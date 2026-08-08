@@ -65,4 +65,34 @@ CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csil
 CSILK_INTERNAL void csilk_client_read_start(csilk_client_t* client);
 CSILK_INTERNAL void csilk_client_read_stop(csilk_client_t* client);
 
+/* --- Server split (server_lifecycle.c, server_shutdown.c, server_worker.c) --- */
+
+typedef struct {
+    worker_pool_t* wp;
+    int            port;
+    uv_barrier_t*  barrier;
+} worker_data_t;
+
+typedef struct {
+    csilk_io_loop_t* loop;
+    uv_tcp_t*        listen_handle;
+    csilk_server_t*  server;
+    int              worker_index;
+} worker_stop_data_t;
+
+/* server_shutdown.c */
+CSILK_INTERNAL void on_signal(uv_signal_t* handle, int signum);
+CSILK_INTERNAL void on_stop_async(uv_async_t* handle);
+CSILK_INTERNAL void on_worker_stop_async(uv_async_t* handle);
+
+/* server_worker.c */
+CSILK_INTERNAL int  bind_and_listen(csilk_io_loop_t* loop,
+                                    uv_tcp_t*        out_handle,
+                                    int              port,
+                                    int              backlog,
+                                    bool             reuseport,
+                                    int              worker_index);
+CSILK_INTERNAL void worker_thread(void* arg);
+CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);
+
 #endif /* SRV_IMPL_H */
