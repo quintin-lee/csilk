@@ -20,8 +20,8 @@ config.yaml
 Makefile
 
 # Test/example binaries produced in project root
-test_*
-example_*
+/test_*
+/example_*
 test.wal
 test_distributed_wals/
 test_wals/
@@ -41,12 +41,9 @@ Doxyfile
 __pycache__/
 *.pyc
 
-# Plans and Specs (keeping them in git is fine, but maybe user wants them ignored? No, standard is to keep them)
-
 # Pre-generated documentation
 docs/html/
 docs/latex/
-docs/superpowers
 
 # Additional build directories
 build_rel*/
