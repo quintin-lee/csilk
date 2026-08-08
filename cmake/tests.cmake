@@ -234,9 +234,12 @@ set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
     test_vector_db
+    test_vector_simd
+    test_vector_hnsw
+    test_vector_db_embedded
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers
+    drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
 )
 
 # -- Reflection tests --

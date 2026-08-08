@@ -79,8 +79,17 @@ typedef struct {
     void (*free)(void* state);
 } csilk_vector_db_driver_t;
 
+/** @brief Probes CPU support for AVX2 SIMD instructions. */
+int csilk_simd_has_avx2(void);
+
+/** @brief Create a native embedded SIMD HNSW vector database driver.
+ *  @param dim     Vector dimension (e.g. 1536).
+ *  @param metric  Distance metric: 0=COSINE, 1=L2, 2=IP.
+ *  @return Handle or nullptr. */
+csilk_vector_db_t* csilk_vector_db_new_embedded(size_t dim, int metric);
+
 /** @brief Create a new Vector DB instance.
- * @param driver_name "qdrant", "milvus", etc.
+ * @param driver_name "qdrant", "milvus", "embedded", etc.
  * @param endpoint    API endpoint.
  * @param api_key     Optional API key.
  * @return Handle or nullptr. */
