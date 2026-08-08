@@ -63,6 +63,7 @@ csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t
         csilk_mutex_unlock(&server->mutex);
         return -1;
     }
+    server->tools = new_tools;
 
     csilk_wf_tool_entry_t* entry = (csilk_wf_tool_entry_t*)calloc(1, sizeof(csilk_wf_tool_entry_t));
     if (!entry) {

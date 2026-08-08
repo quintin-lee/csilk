@@ -419,7 +419,9 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
             return -1;
         }
 
-        if (is_hash) {
+        if (!result->rows) {
+            /* No rows to populate */
+        } else if (is_hash) {
             /* HGETALL: alternating field/value pairs */
             int ri = 0;
             for (size_t i = 0; i + 1 < reply->elements; i += 2) {
