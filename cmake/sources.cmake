@@ -123,6 +123,9 @@ set(CSILK_PROTOCOL_SOURCES
     src/protocols/swagger.c
     src/protocols/websocket.c
     src/protocols/ws_room.c
+    src/protocols/mcp/mcp_jsonrpc.c
+    src/protocols/mcp/mcp_server.c
+    src/protocols/mcp/mcp_client.c
 )
 
 set(CSILK_REFLECTION_SOURCES
@@ -153,6 +156,9 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_trace.c
     src/workflow/workflow_loader.c
     src/workflow/workflow_wal.c
+    src/workflow/workflow_dsl.c
+    src/workflow/workflow_manager.c
+    src/workflow/workflow_debug.c
 )
 
 # Combine into the main source list.
