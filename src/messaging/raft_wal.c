@@ -4,17 +4,9 @@
  * @copyright MIT License
  */
 
-#include "csilk/messaging/raft_wal.h"
+#include "raft_internal.h"
 #include <stdlib.h>
 #include <string.h>
-
-struct csilk_raft_node_s {
-    csilk_raft_config_t config;
-    csilk_raft_role_t   role;
-    uint64_t            current_term;
-    uint64_t            last_log_index;
-    uint64_t            commit_index;
-};
 
 csilk_raft_node_t*
 csilk_raft_node_new(const csilk_raft_config_t* config)
@@ -37,6 +29,7 @@ csilk_raft_node_new(const csilk_raft_config_t* config)
     node->current_term = 1;
     node->last_log_index = 0;
     node->commit_index = 0;
+    csilk_mutex_init(&node->mutex);
 
     return node;
 }
@@ -47,6 +40,7 @@ csilk_raft_node_free(csilk_raft_node_t* node)
     if (!node) {
         return;
     }
+    csilk_mutex_destroy(&node->mutex);
     free(node);
 }
 

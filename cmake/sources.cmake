@@ -97,6 +97,9 @@ set(CSILK_MESSAGING_SOURCES
     src/messaging/mq_offload.c
     src/messaging/mq_wal.c
     src/messaging/raft_wal.c
+    src/messaging/raft_rpc.c
+    src/messaging/raft_consensus.c
+    src/messaging/raft_snapshot.c
 )
 
 set(CSILK_MIDDLEWARE_SOURCES
@@ -164,6 +167,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/workflow_dsl.c
     src/workflow/workflow_manager.c
     src/workflow/workflow_debug.c
+    src/workflow/wf_cluster_sm.c
 )
 
 # Combine into the main source list.
