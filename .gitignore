@@ -15,7 +15,7 @@ CPackSourceConfig.cmake
 CTestTestfile.cmake
 _deps/
 cmake_install.cmake
-csilk/
+/csilk
 config.yaml
 Makefile
 
