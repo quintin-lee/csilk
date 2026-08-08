@@ -91,7 +91,8 @@ if(HAS_MONGODB)
 endif()
 
 if(HIREDIS_LIB AND HIREDIS_INCLUDE_DIR)
-  list(APPEND CSILK_SOURCES src/drivers/db/redis.c)
+  list(APPEND CSILK_SOURCES src/drivers/db/redis.c
+                            src/drivers/db/redis_storage.c)
   set(CSILK_HAS_REDIS TRUE)
 endif()
 
