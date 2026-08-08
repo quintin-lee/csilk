@@ -87,6 +87,8 @@ set(CSILK_DRIVER_SOURCES
     src/drivers/perm/simple.c
     src/drivers/db/sqlite.c
     src/drivers/vector/vector.c
+    src/drivers/vector/vector_simd.c
+    src/drivers/vector/vector_hnsw.c
     src/drivers/vector/qdrant.c
     src/drivers/vector/milvus.c
 )
