@@ -75,13 +75,17 @@ set(CSILK_CORE_TESTS
     test_af_xdp_zerocopy
     test_uring_sqpoll
     test_io_perf_fallback
+    test_wasm_vm
+    test_wasm_fuel
+    test_wasm_wasi
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core
 )
 
 # -- Application tests --
@@ -131,11 +135,12 @@ set(CSILK_WORKFLOW_TESTS
     test_workflow_dsl
     test_workflow_hotreload
     test_wf_cluster_sm
+    test_wf_wasm_node
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
 )
 
 # -- Middleware tests --
