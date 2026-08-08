@@ -571,6 +571,13 @@ void csilk_wf_signal_continue(csilk_wf_t*   wf,
                               void (*callback)(csilk_data_t* result));
 
 /**
+ * @brief Set custom user_data free callback for a node.
+ * @param node    Node handle.
+ * @param free_fn Custom destructor function for user_data.
+ */
+void csilk_wf_node_set_free(csilk_wf_node_t* node, void (*free_fn)(void*));
+
+/**
  * @brief Set a timeout for a specific node.
  * @param node       Node handle.
  * @param timeout_ms Timeout in milliseconds (0 for no timeout).

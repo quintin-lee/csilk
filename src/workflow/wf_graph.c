@@ -575,3 +575,11 @@ csilk_wf_get_node(csilk_wf_t* wf, const char* id)
     }
     return nullptr;
 }
+
+void
+csilk_wf_node_set_free(csilk_wf_node_t* node, void (*free_fn)(void*))
+{
+    if (node) {
+        node->user_data_free = free_fn;
+    }
+}
