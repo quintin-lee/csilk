@@ -29,7 +29,6 @@ typedef struct csilk_wf_manager_s csilk_wf_manager_t;
  * @param err_len Size of err_buf.
  * @return Pointer to constructed workflow, or NULL on failure.
  */
-csilk_wf_t* csilk_wf_from_json(const char* json_str);
 csilk_wf_t* csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len);
 
 /**
