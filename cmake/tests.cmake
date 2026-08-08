@@ -71,13 +71,17 @@ set(CSILK_CORE_TESTS
     test_swar_http
     test_af_xdp
     test_dpdk_pmd
+    test_http1_zerocopy
+    test_af_xdp_zerocopy
+    test_uring_sqpoll
+    test_io_perf_fallback
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core
+    core;core;core;core;core;core;core;core;core
 )
 
 # -- Application tests --
