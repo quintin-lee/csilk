@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include "csilk/messaging/raft.h"
 #include "csilk/messaging/raft_wal.h"
 
 int
@@ -13,9 +14,10 @@ main(void)
     csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
     assert(node != NULL);
     assert(csilk_raft_get_role(node) == CSILK_RAFT_ROLE_FOLLOWER);
+    assert(csilk_raft_get_term(node) == 1);
     assert(csilk_raft_node_start(node) == 0);
     assert(csilk_raft_get_role(node) == CSILK_RAFT_ROLE_LEADER);
-    assert(csilk_raft_get_term(node) == 1);
+    assert(csilk_raft_get_term(node) == 2);
 
     /* Test 1: Append log entry */
     const char* data = "LOG_ENTRY_001";
