@@ -137,12 +137,6 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
 }
 
 csilk_wf_t*
-csilk_wf_from_json(const char* json_str)
-{
-    return csilk_wf_from_json_ext(json_str, nullptr, 0);
-}
-
-csilk_wf_t*
 csilk_wf_from_file(const char* filepath, char* err_buf, size_t err_len)
 {
     if (!filepath) {
