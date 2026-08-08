@@ -172,15 +172,14 @@ csilk_wf_from_file(const char* filepath, char* err_buf, size_t err_len)
         return nullptr;
     }
 
-    char* buf = (char*)malloc((size_t)sz + 1);
+    char* buf = (char*)calloc(1, (size_t)sz + 1);
     if (!buf) {
         fclose(f);
         return nullptr;
     }
 
-    size_t read_bytes = fread(buf, 1, (size_t)sz, f);
+    fread(buf, 1, (size_t)sz, f);
     fclose(f);
-    buf[read_bytes] = '\0';
 
     csilk_wf_t* wf = csilk_wf_from_json_ext(buf, err_buf, err_len);
     free(buf);

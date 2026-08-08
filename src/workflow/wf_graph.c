@@ -27,10 +27,9 @@ serve_ui_handler(csilk_ctx_t* c)
             long sz = ftell(f);
             fseek(f, 0, SEEK_SET);
             if (sz > 0) {
-                char* buf = malloc((size_t)sz + 1);
+                char* buf = calloc(1, (size_t)sz + 1);
                 if (buf) {
                     if (fread(buf, 1, (size_t)sz, f) == (size_t)sz) {
-                        buf[sz] = '\0';
                         csilk_set_header(c, "Content-Type", "text/html");
                         csilk_string(c, 200, buf);
                     }
