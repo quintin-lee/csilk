@@ -113,7 +113,7 @@ ensure_server() {
     fi
 }
 
-VERSION=$(grep -m1 'set(CPACK_PACKAGE_VERSION' "$PROJECT_DIR/CMakeLists.txt" | sed 's/.*"\(.*\)".*/\1/')
+VERSION=$(grep -E '^set\(CSILK_VERSION ' "$PROJECT_DIR/cmake/options.cmake" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || echo "0.3.0")
 GIT_HASH=$(cd "$PROJECT_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
