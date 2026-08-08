@@ -60,7 +60,9 @@ if(CSILK_USE_URING)
     )
 else()
     list(APPEND CSILK_CORE_SOURCES
-        src/core/server/server.c
+        src/core/server/server_lifecycle.c
+        src/core/server/server_shutdown.c
+        src/core/server/server_worker.c
         src/core/server/connection.c
     )
 endif()
