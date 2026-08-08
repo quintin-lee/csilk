@@ -14,7 +14,7 @@
 #include "csilk/core/wasm.h"
 
 #define CSILK_WASM_MAGIC 0x6d736100u   /* \0asm */
-#define CSILK_WASM_VERSION 0x01000000u /* v1.0 */
+#define CSILK_WASM_VERSION 0x00000001u /* v1.0 */
 #define CSILK_WASM_PAGE_SIZE 65536u    /* 64 KB */
 
 typedef union {

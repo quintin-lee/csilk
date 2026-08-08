@@ -12,6 +12,8 @@ main(void)
 
     csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
     assert(node != NULL);
+    assert(csilk_raft_get_role(node) == CSILK_RAFT_ROLE_FOLLOWER);
+    assert(csilk_raft_node_start(node) == 0);
     assert(csilk_raft_get_role(node) == CSILK_RAFT_ROLE_LEADER);
     assert(csilk_raft_get_term(node) == 1);
 
