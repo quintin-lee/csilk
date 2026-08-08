@@ -29,6 +29,7 @@ typedef struct {
     uint32_t initial_pages;
     uint32_t max_pages;
     size_t   current_size;
+    bool     is_mapped;
 } csilk_wasm_memory_t;
 
 typedef struct {

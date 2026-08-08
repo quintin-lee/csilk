@@ -93,7 +93,7 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
         return;
     }
     csilk_mutex_destroy(&plugin->mutex);
-    if (plugin->memory.data) {
+    if (plugin->memory.data && !plugin->memory.is_mapped) {
         free(plugin->memory.data);
     }
     if (plugin->bytecode) {
