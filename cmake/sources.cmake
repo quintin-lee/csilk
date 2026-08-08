@@ -25,6 +25,7 @@ set(CSILK_CORE_SOURCES
     src/core/http/h2.c
     src/core/http/http1_parse.c
     src/core/http/http1_response.c
+    src/core/http/http1_zerocopy.c
     src/core/config/logger.c
     src/core/primitives/recovery.c
     src/core/primitives/response.c
@@ -46,8 +47,12 @@ set(CSILK_CORE_SOURCES
     src/core/cache/mvcc_cache.c
     src/core/http/swar_http.c
     src/core/io/af_xdp.c
+    src/core/io/af_xdp_zerocopy.c
+    src/core/io/io_perf_probe.c
     src/core/io/dpdk_pmd.c
     src/core/uring/uring_buf.c
+    src/core/uring/uring_sqpoll.c
+    src/core/uring/uring_vector.c
     src/core/plugin/wasm_plugin.c
 )
 
