@@ -9,7 +9,7 @@ main(void)
 {
     printf("Testing eBPF XDP Hardware Offload WAF...\n");
 
-    csilk_xdp_waf_t* waf = csilk_xdp_waf_new();
+    csilk_xdp_waf_t* waf = csilk_xdp_waf_new(NULL);
     assert(waf != NULL);
 
     /* Test 1: Block IP */

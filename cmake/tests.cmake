@@ -173,11 +173,15 @@ set(CSILK_MIDDLEWARE_TESTS
     test_validate
     test_waf
     test_xdp_waf
+    test_xdp_waf_rules
+    test_otlp_trace_span
+    test_apm_dashboard_route
 )
 set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
+    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
+    middleware
 )
 
 # -- Protocol tests --
