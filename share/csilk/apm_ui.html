@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>csilk APM Tracing & eBPF Dashboard</title>
+    <style>
+        :root { --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8; --text: #f8fafc; }
+        body { margin: 0; font-family: monospace; background: var(--bg); color: var(--text); padding: 24px; }
+        h1 { color: var(--accent); margin-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .card { background: var(--panel); padding: 16px; border-radius: 8px; border: 1px solid #334155; }
+        .card .value { font-size: 24px; font-weight: bold; color: var(--accent); }
+        .table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+        .table th { background: #0f172a; color: var(--accent); }
+    </style>
+</head>
+<body>
+    <h1>⚡ csilk APM & eBPF Control Plane</h1>
+    <p>Real-Time OpenTelemetry Distributed Tracing Waterfall & Kernel Drop Counter</p>
+    <div class="grid">
+        <div class="card"><div>Total Spans Collected</div><div class="value" id="spanCount">0</div></div>
+        <div class="card"><div>eBPF Dropped Packets</div><div class="value" id="dropCount">0</div></div>
+        <div class="card"><div>P95 Latency</div><div class="value" id="p95Latency">0.42 ms</div></div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr><th>Trace ID</th><th>Operation Name</th><th>Duration (ms)</th><th>Status</th></tr>
+        </thead>
+        <tbody id="spanList">
+            <tr><td>4bf92f3577b34da6</td><td>WorkflowNode:ai_prompt_1</td><td>0.18 ms</td><td><span style="color:#4ade80">OK</span></td></tr>
+        </tbody>
+    </table>
+</body>
+</html>
