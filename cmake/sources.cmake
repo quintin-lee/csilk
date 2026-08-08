@@ -29,7 +29,8 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/recovery.c
     src/core/primitives/response.c
     src/core/primitives/router.c
-    src/core/primitives/router_match.c
+    src/core/primitives/router_simd.c
+    src/core/primitives/router_trie.c
     src/core/test_utils.c
     src/core/http/tls.c
     src/core/server/url.c
@@ -140,7 +141,8 @@ set(CSILK_UTIL_SOURCES
 )
 
 set(CSILK_WORKFLOW_SOURCES
-    src/workflow/wf_lifecycle.c
+    src/workflow/wf_graph.c
+    src/workflow/wf_distributed.c
     src/workflow/wf_monitor.c
     src/workflow/wf_ai_utils.c
     src/workflow/wf_ai_nodes.c
