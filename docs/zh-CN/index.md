@@ -1,6 +1,6 @@
 # csilk 文档
 
-> **版本**: 0.7.0 | **最后更新**: 2026-07-18
+> **版本**: 0.3.0 | **最后更新**: 2026-08-08
 
 [English](../index.md) | [中文](index.md)
 
@@ -24,7 +24,7 @@ graph TB
         RT["fa:fa-clock-o Rate Limit"]
         SLIM["fa:fa-sliders Sliding Limiter"]
         CB["fa:fa-bolt Circuit Breaker"]
-        OTLP["fa:fa-eye OTLP Trace & Exporter"]
+        OTLP["fa:fa-eye OTLP Trace & APM Dashboard"]
         GRPC["fa:fa-exchange gRPC Gateway"]
         CSRF["fa:fa-shield CSRF"]
         ST["fa:fa-folder-open Static Files"]
@@ -36,7 +36,7 @@ graph TB
         RID["fa:fa-tag RequestID"]
         SES["fa:fa-cookie Session"]
         VAL["fa:fa-check-square Validate"]
-        WAF["fa:fa-fire WAF"]
+        WAF["fa:fa-fire WAF / eBPF XDP WAF"]
     end
 
     subgraph Core_Framework["fa:fa-cogs Core Framework"]

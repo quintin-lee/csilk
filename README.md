@@ -53,6 +53,8 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🚀 **SWAR/SIMD Parallel Prefix Matching** — 64-bit parallel SWAR comparison (`csilk_common_prefix_len_fast`) and 64-byte cache-line aligned Arena memory pool
 - 🐍 **Python CFFI/ctypes Bindings** — Native Python wrappers (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
 - **WAF (Web Application Firewall)** middleware
+- 🧬 **Embedded SIMD Vector Index Engine** — Native 32-byte aligned AVX2 SIMD vector distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
+- 🛡️ **eBPF XDP Dynamic WAF & OTLP APM Dashboard** — Zero-downtime BPF-Map hot-reloading dynamic WAF rule engine (`csilk_xdp_waf_add_ip_rule`) and lock-free 2048-span W3C trace context ring buffer (`csilk_otlp_tracer_start_span`) with single-page embedded Web APM Dashboard (`/admin/apm`).
 
 ## Architecture Overview
 

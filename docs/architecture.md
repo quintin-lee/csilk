@@ -1,6 +1,6 @@
 # csilk Architecture Whitepaper & Technical Manual
 
-> **Version**: 0.3.0 | **Last updated**: 2026-07-04
+> **Version**: 0.3.0 | **Last updated**: 2026-08-08
 
 csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv (default) or io_uring (optional, Linux-only), llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
 
@@ -38,7 +38,7 @@ graph TB
     end
 
     subgraph layer2["fa:fa-layer-group Layer 2: Middleware"]
-        MW["fa:fa-plug Recovery | Logger | CORS | Auth | JWT | WAF<br/>RateLimit | CSRF | Static | Gzip | SSE | Multipart<br/>Metrics | RequestID | Validate | Session"]
+        MW["fa:fa-plug Recovery | Logger | CORS | Auth | JWT | WAF | eBPF XDP WAF<br/>RateLimit | CSRF | Static | Gzip | SSE | Multipart | OTLP APM Dashboard<br/>Metrics | RequestID | Validate | Session"]
     end
 
     subgraph layer3["fa:fa-cogs Layer 3: Core Engine"]
@@ -49,6 +49,7 @@ graph TB
         end
         subgraph ai_data["fa:fa-brain AI & Data"]
             AI["fa:fa-robot AI Unified Engine"]
+            VEC["fa:fa-project-diagram Embedded SIMD Vector Engine (AVX2 HNSW)"]
             DB["fa:fa-database DB Abstraction (SQLite/MySQL/PG/MongoDB)"]
             REFL["fa:fa-magic Reflection Engine"]
         end
@@ -78,6 +79,7 @@ graph TB
         METRICS["fa:fa-chart-bar Prometheus /metrics"]
         ADMIN["fa:fa-tachometer-alt Admin Dashboard /admin"]
         ADMIN_STATS["fa:fa-chart-pie Admin Stats /admin/stats"]
+        APM["fa:fa-chart-line Single-Page Web APM Dashboard /admin/apm"]
         ADMIN_WS["fa:fa-comment-alt Admin WS /admin/ws"]
     end
 

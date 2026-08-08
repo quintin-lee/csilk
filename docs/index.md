@@ -2,7 +2,7 @@
 
 [English](index.md) | [中文](zh-CN/index.md)
 
-> **Version**: 0.7.0 | **Last updated**: 2026-07-18
+> **Version**: 0.3.0 | **Last updated**: 2026-08-08
 
 csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Built on **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and cJSON, it achieves ~50K QPS throughput (4-core single worker) with linear scaling to ~200K QPS on 16-core multi-worker mode. Developers **MUST** compile with C23 support (GCC 13+ or Clang 19+). Public API **MUST** be used through the `csilk_ctx_t*` opaque handle — direct struct access is **NOT** part of the stable ABI. All resource management **SHOULD** prefer arena allocation (~3 CPU instructions per alloc, ≤ 5ns reset) over heap `malloc`/`free`.
 
@@ -24,7 +24,7 @@ graph TB
         RT["fa:fa-clock-o Rate Limit"]
         SLIM["fa:fa-sliders Sliding Limiter"]
         CB["fa:fa-bolt Circuit Breaker"]
-        OTLP["fa:fa-eye OTLP Trace & Exporter"]
+        OTLP["fa:fa-eye OTLP Trace & APM Dashboard"]
         GRPC["fa:fa-exchange gRPC Gateway"]
         CSRF["fa:fa-shield CSRF"]
         ST["fa:fa-folder-open Static Files"]
@@ -36,7 +36,7 @@ graph TB
         RID["fa:fa-tag RequestID"]
         SES["fa:fa-cookie Session"]
         VAL["fa:fa-check-square Validate"]
-        WAF["fa:fa-fire WAF"]
+        WAF["fa:fa-fire WAF / eBPF XDP WAF"]
     end
 
     subgraph Core_Framework["fa:fa-cogs Core Framework"]
