@@ -126,6 +126,9 @@ set(CSILK_PROTOCOL_SOURCES
 
 set(CSILK_REFLECTION_SOURCES
     src/reflection/reflect.c
+    src/reflection/reflect_marshal.c
+    src/reflection/reflect_unmarshal.c
+    src/reflection/reflect_free.c
 )
 
 set(CSILK_SECURITY_SOURCES
