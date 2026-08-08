@@ -114,6 +114,9 @@ csilk_wasm_plugin_map_memory(csilk_wasm_plugin_t* plugin, void* buf, size_t len)
     if (!plugin || !buf || len == 0) {
         return -1;
     }
+    if (plugin->memory.data && !plugin->memory.is_mapped) {
+        free(plugin->memory.data);
+    }
     plugin->memory.data = (uint8_t*)buf;
     plugin->memory.current_size = len;
     plugin->memory.is_mapped = true;
