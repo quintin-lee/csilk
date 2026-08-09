@@ -602,7 +602,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
         if (schemas) {
             csilk_reflect_foreach(auto_register_schema, schemas);
         }
-
-        csilk_json_free(routes);
-        return doc;
     }
+
+    csilk_json_free(routes);
+    return doc;
+}
