@@ -64,8 +64,14 @@ csilk_serve_openapi(csilk_ctx_t*    c,
     csilk_mutex_lock(&g_openapi_cache_mutex);
     if (!g_openapi_cache_json) {
         csilk_json_t* doc = csilk_generate_openapi_json(r, title, version, description);
+        if (!doc) {
+            fprintf(stderr, "[DEBUG] csilk_generate_openapi_json returned NULL\n");
+        }
         if (doc) {
             g_openapi_cache_json = csilk_json_serialize(doc, NULL);
+            if (!g_openapi_cache_json) {
+                fprintf(stderr, "[DEBUG] csilk_json_serialize returned NULL\n");
+            }
             csilk_json_free(doc);
         }
     }
