@@ -447,13 +447,11 @@ csilk_generate_openapi_json(csilk_router_t* router,
                                   desc_item && csilk_json_string_value(desc_item)
                                       ? csilk_json_string_value(desc_item)
                                       : "");
-            csilk_json_add_string(operation, "operationId", "");
-
             // Add Operation ID: method_path
             {
                 char opid[1024];
                 snprintf(opid, sizeof(opid), "%s%s", method, oa_path);
-                csilk_json_set_string(csilk_json_get(operation, "operationId"), opid);
+                csilk_json_add_string(operation, "operationId", opid);
             }
 
             // Parameters (path params extracted from path pattern)
@@ -472,13 +470,12 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     size_t len = (size_t)(p - start);
 
                     csilk_json_t* param = csilk_json_object();
-                    csilk_json_add_string(param, "name", "");
                     {
                         char   param_name[128];
                         size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
                         memcpy(param_name, start, clen);
                         param_name[clen] = '\0';
-                        csilk_json_set_string(csilk_json_get(param, "name"), param_name);
+                        csilk_json_add_string(param, "name", param_name);
                     }
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
@@ -497,13 +494,12 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     size_t len = (size_t)(p - start);
 
                     csilk_json_t* param = csilk_json_object();
-                    csilk_json_add_string(param, "name", "");
                     {
                         char   param_name[128];
                         size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
                         memcpy(param_name, start, clen);
                         param_name[clen] = '\0';
-                        csilk_json_set_string(csilk_json_get(param, "name"), param_name);
+                        csilk_json_add_string(param, "name", param_name);
                     }
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
