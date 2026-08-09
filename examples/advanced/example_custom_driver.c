@@ -162,12 +162,12 @@ main(void)
     }
 
     /* Execute a query and fetch results as JSON */
-    cJSON* users = csilk_db_query_json(pool, "SELECT * FROM users");
+    csilk_json_t* users = csilk_db_query_json(pool, "SELECT * FROM users");
     if (users) {
-        char* json_str = cJSON_Print(users);
+        char* json_str = csilk_json_serialize_pretty(users, NULL);
         printf("[Result] Query output (JSON):\n%s\n", json_str);
         free(json_str);
-        cJSON_Delete(users);
+        csilk_json_free(users);
     } else {
         fprintf(stderr, "Failed to execute query\n");
     }

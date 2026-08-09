@@ -141,32 +141,32 @@ user_handler(csilk_ctx_t* c)
 void
 login_handler(csilk_ctx_t* c)
 {
-    cJSON* json = csilk_bind_json(c);
+    csilk_json_t* json = csilk_bind_json(c);
     if (!json) {
         csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Invalid JSON");
         return;
     }
 
-    cJSON* username = cJSON_GetObjectItemCaseSensitive(json, "username");
-    cJSON* password = cJSON_GetObjectItemCaseSensitive(json, "password");
+    csilk_json_t* username = csilk_json_get(json, "username");
+    csilk_json_t* password = csilk_json_get(json, "password");
 
-    if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
-        cJSON_Delete(json);
+    if (!csilk_json_is_string(username) || !csilk_json_is_string(password)) {
+        csilk_json_free(json);
         csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Username and password required");
         return;
     }
 
-    if (strcmp(username->valuestring, "admin") == 0 &&
-        strcmp(password->valuestring, "password") == 0) {
-        cJSON* response = cJSON_CreateObject();
-        cJSON_AddStringToObject(response, "token", "secret123");
-        cJSON_AddStringToObject(response, "message", "Login successful");
+    if (strcmp(csilk_json_string_value(username), "admin") == 0 &&
+        strcmp(csilk_json_string_value(password), "password") == 0) {
+        csilk_json_t* response = csilk_json_object();
+        csilk_json_add_string(response, "token", "secret123");
+        csilk_json_add_string(response, "message", "Login successful");
         csilk_json(c, CSILK_STATUS_OK, response);
     } else {
         csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "Invalid credentials");
     }
 
-    cJSON_Delete(json);
+    csilk_json_free(json);
 }
 
 /** @brief Handler for GET /protected — returns content only if authorized. */
@@ -187,19 +187,19 @@ protected_handler(csilk_ctx_t* c)
 void
 api_data_handler(csilk_ctx_t* c)
 {
-    cJSON* data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(data, "id", 1);
-    cJSON_AddStringToObject(data, "name", "Sample Data");
-    cJSON_AddBoolToObject(data, "active", true);
+    csilk_json_t* data = csilk_json_object();
+    csilk_json_add_number(data, "id", 1);
+    csilk_json_add_string(data, "name", "Sample Data");
+    csilk_json_add_bool(data, "active", true);
 
-    cJSON* items = cJSON_CreateArray();
-    cJSON_AddItemToArray(items, cJSON_CreateString("item1"));
-    cJSON_AddItemToArray(items, cJSON_CreateString("item2"));
-    cJSON_AddItemToArray(items, cJSON_CreateString("item3"));
-    cJSON_AddItemToObject(data, "items", items);
+    csilk_json_t* items = csilk_json_array();
+    csilk_json_array_append(items, csilk_json_string_new("item1"));
+    csilk_json_array_append(items, csilk_json_string_new("item2"));
+    csilk_json_array_append(items, csilk_json_string_new("item3"));
+    csilk_json_add_object(data, "items", items);
 
     time_t now = time(nullptr);
-    cJSON_AddNumberToObject(data, "timestamp", (double)now);
+    csilk_json_add_number(data, "timestamp", (double)now);
 
     csilk_json(c, CSILK_STATUS_OK, data);
 }

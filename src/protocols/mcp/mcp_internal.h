@@ -6,7 +6,7 @@
 #ifndef CSILK_MCP_INTERNAL_H
 #define CSILK_MCP_INTERNAL_H
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -24,12 +24,12 @@
  * @brief Represents a parsed JSON-RPC 2.0 message frame.
  */
 typedef struct {
-    char   jsonrpc[8]; /* Must be "2.0" */
-    cJSON* id;         /* Number, String, or NULL (notification) */
-    char*  method;     /* Method name string */
-    cJSON* params;     /* Parameters object or array */
-    cJSON* result;     /* Response payload */
-    cJSON* error;      /* { "code": int, "message": string, "data": optional } */
+    char          jsonrpc[8]; /* Must be "2.0" */
+    csilk_json_t* id;         /* Number, String, or NULL (notification) */
+    char*         method;     /* Method name string */
+    csilk_json_t* params;     /* Parameters object or array */
+    csilk_json_t* result;     /* Response payload */
+    csilk_json_t* error;      /* { "code": int, "message": string, "data": optional } */
 } csilk_mcp_msg_t;
 
 /**
@@ -61,7 +61,7 @@ struct csilk_mcp_client_s {
 
 csilk_mcp_msg_t* csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena);
 char*            csilk_mcp_msg_serialize(const csilk_mcp_msg_t* msg, csilk_arena_t* arena);
-csilk_mcp_msg_t* csilk_mcp_msg_create_error(cJSON* id, int code, const char* message);
-csilk_mcp_msg_t* csilk_mcp_msg_create_response(cJSON* id, cJSON* result);
+csilk_mcp_msg_t* csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message);
+csilk_mcp_msg_t* csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result);
 
 #endif /* CSILK_MCP_INTERNAL_H */

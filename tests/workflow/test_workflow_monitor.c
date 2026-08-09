@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"

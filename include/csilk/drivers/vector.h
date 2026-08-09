@@ -10,21 +10,21 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 /** @brief A single vector point. */
 typedef struct {
-    const char*  id;        /**< String ID (UUID usually). */
-    const float* vector;    /**< Floating point vector array. */
-    size_t       dimension; /**< Vector dimension. */
-    cJSON*       payload;   /**< Optional metadata payload (JSON). */
+    const char*   id;        /**< String ID (UUID usually). */
+    const float*  vector;    /**< Floating point vector array. */
+    size_t        dimension; /**< Vector dimension. */
+    csilk_json_t* payload;   /**< Optional metadata payload (JSON). */
 } csilk_vector_point_t;
 
 /** @brief A single vector search result. */
 typedef struct {
-    char*  id;      /**< Found point ID (heap-allocated). */
-    float  score;   /**< Similarity score. */
-    cJSON* payload; /**< Metadata payload (heap-allocated). */
+    char*         id;      /**< Found point ID (heap-allocated). */
+    float         score;   /**< Similarity score. */
+    csilk_json_t* payload; /**< Metadata payload (heap-allocated). */
 } csilk_vector_search_result_t;
 
 /** @brief Response data for a vector search. */

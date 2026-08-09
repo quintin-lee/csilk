@@ -37,10 +37,10 @@ get_user_handler(csilk_ctx_t* c)
 {
     const char* id = csilk_get_param(c, "id");
 
-    cJSON* user = cJSON_CreateObject();
-    cJSON_AddNumberToObject(user, "id", atoi(id));
-    cJSON_AddStringToObject(user, "name", "John Doe");
-    cJSON_AddStringToObject(user, "email", "john@example.com");
+    csilk_json_t* user = csilk_json_object();
+    csilk_json_add_number(user, "id", atoi(id));
+    csilk_json_add_string(user, "name", "John Doe");
+    csilk_json_add_string(user, "email", "john@example.com");
 
     csilk_json(c, CSILK_STATUS_OK, user);
 }
@@ -50,7 +50,7 @@ get_user_handler(csilk_ctx_t* c)
 void
 post_data_handler(csilk_ctx_t* c)
 {
-    cJSON* json = csilk_bind_json(c);
+    csilk_json_t* json = csilk_bind_json(c);
     if (!json) {
         csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Bad Request: Invalid JSON");
         return;
@@ -60,12 +60,12 @@ post_data_handler(csilk_ctx_t* c)
     struct timespec ts = {0, 50 * 1000000}; // 50ms
     nanosleep(&ts, nullptr);
 
-    cJSON* resp = cJSON_CreateObject();
-    cJSON_AddStringToObject(resp, "status", "received");
-    cJSON_AddItemToObject(resp, "data", cJSON_Duplicate(json, 1));
+    csilk_json_t* resp = csilk_json_object();
+    csilk_json_add_string(resp, "status", "received");
+    csilk_json_add_object(resp, "data", csilk_json_copy(json));
 
     csilk_json(c, CSILK_STATUS_CREATED, resp);
-    cJSON_Delete(json);
+    csilk_json_free(json);
 }
 
 /** @brief WebSocket message callback — echoes received messages back to client.

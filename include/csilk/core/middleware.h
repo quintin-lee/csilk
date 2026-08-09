@@ -321,7 +321,7 @@ int csilk_csrf_generate_token(char* buf, size_t buf_size);
  * @param secret  Secret key string for HMAC signing.
  * @return A heap-allocated JWT string (caller must free), or nullptr on failure.
  */
-char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
+char* csilk_jwt_generate(csilk_ctx_t* c, csilk_json_t* payload, const char* secret);
 
 /**
  * @brief Verify a JWT token and extract its payload.
@@ -335,7 +335,7 @@ char* csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret);
  * @return A heap-allocated cJSON object with the payload claims, or nullptr if
  *         the token is invalid or expired.  Caller must free with cJSON_Delete.
  */
-cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
+csilk_json_t* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
 
 /* --- Extended JWT API (RS256, ES256 support) --- */
 
@@ -346,8 +346,11 @@ cJSON* csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret);
  *  @param key_len   Length of @p key in bytes.
  *  @param algorithm JWT algorithm (CSILK_JWT_HS256, CSILK_JWT_RS256, etc.).
  *  @return Heap-allocated JWT string (caller must free), or nullptr on failure. */
-char* csilk_jwt_generate_ex(
-    csilk_ctx_t* c, cJSON* payload, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+char* csilk_jwt_generate_ex(csilk_ctx_t*    c,
+                            csilk_json_t*   payload,
+                            const char*     key,
+                            size_t          key_len,
+                            csilk_jwt_alg_t algorithm);
 /** @brief Verify a JWT with an explicit algorithm.
  *  @param c         Request context.
  *  @param token     The JWT string to verify.
@@ -355,7 +358,7 @@ char* csilk_jwt_generate_ex(
  *  @param key_len   Length of @p key in bytes.
  *  @param algorithm Expected JWT algorithm.
  *  @return Heap-allocated cJSON payload (caller must cJSON_Delete), or nullptr if invalid/expired. */
-cJSON* csilk_jwt_verify_ex(
+csilk_json_t* csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
 /** @brief JWT middleware with explicit algorithm support (RS256, ES256).
  *  @param c         Request context.

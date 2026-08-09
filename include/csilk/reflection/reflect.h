@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/core/types.h"
 
 /**

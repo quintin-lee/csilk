@@ -115,49 +115,49 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
     }
 
     if (strcmp(req->method, "initialize") == 0) {
-        cJSON* res = cJSON_CreateObject();
-        cJSON_AddStringToObject(res, "protocolVersion", "2024-11-05");
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_add_string(res, "protocolVersion", "2024-11-05");
 
-        cJSON* server_info = cJSON_CreateObject();
-        cJSON_AddStringToObject(server_info, "name", server->name);
-        cJSON_AddStringToObject(server_info, "version", server->version);
-        cJSON_AddItemToObject(res, "serverInfo", server_info);
+        csilk_json_t* server_info = csilk_json_object();
+        csilk_json_add_string(server_info, "name", server->name);
+        csilk_json_add_string(server_info, "version", server->version);
+        csilk_json_add_object(res, "serverInfo", server_info);
 
-        cJSON* caps = cJSON_CreateObject();
-        cJSON* tools_cap = cJSON_CreateObject();
-        cJSON_AddBoolToObject(tools_cap, "listChanged", false);
-        cJSON_AddItemToObject(caps, "tools", tools_cap);
-        cJSON_AddItemToObject(res, "capabilities", caps);
+        csilk_json_t* caps = csilk_json_object();
+        csilk_json_t* tools_cap = csilk_json_object();
+        csilk_json_add_bool(tools_cap, "listChanged", false);
+        csilk_json_add_object(caps, "tools", tools_cap);
+        csilk_json_add_object(res, "capabilities", caps);
 
         return csilk_mcp_msg_create_response(req->id, res);
     }
 
     if (strcmp(req->method, "tools/list") == 0) {
-        cJSON* res = cJSON_CreateObject();
-        cJSON* tools_arr = cJSON_CreateArray();
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_t* tools_arr = csilk_json_array();
 
         csilk_mutex_lock(&server->mutex);
         for (size_t i = 0; i < server->tool_count; i++) {
             csilk_wf_tool_entry_t* t = server->tools[i];
-            cJSON*                 t_obj = cJSON_CreateObject();
-            cJSON_AddStringToObject(t_obj, "name", t->name);
-            cJSON_AddStringToObject(t_obj, "description", t->description ? t->description : "");
+            csilk_json_t*          t_obj = csilk_json_object();
+            csilk_json_add_string(t_obj, "name", t->name);
+            csilk_json_add_string(t_obj, "description", t->description ? t->description : "");
 
             if (t->parameters_json) {
-                cJSON* schema = cJSON_Parse(t->parameters_json);
+                csilk_json_t* schema = csilk_json_parse(t->parameters_json);
                 if (schema) {
-                    cJSON_AddItemToObject(t_obj, "inputSchema", schema);
+                    csilk_json_add_object(t_obj, "inputSchema", schema);
                 } else {
-                    cJSON_AddItemToObject(t_obj, "inputSchema", cJSON_CreateObject());
+                    csilk_json_add_object(t_obj, "inputSchema", csilk_json_object());
                 }
             } else {
-                cJSON_AddItemToObject(t_obj, "inputSchema", cJSON_CreateObject());
+                csilk_json_add_object(t_obj, "inputSchema", csilk_json_object());
             }
-            cJSON_AddItemToArray(tools_arr, t_obj);
+            csilk_json_array_append(tools_arr, t_obj);
         }
         csilk_mutex_unlock(&server->mutex);
 
-        cJSON_AddItemToObject(res, "tools", tools_arr);
+        csilk_json_add_object(res, "tools", tools_arr);
         return csilk_mcp_msg_create_response(req->id, res);
     }
 
@@ -166,14 +166,14 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
             return csilk_mcp_msg_create_error(req->id, CSILK_MCP_INVALID_PARAMS, "Missing params");
         }
 
-        cJSON* j_name = cJSON_GetObjectItem(req->params, "name");
-        cJSON* j_args = cJSON_GetObjectItem(req->params, "arguments");
-        if (!j_name || !cJSON_IsString(j_name)) {
+        csilk_json_t* j_name = csilk_json_get(req->params, "name");
+        csilk_json_t* j_args = csilk_json_get(req->params, "arguments");
+        if (!j_name || !csilk_json_is_string(j_name)) {
             return csilk_mcp_msg_create_error(
                 req->id, CSILK_MCP_INVALID_PARAMS, "Missing tool name");
         }
 
-        const char*            name = j_name->valuestring;
+        const char*            name = csilk_json_string_value(j_name);
         csilk_wf_tool_entry_t* matched = nullptr;
 
         csilk_mutex_lock(&server->mutex);
@@ -190,18 +190,18 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
                 req->id, CSILK_MCP_METHOD_NOT_FOUND, "Tool not found");
         }
 
-        char* args_str = j_args ? cJSON_PrintUnformatted(j_args) : strdup("{}");
+        char* args_str = j_args ? csilk_json_serialize(j_args, NULL) : strdup("{}");
         char* tool_res = matched->fn(args_str, matched->user_data);
         free(args_str);
 
-        cJSON* res = cJSON_CreateObject();
-        cJSON* content_arr = cJSON_CreateArray();
-        cJSON* item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "type", "text");
-        cJSON_AddStringToObject(item, "text", tool_res ? tool_res : "");
-        cJSON_AddItemToArray(content_arr, item);
-        cJSON_AddItemToObject(res, "content", content_arr);
-        cJSON_AddBoolToObject(res, "isError", false);
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_t* content_arr = csilk_json_array();
+        csilk_json_t* item = csilk_json_object();
+        csilk_json_add_string(item, "type", "text");
+        csilk_json_add_string(item, "text", tool_res ? tool_res : "");
+        csilk_json_array_append(content_arr, item);
+        csilk_json_add_object(res, "content", content_arr);
+        csilk_json_add_bool(res, "isError", false);
 
         if (tool_res) {
             free(tool_res);
@@ -239,21 +239,21 @@ csilk_mcp_server_start_stdio(csilk_mcp_server_t* server)
                     free(out);
                 }
                 if (resp->id) {
-                    cJSON_Delete(resp->id);
+                    csilk_json_free(resp->id);
                 }
                 if (resp->result) {
-                    cJSON_Delete(resp->result);
+                    csilk_json_free(resp->result);
                 }
                 if (resp->error) {
-                    cJSON_Delete(resp->error);
+                    csilk_json_free(resp->error);
                 }
                 free(resp);
             }
             if (req->id) {
-                cJSON_Delete(req->id);
+                csilk_json_free(req->id);
             }
             if (req->params) {
-                cJSON_Delete(req->params);
+                csilk_json_free(req->params);
             }
             if (req->method) {
                 free(req->method);
@@ -300,21 +300,21 @@ mcp_sse_post_handler(csilk_ctx_t* c)
     }
     if (resp) {
         if (resp->id) {
-            cJSON_Delete(resp->id);
+            csilk_json_free(resp->id);
         }
         if (resp->result) {
-            cJSON_Delete(resp->result);
+            csilk_json_free(resp->result);
         }
         if (resp->error) {
-            cJSON_Delete(resp->error);
+            csilk_json_free(resp->error);
         }
         free(resp);
     }
     if (req->id) {
-        cJSON_Delete(req->id);
+        csilk_json_free(req->id);
     }
     if (req->params) {
-        cJSON_Delete(req->params);
+        csilk_json_free(req->params);
     }
     if (req->method) {
         free(req->method);

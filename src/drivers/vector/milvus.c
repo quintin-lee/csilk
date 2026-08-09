@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 typedef struct {
     char* endpoint;
@@ -85,31 +85,34 @@ milvus_upsert(void*                       state_ptr,
     }
 
     /* Milvus v2.x REST API: POST /v2/vectordb/entities/upsert */
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "collectionName", collection);
-    cJSON* data_arr = cJSON_AddArrayToObject(root, "data");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "collectionName", collection);
+    csilk_json_t* data_arr = csilk_json_add_array_obj(root, "data", csilk_json_array());
     for (size_t i = 0; i < count; i++) {
-        cJSON* p = cJSON_CreateObject();
+        csilk_json_t* p = csilk_json_object();
         /* Milvus usually expects an 'id' field and a 'vector' field */
-        cJSON_AddStringToObject(p, "id", points[i].id);
+        csilk_json_add_string(p, "id", points[i].id);
 
-        cJSON* vec_arr = cJSON_AddArrayToObject(p, "vector");
+        csilk_json_t* vec_arr = csilk_json_add_array_obj(p, "vector", csilk_json_array());
         for (size_t d = 0; d < points[i].dimension; d++) {
-            cJSON_AddItemToArray(vec_arr, cJSON_CreateNumber(points[i].vector[d]));
+            csilk_json_array_append(vec_arr, csilk_json_number(points[i].vector[d]));
         }
         if (points[i].payload) {
             /* Merge payload fields into the entity object */
-            cJSON* field = points[i].payload->child;
-            while (field) {
-                cJSON_AddItemToObject(p, field->string, cJSON_Duplicate(field, 1));
-                field = field->next;
+            size_t _pc = csilk_json_object_size(points[i].payload);
+            for (size_t _pi = 0; _pi < _pc; _pi++) {
+                const char*   _pk = csilk_json_object_key(points[i].payload, _pi);
+                csilk_json_t* _pv = csilk_json_object_val(points[i].payload, _pi);
+                if (_pk && _pv) {
+                    csilk_json_add_object(p, _pk, csilk_json_copy(_pv));
+                }
             }
         }
-        cJSON_AddItemToArray(data_arr, p);
+        csilk_json_array_append(data_arr, p);
     }
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     char url[512];
     snprintf(url, sizeof(url), "%s/v2/vectordb/entities/upsert", state->endpoint);
@@ -164,20 +167,21 @@ milvus_search(void*                           state_ptr,
     }
 
     /* Milvus v2.x REST API: POST /v2/vectordb/entities/search */
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "collectionName", collection);
-    cJSON* vec_arr = cJSON_AddArrayToObject(root, "vector");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "collectionName", collection);
+    csilk_json_t* vec_arr = csilk_json_add_array_obj(root, "vector", csilk_json_array());
     for (size_t d = 0; d < dimension; d++) {
-        cJSON_AddItemToArray(vec_arr, cJSON_CreateNumber(vector[d]));
+        csilk_json_array_append(vec_arr, csilk_json_number(vector[d]));
     }
-    cJSON_AddNumberToObject(root, "limit", limit);
+    csilk_json_add_number(root, "limit", limit);
 
     /* Request all fields in output */
-    cJSON* output_fields = cJSON_AddArrayToObject(root, "outputFields");
-    cJSON_AddItemToArray(output_fields, cJSON_CreateString("*"));
+    csilk_json_t* output_fields =
+        csilk_json_add_array_obj(root, "outputFields", csilk_json_array());
+    csilk_json_array_append(output_fields, csilk_json_string_new("*"));
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     char url[512];
     snprintf(url, sizeof(url), "%s/v2/vectordb/entities/search", state->endpoint);
@@ -217,7 +221,7 @@ milvus_search(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* resp = cJSON_Parse(cr.body);
+    csilk_json_t* resp = csilk_json_parse(cr.body);
     free(cr.body);
     curl_easy_cleanup(curl);
 
@@ -226,35 +230,40 @@ milvus_search(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* data = cJSON_GetObjectItem(resp, "data");
-    if (cJSON_IsArray(data)) {
-        res->count = cJSON_GetArraySize(data);
+    csilk_json_t* data = csilk_json_get(resp, "data");
+    if (csilk_json_is_array(data)) {
+        res->count = csilk_json_array_size(data);
         res->results = calloc(res->count, sizeof(csilk_vector_search_result_t));
         for (size_t i = 0; i < res->count; i++) {
-            cJSON* item = cJSON_GetArrayItem(data, (int)i);
-            cJSON* id = cJSON_GetObjectItem(item, "id");
+            csilk_json_t* item = csilk_json_array_get(data, (int)i);
+            csilk_json_t* id = csilk_json_get(item, "id");
             if (id) {
-                if (cJSON_IsString(id)) {
-                    res->results[i].id = strdup(id->valuestring);
+                if (csilk_json_is_string(id)) {
+                    res->results[i].id = strdup(csilk_json_string_value(id));
                 } else {
                     char buf[64];
-                    snprintf(buf, sizeof(buf), "%g", id->valuedouble);
+                    snprintf(buf, sizeof(buf), "%g", csilk_json_number_value(id));
                     res->results[i].id = strdup(buf);
                 }
             }
-            cJSON* distance = cJSON_GetObjectItem(item, "distance");
+            csilk_json_t* distance = csilk_json_get(item, "distance");
             if (distance) {
-                res->results[i].score = (float)distance->valuedouble;
+                res->results[i].score = (float)csilk_json_number_value(distance);
             }
 
             /* Treat all other fields as payload */
-            cJSON* payload = cJSON_CreateObject();
-            cJSON* field = item->child;
-            while (field) {
-                if (strcmp(field->string, "id") != 0 && strcmp(field->string, "distance") != 0) {
-                    cJSON_AddItemToObject(payload, field->string, cJSON_Duplicate(field, 1));
+            csilk_json_t* payload = csilk_json_object();
+            size_t        _field_count = csilk_json_object_size(item);
+            for (size_t _fi = 0; _fi < _field_count; _fi++) {
+                const char*   _field_key = csilk_json_object_key(item, _fi);
+                csilk_json_t* field = csilk_json_object_val(item, _fi);
+                if (!_field_key || !field) {
+                    continue;
                 }
-                field = field->next;
+                if (strcmp(_field_key, "id") == 0 || strcmp(_field_key, "distance") == 0) {
+                    continue;
+                }
+                csilk_json_add_object(payload, _field_key, csilk_json_copy(field));
             }
             res->results[i].payload = payload;
         }
@@ -263,7 +272,7 @@ milvus_search(void*                           state_ptr,
         res->results = nullptr;
     }
 
-    cJSON_Delete(resp);
+    csilk_json_free(resp);
     return 0;
 }
 

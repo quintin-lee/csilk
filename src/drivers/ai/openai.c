@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 /** @brief Per-instance state for the OpenAI-compatible driver. */
 typedef struct {
@@ -143,34 +143,34 @@ process_stream_line(struct curl_context* ctx, const char* line)
         return;
     }
 
-    cJSON* root = cJSON_Parse(data);
+    csilk_json_t* root = csilk_json_parse(data);
     if (!root) {
         return;
     }
 
-    cJSON* choices = cJSON_GetObjectItem(root, "choices");
-    if (cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-        cJSON* first = cJSON_GetArrayItem(choices, 0);
-        cJSON* delta = cJSON_GetObjectItem(first, "delta");
-        cJSON* content = cJSON_GetObjectItem(delta, "content");
-        if (cJSON_IsString(content)) {
+    csilk_json_t* choices = csilk_json_get(root, "choices");
+    if (csilk_json_is_array(choices) && csilk_json_array_size(choices) > 0) {
+        csilk_json_t* first = csilk_json_array_get(choices, 0);
+        csilk_json_t* delta = csilk_json_get(first, "delta");
+        csilk_json_t* content = csilk_json_get(delta, "content");
+        if (csilk_json_is_string(content)) {
             /* Append this chunk to the accumulated full content */
-            size_t clen = strlen(content->valuestring);
+            size_t clen = strlen(csilk_json_string_value(content));
             size_t current_len = ctx->res->content ? strlen(ctx->res->content) : 0;
             char*  new_content = realloc(ctx->res->content, current_len + clen + 1);
             if (new_content) {
                 ctx->res->content = new_content;
-                memcpy(ctx->res->content + current_len, content->valuestring, clen);
+                memcpy(ctx->res->content + current_len, csilk_json_string_value(content), clen);
                 ctx->res->content[current_len + clen] = '\0';
             }
 
             /* Forward the chunk to the caller's streaming callback */
             if (ctx->req->on_chunk) {
-                ctx->req->on_chunk(content->valuestring, ctx->req->user_data);
+                ctx->req->on_chunk(csilk_json_string_value(content), ctx->req->user_data);
             }
         }
     }
-    cJSON_Delete(root);
+    csilk_json_free(root);
 }
 
 /**
@@ -263,78 +263,78 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 1: Build JSON request body --- */
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "model", req->model ? req->model : "gpt-3.5-turbo");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "model", req->model ? req->model : "gpt-3.5-turbo");
 
-    cJSON* msgs = cJSON_CreateArray();
+    csilk_json_t* msgs = csilk_json_array();
     for (size_t i = 0; i < req->message_count; i++) {
-        cJSON* m = cJSON_CreateObject();
-        cJSON_AddStringToObject(m, "role", req->messages[i].role);
-        cJSON_AddStringToObject(m, "content", req->messages[i].content);
-        cJSON_AddItemToArray(msgs, m);
+        csilk_json_t* m = csilk_json_object();
+        csilk_json_add_string(m, "role", req->messages[i].role);
+        csilk_json_add_string(m, "content", req->messages[i].content);
+        csilk_json_array_append(msgs, m);
     }
-    cJSON_AddItemToObject(root, "messages", msgs);
+    csilk_json_add_object(root, "messages", msgs);
 
     /* Sampling params (only set when non-zero/non-default) */
     if (req->temperature > 0) {
-        cJSON_AddNumberToObject(root, "temperature", req->temperature);
+        csilk_json_add_number(root, "temperature", req->temperature);
     }
     if (req->top_p > 0) {
-        cJSON_AddNumberToObject(root, "top_p", req->top_p);
+        csilk_json_add_number(root, "top_p", req->top_p);
     }
     if (req->presence_penalty != 0) {
-        cJSON_AddNumberToObject(root, "presence_penalty", req->presence_penalty);
+        csilk_json_add_number(root, "presence_penalty", req->presence_penalty);
     }
     if (req->frequency_penalty != 0) {
-        cJSON_AddNumberToObject(root, "frequency_penalty", req->frequency_penalty);
+        csilk_json_add_number(root, "frequency_penalty", req->frequency_penalty);
     }
     if (req->max_tokens > 0) {
-        cJSON_AddNumberToObject(root, "max_tokens", req->max_tokens);
+        csilk_json_add_number(root, "max_tokens", req->max_tokens);
     }
     if (req->user) {
-        cJSON_AddStringToObject(root, "user", req->user);
+        csilk_json_add_string(root, "user", req->user);
     }
     if (req->stream) {
-        cJSON_AddBoolToObject(root, "stream", true);
+        csilk_json_add_bool(root, "stream", true);
     }
 
     /* Stop sequences array */
     if (req->stop_count > 0) {
-        cJSON* stop = cJSON_CreateArray();
+        csilk_json_t* stop = csilk_json_array();
         for (size_t i = 0; i < req->stop_count; i++) {
-            cJSON_AddItemToArray(stop, cJSON_CreateString(req->stop[i]));
+            csilk_json_array_append(stop, csilk_json_string_new(req->stop[i]));
         }
-        cJSON_AddItemToObject(root, "stop", stop);
+        csilk_json_add_object(root, "stop", stop);
     }
 
     /* Tool / function definitions */
     if (req->tool_count > 0) {
-        cJSON* tools = cJSON_CreateArray();
+        csilk_json_t* tools = csilk_json_array();
         for (size_t i = 0; i < req->tool_count; i++) {
-            cJSON* t = cJSON_CreateObject();
-            cJSON_AddStringToObject(t, "type", req->tools[i].type);
-            cJSON* f = cJSON_CreateObject();
-            cJSON_AddStringToObject(f, "name", req->tools[i].function.name);
+            csilk_json_t* t = csilk_json_object();
+            csilk_json_add_string(t, "type", req->tools[i].type);
+            csilk_json_t* f = csilk_json_object();
+            csilk_json_add_string(f, "name", req->tools[i].function.name);
             if (req->tools[i].function.description) {
-                cJSON_AddStringToObject(f, "description", req->tools[i].function.description);
+                csilk_json_add_string(f, "description", req->tools[i].function.description);
             }
             if (req->tools[i].function.parameters_json) {
-                cJSON_AddItemToObject(
+                csilk_json_add_object(
                     f,
                     "parameters",
-                    cJSON_Duplicate((cJSON*)req->tools[i].function.parameters_json, 1));
+                    csilk_json_copy((csilk_json_t*)req->tools[i].function.parameters_json));
             }
-            cJSON_AddItemToObject(t, "function", f);
-            cJSON_AddItemToArray(tools, t);
+            csilk_json_add_object(t, "function", f);
+            csilk_json_array_append(tools, t);
         }
-        cJSON_AddItemToObject(root, "tools", tools);
+        csilk_json_add_object(root, "tools", tools);
         if (req->tool_choice) {
-            cJSON_AddStringToObject(root, "tool_choice", req->tool_choice);
+            csilk_json_add_string(root, "tool_choice", req->tool_choice);
         }
     }
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     /* --- Step 2: Prepare and send HTTP request --- */
     char url[512];
@@ -399,49 +399,49 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 4b: Non-streaming path -- parse the JSON response --- */
-    cJSON* resp_root = cJSON_Parse(ctx.body);
+    csilk_json_t* resp_root = csilk_json_parse(ctx.body);
     if (resp_root) {
         res->raw_response = ctx.body;
-        cJSON* choices = cJSON_GetObjectItem(resp_root, "choices");
-        if (cJSON_IsArray(choices) && cJSON_GetArraySize(choices) > 0) {
-            cJSON* first = cJSON_GetArrayItem(choices, 0);
-            cJSON* msg = cJSON_GetObjectItem(first, "message");
-            cJSON* content = cJSON_GetObjectItem(msg, "content");
-            if (cJSON_IsString(content)) {
-                res->content = strdup(content->valuestring);
+        csilk_json_t* choices = csilk_json_get(resp_root, "choices");
+        if (csilk_json_is_array(choices) && csilk_json_array_size(choices) > 0) {
+            csilk_json_t* first = csilk_json_array_get(choices, 0);
+            csilk_json_t* msg = csilk_json_get(first, "message");
+            csilk_json_t* content = csilk_json_get(msg, "content");
+            if (csilk_json_is_string(content)) {
+                res->content = strdup(csilk_json_string_value(content));
             }
             /* Extract tool calls if the model requested function invocations */
-            cJSON* tcalls = cJSON_GetObjectItem(msg, "tool_calls");
-            if (cJSON_IsArray(tcalls)) {
-                res->tool_call_count = cJSON_GetArraySize(tcalls);
+            csilk_json_t* tcalls = csilk_json_get(msg, "tool_calls");
+            if (csilk_json_is_array(tcalls)) {
+                res->tool_call_count = csilk_json_array_size(tcalls);
                 res->tool_calls = calloc(res->tool_call_count, sizeof(csilk_ai_tool_call_t));
                 for (size_t i = 0; i < res->tool_call_count; i++) {
-                    cJSON* tc = cJSON_GetArrayItem(tcalls, i);
-                    cJSON* fid = cJSON_GetObjectItem(tc, "id");
-                    cJSON* func = cJSON_GetObjectItem(tc, "function");
-                    cJSON* fname = cJSON_GetObjectItem(func, "name");
-                    cJSON* fargs = cJSON_GetObjectItem(func, "arguments");
+                    csilk_json_t* tc = csilk_json_array_get(tcalls, i);
+                    csilk_json_t* fid = csilk_json_get(tc, "id");
+                    csilk_json_t* func = csilk_json_get(tc, "function");
+                    csilk_json_t* fname = csilk_json_get(func, "name");
+                    csilk_json_t* fargs = csilk_json_get(func, "arguments");
 
                     if (fid) {
-                        res->tool_calls[i].id = strdup(fid->valuestring);
+                        res->tool_calls[i].id = strdup(csilk_json_string_value(fid));
                     }
                     if (fname) {
-                        res->tool_calls[i].name = strdup(fname->valuestring);
+                        res->tool_calls[i].name = strdup(csilk_json_string_value(fname));
                     }
                     if (fargs) {
-                        res->tool_calls[i].arguments = strdup(fargs->valuestring);
+                        res->tool_calls[i].arguments = strdup(csilk_json_string_value(fargs));
                     }
                 }
             }
         }
         /* Token usage statistics */
-        cJSON* usage = cJSON_GetObjectItem(resp_root, "usage");
+        csilk_json_t* usage = csilk_json_get(resp_root, "usage");
         if (usage) {
-            res->prompt_tokens = cJSON_GetObjectItem(usage, "prompt_tokens")->valueint;
-            res->completion_tokens = cJSON_GetObjectItem(usage, "completion_tokens")->valueint;
-            res->total_tokens = cJSON_GetObjectItem(usage, "total_tokens")->valueint;
+            res->prompt_tokens = csilk_json_get_int(usage, "prompt_tokens");
+            res->completion_tokens = csilk_json_get_int(usage, "completion_tokens");
+            res->total_tokens = csilk_json_get_int(usage, "total_tokens");
         }
-        cJSON_Delete(resp_root);
+        csilk_json_free(resp_root);
     } else {
         free(ctx.body);
     }
@@ -477,16 +477,16 @@ openai_embeddings(void*                           state_ptr,
     }
 
     /* --- Build the JSON request body --- */
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "model", model);
-    cJSON* in_arr = cJSON_CreateArray();
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "model", model);
+    csilk_json_t* in_arr = csilk_json_array();
     for (size_t i = 0; i < count; i++) {
-        cJSON_AddItemToArray(in_arr, cJSON_CreateString(input[i]));
+        csilk_json_array_append(in_arr, csilk_json_string_new(input[i]));
     }
-    cJSON_AddItemToObject(root, "input", in_arr);
+    csilk_json_add_object(root, "input", in_arr);
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     /* --- Prepare the HTTP request --- */
     char url[512];
@@ -519,7 +519,7 @@ openai_embeddings(void*                           state_ptr,
     }
 
     /* --- Parse the response and extract vectors --- */
-    cJSON* resp = cJSON_Parse(cr.body);
+    csilk_json_t* resp = csilk_json_parse(cr.body);
     free(cr.body);
     if (!resp) {
         res->error_message = strdup("JSON parse error");
@@ -527,35 +527,35 @@ openai_embeddings(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* data = cJSON_GetObjectItem(resp, "data");
-    if (cJSON_IsArray(data)) {
-        res->count = cJSON_GetArraySize(data);
+    csilk_json_t* data = csilk_json_get(resp, "data");
+    if (csilk_json_is_array(data)) {
+        res->count = csilk_json_array_size(data);
         if (res->count > 0) {
-            cJSON* first = cJSON_GetArrayItem(data, 0);
-            cJSON* vec = cJSON_GetObjectItem(first, "embedding");
-            if (cJSON_IsArray(vec)) {
+            csilk_json_t* first = csilk_json_array_get(data, 0);
+            csilk_json_t* vec = csilk_json_get(first, "embedding");
+            if (csilk_json_is_array(vec)) {
                 /* Flatten all embedding vectors into a single float array */
-                res->dimension = cJSON_GetArraySize(vec);
+                res->dimension = csilk_json_array_size(vec);
                 res->values = malloc(sizeof(float) * res->count * res->dimension);
                 for (size_t i = 0; i < res->count; i++) {
-                    cJSON* item = cJSON_GetArrayItem(data, i);
-                    cJSON* v = cJSON_GetObjectItem(item, "embedding");
+                    csilk_json_t* item = csilk_json_array_get(data, i);
+                    csilk_json_t* v = csilk_json_get(item, "embedding");
                     for (size_t j = 0; j < res->dimension; j++) {
                         res->values[i * res->dimension + j] =
-                            (float)cJSON_GetArrayItem(v, j)->valuedouble;
+                            (float)csilk_json_number_value(csilk_json_array_get(v, j));
                     }
                 }
             }
         }
     }
 
-    cJSON* usage = cJSON_GetObjectItem(resp, "usage");
+    csilk_json_t* usage = csilk_json_get(resp, "usage");
     if (usage) {
-        res->prompt_tokens = cJSON_GetObjectItem(usage, "prompt_tokens")->valueint;
-        res->total_tokens = cJSON_GetObjectItem(usage, "total_tokens")->valueint;
+        res->prompt_tokens = csilk_json_get_int(usage, "prompt_tokens");
+        res->total_tokens = csilk_json_get_int(usage, "total_tokens");
     }
 
-    cJSON_Delete(resp);
+    csilk_json_free(resp);
     curl_easy_cleanup(curl);
     return 0;
 }

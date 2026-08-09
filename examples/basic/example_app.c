@@ -184,9 +184,9 @@ user(csilk_ctx_t* c)
 static void
 ping(csilk_ctx_t* c)
 {
-    cJSON* obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "status", "ok");
-    cJSON_AddNumberToObject(obj, "time", (double)time(nullptr));
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_string(obj, "status", "ok");
+    csilk_json_add_number(obj, "time", (double)time(nullptr));
     csilk_json(c, CSILK_STATUS_OK, obj);
 }
 
@@ -194,20 +194,20 @@ ping(csilk_ctx_t* c)
 static void
 login(csilk_ctx_t* c)
 {
-    cJSON* in = csilk_bind_json(c);
+    csilk_json_t* in = csilk_bind_json(c);
     if (!in) {
         csilk_string(c, CSILK_STATUS_BAD_REQUEST, "bad json");
         return;
     }
-    cJSON* u = cJSON_GetObjectItem(in, "user");
-    if (cJSON_IsString(u) && !strcmp(u->valuestring, "admin")) {
-        cJSON* out = cJSON_CreateObject();
-        cJSON_AddStringToObject(out, "token", "demo-token");
+    csilk_json_t* u = csilk_json_get(in, "user");
+    if (csilk_json_is_string(u) && !strcmp(csilk_json_string_value(u), "admin")) {
+        csilk_json_t* out = csilk_json_object();
+        csilk_json_add_string(out, "token", "demo-token");
         csilk_json(c, CSILK_STATUS_OK, out);
     } else {
         csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "unauthorized");
     }
-    cJSON_Delete(in);
+    csilk_json_free(in);
 }
 
 /** @brief Handler for GET /echo?msg=... — echoes back the query parameter. */

@@ -13,23 +13,23 @@ test_jwt_hs256_roundtrip(void)
 {
     printf("Testing JWT HS256 round-trip...\n");
 
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       payload = cJSON_CreateObject();
-    cJSON_AddStringToObject(payload, "sub", "user123");
-    cJSON_AddStringToObject(payload, "role", "admin");
-    cJSON_AddNumberToObject(payload, "iat", 1700000000);
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "sub", "user123");
+    csilk_json_add_string(payload, "role", "admin");
+    csilk_json_add_number(payload, "iat", 1700000000);
 
     const char* secret = "my-secret-key-for-testing";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != nullptr);
 
-    cJSON* verified = csilk_jwt_verify(c, token, secret);
+    csilk_json_t* verified = csilk_jwt_verify(c, token, secret);
     assert(verified != nullptr);
-    assert(strcmp(cJSON_GetObjectItem(verified, "sub")->valuestring, "user123") == 0);
-    assert(strcmp(cJSON_GetObjectItem(verified, "role")->valuestring, "admin") == 0);
+    assert(strcmp(csilk_json_get_string(verified, "sub"), "user123") == 0);
+    assert(strcmp(csilk_json_get_string(verified, "role"), "admin") == 0);
 
-    cJSON_Delete(verified);
-    cJSON_Delete(payload);
+    csilk_json_free(verified);
+    csilk_json_free(payload);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");
@@ -40,17 +40,17 @@ test_jwt_wrong_secret(void)
 {
     printf("Testing JWT wrong secret rejection...\n");
 
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       payload = cJSON_CreateObject();
-    cJSON_AddStringToObject(payload, "sub", "test");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "sub", "test");
 
     char* token = csilk_jwt_generate(c, payload, "correct-secret");
     assert(token != nullptr);
 
-    cJSON* verified = csilk_jwt_verify(c, token, "wrong-secret");
+    csilk_json_t* verified = csilk_jwt_verify(c, token, "wrong-secret");
     assert(verified == nullptr);
 
-    cJSON_Delete(payload);
+    csilk_json_free(payload);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");
@@ -61,22 +61,22 @@ test_jwt_expired_token(void)
 {
     printf("Testing JWT expired token (verify checks signature, not exp)...\n");
 
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       payload = cJSON_CreateObject();
-    cJSON_AddStringToObject(payload, "sub", "user");
-    cJSON_AddNumberToObject(payload, "exp", 1000000);
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "sub", "user");
+    csilk_json_add_number(payload, "exp", 1000000);
 
     const char* secret = "test-secret";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != nullptr);
 
-    cJSON* verified = csilk_jwt_verify(c, token, secret);
+    csilk_json_t* verified = csilk_jwt_verify(c, token, secret);
     assert(verified != nullptr);
-    assert(cJSON_GetObjectItem(verified, "exp") != nullptr);
-    assert(cJSON_GetObjectItem(verified, "exp")->valueint == 1000000);
+    assert(csilk_json_get(verified, "exp") != nullptr);
+    assert(csilk_json_get_int(verified, "exp") == 1000000);
 
-    cJSON_Delete(verified);
-    cJSON_Delete(payload);
+    csilk_json_free(verified);
+    csilk_json_free(payload);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");
@@ -89,16 +89,16 @@ test_jwt_malformed_token(void)
 
     csilk_ctx_t* c = csilk_test_ctx_new();
 
-    cJSON* v1 = csilk_jwt_verify(c, "not-a-jwt", "secret");
+    csilk_json_t* v1 = csilk_jwt_verify(c, "not-a-jwt", "secret");
     assert(v1 == nullptr);
 
-    cJSON* v2 = csilk_jwt_verify(c, "only.two", "secret");
+    csilk_json_t* v2 = csilk_jwt_verify(c, "only.two", "secret");
     assert(v2 == nullptr);
 
-    cJSON* v3 = csilk_jwt_verify(c, "", "secret");
+    csilk_json_t* v3 = csilk_jwt_verify(c, "", "secret");
     assert(v3 == nullptr);
 
-    cJSON* v4 = csilk_jwt_verify(c, "a.b.c.d", "secret");
+    csilk_json_t* v4 = csilk_jwt_verify(c, "a.b.c.d", "secret");
     assert(v4 == nullptr);
 
     csilk_test_ctx_free(c);
@@ -110,21 +110,21 @@ test_jwt_no_exp_claim(void)
 {
     printf("Testing JWT without exp claim...\n");
 
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       payload = cJSON_CreateObject();
-    cJSON_AddStringToObject(payload, "sub", "user");
-    cJSON_AddStringToObject(payload, "name", "Test User");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "sub", "user");
+    csilk_json_add_string(payload, "name", "Test User");
 
     const char* secret = "secret";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != nullptr);
 
-    cJSON* verified = csilk_jwt_verify(c, token, secret);
+    csilk_json_t* verified = csilk_jwt_verify(c, token, secret);
     assert(verified != nullptr);
-    assert(strcmp(cJSON_GetObjectItem(verified, "sub")->valuestring, "user") == 0);
+    assert(strcmp(csilk_json_get_string(verified, "sub"), "user") == 0);
 
-    cJSON_Delete(verified);
-    cJSON_Delete(payload);
+    csilk_json_free(verified);
+    csilk_json_free(payload);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");
@@ -141,11 +141,11 @@ test_jwt_generate_json(void)
     char* token = csilk_jwt_generate_json(c, "{\"sub\":\"json-user\",\"iat\":1700000000}", secret);
     assert(token != nullptr);
 
-    cJSON* verified = csilk_jwt_verify(c, token, secret);
+    csilk_json_t* verified = csilk_jwt_verify(c, token, secret);
     assert(verified != nullptr);
-    assert(strcmp(cJSON_GetObjectItem(verified, "sub")->valuestring, "json-user") == 0);
+    assert(strcmp(csilk_json_get_string(verified, "sub"), "json-user") == 0);
 
-    cJSON_Delete(verified);
+    csilk_json_free(verified);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");
@@ -204,9 +204,9 @@ test_jwt_middleware_valid(void)
 
     const char* secret = "middleware-secret";
 
-    cJSON* payload = cJSON_CreateObject();
-    cJSON_AddStringToObject(payload, "sub", "user1");
-    cJSON_AddNumberToObject(payload, "iat", (double)time(nullptr));
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "sub", "user1");
+    csilk_json_add_number(payload, "iat", (double)time(nullptr));
 
     char* token = csilk_jwt_generate(c, payload, secret);
     assert(token != nullptr);
@@ -219,11 +219,11 @@ test_jwt_middleware_valid(void)
     csilk_jwt_middleware(c, secret);
     assert(csilk_is_aborted(c) == 0);
 
-    cJSON* stored = (cJSON*)csilk_get(c, "jwt_payload");
+    csilk_json_t* stored = (csilk_json_t*)csilk_get(c, "jwt_payload");
     assert(stored != nullptr);
-    cJSON_Delete(stored);
+    csilk_json_free(stored);
 
-    cJSON_Delete(payload);
+    csilk_json_free(payload);
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");

@@ -14,7 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 /* Forward declarations — avoids pulling the entire public API via csilk.h.
    types.h defines csilk_storage_driver_t which this header needs. */
@@ -172,17 +172,17 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  *
  * Internally acquires the pool mutex, calls the driver's query function,
  * converts each row to a JSON object (keyed by column name), frees the
- * native result, and returns the cJSON array.
+ * native result, and returns the csilk_json array.
  *
  * @param pool  Connection pool.
  * @param sql   SQL SELECT statement.
- * @return A cJSON array of row objects, or nullptr on failure.  Caller must
- *         free with cJSON_Delete.
+ * @return A csilk_json array of row objects, or nullptr on failure.  Caller must
+ *         free with csilk_json_free.
  */
-cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
+csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
 /** @brief Callback type for async database query execution. */
-typedef void (*csilk_db_async_cb)(cJSON* result, void* user_data);
+typedef void (*csilk_db_async_cb)(csilk_json_t* result, void* user_data);
 
 /**
  * @brief Execute a SQL query asynchronously without blocking the event loop.
@@ -192,7 +192,7 @@ typedef void (*csilk_db_async_cb)(cJSON* result, void* user_data);
  *
  * @param pool      Connection pool.
  * @param sql       SQL query string.
- * @param cb        Callback to invoke with the query result (cJSON*).
+ * @param cb        Callback to invoke with the query result (csilk_json_t*).
  * @param user_data Opaque user data pointer.
  * @return 0 if offloaded successfully, -1 on failure.
  */
@@ -223,10 +223,11 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  * @param sql    SQL with ? placeholders.
  * @param params nullptr-terminated array of string values.  The number of
  *               values must match the number of ? placeholders.
- * @return A cJSON array of row objects, or nullptr on failure.  Caller must
- *         free with cJSON_Delete.
+ * @return A csilk_json array of row objects, or nullptr on failure.  Caller must
+ *         free with csilk_json_free.
  */
-cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
+csilk_json_t*
+csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /**
  * @brief Register a database driver implementation.

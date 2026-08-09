@@ -79,7 +79,7 @@ typedef void (*csilk_ai_stream_cb)(const char* chunk, void* user_data);
 typedef struct {
     const char* name;            /**< Function name. */
     const char* description;     /**< Description of what the function does. */
-    void*       parameters_json; /**< JSON Schema of parameters (cJSON*). */
+    void*       parameters_json; /**< JSON Schema of parameters (csilk_json_t*). */
 } csilk_ai_tool_function_t;
 
 /** @brief A tool that can be called by the model. */

@@ -357,18 +357,19 @@ after_worker_cb(csilk_io_work_t* req, int status)
     // JSON Schema Validation
 
     if (output && output->value && node->output_schema) {
-        cJSON* schema = cJSON_Parse(node->output_schema);
-        cJSON* data = cJSON_Parse((char*)output->value);
+        csilk_json_t* schema = csilk_json_parse(node->output_schema);
+        csilk_json_t* data = csilk_json_parse((char*)output->value);
         if (schema && data) {
-            cJSON* required = cJSON_GetObjectItem(schema, "required");
-            if (cJSON_IsArray(required)) {
-                for (int i = 0; i < cJSON_GetArraySize(required); i++) {
-                    cJSON* field = cJSON_GetArrayItem(required, i);
-                    if (cJSON_IsString(field) && !cJSON_HasObjectItem(data, field->valuestring)) {
+            csilk_json_t* required = csilk_json_get(schema, "required");
+            if (csilk_json_is_array(required)) {
+                for (int i = 0; i < csilk_json_array_size(required); i++) {
+                    csilk_json_t* field = csilk_json_array_get(required, i);
+                    if (csilk_json_is_string(field) &&
+                        !csilk_json_get(data, csilk_json_string_value(field))) {
                         CSILK_LOG_W("[Workflow] Node '%s' output failed "
                                     "schema: missing required field '%s'",
                                     node->id,
-                                    field->valuestring);
+                                    csilk_json_string_value(field));
                         output = nullptr;
                         break;
                     }
@@ -377,8 +378,8 @@ after_worker_cb(csilk_io_work_t* req, int status)
         } else if (node->output_schema) {
             output = nullptr; // Invalid JSON or Schema
         }
-        cJSON_Delete(schema);
-        cJSON_Delete(data);
+        csilk_json_free(schema);
+        csilk_json_free(data);
     }
 
     csilk_mutex_lock(&ctx->mutex);
@@ -590,13 +591,13 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         ctx->nodes_active++;
         csilk_mutex_unlock(&ctx->mutex);
 
-        cJSON* task = cJSON_CreateObject();
-        cJSON_AddStringToObject(task, "exec_id", ctx->exec_id);
-        cJSON_AddStringToObject(task, "node_id", node->id);
+        csilk_json_t* task = csilk_json_object();
+        csilk_json_add_string(task, "exec_id", ctx->exec_id);
+        csilk_json_add_string(task, "node_id", node->id);
         if (input && input->value) {
-            cJSON_AddStringToObject(task, "input", (char*)input->value);
+            csilk_json_add_string(task, "input", (char*)input->value);
         }
-        char* json = cJSON_PrintUnformatted(task);
+        char* json = csilk_json_serialize(task, NULL);
 
         csilk_mq_publish(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
         _wf_wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
@@ -605,7 +606,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         CSILK_LOG_I("[Workflow] Execution %s offloaded node '%s' to MQ", ctx->exec_id, node->id);
 
         free(json);
-        cJSON_Delete(task);
+        csilk_json_free(task);
         return;
     }
     csilk_mutex_unlock(&ctx->mutex);

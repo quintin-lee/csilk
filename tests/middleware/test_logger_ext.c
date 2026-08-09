@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/csilk.h"
 
 int
@@ -14,28 +14,28 @@ main()
 
     printf("Testing csilk_log_make_kv...\n");
     {
-        cJSON* kv = csilk_log_make_kv("key1", "val1", "key2", "val2", nullptr);
+        csilk_json_t* kv = csilk_log_make_kv("key1", "val1", "key2", "val2", nullptr);
         assert(kv != nullptr);
-        cJSON* v1 = cJSON_GetObjectItem(kv, "key1");
-        assert(v1 != nullptr && strcmp(v1->valuestring, "val1") == 0);
-        cJSON* v2 = cJSON_GetObjectItem(kv, "key2");
-        assert(v2 != nullptr && strcmp(v2->valuestring, "val2") == 0);
-        cJSON_Delete(kv);
+        csilk_json_t* v1 = csilk_json_get(kv, "key1");
+        assert(v1 != nullptr && strcmp(csilk_json_string_value(v1), "val1") == 0);
+        csilk_json_t* v2 = csilk_json_get(kv, "key2");
+        assert(v2 != nullptr && strcmp(csilk_json_string_value(v2), "val2") == 0);
+        csilk_json_free(kv);
     }
     {
-        cJSON* kv = csilk_log_make_kv(nullptr);
+        csilk_json_t* kv = csilk_log_make_kv(nullptr);
         assert(kv != nullptr);
-        assert(cJSON_GetObjectItem(kv, "key1") == nullptr);
-        cJSON_Delete(kv);
+        assert(csilk_json_get(kv, "key1") == nullptr);
+        csilk_json_free(kv);
     }
 
     printf("Testing csilk_log_make_kv with odd args (no sentinel)...\n");
     {
-        cJSON* kv = csilk_log_make_kv("alone", "val", nullptr);
+        csilk_json_t* kv = csilk_log_make_kv("alone", "val", nullptr);
         assert(kv != nullptr);
-        cJSON* v = cJSON_GetObjectItem(kv, "alone");
+        csilk_json_t* v = csilk_json_get(kv, "alone");
         assert(v != nullptr);
-        cJSON_Delete(kv);
+        csilk_json_free(kv);
     }
 
     printf("Testing csilk_log_is_json...\n");
@@ -65,7 +65,7 @@ main()
         cfg.file_path = nullptr;
         int ret = csilk_log_init(cfg);
         assert(ret == 0);
-        cJSON* extra = csilk_log_make_kv("route", "/test", "method", "GET", nullptr);
+        csilk_json_t* extra = csilk_log_make_kv("route", "/test", "method", "GET", nullptr);
         _csilk_log_structured(
             CSILK_LOG_INFO, __FILE__, __LINE__, __func__, extra, "structured test message");
         csilk_log_close();
@@ -78,7 +78,7 @@ main()
         cfg.file_path = nullptr;
         int ret = csilk_log_init(cfg);
         assert(ret == 0);
-        cJSON* extra = csilk_log_make_kv("route", "/test", nullptr);
+        csilk_json_t* extra = csilk_log_make_kv("route", "/test", nullptr);
         _csilk_log_structured(
             CSILK_LOG_WARN, __FILE__, __LINE__, __func__, extra, "text structured message");
         csilk_log_close();
@@ -115,7 +115,7 @@ main()
         cfg.file_path = nullptr;
         int ret = csilk_log_init(cfg);
         assert(ret == 0);
-        cJSON* extra = csilk_log_make_kv("test", "macro", nullptr);
+        csilk_json_t* extra = csilk_log_make_kv("test", "macro", nullptr);
         CSILK_LOG_STRUCT(CSILK_LOG_DEBUG, extra, "CSILK_LOG_STRUCT test message");
         csilk_log_close();
     }

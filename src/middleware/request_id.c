@@ -74,8 +74,8 @@ csilk_health_check_handler(csilk_ctx_t* c)
 
     csilk_arena_t* arena = csilk_get_arena(c);
     if (!arena) {
-        cJSON* root = cJSON_CreateObject();
-        cJSON_AddStringToObject(root, "status", "up");
+        csilk_json_t* root = csilk_json_object();
+        csilk_json_add_string(root, "status", "up");
         csilk_json(c, CSILK_STATUS_OK, root);
         return;
     }
@@ -85,8 +85,8 @@ csilk_health_check_handler(csilk_ctx_t* c)
     csilk_bounded_json_status(&j, buf, sizeof(buf), "up");
 
     if (csilk_bounded_json_overflow(&j)) {
-        cJSON* root = cJSON_CreateObject();
-        cJSON_AddStringToObject(root, "status", "up");
+        csilk_json_t* root = csilk_json_object();
+        csilk_json_add_string(root, "status", "up");
         csilk_json(c, CSILK_STATUS_OK, root);
         return;
     }
@@ -153,13 +153,13 @@ csilk_ready_check_handler(csilk_ctx_t* c)
 
     csilk_arena_t* arena = csilk_get_arena(c);
     if (!arena) {
-        cJSON* root = cJSON_CreateObject();
+        csilk_json_t* root = csilk_json_object();
         if (is_healthy) {
-            cJSON_AddStringToObject(root, "status", "ready");
+            csilk_json_add_string(root, "status", "ready");
             csilk_json(c, CSILK_STATUS_OK, root);
         } else {
-            cJSON_AddStringToObject(root, "status", "unavailable");
-            cJSON_AddStringToObject(root, "reason", reason);
+            csilk_json_add_string(root, "status", "unavailable");
+            csilk_json_add_string(root, "reason", reason);
             csilk_json(c, CSILK_STATUS_SERVICE_UNAVAILABLE, root);
         }
         return;
@@ -182,13 +182,13 @@ csilk_ready_check_handler(csilk_ctx_t* c)
     csilk_bounded_json_object_close(&j);
 
     if (csilk_bounded_json_overflow(&j)) {
-        cJSON* root = cJSON_CreateObject();
+        csilk_json_t* root = csilk_json_object();
         if (is_healthy) {
-            cJSON_AddStringToObject(root, "status", "ready");
+            csilk_json_add_string(root, "status", "ready");
             csilk_json(c, CSILK_STATUS_OK, root);
         } else {
-            cJSON_AddStringToObject(root, "status", "unavailable");
-            cJSON_AddStringToObject(root, "reason", reason);
+            csilk_json_add_string(root, "status", "unavailable");
+            csilk_json_add_string(root, "reason", reason);
             csilk_json(c, CSILK_STATUS_SERVICE_UNAVAILABLE, root);
         }
         return;

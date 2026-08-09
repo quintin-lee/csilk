@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/drivers/ai.h"
 
 /** @brief Per-instance state for the Ollama driver. */
@@ -124,35 +124,35 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 1: Serialise the request into Ollama's JSON format --- */
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "model", req->model ? req->model : "llama3");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "model", req->model ? req->model : "llama3");
 
-    cJSON* msgs = cJSON_CreateArray();
+    csilk_json_t* msgs = csilk_json_array();
     for (size_t i = 0; i < req->message_count; i++) {
-        cJSON* m = cJSON_CreateObject();
-        cJSON_AddStringToObject(m, "role", req->messages[i].role);
-        cJSON_AddStringToObject(m, "content", req->messages[i].content);
-        cJSON_AddItemToArray(msgs, m);
+        csilk_json_t* m = csilk_json_object();
+        csilk_json_add_string(m, "role", req->messages[i].role);
+        csilk_json_add_string(m, "content", req->messages[i].content);
+        csilk_json_array_append(msgs, m);
     }
-    cJSON_AddItemToObject(root, "messages", msgs);
+    csilk_json_add_object(root, "messages", msgs);
 
     /* Streaming disabled for simplicity; the response body contains the
    * complete reply rather than SSE chunks. */
-    cJSON_AddBoolToObject(root, "stream", false);
+    csilk_json_add_bool(root, "stream", false);
 
     /* Ollama wraps sampling parameters in a nested "options" object, unlike
    * OpenAI which places them at the JSON root. */
-    cJSON* opts = cJSON_CreateObject();
+    csilk_json_t* opts = csilk_json_object();
     if (req->temperature > 0) {
-        cJSON_AddNumberToObject(opts, "temperature", req->temperature);
+        csilk_json_add_number(opts, "temperature", req->temperature);
     }
     if (req->top_p > 0) {
-        cJSON_AddNumberToObject(opts, "top_p", req->top_p);
+        csilk_json_add_number(opts, "top_p", req->top_p);
     }
-    cJSON_AddItemToObject(root, "options", opts);
+    csilk_json_add_object(root, "options", opts);
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     /* --- Step 2: Perform the HTTP POST --- */
     char url[512];
@@ -180,18 +180,18 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 3: Parse the Ollama response --- */
-    cJSON* resp_root = cJSON_Parse(cr.body);
+    csilk_json_t* resp_root = csilk_json_parse(cr.body);
     if (resp_root) {
-        cJSON* msg = cJSON_GetObjectItem(resp_root, "message");
-        cJSON* content = cJSON_GetObjectItem(msg, "content");
-        if (cJSON_IsString(content)) {
-            res->content = strdup(content->valuestring);
+        csilk_json_t* msg = csilk_json_get(resp_root, "message");
+        csilk_json_t* content = csilk_json_get(msg, "content");
+        if (csilk_json_is_string(content)) {
+            res->content = strdup(csilk_json_string_value(content));
         }
         /* Ollama uses different field names than OpenAI for token accounting */
-        res->prompt_tokens = cJSON_GetObjectItem(resp_root, "prompt_eval_count")->valueint;
-        res->completion_tokens = cJSON_GetObjectItem(resp_root, "eval_count")->valueint;
+        res->prompt_tokens = csilk_json_get_int(resp_root, "prompt_eval_count");
+        res->completion_tokens = csilk_json_get_int(resp_root, "eval_count");
         res->total_tokens = res->prompt_tokens + res->completion_tokens;
-        cJSON_Delete(resp_root);
+        csilk_json_free(resp_root);
     }
 
     free(cr.body);
@@ -230,11 +230,11 @@ ollama_embeddings(void*                           state_ptr,
             return -1;
         }
 
-        cJSON* root = cJSON_CreateObject();
-        cJSON_AddStringToObject(root, "model", model);
-        cJSON_AddStringToObject(root, "prompt", input[i]);
-        char* json_body = cJSON_PrintUnformatted(root);
-        cJSON_Delete(root);
+        csilk_json_t* root = csilk_json_object();
+        csilk_json_add_string(root, "model", model);
+        csilk_json_add_string(root, "prompt", input[i]);
+        char* json_body = csilk_json_serialize(root, NULL);
+        csilk_json_free(root);
 
         char url[512];
         snprintf(url, sizeof(url), "%s/api/embeddings", state->base_url);
@@ -262,7 +262,7 @@ ollama_embeddings(void*                           state_ptr,
             return -1;
         }
 
-        cJSON* resp = cJSON_Parse(cr.body);
+        csilk_json_t* resp = csilk_json_parse(cr.body);
         free(cr.body);
         if (!resp) {
             res->error_message = strdup("JSON parse error");
@@ -270,29 +270,29 @@ ollama_embeddings(void*                           state_ptr,
             return -1;
         }
 
-        cJSON* embedding = cJSON_GetObjectItem(resp, "embedding");
-        size_t dim = 0;
-        if (cJSON_IsArray(embedding)) {
-            dim = cJSON_GetArraySize(embedding);
+        csilk_json_t* embedding = csilk_json_get(resp, "embedding");
+        size_t        dim = 0;
+        if (csilk_json_is_array(embedding)) {
+            dim = csilk_json_array_size(embedding);
             if (res->dimension == 0) {
                 res->dimension = dim;
             }
             size_t new_count = res->count + 1;
             float* new_values = realloc(res->values, sizeof(float) * new_count * res->dimension);
             if (!new_values) {
-                cJSON_Delete(resp);
+                csilk_json_free(resp);
                 curl_easy_cleanup(curl);
                 return -1;
             }
             res->values = new_values;
             for (size_t j = 0; j < dim; j++) {
                 res->values[res->count * res->dimension + j] =
-                    (float)cJSON_GetArrayItem(embedding, j)->valuedouble;
+                    (float)csilk_json_number_value(csilk_json_array_get(embedding, j));
             }
             res->count = (int)new_count;
         }
 
-        cJSON_Delete(resp);
+        csilk_json_free(resp);
         curl_easy_cleanup(curl);
     }
 

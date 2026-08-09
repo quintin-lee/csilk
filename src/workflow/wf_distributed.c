@@ -27,20 +27,21 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
     }
     CSILK_LOG_I("Workflow received remote result: %s", payload);
 
-    cJSON* root = cJSON_Parse(payload);
+    csilk_json_t* root = csilk_json_parse(payload);
     if (!root) {
         csilk_mq_next(m_ctx);
         return;
     }
 
-    cJSON* j_exec_id = cJSON_GetObjectItem(root, "exec_id");
-    cJSON* j_node_id = cJSON_GetObjectItem(root, "node_id");
-    cJSON* j_output = cJSON_GetObjectItem(root, "output");
+    csilk_json_t* j_exec_id = csilk_json_get(root, "exec_id");
+    csilk_json_t* j_node_id = csilk_json_get(root, "node_id");
+    csilk_json_t* j_output = csilk_json_get(root, "output");
 
-    if (j_exec_id && cJSON_IsString(j_exec_id) && j_output && cJSON_IsString(j_output)) {
-        const char* exec_id = j_exec_id->valuestring;
-        const char* node_id = j_node_id ? j_node_id->valuestring : nullptr;
-        const char* output_str = j_output->valuestring;
+    if (j_exec_id && csilk_json_is_string(j_exec_id) && j_output &&
+        csilk_json_is_string(j_output)) {
+        const char* exec_id = csilk_json_string_value(j_exec_id);
+        const char* node_id = j_node_id ? csilk_json_string_value(j_node_id) : nullptr;
+        const char* output_str = csilk_json_string_value(j_output);
 
         for (size_t i = 0; i < g_distributed_wf_count; i++) {
             csilk_wf_t* wf = g_distributed_wfs[i];
@@ -78,7 +79,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
         }
     }
 
-    cJSON_Delete(root);
+    csilk_json_free(root);
     csilk_mq_next(m_ctx);
 }
 

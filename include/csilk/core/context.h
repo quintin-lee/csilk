@@ -441,7 +441,7 @@ long long csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec);
  * @return A cJSON object parsed from the body, or nullptr if the body is
  *         empty or is not valid JSON.
  */
-cJSON* csilk_bind_json(csilk_ctx_t* c);
+csilk_json_t* csilk_bind_json(csilk_ctx_t* c);
 
 /**
  * @brief Bind request body to cJSON with a descriptive error message.
@@ -454,7 +454,7 @@ cJSON* csilk_bind_json(csilk_ctx_t* c);
  *                    Unchanged on success.
  * @return A cJSON object, or nullptr on parse failure (@p error is set).
  */
-cJSON* csilk_bind_json_err(csilk_ctx_t* c, const char** error);
+csilk_json_t* csilk_bind_json_err(csilk_ctx_t* c, const char** error);
 
 /**
  * @brief Get a cookie value by name from the Cookie request header.

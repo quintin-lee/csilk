@@ -46,18 +46,18 @@ apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
             val[len] = '\0';
         }
     } else if (strcmp(filter, "json_escape") == 0) {
-        cJSON* j = cJSON_CreateString(val);
-        char*  escaped = cJSON_PrintUnformatted(j);
-        size_t elen = strlen(escaped);
+        csilk_json_t* j = csilk_json_string_new(val);
+        char*         escaped = csilk_json_serialize(j, NULL);
+        size_t        elen = strlen(escaped);
         if (elen >= 2) {
             escaped[elen - 1] = '\0';
             char* inner = csilk_wf_strdup(ctx, escaped + 1);
             free(escaped);
-            cJSON_Delete(j);
+            csilk_json_free(j);
             return inner;
         }
         free(escaped);
-        cJSON_Delete(j);
+        csilk_json_free(j);
     }
     return val;
 }
@@ -103,13 +103,13 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                     memcpy(path, path_start, path_len);
                     path[path_len] = '\0';
 
-                    cJSON* json = cJSON_Parse((char*)out->value);
+                    csilk_json_t* json = csilk_json_parse((char*)out->value);
                     if (json) {
                         char* val = _csilk_json_get_path(ctx, json, path);
                         if (val) {
                             replacement = val;
                         }
-                        cJSON_Delete(json);
+                        csilk_json_free(json);
                     }
                     free(path);
                 } else {
@@ -179,13 +179,13 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                 memcpy(path, path_start, path_len);
                 path[path_len] = '\0';
 
-                cJSON* json = cJSON_Parse((char*)ctx->initial_input->value);
+                csilk_json_t* json = csilk_json_parse((char*)ctx->initial_input->value);
                 if (json) {
                     char* val = _csilk_json_get_path(ctx, json, path);
                     if (val) {
                         replacement = val;
                     }
-                    cJSON_Delete(json);
+                    csilk_json_free(json);
                 }
                 free(path);
             } else {
@@ -329,7 +329,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             tools[i].function.name = ctx->wf->tools[i].name;
             tools[i].function.description = ctx->wf->tools[i].description;
             if (ctx->wf->tools[i].parameters_json) {
-                tools[i].function.parameters_json = cJSON_Parse(ctx->wf->tools[i].parameters_json);
+                tools[i].function.parameters_json =
+                    csilk_json_parse(ctx->wf->tools[i].parameters_json);
             }
         }
         for (size_t i = 0; i < discovered_count; i++) {
@@ -338,7 +339,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             tools[idx].function.name = discovered[i].name;
             tools[idx].function.description = discovered[i].description;
             if (discovered[i].parameters_json) {
-                tools[idx].function.parameters_json = cJSON_Parse(discovered[i].parameters_json);
+                tools[idx].function.parameters_json =
+                    csilk_json_parse(discovered[i].parameters_json);
             }
         }
     }
@@ -467,11 +469,11 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     free(msgs);
     if (tools) {
         for (size_t i = 0; i < ctx->wf->tool_count; i++) {
-            cJSON_Delete(tools[i].function.parameters_json);
+            csilk_json_free(tools[i].function.parameters_json);
         }
         for (size_t i = 0; i < discovered_count; i++) {
             size_t idx = ctx->wf->tool_count + i;
-            cJSON_Delete(tools[idx].function.parameters_json);
+            csilk_json_free(tools[idx].function.parameters_json);
         }
         free(tools);
     }
@@ -543,19 +545,19 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
         return nullptr;
     }
 
-    cJSON* root = cJSON_CreateArray();
+    csilk_json_t* root = csilk_json_array();
     for (size_t i = 0; i < vres.count; i++) {
-        cJSON* item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "id", vres.results[i].id);
-        cJSON_AddNumberToObject(item, "score", (double)vres.results[i].score);
+        csilk_json_t* item = csilk_json_object();
+        csilk_json_add_string(item, "id", vres.results[i].id);
+        csilk_json_add_number(item, "score", (double)vres.results[i].score);
         if (vres.results[i].payload) {
-            cJSON_AddItemToObject(item, "payload", cJSON_Duplicate(vres.results[i].payload, 1));
+            csilk_json_add_object(item, "payload", csilk_json_copy(vres.results[i].payload));
         }
-        cJSON_AddItemToArray(root, item);
+        csilk_json_array_append(root, item);
     }
 
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_str = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     csilk_ai_embeddings_response_free(&eres);
     csilk_vector_search_response_free(&vres);

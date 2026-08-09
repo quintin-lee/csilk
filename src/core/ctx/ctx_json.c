@@ -7,7 +7,7 @@
 
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/reflection/reflect.h"
@@ -18,14 +18,14 @@
  * @return A cJSON object parsed from the request body, or nullptr if the body
  *         is nullptr or the JSON is invalid.
  * @note The caller owns the returned cJSON object and must free it with
- *       cJSON_Delete(). For error details use csilk_bind_json_err(). */
-cJSON*
+ *       csilk_json_free(). For error details use csilk_bind_json_err(). */
+csilk_json_t*
 csilk_bind_json(csilk_ctx_t* c)
 {
     if (!c || !c->request.body) {
         return nullptr;
     }
-    return cJSON_Parse(c->request.body);
+    return csilk_json_parse(c->request.body);
 }
 
 /** @brief Parse the request body as JSON with detailed error feedback.
@@ -39,7 +39,7 @@ csilk_bind_json(csilk_ctx_t* c)
  * @return A cJSON object parsed from the request body, or nullptr on failure.
  * @note The caller owns the returned cJSON object and must free it.
  *       The @p error string is a static pointer (do not free). */
-cJSON*
+csilk_json_t*
 csilk_bind_json_err(csilk_ctx_t* c, const char** error)
 {
     if (error) {
@@ -57,10 +57,10 @@ csilk_bind_json_err(csilk_ctx_t* c, const char** error)
         }
         return nullptr;
     }
-    cJSON* json = cJSON_Parse(c->request.body);
+    csilk_json_t* json = csilk_json_parse(c->request.body);
     if (!json) {
         if (error) {
-            *error = cJSON_GetErrorPtr();
+            *error = NULL;
         }
         if (error && !*error) {
             *error = "Invalid JSON";

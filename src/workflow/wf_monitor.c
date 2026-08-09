@@ -53,15 +53,15 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
     if (wf->monitor_count == 0) {
         return;
     }
-    cJSON* msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "event", event);
+    csilk_json_t* msg = csilk_json_object();
+    csilk_json_add_string(msg, "event", event);
     if (node_id) {
-        cJSON_AddStringToObject(msg, "node_id", node_id);
+        csilk_json_add_string(msg, "node_id", node_id);
     }
     if (payload) {
-        cJSON_AddStringToObject(msg, "data", payload);
+        csilk_json_add_string(msg, "data", payload);
     }
-    char* json = cJSON_PrintUnformatted(msg);
+    char* json = csilk_json_serialize(msg, NULL);
     csilk_mutex_lock(&wf->monitor_mutex);
     for (size_t i = 0; i < wf->monitor_count; i++) {
         if (csilk_is_sse(wf->monitors[i])) {
@@ -72,7 +72,7 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
     }
     csilk_mutex_unlock(&wf->monitor_mutex);
     free(json);
-    cJSON_Delete(msg);
+    csilk_json_free(msg);
 }
 
 CSILK_INTERNAL void

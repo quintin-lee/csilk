@@ -65,12 +65,12 @@ db_handler(csilk_ctx_t* c)
         csilk_string(c, 500, "Database pool not initialized.");
         return;
     }
-    cJSON* result = csilk_db_query_json(global_db_pool, "SELECT * FROM users LIMIT 1");
+    csilk_json_t* result = csilk_db_query_json(global_db_pool, "SELECT * FROM users LIMIT 1");
     if (result) {
-        char* json_str = cJSON_PrintUnformatted(result);
+        char* json_str = csilk_json_serialize(result, NULL);
         csilk_string(c, 200, json_str);
         free(json_str);
-        cJSON_Delete(result);
+        csilk_json_free(result);
     } else {
         csilk_string(c, 500, "Database query failed.");
     }
@@ -174,10 +174,10 @@ generate_bg_traffic(void* arg)
             }
             csilk_db_exec(global_db_pool,
                           "INSERT OR IGNORE INTO users (name) VALUES ('bg_demo_user')");
-            cJSON* result =
+            csilk_json_t* result =
                 csilk_db_query_json(global_db_pool, "SELECT COUNT(*) AS cnt FROM users");
             if (result) {
-                cJSON_Delete(result);
+                csilk_json_free(result);
             }
         }
 

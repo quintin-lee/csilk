@@ -8,7 +8,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
@@ -77,9 +77,9 @@ test_string_empty(void)
 static void
 test_json_content_type(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "key", "value");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_string(obj, "key", "value");
     csilk_json(c, 200, obj);
     int ok = (csilk_get_status(c) == 200) &&
              (csilk_test_ctx_count_response_headers(c, "Content-Type", "application/json") >= 1);
@@ -94,9 +94,9 @@ test_json_content_type(void)
 static void
 test_json_body_valid(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "msg", "hello");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_string(obj, "msg", "hello");
     csilk_json(c, 201, obj);
     size_t      len;
     const char* body = csilk_get_response_body(c, &len);
@@ -114,9 +114,9 @@ test_json_null_safe(void)
 {
     csilk_ctx_t* c = csilk_test_ctx_new();
     csilk_json(c, 200, nullptr);
-    cJSON* leak_test = cJSON_CreateObject();
+    csilk_json_t* leak_test = csilk_json_object();
     csilk_json(nullptr, 200, leak_test);
-    cJSON_Delete(leak_test);
+    csilk_json_free(leak_test);
     PASS();
     csilk_test_ctx_free(c);
 }

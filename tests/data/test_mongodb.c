@@ -35,16 +35,16 @@ test_mongodb_basic(void)
     /* 2. Query the collection */
     // For our MongoDB driver, query with a string that is NOT JSON is treated as
     // collection name
-    cJSON* users = csilk_db_query_json(pool, "users");
+    csilk_json_t* users = csilk_db_query_json(pool, "users");
     assert(users != nullptr);
-    assert(cJSON_IsArray(users));
+    assert(csilk_json_is_array(users));
 
     // We expect at least Alice
     int found_alice = 0;
-    for (int i = 0; i < cJSON_GetArraySize(users); i++) {
-        cJSON* user = cJSON_GetArrayItem(users, i);
-        cJSON* name = cJSON_GetObjectItem(user, "name");
-        if (name && strcmp(name->valuestring, "Alice") == 0) {
+    for (int i = 0; i < csilk_json_array_size(users); i++) {
+        csilk_json_t* user = csilk_json_array_get(users, i);
+        csilk_json_t* name = csilk_json_get(user, "name");
+        if (name && strcmp(csilk_json_string_value(name), "Alice") == 0) {
             found_alice = 1;
             break;
         }
@@ -55,7 +55,7 @@ test_mongodb_basic(void)
     const char* drop_cmd = "{\"drop\": \"users\"}";
     csilk_db_exec(pool, drop_cmd);
 
-    cJSON_Delete(users);
+    csilk_json_free(users);
     csilk_db_pool_free(pool);
     printf("test_mongodb_basic: PASS\n");
 }

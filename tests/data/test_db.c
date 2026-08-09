@@ -47,23 +47,24 @@ test_db_sqlite_insert_query(void)
                   "KEY, name TEXT)");
 
     /* Insert */
-    const char* params[] = {"Alice", nullptr};
-    cJSON* result = csilk_db_query_param_json(pool, "INSERT INTO users (name) VALUES (?)", params);
+    const char*   params[] = {"Alice", nullptr};
+    csilk_json_t* result =
+        csilk_db_query_param_json(pool, "INSERT INTO users (name) VALUES (?)", params);
     if (result) {
-        cJSON_Delete(result);
+        csilk_json_free(result);
     }
 
     /* Query */
-    cJSON* users = csilk_db_query_json(pool, "SELECT * FROM users");
+    csilk_json_t* users = csilk_db_query_json(pool, "SELECT * FROM users");
     assert(users != nullptr);
-    assert(cJSON_GetArraySize(users) == 1);
+    assert(csilk_json_array_size(users) == 1);
 
-    cJSON* user = cJSON_GetArrayItem(users, 0);
-    cJSON* name = cJSON_GetObjectItem(user, "name");
+    csilk_json_t* user = csilk_json_array_get(users, 0);
+    csilk_json_t* name = csilk_json_get(user, "name");
     assert(name != nullptr);
-    assert(strcmp(name->valuestring, "Alice") == 0);
+    assert(strcmp(csilk_json_string_value(name), "Alice") == 0);
 
-    cJSON_Delete(users);
+    csilk_json_free(users);
     csilk_db_pool_free(pool);
 
     /* Clean up */
@@ -95,14 +96,15 @@ test_db_sqlite_transactions(void)
     csilk_db_exec(pool, "COMMIT");
 
     /* Verify */
-    cJSON* accounts = csilk_db_query_json(pool, "SELECT SUM(balance) as total FROM accounts");
+    csilk_json_t* accounts =
+        csilk_db_query_json(pool, "SELECT SUM(balance) as total FROM accounts");
     assert(accounts != nullptr);
-    cJSON* acc = cJSON_GetArrayItem(accounts, 0);
-    cJSON* total = cJSON_GetObjectItem(acc, "total");
+    csilk_json_t* acc = csilk_json_array_get(accounts, 0);
+    csilk_json_t* total = csilk_json_get(acc, "total");
     assert(total != nullptr);
-    assert(strcmp(total->valuestring, "300") == 0);
+    assert(strcmp(csilk_json_string_value(total), "300") == 0);
 
-    cJSON_Delete(accounts);
+    csilk_json_free(accounts);
     csilk_db_pool_free(pool);
 
     /* Clean up */
@@ -113,12 +115,12 @@ test_db_sqlite_transactions(void)
 
 static int async_called = 0;
 static void
-on_async_query(cJSON* result, void* user_data)
+on_async_query(csilk_json_t* result, void* user_data)
 {
     (void)user_data;
     assert(result != nullptr);
-    assert(cJSON_GetArraySize(result) == 1);
-    cJSON_Delete(result);
+    assert(csilk_json_array_size(result) == 1);
+    csilk_json_free(result);
     async_called = 1;
 }
 

@@ -53,18 +53,18 @@ test_sqlite_exec_and_query(void)
     r = csilk_db_exec(pool, "INSERT INTO users (name, age) VALUES ('Bob', 25)");
     assert(r == 0);
 
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM users ORDER BY id");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM users ORDER BY id");
     assert(result != nullptr);
-    assert(cJSON_IsArray(result));
-    assert(cJSON_GetArraySize(result) == 2);
+    assert(csilk_json_is_array(result));
+    assert(csilk_json_array_size(result) == 2);
 
-    cJSON* first = cJSON_GetArrayItem(result, 0);
+    csilk_json_t* first = csilk_json_array_get(result, 0);
     assert(first != nullptr);
-    cJSON* name = cJSON_GetObjectItem(first, "name");
+    csilk_json_t* name = csilk_json_get(first, "name");
     assert(name != nullptr);
-    assert(strcmp(name->valuestring, "Alice") == 0);
+    assert(strcmp(csilk_json_string_value(name), "Alice") == 0);
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
     csilk_db_pool_free(pool);
     cleanup();
     printf("  passed\n");
@@ -86,15 +86,16 @@ test_sqlite_param_query(void)
     csilk_db_exec(pool, "INSERT INTO items (label) VALUES ('beta')");
     csilk_db_exec(pool, "INSERT INTO items (label) VALUES ('gamma')");
 
-    const char* params[] = {"beta", nullptr};
-    cJSON* result = csilk_db_query_param_json(pool, "SELECT * FROM items WHERE label = ?", params);
+    const char*   params[] = {"beta", nullptr};
+    csilk_json_t* result =
+        csilk_db_query_param_json(pool, "SELECT * FROM items WHERE label = ?", params);
     assert(result != nullptr);
-    assert(cJSON_GetArraySize(result) == 1);
+    assert(csilk_json_array_size(result) == 1);
 
-    cJSON* row = cJSON_GetArrayItem(result, 0);
-    assert(strcmp(cJSON_GetObjectItem(row, "label")->valuestring, "beta") == 0);
+    csilk_json_t* row = csilk_json_array_get(result, 0);
+    assert(strcmp(csilk_json_get_string(row, "label"), "beta") == 0);
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
     csilk_db_pool_free(pool);
     cleanup();
     printf("  passed\n");
@@ -117,14 +118,14 @@ test_sqlite_transaction_commit(void)
     csilk_db_exec(pool, "INSERT INTO tx_test (val) VALUES ('tx_data')");
     csilk_db_exec(pool, "COMMIT");
 
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM tx_test");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM tx_test");
     assert(result != nullptr);
-    assert(cJSON_GetArraySize(result) == 1);
+    assert(csilk_json_array_size(result) == 1);
 
-    cJSON* row = cJSON_GetArrayItem(result, 0);
-    assert(strcmp(cJSON_GetObjectItem(row, "val")->valuestring, "tx_data") == 0);
+    csilk_json_t* row = csilk_json_array_get(result, 0);
+    assert(strcmp(csilk_json_get_string(row, "val"), "tx_data") == 0);
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
     csilk_db_pool_free(pool);
     cleanup();
     printf("  passed\n");
@@ -148,14 +149,14 @@ test_sqlite_transaction_rollback(void)
     csilk_db_exec(pool, "INSERT INTO rb_test (val) VALUES ('rolled_back')");
     csilk_db_exec(pool, "ROLLBACK");
 
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM rb_test");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM rb_test");
     assert(result != nullptr);
-    assert(cJSON_GetArraySize(result) == 1);
+    assert(csilk_json_array_size(result) == 1);
 
-    cJSON* row = cJSON_GetArrayItem(result, 0);
-    assert(strcmp(cJSON_GetObjectItem(row, "val")->valuestring, "committed") == 0);
+    csilk_json_t* row = csilk_json_array_get(result, 0);
+    assert(strcmp(csilk_json_get_string(row, "val"), "committed") == 0);
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
     csilk_db_pool_free(pool);
     cleanup();
     printf("  passed\n");
@@ -175,7 +176,7 @@ test_sqlite_invalid_sql(void)
     int r = csilk_db_exec(pool, "INVALID SQL STATEMENT");
     assert(r == -1);
 
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM nonexistent_table");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM nonexistent_table");
     assert(result == nullptr);
 
     csilk_db_pool_free(pool);
@@ -199,16 +200,16 @@ test_sqlite_multiple_columns(void)
         "CREATE TABLE types_test (id INTEGER PRIMARY KEY, name TEXT, score REAL, active INTEGER)");
     csilk_db_exec(pool, "INSERT INTO types_test (name, score, active) VALUES ('test', 99.5, 1)");
 
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM types_test");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM types_test");
     assert(result != nullptr);
-    assert(cJSON_GetArraySize(result) == 1);
+    assert(csilk_json_array_size(result) == 1);
 
-    cJSON* row = cJSON_GetArrayItem(result, 0);
-    assert(cJSON_GetObjectItem(row, "name") != nullptr);
-    assert(cJSON_GetObjectItem(row, "score") != nullptr);
-    assert(cJSON_GetObjectItem(row, "active") != nullptr);
+    csilk_json_t* row = csilk_json_array_get(result, 0);
+    assert(csilk_json_get(row, "name") != nullptr);
+    assert(csilk_json_get(row, "score") != nullptr);
+    assert(csilk_json_get(row, "active") != nullptr);
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
     csilk_db_pool_free(pool);
     cleanup();
     printf("  passed\n");

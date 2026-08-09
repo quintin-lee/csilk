@@ -123,27 +123,28 @@ user_handler(csilk_ctx_t* c)
 static void
 login_handler(csilk_ctx_t* c)
 {
-    cJSON* json = csilk_bind_json(c);
+    csilk_json_t* json = csilk_bind_json(c);
     if (!json) {
         csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Invalid JSON");
         return;
     }
-    cJSON* username = cJSON_GetObjectItemCaseSensitive(json, "username");
-    cJSON* password = cJSON_GetObjectItemCaseSensitive(json, "password");
-    if (!cJSON_IsString(username) || !cJSON_IsString(password)) {
-        cJSON_Delete(json);
+    csilk_json_t* username = csilk_json_get(json, "username");
+    csilk_json_t* password = csilk_json_get(json, "password");
+    if (!csilk_json_is_string(username) || !csilk_json_is_string(password)) {
+        csilk_json_free(json);
         csilk_string(c, CSILK_STATUS_BAD_REQUEST, "Username and password required");
         return;
     }
-    if (strcmp(username->valuestring, "admin") == 0 && strcmp(password->valuestring, "pass") == 0) {
-        cJSON* resp = cJSON_CreateObject();
-        cJSON_AddStringToObject(resp, "token", "test123");
-        cJSON_AddStringToObject(resp, "status", "ok");
+    if (strcmp(csilk_json_string_value(username), "admin") == 0 &&
+        strcmp(csilk_json_string_value(password), "pass") == 0) {
+        csilk_json_t* resp = csilk_json_object();
+        csilk_json_add_string(resp, "token", "test123");
+        csilk_json_add_string(resp, "status", "ok");
         csilk_json(c, CSILK_STATUS_OK, resp);
     } else {
         csilk_string(c, CSILK_STATUS_UNAUTHORIZED, "Invalid credentials");
     }
-    cJSON_Delete(json);
+    csilk_json_free(json);
 }
 
 static int
@@ -166,9 +167,9 @@ protected_handler(csilk_ctx_t* c)
 static void
 api_handler(csilk_ctx_t* c)
 {
-    cJSON* data = cJSON_CreateObject();
-    cJSON_AddStringToObject(data, "key", "value");
-    cJSON_AddNumberToObject(data, "num", 42);
+    csilk_json_t* data = csilk_json_object();
+    csilk_json_add_string(data, "key", "value");
+    csilk_json_add_number(data, "num", 42);
     csilk_json(c, CSILK_STATUS_OK, data);
 }
 

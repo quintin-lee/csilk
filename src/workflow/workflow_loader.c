@@ -8,7 +8,7 @@
 #include <string.h>
 #include <yaml.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
 
@@ -85,66 +85,68 @@ csilk_wf_from_json(const char* json_str)
 
     CSILK_LOG_T("WorkflowLoader: parsing workflow from JSON string");
 
-    cJSON* root = cJSON_Parse(json_str);
+    csilk_json_t* root = csilk_json_parse(json_str);
     if (!root) {
         CSILK_LOG_E("WorkflowLoader: failed to parse JSON string");
         return nullptr;
     }
 
-    cJSON*      name_item = cJSON_GetObjectItem(root, "name");
-    const char* wf_name = (cJSON_IsString(name_item)) ? name_item->valuestring : "DeclarativeWF";
+    csilk_json_t* name_item = csilk_json_get(root, "name");
+    const char*   wf_name =
+        (csilk_json_is_string(name_item)) ? csilk_json_string_value(name_item) : "DeclarativeWF";
 
     csilk_wf_t* wf = csilk_wf_new(wf_name);
     if (!wf) {
         CSILK_LOG_E("WorkflowLoader: failed to create workflow instance '%s'", wf_name);
-        cJSON_Delete(root);
+        csilk_json_free(root);
         return nullptr;
     }
 
-    cJSON* steps = cJSON_GetObjectItem(root, "steps");
-    if (cJSON_IsArray(steps)) {
-        int count = cJSON_GetArraySize(steps);
+    csilk_json_t* steps = csilk_json_get(root, "steps");
+    if (csilk_json_is_array(steps)) {
+        int count = csilk_json_array_size(steps);
         for (int i = 0; i < count; i++) {
-            cJSON* step = cJSON_GetArrayItem(steps, i);
-            cJSON* id_item = cJSON_GetObjectItem(step, "id");
-            cJSON* type_item = cJSON_GetObjectItem(step, "type");
+            csilk_json_t* step = csilk_json_array_get(steps, i);
+            csilk_json_t* id_item = csilk_json_get(step, "id");
+            csilk_json_t* type_item = csilk_json_get(step, "type");
 
-            if (!cJSON_IsString(id_item)) {
+            if (!csilk_json_is_string(id_item)) {
                 CSILK_LOG_W("WorkflowLoader: step skipped - missing 'id' field");
                 continue;
             }
-            const char* id = id_item->valuestring;
-            const char* type = cJSON_IsString(type_item) ? type_item->valuestring : "handler";
+            const char* id = csilk_json_string_value(id_item);
+            const char* type =
+                csilk_json_is_string(type_item) ? csilk_json_string_value(type_item) : "handler";
 
             csilk_wf_node_t* node = nullptr;
             if (strcmp(type, "ai") == 0) {
-                cJSON*            config = cJSON_GetObjectItem(step, "config");
+                csilk_json_t*     config = csilk_json_get(step, "config");
                 csilk_ai_config_t aic = {0};
-                if (cJSON_IsObject(config)) {
-                    cJSON* model = cJSON_GetObjectItem(config, "model");
-                    cJSON* prompt = cJSON_GetObjectItem(config, "prompt");
-                    cJSON* sys = cJSON_GetObjectItem(config, "system_msg");
-                    if (cJSON_IsString(model)) {
-                        aic.model = model->valuestring;
+                if (csilk_json_is_object(config)) {
+                    csilk_json_t* model = csilk_json_get(config, "model");
+                    csilk_json_t* prompt = csilk_json_get(config, "prompt");
+                    csilk_json_t* sys = csilk_json_get(config, "system_msg");
+                    if (csilk_json_is_string(model)) {
+                        aic.model = csilk_json_string_value(model);
                     }
-                    if (cJSON_IsString(prompt)) {
-                        aic.prompt = prompt->valuestring;
+                    if (csilk_json_is_string(prompt)) {
+                        aic.prompt = csilk_json_string_value(prompt);
                     }
-                    if (cJSON_IsString(sys)) {
-                        aic.system_msg = sys->valuestring;
+                    if (csilk_json_is_string(sys)) {
+                        aic.system_msg = csilk_json_string_value(sys);
                     }
                 }
                 node = csilk_wf_add_ai(wf, id, &aic);
             } else {
-                cJSON* handler_item = cJSON_GetObjectItem(step, "handler");
-                if (cJSON_IsString(handler_item)) {
-                    csilk_wf_handler_t h = find_handler(handler_item->valuestring);
+                csilk_json_t* handler_item = csilk_json_get(step, "handler");
+                if (csilk_json_is_string(handler_item)) {
+                    csilk_wf_handler_t h = find_handler(csilk_json_string_value(handler_item));
                     if (h) {
                         node = csilk_wf_add(wf, id, h, nullptr);
                     } else {
                         CSILK_LOG_W("WorkflowLoader: handler '%s' not "
                                     "registered for step '%s'",
-                                    handler_item->valuestring,
+                                    csilk_json_string_value(handler_item),
                                     id);
                     }
                 }
@@ -153,14 +155,15 @@ csilk_wf_from_json(const char* json_str)
             if (node) {
                 CSILK_LOG_D("WorkflowLoader: loaded step '%s' (type: '%s')", id, type);
 
-                cJSON* entry_item = cJSON_GetObjectItem(step, "entry");
-                if (cJSON_IsTrue(entry_item)) {
+                csilk_json_t* entry_item = csilk_json_get(step, "entry");
+                if (csilk_json_is_true(entry_item)) {
                     csilk_wf_node_set_entry(node, 1);
                     CSILK_LOG_D("WorkflowLoader: step '%s' marked as entry point", id);
                 }
 
-                cJSON* join_item = cJSON_GetObjectItem(step, "join");
-                if (cJSON_IsString(join_item) && strcmp(join_item->valuestring, "or") == 0) {
+                csilk_json_t* join_item = csilk_json_get(step, "join");
+                if (csilk_json_is_string(join_item) &&
+                    strcmp(csilk_json_string_value(join_item), "or") == 0) {
                     csilk_wf_node_set_join(node, CSILK_WF_JOIN_OR);
                     CSILK_LOG_D("WorkflowLoader: step '%s' join policy set to OR", id);
                 }
@@ -171,28 +174,29 @@ csilk_wf_from_json(const char* json_str)
     }
 
     // Pass 2: Connections
-    cJSON* conns = cJSON_GetObjectItem(root, "connections");
-    if (cJSON_IsArray(conns)) {
-        int count = cJSON_GetArraySize(conns);
+    csilk_json_t* conns = csilk_json_get(root, "connections");
+    if (csilk_json_is_array(conns)) {
+        int count = csilk_json_array_size(conns);
         for (int i = 0; i < count; i++) {
-            cJSON* conn = cJSON_GetArrayItem(conns, i);
-            cJSON* from_item = cJSON_GetObjectItem(conn, "from");
-            cJSON* to_item = cJSON_GetObjectItem(conn, "to");
-            if (!cJSON_IsString(from_item) || !cJSON_IsString(to_item)) {
+            csilk_json_t* conn = csilk_json_array_get(conns, i);
+            csilk_json_t* from_item = csilk_json_get(conn, "from");
+            csilk_json_t* to_item = csilk_json_get(conn, "to");
+            if (!csilk_json_is_string(from_item) || !csilk_json_is_string(to_item)) {
                 CSILK_LOG_W("WorkflowLoader: connection skipped - missing or "
                             "invalid 'from'/'to' fields");
                 continue;
             }
 
-            csilk_wf_node_t* n_from = csilk_wf_get_node(wf, from_item->valuestring);
-            csilk_wf_node_t* n_to = csilk_wf_get_node(wf, to_item->valuestring);
+            csilk_wf_node_t* n_from = csilk_wf_get_node(wf, csilk_json_string_value(from_item));
+            csilk_wf_node_t* n_to = csilk_wf_get_node(wf, csilk_json_string_value(to_item));
 
             if (n_from && n_to) {
-                cJSON*      cond_item = cJSON_GetObjectItem(conn, "condition");
-                cJSON*      loop_item = cJSON_GetObjectItem(conn, "loop");
-                const char* cond = cJSON_IsString(cond_item) ? cond_item->valuestring : nullptr;
+                csilk_json_t* cond_item = csilk_json_get(conn, "condition");
+                csilk_json_t* loop_item = csilk_json_get(conn, "loop");
+                const char*   cond =
+                    csilk_json_is_string(cond_item) ? csilk_json_string_value(cond_item) : nullptr;
 
-                if (cJSON_IsTrue(loop_item)) {
+                if (csilk_json_is_true(loop_item)) {
                     csilk_wf_on_loop(n_from, cond, n_to);
                 } else if (cond) {
                     csilk_wf_on(n_from, cond, n_to);
@@ -201,39 +205,40 @@ csilk_wf_from_json(const char* json_str)
                 }
                 CSILK_LOG_D("WorkflowLoader: loaded connection '%s' -> '%s' "
                             "(condition: '%s', loop: %d)",
-                            from_item->valuestring,
-                            to_item->valuestring,
+                            csilk_json_string_value(from_item),
+                            csilk_json_string_value(to_item),
                             cond ? cond : "none",
-                            cJSON_IsTrue(loop_item));
+                            csilk_json_is_true(loop_item));
             } else {
                 CSILK_LOG_W("WorkflowLoader: connection skipped - failed to find "
                             "nodes for connection '%s' -> '%s'",
-                            from_item->valuestring,
-                            to_item->valuestring);
+                            csilk_json_string_value(from_item),
+                            csilk_json_string_value(to_item));
             }
         }
     }
 
     // Pass 3: Error Targets
-    if (cJSON_IsArray(steps)) {
-        int count = cJSON_GetArraySize(steps);
+    if (csilk_json_is_array(steps)) {
+        int count = csilk_json_array_size(steps);
         for (int i = 0; i < count; i++) {
-            cJSON* step = cJSON_GetArrayItem(steps, i);
-            cJSON* id_item = cJSON_GetObjectItem(step, "id");
-            cJSON* err_item = cJSON_GetObjectItem(step, "on_error");
-            if (cJSON_IsString(id_item) && cJSON_IsString(err_item)) {
-                csilk_wf_node_t* n = csilk_wf_get_node(wf, id_item->valuestring);
-                csilk_wf_node_t* err_target = csilk_wf_get_node(wf, err_item->valuestring);
+            csilk_json_t* step = csilk_json_array_get(steps, i);
+            csilk_json_t* id_item = csilk_json_get(step, "id");
+            csilk_json_t* err_item = csilk_json_get(step, "on_error");
+            if (csilk_json_is_string(id_item) && csilk_json_is_string(err_item)) {
+                csilk_wf_node_t* n = csilk_wf_get_node(wf, csilk_json_string_value(id_item));
+                csilk_wf_node_t* err_target =
+                    csilk_wf_get_node(wf, csilk_json_string_value(err_item));
                 if (n && err_target) {
                     csilk_wf_on_error(n, err_target);
                     CSILK_LOG_D("WorkflowLoader: registered error route '%s' -> '%s'",
-                                id_item->valuestring,
-                                err_item->valuestring);
+                                csilk_json_string_value(id_item),
+                                csilk_json_string_value(err_item));
                 } else {
                     CSILK_LOG_W("WorkflowLoader: failed to set error target - "
                                 "step '%s' or error step '%s' not found",
-                                id_item->valuestring,
-                                err_item->valuestring);
+                                csilk_json_string_value(id_item),
+                                csilk_json_string_value(err_item));
                 }
             }
         }
@@ -241,7 +246,7 @@ csilk_wf_from_json(const char* json_str)
 
     CSILK_LOG_I("WorkflowLoader: workflow '%s' successfully loaded from JSON", wf_name);
 
-    cJSON_Delete(root);
+    csilk_json_free(root);
     return wf;
 }
 
@@ -264,10 +269,10 @@ csilk_wf_from_json(const char* json_str)
  * @param path Filesystem path to the YAML file.
  * @return Root cJSON node (object or array), or nullptr if the file
  *         cannot be opened or parsed.
- * @note The caller must free the returned cJSON with cJSON_Delete().
+ * @note The caller must free the returned cJSON with csilk_json_free().
  *       YAML boolean values ("true"/"false") are converted to cJSON
  *       boolean. All other scalars are treated as strings. */
-static cJSON*
+static csilk_json_t*
 parse_yaml_file(const char* path)
 {
     FILE* fh = fopen(path, "rb");
@@ -284,10 +289,10 @@ parse_yaml_file(const char* path)
     }
     yaml_parser_set_input_file(&parser, fh);
 
-    cJSON* root = nullptr;
+    csilk_json_t* root = nullptr;
     enum { WF_YAML_MAX_DEPTH = 64 };
-    cJSON* stack[WF_YAML_MAX_DEPTH] = {nullptr};
-    int    stack_ptr = 0;
+    csilk_json_t* stack[WF_YAML_MAX_DEPTH] = {nullptr};
+    int           stack_ptr = 0;
 
     // To handle mapping keys:
     char* current_key = nullptr;
@@ -307,15 +312,15 @@ parse_yaml_file(const char* path)
                 done = 1;
                 break;
             }
-            cJSON* obj = cJSON_CreateObject();
+            csilk_json_t* obj = csilk_json_object();
             if (!root) {
                 root = obj;
             } else {
-                cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
-                if (parent && cJSON_IsArray(parent)) {
-                    cJSON_AddItemToArray(parent, obj);
-                } else if (parent && cJSON_IsObject(parent) && current_key) {
-                    cJSON_AddItemToObject(parent, current_key, obj);
+                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                if (parent && csilk_json_is_array(parent)) {
+                    csilk_json_array_append(parent, obj);
+                } else if (parent && csilk_json_is_object(parent) && current_key) {
+                    csilk_json_add_object(parent, current_key, obj);
                     free(current_key);
                     current_key = nullptr;
                 }
@@ -329,15 +334,15 @@ parse_yaml_file(const char* path)
                 done = 1;
                 break;
             }
-            cJSON* arr = cJSON_CreateArray();
+            csilk_json_t* arr = csilk_json_array();
             if (!root) {
                 root = arr;
             } else {
-                cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
-                if (parent && cJSON_IsArray(parent)) {
-                    cJSON_AddItemToArray(parent, arr);
-                } else if (parent && cJSON_IsObject(parent) && current_key) {
-                    cJSON_AddItemToObject(parent, current_key, arr);
+                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                if (parent && csilk_json_is_array(parent)) {
+                    csilk_json_array_append(parent, arr);
+                } else if (parent && csilk_json_is_object(parent) && current_key) {
+                    csilk_json_add_object(parent, current_key, arr);
                     free(current_key);
                     current_key = nullptr;
                 }
@@ -346,36 +351,36 @@ parse_yaml_file(const char* path)
             break;
         }
         case YAML_SCALAR_EVENT: {
-            cJSON* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+            csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
             if (parent) {
-                if (cJSON_IsObject(parent)) {
+                if (csilk_json_is_object(parent)) {
                     if (!current_key) {
                         current_key = strdup((char*)event.data.scalar.value);
                     } else {
-                        const char* val = (char*)event.data.scalar.value;
-                        cJSON*      scalar = nullptr;
+                        const char*   val = (char*)event.data.scalar.value;
+                        csilk_json_t* scalar = nullptr;
                         if (strcmp(val, "true") == 0) {
-                            scalar = cJSON_CreateBool(1);
+                            scalar = csilk_json_bool(1);
                         } else if (strcmp(val, "false") == 0) {
-                            scalar = cJSON_CreateBool(0);
+                            scalar = csilk_json_bool(0);
                         } else {
-                            scalar = cJSON_CreateString(val);
+                            scalar = csilk_json_string_new(val);
                         }
-                        cJSON_AddItemToObject(parent, current_key, scalar);
+                        csilk_json_add_object(parent, current_key, scalar);
                         free(current_key);
                         current_key = nullptr;
                     }
-                } else if (cJSON_IsArray(parent)) {
-                    const char* val = (char*)event.data.scalar.value;
-                    cJSON*      scalar = nullptr;
+                } else if (csilk_json_is_array(parent)) {
+                    const char*   val = (char*)event.data.scalar.value;
+                    csilk_json_t* scalar = nullptr;
                     if (strcmp(val, "true") == 0) {
-                        scalar = cJSON_CreateBool(1);
+                        scalar = csilk_json_bool(1);
                     } else if (strcmp(val, "false") == 0) {
-                        scalar = cJSON_CreateBool(0);
+                        scalar = csilk_json_bool(0);
                     } else {
-                        scalar = cJSON_CreateString(val);
+                        scalar = csilk_json_string_new(val);
                     }
-                    cJSON_AddItemToArray(parent, scalar);
+                    csilk_json_array_append(parent, scalar);
                 }
             }
             break;
@@ -416,13 +421,13 @@ csilk_wf_t*
 csilk_wf_load_yaml(const char* path)
 {
     CSILK_LOG_I("WorkflowLoader: loading declarative workflow from YAML file '%s'", path);
-    cJSON* root = parse_yaml_file(path);
+    csilk_json_t* root = parse_yaml_file(path);
     if (!root) {
         CSILK_LOG_E("WorkflowLoader: failed to parse YAML structure from file '%s'", path);
         return nullptr;
     }
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_str = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
     csilk_wf_t* wf = csilk_wf_from_json(json_str);
     free(json_str);
     return wf;

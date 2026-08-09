@@ -29,7 +29,7 @@
 #include <time.h>
 #include <csilk/core/sys_io.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 
@@ -70,28 +70,28 @@ _ai_broadcast(const char* event,
         return;
     }
 
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "event", event);
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "event", event);
     if (model) {
-        cJSON_AddStringToObject(root, "model", model);
+        csilk_json_add_string(root, "model", model);
     }
-    cJSON_AddNumberToObject(root, "status", status);
-    cJSON_AddNumberToObject(root, "prompt_tokens", (double)prompt_tokens);
-    cJSON_AddNumberToObject(root, "completion_tokens", (double)completion_tokens);
-    cJSON_AddNumberToObject(root, "duration_ms", (double)duration_us / 1000.0);
+    csilk_json_add_number(root, "status", status);
+    csilk_json_add_number(root, "prompt_tokens", (double)prompt_tokens);
+    csilk_json_add_number(root, "completion_tokens", (double)completion_tokens);
+    csilk_json_add_number(root, "duration_ms", (double)duration_us / 1000.0);
     if (error) {
-        cJSON_AddStringToObject(root, "error", error);
+        csilk_json_add_string(root, "error", error);
     }
-    cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
+    csilk_json_add_number(root, "timestamp", (double)time(nullptr));
 
-    char* json = cJSON_PrintUnformatted(root);
+    char* json = csilk_json_serialize(root, NULL);
     csilk_mutex_lock(&g_ai_monitor_mutex);
     for (size_t i = 0; i < g_ai_monitor_count; i++) {
         csilk_ws_send(g_ai_monitors[i], (uint8_t*)json, strlen(json), 0x1);
     }
     csilk_mutex_unlock(&g_ai_monitor_mutex);
     free(json);
-    cJSON_Delete(root);
+    csilk_json_free(root);
 }
 
 void
@@ -114,15 +114,15 @@ csilk_ai_stats_to_json(const csilk_ai_stats_t* stats)
     if (!stats) {
         return nullptr;
     }
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "requests_total", (double)stats->requests_total);
-    cJSON_AddNumberToObject(root, "tokens_total", (double)stats->tokens_total);
-    cJSON_AddNumberToObject(root, "prompt_tokens", (double)stats->prompt_tokens);
-    cJSON_AddNumberToObject(root, "completion_tokens", (double)stats->completion_tokens);
-    cJSON_AddNumberToObject(root, "errors_total", (double)stats->errors_total);
-    cJSON_AddNumberToObject(root, "duration_us_total", (double)stats->duration_us_total);
-    char* json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_number(root, "requests_total", (double)stats->requests_total);
+    csilk_json_add_number(root, "tokens_total", (double)stats->tokens_total);
+    csilk_json_add_number(root, "prompt_tokens", (double)stats->prompt_tokens);
+    csilk_json_add_number(root, "completion_tokens", (double)stats->completion_tokens);
+    csilk_json_add_number(root, "errors_total", (double)stats->errors_total);
+    csilk_json_add_number(root, "duration_us_total", (double)stats->duration_us_total);
+    char* json = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
     return json;
 }
 

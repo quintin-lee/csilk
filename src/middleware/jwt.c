@@ -62,8 +62,11 @@ constant_time_compare(const uint8_t* a, const uint8_t* b, size_t len)
  * @brief Internal: Generate a JWT token with a specified algorithm.
  */
 static char*
-jwt_generate_internal(
-    csilk_ctx_t* c, cJSON* payload, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
+jwt_generate_internal(csilk_ctx_t*    c,
+                      csilk_json_t*   payload,
+                      const char*     key,
+                      size_t          key_len,
+                      csilk_jwt_alg_t algorithm)
 {
     if (!payload || !key) {
         CSILK_LOG_E("JWT: Generation failed: invalid arguments");
@@ -94,7 +97,7 @@ jwt_generate_internal(
     free(header_json);
 
     /* Step 2: Serialize payload to JSON, then base64url-encode. */
-    char* payload_str = cJSON_PrintUnformatted(payload);
+    char* payload_str = csilk_json_serialize(payload, NULL);
     if (!payload_str) {
         free(header_b64);
         return nullptr;
@@ -187,14 +190,17 @@ jwt_generate_internal(
 }
 
 char*
-csilk_jwt_generate(csilk_ctx_t* c, cJSON* payload, const char* secret)
+csilk_jwt_generate(csilk_ctx_t* c, csilk_json_t* payload, const char* secret)
 {
     return jwt_generate_internal(c, payload, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
 }
 
 char*
-csilk_jwt_generate_ex(
-    csilk_ctx_t* c, cJSON* payload, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
+csilk_jwt_generate_ex(csilk_ctx_t*    c,
+                      csilk_json_t*   payload,
+                      const char*     key,
+                      size_t          key_len,
+                      csilk_jwt_alg_t algorithm)
 {
     return jwt_generate_internal(c, payload, key, key_len, algorithm);
 }
@@ -202,7 +208,7 @@ csilk_jwt_generate_ex(
 /**
  * @brief Internal: Verify a JWT token with a specified algorithm.
  */
-static cJSON*
+static csilk_json_t*
 jwt_verify_internal(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
 {
@@ -285,18 +291,18 @@ jwt_verify_internal(
     }
     p_json_str[p_decoded_len] = '\0';
 
-    cJSON* payload = cJSON_Parse((const char*)p_json_str);
+    csilk_json_t* payload = csilk_json_parse((const char*)p_json_str);
     free(p_json_str);
     return payload;
 }
 
-cJSON*
+csilk_json_t*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 {
     return jwt_verify_internal(c, token, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
 }
 
-cJSON*
+csilk_json_t*
 csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
 {
@@ -330,8 +336,8 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
         return;
     }
 
-    const char* token = auth_header + 7;
-    cJSON*      payload = jwt_verify_internal(c, token, key, key_len, algorithm);
+    const char*   token = auth_header + 7;
+    csilk_json_t* payload = jwt_verify_internal(c, token, key, key_len, algorithm);
     if (!payload) {
         csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Invalid or expired token");
         csilk_abort(c);
@@ -339,10 +345,10 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
     }
 
     /* Check expiration if 'exp' claim exists */
-    cJSON* exp = cJSON_GetObjectItemCaseSensitive(payload, "exp");
-    if (cJSON_IsNumber(exp)) {
-        if ((double)time(nullptr) > exp->valuedouble) {
-            cJSON_Delete(payload);
+    csilk_json_t* exp = csilk_json_get(payload, "exp");
+    if (csilk_json_is_number(exp)) {
+        if ((double)time(nullptr) > csilk_json_number_value(exp)) {
+            csilk_json_free(payload);
             csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Token expired");
             csilk_abort(c);
             return;
@@ -365,12 +371,12 @@ csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
     if (!c) {
         return nullptr;
     }
-    cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+    csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     if (!payload) {
         return nullptr;
     }
-    char* json_str = cJSON_PrintUnformatted(payload);
-    cJSON_Delete(payload);
+    char* json_str = csilk_json_serialize(payload, NULL);
+    csilk_json_free(payload);
     csilk_set(c, "jwt_payload", nullptr);
     return json_str;
 }
@@ -381,9 +387,9 @@ csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
     if (!c) {
         return;
     }
-    cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+    csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     if (payload) {
-        cJSON_Delete(payload);
+        csilk_json_free(payload);
         csilk_set(c, "jwt_payload", nullptr);
     }
 }
@@ -394,11 +400,11 @@ csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* se
     if (!payload_json || !secret) {
         return nullptr;
     }
-    cJSON* payload = cJSON_Parse(payload_json);
+    csilk_json_t* payload = csilk_json_parse(payload_json);
     if (!payload) {
         return nullptr;
     }
     char* token = csilk_jwt_generate(c, payload, secret);
-    cJSON_Delete(payload);
+    csilk_json_free(payload);
     return token;
 }

@@ -80,15 +80,15 @@ test_perm_simple_role_from_jwt()
     printf("Testing simple perm (Role from JWT)...\n");
     csilk_ctx_t* c = csilk_test_ctx_new();
 
-    cJSON* jwt = cJSON_CreateObject();
-    cJSON_AddStringToObject(jwt, "role", "editor");
+    csilk_json_t* jwt = csilk_json_object();
+    csilk_json_add_string(jwt, "role", "editor");
     csilk_set(c, "jwt_payload", jwt);
 
     csilk_perm_simple_allow("editor", "edit", "*");
     csilk_perm_require(c, "edit", "any");
     assert(csilk_is_aborted(c) == 0);
 
-    cJSON_Delete(jwt);
+    csilk_json_free(jwt);
     csilk_test_ctx_free(c);
     printf("test_perm_simple_role_from_jwt passed\n");
 }
