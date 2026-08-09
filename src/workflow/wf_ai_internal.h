@@ -12,7 +12,7 @@
 
 #include "csilk/csilk.h"
 
-char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path);
+char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path);
 
 csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data);
 

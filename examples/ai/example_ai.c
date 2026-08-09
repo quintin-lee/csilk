@@ -153,17 +153,17 @@ main()
     };
 
     /* Define a tool using cJSON */
-    cJSON* params = cJSON_CreateObject();
-    cJSON_AddStringToObject(params, "type", "object");
-    cJSON* props = cJSON_CreateObject();
-    cJSON* loc = cJSON_CreateObject();
-    cJSON_AddStringToObject(loc, "type", "string");
-    cJSON_AddStringToObject(loc, "description", "The city and state, e.g. San Francisco, CA");
-    cJSON_AddItemToObject(props, "location", loc);
-    cJSON_AddItemToObject(params, "properties", props);
-    cJSON* req_arr = cJSON_CreateArray();
-    cJSON_AddItemToArray(req_arr, cJSON_CreateString("location"));
-    cJSON_AddItemToObject(params, "required", req_arr);
+    csilk_json_t* params = csilk_json_object();
+    csilk_json_add_string(params, "type", "object");
+    csilk_json_t* props = csilk_json_object();
+    csilk_json_t* loc = csilk_json_object();
+    csilk_json_add_string(loc, "type", "string");
+    csilk_json_add_string(loc, "description", "The city and state, e.g. San Francisco, CA");
+    csilk_json_add_object(props, "location", loc);
+    csilk_json_add_object(params, "properties", props);
+    csilk_json_t* req_arr = csilk_json_array();
+    csilk_json_array_append(req_arr, csilk_json_string_new("location"));
+    csilk_json_add_object(params, "required", req_arr);
 
     csilk_ai_tool_t tools[1] = {
         {.type = "function",
@@ -197,7 +197,7 @@ main()
                 res.error_message ? res.error_message : "Unknown error");
         csilk_ai_chat_response_free(&res);
     }
-    cJSON_Delete(params);
+    csilk_json_free(params);
 
     csilk_ai_free(ai);
     return 0;

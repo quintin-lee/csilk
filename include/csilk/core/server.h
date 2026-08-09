@@ -247,7 +247,7 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  * @return A cJSON array of row objects (caller must free with cJSON_Delete),
  *         or nullptr on failure.
  */
-cJSON* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
+csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
 /**
  * @brief Execute a statement that returns no result rows.
@@ -273,7 +273,8 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  *               The array must end with a nullptr sentinel.
  * @return A cJSON array (caller must free), or nullptr on failure.
  */
-cJSON* csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
+csilk_json_t*
+csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /* --- Logging API --- */
 
@@ -313,7 +314,7 @@ CSILK_INTERNAL void _csilk_log_structured(csilk_log_level_t lv,
                                           const char*       file,
                                           int               line,
                                           const char*       func,
-                                          cJSON*            extra,
+                                          csilk_json_t*     extra,
                                           const char*       fmt,
                                           ...);
 
@@ -331,7 +332,7 @@ void csilk_log_set_request_id(const char* request_id);
  *  string pairs terminated by a nullptr key.
  *
  *  @code
- *    cJSON* fields = csilk_log_make_kv("method", method, "path", path, nullptr);
+ *    csilk_json_t* fields = csilk_log_make_kv("method", method, "path", path, nullptr);
  *    _csilk_log_structured(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, fields,
  *                          "request completed");
  *  @endcode
@@ -339,7 +340,7 @@ void csilk_log_set_request_id(const char* request_id);
  *  @param key   First key.
  *  @param ...   Value, then key, value, ... terminated by nullptr.
  *  @return New cJSON object (caller owns). */
-cJSON* csilk_log_make_kv(const char* key, ...);
+csilk_json_t* csilk_log_make_kv(const char* key, ...);
 
 /** @name Logging Macros
  *  Convenience macros that capture source location.
@@ -366,7 +367,7 @@ cJSON* csilk_log_make_kv(const char* key, ...);
 /** @brief Log a structured JSON message (only meaningful when json_format is
  *  on).
  *  @param level Log level.
- *  @param extra  cJSON* with extra fields (can be nullptr).
+ *  @param extra  csilk_json_t* with extra fields (can be nullptr).
  *  @param ...    printf-style format and args for the message string. */
 #define CSILK_LOG_STRUCT(level, extra, ...)                                                        \
     _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)

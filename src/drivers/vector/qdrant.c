@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 typedef struct {
     char* endpoint;
@@ -84,24 +84,24 @@ qdrant_upsert(void*                       state_ptr,
         return -1;
     }
 
-    cJSON* root = cJSON_CreateObject();
-    cJSON* points_arr = cJSON_AddArrayToObject(root, "points");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_t* points_arr = csilk_json_add_array_obj(root, "points", csilk_json_array());
     for (size_t i = 0; i < count; i++) {
-        cJSON* p = cJSON_CreateObject();
-        cJSON_AddStringToObject(p, "id", points[i].id);
+        csilk_json_t* p = csilk_json_object();
+        csilk_json_add_string(p, "id", points[i].id);
 
-        cJSON* vec_arr = cJSON_AddArrayToObject(p, "vector");
+        csilk_json_t* vec_arr = csilk_json_add_array_obj(p, "vector", csilk_json_array());
         for (size_t d = 0; d < points[i].dimension; d++) {
-            cJSON_AddItemToArray(vec_arr, cJSON_CreateNumber(points[i].vector[d]));
+            csilk_json_array_append(vec_arr, csilk_json_number(points[i].vector[d]));
         }
         if (points[i].payload) {
-            cJSON_AddItemToObject(p, "payload", cJSON_Duplicate(points[i].payload, 1));
+            csilk_json_add_object(p, "payload", csilk_json_copy(points[i].payload));
         }
-        cJSON_AddItemToArray(points_arr, p);
+        csilk_json_array_append(points_arr, p);
     }
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points", state->endpoint, collection);
@@ -156,16 +156,16 @@ qdrant_search(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* root = cJSON_CreateObject();
-    cJSON* vec_arr = cJSON_AddArrayToObject(root, "vector");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_t* vec_arr = csilk_json_add_array_obj(root, "vector", csilk_json_array());
     for (size_t d = 0; d < dimension; d++) {
-        cJSON_AddItemToArray(vec_arr, cJSON_CreateNumber(vector[d]));
+        csilk_json_array_append(vec_arr, csilk_json_number(vector[d]));
     }
-    cJSON_AddNumberToObject(root, "limit", limit);
-    cJSON_AddBoolToObject(root, "with_payload", 1);
+    csilk_json_add_number(root, "limit", limit);
+    csilk_json_add_bool(root, "with_payload", 1);
 
-    char* json_body = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* json_body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points/search", state->endpoint, collection);
@@ -206,7 +206,7 @@ qdrant_search(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* resp = cJSON_Parse(cr.body);
+    csilk_json_t* resp = csilk_json_parse(cr.body);
     free(cr.body);
     curl_easy_cleanup(curl);
 
@@ -215,30 +215,30 @@ qdrant_search(void*                           state_ptr,
         return -1;
     }
 
-    cJSON* result_arr = cJSON_GetObjectItem(resp, "result");
-    if (cJSON_IsArray(result_arr)) {
-        res->count = cJSON_GetArraySize(result_arr);
+    csilk_json_t* result_arr = csilk_json_get(resp, "result");
+    if (csilk_json_is_array(result_arr)) {
+        res->count = csilk_json_array_size(result_arr);
         res->results = calloc(res->count, sizeof(csilk_vector_search_result_t));
         for (size_t i = 0; i < res->count; i++) {
-            cJSON* item = cJSON_GetArrayItem(result_arr, (int)i);
-            cJSON* id = cJSON_GetObjectItem(item, "id");
+            csilk_json_t* item = csilk_json_array_get(result_arr, (int)i);
+            csilk_json_t* id = csilk_json_get(item, "id");
             if (id) {
-                if (cJSON_IsString(id)) {
-                    res->results[i].id = strdup(id->valuestring);
-                } else if (cJSON_IsNumber(id)) {
+                if (csilk_json_is_string(id)) {
+                    res->results[i].id = strdup(csilk_json_string_value(id));
+                } else if (csilk_json_is_number(id)) {
                     char buf[32];
-                    snprintf(buf, sizeof(buf), "%d", id->valueint);
+                    snprintf(buf, sizeof(buf), "%d", csilk_json_int_value(id));
                     res->results[i].id = strdup(buf);
                 }
             }
-            cJSON* score = cJSON_GetObjectItem(item, "score");
+            csilk_json_t* score = csilk_json_get(item, "score");
             if (score) {
-                res->results[i].score = (float)score->valuedouble;
+                res->results[i].score = (float)csilk_json_number_value(score);
             }
 
-            cJSON* payload = cJSON_GetObjectItem(item, "payload");
+            csilk_json_t* payload = csilk_json_get(item, "payload");
             if (payload) {
-                res->results[i].payload = cJSON_Duplicate(payload, 1);
+                res->results[i].payload = csilk_json_copy(payload);
             }
         }
     } else {
@@ -246,7 +246,7 @@ qdrant_search(void*                           state_ptr,
         res->results = nullptr;
     }
 
-    cJSON_Delete(resp);
+    csilk_json_free(resp);
     return 0;
 }
 

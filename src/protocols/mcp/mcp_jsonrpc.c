@@ -1,4 +1,4 @@
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +12,7 @@ csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
         return nullptr;
     }
 
-    cJSON* root = cJSON_ParseWithLength(buf, len);
+    csilk_json_t* root = csilk_json_parse_len(buf, len);
     if (!root) {
         return nullptr;
     }
@@ -24,48 +24,48 @@ csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
         msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     }
     if (!msg) {
-        cJSON_Delete(root);
+        csilk_json_free(root);
         return nullptr;
     }
     memset(msg, 0, sizeof(csilk_mcp_msg_t));
 
-    cJSON* j_ver = cJSON_GetObjectItem(root, "jsonrpc");
-    if (j_ver && cJSON_IsString(j_ver)) {
-        snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "%s", j_ver->valuestring);
+    csilk_json_t* j_ver = csilk_json_get(root, "jsonrpc");
+    if (j_ver && csilk_json_is_string(j_ver)) {
+        snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "%s", csilk_json_string_value(j_ver));
     } else {
         snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");
     }
 
-    cJSON* j_id = cJSON_GetObjectItem(root, "id");
+    csilk_json_t* j_id = csilk_json_get(root, "id");
     if (j_id) {
-        msg->id = cJSON_Duplicate(j_id, 1);
+        msg->id = csilk_json_copy(j_id);
     }
 
-    cJSON* j_method = cJSON_GetObjectItem(root, "method");
-    if (j_method && cJSON_IsString(j_method)) {
+    csilk_json_t* j_method = csilk_json_get(root, "method");
+    if (j_method && csilk_json_is_string(j_method)) {
         if (arena) {
-            msg->method = csilk_arena_strdup(arena, j_method->valuestring);
+            msg->method = csilk_arena_strdup(arena, csilk_json_string_value(j_method));
         } else {
-            msg->method = strdup(j_method->valuestring);
+            msg->method = strdup(csilk_json_string_value(j_method));
         }
     }
 
-    cJSON* j_params = cJSON_GetObjectItem(root, "params");
+    csilk_json_t* j_params = csilk_json_get(root, "params");
     if (j_params) {
-        msg->params = cJSON_Duplicate(j_params, 1);
+        msg->params = csilk_json_copy(j_params);
     }
 
-    cJSON* j_result = cJSON_GetObjectItem(root, "result");
+    csilk_json_t* j_result = csilk_json_get(root, "result");
     if (j_result) {
-        msg->result = cJSON_Duplicate(j_result, 1);
+        msg->result = csilk_json_copy(j_result);
     }
 
-    cJSON* j_error = cJSON_GetObjectItem(root, "error");
+    csilk_json_t* j_error = csilk_json_get(root, "error");
     if (j_error) {
-        msg->error = cJSON_Duplicate(j_error, 1);
+        msg->error = csilk_json_copy(j_error);
     }
 
-    cJSON_Delete(root);
+    csilk_json_free(root);
     return msg;
 }
 
@@ -76,31 +76,31 @@ csilk_mcp_msg_serialize(const csilk_mcp_msg_t* msg, csilk_arena_t* arena)
         return nullptr;
     }
 
-    cJSON* root = cJSON_CreateObject();
+    csilk_json_t* root = csilk_json_object();
     if (!root) {
         return nullptr;
     }
 
-    cJSON_AddStringToObject(root, "jsonrpc", msg->jsonrpc[0] ? msg->jsonrpc : "2.0");
+    csilk_json_add_string(root, "jsonrpc", msg->jsonrpc[0] ? msg->jsonrpc : "2.0");
 
     if (msg->id) {
-        cJSON_AddItemToObject(root, "id", cJSON_Duplicate(msg->id, 1));
+        csilk_json_add_object(root, "id", csilk_json_copy(msg->id));
     }
     if (msg->method) {
-        cJSON_AddStringToObject(root, "method", msg->method);
+        csilk_json_add_string(root, "method", msg->method);
     }
     if (msg->params) {
-        cJSON_AddItemToObject(root, "params", cJSON_Duplicate(msg->params, 1));
+        csilk_json_add_object(root, "params", csilk_json_copy(msg->params));
     }
     if (msg->result) {
-        cJSON_AddItemToObject(root, "result", cJSON_Duplicate(msg->result, 1));
+        csilk_json_add_object(root, "result", csilk_json_copy(msg->result));
     }
     if (msg->error) {
-        cJSON_AddItemToObject(root, "error", cJSON_Duplicate(msg->error, 1));
+        csilk_json_add_object(root, "error", csilk_json_copy(msg->error));
     }
 
-    char* formatted = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* formatted = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
 
     if (arena && formatted) {
         char* arena_out = csilk_arena_strdup(arena, formatted);
@@ -112,7 +112,7 @@ csilk_mcp_msg_serialize(const csilk_mcp_msg_t* msg, csilk_arena_t* arena)
 }
 
 csilk_mcp_msg_t*
-csilk_mcp_msg_create_error(cJSON* id, int code, const char* message)
+csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message)
 {
     csilk_mcp_msg_t* msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     if (!msg) {
@@ -121,19 +121,19 @@ csilk_mcp_msg_create_error(cJSON* id, int code, const char* message)
 
     snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");
     if (id) {
-        msg->id = cJSON_Duplicate(id, 1);
+        msg->id = csilk_json_copy(id);
     }
 
-    cJSON* err_obj = cJSON_CreateObject();
-    cJSON_AddNumberToObject(err_obj, "code", code);
-    cJSON_AddStringToObject(err_obj, "message", message ? message : "Unknown error");
+    csilk_json_t* err_obj = csilk_json_object();
+    csilk_json_add_number(err_obj, "code", code);
+    csilk_json_add_string(err_obj, "message", message ? message : "Unknown error");
     msg->error = err_obj;
 
     return msg;
 }
 
 csilk_mcp_msg_t*
-csilk_mcp_msg_create_response(cJSON* id, cJSON* result)
+csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result)
 {
     csilk_mcp_msg_t* msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     if (!msg) {
@@ -142,10 +142,10 @@ csilk_mcp_msg_create_response(cJSON* id, cJSON* result)
 
     snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");
     if (id) {
-        msg->id = cJSON_Duplicate(id, 1);
+        msg->id = csilk_json_copy(id);
     }
     if (result) {
-        msg->result = cJSON_Duplicate(result, 1);
+        msg->result = csilk_json_copy(result);
     }
 
     return msg;

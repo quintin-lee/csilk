@@ -80,7 +80,7 @@ csilk_router_free(csilk_router_t* r)
 }
 
 static void
-node_collect_routes(csilk_router_node_t* node, cJSON* routes)
+node_collect_routes(csilk_router_node_t* node, csilk_json_t* routes)
 {
     if (!node) {
         return;
@@ -88,15 +88,15 @@ node_collect_routes(csilk_router_node_t* node, cJSON* routes)
 
     csilk_method_handler_t* mh = node->handlers;
     while (mh) {
-        cJSON* route = cJSON_CreateObject();
+        csilk_json_t* route = csilk_json_object();
         if (route) {
-            cJSON_AddStringToObject(route, "method", mh->method);
-            cJSON_AddStringToObject(route, "path", mh->path ? mh->path : "");
-            cJSON_AddStringToObject(route, "input_type", mh->input_type ? mh->input_type : "");
-            cJSON_AddStringToObject(route, "output_type", mh->output_type ? mh->output_type : "");
-            cJSON_AddStringToObject(route, "summary", mh->summary ? mh->summary : "");
-            cJSON_AddStringToObject(route, "description", mh->description ? mh->description : "");
-            cJSON_AddItemToArray(routes, route);
+            csilk_json_add_string(route, "method", mh->method);
+            csilk_json_add_string(route, "path", mh->path ? mh->path : "");
+            csilk_json_add_string(route, "input_type", mh->input_type ? mh->input_type : "");
+            csilk_json_add_string(route, "output_type", mh->output_type ? mh->output_type : "");
+            csilk_json_add_string(route, "summary", mh->summary ? mh->summary : "");
+            csilk_json_add_string(route, "description", mh->description ? mh->description : "");
+            csilk_json_array_append(routes, route);
         }
         mh = mh->next;
     }
@@ -106,13 +106,13 @@ node_collect_routes(csilk_router_node_t* node, cJSON* routes)
     }
 }
 
-cJSON*
+csilk_json_t*
 csilk_router_collect_routes(csilk_router_t* r)
 {
     if (!r || !r->root) {
         return nullptr;
     }
-    cJSON* array = cJSON_CreateArray();
+    csilk_json_t* array = csilk_json_array();
     if (!array) {
         return nullptr;
     }

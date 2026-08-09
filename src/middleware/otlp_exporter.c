@@ -91,42 +91,42 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     int exported_count = exp->count;
 
     /* Build OTLP JSON hierarchy: root -> resourceSpans -> scopeSpans -> spans */
-    cJSON* root = cJSON_CreateObject();
-    cJSON* resource_spans = cJSON_CreateArray();
-    cJSON_AddItemToObject(root, "resourceSpans", resource_spans);
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_t* resource_spans = csilk_json_array();
+    csilk_json_add_object(root, "resourceSpans", resource_spans);
 
-    cJSON* res_span = cJSON_CreateObject();
-    cJSON_AddItemToArray(resource_spans, res_span);
+    csilk_json_t* res_span = csilk_json_object();
+    csilk_json_array_append(resource_spans, res_span);
 
-    cJSON* scope_spans = cJSON_CreateArray();
-    cJSON_AddItemToObject(res_span, "scopeSpans", scope_spans);
+    csilk_json_t* scope_spans = csilk_json_array();
+    csilk_json_add_object(res_span, "scopeSpans", scope_spans);
 
-    cJSON* scope_span = cJSON_CreateObject();
-    cJSON_AddItemToArray(scope_spans, scope_span);
+    csilk_json_t* scope_span = csilk_json_object();
+    csilk_json_array_append(scope_spans, scope_span);
 
-    cJSON* spans_arr = cJSON_CreateArray();
-    cJSON_AddItemToObject(scope_span, "spans", spans_arr);
+    csilk_json_t* spans_arr = csilk_json_array();
+    csilk_json_add_object(scope_span, "spans", spans_arr);
 
     for (int i = 0; i < exp->count; i++) {
-        cJSON* s = cJSON_CreateObject();
-        cJSON_AddStringToObject(s, "traceId", exp->spans[i].trace_id);
-        cJSON_AddStringToObject(s, "spanId", exp->spans[i].span_id);
+        csilk_json_t* s = csilk_json_object();
+        csilk_json_add_string(s, "traceId", exp->spans[i].trace_id);
+        csilk_json_add_string(s, "spanId", exp->spans[i].span_id);
         if (exp->spans[i].parent_span_id[0] != '\0') {
-            cJSON_AddStringToObject(s, "parentSpanId", exp->spans[i].parent_span_id);
+            csilk_json_add_string(s, "parentSpanId", exp->spans[i].parent_span_id);
         }
-        cJSON_AddStringToObject(s, "name", exp->spans[i].name);
-        cJSON_AddNumberToObject(s, "startTimeUnixNano", (double)exp->spans[i].start_time_ns);
-        cJSON_AddNumberToObject(s, "endTimeUnixNano", (double)exp->spans[i].end_time_ns);
-        cJSON_AddNumberToObject(s, "statusCode", exp->spans[i].status_code);
-        cJSON_AddItemToArray(spans_arr, s);
+        csilk_json_add_string(s, "name", exp->spans[i].name);
+        csilk_json_add_number(s, "startTimeUnixNano", (double)exp->spans[i].start_time_ns);
+        csilk_json_add_number(s, "endTimeUnixNano", (double)exp->spans[i].end_time_ns);
+        csilk_json_add_number(s, "statusCode", exp->spans[i].status_code);
+        csilk_json_array_append(spans_arr, s);
     }
 
-    char* json_str = cJSON_PrintUnformatted(root);
+    char* json_str = csilk_json_serialize(root, NULL);
     if (json_str) {
         snprintf(out_buf, buf_size, "%s", json_str);
         free(json_str);
     }
-    cJSON_Delete(root);
+    csilk_json_free(root);
 
     /* Reset buffer count after flush */
     exp->count = 0;

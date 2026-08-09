@@ -1,4 +1,4 @@
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,85 +16,86 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
         return nullptr;
     }
 
-    cJSON* root = cJSON_Parse(json_str);
+    csilk_json_t* root = csilk_json_parse(json_str);
     if (!root) {
         if (err_buf && err_len > 0) {
-            snprintf(err_buf, err_len, "JSON parse error near '%s'", cJSON_GetErrorPtr());
+            snprintf(err_buf, err_len, "JSON parse error near '%s'", NULL);
         }
         return nullptr;
     }
 
-    cJSON*      j_name = cJSON_GetObjectItem(root, "name");
-    const char* wf_name = (j_name && cJSON_IsString(j_name)) ? j_name->valuestring : "dsl_workflow";
+    csilk_json_t* j_name = csilk_json_get(root, "name");
+    const char*   wf_name =
+        (j_name && csilk_json_is_string(j_name)) ? csilk_json_string_value(j_name) : "dsl_workflow";
 
     csilk_wf_t* wf = csilk_wf_new(wf_name);
     if (!wf) {
-        cJSON_Delete(root);
+        csilk_json_free(root);
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "Failed to create workflow instance");
         }
         return nullptr;
     }
 
-    cJSON* j_budget = cJSON_GetObjectItem(root, "budget");
-    if (j_budget && cJSON_IsObject(j_budget)) {
-        cJSON* j_tokens = cJSON_GetObjectItem(j_budget, "max_tokens");
-        if (j_tokens && cJSON_IsNumber(j_tokens)) {
-            csilk_wf_set_budget(wf, j_tokens->valueint);
+    csilk_json_t* j_budget = csilk_json_get(root, "budget");
+    if (j_budget && csilk_json_is_object(j_budget)) {
+        csilk_json_t* j_tokens = csilk_json_get(j_budget, "max_tokens");
+        if (j_tokens && csilk_json_is_number(j_tokens)) {
+            csilk_wf_set_budget(wf, csilk_json_int_value(j_tokens));
         }
     }
 
-    cJSON* j_persistence = cJSON_GetObjectItem(root, "persistence");
-    if (j_persistence && cJSON_IsObject(j_persistence)) {
-        cJSON* j_enabled = cJSON_GetObjectItem(j_persistence, "enabled");
-        cJSON* j_dir = cJSON_GetObjectItem(j_persistence, "wal_dir");
-        if (j_enabled && cJSON_IsTrue(j_enabled) && j_dir && cJSON_IsString(j_dir)) {
-            csilk_wf_set_persistence(wf, j_dir->valuestring);
+    csilk_json_t* j_persistence = csilk_json_get(root, "persistence");
+    if (j_persistence && csilk_json_is_object(j_persistence)) {
+        csilk_json_t* j_enabled = csilk_json_get(j_persistence, "enabled");
+        csilk_json_t* j_dir = csilk_json_get(j_persistence, "wal_dir");
+        if (j_enabled && csilk_json_is_true(j_enabled) && j_dir && csilk_json_is_string(j_dir)) {
+            csilk_wf_set_persistence(wf, csilk_json_string_value(j_dir));
         }
     }
 
-    cJSON* j_nodes = cJSON_GetObjectItem(root, "nodes");
-    if (j_nodes && cJSON_IsArray(j_nodes)) {
-        int node_count = cJSON_GetArraySize(j_nodes);
+    csilk_json_t* j_nodes = csilk_json_get(root, "nodes");
+    if (j_nodes && csilk_json_is_array(j_nodes)) {
+        int node_count = csilk_json_array_size(j_nodes);
         for (int i = 0; i < node_count; i++) {
-            cJSON* item = cJSON_GetArrayItem(j_nodes, i);
+            csilk_json_t* item = csilk_json_array_get(j_nodes, i);
             if (!item) {
                 continue;
             }
 
-            cJSON* j_id = cJSON_GetObjectItem(item, "id");
-            cJSON* j_type = cJSON_GetObjectItem(item, "type");
-            if (!j_id || !cJSON_IsString(j_id) || !j_type || !cJSON_IsString(j_type)) {
+            csilk_json_t* j_id = csilk_json_get(item, "id");
+            csilk_json_t* j_type = csilk_json_get(item, "type");
+            if (!j_id || !csilk_json_is_string(j_id) || !j_type || !csilk_json_is_string(j_type)) {
                 continue;
             }
 
-            const char* id = j_id->valuestring;
-            const char* type = j_type->valuestring;
-            cJSON*      j_cfg = cJSON_GetObjectItem(item, "config");
+            const char*   id = csilk_json_string_value(j_id);
+            const char*   type = csilk_json_string_value(j_type);
+            csilk_json_t* j_cfg = csilk_json_get(item, "config");
 
             if (strcmp(type, "ai_chat") == 0) {
                 csilk_ai_config_t cfg = {0};
                 if (j_cfg) {
-                    cJSON* j_m = cJSON_GetObjectItem(j_cfg, "model");
-                    cJSON* j_sp = cJSON_GetObjectItem(j_cfg, "system_prompt");
-                    if (j_m && cJSON_IsString(j_m)) {
-                        cfg.model = j_m->valuestring;
+                    csilk_json_t* j_m = csilk_json_get(j_cfg, "model");
+                    csilk_json_t* j_sp = csilk_json_get(j_cfg, "system_prompt");
+                    if (j_m && csilk_json_is_string(j_m)) {
+                        cfg.model = csilk_json_string_value(j_m);
                     }
-                    if (j_sp && cJSON_IsString(j_sp)) {
-                        cfg.system_msg = j_sp->valuestring;
+                    if (j_sp && csilk_json_is_string(j_sp)) {
+                        cfg.system_msg = csilk_json_string_value(j_sp);
                     }
                 }
                 csilk_wf_add_ai(wf, id, &cfg);
             } else if (strcmp(type, "agent_react") == 0) {
                 csilk_agent_react_config_t cfg = {0};
                 if (j_cfg) {
-                    cJSON* j_m = cJSON_GetObjectItem(j_cfg, "model");
-                    cJSON* j_sp = cJSON_GetObjectItem(j_cfg, "system_prompt");
-                    if (j_m && cJSON_IsString(j_m)) {
-                        cfg.model = j_m->valuestring;
+                    csilk_json_t* j_m = csilk_json_get(j_cfg, "model");
+                    csilk_json_t* j_sp = csilk_json_get(j_cfg, "system_prompt");
+                    if (j_m && csilk_json_is_string(j_m)) {
+                        cfg.model = csilk_json_string_value(j_m);
                     }
-                    if (j_sp && cJSON_IsString(j_sp)) {
-                        cfg.system_prompt = j_sp->valuestring;
+                    if (j_sp && csilk_json_is_string(j_sp)) {
+                        cfg.system_prompt = csilk_json_string_value(j_sp);
                     }
                 }
                 csilk_wf_add_agent_react(wf, id, &cfg);
@@ -103,27 +104,27 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
 
         /* Wire dependencies */
         for (int i = 0; i < node_count; i++) {
-            cJSON* item = cJSON_GetArrayItem(j_nodes, i);
+            csilk_json_t* item = csilk_json_array_get(j_nodes, i);
             if (!item) {
                 continue;
             }
 
-            cJSON* j_id = cJSON_GetObjectItem(item, "id");
-            cJSON* j_deps = cJSON_GetObjectItem(item, "depends_on");
-            if (!j_id || !cJSON_IsString(j_id) || !j_deps || !cJSON_IsArray(j_deps)) {
+            csilk_json_t* j_id = csilk_json_get(item, "id");
+            csilk_json_t* j_deps = csilk_json_get(item, "depends_on");
+            if (!j_id || !csilk_json_is_string(j_id) || !j_deps || !csilk_json_is_array(j_deps)) {
                 continue;
             }
 
-            csilk_wf_node_t* target = csilk_wf_get_node(wf, j_id->valuestring);
+            csilk_wf_node_t* target = csilk_wf_get_node(wf, csilk_json_string_value(j_id));
             if (!target) {
                 continue;
             }
 
-            int dep_count = cJSON_GetArraySize(j_deps);
+            int dep_count = csilk_json_array_size(j_deps);
             for (int d = 0; d < dep_count; d++) {
-                cJSON* dep_item = cJSON_GetArrayItem(j_deps, d);
-                if (dep_item && cJSON_IsString(dep_item)) {
-                    csilk_wf_node_t* src = csilk_wf_get_node(wf, dep_item->valuestring);
+                csilk_json_t* dep_item = csilk_json_array_get(j_deps, d);
+                if (dep_item && csilk_json_is_string(dep_item)) {
+                    csilk_wf_node_t* src = csilk_wf_get_node(wf, csilk_json_string_value(dep_item));
                     if (src) {
                         csilk_wf_bind(src, target);
                     }
@@ -132,7 +133,7 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
         }
     }
 
-    cJSON_Delete(root);
+    csilk_json_free(root);
     return wf;
 }
 
@@ -187,21 +188,21 @@ csilk_wf_to_json(csilk_wf_t* wf)
         return nullptr;
     }
 
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "name", wf->name ? wf->name : "dsl_workflow");
-    cJSON_AddStringToObject(root, "version", "1.0.0");
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "name", wf->name ? wf->name : "dsl_workflow");
+    csilk_json_add_string(root, "version", "1.0.0");
 
-    cJSON* j_nodes = cJSON_CreateArray();
+    csilk_json_t* j_nodes = csilk_json_array();
     for (size_t i = 0; i < wf->node_count; i++) {
         csilk_wf_node_t* n = wf->nodes[i];
-        cJSON*           item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "id", n->id);
-        cJSON_AddStringToObject(item, "type", "generic");
-        cJSON_AddItemToArray(j_nodes, item);
+        csilk_json_t*    item = csilk_json_object();
+        csilk_json_add_string(item, "id", n->id);
+        csilk_json_add_string(item, "type", "generic");
+        csilk_json_array_append(j_nodes, item);
     }
-    cJSON_AddItemToObject(root, "nodes", j_nodes);
+    csilk_json_add_object(root, "nodes", j_nodes);
 
-    char* formatted = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
+    char* formatted = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
     return formatted;
 }

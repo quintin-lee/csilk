@@ -4,7 +4,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
@@ -26,14 +26,14 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
                 len,
                 mq->monitor_count);
 
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "event", event);
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_string(root, "event", event);
     if (topic) {
-        cJSON_AddStringToObject(root, "topic", topic);
+        csilk_json_add_string(root, "topic", topic);
     }
-    cJSON_AddNumberToObject(root, "payload_len", (double)len);
-    cJSON_AddNumberToObject(root, "timestamp", (double)time(nullptr));
-    char* json = cJSON_PrintUnformatted(root);
+    csilk_json_add_number(root, "payload_len", (double)len);
+    csilk_json_add_number(root, "timestamp", (double)time(nullptr));
+    char* json = csilk_json_serialize(root, NULL);
 
     csilk_mutex_lock(&mq->monitor_mutex);
     for (size_t i = 0; i < mq->monitor_count; i++) {
@@ -42,7 +42,7 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
     csilk_mutex_unlock(&mq->monitor_mutex);
 
     free(json);
-    cJSON_Delete(root);
+    csilk_json_free(root);
 }
 
 CSILK_INTERNAL int

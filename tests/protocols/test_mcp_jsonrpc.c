@@ -14,7 +14,7 @@ test_jsonrpc_parse_request(void)
     assert(msg != nullptr);
     assert(strcmp(msg->jsonrpc, "2.0") == 0);
     assert(msg->id != nullptr);
-    assert(msg->id->valueint == 1);
+    assert(msg->csilk_json_int_value(id) == 1);
     assert(msg->method != nullptr);
     assert(strcmp(msg->method, "tools/list") == 0);
 
@@ -23,9 +23,9 @@ test_jsonrpc_parse_request(void)
     assert(strstr(out, "tools/list") != nullptr);
 
     free(out);
-    cJSON_Delete(msg->id);
+    csilk_json_free(msg->id);
     if (msg->params) {
-        cJSON_Delete(msg->params);
+        csilk_json_free(msg->params);
     }
     free(msg->method);
     free(msg);
@@ -35,26 +35,26 @@ test_jsonrpc_parse_request(void)
 static void
 test_jsonrpc_create_error(void)
 {
-    cJSON*           id = cJSON_CreateNumber(42);
+    csilk_json_t*    id = csilk_json_number(42);
     csilk_mcp_msg_t* msg =
         csilk_mcp_msg_create_error(id, CSILK_MCP_METHOD_NOT_FOUND, "Method not found");
 
     assert(msg != nullptr);
     assert(msg->error != nullptr);
-    cJSON* code = cJSON_GetObjectItem(msg->error, "code");
-    assert(code != nullptr && code->valueint == CSILK_MCP_METHOD_NOT_FOUND);
+    csilk_json_t* code = csilk_json_get(msg->error, "code");
+    assert(code != nullptr && csilk_json_int_value(code) == CSILK_MCP_METHOD_NOT_FOUND);
 
     char* out = csilk_mcp_msg_serialize(msg, nullptr);
     assert(out != nullptr);
     assert(strstr(out, "Method not found") != nullptr);
 
     free(out);
-    cJSON_Delete(id);
+    csilk_json_free(id);
     if (msg->id) {
-        cJSON_Delete(msg->id);
+        csilk_json_free(msg->id);
     }
     if (msg->error) {
-        cJSON_Delete(msg->error);
+        csilk_json_free(msg->error);
     }
     free(msg);
     printf("test_jsonrpc_create_error passed\n");

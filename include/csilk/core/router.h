@@ -104,7 +104,7 @@ void csilk_router_free(csilk_router_t* r);
  * @return A cJSON array (caller must free with cJSON_Delete), or nullptr on
  *         allocation failure.
  */
-cJSON* csilk_router_collect_routes(csilk_router_t* r);
+csilk_json_t* csilk_router_collect_routes(csilk_router_t* r);
 
 /**
  * @brief Generate an OpenAPI 3.0 specification JSON from the router.
@@ -120,10 +120,10 @@ cJSON* csilk_router_collect_routes(csilk_router_t* r);
  * @return A cJSON object representing the full OpenAPI spec.  Caller must
  *         free with cJSON_Delete.
  */
-cJSON* csilk_generate_openapi_json(csilk_router_t* router,
-                                   const char*     title,
-                                   const char*     version,
-                                   const char*     description);
+csilk_json_t* csilk_generate_openapi_json(csilk_router_t* router,
+                                          const char*     title,
+                                          const char*     version,
+                                          const char*     description);
 
 /**
  * @brief Register a route with full OpenAPI/reflection metadata.

@@ -96,7 +96,7 @@ void csilk_set_cookie(csilk_ctx_t* c,
  * @param json   cJSON object to serialise and send.  Ownership is transferred
  *               to the framework (cJSON_Delete is called internally).
  */
-void csilk_json(csilk_ctx_t* c, int status, cJSON* json);
+void csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json);
 
 /**
  * @brief Send a raw JSON string response without AST building or heap allocation.

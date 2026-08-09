@@ -177,7 +177,7 @@ csilk_vector_search_response_free(csilk_vector_search_response_t* res)
         for (size_t i = 0; i < res->count; i++) {
             free(res->results[i].id);
             if (res->results[i].payload) {
-                cJSON_Delete(res->results[i].payload);
+                csilk_json_free(res->results[i].payload);
             }
         }
         free(res->results);

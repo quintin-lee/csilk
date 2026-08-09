@@ -16,7 +16,7 @@
  * @copyright MIT License
  */
 
-#include <cJSON.h>
+#include "csilk/core/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,11 +85,11 @@ get_role_from_ctx(csilk_ctx_t* c)
         return role;
     }
 
-    cJSON* payload = (cJSON*)csilk_get(c, "jwt_payload");
+    csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     if (payload) {
-        cJSON* r = cJSON_GetObjectItem(payload, "role");
-        if (r && cJSON_IsString(r)) {
-            return r->valuestring;
+        csilk_json_t* r = csilk_json_get(payload, "role");
+        if (r && csilk_json_is_string(r)) {
+            return csilk_json_string_value(r);
         }
     }
 

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
@@ -38,14 +38,14 @@ csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
     if (!stats) {
         return nullptr;
     }
-    cJSON* root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "published_total", (double)stats->published_total);
-    cJSON_AddNumberToObject(root, "delivered_total", (double)stats->delivered_total);
-    cJSON_AddNumberToObject(root, "failed_total", (double)stats->failed_total);
-    cJSON_AddNumberToObject(root, "queue_depth", (double)stats->queue_depth);
-    cJSON_AddNumberToObject(root, "topic_count", (double)stats->topic_count);
-    char* json = cJSON_Print(root);
-    cJSON_Delete(root);
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_number(root, "published_total", (double)stats->published_total);
+    csilk_json_add_number(root, "delivered_total", (double)stats->delivered_total);
+    csilk_json_add_number(root, "failed_total", (double)stats->failed_total);
+    csilk_json_add_number(root, "queue_depth", (double)stats->queue_depth);
+    csilk_json_add_number(root, "topic_count", (double)stats->topic_count);
+    char* json = csilk_json_serialize_pretty(root, NULL);
+    csilk_json_free(root);
     return json;
 }
 

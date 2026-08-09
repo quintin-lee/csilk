@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/reflection/reflect.h"
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_impl.h"
@@ -229,7 +229,7 @@ csilk_set_cookie(csilk_ctx_t* c,
  *       The serialized JSON string is heap-allocated and managed by the
  *       framework. */
 void
-csilk_json(csilk_ctx_t* c, int status, cJSON* json)
+csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
 {
     if (!c || !json) {
         if (!c) {
@@ -250,13 +250,13 @@ csilk_json(csilk_ctx_t* c, int status, cJSON* json)
         c->response.body_is_managed = 0;
     }
 
-    char* body = cJSON_PrintUnformatted(json);
+    char* body = csilk_json_serialize(json, NULL);
     if (body) {
         c->response.body = body;
         c->response.body_len = strlen(body);
         c->response.body_is_managed = 1;
     }
-    cJSON_Delete(json);
+    csilk_json_free(json);
 }
 
 void
@@ -312,9 +312,9 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 
     if (csilk_bounded_json_overflow(&j)) {
         /* Fall back to cJSON for unusually long messages */
-        cJSON* err = cJSON_CreateObject();
+        csilk_json_t* err = csilk_json_object();
         if (err) {
-            cJSON_AddStringToObject(err, "error", message);
+            csilk_json_add_string(err, "error", message);
             csilk_json(c, status, err);
         }
         return;

@@ -273,12 +273,12 @@ test_csilk_bind_json_valid()
     printf("Testing csilk_bind_json valid...\n");
     csilk_ctx_t* ctx = csilk_test_ctx_new();
     csilk_test_ctx_set_body(ctx, "{\"key\":\"val\"}", 13);
-    cJSON* j = csilk_bind_json(ctx);
+    csilk_json_t* j = csilk_bind_json(ctx);
     assert(j != nullptr);
-    cJSON* item = cJSON_GetObjectItem(j, "key");
-    assert(item != nullptr && cJSON_IsString(item));
-    assert(strcmp(item->valuestring, "val") == 0);
-    cJSON_Delete(j);
+    csilk_json_t* item = csilk_json_get(j, "key");
+    assert(item != nullptr && csilk_json_is_string(item));
+    assert(strcmp(csilk_json_string_value(item), "val") == 0);
+    csilk_json_free(j);
     csilk_test_ctx_free(ctx);
     printf("csilk_bind_json_valid passed!\n");
 }
@@ -424,9 +424,9 @@ static void
 test_csilk_json_valid()
 {
     printf("Testing csilk_json valid...\n");
-    csilk_ctx_t* ctx = csilk_test_ctx_new();
-    cJSON*       j = cJSON_CreateObject();
-    cJSON_AddStringToObject(j, "status", "ok");
+    csilk_ctx_t*  ctx = csilk_test_ctx_new();
+    csilk_json_t* j = csilk_json_object();
+    csilk_json_add_string(j, "status", "ok");
     csilk_json(ctx, 200, j);
     assert(csilk_get_status(ctx) == 200);
     const char* body = csilk_get_response_body(ctx, nullptr);
@@ -444,8 +444,8 @@ test_csilk_json_replaces_managed_body()
     printf("Testing csilk_json replaces existing managed body...\n");
     csilk_ctx_t* ctx = csilk_test_ctx_new();
     csilk_set_response_body(ctx, strdup("old"), 3, 1);
-    cJSON* j = cJSON_CreateObject();
-    cJSON_AddStringToObject(j, "x", "y");
+    csilk_json_t* j = csilk_json_object();
+    csilk_json_add_string(j, "x", "y");
     csilk_json(ctx, 200, j);
     const char* body = csilk_get_response_body(ctx, nullptr);
     assert(body != nullptr);

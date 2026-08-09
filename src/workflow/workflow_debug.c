@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/app/workflow_dsl.h"
 #include "workflow_internal.h"
 

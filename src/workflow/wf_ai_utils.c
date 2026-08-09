@@ -52,40 +52,40 @@ csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
 
 /** @brief Internal: traverse a cJSON tree following a dot-separated path. */
 char*
-_csilk_json_get_path(csilk_wf_ctx_t* ctx, cJSON* root, const char* path)
+_csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
 {
     if (!root || !path) {
         return nullptr;
     }
 
-    cJSON* curr = root;
-    char*  path_copy = strdup(path);
-    char*  saveptr;
-    char*  token = strtok_r(path_copy, ".", &saveptr);
+    csilk_json_t* curr = root;
+    char*         path_copy = strdup(path);
+    char*         saveptr;
+    char*         token = strtok_r(path_copy, ".", &saveptr);
 
     while (token && curr) {
-        if (cJSON_IsArray(curr)) {
-            curr = cJSON_GetArrayItem(curr, atoi(token));
+        if (csilk_json_is_array(curr)) {
+            curr = csilk_json_array_get(curr, atoi(token));
         } else {
-            curr = cJSON_GetObjectItemCaseSensitive(curr, token);
+            curr = csilk_json_get(curr, token);
         }
         token = strtok_r(nullptr, ".", &saveptr);
     }
 
     char* result = nullptr;
     if (curr) {
-        if (cJSON_IsString(curr)) {
-            result = csilk_wf_strdup(ctx, curr->valuestring);
-        } else if (cJSON_IsNumber(curr)) {
+        if (csilk_json_is_string(curr)) {
+            result = csilk_wf_strdup(ctx, csilk_json_string_value(curr));
+        } else if (csilk_json_is_number(curr)) {
             char buf[64];
-            snprintf(buf, sizeof(buf), "%g", curr->valuedouble);
+            snprintf(buf, sizeof(buf), "%g", csilk_json_number_value(curr));
             result = csilk_wf_strdup(ctx, buf);
-        } else if (cJSON_IsBool(curr)) {
-            result = csilk_wf_strdup(ctx, curr->valueint ? "true" : "false");
-        } else if (cJSON_IsNull(curr)) {
+        } else if (csilk_json_is_bool(curr)) {
+            result = csilk_wf_strdup(ctx, csilk_json_int_value(curr) ? "true" : "false");
+        } else if (csilk_json_is_null(curr)) {
             result = csilk_wf_strdup(ctx, "null");
         } else {
-            char* tmp = cJSON_PrintUnformatted(curr);
+            char* tmp = csilk_json_serialize(curr, NULL);
             result = csilk_wf_strdup(ctx, tmp);
             free(tmp);
         }
@@ -193,17 +193,17 @@ csilk_agent_memory_store(csilk_agent_memory_t* mem,
         return -1;
     }
 
-    cJSON* payload = metadata_json ? cJSON_Parse(metadata_json) : cJSON_CreateObject();
+    csilk_json_t* payload = metadata_json ? csilk_json_parse(metadata_json) : csilk_json_object();
     if (!payload) {
-        payload = cJSON_CreateObject();
+        payload = csilk_json_object();
     }
-    cJSON_AddStringToObject(payload, "text", text);
+    csilk_json_add_string(payload, "text", text);
 
     csilk_vector_point_t pt = {
         .id = id, .vector = eres.values, .dimension = eres.dimension, .payload = payload};
 
     int rc = csilk_vector_db_upsert(mem->db, mem->collection, &pt, 1);
-    cJSON_Delete(payload);
+    csilk_json_free(payload);
     csilk_ai_embeddings_response_free(&eres);
     return rc;
 }

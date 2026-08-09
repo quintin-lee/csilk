@@ -17,7 +17,7 @@
 
 /* Forward declaration — cjson_to_struct_internal is mutually recursive with
  * deserialize_scalar (nested struct fields trigger recursion). */
-static void cjson_to_struct_internal(const cJSON*              obj,
+static void cjson_to_struct_internal(const csilk_json_t*       obj,
                                      void*                     struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t                    field_count);
@@ -36,17 +36,17 @@ static void cjson_to_struct_internal(const cJSON*              obj,
  * @note For pointer string fields, any existing allocation is freed before
  *       the new value is assigned. */
 static void
-deserialize_scalar(const cJSON* item, void* addr, const csilk_field_desc_t* desc)
+deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_t* desc)
 {
     /*
    * Skip null/missing JSON values — the field retains whatever it currently
    * holds (typically zero-initialized from calloc).
    *
    * Type coercion from cJSON to C primitives:
-   *   - Integer types (int8-uint32): read from item->valueint.
-   *   - Int64/uint64/float/double: read from item->valuedouble to capture
+   *   - Integer types (int8-uint32): read from csilk_json_int_value(item).
+   *   - Int64/uint64/float/double: read from csilk_json_number_value(item) to capture
    *     full numeric range (accepts potential precision loss for i64).
-   *   - Bool: cJSON_IsTrue() handles both True and False.
+   *   - Bool: csilk_json_is_true() handles both True and False.
    *   - String, pointer mode (desc->is_pointer): free existing allocation
    *     before malloc + memcpy of new value (avoids leaks on re-parse).
    *   - String, buffer mode: snprintf with desc->size limit + automatic
@@ -54,63 +54,63 @@ deserialize_scalar(const cJSON* item, void* addr, const csilk_field_desc_t* desc
    *   - Nested struct: if pointer field and nil, auto-allocate with
    *     calloc(1, desc->size), then recurse via cjson_to_struct_internal().
    */
-    if (!item || cJSON_IsNull(item)) {
+    if (!item || csilk_json_is_null(item)) {
         return;
     }
 
     switch (desc->type) {
     case CSILK_TYPE_INT8:
-        *(int8_t*)addr = (int8_t)item->valueint;
+        *(int8_t*)addr = (int8_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_UINT8:
-        *(uint8_t*)addr = (uint8_t)item->valueint;
+        *(uint8_t*)addr = (uint8_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_INT16:
-        *(int16_t*)addr = (int16_t)item->valueint;
+        *(int16_t*)addr = (int16_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_UINT16:
-        *(uint16_t*)addr = (uint16_t)item->valueint;
+        *(uint16_t*)addr = (uint16_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_INT32:
-        *(int32_t*)addr = (int32_t)item->valueint;
+        *(int32_t*)addr = (int32_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_UINT32:
-        *(uint32_t*)addr = (uint32_t)item->valueint;
+        *(uint32_t*)addr = (uint32_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_INT64:
-        *(int64_t*)addr = (int64_t)item->valuedouble;
+        *(int64_t*)addr = (int64_t)csilk_json_number_value(item);
         break;
     case CSILK_TYPE_UINT64:
-        *(uint64_t*)addr = (uint64_t)item->valuedouble;
+        *(uint64_t*)addr = (uint64_t)csilk_json_number_value(item);
         break;
     case CSILK_TYPE_FLOAT:
-        *(float*)addr = (float)item->valuedouble;
+        *(float*)addr = (float)csilk_json_number_value(item);
         break;
     case CSILK_TYPE_DOUBLE:
-        *(double*)addr = item->valuedouble;
+        *(double*)addr = csilk_json_number_value(item);
         break;
     case CSILK_TYPE_BOOL:
-        *(bool*)addr = cJSON_IsTrue(item);
+        *(bool*)addr = csilk_json_is_true(item);
         break;
     case CSILK_TYPE_STRING:
-        if (cJSON_IsString(item) && item->valuestring) {
+        if (csilk_json_is_string(item) && csilk_json_string_value(item)) {
             if (desc->is_pointer) {
                 char** ptr = (char**)addr;
                 if (*ptr) {
                     free(*ptr);
                 }
-                size_t len = strlen(item->valuestring) + 1;
+                size_t len = strlen(csilk_json_string_value(item)) + 1;
                 *ptr = (char*)malloc(len);
                 if (*ptr) {
-                    memcpy(*ptr, item->valuestring, len);
+                    memcpy(*ptr, csilk_json_string_value(item), len);
                 }
             } else {
-                snprintf((char*)addr, desc->size, "%s", item->valuestring);
+                snprintf((char*)addr, desc->size, "%s", csilk_json_string_value(item));
             }
         }
         break;
     case CSILK_TYPE_STRUCT:
-        if (cJSON_IsObject(item)) {
+        if (csilk_json_is_object(item)) {
             void* struct_addr = addr;
             if (desc->is_pointer) {
                 void** ptr = (void**)addr;
@@ -142,14 +142,14 @@ deserialize_scalar(const cJSON* item, void* addr, const csilk_field_desc_t* desc
  * @param descs       Array of field descriptors.
  * @param field_count Number of field descriptors. */
 static void
-cjson_to_struct_internal(const cJSON*              obj,
+cjson_to_struct_internal(const csilk_json_t*       obj,
                          void*                     struct_ptr,
                          const csilk_field_desc_t* descs,
                          size_t                    field_count)
 {
     /*
    * Walk all field descriptors and match each against a JSON key in the
-   * parsed object.  cJSON_GetObjectItemCaseSensitive() does a string-key
+   * parsed object.  csilk_json_get() does a string-key
    * lookup (O(n) in the number of keys for each call).  Keys not present
    * in the JSON are silently skipped — the struct field retains its
    * current value (safe for partial updates).
@@ -160,7 +160,7 @@ cjson_to_struct_internal(const cJSON*              obj,
    * contiguous array layout in memory.
    */
     for (size_t i = 0; i < field_count; i++) {
-        cJSON* item = cJSON_GetObjectItemCaseSensitive(obj, descs[i].json_key);
+        csilk_json_t* item = csilk_json_get(obj, descs[i].json_key);
         if (!item) {
             continue;
         }
@@ -168,15 +168,15 @@ cjson_to_struct_internal(const cJSON*              obj,
         char* field_addr = (char*)struct_ptr + descs[i].offset;
 
         if (descs[i].array_length > 0) {
-            if (!cJSON_IsArray(item)) {
+            if (!csilk_json_is_array(item)) {
                 continue;
             }
-            size_t arr_size = cJSON_GetArraySize(item);
+            size_t arr_size = csilk_json_array_size(item);
             size_t limit = (arr_size < descs[i].array_length) ? arr_size : descs[i].array_length;
 
             for (size_t j = 0; j < limit; j++) {
                 char* item_addr = field_addr + (j * descs[i].size);
-                deserialize_scalar(cJSON_GetArrayItem(item, j), item_addr, &descs[i]);
+                deserialize_scalar(csilk_json_array_get(item, j), item_addr, &descs[i]);
             }
         } else {
             deserialize_scalar(item, field_addr, &descs[i]);
@@ -201,12 +201,12 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
    */
     csilk_field_desc_t basic_desc;
     if (get_basic_type(type_name, &basic_desc)) {
-        cJSON* root = cJSON_Parse(json_str);
+        csilk_json_t* root = csilk_json_parse(json_str);
         if (!root) {
             return 0;
         }
         deserialize_scalar(root, ptr, &basic_desc);
-        cJSON_Delete(root);
+        csilk_json_free(root);
         return 1;
     }
 
@@ -215,12 +215,12 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
         return 0;
     }
 
-    cJSON* root = cJSON_Parse(json_str);
+    csilk_json_t* root = csilk_json_parse(json_str);
     if (!root) {
         return 0;
     }
 
     cjson_to_struct_internal(root, ptr, entry->fields, entry->count);
-    cJSON_Delete(root);
+    csilk_json_free(root);
     return 1;
 }

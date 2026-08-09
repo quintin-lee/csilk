@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/reflection/reflect.h"
@@ -28,10 +28,10 @@ static int tests_passed = 0;
 static void
 test_json_roundtrip(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       obj = cJSON_CreateObject();
-    cJSON_AddNumberToObject(obj, "id", 42);
-    cJSON_AddStringToObject(obj, "name", "Alice");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_number(obj, "id", 42);
+    csilk_json_add_string(obj, "name", "Alice");
 
     csilk_json(c, 200, obj);
 
@@ -53,13 +53,13 @@ test_json_roundtrip(void)
 static void
 test_json_large_payload(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       arr = cJSON_CreateArray();
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* arr = csilk_json_array();
     for (int i = 0; i < 100; i++) {
-        cJSON* item = cJSON_CreateObject();
-        cJSON_AddNumberToObject(item, "index", i);
-        cJSON_AddStringToObject(item, "text", "repeated text for size testing");
-        cJSON_AddItemToArray(arr, item);
+        csilk_json_t* item = csilk_json_object();
+        csilk_json_add_number(item, "index", i);
+        csilk_json_add_string(item, "text", "repeated text for size testing");
+        csilk_json_array_append(arr, item);
     }
 
     csilk_json(c, 200, arr);
@@ -77,12 +77,12 @@ test_json_large_payload(void)
 static void
 test_json_nested_structure(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       root = cJSON_CreateObject();
-    cJSON*       meta = cJSON_CreateObject();
-    cJSON_AddStringToObject(meta, "version", "1.0");
-    cJSON_AddItemToObject(root, "meta", meta);
-    cJSON_AddStringToObject(root, "data", "nested");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_t* meta = csilk_json_object();
+    csilk_json_add_string(meta, "version", "1.0");
+    csilk_json_add_object(root, "meta", meta);
+    csilk_json_add_string(root, "data", "nested");
 
     csilk_json(c, 200, root);
 
@@ -137,11 +137,11 @@ test_json_error_copy(void)
 static void
 test_reflect_json_basic(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    cJSON*       obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "hello", "world");
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_string(obj, "hello", "world");
     csilk_json_error(c, 200, "ok test");
-    cJSON_Delete(obj);
+    csilk_json_free(obj);
 
     size_t      len;
     const char* body = csilk_get_response_body(c, &len);
@@ -158,11 +158,11 @@ test_bind_json_bad_input(void)
 {
     csilk_ctx_t* c = csilk_test_ctx_new();
     csilk_test_ctx_set_body(c, "not-json", 8);
-    cJSON* result = csilk_bind_json(c);
+    csilk_json_t* result = csilk_bind_json(c);
     if (result == nullptr) {
         PASS();
     } else {
-        cJSON_Delete(result);
+        csilk_json_free(result);
         FAIL("bind_json should fail on bad input");
     }
     csilk_test_ctx_free(c);
@@ -171,11 +171,11 @@ test_bind_json_bad_input(void)
 static void
 test_bind_json_null_ctx(void)
 {
-    cJSON* result = csilk_bind_json(nullptr);
+    csilk_json_t* result = csilk_bind_json(nullptr);
     if (result == nullptr) {
         PASS();
     } else {
-        cJSON_Delete(result);
+        csilk_json_free(result);
         FAIL("bind_json null ctx");
     }
 }

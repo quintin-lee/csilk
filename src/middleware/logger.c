@@ -104,8 +104,8 @@ csilk_logger_handler(csilk_ctx_t* c)
             snprintf(rl.remote_addr, sizeof(rl.remote_addr), "%s", ip);
         }
 
-        char*  json_str = csilk_json_marshal("csilk_req_log_t", &rl);
-        cJSON* extra = json_str ? cJSON_Parse(json_str) : nullptr;
+        char*         json_str = csilk_json_marshal("csilk_req_log_t", &rl);
+        csilk_json_t* extra = json_str ? csilk_json_parse(json_str) : nullptr;
         free(json_str);
         _csilk_log_structured(
             CSILK_LOG_INFO, __FILE__, __LINE__, __func__, extra, "request completed");

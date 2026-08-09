@@ -26,7 +26,7 @@
  *
  * ## JSON result conversion
  * csilk_db_query_json() and friends convert the driver's tabular result
- * (csilk_db_result_t) into a cJSON array of objects — one object per row,
+ * (csilk_db_result_t) into a csilk_json array of objects — one object per row,
  * with column names as keys. This is the format expected by the HTTP layer
  * for JSON API responses.
  *
@@ -44,7 +44,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 
 /* --- Global DB Metrics --- */
 static atomic_uint_fast64_t db_queries_total = 0;
@@ -89,31 +89,31 @@ csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
     }
 }
 
-/** @brief Internal: execute a query and return the result as a cJSON array.
+/** @brief Internal: execute a query and return the result as a csilk_json array.
  *
  * ## Row-to-JSON conversion
  *   1. Call driver->query() to get the raw tabular result (rows + columns).
- *   2. Create an empty cJSON array.
+ *   2. Create an empty csilk_json array.
  *   3. For each row (result.rows[i]):
- *      a. Create a cJSON object.
+ *      a. Create a csilk_json object.
  *      b. For each field (row->values[j]):
  *         - Add (column_name[j], field_value) as a string key-value pair.
  *         - If column_names is nullptr, use "col" as the key.
  *         - nullptr values are skipped (not added to the object).
  *      c. Append the object to the array.
  *   4. Call driver->free_result() to release the driver's memory.
- *   5. Return the cJSON array (caller must cJSON_Delete()).
+ *   5. Return the csilk_json array (caller must csilk_json_free()).
  *
- * All values are represented as cJSON strings — no type inference is
- * attempted. The caller can parse numerics/bools with cJSON_GetNumberValue
+ * All values are represented as csilk_json strings — no type inference is
+ * attempted. The caller can parse numerics/bools with csilk_json_get_number
  * etc. if needed.
  *
  * @param pool Database pool with an active connection.
  * @param sql  SQL query string.
- * @return A cJSON array of row objects, or nullptr on failure.
- * @note The returned cJSON must be freed by the caller with cJSON_Delete().
+ * @return A csilk_json array of row objects, or nullptr on failure.
+ * @note The returned csilk_json must be freed by the caller with csilk_json_free().
  * @warning The pool mutex must be held for the duration of this call. */
-static cJSON*
+static csilk_json_t*
 csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 {
     csilk_db_result_t result = {0};
@@ -121,16 +121,16 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
         return nullptr;
     }
 
-    cJSON* array = cJSON_CreateArray();
+    csilk_json_t* array = csilk_json_array();
     if (!array) {
         pool->driver->free_result(&result);
         return nullptr;
     }
 
     for (int i = 0; i < result.row_count; i++) {
-        cJSON* obj = cJSON_CreateObject();
+        csilk_json_t* obj = csilk_json_object();
         if (!obj) {
-            cJSON_Delete(array);
+            csilk_json_free(array);
             pool->driver->free_result(&result);
             return nullptr;
         }
@@ -138,12 +138,12 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
         csilk_db_row_t* row = result.rows[i];
         for (int j = 0; j < row->count; j++) {
             if (row->values[j]) {
-                cJSON_AddItemToObject(obj,
+                csilk_json_add_object(obj,
                                       result.column_names ? result.column_names[j] : "col",
-                                      cJSON_CreateString(row->values[j]));
+                                      csilk_json_string_new(row->values[j]));
             }
         }
-        cJSON_AddItemToArray(array, obj);
+        csilk_json_array_append(array, obj);
     }
 
     pool->driver->free_result(&result);
@@ -223,8 +223,8 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
     free(pool);
 }
 
-/** @brief Execute a SQL query and return the result as a cJSON array. */
-cJSON*
+/** @brief Execute a SQL query and return the result as a csilk_json array. */
+csilk_json_t*
 csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 {
     if (!pool || !pool->driver || !pool->driver->query) {
@@ -236,7 +236,7 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
     CSILK_LOG_D("Database query initiated: %s", sql);
 
     csilk_mutex_lock(&pool->mutex);
-    cJSON* result = csilk_db_query_json_locked(pool, sql);
+    csilk_json_t* result = csilk_db_query_json_locked(pool, sql);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
@@ -260,7 +260,7 @@ typedef struct {
     char*             sql;
     csilk_db_async_cb cb;
     void*             user_data;
-    cJSON*            result;
+    csilk_json_t*     result;
 } db_async_work_ctx_t;
 
 static void
@@ -364,7 +364,7 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
  * @param pool   Database pool.
  * @param sql    SQL pattern with ? placeholders.
  * @param params nullptr-terminated array of string values. */
-cJSON*
+csilk_json_t*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
     if (!pool || !sql || !params) {
@@ -413,7 +413,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
     *p = '\0';
 
     csilk_mutex_lock(&pool->mutex);
-    cJSON* result = csilk_db_query_json_locked(pool, full_sql);
+    csilk_json_t* result = csilk_db_query_json_locked(pool, full_sql);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;

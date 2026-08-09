@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "cJSON.h"
+#include "csilk/core/json.h"
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
 
@@ -24,27 +24,27 @@ mock_worker_handler(csilk_mq_ctx_t* ctx)
     printf("[MockWorker] Received task: %.*s\n", (int)len, payload);
     g_remote_task_received++;
 
-    cJSON* root = cJSON_Parse(payload);
+    csilk_json_t* root = csilk_json_parse(payload);
     if (!root) {
         csilk_mq_next(ctx);
         return;
     }
-    const char* exec_id = cJSON_GetObjectItem(root, "exec_id")->valuestring;
-    const char* node_id = cJSON_GetObjectItem(root, "node_id")->valuestring;
+    const char* exec_id = csilk_json_get_string(root, "exec_id");
+    const char* node_id = csilk_json_get_string(root, "node_id");
 
     // Simulate some work, then publish result back to the workflow engine
-    cJSON* res = cJSON_CreateObject();
-    cJSON_AddStringToObject(res, "exec_id", exec_id);
-    cJSON_AddStringToObject(res, "node_id", node_id);
-    cJSON_AddStringToObject(res, "output", "remote_worker_result");
-    char* res_json = cJSON_PrintUnformatted(res);
+    csilk_json_t* res = csilk_json_object();
+    csilk_json_add_string(res, "exec_id", exec_id);
+    csilk_json_add_string(res, "node_id", node_id);
+    csilk_json_add_string(res, "output", "remote_worker_result");
+    char* res_json = csilk_json_serialize(res, NULL);
 
     printf("[MockWorker] Publishing result back to MQ for node '%s'...\n", node_id);
     csilk_mq_publish(g_mq, "csilk.wf.results", res_json, strlen(res_json));
 
     free(res_json);
-    cJSON_Delete(res);
-    cJSON_Delete(root);
+    csilk_json_free(res);
+    csilk_json_free(root);
     csilk_mq_next(ctx);
 }
 

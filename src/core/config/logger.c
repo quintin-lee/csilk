@@ -195,8 +195,8 @@ log_text(csilk_log_level_t lv,
  * @param msg     Log message content.
  * @param msg_len Message length (may truncate to fit the entry struct).
  * @return cJSON object ready for merging extra fields, or nullptr on failure.
- * @note The returned cJSON must be freed by the caller with cJSON_Delete(). */
-static cJSON*
+ * @note The returned cJSON must be freed by the caller with csilk_json_free(). */
+static csilk_json_t*
 build_json_entry(csilk_log_level_t lv,
                  const char*       file,
                  int               line,
@@ -207,7 +207,7 @@ build_json_entry(csilk_log_level_t lv,
     const char* fn = strrchr(file, '/');
     fn = fn ? fn + 1 : file;
 
-    cJSON* root = cJSON_CreateObject();
+    csilk_json_t* root = csilk_json_object();
     if (!root) {
         return nullptr;
     }
@@ -221,15 +221,15 @@ build_json_entry(csilk_log_level_t lv,
         strftime(tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
     }
 
-    cJSON_AddNumberToObject(root, "time_epoch", (double)(int64_t)now);
-    cJSON_AddStringToObject(root, "level", level_names[lv]);
+    csilk_json_add_number(root, "time_epoch", (double)(int64_t)now);
+    csilk_json_add_string(root, "level", level_names[lv]);
 
     char* tl_request_id = get_tl_request_id();
-    cJSON_AddStringToObject(root, "request_id", tl_request_id);
+    csilk_json_add_string(root, "request_id", tl_request_id);
 
-    cJSON_AddStringToObject(root, "file", fn);
-    cJSON_AddNumberToObject(root, "line", line);
-    cJSON_AddStringToObject(root, "func", func);
+    csilk_json_add_string(root, "file", fn);
+    csilk_json_add_number(root, "line", line);
+    csilk_json_add_string(root, "func", func);
 
     if (msg && msg_len > 0) {
         /* Truncate to fit the message field limit (same as before) */
@@ -237,9 +237,9 @@ build_json_entry(csilk_log_level_t lv,
         char   buf[1024];
         memcpy(buf, msg, cp);
         buf[cp] = '\0';
-        cJSON_AddStringToObject(root, "msg", buf);
+        csilk_json_add_string(root, "msg", buf);
     } else {
-        cJSON_AddStringToObject(root, "msg", "");
+        csilk_json_add_string(root, "msg", "");
     }
 
     return root;
@@ -267,34 +267,37 @@ log_json(csilk_log_level_t lv,
          const char*       file,
          int               line,
          const char*       func,
-         cJSON*            extra,
+         csilk_json_t*     extra,
          const char*       msg,
          int               msg_len)
 {
-    cJSON* root = build_json_entry(lv, file, line, func, msg, msg_len);
+    csilk_json_t* root = build_json_entry(lv, file, line, func, msg, msg_len);
     if (!root) {
         return 0;
     }
 
     if (extra) {
-        cJSON* child = extra->child;
-        while (child) {
-            cJSON* dupe = cJSON_Duplicate(child, 1);
-            if (dupe) {
-                cJSON_AddItemToObject(root, child->string, dupe);
+        size_t count = csilk_json_object_size(extra);
+        for (size_t i = 0; i < count; i++) {
+            const char*         key = csilk_json_object_key(extra, i);
+            const csilk_json_t* val = csilk_json_object_val(extra, i);
+            if (key && val) {
+                csilk_json_t* dupe = csilk_json_copy(val);
+                if (dupe) {
+                    csilk_json_add_object(root, key, dupe);
+                }
             }
-            child = child->next;
         }
-        cJSON_Delete(extra);
+        csilk_json_free(extra);
     }
 
-    char* line_str = cJSON_PrintUnformatted(root);
+    char* line_str = csilk_json_serialize(root, NULL);
     int   n = 0;
     if (line_str) {
         n = fprintf(g_logger.fp, "%s\n", line_str);
         free(line_str);
     }
-    cJSON_Delete(root);
+    csilk_json_free(root);
     return n;
 }
 
@@ -422,7 +425,7 @@ _csilk_log_structured(csilk_log_level_t lv,
                       const char*       file,
                       int               line,
                       const char*       func,
-                      cJSON*            extra,
+                      csilk_json_t*     extra,
                       const char*       fmt,
                       ...)
 {
@@ -453,7 +456,7 @@ _csilk_log_structured(csilk_log_level_t lv,
         n = log_json(lv, file, line, func, extra, buf, len);
     } else {
         if (extra) {
-            cJSON_Delete(extra);
+            csilk_json_free(extra);
         }
         n = log_text(lv, file, line, func, buf, len);
     }
@@ -497,10 +500,10 @@ csilk_log_set_request_id(const char* request_id)
  *
  * Helper to create a flat JSON object from a nullptr-terminated list of strings.
  * Used primarily with CSILK_LOG_KV. */
-cJSON*
+csilk_json_t*
 csilk_log_make_kv(const char* key, ...)
 {
-    cJSON* obj = cJSON_CreateObject();
+    csilk_json_t* obj = csilk_json_object();
     if (!obj) {
         return nullptr;
     }
@@ -513,7 +516,7 @@ csilk_log_make_kv(const char* key, ...)
     while (k) {
         const char* v = va_arg(args, const char*); // NOLINT
         if (v) {
-            cJSON_AddStringToObject(obj, k, v);
+            csilk_json_add_string(obj, k, v);
         }
         k = va_arg(args, const char*);
     }
