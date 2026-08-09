@@ -21,9 +21,9 @@ if(EXISTS "${CSILK_DEPS_DIR}/libuv-src/CMakeLists.txt")
   message(STATUS "csilk: using pre-fetched libuv at ${libuv_SOURCE_DIR}")
 endif()
 
-if(EXISTS "${CSILK_DEPS_DIR}/cjson-src/CMakeLists.txt")
-  set(cjson_SOURCE_DIR "${CSILK_DEPS_DIR}/cjson-src" CACHE PATH "Pre-fetched cJSON source")
-  message(STATUS "csilk: using pre-fetched cJSON at ${cjson_SOURCE_DIR}")
+if(EXISTS "${CSILK_DEPS_DIR}/yyjson-src/CMakeLists.txt")
+  set(yyjson_SOURCE_DIR "${CSILK_DEPS_DIR}/yyjson-src" CACHE PATH "Pre-fetched yyjson source")
+  message(STATUS "csilk: using pre-fetched yyjson at ${yyjson_SOURCE_DIR}")
 endif()
 
 if(EXISTS "${CSILK_DEPS_DIR}/llhttp-src/CMakeLists.txt")
