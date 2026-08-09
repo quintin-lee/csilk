@@ -29,9 +29,9 @@ jobs:
       uses: actions/cache@v5
       with:
         path: build/_deps
-        key: ${{ runner.os }}-${{ matrix.build_type }}-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        key: ${{ runner.os }}-${{ matrix.build_type }}-clang-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.build_type }}-deps-
+          ${{ runner.os }}-${{ matrix.build_type }}-clang-deps-
 
     - name: Cache ccache
       uses: actions/cache@v5
@@ -39,9 +39,9 @@ jobs:
         path: |
           ~/.cache/ccache
           ~/Library/Caches/ccache
-        key: ${{ runner.os }}-${{ matrix.build_type }}-ccache-${{ github.sha }}
+        key: ${{ runner.os }}-${{ matrix.build_type }}-clang-ccache-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.build_type }}-ccache-
+          ${{ runner.os }}-${{ matrix.build_type }}-clang-ccache-
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
