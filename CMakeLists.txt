@@ -33,39 +33,44 @@ else()
 endif()
 set(CSILK_DEBUG_FLAGS   "$<$<NOT:$<CONFIG:Release>>:-O2>")
 
-# Suppress benign third-party warnings (cJSON macros, nghttp2/libuv deprecations).
+# Suppress benign third-party warnings (cJSON/yyjson macros, nghttp2/libuv deprecations).
 add_compile_options(-Wno-keyword-macro -Wno-deprecated-declarations)
 
 # SIMD acceleration for router path matching (AVX2/AVX-512 on x86_64, NEON on aarch64)
 include(CheckCSourceCompiles)
-set(CMAKE_REQUIRED_FLAGS "-mavx2")
-check_c_source_compiles("
-  #include <immintrin.h>
-  int main(void) {
-    __m256i v = _mm256_setzero_si256();
-    (void)v;
-    return 0;
-  }
-" CSILK_HAS_AVX2)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+  set(CMAKE_REQUIRED_FLAGS "-mavx2")
+  check_c_source_compiles("
+    #include <immintrin.h>
+    int main(void) {
+      __m256i v = _mm256_setzero_si256();
+      (void)v;
+      return 0;
+    }
+  " CSILK_HAS_AVX2)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+  set(CSILK_HAS_AVX2 FALSE)
+  message(STATUS "ARM platform — AVX2 disabled, using word-aligned fast path")
+endif()
 set(CMAKE_REQUIRED_FLAGS "")
 if(CSILK_HAS_AVX2)
   message(STATUS "AVX2 SIMD enabled for router path matching")
-else()
-  message(STATUS "AVX2 not available — using word-aligned fast path")
 endif()
 
-set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512bw")
-check_c_source_compiles("
-  #include <immintrin.h>
-  int main(void) {
-    __m512i v = _mm512_setzero_si256();
-    (void)v;
-    return 0;
-  }
-" CSILK_HAS_AVX512)
-set(CMAKE_REQUIRED_FLAGS "")
-if(CSILK_HAS_AVX512)
-  message(STATUS "AVX-512 SIMD enabled for router path matching")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+  set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512bw")
+  check_c_source_compiles("
+    #include <immintrin.h>
+    int main(void) {
+      __m512i v = _mm512_setzero_si512();
+      (void)v;
+      return 0;
+    }
+  " CSILK_HAS_AVX512)
+  set(CMAKE_REQUIRED_FLAGS "")
+  if(CSILK_HAS_AVX512)
+    message(STATUS "AVX-512 SIMD enabled for router path matching")
+  endif()
 endif()
 
 # ── Modular includes ─────────────────────────────────────────────────────
