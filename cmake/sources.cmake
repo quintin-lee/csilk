@@ -22,6 +22,7 @@ set(CSILK_CORE_SOURCES
     src/core/ctx/ctx_accessors.c
     src/core/ctx/ctx_defer.c
     src/core/ctx/ctx_json.c
+    src/core/json/json.c
     src/core/http/h2.c
     src/core/http/http1_parse.c
     src/core/http/http1_response.c

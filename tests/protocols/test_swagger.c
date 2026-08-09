@@ -54,37 +54,38 @@ dummy_handler(csilk_ctx_t* c)
 // --- Helper to verify cJSON tree ---
 
 static int
-json_has_string(cJSON* obj, const char* key, const char* val)
+json_has_string(csilk_json_t* obj, const char* key, const char* val)
 {
-    cJSON* item = cJSON_GetObjectItem(obj, key);
-    return item && cJSON_IsString(item) && strcmp(item->valuestring, val) == 0;
+    csilk_json_t* item = csilk_json_get(obj, key);
+    return item && csilk_json_is_string(item) && strcmp(csilk_json_string_value(item), val) == 0;
 }
 
-static cJSON*
-get_path(cJSON* spec, const char* method, const char* path)
+static csilk_json_t*
+get_path(csilk_json_t* spec, const char* method, const char* path)
 {
-    cJSON* paths = cJSON_GetObjectItem(spec, "paths");
+    csilk_json_t* paths = csilk_json_get(spec, "paths");
     if (!paths) {
         return nullptr;
     }
-    cJSON* pobj = cJSON_GetObjectItem(paths, path);
+    csilk_json_t* pobj = csilk_json_get(paths, path);
     if (!pobj) {
         return nullptr;
     }
-    return cJSON_GetObjectItem(pobj, method);
+    return csilk_json_get(pobj, method);
 }
 
 static int
-count_array(cJSON* arr)
+count_array(csilk_json_t* arr)
 {
-    if (!arr || !cJSON_IsArray(arr)) {
+    if (!arr || !csilk_json_is_array(arr)) {
         return 0;
     }
-    int    c = 0;
-    cJSON* e;
-    cJSON_ArrayForEach(e, arr)
-    {
-        (void)e;
+    int c = 0;
+    for (size_t _i = 0; _i < csilk_json_array_size(arr); _i++) {
+        csilk_json_t* e = csilk_json_array_get(arr, _i);
+        if (!e) {
+            break;
+        }
         c++;
     }
     return c;
@@ -101,28 +102,28 @@ test_basic_spec_structure()
     csilk_handler_t h[] = {dummy_handler};
     csilk_router_add_extended(r, "GET", "/", h, 1, "/", nullptr, nullptr, "Root", "Root endpoint");
 
-    cJSON* spec = csilk_generate_openapi_json(r, "TestAPI", "2.0.0", "Description");
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "TestAPI", "2.0.0", "Description");
     assert(spec);
 
     // Check openapi version
     assert(json_has_string(spec, "openapi", "3.0.3"));
 
     // Check info section
-    cJSON* info = cJSON_GetObjectItem(spec, "info");
+    csilk_json_t* info = csilk_json_get(spec, "info");
     assert(info);
     assert(json_has_string(info, "title", "TestAPI"));
     assert(json_has_string(info, "version", "2.0.0"));
     assert(json_has_string(info, "description", "Description"));
 
     // Check paths
-    cJSON* paths = cJSON_GetObjectItem(spec, "paths");
+    csilk_json_t* paths = csilk_json_get(spec, "paths");
     assert(paths);
 
-    cJSON* get_op = get_path(spec, "get", "/");
+    csilk_json_t* get_op = get_path(spec, "get", "/");
     assert(get_op);
     assert(json_has_string(get_op, "summary", "Root"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_basic_spec_structure PASSED\n");
 }
@@ -139,30 +140,30 @@ test_path_parameter_conversion()
     csilk_router_add_extended(
         r, "GET", "/files/*path", h, 1, "/files/*path", nullptr, nullptr, nullptr, nullptr);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
     // Check :id → {id}
-    cJSON* user_get = get_path(spec, "get", "/users/{id}");
+    csilk_json_t* user_get = get_path(spec, "get", "/users/{id}");
     assert(user_get);
-    cJSON* params = cJSON_GetObjectItem(user_get, "parameters");
-    assert(params && cJSON_IsArray(params));
+    csilk_json_t* params = csilk_json_get(user_get, "parameters");
+    assert(params && csilk_json_is_array(params));
     assert(count_array(params) == 1);
-    cJSON* p = cJSON_GetArrayItem(params, 0);
+    csilk_json_t* p = csilk_json_array_get(params, 0);
     assert(p);
     assert(json_has_string(p, "name", "id"));
     assert(json_has_string(p, "in", "path"));
 
     // Check *path → {path+}
-    cJSON* file_get = get_path(spec, "get", "/files/{path+}");
+    csilk_json_t* file_get = get_path(spec, "get", "/files/{path+}");
     assert(file_get);
-    params = cJSON_GetObjectItem(file_get, "parameters");
-    assert(params && cJSON_IsArray(params));
+    params = csilk_json_get(file_get, "parameters");
+    assert(params && csilk_json_is_array(params));
     assert(count_array(params) == 1);
-    p = cJSON_GetArrayItem(params, 0);
+    p = csilk_json_array_get(params, 0);
     assert(json_has_string(p, "name", "path"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_path_parameter_conversion PASSED\n");
 }
@@ -185,35 +186,35 @@ test_request_response_types()
                               "User Login",
                               "Authenticate user");
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* post_op = get_path(spec, "post", "/login");
+    csilk_json_t* post_op = get_path(spec, "post", "/login");
     assert(post_op);
 
     // Check requestBody
-    cJSON* req_body = cJSON_GetObjectItem(post_op, "requestBody");
+    csilk_json_t* req_body = csilk_json_get(post_op, "requestBody");
     assert(req_body);
-    cJSON* content = cJSON_GetObjectItem(req_body, "content");
+    csilk_json_t* content = csilk_json_get(req_body, "content");
     assert(content);
-    cJSON* json_content = cJSON_GetObjectItem(content, "application/json");
+    csilk_json_t* json_content = csilk_json_get(content, "application/json");
     assert(json_content);
-    cJSON* schema = cJSON_GetObjectItem(json_content, "schema");
+    csilk_json_t* schema = csilk_json_get(json_content, "schema");
     assert(schema);
     assert(json_has_string(schema, "$ref", "#/components/schemas/LoginReq"));
 
     // Check response 200 schema
-    cJSON* resp200 = cJSON_GetObjectItem(cJSON_GetObjectItem(post_op, "responses"), "200");
+    csilk_json_t* resp200 = csilk_json_get(csilk_json_get(post_op, "responses"), "200");
     assert(resp200);
-    content = cJSON_GetObjectItem(resp200, "content");
+    content = csilk_json_get(resp200, "content");
     assert(content);
-    json_content = cJSON_GetObjectItem(content, "application/json");
+    json_content = csilk_json_get(content, "application/json");
     assert(json_content);
-    schema = cJSON_GetObjectItem(json_content, "schema");
+    schema = csilk_json_get(json_content, "schema");
     assert(schema);
     assert(json_has_string(schema, "$ref", "#/components/schemas/LoginResp"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_request_response_types PASSED\n");
 }
@@ -228,41 +229,41 @@ test_schema_generation()
     csilk_router_add_extended(
         r, "POST", "/products", h, 1, "/products", "Product", "Product", nullptr, nullptr);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
     // Check components/schemas
-    cJSON* components = cJSON_GetObjectItem(spec, "components");
+    csilk_json_t* components = csilk_json_get(spec, "components");
     assert(components);
-    cJSON* schemas = cJSON_GetObjectItem(components, "schemas");
+    csilk_json_t* schemas = csilk_json_get(components, "schemas");
     assert(schemas);
 
-    cJSON* product_schema = cJSON_GetObjectItem(schemas, "Product");
+    csilk_json_t* product_schema = csilk_json_get(schemas, "Product");
     assert(product_schema);
     assert(json_has_string(product_schema, "type", "object"));
 
     // Check properties
-    cJSON* props = cJSON_GetObjectItem(product_schema, "properties");
+    csilk_json_t* props = csilk_json_get(product_schema, "properties");
     assert(props);
-    assert(cJSON_GetObjectItem(props, "id"));
-    assert(cJSON_GetObjectItem(props, "name"));
-    assert(cJSON_GetObjectItem(props, "price"));
-    assert(cJSON_GetObjectItem(props, "active"));
+    assert(csilk_json_get(props, "id"));
+    assert(csilk_json_get(props, "name"));
+    assert(csilk_json_get(props, "price"));
+    assert(csilk_json_get(props, "active"));
 
     // Verify type mapping
-    cJSON* name_prop = cJSON_GetObjectItem(props, "name");
+    csilk_json_t* name_prop = csilk_json_get(props, "name");
     assert(json_has_string(name_prop, "type", "string"));
 
-    cJSON* id_prop = cJSON_GetObjectItem(props, "id");
+    csilk_json_t* id_prop = csilk_json_get(props, "id");
     assert(json_has_string(id_prop, "type", "integer"));
 
-    cJSON* price_prop = cJSON_GetObjectItem(props, "price");
+    csilk_json_t* price_prop = csilk_json_get(props, "price");
     assert(json_has_string(price_prop, "type", "number"));
 
-    cJSON* active_prop = cJSON_GetObjectItem(props, "active");
+    csilk_json_t* active_prop = csilk_json_get(props, "active");
     assert(json_has_string(active_prop, "type", "boolean"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_schema_generation PASSED\n");
 }
@@ -281,32 +282,32 @@ test_multiple_methods_same_path()
     csilk_router_add_extended(
         r, "DELETE", "/items/:id", h, 1, "/items/:id", nullptr, nullptr, "Delete item", nullptr);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* paths = cJSON_GetObjectItem(spec, "paths");
+    csilk_json_t* paths = csilk_json_get(spec, "paths");
     assert(paths);
 
     // Check multiple methods on /items
-    cJSON* items = cJSON_GetObjectItem(paths, "/items");
+    csilk_json_t* items = csilk_json_get(paths, "/items");
     assert(items);
-    assert(cJSON_GetObjectItem(items, "get"));
-    assert(cJSON_GetObjectItem(items, "post"));
+    assert(csilk_json_get(items, "get"));
+    assert(csilk_json_get(items, "post"));
 
     // Each method should have correct summary
-    cJSON* get_op = cJSON_GetObjectItem(items, "get");
+    csilk_json_t* get_op = csilk_json_get(items, "get");
     assert(json_has_string(get_op, "summary", "List items"));
-    cJSON* post_op = cJSON_GetObjectItem(items, "post");
+    csilk_json_t* post_op = csilk_json_get(items, "post");
     assert(json_has_string(post_op, "summary", "Create item"));
 
     // Check /items/{id}
-    cJSON* items_id = cJSON_GetObjectItem(paths, "/items/{id}");
+    csilk_json_t* items_id = csilk_json_get(paths, "/items/{id}");
     assert(items_id);
-    cJSON* del_op = cJSON_GetObjectItem(items_id, "delete");
+    csilk_json_t* del_op = csilk_json_get(items_id, "delete");
     assert(del_op);
     assert(json_has_string(del_op, "summary", "Delete item"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_multiple_methods_same_path PASSED\n");
 }
@@ -320,22 +321,22 @@ test_route_without_types()
     csilk_handler_t h[] = {dummy_handler};
     csilk_router_add(r, "GET", "/plain", h, 1);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* get_op = get_path(spec, "get", "/plain");
+    csilk_json_t* get_op = get_path(spec, "get", "/plain");
     assert(get_op);
 
     // Should NOT have requestBody
-    assert(cJSON_GetObjectItem(get_op, "requestBody") == nullptr);
+    assert(csilk_json_get(get_op, "requestBody") == nullptr);
 
     // Should have default response (no schema ref)
-    cJSON* resp200 = cJSON_GetObjectItem(cJSON_GetObjectItem(get_op, "responses"), "200");
+    csilk_json_t* resp200 = csilk_json_get(csilk_json_get(get_op, "responses"), "200");
     assert(resp200);
     // No content section for type-less routes
-    assert(cJSON_GetObjectItem(resp200, "content") == nullptr);
+    assert(csilk_json_get(resp200, "content") == nullptr);
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_route_without_types PASSED\n");
 }
@@ -351,23 +352,23 @@ test_router_collect_routes()
     csilk_handler_t h2[] = {dummy_handler};
     csilk_router_add_extended(r, "POST", "/b", h2, 1, "/b", "LoginReq", nullptr, nullptr, nullptr);
 
-    cJSON* routes = csilk_router_collect_routes(r);
+    csilk_json_t* routes = csilk_router_collect_routes(r);
     assert(routes);
-    assert(cJSON_IsArray(routes));
+    assert(csilk_json_is_array(routes));
     assert(count_array(routes) == 2);
 
-    cJSON* first = cJSON_GetArrayItem(routes, 0);
+    csilk_json_t* first = csilk_json_array_get(routes, 0);
     assert(first);
     assert(json_has_string(first, "method", "GET"));
     assert(json_has_string(first, "path", "/a"));
 
-    cJSON* second = cJSON_GetArrayItem(routes, 1);
+    csilk_json_t* second = csilk_json_array_get(routes, 1);
     assert(second);
     assert(json_has_string(second, "method", "POST"));
     assert(json_has_string(second, "path", "/b"));
     assert(json_has_string(second, "input_type", "LoginReq"));
 
-    cJSON_Delete(routes);
+    csilk_json_free(routes);
     csilk_router_free(r);
     printf("test_router_collect_routes PASSED\n");
 }
@@ -383,28 +384,29 @@ test_no_duplicate_schemas()
     csilk_router_add_extended(r, "GET", "/p1", h, 1, "/p1", nullptr, "Product", nullptr, nullptr);
     csilk_router_add_extended(r, "GET", "/p2", h, 1, "/p2", nullptr, "Product", nullptr, nullptr);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* schemas = cJSON_GetObjectItem(cJSON_GetObjectItem(spec, "components"), "schemas");
+    csilk_json_t* schemas = csilk_json_get(csilk_json_get(spec, "components"), "schemas");
     assert(schemas);
 
     // Product should appear exactly once
-    cJSON* product = cJSON_GetObjectItem(schemas, "Product");
+    csilk_json_t* product = csilk_json_get(schemas, "Product");
     assert(product);
 
     // Count properties inside product schema
-    cJSON* props = cJSON_GetObjectItem(product, "properties");
-    int    count = 0;
-    cJSON* p;
-    cJSON_ArrayForEach(p, props)
-    {
-        (void)p;
+    csilk_json_t* props = csilk_json_get(product, "properties");
+    int           count = 0;
+    for (size_t _i = 0; _i < csilk_json_object_size(props); _i++) {
+        csilk_json_t* p = csilk_json_object_val(props, _i);
+        if (!p) {
+            break;
+        }
         count++;
     }
     assert(count == 4); // id, name, price, active
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_no_duplicate_schemas PASSED\n");
 }
@@ -418,14 +420,14 @@ test_extended_route_macro()
     csilk_handler_t h[] = {dummy_handler};
     CSILK_ROUTE(r, "PUT", "/item/:id", h, 1, "Product", "Product", "Update", "Update item");
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* put_op = get_path(spec, "put", "/item/{id}");
+    csilk_json_t* put_op = get_path(spec, "put", "/item/{id}");
     assert(put_op);
     assert(json_has_string(put_op, "summary", "Update"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_extended_route_macro PASSED\n");
 }
@@ -440,15 +442,15 @@ test_descriptions_and_summaries()
     csilk_router_add_extended(
         r, "GET", "/test", h, 1, "/test", nullptr, nullptr, "Short", "Long description");
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* op = get_path(spec, "get", "/test");
+    csilk_json_t* op = get_path(spec, "get", "/test");
     assert(op);
     assert(json_has_string(op, "summary", "Short"));
     assert(json_has_string(op, "description", "Long description"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_descriptions_and_summaries PASSED\n");
 }
@@ -528,19 +530,19 @@ test_auto_register_all_types()
     csilk_handler_t h[] = {dummy_handler};
     csilk_router_add(r, "GET", "/foo", h, 1);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "T", "1", nullptr);
     assert(spec);
 
-    cJSON* schemas = cJSON_GetObjectItem(cJSON_GetObjectItem(spec, "components"), "schemas");
+    csilk_json_t* schemas = csilk_json_get(csilk_json_get(spec, "components"), "schemas");
     assert(schemas);
 
     // All reflected types should auto-appear in components/schemas
     // even though no route references them
-    assert(cJSON_GetObjectItem(schemas, "Product"));
-    assert(cJSON_GetObjectItem(schemas, "LoginReq"));
-    assert(cJSON_GetObjectItem(schemas, "LoginResp"));
+    assert(csilk_json_get(schemas, "Product"));
+    assert(csilk_json_get(schemas, "LoginReq"));
+    assert(csilk_json_get(schemas, "LoginResp"));
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_auto_register_all_types PASSED\n");
 }
@@ -551,19 +553,19 @@ test_empty_router()
     csilk_router_t* r = csilk_router_new();
     assert(r);
 
-    cJSON* spec = csilk_generate_openapi_json(r, "Empty", "1", nullptr);
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "Empty", "1", nullptr);
     assert(spec);
 
-    cJSON* paths = cJSON_GetObjectItem(spec, "paths");
+    csilk_json_t* paths = csilk_json_get(spec, "paths");
     assert(paths);
-    assert(count_array(paths->child) == 0 || cJSON_GetArraySize(paths) == 0);
+    assert(count_array(paths) == 0);
 
-    cJSON* routes = csilk_router_collect_routes(r);
+    csilk_json_t* routes = csilk_router_collect_routes(r);
     assert(routes);
     assert(count_array(routes) == 0);
-    cJSON_Delete(routes);
+    csilk_json_free(routes);
 
-    cJSON_Delete(spec);
+    csilk_json_free(spec);
     csilk_router_free(r);
     printf("test_empty_router PASSED\n");
 }

@@ -146,10 +146,10 @@ field_type_to_openapi_type(csilk_field_type_t type)
  * wrapper with "items".
  *
  * @param type_name Registered reflection type name.
- * @return A cJSON object representing the OpenAPI schema, or nullptr if the
+ * @return A csilk_json_t object representing the OpenAPI schema, or nullptr if the
  *         type is not registered or allocation fails.
- * @note The caller must free the returned cJSON with cJSON_Delete(). */
-static cJSON*
+ * @note The caller must free the returned csilk_json_t with csilk_json_free(). */
+static csilk_json_t*
 generate_schema_for_type(const char* type_name)
 {
     const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
@@ -157,15 +157,16 @@ generate_schema_for_type(const char* type_name)
         return nullptr;
     }
 
-    cJSON* schema = cJSON_CreateObject();
+    csilk_json_t* schema = csilk_json_object();
     if (!schema) {
         return nullptr;
     }
 
-    cJSON_AddStringToObject(schema, "type", "object");
-    cJSON* properties = cJSON_AddObjectToObject(schema, "properties");
+    csilk_json_add_string(schema, "type", "object");
+    csilk_json_t* properties = csilk_json_object();
+    csilk_json_add_object(schema, "properties", properties);
     if (!properties) {
-        cJSON_Delete(schema);
+        csilk_json_free(schema);
         return nullptr;
     }
 
@@ -190,25 +191,25 @@ generate_schema_for_type(const char* type_name)
    */
     for (size_t i = 0; i < entry->count; i++) {
         const csilk_field_desc_t* field = &entry->fields[i];
-        cJSON*                    prop = cJSON_CreateObject();
+        csilk_json_t*             prop = csilk_json_object();
 
         const char* oa_type = field_type_to_openapi_type(field->type);
         if (field->type == CSILK_TYPE_STRUCT) {
             const char* type_name = field->nested_type_name ? field->nested_type_name : "unknown";
             char        ref[256];
             snprintf(ref, sizeof(ref), "#/components/schemas/%s", type_name);
-            cJSON_AddStringToObject(prop, "$ref", ref);
+            csilk_json_add_string(prop, "$ref", ref);
         } else {
-            cJSON_AddStringToObject(prop, "type", oa_type);
+            csilk_json_add_string(prop, "type", oa_type);
         }
 
         if (field->array_length > 0) {
-            cJSON* arr_wrap = cJSON_CreateObject();
-            cJSON_AddItemToObject(arr_wrap, "items", prop);
-            cJSON_AddStringToObject(arr_wrap, "type", "array");
-            cJSON_AddItemToObject(properties, field->json_key, arr_wrap);
+            csilk_json_t* arr_wrap = csilk_json_object();
+            csilk_json_add_object(arr_wrap, "items", prop);
+            csilk_json_add_string(arr_wrap, "type", "array");
+            csilk_json_add_object(properties, field->json_key, arr_wrap);
         } else {
-            cJSON_AddItemToObject(properties, field->json_key, prop);
+            csilk_json_add_object(properties, field->json_key, prop);
         }
     }
 
@@ -222,10 +223,10 @@ generate_schema_for_type(const char* type_name)
  * generates the schema, adds it, and recursively registers schemas for any
  * nested struct fields.
  *
- * @param schemas   The "schemas" cJSON object under components.
+ * @param schemas   The "schemas" csilk_json_t object under components.
  * @param type_name Type name to generate and add. */
 static void
-add_schema(cJSON* schemas, const char* type_name)
+add_schema(csilk_json_t* schemas, const char* type_name)
 {
     if (!schemas || !type_name || *type_name == '\0') {
         return;
@@ -237,18 +238,18 @@ add_schema(cJSON* schemas, const char* type_name)
    * references (e.g., type A has a field of type B, and type B has a field
    * of type A).
    *
-   * The schemas cJSON object doubles as a "visited" set: we insert the
+   * The schemas csilk_json_t object doubles as a "visited" set: we insert the
    * schema upfront (cJSON_AddItemToObject) before recursing into nested
    * types, so a re-encounter is caught immediately.  The "$ref" pointer
    * in the parent schema correctly references the already-inserted entry.
    */
-    if (cJSON_GetObjectItem(schemas, type_name)) {
+    if (csilk_json_get(schemas, type_name)) {
         return;
     }
 
-    cJSON* schema = generate_schema_for_type(type_name);
+    csilk_json_t* schema = generate_schema_for_type(type_name);
     if (schema) {
-        cJSON_AddItemToObject(schemas, type_name, schema);
+        csilk_json_add_object(schemas, type_name, schema);
 
         // Recursively register schemas for nested struct types
         const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
@@ -272,12 +273,12 @@ add_schema(cJSON* schemas, const char* type_name)
  *
  * @param name      Type name.
  * @param entry     Reflection entry (unused).
- * @param user_data Pointer to the schemas cJSON object. */
+ * @param user_data Pointer to the schemas csilk_json_t object. */
 static void
 auto_register_schema(const char* name, const csilk_reflect_entry_t* entry, void* user_data)
 {
     (void)entry;
-    add_schema((cJSON*)user_data, name);
+    add_schema((csilk_json_t*)user_data, name);
 }
 
 /** @brief Generate a complete OpenAPI 3.0 specification document from the
@@ -299,10 +300,10 @@ auto_register_schema(const char* name, const csilk_reflect_entry_t* entry, void*
  * @param title       API title for the info section (pass nullptr for default).
  * @param version     API version string (pass nullptr for default "1.0.0").
  * @param description API description (may be nullptr).
- * @return A cJSON object representing the full OpenAPI document. Caller must
- *         free with cJSON_Delete(). Returns nullptr if router is nullptr or
+ * @return A csilk_json_t object representing the full OpenAPI document. Caller must
+ *         free with csilk_json_free(). Returns nullptr if router is nullptr or
  *         allocation fails. */
-cJSON*
+csilk_json_t*
 csilk_generate_openapi_json(csilk_router_t* router,
                             const char*     title,
                             const char*     version,
@@ -312,45 +313,49 @@ csilk_generate_openapi_json(csilk_router_t* router,
         return nullptr;
     }
 
-    cJSON* doc = cJSON_CreateObject();
+    csilk_json_t* doc = csilk_json_object();
     if (!doc) {
         return nullptr;
     }
 
     // OpenAPI version
-    cJSON_AddStringToObject(doc, "openapi", "3.0.3");
+    csilk_json_add_string(doc, "openapi", "3.0.3");
 
     // Info section
-    cJSON* info = cJSON_AddObjectToObject(doc, "info");
+    csilk_json_t* info = csilk_json_object();
+    csilk_json_add_object(doc, "info", info);
     if (info) {
-        cJSON_AddStringToObject(info, "title", title ? title : "csilk API");
-        cJSON_AddStringToObject(info, "version", version ? version : "1.0.0");
+        csilk_json_add_string(info, "title", title ? title : "csilk API");
+        csilk_json_add_string(info, "version", version ? version : "1.0.0");
         if (description) {
-            cJSON_AddStringToObject(info, "description", description);
+            csilk_json_add_string(info, "description", description);
         }
     }
 
     // Paths section
-    cJSON* paths = cJSON_AddObjectToObject(doc, "paths");
+    csilk_json_t* paths = csilk_json_object();
+    csilk_json_add_object(doc, "paths", paths);
 
     // Components section
-    cJSON* components = cJSON_AddObjectToObject(doc, "components");
-    cJSON* schemas = nullptr;
+    csilk_json_t* components = csilk_json_object();
+    csilk_json_add_object(doc, "components", components);
+    csilk_json_t* schemas = nullptr;
     if (components) {
-        schemas = cJSON_AddObjectToObject(components, "schemas");
+        schemas = csilk_json_object();
+        csilk_json_add_object(components, "schemas", schemas);
     }
 
     // Collect all routes
-    cJSON* routes = csilk_router_collect_routes(router);
+    csilk_json_t* routes = csilk_router_collect_routes(router);
     if (!routes) {
-        cJSON_Delete(doc);
+        csilk_json_free(doc);
         return nullptr;
     }
 
     /*
    * Phase 1 — Build the "paths" section by iterating every registered route.
    * Each route from csilk_router_collect_routes() carries method, path,
-   * input_type, output_type, summary, and description as cJSON properties.
+   * input_type, output_type, summary, and description as csilk_json_t properties.
    *
    * Steps per route:
    *   a) Convert router-style path (":param") to OpenAPI syntax ("{param}").
@@ -366,209 +371,225 @@ csilk_generate_openapi_json(csilk_router_t* router,
    *   f) Add a "200" response with the output type's schema "$ref", and
    *      generic "400" and "500" error responses.
    */
-    cJSON* route;
-    cJSON_ArrayForEach(route, routes)
-    {
-        cJSON* method_item = cJSON_GetObjectItem(route, "method");
-        cJSON* path_item = cJSON_GetObjectItem(route, "path");
-        cJSON* input_item = cJSON_GetObjectItem(route, "input_type");
-        cJSON* output_item = cJSON_GetObjectItem(route, "output_type");
-        cJSON* summary_item = cJSON_GetObjectItem(route, "summary");
-        cJSON* desc_item = cJSON_GetObjectItem(route, "description");
-
-        if (!method_item || !path_item) {
-            continue;
+    csilk_json_t* route;
+    for (size_t _i = 0; _i < csilk_json_array_size(routes); _i++) {
+        route = csilk_json_array_get(routes, _i);
+        if (!route) {
+            break;
         }
-
-        const char* method = cJSON_GetStringValue(method_item);
-        const char* raw_path = cJSON_GetStringValue(path_item);
-        if (!method || !raw_path) {
-            continue;
-        }
-
-        // Convert path to OpenAPI format
-        char oa_path[1024];
-        path_to_openapi(raw_path, oa_path, sizeof(oa_path));
-
-        // Get or create path item
-        cJSON* path_obj = cJSON_GetObjectItem(paths, oa_path);
-        if (!path_obj) {
-            path_obj = cJSON_AddObjectToObject(paths, oa_path);
-        }
-        if (!path_obj) {
-            continue;
-        }
-
-        // Method can be in lowercase for path item
-        char   method_lower[16];
-        size_t mlen = strlen(method);
-        if (mlen >= sizeof(method_lower)) {
-            mlen = sizeof(method_lower) - 1;
-        }
-        for (size_t i = 0; i < mlen; i++) {
-            method_lower[i] = (char)tolower((unsigned char)method[i]);
-        }
-        method_lower[mlen] = '\0';
-
-        // Check if method already exists (e.g., GET already added for this path)
-        if (cJSON_GetObjectItem(path_obj, method_lower)) {
-            continue;
-        }
-
-        cJSON* operation = cJSON_AddObjectToObject(path_obj, method_lower);
-        if (!operation) {
-            continue;
-        }
-
-        // Summary and description
-        cJSON_AddStringToObject(operation,
-                                "summary",
-                                summary_item && cJSON_GetStringValue(summary_item)
-                                    ? cJSON_GetStringValue(summary_item)
-                                    : "");
-        cJSON_AddStringToObject(
-            operation,
-            "description",
-            desc_item && cJSON_GetStringValue(desc_item) ? cJSON_GetStringValue(desc_item) : "");
-        cJSON_AddStringToObject(operation, "operationId", "");
-
-        // Add Operation ID: method_path
         {
-            char opid[1024];
-            snprintf(opid, sizeof(opid), "%s%s", method, oa_path);
-            cJSON_SetValuestring(cJSON_GetObjectItem(operation, "operationId"), opid);
-        }
+            csilk_json_t* method_item = csilk_json_get(route, "method");
+            csilk_json_t* path_item = csilk_json_get(route, "path");
+            csilk_json_t* input_item = csilk_json_get(route, "input_type");
+            csilk_json_t* output_item = csilk_json_get(route, "output_type");
+            csilk_json_t* summary_item = csilk_json_get(route, "summary");
+            csilk_json_t* desc_item = csilk_json_get(route, "description");
 
-        // Parameters (path params extracted from path pattern)
-        cJSON* params = cJSON_AddArrayToObject(operation, "parameters");
-
-        // Extract path parameters from raw path
-        const char* p = raw_path;
-        while (*p) {
-            if (*p == ':') {
-                p++;
-                const char* start = p;
-                while (*p && *p != '/') {
-                    p++;
-                }
-                size_t len = (size_t)(p - start);
-
-                cJSON* param = cJSON_CreateObject();
-                cJSON_AddStringToObject(param, "name", "");
-                {
-                    char   param_name[128];
-                    size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
-                    memcpy(param_name, start, clen);
-                    param_name[clen] = '\0';
-                    cJSON_SetValuestring(cJSON_GetObjectItem(param, "name"), param_name);
-                }
-                cJSON_AddStringToObject(param, "in", "path");
-                cJSON_AddBoolToObject(param, "required", 1);
-                cJSON* schema_obj = cJSON_AddObjectToObject(param, "schema");
-                if (schema_obj) {
-                    cJSON_AddStringToObject(schema_obj, "type", "string");
-                }
-                cJSON_AddItemToArray(params, param);
-            } else if (*p == '*') {
-                p++;
-                const char* start = p;
-                while (*p) {
-                    p++;
-                }
-                size_t len = (size_t)(p - start);
-
-                cJSON* param = cJSON_CreateObject();
-                cJSON_AddStringToObject(param, "name", "");
-                {
-                    char   param_name[128];
-                    size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
-                    memcpy(param_name, start, clen);
-                    param_name[clen] = '\0';
-                    cJSON_SetValuestring(cJSON_GetObjectItem(param, "name"), param_name);
-                }
-                cJSON_AddStringToObject(param, "in", "path");
-                cJSON_AddBoolToObject(param, "required", 1);
-                cJSON* schema_obj = cJSON_AddObjectToObject(param, "schema");
-                if (schema_obj) {
-                    cJSON_AddStringToObject(schema_obj, "type", "string");
-                }
-                cJSON_AddItemToArray(params, param);
-            } else {
-                p++;
-            }
-        }
-
-        // Request body (if input_type is set)
-        const char* input_type = input_item ? cJSON_GetStringValue(input_item) : nullptr;
-        if (input_type && *input_type != '\0') {
-            // Add schema for this type
-            if (schemas) {
-                add_schema(schemas, input_type);
+            const char* method = csilk_json_string_value(method_item);
+            const char* raw_path = csilk_json_string_value(path_item);
+            if (!method || !raw_path) {
+                continue;
             }
 
-            cJSON* req_body = cJSON_AddObjectToObject(operation, "requestBody");
-            if (req_body) {
-                cJSON_AddBoolToObject(req_body, "required", 1);
-                cJSON* content = cJSON_AddObjectToObject(req_body, "content");
-                if (content) {
-                    cJSON* json_content = cJSON_AddObjectToObject(content, "application/json");
-                    if (json_content) {
-                        cJSON* ref_schema = cJSON_CreateObject();
-                        char   ref[256];
-                        snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
-                        cJSON_AddStringToObject(ref_schema, "$ref", ref);
-                        cJSON_AddItemToObject(json_content, "schema", ref_schema);
+            // Convert path to OpenAPI format
+            char oa_path[1024];
+            path_to_openapi(raw_path, oa_path, sizeof(oa_path));
+
+            // Get or create path item
+            csilk_json_t* path_obj = csilk_json_get(paths, oa_path);
+            if (!path_obj) {
+                path_obj = csilk_json_object();
+                csilk_json_add_object(paths, oa_path, path_obj);
+            }
+            if (!path_obj) {
+                continue;
+            }
+
+            // Method can be in lowercase for path item
+            char   method_lower[16];
+            size_t mlen = strlen(method);
+            if (mlen >= sizeof(method_lower)) {
+                mlen = sizeof(method_lower) - 1;
+            }
+            for (size_t i = 0; i < mlen; i++) {
+                method_lower[i] = (char)tolower((unsigned char)method[i]);
+            }
+            method_lower[mlen] = '\0';
+
+            // Check if method already exists (e.g., GET already added for this path)
+            if (csilk_json_get(path_obj, method_lower)) {
+                continue;
+            }
+
+            csilk_json_t* operation = csilk_json_object();
+            csilk_json_add_object(path_obj, method_lower, operation);
+            if (!operation) {
+                continue;
+            }
+
+            // Summary and description
+            csilk_json_add_string(operation,
+                                  "summary",
+                                  summary_item && csilk_json_string_value(summary_item)
+                                      ? csilk_json_string_value(summary_item)
+                                      : "");
+            csilk_json_add_string(operation,
+                                  "description",
+                                  desc_item && csilk_json_string_value(desc_item)
+                                      ? csilk_json_string_value(desc_item)
+                                      : "");
+            csilk_json_add_string(operation, "operationId", "");
+
+            // Add Operation ID: method_path
+            {
+                char opid[1024];
+                snprintf(opid, sizeof(opid), "%s%s", method, oa_path);
+                csilk_json_add_string(operation, "operationId", opid);
+            }
+
+            // Parameters (path params extracted from path pattern)
+            csilk_json_t* params =
+                csilk_json_add_array_obj(operation, "parameters", csilk_json_array());
+
+            // Extract path parameters from raw path
+            const char* p = raw_path;
+            while (*p) {
+                if (*p == ':') {
+                    p++;
+                    const char* start = p;
+                    while (*p && *p != '/') {
+                        p++;
                     }
+                    size_t len = (size_t)(p - start);
+
+                    csilk_json_t* param = csilk_json_object();
+                    csilk_json_add_string(param, "name", "");
+                    {
+                        char   param_name[128];
+                        size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
+                        memcpy(param_name, start, clen);
+                        param_name[clen] = '\0';
+                        csilk_json_add_string(param, "name", param_name);
+                    }
+                    csilk_json_add_string(param, "in", "path");
+                    csilk_json_add_bool(param, "required", 1);
+                    csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_object(param, "schema", schema_obj);
+                    if (schema_obj) {
+                        csilk_json_add_string(schema_obj, "type", "string");
+                    }
+                    csilk_json_array_append(params, param);
+                } else if (*p == '*') {
+                    p++;
+                    const char* start = p;
+                    while (*p) {
+                        p++;
+                    }
+                    size_t len = (size_t)(p - start);
+
+                    csilk_json_t* param = csilk_json_object();
+                    csilk_json_add_string(param, "name", "");
+                    {
+                        char   param_name[128];
+                        size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
+                        memcpy(param_name, start, clen);
+                        param_name[clen] = '\0';
+                        csilk_json_add_string(param, "name", param_name);
+                    }
+                    csilk_json_add_string(param, "in", "path");
+                    csilk_json_add_bool(param, "required", 1);
+                    csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_object(param, "schema", schema_obj);
+                    if (schema_obj) {
+                        csilk_json_add_string(schema_obj, "type", "string");
+                    }
+                    csilk_json_array_append(params, param);
+                } else {
+                    p++;
                 }
             }
-        }
 
-        // Responses
-        cJSON* responses = cJSON_AddObjectToObject(operation, "responses");
-        if (responses) {
-            const char* output_type = output_item ? cJSON_GetStringValue(output_item) : nullptr;
-            int         has_output = (output_type && *output_type != '\0');
+            // Request body (if input_type is set)
+            const char* input_type = input_item ? csilk_json_string_value(input_item) : nullptr;
+            if (input_type && *input_type != '\0') {
+                // Add schema for this type
+                if (schemas) {
+                    add_schema(schemas, input_type);
+                }
 
-            if (has_output && schemas) {
-                add_schema(schemas, output_type);
-            }
-
-            // Default 200 response
-            cJSON* resp200 = cJSON_AddObjectToObject(responses, "200");
-            if (resp200) {
-                cJSON_AddStringToObject(resp200, "description", "Success");
-                if (has_output) {
-                    cJSON* content = cJSON_AddObjectToObject(resp200, "content");
+                csilk_json_t* req_body = csilk_json_object();
+                csilk_json_add_object(operation, "requestBody", req_body);
+                if (req_body) {
+                    csilk_json_add_bool(req_body, "required", 1);
+                    csilk_json_t* content = csilk_json_object();
+                    csilk_json_add_object(req_body, "content", content);
                     if (content) {
-                        cJSON* json_content = cJSON_AddObjectToObject(content, "application/json");
+                        csilk_json_t* json_content = csilk_json_object();
+                        csilk_json_add_object(content, "application/json", json_content);
                         if (json_content) {
-                            cJSON* ref_schema = cJSON_CreateObject();
-                            char   ref[256];
-                            snprintf(ref,
-                                     sizeof(ref),
-                                     "#/components/"
-                                     "schemas/%s",
-                                     output_type);
-                            cJSON_AddStringToObject(ref_schema, "$ref", ref);
-                            cJSON_AddItemToObject(json_content, "schema", ref_schema);
+                            csilk_json_t* ref_schema = csilk_json_object();
+                            char          ref[256];
+                            snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
+                            csilk_json_add_string(ref_schema, "$ref", ref);
+                            csilk_json_add_object(json_content, "schema", ref_schema);
                         }
                     }
                 }
             }
 
-            cJSON* resp400 = cJSON_AddObjectToObject(responses, "400");
-            if (resp400) {
-                cJSON_AddStringToObject(resp400, "description", "Bad Request");
-            }
+            // Responses
+            csilk_json_t* responses = csilk_json_object();
+            csilk_json_add_object(operation, "responses", responses);
+            if (responses) {
+                const char* output_type =
+                    output_item ? csilk_json_string_value(output_item) : nullptr;
+                int has_output = (output_type && *output_type != '\0');
 
-            cJSON* resp500 = cJSON_AddObjectToObject(responses, "500");
-            if (resp500) {
-                cJSON_AddStringToObject(resp500, "description", "Internal Server Error");
+                if (has_output && schemas) {
+                    add_schema(schemas, output_type);
+                }
+
+                // Default 200 response
+                csilk_json_t* resp200 = csilk_json_object();
+                csilk_json_add_object(responses, "200", resp200);
+                if (resp200) {
+                    csilk_json_add_string(resp200, "description", "Success");
+                    if (has_output) {
+                        csilk_json_t* content = csilk_json_object();
+                        csilk_json_add_object(resp200, "content", content);
+                        if (content) {
+                            csilk_json_t* json_content = csilk_json_object();
+                            csilk_json_add_object(content, "application/json", json_content);
+                            if (json_content) {
+                                csilk_json_t* ref_schema = csilk_json_object();
+                                char          ref[256];
+                                snprintf(ref,
+                                         sizeof(ref),
+                                         "#/components/"
+                                         "schemas/%s",
+                                         output_type);
+                                csilk_json_add_string(ref_schema, "$ref", ref);
+                                csilk_json_add_object(json_content, "schema", ref_schema);
+                            }
+                        }
+                    }
+                }
+
+                csilk_json_t* resp400 = csilk_json_object();
+                csilk_json_add_object(responses, "400", resp400);
+                if (resp400) {
+                    csilk_json_add_string(resp400, "description", "Bad Request");
+                }
+
+                csilk_json_t* resp500 = csilk_json_object();
+                csilk_json_add_object(responses, "500", resp500);
+                if (resp500) {
+                    csilk_json_add_string(resp500, "description", "Internal Server Error");
+                }
             }
         }
-    }
 
-    /*
+        /*
    * Phase 2 — Orphan type registration: scan every registered reflection
    * type and add it to components/schemas if not already present.  This
    * catches types that are never directly referenced by any route's
@@ -578,10 +599,10 @@ csilk_generate_openapi_json(csilk_router_t* router,
    * add_schema() skips duplicates internally (cycle detection), so types
    * already registered during Phase 1 are safe no-ops.
    */
-    if (schemas) {
-        csilk_reflect_foreach(auto_register_schema, schemas);
-    }
+        if (schemas) {
+            csilk_reflect_foreach(auto_register_schema, schemas);
+        }
 
-    cJSON_Delete(routes);
-    return doc;
-}
+        csilk_json_free(routes);
+        return doc;
+    }

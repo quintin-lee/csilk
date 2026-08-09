@@ -21,10 +21,10 @@
 #include "csilk/reflection/reflect.h"
 
 /* Forward declaration — defined in openapi_gen.c */
-extern cJSON* csilk_generate_openapi_json(csilk_router_t* router,
-                                          const char*     title,
-                                          const char*     version,
-                                          const char*     description);
+extern csilk_json_t* csilk_generate_openapi_json(csilk_router_t* router,
+                                                 const char*     title,
+                                                 const char*     version,
+                                                 const char*     description);
 
 /** @brief Serve the generated OpenAPI 3.0 spec as a JSON response.
  *
@@ -63,10 +63,10 @@ csilk_serve_openapi(csilk_ctx_t*    c,
 
     csilk_mutex_lock(&g_openapi_cache_mutex);
     if (!g_openapi_cache_json) {
-        cJSON* doc = csilk_generate_openapi_json(r, title, version, description);
+        csilk_json_t* doc = csilk_generate_openapi_json(r, title, version, description);
         if (doc) {
-            g_openapi_cache_json = cJSON_PrintUnformatted(doc);
-            cJSON_Delete(doc);
+            g_openapi_cache_json = csilk_json_serialize(doc, NULL);
+            csilk_json_free(doc);
         }
     }
     const char* cached_json = g_openapi_cache_json;
