@@ -323,6 +323,7 @@ csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
     (void)app;
     set_openapi_router(enable ? app->router : nullptr);
+    csilk_invalidate_openapi_cache();
     CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 

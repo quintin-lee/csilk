@@ -670,6 +670,19 @@ csilk_serve_openapi(csilk_ctx_t*    c,
     }
 }
 
+/** @brief Invalidate the cached OpenAPI spec JSON.
+ *
+ * Call this when the set of routes changes so that the next request
+ * to /openapi.json regenerates the spec from the current router state.
+ */
+void
+csilk_invalidate_openapi_cache(void)
+{
+    csilk_mutex_lock(&g_openapi_cache_mutex);
+    free(g_openapi_cache_json);
+    g_openapi_cache_json = nullptr;
+    csilk_mutex_unlock(&g_openapi_cache_mutex);
+}
 /* =========================================================================
  *  Embedded Swagger UI page
  * ========================================================================= */
