@@ -63,6 +63,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         cmake -B build -S . \
+          -DCMAKE_C_COMPILER=clang \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DENABLE_OOM_TEST=ON \
           -DCSILK_BUILD_SHARED=ON \
