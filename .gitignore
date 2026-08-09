@@ -92,3 +92,8 @@ python/.venv/
 .gemini/
 .opencode/
 .kilo/
+yyjson.pc
+
+# yyjson build artifacts
+libyyjson.so*
+*.pc
