@@ -81,7 +81,7 @@ _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
             snprintf(buf, sizeof(buf), "%g", csilk_json_number_value(curr));
             result = csilk_wf_strdup(ctx, buf);
         } else if (csilk_json_is_bool(curr)) {
-            result = csilk_wf_strdup(ctx, csilk_json_int_value(curr) ? "true" : "false");
+            result = csilk_wf_strdup(ctx, csilk_json_bool_value(curr) ? "true" : "false");
         } else if (csilk_json_is_null(curr)) {
             result = csilk_wf_strdup(ctx, "null");
         } else {

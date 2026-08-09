@@ -119,6 +119,9 @@ double csilk_json_number_value(const csilk_json_t* v);
 /** Get a child integer directly from a number node (valueint equivalent). */
 int64_t csilk_json_int_value(const csilk_json_t* v);
 
+/** Get a child boolean directly from a bool node. */
+bool csilk_json_bool_value(const csilk_json_t* v);
+
 /** Get the N-th element of an array.  Returns NULL if out of bounds. */
 csilk_json_t* csilk_json_array_get(const csilk_json_t* arr, size_t index);
 

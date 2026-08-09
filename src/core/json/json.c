@@ -21,7 +21,8 @@ json_mut_new(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
         return NULL;
     }
     j->u.mval = mval;
-    j->owner.mdoc = mdoc;
+    j->doc.mdoc = mdoc;
+    j->is_owner = true;
     j->kind = CSILK_JSON_MUTABLE;
     return j;
 }
@@ -35,33 +36,36 @@ json_imut_new(yyjson_doc* doc, yyjson_val* val)
         return NULL;
     }
     j->u.ival = val;
-    j->owner.idoc = doc;
+    j->doc.idoc = doc;
+    j->is_owner = true;
     j->kind = CSILK_JSON_IMMUTABLE;
     return j;
 }
 
 static csilk_json_t*
-json_view_immutable(yyjson_val* val)
+json_view_immutable(yyjson_doc* idoc, yyjson_val* val)
 {
     csilk_json_t* j = (csilk_json_t*)malloc(sizeof(csilk_json_t));
     if (!j) {
         return NULL;
     }
     j->u.ival = val;
-    j->owner.idoc = NULL;
+    j->doc.idoc = idoc;
+    j->is_owner = false;
     j->kind = CSILK_JSON_IMMUTABLE;
     return j;
 }
 
 static csilk_json_t*
-json_view_mutable(yyjson_mut_val* mval)
+json_view_mutable(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
 {
     csilk_json_t* j = (csilk_json_t*)malloc(sizeof(csilk_json_t));
     if (!j) {
         return NULL;
     }
     j->u.mval = mval;
-    j->owner.mdoc = NULL;
+    j->doc.mdoc = mdoc;
+    j->is_owner = false;
     j->kind = CSILK_JSON_MUTABLE;
     return j;
 }
@@ -110,7 +114,7 @@ csilk_json_string_new(const char* s)
     if (!mdoc) {
         return NULL;
     }
-    yyjson_mut_val* mval = yyjson_mut_str(mdoc, s);
+    yyjson_mut_val* mval = yyjson_mut_strcpy(mdoc, s);
     if (!mval) {
         yyjson_mut_doc_free(mdoc);
         return NULL;
@@ -188,19 +192,47 @@ json_add_to_obj(csilk_json_t* obj, const char* key, csilk_json_t* item)
     if (!obj || !key || !item) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
 
     if (item->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_obj_add(obj->u.mval, yyjson_mut_str(obj->owner.mdoc, key), item->u.mval);
+        if (item->doc.mdoc == obj->doc.mdoc) {
+            return yyjson_mut_obj_add(
+                obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), item->u.mval);
+        }
+        yyjson_mut_val* mval = yyjson_mut_val_mut_copy(obj->doc.mdoc, item->u.mval);
+        if (!mval) {
+            return false;
+        }
+        if (!yyjson_mut_obj_add(obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), mval)) {
+            return false;
+        }
+        if (item->is_owner && item->doc.mdoc) {
+            yyjson_mut_doc_free(item->doc.mdoc);
+        }
+        item->u.mval = mval;
+        item->doc.mdoc = obj->doc.mdoc;
+        item->is_owner = false;
+        return true;
     }
+
     /* item is immutable — deep-copy into mutable doc */
-    yyjson_mut_val* mval = yyjson_mut_val_mut_copy(obj->owner.mdoc, item->u.mval);
+    yyjson_mut_val* mval = yyjson_val_mut_copy(obj->doc.mdoc, item->u.ival);
     if (!mval) {
         return false;
     }
-    return yyjson_mut_obj_add(obj->u.mval, yyjson_mut_str(obj->owner.mdoc, key), mval);
+    if (!yyjson_mut_obj_add(obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), mval)) {
+        return false;
+    }
+    if (item->is_owner && item->doc.idoc) {
+        yyjson_doc_free(item->doc.idoc);
+    }
+    item->u.mval = mval;
+    item->doc.mdoc = obj->doc.mdoc;
+    item->is_owner = false;
+    item->kind = CSILK_JSON_MUTABLE;
+    return true;
 }
 
 bool
@@ -230,13 +262,13 @@ csilk_json_add_string(csilk_json_t* obj, const char* key, const char* value)
     if (!obj || !key) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
     if (!value) {
-        return yyjson_mut_obj_add_null(obj->owner.mdoc, obj->u.mval, key);
+        return csilk_json_add_null(obj, key);
     }
-    return yyjson_mut_obj_add_str(obj->owner.mdoc, obj->u.mval, key, value);
+    return yyjson_mut_obj_add_strcpy(obj->doc.mdoc, obj->u.mval, key, value);
 }
 
 bool
@@ -245,10 +277,12 @@ csilk_json_add_number(csilk_json_t* obj, const char* key, double value)
     if (!obj || !key) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
-    return yyjson_mut_obj_add_double(obj->owner.mdoc, obj->u.mval, key, value);
+    return yyjson_mut_obj_add(obj->u.mval,
+                              yyjson_mut_strcpy(obj->doc.mdoc, key),
+                              yyjson_mut_double(obj->doc.mdoc, value));
 }
 
 bool
@@ -257,10 +291,11 @@ csilk_json_add_int(csilk_json_t* obj, const char* key, int64_t value)
     if (!obj || !key) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
-    return yyjson_mut_obj_add_sint(obj->owner.mdoc, obj->u.mval, key, value);
+    return yyjson_mut_obj_add(
+        obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_sint(obj->doc.mdoc, value));
 }
 
 bool
@@ -269,10 +304,11 @@ csilk_json_add_bool(csilk_json_t* obj, const char* key, bool value)
     if (!obj || !key) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
-    return yyjson_mut_obj_add_bool(obj->owner.mdoc, obj->u.mval, key, value);
+    return yyjson_mut_obj_add(
+        obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_bool(obj->doc.mdoc, value));
 }
 
 bool
@@ -281,10 +317,11 @@ csilk_json_add_null(csilk_json_t* obj, const char* key)
     if (!obj || !key) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
-    return yyjson_mut_obj_add_null(obj->owner.mdoc, obj->u.mval, key);
+    return yyjson_mut_obj_add(
+        obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_null(obj->doc.mdoc));
 }
 
 bool
@@ -293,17 +330,43 @@ csilk_json_add_item(csilk_json_t* obj, csilk_json_t* item)
     if (!obj || !item) {
         return false;
     }
-    if (obj->kind != CSILK_JSON_MUTABLE) {
+    if (obj->kind != CSILK_JSON_MUTABLE || !obj->doc.mdoc) {
         return false;
     }
     if (item->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_arr_add_val(obj->u.mval, item->u.mval);
+        if (item->doc.mdoc == obj->doc.mdoc) {
+            return yyjson_mut_arr_add_val(obj->u.mval, item->u.mval);
+        }
+        yyjson_mut_val* mval = yyjson_mut_val_mut_copy(obj->doc.mdoc, item->u.mval);
+        if (!mval) {
+            return false;
+        }
+        if (!yyjson_mut_arr_add_val(obj->u.mval, mval)) {
+            return false;
+        }
+        if (item->is_owner && item->doc.mdoc) {
+            yyjson_mut_doc_free(item->doc.mdoc);
+        }
+        item->u.mval = mval;
+        item->doc.mdoc = obj->doc.mdoc;
+        item->is_owner = false;
+        return true;
     }
-    yyjson_mut_val* mval = yyjson_mut_val_mut_copy(obj->owner.mdoc, item->u.mval);
+    yyjson_mut_val* mval = yyjson_val_mut_copy(obj->doc.mdoc, item->u.ival);
     if (!mval) {
         return false;
     }
-    return yyjson_mut_arr_add_val(obj->u.mval, mval);
+    if (!yyjson_mut_arr_add_val(obj->u.mval, mval)) {
+        return false;
+    }
+    if (item->is_owner && item->doc.idoc) {
+        yyjson_doc_free(item->doc.idoc);
+    }
+    item->u.mval = mval;
+    item->doc.mdoc = obj->doc.mdoc;
+    item->is_owner = false;
+    item->kind = CSILK_JSON_MUTABLE;
+    return true;
 }
 
 /* ====================================================================
@@ -316,17 +379,43 @@ csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
     if (!arr || !item) {
         return false;
     }
-    if (arr->kind != CSILK_JSON_MUTABLE) {
+    if (arr->kind != CSILK_JSON_MUTABLE || !arr->doc.mdoc) {
         return false;
     }
     if (item->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_arr_add_val(arr->u.mval, item->u.mval);
+        if (item->doc.mdoc == arr->doc.mdoc) {
+            return yyjson_mut_arr_add_val(arr->u.mval, item->u.mval);
+        }
+        yyjson_mut_val* mval = yyjson_mut_val_mut_copy(arr->doc.mdoc, item->u.mval);
+        if (!mval) {
+            return false;
+        }
+        if (!yyjson_mut_arr_add_val(arr->u.mval, mval)) {
+            return false;
+        }
+        if (item->is_owner && item->doc.mdoc) {
+            yyjson_mut_doc_free(item->doc.mdoc);
+        }
+        item->u.mval = mval;
+        item->doc.mdoc = arr->doc.mdoc;
+        item->is_owner = false;
+        return true;
     }
-    yyjson_mut_val* mval = yyjson_mut_val_mut_copy(arr->owner.mdoc, item->u.mval);
+    yyjson_mut_val* mval = yyjson_val_mut_copy(arr->doc.mdoc, item->u.ival);
     if (!mval) {
         return false;
     }
-    return yyjson_mut_arr_add_val(arr->u.mval, mval);
+    if (!yyjson_mut_arr_add_val(arr->u.mval, mval)) {
+        return false;
+    }
+    if (item->is_owner && item->doc.idoc) {
+        yyjson_doc_free(item->doc.idoc);
+    }
+    item->u.mval = mval;
+    item->doc.mdoc = arr->doc.mdoc;
+    item->is_owner = false;
+    item->kind = CSILK_JSON_MUTABLE;
+    return true;
 }
 
 /* ====================================================================
@@ -344,13 +433,13 @@ csilk_json_get(const csilk_json_t* obj, const char* key)
         if (!v) {
             return NULL;
         }
-        return json_view_mutable(v);
+        return json_view_mutable(obj->doc.mdoc, v);
     }
     yyjson_val* v = yyjson_obj_get(obj->u.ival, key);
     if (!v) {
         return NULL;
     }
-    return json_view_immutable(v);
+    return json_view_immutable(obj->doc.idoc, v);
 }
 
 csilk_json_t*
@@ -364,13 +453,13 @@ csilk_json_get_object(const csilk_json_t* obj, const char* key)
         if (!v || !yyjson_mut_is_obj(v)) {
             return NULL;
         }
-        return json_view_mutable(v);
+        return json_view_mutable(obj->doc.mdoc, v);
     }
     yyjson_val* v = yyjson_obj_get(obj->u.ival, key);
     if (!v || !yyjson_is_obj(v)) {
         return NULL;
     }
-    return json_view_immutable(v);
+    return json_view_immutable(obj->doc.idoc, v);
 }
 
 csilk_json_t*
@@ -384,13 +473,13 @@ csilk_json_get_array(const csilk_json_t* obj, const char* key)
         if (!v || !yyjson_mut_is_arr(v)) {
             return NULL;
         }
-        return json_view_mutable(v);
+        return json_view_mutable(obj->doc.mdoc, v);
     }
     yyjson_val* v = yyjson_obj_get(obj->u.ival, key);
     if (!v || !yyjson_is_arr(v)) {
         return NULL;
     }
-    return json_view_immutable(v);
+    return json_view_immutable(obj->doc.idoc, v);
 }
 
 const char*
@@ -441,16 +530,28 @@ csilk_json_get_int(const csilk_json_t* obj, const char* key)
     }
     if (obj->kind == CSILK_JSON_MUTABLE) {
         yyjson_mut_val* v = yyjson_mut_obj_get(obj->u.mval, key);
-        if (!v || !yyjson_mut_is_int(v)) {
+        if (!v) {
             return 0;
         }
-        return yyjson_mut_get_sint(v);
-    }
-    yyjson_val* v = yyjson_obj_get(obj->u.ival, key);
-    if (!v || !yyjson_is_int(v)) {
+        if (yyjson_mut_is_int(v)) {
+            return yyjson_mut_get_sint(v);
+        }
+        if (yyjson_mut_is_num(v)) {
+            return (int64_t)yyjson_mut_get_num(v);
+        }
         return 0;
     }
-    return yyjson_get_int(v);
+    yyjson_val* v = yyjson_obj_get(obj->u.ival, key);
+    if (!v) {
+        return 0;
+    }
+    if (yyjson_is_int(v)) {
+        return yyjson_get_int(v);
+    }
+    if (yyjson_is_num(v)) {
+        return (int64_t)yyjson_get_num(v);
+    }
+    return 0;
 }
 
 bool
@@ -516,15 +617,39 @@ csilk_json_int_value(const csilk_json_t* v)
         return 0;
     }
     if (v->kind == CSILK_JSON_MUTABLE) {
-        if (!yyjson_mut_is_int(v->u.mval)) {
-            return 0;
+        if (yyjson_mut_is_int(v->u.mval)) {
+            return yyjson_mut_get_sint(v->u.mval);
         }
-        return yyjson_mut_get_sint(v->u.mval);
-    }
-    if (!yyjson_is_int(v->u.ival)) {
+        if (yyjson_mut_is_num(v->u.mval)) {
+            return (int64_t)yyjson_mut_get_num(v->u.mval);
+        }
         return 0;
     }
-    return yyjson_get_int(v->u.ival);
+    if (yyjson_is_int(v->u.ival)) {
+        return yyjson_get_int(v->u.ival);
+    }
+    if (yyjson_is_num(v->u.ival)) {
+        return (int64_t)yyjson_get_num(v->u.ival);
+    }
+    return 0;
+}
+
+bool
+csilk_json_bool_value(const csilk_json_t* v)
+{
+    if (!v) {
+        return false;
+    }
+    if (v->kind == CSILK_JSON_MUTABLE) {
+        if (!yyjson_mut_is_bool(v->u.mval)) {
+            return false;
+        }
+        return yyjson_mut_get_bool(v->u.mval);
+    }
+    if (!yyjson_is_bool(v->u.ival)) {
+        return false;
+    }
+    return yyjson_get_bool(v->u.ival);
 }
 
 csilk_json_t*
@@ -541,7 +666,7 @@ csilk_json_array_get(const csilk_json_t* arr, size_t index)
         if (!v) {
             return NULL;
         }
-        return json_view_mutable(v);
+        return json_view_mutable(arr->doc.mdoc, v);
     }
     if (!yyjson_is_arr(arr->u.ival)) {
         return NULL;
@@ -550,7 +675,7 @@ csilk_json_array_get(const csilk_json_t* arr, size_t index)
     if (!v) {
         return NULL;
     }
-    return json_view_immutable(v);
+    return json_view_immutable(arr->doc.idoc, v);
 }
 
 size_t
@@ -713,9 +838,9 @@ csilk_json_serialize(const csilk_json_t* v, size_t* len)
         return NULL;
     }
     if (v->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_val_write(v->u.mval, YYJSON_WRITE_ALLOW_INF_AND_NAN, len);
+        return yyjson_mut_val_write(v->u.mval, 0, len);
     }
-    return yyjson_val_write(v->u.ival, YYJSON_WRITE_ALLOW_INF_AND_NAN, len);
+    return yyjson_val_write(v->u.ival, 0, len);
 }
 
 char*
@@ -740,13 +865,15 @@ csilk_json_free(csilk_json_t* v)
     if (!v) {
         return;
     }
-    if (v->kind == CSILK_JSON_MUTABLE) {
-        if (v->owner.mdoc) {
-            yyjson_mut_doc_free(v->owner.mdoc);
-        }
-    } else {
-        if (v->owner.idoc) {
-            yyjson_doc_free(v->owner.idoc);
+    if (v->is_owner) {
+        if (v->kind == CSILK_JSON_MUTABLE) {
+            if (v->doc.mdoc) {
+                yyjson_mut_doc_free(v->doc.mdoc);
+            }
+        } else {
+            if (v->doc.idoc) {
+                yyjson_doc_free(v->doc.idoc);
+            }
         }
     }
     free(v);
@@ -762,28 +889,29 @@ csilk_json_copy(const csilk_json_t* v)
     if (!v) {
         return NULL;
     }
-    if (v->kind == CSILK_JSON_MUTABLE) {
-        yyjson_mut_doc* mdoc = yyjson_mut_doc_new(NULL);
-        if (!mdoc) {
-            return NULL;
-        }
-        yyjson_mut_val* mval = yyjson_mut_val_mut_copy(mdoc, v->u.mval);
-        if (!mval) {
-            yyjson_mut_doc_free(mdoc);
-            return NULL;
-        }
-        return json_mut_new(mdoc, mval);
-    }
-    yyjson_mut_doc* mdoc = yyjson_doc_mut_copy(v->owner.idoc, NULL);
+    yyjson_mut_doc* mdoc = yyjson_mut_doc_new(NULL);
     if (!mdoc) {
         return NULL;
     }
-    yyjson_doc* doc = yyjson_mut_doc_imut_copy(mdoc, NULL);
-    yyjson_mut_doc_free(mdoc);
-    if (!doc) {
+    yyjson_mut_val* mval = NULL;
+    if (v->kind == CSILK_JSON_MUTABLE) {
+        if (!v->u.mval) {
+            yyjson_mut_doc_free(mdoc);
+            return NULL;
+        }
+        mval = yyjson_mut_val_mut_copy(mdoc, v->u.mval);
+    } else {
+        if (!v->u.ival) {
+            yyjson_mut_doc_free(mdoc);
+            return NULL;
+        }
+        mval = yyjson_val_mut_copy(mdoc, v->u.ival);
+    }
+    if (!mval) {
+        yyjson_mut_doc_free(mdoc);
         return NULL;
     }
-    return json_imut_new(doc, yyjson_doc_get_root(doc));
+    return json_mut_new(mdoc, mval);
 }
 
 /* ====================================================================
@@ -862,7 +990,7 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
         size_t          i = 0;
         while ((key_val = yyjson_mut_obj_iter_next(&it))) {
             if (i == index) {
-                return json_view_mutable(yyjson_mut_obj_iter_get_val(key_val));
+                return json_view_mutable(obj->doc.mdoc, yyjson_mut_obj_iter_get_val(key_val));
             }
             i++;
         }
@@ -877,7 +1005,7 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
     size_t      i = 0;
     while ((key_val = yyjson_obj_iter_next(&it))) {
         if (i == index) {
-            return json_view_immutable(yyjson_obj_iter_get_val(key_val));
+            return json_view_immutable(obj->doc.idoc, yyjson_obj_iter_get_val(key_val));
         }
         i++;
     }
@@ -891,15 +1019,21 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
 bool
 csilk_json_set_string(csilk_json_t* v, const char* new_value)
 {
-    if (!v || !yyjson_is_str(v->u.ival) || !new_value) {
+    if (!v || !new_value) {
         return false;
     }
-    if (!v->owner.idoc) {
+    if (v->kind == CSILK_JSON_MUTABLE) {
+        if (!v->doc.mdoc || !yyjson_mut_is_str(v->u.mval)) {
+            return false;
+        }
+        return yyjson_mut_set_str(v->u.mval, new_value);
+    }
+    if (!v->doc.idoc || !yyjson_is_str(v->u.ival)) {
         return false;
     }
 
     /* Convert immutable doc to mutable, replace root string, then swap. */
-    yyjson_mut_doc* mdoc = yyjson_doc_mut_copy(v->owner.idoc, NULL);
+    yyjson_mut_doc* mdoc = yyjson_doc_mut_copy(v->doc.idoc, NULL);
     if (!mdoc) {
         return false;
     }
@@ -910,15 +1044,18 @@ csilk_json_set_string(csilk_json_t* v, const char* new_value)
         return false;
     }
 
-    yyjson_mut_val* mnew_str = yyjson_mut_str(mdoc, new_value);
+    yyjson_mut_val* mnew_str = yyjson_mut_strcpy(mdoc, new_value);
     if (!mnew_str) {
         yyjson_mut_doc_free(mdoc);
         return false;
     }
 
-    yyjson_doc_free(v->owner.idoc);
+    if (v->is_owner && v->doc.idoc) {
+        yyjson_doc_free(v->doc.idoc);
+    }
     v->u.mval = mnew_str;
-    v->owner.mdoc = mdoc;
+    v->doc.mdoc = mdoc;
+    v->is_owner = true;
     v->kind = CSILK_JSON_MUTABLE;
     return true;
 }
