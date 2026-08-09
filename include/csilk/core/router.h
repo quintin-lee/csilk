@@ -273,4 +273,3 @@ void csilk_serve_openapi(csilk_ctx_t*    c,
  * @param c  The request context.
  */
 void csilk_serve_swagger_ui(csilk_ctx_t* c);
-void csilk_invalidate_openapi_cache(void);
