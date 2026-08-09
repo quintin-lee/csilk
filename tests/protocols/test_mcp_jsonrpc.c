@@ -14,7 +14,7 @@ test_jsonrpc_parse_request(void)
     assert(msg != nullptr);
     assert(strcmp(msg->jsonrpc, "2.0") == 0);
     assert(msg->id != nullptr);
-    assert(msg->csilk_json_int_value(id) == 1);
+    assert(csilk_json_int_value(msg->id) == 1);
     assert(msg->method != nullptr);
     assert(strcmp(msg->method, "tools/list") == 0);
 
