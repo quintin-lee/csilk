@@ -127,6 +127,8 @@ on_async_query(csilk_json_t* result, void* user_data)
 void
 test_db_sqlite_async_query(void)
 {
+    remove("test_async_db.db");
+    remove("test_async_db.db-journal");
     csilk_db_init();
 
     csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", "test_async_db.db");

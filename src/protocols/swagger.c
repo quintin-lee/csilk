@@ -169,7 +169,6 @@ generate_schema_for_type(const char* type_name)
 
     csilk_json_add_string(schema, "type", "object");
     csilk_json_t* properties = csilk_json_object();
-    csilk_json_add_object(schema, "properties", properties);
     if (!properties) {
         csilk_json_free(schema);
         return nullptr;
@@ -218,6 +217,7 @@ generate_schema_for_type(const char* type_name)
         }
     }
 
+    csilk_json_add_object(schema, "properties", properties);
     return schema;
 }
 
@@ -328,26 +328,23 @@ csilk_generate_openapi_json(csilk_router_t* router,
 
     // Info section
     csilk_json_t* info = csilk_json_object();
-    csilk_json_add_object(doc, "info", info);
     if (info) {
         csilk_json_add_string(info, "title", title ? title : "csilk API");
         csilk_json_add_string(info, "version", version ? version : "1.0.0");
         if (description) {
             csilk_json_add_string(info, "description", description);
         }
+        csilk_json_add_object(doc, "info", info);
     }
 
     // Paths section
     csilk_json_t* paths = csilk_json_object();
-    csilk_json_add_object(doc, "paths", paths);
 
     // Components section
     csilk_json_t* components = csilk_json_object();
-    csilk_json_add_object(doc, "components", components);
     csilk_json_t* schemas = nullptr;
     if (components) {
         schemas = csilk_json_object();
-        csilk_json_add_object(components, "schemas", schemas);
     }
 
     // Collect all routes
@@ -607,6 +604,15 @@ csilk_generate_openapi_json(csilk_router_t* router,
    */
     if (schemas) {
         csilk_reflect_foreach(auto_register_schema, schemas);
+    }
+    if (schemas && components) {
+        csilk_json_add_object(components, "schemas", schemas);
+    }
+    if (components) {
+        csilk_json_add_object(doc, "components", components);
+    }
+    if (paths) {
+        csilk_json_add_object(doc, "paths", paths);
     }
 
     csilk_json_free(routes);
