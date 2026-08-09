@@ -25,7 +25,7 @@ csilk_bind_json(csilk_ctx_t* c)
     if (!c || !c->request.body) {
         return nullptr;
     }
-    return csilk_json_parse(c->request.body);
+    return csilk_json_parse_len(c->request.body, c->request.body_len);
 }
 
 /** @brief Parse the request body as JSON with detailed error feedback.
@@ -57,7 +57,7 @@ csilk_bind_json_err(csilk_ctx_t* c, const char** error)
         }
         return nullptr;
     }
-    csilk_json_t* json = csilk_json_parse(c->request.body);
+    csilk_json_t* json = csilk_json_parse_len(c->request.body, c->request.body_len);
     if (!json) {
         if (error) {
             *error = NULL;
