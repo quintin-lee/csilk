@@ -56,9 +56,11 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   )
 
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    set_target_properties(${TARGET} PROPERTIES
-        INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>"
-    )
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error LANGUAGES C)
+    if(ipo_supported AND TYPE STREQUAL "SHARED")
+      set_target_properties(${TARGET} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
   endif()
 
   if(CSILK_USE_URING)
