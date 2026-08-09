@@ -336,7 +336,11 @@ test_post_login_bad()
     close(sock);
     test_result("POST /login bad (response)", n > 0);
     test_result("POST /login bad (status 401)", expect_status(buf, CSILK_STATUS_UNAUTHORIZED));
-    test_result("POST /login bad (body)", expect_body(buf, "Invalid credentials"));
+    int body_ok = expect_body(buf, "Invalid credentials");
+    if (!body_ok) {
+        printf("DEBUG: test_post_login_bad received: %s\n", buf);
+    }
+    test_result("POST /login bad (body)", body_ok);
 }
 
 static void
