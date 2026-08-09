@@ -30,16 +30,16 @@ setup_db(csilk_db_pool_t* pool)
     const char* insert_sql = "INSERT INTO users (name, email) VALUES (?, ?)";
     const char* params[] = {"Alice", "alice@example.com", nullptr};
 
-    cJSON* result = csilk_db_query_param_json(pool, insert_sql, params);
+    csilk_json_t* result = csilk_db_query_param_json(pool, insert_sql, params);
     if (result) {
-        cJSON_Delete(result);
+        csilk_json_free(result);
     }
 
     params[0] = "Bob";
     params[1] = "bob@example.com";
     result = csilk_db_query_param_json(pool, insert_sql, params);
     if (result) {
-        cJSON_Delete(result);
+        csilk_json_free(result);
     }
 
     return 0;
@@ -49,22 +49,25 @@ setup_db(csilk_db_pool_t* pool)
 static void
 query_users(csilk_db_pool_t* pool)
 {
-    cJSON* result = csilk_db_query_json(pool, "SELECT * FROM users");
+    csilk_json_t* result = csilk_db_query_json(pool, "SELECT * FROM users");
     if (!result) {
         fprintf(stderr, "Query failed\n");
         return;
     }
 
     printf("Users:\n");
-    cJSON* item = nullptr;
-    cJSON_ArrayForEach(item, result)
-    {
-        const char* name = cJSON_GetObjectItem(item, "name")->valuestring;
-        const char* email = cJSON_GetObjectItem(item, "email")->valuestring;
+    csilk_json_t* item = nullptr;
+    for (size_t _i = 0; _i < csilk_json_array_size(result); _i++) {
+        csilk_json_t* item = csilk_json_array_get(result, _i);
+        if (!item) {
+            break;
+        }
+        const char* name = csilk_json_get_string(item, "name");
+        const char* email = csilk_json_get_string(item, "email");
         printf("  %s - %s\n", name, email);
     }
 
-    cJSON_Delete(result);
+    csilk_json_free(result);
 }
 
 /** @brief Main entry point. */

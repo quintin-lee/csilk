@@ -62,12 +62,12 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   endif()
 
   if(CSILK_USE_URING)
-    target_link_libraries(${TARGET} PUBLIC uring cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
+    target_link_libraries(${TARGET} PUBLIC uring yyjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
     if(NOT APPLE)
       target_compile_options(${TARGET} PUBLIC "-D_GNU_SOURCE")
     endif()
   else()
-    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} cjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
+    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} yyjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2)
   endif()
 
   foreach(DB_LIB MYSQL_LIB PQ_LIB HIREDIS_LIB)
@@ -79,7 +79,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   target_include_directories(${TARGET} PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
       $<INSTALL_INTERFACE:include>
-      $<BUILD_INTERFACE:${cjson_SOURCE_DIR}>
+      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
   )
 
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)

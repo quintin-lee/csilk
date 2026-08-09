@@ -99,16 +99,13 @@ else()
   message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
 endif()
 
-# Fetch cJSON
-set(ENABLE_CJSON_TEST OFF CACHE BOOL "" FORCE)
-set(CJSON_INSTALL OFF CACHE BOOL "" FORCE)
-set(CJSON_OVERRIDE_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# Fetch yyjson (header-only JSON library)
 FetchContent_Declare(
-  cjson
-  GIT_REPOSITORY https://github.com/DaveGamble/cJSON.git
-  GIT_TAG v1.7.18
+  yyjson
+  GIT_REPOSITORY https://github.com/ibireme/yyjson.git
+  GIT_TAG        0.12.0
 )
-FetchContent_MakeAvailable(cjson)
+FetchContent_MakeAvailable(yyjson)
 
 # Fetch nghttp2
 set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
@@ -133,7 +130,7 @@ find_package(CURL REQUIRED)
 include_directories(include)
 include_directories(src)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${cjson_SOURCE_DIR})
+include_directories(${yyjson_SOURCE_DIR})
 include_directories(${CURL_INCLUDE_DIRS})
 
 # Generate version.h from CMake variable
