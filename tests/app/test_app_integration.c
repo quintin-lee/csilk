@@ -169,7 +169,14 @@ test_openapi_json(void)
     test_result("GET /openapi.json (JSON body)", body_ok);
     test_result("GET /openapi.json (paths)", paths_ok);
     if (!status_ok || !body_ok || !paths_ok) {
-        printf("  [DEBUG] openapi response (%d bytes): %.300s\n", n, buf);
+        const char* hdr_end = strstr(buf, "\r\n\r\n");
+        if (hdr_end) {
+            printf("  [DEBUG] openapi body (%d bytes): %.500s\n",
+                   n - (int)(hdr_end + 4 - buf),
+                   hdr_end + 4);
+        } else {
+            printf("  [DEBUG] openapi response (%d bytes): %.300s\n", n, buf);
+        }
     }
 }
 
