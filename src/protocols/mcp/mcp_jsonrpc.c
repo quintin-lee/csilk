@@ -125,7 +125,7 @@ csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message)
     }
 
     csilk_json_t* err_obj = csilk_json_object();
-    csilk_json_add_number(err_obj, "code", code);
+    csilk_json_add_int(err_obj, "code", code);
     csilk_json_add_string(err_obj, "message", message ? message : "Unknown error");
     msg->error = err_obj;
 

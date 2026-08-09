@@ -27,12 +27,13 @@ typedef enum {
 
 struct csilk_json_s {
     union {
-        yyjson_val*     ival; /**< Immutable yyjson value. */
-        yyjson_mut_val* mval; /**< Mutable yyjson value. */
+        yyjson_val*     ival;   /**< Immutable yyjson value. */
+        yyjson_mut_val* mval;   /**< Mutable yyjson value. */
     } u;
     union {
-        yyjson_doc*     idoc; /**< Owning immutable doc (NULL = view). */
-        yyjson_mut_doc* mdoc; /**< Owning mutable doc  (NULL = view). */
-    } owner;
+        yyjson_doc*     idoc;   /**< Owning or referenced immutable doc. */
+        yyjson_mut_doc* mdoc;   /**< Owning or referenced mutable doc. */
+    } doc;
+    bool              is_owner; /**< True if handle owns the doc (frees doc on csilk_json_free). */
     csilk_json_kind_t kind;
 };

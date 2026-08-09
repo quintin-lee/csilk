@@ -57,21 +57,21 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
    */
     switch (desc->type) {
     case CSILK_TYPE_INT8:
-        return csilk_json_number(*(const int8_t*)addr);
+        return csilk_json_int(*(const int8_t*)addr);
     case CSILK_TYPE_UINT8:
-        return csilk_json_number(*(const uint8_t*)addr);
+        return csilk_json_int(*(const uint8_t*)addr);
     case CSILK_TYPE_INT16:
-        return csilk_json_number(*(const int16_t*)addr);
+        return csilk_json_int(*(const int16_t*)addr);
     case CSILK_TYPE_UINT16:
-        return csilk_json_number(*(const uint16_t*)addr);
+        return csilk_json_int(*(const uint16_t*)addr);
     case CSILK_TYPE_INT32:
-        return csilk_json_number(*(const int32_t*)addr);
+        return csilk_json_int(*(const int32_t*)addr);
     case CSILK_TYPE_UINT32:
-        return csilk_json_number(*(const uint32_t*)addr);
+        return csilk_json_int(*(const uint32_t*)addr);
     case CSILK_TYPE_INT64:
-        return csilk_json_number((double)*(const int64_t*)addr);
+        return csilk_json_int(*(const int64_t*)addr);
     case CSILK_TYPE_UINT64:
-        return csilk_json_number((double)*(const uint64_t*)addr);
+        return csilk_json_int((int64_t)*(const uint64_t*)addr);
     case CSILK_TYPE_FLOAT:
         return csilk_json_number(*(const float*)addr);
     case CSILK_TYPE_DOUBLE:
