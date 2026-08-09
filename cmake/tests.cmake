@@ -5,7 +5,7 @@
 # Helper to add a test executable and register with CTest
 function(add_csilk_test name source)
   add_executable(${name} ${source})
-  target_link_libraries(${name} csilk pthread)
+  target_link_libraries(${name} csilk pthread m)
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
       "${CSILK_COMMON_FLAGS}"
