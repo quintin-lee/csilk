@@ -70,8 +70,10 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
         return csilk_json_int(*(const uint32_t*)addr);
     case CSILK_TYPE_INT64:
         return csilk_json_int(*(const int64_t*)addr);
-    case CSILK_TYPE_UINT64:
-        return csilk_json_int((int64_t)*(const uint64_t*)addr);
+    case CSILK_TYPE_UINT64: {
+        uint64_t uval = *(const uint64_t*)addr;
+        return csilk_json_int((int64_t)uval);
+    }
     case CSILK_TYPE_FLOAT:
         return csilk_json_number(*(const float*)addr);
     case CSILK_TYPE_DOUBLE:
