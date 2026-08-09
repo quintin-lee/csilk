@@ -64,6 +64,8 @@ jobs:
       run: |
         cmake -B build -S . \
           -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_AR=$(which llvm-ar-18 2>/dev/null || which llvm-ar 2>/dev/null || echo ar) \
+          -DCMAKE_RANLIB=$(which llvm-ranlib-18 2>/dev/null || which llvm-ranlib 2>/dev/null || echo ranlib) \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DENABLE_OOM_TEST=ON \
           -DCSILK_BUILD_SHARED=ON \
