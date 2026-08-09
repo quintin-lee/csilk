@@ -82,11 +82,11 @@ class VectorDB:
             c_payload = None
             if payload_json is not None:
                 json_str = json.dumps(payload_json).encode('utf-8')
-                c_payload = self._lib.cJSON_Parse(json_str)
+                c_payload = self._lib.csilk_json_parse(json_str)
                 if not c_payload:
                     for j in range(i):
                         if c_points[j].payload:
-                            self._lib.cJSON_Delete(c_points[j].payload)
+                            self._lib.csilk_json_free(c_points[j].payload)
                     raise ValueError("Failed to parse payload JSON")
 
             c_points[i].id = pt_id
@@ -105,7 +105,7 @@ class VectorDB:
 
         for i in range(count):
             if c_points[i].payload:
-                self._lib.cJSON_Delete(c_points[i].payload)
+                self._lib.csilk_json_free(c_points[i].payload)
 
         if res != 0:
             raise RuntimeError("Failed to upsert vector points")
@@ -160,7 +160,7 @@ class VectorDB:
 
                 payload = None
                 if item.payload:
-                    c_str_ptr = self._lib.cJSON_PrintUnformatted(item.payload)
+                    c_str_ptr = self._lib.csilk_json_serialize(item.payload, None)
                     if c_str_ptr:
                         json_str = ctypes.string_at(c_str_ptr).decode('utf-8')
                         self._lib.csilk_free(c_str_ptr)

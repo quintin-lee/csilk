@@ -79,14 +79,14 @@ class DBPool:
             raise RuntimeError("Database query failed")
 
         try:
-            res_str_ptr = self._lib.cJSON_PrintUnformatted(cjson_ptr)
+            res_str_ptr = self._lib.csilk_json_serialize(cjson_ptr, None)
             if res_str_ptr:
                 val = ctypes.string_at(res_str_ptr).decode('utf-8')
                 self._lib.csilk_free(res_str_ptr)
                 return json.loads(val)
             return []
         finally:
-            self._lib.cJSON_Delete(cjson_ptr)
+            self._lib.csilk_json_free(cjson_ptr)
 
     def exec(self, sql: str):
         """Execute a SQL statement that does not return rows.
