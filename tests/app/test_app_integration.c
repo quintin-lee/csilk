@@ -162,9 +162,15 @@ test_openapi_json(void)
     int  n = read_response(sock, buf, sizeof(buf));
     close(sock);
     test_result("GET /openapi.json (response received)", n > 0);
-    test_result("GET /openapi.json (status 200)", expect_status(buf, 200));
-    test_result("GET /openapi.json (JSON body)", expect_body(buf, "\"openapi\""));
-    test_result("GET /openapi.json (paths)", expect_body(buf, "\"/hello\""));
+    int status_ok = expect_status(buf, 200);
+    int body_ok = expect_body(buf, "\"openapi\"");
+    int paths_ok = expect_body(buf, "\"/hello\"");
+    test_result("GET /openapi.json (status 200)", status_ok);
+    test_result("GET /openapi.json (JSON body)", body_ok);
+    test_result("GET /openapi.json (paths)", paths_ok);
+    if (!status_ok || !body_ok || !paths_ok) {
+        printf("  [DEBUG] openapi response (%d bytes): %.300s\n", n, buf);
+    }
 }
 
 static void
