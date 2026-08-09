@@ -957,12 +957,12 @@ def get_bindings():
     lib.csilk_db_get_stats.restype = None
     lib.csilk_db_get_stats.argtypes = [ctypes.POINTER(CsilkDbStats)]
 
-    # cJSON
-    lib.cJSON_PrintUnformatted.restype = ctypes.c_void_p
-    lib.cJSON_PrintUnformatted.argtypes = [ctypes.c_void_p]
+    # csilk_json serialization \& free
+    lib.csilk_json_serialize.restype = ctypes.c_void_p
+    lib.csilk_json_serialize.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
 
-    lib.cJSON_Delete.restype = None
-    lib.cJSON_Delete.argtypes = [ctypes.c_void_p]
+    lib.csilk_json_free.restype = None
+    lib.csilk_json_free.argtypes = [ctypes.c_void_p]
 
     # Cryptographic utilities
     lib.csilk_crypto_fill_random.restype = ctypes.c_int
@@ -974,9 +974,9 @@ def get_bindings():
     lib.csilk_csrf_generate_token.restype = ctypes.c_int
     lib.csilk_csrf_generate_token.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
 
-    # cJSON Parsing
-    lib.cJSON_Parse.restype = ctypes.c_void_p
-    lib.cJSON_Parse.argtypes = [ctypes.c_char_p]
+    # csilk_json parsing
+    lib.csilk_json_parse.restype = ctypes.c_void_p
+    lib.csilk_json_parse.argtypes = [ctypes.c_char_p]
 
     # Permission management
     lib.csilk_perm_init.restype = None
