@@ -56,7 +56,7 @@ csilk_test_malloc(size_t size)
         return nullptr;
     }
     g_oom_count++;
-    return malloc(size);
+    return malloc(size); // NOLINT(clang-analyzer-unix.Errno)
 }
 
 /**
@@ -74,7 +74,7 @@ csilk_test_calloc(size_t nmemb, size_t size)
         return nullptr;
     }
     g_oom_count++;
-    return calloc(nmemb, size);
+    return calloc(nmemb, size); // NOLINT(clang-analyzer-unix.Errno)
 }
 
 /**
@@ -92,7 +92,7 @@ csilk_test_realloc(void* ptr, size_t size)
         return nullptr;
     }
     g_oom_count++;
-    return realloc(ptr, size);
+    return realloc(ptr, size); // NOLINT(clang-analyzer-unix.Errno)
 }
 
 /**
