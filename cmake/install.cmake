@@ -23,6 +23,11 @@ if(CSILK_BUILD_SHARED)
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# version.h is generated at configure time into the binary include/ tree,
+# so it must be installed explicitly (the source include/ only holds the .in
+# template).
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/csilk/version.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/csilk)
 install(DIRECTORY share/swagger-ui/ DESTINATION ${CMAKE_INSTALL_DATADIR}/csilk/swagger-ui)
 
 install(EXPORT csilk-targets
