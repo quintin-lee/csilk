@@ -129,14 +129,16 @@ find_package(CURL REQUIRED)
 
 include_directories(include)
 include_directories(src)
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories(${yyjson_SOURCE_DIR})
 include_directories(${CURL_INCLUDE_DIRS})
 
-# Generate version.h from CMake variable
+# Generate version.h into the binary include/ tree (mirroring the source
+# include/ layout) so consumers of the csilk target — add_subdirectory,
+# FetchContent, and installed packages alike — can resolve "csilk/version.h".
 configure_file(
   include/csilk/version.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/csilk/version.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/csilk/version.h
   @ONLY
 )
 configure_file(
