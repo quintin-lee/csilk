@@ -106,7 +106,9 @@ spa_fallback_handler(csilk_ctx_t* c)
     rewind(f);
     char* body = malloc((size_t)fsize + 1); // NOLINT(clang-analyzer-unix.Errno)
     if (!body) {
+        int saved_errno = errno;
         fclose(f);
+        errno = saved_errno;
         csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
         return;
     }
