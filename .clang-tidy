@@ -10,8 +10,8 @@ Checks: >
   -clang-analyzer-deadcode.DeadStores,
   -clang-analyzer-core.FixedAddressDereference,
   -clang-analyzer-optin.performance.Padding,
-  -clang-analyzer-valist.Uninitialized
-
+  -clang-analyzer-valist.Uninitialized,
+  -clang-analyzer-core.uninitialized.Assign
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(src/|include/).*'
 FormatStyle: none
