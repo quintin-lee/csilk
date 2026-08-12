@@ -11,11 +11,10 @@ set(CSILK_APP_SOURCES
     src/app/app.c
     src/app/app_routes.c
     src/app/group.c
+    src/app/admin.c
 )
 
 set(CSILK_CORE_SOURCES
-    src/core/bcrypt.c
-    src/core/config/admin.c
     src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
     src/core/config/config.c
@@ -36,11 +35,6 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/router_trie.c
     src/core/test_utils.c
     src/core/http/tls.c
-    src/core/server/url.c
-    src/core/server/utils.c
-    src/core/server/sha1.c
-    src/core/server/base64.c
-    src/core/server/uuid.c
     src/core/config/hot_reload.c
     src/core/primitives/header_map.c
     src/core/config/hooks.c
@@ -78,15 +72,12 @@ else()
     )
 endif()
 
-set(CSILK_DATA_SOURCES
-    src/drivers/db/db.c
-)
-
 set(CSILK_DRIVER_SOURCES
     src/drivers/ai/ollama.c
     src/drivers/ai/openai.c
     src/drivers/cipher/openssl.c
     src/drivers/perm/simple.c
+    src/drivers/db/db.c
     src/drivers/db/sqlite.c
     src/drivers/vector/vector.c
     src/drivers/vector/vector_simd.c
@@ -149,8 +140,17 @@ set(CSILK_REFLECTION_SOURCES
     src/reflection/reflect_free.c
 )
 
+set(CSILK_CRYPTO_SOURCES
+    src/crypto/base64.c
+    src/crypto/sha1.c
+    src/crypto/url.c
+    src/crypto/uuid.c
+    src/crypto/utils.c
+)
+
 set(CSILK_SECURITY_SOURCES
     src/drivers/perm/perm.c
+    src/security/bcrypt.c
 )
 
 set(CSILK_UTIL_SOURCES
@@ -181,7 +181,7 @@ set(CSILK_SOURCES
     ${CSILK_AI_SOURCES}
     ${CSILK_APP_SOURCES}
     ${CSILK_CORE_SOURCES}
-    ${CSILK_DATA_SOURCES}
+    ${CSILK_CRYPTO_SOURCES}
     ${CSILK_DRIVER_SOURCES}
     ${CSILK_MESSAGING_SOURCES}
     ${CSILK_MIDDLEWARE_SOURCES}
