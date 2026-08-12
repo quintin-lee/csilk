@@ -83,18 +83,22 @@ endif()
 # Prefer system llhttp; fallback to FetchContent from source
 find_library(LLHTTP_LIB NAMES llhttp libllhttp)
 if(NOT LLHTTP_LIB)
-  message(STATUS "System llhttp not found — fetching from source")
+  message(STATUS "System llhttp not found — fetching from source and embedding into CSILK_SOURCES")
   FetchContent_Declare(
     llhttp
     GIT_REPOSITORY https://github.com/nodejs/llhttp.git
     GIT_TAG        release/v9.4.1
   )
-  set(LLHTTP_BUILD_STATIC_LIBS ON)
   FetchContent_MakeAvailable(llhttp)
-  set(LLHTTP_LIB llhttp::llhttp)
   if(llhttp_SOURCE_DIR)
     include_directories(${llhttp_SOURCE_DIR}/include)
+    set(LLHTTP_SOURCES
+      ${llhttp_SOURCE_DIR}/src/api.c
+      ${llhttp_SOURCE_DIR}/src/http.c
+      ${llhttp_SOURCE_DIR}/src/llhttp.c
+    )
   endif()
+  set(LLHTTP_LIB "")
 else()
   message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
 endif()

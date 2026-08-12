@@ -80,6 +80,10 @@ include(cmake/dependencies.cmake)
 # Source files — organized per module in cmake/sources.cmake
 include(cmake/sources.cmake)
 
+if(LLHTTP_SOURCES)
+  list(APPEND CSILK_SOURCES ${LLHTTP_SOURCES})
+endif()
+
 # Conditional driver sources
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
   list(APPEND CSILK_SOURCES src/drivers/db/mysql.c)
