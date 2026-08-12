@@ -35,6 +35,7 @@
 #include "csilk/core/crypto_dispatch.h"
 #include "messaging/mq_internal.h"
 #include "csilk/core/bounded_buf.h"
+#include "csilk/core/bcrypt.h"
 
 /* ================================================================
  * Portable secure memory zeroing
