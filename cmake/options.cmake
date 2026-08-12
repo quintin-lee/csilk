@@ -40,7 +40,7 @@ endif()
 
 option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
 option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
-option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" OFF)
+option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 
 # ── Configurable compile-time constants ──────────────────────────────────
 set(CSILK_HEADER_BUCKETS 64  CACHE STRING "Header hash-table bucket count")
