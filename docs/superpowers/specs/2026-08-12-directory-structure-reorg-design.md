@@ -124,18 +124,9 @@ Include path changes:
 |------|-----|--------|
 | `src/core/config/admin.c` | `src/app/admin.c` | Includes `csilk/app/admin.h` and `csilk/app/app.h` |
 
-Include path changes:
-- `admin.c`: `#include "csilk/core/json.h"` → `#include "core/json.h"` (or keep full path, both work)
-- `admin.c`: `#include "csilk/core/internal.h"` → `#include "core/internal.h"`
-- `admin.c`: `#include "util/flamegraph.h"` → `#include "../util/flamegraph.h"`
+**No include path changes needed.** The CMake build already sets `include_directories(include)` and `include_directories(src)` (in `cmake/dependencies.cmake`), so all existing `#include "csilk/..."` paths in `admin.c` continue to resolve correctly after the move. Only `#include "util/flamegraph.h"` may optionally be updated to `#include "../util/flamegraph.h"`, but the existing relative path also works.
 
-### Phase 4: Move test utilities out of production
-
-| From | To | Reason |
-|------|-----|--------|
-| `src/core/test_utils.c` | `tests/test_utils.c` | Test infrastructure, not production code |
-
-### Phase 5: Reorganize test directories
+### Phase 4: Reorganize test directories
 
 | From | To |
 |------|-----|
@@ -145,23 +136,21 @@ Include path changes:
 | `tests/data/test_mongodb.c` | `tests/drivers/db/test_mongodb.c` |
 | `tests/fixtures/config_load_test.yaml` | `tests/drivers/db/fixtures/config_load_test.yaml` |
 
-### Phase 6: Update CMake
+### Phase 5: Update CMake
 
 1. **cmake/sources.cmake**:
    - Add `CSILK_CRYPTO_SOURCES` set with base64/sha1/url/uuid/utils
-   - Add `CSILK_SECURITY_SOURCES` set with bcrypt.c (merge into existing or separate)
+   - Add `CSILK_SECURITY_SOURCES` set with bcrypt.c
    - Remove `src/core/server/base64.c`, `sha1.c`, `url.c`, `uuid.c`, `utils.c` from `CSILK_CORE_SOURCES`
    - Remove `src/core/bcrypt.c` from `CSILK_CORE_SOURCES`
    - Move `src/core/config/admin.c` to `CSILK_APP_SOURCES`
-   - Remove `src/core/test_utils.c` from `CSILK_CORE_SOURCES`
-   - Remove `CSILK_DATA_SOURCES` (empty or merge into driver sets)
+   - Remove `CSILK_DATA_SOURCES` and inline its single file (`src/drivers/db/db.c`) into `CSILK_DRIVER_SOURCES`
+   - Remove `src/core/test_utils.c` from `CSILK_CORE_SOURCES` (it is linked into every test executable via `target_link_libraries(${name} csilk pthread m)` — leaving it in the library is intentional since test files call `csilk_test_ctx_*` functions from it)
 
 2. **cmake/tests.cmake**:
-   - Update paths for moved test files
-   - Add `tests/drivers/db/` subdirectory entries
-
-3. **CMakeLists.txt**:
-   - If `test_utils` is linked as a separate target, adjust
+   - Move `test_cipher` and `test_crypto_driver` from `CSILK_DATA_TESTS`/`CSILK_DATA_TEST_DIRS` to `CSILK_SECURITY_TESTS`/`CSILK_SECURITY_TEST_DIRS`
+   - Move `test_db` and `test_mongodb` from `CSILK_DATA_TESTS`/`CSILK_DATA_TEST_DIRS` to `CSILK_AI_TESTS`/`CSILK_AI_TEST_DIRS` (or create a new `CSILK_DB_TESTS` set under `drivers/db/`)
+   - Remove empty `CSILK_DATA_TESTS`/`CSILK_DATA_TEST_DIRS` sets
 
 ---
 
