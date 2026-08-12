@@ -12,7 +12,7 @@
  *
  * bcrypt hashes have the form:
  * ```
- * $2a$XX$<22-char-cost><16-char-salt><31-char-checksum>
+ * $2a$XX$<22-char-salt><32-char-checksum>
  * ```
  * where XX is a two-digit cost factor (04–31) and each character of
  * the 53-character suffix is drawn from the bcrypt base64 alphabet
@@ -49,13 +49,13 @@ enum { CSILK_BCRYPT_DEFAULT_COST = 12 };
 /** @brief Maximum bcrypt salt length in bytes (16 bytes). */
 enum { CSILK_BCRYPT_SALT_BYTES = 16 };
 
-/** @brief Length of the ciphertext output after Eksblowfish (23 bytes). */
-enum { CSILK_BCRYPT_CIPHER_OUT = 23 };
+/** @brief Length of the ciphertext output after Eksblowfish (24 bytes). */
+enum { CSILK_BCRYPT_CIPHER_OUT = 24 };
 
 /** @brief bcrypt hash buffer size (static — never reallocates).
  *
- * Format: `$2a$XX$` (7) + 53 base64 chars = 60 bytes + NUL terminator. */
-enum { CSILK_BCRYPT_HASH_LEN = 61 };
+ * Format: `$2a$XX$` (7) + 22 salt chars + 32 checksum chars = 61 bytes + NUL terminator. */
+enum { CSILK_BCRYPT_HASH_LEN = 62 };
 
 /**
  * @brief Hash a plaintext password with bcrypt.
@@ -69,7 +69,8 @@ enum { CSILK_BCRYPT_HASH_LEN = 61 };
  *                   Values outside the range are clamped.
  * @param[out] hash  Output buffer of at least CSILK_BCRYPT_HASH_LEN bytes.
  */
-void csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN]);
+void
+csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN]);
 
 /**
  * @brief Verify a plaintext password against a bcrypt hash.
