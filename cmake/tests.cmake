@@ -215,9 +215,10 @@ set(CSILK_SECURITY_TESTS
     test_crypto_primitives
     test_jwt_security
     test_uuid
+    test_bcrypt
 )
 set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security
+    security;security;security;security;security;security
 )
 
 # -- Data / driver tests --

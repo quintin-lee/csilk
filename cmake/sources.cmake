@@ -14,6 +14,7 @@ set(CSILK_APP_SOURCES
 )
 
 set(CSILK_CORE_SOURCES
+    src/core/bcrypt.c
     src/core/config/admin.c
     src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
