@@ -216,22 +216,21 @@ set(CSILK_SECURITY_TESTS
     test_jwt_security
     test_uuid
     test_bcrypt
+    test_cipher
+    test_crypto_driver
 )
 set(CSILK_SECURITY_TEST_DIRS
     security;security;security;security;security;security
+    security;security
 )
 
 # -- Data / driver tests --
 set(CSILK_DATA_TESTS
-    test_cipher
-    test_crypto_driver
-    test_db
-    test_mongodb
     test_db_sqlite
     test_db_registry
 )
 set(CSILK_DATA_TEST_DIRS
-    data;data;data;data;drivers;drivers
+    drivers;drivers
 )
 
 # -- AI / driver tests --
@@ -242,9 +241,12 @@ set(CSILK_AI_TESTS
     test_vector_simd
     test_vector_hnsw
     test_vector_db_embedded
+    test_db
+    test_mongodb
 )
 set(CSILK_AI_TEST_DIRS
     drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
+    drivers/db;drivers/db
 )
 
 # -- Reflection tests --

@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../ctx/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 
 /** @brief Helper: convert a hexadecimal character to its integer value.

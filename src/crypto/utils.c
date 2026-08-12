@@ -28,7 +28,7 @@
 #include <sys/random.h>
 #endif
 
-#include "../ctx/ctx_internal.h"
+#include "core/ctx/ctx_internal.h"
 #include <stdlib.h>
 #include "csilk/core/internal.h"
 #include "csilk/core/crypto.h"

@@ -42,7 +42,7 @@ static const uint32_t pg[18] = {
  * (public domain).  Layout: 4 sub-boxes × 256 entries each.
  */
 static const uint32_t sg_init[4][256] = {
-#include "csilk/core/blowfish_sboxes.h"
+#include "blowfish_sboxes.h"
 };
 
 static uint32_t sg[4][256];
