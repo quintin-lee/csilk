@@ -153,27 +153,24 @@ eksblowfish_key_setup(const uint8_t password[], size_t pwd_len,
     }
 
     /* Step 2: Encrypt and key P-array with salt. */
-    datal = 0;
-    datar = 0;
     for (int i = 0; i < 18; i += 2) {
-        /* Build next salt word for left half, XOR into datal. */
         uint32_t new_datal = 0;
         for (int j = 0; j < 4; j++) {
             uint8_t byte = salt[salt_idx++];
             if (salt_idx >= salt_len) salt_idx = 0;
             new_datal = (new_datal << 8) | byte;
         }
-        /* Build next salt word for right half, XOR into datar. */
         uint32_t new_datar = 0;
         for (int j = 0; j < 4; j++) {
             uint8_t byte = salt[salt_idx++];
             if (salt_idx >= salt_len) salt_idx = 0;
             new_datar = (new_datar << 8) | byte;
         }
-        datal ^= new_datal;
-        datar ^= new_datar;
 
-        blowfish_encipher(&datal, &datar, p);
+        uint32_t block[2] = {datal ^ new_datal, datar ^ new_datar};
+        blowfish_encipher(block, block, p);
+        datal = block[0];
+        datar = block[1];
         p[i] = datal;
         p[i + 1] = datar;
     }
@@ -181,25 +178,23 @@ eksblowfish_key_setup(const uint8_t password[], size_t pwd_len,
     /* Step 3: Encrypt and key S-boxes with salt. */
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 256; j += 2) {
-            /* Build next salt word for left half, XOR into datal. */
             uint32_t new_datal = 0;
             for (int k = 0; k < 4; k++) {
                 uint8_t byte = salt[salt_idx++];
                 if (salt_idx >= salt_len) salt_idx = 0;
                 new_datal = (new_datal << 8) | byte;
             }
-            /* Build next salt word for right half, XOR into datar. */
             uint32_t new_datar = 0;
             for (int k = 0; k < 4; k++) {
                 uint8_t byte = salt[salt_idx++];
                 if (salt_idx >= salt_len) salt_idx = 0;
                 new_datar = (new_datar << 8) | byte;
             }
-            datal ^= new_datal;
-            datar ^= new_datar;
-            blowfish_encipher(&datal, &datar, p);
-            sg[i][j] = datal;
-            sg[i][j + 1] = datar;
+
+            uint32_t block[2] = {datal ^ new_datal, datar ^ new_datar};
+            blowfish_encipher(block, block, p);
+            sg[i][j]     = block[0];
+            sg[i][j + 1] = block[1];
         }
     }
 }
