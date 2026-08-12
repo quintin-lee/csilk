@@ -145,7 +145,7 @@ set(CSILK_CRYPTO_SOURCES
     src/crypto/sha1.c
     src/crypto/url.c
     src/crypto/uuid.c
-    src/crypto/utils.c
+    src/crypto/crypto.c
 )
 
 set(CSILK_SECURITY_SOURCES
