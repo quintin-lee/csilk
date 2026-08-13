@@ -19,7 +19,7 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
     csilk_json_t* root = csilk_json_parse(json_str);
     if (!root) {
         if (err_buf && err_len > 0) {
-            snprintf(err_buf, err_len, "JSON parse error near '%s'", NULL);
+            snprintf(err_buf, err_len, "JSON parse error");
         }
         return nullptr;
     }
