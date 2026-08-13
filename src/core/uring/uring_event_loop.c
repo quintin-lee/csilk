@@ -28,6 +28,7 @@
 #include "csilk/core/sync.h"
 #include "core/internal/srv_internal.h"
 #include "../internal/srv_impl.h"
+#include "messaging/mq_internal.h"
 #include "uring_internal.h"
 
 /* --- Barrier primitives --- */
