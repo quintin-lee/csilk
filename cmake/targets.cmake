@@ -45,6 +45,16 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
         target_link_options(${TARGET} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/libcsilk.map")
     endif()
+    # macOS: use @loader_path (equivalent of $ORIGIN) so delocate-wheel can
+    # relocate the dylib and its Homebrew deps into the wheel bundle without
+    # hard-coded /opt/homebrew paths breaking after installation.
+    if(APPLE)
+      set_target_properties(${TARGET} PROPERTIES
+          INSTALL_NAME_DIR         "@loader_path"
+          BUILD_RPATH_USE_ORIGIN   TRUE
+          INSTALL_RPATH            "@loader_path"
+      )
+    endif()
   endif()
 
   set_target_properties(${TARGET} PROPERTIES
