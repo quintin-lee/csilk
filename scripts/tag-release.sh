@@ -21,7 +21,7 @@
 #  13. Commits all changes
 #  14. Creates a signed git tag vX.Y.Z
 #
-# The single source of truth is CMakeLists.txt (CSILK_VERSION_MAJOR/MINOR/PATCH).
+# The single source of truth is cmake/options.cmake (CSILK_VERSION_MAJOR/MINOR/PATCH).
 # Everything else is derived from it.
 
 set -euo pipefail
@@ -109,12 +109,13 @@ run_or_print() {
     fi
 }
 
-# ── Step 1: Update CMakeLists.txt (single source of truth) ──────────────────
-info "Updating CMakeLists.txt ..."
+# ── Step 1: Update cmake/options.cmake (single source of truth) ─────────────
+info "Updating cmake/options.cmake ..."
 
-OLD_MAJOR=$(grep -oP 'set\(CSILK_VERSION_MAJOR \K[0-9]+' CMakeLists.txt)
-OLD_MINOR=$(grep -oP 'set\(CSILK_VERSION_MINOR \K[0-9]+' CMakeLists.txt)
-OLD_PATCH=$(grep -oP 'set\(CSILK_VERSION_PATCH \K[0-9]+' CMakeLists.txt)
+VERSION_FILE="cmake/options.cmake"
+OLD_MAJOR=$(grep -oP 'set\(CSILK_VERSION_MAJOR \K[0-9]+' "$VERSION_FILE")
+OLD_MINOR=$(grep -oP 'set\(CSILK_VERSION_MINOR \K[0-9]+' "$VERSION_FILE")
+OLD_PATCH=$(grep -oP 'set\(CSILK_VERSION_PATCH \K[0-9]+' "$VERSION_FILE")
 OLD_VERSION="${OLD_MAJOR}.${OLD_MINOR}.${OLD_PATCH}"
 
 if [[ "$OLD_VERSION" == "$VERSION" ]]; then
@@ -123,11 +124,11 @@ fi
 
 info "  ${OLD_VERSION} → ${VERSION}"
 
-run_or_print "sed -i 's/set(CSILK_VERSION_MAJOR ${OLD_MAJOR}/set(CSILK_VERSION_MAJOR ${V_MAJOR}/' CMakeLists.txt"
-run_or_print "sed -i 's/set(CSILK_VERSION_MINOR ${OLD_MINOR}/set(CSILK_VERSION_MINOR ${V_MINOR}/' CMakeLists.txt"
-run_or_print "sed -i 's/set(CSILK_VERSION_PATCH ${OLD_PATCH}/set(CSILK_VERSION_PATCH ${V_PATCH}/' CMakeLists.txt"
+run_or_print "sed -i 's/set(CSILK_VERSION_MAJOR ${OLD_MAJOR}/set(CSILK_VERSION_MAJOR ${V_MAJOR}/' '$VERSION_FILE'"
+run_or_print "sed -i 's/set(CSILK_VERSION_MINOR ${OLD_MINOR}/set(CSILK_VERSION_MINOR ${V_MINOR}/' '$VERSION_FILE'"
+run_or_print "sed -i 's/set(CSILK_VERSION_PATCH ${OLD_PATCH}/set(CSILK_VERSION_PATCH ${V_PATCH}/' '$VERSION_FILE'"
 
-ok "CMakeLists.txt updated"
+ok "cmake/options.cmake updated"
 
 # ── Step 2: Update @version in header and source files ──────────────────────
 info "Updating @version in header and source files ..."
