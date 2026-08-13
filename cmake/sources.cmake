@@ -146,11 +146,11 @@ set(CSILK_CRYPTO_SOURCES
     src/crypto/url.c
     src/crypto/uuid.c
     src/crypto/crypto.c
+    src/crypto/bcrypt.c
 )
 
 set(CSILK_SECURITY_SOURCES
     src/drivers/perm/perm.c
-    src/security/bcrypt.c
 )
 
 set(CSILK_UTIL_SOURCES
