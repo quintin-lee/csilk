@@ -113,7 +113,7 @@ cmake -B build_pgo_final -S . -DCMAKE_BUILD_TYPE=Release \
 make -C build_pgo_final -j$(nproc)
 ```
 
-### 2.4 io_uring 后端构建（Linux-only）
+### 2.6 io_uring 后端构建（Linux-only）
 
 csilk 支持可选的 io_uring 后端，在 Linux 5.1+ 上提供更高的 I/O 性能：
 
@@ -125,7 +125,7 @@ make -j$(nproc)
 
 > **注意**: io_uring 后端需要 Linux 内核 ≥ 5.1（推荐 ≥ 5.6 以获得轮询模式支持）。libuv 后端在所有平台均可使用，是默认选项。
 
-### 2.5 静态库 vs 动态库
+### 2.7 静态库 vs 动态库
 
 ```bash
 # 静态库（默认，~150KB）
