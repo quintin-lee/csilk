@@ -26,5 +26,5 @@
 #include "csilk/messaging/mq.h"
 #include "csilk/core/server.h"
 #include "csilk/app/workflow.h"
-#include "csilk/core/admin.h"
+#include "csilk/app/admin.h"
 #include "csilk/core/hot_reload.h"
