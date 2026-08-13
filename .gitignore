@@ -51,6 +51,7 @@ build-pkg/
 build-profile/
 build/
 build_cov/
+dist/
 
 findings.md
 progress.md
