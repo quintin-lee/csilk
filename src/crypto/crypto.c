@@ -401,7 +401,8 @@ _csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20])
 }
 
 CSILK_INTERNAL void
-_csilk_bcrypt_hash(csilk_ctx_t* c, const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN])
+_csilk_bcrypt_hash(
+    csilk_ctx_t* c, const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN])
 {
     if (c && c->crypto_driver && c->crypto_driver->bcrypt_hash) {
         c->crypto_driver->bcrypt_hash(password, len, cost, hash);

@@ -30,7 +30,7 @@
  * Allocates a buffer of the suggested size using malloc. The buffer is freed
  * by the I/O backend after the read callback is invoked (libuv path).
  *
- * /* * @param handle          The I/O handle that will read into the buffer.
+ * // @param handle          The I/O handle that will read into the buffer.
  * @param suggested_size  Recommended buffer size from the I/O backend.
  * @param buf             [out] Pointer to the csilk_io_buf_t to populate. */
 void
