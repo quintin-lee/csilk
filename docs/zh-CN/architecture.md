@@ -924,51 +924,115 @@ csilk/
 │           └── reflect.h          # 运行时类型反射
 ├── src/
 │   ├── core/                      # 服务器引擎
-│   │   ├── server.c               # 生命周期：create/run/stop/free/hooks/workers
-│   │   ├── connection.c           # 池、accept、I/O、计时器、on_read
-│   │   ├── http1.c                # llHTTP 回调、分发、响应序列化
-│   │   ├── tls.c                  # OpenSSL 初始化、BIO-pair、ALPN 协商
-│   │   ├── context.c              # 请求读取、生命周期、绑定、cookie
-│   │   ├── response.c             # 响应写入（状态/JSON/重定向/分块）
-│   │   ├── router.c               # 基数树路由匹配
-│   │   ├── arena.c                # 碰撞分配器
-│   │   ├── config.c               # YAML 配置加载器
-│   │   ├── h2.c                   # HTTP/2 集成（nghttp2）
-│   │   ├── h2.h                   # HTTP/2 内部头文件
-│   │   ├── logger.c               # 结构化日志记录
-│   │   ├── recovery.c             # setjmp/longjmp 错误恢复
-│   │   ├── url.c                  # URL 解析和分割
-│   │   ├── utils.c                # 杂项实用函数
-│   │   ├── base64.c               # Base64/Base64URL 编码/解码
-│   │   ├── sha1.c                 # SHA-1 哈希（WebSocket 握手）
-│   │   ├── uuid.c                 # UUID v4 生成
-│   │   ├── bounded_buf.c          # 栈限定的限定字符串/JSON 构建器
-│   │   ├── hot_reload.c           # 文件监视热重载（inotify）
+│   │   ├── server/                # 生命周期：create/run/stop/free/hooks/workers
+│   │   │   ├── server_lifecycle.c # 服务器 create/run/stop/free/hooks
+│   │   │   ├── server_shutdown.c  # 优雅关闭
+│   │   │   ├── server_worker.c    # 工作线程池
+│   │   │   └── connection.c       # 池、accept、I/O、计时器、on_read
+│   │   ├── http/                  # HTTP/1.1、HTTP/2、TLS
+│   │   │   ├── http1_parse.c      # llHTTP 回调、分发
+│   │   │   ├── http1_response.c   # 响应序列化
+│   │   │   ├── http1_zerocopy.c   # 零拷贝静态文件服务
+│   │   │   ├── swar_http.c        # SWAR 并行前缀头解析
+│   │   │   ├── h2.c               # HTTP/2 集成（nghttp2）
+│   │   │   ├── h2_callbacks.c     # HTTP/2 回调
+│   │   │   ├── h2.h               # HTTP/2 内部头文件
+│   │   │   └── tls.c              # OpenSSL 初始化、BIO-pair、ALPN 协商
+│   │   ├── ctx/                   # 请求上下文
+│   │   │   ├── context.c          # 请求读取、生命周期、绑定、cookie
+│   │   │   ├── ctx_accessors.c    # 上下文访问器 API
+│   │   │   ├── ctx_defer.c        # 延迟清理
+│   │   │   ├── ctx_json.c         # JSON 响应辅助
+│   │   │   └── ctx_internal.h     # csilk_ctx_s 结构布局
+│   │   ├── primitives/            # 核心数据结构
+│   │   │   ├── arena.c            # 碰撞分配器
+│   │   │   ├── bounded_buf.c      # 栈限定的限定字符串/JSON 构建器
+│   │   │   ├── header_map.c/h     # 头映射
+│   │   │   ├── kv_store.c         # 键值存储
+│   │   │   ├── lfqueue.h          # 无锁队列
+│   │   │   ├── query.c/h          # 查询字符串解析
+│   │   │   ├── recovery.c         # setjmp/longjmp 错误恢复
+│   │   │   ├── response.c         # 响应写入（状态/JSON/重定向/分块）
+│   │   │   ├── router.c           # 基数树路由匹配
+│   │   │   ├── router_simd.c      # SIMD 加速路由匹配
+│   │   │   └── router_trie.c      # 基数树节点
+│   │   ├── config/                # 配置与日志
+│   │   │   ├── config.c           # YAML 配置加载器
+│   │   │   ├── hooks.c            # 生命周期 hook 系统
+│   │   │   ├── hot_reload.c       # 文件监视热重载（inotify）
+│   │   │   └── logger.c           # 结构化日志记录
+│   │   ├── cache/                 # mvcc_cache.c - MVCC 缓存
+│   │   ├── io/                    # 高性能 I/O（AF_XDP、DPDK PMD）
+│   │   ├── json/                  # cJSON 包装
+│   │   ├── plugin/                # WASM 插件运行时
+│   │   ├── internal/              # 内部服务器头文件（不安装）
+│   │   │   ├── srv_impl.h         # 跨文件声明（服务器拆分）
+│   │   │   └── srv_internal.h     # 内部服务器类型
 │   │   ├── test_utils.c           # 测试 OOM 实用工具
-│   │   ├── admin.c                # Admin 仪表板
- │   │   ├── internal/              # 内部服务器头文件（不安装）
- │   │   │   ├── srv_impl.h          # 跨文件声明（服务器拆分）
- │   │   │   └── srv_internal.h      # 内部服务器类型
 │   │   └── uring/                 # io_uring 后端（仅 Linux，可选）
 │   │       ├── uring_server.c
 │   │       ├── uring_connection.c
 │   │       ├── uring_thread_pool.c
 │   │       ├── uring_internal.h
 │   │       └── uv_stubs.c
-│   ├── app/                       # 轻量级应用包装
-│   │   ├── app.c
-│   │   └── group.c
+│   ├── crypto/                    # 加密原语与算法
+│   │   ├── base64.c               # Base64/Base64URL 编码/解码
+│   │   ├── sha1.c                 # SHA-1 哈希（WebSocket 握手）
+│   │   ├── url.c                  # URL 解析和分割
+│   │   ├── uuid.c                 # UUID v4 生成
+│   │   ├── crypto.c               # 杂项加密实用函数
+│   │   ├── bcrypt.c               # bcrypt 密码哈希
+│   │   └── blowfish_sboxes.h      # Eksblowfish S 盒常量
+│   ├── app/                       # 高级应用层
+│   │   ├── app.c                  # App 门面
+│   │   ├── app_routes.c           # 路由注册辅助
+│   │   ├── group.c                # 路由组
+│   │   ├── admin.c                # Admin 仪表板
+│   │   └── app_internal.h         # 内部应用类型
 │   ├── workflow/                  # AI 工作流引擎
-│   │   ├── wf_ai.c                # AI 聊天节点、内存助手、模板
-│   │   ├── wf_lifecycle.c         # 生命周期：创建、销毁、注册
-│   │   ├── wf_monitor.c           # 实时监控事件
 │   │   ├── wf_scheduler.c         # 执行引擎、DAG 调度、WAL 恢复
+│   │   ├── wf_graph.c             # DAG 图结构
+│   │   ├── wf_monitor.c           # 实时监控事件
 │   │   ├── wf_trace.c             # 执行跟踪记录
-│   │   ├── workflow_internal.h    # 内部结构 & 存根
+│   │   ├── wf_resume.c            # 工作流恢复
+│   │   ├── wf_tools.c             # 工具调用
+│   │   ├── wf_ai_nodes.c          # AI 聊天节点
+│   │   ├── wf_ai_agents.c         # Agent 引擎
+│   │   ├── wf_ai_utils.c          # AI 辅助
 │   │   ├── workflow_loader.c      # JSON/YAML 解析器加载器
-│   │   └── workflow_wal.c         # WAL 持久化引擎
-│   ├── middleware/                # 内置中间件模块
-│   ├── protocols/                 # WebSocket、Swagger
+│   │   ├── workflow_wal.c         # WAL 持久化引擎
+│   │   ├── workflow_manager.c     # 工作流生命周期管理
+│   │   ├── workflow_dsl.c         # DSL 定义
+│   │   ├── workflow_internal.h    # 内部结构 & 存根
+│   │   └── ...                    # 分布式与集群支持（wf_distributed.c、wf_cluster_sm.c）
+│   ├── middleware/                # 22 个内置中间件模块
+│   │   ├── auth.c, jwt.c          # 令牌 & JWT（HS256）认证
+│   │   ├── cors.c, csrf.c         # CORS、CSRF
+│   │   ├── ratelimit.c            # 固定窗口限流
+│   │   ├── sliding_ratelimit.c    # 滑动窗口限流器
+│   │   ├── circuit_breaker.c      # 熔断器
+│   │   ├── gzip.c                 # Gzip 压缩
+│   │   ├── logger.c, metrics.c    # 请求日志、Prometheus 指标
+│   │   ├── waf.c, xdp_waf.c       # WAF、eBPF XDP 动态 WAF
+│   │   ├── static.c               # 静态文件服务
+│   │   ├── session.c              # 会话管理
+│   │   ├── sse.c                  # 服务器发送事件
+│   │   ├── multipart.c            # 多部分文件上传
+│   │   ├── grpc_gateway.c         # HTTP/JSON <-> gRPC 转码
+│   │   ├── otlp_exporter.c        # OTLP 导出器（Jaeger/Zipkin）
+│   │   ├── otlp_trace.c           # W3C 跟踪上下文
+│   │   ├── request_id.c           # X-Request-Id 追踪
+│   │   └── validate.c             # 参数验证
+│   ├── protocols/                 # 协议扩展
+│   │   ├── websocket.c            # RFC 6455 WebSocket
+│   │   ├── ws_room.c              # WebSocket 房间
+│   │   ├── h3.c                   # HTTP/3（QUIC）
+│   │   ├── swagger.c              # Swagger UI
+│   │   ├── openapi_gen.c          # OpenAPI 生成
+│   │   └── mcp/                   # 模型上下文协议
+│   │       ├── mcp_server.c
+│   │       ├── mcp_client.c
+│   │       └── mcp_jsonrpc.c
 │   ├── drivers/                   # 驱动实现
 │   │   ├── ai/                    # AI 引擎 + OpenAI/Ollama 后端
 │   │   │   ├── ai.c
@@ -991,9 +1055,19 @@ csilk/
 │   │       ├── vector.c
 │   │       ├── qdrant.c
 │   │       └── milvus.c
-│   ├── messaging/                 # 消息队列
+│   ├── messaging/                 # 消息队列 + Raft 共识
+│   │   ├── mq_core.c              # MQ 核心
+│   │   ├── mq_pubsub.c            # 发布/订阅
+│   │   ├── mq_wal.c               # MQ WAL 持久化
+│   │   ├── raft_consensus.c       # Raft 共识
+│   │   ├── raft_wal.c             # Raft WAL
+│   │   └── ...
 │   ├── reflection/                # 运行时类型反射
+│   │   ├── reflect.c
+│   │   ├── reflect_marshal.c
+│   │   └── reflect_unmarshal.c
 │   └── util/                      # 实用模块
+│       └── flamegraph.c           # CPU 火焰图采样
 ├── tests/                         # 单元/集成/模糊测试
 ├── examples/                      # 示例应用程序
 ├── docs/                          # 架构、研究、分析文档

@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### 变更
+- **目录结构重组**：将 `base64.c`、`sha1.c`、`url.c`、`uuid.c`、`crypto.c`（原名 `utils.c`）从 `src/core/server/` 移至新模块 `src/crypto/`；将 `bcrypt.c` 和 `blowfish_sboxes.h` 并入 `src/crypto/`（合并 `src/security/`）；将 `admin.c` 从 `src/core/config/` 移至 `src/app/`；将测试从 `tests/data/` 重组至 `tests/security/` 和 `tests/drivers/db/`；删除冗余的 `include/csilk/core/admin.h` re-export 包装；移除 `CSILK_DATA_SOURCES` CMake 变量（内联至 `CSILK_DRIVER_SOURCES`）。
+
 ### 新增
 - **原生内嵌式 SIMD 向量检索索引引擎**：32 字节内存对齐 AVX2 SIMD 距离算子（Cosine / L2 / 点积）与多层 HNSW 跳表图索引 (`csilk_hnsw_index_t`)，实现 $O(\log N)$ ANN 近似最近邻向量检索与全零依赖内嵌驱动 (`csilk_vector_db_new_embedded`)。
 - **eBPF XDP 动态规则 WAF 与 OTLP 全链路追踪 Web 仪表盘**：BPF-Map 无缝热加载内核防火墙规则 (`csilk_xdp_waf_add_ip_rule`)、W3C 链路追踪 2048-Span 无锁环形缓冲区 (`csilk_otlp_tracer_start_span`)，以及单页嵌入式 Web APM Dashboard (`share/csilk/apm_ui.html`, `/admin/apm`)。

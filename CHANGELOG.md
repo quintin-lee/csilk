@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Directory structure reorganization**: Moved `base64.c`, `sha1.c`, `url.c`, `uuid.c`, `crypto.c` (formerly `utils.c`) from `src/core/server/` into new `src/crypto/` module; moved `bcrypt.c` and `blowfish_sboxes.h` into `src/crypto/` (merged `src/security/`); moved `admin.c` from `src/core/config/` to `src/app/`; reorganized tests from `tests/data/` into `tests/security/` and `tests/drivers/db/`; removed redundant `include/csilk/core/admin.h` re-export wrapper; removed `CSILK_DATA_SOURCES` CMake variable (inlined into `CSILK_DRIVER_SOURCES`).
+
 ### Added
 - **Embedded SIMD Vector Index Engine**: 32-byte aligned AVX2 SIMD distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index engine (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
 - **eBPF XDP Dynamic WAF & OTLP APM Dashboard**: BPF-Map hot-reloading dynamic WAF rule engine (`csilk_xdp_waf_add_ip_rule`), W3C trace context middleware with 2048-span ring buffer (`csilk_otlp_tracer_start_span`), and single-page embedded Web APM Dashboard (`share/csilk/apm_ui.html`, `/admin/apm`).
