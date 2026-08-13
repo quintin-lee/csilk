@@ -12,7 +12,7 @@
  *   - **codec.h** — Base64, Base64URL, URL percent-decoding.
  *   - **ws_frame.h** — WebSocket frame parsing (RFC 6455).
  *   - **crypto_dispatch.h** — Weak-symbol stubs for crypto/cipher dispatch.
- *   - **mq_internal.h** — Message Queue types and internal API.
+ *   - **bounded_buf.h** — Bounded buffer primitives.
  * @copyright MIT License
  */
 
@@ -33,7 +33,6 @@
 #include "csilk/core/codec.h"
 #include "csilk/core/ws_frame.h"
 #include "csilk/core/crypto_dispatch.h"
-#include "messaging/mq_internal.h"
 #include "csilk/core/bounded_buf.h"
 #include "csilk/core/bcrypt.h"
 
