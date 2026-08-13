@@ -6,7 +6,7 @@
 
 ## Installation
 
-Ensure that the core `csilk` C library is compiled (e.g., in the `build/` directory or system library path). Then install the Python package:
+Ensure that the core `csilk` C library is compiled (e.g., in the `build/` directory or system library path). The `pip install` command above triggers a CMake build automatically if the shared library (`libcsilk.so`) is not yet present — no manual build step is required. Then install the Python package:
 
 ```bash
 pip install -e ./python

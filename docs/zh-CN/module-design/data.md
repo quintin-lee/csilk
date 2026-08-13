@@ -203,7 +203,7 @@ Redis 在 csilk 中扮演两个角色：
 
 1. **数据库驱动** (`csilk_db_driver_t`) — Redis 命令通过标准查询/exec 接口。用于直接 Redis 命令执行。
 
-2. **存储驱动** (`csilk_storage_driver_t`) — 通过 `csilk_redis_storage_driver_new(pool)` 创建。提供键值存储（set/get/clear/incr）用于会话管理和速率限制。存储驱动包装 DB 池并将存储操作转换为 Redis 命令。
+2. **存储驱动** (`csilk_storage_driver_t`) — 提供两种后端：内置**默认**后端（基于 arena 的内存链表，未设置自定义驱动时自动使用）和 **Redis**（通过 `csilk_redis_storage_driver_new(pool)` 创建）。Redis 驱动提供持久化键值存储（set/get/clear/incr），用于会话管理和速率限制，包装 DB 池并将存储操作转换为 Redis 命令。
 
 ### 6.2 事务支持
 

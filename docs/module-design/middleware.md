@@ -126,4 +126,4 @@ int main() {
 
 ## Internal Implementation
 
-The middleware uses a **Pluggable Crypto Driver**. By default, it uses the built-in HMAC-SHA256 implementation located in `src/crypto/crypto.c`. You can replace this with hardware-accelerated or system-provided libraries using `csilk_server_set_crypto_driver()`.
+The middleware uses a **Pluggable Crypto Driver**. By default, it uses the built-in HMAC-SHA256, SHA1, and bcrypt implementations located in `src/crypto/crypto.c`. You can replace any of these with hardware-accelerated or system-provided libraries using `csilk_server_set_crypto_driver()`.
