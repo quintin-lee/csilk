@@ -202,7 +202,7 @@ Redis serves two roles in csilk:
 
 1. **Database driver** (`csilk_db_driver_t`) — Redis commands via the standard query/exec interface. Used for direct Redis command execution.
 
-2. **Storage driver** (`csilk_storage_driver_t`) — Created via `csilk_redis_storage_driver_new(pool)`. Provides key-value storage (set/get/clear/incr) for session management and rate limiting. The storage driver wraps a DB pool and translates storage operations to Redis commands.
+2. **Storage driver** (`csilk_storage_driver_t`) — Two backends are available: the built-in **default** (arena-backed in-memory linked list, used automatically when no custom driver is set) and **Redis** (created via `csilk_redis_storage_driver_new(pool)`). The Redis driver provides persistent key-value storage (set/get/clear/incr) for session management and rate limiting. It wraps a DB pool and translates storage operations to Redis commands.
 
 ### 6.2 Transaction Support
 

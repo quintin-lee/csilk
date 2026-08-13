@@ -6,7 +6,7 @@
 
 ## 安装
 
-确保核心 `csilk` C 库已编译（例如，在 `build/` 目录或系统库路径中）。然后安装 Python 包：
+确保核心 `csilk` C 库已编译（例如，在 `build/` 目录或系统库路径中）。上述 `pip install` 命令会在共享库（`libcsilk.so`）尚未存在时自动触发 CMake 构建——无需手动构建步骤。然后安装 Python 包：
 
 ```bash
 pip install -e ./python

@@ -42,9 +42,9 @@ graph TB
         MW["fa:fa-layer-group csilk_handler_t middlewares[32]<br/>Global middleware chain"]
         RT["fa:fa-sitemap csilk_router_t* router<br/>Radix tree router"]
 
-        CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>Pluggable crypto"]
-        CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>Pluggable cipher"]
-        STORE["fa:fa-database csilk_storage_driver_t*<br/>Session storage"]
+        CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>Pluggable crypto (defaults to OpenSSL)"]
+        CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>Pluggable cipher (defaults to OpenSSL)"]
+        STORE["fa:fa-database csilk_storage_driver_t*<br/>Session storage (defaults to in-memory)"]
 
         SSL["fa:fa-shield SSL_CTX* ssl_ctx<br/>OpenSSL context"]
 

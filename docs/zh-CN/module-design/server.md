@@ -42,9 +42,9 @@ graph TB
         MW["fa:fa-layer-group csilk_handler_t middlewares[32]<br/>全局中间件链"]
         RT["fa:fa-sitemap csilk_router_t* router<br/>Radix tree 路由"]
 
-        CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>可插拔加密"]
-        CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>可插拔密码"]
-        STORE["fa:fa-database csilk_storage_driver_t*<br/>会话存储"]
+        CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>可插拔加密（默认 OpenSSL）"]
+        CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>可插拔密码（默认 OpenSSL）"]
+        STORE["fa:fa-database csilk_storage_driver_t*<br/>会话存储（默认内存）"]
 
         SSL["fa:fa-shield SSL_CTX* ssl_ctx<br/>OpenSSL 上下文"]
 

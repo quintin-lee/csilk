@@ -358,7 +358,9 @@ typedef struct {
 } csilk_storage_driver_t;
 ```
 
-**内置实现**: Redis-backed (`csilk_redis_storage_driver_new(pool)`)
+**内置实现**:
+- **默认内存后端**（`csilk_default_storage_driver`）：arena 背链式列表，自动在 context 初始化时绑定，无需额外配置。
+- **Redis 后端**（`csilk_redis_storage_driver_new(pool)`）：持久化键值存储，用于会话管理和分布式速率限制。
 - `SET key value` / `GET key` / `DEL key`
 - `SET key value EX ttl` (带 TTL)
 - `INCR key`（原子递增）
