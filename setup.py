@@ -27,7 +27,7 @@ class CMakeBuild(build_ext):
         
         # Determine the target directory for the shared library
         # We want to put it in the csilk package folder so it can be distributed
-        csilk_pkg_dir = os.path.join(extdir, "csilk")
+        csilk_pkg_dir = extdir
         os.makedirs(csilk_pkg_dir, exist_ok=True)
         
         cfg = "Debug" if self.debug else "Release"
