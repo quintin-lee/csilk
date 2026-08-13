@@ -27,6 +27,8 @@
 - **bcrypt 空密码验证失败**：修复 bcrypt 实现中的三个导致 `csilk_bcrypt_verify` 对空密码始终返回 -1 的 bug：(1) `CSILK_BCRYPT_CIPHER_OUT` 为 23 而非 24——24 字节应编码为 32 个 base64 字符，但 verify 只读取 31 个，丢失了最后一个字节；(2) Eksblowfish P-array 密钥调度（Step 2）前未将 `datal`/`datar` 初始化为零，导致空密码时 salt 与栈垃圾值异或；(3) `pwd_buf` 在 `memcpy` 前未 `memset` 清零，`len == 0` 时留下未初始化内存。将 `CSILK_BCRYPT_HASH_LEN` 从 61 更新为 62 以匹配修正后的哈希格式（`$2a$XX$` + 22 salt + 32 checksum + NUL）。
 - **clang-tidy 误报**：在 `blowfish_encipher` 的 `XL ^= p[i]` 处抑制 `clang-analyzer-core.uninitialized.Assign`——分析器无法追踪数组指针参数；代码正确。
 - **编译警告**：修复 connection.c 中块注释内无效的 `/*`（`-Wcomment`）；修复 qdrant.c 中对 `int64_t` 使用 `%lld` 格式符（`-Wformat`）；修复 workflow_dsl.c 中 snprintf 多余的 NULL 参数（`-Wformat`）；为 crypto.h 和 crypto_dispatch.h 中的 bcrypt 签名应用 clang-format。
+- **Python wheel 打包**：移除 `setup.py` 中多余的 `csilk/` 子目录路径；在 CMakeLists.txt 中添加 `if(NOT DEFINED)` 守卫，确保 setuptools 传入的 `-D` 值不被覆盖。
+- **macOS rpath**：为共享库设置 `@loader_path` rpath，兼容 delocate-wheel。
 - **路由宏安全性**：将路由宏包装在 `do { } while(0)` 中，以便在控制流语句中安全使用。
 - **CI 兼容性**：升级 upload/download-artifact 到 v6 以支持 Node 24，在未收集到样本时跳过 FlameGraph 上传，修复 benchmark-results 上传路径。
 - **macOS 兼容性**：为 macOS 构建添加可移植的 `explicit_bzero` 兼容层。
