@@ -1,10 +1,12 @@
 # cmake/options.cmake — project options, version, sanitizers, compile-time constants
 
-# Version — single source of truth
-set(CSILK_VERSION_MAJOR 0 CACHE STRING "Major version")
-set(CSILK_VERSION_MINOR 4 CACHE STRING "Minor version")
-set(CSILK_VERSION_PATCH 0 CACHE STRING "Patch version")
-set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}" CACHE STRING "Full version")
+# Version — single source of truth.
+# FORCE: always re-derive from this file on every configure, so a stale
+# CMakeCache.txt can never pin an old version after a release bump.
+set(CSILK_VERSION_MAJOR 0 CACHE STRING "Major version" FORCE)
+set(CSILK_VERSION_MINOR 4 CACHE STRING "Minor version" FORCE)
+set(CSILK_VERSION_PATCH 0 CACHE STRING "Patch version" FORCE)
+set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}" CACHE STRING "Full version" FORCE)
 
 # Build acceleration: ccache (if available)
 find_program(CCACHE_PROGRAM ccache)
