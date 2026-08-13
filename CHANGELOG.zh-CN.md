@@ -16,7 +16,10 @@
 - **JWT 整数溢出保护**：在 JWT 解析中为 base64 长度计算添加溢出保护。
 
 ### 修复
-- **clang-tidy 警告**：解决源文件和测试文件中的静态分析警告，包括数组越界、内存泄漏和空指针解引用。
+- **bcrypt 空密码验证失败**：修复 bcrypt 实现中的三个导致 `csilk_bcrypt_verify` 对空密码始终返回 -1 的 bug：(1) `CSILK_BCRYPT_CIPHER_OUT` 为 23 而非 24——24 字节应编码为 32 个 base64 字符，但 verify 只读取 31 个，丢失了最后一个字节；(2) Eksblowfish P-array 密钥调度（Step 2）前未将 `datal`/`datar` 初始化为零，导致空密码时 salt 与栈垃圾值异或；(3) `pwd_buf` 在 `memcpy` 前未 `memset` 清零，`len == 0` 时留下未初始化内存。将 `CSILK_BCRYPT_HASH_LEN` 从 61 更新为 62 以匹配修正后的哈希格式（`$2a$XX$` + 22 salt + 32 checksum + NUL）。
+- **clang-tidy 误报**：在 `blowfish_encipher` 的 `XL ^= p[i]` 处抑制 `clang-analyzer-core.uninitialized.Assign`——分析器无法追踪数组指针参数；代码正确。
+- **blowfish_sboxes.h 格式化**：重新格式化 1024 条目 S-box 表以满足 clang-format 行宽约束。
+- **test_bcrypt 确定性**：当未定义 `TEST_OOM` 时跳过密码截断相等性断言，因为随机 salt 会使两次独立哈希不可比较。
 - **路由宏安全性**：将路由宏包装在 `do { } while(0)` 中，以便在控制流语句中安全使用。
 - **CI 兼容性**：升级 upload/download-artifact 到 v6 以支持 Node 24，在未收集到样本时跳过 FlameGraph 上传，修复 benchmark-results 上传路径。
 - **macOS 兼容性**：为 macOS 构建添加可移植的 `explicit_bzero` 兼容层。

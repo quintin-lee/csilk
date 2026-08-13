@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JWT integer overflow guards**: Add overflow protection to base64 length calculations in JWT parsing.
 
 ### Fixed
-- **clang-tidy warnings**: Resolve static analyzer warnings in source and test files including array bounds, memory leaks, and null pointer dereferences.
+- **bcrypt verify failure on empty passwords**: Fixed three bugs in the bcrypt implementation that caused `csilk_bcrypt_verify` to always return -1 for empty passwords: (1) `CSILK_BCRYPT_CIPHER_OUT` was 23 instead of 24 — 24 bytes encode to 32 base64 chars, but verify read only 31, dropping the last byte; (2) `datal`/`datar` were not zero-initialized before the Eksblowfish P-array keying loop (Step 2), causing salt to XOR against stack garbage for empty passwords; (3) `pwd_buf` was not `memset`-zeroed before `memcpy`, leaving uninitialized memory when `len == 0`. Updated `CSILK_BCRYPT_HASH_LEN` from 61 to 62 to match the corrected hash format (`$2a$XX$` + 22 salt + 32 checksum + NUL).
+- **clang-tidy false positive**: Suppress `clang-analyzer-core.uninitialized.Assign` on `XL ^= p[i]` in `blowfish_encipher` — the analyzer cannot trace through the array-pointer parameter; the code is correct.
+- **clang-format in blowfish_sboxes.h**: Reformat the 1024-entry S-box table to satisfy clang-format line-width constraints.
+- **test_bcrypt determinism**: Skip the password truncation equality assertion when `TEST_OOM` is not defined, since random salts make two independent hashes non-comparable.
 - **Route macro safety**: Wrap route macros in `do { } while(0)` for safe use in control flow statements.
 - **CI compatibility**: Bump upload/download-artifact to v6 for Node 24 support, skip FlameGraph upload when no samples collected, fix benchmark-results upload path.
 - **macOS compatibility**: Add portable `explicit_bzero` shim for macOS builds.

@@ -75,7 +75,27 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DUSE_ASAN=ON
 make -j$(nproc)
 ```
 
-### 2.3 启用所有优化（LTO + PGO）
+### 2.3 ThreadSanitizer（仅 Linux，与 ASan 互斥）
+
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DUSE_TSAN=ON -DENABLE_OOM_TEST=ON
+make -j$(nproc)
+ctest --test-dir build -E test_integration --output-on-failure
+```
+
+### 2.4 代码覆盖率（需 gcc，与 ASan/TSan 不兼容）
+
+```bash
+cmake .. -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug \
+         -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF
+make -j$(nproc)
+ctest --test-dir build --output-on-failure
+gcovr -r . build/ --html-details build/coverage/index.html --xml build/coverage/coverage.xml
+```
+
+> **注意**：覆盖率构建必须使用 `gcc`，clang 的 gcov 支持不完整。
+
+### 2.5 启用所有优化（LTO + PGO）
 
 ```bash
 # Phase 1: Instrumented 构建
@@ -127,9 +147,10 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 | `CSILK_USE_URING` | OFF | 启用 io_uring 后端替代 libuv（仅 Linux）| 需要时 |
 | `CSILK_BUILD_SHARED` | OFF | 启用动态库 | Release 时启用 |
 | `USE_ASAN` | OFF | 启用 AddressSanitizer | 调试时 |
+| `USE_TSAN` | OFF | 启用 ThreadSanitizer（与 ASAN 互斥）| 调试时 |
 | `USE_FUZZER` | OFF | 启用 libFuzzer | CI 测试 |
-| `USE_COVERAGE` | OFF | 启用 gcov 覆盖率 | 测试时 |
-| `ENABLE_OOM_TEST` | OFF | 启用 OOM 模拟测试 | 测试时 |
+| `USE_COVERAGE` | OFF | 启用 gcov 覆盖率（需 gcc）| 测试时 |
+| `ENABLE_OOM_TEST` | OFF | 启用 OOM 模拟测试（强制确定性 salt）| 测试时 |
 | `CSILK_USE_MYSQL` | OFF | 启用 MySQL 驱动 | 需要时 |
 | `CSILK_USE_POSTGRES` | OFF | 启用 PostgreSQL 驱动 | 需要时 |
 | `CSILK_USE_MONGODB` | OFF | 启用 MongoDB 驱动 | 需要时 |
