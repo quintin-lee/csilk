@@ -26,7 +26,7 @@ graph TB
         WS_CLIENT["fa:fa-plug WebSocket 客户端（实时更新）"]
     end
 
-    subgraph Backend["fa:fa-server 后端 (src/core/admin.c)"]
+    subgraph Backend["fa:fa-server 后端 (src/app/admin.c)"]
         UI["GET /admin/ui<br/>提供 HTML 模板"]
         STATS["GET /admin/stats<br/>聚合 JSON 指标"]
         TOPO["GET /admin/topology<br/>路由器路由列表"]
@@ -175,6 +175,6 @@ void csilk_admin_serve_secure(csilk_app_t* app, const char* path,
 |:----|:-----|
 | [用户手册 — 管理后台](../user-manual/admin.md) | 使用指南、自定义端点、保护管理后台 |
 | [模块设计 — 应用层](../module-design/app.md) | 应用层启动、管理后台集成 |
-| [源码 — admin.c](../../src/core/admin.c) | 实现 |
+| [源码 — admin.c](../../src/app/admin.c) | 实现 |
 | [源码 — flamegraph.c](../../src/util/flamegraph.c) | perf_event_open 性能分析 |
 | [管理后台 UI HTML](../../share/csilk/admin_ui.html) | 前端模板 |

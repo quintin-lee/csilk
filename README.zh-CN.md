@@ -276,6 +276,7 @@ docker run -p 8080:8080 -v $(pwd)/custom_config.yaml:/etc/csilk/config.yaml csil
 src/
    ├── core/           # 内核（libuv/io_uring TCP、Router、Arena、Logger、Config）
    │   └── uring/      # io_uring 后端（仅 Linux，可选）
+   ├── crypto/         # base64、sha1、url、uuid、加密原语、bcrypt
    ├── app/            # 应用层（app、admin dashboard、workflow engine）
    ├── drivers/        # 驱动实现
    │   ├── ai/         # AI 引擎 + OpenAI/Ollama 后端

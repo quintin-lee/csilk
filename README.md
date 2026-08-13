@@ -449,6 +449,7 @@ int main() {
 src/
    ├── core/           # Kernel (libuv/io_uring TCP, Router, Arena, Logger, Config)
    │   └── uring/      # io_uring backend (Linux-only, optional)
+   ├── crypto/         # base64, sha1, url, uuid, crypto primitives, bcrypt
    ├── app/            # Application Layer (app, admin dashboard, workflow engine)
    ├── drivers/        # Driver implementations
    │   ├── ai/         # AI engine + OpenAI/Ollama backends

@@ -909,51 +909,115 @@ csilk/
 │           └── reflect.h          # Runtime type reflection
 ├── src/
 │   ├── core/                      # Server engine
-│   │   ├── server.c               # Lifecycle: create/run/stop/free/hooks/workers
-│   │   ├── connection.c           # Pool, accept, I/O, timers, on_read
-│   │   ├── http1.c                # llHTTP callbacks, dispatch, response serialization
-│   │   ├── tls.c                  # OpenSSL init, BIO-pair, ALPN negotiation
-│   │   ├── context.c              # Request reading, lifecycle, binding, cookies
-│   │   ├── response.c             # Response writing (status/JSON/redirect/chunked)
-│   │   ├── router.c               # Radix-tree route matching
-│   │   ├── arena.c                # Bump allocator
-│   │   ├── config.c               # YAML configuration loader
-│   │   ├── h2.c                   # HTTP/2 integration (nghttp2)
-│   │   ├── h2.h                   # HTTP/2 internal header
-│   │   ├── logger.c               # Structured logging
-│   │   ├── recovery.c             # setjmp/longjmp error recovery
-│   │   ├── url.c                  # URL parsing and splitting
-│   │   ├── utils.c                # misc utility functions
-│   │   ├── base64.c               # Base64/Base64URL encode/decode
-│   │   ├── sha1.c                 # SHA-1 hash (WebSocket handshake)
-│   │   ├── uuid.c                 # UUID v4 generation
-│   │   ├── bounded_buf.c          # Stack-only bounded string/JSON builder
-│   │   ├── hot_reload.c           # File-watch hot-reload (inotify)
+│   │   ├── server/                # Lifecycle: create/run/stop/free/hooks/workers
+│   │   │   ├── server_lifecycle.c # Server create/run/stop/free/hooks
+│   │   │   ├── server_shutdown.c  # Graceful shutdown
+│   │   │   ├── server_worker.c    # Worker pool
+│   │   │   └── connection.c       # Pool, accept, I/O, timers, on_read
+│   │   ├── http/                  # HTTP/1.1, HTTP/2, TLS
+│   │   │   ├── http1_parse.c      # llHTTP callbacks, dispatch
+│   │   │   ├── http1_response.c   # Response serialization
+│   │   │   ├── http1_zerocopy.c   # Zero-copy static file serving
+│   │   │   ├── swar_http.c        # SWAR parallel-prefix header parsing
+│   │   │   ├── h2.c               # HTTP/2 integration (nghttp2)
+│   │   │   ├── h2_callbacks.c     # HTTP/2 callbacks
+│   │   │   ├── h2.h               # HTTP/2 internal header
+│   │   │   └── tls.c              # OpenSSL init, BIO-pair, ALPN negotiation
+│   │   ├── ctx/                   # Request context
+│   │   │   ├── context.c          # Request reading, lifecycle, binding, cookies
+│   │   │   ├── ctx_accessors.c    # Context accessor API
+│   │   │   ├── ctx_defer.c        # Deferred cleanup
+│   │   │   ├── ctx_json.c         # JSON response helpers
+│   │   │   └── ctx_internal.h     # csilk_ctx_s struct layout
+│   │   ├── primitives/            # Core data structures
+│   │   │   ├── arena.c            # Bump allocator
+│   │   │   ├── bounded_buf.c      # Stack-only bounded string/JSON builder
+│   │   │   ├── header_map.c/h     # Header map
+│   │   │   ├── kv_store.c         # Key-value store
+│   │   │   ├── lfqueue.h          # Lock-free queue
+│   │   │   ├── query.c/h          # Query string parsing
+│   │   │   ├── recovery.c         # setjmp/longjmp error recovery
+│   │   │   ├── response.c         # Response writing (status/JSON/redirect/chunked)
+│   │   │   ├── router.c           # Radix-tree route matching
+│   │   │   ├── router_simd.c      # SIMD-accelerated route matching
+│   │   │   └── router_trie.c      # Radix trie nodes
+│   │   ├── config/                # Configuration & logging
+│   │   │   ├── config.c           # YAML configuration loader
+│   │   │   ├── hooks.c            # Lifecycle hook system
+│   │   │   ├── hot_reload.c       # File-watch hot-reload (inotify)
+│   │   │   └── logger.c           # Structured logging
+│   │   ├── cache/                 # mvcc_cache.c - MVCC cache
+│   │   ├── io/                    # High-performance I/O (AF_XDP, DPDK PMD)
+│   │   ├── json/                  # cJSON wrapper
+│   │   ├── plugin/                # WASM plugin runtime
+│   │   ├── internal/              # Internal server headers (not installed)
+│   │   │   ├── srv_impl.h         # Cross-file declarations for server split
+│   │   │   └── srv_internal.h     # Internal server types
 │   │   ├── test_utils.c           # Test OOM utilities
-│   │   ├── admin.c                # Admin dashboard
- │   │   ├── internal/              # Internal server headers (not installed)
- │   │   │   ├── srv_impl.h          # Cross-file declarations for server split
- │   │   │   └── srv_internal.h      # Internal server types
 │   │   └── uring/                 # io_uring backend (Linux-only, optional)
 │   │       ├── uring_server.c
 │   │       ├── uring_connection.c
 │   │       ├── uring_thread_pool.c
 │   │       ├── uring_internal.h
 │   │       └── uv_stubs.c
-│   ├── app/                       # Thin app wrappers
-│   │   ├── app.c
-│   │   └── group.c
+│   ├── crypto/                    # Crypto primitives & algorithms
+│   │   ├── base64.c               # Base64/Base64URL encode/decode
+│   │   ├── sha1.c                 # SHA-1 hash (WebSocket handshake)
+│   │   ├── url.c                  # URL parsing and splitting
+│   │   ├── uuid.c                 # UUID v4 generation
+│   │   ├── crypto.c               # misc crypto utility functions
+│   │   ├── bcrypt.c               # bcrypt password hashing
+│   │   └── blowfish_sboxes.h      # Eksblowfish S-box constants
+│   ├── app/                       # High-level app layer
+│   │   ├── app.c                  # App facade
+│   │   ├── app_routes.c           # Route registration helpers
+│   │   ├── group.c                # Route groups
+│   │   ├── admin.c                # Admin dashboard
+│   │   └── app_internal.h         # Internal app types
 │   ├── workflow/                  # AI workflow engine
-│   │   ├── wf_ai.c                # AI chat nodes, memory helper, templates
-│   │   ├── wf_lifecycle.c         # Lifecycle: creation, destruction, registration
-│   │   ├── wf_monitor.c           # Real-time monitor events
 │   │   ├── wf_scheduler.c         # Execution engine, DAG scheduling, WAL restore
+│   │   ├── wf_graph.c             # DAG graph structures
+│   │   ├── wf_monitor.c           # Real-time monitor events
 │   │   ├── wf_trace.c             # Execution trace recording
-│   │   ├── workflow_internal.h    # Internal structures & stubs
+│   │   ├── wf_resume.c            # Workflow resume
+│   │   ├── wf_tools.c             # Tool calling
+│   │   ├── wf_ai_nodes.c          # AI chat nodes
+│   │   ├── wf_ai_agents.c         # Agent engine
+│   │   ├── wf_ai_utils.c          # AI helpers
 │   │   ├── workflow_loader.c      # JSON/YAML parser loaders
-│   │   └── workflow_wal.c         # WAL persistence engine
-│   ├── middleware/                # Built-in middleware modules
-│   ├── protocols/                 # WebSocket, Swagger
+│   │   ├── workflow_wal.c         # WAL persistence engine
+│   │   ├── workflow_manager.c     # Workflow lifecycle management
+│   │   ├── workflow_dsl.c         # DSL definitions
+│   │   ├── workflow_internal.h    # Internal structures & stubs
+│   │   └── ...                    # Distributed & cluster support (wf_distributed.c, wf_cluster_sm.c)
+│   ├── middleware/                # 22 built-in middleware modules
+│   │   ├── auth.c, jwt.c          # Token & JWT (HS256) authentication
+│   │   ├── cors.c, csrf.c         # CORS, CSRF
+│   │   ├── ratelimit.c            # Fixed window rate limiting
+│   │   ├── sliding_ratelimit.c    # Sliding window rate limiter
+│   │   ├── circuit_breaker.c      # Circuit breaker
+│   │   ├── gzip.c                 # Gzip compression
+│   │   ├── logger.c, metrics.c    # Request logging, Prometheus metrics
+│   │   ├── waf.c, xdp_waf.c       # WAF, eBPF XDP dynamic WAF
+│   │   ├── static.c               # Static file serving
+│   │   ├── session.c              # Session management
+│   │   ├── sse.c                  # Server-Sent Events
+│   │   ├── multipart.c            # Multipart file upload
+│   │   ├── grpc_gateway.c         # HTTP/JSON <-> gRPC transcoding
+│   │   ├── otlp_exporter.c        # OTLP exporter (Jaeger/Zipkin)
+│   │   ├── otlp_trace.c           # W3C trace context
+│   │   ├── request_id.c           # X-Request-Id tracing
+│   │   └── validate.c             # Parameter validation
+│   ├── protocols/                 # Protocol extensions
+│   │   ├── websocket.c            # RFC 6455 WebSocket
+│   │   ├── ws_room.c              # WebSocket rooms
+│   │   ├── h3.c                   # HTTP/3 (QUIC)
+│   │   ├── swagger.c              # Swagger UI
+│   │   ├── openapi_gen.c          # OpenAPI generation
+│   │   └── mcp/                   # Model Context Protocol
+│   │       ├── mcp_server.c
+│   │       ├── mcp_client.c
+│   │       └── mcp_jsonrpc.c
 │   ├── drivers/                   # Driver implementations
 │   │   ├── ai/                    # AI engine + OpenAI/Ollama backends
 │   │   │   ├── ai.c
@@ -976,9 +1040,19 @@ csilk/
 │   │       ├── vector.c
 │   │       ├── qdrant.c
 │   │       └── milvus.c
-│   ├── messaging/                 # Message Queue
+│   ├── messaging/                 # Message Queue + Raft consensus
+│   │   ├── mq_core.c              # MQ core
+│   │   ├── mq_pubsub.c            # Pub/sub
+│   │   ├── mq_wal.c               # MQ WAL persistence
+│   │   ├── raft_consensus.c       # Raft consensus
+│   │   ├── raft_wal.c             # Raft WAL
+│   │   └── ...
 │   ├── reflection/                # Runtime type reflection
+│   │   ├── reflect.c
+│   │   ├── reflect_marshal.c
+│   │   └── reflect_unmarshal.c
 │   └── util/                      # Utility modules
+│       └── flamegraph.c           # CPU flame graph sampling
 ├── tests/                         # Unit/integration/fuzz tests
 ├── examples/                      # Example applications
 ├── docs/                          # Architecture, research, analysis docs

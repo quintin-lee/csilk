@@ -94,11 +94,12 @@ csilk/
 │   ├── middleware/    # Built-in middleware (15 modules)
 │   ├── protocols/     # WebSocket, Swagger
 │   ├── drivers/       # Non-DB drivers: ai, cipher, perm, vector
+│   ├── app/           # High-level API: app, admin dashboard, workflow engine
+│   ├── crypto/        # base64, sha1, url, uuid, crypto, bcrypt
 │   ├── data/          # DB drivers (SQLite/MySQL/PG/Mongo/Redis)
 │   ├── ai/            # AI engine
 │   ├── messaging/     # Message Queue (MQ)
 │   ├── reflection/    # Runtime type reflection
-│   ├── security/      # Permission system
 │   ├── util/          # Internal utilities
 │   └── workflow/      # Workflow engine
 ├── tests/             # 120+ unit/integration tests (mirrors src/)

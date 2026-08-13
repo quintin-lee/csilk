@@ -400,7 +400,7 @@ csilk_app_free(app);
 | `include/csilk/core/internal.h` | 内部头文件（包含 app 结构体定义？实际定义在 app.c） |
 | `src/app/app.c` | App 门面实现（936 行） |
 | `src/app/group.c` | 路由组实现（middleware 链、前缀拼接） |
-| `src/core/admin.c` | Admin dashboard（stats、WebSocket、topology/flamegraph） |
+| `src/app/admin.c` | Admin dashboard（stats、WebSocket、topology/flamegraph） |
 | `src/workflow/` | Workflow 引擎（热重载、DAG 调度） |
 | `include/csilk/types.h` | `csilk_app_t` opaque 类型前向声明 |
 | `python/csilk/app.py` | Python CTypes 绑定 |

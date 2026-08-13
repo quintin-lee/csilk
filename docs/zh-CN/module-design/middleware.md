@@ -126,4 +126,4 @@ int main() {
 
 ## 内部实现
 
-JWT 中间件使用 **可插拔加密驱动**。默认情况下，它使用 `src/core/utils.c` 中的内置 HMAC-SHA256 实现。可以使用 `csilk_server_set_crypto_driver()` 将其替换为硬件加速或系统提供的库。
+JWT 中间件使用 **可插拔加密驱动**。默认情况下，它使用 `src/crypto/crypto.c` 中的内置 HMAC-SHA256 实现。可以使用 `csilk_server_set_crypto_driver()` 将其替换为硬件加速或系统提供的库。

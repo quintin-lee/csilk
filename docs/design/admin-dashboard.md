@@ -26,7 +26,7 @@ graph TB
         WS_CLIENT["fa:fa-plug WebSocket Client (live updates)"]
     end
 
-    subgraph Backend["fa:fa-server Backend (src/core/admin.c)"]
+    subgraph Backend["fa:fa-server Backend (src/app/admin.c)"]
         UI["GET /admin/ui<br/>Serves HTML template"]
         STATS["GET /admin/stats<br/>Aggregated JSON metrics"]
         TOPO["GET /admin/topology<br/>Router route listing"]
@@ -178,6 +178,6 @@ void csilk_admin_serve_secure(csilk_app_t* app, const char* path,
 |:---------|:--------|
 | [User Manual — Admin Dashboard](../user-manual/admin.md) | Usage guide, custom endpoints, protecting admin |
 | [Module Design — App Layer](../module-design/app.md) | App layer bootstrap, admin integration |
-| [Source — admin.c](../../src/core/admin.c) | Implementation |
+| [Source — admin.c](../../src/app/admin.c) | Implementation |
 | [Source — flamegraph.c](../../src/util/flamegraph.c) | perf_event_open profiling |
 | [Admin UI HTML](../../share/csilk/admin_ui.html) | Frontend template |

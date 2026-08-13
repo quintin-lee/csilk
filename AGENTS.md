@@ -77,8 +77,7 @@ memcpy(pwd_buf, password, len);
 | Directory | Purpose |
 |---|---|
 | `src/core/` | HTTP server, arena, config, JSON, TLS |
-| `src/crypto/` | base64, sha1, url, uuid, crypto primitives |
-| `src/security/` | bcrypt, blowfish sboxes |
+| `src/crypto/` | base64, sha1, url, uuid, crypto primitives, bcrypt |
 | `src/drivers/` | DB (sqlite, postgres, mysql, redis), AI, cipher, vector |
 | `src/middleware/` | auth, cors, csrf, jwt, ratelimit, etc. |
 | `src/protocols/` | websocket, h2, h3, swagger, mcp |
