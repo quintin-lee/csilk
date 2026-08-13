@@ -12,6 +12,7 @@
 
 #include "core/ctx/ctx_internal.h"
 #include "csilk/protocols/mcp.h"
+#include "csilk/core/sync.h"
 
 /* Standard MCP Error Codes */
 #define CSILK_MCP_PARSE_ERROR -32700
