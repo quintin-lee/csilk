@@ -79,6 +79,14 @@ CSILK_INTERNAL void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
  */
 CSILK_INTERNAL int _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len);
 
+CSILK_INTERNAL void _csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20]);
+
+CSILK_INTERNAL void _csilk_bcrypt_hash(csilk_ctx_t* c,
+                                       const char* password,
+                                       size_t len,
+                                       int cost,
+                                       char hash[62]);
+
 /** @brief Get the internal client connection object.
  *
  * Opaque pointer used by protocol implementations (WebSocket, SSE).

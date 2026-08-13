@@ -13,6 +13,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "csilk/core/bcrypt.h"
+#include "csilk/core/hash.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -84,6 +87,17 @@ typedef struct {
    *  @param      len  Number of bytes to generate.
    *  @return 0 on success, -1 on failure. */
     int (*fill_random)(void* out, size_t len);
+    /** @brief Compute the SHA-1 hash of a buffer (20-byte digest).
+    *  @param data  Input data.
+    *  @param len   Input length.
+    *  @param[out] out  20-byte hash output. */
+    void (*sha1)(const uint8_t* data, size_t len, uint8_t out[20]);
+    /** @brief Hash a password with bcrypt, producing a $2a$ hash string.
+    *  @param password  Plaintext password (may contain NUL bytes; use @p len).
+    *  @param len       Byte length of @p password (> 72 is truncated).
+    *  @param cost      Cost factor (CSILK_BCRYPT_MIN_COST..CSILK_BCRYPT_MAX_COST).
+    *  @param[out] hash  Output buffer of at least CSILK_BCRYPT_HASH_LEN bytes. */
+    void (*bcrypt_hash)(const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN]);
 } csilk_crypto_driver_t;
 
 #ifdef __cplusplus
