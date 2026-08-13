@@ -33,7 +33,6 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/router.c
     src/core/primitives/router_simd.c
     src/core/primitives/router_trie.c
-    src/core/test_utils.c
     src/core/http/tls.c
     src/core/config/hot_reload.c
     src/core/primitives/header_map.c
