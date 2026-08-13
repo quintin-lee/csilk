@@ -110,7 +110,7 @@ metrics_hash(const char* method, const char* route, int status)
  * @param method The HTTP method.
  * @param route  The route pattern.
  * @param status The status code.
- * @return Pointer to the metric slot, or nullptr if the table is saturated.
+ * @return Pointer to the metric slot, or NULL if the table is saturated.
  */
 static csilk_route_metric_t*
 get_metric_slot(const char* method, const char* route, int status)
@@ -142,7 +142,7 @@ get_metric_slot(const char* method, const char* route, int status)
             return slot;
         }
     }
-    return nullptr; /* Table is full; telemetry for this combo will be dropped. */
+    return NULL; /* Table is full; telemetry for this combo will be dropped. */
 }
 
 /* --- Public API: Statistics Collection --- */
@@ -154,7 +154,7 @@ get_metric_slot(const char* method, const char* route, int status)
  *  independently atomic, so the snapshot may be inconsistent across
  *  counters under concurrent updates — this is acceptable for telemetry.
  *
- *  @param[out] stats  Struct to populate (must not be nullptr). */
+ *  @param[out] stats  Struct to populate (must not be NULL). */
 void
 csilk_security_get_stats(csilk_security_stats_t* stats)
 {
@@ -326,7 +326,7 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
 void
 csilk_metrics_handler(csilk_ctx_t* c)
 {
-    char*  buf = nullptr;
+    char*  buf = NULL;
     size_t size = 0, offset = 0;
 
     CSILK_LOG_T("Metrics: metrics scrape request received from %p", (void*)c);

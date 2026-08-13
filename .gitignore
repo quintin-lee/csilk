@@ -1,4 +1,6 @@
 # Build artifacts
+build-*/
+build_*/
 build/
 bin/
 lib/
@@ -99,3 +101,7 @@ yyjson.pc
 libyyjson.so*
 *.pc
 libnghttp2.so*
+build-*
+*.so*
+/test_*
+/example_*

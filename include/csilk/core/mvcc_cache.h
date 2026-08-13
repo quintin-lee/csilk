@@ -20,7 +20,7 @@ typedef struct csilk_mvcc_cache_s csilk_mvcc_cache_t;
 /**
  * @brief Create a new Epoch-based MVCC lock-free cache instance.
  * @param capacity Maximum number of entries (hash table size).
- * @return New cache instance, or nullptr on allocation failure.
+ * @return New cache instance, or NULL on allocation failure.
  */
 csilk_mvcc_cache_t* csilk_mvcc_cache_new(size_t capacity);
 
@@ -45,8 +45,8 @@ csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val
  * @brief Retrieve a value atomically without acquiring any locks.
  * @param cache Cache instance.
  * @param key Null-terminated key string.
- * @param[out] val_len Receives value length in bytes (can be nullptr).
- * @return Read-only pointer to the value bytes, or nullptr if not found.
+ * @param[out] val_len Receives value length in bytes (can be NULL).
+ * @return Read-only pointer to the value bytes, or NULL if not found.
  */
 const void* csilk_mvcc_cache_get(csilk_mvcc_cache_t* cache, const char* key, size_t* val_len);
 

@@ -36,7 +36,7 @@ char*
 csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
 {
     if (!stats) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* root = csilk_json_object();
     csilk_json_add_number(root, "published_total", (double)stats->published_total);
@@ -92,7 +92,7 @@ _csilk_mq_new(csilk_io_loop_t* loop)
     csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
     if (!mq) {
         CSILK_LOG_E("MQ: Failed to allocate memory for message queue");
-        return nullptr;
+        return NULL;
     }
 
     csilk_mutex_init(&mq->queue_mutex);
@@ -103,7 +103,7 @@ _csilk_mq_new(csilk_io_loop_t* loop)
     mq->async_handle.data = mq;
 
     mq->wal_fd = -1;
-    mq->wal_path = nullptr;
+    mq->wal_path = NULL;
     csilk_mutex_init(&mq->wal_mutex);
 
     CSILK_LOG_I("MQ: Message queue initialized successfully");
@@ -125,7 +125,7 @@ on_mq_close(csilk_io_handle_t* handle)
 
     if (mq->wal_fd >= 0) {
         csilk_io_fs_t close_req;
-        csilk_io_fs_close(handle->loop, &close_req, mq->wal_fd, nullptr);
+        csilk_io_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
         csilk_io_fs_req_cleanup(&close_req);
     }
     if (mq->wal_path) {

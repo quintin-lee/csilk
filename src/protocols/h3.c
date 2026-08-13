@@ -164,12 +164,12 @@ csilk_h3_listener_t*
 csilk_h3_listener_bind(int port)
 {
     if (port <= 0 || port > 65535) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_h3_listener_t* l = calloc(1, sizeof(csilk_h3_listener_t));
     if (!l) {
-        return nullptr;
+        return NULL;
     }
 
     l->port = port;

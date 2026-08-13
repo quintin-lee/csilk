@@ -84,7 +84,7 @@ typedef struct {
     /** @brief Retrieve a value by key.
    *  @param c  Owning request context.
    *  @param key  NUL-terminated key string.
-   *  @return The stored pointer, or nullptr if @p key was never set. */
+   *  @return The stored pointer, or NULL if @p key was never set. */
     void* (*get)(csilk_ctx_t* c, const char* key);
     /** @brief Clear all stored key-value pairs.
    *  Called during csilk_ctx_cleanup to release references. */
@@ -101,7 +101,7 @@ typedef struct {
     /** @brief Retrieve a string value by key.
    *  @param c    Owning request context.
    *  @param key  NUL-terminated key string.
-   *  @return Heap-allocated string value (caller must free), or nullptr if not found. */
+   *  @return Heap-allocated string value (caller must free), or NULL if not found. */
     char* (*get_string)(csilk_ctx_t* c, const char* key);
 
     /** @brief Increment a numeric value by 1 with an optional TTL.
@@ -191,7 +191,7 @@ typedef enum {
 typedef struct {
     csilk_log_level_t level;         /**< Minimum level to emit (messages below this are
                               filtered out). */
-    const char*       file_path;     /**< Path to the log file, or nullptr to log to stderr. */
+    const char*       file_path;     /**< Path to the log file, or NULL to log to stderr. */
     size_t            max_file_size; /**< Maximum file size in bytes before rotation (0 =
                         rotation disabled). Requires @p file_path to be set. */
     int               use_colors;    /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 =
@@ -252,7 +252,7 @@ typedef int (*csilk_auth_validator_t)(const char* token);
 /**
  * @brief A single validation rule for request parameter checking.
  *
- * Rules are collected into a nullptr-terminated array and passed to
+ * Rules are collected into a NULL-terminated array and passed to
  * csilk_validate.  Each rule specifies constraints for one field.
  */
 typedef struct {
@@ -264,7 +264,7 @@ typedef struct {
     int         max;    /**< Maximum allowed length (string fields) or numeric value (int
               fields). */
     const char* source; /**< Location to look for the field: "query", "form",
-                         "header", "cookie", or nullptr to auto-detect. */
+                         "header", "cookie", or NULL to auto-detect. */
 } csilk_valid_rule_t;
 
 /**
@@ -343,7 +343,7 @@ typedef struct {
  * Caller must free the returned pointer with csilk_free().
  *
  * @param view The string view to copy.
- * @return A newly allocated null-terminated string, or nullptr on failure.
+ * @return A newly allocated null-terminated string, or NULL on failure.
  */
 char* csilk_str_view_to_string(const csilk_str_view_t* view);
 
@@ -355,7 +355,7 @@ char* csilk_str_view_to_string(const csilk_str_view_t* view);
  *
  * @param c    The request context (for arena access).
  * @param view The string view to persist.
- * @return A null-terminated string in arena memory, or nullptr on failure.
+ * @return A null-terminated string in arena memory, or NULL on failure.
  */
 const char* csilk_str_view_persist(csilk_ctx_t* c, const csilk_str_view_t* view);
 

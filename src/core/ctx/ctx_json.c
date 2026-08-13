@@ -15,15 +15,15 @@
 /** @brief Parse the request body as JSON using cJSON.
  *
  * @param c The request context.
- * @return A cJSON object parsed from the request body, or nullptr if the body
- *         is nullptr or the JSON is invalid.
+ * @return A cJSON object parsed from the request body, or NULL if the body
+ *         is NULL or the JSON is invalid.
  * @note The caller owns the returned cJSON object and must free it with
  *       csilk_json_free(). For error details use csilk_bind_json_err(). */
 csilk_json_t*
 csilk_bind_json(csilk_ctx_t* c)
 {
     if (!c || !c->request.body) {
-        return nullptr;
+        return NULL;
     }
     return csilk_json_parse_len(c->request.body, c->request.body_len);
 }
@@ -36,26 +36,26 @@ csilk_bind_json(csilk_ctx_t* c)
  *
  * @param c     The request context.
  * @param error [out] Optional pointer to receive a static error string.
- * @return A cJSON object parsed from the request body, or nullptr on failure.
+ * @return A cJSON object parsed from the request body, or NULL on failure.
  * @note The caller owns the returned cJSON object and must free it.
  *       The @p error string is a static pointer (do not free). */
 csilk_json_t*
 csilk_bind_json_err(csilk_ctx_t* c, const char** error)
 {
     if (error) {
-        *error = nullptr;
+        *error = NULL;
     }
     if (!c) {
         if (error) {
             *error = "Null context";
         }
-        return nullptr;
+        return NULL;
     }
     if (!c->request.body) {
         if (error) {
             *error = "No request body";
         }
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* json = csilk_json_parse_len(c->request.body, c->request.body_len);
     if (!json) {
@@ -65,7 +65,7 @@ csilk_bind_json_err(csilk_ctx_t* c, const char** error)
         if (error && !*error) {
             *error = "Invalid JSON";
         }
-        return nullptr;
+        return NULL;
     }
     return json;
 }
@@ -77,24 +77,24 @@ csilk_bind_json_err(csilk_ctx_t* c, const char** error)
  *
  * @param c    The request context.
  * @param name Cookie name to look up.
- * @return The cookie value string (arena-allocated), or nullptr if the cookie
- *         is not found, the header is absent, or the context/arena is nullptr.
+ * @return The cookie value string (arena-allocated), or NULL if the cookie
+ *         is not found, the header is absent, or the context/arena is NULL.
  * @note The returned value is URL-decoded only as much as the raw header
  *       contains. Cookie attributes (path, domain, etc.) are not supported. */
 const char*
 csilk_get_cookie(csilk_ctx_t* c, const char* name)
 {
     if (!c || !name || !c->arena) {
-        return nullptr;
+        return NULL;
     }
     const char* cookie_header = csilk_get_header(c, "Cookie");
     if (!cookie_header) {
-        return nullptr;
+        return NULL;
     }
 
     char* cookies = csilk_arena_strdup(c->arena, cookie_header);
     if (!cookies) {
-        return nullptr;
+        return NULL;
     }
 
     char* saveptr;
@@ -108,23 +108,23 @@ csilk_get_cookie(csilk_ctx_t* c, const char* name)
                 return csilk_arena_strdup(c->arena, eq + 1);
             }
         }
-        cookie = strtok_r(nullptr, "; ", &saveptr);
+        cookie = strtok_r(NULL, "; ", &saveptr);
     }
 
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Bind the request body JSON to a registered struct via reflection.
  *
  * Deserializes the JSON request body into the provided struct pointer using
- * the csilk reflection engine. If @p type_name is nullptr, the type is inferred
+ * the csilk reflection engine. If @p type_name is NULL, the type is inferred
  * from the current handler's input_type metadata (if available).
  *
  * @param c         The request context.
- * @param type_name Registered type name (e.g., "my_request_t"), or nullptr to
+ * @param type_name Registered type name (e.g., "my_request_t"), or NULL to
  *                  infer from the route handler's metadata.
  * @param ptr       Pointer to the target struct to populate.
- * @return 1 on success, 0 on failure (nullptr context, no body, type not found,
+ * @return 1 on success, 0 on failure (NULL context, no body, type not found,
  *         or JSON parse error).
  * @note Uses csilk_json_unmarshal() internally. The struct should have been
  *       registered via CSILK_REGISTER_REFLECT(). */

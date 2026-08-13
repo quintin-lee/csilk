@@ -30,7 +30,7 @@ static void cjson_to_struct_internal(const csilk_json_t*       obj,
  * calls cjson_to_struct_internal(). Null JSON values or missing items
  * cause the field to be skipped (left at its current value).
  *
- * @param item Source cJSON node (may be nullptr or Null).
+ * @param item Source cJSON node (may be NULL or Null).
  * @param addr Memory address of the target field.
  * @param desc Field descriptor with type, size, and pointer flag.
  * @note For pointer string fields, any existing allocation is freed before

@@ -44,7 +44,7 @@ void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcod
  * @param c           The request context.
  * @param status_code Close status code (e.g., 1000 for normal closure,
  *                    0 to omit the status code from the frame).
- * @param reason      Optional human-readable reason string (may be nullptr).
+ * @param reason      Optional human-readable reason string (may be NULL).
  */
 void csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason);
 

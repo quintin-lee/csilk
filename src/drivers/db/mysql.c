@@ -48,22 +48,22 @@ typedef struct {
  * Port defaults to 3306 if omitted.  Unknown keys are silently ignored.
  * The input string is duplicated internally for tokenisation.
  *
- * @param dsn      Raw DSN string (may be nullptr).
- * @param host     [out] Heap-allocated host string (or nullptr).
+ * @param dsn      Raw DSN string (may be NULL).
+ * @param host     [out] Heap-allocated host string (or NULL).
  * @param port     [out] Port number (defaults to 3306).
- * @param user     [out] Heap-allocated username (or nullptr).
- * @param password [out] Heap-allocated password (or nullptr).
- * @param dbname   [out] Heap-allocated database name (or nullptr).
+ * @param user     [out] Heap-allocated username (or NULL).
+ * @param password [out] Heap-allocated password (or NULL).
+ * @param dbname   [out] Heap-allocated database name (or NULL).
  */
 static void
 mysql_parse_dsn(
     const char* dsn, char** host, int* port, char** user, char** password, char** dbname)
 {
-    *host = nullptr;
+    *host = NULL;
     *port = 3306;
-    *user = nullptr;
-    *password = nullptr;
-    *dbname = nullptr;
+    *user = NULL;
+    *password = NULL;
+    *dbname = NULL;
     if (!dsn) {
         return;
     }
@@ -80,7 +80,7 @@ mysql_parse_dsn(
         }
         char* eq = strchr(token, '=');
         if (!eq) {
-            token = strtok(nullptr, ";");
+            token = strtok(NULL, ";");
             continue;
         }
         *eq = '\0';
@@ -103,7 +103,7 @@ mysql_parse_dsn(
             *dbname = strdup(val);
         }
 
-        token = strtok(nullptr, ";");
+        token = strtok(NULL, ";");
     }
     free(buf);
 }
@@ -127,19 +127,19 @@ mysql_drv_connect(csilk_db_pool_t* pool, const char* dsn)
         return -1;
     }
 
-    conn->db = mysql_init(nullptr);
+    conn->db = mysql_init(NULL);
     if (!conn->db) {
         CSILK_LOG_E("csilk_db_mysql: mysql_init failed");
         free(conn);
         return -1;
     }
 
-    char *host = nullptr, *user = nullptr, *password = nullptr, *dbname = nullptr;
+    char *host = NULL, *user = NULL, *password = NULL, *dbname = NULL;
     int   port = 3306;
     mysql_parse_dsn(dsn, &host, &port, &user, &password, &dbname);
 
     /* TCP connection; no client flags set */
-    MYSQL* ret = mysql_real_connect(conn->db, host, user, password, dbname, port, nullptr, 0);
+    MYSQL* ret = mysql_real_connect(conn->db, host, user, password, dbname, port, NULL, 0);
     free(host);
     free(user);
     free(password);
@@ -171,7 +171,7 @@ mysql_drv_disconnect(csilk_db_pool_t* pool)
         mysql_close(conn->db);
     }
     free(conn);
-    csilk_db_pool_set_connection(pool, nullptr);
+    csilk_db_pool_set_connection(pool, NULL);
     return 0;
 }
 
@@ -203,8 +203,8 @@ mysql_free_csilk_result(csilk_db_result_t* result)
         free(result->column_names[i]);
     }
     free(result->column_names);
-    result->rows = nullptr;
-    result->column_names = nullptr;
+    result->rows = NULL;
+    result->column_names = NULL;
     result->row_count = 0;
     result->column_count = 0;
 }
@@ -223,7 +223,7 @@ mysql_free_csilk_result(csilk_db_result_t* result)
  *   5. On any allocation failure, partial results are freed immediately.
  *
  * @note Uses strndup with mysql_fetch_lengths for binary-safe field copies.
- *       nullptr SQL values remain nullptr in the result row.
+ *       NULL SQL values remain NULL in the result row.
  */
 static int
 mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
@@ -282,7 +282,7 @@ mysql_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
 
         /* Copy each field using the binary-safe length from mysql_fetch_lengths */
         for (unsigned int i = 0; i < num_fields; i++) {
-            drow->values[i] = row[i] ? csilk_strndup(row[i], lengths[i]) : nullptr;
+            drow->values[i] = row[i] ? csilk_strndup(row[i], lengths[i]) : NULL;
         }
 
         /* Append row to the result array */

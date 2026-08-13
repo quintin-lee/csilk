@@ -14,13 +14,13 @@
  * Useful for frontend workflow visualization and diagnostics.
  *
  * @param wf The workflow instance to visualize.
- * @return A heap-allocated Mermaid.js schema string, or nullptr if wf is invalid. The caller takes ownership of the string.
+ * @return A heap-allocated Mermaid.js schema string, or NULL if wf is invalid. The caller takes ownership of the string.
  */
 char*
 csilk_wf_to_mermaid(csilk_wf_t* wf)
 {
     if (!wf) {
-        return nullptr;
+        return NULL;
     }
     size_t buf_size = 8192;
     char*  buf = malloc(buf_size);
@@ -73,13 +73,13 @@ csilk_wf_to_mermaid(csilk_wf_t* wf)
  * input/output dumps, AI token usages, error reports, etc.).
  *
  * @param trace Pointer to the workflow trace record.
- * @return Heap-allocated JSON string, or nullptr if trace is invalid. Caller takes ownership.
+ * @return Heap-allocated JSON string, or NULL if trace is invalid. Caller takes ownership.
  */
 char*
 csilk_wf_trace_to_json(const csilk_wf_trace_t* trace)
 {
     if (!trace) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* root = csilk_json_object();
     csilk_json_add_string(root, "exec_id", trace->exec_id);

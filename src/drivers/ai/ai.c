@@ -82,7 +82,7 @@ _ai_broadcast(const char* event,
     if (error) {
         csilk_json_add_string(root, "error", error);
     }
-    csilk_json_add_number(root, "timestamp", (double)time(nullptr));
+    csilk_json_add_number(root, "timestamp", (double)time(NULL));
 
     char* json = csilk_json_serialize(root, NULL);
     csilk_mutex_lock(&g_ai_monitor_mutex);
@@ -112,7 +112,7 @@ char*
 csilk_ai_stats_to_json(const csilk_ai_stats_t* stats)
 {
     if (!stats) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* root = csilk_json_object();
     csilk_json_add_number(root, "requests_total", (double)stats->requests_total);
@@ -176,7 +176,7 @@ csilk_ai_register_driver(const csilk_ai_driver_t* driver)
 
 /** @brief Linear search of the global driver registry by name.
  *  @param name Driver name (e.g., "openai", "ollama").
- *  @return Pointer to the driver vtable, or nullptr if not found. */
+ *  @return Pointer to the driver vtable, or NULL if not found. */
 static const csilk_ai_driver_t*
 find_driver(const char* name)
 {
@@ -185,7 +185,7 @@ find_driver(const char* name)
             return g_drivers[i];
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 /* Forward declarations for default drivers */
@@ -196,12 +196,12 @@ extern void csilk_ai_ollama_init_driver(void);
  *
  *  On the very first call, lazy-initializes the built-in driver registry
  *  (OpenAI and Ollama). Subsequent calls reuse the already-registered drivers.
- *  If the named driver is not found or its init() fails, returns nullptr.
+ *  If the named driver is not found or its init() fails, returns NULL.
  *
  *  @param driver_name Backend name (e.g., "openai", "ollama").
  *  @param api_key     API key for authentication (e.g., OpenAI API key).
- *  @param base_url    Optional custom base URL (nullptr for driver default).
- *  @return Newly allocated csilk_ai_t, or nullptr on failure.
+ *  @param base_url    Optional custom base URL (NULL for driver default).
+ *  @return Newly allocated csilk_ai_t, or NULL on failure.
  *  @note The caller owns the returned handle and must free with
  * csilk_ai_free(). On allocation failure, the driver state is freed internally
  * to avoid leaks. */
@@ -221,7 +221,7 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
     const csilk_ai_driver_t* driver = find_driver(driver_name);
     if (!driver) {
         CSILK_LOG_E("Failed to create AI instance: driver '%s' not found", driver_name);
-        return nullptr;
+        return NULL;
     }
 
     void* state = driver->init(api_key, base_url);
@@ -229,14 +229,14 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
         CSILK_LOG_E("Failed to initialize AI driver '%s' state (base_url: %s)",
                     driver_name,
                     base_url ? base_url : "default");
-        return nullptr;
+        return NULL;
     }
 
     csilk_ai_t* ai = malloc(sizeof(csilk_ai_t));
     if (!ai) {
         CSILK_LOG_E("Failed to allocate memory for AI instance (driver: '%s')", driver_name);
         driver->free(state);
-        return nullptr;
+        return NULL;
     }
 
     ai->driver = driver;
@@ -259,7 +259,7 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
  *  5. If retryable and attempts remain, sleep with exponential backoff
  *     (1s, 2s) and retry. Non-retryable errors break immediately.
  *
- *  @param ai  AI engine handle (must not be nullptr).
+ *  @param ai  AI engine handle (must not be NULL).
  *  @param req Chat request parameters (model, messages, temperature, tools).
  *  @param res [out] Receives the chat response, including content, tool calls,
  *              and token usage. Zeroed on each retry attempt.
@@ -588,7 +588,7 @@ csilk_ai_embeddings_async(csilk_ai_t*                  ai,
 
 /** @brief Free an AI engine handle and its driver state.
  *  Calls the driver's free() callback first, then frees the handle.
- *  @param ai The handle to free (may be nullptr). */
+ *  @param ai The handle to free (may be NULL). */
 void
 csilk_ai_free(csilk_ai_t* ai)
 {
@@ -603,7 +603,7 @@ csilk_ai_free(csilk_ai_t* ai)
 /** @brief Free all dynamically allocated fields in a chat response.
  *  Frees content, tool calls (with their id/name/arguments), raw_response,
  *  and error_message. Does NOT free the struct itself.
- *  @param res Response struct to clean (may be nullptr). Safe to call on
+ *  @param res Response struct to clean (may be NULL). Safe to call on
  *         a zero-initialized struct. */
 void
 csilk_ai_chat_response_free(csilk_ai_chat_response_t* res)
@@ -626,7 +626,7 @@ csilk_ai_chat_response_free(csilk_ai_chat_response_t* res)
 
 /** @brief Free dynamically allocated fields in an embeddings response.
  *  Frees values array and error_message. Does NOT free the struct itself.
- *  @param res Response struct to clean (may be nullptr). */
+ *  @param res Response struct to clean (may be NULL). */
 void
 csilk_ai_embeddings_response_free(csilk_ai_embeddings_response_t* res)
 {
@@ -646,7 +646,7 @@ csilk_ai_embeddings_response_free(csilk_ai_embeddings_response_t* res)
  * oldest message is evicted on each new add().
  *
  * @param max_history Maximum number of messages to retain (0 = unlimited).
- * @return A new context handle, or nullptr on allocation failure.
+ * @return A new context handle, or NULL on allocation failure.
  * @note The caller must free the handle with csilk_ai_context_free(). */
 csilk_ai_context_t*
 csilk_ai_context_new(size_t max_history)
@@ -716,7 +716,7 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
  *  Frees each message's role and content strings and resets the
  *  message count to zero. The internal array capacity is preserved
  *  to avoid repeated reallocation.
- *  @param ctx Conversation context (may be nullptr). */
+ *  @param ctx Conversation context (may be NULL). */
 void
 csilk_ai_context_clear(csilk_ai_context_t* ctx)
 {
@@ -733,7 +733,7 @@ csilk_ai_context_clear(csilk_ai_context_t* ctx)
 
 /** @brief Free a conversation context and all associated resources.
  *  Clears messages, frees the message array, and frees the context struct.
- *  @param ctx Context to free (may be nullptr). */
+ *  @param ctx Context to free (may be NULL). */
 void
 csilk_ai_context_free(csilk_ai_context_t* ctx)
 {

@@ -28,7 +28,7 @@
  *
  * @param key Header key string (null-terminated).
  * @return Bucket index in the range [0, CSILK_HEADER_BUCKETS - 1].
- * @note The caller must ensure @p key is non-nullptr. */
+ * @note The caller must ensure @p key is non-NULL. */
 uint32_t
 hash_key(const char* key)
 {
@@ -45,15 +45,15 @@ hash_key(const char* key)
  * Iterates the linked list at the hashed bucket and compares keys using
  * strcasecmp. Returns the first matching value.
  *
- * @param map Header hash map (must not be nullptr).
+ * @param map Header hash map (must not be NULL).
  * @param key Header key to find (case-insensitive).
- * @return Pointer to the value string, or nullptr if the key is not found.
+ * @return Pointer to the value string, or NULL if the key is not found.
  * @note The returned string shares the lifetime of the map's arena. */
 const char*
 map_get(csilk_header_map_t* map, const char* key)
 {
     if (!map || !key) {
-        return nullptr;
+        return NULL;
     }
     uint32_t        bucket = hash_key(key);
     csilk_header_t* h = map->buckets[bucket];
@@ -63,7 +63,7 @@ map_get(csilk_header_map_t* map, const char* key)
         }
         h = h->next;
     }
-    return nullptr;
+    return NULL;
 }
 /** @brief Hash a key from a string view into a bucket index.
  *
@@ -71,7 +71,7 @@ map_get(csilk_header_map_t* map, const char* key)
  *
  * @param key Header key string view.
  * @return Bucket index in the range [0, CSILK_HEADER_BUCKETS - 1].
- * @note The caller must ensure @p key is non-nullptr and has valid data. */
+ * @note The caller must ensure @p key is non-NULL and has valid data. */
 static uint32_t
 hash_key_view(const csilk_str_view_t* key)
 {
@@ -93,7 +93,7 @@ hash_key_view(const csilk_str_view_t* key)
  * @param key   Header key (zero-copy reference to recv buffer).
  * @param value Header value (zero-copy reference to recv buffer).
  * @note The key and value are copied into arena memory. If the arena is
- *       nullptr this function silently does nothing. */
+ *       NULL this function silently does nothing. */
 void
 map_set_view(csilk_ctx_t*            c,
              csilk_header_map_t*     map,
@@ -136,7 +136,7 @@ map_set_view(csilk_ctx_t*            c,
  * @param key   Header key (case-insensitive via strcasecmp on lookup).
  * @param value Header value string.
  * @note The key and value are duplicated into arena memory. If the arena is
- *       nullptr this function silently does nothing.
+ *       NULL this function silently does nothing.
  */
 void
 map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value)
@@ -177,7 +177,7 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
  * @param key   Header key.
  * @param value Header value.
  * @note Both key and value are duplicated into arena memory. Silently does
- *       nothing if the arena is nullptr. */
+ *       nothing if the arena is NULL. */
 void
 map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value)
 {

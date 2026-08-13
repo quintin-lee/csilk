@@ -70,28 +70,28 @@ jwt_generate_internal(csilk_ctx_t*    c,
 {
     if (!payload || !key) {
         CSILK_LOG_E("JWT: Generation failed: invalid arguments");
-        return nullptr;
+        return NULL;
     }
 
-    char* header_b64 = nullptr;
-    char* payload_b64 = nullptr;
-    char* token = nullptr;
+    char* header_b64 = NULL;
+    char* payload_b64 = NULL;
+    char* token = NULL;
     char* header_json = jwt_build_header(algorithm);
     if (!header_json) {
-        return nullptr;
+        return NULL;
     }
 
     /* Step 1: Base64url-encode the JWT header. */
     size_t h_len = strlen(header_json);
     if (h_len > SIZE_MAX / 4 - 1) {
         free(header_json);
-        return nullptr;
+        return NULL;
     }
     size_t h_b64_len = ((h_len + 2) / 3) * 4 + 1;
     header_b64 = malloc(h_b64_len);
     if (!header_b64) {
         free(header_json);
-        return nullptr;
+        return NULL;
     }
     csilk_base64url_encode((const uint8_t*)header_json, h_len, header_b64);
     free(header_json);
@@ -100,20 +100,20 @@ jwt_generate_internal(csilk_ctx_t*    c,
     char* payload_str = csilk_json_serialize(payload, NULL);
     if (!payload_str) {
         free(header_b64);
-        return nullptr;
+        return NULL;
     }
     size_t p_len = strlen(payload_str);
     if (p_len > SIZE_MAX / 4 - 1) {
         free(header_b64);
         free(payload_str);
-        return nullptr;
+        return NULL;
     }
     size_t p_b64_len = ((p_len + 2) / 3) * 4 + 1;
     payload_b64 = malloc(p_b64_len);
     if (!payload_b64) {
         free(header_b64);
         free(payload_str);
-        return nullptr;
+        return NULL;
     }
     csilk_base64url_encode((const uint8_t*)payload_str, p_len, payload_b64);
     free(payload_str);
@@ -124,14 +124,14 @@ jwt_generate_internal(csilk_ctx_t*    c,
     if (hb64_len > SIZE_MAX - 2 - pb64_len) {
         free(header_b64);
         free(payload_b64);
-        return nullptr;
+        return NULL;
     }
     size_t sign_input_len = hb64_len + 1 + pb64_len + 1;
     char*  sign_input = malloc(sign_input_len);
     if (!sign_input) {
         free(header_b64);
         free(payload_b64);
-        return nullptr;
+        return NULL;
     }
     snprintf(sign_input, sign_input_len, "%s.%s", header_b64, payload_b64);
 
@@ -161,7 +161,7 @@ jwt_generate_internal(csilk_ctx_t*    c,
             free(header_b64);
             free(payload_b64);
             free(sign_input);
-            return nullptr;
+            return NULL;
         }
         csilk_base64url_encode(sig, sig_len, sig_b64);
         explicit_bzero(sig, sizeof(sig));
@@ -175,7 +175,7 @@ jwt_generate_internal(csilk_ctx_t*    c,
         free(payload_b64);
         free(sign_input);
         explicit_bzero(sig_b64, sizeof(sig_b64));
-        return nullptr;
+        return NULL;
     }
     token = malloc(si_len + 1 + sb_len + 1);
     if (token) {
@@ -214,19 +214,19 @@ jwt_verify_internal(
 {
     if (!token || !key) {
         CSILK_LOG_E("JWT: Verification failed: invalid arguments");
-        return nullptr;
+        return NULL;
     }
 
     /* Locate the two dots separating header, payload, signature. */
     const char* dot1 = strchr(token, '.');
     if (!dot1) {
         CSILK_LOG_W("JWT: Verification failed: missing first dot");
-        return nullptr;
+        return NULL;
     }
     const char* dot2 = strchr(dot1 + 1, '.');
     if (!dot2) {
         CSILK_LOG_W("JWT: Verification failed: missing second dot");
-        return nullptr;
+        return NULL;
     }
 
     size_t      payload_len = (size_t)(dot2 - dot1 - 1);
@@ -265,13 +265,13 @@ jwt_verify_internal(
 
     if (!sig_ok) {
         CSILK_LOG_W("JWT: Verification failed: signature mismatch");
-        return nullptr;
+        return NULL;
     }
 
     /* Decode and parse the payload. */
     char* p_b64 = malloc(payload_len + 1);
     if (!p_b64) {
-        return nullptr;
+        return NULL;
     }
     memcpy(p_b64, dot1 + 1, payload_len);
     p_b64[payload_len] = '\0';
@@ -279,7 +279,7 @@ jwt_verify_internal(
     uint8_t* p_json_str = malloc(payload_len + 1);
     if (!p_json_str) {
         free(p_b64);
-        return nullptr;
+        return NULL;
     }
     int p_decoded_len = csilk_base64url_decode(p_b64, p_json_str, payload_len + 1);
     free(p_b64);
@@ -287,7 +287,7 @@ jwt_verify_internal(
     if (p_decoded_len < 0) {
         CSILK_LOG_W("JWT: base64url decode failed for payload");
         free(p_json_str);
-        return nullptr;
+        return NULL;
     }
     p_json_str[p_decoded_len] = '\0';
 
@@ -347,7 +347,7 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
     /* Check expiration if 'exp' claim exists */
     csilk_json_t* exp = csilk_json_get(payload, "exp");
     if (csilk_json_is_number(exp)) {
-        if ((double)time(nullptr) > csilk_json_number_value(exp)) {
+        if ((double)time(NULL) > csilk_json_number_value(exp)) {
             csilk_json_free(payload);
             csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Token expired");
             csilk_abort(c);
@@ -369,15 +369,15 @@ char*
 csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
 {
     if (!c) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     if (!payload) {
-        return nullptr;
+        return NULL;
     }
     char* json_str = csilk_json_serialize(payload, NULL);
     csilk_json_free(payload);
-    csilk_set(c, "jwt_payload", nullptr);
+    csilk_set(c, "jwt_payload", NULL);
     return json_str;
 }
 
@@ -390,7 +390,7 @@ csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
     csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     if (payload) {
         csilk_json_free(payload);
-        csilk_set(c, "jwt_payload", nullptr);
+        csilk_set(c, "jwt_payload", NULL);
     }
 }
 
@@ -398,11 +398,11 @@ char*
 csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret)
 {
     if (!payload_json || !secret) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* payload = csilk_json_parse(payload_json);
     if (!payload) {
-        return nullptr;
+        return NULL;
     }
     char* token = csilk_jwt_generate(c, payload, secret);
     csilk_json_free(payload);

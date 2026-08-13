@@ -30,7 +30,7 @@ typedef struct {
 /**
  * @brief Create and initialize a new DPDK Poll Mode Driver engine instance.
  * @param config Engine configuration parameters.
- * @return New engine instance handle, or nullptr on failure.
+ * @return New engine instance handle, or NULL on failure.
  */
 csilk_dpdk_engine_t* csilk_dpdk_engine_new(const csilk_dpdk_config_t* config);
 

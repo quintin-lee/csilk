@@ -56,8 +56,8 @@
  *       └─ _mq_enqueue(mq, topic, payload, len)
  *
  * @param mq      MQ instance (must have wal_fd >= 0).
- * @param topic   Topic string (not nullptr).
- * @param payload Opaque payload data (may be nullptr if len == 0).
+ * @param topic   Topic string (not NULL).
+ * @param payload Opaque payload data (may be NULL if len == 0).
  * @param len     Payload length in bytes.
  * @return 0 on success, -1 on write or fsync failure.
  * @threadsafe Serialized via wal_mutex. */
@@ -316,7 +316,7 @@ _mq_recovery(csilk_mq_t* mq)
 
         /* 1. Read topic_len (4 bytes) */
         csilk_io_buf_t buf = csilk_io_buf_init((char*)&topic_len, 4);
-        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
+        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
         csilk_io_fs_req_cleanup(&read_req);
         if (nread < 4) {
             if (nread > 0) {
@@ -335,7 +335,7 @@ _mq_recovery(csilk_mq_t* mq)
             break;
         }
         buf = csilk_io_buf_init(topic, topic_len);
-        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
+        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
         csilk_io_fs_req_cleanup(&read_req);
         if (nread < (int)topic_len) {
             CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: truncated topic bytes",
@@ -348,7 +348,7 @@ _mq_recovery(csilk_mq_t* mq)
 
         /* 3. Read payload_len (4 bytes) */
         buf = csilk_io_buf_init((char*)&payload_len, 4);
-        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
+        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
         csilk_io_fs_req_cleanup(&read_req);
         if (nread < 4) {
             CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: truncated payload_len",
@@ -359,7 +359,7 @@ _mq_recovery(csilk_mq_t* mq)
         offset += 4;
 
         /* 4. Read payload bytes (if payload_len > 0) */
-        void* payload = nullptr;
+        void* payload = NULL;
         if (payload_len > 0) {
             payload = malloc(payload_len);
             if (!payload) {
@@ -370,7 +370,7 @@ _mq_recovery(csilk_mq_t* mq)
                 break;
             }
             buf = csilk_io_buf_init(payload, payload_len);
-            nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
+            nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
             csilk_io_fs_req_cleanup(&read_req);
             if (nread < (int)payload_len) {
                 CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: truncated "
@@ -385,7 +385,7 @@ _mq_recovery(csilk_mq_t* mq)
 
         /* 5. Read stored checksum (4 bytes) */
         buf = csilk_io_buf_init((char*)&checksum, 4);
-        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, nullptr);
+        nread = csilk_io_fs_read(mq->loop, &read_req, mq->wal_fd, &buf, 1, offset, NULL);
         csilk_io_fs_req_cleanup(&read_req);
         if (nread < 4) {
             CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: truncated checksum",
@@ -466,8 +466,8 @@ _mq_recovery(csilk_mq_t* mq)
  *    │                             └─ _mq_enqueue()    ← in-memory queue
  * ```
  *
- * @param mq       The MQ instance (must not be nullptr).
- * @param wal_path Filesystem path to the WAL file (must not be nullptr).
+ * @param mq       The MQ instance (must not be NULL).
+ * @param wal_path Filesystem path to the WAL file (must not be NULL).
  * @return 0 on success, or a negative csilk_io_fs_open error code on failure.
  * @threadsafe Serialized via wal_mutex.
  * @note The WAL file is opened with O_CREAT | O_RDWR | O_APPEND, mode 0644.
@@ -489,18 +489,18 @@ csilk_mq_set_persistence(csilk_mq_t* mq, const char* wal_path)
     if (mq->wal_fd >= 0) {
         CSILK_LOG_I("MQ: Closing active WAL file descriptor: %d", mq->wal_fd);
         csilk_io_fs_t close_req;
-        csilk_io_fs_close(mq->loop, &close_req, mq->wal_fd, nullptr);
+        csilk_io_fs_close(mq->loop, &close_req, mq->wal_fd, NULL);
         csilk_io_fs_req_cleanup(&close_req);
         mq->wal_fd = -1;
     }
     if (mq->wal_path) {
         free(mq->wal_path);
-        mq->wal_path = nullptr;
+        mq->wal_path = NULL;
     }
 
     csilk_io_fs_t open_req;
     int           fd =
-        csilk_io_fs_open(mq->loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, nullptr);
+        csilk_io_fs_open(mq->loop, &open_req, wal_path, O_CREAT | O_RDWR | O_APPEND, 0644, NULL);
     csilk_io_fs_req_cleanup(&open_req);
 
     if (fd < 0) {

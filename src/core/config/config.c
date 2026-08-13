@@ -67,7 +67,7 @@ string_to_log_level(const char* s)
  *
  * @param yaml_path Absolute or relative path to the YAML configuration file.
  * @param config    [out] Pre-allocated config structure to populate.
- * @return 0 on success, -1 on I/O error, parse error, or nullptr input.
+ * @return 0 on success, -1 on I/O error, parse error, or NULL input.
  * @note Dynamically allocated strings (file_path, allow_origin, etc.) are
  *       strdup'd and must be freed later with csilk_config_free().
  * @note The config structure is memset to zero first, then defaults are set.
@@ -94,8 +94,8 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
 
     yaml_parser_set_input_file(&parser, fh);
 
-    char* current_key = nullptr;
-    char* current_section = nullptr;
+    char* current_key = NULL;
+    char* current_section = NULL;
 
     // Default values
     memset(config, 0, sizeof(csilk_config_t));
@@ -134,7 +134,7 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
             } else {
                 char* val = (char*)event.data.scalar.value;
 
-                if (current_section == nullptr) {
+                if (current_section == NULL) {
                     if (strcmp(current_key, "port") == 0) {
                         config->port = atoi(val);
                     } else if (strcmp(current_key, "http3_port") == 0) {
@@ -308,7 +308,7 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
                 }
 
                 free(current_key);
-                current_key = nullptr;
+                current_key = NULL;
             }
             break;
         case YAML_MAPPING_START_EVENT:
@@ -317,13 +317,13 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
                     free(current_section);
                 }
                 current_section = current_key;
-                current_key = nullptr;
+                current_key = NULL;
             }
             break;
         case YAML_MAPPING_END_EVENT:
             if (current_section) {
                 free(current_section);
-                current_section = nullptr;
+                current_section = NULL;
             }
             break;
         case YAML_STREAM_END_EVENT:
@@ -351,11 +351,11 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
  *
  * Releases memory for logger.file_path, cors allow_origin/methods/headers,
  * static_files root_dir/prefix, and middleware.auth_token. Each pointer is
- * set to nullptr after being freed, making repeated calls safe.
+ * set to NULL after being freed, making repeated calls safe.
  *
  * @param config Configuration structure whose strings will be freed.
  * @note Does NOT free the config struct itself — only its internal heap
- *       allocations. Safe to call with nullptr. */
+ *       allocations. Safe to call with NULL. */
 void
 csilk_config_free(csilk_config_t* config)
 {
@@ -365,69 +365,69 @@ csilk_config_free(csilk_config_t* config)
 
     if (config->logger.file_path) {
         free((void*)config->logger.file_path);
-        config->logger.file_path = nullptr;
+        config->logger.file_path = NULL;
     }
 
     if (config->cors.config.allow_origin) {
         free((void*)config->cors.config.allow_origin);
-        config->cors.config.allow_origin = nullptr;
+        config->cors.config.allow_origin = NULL;
     }
     if (config->cors.config.allow_methods) {
         free((void*)config->cors.config.allow_methods);
-        config->cors.config.allow_methods = nullptr;
+        config->cors.config.allow_methods = NULL;
     }
     if (config->cors.config.allow_headers) {
         free((void*)config->cors.config.allow_headers);
-        config->cors.config.allow_headers = nullptr;
+        config->cors.config.allow_headers = NULL;
     }
 
     if (config->static_files.root_dir) {
         free(config->static_files.root_dir);
-        config->static_files.root_dir = nullptr;
+        config->static_files.root_dir = NULL;
     }
     if (config->static_files.prefix) {
         free(config->static_files.prefix);
-        config->static_files.prefix = nullptr;
+        config->static_files.prefix = NULL;
     }
 
     if (config->middleware.auth_token) {
         free(config->middleware.auth_token);
-        config->middleware.auth_token = nullptr;
+        config->middleware.auth_token = NULL;
     }
 
     if (config->ai.driver) {
         free(config->ai.driver);
-        config->ai.driver = nullptr;
+        config->ai.driver = NULL;
     }
     if (config->ai.model) {
         free(config->ai.model);
-        config->ai.model = nullptr;
+        config->ai.model = NULL;
     }
     if (config->ai.api_key) {
         free(config->ai.api_key);
-        config->ai.api_key = nullptr;
+        config->ai.api_key = NULL;
     }
     if (config->ai.base_url) {
         free(config->ai.base_url);
-        config->ai.base_url = nullptr;
+        config->ai.base_url = NULL;
     }
 
     if (config->cipher.driver) {
         free(config->cipher.driver);
-        config->cipher.driver = nullptr;
+        config->cipher.driver = NULL;
     }
 
     if (config->server.tls_cert_file) {
         free(config->server.tls_cert_file);
-        config->server.tls_cert_file = nullptr;
+        config->server.tls_cert_file = NULL;
     }
     if (config->server.tls_key_file) {
         free(config->server.tls_key_file);
-        config->server.tls_key_file = nullptr;
+        config->server.tls_key_file = NULL;
     }
     if (config->server.tls_ca_file) {
         free(config->server.tls_ca_file);
-        config->server.tls_ca_file = nullptr;
+        config->server.tls_ca_file = NULL;
     }
 }
 

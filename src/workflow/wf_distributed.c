@@ -40,7 +40,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
     if (j_exec_id && csilk_json_is_string(j_exec_id) && j_output &&
         csilk_json_is_string(j_output)) {
         const char* exec_id = csilk_json_string_value(j_exec_id);
-        const char* node_id = j_node_id ? csilk_json_string_value(j_node_id) : nullptr;
+        const char* node_id = j_node_id ? csilk_json_string_value(j_node_id) : NULL;
         const char* output_str = csilk_json_string_value(j_output);
 
         for (size_t i = 0; i < g_distributed_wf_count; i++) {
@@ -50,7 +50,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
             csilk_wf_ctx_t* active = _wf_find_active_ctx(wf, exec_id);
             if (active) {
                 CSILK_LOG_I("Workflow found active execution %s, resuming hot", exec_id);
-                csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : nullptr;
+                csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
                 // If node_id wasn't provided, we might have to search the context for a
                 // paused node
 
@@ -72,8 +72,8 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
             snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
             if (access(path, F_OK) == 0) {
                 CSILK_LOG_I("Workflow found WAL for %s, signaling continue (cold)", exec_id);
-                csilk_data_t out_data = {"application/json", (void*)output_str, nullptr, nullptr};
-                csilk_wf_signal_continue(wf, exec_id, &out_data, nullptr);
+                csilk_data_t out_data = {"application/json", (void*)output_str, NULL, NULL};
+                csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
                 break;
             }
         }

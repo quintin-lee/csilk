@@ -66,7 +66,7 @@ static char*
 resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 {
     if (!template) {
-        return nullptr;
+        return NULL;
     }
     char* res = csilk_wf_strdup(ctx, template);
 
@@ -76,7 +76,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
         snprintf(base_pattern, sizeof(base_pattern), "{{%s.value", n->id);
 
         char* pos;
-        while ((pos = strstr(res, base_pattern)) != nullptr) {
+        while ((pos = strstr(res, base_pattern)) != NULL) {
             char* end = strstr(pos, "}}");
             if (!end) {
                 break;
@@ -90,10 +90,10 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                 char* path_start = pos + strlen(base_pattern);
                 char* pipe = strchr(path_start, '|');
                 if (pipe && pipe > end) {
-                    pipe = nullptr;
+                    pipe = NULL;
                 }
 
-                char* filter_start = pipe ? pipe + 1 : nullptr;
+                char* filter_start = pipe ? pipe + 1 : NULL;
                 char* actual_end = pipe ? pipe : end;
 
                 if (*path_start == '.') {
@@ -135,7 +135,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                         }
 
                         replacement = apply_filter(ctx, f, replacement);
-                        f = strtok_r(nullptr, "|", &saveptr);
+                        f = strtok_r(NULL, "|", &saveptr);
                     }
                     free(filters);
                 }
@@ -154,7 +154,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 
     const char* in_pattern = "{{input.value";
     char*       pos;
-    while ((pos = strstr(res, in_pattern)) != nullptr) {
+    while ((pos = strstr(res, in_pattern)) != NULL) {
         char* end = strstr(pos, "}}");
         if (!end) {
             break;
@@ -167,9 +167,9 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
             char* path_start = pos + strlen(in_pattern);
             char* pipe = strchr(path_start, '|');
             if (pipe && pipe > end) {
-                pipe = nullptr;
+                pipe = NULL;
             }
-            char* filter_start = pipe ? pipe + 1 : nullptr;
+            char* filter_start = pipe ? pipe + 1 : NULL;
             char* actual_end = pipe ? pipe : end;
 
             if (*path_start == '.') {
@@ -209,7 +209,7 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                         fe--;
                     }
                     replacement = apply_filter(ctx, f, replacement);
-                    f = strtok_r(nullptr, "|", &saveptr);
+                    f = strtok_r(NULL, "|", &saveptr);
                 }
                 free(filters);
             }
@@ -245,7 +245,7 @@ static void
 sub_worker_cb(csilk_io_work_t* req)
 {
     sub_tool_work_t* sw = (sub_tool_work_t*)req->data;
-    sw->result = nullptr;
+    sw->result = NULL;
     for (size_t j = 0; j < sw->ctx->wf->tool_count; j++) {
         if (strcmp(sw->ctx->wf->tools[j].name, sw->tc->name) == 0) {
             sw->result =
@@ -302,14 +302,14 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     char*              prompt = resolve_templates(ctx, config->prompt);
     const char*        api_key = getenv("AGENT_API_KEY");
     if (!api_key) {
-        return nullptr;
+        return NULL;
     }
     csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
     if (!ai) {
-        return nullptr;
+        return NULL;
     }
-    csilk_ai_tool_t*       tools = nullptr;
-    csilk_wf_tool_entry_t* discovered = nullptr;
+    csilk_ai_tool_t*       tools = NULL;
+    csilk_wf_tool_entry_t* discovered = NULL;
     size_t                 discovered_count = 0;
 
     if (ctx->wf->tool_discovery) {
@@ -365,7 +365,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     msgs[msg_count].role = "user";
     msgs[msg_count].content = strdup(prompt);
     msg_count++;
-    csilk_data_t* out = nullptr;
+    csilk_data_t* out = NULL;
     int           iterations = 0;
     while (iterations < 10) {
         iterations++;
@@ -400,8 +400,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
             .tools = tools,
             .tool_count = ctx->wf->tool_count,
-            .on_chunk = config->stream ? on_ai_stream : nullptr,
-            .user_data = config->stream ? &s_ctx : nullptr};
+            .on_chunk = config->stream ? on_ai_stream : NULL,
+            .user_data = config->stream ? &s_ctx : NULL};
         csilk_ai_chat_response_t res;
         if (csilk_ai_chat(ai, &req, &res) != 0) {
             break;
@@ -506,11 +506,11 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
 {
     csilk_vector_search_config_t* config = (csilk_vector_search_config_t*)user_data;
     if (!config || !config->ai || !config->db || !config->collection) {
-        return nullptr;
+        return NULL;
     }
 
-    const char* text = nullptr;
-    char*       resolved = nullptr;
+    const char* text = NULL;
+    char*       resolved = NULL;
     if (config->input_template) {
         resolved = resolve_templates(ctx, config->input_template);
         text = resolved;
@@ -519,18 +519,18 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
     }
 
     if (!text) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_ai_embeddings_response_t eres = {0};
     if (csilk_ai_embeddings(config->ai, config->embedding_model, &text, 1, &eres) != 0) {
         csilk_ai_embeddings_response_free(&eres);
-        return nullptr;
+        return NULL;
     }
 
     if (eres.count == 0 || eres.dimension == 0) {
         csilk_ai_embeddings_response_free(&eres);
-        return nullptr;
+        return NULL;
     }
 
     csilk_vector_search_response_t vres = {0};
@@ -542,7 +542,7 @@ vector_search_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_
                                &vres) != 0) {
         csilk_ai_embeddings_response_free(&eres);
         csilk_vector_search_response_free(&vres);
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_array();
@@ -578,9 +578,9 @@ csilk_wf_add_ai(csilk_wf_t* wf, const char* id, const csilk_ai_config_t* config)
 {
     csilk_ai_config_t* copy = malloc(sizeof(csilk_ai_config_t));
     memcpy(copy, config, sizeof(csilk_ai_config_t));
-    copy->model = config->model ? strdup(config->model) : nullptr;
-    copy->system_msg = config->system_msg ? strdup(config->system_msg) : nullptr;
-    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+    copy->model = config->model ? strdup(config->model) : NULL;
+    copy->system_msg = config->system_msg ? strdup(config->system_msg) : NULL;
+    copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
     csilk_wf_node_t* node = csilk_wf_add(wf, id, ai_node_handler, copy);
     if (node) {
         node->user_data_free = ai_config_free;
@@ -595,9 +595,9 @@ csilk_wf_add_vector_search(csilk_wf_t*                         wf,
 {
     csilk_vector_search_config_t* copy = malloc(sizeof(csilk_vector_search_config_t));
     memcpy(copy, config, sizeof(csilk_vector_search_config_t));
-    copy->embedding_model = config->embedding_model ? strdup(config->embedding_model) : nullptr;
-    copy->collection = config->collection ? strdup(config->collection) : nullptr;
-    copy->input_template = config->input_template ? strdup(config->input_template) : nullptr;
+    copy->embedding_model = config->embedding_model ? strdup(config->embedding_model) : NULL;
+    copy->collection = config->collection ? strdup(config->collection) : NULL;
+    copy->input_template = config->input_template ? strdup(config->input_template) : NULL;
 
     csilk_wf_node_t* node = csilk_wf_add(wf, id, vector_search_node_handler, copy);
     if (node) {

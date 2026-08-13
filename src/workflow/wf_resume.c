@@ -39,7 +39,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
         if (header.magic != CSILK_WF_MAGIC) {
             break;
         }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
+        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
         if (payload && fread(payload, header.payload_len, 1, f) != 1) {
             free(payload);
             break;
@@ -107,7 +107,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     fclose(f);
     if (wf_ended) {
         if (callback) {
-            callback(nullptr);
+            callback(NULL);
         }
         _wf_cleanup_ctx(ctx);
     } else if (ctx->is_paused) {
@@ -177,14 +177,14 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
     snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
     ctx->wal_path = strdup(wal_path);
 
-    char* paused_node_id = nullptr;
+    char* paused_node_id = NULL;
 
     csilk_wf_wal_header_t header;
     while (fread(&header, sizeof(header), 1, f) == 1) {
         if (header.magic != CSILK_WF_MAGIC) {
             break;
         }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : nullptr;
+        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
         if (payload && fread(payload, header.payload_len, 1, f) != 1) {
             free(payload);
             break;

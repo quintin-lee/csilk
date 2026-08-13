@@ -72,7 +72,7 @@ CSILK_INTERNAL void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
  * @brief Internal: Fill a buffer with cryptographically secure random bytes
  * using the crypto driver (if set) or the built-in implementation.
  *
- * @param c    Request context (for driver lookup, may be nullptr).
+ * @param c    Request context (for driver lookup, may be NULL).
  * @param out  Buffer to fill.
  * @param len  Number of bytes to generate.
  * @return 0 on success, -1 on failure.
@@ -102,7 +102,7 @@ CSILK_INTERNAL void _csilk_set_internal_client(csilk_ctx_t* c, void* client);
  * @brief Internal: Symmetric encrypt using the context's cipher driver
  * or the built-in OpenSSL AES-256-GCM implementation.
  *
- * @param c              Request context (for driver lookup, may be nullptr).
+ * @param c              Request context (for driver lookup, may be NULL).
  * @param key            Encryption key (must be 32 bytes for AES-256).
  * @param key_len        Key length.
  * @param plaintext      Data to encrypt.
@@ -131,7 +131,7 @@ CSILK_INTERNAL int _csilk_symmetric_encrypt(csilk_ctx_t*   c,
  * @brief Internal: Symmetric decrypt using the context's cipher driver
  * or the built-in OpenSSL AES-256-GCM implementation.
  *
- * @param c              Request context (for driver lookup, may be nullptr).
+ * @param c              Request context (for driver lookup, may be NULL).
  * @param key            Decryption key (must be 32 bytes for AES-256).
  * @param key_len        Key length.
  * @param ciphertext     Data to decrypt.
@@ -163,7 +163,7 @@ CSILK_INTERNAL int _csilk_symmetric_decrypt(csilk_ctx_t*   c,
  *
  * Keys are output as PEM-encoded strings.
  *
- * @param c            Request context (for driver lookup, may be nullptr).
+ * @param c            Request context (for driver lookup, may be NULL).
  * @param[out] public_key   PEM public key buffer.
  * @param[in,out] pub_len   In: capacity, Out: actual PEM length (incl. NUL).
  * @param[out] private_key  PEM private key buffer.
@@ -177,7 +177,7 @@ CSILK_INTERNAL int _csilk_generate_keypair(
  * @brief Internal: Asymmetric encrypt using the context's cipher driver
  * or the built-in OpenSSL RSA-OAEP implementation.
  *
- * @param c              Request context (for driver lookup, may be nullptr).
+ * @param c              Request context (for driver lookup, may be NULL).
  * @param public_key     PEM-encoded RSA public key.
  * @param pub_len        Public key length.
  * @param plaintext      Data to encrypt (max ~190 bytes for RSA-2048).
@@ -198,7 +198,7 @@ CSILK_INTERNAL int _csilk_asymmetric_encrypt(csilk_ctx_t*   c,
  * @brief Internal: Asymmetric decrypt using the context's cipher driver
  * or the built-in OpenSSL RSA-OAEP implementation.
  *
- * @param c              Request context (for driver lookup, may be nullptr).
+ * @param c              Request context (for driver lookup, may be NULL).
  * @param private_key    PEM-encoded RSA private key.
  * @param priv_len       Private key length.
  * @param ciphertext     Data to decrypt (typically 256 bytes for RSA-2048).
@@ -219,7 +219,7 @@ CSILK_INTERNAL int _csilk_asymmetric_decrypt(csilk_ctx_t*   c,
  * @brief Internal: Sign data using the context's cipher driver
  * or the built-in OpenSSL RSA-PSS implementation.
  *
- * @param c            Request context (for driver lookup, may be nullptr).
+ * @param c            Request context (for driver lookup, may be NULL).
  * @param private_key  PEM-encoded RSA private key.
  * @param priv_len     Private key length.
  * @param data         Data to sign.
@@ -240,7 +240,7 @@ CSILK_INTERNAL int _csilk_sign(csilk_ctx_t*   c,
  * @brief Internal: Verify a signature using the context's cipher driver
  * or the built-in OpenSSL RSA-PSS implementation.
  *
- * @param c           Request context (for driver lookup, may be nullptr).
+ * @param c           Request context (for driver lookup, may be NULL).
  * @param public_key  PEM-encoded RSA public key.
  * @param pub_len     Public key length.
  * @param data        Original signed data.

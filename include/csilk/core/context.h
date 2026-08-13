@@ -38,13 +38,13 @@ const char* csilk_get_path(csilk_ctx_t* c);
 /**
  * @brief Get the raw request body and its length.
  *
- * Only valid after the full body has been parsed.  Returns nullptr for methods
+ * Only valid after the full body has been parsed.  Returns NULL for methods
  * that have no body (GET, HEAD, etc.) or when the body is empty.
  *
  * @param c        The request context.
  * @param[out] out_len  Optional pointer to receive the body length in bytes.
- *                      May be nullptr if the caller does not need the length.
- * @return Pointer to the raw body data (not NUL-terminated), or nullptr if no
+ *                      May be NULL if the caller does not need the length.
+ * @return Pointer to the raw body data (not NUL-terminated), or NULL if no
  *         body is present.
  */
 const char* csilk_get_body(csilk_ctx_t* c, size_t* out_len);
@@ -123,7 +123,7 @@ csilk_header_map_t* csilk_get_headers(csilk_ctx_t* c);
  *
  * @param c   The request context.
  * @param key The header field name (e.g., "Content-Type").
- * @return The header value string, or nullptr if the header is not present.
+ * @return The header value string, or NULL if the header is not present.
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_header(csilk_ctx_t* c, const char* key);
@@ -133,7 +133,7 @@ const char* csilk_get_header(csilk_ctx_t* c, const char* key);
  *
  * @param c   The request context.
  * @param key The header field name.
- * @return The header value string, or nullptr if the header has not been set.
+ * @return The header value string, or NULL if the header has not been set.
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_response_header(csilk_ctx_t* c, const char* key);
@@ -146,7 +146,7 @@ const char* csilk_get_response_header(csilk_ctx_t* c, const char* key);
  *
  * @param c   The request context.
  * @param key The query parameter name.
- * @return The parameter value, or nullptr if not present.
+ * @return The parameter value, or NULL if not present.
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_query(csilk_ctx_t* c, const char* key);
@@ -159,7 +159,7 @@ const char* csilk_get_query(csilk_ctx_t* c, const char* key);
  *
  * @param c   The request context.
  * @param key The parameter name as defined in the route pattern (e.g., "id").
- * @return The decoded parameter value, or nullptr if @p key is not a known
+ * @return The decoded parameter value, or NULL if @p key is not a known
  *         parameter.  Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_param(csilk_ctx_t* c, const char* key);
@@ -177,7 +177,7 @@ int csilk_get_params_count(csilk_ctx_t* c);
  *
  * @param c      The request context.
  * @param index  Index of the parameter (0..count-1).
- * @return The parameter name string, or nullptr if index is out of bounds.
+ * @return The parameter name string, or NULL if index is out of bounds.
  */
 const char* csilk_get_param_key(csilk_ctx_t* c, int index);
 
@@ -186,7 +186,7 @@ const char* csilk_get_param_key(csilk_ctx_t* c, int index);
  *
  * @param c      The request context.
  * @param index  Index of the parameter (0..count-1).
- * @return The parameter value string, or nullptr if index is out of bounds.
+ * @return The parameter value string, or NULL if index is out of bounds.
  */
 const char* csilk_get_param_value(csilk_ctx_t* c, int index);
 
@@ -327,7 +327,7 @@ int csilk_get_file_fd(csilk_ctx_t* c);
  * @brief Get the route pattern for the matched handler (e.g., "/users/:id").
  *
  * @param c  The request context.
- * @return The route path pattern, or nullptr if no route was matched.
+ * @return The route path pattern, or NULL if no route was matched.
  */
 const char* csilk_ctx_get_handler_path(csilk_ctx_t* c);
 
@@ -335,7 +335,7 @@ const char* csilk_ctx_get_handler_path(csilk_ctx_t* c);
  * @brief Get the permission string required by the matched handler.
  *
  * @param c  The request context.
- * @return The permission identifier, or nullptr if none is required.
+ * @return The permission identifier, or NULL if none is required.
  */
 const char* csilk_ctx_get_handler_perm_required(csilk_ctx_t* c);
 
@@ -343,7 +343,7 @@ const char* csilk_ctx_get_handler_perm_required(csilk_ctx_t* c);
  * @brief Get the resource pattern for the matched handler's permission check.
  *
  * @param c  The request context.
- * @return The resource pattern, or nullptr.
+ * @return The resource pattern, or NULL.
  */
 const char* csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c);
 
@@ -368,13 +368,13 @@ const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 /**
  * @brief Get the server instance associated with the current context.
  * @param c The request context.
- * @return Server handle, or nullptr on error.
+ * @return Server handle, or NULL on error.
  */
 csilk_server_t* csilk_ctx_get_server(csilk_ctx_t* c);
 
 /** @brief Get the internal MQ instance from the context.
  *  @param c The request context.
- *  @return Pointer to csilk_mq_t, or nullptr if not available. */
+ *  @return Pointer to csilk_mq_t, or NULL if not available. */
 csilk_mq_t* csilk_ctx_get_mq(csilk_ctx_t* c);
 
 /**
@@ -387,8 +387,8 @@ csilk_mq_t* csilk_ctx_get_mq(csilk_ctx_t* c);
  *
  * @param c     The request context.
  * @param key   NUL-terminated key name (a copy is made internally).
- * @param value Opaque pointer to store.  May be nullptr (which will be returned
- *              by csilk_get, so storing nullptr is indistinguishable from "not
+ * @param value Opaque pointer to store.  May be NULL (which will be returned
+ *              by csilk_get, so storing NULL is indistinguishable from "not
  *              set" — avoid it).
  */
 void csilk_set(csilk_ctx_t* c, const char* key, void* value);
@@ -398,8 +398,8 @@ void csilk_set(csilk_ctx_t* c, const char* key, void* value);
  *
  * @param c   The request context.
  * @param key NUL-terminated key name.
- * @return The value pointer previously stored with csilk_set, or nullptr if
- *         @p key was never set (or was explicitly set to nullptr — see the
+ * @return The value pointer previously stored with csilk_set, or NULL if
+ *         @p key was never set (or was explicitly set to NULL — see the
  *         note on csilk_set).
  */
 void* csilk_get(csilk_ctx_t* c, const char* key);
@@ -418,7 +418,7 @@ int csilk_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl
  * @brief Retrieve a string value by key (requires a compatible storage driver).
  * @param c    The request context.
  * @param key  Storage key.
- * @return Heap-allocated string value (caller must free), or nullptr if not found.
+ * @return Heap-allocated string value (caller must free), or NULL if not found.
  */
 char* csilk_get_string(csilk_ctx_t* c, const char* key);
 
@@ -438,7 +438,7 @@ long long csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec);
  * heap-allocated and must be freed by the caller with cJSON_Delete.
  *
  * @param c  The request context.
- * @return A cJSON object parsed from the body, or nullptr if the body is
+ * @return A cJSON object parsed from the body, or NULL if the body is
  *         empty or is not valid JSON.
  */
 csilk_json_t* csilk_bind_json(csilk_ctx_t* c);
@@ -452,7 +452,7 @@ csilk_json_t* csilk_bind_json(csilk_ctx_t* c);
  * @param  c      The request context.
  * @param[out] error  Pointer to receive a static error string (do NOT free).
  *                    Unchanged on success.
- * @return A cJSON object, or nullptr on parse failure (@p error is set).
+ * @return A cJSON object, or NULL on parse failure (@p error is set).
  */
 csilk_json_t* csilk_bind_json_err(csilk_ctx_t* c, const char** error);
 
@@ -463,7 +463,7 @@ csilk_json_t* csilk_bind_json_err(csilk_ctx_t* c, const char** error);
  *
  * @param c    The request context.
  * @param name The cookie name.
- * @return The cookie value, or nullptr if no cookie with that name exists.
+ * @return The cookie value, or NULL if no cookie with that name exists.
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_cookie(csilk_ctx_t* c, const char* name);
@@ -509,7 +509,7 @@ void csilk_parse_form_urlencoded(csilk_ctx_t* c);
  *
  * @param c   The request context.
  * @param key The form field name.
- * @return The field value, or nullptr if not found.
+ * @return The field value, or NULL if not found.
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);
@@ -521,7 +521,7 @@ const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);
  * both keys and values.
  *
  * @param c             The request context.
- * @param query_string  Raw query string (the part after '?', may be nullptr or
+ * @param query_string  Raw query string (the part after '?', may be NULL or
  * empty).
  */
 void csilk_parse_query(csilk_ctx_t* c, const char* query_string);
@@ -579,7 +579,7 @@ void csilk_set_on_ws_send(
  * @brief Get the currently registered WebSocket message callback.
  *
  * @param c  The request context.
- * @return The callback function pointer, or nullptr if none is set.
+ * @return The callback function pointer, or NULL if none is set.
  */
 void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t*   c,
                                                 const uint8_t* payload,
@@ -663,6 +663,6 @@ void csilk_ctx_defer_free(csilk_ctx_t* c);
  * @param  url    Full URL string (will be modified in-place).
  * @param[out] path  Receives a pointer to the path portion inside @p url.
  * @param[out] query Receives a pointer to the query portion inside @p url,
- *                   or nullptr if no query was present.
+ *                   or NULL if no query was present.
  */
 void csilk_split_url(const char* url, char** path, char** query);

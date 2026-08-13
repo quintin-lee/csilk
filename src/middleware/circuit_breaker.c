@@ -39,7 +39,7 @@ csilk_circuit_breaker_new(const csilk_circuit_breaker_config_t* config)
 {
     csilk_circuit_breaker_t* cb = malloc(sizeof(csilk_circuit_breaker_t));
     if (!cb) {
-        return nullptr;
+        return NULL;
     }
     cb->state = 0; // CLOSED
     cb->consecutive_failures = 0;

@@ -121,7 +121,7 @@ typedef struct CSILK_CACHE_ALIGNED {
     csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
     csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
     csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
-    void*            thread_pool;    /**< io_uring thread pool (nullptr in libuv mode). */
+    void*            thread_pool;    /**< io_uring thread pool (NULL in libuv mode). */
 } worker_pool_t;
 
 /**
@@ -143,13 +143,13 @@ struct csilk_server_s {
     int                   middleware_count;   /**< Number of global middlewares. */
     atomic_int            max_connections;    /**< Max concurrent connections (0=unlimited). */
     atomic_int            active_connections; /**< Current connection count (atomic). */
-    csilk_thread_t*       worker_tids;        /**< Worker thread IDs (nullptr if single-thread). */
+    csilk_thread_t*       worker_tids;        /**< Worker thread IDs (NULL if single-thread). */
     int                   worker_count;       /**< Number of worker threads created. */
     worker_pool_t*
         worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
     int worker_pool_count; /**< Number of worker pools (= worker_threads). */
-    csilk_handler_t         not_found_handler; /**< Custom 404 handler (nullptr = default). */
-    char*                   spa_doc_root;      /**< SPA fallback doc root (nullptr = disabled). */
+    csilk_handler_t         not_found_handler; /**< Custom 404 handler (NULL = default). */
+    char*                   spa_doc_root;      /**< SPA fallback doc root (NULL = disabled). */
     csilk_storage_driver_t* storage_driver;    /**< Context storage driver. */
     csilk_crypto_driver_t*  crypto_driver;     /**< Crypto algorithm driver. */
     csilk_cipher_driver_t*  cipher_driver;     /**< Cipher algorithm driver. */
@@ -228,7 +228,7 @@ CSILK_INTERNAL void _csilk_dispatch_request(csilk_ctx_t* c);
 /**
  * @brief Internal: invoke all registered handlers for a given hook type.
  * @param s    The server instance.
- * @param c    The request context (may be nullptr for server-level hooks).
+ * @param c    The request context (may be NULL for server-level hooks).
  * @param type Hook type to trigger.
  */
 CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type);

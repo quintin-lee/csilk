@@ -172,14 +172,14 @@ csilk_wf_serve_ui(csilk_app_t* app, const char* path)
  * Initializes sync mutexes and sets the execution event loop to csilk_io_default_loop().
  *
  * @param name The descriptive name of the workflow.
- * @return Pointer to the new workflow handle, or nullptr on allocation failure.
+ * @return Pointer to the new workflow handle, or NULL on allocation failure.
  */
 csilk_wf_t*
 csilk_wf_new(const char* name)
 {
     csilk_wf_t* wf = calloc(1, sizeof(csilk_wf_t));
     if (!wf) {
-        return nullptr;
+        return NULL;
     }
     wf->name = strdup(name);
     wf->loop = csilk_io_default_loop();
@@ -256,7 +256,7 @@ csilk_wf_free(csilk_wf_t* wf)
     }
     free(wf->tools);
     for (size_t i = 0; i < wf->monitor_count; i++) {
-        wf->monitors[i] = nullptr;
+        wf->monitors[i] = NULL;
     }
     free(wf->monitors);
     csilk_mutex_destroy(&wf->monitor_mutex);
@@ -276,27 +276,27 @@ csilk_wf_free(csilk_wf_t* wf)
  * @param id        Unique string identifier for the node.
  * @param handler   Callback executed when this node is run (null permitted for remote-only nodes).
  * @param user_data Opaque pointer forwarded to the callback.
- * @return The new node pointer, or nullptr on failure.
+ * @return The new node pointer, or NULL on failure.
  */
 csilk_wf_node_t*
 csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data)
 {
     if (!wf || !id) {
-        return nullptr;
+        return NULL;
     }
     if (wf->node_count >= wf->node_capacity) {
         size_t            new_cap = wf->node_capacity == 0 ? 16 : wf->node_capacity * 2;
         csilk_wf_node_t** new_nodes = realloc(wf->nodes, sizeof(csilk_wf_node_t*) * new_cap);
         if (!new_nodes) {
             CSILK_LOG_E("Workflow: realloc failed for nodes array on workflow '%s'", wf->name);
-            return nullptr;
+            return NULL;
         }
         wf->nodes = new_nodes;
         wf->node_capacity = new_cap;
     }
     csilk_wf_node_t* node = calloc(1, sizeof(csilk_wf_node_t));
     if (!node) {
-        return nullptr;
+        return NULL;
     }
     node->id = strdup(id);
     node->handler = handler;
@@ -334,7 +334,7 @@ add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
         from->edge_capacity = new_cap;
     }
     csilk_wf_edge_t* e = &from->edges[from->edge_count++];
-    e->condition = condition ? strdup(condition) : nullptr;
+    e->condition = condition ? strdup(condition) : NULL;
     e->target = to;
     to->incoming_count++;
     CSILK_LOG_D("Workflow: added edge from '%s' to '%s' (condition: '%s')",
@@ -351,7 +351,7 @@ add_edge(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* to)
 void
 csilk_wf_bind(csilk_wf_node_t* from, csilk_wf_node_t* to)
 {
-    add_edge(from, nullptr, to);
+    add_edge(from, NULL, to);
 }
 
 /**
@@ -380,7 +380,7 @@ csilk_wf_on_loop(csilk_wf_node_t* from, const char* condition, csilk_wf_node_t* 
 }
 
 /**
- * @brief Directs execution to target if the source node returns nullptr (representing error).
+ * @brief Directs execution to target if the source node returns NULL (representing error).
  * @param from   Source node.
  * @param target Error fallback node.
  */
@@ -502,7 +502,7 @@ csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema)
 {
     if (node) {
         free(node->output_schema);
-        node->output_schema = schema ? strdup(schema) : nullptr;
+        node->output_schema = schema ? strdup(schema) : NULL;
     }
 }
 
@@ -545,7 +545,7 @@ csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote)
 {
     if (node) {
         node->is_remote = is_remote;
-        if (is_remote && node->handler == nullptr) {
+        if (is_remote && node->handler == NULL) {
             node->handler = remote_pass_handler;
         }
         CSILK_LOG_I("Workflow: configured node '%s' for %s execution",
@@ -560,20 +560,20 @@ csilk_wf_node_set_remote(csilk_wf_node_t* node, int is_remote)
  * @brief Looks up a workflow node pointer by its unique ID string.
  * @param wf The workflow instance.
  * @param id Unique identifier string of the target node.
- * @return The matching node pointer, or nullptr if not found.
+ * @return The matching node pointer, or NULL if not found.
  */
 csilk_wf_node_t*
 csilk_wf_get_node(csilk_wf_t* wf, const char* id)
 {
     if (!wf || !id) {
-        return nullptr;
+        return NULL;
     }
     for (size_t i = 0; i < wf->node_count; i++) {
         if (strcmp(wf->nodes[i]->id, id) == 0) {
             return wf->nodes[i];
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 void

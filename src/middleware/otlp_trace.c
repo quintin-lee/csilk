@@ -98,7 +98,7 @@ const char*
 csilk_ctx_get_trace_id(csilk_ctx_t* c)
 {
     if (!c) {
-        return nullptr;
+        return NULL;
     }
     return (const char*)csilk_get(c, "otlp_trace_id");
 }
@@ -107,7 +107,7 @@ const char*
 csilk_ctx_get_span_id(csilk_ctx_t* c)
 {
     if (!c) {
-        return nullptr;
+        return NULL;
     }
     return (const char*)csilk_get(c, "otlp_span_id");
 }

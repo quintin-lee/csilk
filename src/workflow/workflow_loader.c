@@ -20,7 +20,7 @@ typedef struct handler_entry_s {
     struct handler_entry_s* next;
 } handler_entry_t;
 
-static handler_entry_t* g_handlers = nullptr;
+static handler_entry_t* g_handlers = NULL;
 
 void
 csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
@@ -43,7 +43,7 @@ csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
 /** @brief Internal: look up a handler by name in the singly-linked list
  * registry.
  * @param name Handler name (case-sensitive).
- * @return Handler function pointer, or nullptr if not registered. */
+ * @return Handler function pointer, or NULL if not registered. */
 static csilk_wf_handler_t
 find_handler(const char* name)
 {
@@ -54,7 +54,7 @@ find_handler(const char* name)
         }
         curr = curr->next;
     }
-    return nullptr;
+    return NULL;
 }
 
 /* --- JSON Parser --- */
@@ -72,7 +72,7 @@ find_handler(const char* name)
  * Pass 3: Set error targets from each step's "on_error" field.
  *
  * @param json_str Null-terminated JSON string.
- * @return A new csilk_wf_t, or nullptr on parse failure or empty workflow.
+ * @return A new csilk_wf_t, or NULL on parse failure or empty workflow.
  * @note The caller owns the returned workflow and must free it with
  *       csilk_wf_free(). Handler functions must be registered via
  *       csilk_wf_register_handler() before calling this function. */
@@ -80,7 +80,7 @@ csilk_wf_t*
 csilk_wf_from_json(const char* json_str)
 {
     if (!json_str) {
-        return nullptr;
+        return NULL;
     }
 
     CSILK_LOG_T("WorkflowLoader: parsing workflow from JSON string");
@@ -88,7 +88,7 @@ csilk_wf_from_json(const char* json_str)
     csilk_json_t* root = csilk_json_parse(json_str);
     if (!root) {
         CSILK_LOG_E("WorkflowLoader: failed to parse JSON string");
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* name_item = csilk_json_get(root, "name");
@@ -99,7 +99,7 @@ csilk_wf_from_json(const char* json_str)
     if (!wf) {
         CSILK_LOG_E("WorkflowLoader: failed to create workflow instance '%s'", wf_name);
         csilk_json_free(root);
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* steps = csilk_json_get(root, "steps");
@@ -118,7 +118,7 @@ csilk_wf_from_json(const char* json_str)
             const char* type =
                 csilk_json_is_string(type_item) ? csilk_json_string_value(type_item) : "handler";
 
-            csilk_wf_node_t* node = nullptr;
+            csilk_wf_node_t* node = NULL;
             if (strcmp(type, "ai") == 0) {
                 csilk_json_t*     config = csilk_json_get(step, "config");
                 csilk_ai_config_t aic = {0};
@@ -142,7 +142,7 @@ csilk_wf_from_json(const char* json_str)
                 if (csilk_json_is_string(handler_item)) {
                     csilk_wf_handler_t h = find_handler(csilk_json_string_value(handler_item));
                     if (h) {
-                        node = csilk_wf_add(wf, id, h, nullptr);
+                        node = csilk_wf_add(wf, id, h, NULL);
                     } else {
                         CSILK_LOG_W("WorkflowLoader: handler '%s' not "
                                     "registered for step '%s'",
@@ -194,7 +194,7 @@ csilk_wf_from_json(const char* json_str)
                 csilk_json_t* cond_item = csilk_json_get(conn, "condition");
                 csilk_json_t* loop_item = csilk_json_get(conn, "loop");
                 const char*   cond =
-                    csilk_json_is_string(cond_item) ? csilk_json_string_value(cond_item) : nullptr;
+                    csilk_json_is_string(cond_item) ? csilk_json_string_value(cond_item) : NULL;
 
                 if (csilk_json_is_true(loop_item)) {
                     csilk_wf_on_loop(n_from, cond, n_to);
@@ -267,7 +267,7 @@ csilk_wf_from_json(const char* json_str)
  * 4. Return the root cJSON node.
  *
  * @param path Filesystem path to the YAML file.
- * @return Root cJSON node (object or array), or nullptr if the file
+ * @return Root cJSON node (object or array), or NULL if the file
  *         cannot be opened or parsed.
  * @note The caller must free the returned cJSON with csilk_json_free().
  *       YAML boolean values ("true"/"false") are converted to cJSON
@@ -278,24 +278,24 @@ parse_yaml_file(const char* path)
     FILE* fh = fopen(path, "rb");
     if (!fh) {
         CSILK_LOG_E("WorkflowLoader: failed to open YAML file '%s'", path);
-        return nullptr;
+        return NULL;
     }
 
     yaml_parser_t parser;
     if (!yaml_parser_initialize(&parser)) {
         CSILK_LOG_E("WorkflowLoader: failed to initialize YAML parser");
         fclose(fh);
-        return nullptr;
+        return NULL;
     }
     yaml_parser_set_input_file(&parser, fh);
 
-    csilk_json_t* root = nullptr;
+    csilk_json_t* root = NULL;
     enum { WF_YAML_MAX_DEPTH = 64 };
-    csilk_json_t* stack[WF_YAML_MAX_DEPTH] = {nullptr};
+    csilk_json_t* stack[WF_YAML_MAX_DEPTH] = {NULL};
     int           stack_ptr = 0;
 
     // To handle mapping keys:
-    char* current_key = nullptr;
+    char* current_key = NULL;
 
     yaml_event_t event;
     int          done = 0;
@@ -316,13 +316,13 @@ parse_yaml_file(const char* path)
             if (!root) {
                 root = obj;
             } else {
-                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
                 if (parent && csilk_json_is_array(parent)) {
                     csilk_json_array_append(parent, obj);
                 } else if (parent && csilk_json_is_object(parent) && current_key) {
                     csilk_json_add_object(parent, current_key, obj);
                     free(current_key);
-                    current_key = nullptr;
+                    current_key = NULL;
                 }
             }
             stack[stack_ptr++] = obj;
@@ -338,27 +338,27 @@ parse_yaml_file(const char* path)
             if (!root) {
                 root = arr;
             } else {
-                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+                csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
                 if (parent && csilk_json_is_array(parent)) {
                     csilk_json_array_append(parent, arr);
                 } else if (parent && csilk_json_is_object(parent) && current_key) {
                     csilk_json_add_object(parent, current_key, arr);
                     free(current_key);
-                    current_key = nullptr;
+                    current_key = NULL;
                 }
             }
             stack[stack_ptr++] = arr;
             break;
         }
         case YAML_SCALAR_EVENT: {
-            csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : nullptr;
+            csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
             if (parent) {
                 if (csilk_json_is_object(parent)) {
                     if (!current_key) {
                         current_key = strdup((char*)event.data.scalar.value);
                     } else {
                         const char*   val = (char*)event.data.scalar.value;
-                        csilk_json_t* scalar = nullptr;
+                        csilk_json_t* scalar = NULL;
                         if (strcmp(val, "true") == 0) {
                             scalar = csilk_json_bool(1);
                         } else if (strcmp(val, "false") == 0) {
@@ -368,11 +368,11 @@ parse_yaml_file(const char* path)
                         }
                         csilk_json_add_object(parent, current_key, scalar);
                         free(current_key);
-                        current_key = nullptr;
+                        current_key = NULL;
                     }
                 } else if (csilk_json_is_array(parent)) {
                     const char*   val = (char*)event.data.scalar.value;
-                    csilk_json_t* scalar = nullptr;
+                    csilk_json_t* scalar = NULL;
                     if (strcmp(val, "true") == 0) {
                         scalar = csilk_json_bool(1);
                     } else if (strcmp(val, "false") == 0) {
@@ -414,7 +414,7 @@ parse_yaml_file(const char* path)
  * approach avoids duplicated parsing logic.
  *
  * @param path Path to a .yaml or .yml file.
- * @return A new csilk_wf_t, or nullptr if the file cannot be read or
+ * @return A new csilk_wf_t, or NULL if the file cannot be read or
  *         the YAML is invalid.
  * @note The caller owns the returned workflow. */
 csilk_wf_t*
@@ -424,7 +424,7 @@ csilk_wf_load_yaml(const char* path)
     csilk_json_t* root = parse_yaml_file(path);
     if (!root) {
         CSILK_LOG_E("WorkflowLoader: failed to parse YAML structure from file '%s'", path);
-        return nullptr;
+        return NULL;
     }
     char* json_str = csilk_json_serialize(root, NULL);
     csilk_json_free(root);

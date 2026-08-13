@@ -53,7 +53,7 @@ CSILK_INTERNAL void csilk_parse_form_urlencoded(csilk_ctx_t* c);
  *
  * @param c   The request context.
  * @param key Field name to look up.
- * @return The URL-decoded field value, or nullptr if not found.
+ * @return The URL-decoded field value, or NULL if not found.
  * @note The returned pointer lives in arena memory.
  */
 CSILK_INTERNAL const char* csilk_get_form_field(csilk_ctx_t* c, const char* key);

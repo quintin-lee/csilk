@@ -42,11 +42,11 @@ static void*
 qdrant_init(const char* endpoint, const char* api_key)
 {
     if (!endpoint) {
-        return nullptr;
+        return NULL;
     }
     qdrant_state_t* state = calloc(1, sizeof(qdrant_state_t));
     if (!state) {
-        return nullptr;
+        return NULL;
     }
     state->endpoint = strdup(endpoint);
     if (api_key) {
@@ -107,7 +107,7 @@ qdrant_upsert(void*                       state_ptr,
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points", state->endpoint, collection);
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     if (state->api_key) {
         char auth_hdr[256];
@@ -171,7 +171,7 @@ qdrant_search(void*                           state_ptr,
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points/search", state->endpoint, collection);
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     if (state->api_key) {
         char auth_hdr[256];
@@ -244,7 +244,7 @@ qdrant_search(void*                           state_ptr,
         }
     } else {
         res->count = 0;
-        res->results = nullptr;
+        res->results = NULL;
     }
 
     csilk_json_free(resp);

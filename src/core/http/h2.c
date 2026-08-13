@@ -313,7 +313,7 @@ csilk_h2_send_response(csilk_ctx_t* c)
     }
 
     nghttp2_data_provider  prd;
-    nghttp2_data_provider* p_prd = nullptr;
+    nghttp2_data_provider* p_prd = NULL;
 
     if (c->response.body_len > 0) {
         prd.source.ptr = c;
@@ -421,7 +421,7 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
                                     c->stream_id,
                                     push_headers,
                                     sizeof(push_headers) / sizeof(push_headers[0]),
-                                    nullptr);
+                                    NULL);
 
     if (promised_id < 0) {
         return promised_id;
@@ -435,8 +435,8 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 
     /* Set up the synthesized request */
     pushed_c->request.method = csilk_arena_strdup(pushed_c->arena, method);
-    char* path_heap = nullptr;
-    char* query_heap = nullptr;
+    char* path_heap = NULL;
+    char* query_heap = NULL;
     csilk_split_url(path, &path_heap, &query_heap);
     pushed_c->request.path = path_heap;
     if (query_heap) {
@@ -493,7 +493,7 @@ on_stream_close_callback(nghttp2_session* session,
             csilk_ctx_cleanup(found);
             if (found->arena) {
                 csilk_arena_free(found->arena);
-                found->arena = nullptr;
+                found->arena = NULL;
             }
 
             free(found);
@@ -544,7 +544,7 @@ send_callback(
  *
  * @param client    The client connection owning the stream list.
  * @param stream_id The HTTP/2 stream identifier to look up or create.
- * @return Pointer to the csilk_ctx_t for the given stream, or nullptr if memory
+ * @return Pointer to the csilk_ctx_t for the given stream, or NULL if memory
  *         allocation failed.
  *
  * @note The returned context is owned by the client's stream list and will
@@ -564,7 +564,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
     /* Create new context for stream */
     csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
     if (!ctx) {
-        return nullptr;
+        return NULL;
     }
 
     _csilk_ctx_init(ctx, client->server, client);
@@ -591,12 +591,12 @@ csilk_h2_free_streams(csilk_client_t* client)
         csilk_ctx_cleanup(curr);
         if (curr->arena) {
             csilk_arena_free(curr->arena);
-            curr->arena = nullptr;
+            curr->arena = NULL;
         }
         free(curr);
         curr = next;
     }
-    client->h2_streams = nullptr;
+    client->h2_streams = NULL;
 }
 
 /** @brief Initialize an HTTP/2 server session for a client connection.

@@ -77,7 +77,7 @@ on_stop_async(uv_async_t* handle)
     csilk_server_t* server = (csilk_server_t*)handle->data;
     CSILK_LOG_I("Server: initiating graceful shutdown");
 
-    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
+    _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
         CSILK_LOG_D("Server: closing server socket listener");
@@ -96,7 +96,7 @@ on_stop_async(uv_async_t* handle)
     }
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async)) {
-        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async, NULL);
     }
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)&server->async_handle)) {
@@ -111,7 +111,7 @@ on_stop_async(uv_async_t* handle)
     if (server->mq) {
         CSILK_LOG_D("Server: freeing message queue");
         _csilk_mq_free(server->mq);
-        server->mq = nullptr;
+        server->mq = NULL;
     }
 }
 
@@ -149,7 +149,7 @@ on_worker_stop_async(uv_async_t* handle)
     csilk_io_loop_t* loop = sd->loop;
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)sd->listen_handle)) {
-        csilk_io_close((csilk_io_handle_t*)sd->listen_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)sd->listen_handle, NULL);
     }
 
     close_active_clients(server, loop);
@@ -157,12 +157,11 @@ on_worker_stop_async(uv_async_t* handle)
     int worker_idx = sd->worker_index;
     if (!csilk_io_is_closing(
             (csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async)) {
-        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async,
-                       nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async, NULL);
     }
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)handle)) {
-        csilk_io_close((csilk_io_handle_t*)handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)handle, NULL);
     }
 
     for (int i = 0; i < 8; i++) {

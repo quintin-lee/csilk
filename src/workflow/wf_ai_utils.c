@@ -15,7 +15,7 @@ void*
 csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 {
     if (!ctx) {
-        return nullptr;
+        return NULL;
     }
     csilk_mutex_lock(&ctx->arena_mutex);
     void* ptr = csilk_arena_alloc(ctx->arena, size);
@@ -27,7 +27,7 @@ char*
 csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
 {
     if (!s) {
-        return nullptr;
+        return NULL;
     }
     size_t len = strlen(s);
     char*  news = csilk_wf_alloc(ctx, len + 1);
@@ -44,8 +44,8 @@ csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
     if (data) {
         data->type = csilk_wf_strdup(ctx, type);
         data->value = value;
-        data->free_fn = nullptr;
-        data->meta = nullptr;
+        data->free_fn = NULL;
+        data->meta = NULL;
     }
     return data;
 }
@@ -55,7 +55,7 @@ char*
 _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
 {
     if (!root || !path) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* curr = root;
@@ -69,10 +69,10 @@ _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
         } else {
             curr = csilk_json_get(curr, token);
         }
-        token = strtok_r(nullptr, ".", &saveptr);
+        token = strtok_r(NULL, ".", &saveptr);
     }
 
-    char* result = nullptr;
+    char* result = NULL;
     if (curr) {
         if (csilk_json_is_string(curr)) {
             result = csilk_wf_strdup(ctx, csilk_json_string_value(curr));
@@ -107,7 +107,7 @@ csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* value)
     csilk_wf_mem_node_t* curr = ctx->memory_head;
     while (curr) {
         if (strcmp(curr->key, key) == 0) {
-            curr->value = value ? csilk_wf_strdup(ctx, value) : nullptr;
+            curr->value = value ? csilk_wf_strdup(ctx, value) : NULL;
             csilk_mutex_unlock(&ctx->mutex);
             return;
         }
@@ -116,7 +116,7 @@ csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* value)
     csilk_wf_mem_node_t* node = csilk_wf_alloc(ctx, sizeof(csilk_wf_mem_node_t));
     if (node) {
         node->key = csilk_wf_strdup(ctx, key);
-        node->value = value ? csilk_wf_strdup(ctx, value) : nullptr;
+        node->value = value ? csilk_wf_strdup(ctx, value) : NULL;
         node->next = ctx->memory_head;
         ctx->memory_head = node;
     }
@@ -127,7 +127,7 @@ const char*
 csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key)
 {
     if (!ctx || !key) {
-        return nullptr;
+        return NULL;
     }
     csilk_mutex_lock(&ctx->mutex);
     csilk_wf_mem_node_t* curr = ctx->memory_head;
@@ -140,7 +140,7 @@ csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key)
         curr = curr->next;
     }
     csilk_mutex_unlock(&ctx->mutex);
-    return nullptr;
+    return NULL;
 }
 
 /* --- Agent Long-Term Memory Store --- */
@@ -159,11 +159,11 @@ csilk_agent_memory_new(csilk_ai_t*        ai,
                        const char*        collection)
 {
     if (!ai || !db || !collection) {
-        return nullptr;
+        return NULL;
     }
     csilk_agent_memory_t* mem = malloc(sizeof(csilk_agent_memory_t));
     if (!mem) {
-        return nullptr;
+        return NULL;
     }
     mem->ai = ai;
     mem->embedding_model =

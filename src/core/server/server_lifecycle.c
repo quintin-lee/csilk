@@ -46,12 +46,12 @@ csilk_server_new(csilk_router_t* router)
     csilk_arena_init();
     csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
     if (!s) {
-        return nullptr;
+        return NULL;
     }
     s->loop = uv_default_loop();
     if (!s->loop) {
         free(s);
-        return nullptr;
+        return NULL;
     }
     s->router = router;
     llhttp_settings_init(&s->settings);
@@ -184,7 +184,7 @@ csilk_server_free(csilk_server_t* server)
             uv_thread_join(&server->worker_tids[i]);
         }
         free(server->worker_tids);
-        server->worker_tids = nullptr;
+        server->worker_tids = NULL;
     }
 
     free(server->spa_doc_root);
@@ -361,7 +361,7 @@ csilk_server_run(csilk_server_t* server, int port)
     }
 
     if (server->config.enable_openapi && server->router) {
-        static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
+        static csilk_handler_t handlers[] = {openapi_json_handler, NULL};
         csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
         CSILK_LOG_I("Server: OpenAPI endpoint automatically registered at GET /openapi.json");
     }
@@ -397,8 +397,8 @@ csilk_server_run(csilk_server_t* server, int port)
     server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
     if (!server->worker_pools) {
         CSILK_LOG_E("Server: failed to allocate memory for worker pools");
-        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
         return -1;
     }
     server->worker_pools[0].server = server;
@@ -426,7 +426,7 @@ csilk_server_run(csilk_server_t* server, int port)
                 CSILK_LOG_E("Server: failed to init worker barrier: %s", csilk_io_strerror(br));
                 free(barrier);
                 free(server->worker_tids);
-                server->worker_tids = nullptr;
+                server->worker_tids = NULL;
             } else {
                 for (int i = 0; i < nworkers; i++) {
                     int idx = i + 1;
@@ -453,30 +453,30 @@ csilk_server_run(csilk_server_t* server, int port)
         } else {
             CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
             free(server->worker_tids);
-            server->worker_tids = nullptr;
+            server->worker_tids = NULL;
         }
     }
 
     r = uv_signal_init(server->loop, &server->sig_handle);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
-        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
         return -1;
     }
     server->sig_handle.data = server;
     r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", csilk_io_strerror(r));
-        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, nullptr);
-        csilk_io_close((csilk_io_handle_t*)&server->async_handle, nullptr);
-        csilk_io_close((csilk_io_handle_t*)&server->server_handle, nullptr);
+        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
         return -1;
     }
 
     CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
 
-    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
+    _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
     return csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
 }
@@ -487,14 +487,14 @@ csilk_server_run(csilk_server_t* server, int port)
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
-    return server ? server->mq : nullptr;
+    return server ? server->mq : NULL;
 }
 
 /** @brief Get the server's radix-tree router. */
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
-    return server ? server->router : nullptr;
+    return server ? server->router : NULL;
 }
 
 /** @brief Swap the router instance attached to a server. */

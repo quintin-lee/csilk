@@ -9,15 +9,15 @@ csilk_mcp_msg_t*
 csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
 {
     if (!buf || len == 0) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_parse_len(buf, len);
     if (!root) {
-        return nullptr;
+        return NULL;
     }
 
-    csilk_mcp_msg_t* msg = nullptr;
+    csilk_mcp_msg_t* msg = NULL;
     if (arena) {
         msg = (csilk_mcp_msg_t*)csilk_arena_alloc(arena, sizeof(csilk_mcp_msg_t));
     } else {
@@ -25,7 +25,7 @@ csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
     }
     if (!msg) {
         csilk_json_free(root);
-        return nullptr;
+        return NULL;
     }
     memset(msg, 0, sizeof(csilk_mcp_msg_t));
 
@@ -73,12 +73,12 @@ char*
 csilk_mcp_msg_serialize(const csilk_mcp_msg_t* msg, csilk_arena_t* arena)
 {
     if (!msg) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_object();
     if (!root) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_add_string(root, "jsonrpc", msg->jsonrpc[0] ? msg->jsonrpc : "2.0");
@@ -116,7 +116,7 @@ csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message)
 {
     csilk_mcp_msg_t* msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     if (!msg) {
-        return nullptr;
+        return NULL;
     }
 
     snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");
@@ -137,7 +137,7 @@ csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result)
 {
     csilk_mcp_msg_t* msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     if (!msg) {
-        return nullptr;
+        return NULL;
     }
 
     snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");

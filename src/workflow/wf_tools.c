@@ -25,8 +25,8 @@ csilk_wf_register_tool(csilk_wf_t*      wf,
     if (wf->tool_count < wf->tool_capacity) {
         csilk_wf_tool_entry_t* entry = &wf->tools[wf->tool_count++];
         entry->name = strdup(name);
-        entry->description = description ? strdup(description) : nullptr;
-        entry->parameters_json = parameters_json ? strdup(parameters_json) : nullptr;
+        entry->description = description ? strdup(description) : NULL;
+        entry->parameters_json = parameters_json ? strdup(parameters_json) : NULL;
         entry->fn = fn;
         entry->user_data = user_data;
     }

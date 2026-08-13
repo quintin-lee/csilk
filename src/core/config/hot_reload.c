@@ -29,7 +29,7 @@ typedef struct {
     csilk_server_t*     server;         /**< Owning server (router is swapped on reload). */
     char*               lib_path;       /**< strdup'd path to the shared library to watch. */
     char*               init_sym;       /**< strdup'd name of the factory symbol. */
-    void*               dl_handle;      /**< Current loaded library handle (nullptr on start). */
+    void*               dl_handle;      /**< Current loaded library handle (NULL on start). */
     csilk_io_fs_event_t fs_event;       /**< I/O filesystem watcher (libuv or io_uring). */
     csilk_io_timer_t    debounce_timer; /**< Debounce timer (100 ms). */
 } hot_reload_ctx_t;
@@ -52,7 +52,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
 #ifdef _WIN32
     if (ctx->dl_handle) {
         FreeLibrary((HMODULE)ctx->dl_handle);
-        ctx->dl_handle = nullptr;
+        ctx->dl_handle = NULL;
     }
     ctx->dl_handle = LoadLibraryA(ctx->lib_path);
     if (!ctx->dl_handle) {
@@ -64,13 +64,13 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
     if (!init_fn) {
         CSILK_LOG_E("[Hot-Reload] Failed to find symbol: %s", ctx->init_sym);
         FreeLibrary((HMODULE)ctx->dl_handle);
-        ctx->dl_handle = nullptr;
+        ctx->dl_handle = NULL;
         return -1;
     }
 #else
     if (ctx->dl_handle) {
         dlclose(ctx->dl_handle);
-        ctx->dl_handle = nullptr;
+        ctx->dl_handle = NULL;
     }
     /* Use RTLD_NOW to resolve all symbols immediately, and RTLD_LOCAL so we can reload it. */
     ctx->dl_handle = dlopen(ctx->lib_path, RTLD_NOW | RTLD_LOCAL);
@@ -92,7 +92,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
 
     csilk_router_t* new_router = init_fn();
     if (!new_router) {
-        CSILK_LOG_E("[Hot-Reload] Initialization function returned nullptr");
+        CSILK_LOG_E("[Hot-Reload] Initialization function returned NULL");
         goto fail;
     }
 
@@ -106,7 +106,7 @@ fail:
 #else
     FreeLibrary((HMODULE)ctx->dl_handle);
 #endif
-    ctx->dl_handle = nullptr;
+    ctx->dl_handle = NULL;
     return -1;
 }
 

@@ -25,7 +25,7 @@
  *
  * @param c     The request context.
  * @param key   Storage key (null-terminated string).
- * @param value Opaque pointer to store (may be nullptr to clear a previous value).
+ * @param value Opaque pointer to store (may be NULL to clear a previous value).
  * @note The key is duplicated into arena memory. The value is stored as a
  *       raw pointer — no deep copy or freeing is performed. */
 void
@@ -78,13 +78,13 @@ csilk_set(csilk_ctx_t* c, const char* key, void* value)
  *
  * @param c   The request context.
  * @param key Storage key to look up.
- * @return The value pointer previously stored with csilk_set(), or nullptr if
- *         the key is not found or the context is nullptr. */
+ * @return The value pointer previously stored with csilk_set(), or NULL if
+ *         the key is not found or the context is NULL. */
 void*
 csilk_get(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
 
     if (c->storage_driver && c->storage_driver->get) {
@@ -98,7 +98,7 @@ csilk_get(csilk_ctx_t* c, const char* key)
         }
         item = item->next;
     }
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Store a string value with an optional TTL.
@@ -138,12 +138,12 @@ csilk_set_string(csilk_ctx_t* c, const char* key, const char* value, int ttl_sec
  *
  * @param c    The request context.
  * @param key  Storage key.
- * @return Heap-allocated string (caller must free), or nullptr if not found. */
+ * @return Heap-allocated string (caller must free), or NULL if not found. */
 char*
 csilk_get_string(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
     if (c->storage_driver && c->storage_driver->get_string) {
         return c->storage_driver->get_string(c, key);
@@ -153,7 +153,7 @@ csilk_get_string(csilk_ctx_t* c, const char* key)
     if (val) {
         return strdup((const char*)val);
     }
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Increment a numeric value by 1 with an optional TTL.

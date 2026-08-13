@@ -32,7 +32,7 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
         csilk_json_add_string(root, "topic", topic);
     }
     csilk_json_add_number(root, "payload_len", (double)len);
-    csilk_json_add_number(root, "timestamp", (double)time(nullptr));
+    csilk_json_add_number(root, "timestamp", (double)time(NULL));
     char* json = csilk_json_serialize(root, NULL);
 
     csilk_mutex_lock(&mq->monitor_mutex);
@@ -139,8 +139,8 @@ on_mq_async(csilk_io_async_t* handle)
 
     csilk_mutex_lock(&mq->queue_mutex);
     csilk_mq_msg_t* head = mq->queue_head;
-    mq->queue_head = nullptr;
-    mq->queue_tail = nullptr;
+    mq->queue_head = NULL;
+    mq->queue_tail = NULL;
     uint32_t count = mq->queue_depth;
     mq->queue_depth = 0;
     csilk_mutex_unlock(&mq->queue_mutex);

@@ -65,7 +65,7 @@ on_message_begin(llhttp_t* p)
             &client->request_timer, on_read_timeout, client->server->config.request_timeout_ms, 0);
     }
 
-    csilk_log_set_request_id(nullptr);
+    csilk_log_set_request_id(NULL);
     return 0;
 }
 
@@ -86,7 +86,7 @@ on_url(llhttp_t* p, const char* at, size_t length)
     size_t          max_url = client->server->config.max_url_size;
     if (max_url > 0 && length > max_url) {
         CSILK_LOG_W("URL length (%zu) exceeds max_url_size limit (%zu)", length, max_url);
-        client->current_url.data = nullptr;
+        client->current_url.data = NULL;
         client->current_url.len = 0;
         return HPE_USER;
     }
@@ -97,7 +97,7 @@ on_url(llhttp_t* p, const char* at, size_t length)
         /* Split URL: must allocate and copy. */
         char* new_url = csilk_arena_alloc(client->ctx.arena, client->current_url.len + length + 1);
         if (!new_url) {
-            client->current_url.data = nullptr;
+            client->current_url.data = NULL;
             client->current_url.len = 0;
             return HPE_USER;
         }
@@ -145,13 +145,13 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
     if (client->current_header_field.data && client->current_header_value.data) {
         _csilk_persist_header(
             &client->ctx, &client->current_header_field, &client->current_header_value);
-        client->current_header_field.data = nullptr;
+        client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
-        client->current_header_value.data = nullptr;
+        client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
     } else if (client->current_header_field.data) {
         /* Previous field had no value — discard it. */
-        client->current_header_field.data = nullptr;
+        client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
     }
 
@@ -163,13 +163,13 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 /** @brief Grow a heap-allocated buffer to at least @p needed bytes.
  *
  * Uses realloc with capacity doubling for amortized O(1) growth. If @p buf
- * is nullptr and *@p cap is 0, this acts as a malloc. On realloc failure the
+ * is NULL and *@p cap is 0, this acts as a malloc. On realloc failure the
  * original buffer is NOT freed (caller must free it).
  *
- * @param buf    Existing allocation (may be nullptr).
+ * @param buf    Existing allocation (may be NULL).
  * @param cap    [in,out] Current capacity — updated on success.
  * @param needed Minimum required size in bytes.
- * @return Pointer to the resized buffer, or nullptr on allocation failure. */
+ * @return Pointer to the resized buffer, or NULL on allocation failure. */
 static char*
 buf_grow(char* buf, size_t* cap, size_t needed)
 {
@@ -179,13 +179,13 @@ buf_grow(char* buf, size_t* cap, size_t needed)
     size_t new_cap = *cap ? *cap : 32;
     while (new_cap < needed) {
         if (new_cap > SIZE_MAX / 2) {
-            return nullptr;
+            return NULL;
         }
         new_cap *= 2;
     }
     char* new_buf = realloc(buf, new_cap);
     if (!new_buf) {
-        return nullptr;
+        return NULL;
     }
     *cap = new_cap;
     return new_buf;
@@ -209,9 +209,9 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
     client->total_header_size += length;
     if (client->total_header_size > client->server->config.max_header_size) {
         CSILK_LOG_W("Total header size limit exceeded on header value");
-        client->current_header_field.data = nullptr;
+        client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
-        client->current_header_value.data = nullptr;
+        client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
         return HPE_USER;
     }
@@ -243,9 +243,9 @@ on_headers_complete(llhttp_t* p)
     if (client->current_header_field.data && client->current_header_value.data) {
         _csilk_persist_header(
             &client->ctx, &client->current_header_field, &client->current_header_value);
-        client->current_header_field.data = nullptr;
+        client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
-        client->current_header_value.data = nullptr;
+        client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
     }
     return 0;
@@ -291,7 +291,7 @@ on_body(llhttp_t* p, const char* at, size_t length)
         char* new_body =
             csilk_arena_alloc(client->ctx.arena, client->ctx.request.body_len + length + 1);
         if (!new_body) {
-            client->ctx.request.body = nullptr;
+            client->ctx.request.body = NULL;
             client->ctx.request.body_len = 0;
             return HPE_USER;
         }
@@ -339,7 +339,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 
         if (server->middleware_count > 0) {
             int route_handler_count = 0;
-            while (c->handlers[route_handler_count] != nullptr) {
+            while (c->handlers[route_handler_count] != NULL) {
                 route_handler_count++;
             }
 
@@ -353,7 +353,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
                 for (int i = 0; i < route_handler_count; i++) {
                     arena_handlers[server->middleware_count + i] = c->handlers[i];
                 }
-                arena_handlers[total_count] = nullptr;
+                arena_handlers[total_count] = NULL;
                 c->handlers = arena_handlers;
             }
         }
@@ -397,9 +397,9 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
     if (client->current_header_field.data && client->current_header_value.data) {
         _csilk_persist_header(
             &client->ctx, &client->current_header_field, &client->current_header_value);
-        client->current_header_field.data = nullptr;
+        client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
-        client->current_header_value.data = nullptr;
+        client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
     }
 
@@ -408,8 +408,8 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
         char* url_copy = csilk_arena_strndup(
             client->ctx.arena, client->current_url.data, client->current_url.len);
         if (url_copy) {
-            char* path = nullptr;
-            char* query = nullptr;
+            char* path = NULL;
+            char* query = NULL;
             csilk_split_url(url_copy, &path, &query);
             client->ctx.request.path = path;
             if (query) {
@@ -417,7 +417,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
                 free(query);
             }
         }
-        client->current_url.data = nullptr;
+        client->current_url.data = NULL;
         client->current_url.len = 0;
     }
 

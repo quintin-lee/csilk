@@ -62,7 +62,7 @@ int csilk_crypto_fill_random(void* out, size_t len);
  *
  * Allows users to replace the default software implementations of SHA256,
  * HMAC-SHA256, and UUID generation (e.g., with hardware-accelerated or
- * FIPS-compliant versions).  All function pointers must be non-nullptr.
+ * FIPS-compliant versions).  All function pointers must be non-NULL.
  */
 typedef struct {
     /** @brief Compute the SHA-256 hash of a buffer.

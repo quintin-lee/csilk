@@ -37,7 +37,7 @@ get_next_segment_avx512(const char** p, size_t* len)
         (*p)++;
     }
     if (**p == '\0') {
-        return nullptr;
+        return NULL;
     }
 
     const char* start = *p;
@@ -81,7 +81,7 @@ get_next_segment_avx2(const char** p, size_t* len)
         (*p)++;
     }
     if (**p == '\0') {
-        return nullptr;
+        return NULL;
     }
 
     const char* start = *p;
@@ -126,7 +126,7 @@ get_next_segment_neon(const char** p, size_t* len)
         (*p)++;
     }
     if (**p == '\0') {
-        return nullptr;
+        return NULL;
     }
 
     const char* start = *p;
@@ -188,14 +188,14 @@ get_next_segment(const char** p, size_t* len)
 #endif
 
     if (!*p || **p == '\0') {
-        return nullptr;
+        return NULL;
     }
 
     while (**p == '/') {
         (*p)++;
     }
     if (**p == '\0') {
-        return nullptr;
+        return NULL;
     }
 
     const char* start = *p;
@@ -399,7 +399,7 @@ const char*
 csilk_simd_find_char(const char* s, size_t len, char target)
 {
     if (!s || len == 0) {
-        return nullptr;
+        return NULL;
     }
     const char* curr = s;
     const char* end = s + len;
@@ -451,7 +451,7 @@ csilk_simd_find_char(const char* s, size_t len, char target)
         }
         curr++;
     }
-    return nullptr;
+    return NULL;
 }
 
 /* ---------------------------------------------------------------------------

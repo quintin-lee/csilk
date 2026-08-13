@@ -45,7 +45,7 @@ typedef struct {
 } static_route_t;
 
 /** @brief Router reference for the built-in OpenAPI handler. */
-static csilk_router_t* s_openapi_router = nullptr;
+static csilk_router_t* s_openapi_router = NULL;
 static csilk_mutex_t   s_app_mutex;
 static csilk_once_t    s_app_mutex_once = CSILK_ONCE_INIT;
 
@@ -169,7 +169,7 @@ csilk_app_new(const char* config_path)
 {
     csilk_app_t* app = calloc(1, sizeof(csilk_app_t));
     if (!app) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_once(&s_app_mutex_once, init_app_mutex);
@@ -221,8 +221,8 @@ csilk_app_new(const char* config_path)
                                   openapi_h,
                                   1,
                                   "/openapi.json",
-                                  nullptr,
-                                  nullptr,
+                                  NULL,
+                                  NULL,
                                   "OpenAPI Specification",
                                   "Returns the OpenAPI 3.0 JSON specification for this API");
     }
@@ -243,7 +243,7 @@ fail:
     csilk_server_free(app->server);
     csilk_config_free(&app->config);
     free(app);
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Free all application resources: server, router, groups, config, and
@@ -288,7 +288,7 @@ csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
     if (app->config.logger.file_path) {
         free((void*)app->config.logger.file_path);
     }
-    app->config.logger.file_path = path ? strdup(path) : nullptr;
+    app->config.logger.file_path = path ? strdup(path) : NULL;
     app->config.logger.max_file_size = max_sz;
     (void)csilk_log_init(app->config.logger);
 }
@@ -322,7 +322,7 @@ void
 csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
     (void)app;
-    set_openapi_router(enable ? app->router : nullptr);
+    set_openapi_router(enable ? app->router : NULL);
     CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
@@ -358,7 +358,7 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
         return;
     }
 
-    csilk_handler_t hs[] = {static_serve, nullptr};
+    csilk_handler_t hs[] = {static_serve, NULL};
     csilk_group_add_handlers(g, "GET", wild, hs, 1);
     csilk_group_add_handlers(g, "GET", idxrt, hs, 1);
 
@@ -381,7 +381,7 @@ csilk_config_t*
 csilk_app_config(csilk_app_t* app)
 {
     if (!app) {
-        return nullptr;
+        return NULL;
     }
     csilk_config_t* cp = malloc(sizeof(csilk_config_t));
     if (cp) {
@@ -404,11 +404,11 @@ csilk_app_run(csilk_app_t* app, int port)
 csilk_router_t*
 csilk_app_router(csilk_app_t* app)
 {
-    return app ? app->router : nullptr;
+    return app ? app->router : NULL;
 }
 
 csilk_server_t*
 csilk_app_server(csilk_app_t* app)
 {
-    return app ? app->server : nullptr;
+    return app ? app->server : NULL;
 }

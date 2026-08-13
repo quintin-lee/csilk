@@ -124,7 +124,7 @@ gzip_after_work_cb(csilk_io_work_t* req, int status)
                     (void*)c,
                     state->compressed_len);
         csilk_set_response_body(c, (const char*)state->dest, state->compressed_len, 1);
-        state->dest = nullptr; // Ownership transferred to context
+        state->dest = NULL; // Ownership transferred to context
 
         csilk_set_header(c, "Content-Encoding", "gzip");
         csilk_set_header(c, "Vary", "Accept-Encoding");

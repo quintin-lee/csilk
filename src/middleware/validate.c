@@ -14,11 +14,11 @@
 /**
  * @brief Find the first occurrence of a character in a string (helper).
  *
- * @param s  The string to search (may be nullptr).
+ * @param s  The string to search (may be NULL).
  * @param c  The character to locate.
  *
- * @return Pointer to the first occurrence of c in s, or nullptr if c is not
- *         found or s is nullptr.
+ * @return Pointer to the first occurrence of c in s, or NULL if c is not
+ *         found or s is NULL.
  */
 static const char*
 str_find(const char* s, char c)
@@ -29,7 +29,7 @@ str_find(const char* s, char c)
         }
         s++;
     }
-    return nullptr;
+    return NULL;
 }
 
 /**
@@ -62,7 +62,7 @@ is_valid_email(const char* s)
      This is intentionally simple — does NOT validate quoted locals,
      IP literals, or special characters per RFC 5322. */
     int         at_count = 0;
-    const char* at_ptr = nullptr;
+    const char* at_ptr = NULL;
 
     for (const char* p = s; *p; p++) {
         if (*p == '@') {
@@ -88,7 +88,7 @@ is_valid_email(const char* s)
 }
 
 /**
- * @brief Run all validation rules and return the first error, or nullptr on
+ * @brief Run all validation rules and return the first error, or NULL on
  *        success.
  *
  * Iterates through an array of validation rules, stopping at the first rule
@@ -103,9 +103,9 @@ is_valid_email(const char* s)
  *
  * @param c     The request context to extract values from.
  * @param rules A null-terminated array of csilk_valid_rule_t rules (the
- *              last entry must have field == nullptr). Must not be nullptr.
+ *              last entry must have field == NULL). Must not be NULL.
  *
- * @return nullptr if all rules pass, or a pointer to the field name (string
+ * @return NULL if all rules pass, or a pointer to the field name (string
  *         from the rule definition) of the first field that fails.
  *
  * @note When no explicit source is specified, the function first tries the
@@ -118,13 +118,13 @@ const char*
 csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
 {
     if (!c || !rules) {
-        return nullptr;
+        return NULL;
     }
 
     CSILK_LOG_T("Validate: starting validation for request %p", (void*)c);
 
     for (const csilk_valid_rule_t* r = rules; r->field; r++) {
-        const char* value = nullptr;
+        const char* value = NULL;
 
         if (r->source && strcmp(r->source, "query") == 0) {
             value = csilk_get_query(c, r->field);
@@ -226,5 +226,5 @@ csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules)
     }
 
     CSILK_LOG_D("Validate: all validation rules passed successfully for request %p", (void*)c);
-    return nullptr;
+    return NULL;
 }

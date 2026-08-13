@@ -65,11 +65,11 @@ void csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn);
  * @brief A single row of a query result.
  *
  * Values are strings (human-readable representations of column data).
- * nullptr database values are represented as nullptr pointers in the values array.
+ * NULL database values are represented as NULL pointers in the values array.
  */
 typedef struct {
     char** values; /**< Array of NUL-terminated string values, one per column.
-                    nullptr if the SQL value was nullptr. */
+                    NULL if the SQL value was NULL. */
     int    count;  /**< Number of columns (length of @p values). */
 } csilk_db_row_t;
 
@@ -91,7 +91,7 @@ typedef struct {
 /**
  * @brief Virtual function table implemented by each database driver.
  *
- * All function pointers must be non-nullptr except where noted.
+ * All function pointers must be non-NULL except where noted.
  */
 struct csilk_db_driver_s {
     const char* name; /**< Driver identifier string (e.g., "sqlite", "postgres").
@@ -139,7 +139,7 @@ struct csilk_db_driver_s {
     int (*transaction_rollback)(csilk_db_pool_t* pool);
 
     /** @brief Free a result set and all associated memory.
-   *  @param result  Result set to free (must not be nullptr). */
+   *  @param result  Result set to free (must not be NULL). */
     void (*free_result)(csilk_db_result_t* result);
 };
 
@@ -150,9 +150,9 @@ struct csilk_db_driver_s {
  * csilk_db_register_driver or the built-in init), allocates a pool, and
  * calls the driver's connect function.
  *
- * @param driver_name  Driver identifier (e.g., "sqlite").  Must not be nullptr.
+ * @param driver_name  Driver identifier (e.g., "sqlite").  Must not be NULL.
  * @param dsn          Data source name (driver-specific format).
- * @return A new csilk_db_pool_t on success, or nullptr if the driver is unknown
+ * @return A new csilk_db_pool_t on success, or NULL if the driver is unknown
  *         or the connection fails.
  */
 csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
@@ -163,7 +163,7 @@ csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
  * Calls the driver's disconnect, frees internal resources, and deallocates
  * the pool struct.
  *
- * @param pool  Pool to destroy.  Must not be nullptr.
+ * @param pool  Pool to destroy.  Must not be NULL.
  */
 void csilk_db_pool_free(csilk_db_pool_t* pool);
 
@@ -176,7 +176,7 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  *
  * @param pool  Connection pool.
  * @param sql   SQL SELECT statement.
- * @return A csilk_json array of row objects, or nullptr on failure.  Caller must
+ * @return A csilk_json array of row objects, or NULL on failure.  Caller must
  *         free with csilk_json_free.
  */
 csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
@@ -221,9 +221,9 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  *
  * @param pool   Connection pool.
  * @param sql    SQL with ? placeholders.
- * @param params nullptr-terminated array of string values.  The number of
+ * @param params NULL-terminated array of string values.  The number of
  *               values must match the number of ? placeholders.
- * @return A csilk_json array of row objects, or nullptr on failure.  Caller must
+ * @return A csilk_json array of row objects, or NULL on failure.  Caller must
  *         free with csilk_json_free.
  */
 csilk_json_t*
@@ -248,7 +248,7 @@ int csilk_db_register_driver(const char* name, csilk_db_driver_t* driver);
  * @brief Look up a registered driver by name.
  *
  * @param name  Driver identifier string.
- * @return Pointer to the registered csilk_db_driver_t, or nullptr if not found.
+ * @return Pointer to the registered csilk_db_driver_t, or NULL if not found.
  */
 csilk_db_driver_t* csilk_db_get_driver(const char* name);
 
@@ -305,7 +305,7 @@ void csilk_db_redis_init(void);
  * session management, and rate limiting via the csilk_storage_driver_t interface.
  *
  * @param pool  The Redis database pool (must be initialized and connected).
- * @return A heap-allocated storage driver instance, or nullptr on failure.
+ * @return A heap-allocated storage driver instance, or NULL on failure.
  *         The caller is responsible for freeing the driver when shutting down.
  */
 csilk_storage_driver_t* csilk_redis_storage_driver_new(csilk_db_pool_t* pool);

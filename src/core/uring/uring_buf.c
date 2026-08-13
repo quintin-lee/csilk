@@ -24,12 +24,12 @@ csilk_uring_buf_ring_t*
 csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
 {
     if (num_bufs == 0 || buf_size == 0) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_uring_buf_ring_t* ring = malloc(sizeof(csilk_uring_buf_ring_t));
     if (!ring) {
-        return nullptr;
+        return NULL;
     }
 
     ring->num_bufs = num_bufs;
@@ -37,7 +37,7 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
     ring->buffers = calloc(num_bufs, sizeof(void*));
     if (!ring->buffers) {
         free(ring);
-        return nullptr;
+        return NULL;
     }
 
     /* Allocate page-aligned (4096-byte boundary) memory chunks for zero-copy kernel I/O */
@@ -45,7 +45,7 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
     size_t aligned_size = (buf_size + align - 1) & ~(align - 1);
 
     for (size_t i = 0; i < num_bufs; i++) {
-        void* ptr = nullptr;
+        void* ptr = NULL;
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L || defined(__APPLE__) ||                \
     defined(__linux__)
         if (posix_memalign(&ptr, align, aligned_size) != 0) {
@@ -61,7 +61,7 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
             }
             free(ring->buffers);
             free(ring);
-            return nullptr;
+            return NULL;
         }
         memset(ptr, 0, aligned_size);
         ring->buffers[i] = ptr;
@@ -74,7 +74,7 @@ void*
 csilk_uring_buf_ring_get(csilk_uring_buf_ring_t* ring, size_t index)
 {
     if (!ring || !ring->buffers || index >= ring->num_bufs) {
-        return nullptr;
+        return NULL;
     }
     return ring->buffers[index];
 }

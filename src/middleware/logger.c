@@ -40,11 +40,11 @@ typedef struct csilk_req_log_s {
 } csilk_req_log_t;
 
 #define REQ_LOG_MAP(X)                                                                             \
-    X(csilk_req_log_t, method, CSILK_TYPE_STRING, 8, 0, false, nullptr)                            \
-    X(csilk_req_log_t, path, CSILK_TYPE_STRING, 256, 0, false, nullptr)                            \
-    X(csilk_req_log_t, status, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, nullptr)               \
-    X(csilk_req_log_t, duration, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, nullptr)             \
-    X(csilk_req_log_t, remote_addr, CSILK_TYPE_STRING, 46, 0, false, nullptr)
+    X(csilk_req_log_t, method, CSILK_TYPE_STRING, 8, 0, false, NULL)                               \
+    X(csilk_req_log_t, path, CSILK_TYPE_STRING, 256, 0, false, NULL)                               \
+    X(csilk_req_log_t, status, CSILK_TYPE_INT32, sizeof(int32_t), 0, false, NULL)                  \
+    X(csilk_req_log_t, duration, CSILK_TYPE_DOUBLE, sizeof(double), 0, false, NULL)                \
+    X(csilk_req_log_t, remote_addr, CSILK_TYPE_STRING, 46, 0, false, NULL)
 
 CSILK_REGISTER_REFLECT(csilk_req_log_t, REQ_LOG_MAP)
 
@@ -105,7 +105,7 @@ csilk_logger_handler(csilk_ctx_t* c)
         }
 
         char*         json_str = csilk_json_marshal("csilk_req_log_t", &rl);
-        csilk_json_t* extra = json_str ? csilk_json_parse(json_str) : nullptr;
+        csilk_json_t* extra = json_str ? csilk_json_parse(json_str) : NULL;
         free(json_str);
         _csilk_log_structured(
             CSILK_LOG_INFO, __FILE__, __LINE__, __func__, extra, "request completed");

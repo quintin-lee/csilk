@@ -145,7 +145,7 @@ on_stream_close_callback(nghttp2_session* session,
             csilk_ctx_cleanup(found);
             if (found->arena) {
                 csilk_arena_free(found->arena);
-                found->arena = nullptr;
+                found->arena = NULL;
             }
 
             free(found);

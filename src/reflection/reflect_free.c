@@ -36,7 +36,7 @@ free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visite
             char** ptr = (char**)addr;
             if (*ptr) {
                 free(*ptr);
-                *ptr = nullptr;
+                *ptr = NULL;
             }
         }
         break;
@@ -58,12 +58,12 @@ free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visite
                         }
                         if (is_visited) {
                             // Break cycle to avoid recursion and double freeing
-                            *ptr = nullptr;
+                            *ptr = NULL;
                         } else {
                             free_struct_internal(
                                 struct_addr, entry->fields, entry->count, depth + 1, visited);
                             free(*ptr);
-                            *ptr = nullptr;
+                            *ptr = NULL;
                         }
                     }
                 } else {

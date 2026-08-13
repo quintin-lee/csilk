@@ -69,12 +69,12 @@ unregister_active_ctx(csilk_wf_t* wf, csilk_wf_ctx_t* ctx)
  *
  * @param wf      The workflow definition instance.
  * @param exec_id The unique execution UUID to find.
- * @return A pointer to the matching csilk_wf_ctx_t, or nullptr if not found.
+ * @return A pointer to the matching csilk_wf_ctx_t, or NULL if not found.
  */
 static csilk_wf_ctx_t*
 find_active_ctx(csilk_wf_t* wf, const char* exec_id)
 {
-    csilk_wf_ctx_t* found = nullptr;
+    csilk_wf_ctx_t* found = NULL;
     csilk_mutex_lock(&wf->ctx_mutex);
     for (size_t i = 0; i < wf->active_context_count; i++) {
         if (strcmp(wf->active_contexts[i]->exec_id, exec_id) == 0) {
@@ -108,7 +108,7 @@ _wf_cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
  *
  * @param wf      The workflow definition instance.
  * @param exec_id The execution UUID to find.
- * @return A pointer to the active context, or nullptr if not found.
+ * @return A pointer to the active context, or NULL if not found.
  */
 CSILK_INTERNAL csilk_wf_ctx_t*
 _wf_find_active_ctx(csilk_wf_t* wf, const char* exec_id)
@@ -159,7 +159,7 @@ on_ttl_timer_close(csilk_io_handle_t* handle)
  * frees the memory arena, node tracking arrays, WAL path, and the
  * context struct itself.
  *
- * @param ctx The execution context to clean up (may be nullptr). */
+ * @param ctx The execution context to clean up (may be NULL). */
 CSILK_INTERNAL void
 _wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
 {
@@ -189,8 +189,8 @@ _wf_cleanup_ctx(csilk_wf_ctx_t* ctx)
  *
  * @param ctx     Workflow execution context (must have wal_path set).
  * @param type    Event type (WF_EV_START, WF_EV_NODE_START, etc.).
- * @param node_id Originating node ID, or nullptr for workflow-level events.
- * @param data    Associated data (may be nullptr for simple events).
+ * @param node_id Originating node ID, or NULL for workflow-level events.
+ * @param data    Associated data (may be NULL for simple events).
  * @note This is a no-op if ctx has no WAL path configured. */
 void
 _wf_wal_log_event(csilk_wf_ctx_t*       ctx,
@@ -203,7 +203,7 @@ _wf_wal_log_event(csilk_wf_ctx_t*       ctx,
     }
 
     /* Ensure we always have 3 null-terminated strings for consistency,
-     even if some fields are nullptr. This prevents buffer overflows during
+     even if some fields are NULL. This prevents buffer overflows during
      recovery parsing. */
     const char* nid = node_id ? node_id : "";
     const char* d_type = (data && data->type) ? data->type : "";
@@ -245,7 +245,7 @@ static void
 worker_cb(csilk_io_work_t* req)
 {
     node_work_t* work = (node_work_t*)req->data;
-    _wf_broadcast(work->ctx->wf, "node_start", work->node->id, nullptr);
+    _wf_broadcast(work->ctx->wf, "node_start", work->node->id, NULL);
     work->output = work->node->handler(work->ctx, work->input, work->node->user_data);
 }
 
@@ -313,10 +313,10 @@ free_work(node_work_t* work)
  * 4. Record trace data (start/end time, input/output dump, model info).
  * 5. Check budget (max_tokens): if exceeded, set is_terminated flag and
  *    terminate the workflow on next idle check.
- * 6. If output is nullptr and error_target is set, route to error node.
+ * 6. If output is NULL and error_target is set, route to error node.
  * 7. If the node has a dynamic router function, call it to determine
  *    the next node; otherwise, evaluate each outgoing edge:
- *    - Unconditional edges (condition == nullptr) always match.
+ *    - Unconditional edges (condition == NULL) always match.
  *    - Conditional edges match if output type equals condition string.
  * 8. For matching edges, check the target's join policy: AND join
  *    requires all incoming edges to fire before the target is ready;
@@ -334,11 +334,11 @@ after_worker_cb(csilk_io_work_t* req, int status)
     csilk_data_t*    output = work->output;
 
     if (work->is_timed_out) {
-        output = nullptr;
+        output = NULL;
     }
 
     // Handle Retries before error logic
-    if (output == nullptr && work->retry_count < node->max_retries) {
+    if (output == NULL && work->retry_count < node->max_retries) {
         work->retry_count++;
         CSILK_LOG_W(
             "[Workflow] Node '%s' failed, scheduled retry in %dms", node->id, node->retry_delay_ms);
@@ -370,13 +370,13 @@ after_worker_cb(csilk_io_work_t* req, int status)
                                     "schema: missing required field '%s'",
                                     node->id,
                                     csilk_json_string_value(field));
-                        output = nullptr;
+                        output = NULL;
                         break;
                     }
                 }
             }
         } else if (node->output_schema) {
-            output = nullptr; // Invalid JSON or Schema
+            output = NULL; // Invalid JSON or Schema
         }
         csilk_json_free(schema);
         csilk_json_free(data);
@@ -392,7 +392,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
     csilk_mutex_unlock(&ctx->mutex);
 
     _wf_wal_log_event(ctx, WF_EV_NODE_FINISH, node->id, output);
-    _wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : nullptr);
+    _wf_broadcast(ctx->wf, "node_finish", node->id, output ? (char*)output->value : NULL);
 
     if (work->trace_node) {
         work->trace_node->end_time = csilk_io_hrtime() / 1000;
@@ -429,12 +429,12 @@ after_worker_cb(csilk_io_work_t* req, int status)
         csilk_mutex_unlock(&ctx->mutex);
         if (current_active == 0) {
             if (ctx->trace_callback) {
-                ctx->trace_callback(nullptr, ctx->trace);
+                ctx->trace_callback(NULL, ctx->trace);
             } else if (ctx->callback) {
-                ctx->callback(nullptr);
+                ctx->callback(NULL);
             }
             if (ctx->trace_callback) {
-                ctx->trace = nullptr;
+                ctx->trace = NULL;
             }
             _wf_cleanup_ctx(ctx);
         }
@@ -442,8 +442,8 @@ after_worker_cb(csilk_io_work_t* req, int status)
         return;
     }
 
-    if (output == nullptr && node->error_target) {
-        execute_node(ctx, node->error_target, nullptr);
+    if (output == NULL && node->error_target) {
+        execute_node(ctx, node->error_target, NULL);
         csilk_mutex_lock(&ctx->mutex);
         ctx->nodes_active--;
         csilk_mutex_unlock(&ctx->mutex);
@@ -467,7 +467,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
         for (size_t i = 0; i < node->edge_count; i++) {
             csilk_wf_edge_t* edge = &node->edges[i];
             int              match = 0;
-            if (edge->condition == nullptr) {
+            if (edge->condition == NULL) {
                 match = 1;
             } else if (output && output->type && strcmp(output->type, edge->condition) == 0) {
                 match = 1;
@@ -509,8 +509,8 @@ after_worker_cb(csilk_io_work_t* req, int status)
     int current_active = ctx->nodes_active;
     csilk_mutex_unlock(&ctx->mutex);
     if (triggered_count == 0 && current_active == 0) {
-        _wf_wal_log_event(ctx, WF_EV_END, nullptr, nullptr);
-        _wf_broadcast(ctx->wf, "workflow_end", nullptr, output ? (char*)output->value : nullptr);
+        _wf_wal_log_event(ctx, WF_EV_END, NULL, NULL);
+        _wf_broadcast(ctx->wf, "workflow_end", NULL, output ? (char*)output->value : NULL);
         if (ctx->trace) {
             ctx->trace->end_time = csilk_io_hrtime() / 1000;
         }
@@ -520,10 +520,10 @@ after_worker_cb(csilk_io_work_t* req, int status)
             ctx->callback(output);
         }
         if (ctx->trace_callback) {
-            ctx->trace = nullptr;
+            ctx->trace = NULL;
         } else if (ctx->trace) {
             csilk_wf_trace_free(ctx->trace);
-            ctx->trace = nullptr;
+            ctx->trace = NULL;
         }
         _wf_cleanup_ctx(ctx);
     }
@@ -532,7 +532,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
 
 /** @brief Timer callback — marks a node as timed out.
  *  Sets the is_timed_out flag on the node_work_t, which causes
- *  after_worker_cb to treat the output as nullptr even if the handler
+ *  after_worker_cb to treat the output as NULL even if the handler
  *  eventually completes. */
 static void
 on_node_timeout(csilk_io_timer_t* handle)
@@ -578,7 +578,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         csilk_mutex_unlock(&ctx->mutex);
 
         _wf_wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
-        _wf_broadcast(ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : nullptr);
+        _wf_broadcast(ctx->wf, "workflow_paused", node->id, input ? (char*)input->value : NULL);
         CSILK_LOG_I("[Workflow] Execution %s paused at node '%s'", ctx->exec_id, node->id);
         return;
     }
@@ -611,8 +611,8 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
     }
     csilk_mutex_unlock(&ctx->mutex);
 
-    _wf_wal_log_event(ctx, WF_EV_NODE_START, node->id, nullptr);
-    _wf_broadcast(ctx->wf, "node_queued", node->id, nullptr);
+    _wf_wal_log_event(ctx, WF_EV_NODE_START, node->id, NULL);
+    _wf_broadcast(ctx->wf, "node_queued", node->id, NULL);
 
     node_work_t* work = calloc(1, sizeof(node_work_t));
     if (ctx->trace) {
@@ -672,7 +672,7 @@ _wf_execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input
 const char*
 csilk_wf_run(csilk_wf_t* wf, csilk_data_t* input, void (*callback)(csilk_data_t* result))
 {
-    return _wf_run_ext_internal(wf, input, callback, nullptr);
+    return _wf_run_ext_internal(wf, input, callback, NULL);
 }
 
 /**
@@ -690,7 +690,7 @@ csilk_wf_run_traced(csilk_wf_t*   wf,
                     csilk_data_t* input,
                     void (*callback)(csilk_data_t* result, csilk_wf_trace_t* trace))
 {
-    _wf_run_ext_internal(wf, input, nullptr, callback);
+    _wf_run_ext_internal(wf, input, NULL, callback);
 }
 
 /**
@@ -722,7 +722,7 @@ on_workflow_ttl(csilk_io_timer_t* handle)
  * @param input    The initial input data container.
  * @param callback The completion callback (for non-traced runs).
  * @param trace_cb The completion callback (for traced runs).
- * @return The assigned execution UUID, or nullptr on failure.
+ * @return The assigned execution UUID, or NULL on failure.
  */
 const char*
 _wf_run_ext_internal(csilk_wf_t*   wf,
@@ -732,12 +732,12 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
 {
     if (!wf || wf->node_count == 0) {
         if (callback) {
-            callback(nullptr);
+            callback(NULL);
         }
         if (trace_cb) {
-            trace_cb(nullptr, nullptr);
+            trace_cb(NULL, NULL);
         }
-        return nullptr;
+        return NULL;
     }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
     ctx->wf = wf;
@@ -761,16 +761,16 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
         csilk_io_timer_start(&ctx->ttl_timer, on_workflow_ttl, wf->ttl_sec * 1000, 0);
     }
 
-    _wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : nullptr);
+    _wf_broadcast(wf, "workflow_start", ctx->exec_id, input ? (char*)input->value : NULL);
 
     char* m_graph = csilk_wf_to_mermaid(wf);
-    _wf_broadcast(wf, "workflow_topology", nullptr, m_graph);
+    _wf_broadcast(wf, "workflow_topology", NULL, m_graph);
     free(m_graph);
     if (wf->wal_dir) {
         char path[512];
         snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, ctx->exec_id);
         ctx->wal_path = strdup(path);
-        _wf_wal_log_event(ctx, WF_EV_START, nullptr, input);
+        _wf_wal_log_event(ctx, WF_EV_START, NULL, input);
     }
     if (trace_cb) {
         ctx->trace = calloc(1, sizeof(csilk_wf_trace_t));
@@ -802,15 +802,15 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
 
     if (!started) {
         if (callback) {
-            callback(nullptr);
+            callback(NULL);
         }
         if (trace_cb) {
-            trace_cb(nullptr, nullptr);
+            trace_cb(NULL, NULL);
         }
         if (active == 0) {
             _wf_cleanup_ctx(ctx);
         }
-        return nullptr;
+        return NULL;
     }
 
     if (active == 0) {

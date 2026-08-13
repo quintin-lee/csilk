@@ -38,7 +38,7 @@ csilk_otlp_exporter_new(const char* endpoint_url, int batch_size)
 {
     csilk_otlp_exporter_t* exp = malloc(sizeof(csilk_otlp_exporter_t));
     if (!exp) {
-        return nullptr;
+        return NULL;
     }
     snprintf(exp->endpoint_url,
              sizeof(exp->endpoint_url),

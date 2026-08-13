@@ -38,7 +38,7 @@ extern csilk_json_t* csilk_generate_openapi_json(csilk_router_t* router,
  * @param description API description.
  * @note The response is sent synchronously via csilk_json(). On failure, a
  *       500 error response is sent. */
-static char*         g_openapi_cache_json = nullptr;
+static char*         g_openapi_cache_json = NULL;
 static csilk_once_t  g_openapi_cache_once = CSILK_ONCE_INIT;
 static csilk_mutex_t g_openapi_cache_mutex;
 

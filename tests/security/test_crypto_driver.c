@@ -55,13 +55,11 @@ custom_bcrypt_hash(const char* password, size_t len, int cost, char hash[62])
     custom_bcrypt_called++;
 }
 
-static csilk_crypto_driver_t my_driver = {
-    .generate_uuid = custom_generate_uuid,
-    .hmac_sha256 = custom_hmac_sha256,
-    .sha1 = custom_sha1,
-    .bcrypt_hash = custom_bcrypt_hash,
-    .sha256 = nullptr
-};
+static csilk_crypto_driver_t my_driver = {.generate_uuid = custom_generate_uuid,
+                                          .hmac_sha256 = custom_hmac_sha256,
+                                          .sha1 = custom_sha1,
+                                          .bcrypt_hash = custom_bcrypt_hash,
+                                          .sha256 = nullptr};
 
 int
 main()

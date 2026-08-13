@@ -65,5 +65,5 @@ csilk_ctx_defer_free(csilk_ctx_t* c)
         }
         item = item->next;
     }
-    c->defer_head = nullptr;
+    c->defer_head = NULL;
 }
