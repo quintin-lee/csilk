@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "csilk/core/json.h"
 
 typedef struct {
@@ -227,7 +228,7 @@ qdrant_search(void*                           state_ptr,
                     res->results[i].id = strdup(csilk_json_string_value(id));
                 } else if (csilk_json_is_number(id)) {
                     char buf[32];
-                    snprintf(buf, sizeof(buf), "%d", csilk_json_int_value(id));
+                    snprintf(buf, sizeof(buf), "%lld", (long long)csilk_json_int_value(id));
                     res->results[i].id = strdup(buf);
                 }
             }

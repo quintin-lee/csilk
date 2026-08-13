@@ -97,7 +97,10 @@ typedef struct {
     *  @param len       Byte length of @p password (> 72 is truncated).
     *  @param cost      Cost factor (CSILK_BCRYPT_MIN_COST..CSILK_BCRYPT_MAX_COST).
     *  @param[out] hash  Output buffer of at least CSILK_BCRYPT_HASH_LEN bytes. */
-    void (*bcrypt_hash)(const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN]);
+    void (*bcrypt_hash)(const char* password,
+                        size_t      len,
+                        int         cost,
+                        char        hash[CSILK_BCRYPT_HASH_LEN]);
 } csilk_crypto_driver_t;
 
 #ifdef __cplusplus
