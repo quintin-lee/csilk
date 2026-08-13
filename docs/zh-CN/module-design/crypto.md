@@ -21,8 +21,12 @@ csilk 允许开发人员替换其内部的加密和唯一标识符算法。这�
 typedef struct {
   void (*sha256)(const uint8_t* data, size_t len, uint8_t out[32]);
   void (*hmac_sha256)(const uint8_t* key, size_t key_len, const uint8_t* data,
-                     size_t data_len, uint8_t out[32]);
+                      size_t data_len, uint8_t out[32]);
   void (*generate_uuid)(char buf[37]);
+  int  (*fill_random)(void* out, size_t len);
+  void (*sha1)(const uint8_t* data, size_t len, uint8_t out[20]);
+  void (*bcrypt_hash)(const char* password, size_t len, int cost,
+                      char hash[CSILK_BCRYPT_HASH_LEN]);
 } csilk_crypto_driver_t;
 ```
 

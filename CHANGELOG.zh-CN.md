@@ -5,6 +5,11 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 新增
+- **加密驱动扩展性**：`csilk_crypto_driver_t` 新增 `sha1`（20 字节摘要）与 `bcrypt_hash`（密码哈希）回调，配套内部分发包装 `_csilk_sha1()`、`_csilk_bcrypt_hash()`——驱动可替换内置软件实现。
+
 ## [0.4.0] - 2026-08-13
 
 ### 变更

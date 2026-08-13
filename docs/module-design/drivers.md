@@ -17,7 +17,7 @@ graph TB
         DB["fa:fa-database DB Drivers<br/>csilk_db_driver_t<br/>connect, query, exec, txn"]
         PERM["fa:fa-shield Perm Drivers<br/>csilk_perm_driver_t<br/>check"]
         VECTOR["fa:fa-search Vector DB Drivers<br/>csilk_vector_db_driver_t<br/>upsert, search"]
-        CRYPTO["fa:fa-lock Crypto Drivers<br/>csilk_crypto_driver_t<br/>sha256, hmac, uuid, random"]
+        CRYPTO["fa:fa-lock Crypto Drivers<br/>csilk_crypto_driver_t<br/>sha256, hmac, uuid, random, sha1, bcrypt"]
         STORAGE["fa:fa-hdd-o Storage Drivers<br/>csilk_storage_driver_t<br/>set, get, incr"]
     end
 
@@ -328,6 +328,9 @@ typedef struct {
                         const uint8_t* data, size_t data_len, uint8_t out[32]);
     void (*generate_uuid)(char buf[37]);
     int  (*fill_random)(void* out, size_t len);
+    void (*sha1)(const uint8_t* data, size_t len, uint8_t out[20]);
+    void (*bcrypt_hash)(const char* password, size_t len, int cost,
+                        char hash[CSILK_BCRYPT_HASH_LEN]);
 } csilk_crypto_driver_t;
 ```
 

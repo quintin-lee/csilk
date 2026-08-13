@@ -387,6 +387,29 @@ csilk_crypto_fill_random(void* out, size_t len)
     return _csilk_fill_random(nullptr, out, len);
 }
 
+CSILK_INTERNAL void
+_csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20])
+{
+    if (c && c->crypto_driver && c->crypto_driver->sha1) {
+        c->crypto_driver->sha1(data, len, out);
+    } else {
+        csilk_sha1_ctx ctx;
+        csilk_sha1_init(&ctx);
+        csilk_sha1_update(&ctx, data, len);
+        csilk_sha1_final(&ctx, out);
+    }
+}
+
+CSILK_INTERNAL void
+_csilk_bcrypt_hash(csilk_ctx_t* c, const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN])
+{
+    if (c && c->crypto_driver && c->crypto_driver->bcrypt_hash) {
+        c->crypto_driver->bcrypt_hash(password, len, cost, hash);
+    } else {
+        csilk_bcrypt_hash(password, len, cost, hash);
+    }
+}
+
 void
 csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
