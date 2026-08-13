@@ -82,7 +82,7 @@ default_symmetric_encrypt(const uint8_t* key,
     int ret = -1;
     int len = 0;
 
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, key, iv) != 1) {
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
         goto out;
     }
     if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) {
@@ -157,7 +157,7 @@ default_symmetric_decrypt(const uint8_t* key,
     int ret = -1;
     int len = 0;
 
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, key, iv) != 1) {
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
         goto out;
     }
     if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) {
@@ -209,13 +209,13 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
         return -1;
     }
 
-    EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
     if (!kctx) {
         return -1;
     }
 
     int       ret = -1;
-    EVP_PKEY* pkey = nullptr;
+    EVP_PKEY* pkey = NULL;
 
     if (EVP_PKEY_keygen_init(kctx) != 1) {
         goto out;
@@ -240,7 +240,7 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
         BIO_free(priv_bio);
         goto out;
     }
-    if (PEM_write_bio_PrivateKey(priv_bio, pkey, nullptr, nullptr, 0, nullptr, nullptr) != 1) {
+    if (PEM_write_bio_PrivateKey(priv_bio, pkey, NULL, NULL, 0, NULL, NULL) != 1) {
         BIO_free(pub_bio);
         BIO_free(priv_bio);
         goto out;
@@ -277,16 +277,16 @@ out:
 /** @brief Internal: parse a PEM-encoded public key into an EVP_PKEY handle.
  * @param pem PEM string buffer.
  * @param len Length of the PEM string.
- * @return New EVP_PKEY with a reference count of 1, or nullptr on parse failure.
+ * @return New EVP_PKEY with a reference count of 1, or NULL on parse failure.
  * @note The caller must free the returned key with EVP_PKEY_free(). */
 static EVP_PKEY*
 pem_to_pkey(const char* pem, size_t len)
 {
     BIO* bio = BIO_new_mem_buf(pem, (int)len);
     if (!bio) {
-        return nullptr;
+        return NULL;
     }
-    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+    EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
     BIO_free(bio);
     return pkey;
 }
@@ -294,16 +294,16 @@ pem_to_pkey(const char* pem, size_t len)
 /** @brief Internal: parse a PEM-encoded private key into an EVP_PKEY handle.
  * @param pem PEM string buffer.
  * @param len Length of the PEM string.
- * @return New EVP_PKEY with a reference count of 1, or nullptr on parse failure.
+ * @return New EVP_PKEY with a reference count of 1, or NULL on parse failure.
  * @note The caller must free the returned key with EVP_PKEY_free(). */
 static EVP_PKEY*
 pem_to_privkey(const char* pem, size_t len)
 {
     BIO* bio = BIO_new_mem_buf(pem, (int)len);
     if (!bio) {
-        return nullptr;
+        return NULL;
     }
-    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
     BIO_free(bio);
     return pkey;
 }
@@ -345,7 +345,7 @@ default_asymmetric_encrypt(const char*    public_key,
     }
 
     int           ret = -1;
-    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, NULL);
     if (!ctx) {
         goto out;
     }
@@ -411,7 +411,7 @@ default_asymmetric_decrypt(const char*    private_key,
     }
 
     int           ret = -1;
-    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, NULL);
     if (!ctx) {
         goto out;
     }
@@ -482,7 +482,7 @@ default_sign(const char*    private_key,
         goto out;
     }
 
-    if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out2;
     }
     if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PSS_PADDING) != 1) {
@@ -546,7 +546,7 @@ default_verify(const char*    public_key,
         goto out;
     }
 
-    if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out2;
     }
     if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PSS_PADDING) != 1) {
@@ -601,7 +601,7 @@ jwt_sign_rs256(const char*    private_key,
         return -1;
     }
     int ret = -1;
-    if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out;
     }
     if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PADDING) != 1) {
@@ -646,7 +646,7 @@ jwt_verify_rs256(const char*    public_key,
         return -1;
     }
     int ret = -1;
-    if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out;
     }
     if (EVP_PKEY_CTX_set_rsa_padding(EVP_MD_CTX_pkey_ctx(mdctx), RSA_PKCS1_PADDING) != 1) {
@@ -692,11 +692,11 @@ jwt_sign_es256(const char*    key,
     int     ret = -1;
     size_t  der_len = 0;
     uint8_t der_buf[128] = {0};
-    if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out;
     }
     /* Get the DER-encoded signature length first */
-    if (EVP_DigestSign(mdctx, nullptr, &der_len, data, data_len) != 1) {
+    if (EVP_DigestSign(mdctx, NULL, &der_len, data, data_len) != 1) {
         goto out;
     }
     if (der_len > sizeof(der_buf)) {
@@ -707,11 +707,11 @@ jwt_sign_es256(const char*    key,
     }
     /* Convert DER ECDSA_SIG to raw r||s (32+32 = 64 bytes) */
     const uint8_t* p = der_buf;
-    ECDSA_SIG*     ec_sig = d2i_ECDSA_SIG(nullptr, &p, (long)der_len);
+    ECDSA_SIG*     ec_sig = d2i_ECDSA_SIG(NULL, &p, (long)der_len);
     if (!ec_sig) {
         goto out;
     }
-    const BIGNUM *r = nullptr, *s = nullptr;
+    const BIGNUM *r = NULL, *s = NULL;
     ECDSA_SIG_get0(ec_sig, &r, &s);
     BN_bn2binpad(r, sig, 32);
     BN_bn2binpad(s, sig + 32, 32);
@@ -748,8 +748,8 @@ jwt_verify_es256(const char*    key,
         return -1;
     }
     /* Build ECDSA_SIG from raw r||s, then DER-encode it */
-    BIGNUM* r = BN_bin2bn(sig, 32, nullptr);
-    BIGNUM* s = BN_bin2bn(sig + 32, 32, nullptr);
+    BIGNUM* r = BN_bin2bn(sig, 32, NULL);
+    BIGNUM* s = BN_bin2bn(sig + 32, 32, NULL);
     if (!r || !s) {
         BN_free(r);
         BN_free(s);
@@ -781,7 +781,7 @@ jwt_verify_es256(const char*    key,
         return -1;
     }
     int ret = -1;
-    if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) != 1) {
+    if (EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, pkey) != 1) {
         goto out;
     }
     if (EVP_DigestVerify(mdctx, der_buf, der_len, data, data_len) == 1) {

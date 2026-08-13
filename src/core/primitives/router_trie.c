@@ -44,7 +44,7 @@ try_match_static(csilk_router_node_t*     child,
                         child->segment);
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 static csilk_handler_t*
@@ -165,7 +165,7 @@ try_match_wildcard(csilk_router_node_t*     child,
         }
         mh = mh->next;
     }
-    return nullptr;
+    return NULL;
 }
 
 csilk_handler_t*
@@ -201,7 +201,7 @@ match_node(csilk_router_node_t*     node,
         CSILK_LOG_T("Router: no handler for method '%s' at node '%s'",
                     method,
                     node->segment[0] ? node->segment : "/");
-        return nullptr;
+        return NULL;
     }
 
     const char* p = path;
@@ -209,7 +209,7 @@ match_node(csilk_router_node_t*     node,
     const char* seg = get_next_segment(&p, &len);
     if (!seg) {
         CSILK_LOG_T("Router: no more segments found in path '%s'", path);
-        return nullptr;
+        return NULL;
     }
 
     CSILK_LOG_T("Router: testing segment '%.*s' against %d children of node '%s'",
@@ -218,7 +218,7 @@ match_node(csilk_router_node_t*     node,
                 node->children_count,
                 node->segment[0] ? node->segment : "/");
 
-    csilk_handler_t* result = nullptr;
+    csilk_handler_t* result = NULL;
     for (int i = 0; i < node->children_count; i++) {
         csilk_router_node_t* child = node->children[i];
         if (child->type == CSILK_NODE_STATIC) {

@@ -41,11 +41,11 @@ static void*
 milvus_init(const char* endpoint, const char* api_key)
 {
     if (!endpoint) {
-        return nullptr;
+        return NULL;
     }
     milvus_state_t* state = calloc(1, sizeof(milvus_state_t));
     if (!state) {
-        return nullptr;
+        return NULL;
     }
     state->endpoint = strdup(endpoint);
     if (api_key) {
@@ -117,7 +117,7 @@ milvus_upsert(void*                       state_ptr,
     char url[512];
     snprintf(url, sizeof(url), "%s/v2/vectordb/entities/upsert", state->endpoint);
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     if (state->api_key) {
         char auth_hdr[256];
@@ -186,7 +186,7 @@ milvus_search(void*                           state_ptr,
     char url[512];
     snprintf(url, sizeof(url), "%s/v2/vectordb/entities/search", state->endpoint);
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     if (state->api_key) {
         char auth_hdr[256];
@@ -269,7 +269,7 @@ milvus_search(void*                           state_ptr,
         }
     } else {
         res->count = 0;
-        res->results = nullptr;
+        res->results = NULL;
     }
 
     csilk_json_free(resp);

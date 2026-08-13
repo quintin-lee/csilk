@@ -28,7 +28,7 @@
  *
  * @param app Application handle.
  * @param prefix URL path prefix.
- * @return Route group instance, or nullptr on failure. */
+ * @return Route group instance, or NULL on failure. */
 csilk_group_t*
 find_or_create_group(csilk_app_t* app, const char* prefix)
 {
@@ -48,7 +48,7 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
 
     if (app->group_count >= CSILK_MAX_GROUPS) {
         CSILK_LOG_E("Failed to create route group: max group limit (%d) reached", CSILK_MAX_GROUPS);
-        return nullptr;
+        return NULL;
     }
 
     if (!app->root_group) {
@@ -60,7 +60,7 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
                                        : csilk_group_new(app->router, prefix);
     if (!g) {
         CSILK_LOG_E("Failed to create subgroup for prefix: %s", prefix);
-        return nullptr;
+        return NULL;
     }
 
     int n = app->group_count++;
@@ -155,7 +155,7 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
     if (!app || !method || !path || !handler) {
         return;
     }
-    const char*    relative_path = nullptr;
+    const char*    relative_path = NULL;
     csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
     if (!g) {
         CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
@@ -189,7 +189,7 @@ csilk_app_add_route_extended(csilk_app_t*    app,
     if (!app || !method || !path || !handler) {
         return;
     }
-    const char*    relative_path = nullptr;
+    const char*    relative_path = NULL;
     csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
     if (!g) {
         CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
@@ -201,8 +201,8 @@ csilk_app_add_route_extended(csilk_app_t*    app,
 }
 
 /** @copydoc csilk_app_add_route_extended
- *  @param perm_required  Permission required for this route, or nullptr.
- *  @param perm_resource  Resource pattern for permission check, or nullptr. */
+ *  @param perm_required  Permission required for this route, or NULL.
+ *  @param perm_resource  Resource pattern for permission check, or NULL. */
 void
 csilk_app_add_route_extended_perm(csilk_app_t*    app,
                                   const char*     method,
@@ -218,7 +218,7 @@ csilk_app_add_route_extended_perm(csilk_app_t*    app,
     if (!app || !method || !path || !handler) {
         return;
     }
-    const char*    relative_path = nullptr;
+    const char*    relative_path = NULL;
     csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
     if (!g) {
         CSILK_LOG_E("Failed to add route %s %s: group match failed", method, path);
@@ -246,8 +246,8 @@ csilk_app_add_route_extended_perm(csilk_app_t*    app,
  *  @param method         HTTP method.
  *  @param path           URL path.
  *  @param handler        Handler function.
- *  @param perm_required  Permission identifier (e.g., "read"), or nullptr.
- *  @param perm_resource  Resource pattern (e.g., "users:*"), or nullptr. */
+ *  @param perm_required  Permission identifier (e.g., "read"), or NULL.
+ *  @param perm_resource  Resource pattern (e.g., "users:*"), or NULL. */
 void
 csilk_app_add_route_perm(csilk_app_t*    app,
                          const char*     method,
@@ -256,16 +256,8 @@ csilk_app_add_route_perm(csilk_app_t*    app,
                          const char*     perm_required,
                          const char*     perm_resource)
 {
-    csilk_app_add_route_extended_perm(app,
-                                      method,
-                                      path,
-                                      handler,
-                                      nullptr,
-                                      nullptr,
-                                      nullptr,
-                                      nullptr,
-                                      perm_required,
-                                      perm_resource);
+    csilk_app_add_route_extended_perm(
+        app, method, path, handler, NULL, NULL, NULL, NULL, perm_required, perm_resource);
 }
 
 /** @brief Register a route with a custom handler chain on the root group.
@@ -282,7 +274,7 @@ csilk_app_add_handlers(
     if (!app || !method || !path || !handlers || n == 0) {
         return;
     }
-    const char*    relative_path = nullptr;
+    const char*    relative_path = NULL;
     csilk_group_t* g = find_matching_group_for_path(app, path, &relative_path);
     if (!g) {
         CSILK_LOG_E("Failed to add handler chain %s %s: group match failed", method, path);

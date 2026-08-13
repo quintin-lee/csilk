@@ -68,12 +68,12 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 }
 
 /** @brief Get the raw driver-level connection handle.
- * @return The connection pointer, or nullptr if pool is nullptr.
+ * @return The connection pointer, or NULL if pool is NULL.
  * @note The caller must hold the pool mutex if concurrent access is possible. */
 void*
 csilk_db_pool_get_connection(csilk_db_pool_t* pool)
 {
-    return pool ? pool->connection : nullptr;
+    return pool ? pool->connection : NULL;
 }
 
 /** @brief Store a driver-level connection handle.
@@ -98,8 +98,8 @@ csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
  *      a. Create a csilk_json object.
  *      b. For each field (row->values[j]):
  *         - Add (column_name[j], field_value) as a string key-value pair.
- *         - If column_names is nullptr, use "col" as the key.
- *         - nullptr values are skipped (not added to the object).
+ *         - If column_names is NULL, use "col" as the key.
+ *         - NULL values are skipped (not added to the object).
  *      c. Append the object to the array.
  *   4. Call driver->free_result() to release the driver's memory.
  *   5. Return the csilk_json array (caller must csilk_json_free()).
@@ -110,7 +110,7 @@ csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
  *
  * @param pool Database pool with an active connection.
  * @param sql  SQL query string.
- * @return A csilk_json array of row objects, or nullptr on failure.
+ * @return A csilk_json array of row objects, or NULL on failure.
  * @note The returned csilk_json must be freed by the caller with csilk_json_free().
  * @warning The pool mutex must be held for the duration of this call. */
 static csilk_json_t*
@@ -118,13 +118,13 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 {
     csilk_db_result_t result = {0};
     if (pool->driver->query(pool, sql, &result) != 0) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* array = csilk_json_array();
     if (!array) {
         pool->driver->free_result(&result);
-        return nullptr;
+        return NULL;
     }
 
     for (int i = 0; i < result.row_count; i++) {
@@ -132,7 +132,7 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
         if (!obj) {
             csilk_json_free(array);
             pool->driver->free_result(&result);
-            return nullptr;
+            return NULL;
         }
 
         csilk_db_row_t* row = result.rows[i];
@@ -170,19 +170,19 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
 {
     if (!driver_name) {
         CSILK_LOG_E("Failed to create database pool: driver_name is NULL");
-        return nullptr;
+        return NULL;
     }
 
     csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
     if (!driver) {
         CSILK_LOG_E("Failed to create database pool: driver '%s' not found", driver_name);
-        return nullptr;
+        return NULL;
     }
 
     csilk_db_pool_t* pool = calloc(1, sizeof(csilk_db_pool_t));
     if (!pool) {
         CSILK_LOG_E("Failed to allocate memory for database pool (driver: '%s')", driver_name);
-        return nullptr;
+        return NULL;
     }
 
     csilk_mutex_init(&pool->mutex);
@@ -191,7 +191,7 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
         CSILK_LOG_E("Database connection failed for driver '%s' (DSN: '%s')", driver_name, dsn);
         csilk_mutex_destroy(&pool->mutex);
         free(pool);
-        return nullptr;
+        return NULL;
     }
 
     CSILK_LOG_I(
@@ -229,7 +229,7 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 {
     if (!pool || !pool->driver || !pool->driver->query) {
         CSILK_LOG_E("Database query failed: invalid pool, driver, or query method");
-        return nullptr;
+        return NULL;
     }
 
     uint64_t start = csilk_io_hrtime();
@@ -363,13 +363,13 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
  *
  * @param pool   Database pool.
  * @param sql    SQL pattern with ? placeholders.
- * @param params nullptr-terminated array of string values. */
+ * @param params NULL-terminated array of string values. */
 csilk_json_t*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
     if (!pool || !sql || !params) {
         CSILK_LOG_E("Parameterized query failed: invalid pool, sql, or params");
-        return nullptr;
+        return NULL;
     }
 
     uint64_t start = csilk_io_hrtime();
@@ -388,7 +388,7 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
     char* full_sql = malloc(len + 1);
     if (!full_sql) {
         CSILK_LOG_E("Failed to allocate memory for full SQL statement");
-        return nullptr;
+        return NULL;
     }
 
     char* p = full_sql;
@@ -484,7 +484,7 @@ csilk_db_init(void)
  * @param name   Unique driver name for later lookup.
  * @param driver Heap-allocated driver vtable (not copied, only the pointer is
  *               stored). Must outlive the registry.
- * @return 0 on success, -1 if name/driver is nullptr or registry is full. */
+ * @return 0 on success, -1 if name/driver is NULL or registry is full. */
 int
 csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
 {
@@ -512,12 +512,12 @@ csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
  * practice).  Must call csilk_db_init() first to register built-in drivers.
  *
  * @param name Driver name (case-sensitive, e.g. "sqlite3").
- * @return Driver pointer, or nullptr if not found or @p name is nullptr. */
+ * @return Driver pointer, or NULL if not found or @p name is NULL. */
 csilk_db_driver_t*
 csilk_db_get_driver(const char* name)
 {
     if (!name) {
-        return nullptr;
+        return NULL;
     }
     ensure_registry_init();
 
@@ -529,5 +529,5 @@ csilk_db_get_driver(const char* name)
         }
     }
     csilk_mutex_unlock(&registry_mutex);
-    return nullptr;
+    return NULL;
 }

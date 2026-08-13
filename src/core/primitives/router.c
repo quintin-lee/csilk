@@ -21,13 +21,13 @@ node_new(const char* segment, csilk_node_type_t type)
     csilk_router_node_t* node = calloc(1, sizeof(csilk_router_node_t));
     if (!node) {
         CSILK_LOG_E("Router: failed to allocate memory for router node");
-        return nullptr;
+        return NULL;
     }
     node->segment = strdup(segment);
     if (!node->segment) {
         CSILK_LOG_E("Router: failed to duplicate segment string '%s'", segment);
         free(node);
-        return nullptr;
+        return NULL;
     }
     node->segment_len = strlen(node->segment);
     node->type = type;
@@ -63,7 +63,7 @@ csilk_router_new()
 {
     csilk_router_t* r = malloc(sizeof(csilk_router_t));
     if (!r) {
-        return nullptr;
+        return NULL;
     }
     r->root = node_new("", CSILK_NODE_STATIC);
     return r;
@@ -110,11 +110,11 @@ csilk_json_t*
 csilk_router_collect_routes(csilk_router_t* r)
 {
     if (!r || !r->root) {
-        return nullptr;
+        return NULL;
     }
     csilk_json_t* array = csilk_json_array();
     if (!array) {
-        return nullptr;
+        return NULL;
     }
     node_collect_routes(r->root, array);
     return array;
@@ -142,7 +142,7 @@ router_add_full(csilk_router_t*  r,
     const char*          seg;
     size_t               len;
 
-    while ((seg = get_next_segment(&p, &len)) != nullptr) {
+    while ((seg = get_next_segment(&p, &len)) != NULL) {
         csilk_node_type_t type = CSILK_NODE_STATIC;
         const char*       seg_name_start = seg;
         size_t            seg_name_len = len;
@@ -167,7 +167,7 @@ router_add_full(csilk_router_t*  r,
         memcpy(seg_name, seg_name_start, seg_name_len);
         seg_name[seg_name_len] = '\0';
 
-        csilk_router_node_t* found = nullptr;
+        csilk_router_node_t* found = NULL;
         int                  insert_pos = curr->children_count;
 
         for (int i = 0; i < curr->children_count; i++) {
@@ -176,7 +176,7 @@ router_add_full(csilk_router_t*  r,
                 found = curr->children[i];
                 break;
             }
-            if (found == nullptr && curr->children[i]->type > type) {
+            if (found == NULL && curr->children[i]->type > type) {
                 insert_pos = i;
             }
         }
@@ -251,8 +251,8 @@ router_add_full(csilk_router_t*  r,
             return -1;
         }
         memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
-        mh->handlers[handler_count] = nullptr;
-        mh->path = path_pattern ? strdup(path_pattern) : nullptr;
+        mh->handlers[handler_count] = NULL;
+        mh->path = path_pattern ? strdup(path_pattern) : NULL;
         if (path_pattern && !mh->path) {
             CSILK_LOG_E("Router: failed to duplicate path pattern for route: %s %s", method, path);
             free(mh->method);
@@ -298,8 +298,8 @@ csilk_router_add_extended(csilk_router_t*  r,
                            output_type,
                            summary,
                            description,
-                           nullptr,
-                           nullptr);
+                           NULL,
+                           NULL);
 }
 
 int
@@ -310,7 +310,7 @@ csilk_router_add(csilk_router_t*  r,
                  size_t           handler_count)
 {
     return csilk_router_add_extended(
-        r, method, path, handlers, handler_count, path, nullptr, nullptr, nullptr, nullptr);
+        r, method, path, handlers, handler_count, path, NULL, NULL, NULL, NULL);
 }
 
 int
@@ -328,10 +328,10 @@ csilk_router_add_perm(csilk_router_t*  r,
                            handlers,
                            handler_count,
                            path,
-                           nullptr,
-                           nullptr,
-                           nullptr,
-                           nullptr,
+                           NULL,
+                           NULL,
+                           NULL,
+                           NULL,
                            perm_required,
                            perm_resource);
 }
@@ -368,9 +368,9 @@ csilk_handler_t*
 csilk_router_match(const csilk_router_t* r, const char* method, const char* path)
 {
     if (!r || !r->root || !method || !path) {
-        return nullptr;
+        return NULL;
     }
-    return match_node(r->root, method, path, nullptr, nullptr);
+    return match_node(r->root, method, path, NULL, NULL);
 }
 
 int
@@ -381,7 +381,7 @@ csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
         return 0;
     }
     c->params_count = 0;
-    csilk_method_handler_t* mh = nullptr;
+    csilk_method_handler_t* mh = NULL;
     CSILK_LOG_T("Attempting to match route for request: %s %s", c->request.method, c->request.path);
     csilk_handler_t* handlers = match_node(r->root, c->request.method, c->request.path, c, &mh);
     if (handlers) {

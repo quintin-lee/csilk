@@ -85,14 +85,14 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
                     range_hdr);
         csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
         csilk_io_fs_t close_req;
-        csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
+        csilk_io_fs_close(NULL, &close_req, fd, NULL);
         return;
     }
 
     long long range_start = 0, range_end = (long long)size - 1;
     *dash = '\0';
     if (range_val[0] != '\0') {
-        char* endptr = nullptr;
+        char* endptr = NULL;
         range_start = strtoll(range_val, &endptr, 10);
         if (endptr == range_val || range_start < 0) {
             *dash = '-';
@@ -101,12 +101,12 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
                         range_hdr);
             csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
             csilk_io_fs_t close_req;
-            csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
+            csilk_io_fs_close(NULL, &close_req, fd, NULL);
             return;
         }
     }
     if (*(dash + 1) != '\0') {
-        char* endptr = nullptr;
+        char* endptr = NULL;
         range_end = strtoll(dash + 1, &endptr, 10);
         if (endptr == dash + 1 || range_end >= (long long)size) {
             range_end = (long long)size - 1;
@@ -121,7 +121,7 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
                     size);
         csilk_status(c, CSILK_STATUS_RANGE_NOT_SATISFIABLE);
         csilk_io_fs_t close_req;
-        csilk_io_fs_close(nullptr, &close_req, fd, nullptr);
+        csilk_io_fs_close(NULL, &close_req, fd, NULL);
         return;
     }
     if (range_end >= (long long)size) {
@@ -169,11 +169,11 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
 /** @brief Check if a string contains null bytes or ASCII control characters.
  *
  *  Sanitizes file paths by rejecting any string that contains a byte below
- *  0x20 (control characters: null, tab, newline, etc.).  A nullptr input
+ *  0x20 (control characters: null, tab, newline, etc.).  A NULL input
  *  is treated as unsafe (returns 1).
  *
- *  @param str  The string to scan (may be nullptr).
- *  @return 1 if unsafe (nullptr or contains control chars), 0 if safe. */
+ *  @param str  The string to scan (may be NULL).
+ *  @return 1 if unsafe (NULL or contains control chars), 0 if safe. */
 static int
 contains_null_or_control(const char* str)
 {
@@ -195,9 +195,9 @@ contains_null_or_control(const char* str)
  *  Scans the path string for literal ".." segments (with '/' or '\'
  *  separators).  This is a defense-in-depth check layered on top of the
  *  realpath()-based canonicalisation in the static file handler.  A
- *  nullptr input is treated as unsafe (returns 1).
+ *  NULL input is treated as unsafe (returns 1).
  *
- *  @param path  The file path to scan (may be nullptr).
+ *  @param path  The file path to scan (may be NULL).
  *  @return 1 if a traversal sequence is detected, 0 if the path appears
  *          safe for this check. */
 static int
@@ -250,7 +250,7 @@ static_work_cb(csilk_io_work_t* req)
         return;
     }
 
-    if (realpath(root_dir, resolved_root) == nullptr) {
+    if (realpath(root_dir, resolved_root) == NULL) {
         CSILK_LOG_E("Static: Failed to resolve root directory path '%s'", root_dir);
         csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
         return;
@@ -279,7 +279,7 @@ static_work_cb(csilk_io_work_t* req)
      root directory prefix, or starts with a different directory that happens
      to share the same prefix (e.g., root="/var/www/uploads" and
      file="/var/www/uploads-extra/"), the request is outside the allowed tree. */
-    if (realpath(full_path, resolved_file) == nullptr) {
+    if (realpath(full_path, resolved_file) == NULL) {
         CSILK_LOG_D("Static: Requested file not found: resolved path '%s' is invalid", full_path);
         csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
         return;
@@ -298,7 +298,7 @@ static_work_cb(csilk_io_work_t* req)
     }
 
     csilk_io_fs_t open_req;
-    int           fd = csilk_io_fs_open(nullptr, &open_req, resolved_file, O_RDONLY, 0, nullptr);
+    int           fd = csilk_io_fs_open(NULL, &open_req, resolved_file, O_RDONLY, 0, NULL);
     csilk_io_fs_req_cleanup(&open_req);
     if (fd < 0) {
         CSILK_LOG_D("Static: Failed to open file '%s' (error: %d)", resolved_file, fd);
@@ -307,7 +307,7 @@ static_work_cb(csilk_io_work_t* req)
     }
 
     csilk_io_fs_t stat_req;
-    csilk_io_fs_fstat(nullptr, &stat_req, fd, nullptr);
+    csilk_io_fs_fstat(NULL, &stat_req, fd, NULL);
     size_t size = stat_req.statbuf.st_size;
     csilk_io_fs_req_cleanup(&stat_req);
 
@@ -331,7 +331,7 @@ file_work_cb(csilk_io_work_t* req)
     CSILK_LOG_T("Static: Resolving specific file serve request for path '%s'", file_path);
 
     csilk_io_fs_t open_req;
-    int           fd = csilk_io_fs_open(nullptr, &open_req, file_path, O_RDONLY, 0, nullptr);
+    int           fd = csilk_io_fs_open(NULL, &open_req, file_path, O_RDONLY, 0, NULL);
     csilk_io_fs_req_cleanup(&open_req);
     if (fd < 0) {
         CSILK_LOG_D("Static: Failed to open specific file '%s' (error: %d)", file_path, fd);
@@ -340,7 +340,7 @@ file_work_cb(csilk_io_work_t* req)
     }
 
     csilk_io_fs_t stat_req;
-    csilk_io_fs_fstat(nullptr, &stat_req, fd, nullptr);
+    csilk_io_fs_fstat(NULL, &stat_req, fd, NULL);
     size_t size = stat_req.statbuf.st_size;
     csilk_io_fs_req_cleanup(&stat_req);
 
@@ -352,7 +352,7 @@ file_work_cb(csilk_io_work_t* req)
  * @brief After-work callback: send the static file response.
  *
  * Runs on the event loop after static_work_cb completes. If the client
- * connection is still alive (_internal_client is non-nullptr), it triggers
+ * connection is still alive (_internal_client is non-NULL), it triggers
  * _csilk_send_response() to transmit the file (using sendfile or chunked
  * I/O depending on the platform).
  *
@@ -385,7 +385,7 @@ static_after_work_cb(csilk_io_work_t* req, int status)
  *
  * @param c        The request context.
  * @param root_dir Absolute or relative path to the static file root
- *                 directory. Must not be nullptr.
+ *                 directory. Must not be NULL.
  *
  * @note The prefix is configured separately via csilk_set(c, "static_prefix",
  *       ...) NOT via this function's parameters.

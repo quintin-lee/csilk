@@ -36,7 +36,7 @@ typedef struct {
 /**
  * @brief Create a new Raft consensus WAL node.
  * @param config Node configuration options.
- * @return New Raft node instance, or nullptr on failure.
+ * @return New Raft node instance, or NULL on failure.
  */
 csilk_raft_node_t* csilk_raft_node_new(const csilk_raft_config_t* config);
 

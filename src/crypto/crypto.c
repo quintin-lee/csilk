@@ -157,7 +157,7 @@ sha256_transform(uint32_t state[8], const uint8_t data[64])
  * Sets the eight state words to the SHA-256 initial constants and resets
  * the bit count to zero.
  *
- * @param context SHA-256 context to initialize (must not be nullptr). */
+ * @param context SHA-256 context to initialize (must not be NULL). */
 void
 csilk_sha256_init(csilk_sha256_ctx* context)
 {
@@ -296,7 +296,7 @@ csilk_hmac_sha256(
  * without changing caller code. The default built-in implementation is
  * always available for environments without hardware crypto.
  *
- * @param c        Request context (may be nullptr — falls back to built-in).
+ * @param c        Request context (may be NULL — falls back to built-in).
  * @param key      HMAC key.
  * @param key_len  Key length.
  * @param data     Input data.
@@ -328,7 +328,7 @@ _csilk_hmac_sha256(csilk_ctx_t*   c,
  * The delegation pattern ensures callers always get the best available
  * randomness source without explicit driver management.
  *
- * @param c   Request context (may be nullptr — falls back to built-in).
+ * @param c   Request context (may be NULL — falls back to built-in).
  * @param buf [out] 37-byte buffer for the UUID string. */
 CSILK_INTERNAL void
 _csilk_generate_uuid(csilk_ctx_t* c, char buf[CSILK_UUID_BUF_SIZE])
@@ -384,7 +384,7 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 int
 csilk_crypto_fill_random(void* out, size_t len)
 {
-    return _csilk_fill_random(nullptr, out, len);
+    return _csilk_fill_random(NULL, out, len);
 }
 
 CSILK_INTERNAL void
@@ -437,8 +437,8 @@ extern csilk_cipher_driver_t csilk_default_cipher_driver;
  * default built-in driver when no context or no driver is set.  This is the
  * central dispatch helper used by all _csilk_* crypto wrappers.
  *
- * @param c Server context, may be nullptr.
- * @return Pointer to an active csilk_cipher_driver_t (never nullptr on its own).
+ * @param c Server context, may be NULL.
+ * @return Pointer to an active csilk_cipher_driver_t (never NULL on its own).
  * @note The fallback driver is declared as a weak symbol so that
  *       applications can override it at link time.
  */
@@ -729,7 +729,7 @@ csilk_free(void* ptr)
 char*
 csilk_strdup(const char* s)
 {
-    return s ? strdup(s) : nullptr;
+    return s ? strdup(s) : NULL;
 }
 
 CSILK_INTERNAL int

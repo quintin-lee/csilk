@@ -48,12 +48,12 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
    * String → two modes via desc->is_pointer:
    *   - Pointer string: field stores a char*; dereference to get the string.
    *   - Fixed buffer: field IS the char array; cast addr directly.
-   *   nullptr or empty → csilk_json_null().
+   *   NULL or empty → csilk_json_null().
    *
    * Nested struct → look up the type's reflection entry by nested_type_name,
    *   create a fresh cJSON object, and recurse via struct_to_cjson_internal().
    *   If desc->is_pointer (struct*), dereference the pointer first.  Returns
-   *   Null if the nested type is not registered or the pointer is nullptr.
+   *   Null if the nested type is not registered or the pointer is NULL.
    */
     switch (desc->type) {
     case CSILK_TYPE_INT8:
@@ -97,7 +97,7 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
 
         csilk_json_t* sub_obj = csilk_json_object();
         if (!sub_obj) {
-            return nullptr;
+            return NULL;
         }
         struct_to_cjson_internal(sub_obj, struct_addr, entry->fields, entry->count);
         return sub_obj;
@@ -115,7 +115,7 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
  * json_key as the object key.
  *
  * @param obj         Target cJSON object to populate.
- * @param struct_ptr  Pointer to the source struct (must not be nullptr).
+ * @param struct_ptr  Pointer to the source struct (must not be NULL).
  * @param descs       Array of field descriptors.
  * @param field_count Number of field descriptors. */
 static void
@@ -165,7 +165,7 @@ char*
 csilk_json_marshal(const char* type_name, const void* ptr)
 {
     if (!type_name || !ptr) {
-        return nullptr;
+        return NULL;
     }
 
     /*
@@ -179,7 +179,7 @@ csilk_json_marshal(const char* type_name, const void* ptr)
     if (get_basic_type(type_name, &basic_desc)) {
         csilk_json_t* node = serialize_scalar(ptr, &basic_desc);
         if (!node) {
-            return nullptr;
+            return NULL;
         }
         char* out = csilk_json_serialize(node, NULL);
         csilk_json_free(node);
@@ -188,12 +188,12 @@ csilk_json_marshal(const char* type_name, const void* ptr)
 
     const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
     if (!entry) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_object();
     if (!root) {
-        return nullptr;
+        return NULL;
     }
 
     struct_to_cjson_internal(root, ptr, entry->fields, entry->count);
@@ -210,10 +210,10 @@ csilk_json_marshal_arena(csilk_arena_t* arena,
 {
     char* str = csilk_json_marshal(type_name, ptr);
     if (!str) {
-        return nullptr;
+        return NULL;
     }
     size_t len = strlen(str);
-    char*  arena_str = nullptr;
+    char*  arena_str = NULL;
     if (arena) {
         arena_str = csilk_arena_strndup(arena, str, len);
     } else {

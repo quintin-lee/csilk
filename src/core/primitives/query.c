@@ -41,7 +41,7 @@ parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
 
         char* eq = strchr(pos, '=');
         char* key = pos;
-        char* value = nullptr;
+        char* value = NULL;
 
         if (eq) {
             *eq = '\0';
@@ -62,7 +62,7 @@ parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
         if (amp) {
             pos = amp + 1;
         } else {
-            pos = nullptr;
+            pos = NULL;
         }
     }
 }
@@ -160,13 +160,13 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
  *
  * @param c   The request context.
  * @param key Field name to look up.
- * @return The URL-decoded field value, or nullptr if not found.
+ * @return The URL-decoded field value, or NULL if not found.
  * @note The returned pointer lives in arena memory. */
 const char*
 csilk_get_form_field(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
     return map_get(&c->request.form_params, key);
 }

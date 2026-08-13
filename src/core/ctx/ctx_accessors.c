@@ -24,14 +24,14 @@ const char*
 csilk_get_param(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
     for (int i = 0; i < c->params_count; i++) {
         if (strcmp(c->params[i].key, key) == 0) {
             return c->params[i].value;
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 int
@@ -46,7 +46,7 @@ csilk_get_param_key(csilk_ctx_t* c, int index)
     if (c && index >= 0 && index < c->params_count) {
         return c->params[index].key;
     }
-    return nullptr;
+    return NULL;
 }
 
 const char*
@@ -55,7 +55,7 @@ csilk_get_param_value(csilk_ctx_t* c, int index)
     if (c && index >= 0 && index < c->params_count) {
         return c->params[index].value;
     }
-    return nullptr;
+    return NULL;
 }
 
 const char*
@@ -85,13 +85,13 @@ csilk_set_request_header(csilk_ctx_t* c, const char* key, const char* value)
 const char*
 csilk_get_method(csilk_ctx_t* c)
 {
-    return c ? c->request.method : nullptr;
+    return c ? c->request.method : NULL;
 }
 
 const char*
 csilk_get_path(csilk_ctx_t* c)
 {
-    return c ? c->request.path : nullptr;
+    return c ? c->request.path : NULL;
 }
 
 int
@@ -125,7 +125,7 @@ csilk_ctx_set_sse(csilk_ctx_t* c, int is_sse)
 void*
 _csilk_get_internal_client(csilk_ctx_t* c)
 {
-    return c ? c->_internal_client : nullptr;
+    return c ? c->_internal_client : NULL;
 }
 
 void
@@ -139,13 +139,13 @@ _csilk_set_internal_client(csilk_ctx_t* c, void* client)
 const char*
 csilk_get_request_id(csilk_ctx_t* c)
 {
-    return c ? c->request_id : nullptr;
+    return c ? c->request_id : NULL;
 }
 
 csilk_arena_t*
 csilk_get_arena(csilk_ctx_t* c)
 {
-    return c ? c->arena : nullptr;
+    return c ? c->arena : NULL;
 }
 
 int
@@ -157,7 +157,7 @@ csilk_get_status(csilk_ctx_t* c)
 csilk_header_map_t*
 csilk_get_headers(csilk_ctx_t* c)
 {
-    return c ? &c->request.headers : nullptr;
+    return c ? &c->request.headers : NULL;
 }
 
 void
@@ -171,13 +171,13 @@ csilk_ctx_set_async(csilk_ctx_t* c, int is_async)
 csilk_server_t*
 csilk_ctx_get_server(csilk_ctx_t* c)
 {
-    return c ? (csilk_server_t*)c->server : nullptr;
+    return c ? (csilk_server_t*)c->server : NULL;
 }
 
 csilk_mq_t*
 csilk_ctx_get_mq(csilk_ctx_t* c)
 {
-    return (c && c->server) ? c->server->mq : nullptr;
+    return (c && c->server) ? c->server->mq : NULL;
 }
 
 int
@@ -203,25 +203,25 @@ csilk_set_request_id(csilk_ctx_t* c, const char* id)
 csilk_io_work_t*
 csilk_get_work_req(csilk_ctx_t* c)
 {
-    return c ? &c->work_req : nullptr;
+    return c ? &c->work_req : NULL;
 }
 
 const char*
 csilk_ctx_get_handler_path(csilk_ctx_t* c)
 {
-    return (c && c->current_handler) ? c->current_handler->path : nullptr;
+    return (c && c->current_handler) ? c->current_handler->path : NULL;
 }
 
 const char*
 csilk_ctx_get_handler_perm_required(csilk_ctx_t* c)
 {
-    return (c && c->current_handler) ? c->current_handler->perm_required : nullptr;
+    return (c && c->current_handler) ? c->current_handler->perm_required : NULL;
 }
 
 const char*
 csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c)
 {
-    return (c && c->current_handler) ? c->current_handler->perm_resource : nullptr;
+    return (c && c->current_handler) ? c->current_handler->perm_resource : NULL;
 }
 
 int
@@ -296,5 +296,5 @@ void (*csilk_get_on_ws_message(csilk_ctx_t* c))(csilk_ctx_t*   c,
                                                 size_t         len,
                                                 int            opcode)
 {
-    return c ? c->on_ws_message : nullptr;
+    return c ? c->on_ws_message : NULL;
 }

@@ -44,11 +44,11 @@
 void
 csilk_next(csilk_ctx_t* c)
 {
-    if (c->aborted || c->panicked || c->handlers == nullptr) {
+    if (c->aborted || c->panicked || c->handlers == NULL) {
         return;
     }
     c->handler_index++;
-    if (c->handlers[c->handler_index] != nullptr) {
+    if (c->handlers[c->handler_index] != NULL) {
         c->handlers[c->handler_index](c);
     }
 }
@@ -67,14 +67,14 @@ csilk_abort(csilk_ctx_t* c)
     c->aborted = 1;
 }
 
-static _Thread_local char* tls_large_body_pool = nullptr;
+static _Thread_local char* tls_large_body_pool = NULL;
 
 static void
 tls_large_body_pool_cleanup(void)
 {
     if (tls_large_body_pool) {
         free(tls_large_body_pool);
-        tls_large_body_pool = nullptr;
+        tls_large_body_pool = NULL;
     }
 }
 
@@ -111,7 +111,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
      * above does NOT free it — we must free it here.
      */
     free(c->request.path);
-    c->request.path = nullptr;
+    c->request.path = NULL;
 
     if (c->request.body && c->request.body_is_managed) {
         if (!tls_large_body_pool && c->request.body_len >= 65536) {
@@ -125,14 +125,14 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
             free(c->request.body);
         }
     }
-    c->request.body = nullptr;
+    c->request.body = NULL;
     c->request.body_len = 0;
     c->request.body_is_managed = 0;
 
     for (int i = 0; i < c->read_buffers_count; i++) {
         if (c->read_buffers[i]) {
             free(c->read_buffers[i]);
-            c->read_buffers[i] = nullptr;
+            c->read_buffers[i] = NULL;
         }
     }
     c->read_buffers_count = 0;
@@ -144,13 +144,13 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
 
     if (c->response.body && c->response.body_is_managed) {
         free((void*)c->response.body);
-        c->response.body = nullptr;
+        c->response.body = NULL;
         c->response.body_is_managed = 0;
     }
 
     if (c->file_fd >= 0) {
         csilk_io_fs_t close_req;
-        csilk_io_fs_close(nullptr, &close_req, c->file_fd, nullptr);
+        csilk_io_fs_close(NULL, &close_req, c->file_fd, NULL);
         csilk_io_fs_req_cleanup(&close_req);
         c->file_fd = -1;
     }
@@ -160,7 +160,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     if (c->storage_driver && c->storage_driver->clear) {
         c->storage_driver->clear(c);
     }
-    c->storage_head = nullptr;
+    c->storage_head = NULL;
 
     c->aborted = 0;
     c->panicked = 0;
@@ -169,16 +169,16 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->is_async = 0;
     c->response_started = 0;
     c->handler_index = -1;
-    c->current_handler = nullptr;
-    c->on_ws_message = nullptr;
+    c->current_handler = NULL;
+    c->on_ws_message = NULL;
     memset(c->request_id, 0, sizeof(c->request_id));
 }
 
 /** @brief Get the request body data and optionally its length.
  *
  * @param c       The request context.
- * @param out_len [out] If non-nullptr, receives the body length in bytes.
- * @return Pointer to the raw request body, or nullptr if no body or nullptr context.
+ * @param out_len [out] If non-NULL, receives the body length in bytes.
+ * @return Pointer to the raw request body, or NULL if no body or NULL context.
  * @note The returned pointer is heap-allocated and freed in
  * csilk_ctx_cleanup(). */
 const char*
@@ -187,13 +187,13 @@ csilk_get_body(csilk_ctx_t* c, size_t* out_len)
     if (out_len) {
         *out_len = c ? c->request.body_len : 0;
     }
-    return c ? c->request.body : nullptr;
+    return c ? c->request.body : NULL;
 }
 
 /** @brief Get the length of the request body.
  *
  * @param c The request context.
- * @return Body length in bytes, or 0 if the context is nullptr or body is empty.
+ * @return Body length in bytes, or 0 if the context is NULL or body is empty.
  */
 size_t
 csilk_get_body_len(csilk_ctx_t* c)
@@ -212,8 +212,8 @@ csilk_set_status(csilk_ctx_t* c, int status)
 /** @brief Get the response body data and optionally its length.
  *
  * @param c       The request context.
- * @param out_len [out] If non-nullptr, receives the response body length.
- * @return Pointer to the response body, or nullptr if no body or nullptr context.
+ * @param out_len [out] If non-NULL, receives the response body length.
+ * @return Pointer to the response body, or NULL if no body or NULL context.
  * @note The body may be managed (arena or heap) depending on how it was set.
  *       The caller must not free the returned pointer. */
 const char*
@@ -223,7 +223,7 @@ csilk_get_response_body(csilk_ctx_t* c, size_t* out_len)
         if (out_len) {
             *out_len = 0;
         }
-        return nullptr;
+        return NULL;
     }
     if (out_len) {
         *out_len = c->response.body_len;
@@ -238,7 +238,7 @@ csilk_get_response_body(csilk_ctx_t* c, size_t* out_len)
  * should be freed automatically during cleanup.
  *
  * @param c       The request context.
- * @param body    Pointer to the body data (may be nullptr).
+ * @param body    Pointer to the body data (may be NULL).
  * @param len     Body length in bytes.
  * @param managed If non-zero, the framework will free @p body during cleanup.
  * @note Setting managed=1 transfers ownership to the framework. With

@@ -52,13 +52,13 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
 {
     if (client->ssl) {
         SSL_free(client->ssl);
-        client->ssl = nullptr;
-        client->read_bio = nullptr;
-        client->write_bio = nullptr;
+        client->ssl = NULL;
+        client->read_bio = NULL;
+        client->write_bio = NULL;
     }
     if (client->h2_session) {
         nghttp2_session_del(client->h2_session);
-        client->h2_session = nullptr;
+        client->h2_session = NULL;
     }
     csilk_h2_free_streams(client);
     uint8_t old_gen = client->generation;
@@ -125,7 +125,7 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
     (void)server;
     worker_pool_t* wp = client->owner_pool;
     client->next = wp->active_clients;
-    client->prev = nullptr;
+    client->prev = NULL;
     if (wp->active_clients) {
         wp->active_clients->prev = client;
     }
@@ -150,7 +150,7 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
     if (client->next) {
         client->next->prev = client->prev;
     }
-    client->next = client->prev = nullptr;
+    client->next = client->prev = NULL;
 }
 
 static void
@@ -252,7 +252,7 @@ csilk_client_read_start(csilk_client_t* client)
     }
 
     size_t suggested_size = 65536;
-    if (client->read_buf == nullptr) {
+    if (client->read_buf == NULL) {
         client->read_buf = malloc(suggested_size);
     }
     void* buf = client->read_buf;
@@ -621,7 +621,7 @@ const char*
 csilk_get_client_ip(csilk_ctx_t* c)
 {
     if (!c || !c->_internal_client) {
-        return nullptr;
+        return NULL;
     }
     csilk_client_t*         client = (csilk_client_t*)c->_internal_client;
     struct sockaddr_storage addr;
@@ -635,7 +635,7 @@ csilk_get_client_ip(csilk_ctx_t* c)
         }
         return csilk_arena_strdup(c->arena, ip);
     }
-    return nullptr;
+    return NULL;
 }
 
 void

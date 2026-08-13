@@ -49,7 +49,7 @@ typedef struct csilk_session_s {
  * over a hash table for simplicity; with typical concurrency levels the
  * O(n) traversal is acceptable for <10K active sessions.
  */
-static csilk_session_t* session_store = nullptr;
+static csilk_session_t* session_store = NULL;
 
 /**
  * @brief Session store mutex — guards session_store and all linked-list
@@ -125,7 +125,7 @@ generate_session_id(csilk_ctx_t* c, char id[CSILK_UUID_BUF_SIZE])
  *
  * @param id  The session ID string to search for.
  *
- * @return Pointer to the csilk_session_t if found, nullptr otherwise.
+ * @return Pointer to the csilk_session_t if found, NULL otherwise.
  *
  * @note This function does NOT acquire the mutex. The caller must hold
  *       session_mutex when calling this function.
@@ -140,7 +140,7 @@ find_session(const char* id)
         }
         s = s->next;
     }
-    return nullptr;
+    return NULL;
 }
 
 /**
@@ -151,7 +151,7 @@ find_session(const char* id)
  *
  * @param id  The session ID string to search for.
  *
- * @return Pointer to the csilk_session_t if found, nullptr otherwise.
+ * @return Pointer to the csilk_session_t if found, NULL otherwise.
  */
 static csilk_session_t*
 find_session_locked(const char* id)
@@ -167,7 +167,7 @@ find_session_locked(const char* id)
  *
  * Prepends the session to the global singly-linked list of active sessions.
  *
- * @param session  The session to add. Must not be nullptr.
+ * @param session  The session to add. Must not be NULL.
  */
 static void
 add_session_locked(csilk_session_t* session)
@@ -217,7 +217,7 @@ remove_session_locked(csilk_session_t* session)
 static void
 cleanup_expired(void)
 {
-    time_t now = time(nullptr);
+    time_t now = time(NULL);
     session_lock();
     csilk_session_t** prev = &session_store;
     csilk_session_t*  s = session_store;
@@ -284,7 +284,7 @@ csilk_session_start(csilk_ctx_t* c)
     /* Look for an existing session cookie. If found and valid, resume it.
      Otherwise create a fresh session with a new UUID. */
     const char*      sid = csilk_get_cookie(c, SESSION_COOKIE);
-    csilk_session_t* session = nullptr;
+    csilk_session_t* session = NULL;
 
     if (sid) {
         session = find_session_locked(sid);
@@ -301,15 +301,15 @@ csilk_session_start(csilk_ctx_t* c)
         }
 
         generate_session_id(c, session->id);
-        session->expires_at = time(nullptr) + SESSION_TTL;
+        session->expires_at = time(NULL) + SESSION_TTL;
 
         add_session_locked(session);
 
         CSILK_LOG_D("Session: Created new session '%s' for request %p", session->id, (void*)c);
-        csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", nullptr, 0, 1);
+        csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0, 1);
     } else {
         /* Existing session: extend the expiry window. */
-        session->expires_at = time(nullptr) + SESSION_TTL;
+        session->expires_at = time(NULL) + SESSION_TTL;
         CSILK_LOG_D("Session: Resumed existing session '%s' for request %p", session->id, (void*)c);
     }
 
@@ -326,8 +326,8 @@ csilk_session_start(csilk_ctx_t* c)
  *
  * @param c     The request context (used to look up the session via
  *              csilk_get(c, "_session")).
- * @param key   Null-terminated key string. Must not be nullptr.
- * @param value Opaque pointer to the value to store. May be nullptr.
+ * @param key   Null-terminated key string. Must not be NULL.
+ * @param value Opaque pointer to the value to store. May be NULL.
  *
  * @note The key is duplicated via strdup(). The value pointer is stored
  *       as-is — the caller is responsible for managing its lifetime.
@@ -365,6 +365,11 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
     }
 
     new_d->key = strdup(key);
+    if (!new_d->key) {
+        CSILK_LOG_E("Session: failed to duplicate key '%s'", key);
+        free(new_d);
+        return;
+    }
     new_d->value = value;
     new_d->next = session->data;
     session->data = new_d;
@@ -377,21 +382,21 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
  * its associated value.
  *
  * @param c   The request context (used to look up the session).
- * @param key Null-terminated key string. Must not be nullptr.
+ * @param key Null-terminated key string. Must not be NULL.
  *
  * @return The value pointer previously stored with csilk_session_set(), or
- *         nullptr if the key is not found or no session is active.
+ *         NULL if the key is not found or no session is active.
  */
 void*
 csilk_session_get(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_session_t* session = csilk_get(c, "_session");
     if (!session) {
-        return nullptr;
+        return NULL;
     }
 
     CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
@@ -420,7 +425,7 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
         free(val);
     }
 
-    return nullptr;
+    return NULL;
 }
 
 /**
@@ -458,16 +463,16 @@ csilk_session_destroy(csilk_ctx_t* c)
     }
     free(session);
 
-    csilk_set(c, "_session", nullptr);
-    csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", nullptr, 0, 1);
+    csilk_set(c, "_session", NULL);
+    csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);
 }
 
 const char*
 csilk_session_get_id(csilk_ctx_t* c)
 {
     if (!c) {
-        return nullptr;
+        return NULL;
     }
     csilk_session_t* session = csilk_get(c, "_session");
-    return session ? session->id : nullptr;
+    return session ? session->id : NULL;
 }

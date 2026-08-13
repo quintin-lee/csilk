@@ -19,7 +19,7 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
     csilk_mq_topic_t* t = calloc(1, sizeof(csilk_mq_topic_t));
     if (!t) {
         CSILK_LOG_E("MQ: Failed to allocate memory for topic '%s'", name);
-        return nullptr;
+        return NULL;
     }
     t->name = strdup(name);
     t->next = mq->topics;

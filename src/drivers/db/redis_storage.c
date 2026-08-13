@@ -60,24 +60,24 @@ redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
  *
  * @param c   Request context.
  * @param key Null-terminated key.
- * @return Value string, or nullptr if the key does not exist. */
+ * @return Value string, or NULL if the key does not exist. */
 static void*
 redis_storage_get(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
     redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
     if (!drv || !drv->pool) {
-        return nullptr;
+        return NULL;
     }
 
     redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
     if (!conn || !conn->c) {
-        return nullptr;
+        return NULL;
     }
 
-    void*       result = nullptr;
+    void*       result = NULL;
     redisReply* reply = redisCommand(conn->c, "GET %s", key);
     if (reply) {
         if (reply->type == REDIS_REPLY_STRING && reply->str && c->arena) {
@@ -124,7 +124,7 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
         return -1;
     }
 
-    redisReply* reply = nullptr;
+    redisReply* reply = NULL;
     if (ttl_sec > 0) {
         reply = redisCommand(conn->c, "SET %s %s EX %d", key, value, ttl_sec);
     } else {
@@ -148,25 +148,25 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
  *
  * @param c   Request context.
  * @param key Null-terminated key.
- * @return Heap-allocated value string, or nullptr if the key does not
+ * @return Heap-allocated value string, or NULL if the key does not
  *         exist. */
 static char*
 redis_storage_get_string(csilk_ctx_t* c, const char* key)
 {
     if (!c || !key) {
-        return nullptr;
+        return NULL;
     }
     redis_storage_driver_t* drv = (redis_storage_driver_t*)c->storage_driver;
     if (!drv || !drv->pool) {
-        return nullptr;
+        return NULL;
     }
 
     redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(drv->pool);
     if (!conn || !conn->c) {
-        return nullptr;
+        return NULL;
     }
 
-    char*       result = nullptr;
+    char*       result = NULL;
     redisReply* reply = redisCommand(conn->c, "GET %s", key);
     if (reply) {
         if (reply->type == REDIS_REPLY_STRING && reply->str) {
@@ -236,7 +236,7 @@ redis_storage_sync_state(csilk_ctx_t* c, const char* key, int state, int ttl_sec
         return -1;
     }
 
-    redisReply* reply = nullptr;
+    redisReply* reply = NULL;
     if (ttl_sec > 0) {
         reply = redisCommand(conn->c, "SET %s %d EX %d", key, state, ttl_sec);
     } else {
@@ -259,17 +259,17 @@ redis_storage_sync_state(csilk_ctx_t* c, const char* key, int state, int ttl_sec
  * csilk_storage_driver_t vtable via Redis SET/GET/INCR commands.
  *
  * @param pool An already-connected Redis database pool.
- * @return A heap-allocated storage driver, or nullptr on allocation
+ * @return A heap-allocated storage driver, or NULL on allocation
  *         failure or null pool. */
 csilk_storage_driver_t*
 csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
 {
     if (!pool) {
-        return nullptr;
+        return NULL;
     }
     redis_storage_driver_t* drv = calloc(1, sizeof(redis_storage_driver_t));
     if (!drv) {
-        return nullptr;
+        return NULL;
     }
 
     drv->base.set = redis_storage_set;

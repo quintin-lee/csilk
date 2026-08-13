@@ -85,19 +85,19 @@ csilk_url_decode(char* str)
  * returned in @p path. The query portion (everything after '?') is
  * returned raw in @p query (NOT URL-decoded — use csilk_parse_query()
  * for that). If there is no '?', the entire URL is treated as the path
- * and @p query is set to nullptr.
+ * and @p query is set to NULL.
  *
  * @param url   Full URL string (e.g., "/foo/bar?key=val").
  * @param path  [out] Receives a malloc'd, URL-decoded path string.
- * @param query [out] Receives a malloc'd raw query string, or nullptr if no
+ * @param query [out] Receives a malloc'd raw query string, or NULL if no
  *              query was present.
  * @note Both output strings must be freed by the caller with free().
- *       On allocation failure, both outputs may be nullptr. */
+ *       On allocation failure, both outputs may be NULL. */
 void
 csilk_split_url(const char* url, char** path, char** query)
 {
-    *path = nullptr;
-    *query = nullptr;
+    *path = NULL;
+    *query = NULL;
     if (!url) {
         return;
     }
@@ -117,7 +117,7 @@ csilk_split_url(const char* url, char** path, char** query)
         *query = strdup(qmark + 1);
         if (!*query) {
             free(*path);
-            *path = nullptr;
+            *path = NULL;
         }
     } else {
         *path = strdup(url);

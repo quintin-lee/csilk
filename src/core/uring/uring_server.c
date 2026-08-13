@@ -46,12 +46,12 @@ csilk_server_new(csilk_router_t* router)
     csilk_arena_init();
     csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
     if (!s) {
-        return nullptr;
+        return NULL;
     }
     s->loop = malloc(sizeof(csilk_io_loop_t));
     if (!s->loop) {
         free(s);
-        return nullptr;
+        return NULL;
     }
     int uring_flags = IORING_SETUP_SQPOLL;
     int ret = io_uring_queue_init(4096, s->loop, uring_flags);
@@ -61,7 +61,7 @@ csilk_server_new(csilk_router_t* router)
         if (ret < 0) {
             free(s->loop);
             free(s);
-            return nullptr;
+            return NULL;
         }
     }
     CSILK_LOG_I("io_uring initialized (depth=4096, flags=0x%x)", uring_flags);
@@ -192,7 +192,7 @@ csilk_server_free(csilk_server_t* server)
             pthread_join((pthread_t)server->worker_tids[i], NULL);
         }
         free(server->worker_tids);
-        server->worker_tids = nullptr;
+        server->worker_tids = NULL;
     }
 
     free(server->spa_doc_root);
@@ -350,7 +350,7 @@ csilk_server_run(csilk_server_t* server, int port)
     }
 
     if (server->config.enable_openapi && server->router) {
-        static csilk_handler_t handlers[] = {openapi_json_handler, nullptr};
+        static csilk_handler_t handlers[] = {openapi_json_handler, NULL};
         csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
         CSILK_LOG_I("Server: OpenAPI endpoint automatically registered at GET /openapi.json");
     }
@@ -444,7 +444,7 @@ csilk_server_run(csilk_server_t* server, int port)
         } else {
             CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
             free(server->worker_tids);
-            server->worker_tids = nullptr;
+            server->worker_tids = NULL;
         }
     }
 
@@ -500,7 +500,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
     CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);
 
-    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_START);
+    _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
     struct io_uring_cqe* cqe;
     int                  running = 1;
@@ -645,13 +645,13 @@ csilk_server_run(csilk_server_t* server, int port)
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
-    return server ? server->mq : nullptr;
+    return server ? server->mq : NULL;
 }
 
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
-    return server ? server->router : nullptr;
+    return server ? server->router : NULL;
 }
 
 void

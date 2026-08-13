@@ -29,7 +29,7 @@
 static csilk_perm_driver_t* drivers[16];
 static int                  driver_count = 0;
 /** @brief Currently active default driver for authorization checks. */
-static csilk_perm_driver_t* default_driver = nullptr;
+static csilk_perm_driver_t* default_driver = NULL;
 static atomic_int           perm_initialized = 0;
 
 /** @brief Initialize the permission subsystem.
@@ -52,7 +52,7 @@ csilk_perm_init(void)
  * The first registered driver automatically becomes the default.
  * @param name   Driver name (e.g., "simple", "rbac").
  * @param driver Driver vtable with check() callback.
- * @return 0 on success, -1 if name is nullptr, driver is nullptr,
+ * @return 0 on success, -1 if name is NULL, driver is NULL,
  *         or the registry is full. */
 int
 csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
@@ -78,19 +78,19 @@ csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
  *
  * Linear search of the driver registry.
  * @param name Driver name to find (case-sensitive).
- * @return Driver pointer, or nullptr if not found. */
+ * @return Driver pointer, or NULL if not found. */
 csilk_perm_driver_t*
 csilk_perm_get_driver(const char* name)
 {
     if (!name) {
-        return nullptr;
+        return NULL;
     }
     for (int i = 0; i < driver_count; i++) {
         if (strcmp(drivers[i]->name, name) == 0) {
             return drivers[i];
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Set the default permission driver by name.

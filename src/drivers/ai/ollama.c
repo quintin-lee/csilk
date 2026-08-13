@@ -38,7 +38,7 @@ ollama_init(const char* api_key, const char* base_url)
     (void)api_key;
     ollama_state_t* state = malloc(sizeof(ollama_state_t));
     if (!state) {
-        return nullptr;
+        return NULL;
     }
 
     state->base_url = strdup(base_url ? base_url : "http://localhost:11434");
@@ -158,7 +158,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     char url[512];
     snprintf(url, sizeof(url), "%s/api/chat", state->base_url);
 
-    struct curl_slist* headers = nullptr;
+    struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
     struct curl_response cr = {0};
@@ -220,7 +220,7 @@ ollama_embeddings(void*                           state_ptr,
         return -1;
     }
 
-    res->values = nullptr;
+    res->values = NULL;
     res->count = 0;
     res->dimension = 0;
 
@@ -239,7 +239,7 @@ ollama_embeddings(void*                           state_ptr,
         char url[512];
         snprintf(url, sizeof(url), "%s/api/embeddings", state->base_url);
 
-        struct curl_slist* headers = nullptr;
+        struct curl_slist* headers = NULL;
         headers = curl_slist_append(headers, "Content-Type: application/json");
 
         struct curl_response cr = {0};

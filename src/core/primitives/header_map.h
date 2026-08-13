@@ -23,7 +23,7 @@
  *
  * @param key Header key string (null-terminated).
  * @return Bucket index in the range [0, CSILK_HEADER_BUCKETS - 1].
- * @note The caller must ensure @p key is non-nullptr.
+ * @note The caller must ensure @p key is non-NULL.
  */
 CSILK_INTERNAL uint32_t hash_key(const char* key);
 
@@ -33,9 +33,9 @@ CSILK_INTERNAL uint32_t hash_key(const char* key);
  * Iterates the linked list at the hashed bucket and compares keys using
  * strcasecmp. Returns the first matching value.
  *
- * @param map Header hash map (must not be nullptr).
+ * @param map Header hash map (must not be NULL).
  * @param key Header key to find (case-insensitive).
- * @return Pointer to the value string, or nullptr if the key is not found.
+ * @return Pointer to the value string, or NULL if the key is not found.
  * @note The returned string shares the lifetime of the map's arena.
  */
 CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
@@ -52,7 +52,7 @@ CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
  * @param key   Header key (case-insensitive via strcasecmp on lookup).
  * @param value Header value string.
  * @note The key and value are duplicated into arena memory. If the arena is
- *       nullptr this function silently does nothing.
+ *       NULL this function silently does nothing.
  */
 CSILK_INTERNAL void map_set_view(csilk_ctx_t*            c,
                                  csilk_header_map_t*     map,
@@ -74,7 +74,7 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
  * @param key   Header key.
  * @param value Header value.
  * @note Both key and value are duplicated into arena memory. Silently does
- *       nothing if the arena is nullptr.
+ *       nothing if the arena is NULL.
  */
 CSILK_INTERNAL void
 map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);

@@ -8,6 +8,7 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "csilk/core/internal.h"
+#include "messaging/mq_internal.h"
 
 static void
 test_mq_monitoring_logic()

@@ -53,7 +53,7 @@ csilk_vector_db_t*
 csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* api_key)
 {
     if (!driver_name) {
-        return nullptr;
+        return NULL;
     }
 
     if (strcmp(driver_name, "embedded") == 0) {
@@ -67,7 +67,7 @@ csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* a
         initialized = 1;
     }
 
-    const csilk_vector_db_driver_t* driver = nullptr;
+    const csilk_vector_db_driver_t* driver = NULL;
     for (int i = 0; i < vector_driver_count; i++) {
         if (strcmp(vector_drivers[i]->name, driver_name) == 0) {
             driver = vector_drivers[i];
@@ -76,18 +76,18 @@ csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* a
     }
 
     if (!driver) {
-        return nullptr;
+        return NULL;
     }
 
     void* state = driver->init(endpoint, api_key);
     if (!state) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_vector_db_t* db = malloc(sizeof(csilk_vector_db_t));
     if (!db) {
         driver->free(state);
-        return nullptr;
+        return NULL;
     }
 
     db->driver = driver;
@@ -184,7 +184,7 @@ csilk_vector_search_response_free(csilk_vector_search_response_t* res)
     }
     free(res->error_message);
 
-    res->results = nullptr;
+    res->results = NULL;
     res->count = 0;
-    res->error_message = nullptr;
+    res->error_message = NULL;
 }

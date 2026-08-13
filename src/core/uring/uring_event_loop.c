@@ -104,7 +104,7 @@ on_stop_async(csilk_io_async_t* handle)
     csilk_server_t* server = (csilk_server_t*)handle->data;
     CSILK_LOG_I("Server: initiating graceful shutdown");
 
-    _csilk_trigger_hooks(server, nullptr, CSILK_HOOK_SERVER_STOP);
+    _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
 
     CSILK_LOG_D("Server: closing server socket listener");
     close(server->server_handle.fd);
@@ -131,7 +131,7 @@ on_stop_async(csilk_io_async_t* handle)
     if (server->mq) {
         CSILK_LOG_D("Server: freeing message queue");
         _csilk_mq_free(server->mq);
-        server->mq = nullptr;
+        server->mq = NULL;
     }
 }
 

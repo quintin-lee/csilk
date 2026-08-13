@@ -24,7 +24,7 @@ csilk_wf_manager_new(void)
 {
     csilk_wf_manager_t* mgr = (csilk_wf_manager_t*)calloc(1, sizeof(csilk_wf_manager_t));
     if (!mgr) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_mutex_init(&mgr->mutex);
@@ -90,7 +90,7 @@ csilk_wf_manager_reload(csilk_wf_manager_t* mgr, const char* name, csilk_wf_t* n
     }
 
     csilk_mutex_lock(&mgr->mutex);
-    csilk_wf_managed_entry_t* target = nullptr;
+    csilk_wf_managed_entry_t* target = NULL;
     for (size_t i = 0; i < mgr->count; i++) {
         if (strcmp(mgr->entries[i].name, name) == 0) {
             target = &mgr->entries[i];
@@ -121,11 +121,11 @@ csilk_wf_t*
 csilk_wf_manager_get(csilk_wf_manager_t* mgr, const char* name)
 {
     if (!mgr || !name) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_mutex_lock(&mgr->mutex);
-    csilk_wf_t* result = nullptr;
+    csilk_wf_t* result = NULL;
     for (size_t i = 0; i < mgr->count; i++) {
         if (strcmp(mgr->entries[i].name, name) == 0) {
             csilk_mutex_lock(&mgr->entries[i].mutex);

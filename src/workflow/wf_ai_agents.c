@@ -27,7 +27,7 @@ agent_react_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_da
     (void)input;
     csilk_agent_react_config_t* config = (csilk_agent_react_config_t*)user_data;
     if (!config) {
-        return nullptr;
+        return NULL;
     }
     const char* default_sys = "You are an AI ReAct Reasoning Agent. Follow the Thought, Action, "
                               "ActionInput, Observation cycle to solve the problem.";
@@ -46,13 +46,13 @@ csilk_wf_node_t*
 csilk_wf_add_agent_react(csilk_wf_t* wf, const char* id, const csilk_agent_react_config_t* config)
 {
     if (!wf || !id || !config) {
-        return nullptr;
+        return NULL;
     }
     csilk_agent_react_config_t* copy = malloc(sizeof(csilk_agent_react_config_t));
     memcpy(copy, config, sizeof(csilk_agent_react_config_t));
-    copy->model = config->model ? strdup(config->model) : nullptr;
-    copy->system_prompt = config->system_prompt ? strdup(config->system_prompt) : nullptr;
-    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+    copy->model = config->model ? strdup(config->model) : NULL;
+    copy->system_prompt = config->system_prompt ? strdup(config->system_prompt) : NULL;
+    copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
 
     csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_react_node_handler, copy);
     if (node) {
@@ -77,11 +77,11 @@ agent_reflexion_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* use
 {
     csilk_agent_reflexion_config_t* config = (csilk_agent_reflexion_config_t*)user_data;
     if (!config) {
-        return nullptr;
+        return NULL;
     }
     int           max_reflections = config->max_reflections > 0 ? config->max_reflections : 3;
     int           reflection_count = 0;
-    csilk_data_t* current_output = nullptr;
+    csilk_data_t* current_output = NULL;
 
     while (reflection_count < max_reflections) {
         reflection_count++;
@@ -99,7 +99,7 @@ agent_reflexion_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* use
         }
 
         if (config->eval_fn) {
-            char* feedback = nullptr;
+            char* feedback = NULL;
             int   pass = config->eval_fn(
                 (const char*)current_output->value, &feedback, config->eval_user_data);
             if (pass) {
@@ -126,12 +126,12 @@ csilk_wf_add_agent_reflexion(csilk_wf_t*                           wf,
                              const csilk_agent_reflexion_config_t* config)
 {
     if (!wf || !id || !config) {
-        return nullptr;
+        return NULL;
     }
     csilk_agent_reflexion_config_t* copy = malloc(sizeof(csilk_agent_reflexion_config_t));
     memcpy(copy, config, sizeof(csilk_agent_reflexion_config_t));
-    copy->model = config->model ? strdup(config->model) : nullptr;
-    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+    copy->model = config->model ? strdup(config->model) : NULL;
+    copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
 
     csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_reflexion_node_handler, copy);
     if (node) {
@@ -172,7 +172,7 @@ agent_worker_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_d
 {
     worker_config_t* wc = (worker_config_t*)user_data;
     if (!wc || !wc->handler) {
-        return nullptr;
+        return NULL;
     }
     return wc->handler(ctx, input, wc->user_data);
 }
@@ -182,7 +182,7 @@ csilk_wf_add_agent_worker(
     csilk_wf_t* wf, const char* id, const char* topic, csilk_wf_handler_t handler, void* user_data)
 {
     if (!wf || !id || !topic || !handler) {
-        return nullptr;
+        return NULL;
     }
     worker_config_t* wc = malloc(sizeof(worker_config_t));
     wc->topic = strdup(topic);
@@ -212,7 +212,7 @@ agent_hitl_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_dat
 {
     csilk_agent_hitl_config_t* config = (csilk_agent_hitl_config_t*)user_data;
     if (!config) {
-        return nullptr;
+        return NULL;
     }
     csilk_ai_config_t ai_cfg = {
         .model = config->model ? config->model : "gpt-3.5-turbo",
@@ -245,12 +245,12 @@ csilk_wf_node_t*
 csilk_wf_add_agent_hitl(csilk_wf_t* wf, const char* id, const csilk_agent_hitl_config_t* config)
 {
     if (!wf || !id || !config) {
-        return nullptr;
+        return NULL;
     }
     csilk_agent_hitl_config_t* copy = malloc(sizeof(csilk_agent_hitl_config_t));
     memcpy(copy, config, sizeof(csilk_agent_hitl_config_t));
-    copy->model = config->model ? strdup(config->model) : nullptr;
-    copy->prompt = config->prompt ? strdup(config->prompt) : nullptr;
+    copy->model = config->model ? strdup(config->model) : NULL;
+    copy->prompt = config->prompt ? strdup(config->prompt) : NULL;
 
     csilk_wf_node_t* node = csilk_wf_add(wf, id, agent_hitl_node_handler, copy);
     if (node) {

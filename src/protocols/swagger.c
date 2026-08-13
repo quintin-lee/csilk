@@ -151,7 +151,7 @@ field_type_to_openapi_type(csilk_field_type_t type)
  * wrapper with "items".
  *
  * @param type_name Registered reflection type name.
- * @return A csilk_json_t object representing the OpenAPI schema, or nullptr if the
+ * @return A csilk_json_t object representing the OpenAPI schema, or NULL if the
  *         type is not registered or allocation fails.
  * @note The caller must free the returned csilk_json_t with csilk_json_free(). */
 static csilk_json_t*
@@ -159,19 +159,19 @@ generate_schema_for_type(const char* type_name)
 {
     const csilk_reflect_entry_t* entry = csilk_reflect_find(type_name);
     if (!entry) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* schema = csilk_json_object();
     if (!schema) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_add_string(schema, "type", "object");
     csilk_json_t* properties = csilk_json_object();
     if (!properties) {
         csilk_json_free(schema);
-        return nullptr;
+        return NULL;
     }
 
     /*
@@ -302,11 +302,11 @@ auto_register_schema(const char* name, const csilk_reflect_entry_t* entry, void*
  * and output_type metadata using the reflection engine.
  *
  * @param router      The router instance containing registered routes.
- * @param title       API title for the info section (pass nullptr for default).
- * @param version     API version string (pass nullptr for default "1.0.0").
- * @param description API description (may be nullptr).
+ * @param title       API title for the info section (pass NULL for default).
+ * @param version     API version string (pass NULL for default "1.0.0").
+ * @param description API description (may be NULL).
  * @return A csilk_json_t object representing the full OpenAPI document. Caller must
- *         free with csilk_json_free(). Returns nullptr if router is nullptr or
+ *         free with csilk_json_free(). Returns NULL if router is NULL or
  *         allocation fails. */
 csilk_json_t*
 csilk_generate_openapi_json(csilk_router_t* router,
@@ -315,12 +315,12 @@ csilk_generate_openapi_json(csilk_router_t* router,
                             const char*     description)
 {
     if (!router) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* doc = csilk_json_object();
     if (!doc) {
-        return nullptr;
+        return NULL;
     }
 
     // OpenAPI version
@@ -342,7 +342,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
 
     // Components section
     csilk_json_t* components = csilk_json_object();
-    csilk_json_t* schemas = nullptr;
+    csilk_json_t* schemas = NULL;
     if (components) {
         schemas = csilk_json_object();
     }
@@ -351,7 +351,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
     csilk_json_t* routes = csilk_router_collect_routes(router);
     if (!routes) {
         csilk_json_free(doc);
-        return nullptr;
+        return NULL;
     }
 
     /*
@@ -512,7 +512,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
             }
 
             // Request body (if input_type is set)
-            const char* input_type = input_item ? csilk_json_string_value(input_item) : nullptr;
+            const char* input_type = input_item ? csilk_json_string_value(input_item) : NULL;
             if (input_type && *input_type != '\0') {
                 // Add schema for this type
                 if (schemas) {
@@ -543,9 +543,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
             csilk_json_t* responses = csilk_json_object();
             csilk_json_add_object(operation, "responses", responses);
             if (responses) {
-                const char* output_type =
-                    output_item ? csilk_json_string_value(output_item) : nullptr;
-                int has_output = (output_type && *output_type != '\0');
+                const char* output_type = output_item ? csilk_json_string_value(output_item) : NULL;
+                int         has_output = (output_type && *output_type != '\0');
 
                 if (has_output && schemas) {
                     add_schema(schemas, output_type);
@@ -631,7 +630,7 @@ csilk_generate_openapi_json(csilk_router_t* router,
  * @param description API description.
  * @note The response is sent synchronously via csilk_json(). On failure, a
  *       500 error response is sent. */
-static char*         g_openapi_cache_json = nullptr;
+static char*         g_openapi_cache_json = NULL;
 static csilk_once_t  g_openapi_cache_once = CSILK_ONCE_INIT;
 static csilk_mutex_t g_openapi_cache_mutex;
 

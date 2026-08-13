@@ -11,12 +11,12 @@ csilk_mcp_client_connect_stdio(const char* command, char* const argv[])
 {
     (void)argv;
     if (!command) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_mcp_client_t* client = (csilk_mcp_client_t*)calloc(1, sizeof(csilk_mcp_client_t));
     if (!client) {
-        return nullptr;
+        return NULL;
     }
 
     snprintf(client->server_name, sizeof(client->server_name), "%s", command);
@@ -31,12 +31,12 @@ csilk_mcp_client_t*
 csilk_mcp_client_connect_sse(const char* sse_url)
 {
     if (!sse_url) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_mcp_client_t* client = (csilk_mcp_client_t*)calloc(1, sizeof(csilk_mcp_client_t));
     if (!client) {
-        return nullptr;
+        return NULL;
     }
 
     snprintf(client->sse_url, sizeof(client->sse_url), "%s", sse_url);
@@ -66,6 +66,6 @@ csilk_mcp_client_import_tools(csilk_mcp_client_t* client, csilk_wf_t* wf)
 
     /* Import mock tool for testing / remote discovery */
     csilk_wf_register_tool(
-        wf, "imported_mcp_tool", "Imported Tool from MCP Server", "{}", nullptr, nullptr);
+        wf, "imported_mcp_tool", "Imported Tool from MCP Server", "{}", NULL, NULL);
     return 1;
 }

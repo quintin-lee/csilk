@@ -185,7 +185,7 @@ admin_flamegraph_handler(csilk_ctx_t* c)
 
     usleep(5000000);
 
-    char*  svg = nullptr;
+    char*  svg = NULL;
     size_t svg_len = 0;
     if (csilk_flamegraph_stop(&svg, &svg_len) == 0 && svg) {
         csilk_set_header(c, "Content-Type", "image/svg+xml");
@@ -240,7 +240,7 @@ admin_profile_quick_handler(csilk_ctx_t* c)
         return;
     }
     usleep(100000);
-    csilk_flamegraph_stop(nullptr, nullptr);
+    csilk_flamegraph_stop(NULL, NULL);
     csilk_json_error(c, 200, "Quick profile complete");
 }
 
@@ -263,7 +263,7 @@ admin_ws_handler(csilk_ctx_t* c)
 void
 csilk_admin_serve(csilk_app_t* app, const char* app_path)
 {
-    csilk_admin_serve_secure(app, app_path, nullptr);
+    csilk_admin_serve_secure(app, app_path, NULL);
 }
 
 /**

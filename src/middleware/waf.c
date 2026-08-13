@@ -28,7 +28,7 @@ static waf_pattern_t sql_rules[] = {
     {"WAITFOR DELAY", sizeof("WAITFOR DELAY") - 1},
     {"SLEEP(",        sizeof("SLEEP(") - 1       },
     {"PG_SLEEP(",     sizeof("PG_SLEEP(") - 1    },
-    {nullptr,         0                          }
+    {NULL,            0                          }
 };
 
 /** @brief Common patterns for Cross-Site Scripting (XSS) attacks. */
@@ -38,14 +38,14 @@ static waf_pattern_t xss_rules[] = {
     {"ONLOAD=",     sizeof("ONLOAD=") - 1    },
     {"JAVASCRIPT:", sizeof("JAVASCRIPT:") - 1},
     {"ALERT(",      sizeof("ALERT(") - 1     },
-    {nullptr,       0                        }
+    {NULL,          0                        }
 };
 
 /** @brief Common patterns for Directory Traversal attacks. */
 static waf_pattern_t traversal_rules[] = {
-    {"../",   sizeof("../") - 1 },
-    {"..\\",  sizeof("..\\") - 1},
-    {nullptr, 0                 }
+    {"../",  sizeof("../") - 1 },
+    {"..\\", sizeof("..\\") - 1},
+    {NULL,   0                 }
 };
 
 /**
@@ -176,7 +176,7 @@ csilk_waf_middleware(csilk_ctx_t* c)
         }
     }
 
-    waf_check_ctx_t wctx = {c, 0, nullptr, nullptr, nullptr, nullptr};
+    waf_check_ctx_t wctx = {c, 0, NULL, NULL, NULL, NULL};
 
     /* Check query parameters for SQLi/XSS */
     if (!blocked) {

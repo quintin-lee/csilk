@@ -70,7 +70,7 @@ typedef struct {
     csilk_ctx_t*      notify_ctx;     /**< Admin context for completion notification. */
 } fg_profiler_t;
 
-static fg_profiler_t* g_profiler = nullptr;
+static fg_profiler_t* g_profiler = NULL;
 
 /** @brief djb2 hash function for collapsed stack strings.
  *
@@ -179,7 +179,7 @@ fg_sampler_thread(void* arg)
         usleep(p->interval_us);
     }
 
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Render accumulated samples as a Brendan Gregg-style SVG flame graph.
@@ -329,11 +329,11 @@ csilk_flamegraph_start(useconds_t interval_us)
         p->hash_table[i] = -1;
     }
     p->interval_us = interval_us;
-    pthread_mutex_init(&p->mutex, nullptr);
+    pthread_mutex_init(&p->mutex, NULL);
     atomic_store(&p->running, 1);
     atomic_store(&p->sample_count, 0);
 
-    if (pthread_create(&p->sampler_thread, nullptr, fg_sampler_thread, p) != 0) {
+    if (pthread_create(&p->sampler_thread, NULL, fg_sampler_thread, p) != 0) {
         pthread_mutex_destroy(&p->mutex);
         free(p->entries);
         free(p->hash_table);
@@ -362,8 +362,8 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
     }
     fg_profiler_t* p = g_profiler;
     atomic_store(&p->running, 0);
-    pthread_join(p->sampler_thread, nullptr);
-    g_profiler = nullptr;
+    pthread_join(p->sampler_thread, NULL);
+    g_profiler = NULL;
 
     fg_generate_svg(p, out_svg, out_len);
 

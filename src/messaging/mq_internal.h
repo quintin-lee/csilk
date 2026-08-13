@@ -23,12 +23,11 @@
  * Messages are heap-allocated and linked via @p next.
  */
 typedef struct csilk_mq_msg_s {
-    char*  topic;   /**< NUL-terminated topic string (heap-allocated copy). */
-    void*  payload; /**< Message payload bytes (heap-allocated copy of published
+    char*                  topic;   /**< NUL-terminated topic string (heap-allocated copy). */
+    void*                  payload; /**< Message payload bytes (heap-allocated copy of published
                     data). */
-    size_t len;     /**< Byte length of @p payload. */
-    struct csilk_mq_msg_s*
-        next;       /**< Pointer to the next message in the queue (nullptr for tail). */
+    size_t                 len;     /**< Byte length of @p payload. */
+    struct csilk_mq_msg_s* next; /**< Pointer to the next message in the queue (NULL for tail). */
 } csilk_mq_msg_t;
 
 /**
@@ -82,7 +81,7 @@ struct csilk_mq_s {
     /* Persistence (WAL) */
     csilk_io_file_t wal_fd;    /**< File descriptor for the Write-Ahead Log, or -1 if
                            disabled. */
-    char*           wal_path;  /**< Path to the WAL file (heap-allocated copy, nullptr if
+    char*           wal_path;  /**< Path to the WAL file (heap-allocated copy, NULL if
                            disabled). */
     csilk_mutex_t   wal_mutex; /**< Mutex guarding WAL append operations. */
 
@@ -132,7 +131,7 @@ typedef struct {
  * @brief Internal: Create a new MQ instance bound to the event loop.
  *
  * @param loop  The I/O event loop (libuv or io_uring).
- * @return A new MQ instance (heap-allocated), or nullptr on failure.
+ * @return A new MQ instance (heap-allocated), or NULL on failure.
  */
 CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(csilk_io_loop_t* loop);
 

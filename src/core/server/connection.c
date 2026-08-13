@@ -49,8 +49,8 @@ alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* b
  * In multi-worker mode, each worker thread has its own pool with no shared
  * state — pool_get is a pure thread-local O(1) operation with zero locking.
  *
- * @param wp The worker pool (must not be nullptr).
- * @return A csilk_client_t ready for use, or nullptr on allocation failure. */
+ * @param wp The worker pool (must not be NULL).
+ * @return A csilk_client_t ready for use, or NULL on allocation failure. */
 static csilk_client_t*
 pool_get(worker_pool_t* wp)
 {
@@ -79,13 +79,13 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
 {
     if (client->ssl) {
         SSL_free(client->ssl);
-        client->ssl = nullptr;
-        client->read_bio = nullptr;
-        client->write_bio = nullptr;
+        client->ssl = NULL;
+        client->read_bio = NULL;
+        client->write_bio = NULL;
     }
     if (client->h2_session) {
         nghttp2_session_del(client->h2_session);
-        client->h2_session = nullptr;
+        client->h2_session = NULL;
     }
     csilk_h2_free_streams(client);
     memset(client, 0, sizeof(*client));
@@ -102,8 +102,8 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
  * to creating a new arena on the fly. Pre-allocated arenas already have their
  * first chunk ready, so the hot path avoids aligned_alloc entirely.
  *
- * @param wp The worker pool (must not be nullptr).
- * @return A csilk_arena_t ready for use, or nullptr on allocation failure. */
+ * @param wp The worker pool (must not be NULL).
+ * @return A csilk_arena_t ready for use, or NULL on allocation failure. */
 static csilk_arena_t*
 pool_get_arena(worker_pool_t* wp)
 {
@@ -185,7 +185,7 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
     (void)server;
     worker_pool_t* wp = client->owner_pool;
     client->next = wp->active_clients;
-    client->prev = nullptr;
+    client->prev = NULL;
     if (wp->active_clients) {
         wp->active_clients->prev = client;
     }
@@ -212,7 +212,7 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
     if (client->next) {
         client->next->prev = client->prev;
     }
-    client->next = client->prev = nullptr;
+    client->next = client->prev = NULL;
 }
 
 /** @brief Remove a client from the active list (thread-safe).
@@ -257,7 +257,7 @@ client_destroy(csilk_client_t* client)
  *  initialization or in unit tests).
  *
  *  @param c The request context.
- *  @return A pointer to the owning I/O event loop (never nullptr). */
+ *  @return A pointer to the owning I/O event loop (never NULL). */
 CSILK_INTERNAL csilk_io_loop_t*
 _csilk_ctx_loop(csilk_ctx_t* c)
 {
@@ -652,7 +652,7 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
                 CSILK_LOG_W("Connection: read_buffers capacity exceeded, freeing "
                             "immediately");
                 free(base);
-                base = nullptr;
+                base = NULL;
             }
 
             if (base) {
@@ -694,13 +694,13 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
  * so it is valid for the duration of the request.
  *
  * @param c The request context.
- * @return A string with the client IP (e.g., "127.0.0.1" or "::1"), or nullptr
- *         if the context is nullptr or the address cannot be resolved. */
+ * @return A string with the client IP (e.g., "127.0.0.1" or "::1"), or NULL
+ *         if the context is NULL or the address cannot be resolved. */
 const char*
 csilk_get_client_ip(csilk_ctx_t* c)
 {
     if (!c || !c->_internal_client) {
-        return nullptr;
+        return NULL;
     }
     csilk_client_t*         client = (csilk_client_t*)c->_internal_client;
     struct sockaddr_storage addr;
@@ -715,7 +715,7 @@ csilk_get_client_ip(csilk_ctx_t* c)
         return csilk_arena_strdup(c->arena, ip);
     }
 
-    return nullptr;
+    return NULL;
 }
 
 void

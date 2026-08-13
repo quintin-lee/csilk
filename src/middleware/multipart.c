@@ -32,7 +32,7 @@ enum { CSILK_MAX_PART_FILENAME = 256 };
  * @param c       The request context containing the parsed body.
  * @param handler Callback invoked once per parsed part. Receives a pointer
  *                to a csilk_multipart_part_t describing the part. Must not
- *                be nullptr.
+ *                be NULL.
  *
  * @note The part data pointers reference memory within the request body
  *       buffer directly — they are NOT copies. The handler must not modify
@@ -46,7 +46,7 @@ enum { CSILK_MAX_PART_FILENAME = 256 };
 void
 csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 {
-    if (!c || !csilk_get_body(c, nullptr) || !handler) {
+    if (!c || !csilk_get_body(c, NULL) || !handler) {
         CSILK_LOG_W("Multipart: parser skipped - context, body, or handler is missing");
         return;
     }
@@ -78,7 +78,7 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 
     size_t end_delim_len = delim_len + 2; // --boundary--
 
-    const char* data = csilk_get_body(c, nullptr);
+    const char* data = csilk_get_body(c, NULL);
     size_t      data_len = csilk_get_body_len(c);
 
     CSILK_LOG_D(
@@ -190,7 +190,7 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
        body is treated as the final part. */
         const char* body_start = pos;
 
-        const char* body_end = nullptr;
+        const char* body_end = NULL;
         const char* search = pos;
         while (search < data + data_len) {
             const char* next_boundary = strstr(search, delimiter);

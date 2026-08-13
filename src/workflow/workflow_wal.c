@@ -72,7 +72,7 @@ wal_writer_thread(void* arg)
             csilk_wf_wal_header_t header;
             header.magic = CSILK_WF_MAGIC;
             header.type = (uint8_t)task->type;
-            header.timestamp = (uint64_t)time(nullptr);
+            header.timestamp = (uint64_t)time(NULL);
             header.payload_len = (uint32_t)task->len;
 
             if (write(fd, &header, sizeof(header)) == sizeof(header)) {

@@ -60,7 +60,7 @@ typedef struct csilk_arena_chunk_s {
 } csilk_arena_chunk_t;
 
 /** @brief Thread-local free list of arena chunks for reuse. */
-static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = nullptr;
+static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = NULL;
 static _Thread_local int                  tls_chunk_count = 0;
 
 /** @brief Arena allocator for request-scoped memory.
@@ -104,16 +104,16 @@ arena_aligned_alloc(size_t size)
 {
 #ifdef TEST_OOM
     if (g_oom_fail_after >= 0 && g_oom_count >= g_oom_fail_after) {
-        return nullptr;
+        return NULL;
     }
     g_oom_count++;
 #endif
 
-    void* ptr = nullptr;
+    void* ptr = NULL;
     /* Guard (size + CLS - 1) against overflow. size is already bounded
      * by callers but this provides defense-in-depth. */
     if (size > SIZE_MAX - (CSILK_CACHE_LINE_SIZE - 1)) {
-        return nullptr;
+        return NULL;
     }
     size_t aligned_size = (size + CSILK_CACHE_LINE_SIZE - 1) & ~(CSILK_CACHE_LINE_SIZE - 1);
 
@@ -122,7 +122,7 @@ arena_aligned_alloc(size_t size)
     if (mach_vm_allocate(
             mach_task_self(), &addr, (mach_vm_size_t)aligned_size, VM_FLAGS_ANYWHERE) !=
         KERN_SUCCESS) {
-        return nullptr;
+        return NULL;
     }
     ptr = (void*)addr;
 #elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
@@ -131,7 +131,7 @@ arena_aligned_alloc(size_t size)
      * musl-based systems where aligned_alloc may not exist despite the
      * compiler advertising C11 conformance. */
     if (posix_memalign(&ptr, CSILK_CACHE_LINE_SIZE, aligned_size) != 0) {
-        return nullptr;
+        return NULL;
     }
 #elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
     ptr = aligned_alloc(CSILK_CACHE_LINE_SIZE, aligned_size);
@@ -195,7 +195,7 @@ arena_check_redzone(uint8_t* data, size_t alloc_sz)
  *
  * @param default_chunk_size Minimum size in bytes for each new chunk.
  *                           Pass 0 to let the implementation choose a default.
- * @return Pointer to the new arena, or nullptr on allocation failure.
+ * @return Pointer to the new arena, or NULL on allocation failure.
  * @note The returned arena must be freed with csilk_arena_free().
  * @note This function is not thread-safe; each thread should use its own arena.
  */
@@ -204,9 +204,9 @@ csilk_arena_new(size_t default_chunk_size)
 {
     csilk_arena_t* arena = arena_aligned_alloc(sizeof(csilk_arena_t));
     if (!arena) {
-        return nullptr;
+        return NULL;
     }
-    arena->head = nullptr;
+    arena->head = NULL;
     arena->default_chunk_size = default_chunk_size;
     arena->align_64 = 0;
     arena->max_total_bytes = 0; /* Unlimited by default */
@@ -232,11 +232,11 @@ csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
  *
  * If set to 0 (default), the arena has no size limit and will grow
  * unbounded until manually freed. If set to a non-zero value, allocations
- * exceeding this limit will fail and return nullptr.
+ * exceeding this limit will fail and return NULL.
  *
  * @param arena    The arena to configure.
  * @param max_bytes Maximum total bytes (0 = unlimited).
- * @return 0 on success, -1 if arena is nullptr.
+ * @return 0 on success, -1 if arena is NULL.
  * @note Setting a limit resets the total_allocated counter to 0.
  */
 int csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes);
@@ -263,21 +263,21 @@ csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes)
  * a new chunk large enough to satisfy the request. The returned memory is
  * zero-initialized only by virtue of being freshly allocated from the OS.
  *
- * @param arena The arena allocator (may be nullptr — returns nullptr).
+ * @param arena The arena allocator (may be NULL — returns NULL).
  * @param size  Number of bytes to allocate. The actual allocation is rounded
  *              up to the nearest multiple of 8 for alignment.
- * @return Pointer to the allocated block, or nullptr on allocation failure.
+ * @return Pointer to the allocated block, or NULL on allocation failure.
  * @note The returned pointer must NOT be freed individually; all arena memory
  *       is reclaimed via csilk_arena_free() or csilk_arena_reset(). */
 void*
 csilk_arena_alloc(csilk_arena_t* arena, size_t size)
 {
     if (!arena) {
-        return nullptr;
+        return NULL;
     }
     size_t alignment = arena->align_64 ? CSILK_CACHE_LINE_SIZE : 8;
     if (size > SIZE_MAX - (alignment - 1)) {
-        return nullptr;
+        return NULL;
     }
 
     /* Zero-size allocation: return a non-null sentinel to prevent
@@ -307,7 +307,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     }
 
     size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
-    csilk_arena_chunk_t* chunk = nullptr;
+    csilk_arena_chunk_t* chunk = NULL;
 
     /* Try to reuse a chunk from the thread-local free list if it matches the
      standard size. This avoids expensive aligned_alloc syscalls in the
@@ -321,20 +321,20 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
          * In practice this is unreachable (requires allocating ~18 EB)
          * but provides formal correctness for all SIZE_MAX inputs. */
         if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
-            return nullptr;
+            return NULL;
         }
 
         /* Check if allocation would exceed max_total_bytes limit */
         if (arena->max_total_bytes > 0 &&
             (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
-            return nullptr;
+            return NULL;
         }
 
         chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
     }
 
     if (!chunk) {
-        return nullptr;
+        return NULL;
     }
 
     chunk->size = chunk_size;
@@ -352,7 +352,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
  *
  * @param arena The arena allocator.
  * @param s     Source string to duplicate.
- * @return Pointer to the new string in arena memory, or nullptr if @p s is nullptr
+ * @return Pointer to the new string in arena memory, or NULL if @p s is NULL
  *         or on allocation failure.
  * @note The result is subject to the same lifetime rules as other arena
  *       allocations — it lives until the arena is freed or reset. */
@@ -360,7 +360,7 @@ char*
 csilk_arena_strdup(csilk_arena_t* arena, const char* s)
 {
     if (!s) {
-        return nullptr;
+        return NULL;
     }
     size_t len = strlen(s);
     char*  news = csilk_arena_alloc(arena, len + 1);
@@ -378,13 +378,13 @@ csilk_arena_strdup(csilk_arena_t* arena, const char* s)
  * @param arena The arena allocator.
  * @param s     Source string to duplicate.
  * @param n     Number of bytes to copy.
- * @return Pointer to the new string in arena memory, or nullptr if @p s is nullptr
+ * @return Pointer to the new string in arena memory, or NULL if @p s is NULL
  *         or on allocation failure. */
 char*
 csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n)
 {
     if (!s) {
-        return nullptr;
+        return NULL;
     }
     char* news = csilk_arena_alloc(arena, n + 1);
     if (news) {
@@ -399,8 +399,8 @@ csilk_arena_strndup(csilk_arena_t* arena, const char* s, size_t n)
  * Walks the linked list of chunks, frees each one, then frees the arena
  * header. After this call the arena pointer is invalid and must not be used.
  *
- * @param arena The arena to destroy (may be nullptr).
- * @note Safe to call with nullptr — it is a no-op. */
+ * @param arena The arena to destroy (may be NULL).
+ * @note Safe to call with NULL — it is a no-op. */
 void
 csilk_arena_free(csilk_arena_t* arena)
 {
@@ -451,9 +451,9 @@ csilk_arena_free(csilk_arena_t* arena)
  * arena memory available for new allocations. No system calls (malloc/free)
  * are performed, making this much cheaper than csilk_arena_free() + _new().
  *
- * @param arena The arena to reset (may be nullptr).
+ * @param arena The arena to reset (may be NULL).
  * @note Useful for request-scoped arenas that are recycled between requests.
- * @note Safe to call with nullptr — it is a no-op. */
+ * @note Safe to call with NULL — it is a no-op. */
 void
 csilk_arena_reset(csilk_arena_t* arena)
 {
@@ -464,7 +464,7 @@ csilk_arena_reset(csilk_arena_t* arena)
     if (head) {
         head->used = 0;
         csilk_arena_chunk_t* curr = head->next;
-        head->next = nullptr;
+        head->next = NULL;
         while (curr) {
             csilk_arena_chunk_t* next = curr->next;
             if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
@@ -497,7 +497,7 @@ csilk_arena_flush_free_list(void)
         arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
         curr = next;
     }
-    tls_chunk_free_list = nullptr;
+    tls_chunk_free_list = NULL;
     tls_chunk_count = 0;
 }
 
@@ -541,10 +541,10 @@ csilk_arena_get_tls_chunk_count(void)
  *
  * Walks the chunk list and sums the total allocated size and total used bytes.
  *
- * @param arena      The arena to query (must not be nullptr).
+ * @param arena      The arena to query (must not be NULL).
  * @param[out] total_size Pointer to receive the total allocated size in bytes.
  * @param[out] total_used Pointer to receive the total used bytes in the arena.
- * @note Safe to call with nullptr pointers for total_size or total_used — they
+ * @note Safe to call with NULL pointers for total_size or total_used — they
  *       will simply be ignored. */
 void
 csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used)

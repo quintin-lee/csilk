@@ -13,7 +13,7 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "Empty JSON string");
         }
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_parse(json_str);
@@ -21,7 +21,7 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "JSON parse error");
         }
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* j_name = csilk_json_get(root, "name");
@@ -34,7 +34,7 @@ csilk_wf_from_json_ext(const char* json_str, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "Failed to create workflow instance");
         }
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* j_budget = csilk_json_get(root, "budget");
@@ -144,7 +144,7 @@ csilk_wf_from_file(const char* filepath, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "Null file path");
         }
-        return nullptr;
+        return NULL;
     }
 
     FILE* f = fopen(filepath, "rb");
@@ -152,7 +152,7 @@ csilk_wf_from_file(const char* filepath, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "Failed to open file: %s", filepath);
         }
-        return nullptr;
+        return NULL;
     }
 
     fseek(f, 0, SEEK_END);
@@ -164,13 +164,13 @@ csilk_wf_from_file(const char* filepath, char* err_buf, size_t err_len)
         if (err_buf && err_len > 0) {
             snprintf(err_buf, err_len, "File is empty: %s", filepath);
         }
-        return nullptr;
+        return NULL;
     }
 
     char* buf = (char*)calloc(1, (size_t)sz + 1);
     if (!buf) {
         fclose(f);
-        return nullptr;
+        return NULL;
     }
 
     fread(buf, 1, (size_t)sz, f);
@@ -185,7 +185,7 @@ char*
 csilk_wf_to_json(csilk_wf_t* wf)
 {
     if (!wf) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_json_t* root = csilk_json_object();

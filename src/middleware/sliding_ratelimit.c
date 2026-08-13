@@ -40,7 +40,7 @@ csilk_sliding_limiter_new(int limit_per_window, uint64_t window_ms)
 {
     csilk_sliding_limiter_t* lim = malloc(sizeof(csilk_sliding_limiter_t));
     if (!lim) {
-        return nullptr;
+        return NULL;
     }
     lim->limit_per_window = limit_per_window > 0 ? limit_per_window : 60;
     lim->window_ms = window_ms > 0 ? window_ms : 60000;

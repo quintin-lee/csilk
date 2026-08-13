@@ -45,8 +45,8 @@ csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
  *
  * @param wf      Workflow instance.
  * @param event   Event name (e.g., "node_start", "workflow_end").
- * @param node_id Node identifier (may be nullptr for workflow-level events).
- * @param payload Additional event data string (may be nullptr). */
+ * @param node_id Node identifier (may be NULL for workflow-level events).
+ * @param payload Additional event data string (may be NULL). */
 static void
 broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, const char* payload)
 {

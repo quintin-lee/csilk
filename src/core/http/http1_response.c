@@ -98,7 +98,7 @@ on_write(csilk_io_write_t* req, int status)
     if (status < 0) {
         CSILK_LOG_E("Write error: %s", csilk_io_strerror(status));
     }
-    csilk_client_t* client = nullptr;
+    csilk_client_t* client = NULL;
     if (req->handle) {
         client = (csilk_client_t*)req->handle->data;
         if (client) {

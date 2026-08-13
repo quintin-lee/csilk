@@ -95,14 +95,14 @@ static const csilk_reflect_entry_t*
 find_entry_unlocked(const char* name)
 {
     if (!name) {
-        return nullptr;
+        return NULL;
     }
     for (size_t i = 0; i < g_registry_count; i++) {
         if (strcmp(g_registry[i].name, name) == 0) {
             return &g_registry[i];
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 static int
@@ -173,14 +173,14 @@ csilk_reflect_register(const char* name, const csilk_field_desc_t* fields, size_
  * Searches the global registry for a type matching @p name.
  *
  * @param name Type name to find (case-sensitive).
- * @return Pointer to the type's reflection entry, or nullptr if not found.
+ * @return Pointer to the type's reflection entry, or NULL if not found.
  * @note Thread-safe. The returned pointer is valid for the lifetime of the
  *       registration. */
 const csilk_reflect_entry_t*
 csilk_reflect_find(const char* name)
 {
     if (!name) {
-        return nullptr;
+        return NULL;
     }
     registry_lock();
     for (size_t i = 0; i < g_registry_count; i++) {
@@ -190,7 +190,7 @@ csilk_reflect_find(const char* name)
         }
     }
     registry_unlock();
-    return nullptr;
+    return NULL;
 }
 
 /** @brief Iterate over all registered reflection types and invoke a callback

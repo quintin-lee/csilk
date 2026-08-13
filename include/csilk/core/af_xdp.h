@@ -29,7 +29,7 @@ typedef struct {
 /**
  * @brief Create and initialize a new AF_XDP socket and UMEM ring buffers.
  * @param config Socket configuration options.
- * @return Pointer to initialized socket, or nullptr on failure.
+ * @return Pointer to initialized socket, or NULL on failure.
  */
 csilk_xdp_socket_t* csilk_xdp_socket_new(const csilk_xdp_config_t* config);
 

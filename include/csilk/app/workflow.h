@@ -75,7 +75,7 @@ typedef struct {
     void* value;            /**< Opaque data pointer.  Ownership semantics
                              depend on @p free_fn. */
     void (*free_fn)(void*); /**< Optional: called by the engine to free @p value
-                             when the data is consumed.  nullptr means the
+                             when the data is consumed.  NULL means the
                              engine does NOT take ownership. */
     void* meta;             /**< Optional metadata pointer (not freed by the
                              engine).  Common use: AI token usage stats. */
@@ -90,7 +90,7 @@ typedef struct csilk_wf_trace_s csilk_wf_trace_t;
 /**
  * @brief Dynamic router function signature.
  * @param input Data from the node that just finished.
- * @return ID of the next node to trigger, or nullptr for default routing.
+ * @return ID of the next node to trigger, or NULL for default routing.
  */
 typedef const char* (*csilk_wf_router_t)(csilk_data_t* input);
 
@@ -204,7 +204,7 @@ void csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* v
  * @brief Get a short-term memory value by key from the workflow context.
  * @param ctx Execution context.
  * @param key Memory key string.
- * @return Value string allocated in context arena, or nullptr if not found.
+ * @return Value string allocated in context arena, or NULL if not found.
  */
 const char* csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key);
 
@@ -213,7 +213,7 @@ const char* csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key);
 /**
  * @brief Create a new AI workflow instance.
  * @param name Descriptive name for the workflow.
- * @return New workflow handle, or nullptr on failure.
+ * @return New workflow handle, or NULL on failure.
  */
 csilk_wf_t* csilk_wf_new(const char* name);
 
@@ -229,7 +229,7 @@ void csilk_wf_free(csilk_wf_t* wf);
  * @param id        Unique ID for the node.
  * @param handler   Function to execute.
  * @param user_data Opaque pointer passed to the handler.
- * @return Handle to the created node, or nullptr on failure.
+ * @return Handle to the created node, or NULL on failure.
  */
 csilk_wf_node_t*
 csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* user_data);
@@ -447,7 +447,7 @@ void csilk_wf_register_tool(csilk_wf_t*      wf,
  *   node completes.
  * - On name collision, statically-registered tools take precedence.
  * - The callback may return 0 tools (set @p discovered_count_out to 0
- *   and @p discovered_out to nullptr).
+ *   and @p discovered_out to NULL).
  * - Runs on the thread pool — blocking I/O (HTTP calls, DB queries) is
  *   acceptable here.
  *
@@ -473,7 +473,7 @@ typedef int (*csilk_wf_tool_discovery_fn)(csilk_wf_t*                  wf,
  * dynamic plugin loading, and other late-binding tool scenarios.
  *
  * @param wf        Workflow handle.
- * @param discovery Discovery callback (nullptr to disable).
+ * @param discovery Discovery callback (NULL to disable).
  * @param user_data Opaque pointer passed to the callback on each invocation.
  */
 void
@@ -483,7 +483,7 @@ csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery
  * @brief Get a node by ID.
  * @param wf Workflow handle.
  * @param id Node ID.
- * @return Node handle or nullptr if not found.
+ * @return Node handle or NULL if not found.
  */
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id);
 
@@ -554,7 +554,7 @@ void csilk_wf_node_set_interactive(csilk_wf_node_t* node, int is_interactive);
 /**
  * @brief Set an expected JSON Schema for a node's output.
  * @param node   Node handle.
- * @param schema JSON Schema string (nullptr to disable).
+ * @param schema JSON Schema string (NULL to disable).
  */
 void csilk_wf_node_set_schema(csilk_wf_node_t* node, const char* schema);
 
@@ -673,7 +673,7 @@ void csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler);
 /**
  * @brief Load a workflow definition from a YAML file.
  * @param path Path to the .yaml or .yml file.
- * @return Workflow handle, or nullptr on failure.
+ * @return Workflow handle, or NULL on failure.
  */
 csilk_wf_t* csilk_wf_load_yaml(const char* path);
 

@@ -44,18 +44,18 @@
  * Unknown keys are silently ignored.  The input string is duplicated
  * internally for tokenisation.
  *
- * @param dsn      Raw DSN string (may be nullptr).
- * @param host     [out] Heap-allocated host string (or nullptr = default).
+ * @param dsn      Raw DSN string (may be NULL).
+ * @param host     [out] Heap-allocated host string (or NULL = default).
  * @param port     [out] Port number (defaults to 6379).
- * @param password [out] Heap-allocated password (or nullptr = no auth).
+ * @param password [out] Heap-allocated password (or NULL = no auth).
  * @param db       [out] Database index (defaults to 0).
  */
 static void
 redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* db)
 {
-    *host = nullptr;
+    *host = NULL;
     *port = 6379;
-    *password = nullptr;
+    *password = NULL;
     *db = 0;
     if (!dsn) {
         return;
@@ -73,7 +73,7 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
         }
         char* eq = strchr(token, '=');
         if (!eq) {
-            token = strtok(nullptr, ";");
+            token = strtok(NULL, ";");
             continue;
         }
         *eq = '\0';
@@ -92,7 +92,7 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
             *db = atoi(val);
         }
 
-        token = strtok(nullptr, ";");
+        token = strtok(NULL, ";");
     }
     free(buf);
 }
@@ -115,7 +115,7 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
         return -1;
     }
 
-    char *host = nullptr, *password = nullptr;
+    char *host = NULL, *password = NULL;
     int   port = 6379, db = 0;
     redis_parse_dsn(dsn, &host, &port, &password, &db);
 
@@ -178,10 +178,10 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
  * @brief Close the Redis connection and free the connection struct.
  *
  * Calls redisFree on the underlying handle, frees the connection struct,
- * and sets pool->connection to nullptr.
+ * and sets pool->connection to NULL.
  *
  * @param pool The database pool to shut down.
- * @return 0 on success, -1 if pool or its connection is nullptr. */
+ * @return 0 on success, -1 if pool or its connection is NULL. */
 static int
 redis_drv_disconnect(csilk_db_pool_t* pool)
 {
@@ -194,7 +194,7 @@ redis_drv_disconnect(csilk_db_pool_t* pool)
         redisFree(conn->c);
     }
     free(conn);
-    csilk_db_pool_set_connection(pool, nullptr);
+    csilk_db_pool_set_connection(pool, NULL);
     return 0;
 }
 
@@ -205,7 +205,7 @@ redis_drv_disconnect(csilk_db_pool_t* pool)
  * row struct), then frees column names and the top-level arrays.  Counts
  * are reset to zero to prevent double-free.
  *
- * @param result The result set to free (may be nullptr). */
+ * @param result The result set to free (may be NULL). */
 static void
 redis_free_csilk_result(csilk_db_result_t* result)
 {
@@ -227,8 +227,8 @@ redis_free_csilk_result(csilk_db_result_t* result)
         free(result->column_names[i]);
     }
     free(result->column_names);
-    result->rows = nullptr;
-    result->column_names = nullptr;
+    result->rows = NULL;
+    result->column_names = NULL;
     result->row_count = 0;
     result->column_count = 0;
 }
@@ -244,7 +244,7 @@ redis_free_csilk_result(csilk_db_result_t* result)
  * @param col_name    Column name for the single column.
  * @param col_count   Total number of columns (typically 1).
  * @param row_idx     Row index for the value array (typically 0).
- * @return A populated csilk_db_row_t, or nullptr on allocation failure. */
+ * @return A populated csilk_db_row_t, or NULL on allocation failure. */
 static csilk_db_row_t*
 redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count, int row_idx)
 {
@@ -252,20 +252,20 @@ redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count,
     (void)row_idx;
     csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
     if (!row) {
-        return nullptr;
+        return NULL;
     }
 
     row->count = col_count;
     row->values = calloc(col_count, sizeof(char*));
     if (!row->values) {
         free(row);
-        return nullptr;
+        return NULL;
     }
 
     if (reply->str) {
         row->values[0] = strdup(reply->str);
     } else {
-        row->values[0] = strdup(""); /* nullptr string → empty string */
+        row->values[0] = strdup(""); /* NULL string → empty string */
     }
     return row;
 }
@@ -412,7 +412,7 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
         result->row_count = is_hash ? (int)(reply->elements / 2) : (int)reply->elements;
         result->rows = result->row_count > 0
                            ? calloc((size_t)result->row_count, sizeof(csilk_db_row_t*))
-                           : nullptr;
+                           : NULL;
         if (!result->rows && result->row_count > 0) {
             free(result->column_names);
             freeReplyObject(reply);
@@ -489,7 +489,7 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
         }
         result->column_names[0] = strdup("value");
         result->row_count = 0;
-        result->rows = nullptr;
+        result->rows = NULL;
         break;
     }
 
@@ -497,8 +497,8 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
         /* Unsupported reply type → treat as empty */
         result->column_count = 0;
         result->row_count = 0;
-        result->rows = nullptr;
-        result->column_names = nullptr;
+        result->rows = NULL;
+        result->column_names = NULL;
         break;
     }
     }

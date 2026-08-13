@@ -97,7 +97,7 @@ mongodb_disconnect(csilk_db_pool_t* pool)
     }
     free(conn->db_name);
     free(conn);
-    csilk_db_pool_set_connection(pool, nullptr);
+    csilk_db_pool_set_connection(pool, NULL);
     return 0;
 }
 
@@ -120,8 +120,8 @@ mongodb_free_result(csilk_db_result_t* result)
         free(result->column_names[i]);
     }
     free(result->column_names);
-    result->rows = nullptr;
-    result->column_names = nullptr;
+    result->rows = NULL;
+    result->column_names = NULL;
     result->row_count = 0;
     result->column_count = 0;
 }
@@ -133,7 +133,7 @@ bson_val_to_str(const bson_iter_t* iter)
     bson_type_t type = bson_iter_type(iter);
     switch (type) {
     case BSON_TYPE_UTF8:
-        return strdup(bson_iter_utf8(iter, nullptr));
+        return strdup(bson_iter_utf8(iter, NULL));
     case BSON_TYPE_INT32: {
         char buf[32];
         snprintf(buf, sizeof(buf), "%d", bson_iter_int32(iter));
@@ -181,8 +181,8 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
     mongodb_conn_t* conn = (mongodb_conn_t*)csilk_db_pool_get_connection(pool);
 
     bson_error_t     error;
-    bson_t*          cmd = nullptr;
-    mongoc_cursor_t* cursor = nullptr;
+    bson_t*          cmd = NULL;
+    mongoc_cursor_t* cursor = NULL;
 
     if (sql[0] == '{') {
         // Looks like a JSON command
@@ -190,12 +190,12 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
         if (!cmd) {
             return -1;
         }
-        cursor = mongoc_client_command_with_opts(
-            conn->client, conn->db_name, cmd, nullptr, nullptr, nullptr);
+        cursor =
+            mongoc_client_command_with_opts(conn->client, conn->db_name, cmd, NULL, NULL, NULL);
     } else {
         // Treat as collection name
         mongoc_collection_t* coll = mongoc_client_get_collection(conn->client, conn->db_name, sql);
-        cursor = mongoc_collection_find_with_opts(coll, bson_new(), nullptr, nullptr);
+        cursor = mongoc_collection_find_with_opts(coll, bson_new(), NULL, NULL);
         mongoc_collection_destroy(coll);
     }
 
@@ -268,7 +268,7 @@ mongodb_exec(csilk_db_pool_t* pool, const char* sql)
 
     bson_t reply;
     bool   success =
-        mongoc_client_command_simple(conn->client, conn->db_name, cmd, nullptr, &reply, &error);
+        mongoc_client_command_simple(conn->client, conn->db_name, cmd, NULL, &reply, &error);
     if (!success) {
         CSILK_LOG_E("csilk_db_mongodb: exec failed: %s", error.message);
     }

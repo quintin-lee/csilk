@@ -8,12 +8,12 @@ csilk_xdp_umem_pool_t*
 csilk_xdp_umem_pool_create(size_t total_size, uint32_t frame_size)
 {
     if (total_size == 0 || frame_size == 0) {
-        return nullptr;
+        return NULL;
     }
 
     csilk_xdp_umem_pool_t* pool = (csilk_xdp_umem_pool_t*)calloc(1, sizeof(csilk_xdp_umem_pool_t));
     if (!pool) {
-        return nullptr;
+        return NULL;
     }
 
     pool->size = total_size;
@@ -24,7 +24,7 @@ csilk_xdp_umem_pool_create(size_t total_size, uint32_t frame_size)
     int res = posix_memalign(&pool->buffer, 4096, total_size);
     if (res != 0 || !pool->buffer) {
         free(pool);
-        return nullptr;
+        return NULL;
     }
     memset(pool->buffer, 0, total_size);
 

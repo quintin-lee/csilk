@@ -12,7 +12,7 @@ csilk_mcp_server_new(const char* name, const char* version)
 {
     csilk_mcp_server_t* server = (csilk_mcp_server_t*)calloc(1, sizeof(csilk_mcp_server_t));
     if (!server) {
-        return nullptr;
+        return NULL;
     }
 
     snprintf(server->name, sizeof(server->name), "%s", name ? name : "csilk-mcp-server");
@@ -72,8 +72,8 @@ csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t
     }
 
     entry->name = strdup(tool->name);
-    entry->description = tool->description ? strdup(tool->description) : nullptr;
-    entry->parameters_json = tool->parameters_json ? strdup(tool->parameters_json) : nullptr;
+    entry->description = tool->description ? strdup(tool->description) : NULL;
+    entry->parameters_json = tool->parameters_json ? strdup(tool->parameters_json) : NULL;
     entry->fn = tool->fn;
     entry->user_data = tool->user_data;
 
@@ -111,7 +111,7 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
 {
     if (!req || !req->method) {
         return csilk_mcp_msg_create_error(
-            req ? req->id : nullptr, CSILK_MCP_INVALID_REQUEST, "Invalid Request");
+            req ? req->id : NULL, CSILK_MCP_INVALID_REQUEST, "Invalid Request");
     }
 
     if (strcmp(req->method, "initialize") == 0) {
@@ -174,7 +174,7 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
         }
 
         const char*            name = csilk_json_string_value(j_name);
-        csilk_wf_tool_entry_t* matched = nullptr;
+        csilk_wf_tool_entry_t* matched = NULL;
 
         csilk_mutex_lock(&server->mutex);
         for (size_t i = 0; i < server->tool_count; i++) {
@@ -228,11 +228,11 @@ csilk_mcp_server_start_stdio(csilk_mcp_server_t* server)
             continue;
         }
 
-        csilk_mcp_msg_t* req = csilk_mcp_msg_parse(line, len, nullptr);
+        csilk_mcp_msg_t* req = csilk_mcp_msg_parse(line, len, NULL);
         if (req) {
             csilk_mcp_msg_t* resp = handle_mcp_request(server, req);
             if (resp) {
-                char* out = csilk_mcp_msg_serialize(resp, nullptr);
+                char* out = csilk_mcp_msg_serialize(resp, NULL);
                 if (out) {
                     fprintf(stdout, "%s\n", out);
                     fflush(stdout);
@@ -279,7 +279,7 @@ mcp_sse_post_handler(csilk_ctx_t* c)
         return;
     }
 
-    csilk_mcp_msg_t* req = csilk_mcp_msg_parse(body, body_len, nullptr);
+    csilk_mcp_msg_t* req = csilk_mcp_msg_parse(body, body_len, NULL);
     if (!req) {
         csilk_set_status(c, 400);
         const char* err_str = "{\"error\":\"Parse error\"}";
@@ -288,7 +288,7 @@ mcp_sse_post_handler(csilk_ctx_t* c)
     }
 
     csilk_mcp_msg_t* resp = handle_mcp_request(server, req);
-    char*            out = resp ? csilk_mcp_msg_serialize(resp, nullptr) : strdup("{}");
+    char*            out = resp ? csilk_mcp_msg_serialize(resp, NULL) : strdup("{}");
     const char*      payload = out ? out : "{}";
 
     csilk_set_status(c, 200);

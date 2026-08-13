@@ -46,7 +46,7 @@ typedef struct {
     /** @brief Initialize driver-specific state.
      *  @param endpoint  Endpoint URL (e.g., "http://localhost:6333").
      *  @param api_key   Optional API key.
-     *  @return Opaque driver state handle, or nullptr on failure. */
+     *  @return Opaque driver state handle, or NULL on failure. */
     void* (*init)(const char* endpoint, const char* api_key);
 
     /** @brief Upsert (insert or update) points into a collection.
@@ -85,14 +85,14 @@ int csilk_simd_has_avx2(void);
 /** @brief Create a native embedded SIMD HNSW vector database driver.
  *  @param dim     Vector dimension (e.g. 1536).
  *  @param metric  Distance metric: 0=COSINE, 1=L2, 2=IP.
- *  @return Handle or nullptr. */
+ *  @return Handle or NULL. */
 csilk_vector_db_t* csilk_vector_db_new_embedded(size_t dim, int metric);
 
 /** @brief Create a new Vector DB instance.
  * @param driver_name "qdrant", "milvus", "embedded", etc.
  * @param endpoint    API endpoint.
  * @param api_key     Optional API key.
- * @return Handle or nullptr. */
+ * @return Handle or NULL. */
 csilk_vector_db_t*
 csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* api_key);
 
