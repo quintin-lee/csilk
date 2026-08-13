@@ -184,10 +184,10 @@ int main() {
 
 ```c
 int _csilk_symmetric_encrypt(csilk_ctx_t* c, ...) {
-    csilk_cipher_driver_t* d = resolve_cipher(c);
-    if (d && d->symmetric_encrypt) return d->symmetric_encrypt(...);
+    csilk_cipher_driver_t* d = csilk_ctx_get_cipher_driver(c);
+    if (d->symmetric_encrypt) return d->symmetric_encrypt(...);
     return -1;
 }
 ```
 
-`resolve_cipher()` 辅助函数返回上下文的加密驱动（如果已设置），否则返回内置的 `csilk_default_cipher_driver`。
+`csilk_ctx_get_cipher_driver()` 返回绑定到上下文的加密驱动；未设置时回退到内置的 `csilk_default_cipher_driver`。

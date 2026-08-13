@@ -184,10 +184,10 @@ Internal wrappers in `crypto_dispatch.h` (included via `internal.h`, implemented
 
 ```c
 int _csilk_symmetric_encrypt(csilk_ctx_t* c, ...) {
-  csilk_cipher_driver_t* d = resolve_cipher(c);
-  if (d && d->symmetric_encrypt) return d->symmetric_encrypt(...);
+  csilk_cipher_driver_t* d = csilk_ctx_get_cipher_driver(c);
+  if (d->symmetric_encrypt) return d->symmetric_encrypt(...);
   return -1;
 }
 ```
 
-The `resolve_cipher()` helper returns the context's cipher driver if set, otherwise the built-in `csilk_default_cipher_driver`.
+`csilk_ctx_get_cipher_driver()` returns the cipher driver bound to the context, falling back to `csilk_default_cipher_driver` when none is set.

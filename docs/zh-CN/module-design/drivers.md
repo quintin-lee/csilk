@@ -54,7 +54,7 @@ graph TB
 | Perm | `csilk_perm_driver_t` | `csilk_perm_register_driver` | `csilk_perm_set_default` | 1 (simple) | `csilk_perm_init` 显式初始化 |
 | 向量 DB | `csilk_vector_db_driver_t` | `csilk_vector_db_register_driver` | `csilk_vector_db_new` | 2+ | 懒加载（首次使用） |
 | Crypto | `csilk_crypto_driver_t` | 服务器 setter | `csilk_server_set_crypto_driver` | 1 (OpenSSL) | 用户调用 |
-| Storage | `csilk_storage_driver_t` | 服务器 setter | `csilk_server_set_storage_driver` | 1 (Redis) | 用户调用 |
+| Storage | `csilk_storage_driver_t` | 服务器 setter（可省略） | `csilk_server_set_storage_driver` | 2（内存默认 + Redis） | 用户调用 / 自动初始化 |
 
 ---
 
