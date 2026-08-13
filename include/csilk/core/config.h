@@ -3,7 +3,7 @@
  * @file config.h
  * @brief Server and application configuration for the csilk framework.
  *
- * @version 0.3.0
+ * @version 0.4.0
  * @copyright MIT License
  */
 
