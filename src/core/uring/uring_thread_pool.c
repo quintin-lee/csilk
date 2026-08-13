@@ -15,7 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/eventfd.h>
-#include <pthread.h>
+#include "csilk/core/sync.h"
 
 /** @brief Maximum pending work items in the queue. */
 #define URING_TP_MAX_WORK 4096
@@ -38,14 +38,14 @@ struct uring_thread_pool_s {
     uring_tp_entry_t queue[URING_TP_MAX_WORK];
     volatile int     queue_head;
     volatile int     queue_tail;
-    pthread_mutex_t  queue_mutex;
-    pthread_cond_t   queue_cond;
+    csilk_mutex_t    queue_mutex;
+    csilk_cond_t     queue_cond;
 
     /* Completion queue — multiple producers (threads) → single consumer (event loop). */
     uring_tp_entry_t done[URING_TP_MAX_WORK];
     volatile int     done_head;
     volatile int     done_tail;
-    pthread_mutex_t  done_mutex;
+    csilk_mutex_t    done_mutex;
 
     int wakeup_fd; /**< eventfd — signalled when work completes. */
 };
@@ -65,12 +65,12 @@ worker_routine(void* arg)
     uring_thread_pool_t* tp = (uring_thread_pool_t*)arg;
 
     while (tp->running) {
-        pthread_mutex_lock(&tp->queue_mutex);
+        csilk_mutex_lock(&tp->queue_mutex);
         while (tp->queue_head == tp->queue_tail && tp->running) {
-            pthread_cond_wait(&tp->queue_cond, &tp->queue_mutex);
+            csilk_cond_wait(&tp->queue_cond, &tp->queue_mutex);
         }
         if (!tp->running) {
-            pthread_mutex_unlock(&tp->queue_mutex);
+            csilk_mutex_unlock(&tp->queue_mutex);
             break;
         }
 
@@ -78,7 +78,7 @@ worker_routine(void* arg)
         int              idx = tp->queue_head % URING_TP_MAX_WORK;
         uring_tp_entry_t entry = tp->queue[idx];
         tp->queue_head++;
-        pthread_mutex_unlock(&tp->queue_mutex);
+        csilk_mutex_unlock(&tp->queue_mutex);
 
         /* Execute the work callback. */
         entry.status = 0;
@@ -87,11 +87,11 @@ worker_routine(void* arg)
         }
 
         /* Push to the completion queue. */
-        pthread_mutex_lock(&tp->done_mutex);
+        csilk_mutex_lock(&tp->done_mutex);
         int done_idx = tp->done_tail % URING_TP_MAX_WORK;
         tp->done[done_idx] = entry;
         tp->done_tail++;
-        pthread_mutex_unlock(&tp->done_mutex);
+        csilk_mutex_unlock(&tp->done_mutex);
 
         /* Wake the event loop. */
         uint64_t val = 1;
@@ -122,9 +122,9 @@ uring_tp_init(int nthreads)
     tp->done_head = 0;
     tp->done_tail = 0;
 
-    pthread_mutex_init(&tp->queue_mutex, NULL);
-    pthread_cond_init(&tp->queue_cond, NULL);
-    pthread_mutex_init(&tp->done_mutex, NULL);
+    csilk_mutex_init(&tp->queue_mutex);
+    csilk_cond_init(&tp->queue_cond);
+    csilk_mutex_init(&tp->done_mutex);
 
     if (nthreads <= 0) {
         nthreads = 1;
@@ -133,9 +133,9 @@ uring_tp_init(int nthreads)
     tp->threads = calloc((size_t)nthreads, sizeof(pthread_t));
     if (!tp->threads) {
         close(tp->wakeup_fd);
-        pthread_mutex_destroy(&tp->queue_mutex);
-        pthread_cond_destroy(&tp->queue_cond);
-        pthread_mutex_destroy(&tp->done_mutex);
+        csilk_mutex_destroy(&tp->queue_mutex);
+        csilk_cond_destroy(&tp->queue_cond);
+        csilk_mutex_destroy(&tp->done_mutex);
         free(tp);
         return NULL;
     }
@@ -157,9 +157,9 @@ uring_tp_destroy(uring_thread_pool_t* tp)
     tp->running = false;
 
     /* Wake all workers so they exit the cond_wait loop. */
-    pthread_mutex_lock(&tp->queue_mutex);
-    pthread_cond_broadcast(&tp->queue_cond);
-    pthread_mutex_unlock(&tp->queue_mutex);
+    csilk_mutex_lock(&tp->queue_mutex);
+    csilk_cond_broadcast(&tp->queue_cond);
+    csilk_mutex_unlock(&tp->queue_mutex);
 
     for (int i = 0; i < tp->thread_count; i++) {
         pthread_join(tp->threads[i], NULL);
@@ -170,9 +170,9 @@ uring_tp_destroy(uring_thread_pool_t* tp)
     uring_tp_drain(tp);
 
     close(tp->wakeup_fd);
-    pthread_mutex_destroy(&tp->queue_mutex);
-    pthread_cond_destroy(&tp->queue_cond);
-    pthread_mutex_destroy(&tp->done_mutex);
+    csilk_mutex_destroy(&tp->queue_mutex);
+    csilk_cond_destroy(&tp->queue_cond);
+    csilk_mutex_destroy(&tp->done_mutex);
     free(tp->threads);
     free(tp);
 }
@@ -187,10 +187,10 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
         return -1;
     }
 
-    pthread_mutex_lock(&tp->queue_mutex);
+    csilk_mutex_lock(&tp->queue_mutex);
     int count = tp->queue_tail - tp->queue_head;
     if (count >= URING_TP_MAX_WORK) {
-        pthread_mutex_unlock(&tp->queue_mutex);
+        csilk_mutex_unlock(&tp->queue_mutex);
         return -1; /* Queue full. */
     }
 
@@ -202,7 +202,7 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
     tp->queue_tail++;
 
     pthread_cond_signal(&tp->queue_cond);
-    pthread_mutex_unlock(&tp->queue_mutex);
+    csilk_mutex_unlock(&tp->queue_mutex);
 
     return 0;
 }
@@ -214,20 +214,20 @@ uring_tp_drain(uring_thread_pool_t* tp)
         return;
     }
 
-    pthread_mutex_lock(&tp->done_mutex);
+    csilk_mutex_lock(&tp->done_mutex);
     while (tp->done_head != tp->done_tail) {
         int              idx = tp->done_head % URING_TP_MAX_WORK;
         uring_tp_entry_t entry = tp->done[idx];
         tp->done_head++;
-        pthread_mutex_unlock(&tp->done_mutex);
+        csilk_mutex_unlock(&tp->done_mutex);
 
         if (entry.after_cb && entry.work) {
             entry.after_cb(entry.work, entry.status);
         }
 
-        pthread_mutex_lock(&tp->done_mutex);
+        csilk_mutex_lock(&tp->done_mutex);
     }
-    pthread_mutex_unlock(&tp->done_mutex);
+    csilk_mutex_unlock(&tp->done_mutex);
 }
 
 int

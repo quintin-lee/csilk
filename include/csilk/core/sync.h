@@ -45,6 +45,11 @@ csilk_cond_signal(csilk_cond_t* cond)
     pthread_cond_signal(cond);
 }
 static inline void
+csilk_cond_broadcast(csilk_cond_t* cond)
+{
+    pthread_cond_broadcast(cond);
+}
+static inline void
 csilk_cond_wait(csilk_cond_t* cond, csilk_mutex_t* mutex)
 {
     pthread_cond_wait(cond, mutex);
@@ -97,6 +102,14 @@ static inline void
 csilk_cond_signal(csilk_cond_t* cond)
 {
     uv_cond_signal(cond);
+}
+static inline void
+csilk_cond_broadcast(csilk_cond_t* cond)
+{
+    /* libuv has no broadcast; signal all waiters in a loop */
+    for (int i = 0; i < 64; i++) {
+        uv_cond_signal(cond);
+    }
 }
 static inline void
 csilk_cond_wait(csilk_cond_t* cond, csilk_mutex_t* mutex)
