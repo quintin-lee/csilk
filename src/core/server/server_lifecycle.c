@@ -419,29 +419,36 @@ csilk_server_run(csilk_server_t* server, int port)
         if (server->worker_tids) {
             server->worker_count = nworkers;
 
-            uv_barrier_t barrier;
-            uv_barrier_init(&barrier, (unsigned int)workers);
+            uv_barrier_t* barrier = calloc(1, sizeof(uv_barrier_t));
+            int           br = uv_barrier_init(barrier, (unsigned int)workers);
+            if (br < 0) {
+                CSILK_LOG_E("Server: failed to init worker barrier: %s", csilk_io_strerror(br));
+                free(barrier);
+                free(server->worker_tids);
+                server->worker_tids = nullptr;
+            } else {
+                for (int i = 0; i < nworkers; i++) {
+                    int idx = i + 1;
+                    server->worker_pools[idx].server = server;
+                    server->worker_pools[idx].worker_index = idx;
 
-            for (int i = 0; i < nworkers; i++) {
-                int idx = i + 1;
-                server->worker_pools[idx].server = server;
-                server->worker_pools[idx].worker_index = idx;
-
-                worker_data_t* data = malloc(sizeof(worker_data_t));
-                if (!data) {
-                    CSILK_LOG_E("Server: failed to allocate memory for worker "
-                                "thread data");
-                    continue;
+                    worker_data_t* data = malloc(sizeof(worker_data_t));
+                    if (!data) {
+                        CSILK_LOG_E("Server: failed to allocate memory for worker "
+                                    "thread data");
+                        continue;
+                    }
+                    data->wp = &server->worker_pools[idx];
+                    data->port = port;
+                    data->barrier = barrier;
+                    uv_thread_create(&server->worker_tids[i], worker_thread, data);
                 }
-                data->wp = &server->worker_pools[idx];
-                data->port = port;
-                data->barrier = &barrier;
-                uv_thread_create(&server->worker_tids[i], worker_thread, data);
-            }
 
-            uv_barrier_wait(&barrier);
-            uv_barrier_destroy(&barrier);
-            CSILK_LOG_I("Server: all %d worker threads spawned successfully", workers - 1);
+                uv_barrier_wait(barrier);
+                uv_barrier_destroy(barrier);
+                free(barrier);
+                CSILK_LOG_I("Server: all %d worker threads spawned successfully", workers - 1);
+            }
         } else {
             CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
             free(server->worker_tids);
