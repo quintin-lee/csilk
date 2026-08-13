@@ -2,7 +2,7 @@
 
 # Version — single source of truth
 set(CSILK_VERSION_MAJOR 0 CACHE STRING "Major version")
-set(CSILK_VERSION_MINOR 3 CACHE STRING "Minor version")
+set(CSILK_VERSION_MINOR 4 CACHE STRING "Minor version")
 set(CSILK_VERSION_PATCH 0 CACHE STRING "Patch version")
 set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}" CACHE STRING "Full version")
 

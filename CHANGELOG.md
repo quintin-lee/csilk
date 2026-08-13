@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-13
+
 ### Changed
 - **Directory structure reorganization**: Moved `base64.c`, `sha1.c`, `url.c`, `uuid.c`, `crypto.c` (formerly `utils.c`) from `src/core/server/` into new `src/crypto/` module; moved `bcrypt.c` and `blowfish_sboxes.h` into `src/crypto/` (merged `src/security/`); moved `admin.c` from `src/core/config/` to `src/app/`; reorganized tests from `tests/data/` into `tests/security/` and `tests/drivers/db/`; removed redundant `include/csilk/core/admin.h` re-export wrapper; removed `CSILK_DATA_SOURCES` CMake variable (inlined into `CSILK_DRIVER_SOURCES`).
 

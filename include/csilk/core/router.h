@@ -6,7 +6,7 @@
  * Supports dynamic path segments (:param), wildcards (*wildcard),
  * route metadata for OpenAPI generation, and permission annotations.
  *
- * @version 0.3.0
+ * @version 0.4.0
  * @copyright MIT License
  */
 

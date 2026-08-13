@@ -1,6 +1,6 @@
 # io_uring 集成可行性研究
 
-> **日期**: 2026-06-05 | **版本**: 0.3.0 | **状态**: **已实现（方案 B 完成）**
+> **日期**: 2026-06-05 | **版本**: 0.4.0 | **状态**: **已实现（方案 B 完成）**
 >
 > **更新（2026-07）**: 完整的原生 io_uring 后端已在 `src/core/uring/` 中实现（参见 [`uring_server.c`、`uring_connection.c`、`uring_thread_pool.c`、`uv_stubs.c`]）。使用 `-DCSILK_USE_URING=ON` 构建（仅 Linux）。所有 120 个 io_uring 专用测试通过。本文档作为设计记录保留；当前用法请参见[构建指南](../contributing/how-to-build.md)和[架构白皮书](../architecture.md)。
 

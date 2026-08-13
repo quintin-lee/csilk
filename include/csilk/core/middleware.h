@@ -8,7 +8,7 @@
  * static file serving, SSE, metrics, multipart parsing, request
  * validation, session management, panic recovery, and health checks.
  *
- * @version 0.3.0
+ * @version 0.4.0
  * @copyright MIT License
  */
 
