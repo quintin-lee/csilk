@@ -69,20 +69,35 @@ memcpy(pwd_buf, password, len);
 ### Eksblowfish datal/datar initialization
 `datal` and `datar` must be zeroed **before** the P-array keying loop (Step 2). Omitting this causes non-deterministic results for empty passwords.
 
-### clang-tidy false positive
-`clang-analyzer-core.uninitialized.Assign` fires on `XL ^= p[i]` in `blowfish_encipher` because the analyzer cannot trace through the array-pointer parameter. Suppressed in `.clang-tidy` — do not add `[[maybe_unused]]` or other workarounds; the code is correct.
+### uv_barrier_t must be heap-allocated
+Never declare `uv_barrier_t` on the stack when used across threads. Worker threads hold a pointer to the barrier; the main thread destroys it after `uv_barrier_wait()`. Stack allocation causes use-after-free on multi-worker servers. Always `calloc` and `free` the barrier.
+
+### Clang-format across all src/ include/
+Run `cmake --build build --target format` before committing. 500+ files were reformatted in Aug 2026; any new file must match the existing style.
+
+### Clang-tidy false positive (suppressed)
+`clang-analyzer-core.uninitialized.Assign` fires on `XL ^= p[i]` in `blowfish_encipher` because the analyzer cannot trace through the array-pointer parameter. Suppressed in `.clang-tidy` — do not add `[[maybe_unused]]` or other workarounds.
+
+### No raw pthread_mutex in cross-backend code
+All new code in `src/core/uring/` and elsewhere must use `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sync.h>`, never `pthread_mutex_t`/`pthread_cond_t`. The abstraction wraps both libuv and pthread backends. Call `csilk_cond_broadcast()` (not `pthread_cond_broadcast`) for wake-all.
+
+### internal.h is a public umbrella header
+`include/csilk/core/internal.h` must NOT include messaging/internal headers — doing so leaks MQ internals to any file that includes it. Add explicit `#include "messaging/mq_internal.h"` only in files that directly use `_csilk_mq_new()` / `_csilk_mq_free()`.
 
 ## Source Layout
 
 | Directory | Purpose |
 |---|---|
-| `src/core/` | HTTP server, arena, config, JSON, TLS |
-| `src/crypto/` | base64, sha1, url, uuid, crypto primitives, bcrypt |
+| `src/core/` | HTTP server, arena, config, JSON, TLS, ctx, http, primitives |
+| `src/core/uring/` | io_uring event loop, connection, server, thread pool |
+| `src/crypto/` | base64, sha1, bcrypt, blowfish sboxes, crypto dispatch |
 | `src/drivers/` | DB (sqlite, postgres, mysql, redis), AI, cipher, vector |
-| `src/middleware/` | auth, cors, csrf, jwt, ratelimit, etc. |
+| `src/middleware/` | auth, cors, csrf, jwt, ratelimit, session, etc. |
 | `src/protocols/` | websocket, h2, h3, swagger, mcp |
 | `src/messaging/` | MQ core, pubsub, raft WAL/RPC/consensus |
 | `src/workflow/` | agent engine, scheduler, DSL |
+| `tests/crypto/` | SHA-256, HMAC, Base64, random, URL decode tests |
+| `tests/security/` | bcrypt, cipher, UUID, JWT security tests |
 | `tests/` | Mirrors `src/` module layout |
 | `python/` | CFFI/ctypes bindings |
 
