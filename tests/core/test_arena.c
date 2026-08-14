@@ -301,6 +301,26 @@ test_arena_pthread_tls_cleanup(void)
     printf("pthread key destructor passed!\n");
 }
 
+void
+test_arena_calloc(void)
+{
+    printf("Testing csilk_arena_calloc...\n");
+    csilk_arena_t* a = csilk_arena_new(1024);
+    assert(a != NULL);
+
+    int* arr = (int*)csilk_arena_calloc(a, 10, sizeof(int));
+    assert(arr != NULL);
+    for (int i = 0; i < 10; i++) {
+        assert(arr[i] == 0);
+    }
+
+    /* Overflow check */
+    assert(csilk_arena_calloc(a, SIZE_MAX, 2) == NULL);
+
+    csilk_arena_free(a);
+    printf("csilk_arena_calloc passed!\n");
+}
+
 int
 main()
 {
@@ -316,6 +336,7 @@ main()
     test_arena_default_chunk_size_zero();
     test_arena_multi_tier_tls_cache();
     test_arena_pthread_tls_cleanup();
+    test_arena_calloc();
 #ifdef TEST_OOM
     test_arena_tls_cache();
 #endif
