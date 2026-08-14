@@ -279,13 +279,15 @@ sequenceDiagram
 
 当 `worker_threads > 1` 时，csilk 使用 `SO_REUSEPORT` 绑定多个监听套接字 — 每个工作线程加主线程一个。内核在所有监听器之间分布传入连接。
 
-### 线程安全
+### 线程安全与并发架构
 
-在多工作线程模式下，连接回调 (`on_new_connection`) 可以在任何事件循环线程上执行。在连接建立期间访问的所有共享可变状态必须是线程安全的：
+在多工作线程模式下，每个 Worker 运行独立的事件循环。csilk 采用无共享（Share-Nothing）与线程封闭（Thread-Confinement）架构，消除 I/O 热路径上的锁竞争：
 
-- **客户端连接池** (`pool_get`/`pool_put`): 每个工作线程管理自己的无锁连接对象池，避免互斥锁争用。
-- **活跃客户端列表**: 由 `clients_mutex` 保护。
-- **连接计数器**: 使用原子操作 (`atomic_fetch_add`)。
+- **客户端连接池 & Arena 内存池** (`pool_get`/`pool_put`): 每个工作线程管理自己专用的连接对象池与 Arena 内存池，零锁开销。
+- **活跃客户端列表** (`active_clients`): Worker 本地双向链表，完全由该 Worker 的事件循环线程独占访问（**非**任意跨线程安全）。
+- **跨线程操作**: 必须使用 `csilk_dispatch()` / `csilk_server_dispatch()` 将任务投递到目标 Worker 的无锁 MPSC 队列并唤醒其事件循环执行。
+- **全局连接计数器**: 使用原子操作 (`atomic_fetch_add` / `atomic_fetch_sub`)。
+
 
 ### 优雅关闭
 
