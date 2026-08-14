@@ -8,7 +8,9 @@
 ## [Unreleased]
 
 ### 新增
+- **连接生命周期状态机**：实现显式 9 状态连接生命周期状态机（`csilk_conn_state_t`：`INIT`、`ACCEPTED`、`TLS`、`READING`、`PROCESSING`、`WRITING`、`STREAMING`、`CLOSING`、`CLOSED`）与严格的状态转移不变式校验（`csilk_conn_set_state`、`csilk_conn_get_state`、`csilk_conn_state_str`），彻底消除 UAF、Double Close、Double Free 以及异步流式/Keep-Alive 状态竞态。
 - **I/O 与并发抽象层**：在 `<csilk/core/sys_io.h>` 与 `<csilk/core/sync.h>` 中规范统一跨后端 I/O 原语 `csilk_io_*`、跨平台线程抽象 `csilk_thread_*`（`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`）以及屏障 `csilk_barrier_*`（`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`）。
+
 - **流式背压与高低水位流量控制**：为 HTTP/1.1 分块流（`csilk_response_write`）、SSE（`csilk_sse_send`）及 WebSocket（`csilk_ws_send`）增加连接级出站队列背压机制。支持配置高水位线（`write_high_water_mark`，默认 64KB）、低水位线（`write_low_water_mark`，默认 16KB）、最大排队限制（`max_write_buffer_size`，默认 16MB）及异步排空回调注册（`csilk_on_drain` / `csilk_set_write_watermarks`）。
 - **Context 存储析构器支持（RAII）**：新增 `csilk_set_ex()` 支持传入自定义析构函数（`csilk_destructor_t`），在请求结束释放 Arena 时自动清理堆内存对象；JWT 中间件自动为 `jwt_payload` 绑定 `csilk_json_free` 析构，防止内存泄漏。
 - **强类型零拷贝视图**：新增 `csilk_view_t`（`const char* data; size_t len;`）及借用语义 Getter（`csilk_get_query_view`、`csilk_get_param_view`、`csilk_get_header_view`、`csilk_get_body_view`），明确区分指向解析缓冲区的零拷贝借用与 Arena 分配的以 NUL 结尾的所有权字符串。

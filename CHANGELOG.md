@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Connection Lifecycle State Machine**: Implemented explicit 9-state connection lifecycle (`csilk_conn_state_t`: `INIT`, `ACCEPTED`, `TLS`, `READING`, `PROCESSING`, `WRITING`, `STREAMING`, `CLOSING`, `CLOSED`) with invariant transition checks (`csilk_conn_set_state`, `csilk_conn_get_state`, `csilk_conn_state_str`), preventing use-after-free, double close, double free, and async write/streaming race conditions.
+
 - **I/O & Sync Abstraction Layer**: Standardized unified, cross-backend `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`), and `csilk_barrier_*` (`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`) APIs in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
+
 - **Streaming Backpressure & Watermark Flow Control**: Implemented per-connection outbound queue backpressure across HTTP/1.1 chunked streaming (`csilk_response_write`), SSE (`csilk_sse_send`), and WebSocket (`csilk_ws_send`). Added configurable high water marks (`write_high_water_mark`, default 64KB), low water marks (`write_low_water_mark`, default 16KB), maximum buffer limits (`max_write_buffer_size`, default 16MB), and asynchronous drain callback registration (`csilk_on_drain` / `csilk_set_write_watermarks`).
 - **Context Storage Destructor Support**: Added `csilk_set_ex()` with `csilk_destructor_t` callback for RAII cleanup of heap values when context arenas reset. JWT middleware now automatically binds `csilk_json_free` to `jwt_payload`.
 - **Typed Zero-Copy Views**: Added `csilk_view_t` (`const char* data; size_t len;`) with explicit borrowed view accessors (`csilk_get_query_view`, `csilk_get_param_view`, `csilk_get_header_view`, `csilk_get_body_view`) distinguishing zero-copy parser buffers from owned NUL-terminated arena strings.

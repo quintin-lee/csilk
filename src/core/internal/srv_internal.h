@@ -86,6 +86,19 @@ typedef struct csilk_hook_node_s {
 /** @brief Protocol type for a client connection. */
 typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk_protocol_t;
 
+/** @brief Connection lifecycle states. */
+typedef enum {
+    CSILK_CONN_INIT = 0,
+    CSILK_CONN_ACCEPTED,
+    CSILK_CONN_TLS,
+    CSILK_CONN_READING,
+    CSILK_CONN_PROCESSING,
+    CSILK_CONN_WRITING,
+    CSILK_CONN_STREAMING,
+    CSILK_CONN_CLOSING,
+    CSILK_CONN_CLOSED
+} csilk_conn_state_t;
+
 /** @brief Forward declaration for client connection structure. */
 typedef struct csilk_client_s csilk_client_t;
 
@@ -166,8 +179,10 @@ struct csilk_server_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-    uint8_t          generation;
-    csilk_io_tcp_t   handle;         /**< I/O stream handle (libuv or io_uring). */
+    uint8_t            generation;
+    csilk_conn_state_t state;        /**< Connection lifecycle state machine. */
+    csilk_io_tcp_t     handle;       /**< I/O stream handle (libuv or io_uring). */
+
     csilk_io_timer_t timer;          /**< Connection idle (keep-alive) timer. */
     csilk_io_timer_t read_timer;     /**< Read timeout timer. */
     csilk_io_timer_t write_timer;    /**< Write timeout timer. */

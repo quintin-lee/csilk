@@ -211,6 +211,7 @@ process_tls_read(csilk_client_t* client)
         } else {
             client->protocol = CSILK_PROTO_HTTP1;
         }
+        csilk_conn_set_state(client, CSILK_CONN_READING);
     }
 
     while ((n = SSL_read(client->ssl, buf, 4096)) > 0) {
