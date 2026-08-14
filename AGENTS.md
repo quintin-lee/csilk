@@ -78,11 +78,24 @@ Run `cmake --build build --target format` before committing. 500+ files were ref
 ### Clang-tidy false positive (suppressed)
 `clang-analyzer-core.uninitialized.Assign` fires on `XL ^= p[i]` in `blowfish_encipher` because the analyzer cannot trace through the array-pointer parameter. Suppressed in `.clang-tidy` — do not add `[[maybe_unused]]` or other workarounds.
 
-### No raw pthread_mutex in cross-backend code
-All new code in `src/core/uring/` and elsewhere must use `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sync.h>`, never `pthread_mutex_t`/`pthread_cond_t`. The abstraction wraps both libuv and pthread backends. Call `csilk_cond_broadcast()` (not `pthread_cond_broadcast`) for wake-all.
+### No raw pthread_mutex or uv_* in cross-backend code
+All server core code in `src/core/server/`, `src/core/http/`, and elsewhere must use `csilk_io_*`, `csilk_thread_*`, `csilk_barrier_*`, and `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`. Never call raw `uv_*` or `pthread_*` directly in the server core.
+
+### Worker-local active_clients confinement
+`wp->active_clients` is strictly single-thread-confined to the owning worker thread. It is never thread-safe. Cross-worker operations (such as broadcast or cross-thread notifications) must use `csilk_dispatch(ctx, cb, arg)` to run callbacks on the owning worker thread.
+
+### Arena allocation semantics
+`csilk_arena_alloc()` returns uninitialized memory for zero-overhead allocation. If zero-initialized memory is required, always use `csilk_arena_calloc()`. When worker threads exit, call `csilk_arena_flush_free_list()` to release thread-local cached chunks.
+
+### Context storage RAII with csilk_set_ex
+When storing heap-allocated objects (e.g. cJSON nodes or driver handles) in the request context, always use `csilk_set_ex(c, key, ptr, destructor)` so they are freed automatically when the request arena resets.
+
+### Outbound streaming backpressure
+`csilk_response_write()`, `csilk_sse_send()`, and `csilk_ws_send()` enforce connection-level outbound watermarks. When they return `0`, the queue has reached the high watermark (`write_high_water_mark`) — pause producer output and resume only after `csilk_on_drain()` fires. Returning `-1` indicates queue overflow or error.
 
 ### internal.h is a public umbrella header
 `include/csilk/core/internal.h` must NOT include messaging/internal headers — doing so leaks MQ internals to any file that includes it. Add explicit `#include "messaging/mq_internal.h"` only in files that directly use `_csilk_mq_new()` / `_csilk_mq_free()`.
+
 
 ## Source Layout
 

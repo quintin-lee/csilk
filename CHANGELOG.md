@@ -8,19 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **I/O & Sync Abstraction Layer**: Standardized unified, cross-backend `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`), and `csilk_barrier_*` (`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`) APIs in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
+- **Streaming Backpressure & Watermark Flow Control**: Implemented per-connection outbound queue backpressure across HTTP/1.1 chunked streaming (`csilk_response_write`), SSE (`csilk_sse_send`), and WebSocket (`csilk_ws_send`). Added configurable high water marks (`write_high_water_mark`, default 64KB), low water marks (`write_low_water_mark`, default 16KB), maximum buffer limits (`max_write_buffer_size`, default 16MB), and asynchronous drain callback registration (`csilk_on_drain` / `csilk_set_write_watermarks`).
+- **Context Storage Destructor Support**: Added `csilk_set_ex()` with `csilk_destructor_t` callback for RAII cleanup of heap values when context arenas reset. JWT middleware now automatically binds `csilk_json_free` to `jwt_payload`.
+- **Typed Zero-Copy Views**: Added `csilk_view_t` (`const char* data; size_t len;`) with explicit borrowed view accessors (`csilk_get_query_view`, `csilk_get_param_view`, `csilk_get_header_view`, `csilk_get_body_view`) distinguishing zero-copy parser buffers from owned NUL-terminated arena strings.
+- **Arena Calloc & Multi-Tier TLS Caching**: Added `csilk_arena_calloc()` for zero-initialized arena allocations, 3-tier thread-local chunk free lists (4KB, 16KB, 64KB) with `max_total_bytes` constraint, and worker thread exit cleanup (`csilk_arena_flush_free_list`).
 - **Crypto driver extensibility**: `csilk_crypto_driver_t` now supports `sha1` (20-byte digest) and `bcrypt_hash` (password hashing) callbacks with internal dispatch wrappers `_csilk_sha1()` and `_csilk_bcrypt_hash()` — drivers can replace the built-in software implementations.
 - **`csilk_cond_broadcast()`**: New function in `<csilk/core/sync.h>` for broadcasting all waiters on a condition variable. Bridges the gap between `pthread_cond_broadcast` and libuv (which has no broadcast primitive).
 - **Crypto module tests**: Comprehensive property-based tests for SHA-256, HMAC-SHA256, Base64/Base64URL roundtrip, `csilk_crypto_fill_random`, `csilk_crypto_generate_nonce`, and `csilk_url_decode` edge cases in `tests/crypto/test_crypto.c`.
 
 ### Changed
+- **Server Core Pure Abstraction**: Eliminated all direct `uv_*` references from `src/core/server/` (`connection.c`, `server_lifecycle.c`, `server_shutdown.c`, `server_worker.c`), replacing them with `csilk_io_*` and `csilk_thread_*`/`csilk_barrier_*`.
+- **io_uring Architecture Streamlining**: Eliminated parallel duplicate server state machines (`uring_server.c`, `uring_connection.c`, `uring_event_loop.c`), consolidated the driver under `src/core/uring/uring_io.c`, and unified single-track server lifecycle execution across backends.
+- **Router Prefix Trie Architecture & Rollback**: Aligned router documentation to reflect segment-based prefix trie architecture and fixed wildcard parameter backtracking on method mismatch or handler failure.
+- **Handler Chain Boundary Safety**: Added explicit `handler_count` check in `csilk_next()` to guard against corrupted or unterminated handler arrays.
+- **Thread Confinement & Dispatch**: Explicitly documented worker-local `active_clients` confinement; cross-thread work must use `csilk_dispatch()`.
 - **Barrier lifecycle**: `uv_barrier_t` in `src/core/server/server_lifecycle.c` is now heap-allocated (`calloc`) to prevent use-after-free when worker threads outlive the stack-local barrier. `uv_barrier_init` return value is now checked.
 - **Threading abstraction**: `src/core/uring/uring_thread_pool.c` replaced raw `pthread_mutex_t`/`pthread_cond_t` with `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sync.h>` for cross-backend consistency.
 - **Header hygiene**: Removed `messaging/mq_internal.h` transitively included via `include/csilk/core/internal.h`. Files needing `_csilk_mq_new`/`_csilk_mq_free` now include `messaging/mq_internal.h` explicitly.
 - **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### Fixed
+- **Dynamic TCP Read Buffers**: Expanded `read_buffers` dynamically (doubling initial 16 slots) to prevent data dropping when a request requires >16 TCP reads.
+- **Atomic Max Connections**: Converted `max_connections` check to atomic CAS reservation (`_csilk_server_try_acquire_connection`) and rollback to eliminate high-concurrency TOCTOU race conditions.
+- **JWT Memory Leak**: Bound automatic destructor via `csilk_set_ex()` to free cJSON payload heap allocations on context reset.
 - **uv_barrier_t UAF**: Fixed use-after-free in multi-worker server startup where a stack-allocated `uv_barrier_t` was destroyed by the main thread while worker threads still held its address. Barrier is now heap-allocated and freed after all workers join.
 - **internal.h MQ leak**: Removed `#include "messaging/mq_internal.h"` from `include/csilk/core/internal.h` to stop transitively exposing MQ internals (e.g., `csilk_mq_t`) to every file including the umbrella header.
+
 
 ## [0.4.0] - 2026-08-13
 

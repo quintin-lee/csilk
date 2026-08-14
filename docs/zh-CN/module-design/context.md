@@ -248,6 +248,57 @@ graph TB
     end
 ```
 
+## 零拷贝字符串视图与所有权语义
+
+csilk 提供双重访问接口以兼顾极限性能与生命周期安全性：
+
+```c
+typedef struct {
+    const char* data; /**< 指向解析/网络缓冲区的借用指针 */
+    size_t      len;  /**< 字节长度（不保证以 NUL 结尾） */
+} csilk_view_t;
+```
+
+| 查询作用域 | 零拷贝借用视图 (Zero-Copy View) | 独立所有权字符串 (NUL-Terminated) |
+|-----------|--------------------------------|----------------------------------|
+| **查询参数** | `csilk_get_query_view(c, "key")` | `csilk_get_query(c, "key")` |
+| **路径参数** | `csilk_get_param_view(c, "id")`  | `csilk_get_param(c, "id")`  |
+| **请求头部** | `csilk_get_header_view(c, "Host")` | `csilk_get_header(c, "Host")` |
+| **请求体**   | `csilk_get_body_view(c)` | `csilk_get_body(c)` |
+
+> [!IMPORTANT]
+> `csilk_view_t` 直接引用底层网络接收缓冲区，零拷贝、零内存分配开销。其生命周期仅在当前请求处理器执行期间有效。若需在上下文重置后持久化持有，请使用标准 `csilk_get_*()` 函数或通过 `csilk_arena_strndup()` 复制到 Arena 中。
+
+## 自定义存储析构器 (RAII)
+
+对于存放在 `csilk_ctx_t` 中的堆分配对象（例如 cJSON 结构体、数据库连接或第三方句柄），`csilk_set_ex()` 允许注册自动析构函数，在请求结束时由框架自动回收：
+
+```c
+typedef void (*csilk_destructor_t)(void* value);
+
+// 存储堆对象并绑定自动析构器
+cJSON* payload = jwt_verify_internal(...);
+csilk_set_ex(c, "jwt_payload", payload, (csilk_destructor_t)csilk_json_free);
+```
+
+## 出站流式传输与背压流控
+
+流式写入接口（`csilk_response_write()`、`csilk_sse_send()`、`csilk_ws_send()`）内置连接级出站队列水位线流控：
+
+```c
+// 配置连接水位线（默认值：高水位 64KB，低水位 16KB，最大缓冲 16MB）
+csilk_set_write_watermarks(c, 128 * 1024, 32 * 1024, 32 * 1024 * 1024);
+
+// 写入数据并检测背压状态
+int status = csilk_response_write(c, data, len);
+if (status == 0) {
+    // 超过高水位线 — 暂停生产者输出
+    csilk_on_drain(c, on_stream_drain, producer_state);
+} else if (status < 0) {
+    // 队列溢出（超过 max_write_buffer_size）或套接字异常
+}
+```
+
 ## 响应生成流程
 
 ```mermaid
@@ -274,21 +325,21 @@ graph TB
   'flowchart': {'htmlLabels': true, 'curve': 'basis'}
 }}%%
 flowchart TB
-    subgraph sync_resp["fa:fa-bolt Sync Response"]
-        SYNC_H["fa:fa-play Handler calls csilk_string/json/redirect"] --> SYNC_SET["fa:fa-cog ctx->response.status = 200\nctx->response.body = 'OK'"]
-        SYNC_SET --> SYNC_RET["fa:fa-undo Handler returns without calling csilk_next()"]
-        SYNC_RET --> SYNC_SEND["fa:fa-reply _csilk_send_response(ctx)\nSerializes HTTP + headers + body\nuv_write() to socket"]
+    subgraph sync_resp["fa:fa-bolt 同步响应"]
+        SYNC_H["fa:fa-play Handler 调用 csilk_string/json/redirect"] --> SYNC_SET["fa:fa-cog ctx->response.status = 200\nctx->response.body = 'OK'"]
+        SYNC_SET --> SYNC_RET["fa:fa-undo Handler 返回（无需调用 csilk_next）"]
+        SYNC_RET --> SYNC_SEND["fa:fa-reply _csilk_send_response(ctx)\n序列化 HTTP 响应行+头部+体\ncsilk_io_write() 写入套接字"]
     end
 
-    subgraph async_resp["fa:fa-cloud Async / Streaming Response"]
-        ASYNC_H["fa:fa-play Handler sets ctx->is_async = 1"] --> ASYNC_RET["fa:fa-undo Returns control to libuv"]
-        ASYNC_RET --> ASYNC_WAIT["fa:fa-hourglass Later: csilk_response_write()"]
-        ASYNC_WAIT --> ASYNC_SEND["fa:fa-file send_chunked_headers() (first call)\nwrite_chunk_frame() (per chunk)\ncsilk_response_end() (terminal chunk)"]
+    subgraph async_resp["fa:fa-cloud 异步 / 流式响应"]
+        ASYNC_H["fa:fa-play Handler 设置 ctx->is_async = 1"] --> ASYNC_RET["fa:fa-undo 归还控制权给事件循环"]
+        ASYNC_RET --> ASYNC_WAIT["fa:fa-hourglass 稍后: csilk_response_write()"]
+        ASYNC_WAIT --> ASYNC_SEND["fa:fa-file send_chunked_headers() (首次调用)\nwrite_chunk_frame() (分块帧)\ncsilk_response_end() (终止分块)"]
     end
 
-    subgraph ws_resp["fa:fa-plug WebSocket Response"]
-        WS_H["fa:fa-play Handler calls csilk_ws_handshake()"] --> WS_101["fa:fa-random Status 101 Switching Protocols\nctx->is_websocket = 1"]
-        WS_101 --> WS_READ["fa:fa-sync-alt uv_read_start() continues\nBut parser switches to csilk_ws_parse_frame()"]
+    subgraph ws_resp["fa:fa-plug WebSocket 响应"]
+        WS_H["fa:fa-play Handler 调用 csilk_ws_handshake()"] --> WS_101["fa:fa-random 101 Switching Protocols\nctx->is_websocket = 1"]
+        WS_101 --> WS_READ["fa:fa-sync-alt csilk_io_read_start() 持续监听\n解析器切换为 csilk_ws_parse_frame()"]
     end
 ```
 
@@ -296,16 +347,17 @@ flowchart TB
 
 ### 常规清理
 
-在 keep-alive 请求之间 (csilk_ctx_cleanup)，高效重置状态：
+在 keep-alive 请求之间 (`csilk_ctx_cleanup`)，高效重置状态：
 
-1. **释放注册的读缓冲区** - 在请求解析期间积累的所有原始网络读缓冲区（由零拷贝字符串视图引用）被释放。
-2. `csilk_arena_reset()` - O(1) 指针重置；所有每请求分配（包括持久化头和查询参数）被释放。
-3. `free()` 路径参数（键/值）。
-4. `free()` 请求体（如果已复制/分配，否则它是零拷贝引用，在步骤 1 中释放）。
-5. `free()` 请求路径。
-6. `memset()` 头/查询/响应映射为零。
-7. 重置所有标志：`aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`。
-8. 重置 `handler_index = -1`, `storage_head = NULL`, 和 `read_buffers_count = 0`。
+1. **调用自定义析构器** - 执行通过 `csilk_set_ex()` 注册的对象析构函数以及 `csilk_ctx_defer` 注册的延迟清理。
+2. **释放注册的读缓冲区** - 在请求解析期间积累的所有动态原始网络读缓冲区被安全释放。
+3. `csilk_arena_reset()` - O(1) 指针重置；所有每请求分配被回收。
+4. `free()` 路径参数（键/值）。
+5. `free()` 请求体（如果已复制/分配，否则它作为零拷贝引用在步骤 2 中释放）。
+6. `free()` 请求路径。
+7. `memset()` 头/查询/响应映射为零。
+8. 重置所有标志：`aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`。
+9. 重置 `handler_index = -1`, `storage_head = NULL`, 和 `read_buffers_count = 0`。
 
 ### 延迟清理 (Panic-Safe)
 
@@ -313,9 +365,10 @@ flowchart TB
 
 ```c
 char* buf = malloc(1024);
-csilk_ctx_defer(c, free, buf);       // free(buf) 在清理或 panic 时调用
-csilk_ctx_defer(c, close, &fd);      // close(fd) 在清理或 panic 时调用
-csilk_ctx_defer(c, uv_mutex_unlock, &mutex);  // unlock 在清理或 panic 时调用
+csilk_ctx_defer(c, free, buf);                 // free(buf) 在清理或 panic 时调用
+csilk_ctx_defer(c, (void(*)(void*))close, &fd);// close(fd) 在清理或 panic 时调用
+csilk_ctx_defer(c, (void(*)(void*))csilk_mutex_unlock, &mutex); // unlock 在清理或 panic 时调用
 ```
+
 
 项在 arena 中分配并随 arena 重置自动释放。回调由 `csilk_ctx_cleanup` 和 panic 恢复路径自动调用。
