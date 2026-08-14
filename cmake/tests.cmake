@@ -218,10 +218,10 @@ set(CSILK_SECURITY_TESTS
     test_bcrypt
     test_cipher
     test_crypto_driver
+    test_crypto
 )
 set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security;security
-    security;security
+    security;security;security;security;security;security;security;security;crypto
 )
 
 # -- Data / driver tests --
