@@ -52,6 +52,7 @@ typedef struct io_uring csilk_io_loop_t;
 typedef struct csilk_io_handle_s {
     void*            data; /**< Opaque user data. */
     csilk_io_loop_t* loop; /**< Loop that owns this handle. */
+    int              fd;   /**< Underlying file descriptor. */
 } csilk_io_handle_t;
 
 /** @brief A TCP/stream connection handle. */

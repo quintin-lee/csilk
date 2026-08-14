@@ -52,25 +52,22 @@ set(CSILK_CORE_SOURCES
     src/core/plugin/wasm_plugin.c
     src/core/plugin/wasm_vm.c
     src/core/plugin/wasm_wasi.c
+    src/core/server/server_lifecycle.c
+    src/core/server/server_shutdown.c
+    src/core/server/server_worker.c
+    src/core/server/connection.c
 )
 
 if(CSILK_USE_URING)
     list(APPEND CSILK_CORE_SOURCES
-        src/core/uring/uring_server.c
-        src/core/uring/uring_event_loop.c
-        src/core/uring/uring_connection.c
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
-        src/core/uring/uv_stubs.c
-    )
-else()
-    list(APPEND CSILK_CORE_SOURCES
-        src/core/server/server_lifecycle.c
-        src/core/server/server_shutdown.c
-        src/core/server/server_worker.c
-        src/core/server/connection.c
+        src/core/uring/uring_io.c
     )
 endif()
+
+
+
 
 set(CSILK_DRIVER_SOURCES
     src/drivers/ai/ollama.c
