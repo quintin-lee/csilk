@@ -302,7 +302,7 @@ on_work_timer_close(csilk_io_handle_t* handle)
 static void
 free_work(node_work_t* work)
 {
-    if (work->node->timeout_ms > 0 && !work->timer_closing) {
+    if (work->timer_initialized && !work->timer_closing) {
         work->timer_closing = 1;
         csilk_io_timer_stop(&work->node_timer);
         work->node_timer.data = work;
@@ -328,6 +328,7 @@ free_work(node_work_t* work)
  *    the next node; otherwise, evaluate each outgoing edge:
  *    - Unconditional edges (condition == NULL) always match.
  *    - Conditional edges match if output type equals condition string.
+ *    - Dynamic routers can inspect previous node outputs from ctx.
  * 8. For matching edges, check the target's join policy: AND join
  *    requires all incoming edges to fire before the target is ready;
  *    OR join fires on any single edge.
@@ -343,6 +344,10 @@ after_worker_cb(csilk_io_work_t* req, int status)
     csilk_wf_node_t* node = work->node;
     csilk_data_t*    output = work->output;
 
+    if (work->timer_initialized && !work->is_timed_out) {
+        csilk_io_timer_stop(&work->node_timer);
+    }
+
     if (work->is_timed_out) {
         output = NULL;
     }
@@ -354,8 +359,11 @@ after_worker_cb(csilk_io_work_t* req, int status)
             "[Workflow] Node '%s' failed, scheduled retry in %dms", node->id, node->retry_delay_ms);
 
         if (node->retry_delay_ms > 0) {
-            csilk_io_timer_init(ctx->wf->loop, &work->node_timer);
-            work->node_timer.data = work;
+            if (!work->timer_initialized) {
+                csilk_io_timer_init(ctx->wf->loop, &work->node_timer);
+                work->node_timer.data = work;
+                work->timer_initialized = 1;
+            }
             csilk_io_timer_start(&work->node_timer, on_retry_timer, node->retry_delay_ms, 0);
             return; // Wait for timer
         } else {
@@ -646,6 +654,7 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
     if (node->timeout_ms > 0) {
         csilk_io_timer_init(ctx->wf->loop, &work->node_timer);
         work->node_timer.data = work;
+        work->timer_initialized = 1;
         csilk_io_timer_start(&work->node_timer, on_node_timeout, node->timeout_ms, 0);
     }
 

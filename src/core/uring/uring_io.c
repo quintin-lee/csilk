@@ -647,6 +647,12 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
         }
     }
 
+    if (loop->running) {
+        /* Avoid recursive event loop invocation from inside callbacks */
+        return 0;
+    }
+    loop->running = 1;
+
     struct io_uring* ring = &loop->ring;
     int              total = 0;
     loop->stop_flag = 0;
@@ -786,7 +792,7 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                     !(async->flags & CSILK_IO_HANDLE_CLOSING)) {
                     uint64_t val = 0;
                     ssize_t  nr = read(async->event_fd, &val, sizeof(val));
-                    /* Re-arm poll */
+                    /* Re-arm async poll */
                     struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
                     if (sqe) {
                         io_uring_prep_poll_add(sqe, async->event_fd, POLLIN);
@@ -868,6 +874,7 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 
     } while (!loop->stop_flag && loop->active_handles > 0);
 
+    loop->running = 0;
     return total > 0 ? 0 : -1;
 }
 

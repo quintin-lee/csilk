@@ -114,9 +114,6 @@ on_stop_async(csilk_io_async_t* handle)
         server->mq = NULL;
     }
 
-    for (int i = 0; i < 8; i++) {
-        csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
-    }
     csilk_io_stop(server->loop);
 }
 
@@ -169,8 +166,5 @@ on_worker_stop_async(csilk_io_async_t* handle)
         csilk_io_close((csilk_io_handle_t*)handle, NULL);
     }
 
-    for (int i = 0; i < 8; i++) {
-        csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
-    }
     csilk_io_stop(loop);
 }

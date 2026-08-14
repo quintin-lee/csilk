@@ -139,6 +139,7 @@ typedef struct node_work_s {
     csilk_io_timer_t       node_timer;
     int                    is_timed_out;
     int                    retry_count;
+    int                    timer_initialized;
     int                    timer_closing;
     csilk_wf_trace_node_t* trace_node;
 } node_work_t;
