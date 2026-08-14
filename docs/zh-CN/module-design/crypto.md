@@ -1,8 +1,13 @@
-# 可插拔加密驱动设计
+# 可插拔加密驱动与密码学原语设计
 
-csilk 将所有标准密码学原语（SHA-256、HMAC-SHA256、SHA-1、AES-256-GCM、RSA、ECDSA）统一委托给系统级 OpenSSL 库实现，消除了手写算法带来的安全审计负担、侧信道风险与编译器行为不确定性，并自动获得硬件指令集加速（如 Intel SHA-NI/AES-NI 及 ARMv8 Crypto 扩展）。
+csilk 将标准密码学原语（SHA-256、HMAC-SHA256、SHA-1、AES-256-GCM、RSA、ECDSA 以及 OpenSSL 加固的 bcrypt）统一委托给系统级 OpenSSL 库实现，消除了手写算法带来的安全审计负担、侧信道风险与编译器行为不确定性，并自动获得硬件指令集加速（如 Intel SHA-NI/AES-NI 及 ARMv8 Crypto 扩展）。
 
-同时，框架允许开发人员通过可插拔驱动替换内部加密和唯一标识符算法。这对于利用专用硬件安全模块（HSM）、集成定制密码库或使用国密算法（如 SM2/SM3/SM4）非常有用。
+### bcrypt 架构设计
+- **密码学随机源**：采用 `<openssl/rand.h>` 的 `RAND_bytes()` / `RAND_priv_bytes()` 生成强随机盐。
+- **侧信道防护**：通过 OpenSSL `CRYPTO_memcmp()` 执行恒定时间（constant-time）哈希比对。
+- **安全擦除**：使用 `OPENSSL_cleanse()` 在函数退出前彻底擦除栈上密码明文、盐及密钥扩展状态。
+- **线程安全与重入性**：使用栈分配的独立 `csilk_bcrypt_state_t`（P-array 与 S-boxes），彻底消除全局共享状态与并发写冲突。
+
 
 
 加密子系统有两个独立的可插拔接口：

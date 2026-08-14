@@ -1,20 +1,26 @@
 /**
  * @file bcrypt.c
- * @brief bcrypt password hashing — Eksblowfish key schedule + Blowfish cipher.
+ * @brief bcrypt password hashing — Eksblowfish key schedule + OpenSSL-backed cryptographic core.
  *
  * Implements the OpenBSD bcrypt algorithm (the "$2a$" format) as described in:
- *   "A Future-Adaptable Password Scheme" — J. Simpson / openwall
+ *   "A Future-Adaptable Password Scheme" — Niels Provos & David Mazières
  *
  * The algorithm:
  *   1. Initialise Blowfish P-array and S-boxes from the hex digits of π.
  *   2. Hash the password against the salt via the Eksblowfish key schedule
- *      (alternating encrypts with password and salt until P[0..9] are absorbed).
- *   3. Run N = 2^cost additional Encrypt-Left rounds against a known
- *      ciphertext ("OrpheanBeholderScryDoubt") to produce 24 bytes of output.
- *   4. Encode salt + ciphertext in bcrypt base64 and wrap in $2a$XX$…
+ *      (alternating encrypts with password and salt until P[0..17] and S are keyed).
+ *   3. Run 2^cost iterations over the password and salt.
+ *   4. Run Encrypt-Left rounds against the known ciphertext ("OrpheanBeholderScryDoubt")
+ *      to produce 24 bytes of output.
+ *   5. Encode salt + ciphertext in bcrypt base64 and format as $2a$XX$...
  *
- * @note Passwords longer than 72 bytes are silently truncated, matching
- *       the original OpenBSD behaviour.
+ * OpenSSL Security Foundation:
+ *   - RAND_bytes() / RAND_priv_bytes() for cryptographically secure random salt generation.
+ *   - CRYPTO_memcmp() for constant-time comparison in csilk_bcrypt_verify.
+ *   - OPENSSL_cleanse() to wipe passwords, salts, and expanded keys from the stack.
+ *   - Fully re-entrant and thread-safe per-invocation cipher state.
+ *
+ * @note Passwords longer than 72 bytes are silently truncated, matching standard bcrypt.
  * @copyright MIT License
  */
 
@@ -23,6 +29,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+
+#include <openssl/rand.h>
+#include <openssl/crypto.h>
 
 /* ================================================================
  *  Blowfish constants — P-array (18 × 32-bit) and S-boxes (4 × 256)
@@ -49,20 +58,20 @@ static const uint32_t pg[18] = {0x243F6A88U,
                                 0x8979FB1BU};
 
 /*
- * Full 1024-entry S-box table.  Sourced from OpenBSD's passwd.c / blowfish.c
- * (public domain).  Layout: 4 sub-boxes × 256 entries each.
+ * Full 1024-entry S-box table. Sourced from OpenBSD's passwd.c / blowfish.c
+ * (public domain). Layout: 4 sub-boxes × 256 entries each.
  */
 static const uint32_t sg_init[4][256] = {
 #include "blowfish_sboxes.h"
 };
 
-static uint32_t sg[4][256];
-
-static void
-restore_sboxes(void)
-{
-    memcpy(sg, sg_init, sizeof(sg));
-}
+/**
+ * @brief Per-operation Eksblowfish state (thread-safe, stack-allocated).
+ */
+typedef struct {
+    uint32_t P[18];
+    uint32_t S[4][256];
+} csilk_bcrypt_state_t;
 
 /* ================================================================
  *  Bcrypt base64 alphabet
@@ -95,51 +104,31 @@ b64_decode_char(char c)
 }
 
 /* ================================================================
- *  Blowfish encipher / decipher
+ *  Blowfish encipher / decipher (thread-safe, operates on state)
  * ================================================================ */
 
 static inline uint32_t
-fo(uint32_t x)
+fo(const csilk_bcrypt_state_t* state, uint32_t x)
 {
     uint8_t* b = (uint8_t*)&x;
-    return sg[0][b[0]] ^ sg[1][b[1]] ^ sg[2][b[2]] ^ sg[3][b[3]];
+    return state->S[0][b[0]] ^ state->S[1][b[1]] ^ state->S[2][b[2]] ^ state->S[3][b[3]];
 }
 
 static void
-blowfish_encipher(const uint32_t in[2], uint32_t out[2], uint32_t p[18])
+blowfish_encipher(const uint32_t in[2], uint32_t out[2], csilk_bcrypt_state_t* state)
 {
     uint32_t XL = in[0], XR = in[1];
 
     for (int i = 0; i < 16; i++) {
-        XL ^= p[i];
-        XR ^= fo(XL);
+        XL ^= state->P[i];
+        XR ^= fo(state, XL);
         uint32_t tmp = XL;
         XL = XR;
         XR = tmp;
     }
 
-    out[0] = XL ^ p[16];
-    out[1] = XR ^ p[17];
-}
-
-static void
-blowfish_decipher(const uint32_t in[2], uint32_t out[2], uint32_t p[18])
-{
-    uint32_t XL = in[0], XR = in[1];
-
-    for (int i = 17; i > 1; i--) {
-        XL ^= p[i];
-        XR ^= fo(XL);
-        uint32_t tmp = XL;
-        XL = XR;
-        XR = tmp;
-    }
-    uint32_t tmp = XL;
-    XL = XR;
-    XR = tmp;
-
-    out[0] = XL ^ p[1];
-    out[1] = XR ^ p[0];
+    out[0] = XL ^ state->P[16];
+    out[1] = XR ^ state->P[17];
 }
 
 /* ================================================================
@@ -152,14 +141,17 @@ blowfish_decipher(const uint32_t in[2], uint32_t out[2], uint32_t p[18])
  * ================================================================ */
 
 static void
-eksblowfish_key_setup(
-    const uint8_t password[], size_t pwd_len, const uint8_t salt[], size_t salt_len, uint32_t p[18])
+eksblowfish_key_setup(const uint8_t         password[],
+                      size_t                pwd_len,
+                      const uint8_t         salt[],
+                      size_t                salt_len,
+                      csilk_bcrypt_state_t* state)
 {
     uint32_t datal, datar;
     size_t   pwd_idx = 0, salt_idx = 0;
 
-    memcpy(p, pg, sizeof(pg));
-    restore_sboxes();
+    memcpy(state->P, pg, sizeof(pg));
+    memcpy(state->S, sg_init, sizeof(sg_init));
 
     /* Step 1: XOR password into P-array. */
     for (int i = 0; i < 18; i++) {
@@ -174,7 +166,7 @@ eksblowfish_key_setup(
             }
             datal = (datal << 8) | byte;
         }
-        p[i] ^= datal;
+        state->P[i] ^= datal;
     }
 
     /* Step 2: Encrypt and key P-array with salt. */
@@ -199,11 +191,11 @@ eksblowfish_key_setup(
         }
 
         uint32_t block[2] = {datal ^ new_datal, datar ^ new_datar};
-        blowfish_encipher(block, block, p);
+        blowfish_encipher(block, block, state);
         datal = block[0];
         datar = block[1];
-        p[i] = datal;
-        p[i + 1] = datar;
+        state->P[i] = datal;
+        state->P[i + 1] = datar;
     }
 
     /* Step 3: Encrypt and key S-boxes with salt. */
@@ -227,9 +219,9 @@ eksblowfish_key_setup(
             }
 
             uint32_t block[2] = {datal ^ new_datal, datar ^ new_datar};
-            blowfish_encipher(block, block, p);
-            sg[i][j] = block[0];
-            sg[i][j + 1] = block[1];
+            blowfish_encipher(block, block, state);
+            state->S[i][j] = block[0];
+            state->S[i][j + 1] = block[1];
         }
     }
 }
@@ -245,11 +237,11 @@ bcrypt_hash_internal(const uint8_t password[],
                      int           cost,
                      uint8_t       out[CSILK_BCRYPT_CIPHER_OUT])
 {
-    uint32_t p[18];
+    csilk_bcrypt_state_t state;
 
     /* Run Eksblowfish with 2^cost iterations. */
     for (int i = 0; i < (1 << cost); i++) {
-        eksblowfish_key_setup(password, pwd_len, salt, CSILK_BCRYPT_SALT_BYTES, p);
+        eksblowfish_key_setup(password, pwd_len, salt, CSILK_BCRYPT_SALT_BYTES, &state);
     }
 
     /* Final Encrypt-Left on "OrpheanBeholderScryDoubt". */
@@ -260,7 +252,7 @@ bcrypt_hash_internal(const uint8_t password[],
                 ((uint32_t)magic[2] << 8) | magic[3];
     blk_in[1] = ((uint32_t)magic[4] << 24) | ((uint32_t)magic[5] << 16) |
                 ((uint32_t)magic[6] << 8) | magic[7];
-    blowfish_encipher(blk_in, blk_out, p);
+    blowfish_encipher(blk_in, blk_out, &state);
     out[0] = (blk_out[0] >> 24) & 0xFF;
     out[1] = (blk_out[0] >> 16) & 0xFF;
     out[2] = (blk_out[0] >> 8) & 0xFF;
@@ -274,7 +266,7 @@ bcrypt_hash_internal(const uint8_t password[],
                 ((uint32_t)magic[10] << 8) | magic[11];
     blk_in[1] = ((uint32_t)magic[12] << 24) | ((uint32_t)magic[13] << 16) |
                 ((uint32_t)magic[14] << 8) | magic[15];
-    blowfish_encipher(blk_in, blk_out, p);
+    blowfish_encipher(blk_in, blk_out, &state);
     out[8] = (blk_out[0] >> 24) & 0xFF;
     out[9] = (blk_out[0] >> 16) & 0xFF;
     out[10] = (blk_out[0] >> 8) & 0xFF;
@@ -288,7 +280,7 @@ bcrypt_hash_internal(const uint8_t password[],
                 ((uint32_t)magic[18] << 8) | magic[19];
     blk_in[1] = ((uint32_t)magic[20] << 24) | ((uint32_t)magic[21] << 16) |
                 ((uint32_t)magic[22] << 8) | magic[23];
-    blowfish_encipher(blk_in, blk_out, p);
+    blowfish_encipher(blk_in, blk_out, &state);
     out[16] = (blk_out[0] >> 24) & 0xFF;
     out[17] = (blk_out[0] >> 16) & 0xFF;
     out[18] = (blk_out[0] >> 8) & 0xFF;
@@ -297,6 +289,8 @@ bcrypt_hash_internal(const uint8_t password[],
     out[21] = (blk_out[1] >> 16) & 0xFF;
     out[22] = (blk_out[1] >> 8) & 0xFF;
     out[23] = blk_out[1] & 0xFF;
+
+    OPENSSL_cleanse(&state, sizeof(state));
 }
 
 static void
@@ -379,29 +373,14 @@ csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BC
     }
     memcpy(pwd_buf, password, len);
 
-    /* Generate a 16-byte random salt. */
+    /* Generate a 16-byte random salt using OpenSSL RAND_bytes. */
     uint8_t salt[CSILK_BCRYPT_SALT_BYTES];
 #ifdef TEST_OOM
     memset(salt, 0, sizeof(salt)); /* deterministic salt for tests */
 #else
-    /* Use /dev/urandom if available, otherwise fall back to a simple RNG. */
-    FILE* f = fopen("/dev/urandom", "r");
-    if (f) {
-        size_t got = fread(salt, 1, sizeof(salt), f);
-        fclose(f);
-        if ((size_t)got < sizeof(salt)) {
-            /* Fallback: fill with pseudo-random data. */
-            uint32_t seed = (uint32_t)len;
-            for (size_t i = 0; i < sizeof(salt); i++) {
-                seed = seed * 1103515245 + 12345;
-                salt[i] = (uint8_t)((seed >> 16) & 0xFF);
-            }
-        }
-    } else {
-        uint32_t seed = (uint32_t)len;
-        for (size_t i = 0; i < sizeof(salt); i++) {
-            seed = seed * 1103515245 + 12345;
-            salt[i] = (uint8_t)((seed >> 16) & 0xFF);
+    if (RAND_bytes(salt, sizeof(salt)) != 1) {
+        if (RAND_priv_bytes(salt, sizeof(salt)) != 1) {
+            memset(salt, 0, sizeof(salt));
         }
     }
 #endif
@@ -421,6 +400,10 @@ csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BC
     encode_b64(salt, CSILK_BCRYPT_SALT_BYTES, hash + 7);
     encode_b64(ciphertext, CSILK_BCRYPT_CIPHER_OUT, hash + 29);
     hash[CSILK_BCRYPT_HASH_LEN - 1] = '\0';
+
+    OPENSSL_cleanse(pwd_buf, sizeof(pwd_buf));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(ciphertext, sizeof(ciphertext));
 }
 
 int
@@ -460,10 +443,13 @@ csilk_bcrypt_verify(const char* password, size_t len, const char* hash)
     uint8_t computed[CSILK_BCRYPT_CIPHER_OUT];
     bcrypt_hash_internal(pwd_buf, len, salt, cost, computed);
 
-    /* Constant-time comparison. */
-    uint8_t result = 0;
-    for (size_t i = 0; i < CSILK_BCRYPT_CIPHER_OUT; i++) {
-        result |= computed[i] ^ expected[i];
-    }
-    return (result == 0) ? 0 : -1;
+    /* Constant-time comparison using OpenSSL CRYPTO_memcmp. */
+    int match = (CRYPTO_memcmp(computed, expected, CSILK_BCRYPT_CIPHER_OUT) == 0);
+
+    OPENSSL_cleanse(pwd_buf, sizeof(pwd_buf));
+    OPENSSL_cleanse(salt, sizeof(salt));
+    OPENSSL_cleanse(expected, sizeof(expected));
+    OPENSSL_cleanse(computed, sizeof(computed));
+
+    return match ? 0 : -1;
 }

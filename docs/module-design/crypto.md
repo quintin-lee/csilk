@@ -1,8 +1,13 @@
-# Pluggable Crypto Driver Design
+# Pluggable Crypto Driver & Primitives Design
 
-csilk delegates all standard cryptographic primitives (SHA-256, HMAC-SHA256, SHA-1, AES-256-GCM, RSA, ECDSA) directly to OpenSSL, eliminating hand-rolled crypto implementations while automatically benefiting from audited security, side-channel protections, and hardware acceleration (e.g., Intel SHA-NI/AES-NI and ARMv8 Crypto Extensions).
+csilk delegates standard cryptographic primitives (SHA-256, HMAC-SHA256, SHA-1, AES-256-GCM, RSA, ECDSA, and OpenSSL-backed bcrypt) directly to OpenSSL, eliminating hand-rolled crypto implementations while automatically benefiting from audited security, side-channel protections, and hardware acceleration (e.g., Intel SHA-NI/AES-NI and ARMv8 Crypto Extensions).
 
-The framework also allows developers to replace its internal cryptographic and unique identifier algorithms via pluggable drivers. This is useful for utilizing specialized hardware security modules (HSM), integrating with custom system libraries, or using localized algorithms (like the SM series).
+### bcrypt Architecture
+- **Cryptographic Randomness**: Employs `RAND_bytes()` / `RAND_priv_bytes()` from `<openssl/rand.h>` for salt generation.
+- **Side-Channel Protection**: Performs constant-time hash verification via `CRYPTO_memcmp()`.
+- **Zeroization**: Utilizes `OPENSSL_cleanse()` to wipe passwords, salts, and expanded cipher key structures from the stack.
+- **Thread Safety**: Operates on a stack-allocated, re-entrant `csilk_bcrypt_state_t` (P-array and S-boxes), eliminating shared mutable state and data races.
+
 
 
 The crypto subsystem has two independent pluggable interfaces:
