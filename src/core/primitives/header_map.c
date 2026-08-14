@@ -65,6 +65,25 @@ map_get(csilk_header_map_t* map, const char* key)
     }
     return NULL;
 }
+
+csilk_view_t
+map_get_view(csilk_header_map_t* map, const char* key)
+{
+    if (!map || !key) {
+        return csilk_view(NULL, 0);
+    }
+    uint32_t        bucket = hash_key(key);
+    csilk_header_t* h = map->buckets[bucket];
+    while (h) {
+        if (strcasecmp(h->key, key) == 0) {
+            return csilk_view(h->value,
+                              h->value_len ? h->value_len : (h->value ? strlen(h->value) : 0));
+        }
+        h = h->next;
+    }
+    return csilk_view(NULL, 0);
+}
+
 /** @brief Hash a key from a string view into a bucket index.
  *
  * Applies the djb2 hash algorithm with case-insensitive character folding.

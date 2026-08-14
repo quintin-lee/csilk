@@ -36,6 +36,14 @@ const char* csilk_get_method(csilk_ctx_t* c);
 const char* csilk_get_path(csilk_ctx_t* c);
 
 /**
+ * @brief Get the request path as a zero-copy slice view.
+ *
+ * @param c The request context.
+ * @return A csilk_view_t slice of the path.
+ */
+csilk_view_t csilk_get_path_view(csilk_ctx_t* c);
+
+/**
  * @brief Get the raw request body and its length.
  *
  * Only valid after the full body has been parsed.  Returns NULL for methods
@@ -48,6 +56,29 @@ const char* csilk_get_path(csilk_ctx_t* c);
  *         body is present.
  */
 const char* csilk_get_body(csilk_ctx_t* c, size_t* out_len);
+
+/**
+ * @brief Get the request body as a zero-copy slice view.
+ *
+ * Returns a borrowed slice directly referencing the received body data.
+ * Does not allocate or copy. The view is valid for the duration of the request.
+ *
+ * @param c The request context.
+ * @return A csilk_view_t slice (empty view if body is absent).
+ */
+csilk_view_t csilk_get_body_view(csilk_ctx_t* c);
+
+/**
+ * @brief Get the request body as a guaranteed NUL-terminated arena string.
+ *
+ * Materializes the body into the request arena if necessary. Safe to pass
+ * directly to standard C string functions (e.g. strcmp, json_parse, printf).
+ * Valid until csilk_ctx_cleanup().
+ *
+ * @param c The request context.
+ * @return NUL-terminated body string, or "" if no body is present.
+ */
+const char* csilk_get_body_str(csilk_ctx_t* c);
 
 /**
  * @brief Get the length of the raw request body.
@@ -129,6 +160,18 @@ csilk_header_map_t* csilk_get_headers(csilk_ctx_t* c);
 const char* csilk_get_header(csilk_ctx_t* c, const char* key);
 
 /**
+ * @brief Get a request header value as a zero-copy slice view (case-insensitive).
+ *
+ * Returns a borrowed view into the request header map / receive buffer.
+ * The view is valid for the duration of the current request.
+ *
+ * @param c   The request context.
+ * @param key The header field name (e.g., "Content-Type").
+ * @return A csilk_view_t slice (empty view if not found).
+ */
+csilk_view_t csilk_get_header_view(csilk_ctx_t* c, const char* key);
+
+/**
  * @brief Get a response header value by name (case-insensitive).
  *
  * @param c   The request context.
@@ -137,6 +180,15 @@ const char* csilk_get_header(csilk_ctx_t* c, const char* key);
  *         Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_response_header(csilk_ctx_t* c, const char* key);
+
+/**
+ * @brief Get a response header value as a zero-copy slice view (case-insensitive).
+ *
+ * @param c   The request context.
+ * @param key The header field name.
+ * @return A csilk_view_t slice (empty view if not found).
+ */
+csilk_view_t csilk_get_response_header_view(csilk_ctx_t* c, const char* key);
 
 /**
  * @brief Get a query-string parameter by key.
@@ -152,6 +204,15 @@ const char* csilk_get_response_header(csilk_ctx_t* c, const char* key);
 const char* csilk_get_query(csilk_ctx_t* c, const char* key);
 
 /**
+ * @brief Get a query-string parameter as a zero-copy slice view.
+ *
+ * @param c   The request context.
+ * @param key The query parameter name.
+ * @return A csilk_view_t slice (empty view if not found).
+ */
+csilk_view_t csilk_get_query_view(csilk_ctx_t* c, const char* key);
+
+/**
  * @brief Get a URL path parameter by key.
  *
  * Parameters are extracted from the route pattern by the router.  For a route
@@ -163,6 +224,15 @@ const char* csilk_get_query(csilk_ctx_t* c, const char* key);
  *         parameter.  Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_param(csilk_ctx_t* c, const char* key);
+
+/**
+ * @brief Get a URL path parameter as a zero-copy slice view.
+ *
+ * @param c   The request context.
+ * @param key The parameter name as defined in the route pattern (e.g., "id").
+ * @return A csilk_view_t slice (empty view if not found).
+ */
+csilk_view_t csilk_get_param_view(csilk_ctx_t* c, const char* key);
 
 /**
  * @brief Get the number of path parameters extracted from the URL.

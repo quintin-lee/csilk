@@ -199,6 +199,27 @@ csilk_get_body(csilk_ctx_t* c, size_t* out_len)
     return c ? c->request.body : NULL;
 }
 
+csilk_view_t
+csilk_get_body_view(csilk_ctx_t* c)
+{
+    if (!c || !c->request.body || c->request.body_len == 0) {
+        return csilk_view(NULL, 0);
+    }
+    return csilk_view(c->request.body, c->request.body_len);
+}
+
+const char*
+csilk_get_body_str(csilk_ctx_t* c)
+{
+    if (!c || !c->request.body || c->request.body_len == 0) {
+        return "";
+    }
+    if (c->arena) {
+        return csilk_arena_strndup(c->arena, c->request.body, c->request.body_len);
+    }
+    return c->request.body;
+}
+
 /** @brief Get the length of the request body.
  *
  * @param c The request context.

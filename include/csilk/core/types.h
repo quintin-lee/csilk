@@ -322,19 +322,117 @@ typedef struct csilk_mq_s csilk_mq_t;
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
 
 /**
- * @brief Zero-copy string view — references external memory without allocation.
+ * @brief Zero-copy read-only string/byte slice view.
  *
- * Used by the HTTP parser to reference fields directly in the receive buffer,
- * eliminating all heap allocations during header parsing. The referenced
- * memory is valid for the duration of the request processing.
+ * References external memory without allocation. Used by the HTTP parser
+ * and high-performance accessor APIs to reference fields directly in the
+ * receive buffer or arena without copying.
  *
- * @note The data pointer is NOT owned by this struct — it points into the
- *       network receive buffer which is valid until the request completes.
+ * @note The data/ptr is a borrowed slice and is NOT guaranteed to be
+ *       NUL-terminated. It is valid only for the lifetime of the underlying
+ *       network buffer or request context.
  */
-typedef struct {
-    const char* data; /**< Pointer to the string data (not null-terminated). */
-    size_t      len;  /**< Length of the string in bytes. */
-} csilk_str_view_t;
+typedef struct csilk_view_s {
+    union {
+        const char* ptr;  /**< Pointer to slice data (not NUL-terminated). */
+        const char* data; /**< Alias for backwards compatibility. */
+    };
+    size_t len;           /**< Length of the slice in bytes. */
+} csilk_view_t;
+
+/** @brief Backward compatibility alias for csilk_view_t. */
+typedef csilk_view_t csilk_str_view_t;
+
+/**
+ * @brief Construct a string view from a pointer and length.
+ *
+ * @param ptr Pointer to data (may be non-NUL-terminated).
+ * @param len Length in bytes.
+ * @return A csilk_view_t slice.
+ */
+static inline csilk_view_t
+csilk_view(const char* ptr, size_t len)
+{
+    csilk_view_t v;
+    v.ptr = ptr;
+    v.len = len;
+    return v;
+}
+
+/**
+ * @brief Construct a string view from a NUL-terminated C string.
+ *
+ * @param str NUL-terminated C string (or NULL).
+ * @return A csilk_view_t slice (empty view if str is NULL).
+ */
+static inline csilk_view_t
+csilk_view_from_str(const char* str)
+{
+    if (!str) {
+        return csilk_view(NULL, 0);
+    }
+    return csilk_view(str, strlen(str));
+}
+
+/**
+ * @brief Check if a string view is empty or NULL.
+ *
+ * @param view The view to check.
+ * @return 1 if view.ptr is NULL or view.len is 0, 0 otherwise.
+ */
+static inline int
+csilk_view_is_empty(csilk_view_t view)
+{
+    return (!view.ptr || view.len == 0);
+}
+
+/**
+ * @brief Compare a view against a NUL-terminated C string (case-sensitive).
+ *
+ * @param view The view to compare.
+ * @param str  NUL-terminated C string.
+ * @return 0 if equal, negative if view < str, positive if view > str.
+ */
+int csilk_view_cmp(csilk_view_t view, const char* str);
+
+/**
+ * @brief Compare a view against a NUL-terminated C string (case-insensitive).
+ *
+ * @param view The view to compare.
+ * @param str  NUL-terminated C string.
+ * @return 0 if equal, negative if view < str, positive if view > str.
+ */
+int csilk_view_casecmp(csilk_view_t view, const char* str);
+
+/**
+ * @brief Compare two views for equality (exact length and byte match).
+ *
+ * @param a First view.
+ * @param b Second view.
+ * @return 1 if identical, 0 otherwise.
+ */
+int csilk_view_equal(csilk_view_t a, csilk_view_t b);
+
+/**
+ * @brief Materialize a view into a NUL-terminated string allocated in the request arena.
+ *
+ * Safe for the entire request lifecycle without manual free.
+ *
+ * @param c    The request context.
+ * @param view The view to persist.
+ * @return NUL-terminated arena string, or NULL on error.
+ */
+const char* csilk_view_to_arena(csilk_ctx_t* c, csilk_view_t view);
+
+/**
+ * @brief Materialize a view into a newly allocated NUL-terminated heap string.
+ *
+ * Caller must free with csilk_free() or free().
+ *
+ * @param view The view to copy.
+ * @return Newly allocated NUL-terminated string, or NULL on error.
+ */
+char* csilk_view_to_heap(csilk_view_t view);
 
 /**
  * @brief Convert a string view to a null-terminated heap-allocated string.

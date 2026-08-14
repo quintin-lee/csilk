@@ -838,6 +838,48 @@ test_csilk_read_buffer_dynamic_expansion()
     printf("csilk_read_buffer_dynamic_expansion passed!\n");
 }
 
+static void
+test_csilk_view_accessors()
+{
+    printf("Testing context zero-copy view accessors...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    /* Set up test headers and params */
+    csilk_set_request_header(ctx, "Content-Type", "application/json");
+    csilk_set_request_header(ctx, "X-Custom-Header", "custom-value");
+
+    /* Header view */
+    csilk_view_t hv = csilk_get_header_view(ctx, "Content-Type");
+    assert(!csilk_view_is_empty(hv));
+    assert(csilk_view_cmp(hv, "application/json") == 0);
+    assert(csilk_view_casecmp(hv, "APPLICATION/JSON") == 0);
+
+    csilk_view_t hv_none = csilk_get_header_view(ctx, "Non-Existent");
+    assert(csilk_view_is_empty(hv_none));
+
+    /* Body view and safe body string */
+    ctx->request.body = "{\"key\":\"value\"}";
+    ctx->request.body_len = 15;
+
+    csilk_view_t bv = csilk_get_body_view(ctx);
+    assert(!csilk_view_is_empty(bv));
+    assert(bv.len == 15);
+    assert(csilk_view_cmp(bv, "{\"key\":\"value\"}") == 0);
+
+    const char* body_str = csilk_get_body_str(ctx);
+    assert(body_str != NULL);
+    assert(strcmp(body_str, "{\"key\":\"value\"}") == 0);
+
+    /* Query view */
+    csilk_parse_query(ctx, "filter=active&sort=desc");
+    csilk_view_t qv = csilk_get_query_view(ctx, "filter");
+    assert(!csilk_view_is_empty(qv));
+    assert(csilk_view_cmp(qv, "active") == 0);
+
+    csilk_test_ctx_free(ctx);
+    printf("csilk_view_accessors passed!\n");
+}
+
 int
 main()
 {
@@ -894,6 +936,7 @@ main()
     test_csilk_parse_form_urlencoded_null();
     test_csilk_get_form_field_null();
     test_csilk_read_buffer_dynamic_expansion();
+    test_csilk_view_accessors();
     printf("test_context_ext: ALL PASSED\n");
     return 0;
 }

@@ -40,6 +40,13 @@ csilk_get_param(csilk_ctx_t* c, const char* key)
     return NULL;
 }
 
+csilk_view_t
+csilk_get_param_view(csilk_ctx_t* c, const char* key)
+{
+    const char* val = csilk_get_param(c, key);
+    return csilk_view_from_str(val);
+}
+
 /**
  * @brief Get the number of path/route parameters.
  * @param[in] c Request context (may be NULL).
@@ -93,6 +100,15 @@ csilk_get_header(csilk_ctx_t* c, const char* key)
     return map_get(&c->request.headers, key);
 }
 
+csilk_view_t
+csilk_get_header_view(csilk_ctx_t* c, const char* key)
+{
+    if (!c || !key) {
+        return csilk_view(NULL, 0);
+    }
+    return map_get_view(&c->request.headers, key);
+}
+
 /**
  * @brief Get a response header value by name.
  * @param[in] c   Request context (validated non-NULL).
@@ -105,6 +121,15 @@ csilk_get_response_header(csilk_ctx_t* c, const char* key)
     return map_get(&c->response.headers, key);
 }
 
+csilk_view_t
+csilk_get_response_header_view(csilk_ctx_t* c, const char* key)
+{
+    if (!c || !key) {
+        return csilk_view(NULL, 0);
+    }
+    return map_get_view(&c->response.headers, key);
+}
+
 /**
  * @brief Get a query-string parameter value by name.
  * @param[in] c   Request context (validated non-NULL).
@@ -115,6 +140,15 @@ const char*
 csilk_get_query(csilk_ctx_t* c, const char* key)
 {
     return map_get(&c->request.query_params, key);
+}
+
+csilk_view_t
+csilk_get_query_view(csilk_ctx_t* c, const char* key)
+{
+    if (!c || !key) {
+        return csilk_view(NULL, 0);
+    }
+    return map_get_view(&c->request.query_params, key);
 }
 
 /**
@@ -149,6 +183,15 @@ const char*
 csilk_get_path(csilk_ctx_t* c)
 {
     return c ? c->request.path : NULL;
+}
+
+csilk_view_t
+csilk_get_path_view(csilk_ctx_t* c)
+{
+    if (!c || !c->request.path) {
+        return csilk_view(NULL, 0);
+    }
+    return csilk_view_from_str(c->request.path);
 }
 
 /**
