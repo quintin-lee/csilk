@@ -981,6 +981,53 @@ test_csilk_streaming_backpressure()
     printf("csilk_streaming_backpressure passed!\n");
 }
 
+static void
+test_csilk_ownership_model()
+{
+    printf("Testing unified ownership model...\n");
+
+    /* 1. Ownership stringifier */
+    assert(strcmp(csilk_ownership_str(CSILK_OWN_BORROWED), "BORROWED") == 0);
+    assert(strcmp(csilk_ownership_str(CSILK_OWN_ARENA), "ARENA") == 0);
+    assert(strcmp(csilk_ownership_str(CSILK_OWN_HEAP), "HEAP") == 0);
+    assert(strcmp(csilk_ownership_str(CSILK_OWN_TRANSFER), "TRANSFER") == 0);
+    assert(strcmp(csilk_ownership_str(CSILK_OWN_SHARED), "SHARED") == 0);
+    assert(strcmp(csilk_ownership_str((csilk_ownership_t)99), "UNKNOWN") == 0);
+
+    /* 2. Borrowed ownership */
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    const char*  borrowed_str = "static borrowed literal";
+    csilk_set_response_body_ex(ctx, borrowed_str, strlen(borrowed_str), CSILK_OWN_BORROWED);
+    assert(csilk_get_response_body_ownership(ctx) == CSILK_OWN_BORROWED);
+    assert(ctx->response.body_is_managed == 0);
+    assert(strcmp(csilk_get_response_body(ctx, NULL), borrowed_str) == 0);
+
+    /* 3. Heap ownership overwrite & cleanup */
+    char* heap_str1 = strdup("heap allocated 1");
+    csilk_set_response_body_ex(ctx, heap_str1, strlen(heap_str1), CSILK_OWN_HEAP);
+    assert(csilk_get_response_body_ownership(ctx) == CSILK_OWN_HEAP);
+    assert(ctx->response.body_is_managed == 1);
+
+    char* heap_str2 = strdup("heap allocated 2");
+    csilk_set_response_body_ex(ctx, heap_str2, strlen(heap_str2), CSILK_OWN_TRANSFER);
+    assert(csilk_get_response_body_ownership(ctx) == CSILK_OWN_TRANSFER);
+    assert(ctx->response.body_is_managed == 1);
+    assert(strcmp(csilk_get_response_body(ctx, NULL), "heap allocated 2") == 0);
+
+    /* 4. Arena ownership */
+    char* arena_str = csilk_arena_strdup(ctx->arena, "arena string");
+    csilk_set_response_body_ex(ctx, arena_str, strlen(arena_str), CSILK_OWN_ARENA);
+    assert(csilk_get_response_body_ownership(ctx) == CSILK_OWN_ARENA);
+    assert(ctx->response.body_is_managed == 0);
+
+    /* 5. NULL context safety */
+    assert(csilk_get_response_body_ownership(NULL) == CSILK_OWN_BORROWED);
+    csilk_set_response_body_ex(NULL, "test", 4, CSILK_OWN_HEAP);
+
+    csilk_test_ctx_free(ctx);
+    printf("csilk_ownership_model passed!\n");
+}
+
 int
 main()
 {
@@ -1040,6 +1087,7 @@ main()
     test_csilk_view_accessors();
     test_csilk_set_ex_destructor();
     test_csilk_streaming_backpressure();
+    test_csilk_ownership_model();
     printf("test_context_ext: ALL PASSED\n");
     return 0;
 }

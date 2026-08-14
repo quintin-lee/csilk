@@ -269,6 +269,30 @@ typedef struct {
 > [!IMPORTANT]
 > `csilk_view_t` directly references raw network receive buffers with zero copying and zero allocations. It is valid only for the duration of the current request handler. If you require a NUL-terminated string or persistent copy, use the standard `csilk_get_*()` functions or duplicate via `csilk_arena_strndup()`.
 
+## Unified Ownership Model (`csilk_ownership_t`)
+
+To avoid ambiguous ownership semantics (like implicit `int managed` flags), csilk provides an explicit memory ownership model:
+
+```c
+typedef enum {
+    CSILK_OWN_BORROWED = 0, /**< Caller/external holds buffer; framework does NOT free or copy. */
+    CSILK_OWN_ARENA    = 1, /**< Memory is allocated from request arena; freed automatically on reset. */
+    CSILK_OWN_HEAP     = 2, /**< Memory is heap allocated (malloc); framework calls free() on cleanup. */
+    CSILK_OWN_TRANSFER = 3, /**< Ownership transferred to receiver; receiver is responsible for free(). */
+    CSILK_OWN_SHARED   = 4  /**< Shared/driver-managed reference; managed by custom destructor/refcount. */
+} csilk_ownership_t;
+```
+
+### Response Body Ownership API
+
+```c
+// Set response body with explicit ownership
+csilk_set_response_body_ex(c, data, len, CSILK_OWN_HEAP);
+
+// Query response body ownership
+csilk_ownership_t own = csilk_get_response_body_ownership(c);
+```
+
 ## Custom Storage Destructors (RAII)
 
 For heap-allocated resources stored in `csilk_ctx_t` (such as cJSON objects, database handles, or third-party structures), `csilk_set_ex()` registers an automatic cleanup callback invoked during request cleanup:
@@ -280,6 +304,7 @@ typedef void (*csilk_destructor_t)(void* value);
 cJSON* payload = jwt_verify_internal(...);
 csilk_set_ex(c, "jwt_payload", payload, (csilk_destructor_t)csilk_json_free);
 ```
+
 
 ## Outbound Streaming & Backpressure Flow Control
 

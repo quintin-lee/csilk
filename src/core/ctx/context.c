@@ -120,7 +120,9 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     free(c->request.path);
     c->request.path = NULL;
 
-    if (c->request.body && c->request.body_is_managed) {
+    if (c->request.body &&
+        (c->request.body_ownership == CSILK_OWN_HEAP ||
+         c->request.body_ownership == CSILK_OWN_TRANSFER || c->request.body_is_managed)) {
         if (!tls_large_body_pool && c->request.body_len >= 65536) {
             tls_large_body_pool = c->request.body;
             static _Thread_local int cleanup_registered = 0;
@@ -135,6 +137,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->request.body = NULL;
     c->request.body_len = 0;
     c->request.body_is_managed = 0;
+    c->request.body_ownership = CSILK_OWN_BORROWED;
 
     for (int i = 0; i < c->read_buffers_count; i++) {
         if (c->read_buffers[i]) {
@@ -154,10 +157,13 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
     memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
 
-    if (c->response.body && c->response.body_is_managed) {
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
         free((void*)c->response.body);
         c->response.body = NULL;
         c->response.body_is_managed = 0;
+        c->response.body_ownership = CSILK_OWN_BORROWED;
     }
 
     if (c->file_fd >= 0) {
@@ -285,29 +291,57 @@ csilk_get_response_body(csilk_ctx_t* c, size_t* out_len)
 
 /** @brief Set the response body directly with explicit ownership semantics.
  *
- * Replaces any existing response body. If the old body was marked as managed
- * it is freed before replacement. The caller specifies whether the new body
- * should be freed automatically during cleanup.
+ * Replaces any existing response body. If the old body was heap-managed or transferred,
+ * it is freed before replacement.
  *
- * @param c       The request context.
- * @param body    Pointer to the body data (may be NULL).
- * @param len     Body length in bytes.
- * @param managed If non-zero, the framework will free @p body during cleanup.
- * @note Setting managed=1 transfers ownership to the framework. With
- *       managed=0 the caller retains ownership and must keep the pointer
- *       valid until the response is sent. */
+ * @param c         The request context.
+ * @param body      Pointer to the body data (may be NULL).
+ * @param len       Body length in bytes.
+ * @param ownership Ownership model (CSILK_OWN_BORROWED, CSILK_OWN_ARENA, CSILK_OWN_HEAP, CSILK_OWN_TRANSFER, CSILK_OWN_SHARED).
+ */
 void
-csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int managed)
+csilk_set_response_body_ex(csilk_ctx_t*      c,
+                           const char*       body,
+                           size_t            len,
+                           csilk_ownership_t ownership)
 {
     if (!c) {
         return;
     }
-    if (c->response.body && c->response.body_is_managed) {
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
         free((void*)c->response.body);
     }
     c->response.body = body;
     c->response.body_len = len;
-    c->response.body_is_managed = managed;
+    c->response.body_ownership = ownership;
+    c->response.body_is_managed =
+        (ownership == CSILK_OWN_HEAP || ownership == CSILK_OWN_TRANSFER) ? 1 : 0;
+}
+
+/** @brief Legacy helper to set response body.
+ *
+ * @param c       The request context.
+ * @param body    Pointer to the body data.
+ * @param len     Body length in bytes.
+ * @param managed If non-zero, treated as CSILK_OWN_HEAP, else CSILK_OWN_BORROWED.
+ */
+void
+csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int managed)
+{
+    csilk_set_response_body_ex(c, body, len, managed ? CSILK_OWN_HEAP : CSILK_OWN_BORROWED);
+}
+
+/** @brief Query current response body ownership.
+ *
+ * @param c The request context.
+ * @return Ownership model for the current response body.
+ */
+csilk_ownership_t
+csilk_get_response_body_ownership(csilk_ctx_t* c)
+{
+    return c ? c->response.body_ownership : CSILK_OWN_BORROWED;
 }
 
 /** @brief Configure zero-copy file transmission.
