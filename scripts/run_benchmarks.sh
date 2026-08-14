@@ -49,9 +49,10 @@ fi
 mkdir -p "$RESULTS_DIR"
 
 # Build
-echo "=== Building csilk (release) ==="
-cmake -B "$BUILD_DIR" -S "$PROJECT_DIR" -DCMAKE_BUILD_TYPE=Release 2>/dev/null
+echo "=== Building csilk (release with native arch) ==="
+cmake -B "$BUILD_DIR" -S "$PROJECT_DIR" -DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON 2>/dev/null
 cmake --build "$BUILD_DIR" --target example_server -j"$CORES" 2>/dev/null
+
 
 # Create static test files
 mkdir -p "$BUILD_DIR/public"

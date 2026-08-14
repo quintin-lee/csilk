@@ -18,7 +18,9 @@
 - **Crypto 模块测试**：在 `tests/crypto/test_crypto.c` 中添加覆盖 SHA-256、HMAC-SHA256、Base64/Base64URL 往返、`csilk_crypto_fill_random`、`csilk_crypto_generate_nonce` 及 `csilk_url_decode` 边界情况的属性测试。
 
 ### 变更
+- **Release 模式默认可移植二进制**：将 Release 构建的默认选项调整为生成兼容性更高的可移植二进制（默认不加 `-march=native`），防止在较旧 CPU、Docker 容器或 CI 分发制品中触发 `SIGILL` 非法指令崩溃。本机指令集深度优化调整为显式开启 `-DCSILK_ENABLE_NATIVE_ARCH=ON`（并在 Benchmark 压测脚本和 CI 性能工作流中自动启用）。
 - **Core 核心层纯净抽象解耦**：彻底消除 `src/core/server/`（`connection.c`, `server_lifecycle.c`, `server_shutdown.c`, `server_worker.c`）中对 `uv_*` 的直接依赖，统一调用 `csilk_io_*` 与 `csilk_thread_*`/`csilk_barrier_*`。
+
 - **io_uring 架构精简与合并**：消除原冗余的 `uring_server.c`、`uring_connection.c`、`uring_event_loop.c` 副本，将驱动精炼统一至 `src/core/uring/uring_io.c`，实现全后端单轨执行。
 - **Router 前缀树架构文档对齐与回滚**：更新 Router 文档以准确描述 Segment-based 前缀树架构；修复通配符路径匹配在 Method 不匹配或 Handler 缺失时的参数回滚机制。
 - **Handler 链越界安全检查**：在 `csilk_next()` 中增加显式 `handler_count` 边界校验，防止异常 Handler 数组导致越界访问。

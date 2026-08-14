@@ -53,8 +53,10 @@ if [[ ! -f "${BUILD_DIR}/example_server" ]]; then
     echo "=== Building example_server (Release, with frame pointers) ==="
     cmake -B "$BUILD_DIR" -S "$ROOT_DIR" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCSILK_ENABLE_NATIVE_ARCH=ON \
         -DCMAKE_C_FLAGS="-fno-omit-frame-pointer" \
         -DENABLE_OOM_TEST=OFF
+
     cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)" --target example_server
 fi
 SERVER_BINARY="${BUILD_DIR}/example_server"

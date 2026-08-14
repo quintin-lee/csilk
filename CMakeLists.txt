@@ -27,18 +27,29 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Common optimization flags (no -Werror; controlled per-target).
-# Release: -O2 + LTO. Native arch tuning (-march=native) is ON by default
-# for maximum performance on the build machine. Set -DCSILK_PORTABLE=ON
-# to produce a portable binary that runs on any x86_64/aarch64 CPU.
-# Debug/RelWithDebInfo/MinSizeRel: -O2 without LTO.
-option(CSILK_PORTABLE "Build portable binary (disable -march=native)" OFF)
+# Release builds default to portable binaries (-O2 -fomit-frame-pointer)
+# safe for Docker, CI artifacts, and deployment across varying CPU architectures.
+# For maximum performance on the local host CPU (benchmarks/profiling),
+# enable -DCSILK_ENABLE_NATIVE_ARCH=ON to append -march=native.
+option(CSILK_ENABLE_NATIVE_ARCH "Enable native host CPU tuning (-march=native)" OFF)
+
+# Backward compatibility alias for CSILK_PORTABLE
+if(DEFINED CSILK_PORTABLE)
+  if(CSILK_PORTABLE)
+    set(CSILK_ENABLE_NATIVE_ARCH OFF CACHE BOOL "Enable native host CPU tuning (-march=native)" FORCE)
+  else()
+    set(CSILK_ENABLE_NATIVE_ARCH ON CACHE BOOL "Enable native host CPU tuning (-march=native)" FORCE)
+  endif()
+endif()
+
 set(CSILK_COMMON_FLAGS "")
-if(CMAKE_CROSSCOMPILING OR CSILK_PORTABLE)
-  set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-fomit-frame-pointer>")
-else()
+if(CSILK_ENABLE_NATIVE_ARCH AND NOT CMAKE_CROSSCOMPILING)
   set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-fomit-frame-pointer;-march=native>")
+else()
+  set(CSILK_RELEASE_FLAGS "$<$<CONFIG:Release>:-O2;-fomit-frame-pointer>")
 endif()
 set(CSILK_DEBUG_FLAGS   "$<$<NOT:$<CONFIG:Release>>:-O2>")
+
 
 # Suppress benign third-party warnings (cJSON/yyjson macros, nghttp2/libuv deprecations).
 add_compile_options(-Wno-keyword-macro -Wno-deprecated-declarations)
