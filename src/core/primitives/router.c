@@ -517,7 +517,7 @@ csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
         CSILK_LOG_D("Route successfully matched: %s %s (pattern: %s)",
                     c->request.method,
                     c->request.path,
-                    mh->path ? mh->path : "unknown");
+                    (mh && mh->path) ? mh->path : "unknown");
         return 1;
     }
     CSILK_LOG_D("Route not matched: %s %s", c->request.method, c->request.path);
