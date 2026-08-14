@@ -40,6 +40,10 @@
 - **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
 
 ### 修复
+- **io_uring 后端定向取消与监听套接字安全**：修复 `csilk_io_timer_stop()` 使用基于指针与 generation 标记的 `io_uring_prep_cancel64()` 进行精准定向取消，防止定时器取消误伤监听套接字 SQE。
+- **io_uring 异步与信号轮询唤醒可靠性**：在 `URING_OP_POLL_ASYNC` 与 `URING_OP_POLL_SIGNAL` 事件分发前增加 `read() > 0` 校验，防止伪就绪事件触发错误回调。
+- **双后端构建字段隔离与跨后端兼容**：在 `src/core/server/connection.c` 中通过 `#ifdef CSILK_USE_URING` 严格隔离 `generation` 与 `fd` 成员访问，并引入统一的 `reject_connection()` 辅助函数，确保 libuv 模式与 io_uring 模式下 100% 编译通过且全量测试通过。
+- **Router 路由匹配日志空指针防护**：在 `csilk_router_match_ctx()` 日志输出中增加 `mh` 非空防御检查，彻底解决 `clang-tidy` 静态分析下的 `clang-analyzer-core.NullDereference` 报错。
 - **多 Worker 启动屏障死锁**：消除多 Worker 初始化阶段在内存分配（`worker_data_t`）或线程创建（`csilk_thread_create`）失败时的永久死锁问题，对未启动 Worker 进行屏障补偿并执行安全回滚与资源清理。
 - **TCP 读取缓冲区动态扩容**：将 `read_buffers` 改为动态扩容（初始 16，按需倍增），解决单个请求超过 16 次 TCP Read 时后续数据静默丢失的问题。
 - **原子最大连接数预留**：将 `max_connections` 检查改为原子 CAS 预留（`_csilk_server_try_acquire_connection`）与回滚，彻底消除高并发下的 TOCTOU 竞态。

@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### Fixed
+- **io_uring Backend Cancellation & Listen Socket Safety**: Fixed `csilk_io_timer_stop()` using targeted `io_uring_prep_cancel64` with pointer and generation tagging instead of broad cancellation, preventing timer stops from inadvertently cancelling server listening socket SQEs.
+- **io_uring Async & Signal Poll Notification Reliability**: Added `read() > 0` validation for `URING_OP_POLL_ASYNC` and `URING_OP_POLL_SIGNAL` before firing callbacks to prevent spurious executions.
+- **Dual-Backend Build & Field Isolation**: Isolated io_uring-specific handle fields (`generation`, `fd`) in `src/core/server/connection.c` under `#ifdef CSILK_USE_URING`, and introduced portable `reject_connection()` helper ensuring clean compilation and 100% test pass rate across both libuv and io_uring backends.
+- **Router Match Debug Logging Safety**: Added defensive null check for `mh` in `csilk_router_match_ctx()` log statement, eliminating `clang-analyzer-core.NullDereference` during `clang-tidy` checks.
 - **Multi-Worker Startup Barrier Deadlock**: Eliminated infinite hangs and deadlocks during multi-worker initialization when worker allocations (`worker_data_t`) or thread creations (`csilk_thread_create`) fail midway, compensating the barrier count for unspawned workers and performing clean graceful aborts.
 - **Dynamic TCP Read Buffers**: Expanded `read_buffers` dynamically (doubling initial 16 slots) to prevent data dropping when a request requires >16 TCP reads.
 - **Atomic Max Connections**: Converted `max_connections` check to atomic CAS reservation (`_csilk_server_try_acquire_connection`) and rollback to eliminate high-concurrency TOCTOU race conditions.
