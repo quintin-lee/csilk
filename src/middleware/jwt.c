@@ -189,12 +189,41 @@ jwt_generate_internal(csilk_ctx_t*    c,
     return token;
 }
 
+/**
+ * @brief Generate a signed JWT using the HS256 (HMAC-SHA256) algorithm.
+ *
+ * Convenience wrapper around jwt_generate_internal() that encodes the supplied
+ * payload with a raw secret string as the HMAC key.
+ *
+ * @param c        The request context (used for crypto operations).
+ * @param payload  JSON object carrying the JWT claims. Must not be NULL.
+ * @param secret   Null-terminated HMAC secret. May be NULL (produces NULL token).
+ *
+ * @return A newly allocated null-terminated JWT string (caller frees), or NULL
+ *         on error or invalid arguments.
+ */
 char*
 csilk_jwt_generate(csilk_ctx_t* c, csilk_json_t* payload, const char* secret)
 {
     return jwt_generate_internal(c, payload, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
 }
 
+/**
+ * @brief Generate a signed JWT using the specified algorithm and key.
+ *
+ * Supports HS256 (raw secret), RS256, and ES256 (key material). The signature
+ * is computed via the framework's cipher driver.
+ *
+ * @param c          The request context (used for crypto operations).
+ * @param payload    JSON object carrying the JWT claims. Must not be NULL.
+ * @param key        Key bytes (raw secret for HS256, PEM for RS256/ES256).
+ * @param key_len    Length of @p key in bytes.
+ * @param algorithm  Algorithm selector (CSILK_JWT_HS256, CSILK_JWT_RS256,
+ *                   CSILK_JWT_ES256).
+ *
+ * @return A newly allocated null-terminated JWT string (caller frees), or NULL
+ *         on error or invalid arguments.
+ */
 char*
 csilk_jwt_generate_ex(csilk_ctx_t*    c,
                       csilk_json_t*   payload,
@@ -296,12 +325,42 @@ jwt_verify_internal(
     return payload;
 }
 
+/**
+ * @brief Verify a JWT using the HS256 (HMAC-SHA256) algorithm.
+ *
+ * Convenience wrapper around jwt_verify_internal() that uses a raw secret
+ * string as the HMAC key.
+ *
+ * @param c        The request context (used for crypto operations).
+ * @param token    Null-terminated JWT string. Must not be NULL.
+ * @param secret   Null-terminated HMAC secret. May be NULL (fails verification).
+ *
+ * @return The decoded claims as a csilk_json_t on success (caller frees via
+ *         csilk_json_free()), or NULL if the token is malformed or signature
+ *         verification fails.
+ */
 csilk_json_t*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 {
     return jwt_verify_internal(c, token, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
 }
 
+/**
+ * @brief Verify a JWT using the specified algorithm and key.
+ *
+ * Supports HS256 (raw secret), RS256, and ES256 (PEM key). On success the
+ * signature is validated before the payload is base64url-decoded and parsed.
+ *
+ * @param c          The request context (used for crypto operations).
+ * @param token      Null-terminated JWT string. Must not be NULL.
+ * @param key        Key bytes (raw secret for HS256, PEM for RS256/ES256).
+ * @param key_len    Length of @p key in bytes.
+ * @param algorithm  Algorithm selector (CSILK_JWT_HS256, CSILK_JWT_RS256,
+ *                   CSILK_JWT_ES256).
+ *
+ * @return The decoded claims as a csilk_json_t on success (caller frees), or
+ *         NULL if the token is malformed or verification fails.
+ */
 csilk_json_t*
 csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
@@ -359,12 +418,36 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
     csilk_next(c);
 }
 
+/**
+ * @brief JWT authentication middleware using HS256 (HMAC-SHA256).
+ *
+ * Convenience wrapper around csilk_jwt_middleware_ex() that strips the
+ * "Bearer " prefix from the Authorization header, verifies the token with the
+ * raw secret, and (on success) stores the claims under "jwt_payload" and calls
+ * csilk_next(). A 401 is returned if the header is missing or the token is
+ * invalid/expired.
+ *
+ * @param c        The request context.
+ * @param secret   Null-terminated HMAC secret. If NULL the function logs an
+ *                 error and returns without aborting.
+ */
 void
 csilk_jwt_middleware(csilk_ctx_t* c, const char* secret)
 {
     csilk_jwt_middleware_ex(c, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
 }
 
+/**
+ * @brief Serialize and consume the stored JWT payload as a JSON string.
+ *
+ * Retrieves the "jwt_payload" claim object set by the JWT middleware, marshals
+ * it to a JSON string, frees the stored object, and clears the context entry.
+ *
+ * @param c  The request context. Must not be NULL.
+ *
+ * @return A newly allocated JSON string (caller frees with free()), or NULL if
+ *         no payload is present or @p c is NULL.
+ */
 char*
 csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
 {
@@ -381,6 +464,14 @@ csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
     return json_str;
 }
 
+/**
+ * @brief Free the stored JWT payload without serializing it.
+ *
+ * Frees the "jwt_payload" claim object set by the JWT middleware and clears the
+ * context entry. Safe to call when no payload is present.
+ *
+ * @param c  The request context. Must not be NULL.
+ */
 void
 csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
 {
@@ -394,6 +485,19 @@ csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
     }
 }
 
+/**
+ * @brief Generate a JWT from a JSON string payload using HS256.
+ *
+ * Parses the supplied JSON claim string into a csilk_json_t, then delegates to
+ * csilk_jwt_generate() with the HS256 algorithm and the given secret.
+ *
+ * @param c              The request context (used for crypto operations).
+ * @param payload_json   Null-terminated JSON string of claims. Must not be NULL.
+ * @param secret         Null-terminated HMAC secret. Must not be NULL.
+ *
+ * @return A newly allocated null-terminated JWT string (caller frees), or NULL
+ *         if the JSON is invalid or arguments are NULL.
+ */
 char*
 csilk_jwt_generate_json(csilk_ctx_t* c, const char* payload_json, const char* secret)
 {

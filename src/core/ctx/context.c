@@ -69,6 +69,10 @@ csilk_abort(csilk_ctx_t* c)
 
 static _Thread_local char* tls_large_body_pool = NULL;
 
+/** @brief Release the thread-local large-body scratch buffer.
+ *
+ * Frees the per-thread buffer used for large request bodies and clears the
+ * pointer so it is not double-freed. Intended to be called on thread exit. */
 static void
 tls_large_body_pool_cleanup(void)
 {
@@ -201,6 +205,11 @@ csilk_get_body_len(csilk_ctx_t* c)
     return c ? c->request.body_len : 0;
 }
 
+/**
+ * @brief Set the HTTP response status code.
+ * @param[in] c      Request context (no-op if NULL).
+ * @param[in] status HTTP status code to store in the response.
+ */
 void
 csilk_set_status(csilk_ctx_t* c, int status)
 {

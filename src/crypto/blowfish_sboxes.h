@@ -1,3 +1,14 @@
+/**
+ * @file blowfish_sboxes.h
+ * @brief Blowfish substitution-box (S-box) table — 4 × 256 × 32-bit entries.
+ *
+ * Static initialiser data for the four Blowfish S-boxes (sg_init), seeded
+ * from the hexadecimal digits of π.  Sourced from OpenBSD's blowfish.c
+ * (public domain).  This file is #include'd directly into the array literal
+ * in bcrypt.c; it contains only comma-separated uint32_t constants and no
+ * executable code.
+ * @copyright MIT License
+ */
 0xD1310BA6U, 0x98DFB5ACU, 0x2FFD72DBU, 0xD01ADFB7U, 0xB8E1AFEDU, 0x6A267E96U, 0xBA7C9045U,
     0xF12C7F99U, 0x24A19947U, 0xB3916CF7U, 0x0801F2E2U, 0x858EFC16U, 0x636920D8U, 0x71574E69U,
     0xA458FEA3U, 0xF4933D7EU, 0x0D95748FU, 0x728EB658U, 0x718BCD58U, 0x82154AEEU, 0x7B54A41DU,

@@ -220,6 +220,8 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
     return val;
 }
 
+/** @brief Persist an integer state value for a key (SET, optional TTL).
+ * Used for distributed state/flags; returns -1 on null args or a Redis error. */
 static int
 redis_storage_sync_state(csilk_ctx_t* c, const char* key, int state, int ttl_sec)
 {

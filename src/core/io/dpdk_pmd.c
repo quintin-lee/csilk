@@ -16,6 +16,15 @@ struct csilk_dpdk_engine_s {
     size_t              tx_head;
 };
 
+/**
+ * @brief Create a DPDK-style PMD engine from a configuration.
+ * @param[in] config Engine configuration (validated non-NULL); zero pool_size/
+ *                    mbuf_size default to 1024/2048.
+ * @return A newly allocated engine with an aligned mbuf pool, or NULL on invalid
+ *         config or allocation failure.
+ * @note Copies the config (applying defaults), allocates a 64-byte aligned mbuf
+ *       pool of pool_size*mbuf_size bytes, and initializes rx/tx cursors to 0.
+ */
 csilk_dpdk_engine_t*
 csilk_dpdk_engine_new(const csilk_dpdk_config_t* config)
 {
@@ -50,6 +59,11 @@ csilk_dpdk_engine_new(const csilk_dpdk_config_t* config)
     return engine;
 }
 
+/**
+ * @brief Free a DPDK-style PMD engine and its mbuf pool.
+ * @param[in] engine Engine to free (no-op if NULL).
+ * @note Frees the mbuf pool (if any) and the engine struct.
+ */
 void
 csilk_dpdk_engine_free(csilk_dpdk_engine_t* engine)
 {
@@ -62,6 +76,15 @@ csilk_dpdk_engine_free(csilk_dpdk_engine_t* engine)
     free(engine);
 }
 
+/**
+ * @brief Receive one packet buffer from the engine RX ring (single-burst).
+ * @param[in]  engine   Engine to receive from (validated non-NULL).
+ * @param[out] pkt_data Receives a pointer into the mbuf pool for the next packet.
+ * @param[out] pkt_len  Receives the mbuf size.
+ * @return 0 on success, -1 on NULL arguments.
+ * @note Advances an internal RX cursor modulo pool size; the returned pointer
+ *       aliases memory owned by the engine.
+ */
 int
 csilk_dpdk_rx_burst(csilk_dpdk_engine_t* engine, const uint8_t** pkt_data, size_t* pkt_len)
 {
@@ -79,6 +102,14 @@ csilk_dpdk_rx_burst(csilk_dpdk_engine_t* engine, const uint8_t** pkt_data, size_
     return 0;
 }
 
+/**
+ * @brief Transmit one packet into the engine TX ring (single-burst).
+ * @param[in] engine   Engine to transmit on (validated non-NULL).
+ * @param[in] pkt_data Packet bytes to copy into the mbuf pool.
+ * @param[in] pkt_len  Length of pkt_data (must be <= configured mbuf size).
+ * @return 0 on success, -1 on NULL args, zero length, or oversized packet.
+ * @note Copies pkt_data into the next mbuf TX slot and advances the TX cursor.
+ */
 int
 csilk_dpdk_tx_burst(csilk_dpdk_engine_t* engine, const uint8_t* pkt_data, size_t pkt_len)
 {

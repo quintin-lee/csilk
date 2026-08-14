@@ -1,3 +1,15 @@
+/**
+ * @file mcp_server.c
+ * @brief MCP server implementation (stdio and HTTP/SSE transports).
+ *
+ * Implements the Model Context Protocol server: a registry of tools and
+ * workflows guarded by a mutex, a JSON-RPC request dispatcher that handles
+ * the standard "initialize", "tools/list", and "tools/call" methods, and
+ * transport bindings for a blocking stdio loop and an HTTP POST route.
+ *
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +19,16 @@
 #include "mcp_internal.h"
 #include "workflow/workflow_internal.h"
 
+/**
+ * @brief Create a new MCP server instance.
+ *
+ * Allocates and zero-initializes the server, applying default name/version
+ * when the supplied values are NULL, and initializes the registry mutex.
+ *
+ * @param[in] name    Server name (defaults to "csilk-mcp-server" if NULL).
+ * @param[in] version Server version (defaults to "1.0.0" if NULL).
+ * @return A newly allocated csilk_mcp_server_t, or NULL on allocation failure.
+ */
 csilk_mcp_server_t*
 csilk_mcp_server_new(const char* name, const char* version)
 {
@@ -22,6 +44,15 @@ csilk_mcp_server_new(const char* name, const char* version)
     return server;
 }
 
+/**
+ * @brief Destroy an MCP server and release all registered tools.
+ *
+ * Frees the name/description/parameters_json strings of each registered tool
+ * entry, the tools and workflows arrays, and the mutex. Safe to call with a
+ * NULL pointer.
+ *
+ * @param[in] server The MCP server to free (may be NULL).
+ */
 void
 csilk_mcp_server_free(csilk_mcp_server_t* server)
 {
@@ -49,6 +80,17 @@ csilk_mcp_server_free(csilk_mcp_server_t* server)
     free(server);
 }
 
+/**
+ * @brief Register a tool handler with the MCP server.
+ *
+ * Copies the tool's name, description, and parameters JSON and stores its
+ * function pointer and user data. The server's tool array is grown via
+ * realloc. Thread-safe (takes the registry mutex).
+ *
+ * @param[in,out] server The MCP server to register with.
+ * @param[in]     tool   The tool entry (name must be non-NULL).
+ * @return 0 on success, or -1 on invalid arguments or allocation failure.
+ */
 int
 csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t* tool)
 {
@@ -84,6 +126,16 @@ csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t
     return 0;
 }
 
+/**
+ * @brief Register a workflow with the MCP server.
+ *
+ * Appends the workflow pointer to the server's workflow array (grown via
+ * realloc). Thread-safe (takes the registry mutex).
+ *
+ * @param[in,out] server The MCP server to register with.
+ * @param[in]     wf     The workflow to register (must be non-NULL).
+ * @return 0 on success, or -1 on invalid arguments or allocation failure.
+ */
 int
 csilk_mcp_server_register_workflow(csilk_mcp_server_t* server, csilk_wf_t* wf)
 {
@@ -106,6 +158,7 @@ csilk_mcp_server_register_workflow(csilk_mcp_server_t* server, csilk_wf_t* wf)
     return 0;
 }
 
+/** @brief Dispatch a single parsed JSON-RPC request, returning a response/error frame. */
 static csilk_mcp_msg_t*
 handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
 {
@@ -214,6 +267,17 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
         req->id, CSILK_MCP_METHOD_NOT_FOUND, "Method not implemented");
 }
 
+/**
+ * @brief Run a blocking JSON-RPC stdio server loop.
+ *
+ * Reads one line at a time from stdin, parses each as a JSON-RPC request,
+ * dispatches it via handle_mcp_request(), and writes the serialized response
+ * followed by a newline to stdout (flushed). The loop ends on EOF (stdin
+ * closed). Memory for each request/response is freed before the next read.
+ *
+ * @param[in,out] server The MCP server handling the requests.
+ * @return 0 on a clean EOF-driven exit, or -1 if @p server is NULL.
+ */
 int
 csilk_mcp_server_start_stdio(csilk_mcp_server_t* server)
 {
@@ -265,6 +329,7 @@ csilk_mcp_server_start_stdio(csilk_mcp_server_t* server)
     return 0;
 }
 
+/** @brief HTTP route handler: parse the POST body as JSON-RPC, dispatch, and reply. */
 static void
 mcp_sse_post_handler(csilk_ctx_t* c)
 {
@@ -322,6 +387,20 @@ mcp_sse_post_handler(csilk_ctx_t* c)
     free(req);
 }
 
+/**
+ * @brief Bind the MCP JSON-RPC endpoint as an HTTP POST route on an app.
+ *
+ * Registers a POST handler at "<route_prefix>/message" (default "/mcp") that
+ * parses the request body as a JSON-RPC message and replies with the
+ * dispatch result. The server pointer is stashed in the route's "_mcp_server"
+ * parameter for later retrieval by the handler.
+ *
+ * @param[in,out] server       The MCP server handling dispatched requests.
+ * @param[in,out] app          The application to register the route on.
+ * @param[in]     route_prefix URL prefix for the endpoint (defaults to
+ *                             "/mcp" when NULL).
+ * @return 0 on success, or -1 on invalid arguments.
+ */
 int
 csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const char* route_prefix)
 {

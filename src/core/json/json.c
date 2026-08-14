@@ -17,6 +17,16 @@
 static __thread csilk_json_t tls_view_ring[CSILK_JSON_VIEW_RING_SIZE];
 static __thread size_t       tls_view_ring_idx = 0;
 
+/** @brief Wrap a mutable yyjson value as an owning csilk_json_t view.
+ *
+ * Allocates a slot from the thread-local view ring and populates it with the
+ * given mutable document/value, marking the view as the owner of @p mdoc.
+ *
+ * @param mdoc Owning mutable document (may be NULL if mval is NULL).
+ * @param mval Mutable yyjson value to wrap.
+ * @return Thread-local view, or NULL if mval is NULL.
+ * @note The returned view is stored in a thread-local ring buffer and is not
+ *       safe to share between threads. */
 static csilk_json_t*
 json_mut_new(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
 {
@@ -33,6 +43,16 @@ json_mut_new(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
     return j;
 }
 
+/** @brief Wrap an immutable yyjson value as an owning csilk_json_t view.
+ *
+ * Allocates a slot from the thread-local view ring and populates it with the
+ * given immutable document/value, marking the view as the owner of @p doc.
+ *
+ * @param doc  Owning immutable document (may be NULL if val is NULL).
+ * @param val  Immutable yyjson value to wrap.
+ * @return Thread-local view, or NULL if val is NULL.
+ * @note The returned view is stored in a thread-local ring buffer and is not
+ *       safe to share between threads. */
 static csilk_json_t*
 json_imut_new(yyjson_doc* doc, yyjson_val* val)
 {
@@ -49,6 +69,15 @@ json_imut_new(yyjson_doc* doc, yyjson_val* val)
     return j;
 }
 
+/** @brief Wrap an immutable yyjson value as a non-owning (read-only) view.
+ *
+ * Creates a view that borrows @p idoc/@p val without taking ownership, so
+ * freeing the view will not free the underlying document.
+ *
+ * @param idoc Immutable document the value belongs to.
+ * @param val  Immutable yyjson value to wrap.
+ * @return Thread-local view, or NULL if val is NULL.
+ * @note Non-owning views must not outlive the document they reference. */
 static csilk_json_t*
 json_view_immutable(yyjson_doc* idoc, yyjson_val* val)
 {
@@ -65,6 +94,15 @@ json_view_immutable(yyjson_doc* idoc, yyjson_val* val)
     return j;
 }
 
+/** @brief Wrap a mutable yyjson value as a non-owning view.
+ *
+ * Creates a view that borrows @p mdoc/@p mval without taking ownership, so
+ * freeing the view will not free the underlying document.
+ *
+ * @param mdoc Mutable document the value belongs to.
+ * @param mval Mutable yyjson value to wrap.
+ * @return Thread-local view, or NULL if mval is NULL.
+ * @note Non-owning views must not outlive the document they reference. */
 static csilk_json_t*
 json_view_mutable(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
 {
@@ -85,6 +123,10 @@ json_view_mutable(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
  * Creation
  * ==================================================================== */
 
+/**
+ * @brief Create a new empty mutable JSON object.
+ * @return A new mutable csilk_json_t object, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_object(void)
 {
@@ -100,6 +142,10 @@ csilk_json_object(void)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a new empty mutable JSON array.
+ * @return A new mutable csilk_json_t array, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_array(void)
 {
@@ -115,6 +161,11 @@ csilk_json_array(void)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a JSON string value from a NUL-terminated C string.
+ * @param[in] s Source string (may be NULL, which yields a JSON null).
+ * @return A new mutable csilk_json_t string, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_string_new(const char* s)
 {
@@ -133,6 +184,11 @@ csilk_json_string_new(const char* s)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a JSON number value from a double.
+ * @param[in] n Floating-point value to store.
+ * @return A new mutable csilk_json_t number, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_number(double n)
 {
@@ -148,6 +204,11 @@ csilk_json_number(double n)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a JSON integer value from a signed 64-bit integer.
+ * @param[in] n Integer value to store.
+ * @return A new mutable csilk_json_t integer, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_int(int64_t n)
 {
@@ -163,6 +224,11 @@ csilk_json_int(int64_t n)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a JSON boolean value.
+ * @param[in] b Boolean value to store.
+ * @return A new mutable csilk_json_t boolean, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_bool(bool b)
 {
@@ -178,6 +244,10 @@ csilk_json_bool(bool b)
     return json_mut_new(mdoc, mval);
 }
 
+/**
+ * @brief Create a JSON null value.
+ * @return A new mutable csilk_json_t null, or NULL on allocation failure.
+ */
 csilk_json_t*
 csilk_json_null(void)
 {
@@ -197,6 +267,19 @@ csilk_json_null(void)
  * Add to object
  * ==================================================================== */
 
+/** @brief Insert a key/value pair into a mutable JSON object.
+ *
+ * Internal helper backing the public csilk_json_add_* family. When @p item
+ * lives in a different document it is deep-copied into @p obj's document; the
+ * copied item's document is then freed if it was an owning view.
+ *
+ * @param[in] obj  Target mutable object (must be MUTABLE).
+ * @param[in] key  NUL-terminated key.
+ * @param[in] item Value to insert.
+ * @return true on success, false on NULL args, wrong object kind, or copy
+ *         failure.
+ * @note For immutable @p item values, the value is converted to a mutable copy
+ *       inside @p obj's document. */
 static bool
 json_add_to_obj(csilk_json_t* obj, const char* key, csilk_json_t* item)
 {
@@ -246,18 +329,43 @@ json_add_to_obj(csilk_json_t* obj, const char* key, csilk_json_t* item)
     return true;
 }
 
+/**
+ * @brief Add an object value to a JSON object under the given key.
+ * @param[in] obj  Target mutable object.
+ * @param[in] key  NUL-terminated key.
+ * @param[in] item Object value to add.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_object(csilk_json_t* obj, const char* key, csilk_json_t* item)
 {
     return json_add_to_obj(obj, key, item);
 }
 
+/**
+ * @brief Add an array value to a JSON object under the given key.
+ * @param[in] obj  Target mutable object.
+ * @param[in] key  NUL-terminated key.
+ * @param[in] item Array value to add.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_array(csilk_json_t* obj, const char* key, csilk_json_t* item)
 {
     return json_add_to_obj(obj, key, item);
 }
 
+/**
+ * @brief Add an array value under a key and return the added item.
+ *
+ * Behaves like csilk_json_add_array but returns @p item (or NULL on failure)
+ * so callers can keep mutating the inserted value.
+ *
+ * @param[in] obj  Target mutable object.
+ * @param[in] key  NUL-terminated key.
+ * @param[in] item Array value to add.
+ * @return @p item on success, or NULL on failure.
+ */
 csilk_json_t*
 csilk_json_add_array_obj(csilk_json_t* obj, const char* key, csilk_json_t* item)
 {
@@ -267,6 +375,13 @@ csilk_json_add_array_obj(csilk_json_t* obj, const char* key, csilk_json_t* item)
     return item;
 }
 
+/**
+ * @brief Add a string value to a JSON object under the given key.
+ * @param[in] obj   Target mutable object.
+ * @param[in] key   NUL-terminated key.
+ * @param[in] value String value (may be NULL, which stores JSON null).
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_string(csilk_json_t* obj, const char* key, const char* value)
 {
@@ -282,6 +397,13 @@ csilk_json_add_string(csilk_json_t* obj, const char* key, const char* value)
     return yyjson_mut_obj_add_strcpy(obj->doc.mdoc, obj->u.mval, key, value);
 }
 
+/**
+ * @brief Add a double number value to a JSON object under the given key.
+ * @param[in] obj   Target mutable object.
+ * @param[in] key   NUL-terminated key.
+ * @param[in] value Numeric value to store.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_number(csilk_json_t* obj, const char* key, double value)
 {
@@ -296,6 +418,13 @@ csilk_json_add_number(csilk_json_t* obj, const char* key, double value)
                               yyjson_mut_double(obj->doc.mdoc, value));
 }
 
+/**
+ * @brief Add a signed 64-bit integer value to a JSON object under a key.
+ * @param[in] obj   Target mutable object.
+ * @param[in] key   NUL-terminated key.
+ * @param[in] value Integer value to store.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_int(csilk_json_t* obj, const char* key, int64_t value)
 {
@@ -309,6 +438,13 @@ csilk_json_add_int(csilk_json_t* obj, const char* key, int64_t value)
         obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_sint(obj->doc.mdoc, value));
 }
 
+/**
+ * @brief Add a boolean value to a JSON object under the given key.
+ * @param[in] obj   Target mutable object.
+ * @param[in] key   NUL-terminated key.
+ * @param[in] value Boolean value to store.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_bool(csilk_json_t* obj, const char* key, bool value)
 {
@@ -322,6 +458,12 @@ csilk_json_add_bool(csilk_json_t* obj, const char* key, bool value)
         obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_bool(obj->doc.mdoc, value));
 }
 
+/**
+ * @brief Add a JSON null value to an object under the given key.
+ * @param[in] obj Target mutable object.
+ * @param[in] key NUL-terminated key.
+ * @return true on success, false on NULL args, non-object target, or failure.
+ */
 bool
 csilk_json_add_null(csilk_json_t* obj, const char* key)
 {
@@ -335,6 +477,12 @@ csilk_json_add_null(csilk_json_t* obj, const char* key)
         obj->u.mval, yyjson_mut_strcpy(obj->doc.mdoc, key), yyjson_mut_null(obj->doc.mdoc));
 }
 
+/**
+ * @brief Append an item to a JSON array (root must be an array).
+ * @param[in] obj  Target mutable array.
+ * @param[in] item Value to append.
+ * @return true on success, false on NULL args, non-array target, or failure.
+ */
 bool
 csilk_json_add_item(csilk_json_t* obj, csilk_json_t* item)
 {
@@ -384,6 +532,16 @@ csilk_json_add_item(csilk_json_t* obj, csilk_json_t* item)
  * Add to array
  * ==================================================================== */
 
+/**
+ * @brief Append an item to the end of a mutable JSON array.
+ *
+ * Equivalent to csilk_json_add_item but documented separately for callers that
+ * append to a value already known to be an array.
+ *
+ * @param[in] arr  Target mutable array.
+ * @param[in] item Value to append.
+ * @return true on success, false on NULL args, non-array target, or failure.
+ */
 bool
 csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
 {
@@ -433,6 +591,13 @@ csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
  * Get / inspect
  * ==================================================================== */
 
+/**
+ * @brief Look up a value by key, returning a non-owning view of any type.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return Non-owning view of the value, or NULL if absent/invalid.
+ * @note The returned view borrows the underlying document; do not free it.
+ */
 csilk_json_t*
 csilk_json_get(const csilk_json_t* obj, const char* key)
 {
@@ -453,6 +618,12 @@ csilk_json_get(const csilk_json_t* obj, const char* key)
     return json_view_immutable(obj->doc.idoc, v);
 }
 
+/**
+ * @brief Look up an object-typed value by key.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return Non-owning view of the object, or NULL if absent or not an object.
+ */
 csilk_json_t*
 csilk_json_get_object(const csilk_json_t* obj, const char* key)
 {
@@ -473,6 +644,12 @@ csilk_json_get_object(const csilk_json_t* obj, const char* key)
     return json_view_immutable(obj->doc.idoc, v);
 }
 
+/**
+ * @brief Look up an array-typed value by key.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return Non-owning view of the array, or NULL if absent or not an array.
+ */
 csilk_json_t*
 csilk_json_get_array(const csilk_json_t* obj, const char* key)
 {
@@ -493,6 +670,13 @@ csilk_json_get_array(const csilk_json_t* obj, const char* key)
     return json_view_immutable(obj->doc.idoc, v);
 }
 
+/**
+ * @brief Look up a string value by key and return its C string.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return NUL-terminated string, or NULL if absent or not a string.
+ * @note The returned pointer aliases document memory and must not be freed.
+ */
 const char*
 csilk_json_get_string(const csilk_json_t* obj, const char* key)
 {
@@ -513,6 +697,12 @@ csilk_json_get_string(const csilk_json_t* obj, const char* key)
     return yyjson_get_str(v);
 }
 
+/**
+ * @brief Look up a numeric value by key as a double.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return The numeric value, or 0.0 if absent or not a number.
+ */
 double
 csilk_json_get_number(const csilk_json_t* obj, const char* key)
 {
@@ -533,6 +723,16 @@ csilk_json_get_number(const csilk_json_t* obj, const char* key)
     return yyjson_get_num(v);
 }
 
+/**
+ * @brief Look up an integer value by key as a signed 64-bit integer.
+ *
+ * Accepts both integer and floating-point JSON numbers (the latter are
+ * truncated). Returns 0 on absence or non-numeric types.
+ *
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return The integer value, or 0 if absent or not numeric.
+ */
 int64_t
 csilk_json_get_int(const csilk_json_t* obj, const char* key)
 {
@@ -565,6 +765,12 @@ csilk_json_get_int(const csilk_json_t* obj, const char* key)
     return 0;
 }
 
+/**
+ * @brief Look up a boolean value by key.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] key NUL-terminated key.
+ * @return The boolean value, or false if absent or not a boolean.
+ */
 bool
 csilk_json_get_bool(const csilk_json_t* obj, const char* key)
 {
@@ -585,6 +791,12 @@ csilk_json_get_bool(const csilk_json_t* obj, const char* key)
     return yyjson_get_bool(v);
 }
 
+/**
+ * @brief Return the C string of a JSON string value.
+ * @param[in] v JSON value (mutable or immutable).
+ * @return NUL-terminated string, or NULL if v is NULL or not a string.
+ * @note The returned pointer aliases document memory and must not be freed.
+ */
 const char*
 csilk_json_string_value(const csilk_json_t* v)
 {
@@ -603,6 +815,11 @@ csilk_json_string_value(const csilk_json_t* v)
     return yyjson_get_str(v->u.ival);
 }
 
+/**
+ * @brief Return the double value of a JSON number value.
+ * @param[in] v JSON value (mutable or immutable).
+ * @return The numeric value, or 0.0 if v is NULL or not a number.
+ */
 double
 csilk_json_number_value(const csilk_json_t* v)
 {
@@ -621,6 +838,11 @@ csilk_json_number_value(const csilk_json_t* v)
     return yyjson_get_num(v->u.ival);
 }
 
+/**
+ * @brief Return the signed 64-bit integer of a JSON value.
+ * @param[in] v JSON value (mutable or immutable).
+ * @return The integer value, or 0 if v is NULL or not numeric.
+ */
 int64_t
 csilk_json_int_value(const csilk_json_t* v)
 {
@@ -645,6 +867,11 @@ csilk_json_int_value(const csilk_json_t* v)
     return 0;
 }
 
+/**
+ * @brief Return the boolean of a JSON value.
+ * @param[in] v JSON value (mutable or immutable).
+ * @return The boolean value, or false if v is NULL or not a boolean.
+ */
 bool
 csilk_json_bool_value(const csilk_json_t* v)
 {
@@ -663,6 +890,13 @@ csilk_json_bool_value(const csilk_json_t* v)
     return yyjson_get_bool(v->u.ival);
 }
 
+/**
+ * @brief Return the array element at the given index.
+ * @param[in] arr JSON array (mutable or immutable).
+ * @param[in] index Zero-based element index.
+ * @return Non-owning element view, or NULL if out of range or not array.
+ * @note The returned view borrows the underlying document; do not free it.
+ */
 csilk_json_t*
 csilk_json_array_get(const csilk_json_t* arr, size_t index)
 {
@@ -689,6 +923,11 @@ csilk_json_array_get(const csilk_json_t* arr, size_t index)
     return json_view_immutable(arr->doc.idoc, v);
 }
 
+/**
+ * @brief Return the number of elements in a JSON array.
+ * @param[in] arr JSON array (mutable or immutable).
+ * @return Element count, or 0 if arr is NULL or not an array.
+ */
 size_t
 csilk_json_array_size(const csilk_json_t* arr)
 {
@@ -711,6 +950,11 @@ csilk_json_array_size(const csilk_json_t* arr)
  * Type predicates
  * ==================================================================== */
 
+/**
+ * @brief Test whether a JSON value is null.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON null, false otherwise.
+ */
 bool
 csilk_json_is_null(const csilk_json_t* v)
 {
@@ -721,6 +965,11 @@ csilk_json_is_null(const csilk_json_t* v)
                                          : yyjson_is_null(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is an object.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON object, false otherwise.
+ */
 bool
 csilk_json_is_object(const csilk_json_t* v)
 {
@@ -730,6 +979,11 @@ csilk_json_is_object(const csilk_json_t* v)
     return v->kind == CSILK_JSON_MUTABLE ? yyjson_mut_is_obj(v->u.mval) : yyjson_is_obj(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is an array.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON array, false otherwise.
+ */
 bool
 csilk_json_is_array(const csilk_json_t* v)
 {
@@ -739,6 +993,11 @@ csilk_json_is_array(const csilk_json_t* v)
     return v->kind == CSILK_JSON_MUTABLE ? yyjson_mut_is_arr(v->u.mval) : yyjson_is_arr(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is a string.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON string, false otherwise.
+ */
 bool
 csilk_json_is_string(const csilk_json_t* v)
 {
@@ -748,6 +1007,11 @@ csilk_json_is_string(const csilk_json_t* v)
     return v->kind == CSILK_JSON_MUTABLE ? yyjson_mut_is_str(v->u.mval) : yyjson_is_str(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is a number.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON number, false otherwise.
+ */
 bool
 csilk_json_is_number(const csilk_json_t* v)
 {
@@ -757,6 +1021,11 @@ csilk_json_is_number(const csilk_json_t* v)
     return v->kind == CSILK_JSON_MUTABLE ? yyjson_mut_is_num(v->u.mval) : yyjson_is_num(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is a boolean.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is a JSON boolean, false otherwise.
+ */
 bool
 csilk_json_is_bool(const csilk_json_t* v)
 {
@@ -767,6 +1036,11 @@ csilk_json_is_bool(const csilk_json_t* v)
                                          : yyjson_is_bool(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is the boolean true.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is JSON true, false otherwise.
+ */
 bool
 csilk_json_is_true(const csilk_json_t* v)
 {
@@ -777,6 +1051,11 @@ csilk_json_is_true(const csilk_json_t* v)
                                          : yyjson_is_true(v->u.ival);
 }
 
+/**
+ * @brief Test whether a JSON value is the boolean false.
+ * @param[in] v JSON value (may be NULL).
+ * @return true if v is JSON false, false otherwise.
+ */
 bool
 csilk_json_is_false(const csilk_json_t* v)
 {
@@ -791,6 +1070,11 @@ csilk_json_is_false(const csilk_json_t* v)
  * Parse
  * ==================================================================== */
 
+/**
+ * @brief Parse a NUL-terminated JSON string into a csilk_json_t.
+ * @param[in] json_str NUL-terminated JSON text (may be NULL).
+ * @return An owning immutable csilk_json_t, or NULL on NULL input/parse error.
+ */
 csilk_json_t*
 csilk_json_parse(const char* json_str)
 {
@@ -800,6 +1084,12 @@ csilk_json_parse(const char* json_str)
     return csilk_json_parse_len(json_str, strlen(json_str));
 }
 
+/**
+ * @brief Parse a JSON string of explicit length into a csilk_json_t.
+ * @param[in] json_str JSON text (may be NULL).
+ * @param[in] len     Length of json_str in bytes.
+ * @return An owning immutable csilk_json_t, or NULL on NULL input/parse error.
+ */
 csilk_json_t*
 csilk_json_parse_len(const char* json_str, size_t len)
 {
@@ -813,6 +1103,16 @@ csilk_json_parse_len(const char* json_str, size_t len)
     return json_imut_new(doc, yyjson_doc_get_root(doc));
 }
 
+/**
+ * @brief Parse JSON, reporting the error message on failure.
+ *
+ * Like csilk_json_parse but writes a human-readable error string to @p error
+ * when parsing fails (or when @p json_str is NULL).
+ *
+ * @param[in]  json_str JSON text.
+ * @param[out] error    Receives an error message pointer (may be NULL).
+ * @return An owning immutable csilk_json_t, or NULL on error.
+ */
 csilk_json_t*
 csilk_json_parse_err(const char* json_str, const char** error)
 {
@@ -842,6 +1142,12 @@ csilk_json_parse_err(const char* json_str, const char** error)
  * Serialize
  * ==================================================================== */
 
+/**
+ * @brief Serialize a JSON value to a compact JSON string.
+ * @param[in]  v   JSON value to serialize.
+ * @param[out] len Receives the length of the returned string (may be NULL).
+ * @return Newly malloc'd JSON string (caller frees), or NULL on error/NULL v.
+ */
 char*
 csilk_json_serialize(const csilk_json_t* v, size_t* len)
 {
@@ -854,6 +1160,12 @@ csilk_json_serialize(const csilk_json_t* v, size_t* len)
     return yyjson_val_write(v->u.ival, 0, len);
 }
 
+/**
+ * @brief Serialize a JSON value to a pretty-printed JSON string.
+ * @param[in]  v   JSON value to serialize.
+ * @param[out] len Receives the length of the returned string (may be NULL).
+ * @return Newly malloc'd JSON string (caller frees), or NULL on error/NULL v.
+ */
 char*
 csilk_json_serialize_pretty(const csilk_json_t* v, size_t* len)
 {
@@ -870,6 +1182,15 @@ csilk_json_serialize_pretty(const csilk_json_t* v, size_t* len)
  * Free
  * ==================================================================== */
 
+/**
+ * @brief Free a csilk_json_t value.
+ *
+ * Frees the underlying document only when the view is the owner; non-owning
+ * views leave the document intact. Thread-local static views (allocated from
+ * the ring buffer) are never individually freed.
+ *
+ * @param[in] v JSON value to free (no-op if NULL).
+ */
 void
 csilk_json_free(csilk_json_t* v)
 {
@@ -896,6 +1217,11 @@ csilk_json_free(csilk_json_t* v)
  * Copy
  * ==================================================================== */
 
+/**
+ * @brief Deep-copy a JSON value into a new owning csilk_json_t.
+ * @param[in] v JSON value to copy (may be NULL).
+ * @return New owning csilk_json_t copy, or NULL on NULL input/alloc error.
+ */
 csilk_json_t*
 csilk_json_copy(const csilk_json_t* v)
 {
@@ -931,6 +1257,17 @@ csilk_json_copy(const csilk_json_t* v)
  * Key iteration
  * ==================================================================== */
 
+/**
+ * @brief Return the object key at the given index, or NULL if not an object.
+ *
+ * Iterates the object's key/value pairs and returns the key string of the
+ * element at @p index.
+ *
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] index Zero-based key index.
+ * @return NUL-terminated key string, or NULL if out of range / not an object.
+ * @note The returned pointer aliases document memory and must not be freed.
+ */
 const char*
 csilk_json_object_key(const csilk_json_t* obj, size_t index)
 {
@@ -969,6 +1306,11 @@ csilk_json_object_key(const csilk_json_t* obj, size_t index)
     return NULL;
 }
 
+/**
+ * @brief Return the number of key/value pairs in a JSON object.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @return Number of keys, or 0 if obj is NULL or not an object.
+ */
 size_t
 csilk_json_object_size(const csilk_json_t* obj)
 {
@@ -987,6 +1329,13 @@ csilk_json_object_size(const csilk_json_t* obj)
     return yyjson_obj_size(obj->u.ival);
 }
 
+/**
+ * @brief Return the object value at the given index.
+ * @param[in] obj JSON object (mutable or immutable).
+ * @param[in] index Zero-based key index.
+ * @return Non-owning value view, or NULL if out of range or not an object.
+ * @note The returned view borrows the underlying document; do not free it.
+ */
 csilk_json_t*
 csilk_json_object_val(const csilk_json_t* obj, size_t index)
 {
@@ -1029,6 +1378,17 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
  * Mutation
  * ==================================================================== */
 
+/**
+ * @brief Replace the contents of a JSON string value.
+ *
+ * For a mutable string value, mutates it in place. For an immutable value, the
+ * underlying document is converted to a mutable copy and the root is replaced,
+ * taking ownership of the new document.
+ *
+ * @param[in] v         JSON value to mutate (must be a string).
+ * @param[in] new_value New string contents.
+ * @return true on success, false on NULL args / non-string value / alloc error.
+ */
 bool
 csilk_json_set_string(csilk_json_t* v, const char* new_value)
 {

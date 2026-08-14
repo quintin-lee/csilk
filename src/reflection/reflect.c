@@ -91,6 +91,7 @@ registry_unlock(void)
     csilk_mutex_unlock(&g_registry_mutex);
 }
 
+/** @brief Lookup a registered type by name without taking the lock (caller holds it). */
 static const csilk_reflect_entry_t*
 find_entry_unlocked(const char* name)
 {
@@ -105,6 +106,7 @@ find_entry_unlocked(const char* name)
     return NULL;
 }
 
+/** @brief Depth-first cycle detection over nested struct fields (max depth 32). */
 static int
 detect_cycle_dfs(const char* type_name, const char** stack, size_t stack_depth)
 {
@@ -241,6 +243,18 @@ csilk_reflect_foreach(csilk_reflect_foreach_cb cb, void* user_data)
     }
 }
 
+/**
+ * @brief Map a primitive type name to a csilk_field_desc_t.
+ *
+ * If @p type_name matches a built-in scalar type ("bool", "int8", …,
+ * "string"), fills @p out_desc with the corresponding CSILK_TYPE_* enum and
+ * returns 1. Returns 0 for unrecognised names. The descriptor is zeroed
+ * before population.
+ *
+ * @param[in]  type_name Type name to look up.
+ * @param[out] out_desc  Output field descriptor (zeroed before population).
+ * @return 1 if the name matched a built-in type, 0 otherwise.
+ */
 int
 get_basic_type(const char* type_name, csilk_field_desc_t* out_desc)
 {

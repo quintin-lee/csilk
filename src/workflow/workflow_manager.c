@@ -1,3 +1,11 @@
+/**
+ * @file workflow_manager.c
+ * @brief Workflow manager: a registry of named, versioned workflows that
+ *        supports hot reload and thread-safe lookup.
+ *
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +27,13 @@ struct csilk_wf_manager_s {
     csilk_mutex_t            mutex;
 };
 
+/**
+ * @brief Creates a new, empty workflow manager.
+ *
+ * Allocates and zero-initializes the manager and its lock.
+ *
+ * @return A new csilk_wf_manager_t, or NULL on allocation failure.
+ */
 csilk_wf_manager_t*
 csilk_wf_manager_new(void)
 {
@@ -31,6 +46,13 @@ csilk_wf_manager_new(void)
     return mgr;
 }
 
+/**
+ * @brief Destroys a workflow manager and frees all registered workflows.
+ *
+ * Tears down each entry's workflow (csilk_wf_free) and destroys all mutexes.
+ *
+ * @param mgr The workflow manager to free (may be NULL).
+ */
 void
 csilk_wf_manager_free(csilk_wf_manager_t* mgr)
 {
@@ -52,6 +74,19 @@ csilk_wf_manager_free(csilk_wf_manager_t* mgr)
     free(mgr);
 }
 
+/**
+ * @brief Registers a workflow under a unique name in the manager.
+ *
+ * Stores wf as the active workflow for name, starting at version 1. Names must
+ * be unique; the fixed 64-entry capacity is enforced.
+ *
+ * @param mgr The workflow manager (must not be NULL).
+ * @param name Unique workflow name (must not be NULL).
+ * @param wf  Workflow instance to register (must not be NULL).
+ * @return 0 on success, or -1 if an argument is NULL, the manager is full, or
+ *         the name already exists.
+ * @note Thread-safe (guarded by mgr->mutex).
+ */
 int
 csilk_wf_manager_register(csilk_wf_manager_t* mgr, const char* name, csilk_wf_t* wf)
 {
@@ -82,6 +117,19 @@ csilk_wf_manager_register(csilk_wf_manager_t* mgr, const char* name, csilk_wf_t*
     return 0;
 }
 
+/**
+ * @brief Hot-swaps the active workflow for a registered name.
+ *
+ * Replaces the existing workflow with new_wf, increments the entry version,
+ * and frees the previously active workflow. The name must already be registered.
+ *
+ * @param mgr    The workflow manager (must not be NULL).
+ * @param name   Name of the workflow to reload (must not be NULL).
+ * @param new_wf Replacement workflow instance (must not be NULL).
+ * @return 0 on success, or -1 if an argument is NULL or the name is unknown.
+ * @note Thread-safe; the swap and old-workflow teardown are guarded by the
+ *       manager and entry mutexes.
+ */
 int
 csilk_wf_manager_reload(csilk_wf_manager_t* mgr, const char* name, csilk_wf_t* new_wf)
 {
@@ -117,6 +165,15 @@ csilk_wf_manager_reload(csilk_wf_manager_t* mgr, const char* name, csilk_wf_t* n
     return 0;
 }
 
+/**
+ * @brief Looks up the active workflow registered under a name.
+ *
+ * @param mgr  The workflow manager (must not be NULL).
+ * @param name Name to look up (must not be NULL).
+ * @return The active csilk_wf_t, or NULL if not found.
+ * @note Thread-safe (guarded by mgr->mutex and the entry mutex). The returned
+ *       pointer is borrowed; it remains valid until a reload/free of that entry.
+ */
 csilk_wf_t*
 csilk_wf_manager_get(csilk_wf_manager_t* mgr, const char* name)
 {
@@ -142,6 +199,16 @@ extern int csilk_wf_manager_enable_debug_server_impl(csilk_wf_manager_t* mgr,
                                                      csilk_app_t*        app,
                                                      const char*         route_path);
 
+/**
+ * @brief Enables the workflow debug server route for the manager.
+ *
+ * Thin wrapper that forwards to csilk_wf_manager_enable_debug_server_impl().
+ *
+ * @param mgr        The workflow manager (may be NULL).
+ * @param app        The csilk application to register the route on (may be NULL).
+ * @param route_path Optional custom route path (may be NULL).
+ * @return 0 on success, or -1 on failure.
+ */
 int
 csilk_wf_manager_enable_debug_server(csilk_wf_manager_t* mgr,
                                      csilk_app_t*        app,

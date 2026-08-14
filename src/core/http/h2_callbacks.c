@@ -169,6 +169,12 @@ send_callback(
     return (ssize_t)length;
 }
 
+/**
+ * @brief Register csilk's internal nghttp2 callbacks on a callbacks object.
+ * @param[in] callbacks nghttp2 callbacks struct to populate (created by caller).
+ * @note Installs send, frame-recv, data-chunk-recv, stream-close, header, and
+ *       begin-headers callbacks used by the HTTP/2 server session.
+ */
 void
 csilk_h2_register_callbacks(nghttp2_session_callbacks* callbacks)
 {

@@ -23,6 +23,7 @@ static void free_struct_internal(void*                     struct_ptr,
                                  int                       depth,
                                  void**                    visited);
 
+/** @brief Free a single scalar/string/struct field, recursing into nested structs. */
 static void
 free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visited)
 {
@@ -88,6 +89,7 @@ free_scalar(void* addr, const csilk_field_desc_t* desc, int depth, void** visite
     }
 }
 
+/** @brief Walk every field of a struct, freeing heap allocations (COW-safe, bounded). */
 static void
 free_struct_internal(void*                     struct_ptr,
                      const csilk_field_desc_t* descs,
@@ -122,7 +124,17 @@ free_struct_internal(void*                     struct_ptr,
     }
 }
 
-/** @brief Recursively free heap-allocated memory of a reflected struct's fields. */
+/**
+ * @brief Recursively free heap-allocated memory owned by a reflected struct.
+ *
+ * Walks the type's field descriptors (or treats @p type_name as a primitive
+ * when it matches a built-in scalar) and releases pointer strings and nested
+ * struct allocations. A visited stack guards against cyclic references. The
+ * struct itself is not freed — only the dynamic memory reachable from it.
+ *
+ * @param[in] type_name Registered reflection type name (or a primitive name).
+ * @param[in] ptr       Pointer to the struct instance to clean up.
+ */
 void
 csilk_struct_free_reflect(const char* type_name, void* ptr)
 {

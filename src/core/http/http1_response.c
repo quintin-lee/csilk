@@ -189,6 +189,16 @@ get_status_text(int status)
  * @param data   Data buffer to send.
  * @param len    Length of data in bytes. */
 #ifndef CSILK_USE_URING
+/**
+ * @brief Write data to a client connection (libuv backend).
+ * @param[in] client Client to write to (validated non-NULL).
+ * @param[in] data   Bytes to send.
+ * @param[in] len    Length of data in bytes.
+ * @note For TLS clients the data is SSL_write'd and flushed through the BIO.
+ *       Otherwise allocates a request and a copy of the data, then queues the
+ *       write via csilk_io_write; the data copy is freed by the completion
+ *       callback. Only compiled in the non-io_uring (libuv) build.
+ */
 void
 csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 {
@@ -418,6 +428,14 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
     }
 }
 
+/**
+ * @brief Serialize and send the full HTTP/1.1 (or H2) response for a context.
+ * @param[in] c Request context whose response fields are serialized and sent.
+ * @note For HTTP/2 clients delegates to csilk_h2_send_response. Otherwise stops
+ *       the request timer, computes status/headers/body (including chunked or
+ *       file-transfer paths), builds the response buffer, and writes it via
+ *       _csilk_send_data, then handles keep-alive/post-response cleanup.
+ */
 CSILK_INTERNAL void
 _csilk_send_response(csilk_ctx_t* c)
 {

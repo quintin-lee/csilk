@@ -1,3 +1,15 @@
+/**
+ * @file wasm_plugin.c
+ * @brief WASM plugin integration: loading, host-call exports, and workflow/MCP glue.
+ *
+ * Wires the minimal WASM VM (wasm_vm.c) into csilk: a byte-buffer loader, host
+ * functions that plugins can import to read/set request headers, params, and the
+ * response status, memory mapping helpers, plus adapters that register a WASM
+ * module as a workflow node or an MCP server tool.
+ *
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +21,15 @@
 #include "csilk/protocols/mcp.h"
 #include "wasm_internal.h"
 
+/**
+ * @brief Load a WASM plugin from an in-memory byte buffer.
+ * @param[in] wasm_bytes Pointer to the .wasm bytes (must be >= 8 bytes).
+ * @param[in] size       Number of bytes in wasm_bytes.
+ * @return A newly allocated plugin on success, or NULL on invalid size or a
+ *         missing/incorrect WASM magic+version, or allocation failure.
+ * @note Initializes one page of linear memory and copies the bytecode; the
+ *       caller frees via csilk_wasm_plugin_free.
+ */
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
 {
@@ -52,12 +73,26 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
     return plugin;
 }
 
+/**
+ * @brief Check whether a WASM plugin is valid/loaded.
+ * @param[in] plugin Plugin to validate.
+ * @return 1 if plugin is non-NULL and carries >= 8 bytes of bytecode, else 0.
+ */
 int
 csilk_wasm_plugin_is_valid(const csilk_wasm_plugin_t* plugin)
 {
     return (plugin && plugin->bytecode && plugin->bytecode_size >= 8) ? 1 : 0;
 }
 
+/**
+ * @brief Execute a WASM plugin function within a request context.
+ * @param[in] plugin    Validated plugin to execute.
+ * @param[in] ctx       Request context (currently unused by the stub).
+ * @param[in] func_name Entry function name (validated non-NULL).
+ * @return 0 on success, -1 on invalid plugin or NULL func_name.
+ * @note The current implementation validates the plugin and returns 0 without
+ *       performing real execution.
+ */
 int
 csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const char* func_name)
 {
@@ -68,6 +103,14 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
     return 0;
 }
 
+/**
+ * @brief Host import: fetch a request or response header by name.
+ * @param[in] ctx  Request context to read from.
+ * @param[in] name Header name to look up.
+ * @return The header value, or NULL if not present in either request or
+ *         response headers.
+ * @note Falls back to the response headers when the request header is absent.
+ */
 const char*
 csilk_wasm_host_get_header(csilk_ctx_t* ctx, const char* name)
 {
@@ -78,6 +121,13 @@ csilk_wasm_host_get_header(csilk_ctx_t* ctx, const char* name)
     return val;
 }
 
+/**
+ * @brief Host import: set a request header by name.
+ * @param[in] ctx   Request context to modify.
+ * @param[in] name  Header name.
+ * @param[in] value Header value.
+ * @return 0 on success.
+ */
 int
 csilk_wasm_host_set_header(csilk_ctx_t* ctx, const char* name, const char* value)
 {
@@ -85,6 +135,14 @@ csilk_wasm_host_set_header(csilk_ctx_t* ctx, const char* name, const char* value
     return 0;
 }
 
+/**
+ * @brief Host import: fetch a path/query parameter by name.
+ * @param[in] ctx  Request context to read from.
+ * @param[in] name Parameter name to look up.
+ * @return The parameter value, or NULL if not present as a path param or query
+ *         parameter.
+ * @note Falls back to query parameters when the path param is absent.
+ */
 const char*
 csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name)
 {
@@ -98,6 +156,12 @@ csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name)
     return val;
 }
 
+/**
+ * @brief Host import: set the HTTP response status code.
+ * @param[in] ctx    Request context to modify.
+ * @param[in] status HTTP status code to set.
+ * @return 0 on success, -1 if ctx is NULL.
+ */
 int
 csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status)
 {
@@ -108,6 +172,16 @@ csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status)
     return 0;
 }
 
+/**
+ * @brief Map an external buffer as the plugin's linear memory.
+ * @param[in] plugin Plugin whose memory is to be replaced.
+ * @param[in] buf    Caller-owned buffer to use as linear memory.
+ * @param[in] len    Size of buf in bytes (must be > 0).
+ * @return 0 on success, -1 on NULL plugin/buf or zero length.
+ * @note Frees any previously heap-allocated memory (unless it was already
+ *       mapped) and marks the memory as externally mapped so plugin_free will
+ *       not free buf.
+ */
 int
 csilk_wasm_plugin_map_memory(csilk_wasm_plugin_t* plugin, void* buf, size_t len)
 {
@@ -123,6 +197,12 @@ csilk_wasm_plugin_map_memory(csilk_wasm_plugin_t* plugin, void* buf, size_t len)
     return 0;
 }
 
+/**
+ * @brief Return the plugin's mapped linear memory buffer and its size.
+ * @param[in]  plugin Plugin to query.
+ * @param[out] len    Receives the current memory size (set to 0 if plugin NULL).
+ * @return Pointer to the linear-memory buffer, or NULL if plugin is NULL.
+ */
 void*
 csilk_wasm_host_get_mapped_buffer(const csilk_wasm_plugin_t* plugin, size_t* len)
 {
@@ -138,6 +218,16 @@ csilk_wasm_host_get_mapped_buffer(const csilk_wasm_plugin_t* plugin, size_t* len
     return plugin->memory.data;
 }
 
+/**
+ * @brief Workflow node handler that loads and executes a WASM file.
+ * @param[in] ctx       Workflow context used to allocate output data.
+ * @param[in] input     Incoming workflow data (currently unused).
+ * @param[in] user_data WASM file path (owned by the registering node).
+ * @return An allocated csilk_data_t carrying the plugin's JSON output, or NULL
+ *         on missing args, load failure, or execution failure.
+ * @note Loads the module, runs "run" with empty input, and frees the plugin
+ *       before returning. The returned data value is a strdup of the output.
+ */
 static csilk_data_t*
 csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
@@ -169,6 +259,15 @@ csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_dat
     return res_data;
 }
 
+/**
+ * @brief Register a WASM module as a workflow node.
+ * @param[in] wf            Workflow to extend.
+ * @param[in] node_id       Identifier for the new node.
+ * @param[in] wasm_filepath Path to the .wasm file (strdup'd; freed on node free).
+ * @return 0 on success, -1 on NULL arguments or node creation failure.
+ * @note The node uses csilk_wasm_node_handler; the file path is duplicated and
+ *       released via the node's free callback.
+ */
 int
 csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
 {
@@ -184,6 +283,16 @@ csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_fil
     return node != NULL ? 0 : -1;
 }
 
+/**
+ * @brief Register a WASM module as an MCP server tool.
+ * @param[in] server         MCP server to register the tool on.
+ * @param[in] wasm_filepath  Path to the .wasm file backing the tool.
+ * @param[in] tool_name       Tool name (validated non-NULL).
+ * @param[in] description     Optional human-readable description (may be NULL).
+ * @return 0 on success (result of csilk_mcp_server_register_tool), -1 on NULL
+ *         server/filepath/tool_name.
+ * @note Registers the tool with a fixed "{\"type\":\"object\"}" parameter schema.
+ */
 int
 csilk_mcp_server_register_wasm_tool(csilk_mcp_server_t* server,
                                     const char*         wasm_filepath,

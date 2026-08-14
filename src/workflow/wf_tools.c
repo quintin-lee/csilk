@@ -1,6 +1,28 @@
+/**
+ * @file wf_tools.c
+ * @brief Workflow tool registration and dynamic tool-discovery hooks.
+ *
+ * @copyright MIT License
+ */
+
 #include "workflow_internal.h"
 #include "csilk/core/sync.h"
 
+/**
+ * @brief Registers a static tool (function) callable by AI workflow nodes.
+ *
+ * Appends a tool entry to the workflow's tool table, copying the name,
+ * description, and parameter JSON schema. The tool's function is invoked by
+ * the AI node handler when the model emits a matching tool call.
+ *
+ * @param wf             The workflow instance.
+ * @param name           Unique tool name (must not be NULL).
+ * @param description     Human-readable tool description (may be NULL).
+ * @param parameters_json JSON schema describing the tool's parameters (may be NULL).
+ * @param fn             Tool implementation callback (must not be NULL).
+ * @param user_data      Opaque pointer passed to fn when invoked.
+ * @note Guarded by wf->monitor_mutex. No-op if wf, name, or fn is NULL.
+ */
 void
 csilk_wf_register_tool(csilk_wf_t*      wf,
                        const char*      name,
@@ -33,6 +55,17 @@ csilk_wf_register_tool(csilk_wf_t*      wf,
     csilk_mutex_unlock(&wf->monitor_mutex);
 }
 
+/**
+ * @brief Installs a dynamic tool-discovery callback on the workflow.
+ *
+ * The discovery function is called at AI node execution time to resolve
+ * additional tools (beyond the statically registered ones) based on context.
+ *
+ * @param wf        The workflow instance.
+ * @param discovery Discovery callback (may be NULL to clear).
+ * @param user_data Opaque pointer forwarded to the discovery callback.
+ * @note Guarded by wf->monitor_mutex. No-op if wf is NULL.
+ */
 void
 csilk_wf_set_tool_discovery(csilk_wf_t* wf, csilk_wf_tool_discovery_fn discovery, void* user_data)
 {

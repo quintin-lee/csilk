@@ -1,3 +1,15 @@
+/**
+ * @file uring_sqpoll.c
+ * @brief io_uring SQPOLL (kernel submission polling thread) setup helpers.
+ *
+ * Initializes an io_uring instance using the SQPOLL feature so the kernel can
+ * poll the submission queue without requiring a syscall on every submission,
+ * with optional CPU affinity for the poller thread. Falls back to a stub that
+ * returns -1 when io_uring is not compiled in.
+ *
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +19,16 @@
 #ifdef CSILK_USE_URING
 #include <liburing.h>
 
+/**
+ * @brief Initialize an io_uring ring with the SQPOLL kernel poller.
+ * @param[out] ring     io_uring instance to initialize.
+ * @param[in]  cpu_core Core to pin the SQPOLL thread to, or -1 for none.
+ * @param[in]  idle_ms  Poller idle timeout in milliseconds (defaults to 2000).
+ * @return 0 on success, or a negative errno from io_uring_queue_init* on
+ *         failure.
+ * @note If SQPOLL setup fails (e.g. missing CAP_SYS_ADMIN) the routine falls
+ *       back to a standard non-polling ring rather than failing outright.
+ */
 int
 csilk_uring_sqpoll_init(struct io_uring* ring, int cpu_core, uint32_t idle_ms)
 {
@@ -32,6 +54,14 @@ csilk_uring_sqpoll_init(struct io_uring* ring, int cpu_core, uint32_t idle_ms)
     return res;
 }
 
+/**
+ * @brief Wake the SQPOLL kernel thread if it is currently idle.
+ * @param[in] ring io_uring ring created with csilk_uring_sqpoll_init.
+ * @return 0 on success or if no wakeup is needed, or a negative errno from
+ *         io_uring_enter on failure.
+ * @note Only issues an io_uring_enter wakeup when the ring's SQ flags indicate
+ *       IORING_SQ_NEED_WAKEUP, i.e. the poller has gone to sleep.
+ */
 int
 csilk_uring_sqpoll_wakeup(struct io_uring* ring)
 {
@@ -44,6 +74,14 @@ csilk_uring_sqpoll_wakeup(struct io_uring* ring)
     return 0;
 }
 #else
+
+/**
+ * @brief Stub for csilk_uring_sqpoll_init when io_uring is disabled.
+ * @param[out] ring   Unused.
+ * @param[in]  cpu_core Unused.
+ * @param[in]  idle_ms Unused.
+ * @return Always -1.
+ */
 int
 csilk_uring_sqpoll_init(void* ring, int cpu_core, uint32_t idle_ms)
 {
@@ -53,6 +91,11 @@ csilk_uring_sqpoll_init(void* ring, int cpu_core, uint32_t idle_ms)
     return -1;
 }
 
+/**
+ * @brief Stub for csilk_uring_sqpoll_wakeup when io_uring is disabled.
+ * @param[in] ring Unused.
+ * @return Always -1.
+ */
 int
 csilk_uring_sqpoll_wakeup(void* ring)
 {

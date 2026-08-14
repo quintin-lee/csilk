@@ -260,6 +260,12 @@ admin_ws_handler(csilk_ctx_t* c)
     }
 }
 
+/**
+ * @brief Register the admin dashboard routes without authentication.
+ * @param[in] app      Application instance.
+ * @param[in] app_path Base URL path for the admin panel (e.g., "/admin").
+ * @return void
+ */
 void
 csilk_admin_serve(csilk_app_t* app, const char* app_path)
 {
@@ -277,6 +283,7 @@ csilk_admin_serve(csilk_app_t* app, const char* app_path)
  * @param app_path        The base URL path for the admin panel (e.g.,
  * "/admin").
  * @param auth_middleware Optional handler function for authentication.
+ * @return void
  */
 void
 csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t auth_middleware)

@@ -1,3 +1,15 @@
+/**
+ * @file xdp_waf.c
+ * @brief eBPF/XDP-based Web Application Firewall (WAF) implementation.
+ *
+ * Provides an in-memory rule engine for filtering network traffic by source
+ * IP (IPv4 CIDR) and payload patterns. Rules are matched under a mutex so the
+ * structure is safe to share across worker threads. This module maintains the
+ * user-space view of rules; kernel attachment via the eBPF/XDP program is
+ * optional and tracked by the is_kernel_attached flag.
+ * @copyright MIT License
+ */
+
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -6,6 +18,18 @@
 
 #include "xdp_waf_internal.h"
 
+/**
+ * @brief Create a new XDP WAF instance.
+ *
+ * Allocates and zero-initializes an XDP WAF handle bound to the given network
+ * interface. The BPF map file descriptor is set to -1 (not attached) and the
+ * rule/pattern counts start at zero.
+ *
+ * @param ifname  Network interface name to associate with the WAF (e.g. "eth0").
+ *                May be NULL, in which case "lo" (loopback) is used.
+ * @return Pointer to the newly allocated csilk_xdp_waf_t, or NULL on allocation
+ *         failure. The caller must free it with csilk_xdp_waf_free().
+ */
 csilk_xdp_waf_t*
 csilk_xdp_waf_new(const char* ifname)
 {
@@ -21,6 +45,18 @@ csilk_xdp_waf_new(const char* ifname)
     return waf;
 }
 
+/**
+ * @brief Add an IP-based rule (IP/prefix -> action) to the XDP WAF.
+ *
+ * Parses an IPv4 CIDR string (e.g. "10.0.0.0/8") and appends a rule to the
+ * WAF's rule table. The source address is stored in host byte order.
+ *
+ * @param[in,out] waf       The XDP WAF instance. Must not be NULL.
+ * @param[in]     ip_cidr   IPv4 CIDR string (address optional "/prefix").
+ * @param[in]     action    Action to take when matched (e.g. DROP/PASS).
+ * @return 0 on success, -1 on NULL input, full rule table (256), or invalid
+ *         CIDR/prefix.
+ */
 int
 csilk_xdp_waf_add_ip_rule(csilk_xdp_waf_t* waf, const char* ip_cidr, uint8_t action)
 {
@@ -60,12 +96,34 @@ csilk_xdp_waf_add_ip_rule(csilk_xdp_waf_t* waf, const char* ip_cidr, uint8_t act
     return 0;
 }
 
+/**
+ * @brief Convenience wrapper to block an IP (drop action).
+ *
+ * Adds a DROP rule for the given IPv4 CIDR by delegating to
+ * csilk_xdp_waf_add_ip_rule() with action CSILK_XDP_ACTION_DROP.
+ *
+ * @param[in,out] waf      The XDP WAF instance. Must not be NULL.
+ * @param[in]     ip_str   IPv4 CIDR string to block. Must not be NULL.
+ * @return 0 on success, -1 on error (see csilk_xdp_waf_add_ip_rule()).
+ */
 int
 csilk_xdp_waf_block_ip(csilk_xdp_waf_t* waf, const char* ip_str)
 {
     return csilk_xdp_waf_add_ip_rule(waf, ip_str, CSILK_XDP_ACTION_DROP);
 }
 
+/**
+ * @brief Add a payload-substring block pattern to the XDP WAF.
+ *
+ * Duplicates and stores a textual pattern; any packet whose payload contains
+ * the pattern (via memmem) will be dropped during inspection. Patterns are
+ * matched under the WAF mutex.
+ *
+ * @param[in,out] waf      The XDP WAF instance. Must not be NULL.
+ * @param[in]     pattern  Null-terminated substring to block. Must not be NULL.
+ * @return 0 on success, -1 on NULL input, full pattern table (128), or
+ *         allocation failure for the duplicated string.
+ */
 int
 csilk_xdp_waf_block_pattern(csilk_xdp_waf_t* waf, const char* pattern)
 {
@@ -90,6 +148,20 @@ csilk_xdp_waf_block_pattern(csilk_xdp_waf_t* waf, const char* pattern)
     return 0;
 }
 
+/**
+ * @brief Inspect a packet against the WAF's IP and payload rules.
+ *
+ * First checks whether the source IPv4 address matches a DROP rule, then (if a
+ * payload is supplied) whether any registered pattern appears in the payload.
+ * Returns DROP if any match is found, otherwise PASS.
+ *
+ * @param[in] waf      The XDP WAF instance. If NULL, returns PASS.
+ * @param[in] src_ip   Source IPv4 address in host byte order.
+ * @param[in] payload  Packet payload bytes (may be NULL if len == 0).
+ * @param[in] len      Length of the payload in bytes.
+ * @return CSILK_XDP_ACTION_DROP if a rule/pattern matches, else
+ *         CSILK_XDP_ACTION_PASS.
+ */
 csilk_xdp_action_t
 csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payload, size_t len)
 {
@@ -120,6 +192,14 @@ csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payl
     return CSILK_XDP_ACTION_PASS;
 }
 
+/**
+ * @brief Destroy an XDP WAF instance and free all resources.
+ *
+ * Frees each duplicated pattern string, destroys the protecting mutex, and
+ * frees the WAF handle itself. Safe to call with NULL.
+ *
+ * @param[in,out] waf  The XDP WAF instance to free. May be NULL.
+ */
 void
 csilk_xdp_waf_free(csilk_xdp_waf_t* waf)
 {

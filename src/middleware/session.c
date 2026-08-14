@@ -467,6 +467,16 @@ csilk_session_destroy(csilk_ctx_t* c)
     csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);
 }
 
+/**
+ * @brief Get the session ID string for the current request.
+ *
+ * Returns the UUID of the session stored in the context under "_session" (set
+ * by csilk_session_start()).
+ *
+ * @param c  The request context. Must not be NULL.
+ * @return The null-terminated session ID string, or NULL if no session is
+ *         active for this request.
+ */
 const char*
 csilk_session_get_id(csilk_ctx_t* c)
 {

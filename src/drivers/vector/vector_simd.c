@@ -1,3 +1,15 @@
+/**
+ * @file vector_simd.c
+ * @brief SIMD-aware vector distance kernels and aligned allocators.
+ *
+ * Implements cosine, L2 (squared Euclidean) and dot-product distance kernels
+ * used by the HNSW index, plus a portable aligned memory allocator.  AVX2
+ * support is detected at runtime via csilk_simd_has_avx2() (compiled paths
+ * are available when __AVX2__ is defined).
+ *
+ * @copyright MIT License
+ */
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +21,14 @@
 #include <immintrin.h>
 #endif
 
+/**
+ * @brief Report whether the CPU supports AVX2.
+ *
+ * When compiled with __AVX2__ the answer is a compile-time yes; otherwise on
+ * x86-64 it uses the compiler's runtime CPU feature detection, and on other
+ * architectures it always returns 0.
+ *
+ * @return 1 if AVX2 is available, 0 otherwise. */
 int
 csilk_simd_has_avx2(void)
 {
@@ -25,6 +45,16 @@ csilk_simd_has_avx2(void)
 #endif
 }
 
+/**
+ * @brief Allocate @p size bytes aligned to @p alignment.
+ *
+ * On POSIX systems with _POSIX_C_SOURCE >= 200112L this uses posix_memalign.
+ * Otherwise it overallocates and stores the original pointer immediately
+ * before the returned region so csilk_aligned_free() can recover it.
+ *
+ * @param alignment Required alignment, a power of two (must be >= 1).
+ * @param size      Number of usable bytes to allocate.
+ * @return Aligned pointer, or NULL on allocation failure. */
 void*
 csilk_aligned_alloc(size_t alignment, size_t size)
 {
@@ -45,6 +75,14 @@ csilk_aligned_alloc(size_t alignment, size_t size)
 #endif
 }
 
+/**
+ * @brief Free a pointer returned by csilk_aligned_alloc().
+ *
+ * Safe to call with NULL. Mirrors the allocation strategy used by
+ * csilk_aligned_alloc() (a plain free() under posix_memalign, or freeing the
+ * stored original pointer otherwise).
+ *
+ * @param ptr Pointer to release (may be NULL). */
 void
 csilk_aligned_free(void* ptr)
 {
@@ -58,6 +96,17 @@ csilk_aligned_free(void* ptr)
 #endif
 }
 
+/**
+ * @brief Compute 1 - cosine similarity as a distance in [0, 2].
+ *
+ * Returns 1.0f for degenerate inputs (NULL pointers or zero dimension, or a
+ * zero-magnitude vector). Values are clamped to the valid cosine range before
+ * the subtraction.
+ *
+ * @param a   First vector (must contain @p dim floats if non-NULL).
+ * @param b   Second vector (must contain @p dim floats if non-NULL).
+ * @param dim Number of components per vector.
+ * @return Cosine distance (0 = identical, 2 = opposite). */
 float
 csilk_simd_cosine_distance(const float* a, const float* b, size_t dim)
 {
@@ -89,6 +138,17 @@ csilk_simd_cosine_distance(const float* a, const float* b, size_t dim)
     return (float)(1.0 - cos_sim);
 }
 
+/**
+ * @brief Compute the squared L2 (Euclidean) distance between two vectors.
+ *
+ * Returns 0.0f for degenerate inputs (NULL pointers or zero dimension).
+ * Note this is the un-squared sum of squared differences, not the Euclidean
+ * norm.
+ *
+ * @param a   First vector (must contain @p dim floats if non-NULL).
+ * @param b   Second vector (must contain @p dim floats if non-NULL).
+ * @param dim Number of components per vector.
+ * @return Squared Euclidean distance. */
 float
 csilk_simd_l2_distance(const float* a, const float* b, size_t dim)
 {
@@ -104,6 +164,17 @@ csilk_simd_l2_distance(const float* a, const float* b, size_t dim)
     return (float)dist;
 }
 
+/**
+ * @brief Compute the negative dot product, used as a similarity score.
+ *
+ * Returns 0.0f for degenerate inputs (NULL pointers or zero dimension). The
+ * result is negated so that smaller values correspond to "more similar"
+ * vectors, matching the minimising convention of csilk_hnsw_search().
+ *
+ * @param a   First vector (must contain @p dim floats if non-NULL).
+ * @param b   Second vector (must contain @p dim floats if non-NULL).
+ * @param dim Number of components per vector.
+ * @return Negated dot product. */
 float
 csilk_simd_dot_product(const float* a, const float* b, size_t dim)
 {

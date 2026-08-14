@@ -21,6 +21,8 @@ struct curl_response {
     size_t size;
 };
 
+/** @brief libcurl write callback that appends body data to a growing buffer.
+ * @return Number of bytes consumed, or 0 to abort the transfer on OOM. */
 static size_t
 write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
 {
@@ -37,6 +39,16 @@ write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
     return realsize;
 }
 
+/**
+ * @brief Initialise a Milvus driver state from an endpoint and API key.
+ *
+ * Stores the endpoint and optional API key (deep-copied) and performs
+ * one-shot libcurl global init. Returns NULL if no endpoint is supplied or
+ * allocation fails.
+ *
+ * @param endpoint Base URL of the Milvus REST API (required).
+ * @param api_key Optional bearer token (may be NULL).
+ * @return Heap-allocated state pointer, or NULL on failure. */
 static void*
 milvus_init(const char* endpoint, const char* api_key)
 {
@@ -60,6 +72,10 @@ milvus_init(const char* endpoint, const char* api_key)
     return state;
 }
 
+/**
+ * @brief Free Milvus driver state and its endpoint/api-key strings.
+ *
+ * @param state_ptr Driver state returned by milvus_init() (may be NULL). */
 static void
 milvus_free(void* state_ptr)
 {
@@ -72,6 +88,19 @@ milvus_free(void* state_ptr)
     free(state);
 }
 
+/**
+ * @brief Upsert vectors into a Milvus collection via the v2 REST API.
+ *
+ * Serialises each point (id, vector, and merged payload fields) as a JSON
+ * entity and POSTs to /v2/vectordb/entities/upsert. A NULL API key omits the
+ * bearer header. Returns 0 on HTTP < 400 success, -1 on transport error or
+ * server error.
+ *
+ * @param state_ptr  Driver state (must be a milvus_state_t).
+ * @param collection Target collection name.
+ * @param points     Array of vectors to upsert.
+ * @param count      Number of points.
+ * @return 0 on success, -1 on transport or HTTP error. */
 static int
 milvus_upsert(void*                       state_ptr,
               const char*                 collection,
@@ -152,6 +181,21 @@ milvus_upsert(void*                       state_ptr,
     return ret;
 }
 
+/**
+ * @brief Search a Milvus collection via the v2 REST API.
+ *
+ * POSTs the query vector and limit to /v2/vectordb/entities/search requesting
+ * all fields. On success the response's "data" entries are converted into
+ * csilk_vector_search_result_t entries (id, distance score, and remaining
+ * fields folded into the payload JSON). On failure an error message is set.
+ *
+ * @param state_ptr  Driver state (must be a milvus_state_t).
+ * @param collection Target collection name.
+ * @param vector     Query vector.
+ * @param dimension  Dimensionality of @p vector.
+ * @param limit      Maximum number of results.
+ * @param[out] res   Response struct to populate.
+ * @return 0 on success, -1 on transport/HTTP/parse error. */
 static int
 milvus_search(void*                           state_ptr,
               const char*                     collection,
@@ -282,6 +326,14 @@ const csilk_vector_db_driver_t milvus_driver = {.name = "milvus",
                                                 .search = milvus_search,
                                                 .free = milvus_free};
 
+/**
+ * @brief Register the Milvus vector-DB driver with the subsystem.
+ *
+ * Adds the milvus_driver vtable to the global vector driver registry so it can
+ * be selected by name from csilk_vector_db_new().
+ *
+ * @note Idempotency is not enforced here; registering twice would add a
+ *       second entry. */
 void
 csilk_vector_milvus_init(void)
 {

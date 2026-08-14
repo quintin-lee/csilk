@@ -1,5 +1,5 @@
 /**
- * @file utils.c
+ * @file crypto.c
  * @brief Cryptographic digests, HMAC, and symmetric/asymmetric crypto dispatch.
  *
  * Implements:
@@ -66,6 +66,8 @@ _Atomic int g_oom_count = 0;
 #define gamma0(x) (ror(x, 7) ^ ror(x, 18) ^ ((x) >> 3))
 #define gamma1(x) (ror(x, 17) ^ ror(x, 19) ^ ((x) >> 10))
 
+/* SHA-256 round constants K[0..63]: the first 32 bits of the fractional
+ * parts of the cube roots of the first 64 primes (nothing-up-my-sleeve). */
 static const uint32_t k256[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -340,6 +342,19 @@ _csilk_generate_uuid(csilk_ctx_t* c, char buf[CSILK_UUID_BUF_SIZE])
     }
 }
 
+/**
+ * @brief Fill a buffer with cryptographically secure random bytes.
+ *
+ * Delegates to the context's crypto driver when one is installed, otherwise
+ * uses the best available platform source (getrandom(2) on Linux,
+ * arc4random_buf(3) on BSD/macOS, CryptGenRandom on Windows, or
+ * /dev/urandom as a final fallback).
+ *
+ * @param c   Request context (may be NULL — uses platform RNG).
+ * @param out [out] Buffer to fill with random bytes.
+ * @param len Number of random bytes to write.
+ * @return 0 on success, or -1 if no entropy source was available.
+ */
 CSILK_INTERNAL int
 _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
 {
@@ -381,12 +396,34 @@ _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len)
     return -1;
 }
 
+/**
+ * @brief Fill a buffer with cryptographically secure random bytes (no context).
+ *
+ * Convenience wrapper around _csilk_fill_random() that always uses the
+ * platform entropy source (no crypto-driver dispatch).  Suitable for callers
+ * that do not have a request context available.
+ *
+ * @param out [out] Buffer to fill with random bytes.
+ * @param len Number of random bytes to write.
+ * @return 0 on success, or -1 if the entropy source failed.
+ */
 int
 csilk_crypto_fill_random(void* out, size_t len)
 {
     return _csilk_fill_random(NULL, out, len);
 }
 
+/**
+ * @brief Context-aware SHA-1 digest dispatcher.
+ *
+ * Delegates to the context's crypto driver when one is installed, otherwise
+ * falls back to the built-in software SHA-1 implementation (csilk_sha1_*).
+ *
+ * @param c   Request context (may be NULL — uses built-in SHA-1).
+ * @param data Input message bytes.
+ * @param len Length of the input in bytes.
+ * @param out [out] 20-byte buffer to receive the SHA-1 digest.
+ */
 CSILK_INTERNAL void
 _csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20])
 {
@@ -400,6 +437,18 @@ _csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20])
     }
 }
 
+/**
+ * @brief Context-aware bcrypt password hashing dispatcher.
+ *
+ * Delegates to the context's crypto driver when one is installed, otherwise
+ * falls back to the built-in bcrypt implementation (csilk_bcrypt_hash).
+ *
+ * @param c       Request context (may be NULL — uses built-in bcrypt).
+ * @param password Null-terminated password bytes (truncated to 72 bytes).
+ * @param len     Length of the password in bytes.
+ * @param cost    bcrypt work factor (10-31); clamped if out of range.
+ * @param hash    [out] Buffer of CSILK_BCRYPT_HASH_LEN bytes for the result.
+ */
 CSILK_INTERNAL void
 _csilk_bcrypt_hash(
     csilk_ctx_t* c, const char* password, size_t len, int cost, char hash[CSILK_BCRYPT_HASH_LEN])
@@ -411,6 +460,17 @@ _csilk_bcrypt_hash(
     }
 }
 
+/**
+ * @brief Generate a random nonce, with a monotonic fallback.
+ *
+ * Fills @p out with @p len cryptographically random bytes.  If the system
+ * entropy source fails, falls back to a deterministic-but-unique value built
+ * from csilk_io_hrtime() plus an atomic counter, so the nonce is never
+ * (accidentally) reused — important for AEAD / nonce-misuse resistance.
+ *
+ * @param out [out] Buffer to receive the nonce.
+ * @param len Number of nonce bytes to generate.
+ */
 void
 csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
@@ -714,24 +774,67 @@ _csilk_verify(csilk_ctx_t*   c,
     return d->verify(public_key, pub_len, data, data_len, signature, sig_len);
 }
 
+/**
+ * @brief Allocate memory via the standard allocator.
+ *
+ * Thin convenience wrapper around malloc().  Provided so callers throughout
+ * the framework use a single allocation entry point.
+ *
+ * @param size Number of bytes to allocate.
+ * @return Pointer to the allocated memory, or NULL on failure.
+ */
 void*
 csilk_malloc(size_t size)
 {
     return malloc(size);
 }
 
+/**
+ * @brief Free memory previously allocated by csilk_malloc()/csilk_strdup().
+ *
+ * Thin convenience wrapper around free().
+ *
+ * @param ptr Pointer to free (may be NULL).
+ */
 void
 csilk_free(void* ptr)
 {
     free(ptr);
 }
 
+/**
+ * @brief Duplicate a NUL-terminated string.
+ *
+ * Thin convenience wrapper around strdup() that is NULL-safe: a NULL input
+ * yields a NULL return rather than dereferencing NULL.
+ *
+ * @param s NUL-terminated string to duplicate (may be NULL).
+ * @return Heap-allocated copy of @p s, or NULL on allocation failure / NULL input.
+ */
 char*
 csilk_strdup(const char* s)
 {
     return s ? strdup(s) : NULL;
 }
 
+/**
+ * @brief Context-aware JWT signing dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its jwt_sign callback to
+ * produce a signature over @p data.  When no driver is installed the call
+ * fails with -1 (there is no built-in JWT signing fallback).
+ *
+ * @param c         Request context (driver resolution).
+ * @param key       Signing key.
+ * @param key_len   Length of the key in bytes.
+ * @param data      Data to sign.
+ * @param data_len  Length of the data in bytes.
+ * @param[out] signature Output buffer for the raw signature.
+ * @param[in,out] sig_len On input, capacity of the signature buffer; on
+ *                 output, bytes written.
+ * @param algorithm JWT algorithm selector (e.g. HS256).
+ * @return 0 on success, or -1 on failure.
+ */
 CSILK_INTERNAL int
 _csilk_jwt_sign(csilk_ctx_t*    c,
                 const char*     key,
@@ -750,6 +853,23 @@ _csilk_jwt_sign(csilk_ctx_t*    c,
     return d->jwt_sign(key, key_len, data, data_len, signature, sig_len, algorithm);
 }
 
+/**
+ * @brief Context-aware JWT verification dispatcher.
+ *
+ * Resolves the cipher driver and delegates to its jwt_verify callback to
+ * check @p signature against @p data.  When no driver is installed the call
+ * fails with -1 (there is no built-in JWT verification fallback).
+ *
+ * @param c         Request context (driver resolution).
+ * @param key       Verification key.
+ * @param key_len   Length of the key in bytes.
+ * @param data      Signed data.
+ * @param data_len  Length of the data in bytes.
+ * @param signature Raw signature bytes to verify.
+ * @param sig_len   Length of the signature in bytes.
+ * @param algorithm JWT algorithm selector (e.g. HS256).
+ * @return 0 on success, or -1 if the signature is invalid / unavailable.
+ */
 CSILK_INTERNAL int
 _csilk_jwt_verify(csilk_ctx_t*    c,
                   const char*     key,

@@ -1,3 +1,15 @@
+/**
+ * @file uring_fs.c
+ * @brief Filesystem I/O helpers for the io_uring backend.
+ *
+ * Provides a zero-copy sendfile path used to stream a file descriptor's
+ * contents to a socket, chunked to keep the TCP window well-fed and to avoid
+ * blocking on a full socket buffer. Degrades to a stub that returns -1 on
+ * platforms without sendfile(2).
+ *
+ * @copyright MIT License
+ */
+
 #include "csilk/core/sys_io.h"
 
 #include <errno.h>
@@ -10,6 +22,20 @@
 #include <sys/sendfile.h>
 #endif
 
+/**
+ * @brief Send file contents to a socket using sendfile, with a completion cb.
+ * @param[in] loop       Event loop (unused; kept for API symmetry).
+ * @param[in] req        FS request; its result field receives bytes sent.
+ * @param[in] out_fd     Destination socket/file descriptor.
+ * @param[in] in_fd      Source file descriptor to read from.
+ * @param[in] in_offset  Starting byte offset within in_fd.
+ * @param[in] length     Total number of bytes to transfer.
+ * @param[in] cb         Optional callback invoked with req on success/zero-len.
+ * @return 0 if at least one byte was sent and the callback (if any) fired, -1
+ *         on error or zero progress; length==0 short-circuits to 0.
+ * @note Transfers in 2 MB chunks and retries on EAGAIN/EINTR. On Linux uses
+ *       sendfile(2); on other platforms always returns -1.
+ */
 int
 csilk_io_fs_sendfile(csilk_io_loop_t* loop,
                      csilk_io_fs_t*   req,

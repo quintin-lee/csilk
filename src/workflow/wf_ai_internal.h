@@ -12,8 +12,11 @@
 
 #include "csilk/csilk.h"
 
+/** @brief Traverse a cJSON tree following a dot-separated path, returning a
+ *         stringified leaf value allocated in the context arena. */
 char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path);
 
+/** @brief Core AI chat node handler shared by AI and agent workflow nodes. */
 csilk_data_t* ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data);
 
 #endif

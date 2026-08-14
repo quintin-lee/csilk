@@ -134,6 +134,21 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     return exported_count;
 }
 
+/**
+ * @brief Serialize buffered spans into an OTLP/gRPC binary frame.
+ *
+ * First renders the spans to OTLP/JSON via csilk_otlp_exporter_export_json()
+ * (which also flushes the buffer), then wraps that JSON in a standard 5-byte
+ * gRPC frame (uncompressed, big-endian length prefix) using
+ * csilk_grpc_frame_encode().
+ *
+ * @param exp       Exporter instance. Must not be NULL.
+ * @param[out] out_buf  Destination buffer for the gRPC frame.
+ * @param buf_size Capacity of @p out_buf (must be at least 16 bytes).
+ *
+ * @return The total gRPC frame length in bytes on success, or -1 on error
+ *         (NULL arguments, too-small buffer, or no spans to export).
+ */
 int
 csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, size_t buf_size)
 {

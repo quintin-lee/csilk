@@ -159,7 +159,18 @@ struct_to_cjson_internal(csilk_json_t*             obj,
     }
 }
 
-/** @brief Serialize a registered struct or basic type to a compact JSON string.
+/**
+ * @brief Serialize a registered struct or basic type to a compact JSON string.
+ *
+ * For primitive type names, serializes the single value directly without a
+ * registry lookup (fast path). For registered structs, builds a cJSON object
+ * from the field descriptors and serializes it. Returns a heap-allocated,
+ * unformatted JSON string.
+ *
+ * @param[in] type_name Registered struct type name or built-in primitive name.
+ * @param[in] ptr       Pointer to the source struct/value.
+ * @return A newly allocated NUL-terminated JSON string (free with free()), or
+ *         NULL on invalid arguments, unknown type, or allocation failure.
  */
 char*
 csilk_json_marshal(const char* type_name, const void* ptr)
@@ -202,6 +213,20 @@ csilk_json_marshal(const char* type_name, const void* ptr)
     return out;
 }
 
+/**
+ * @brief Marshal a struct/value to an arena- (or heap-) allocated JSON string.
+ *
+ * Delegates to csilk_json_marshal() and copies the result into the supplied
+ * arena when one is provided, otherwise duplicates it on the heap. The marshalled
+ * length is reported via @p out_len when non-NULL.
+ *
+ * @param[in]  arena     Optional arena allocator (falls back to heap if NULL).
+ * @param[in]  type_name Registered struct type name or built-in primitive name.
+ * @param[in]  ptr       Pointer to the source struct/value.
+ * @param[out] out_len   Optional; receives the string length (excluding NUL).
+ * @return An arena- or heap-allocated JSON string (free with free() unless
+ *         arena-owned), or NULL on failure.
+ */
 char*
 csilk_json_marshal_arena(csilk_arena_t* arena,
                          const char*    type_name,

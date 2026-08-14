@@ -273,6 +273,13 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
     }
 }
 
+/**
+ * @brief Report whether the server is over its backpressure connection limit.
+ * @param[in] server Server to query (validated non-NULL).
+ * @return 1 if active connections exceed config.backpressure_max_queue_depth
+ *         (when that limit is > 0), otherwise 0.
+ * @note Returns 0 for a NULL server or when backpressure limiting is disabled.
+ */
 int
 csilk_server_check_backpressure(csilk_server_t* server)
 {
@@ -331,6 +338,12 @@ csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* dr
     }
 }
 
+/**
+ * @brief Set the server's QUIC transport implementation.
+ * @param[in] server    Server whose QUIC transport is set.
+ * @param[in] transport QUIC transport handle (stored opaquely; may be NULL).
+ * @note No-op if server is NULL. The transport is stored as an opaque pointer.
+ */
 void
 csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* transport)
 {
@@ -341,6 +354,12 @@ csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* 
 
 /* --- Server run --- */
 
+/**
+ * @brief Handler that serves the auto-generated OpenAPI JSON document.
+ * @param[in] c Request context used to resolve the server/router and respond.
+ * @note Looks up the owning server and router; on success calls
+ *       csilk_serve_openapi, otherwise sets HTTP 500.
+ */
 static void
 openapi_json_handler(csilk_ctx_t* c)
 {
@@ -353,6 +372,17 @@ openapi_json_handler(csilk_ctx_t* c)
     }
 }
 
+/**
+ * @brief Start and run the server event loop, binding to port.
+ * @param[in] server Server instance to run (validated non-NULL).
+ * @param[in] port   TCP port to bind and listen on.
+ * @return 0 on a clean run, -1 on invalid args or setup failure (TLS init,
+ *         async init, bind/listen, or worker pool allocation).
+ * @note Optionally registers a GET /openapi.json handler, initializes TLS when
+ *       enabled, sets up the stop async handle, binds the listening socket (with
+ *       SO_REUSEPORT when multiple workers are configured), creates per-worker
+ *       pools/arenas, spawns worker threads, and runs the libuv loop until stop.
+ */
 int
 csilk_server_run(csilk_server_t* server, int port)
 {

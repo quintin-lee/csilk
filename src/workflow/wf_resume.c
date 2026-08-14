@@ -1,7 +1,32 @@
+/**
+ * @file wf_resume.c
+ * @brief Workflow resumption: replaying the Write-Ahead Log to restore
+ *        execution state and re-trigger unfinished or paused nodes.
+ *
+ * @copyright MIT License
+ */
+
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 
+/**
+ * @brief Resumes a paused or interrupted workflow execution from its WAL.
+ *
+ * Flushes the WAL, drops any stale active context for exec_id, and replays the
+ * workflow's .wal file to reconstruct node outputs, input counts, pause and
+ * end state. Finished nodes are skipped; unfinished (started-but-not-finished
+ * or not-yet-started) nodes are re-executed with their reconstructed inputs.
+ * If the WAL records an end, the callback is invoked with NULL and the context
+ * is freed; if paused, the context is discarded.
+ *
+ * @param wf        The workflow definition (must have wal_dir configured).
+ * @param exec_id   The unique execution ID whose WAL should be replayed.
+ * @param callback  Completion callback receiving the final result (NULL for
+ *                  paused/ended executions).
+ * @note No-op if wf, exec_id, or wf->wal_dir is NULL. Not thread-safe with
+ *       respect to concurrent execution of the same exec_id.
+ */
 void
 csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data_t* result))
 {
@@ -143,6 +168,20 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     free(node_finished);
 }
 
+/**
+ * @brief Continues a paused workflow execution after a human/remote result.
+ *
+ * Flushes the WAL and replays it to find the node at which execution paused
+ * (WF_EV_PAUSE). Marks that node as approved and re-executes it with the
+ * supplied input (the human/remote-provided result). If no paused node is
+ * found the reconstructed context is freed without executing further.
+ *
+ * @param wf        The workflow definition (must have wal_dir configured).
+ * @param exec_id   The unique execution ID to continue.
+ * @param input     The result data delivered to the paused node.
+ * @param callback  Completion callback receiving the final result.
+ * @note No-op if wf, exec_id, or wf->wal_dir is NULL.
+ */
 void
 csilk_wf_signal_continue(csilk_wf_t*   wf,
                          const char*   exec_id,

@@ -582,6 +582,13 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
     return ctx;
 }
 
+/**
+ * @brief Free all HTTP/2 streams associated with a client connection.
+ * @param[in] client Client whose h2_streams list is torn down.
+ * @note Walks the per-client stream list, cleaning up each stream's context
+ *       (and freeing its arena), freeing each stream, and resetting the list to
+ *       NULL. Safe to call when no streams are present.
+ */
 void
 csilk_h2_free_streams(csilk_client_t* client)
 {
