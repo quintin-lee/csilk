@@ -22,7 +22,7 @@
 void csilk_ws_handshake(csilk_ctx_t* c);
 
 /**
- * @brief Send a WebSocket data frame.
+ * @brief Send a WebSocket data frame with backpressure awareness.
  *
  * Encodes and sends a single WebSocket frame per RFC 6455.  Masks the
  * payload if required (client-to-server masking).
@@ -31,8 +31,11 @@ void csilk_ws_handshake(csilk_ctx_t* c);
  * @param payload Raw data to send.
  * @param len     Byte length of @p payload.
  * @param opcode  WebSocket opcode: 0x1 for text, 0x2 for binary, 0x9 for ping.
+ * @return 1 if sent and write queue is healthy (writable),
+ *         0 if backpressure was triggered (queue >= high water mark; caller should pause),
+ *        -1 on error or if max write buffer exceeded.
  */
-void csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
+int csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
 /**
  * @brief Send a WebSocket close frame.

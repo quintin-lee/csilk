@@ -139,6 +139,10 @@ on_write(csilk_io_write_t* req, int status)
     }
 
     free(req);
+
+    if (client) {
+        _csilk_check_and_trigger_drain(client);
+    }
 }
 
 /* --- Status text --- */
@@ -244,6 +248,39 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
  * @param c    The request context.
  * @param data Pointer to the data buffer.
  * @param len  Number of bytes to write. */
+CSILK_INTERNAL size_t
+_csilk_client_get_write_queue_size(csilk_client_t* client)
+{
+    if (!client) {
+        return 0;
+    }
+#ifndef CSILK_USE_URING
+    return ((csilk_io_stream_t*)&client->handle)->write_queue_size;
+#else
+    return client->pending_write_bytes;
+#endif
+}
+
+CSILK_INTERNAL void
+_csilk_check_and_trigger_drain(csilk_client_t* client)
+{
+    if (!client) {
+        return;
+    }
+    csilk_ctx_t* c = &client->ctx;
+    if (c->write_paused) {
+        size_t q = _csilk_client_get_write_queue_size(client);
+        if (q <= c->write_low_water_mark) {
+            c->write_paused = 0;
+            if (c->on_drain) {
+                void (*drain_cb)(csilk_ctx_t*, void*) = c->on_drain;
+                void* drain_data = c->on_drain_data;
+                drain_cb(c, drain_data);
+            }
+        }
+    }
+}
+
 CSILK_INTERNAL void
 _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {

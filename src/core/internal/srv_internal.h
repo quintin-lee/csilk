@@ -167,30 +167,32 @@ struct csilk_server_s {
  */
 struct csilk_client_s {
     uint8_t          generation;
-    csilk_io_tcp_t   handle;           /**< I/O stream handle (libuv or io_uring). */
-    csilk_io_timer_t timer;            /**< Connection idle (keep-alive) timer. */
-    csilk_io_timer_t read_timer;       /**< Read timeout timer. */
-    csilk_io_timer_t write_timer;      /**< Write timeout timer. */
-    csilk_io_timer_t request_timer;    /**< Request timeout timer. */
-    int              close_pending;    /**< Pending close refs before freeing client. */
-    _Atomic int      async_ref;        /**< Active asynchronous tasks reference counter. */
+    csilk_io_tcp_t   handle;         /**< I/O stream handle (libuv or io_uring). */
+    csilk_io_timer_t timer;          /**< Connection idle (keep-alive) timer. */
+    csilk_io_timer_t read_timer;     /**< Read timeout timer. */
+    csilk_io_timer_t write_timer;    /**< Write timeout timer. */
+    csilk_io_timer_t request_timer;  /**< Request timeout timer. */
+    int              close_pending;  /**< Pending close refs before freeing client. */
+    _Atomic int      async_ref;      /**< Active asynchronous tasks reference counter. */
     int              read_paused;
     unsigned         read_active : 1;
-    unsigned         keep_alive : 1;   /**< Cached keep-alive decision from
+    unsigned         keep_alive : 1; /**< Cached keep-alive decision from
                    * _csilk_send_response, used by on_write_done
                    * because llhttp clears F_CONNECTION_CLOSE
                    * after on_message_complete returns. */
-    void*            read_buf;         /**< Pre-allocated read buffer for io_uring */
+    void*            read_buf;       /**< Pre-allocated read buffer for io_uring */
+    size_t pending_write_bytes;  /**< In-flight outbound write bytes for io_uring/backpressure. */
 
-    csilk_protocol_t protocol;         /**< Protocol negotiated for this connection. */
-    nghttp2_session* h2_session;       /**< HTTP/2 session state (if HTTP/2). */
-    csilk_ctx_t*     h2_streams;       /**< Linked list of active HTTP/2 stream contexts. */
+    csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
 
-    llhttp_t parser;                   /**< HTTP request parser (if HTTP/1.1). */
+    nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
+    csilk_ctx_t*     h2_streams; /**< Linked list of active HTTP/2 stream contexts. */
 
-    csilk_server_t* server;            /**< Owning server instance. */
-    worker_pool_t*  owner_pool;        /**< Per-worker pool that owns this client. */
-    csilk_ctx_t     ctx;               /**< Request context for this connection. */
+    llhttp_t parser;             /**< HTTP request parser (if HTTP/1.1). */
+
+    csilk_server_t* server;      /**< Owning server instance. */
+    worker_pool_t*  owner_pool;  /**< Per-worker pool that owns this client. */
+    csilk_ctx_t     ctx;         /**< Request context for this connection. */
     size_t          total_header_size; /**< Total size of headers parsed so far. */
     size_t          header_count;      /**< Number of headers parsed so far. */
 

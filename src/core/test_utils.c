@@ -26,6 +26,9 @@ csilk_test_ctx_new(void)
         c->handler_index = -1;
         c->arena = csilk_arena_new(4096);
         c->file_fd = -1;
+        c->write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+        c->write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+        c->max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
     }
     return c;
 }

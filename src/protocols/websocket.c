@@ -30,6 +30,7 @@
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
  *
@@ -93,10 +94,19 @@ csilk_ws_handshake(csilk_ctx_t* c)
 static void
 on_ws_write(csilk_io_write_t* req, int status)
 {
+    (void)status;
+    csilk_client_t* client = NULL;
+    if (req->handle) {
+        client = (csilk_client_t*)req->handle->data;
+    }
     if (req->data) {
         free(req->data);
     }
     free(req);
+
+    if (client) {
+        _csilk_check_and_trigger_drain(client);
+    }
 }
 
 /** @brief Send a WebSocket data frame (text or binary opcode) per RFC 6455
@@ -115,11 +125,11 @@ on_ws_write(csilk_io_write_t* req, int status)
  * @note The payload is copied into a heap-allocated frame buffer which is
  *       freed by the write completion callback. This function returns
  *       immediately; the write happens asynchronously. */
-void
+int
 csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 {
     if (!c) {
-        return;
+        return -1;
     }
 
     if (c->on_ws_send) {
@@ -128,8 +138,11 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 
     void* internal_client = _csilk_get_internal_client(c);
     if (!internal_client) {
-        return;
+        return -1;
     }
+
+    csilk_client_t* cl = (csilk_client_t*)internal_client;
+    size_t          q = _csilk_client_get_write_queue_size(cl);
 
     size_t header_len = 2;
     if (len > 125 && len <= 65535) {
@@ -139,12 +152,21 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
     }
 
     if (len > SIZE_MAX - header_len) {
-        return;
+        return -1;
     }
 
-    uint8_t* frame = malloc(header_len + len);
+    size_t frame_len = header_len + len;
+    if (c->max_write_buffer_size > 0 && q + frame_len > c->max_write_buffer_size) {
+        CSILK_LOG_E("WebSocket: max write buffer exceeded (%zu + %zu > %zu)",
+                    q,
+                    frame_len,
+                    c->max_write_buffer_size);
+        return -1;
+    }
+
+    uint8_t* frame = malloc(frame_len);
     if (!frame) {
-        return;
+        return -1;
     }
 
     /* Byte 0: FIN bit (0x80) OR'd with the opcode nibble (lower 4 bits).
@@ -175,14 +197,22 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 
     csilk_io_write_t* write_req = malloc(sizeof(csilk_io_write_t));
     if (write_req) {
-        csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)(header_len + len));
+        csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
         write_req->data = frame;
-        csilk_client_t*    cl = (csilk_client_t*)internal_client;
         csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
         csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
     } else {
         free(frame);
+        return -1;
     }
+
+    q = _csilk_client_get_write_queue_size(cl);
+    if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
+        c->write_paused = 1;
+        return 0;
+    }
+
+    return 1;
 }
 
 /** @brief Write completion callback for WebSocket close frames.

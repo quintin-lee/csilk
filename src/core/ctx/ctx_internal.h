@@ -314,6 +314,14 @@ struct csilk_ctx_s {
                            csilk_response_write() to avoid sending headers
                            multiple times in streaming mode. */
 
+    /* === Streaming Backpressure & Flow Control === */
+    size_t write_high_water_mark; /**< Outbound write queue high water mark (bytes). */
+    size_t write_low_water_mark;  /**< Outbound write queue low water mark (bytes). */
+    size_t max_write_buffer_size; /**< Hard max write buffer size before drop (bytes). */
+    int    write_paused;          /**< 1 if backpressure paused the stream. */
+    void (*on_drain)(struct csilk_ctx_s* c, void* user_data); /**< Drain callback. */
+    void* on_drain_data;
+
     /* === Zero-Copy File Serving (sendfile) === */
     int    file_fd;     /**< File descriptor of the file being sent via sendfile(). -1 if
                   not in use. Set by static file middleware for large file

@@ -98,6 +98,8 @@ CSILK_INTERNAL int         on_headers_complete(llhttp_t* p);
 CSILK_INTERNAL int         on_body(llhttp_t* p, const char* at, size_t length);
 CSILK_INTERNAL int         on_message_complete(llhttp_t* p);
 CSILK_INTERNAL void        _csilk_handle_post_response(csilk_client_t* client, int keep_alive);
+CSILK_INTERNAL size_t      _csilk_client_get_write_queue_size(csilk_client_t* client);
+CSILK_INTERNAL void        _csilk_check_and_trigger_drain(csilk_client_t* client);
 
 /* --- TLS (tls.c) --- */
 
