@@ -224,7 +224,6 @@ worker_thread(void* arg)
     csilk_server_t*  server = wp->server;
     int              port = data->port;
     csilk_barrier_t* barrier = data->barrier;
-    free(data);
 
     pin_thread_to_core(wp->worker_index);
 
@@ -242,12 +241,11 @@ worker_thread(void* arg)
     _csilk_worker_init_arena_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
-    if (bind_and_listen(loop_ptr,
-                        &wp->server_handle,
-                        port,
-                        server->config.listen_backlog,
-                        true,
-                        wp->worker_index) < 0) {
+    int bind_res = bind_and_listen(
+        loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true, wp->worker_index);
+    if (bind_res < 0) {
+        CSILK_LOG_E("Server: worker %d failed to bind and listen", wp->worker_index);
+        data->success = 0;
         if (barrier) {
             csilk_barrier_wait(barrier);
         }
@@ -259,6 +257,7 @@ worker_thread(void* arg)
     wp->stop_async.data = &sd;
     csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
 
+    data->success = 1;
     if (barrier) {
         csilk_barrier_wait(barrier);
     }
