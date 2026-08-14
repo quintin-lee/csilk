@@ -248,6 +248,57 @@ graph TB
     end
 ```
 
+## Zero-Copy String Views vs Owned Accessors
+
+csilk provides dual accessors for maximum performance and explicit ownership semantics:
+
+```c
+typedef struct {
+    const char* data; /**< Pointer to buffer (borrowed from parser/network buffer). */
+    size_t      len;  /**< Byte length (not guaranteed to be NUL-terminated). */
+} csilk_view_t;
+```
+
+| Scope | Zero-Copy Borrowed View | Owned / NUL-Terminated C-String |
+|-------|-------------------------|--------------------------------|
+| **Query Param** | `csilk_get_query_view(c, "key")` | `csilk_get_query(c, "key")` |
+| **Path Param**  | `csilk_get_param_view(c, "id")`  | `csilk_get_param(c, "id")`  |
+| **Header**      | `csilk_get_header_view(c, "Host")` | `csilk_get_header(c, "Host")` |
+| **Body**        | `csilk_get_body_view(c)` | `csilk_get_body(c)` |
+
+> [!IMPORTANT]
+> `csilk_view_t` directly references raw network receive buffers with zero copying and zero allocations. It is valid only for the duration of the current request handler. If you require a NUL-terminated string or persistent copy, use the standard `csilk_get_*()` functions or duplicate via `csilk_arena_strndup()`.
+
+## Custom Storage Destructors (RAII)
+
+For heap-allocated resources stored in `csilk_ctx_t` (such as cJSON objects, database handles, or third-party structures), `csilk_set_ex()` registers an automatic cleanup callback invoked during request cleanup:
+
+```c
+typedef void (*csilk_destructor_t)(void* value);
+
+// Store heap object with automatic destructor
+cJSON* payload = jwt_verify_internal(...);
+csilk_set_ex(c, "jwt_payload", payload, (csilk_destructor_t)csilk_json_free);
+```
+
+## Outbound Streaming & Backpressure Flow Control
+
+Streaming writes (`csilk_response_write()`, `csilk_sse_send()`, `csilk_ws_send()`) enforce connection-level outbound queue watermarks:
+
+```c
+// Configure connection watermarks (defaults: 64KB high, 16KB low, 16MB max)
+csilk_set_write_watermarks(c, 128 * 1024, 32 * 1024, 32 * 1024 * 1024);
+
+// Write data with backpressure detection
+int status = csilk_response_write(c, data, len);
+if (status == 0) {
+    // High watermark exceeded — pause producer output
+    csilk_on_drain(c, on_stream_drain, producer_state);
+} else if (status < 0) {
+    // Buffer overflow (exceeded max_write_buffer_size) or socket error
+}
+```
+
 ## Response Generation Flow
 
 ```mermaid
@@ -277,18 +328,18 @@ flowchart TB
     subgraph sync_resp["fa:fa-bolt Sync Response"]
         SYNC_H["fa:fa-play Handler calls csilk_string/json/redirect"] --> SYNC_SET["fa:fa-cog ctx->response.status = 200\nctx->response.body = 'OK'"]
         SYNC_SET --> SYNC_RET["fa:fa-undo Handler returns without calling csilk_next()"]
-        SYNC_RET --> SYNC_SEND["fa:fa-reply _csilk_send_response(ctx)\nSerializes HTTP + headers + body\nuv_write() to socket"]
+        SYNC_RET --> SYNC_SEND["fa:fa-reply _csilk_send_response(ctx)\nSerializes HTTP + headers + body\ncsilk_io_write() to socket"]
     end
 
     subgraph async_resp["fa:fa-cloud Async / Streaming Response"]
-        ASYNC_H["fa:fa-play Handler sets ctx->is_async = 1"] --> ASYNC_RET["fa:fa-undo Returns control to libuv"]
+        ASYNC_H["fa:fa-play Handler sets ctx->is_async = 1"] --> ASYNC_RET["fa:fa-undo Returns control to event loop"]
         ASYNC_RET --> ASYNC_WAIT["fa:fa-hourglass Later: csilk_response_write()"]
         ASYNC_WAIT --> ASYNC_SEND["fa:fa-file send_chunked_headers() (first call)\nwrite_chunk_frame() (per chunk)\ncsilk_response_end() (terminal chunk)"]
     end
 
     subgraph ws_resp["fa:fa-plug WebSocket Response"]
         WS_H["fa:fa-play Handler calls csilk_ws_handshake()"] --> WS_101["fa:fa-random Status 101 Switching Protocols\nctx->is_websocket = 1"]
-        WS_101 --> WS_READ["fa:fa-sync-alt uv_read_start() continues\nBut parser switches to csilk_ws_parse_frame()"]
+        WS_101 --> WS_READ["fa:fa-sync-alt csilk_io_read_start() continues\nBut parser switches to csilk_ws_parse_frame()"]
     end
 ```
 
@@ -298,14 +349,15 @@ flowchart TB
 
 Between requests (keep-alive), `csilk_ctx_cleanup()` efficiently resets state:
 
-1. **Free registered read buffers** - All raw network read buffers accumulated during request parsing (and referenced by zero-copy string views) are freed.
-2. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations (including persisted headers and query params) are freed.
-3. `free()` path parameters (keys/values).
-4. `free()` request body (if it was copied/allocated, otherwise it was zero-copy referenced and freed in step 1).
-5. `free()` request path.
-6. `memset()` header/query/response maps to zero.
-7. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`.
-8. Reset `handler_index = -1`, `storage_head = NULL`, and `read_buffers_count = 0`.
+1. **Invoke Custom Destructors** - Run custom `csilk_destructor_t` on stored objects (`csilk_set_ex`) and deferred cleanup items (`csilk_ctx_defer`).
+2. **Free registered read buffers** - All dynamic raw network read buffers accumulated during request parsing are freed.
+3. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations are recycled.
+4. `free()` path parameters (keys/values).
+5. `free()` request body (if it was copied/allocated, otherwise it was zero-copy referenced and freed in step 2).
+6. `free()` request path.
+7. `memset()` header/query/response maps to zero.
+8. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`.
+9. Reset `handler_index = -1`, `storage_head = NULL`, and `read_buffers_count = 0`.
 
 ### Deferred Cleanup (Panic-Safe)
 
@@ -313,9 +365,8 @@ The deferred cleanup API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) protects a
 
 ```c
 char* buf = malloc(1024);
-csilk_ctx_defer(c, free, buf);       // free(buf) called on cleanup or panic
-csilk_ctx_defer(c, close, &fd);      // close(fd) called on cleanup or panic
-csilk_ctx_defer(c, uv_mutex_unlock, &mutex);  // unlock called on cleanup or panic
+csilk_ctx_defer(c, free, buf);                 // free(buf) called on cleanup or panic
+csilk_ctx_defer(c, (void(*)(void*))close, &fd);// close(fd) called on cleanup or panic
+csilk_ctx_defer(c, (void(*)(void*))csilk_mutex_unlock, &mutex); // unlock called on cleanup or panic
 ```
 
-Items are arena-allocated and auto-freed on arena reset. Callbacks are invoked automatically by `csilk_ctx_cleanup` and by the panic recovery path.

@@ -8,19 +8,33 @@
 ## [Unreleased]
 
 ### 新增
+- **I/O 与并发抽象层**：在 `<csilk/core/sys_io.h>` 与 `<csilk/core/sync.h>` 中规范统一跨后端 I/O 原语 `csilk_io_*`、跨平台线程抽象 `csilk_thread_*`（`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`）以及屏障 `csilk_barrier_*`（`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`）。
+- **流式背压与高低水位流量控制**：为 HTTP/1.1 分块流（`csilk_response_write`）、SSE（`csilk_sse_send`）及 WebSocket（`csilk_ws_send`）增加连接级出站队列背压机制。支持配置高水位线（`write_high_water_mark`，默认 64KB）、低水位线（`write_low_water_mark`，默认 16KB）、最大排队限制（`max_write_buffer_size`，默认 16MB）及异步排空回调注册（`csilk_on_drain` / `csilk_set_write_watermarks`）。
+- **Context 存储析构器支持（RAII）**：新增 `csilk_set_ex()` 支持传入自定义析构函数（`csilk_destructor_t`），在请求结束释放 Arena 时自动清理堆内存对象；JWT 中间件自动为 `jwt_payload` 绑定 `csilk_json_free` 析构，防止内存泄漏。
+- **强类型零拷贝视图**：新增 `csilk_view_t`（`const char* data; size_t len;`）及借用语义 Getter（`csilk_get_query_view`、`csilk_get_param_view`、`csilk_get_header_view`、`csilk_get_body_view`），明确区分指向解析缓冲区的零拷贝借用与 Arena 分配的以 NUL 结尾的所有权字符串。
+- **Arena Calloc 与多级 TLS 缓存**：新增 `csilk_arena_calloc()` 支持零初始化内存分配；引入 4KB / 16KB / 64KB 三级线程局部 Chunk 空闲链表与 `max_total_bytes` 约束，并在 Worker 线程退出时自动清理（`csilk_arena_flush_free_list`）。
 - **加密驱动扩展性**：`csilk_crypto_driver_t` 新增 `sha1`（20 字节摘要）与 `bcrypt_hash`（密码哈希）回调，配套内部分发包装 `_csilk_sha1()`、`_csilk_bcrypt_hash()`——驱动可替换内置软件实现。
 - **`csilk_cond_broadcast()`**：在 `<csilk/core/sync.h>` 中新增条件变量广播函数，支持一次性唤醒所有等待者，弥补 libuv 无 broadcast 原语的缺口。
 - **Crypto 模块测试**：在 `tests/crypto/test_crypto.c` 中添加覆盖 SHA-256、HMAC-SHA256、Base64/Base64URL 往返、`csilk_crypto_fill_random`、`csilk_crypto_generate_nonce` 及 `csilk_url_decode` 边界情况的属性测试。
 
 ### 变更
+- **Core 核心层纯净抽象解耦**：彻底消除 `src/core/server/`（`connection.c`, `server_lifecycle.c`, `server_shutdown.c`, `server_worker.c`）中对 `uv_*` 的直接依赖，统一调用 `csilk_io_*` 与 `csilk_thread_*`/`csilk_barrier_*`。
+- **io_uring 架构精简与合并**：消除原冗余的 `uring_server.c`、`uring_connection.c`、`uring_event_loop.c` 副本，将驱动精炼统一至 `src/core/uring/uring_io.c`，实现全后端单轨执行。
+- **Router 前缀树架构文档对齐与回滚**：更新 Router 文档以准确描述 Segment-based 前缀树架构；修复通配符路径匹配在 Method 不匹配或 Handler 缺失时的参数回滚机制。
+- **Handler 链越界安全检查**：在 `csilk_next()` 中增加显式 `handler_count` 边界校验，防止异常 Handler 数组导致越界访问。
+- **线程隔离与分发规范**：明确规范 Worker 线程私有 `active_clients` 隔离语义，跨线程操作统一使用 `csilk_dispatch()` 进行异步分发。
 - **Barrier 生命周期**：`src/core/server/server_lifecycle.c` 中的 `uv_barrier_t` 改为堆分配（`calloc`），防止多线程 worker 在栈上的 barrier 被销毁后仍持有该地址导致的 UAF。现在检查 `uv_barrier_init` 返回值。
 - **线程抽象统一**：`src/core/uring/uring_thread_pool.c` 中将原始 `pthread_mutex_t`/`pthread_cond_t` 替换为 `<csilk/core/sync.h>` 中的 `csilk_mutex_t`/`csilk_cond_t`，保持跨后端一致性。
 - **头文件卫生**：从 `include/csilk/core/internal.h` 移除隐式包含 `messaging/mq_internal.h`，需使用 `_csilk_mq_new`/`_csilk_mq_free` 的文件现在显式 include。
 - **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
 
 ### 修复
+- **TCP 读取缓冲区动态扩容**：将 `read_buffers` 改为动态扩容（初始 16，按需倍增），解决单个请求超过 16 次 TCP Read 时后续数据静默丢失的问题。
+- **原子最大连接数预留**：将 `max_connections` 检查改为原子 CAS 预留（`_csilk_server_try_acquire_connection`）与回滚，彻底消除高并发下的 TOCTOU 竞态。
+- **JWT 内存泄漏**：在 JWT 中间件中使用 `csilk_set_ex()` 绑定析构器，解决 cJSON payload 在请求结束时未释放的问题。
 - **uv_barrier_t UAF**：修复多 worker 服务器启动时的 use-after-free——主线程在 `uv_barrier_destroy` 后栈变量析构，而 worker 线程仍持有其地址。现改为堆分配并在所有 worker join 后释放。
 - **internal.h MQ 泄漏**：从 `include/csilk/core/internal.h` 移除 `#include "messaging/mq_internal.h"`，避免所有 include 该头文件的代码都暴露 MQ 内部类型（如 `csilk_mq_t`）。
+
 
 ## [0.4.0] - 2026-08-13
 

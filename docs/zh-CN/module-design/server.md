@@ -1,8 +1,8 @@
 # 服务器核心设计
 
-> **版本**: 0.4.0 | **最后更新**: 2026-06-27
+> **版本**: 0.4.0 | **最后更新**: 2026-08-14
 
-csilk 的 Server Core 是框架的基石——管理 libuv（默认）或 io_uring（可选）事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。单 worker 模式实测可达 ~50K QPS (P99 ≤ 5ms) 于 4 核 CPU；多 worker 模式线性扩展至 ~200K QPS (16 核, P99 ≤ 8ms)。
+csilk 的 Server Core 是框架的基石——基于统一跨后端 I/O 抽象层（`csilk_io_*`）管理 libuv（默认）或 io_uring（可选）事件循环、TCP 监听、多 worker 连接池、TLS/SSL 握手、HTTP/2 ALPN 协商、钩子系统、流式背压以及优雅关闭。所有的连接 I/O、HTTP 解析和请求分发都在此之上构建。单 worker 模式实测可达 ~50K QPS (P99 ≤ 5ms) 于 4 核 CPU；多 worker 模式线性扩展至 ~200K QPS (16 核, P99 ≤ 8ms)。
 
 ---
 
@@ -33,14 +33,14 @@ csilk 的 Server Core 是框架的基石——管理 libuv（默认）或 io_uri
 }}%%
 graph TB
     subgraph server_t["fa:fa-server csilk_server_t"]
-        LOOP["fa:fa-sync-alt uv_loop_t* loop<br/>libuv 事件循环"]
-        SRVH["fa:fa-plug uv_tcp_t server_handle<br/>监听套接字"]
-        SIG["fa:fa-bell uv_signal_t sig_handle<br/>SIGINT 处理"]
-        ASYNC["fa:fa-bolt uv_async_t async_handle<br/>跨线程唤醒"]
-        CFG["fa:fa-cog csilk_server_config_t config<br/>超时, TLS, workers..."]
+        LOOP["fa:fa-sync-alt csilk_io_loop_t* loop<br/>抽象事件循环 (libuv / io_uring)"]
+        SRVH["fa:fa-plug csilk_io_tcp_t server_handle<br/>监听套接字"]
+        SIG["fa:fa-bell csilk_io_signal_t sig_handle<br/>SIGINT 处理"]
+        ASYNC["fa:fa-bolt csilk_io_async_t async_handle<br/>跨线程唤醒句柄"]
+        CFG["fa:fa-cog csilk_server_config_t config<br/>超时, TLS, workers, 背压..."]
 
         MW["fa:fa-layer-group csilk_handler_t middlewares[32]<br/>全局中间件链"]
-        RT["fa:fa-sitemap csilk_router_t* router<br/>Radix tree 路由"]
+        RT["fa:fa-sitemap csilk_router_t* router<br/>分段前缀树路由 (Segment Prefix Trie)"]
 
         CRYPTO["fa:fa-key csilk_crypto_driver_t*<br/>可插拔加密（默认 OpenSSL）"]
         CIPHER["fa:fa-lock csilk_cipher_driver_t*<br/>可插拔密码（默认 OpenSSL）"]
@@ -53,12 +53,12 @@ graph TB
 
         POOL["fa:fa-cubes worker_pool_t* worker_pools<br/>每个 worker 的连接池"]
 
-        ATOMIC["fa:fa-chart-bar atomic_int active_connections<br/>连接计数器"]
+        ATOMIC["fa:fa-chart-bar atomic_int active_connections<br/>连接计数器 (Atomic CAS 预留)"]
     end
 
-    LOOP --> ACC["fa:fa-link connection.c<br/>on_connection (accept)"]
+    LOOP --> ACC["fa:fa-link connection.c<br/>on_new_connection (accept)"]
     ACC --> TLS["fa:fa-lock tls.c<br/>TLS 握手 + ALPN"]
-    TLS --> H1["fa:fa-code http1.c<br/>llhttp parse"]
+    TLS --> H1["fa:fa-code http1_parse.c<br/>llhttp parse"]
     TLS --> H2["fa:fa-code-branch h2.c<br/>nghttp2 session"]
     H1 --> DISPATCH["fa:fa-forward _csilk_dispatch_request"]
     H2 --> DISPATCH
@@ -73,26 +73,26 @@ graph TB
 
 | 字段 | 类型 | 作用 |
 |------|------|------|
-| `loop` | `uv_loop_t*` | libuv 事件循环实例 |
-| `server_handle` | `uv_tcp_t` | TCP 监听套接字 |
-| `sig_handle` | `uv_signal_t` | SIGINT 信号处理 |
-| `async_handle` | `uv_async_t` | 跨线程唤醒 |
-| `config` | `csilk_server_config_t` | 服务器配置（超时、TLS、Worker 数等） |
-| `router` | `csilk_router_t*` | 路由表（Radix Tree） |
+| `loop` | `csilk_io_loop_t*` | 抽象事件循环实例（libuv / io_uring） |
+| `server_handle` | `csilk_io_tcp_t` | TCP 监听套接字 |
+| `sig_handle` | `csilk_io_signal_t` | SIGINT 信号处理 |
+| `async_handle` | `csilk_io_async_t` | 跨线程唤醒句柄 |
+| `config` | `csilk_server_config_t` | 服务器配置（超时、TLS、Worker 数、流式水位线等） |
+| `router` | `csilk_router_t*` | 路由表（分段前缀树 Segment-based Prefix Trie） |
 | `middlewares[32]` | `csilk_handler_t[]` | 全局中间件链 |
-| `max_connections` | `int` | 最大并发连接数（0=无限） |
+| `max_connections` | `int` | 最大并发连接数（0=无限，CAS 原子预留） |
 | `active_connections` | `atomic_int` | 当前活动连接数 |
 | `worker_pools` | `worker_pool_t*` | 每个 Worker 的独立连接/内存池与 Worker 本地 `active_clients` |
-| `worker_tids` | `uv_thread_t*` | Worker 线程 ID 数组 |
+| `worker_tids` | `csilk_thread_t*` | Worker 线程 ID 数组 |
 | `ssl_ctx` | `SSL_CTX*` | OpenSSL 上下文 |
 | `mq` | `csilk_mq_t*` | 消息队列实例 |
 | `hooks[6]` | `csilk_hook_node_t*` | 生命周期钩子链表 |
 
 > [!NOTE]
-> `active_clients` 归属于各自的 `worker_pool_t`，完全由对应的 Worker Event Loop 线程独占访问（线程封闭，无需互斥锁）。跨线程操作必须通过 `csilk_dispatch()` 投递至对应 Worker 的无锁队列。
-
+> `active_clients` 归属于各自的 `worker_pool_t`，完全由对应的 Worker Event Loop 线程独占访问（线程封闭，非线程安全）。跨线程操作必须通过 `csilk_dispatch()` 投递至对应 Worker 的无锁任务队列执行。
 
 ---
+
 
 ## 2. 服务器生命周期
 
@@ -159,26 +159,26 @@ void csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t
 }}%%
 flowchart TB
     RUN["fa:fa-play csilk_server_run(port)"] --> BIND["fa:fa-link bind_and_listen()"]
-    BIND --> SIGNAL["fa:fa-bell uv_signal_start(SIGINT → on_signal)"]
+    BIND --> SIGNAL["fa:fa-bell csilk_io_signal_start(SIGINT → on_signal)"]
     SIGNAL --> WORKERS{"fa:fa-users worker_threads > 1?"}
 
-    WORKERS -->|Yes| SPAWN["fa:fa-cogs pthread_create × N<br/>每个 worker SO_REUSEPORT"]
-    WORKERS -->|No| SINGLE["fa:fa-user 单 worker<br/>直接 uv_run()"]
+    WORKERS -->|Yes| SPAWN["fa:fa-cogs csilk_thread_create × N<br/>每个 worker SO_REUSEPORT"]
+    WORKERS -->|No| SINGLE["fa:fa-user 单 worker<br/>直接 csilk_io_run()"]
 
-    SPAWN --> MAIN["fa:fa-crown 主线程 uv_run()"]
-    SINGLE --> RUNLOOP["fa:fa-play uv_run(UV_RUN_DEFAULT)"]
+    SPAWN --> MAIN["fa:fa-crown 主线程 csilk_io_run()"]
+    SINGLE --> RUNLOOP["fa:fa-play csilk_io_run(CSILK_IO_RUN_DEFAULT)"]
 ```
 
 核心步骤：
 
-1. **绑定并监听 TCP 端口**：创建 `uv_tcp_t`，设置 `SO_REUSEPORT`（多 worker 模式需要），绑定端口，`listen()`。
+1. **绑定并监听 TCP 端口**：创建 `csilk_io_tcp_t`，设置 `SO_REUSEPORT`（多 worker 模式需要），绑定端口，`csilk_io_listen()`。
 2. **注册 SIGINT 处理**：`on_signal()` 回调调用 `csilk_server_stop()`。
 3. **多 Worker 模式**（`worker_threads > 1`）：
-   - 创建 `worker_threads` 个 worker_pool_t（索引 0 为主线程，1..N-1 为子线程）
-   - 每个 worker 拥有独立的 `uv_loop_t`、`uv_tcp_t`（SO_REUSEPORT 共享端口）
-   - 通过 `uv_barrier_t` 确保所有 worker 同时开始运行
-   - 主线程调用 `uv_run()`，子线程在 `worker_thread()` 中运行
-4. **单 Worker 模式**（默认）：直接在调用线程运行 `uv_run(UV_RUN_DEFAULT)`。
+   - 创建 `worker_threads` 个 `worker_pool_t`（索引 0 为主线程，1..N-1 为子线程）
+   - 每个 worker 拥有独立的 `csilk_io_loop_t`、`csilk_io_tcp_t`（SO_REUSEPORT 共享端口）
+   - 通过 `csilk_barrier_t` 确保所有 worker 同时开始运行
+   - 主线程调用 `csilk_io_run()`，子线程在 `worker_thread()` 中运行
+4. **单 Worker 模式**（默认）：直接在调用线程运行 `csilk_io_run(loop, CSILK_IO_RUN_DEFAULT)`。
 
 ### 2.4 停止阶段
 
@@ -192,9 +192,9 @@ void csilk_server_stop(csilk_server_t* server);
 2. 遍历 `active_clients` 链表，分类关闭连接：
    - WebSocket → 发送关闭帧 `ws_close(1001)`
    - SSE → 发送 `"close"` 事件
-   - 普通 HTTP → `uv_close()`
-3. 向每个 worker 发送 `uv_async` 停止通知
-4. 等待所有 worker 线程 join（`uv_thread_join`）
+   - 普通 HTTP → `csilk_io_close()`
+3. 向每个 worker 发送 `csilk_io_async_send` 停止通知
+4. 等待所有 worker 线程 join（`csilk_thread_join`）
 5. 关闭主事件循环
 
 ### 2.5 释放阶段
@@ -220,24 +220,26 @@ void csilk_server_free(csilk_server_t* server);
 ```c
 typedef struct {
     csilk_server_t* server;              // 所属服务器
-    uv_loop_t loop;                      // 本 worker 的事件循环
-    uv_tcp_t server_handle;              // 本 worker 的监听句柄 (SO_REUSEPORT)
+    csilk_io_loop_t loop;                // 本 worker 的事件循环
+    csilk_io_tcp_t server_handle;        // 本 worker 的监听句柄 (SO_REUSEPORT)
     csilk_client_t* client_pool[32];     // Worker 本地空闲客户端列表
     int client_pool_count;
-    uv_async_t stop_async;               // 停止通知
+    csilk_io_async_t stop_async;         // 停止通知
     int worker_index;                    // 0 = 主线程, 1+ = 工作线程
     csilk_arena_t* arena_pool[32];       // 预分配的 Arena 池
     int arena_pool_count;
-    uv_async_t dispatch_async;           // 跨线程任务派发
-    uv_mutex_t dispatch_mutex;
+    csilk_io_async_t dispatch_async;     // 跨线程任务派发
+    csilk_mutex_t dispatch_mutex;
     csilk_dispatch_task_t* dispatch_head;
     csilk_dispatch_task_t* dispatch_tail;
+    csilk_client_t* active_clients;      // Worker 私有活跃客户端链表（线程封闭）
 } worker_pool_t;
 ```
 
 ### 3.2 无锁连接池
 
 **设计哲学**：每个 Worker 拥有独立的本地连接池，`pool_get()` 和 `pool_put()` 是完全的线程本地操作，零锁开销。Worker 数 **SHOULD** 配置为 CPU 核数 (`worker_threads = N_CPUS`)。当 `worker_threads > 1` 时，TCP 端口 **MUST** 支持 `SO_REUSEPORT`（Linux ≥ 3.9）。
+
 
 ```mermaid
 %%{init: {
@@ -670,6 +672,9 @@ typedef struct {
     int      enable_simd;          // SIMD 路由加速
     int      enable_arena_alignment;
     int      enable_openapi;       // OpenAPI 端点
+    size_t   write_high_water_mark;// 流式背压高水位 (默认 64KB)
+    size_t   write_low_water_mark; // 流式背压低水位 (默认 16KB)
+    size_t   max_write_buffer_size;// 最大出站缓冲限制 (默认 16MB)
 } csilk_server_config_t;
 ```
 
@@ -679,12 +684,17 @@ typedef struct {
 
 | 文件 | 职责 |
 |------|------|
-| `src/core/server.c` | Server 生命周期：创建、配置、运行、停止、释放、驱动注入 |
+| `src/core/server/server_lifecycle.c` | Server 生命周期：创建、配置、运行、驱动注入 |
+| `src/core/server/server_shutdown.c` | Server 优雅关闭、资源释放与 Worker 停止通知 |
+| `src/core/server/server_worker.c` | Worker 线程池管理、CPU 亲和性与跨线程 Dispatch |
+| `src/core/server/connection.c` | TCP 接受连接、连接池、动态读缓冲、超时定时器与流式背压排空 |
 | `src/core/internal/srv_internal.h` | 内部类型：`csilk_server_t`、`csilk_client_t`、`worker_pool_t` |
-| `src/core/internal/srv_impl.h` | 内部函数声明：`_csilk_dispatch_request()`、`csilk_client_write()` |
-| `src/core/connection.c` | TCP 接受连接、连接池、客户端创建/销毁 |
-| `src/core/tls.c` | TLS/SSL 初始化、ALPN 协商、BIO pair I/O |
-| `src/core/h2.c` | HTTP/2 会话、nghttp2 回调、流管理、服务器推送 |
+| `src/core/internal/srv_impl.h` | 内部函数声明与跨模块回调 |
+| `src/core/tls/tls.c` | TLS/SSL 初始化、ALPN 协商、BIO pair I/O |
+| `src/core/http/http1_parse.c` | HTTP/1.1 llhttp 解析与请求分发 |
+| `src/core/http/http1_response.c` | HTTP/1.1 响应构建、分块传输与背压检测 |
+| `src/core/http/h2.c` | HTTP/2 会话、nghttp2 回调、流管理、服务器推送 |
 | `src/core/hooks.c` | 生命周期钩子注册与触发 |
-| `src/core/hot_reload.c` | 基于 dlopen 的路由热重载 |
-| `src/core/arena.c` | Arena 分配器（连接级的 bump 分配器） |
+| `src/core/arena.c` | Arena 分配器（连接级 bump 分配器与多级 TLS 缓存） |
+| `src/core/uring/uring_io.c` | io_uring 后端统一 I/O 驱动实现 |
+
