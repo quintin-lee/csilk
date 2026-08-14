@@ -880,8 +880,63 @@ test_csilk_view_accessors()
     printf("csilk_view_accessors passed!\n");
 }
 
+static int   g_destructor_call_count = 0;
+static void* g_last_destroyed_ptr = NULL;
+
+static void
+custom_destructor(void* ptr)
+{
+    g_destructor_call_count++;
+    g_last_destroyed_ptr = ptr;
+    free(ptr);
+}
+
+static void
+test_csilk_set_ex_destructor()
+{
+    printf("Testing csilk_set_ex with custom destructor...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    g_destructor_call_count = 0;
+    g_last_destroyed_ptr = NULL;
+
+    char* val1 = strdup("val1");
+    csilk_set_ex(ctx, "resource", val1, custom_destructor);
+    assert(csilk_get(ctx, "resource") == val1);
+    assert(g_destructor_call_count == 0);
+
+    // Overwrite triggers destructor on old value
+    char* val2 = strdup("val2");
+    csilk_set_ex(ctx, "resource", val2, custom_destructor);
+    assert(g_destructor_call_count == 1);
+    assert(g_last_destroyed_ptr == val1);
+    assert(csilk_get(ctx, "resource") == val2);
+
+    // Setting same pointer doesn't trigger destructor
+    csilk_set_ex(ctx, "resource", val2, custom_destructor);
+    assert(g_destructor_call_count == 1);
+
+    // Setting NULL / clearing triggers destructor
+    csilk_set(ctx, "resource", NULL);
+    assert(g_destructor_call_count == 2);
+    assert(g_last_destroyed_ptr == val2);
+    assert(csilk_get(ctx, "resource") == NULL);
+
+    // Automatic cleanup on context reset / free
+    char* val3 = strdup("val3");
+    csilk_set_ex(ctx, "resource3", val3, custom_destructor);
+    assert(g_destructor_call_count == 2);
+
+    csilk_test_ctx_free(ctx);
+    assert(g_destructor_call_count == 3);
+    assert(g_last_destroyed_ptr == val3);
+
+    printf("csilk_set_ex_destructor passed!\n");
+}
+
 int
 main()
+
 {
     test_csilk_next_aborted();
 
@@ -937,6 +992,7 @@ main()
     test_csilk_get_form_field_null();
     test_csilk_read_buffer_dynamic_expansion();
     test_csilk_view_accessors();
+    test_csilk_set_ex_destructor();
     printf("test_context_ext: ALL PASSED\n");
     return 0;
 }

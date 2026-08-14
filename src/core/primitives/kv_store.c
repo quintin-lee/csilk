@@ -16,20 +16,20 @@
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 
-/** @brief Store a value in the context's key-value storage.
+/** @brief Store a value in the context's key-value storage with an optional destructor.
  *
  * If a storage driver is set on the context, delegates to it. Otherwise,
  * uses a simple linked list allocated from the arena. If the key already
- * exists, its value is replaced. There is a hard limit of CSILK_MAX_STORAGE
- * items per request to prevent excessive arena consumption.
+ * exists, its previous value is freed with its free_fn (if non-NULL) and replaced.
+ * There is a hard limit of CSILK_MAX_STORAGE items per request.
  *
- * @param c     The request context.
- * @param key   Storage key (null-terminated string).
- * @param value Opaque pointer to store (may be NULL to clear a previous value).
- * @note The key is duplicated into arena memory. The value is stored as a
- *       raw pointer — no deep copy or freeing is performed. */
+ * @param c        The request context.
+ * @param key      Storage key (null-terminated string).
+ * @param value    Opaque pointer to store (may be NULL to clear a previous value).
+ * @param free_fn  Destructor function to free @p value upon overwrite/clearing/cleanup.
+ */
 void
-csilk_set(csilk_ctx_t* c, const char* key, void* value)
+csilk_set_ex(csilk_ctx_t* c, const char* key, void* value, void (*free_fn)(void*))
 {
     if (!c || !key) {
         return;
@@ -48,7 +48,11 @@ csilk_set(csilk_ctx_t* c, const char* key, void* value)
     int                   count = 0;
     while (item) {
         if (strcmp(item->key, key) == 0) {
+            if (item->free_fn && item->value && item->value != value) {
+                item->free_fn(item->value);
+            }
             item->value = value;
+            item->free_fn = free_fn;
             return;
         }
         count++;
@@ -66,9 +70,24 @@ csilk_set(csilk_ctx_t* c, const char* key, void* value)
     if (new_item) {
         new_item->key = csilk_arena_strdup(c->arena, key);
         new_item->value = value;
+        new_item->free_fn = free_fn;
         new_item->next = c->storage_head;
         c->storage_head = new_item;
     }
+}
+
+/** @brief Store a value in the context's key-value storage.
+ *
+ * Calls csilk_set_ex() with NULL destructor.
+ *
+ * @param c     The request context.
+ * @param key   Storage key (null-terminated string).
+ * @param value Opaque pointer to store (may be NULL to clear a previous value).
+ */
+void
+csilk_set(csilk_ctx_t* c, const char* key, void* value)
+{
+    csilk_set_ex(c, key, value, NULL);
 }
 
 /** @brief Retrieve a value from the context's key-value storage.

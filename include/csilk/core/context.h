@@ -472,6 +472,19 @@ csilk_mq_t* csilk_ctx_get_mq(csilk_ctx_t* c);
 void csilk_set(csilk_ctx_t* c, const char* key, void* value);
 
 /**
+ * @brief Store a value in context storage with an automatic destructor.
+ *
+ * If @p free_fn is non-NULL, it will be invoked on @p value when the key is
+ * overwritten, cleared (set to NULL), or when the request context is cleaned up.
+ *
+ * @param c        The request context.
+ * @param key      NUL-terminated key name.
+ * @param value    Opaque pointer to store.
+ * @param free_fn  Destructor callback function (e.g., free, csilk_json_free) or NULL.
+ */
+void csilk_set_ex(csilk_ctx_t* c, const char* key, void* value, void (*free_fn)(void*));
+
+/**
  * @brief Retrieve an opaque value from the request context.
  *
  * @param c   The request context.
