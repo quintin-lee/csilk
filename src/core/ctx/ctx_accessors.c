@@ -367,6 +367,12 @@ csilk_get_handler_index(csilk_ctx_t* c)
     return c ? c->handler_index : -1;
 }
 
+size_t
+csilk_get_handler_count(csilk_ctx_t* c)
+{
+    return c ? c->handler_count : 0;
+}
+
 /**
  * @brief Set the request's unique ID string.
  * @param[in] c  Request context (validated non-NULL).

@@ -44,10 +44,13 @@
 void
 csilk_next(csilk_ctx_t* c)
 {
-    if (c->aborted || c->panicked || c->handlers == NULL) {
+    if (!c || c->aborted || c->panicked || c->handlers == NULL) {
         return;
     }
     c->handler_index++;
+    if (c->handler_count > 0 && (size_t)c->handler_index >= c->handler_count) {
+        return;
+    }
     if (c->handlers[c->handler_index] != NULL) {
         c->handlers[c->handler_index](c);
     }
@@ -178,6 +181,8 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->is_async = 0;
     c->response_started = 0;
     c->handler_index = -1;
+    c->handlers = NULL;
+    c->handler_count = 0;
     c->current_handler = NULL;
     c->on_ws_message = NULL;
     memset(c->request_id, 0, sizeof(c->request_id));

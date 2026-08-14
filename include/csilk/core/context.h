@@ -361,6 +361,14 @@ void csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
 int csilk_get_handler_index(csilk_ctx_t* c);
 
 /**
+ * @brief Get the total number of handlers in the context's execution chain.
+ *
+ * @param c  The request context.
+ * @return Total number of handlers (0 if no chain or context is NULL).
+ */
+size_t csilk_get_handler_count(csilk_ctx_t* c);
+
+/**
  * @brief Get the I/O work request associated with the context.
  *
  * Use this to offload long-running operations to the thread pool while

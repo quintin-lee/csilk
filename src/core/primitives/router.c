@@ -303,7 +303,9 @@ router_add_full(csilk_router_t*  r,
         }
         memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
         mh->handlers[handler_count] = NULL;
+        mh->handler_count = handler_count;
         mh->path = path_pattern ? strdup(path_pattern) : NULL;
+
         if (path_pattern && !mh->path) {
             CSILK_LOG_E("Router: failed to duplicate path pattern for route: %s %s", method, path);
             free(mh->method);
@@ -508,8 +510,10 @@ csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
     csilk_handler_t* handlers = match_node(r->root, c->request.method, c->request.path, c, &mh);
     if (handlers) {
         c->handlers = handlers;
+        c->handler_count = mh ? mh->handler_count : 0;
         c->handler_index = -1;
         c->current_handler = mh;
+
         CSILK_LOG_D("Route successfully matched: %s %s (pattern: %s)",
                     c->request.method,
                     c->request.path,
