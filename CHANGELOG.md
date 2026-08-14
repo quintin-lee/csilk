@@ -29,11 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### Fixed
+- **Multi-Worker Startup Barrier Deadlock**: Eliminated infinite hangs and deadlocks during multi-worker initialization when worker allocations (`worker_data_t`) or thread creations (`csilk_thread_create`) fail midway, compensating the barrier count for unspawned workers and performing clean graceful aborts.
 - **Dynamic TCP Read Buffers**: Expanded `read_buffers` dynamically (doubling initial 16 slots) to prevent data dropping when a request requires >16 TCP reads.
 - **Atomic Max Connections**: Converted `max_connections` check to atomic CAS reservation (`_csilk_server_try_acquire_connection`) and rollback to eliminate high-concurrency TOCTOU race conditions.
 - **JWT Memory Leak**: Bound automatic destructor via `csilk_set_ex()` to free cJSON payload heap allocations on context reset.
 - **uv_barrier_t UAF**: Fixed use-after-free in multi-worker server startup where a stack-allocated `uv_barrier_t` was destroyed by the main thread while worker threads still held its address. Barrier is now heap-allocated and freed after all workers join.
 - **internal.h MQ leak**: Removed `#include "messaging/mq_internal.h"` from `include/csilk/core/internal.h` to stop transitively exposing MQ internals (e.g., `csilk_mq_t`) to every file including the umbrella header.
+
 
 
 ## [0.4.0] - 2026-08-13

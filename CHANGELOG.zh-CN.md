@@ -29,11 +29,13 @@
 - **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
 
 ### 修复
+- **多 Worker 启动屏障死锁**：消除多 Worker 初始化阶段在内存分配（`worker_data_t`）或线程创建（`csilk_thread_create`）失败时的永久死锁问题，对未启动 Worker 进行屏障补偿并执行安全回滚与资源清理。
 - **TCP 读取缓冲区动态扩容**：将 `read_buffers` 改为动态扩容（初始 16，按需倍增），解决单个请求超过 16 次 TCP Read 时后续数据静默丢失的问题。
 - **原子最大连接数预留**：将 `max_connections` 检查改为原子 CAS 预留（`_csilk_server_try_acquire_connection`）与回滚，彻底消除高并发下的 TOCTOU 竞态。
 - **JWT 内存泄漏**：在 JWT 中间件中使用 `csilk_set_ex()` 绑定析构器，解决 cJSON payload 在请求结束时未释放的问题。
 - **uv_barrier_t UAF**：修复多 worker 服务器启动时的 use-after-free——主线程在 `uv_barrier_destroy` 后栈变量析构，而 worker 线程仍持有其地址。现改为堆分配并在所有 worker join 后释放。
 - **internal.h MQ 泄漏**：从 `include/csilk/core/internal.h` 移除 `#include "messaging/mq_internal.h"`，避免所有 include 该头文件的代码都暴露 MQ 内部类型（如 `csilk_mq_t`）。
+
 
 
 ## [0.4.0] - 2026-08-13
