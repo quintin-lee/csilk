@@ -161,6 +161,8 @@ test_arena_reset()
     printf("csilk_arena_reset passed!\n");
 }
 
+extern void csilk_arena_flush_free_list(void);
+
 #ifdef TEST_OOM
 extern int csilk_arena_get_tls_chunk_count(void);
 
@@ -241,6 +243,40 @@ test_arena_default_chunk_size_zero(void)
     printf("csilk_arena_new(0) default chunk size passed!\n");
 }
 
+void
+test_arena_multi_tier_tls_cache(void)
+{
+    printf("Testing multi-tier TLS chunk caching (4K, 16K, 64K)...\n");
+
+    /* Flush cache initially */
+    csilk_arena_flush_free_list();
+
+    /* Test 16KB tier */
+    csilk_arena_t* a16 = csilk_arena_new(16384);
+    assert(a16 != NULL);
+    csilk_arena_alloc(a16, 5000); /* Will allocate a 16KB chunk */
+    csilk_arena_free(a16);        /* Returns 16KB chunk to tier 1 */
+
+    csilk_arena_t* a16_2 = csilk_arena_new(16384);
+    void*          p16 = csilk_arena_alloc(a16_2, 5000);
+    assert(p16 != NULL);
+    csilk_arena_free(a16_2);
+
+    /* Test 64KB tier */
+    csilk_arena_t* a64 = csilk_arena_new(65536);
+    assert(a64 != NULL);
+    csilk_arena_alloc(a64, 30000); /* Will allocate a 64KB chunk */
+    csilk_arena_free(a64);         /* Returns 64KB chunk to tier 2 */
+
+    csilk_arena_t* a64_2 = csilk_arena_new(65536);
+    void*          p64 = csilk_arena_alloc(a64_2, 30000);
+    assert(p64 != NULL);
+    csilk_arena_free(a64_2);
+
+    csilk_arena_flush_free_list();
+    printf("multi-tier TLS chunk caching passed!\n");
+}
+
 int
 main()
 {
@@ -254,6 +290,7 @@ main()
     test_arena_reset();
     test_arena_max_total_bytes_tls_enforced();
     test_arena_default_chunk_size_zero();
+    test_arena_multi_tier_tls_cache();
 #ifdef TEST_OOM
     test_arena_tls_cache();
 #endif
