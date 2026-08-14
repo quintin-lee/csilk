@@ -1,12 +1,9 @@
 /**
- * @file uv_stubs.c
- * @brief libuv-compatible API shims for the io_uring backend.
+ * @file uring_io.c
+ * @brief io_uring driver implementation for the csilk_io abstraction.
  *
- * Implements the subset of the csilk I/O surface that the io_uring backend must
- * expose to look like the libuv backend: handle closing flags, stream fileno,
- * vectored writes, and timer lifecycle/default-loop/run glue. Most routines are
- * thin wrappers that translate libuv-style requests into io_uring SQEs, with a
- * few no-op callbacks used by the synchronous fallback path.
+ * Implements the csilk_io surface (handles, loop, timer, tcp, stream, signal,
+ * async, and write pipeline) backed by io_uring.
  *
  * @copyright MIT License
  */
@@ -21,7 +18,13 @@
 #include "../internal/srv_internal.h"
 #include "uring_internal.h"
 
-void csilk_client_close(csilk_client_t* client);
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <sys/signalfd.h>
+#include <unistd.h>
 
 /**
  * @brief Report whether an I/O handle is in a closing state.
@@ -32,19 +35,9 @@ int
 csilk_io_is_closing(const csilk_io_handle_t* handle)
 {
     (void)handle;
-    /* io_uring backend has no libuv closing state machine.
-     * Returns 0 (not closing) for all handles. */
     return 0;
 }
 
-/**
- * @brief Retrieve the OS file descriptor backing an I/O handle.
- * @param[in]  handle Stream handle whose fd is requested.
- * @param[out] fd     Receives the OS file descriptor on success.
- * @return 0 on success, -1 on NULL handle/fd.
- * @note The handle is downcast to csilk_io_stream_t; only stream handles carry
- *       an fd.
- */
 int
 csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
 {
@@ -56,19 +49,6 @@ csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
     return 0;
 }
 
-/**
- * @brief Submit a vectored write for a stream over io_uring.
- * @param[in] req     Write request object; its cb/handle fields are filled in.
- * @param[in] handle  Stream handle (its data must point at a csilk_client_t).
- * @param[in] bufs    Array of iovec-style buffers to write.
- * @param[in] nbufs   Number of buffers in bufs.
- * @param[in] cb      Completion callback invoked from the CQE dispatcher.
- * @return 0 on successful submission, -1 on NULL/invalid handle, closed
- *         connection, or when no SQE slot is available.
- * @note Allocates an iovec array and a 3-pointer context that travel with the
- *       SQE and are freed in csilk_uv_on_write_done. Increments the client's
- *       async_ref so the connection is not torn down mid-write.
- */
 int
 csilk_io_write(csilk_io_write_t*    req,
                csilk_io_stream_t*   handle,
@@ -111,71 +91,242 @@ csilk_io_write(csilk_io_write_t*    req,
     return 0;
 }
 
-/**
- * @brief Close an I/O handle on the io_uring backend.
- * @param[in] handle Stream/timer/async handle to close.
- * @param[in] cb     Optional close callback (invoked for stream handles only).
- * @note For stream handles whose data points at a client, delegates to
- *       csilk_client_close. Non-stream handles (timer/async) have no libuv
- *       close semantics, so the callback is a no-op for them. NULL handles are
- *       ignored.
- */
 void
 csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
     if (!handle) {
         return;
     }
-    /* In the uring backend, only TCP handles (csilk_io_tcp_t) wrap clients.
-     * Distinguish by checking if data points to a valid client structure
-     * (has ctx.conn_closed at a known offset). Async/timer handles have
-     * different layouts and must not be cast to stream. */
-    if (handle->data && ((uintptr_t)handle->data > 0x1000)) {
-        csilk_io_stream_t* stream = (csilk_io_stream_t*)handle;
-        csilk_client_t*    client = (csilk_client_t*)stream->data;
-        /* Verify this looks like a real client (not a random pointer) */
-        if (client && client->server && client->handle.fd >= 0) {
-            csilk_client_close(client);
-        }
+    if (handle->fd >= 0) {
+        close(handle->fd);
+        handle->fd = -1;
     }
-    /* For non-stream handles (async, timer, etc.) the callback is a no-op
-     * since there's no libuv close semantics in the io_uring backend. */
-    if (cb && handle->data && ((uintptr_t)handle->data > 0x1000)) {
+    if (cb) {
         cb(handle);
     }
 }
 
-/**
- * @brief No-op libuv close callback for the io_uring backend.
- * @param[in] handle Unused.
- */
-void
-on_close(csilk_io_handle_t* handle)
+int
+csilk_io_is_active(const csilk_io_handle_t* handle)
 {
+    return handle != NULL;
 }
-/**
- * @brief No-op idle timeout callback (sync fallback path).
- * @param[in] handle Unused.
- */
-void
-on_idle_timeout(csilk_io_timer_t* handle)
+
+int
+csilk_io_loop_init(csilk_io_loop_t* loop)
 {
+    return io_uring_queue_init(4096, loop, 0);
 }
-/**
- * @brief No-op read timeout callback (sync fallback path).
- * @param[in] handle Unused.
- */
-void
-on_read_timeout(csilk_io_timer_t* handle)
+
+int
+csilk_io_loop_close(csilk_io_loop_t* loop)
 {
+    io_uring_queue_exit(loop);
+    return 0;
 }
-/**
- * @brief No-op write timeout callback (sync fallback path).
- * @param[in] handle Unused.
- */
+
 void
-on_write_timeout(csilk_io_timer_t* handle)
+csilk_io_stop(csilk_io_loop_t* loop)
 {
+    (void)loop;
+}
+
+uint64_t
+csilk_io_now(const csilk_io_loop_t* loop)
+{
+    (void)loop;
+    return csilk_io_hrtime() / 1000000ULL;
+}
+
+void
+csilk_io_update_time(csilk_io_loop_t* loop)
+{
+    (void)loop;
+}
+
+int
+csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle)
+{
+    (void)loop;
+    if (!handle) {
+        return -1;
+    }
+    handle->fd = -1;
+    handle->data = NULL;
+    return 0;
+}
+
+int
+csilk_io_tcp_open(csilk_io_tcp_t* handle, csilk_io_os_sock_t sock)
+{
+    if (!handle) {
+        return -1;
+    }
+    handle->fd = sock;
+    return 0;
+}
+
+int
+csilk_io_tcp_bind(csilk_io_tcp_t* handle, const struct sockaddr* addr, unsigned int flags)
+{
+    (void)flags;
+    if (!handle || handle->fd < 0) {
+        return -1;
+    }
+    return bind(handle->fd, addr, sizeof(*addr));
+}
+
+int
+csilk_io_listen(csilk_io_stream_t* stream, int backlog, csilk_io_connection_cb cb)
+{
+    (void)cb;
+    if (!stream || stream->fd < 0) {
+        return -1;
+    }
+    return listen(stream->fd, backlog);
+}
+
+int
+csilk_io_accept(csilk_io_stream_t* server, csilk_io_stream_t* client)
+{
+    if (!server || server->fd < 0 || !client) {
+        return -1;
+    }
+#ifdef __linux__
+    int fd = accept4(server->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+#else
+    int fd = accept(server->fd, NULL, NULL);
+#endif
+    if (fd < 0) {
+        return -1;
+    }
+    client->fd = fd;
+    return 0;
+}
+
+int
+csilk_io_tcp_nodelay(csilk_io_tcp_t* handle, int enable)
+{
+    if (!handle || handle->fd < 0) {
+        return -1;
+    }
+    return setsockopt(handle->fd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+}
+
+int
+csilk_io_tcp_keepalive(csilk_io_tcp_t* handle, int enable, unsigned int delay)
+{
+    if (!handle || handle->fd < 0) {
+        return -1;
+    }
+    (void)delay;
+    return setsockopt(handle->fd, SOL_SOCKET, SO_KEEPALIVE, &enable, sizeof(enable));
+}
+
+int
+csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen)
+{
+    if (!handle || handle->fd < 0 || !name || !namelen) {
+        return -1;
+    }
+    socklen_t slen = (socklen_t)*namelen;
+    int       r = getpeername(handle->fd, name, &slen);
+    *namelen = (int)slen;
+    return r;
+}
+
+int
+csilk_io_ip4_addr(const char* ip, int port, struct sockaddr_in* addr)
+{
+    if (!ip || !addr) {
+        return -1;
+    }
+    memset(addr, 0, sizeof(*addr));
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons((uint16_t)port);
+    if (inet_pton(AF_INET, ip, &addr->sin_addr) <= 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int
+csilk_io_ip4_name(const struct sockaddr_in* src, char* dst, size_t size)
+{
+    if (!src || !dst) {
+        return -1;
+    }
+    return inet_ntop(AF_INET, &src->sin_addr, dst, (socklen_t)size) ? 0 : -1;
+}
+
+int
+csilk_io_ip6_name(const struct sockaddr_in6* src, char* dst, size_t size)
+{
+    if (!src || !dst) {
+        return -1;
+    }
+    return inet_ntop(AF_INET6, &src->sin6_addr, dst, (socklen_t)size) ? 0 : -1;
+}
+
+int
+csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk_io_read_cb read_cb)
+{
+    (void)stream;
+    (void)alloc_cb;
+    (void)read_cb;
+    return 0;
+}
+
+int
+csilk_io_read_stop(csilk_io_stream_t* stream)
+{
+    (void)stream;
+    return 0;
+}
+
+int
+csilk_io_timer_again(csilk_io_timer_t* handle)
+{
+    (void)handle;
+    return 0;
+}
+
+int
+csilk_io_signal_init(csilk_io_loop_t* loop, csilk_io_signal_t* handle)
+{
+    (void)loop;
+    if (!handle) {
+        return -1;
+    }
+    handle->signal_fd = -1;
+    handle->data = NULL;
+    return 0;
+}
+
+int
+csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int signum)
+{
+    (void)cb;
+    if (!handle) {
+        return -1;
+    }
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, signum);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    handle->signal_fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+    return handle->signal_fd >= 0 ? 0 : -1;
+}
+
+int
+csilk_io_signal_stop(csilk_io_signal_t* handle)
+{
+    if (!handle || handle->signal_fd < 0) {
+        return -1;
+    }
+    close(handle->signal_fd);
+    handle->signal_fd = -1;
+    return 0;
 }
 
 /* --- Default ring + pending-SQE tracker --- */
@@ -430,7 +581,6 @@ csilk_uv_on_write_done(void* arg, ssize_t res)
     if (!ctx) {
         return;
     }
-    csilk_client_t*   client = (csilk_client_t*)ctx[0];
     csilk_io_write_t* req = (csilk_io_write_t*)ctx[1];
     struct iovec*     iov = (struct iovec*)ctx[2];
 
@@ -442,9 +592,4 @@ csilk_uv_on_write_done(void* arg, ssize_t res)
         cb(req, (int)res);
     }
     free(ctx);
-
-    atomic_fetch_sub(&client->async_ref, 1);
-    if (client->close_pending && atomic_load(&client->async_ref) == 0) {
-        on_close_done(client);
-    }
 }

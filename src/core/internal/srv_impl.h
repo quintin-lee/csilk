@@ -72,13 +72,9 @@ CSILK_INTERNAL void
 alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf);
 
 CSILK_INTERNAL void on_close(csilk_io_handle_t* handle);
-#ifndef CSILK_USE_URING
 CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf);
 CSILK_INTERNAL void on_new_connection(csilk_io_stream_t* server_stream, int status);
-#else
-CSILK_INTERNAL void on_read(csilk_client_t* client, ssize_t nread);
-CSILK_INTERNAL void on_new_connection(worker_pool_t* wp, int client_fd);
-#endif
+
 CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
 CSILK_INTERNAL void csilk_arena_flush_free_list(void);
 CSILK_INTERNAL void on_idle_timeout(csilk_io_timer_t* handle);

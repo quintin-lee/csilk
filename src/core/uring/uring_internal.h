@@ -158,13 +158,6 @@ int  _uring_deferred_drain_all(void);
 /* --- Server split (uring_server.c, uring_event_loop.c) --- */
 
 typedef struct {
-    pthread_mutex_t mutex;
-    pthread_cond_t  cond;
-    int             count;
-    int             waiting;
-} csilk_barrier_t;
-
-typedef struct {
     worker_pool_t*   wp;
     int              port;
     csilk_barrier_t* barrier;
@@ -177,11 +170,6 @@ typedef struct {
     int              worker_index;
 } uring_worker_stop_data_t;
 
-void uring_barrier_init(csilk_barrier_t* b, int count);
-void uring_barrier_wait(csilk_barrier_t* b);
-void uring_barrier_destroy(csilk_barrier_t* b);
-
-void on_signal(csilk_server_t* server);
 void on_stop_async(csilk_io_async_t* handle);
 void on_dispatch_async(csilk_io_async_t* handle);
 
