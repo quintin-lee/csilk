@@ -323,7 +323,51 @@ typedef struct csilk_mq_s csilk_mq_t;
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
 
 /**
+ * @brief Memory ownership and lifecycle management model.
+ *
+ * Defines explicit ownership semantics across context, response bodies,
+ * zero-copy views, and internal resources.
+ */
+typedef enum {
+    CSILK_OWN_BORROWED = 0, /**< Caller/external holds buffer; framework does NOT free or copy. */
+    CSILK_OWN_ARENA =
+        1, /**< Memory is allocated from request arena; freed automatically on reset. */
+    CSILK_OWN_HEAP =
+        2, /**< Memory is heap allocated (malloc); framework calls free() on cleanup. */
+    CSILK_OWN_TRANSFER =
+        3, /**< Ownership transferred to receiver; receiver is responsible for free(). */
+    CSILK_OWN_SHARED =
+        4  /**< Shared/driver-managed reference; managed by custom destructor/refcount. */
+} csilk_ownership_t;
+
+/**
+ * @brief Convert ownership enum value to human-readable string.
+ *
+ * @param ownership Ownership enum value.
+ * @return Static string representation ("BORROWED", "ARENA", "HEAP", "TRANSFER", "SHARED", "UNKNOWN").
+ */
+static inline const char*
+csilk_ownership_str(csilk_ownership_t ownership)
+{
+    switch (ownership) {
+    case CSILK_OWN_BORROWED:
+        return "BORROWED";
+    case CSILK_OWN_ARENA:
+        return "ARENA";
+    case CSILK_OWN_HEAP:
+        return "HEAP";
+    case CSILK_OWN_TRANSFER:
+        return "TRANSFER";
+    case CSILK_OWN_SHARED:
+        return "SHARED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+/**
  * @brief Zero-copy read-only string/byte slice view.
+
  *
  * References external memory without allocation. Used by the HTTP parser
  * and high-performance accessor APIs to reference fields directly in the

@@ -62,14 +62,18 @@ csilk_string(csilk_ctx_t* c, int status, const char* msg)
     if (c->arena) {
         c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : NULL;
         c->response.body_len = msg_len;
+        c->response.body_ownership = CSILK_OWN_ARENA;
         c->response.body_is_managed = 0;
     } else {
-        if (c->response.body && c->response.body_is_managed) {
+        if (c->response.body &&
+            (c->response.body_ownership == CSILK_OWN_HEAP ||
+             c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
             free((void*)c->response.body);
         }
         char* body = msg ? strdup(msg) : NULL;
         c->response.body = body;
         c->response.body_len = body ? msg_len : 0;
+        c->response.body_ownership = body ? CSILK_OWN_HEAP : CSILK_OWN_BORROWED;
         c->response.body_is_managed = body ? 1 : 0;
     }
 }
@@ -244,16 +248,20 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    if (c->response.body && c->response.body_is_managed) {
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
         free((void*)c->response.body);
         c->response.body = NULL;
         c->response.body_is_managed = 0;
+        c->response.body_ownership = CSILK_OWN_BORROWED;
     }
 
     char* body = csilk_json_serialize(json, NULL);
     if (body) {
         c->response.body = body;
         c->response.body_len = strlen(body);
+        c->response.body_ownership = CSILK_OWN_HEAP;
         c->response.body_is_managed = 1;
     }
     csilk_json_free(json);
@@ -281,14 +289,18 @@ csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    if (c->response.body && c->response.body_is_managed) {
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
         free((void*)c->response.body);
         c->response.body = NULL;
         c->response.body_is_managed = 0;
+        c->response.body_ownership = CSILK_OWN_BORROWED;
     }
 
     c->response.body = json_str;
     c->response.body_len = strlen(json_str);
+    c->response.body_ownership = CSILK_OWN_BORROWED;
     c->response.body_is_managed = 0;
 }
 
@@ -334,7 +346,7 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 
     char* arena_body = csilk_arena_strndup(c->arena, body, body_len);
     if (arena_body) {
-        csilk_set_response_body(c, arena_body, body_len, 0);
+        csilk_set_response_body_ex(c, arena_body, body_len, CSILK_OWN_ARENA);
     }
 }
 
@@ -370,11 +382,14 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
     if (json_str) {
         c->response.status = status;
         csilk_set_header(c, "Content-Type", "application/json");
-        if (c->response.body && c->response.body_is_managed) {
+        if (c->response.body &&
+            (c->response.body_ownership == CSILK_OWN_HEAP ||
+             c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
             free((void*)c->response.body);
         }
         c->response.body = json_str;
         c->response.body_len = body_len;
+        c->response.body_ownership = c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP;
         c->response.body_is_managed = c->arena ? 0 : 1;
     }
 }

@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Unified Memory Ownership Model**: Defined `csilk_ownership_t` (`CSILK_OWN_BORROWED`, `CSILK_OWN_ARENA`, `CSILK_OWN_HEAP`, `CSILK_OWN_TRANSFER`, `CSILK_OWN_SHARED`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`, replacing ambiguous implicit `int managed` flags. Added `csilk_set_response_body_ex()` and `csilk_get_response_body_ownership()`.
 - **Connection Lifecycle State Machine**: Implemented explicit 9-state connection lifecycle (`csilk_conn_state_t`: `INIT`, `ACCEPTED`, `TLS`, `READING`, `PROCESSING`, `WRITING`, `STREAMING`, `CLOSING`, `CLOSED`) with invariant transition checks (`csilk_conn_set_state`, `csilk_conn_get_state`, `csilk_conn_state_str`), preventing use-after-free, double close, double free, and async write/streaming race conditions.
+
 
 - **I/O & Sync Abstraction Layer**: Standardized unified, cross-backend `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`), and `csilk_barrier_*` (`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`) APIs in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
 

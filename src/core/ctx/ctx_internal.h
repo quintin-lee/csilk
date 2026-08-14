@@ -86,6 +86,7 @@ struct csilk_request_s {
                                         from application/x-www-form-urlencoded
                                         body. Populated by
                                         csilk_parse_form_urlencoded(). */
+    csilk_ownership_t  body_ownership;  /**< Ownership model for request body. */
     int                body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
                               must be freed on cleanup. Zero for H1 bodies
                               (they reference the TCP recv buffer directly). */
@@ -100,6 +101,7 @@ struct csilk_response_s {
     const char*        body;
     size_t             body_len;
     csilk_header_map_t headers;
+    csilk_ownership_t  body_ownership;
     int                body_is_managed;
 };
 typedef struct csilk_response_s csilk_response_t;

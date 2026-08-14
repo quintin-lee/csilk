@@ -269,6 +269,30 @@ typedef struct {
 > [!IMPORTANT]
 > `csilk_view_t` 直接引用底层网络接收缓冲区，零拷贝、零内存分配开销。其生命周期仅在当前请求处理器执行期间有效。若需在上下文重置后持久化持有，请使用标准 `csilk_get_*()` 函数或通过 `csilk_arena_strndup()` 复制到 Arena 中。
 
+## 统一所有权模型 (`csilk_ownership_t`)
+
+为避免模糊的所有权隐式传递（如隐式 `int managed` 标志），csilk 建立了统一的显式内存所有权模型：
+
+```c
+typedef enum {
+    CSILK_OWN_BORROWED = 0, /**< 借用语义，调用方持有内存；框架不负责释放也不执行拷贝 */
+    CSILK_OWN_ARENA    = 1, /**< Arena 托管，在请求结束重置 Arena 时自动批量释放 */
+    CSILK_OWN_HEAP     = 2, /**< 堆分配内存 (malloc)，在上下文清理时由框架调用 free() 释放 */
+    CSILK_OWN_TRANSFER = 3, /**< 所有权转移，转交给接收方，生命周期结束时自动安全释放 */
+    CSILK_OWN_SHARED   = 4  /**< 共享/驱动托管引用，通过自定义析构器或引用计数管理 */
+} csilk_ownership_t;
+```
+
+### 响应体所有权 API
+
+```c
+// 显式指定所有权设置响应体
+csilk_set_response_body_ex(c, data, len, CSILK_OWN_HEAP);
+
+// 查询响应体当前所有权模型
+csilk_ownership_t own = csilk_get_response_body_ownership(c);
+```
+
 ## 自定义存储析构器 (RAII)
 
 对于存放在 `csilk_ctx_t` 中的堆分配对象（例如 cJSON 结构体、数据库连接或第三方句柄），`csilk_set_ex()` 允许注册自动析构函数，在请求结束时由框架自动回收：
@@ -280,6 +304,7 @@ typedef void (*csilk_destructor_t)(void* value);
 cJSON* payload = jwt_verify_internal(...);
 csilk_set_ex(c, "jwt_payload", payload, (csilk_destructor_t)csilk_json_free);
 ```
+
 
 ## 出站流式传输与背压流控
 

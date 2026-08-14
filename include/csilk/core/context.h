@@ -432,14 +432,33 @@ const char* csilk_ctx_get_handler_perm_resource(csilk_ctx_t* c);
  * response transformation).  If @p managed is 1 the framework takes ownership
  * and calls free() when the response is sent.
  *
+ * @param c         The request context.
+ * @param body      Pointer to the new body data.
+ * @param len       Byte length of @p body.
+ * @param ownership Ownership model (CSILK_OWN_BORROWED, CSILK_OWN_ARENA, CSILK_OWN_HEAP, etc.).
+ */
+void csilk_set_response_body_ex(csilk_ctx_t*      c,
+                                const char*       body,
+                                size_t            len,
+                                csilk_ownership_t ownership);
+
+/**
+ * @brief Overwrite the response body from middleware (legacy compatibility).
+ *
  * @param c       The request context.
  * @param body    Pointer to the new body data.
  * @param len     Byte length of @p body.
- * @param managed Ownership flag: 1 = framework calls free(@p body) when done,
- *                0 = caller retains ownership and body must stay valid until
- *                the response is sent.
+ * @param managed Ownership flag: 1 = CSILK_OWN_HEAP, 0 = CSILK_OWN_BORROWED.
  */
 void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int managed);
+
+/**
+ * @brief Query current response body ownership.
+ *
+ * @param c The request context.
+ * @return Ownership model for the current response body.
+ */
+csilk_ownership_t csilk_get_response_body_ownership(csilk_ctx_t* c);
 
 const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
