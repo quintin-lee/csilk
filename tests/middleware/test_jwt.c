@@ -254,12 +254,69 @@ test_jwt_es256()
     csilk_test_ctx_free(c);
 }
 
+void
+test_jwt_options()
+{
+    printf("Testing JWT middleware options and CSILK_JWT_REQUIRE_EXP...\n");
+
+    csilk_ctx_t*    c = csilk_test_ctx_new();
+    csilk_handler_t handlers[] = {dummy_handler, NULL};
+    csilk_test_ctx_set_handlers(c, handlers);
+
+    const char*   secret = "secret";
+    csilk_json_t* payload = csilk_json_object();
+    csilk_json_add_string(payload, "user", "alice");
+
+    /* 1. Token without exp - standard middleware accepts */
+    char* token = csilk_jwt_generate(c, payload, secret);
+    char  auth_header[512];
+    snprintf(auth_header, sizeof(auth_header), "Bearer %s", token);
+
+    csilk_set_request_header(c, "Authorization", auth_header);
+    csilk_jwt_middleware(c, secret);
+    assert(csilk_is_aborted(c) == 0);
+
+    /* 2. Token without exp - options middleware with CSILK_JWT_REQUIRE_EXP rejects */
+    csilk_test_ctx_free(c);
+    c = csilk_test_ctx_new();
+    csilk_test_ctx_set_handlers(c, handlers);
+    csilk_set_request_header(c, "Authorization", auth_header);
+
+    csilk_jwt_options_t opts = {
+        .algorithm = CSILK_JWT_HS256,
+        .flags = CSILK_JWT_REQUIRE_EXP,
+        .leeway_sec = 0,
+    };
+    csilk_jwt_middleware_options(c, secret, strlen(secret), &opts);
+    assert(csilk_is_aborted(c) == 1);
+    assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
+
+    /* 3. Token with valid future exp - options middleware accepts */
+    csilk_test_ctx_free(c);
+    c = csilk_test_ctx_new();
+    csilk_test_ctx_set_handlers(c, handlers);
+
+    csilk_json_add_number(payload, "exp", (double)time(NULL) + 3600);
+    free(token);
+    token = csilk_jwt_generate(c, payload, secret);
+    snprintf(auth_header, sizeof(auth_header), "Bearer %s", token);
+    csilk_set_request_header(c, "Authorization", auth_header);
+
+    csilk_jwt_middleware_options(c, secret, strlen(secret), &opts);
+    assert(csilk_is_aborted(c) == 0);
+
+    free(token);
+    csilk_json_free(payload);
+    csilk_test_ctx_free(c);
+}
+
 int
 main()
 {
     test_jwt_core();
     test_jwt_middleware();
     test_jwt_expiration();
+    test_jwt_options();
     test_jwt_rs256();
     test_jwt_es256();
     printf("All JWT tests passed!\n");

@@ -235,16 +235,23 @@ csilk_jwt_generate_ex(csilk_ctx_t*    c,
 }
 
 /**
- * @brief Internal: Verify a JWT token with a specified algorithm.
+ * @brief Internal: Verify a JWT token with full validation options.
  */
 static csilk_json_t*
-jwt_verify_internal(
-    csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
+jwt_verify_internal(csilk_ctx_t*               c,
+                    const char*                token,
+                    const char*                key,
+                    size_t                     key_len,
+                    const csilk_jwt_options_t* options)
 {
     if (!token || !key) {
         CSILK_LOG_E("JWT: Verification failed: invalid arguments");
         return NULL;
     }
+
+    csilk_jwt_alg_t algorithm = options ? options->algorithm : CSILK_JWT_HS256;
+    uint32_t        flags = options ? options->flags : CSILK_JWT_NONE;
+    int64_t         leeway = options ? options->leeway_sec : 0;
 
     /* Locate the two dots separating header, payload, signature. */
     const char* dot1 = strchr(token, '.');
@@ -322,13 +329,74 @@ jwt_verify_internal(
 
     csilk_json_t* payload = csilk_json_parse((const char*)p_json_str);
     free(p_json_str);
+    if (!payload) {
+        CSILK_LOG_W("JWT: Failed to parse JSON payload");
+        return NULL;
+    }
+
+    time_t now = time(NULL);
+
+    /* Validate 'exp' claim */
+    csilk_json_t* exp = csilk_json_get(payload, "exp");
+    if (exp) {
+        if (!csilk_json_is_number(exp)) {
+            CSILK_LOG_W("JWT: 'exp' claim is not a valid number");
+            csilk_json_free(payload);
+            return NULL;
+        }
+        double exp_val = csilk_json_number_value(exp);
+        if ((double)now - (double)leeway > exp_val) {
+            CSILK_LOG_W("JWT: Token expired");
+            csilk_json_free(payload);
+            return NULL;
+        }
+    } else if (flags & CSILK_JWT_REQUIRE_EXP) {
+        CSILK_LOG_W("JWT: Missing required 'exp' claim");
+        csilk_json_free(payload);
+        return NULL;
+    }
+
+    /* Validate 'nbf' claim */
+    csilk_json_t* nbf = csilk_json_get(payload, "nbf");
+    if (nbf) {
+        if (!csilk_json_is_number(nbf)) {
+            CSILK_LOG_W("JWT: 'nbf' claim is not a valid number");
+            csilk_json_free(payload);
+            return NULL;
+        }
+        double nbf_val = csilk_json_number_value(nbf);
+        if ((double)now + (double)leeway < nbf_val) {
+            CSILK_LOG_W("JWT: Token not yet valid (nbf)");
+            csilk_json_free(payload);
+            return NULL;
+        }
+    } else if (flags & CSILK_JWT_REQUIRE_NBF) {
+        CSILK_LOG_W("JWT: Missing required 'nbf' claim");
+        csilk_json_free(payload);
+        return NULL;
+    }
+
+    /* Validate 'iat' claim */
+    csilk_json_t* iat = csilk_json_get(payload, "iat");
+    if (iat) {
+        if (!csilk_json_is_number(iat)) {
+            CSILK_LOG_W("JWT: 'iat' claim is not a valid number");
+            csilk_json_free(payload);
+            return NULL;
+        }
+    } else if (flags & CSILK_JWT_REQUIRE_IAT) {
+        CSILK_LOG_W("JWT: Missing required 'iat' claim");
+        csilk_json_free(payload);
+        return NULL;
+    }
+
     return payload;
 }
 
 /**
  * @brief Verify a JWT using the HS256 (HMAC-SHA256) algorithm.
  *
- * Convenience wrapper around jwt_verify_internal() that uses a raw secret
+ * Convenience wrapper around csilk_jwt_verify_options() that uses a raw secret
  * string as the HMAC key.
  *
  * @param c        The request context (used for crypto operations).
@@ -342,7 +410,12 @@ jwt_verify_internal(
 csilk_json_t*
 csilk_jwt_verify(csilk_ctx_t* c, const char* token, const char* secret)
 {
-    return jwt_verify_internal(c, token, secret, secret ? strlen(secret) : 0, CSILK_JWT_HS256);
+    csilk_jwt_options_t opts = {
+        .algorithm = CSILK_JWT_HS256,
+        .flags = CSILK_JWT_NONE,
+        .leeway_sec = 0,
+    };
+    return jwt_verify_internal(c, token, secret, secret ? strlen(secret) : 0, &opts);
 }
 
 /**
@@ -365,22 +438,52 @@ csilk_json_t*
 csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
 {
-    return jwt_verify_internal(c, token, key, key_len, algorithm);
+    csilk_jwt_options_t opts = {
+        .algorithm = algorithm,
+        .flags = CSILK_JWT_NONE,
+        .leeway_sec = 0,
+    };
+    return jwt_verify_internal(c, token, key, key_len, &opts);
 }
 
 /**
- * @brief JWT authentication middleware.
+ * @brief Verify a JWT with configurable validation options (algorithm, require_exp policy, leeway).
  *
- * Extracts the Bearer token from the Authorization header and verifies it.
- * Supports HS256 (raw secret), RS256, and ES256 (PEM-encoded public key).
+ * @param c         The request context (used for crypto operations).
+ * @param token     Null-terminated JWT string. Must not be NULL.
+ * @param key       Key bytes (raw secret for HS256, PEM for RS256/ES256).
+ * @param key_len   Length of @p key in bytes.
+ * @param options   Validation options struct (may be NULL for defaults).
+ *
+ * @return The decoded claims as a csilk_json_t on success (caller frees), or
+ *         NULL if validation fails.
+ */
+csilk_json_t*
+csilk_jwt_verify_options(csilk_ctx_t*               c,
+                         const char*                token,
+                         const char*                key,
+                         size_t                     key_len,
+                         const csilk_jwt_options_t* options)
+{
+    return jwt_verify_internal(c, token, key, key_len, options);
+}
+
+/**
+ * @brief JWT authentication middleware with configurable validation policy (e.g. CSILK_JWT_REQUIRE_EXP).
+ *
+ * Extracts the Bearer token from the Authorization header and validates it against
+ * the configured options.
  *
  * @param c          The request context.
  * @param key        Verification key (raw string for HS256, PEM for RS256/ES256).
  * @param key_len    Key length in bytes.
- * @param algorithm  JWT algorithm (0 = HS256).
+ * @param options    JWT validation options (algorithm, flags, leeway). May be NULL.
  */
 void
-csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
+csilk_jwt_middleware_options(csilk_ctx_t*               c,
+                             const char*                key,
+                             size_t                     key_len,
+                             const csilk_jwt_options_t* options)
 {
     if (!c || !key) {
         CSILK_LOG_E("JWT: Middleware error: invalid arguments");
@@ -396,26 +499,37 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
     }
 
     const char*   token = auth_header + 7;
-    csilk_json_t* payload = jwt_verify_internal(c, token, key, key_len, algorithm);
+    csilk_json_t* payload = jwt_verify_internal(c, token, key, key_len, options);
     if (!payload) {
         csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Invalid or expired token");
         csilk_abort(c);
         return;
     }
 
-    /* Check expiration if 'exp' claim exists */
-    csilk_json_t* exp = csilk_json_get(payload, "exp");
-    if (csilk_json_is_number(exp)) {
-        if ((double)time(NULL) > csilk_json_number_value(exp)) {
-            csilk_json_free(payload);
-            csilk_json_error(c, CSILK_STATUS_UNAUTHORIZED, "Token expired");
-            csilk_abort(c);
-            return;
-        }
-    }
-
     csilk_set_ex(c, "jwt_payload", payload, (void (*)(void*))csilk_json_free);
     csilk_next(c);
+}
+
+/**
+ * @brief JWT authentication middleware with explicit algorithm parameter.
+ *
+ * Extracts the Bearer token from the Authorization header and verifies it.
+ * Supports HS256 (raw secret), RS256, and ES256 (PEM-encoded public key).
+ *
+ * @param c          The request context.
+ * @param key        Verification key (raw string for HS256, PEM for RS256/ES256).
+ * @param key_len    Key length in bytes.
+ * @param algorithm  JWT algorithm (0 = HS256).
+ */
+void
+csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_jwt_alg_t algorithm)
+{
+    csilk_jwt_options_t opts = {
+        .algorithm = algorithm,
+        .flags = CSILK_JWT_NONE,
+        .leeway_sec = 0,
+    };
+    csilk_jwt_middleware_options(c, key, key_len, &opts);
 }
 
 /**

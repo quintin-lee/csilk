@@ -37,6 +37,25 @@ typedef enum {
 } csilk_jwt_alg_t;
 
 /**
+ * @brief JWT validation policy and requirement flags.
+ */
+typedef enum {
+    CSILK_JWT_NONE = 0,
+    CSILK_JWT_REQUIRE_EXP = (1 << 0), /**< Require 'exp' claim to be present and non-expired. */
+    CSILK_JWT_REQUIRE_NBF = (1 << 1), /**< Require 'nbf' claim to be present and valid. */
+    CSILK_JWT_REQUIRE_IAT = (1 << 2)  /**< Require 'iat' claim to be present. */
+} csilk_jwt_flags_t;
+
+/**
+ * @brief Configuration options for JWT verification and middleware.
+ */
+typedef struct {
+    csilk_jwt_alg_t algorithm; /**< Expected signing algorithm (HS256, RS256, ES256). */
+    uint32_t        flags; /**< Bitwise OR of csilk_jwt_flags_t (e.g., CSILK_JWT_REQUIRE_EXP). */
+    int64_t         leeway_sec; /**< Clock skew tolerance in seconds (default 0). */
+} csilk_jwt_options_t;
+
+/**
  * @brief Generate a cryptographically secure random nonce for AES-256-GCM.
  *
  * This helper ensures that nonces are never reused, which is critical for

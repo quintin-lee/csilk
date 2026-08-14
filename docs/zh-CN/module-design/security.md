@@ -181,13 +181,15 @@ csilk_jwt_middleware(ctx, secret):
 
 | 特性 | 详情 |
 |---|---|
-| **算法** | HS256 (HMAC-SHA256) |
+| **算法** | HS256 (HMAC-SHA256)、RS256、ES256 |
 | **令牌来源** | `Authorization: Bearer <token>` 头 |
-| **过期时间** | 检查 `exp` 声明与 `time()` |
-| **有效负载** | 存储在上下文的 `"jwt_payload"` (cJSON 指针) |
+| **过期与声明** | 支持 `exp`、`nbf`、`iat` 时间声明校验与 `leeway_sec` 时钟倾斜容差 |
+| **策略标志** | 通过 `csilk_jwt_options_t` 可配置：`CSILK_JWT_REQUIRE_EXP`、`CSILK_JWT_REQUIRE_NBF`、`CSILK_JWT_REQUIRE_IAT` |
+| **有效负载** | 存储在上下文的 `"jwt_payload"`（cJSON 指针，RAII 自动析构管理） |
 | **恒定时间比较** | 签名比较使用 `constant_time_compare()` 防止定时攻击 |
-| **清理** | `csilk_ctx_cleanup_jwt_payload()` 在处理器完成后释放有效负载 |
-| **扩展 API** | `csilk_jwt_middleware_ex()` 接受密钥长度 + 算法参数以支持未来算法 |
+| **清理** | `csilk_ctx_cleanup_jwt_payload()` 或请求上下文重置时自动安全释放 |
+| **扩展 API** | `csilk_jwt_middleware_options()` 与 `csilk_jwt_verify_options()` 支持完整的算法、策略标志及时钟容差配置 |
+
 
 ---
 
