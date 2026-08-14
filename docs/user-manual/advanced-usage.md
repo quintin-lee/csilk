@@ -323,15 +323,15 @@ When `worker_threads > 1`, csilk uses `SO_REUSEPORT` to bind multiple listener
 sockets — one per worker thread plus the main thread. The kernel distributes
 incoming connections across all listeners.
 
-### Thread Safety
+### Thread Safety & Concurrency Architecture
 
-In multi-worker mode, connection callbacks (`on_new_connection`) can execute on
-any event loop thread. All shared mutable state accessed during connection
-establishment must be thread-safe:
+In multi-worker mode, each worker runs an independent event loop. Csilk uses a share-nothing, thread-confined architecture to eliminate lock contention on the I/O hot path:
 
-- **Client connection pool** (`pool_get`/`pool_put`): Each worker thread manages its own lock-free connection object pool, avoiding mutex contention.
-- **Active client list**: Protected by `clients_mutex`.
-- **Connection counters**: Use atomic operations (`atomic_fetch_add`).
+- **Client & Arena pools** (`pool_get`/`pool_put`): Each worker thread manages its own dedicated connection object and arena memory pools with zero locking overhead.
+- **Active client list** (`active_clients`): Worker-local doubly-linked list owned exclusively by that worker's event loop thread (NOT thread-safe for arbitrary threads).
+- **Cross-thread operations**: Must use `csilk_dispatch()` / `csilk_server_dispatch()` to queue a task into the target worker's lock-free MPSC queue and wake up its event loop.
+- **Global connection counters**: Use atomic operations (`atomic_fetch_add` / `atomic_fetch_sub`).
+
 
 ### Graceful Shutdown
 

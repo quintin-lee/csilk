@@ -157,9 +157,12 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
 
 /**
  * @brief Add a client to its owner worker's active-client linked list.
+ *
+ * NOT thread-safe: MUST be called exclusively on the client's owning worker
+ * event-loop thread. Cross-thread operations must be dispatched via csilk_dispatch().
+ *
  * @param[in] server Server (currently unused; the list is per-worker).
  * @param[in] client Client to insert at the head of the active list.
- * @note Updates prev/next pointers and the worker's active_clients head.
  */
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
@@ -176,13 +179,15 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
 
 /**
  * @brief Unlink a client from its owner worker's active-client list.
+ *
+ * NOT thread-safe: MUST be called exclusively on the client's owning worker
+ * event-loop thread. Cross-thread operations must be dispatched via csilk_dispatch().
+ *
  * @param[in] server Server owning the client (validated non-NULL).
  * @param[in] client Client to remove.
- * @note Relinks prev/next neighbors and clears the client's list pointers.
- *       No-op if server or the client's owner pool is NULL.
  */
 static void
-client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
+client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
     if (!server) {
         return;
@@ -203,18 +208,6 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 }
 
 /**
- * @brief Remove a client from the active list (public wrapper).
- * @param[in] server Server owning the client.
- * @param[in] client Client to remove.
- * @note Thin wrapper around client_list_remove_internal.
- */
-static void
-client_list_remove(csilk_server_t* server, csilk_client_t* client)
-{
-    client_list_remove_internal(server, client);
-}
-
-/**
  * @brief Fully tear down a client connection and recycle its resources.
  * @param[in] client Client to destroy.
  * @note Decrements the server's active-connection count, removes the client from
@@ -227,8 +220,9 @@ client_destroy(csilk_client_t* client)
     CSILK_LOG_D("client_destroy called, closing fd %d", client->handle.fd);
     if (client->server) {
         atomic_fetch_sub(&client->server->active_connections, 1);
-        client_list_remove_internal(client->server, client);
+        client_list_remove(client->server, client);
     }
+
     csilk_ctx_cleanup(&client->ctx);
     if (client->handle.fd >= 0) {
         close(client->handle.fd);

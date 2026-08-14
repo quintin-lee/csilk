@@ -82,13 +82,15 @@ graph TB
 | `middlewares[32]` | `csilk_handler_t[]` | 全局中间件链 |
 | `max_connections` | `int` | 最大并发连接数（0=无限） |
 | `active_connections` | `atomic_int` | 当前活动连接数 |
-| `worker_pools` | `worker_pool_t*` | 每个 Worker 的连接/内存池 |
+| `worker_pools` | `worker_pool_t*` | 每个 Worker 的独立连接/内存池与 Worker 本地 `active_clients` |
 | `worker_tids` | `uv_thread_t*` | Worker 线程 ID 数组 |
 | `ssl_ctx` | `SSL_CTX*` | OpenSSL 上下文 |
 | `mq` | `csilk_mq_t*` | 消息队列实例 |
 | `hooks[6]` | `csilk_hook_node_t*` | 生命周期钩子链表 |
-| `active_clients` | `csilk_client_t*` | 活跃连接链表头 |
-| `clients_mutex` | `uv_mutex_t` | 活跃链表互斥锁 |
+
+> [!NOTE]
+> `active_clients` 归属于各自的 `worker_pool_t`，完全由对应的 Worker Event Loop 线程独占访问（线程封闭，无需互斥锁）。跨线程操作必须通过 `csilk_dispatch()` 投递至对应 Worker 的无锁队列。
+
 
 ---
 

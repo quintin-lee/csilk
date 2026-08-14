@@ -173,12 +173,15 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
 
 /* --- Active client list --- */
 
-/** @brief Insert a client at the head of the server's active client list.
+/**
+ * @brief Insert a client at the head of the worker's active client list.
  *
- * Thread-safe: acquires the clients_mutex before modification.
+ * NOT thread-safe: MUST be called exclusively on the client's owning worker
+ * event-loop thread. Cross-thread operations must be dispatched via csilk_dispatch().
  *
- * @param server The server instance.
- * @param client The client to add (must not already be in a list). */
+ * @param server The server instance (unused; list is worker-local).
+ * @param client The client to add (must not already be in a list).
+ */
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
@@ -192,18 +195,25 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
     wp->active_clients = client;
 }
 
-/** @brief Remove a client from the active list (no locking).
+/**
+ * @brief Remove a client from the worker's active client list.
  *
- * Unlinks the client from the doubly-linked list and clears its prev/next
- * pointers. Caller must hold clients_mutex.
+ * NOT thread-safe: MUST be called exclusively on the client's owning worker
+ * event-loop thread. Cross-thread operations must be dispatched via csilk_dispatch().
  *
- * @param server The server instance.
- * @param client The client to remove. */
+ * Unlinks the client from the doubly-linked list and clears its prev/next pointers.
+ *
+ * @param server The server instance (unused; list is worker-local).
+ * @param client The client to remove.
+ */
 static void
-client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
+client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
     (void)server;
     worker_pool_t* wp = client->owner_pool;
+    if (!wp) {
+        return;
+    }
     if (client->prev) {
         client->prev->next = client->next;
     } else if (wp->active_clients == client) {
@@ -213,18 +223,6 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
         client->next->prev = client->prev;
     }
     client->next = client->prev = NULL;
-}
-
-/** @brief Remove a client from the active list (thread-safe).
- *
- * Acquires clients_mutex, then delegates to client_list_remove_internal().
- *
- * @param server The server instance.
- * @param client The client to remove. */
-static void
-client_list_remove(csilk_server_t* server, csilk_client_t* client)
-{
-    client_list_remove_internal(server, client);
 }
 
 /* --- Timer close --- */
