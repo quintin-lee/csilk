@@ -198,6 +198,49 @@ test_arena_tls_cache()
 }
 #endif
 
+void
+test_arena_max_total_bytes_tls_enforced(void)
+{
+    printf("Testing csilk_arena max_total_bytes with TLS cache hit...\n");
+
+    /* Populate TLS cache with a standard chunk */
+    csilk_arena_t* a1 = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+    assert(a1 != NULL);
+    void* p = csilk_arena_alloc(a1, 100);
+    assert(p != NULL);
+    csilk_arena_free(a1);
+
+    /* Allocate a new arena with a tight size limit smaller than 4KB */
+    csilk_arena_t* a2 = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+    assert(a2 != NULL);
+    assert(csilk_arena_set_max_bytes(a2, 2048) == 0);
+
+    /* Should fail because 4096 > 2048, even though TLS has a cached chunk */
+    void* p2 = csilk_arena_alloc(a2, 100);
+    assert(p2 == NULL);
+
+    csilk_arena_free(a2);
+    printf("csilk_arena max_total_bytes TLS enforcement passed!\n");
+}
+
+void
+test_arena_default_chunk_size_zero(void)
+{
+    printf("Testing csilk_arena_new(0) defaults to CSILK_DEFAULT_ARENA_SIZE...\n");
+
+    csilk_arena_t* a = csilk_arena_new(0);
+    assert(a != NULL);
+    void* p = csilk_arena_alloc(a, 64);
+    assert(p != NULL);
+
+    size_t total_size = 0, total_used = 0;
+    csilk_arena_get_stats(a, &total_size, &total_used);
+    assert(total_size == CSILK_DEFAULT_ARENA_SIZE);
+
+    csilk_arena_free(a);
+    printf("csilk_arena_new(0) default chunk size passed!\n");
+}
+
 int
 main()
 {
@@ -209,6 +252,8 @@ main()
     test_arena_alignment();
     test_arena_64_alignment();
     test_arena_reset();
+    test_arena_max_total_bytes_tls_enforced();
+    test_arena_default_chunk_size_zero();
 #ifdef TEST_OOM
     test_arena_tls_cache();
 #endif
