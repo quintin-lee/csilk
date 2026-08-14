@@ -82,6 +82,10 @@ csilk_ws_handshake(csilk_ctx_t* c)
 
     csilk_status(c, CSILK_STATUS_SWITCHING_PROTOCOLS);
     csilk_ctx_set_websocket(c, 1);
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client) {
+        csilk_conn_set_state(client, CSILK_CONN_STREAMING);
+    }
 }
 
 /** @brief Write completion callback for WebSocket frame sends.
@@ -142,7 +146,8 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
     }
 
     csilk_client_t* cl = (csilk_client_t*)internal_client;
-    size_t          q = _csilk_client_get_write_queue_size(cl);
+    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
+    size_t q = _csilk_client_get_write_queue_size(cl);
 
     size_t header_len = 2;
     if (len > 125 && len <= 65535) {

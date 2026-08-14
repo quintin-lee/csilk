@@ -205,7 +205,7 @@ get_status_text(int status)
 void
 csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 {
-    if (!client) {
+    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
         return;
     }
 
@@ -286,6 +286,9 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
     csilk_client_write(client, data, len);
 }
 
@@ -307,6 +310,10 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        free(data);
+        return;
+    }
 
     if (client->ssl) {
         assert(len <= INT_MAX);
@@ -451,12 +458,14 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
     CSILK_LOG_I("_csilk_handle_post_response called, keep_alive=%d", keep_alive);
     if (keep_alive) {
         CSILK_LOG_I("_csilk_handle_post_response: restarting read");
+        csilk_conn_set_state(client, CSILK_CONN_READING);
         csilk_io_timer_start(
             &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
         llhttp_resume(&client->parser);
         csilk_client_read_start(client);
     } else {
         CSILK_LOG_I("_csilk_handle_post_response: closing handle");
+        csilk_conn_set_state(client, CSILK_CONN_CLOSING);
         if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
             csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
         }
@@ -479,7 +488,10 @@ _csilk_send_response(csilk_ctx_t* c)
         return;
     }
 
+    csilk_conn_set_state(client, CSILK_CONN_WRITING);
+
     if (client->protocol == CSILK_PROTO_HTTP2) {
+
         csilk_h2_send_response(c);
         return;
     }

@@ -109,7 +109,8 @@ csilk_sse_init(csilk_ctx_t* c)
 
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
     req->data = buf;
-    csilk_client_t*    cl = (csilk_client_t*)internal_client;
+    csilk_client_t* cl = (csilk_client_t*)internal_client;
+    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
     csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
 }
@@ -145,7 +146,8 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     }
 
     csilk_client_t* cl = (csilk_client_t*)internal_client;
-    size_t          q = _csilk_client_get_write_queue_size(cl);
+    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
+    size_t q = _csilk_client_get_write_queue_size(cl);
 
     size_t event_len = event ? strlen(event) : 0;
     size_t data_len = data ? strlen(data) : 0;

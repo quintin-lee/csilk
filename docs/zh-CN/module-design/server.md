@@ -294,13 +294,15 @@ flowchart LR
 
 ```c
 struct csilk_client_s {
-    uv_tcp_t handle;              // libuv TCP 流句柄
-    uv_timer_t timer;             // 空闲 (keep-alive) 定时器
-    uv_timer_t read_timer;        // 读取超时定时器
-    uv_timer_t write_timer;       // 写入超时定时器
-    uv_timer_t request_timer;     // 请求超时定时器
+    uint8_t generation;
+    csilk_conn_state_t state;     // 连接生命周期状态机
+    csilk_io_tcp_t handle;        // 抽象 TCP 流句柄 (libuv / io_uring)
+    csilk_io_timer_t timer;       // 空闲 (keep-alive) 定时器
+    csilk_io_timer_t read_timer;  // 读取超时定时器
+    csilk_io_timer_t write_timer; // 写入超时定时器
+    csilk_io_timer_t request_timer; // 请求超时定时器
     int close_pending;            // 待关闭引用计数
-    int async_ref;                // 异步任务引用计数
+    _Atomic int async_ref;        // 异步任务引用计数
     csilk_protocol_t protocol;    // CSILK_PROTO_HTTP1 / CSILK_PROTO_HTTP2
     nghttp2_session* h2_session;  // HTTP/2 会话
     csilk_ctx_t* h2_streams;      // 活跃 HTTP/2 流链表
@@ -318,54 +320,55 @@ struct csilk_client_s {
 };
 ```
 
-### 3.4 连接生命周期
+### 3.4 显式生命周期状态机 (`csilk_conn_state_t`)
 
-```mermaid
-%%{init: {
-  'theme': 'base',
-  'themeVariables': {
-    'background': '#2E3440',
-    'primaryColor': '#81A1C1',
-    'primaryBorderColor': '#4C566A',
-    'primaryTextColor': '#ECEFF4',
-    'secondaryColor': '#3B4252',
-    'secondaryBorderColor': '#434C5E',
-    'secondaryTextColor': '#D8DEE9',
-    'lineColor': '#81A1C1',
-    'textColor': '#ECEFF4',
-    'mainBkg': '#3B4252',
-    'nodeBorder': '#4C566A',
-    'clusterBkg': '#2E3440',
-    'clusterBorder': '#4C566A',
-    'titleColor': '#ECEFF4',
-    'edgeLabelBackground': '#3B4252',
-    'nodeTextColor': '#ECEFF4'
-  },
-  'flowchart': {'htmlLabels': true, 'curve': 'basis'}
-}}%%
-flowchart TB
-    ACCEPT["fa:fa-handshake on_connection()<br/>accept TCP"] --> POOL["fa:fa-cubes pool_get()<br/>从本地池获取 client"]
-    POOL --> TLS_CHECK{"fa:fa-shield TLS enabled?"}
-    TLS_CHECK -->|Yes| SSL_INIT["fa:fa-lock ssl_tls_init()<br/>创建 SSL session + BIO pair"]
-    TLS_CHECK -->|No| PARSER["fa:fa-cog llhttp_init()"]
-    SSL_INIT --> ALPN["fa:fa-random ALPN 协商<br/>h2 vs http/1.1"]
-    ALPN --> PARSER
-    PARSER --> READ["fa:fa-play uv_read_start()<br/>开始读取"]
-    READ --> TIMERS["fa:fa-hourglass 启动空闲超时"]
-    TIMERS --> DISPATCH
+为了彻底杜绝 UAF、Double Free、Double Close 以及并发 Streaming/Keep-Alive 竞态，csilk 建立了统一的显式连接状态机：
 
-    DISPATCH --> PARSE_OK{"fa:fa-check llhttp 解析成功?"}
-    PARSE_OK -->|Yes| ROUTE["fa:fa-sitemap _csilk_dispatch_request()"]
-    ROUTE --> HEADERS["fa:fa-tag 持久化头部到 arena"]
-    HEADERS --> MIDDLEWARE["fa:fa-layer-group 执行中间件链"]
-    MIDDLEWARE --> HANDLER["fa:fa-code 执行路由处理器"]
-    ROUTE --> RESPONSE["fa:fa-reply csilk_string / csilk_json / ..."]
-    RESPONSE --> KEEPALIVE{"fa:fa-redo Connection: keep-alive?"}
-    KEEPALIVE -->|Yes| RESET["fa:fa-undo arena_reset()<br/>保留 client 在池中"]
-    KEEPALIVE -->|No| CLOSE["fa:fa-times uv_close() → client_destroy()"]
+```c
+typedef enum {
+    CSILK_CONN_INIT = 0,    // 初始创建 / 池中取出
+    CSILK_CONN_ACCEPTED,    // TCP accept 成功
+    CSILK_CONN_TLS,         // TLS 握手进行中
+    CSILK_CONN_READING,     // 等待/读取请求数据
+    CSILK_CONN_PROCESSING,  // 请求解析完成，进入路由与中间件流水线
+    CSILK_CONN_WRITING,     // 正在发送非流式 HTTP 响应
+    CSILK_CONN_STREAMING,   // 流式传输中 (Chunked Stream / SSE / WebSocket)
+    CSILK_CONN_CLOSING,     // 连接正在关闭，拒绝新写入
+    CSILK_CONN_CLOSED       // 连接已关闭，销毁并归还连接池
+} csilk_conn_state_t;
 ```
 
+#### 状态转换流与不变量
+
+```
+INIT
+ ↓
+ACCEPTED
+ ↓
+TLS (若启用 TLS)
+ ↓
+READING <───────────────────┐ (Keep-Alive)
+ ↓                          │
+PROCESSING                  │
+ ↓                          │
+WRITING ────────────────────┤
+ ↓                          │
+STREAMING ──────────────────┘
+ ↓
+CLOSING
+ ↓
+CLOSED
+ ↓
+INIT (回收进 Pool)
+```
+
+- **不变式保护**：
+  1. `CSILK_CONN_CLOSING` 与 `CSILK_CONN_CLOSED` 状态下，所有出站写操作（`csilk_client_write`、`_csilk_send_data`、`_csilk_send_data_owned`）立即静默丢弃并安全释放内存，防止向正在关闭的 socket 重复排队。
+  2. `on_read` 入口检查状态机，若处于 `CLOSING`/`CLOSED` 则立即放弃读取并释放接收缓冲。
+  3. 一旦进入 `CLOSING`，只允许流转到 `CLOSED`；`CLOSED` 状态只允许在归还池重新取出时重置为 `INIT`。
+
 ### 3.5 客户端销毁 (`client_destroy`)
+
 
 ```c
 static void client_destroy(csilk_client_t* client) {

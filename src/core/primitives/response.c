@@ -577,7 +577,8 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
     }
 
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    size_t          q = _csilk_client_get_write_queue_size(client);
+    csilk_conn_set_state(client, CSILK_CONN_STREAMING);
+    size_t q = _csilk_client_get_write_queue_size(client);
 
     if (c->max_write_buffer_size > 0 && q + len > c->max_write_buffer_size) {
         CSILK_LOG_E("Response: max write buffer exceeded (%zu + %zu > %zu), dropping write",

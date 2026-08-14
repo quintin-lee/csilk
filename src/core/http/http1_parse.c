@@ -329,8 +329,12 @@ _csilk_dispatch_request(csilk_ctx_t* c)
     }
 
     csilk_server_t* server = (csilk_server_t*)c->server;
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
 
     CSILK_LOG_I("Request: %s %s", c->request.method, c->request.path);
+    if (client) {
+        csilk_conn_set_state(client, CSILK_CONN_PROCESSING);
+    }
 
     _csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
 

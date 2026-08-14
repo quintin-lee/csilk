@@ -41,6 +41,90 @@ alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* b
     buf->len = suggested_size;
 }
 
+/* --- Connection lifecycle state machine --- */
+
+/**
+ * @brief Get human-readable string representation of connection state.
+ * @param state Connection lifecycle state.
+ * @return Static string description of the state.
+ */
+const char*
+csilk_conn_state_str(csilk_conn_state_t state)
+{
+    switch (state) {
+    case CSILK_CONN_INIT:
+        return "INIT";
+    case CSILK_CONN_ACCEPTED:
+        return "ACCEPTED";
+    case CSILK_CONN_TLS:
+        return "TLS";
+    case CSILK_CONN_READING:
+        return "READING";
+    case CSILK_CONN_PROCESSING:
+        return "PROCESSING";
+    case CSILK_CONN_WRITING:
+        return "WRITING";
+    case CSILK_CONN_STREAMING:
+        return "STREAMING";
+    case CSILK_CONN_CLOSING:
+        return "CLOSING";
+    case CSILK_CONN_CLOSED:
+        return "CLOSED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief Transition a connection to a new lifecycle state with invariant validation.
+ * @param client    Client connection instance.
+ * @param new_state Target lifecycle state.
+ */
+void
+csilk_conn_set_state(csilk_client_t* client, csilk_conn_state_t new_state)
+{
+    if (!client) {
+        return;
+    }
+    csilk_conn_state_t old_state = client->state;
+    if (old_state == new_state) {
+        return;
+    }
+
+    /* Invariant: once CLOSED, connection cannot transition except to INIT (pool reuse) */
+    if (old_state == CSILK_CONN_CLOSED && new_state != CSILK_CONN_INIT) {
+        CSILK_LOG_W("Conn %p: illegal state transition from CLOSED to %s",
+                    (void*)client,
+                    csilk_conn_state_str(new_state));
+        return;
+    }
+
+    /* Invariant: once CLOSING, only allowed next state is CLOSED */
+    if (old_state == CSILK_CONN_CLOSING && new_state != CSILK_CONN_CLOSED) {
+        CSILK_LOG_D("Conn %p: ignored transition from CLOSING to %s",
+                    (void*)client,
+                    csilk_conn_state_str(new_state));
+        return;
+    }
+
+    CSILK_LOG_T("Conn %p state: %s -> %s",
+                (void*)client,
+                csilk_conn_state_str(old_state),
+                csilk_conn_state_str(new_state));
+    client->state = new_state;
+}
+
+/**
+ * @brief Get the current lifecycle state of a connection.
+ * @param client Client connection instance.
+ * @return Current connection state, or CSILK_CONN_CLOSED if client is NULL.
+ */
+csilk_conn_state_t
+csilk_conn_get_state(const csilk_client_t* client)
+{
+    return client ? client->state : CSILK_CONN_CLOSED;
+}
+
 /* --- Connection pool (per-worker, lock-free) --- */
 
 /** @brief Get a client connection object from the worker-local free pool or
@@ -61,6 +145,7 @@ pool_get(worker_pool_t* wp)
         client = calloc(1, sizeof(csilk_client_t));
     }
     if (client) {
+        client->state = CSILK_CONN_INIT;
         client->ctx.file_fd = -1;
     }
     return client;
@@ -241,6 +326,7 @@ client_destroy(csilk_client_t* client)
     if (client->server) {
         atomic_fetch_sub(&client->server->active_connections, 1);
     }
+    csilk_conn_set_state(client, CSILK_CONN_CLOSED);
     csilk_ctx_cleanup(&client->ctx);
     if (client->ctx.arena) {
         pool_put_arena(client->owner_pool, client->ctx.arena);
@@ -347,10 +433,12 @@ on_close(csilk_io_handle_t* handle)
     csilk_client_t* client = (csilk_client_t*)handle->data;
     if (client) {
         CSILK_LOG_D("Connection: closed (client pointer: %p)", (void*)client);
+        csilk_conn_set_state(client, CSILK_CONN_CLOSING);
         _csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
         client_list_remove(client->server, client);
         client->ctx.conn_closed = 1;
         csilk_io_timer_stop(&client->timer);
+
         csilk_io_timer_stop(&client->read_timer);
         csilk_io_timer_stop(&client->write_timer);
         csilk_io_timer_stop(&client->request_timer);
@@ -537,6 +625,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
     if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&client->handle) == 0) {
         CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)", (void*)client);
+        csilk_conn_set_state(client, CSILK_CONN_ACCEPTED);
         if (server->config.tcp_nodelay) {
             csilk_io_tcp_nodelay(&client->handle, 1);
         }
@@ -548,6 +637,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
         if (server->ssl_ctx) {
             CSILK_LOG_D("Connection: setting up TLS for connection: %p", (void*)client);
+            csilk_conn_set_state(client, CSILK_CONN_TLS);
             if (setup_client_tls(client) < 0) {
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
                 return;
@@ -571,6 +661,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
         if (server->config.request_timeout_ms > 0) {
             csilk_io_timer_start(
                 &client->request_timer, on_read_timeout, server->config.request_timeout_ms, 0);
+        }
+
+        if (!server->ssl_ctx) {
+            csilk_conn_set_state(client, CSILK_CONN_READING);
         }
 
         r = csilk_io_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
@@ -627,6 +721,14 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
     csilk_client_t* client = (csilk_client_t*)stream->data;
     char*           base = buf->base;
     int             is_registered = 0;
+
+    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        if (base) {
+            free(base);
+        }
+        return;
+    }
+
     csilk_io_timer_stop(&client->timer);
     if (client->server->config.read_timeout_ms > 0) {
         csilk_io_timer_start(
@@ -637,8 +739,11 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
             BIO_write(client->read_bio, base, (int)nread);
             process_tls_read(client);
         } else if (client->ctx.is_websocket) {
+            csilk_conn_set_state(client, CSILK_CONN_STREAMING);
             csilk_ws_parse_frame(&client->ctx, (const uint8_t*)base, (size_t)nread);
         } else {
+            csilk_conn_set_state(client, CSILK_CONN_READING);
+
             /* Register the receive buffer so it stays alive for zero-copy header/body views. */
             if (_csilk_ctx_register_read_buffer(&client->ctx, base) == 0) {
                 is_registered = 1;
