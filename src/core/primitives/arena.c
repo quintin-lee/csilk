@@ -174,6 +174,76 @@ arena_aligned_free(void* ptr, size_t size)
 #endif
 }
 
+/** @brief Flush the thread-local arena chunk free list.
+ *
+ * Frees all chunks cached in the calling thread's TLS free list. Call this
+ * before the thread exits to prevent ASAN from reporting the cached chunks
+ * as memory leaks when arenas were used on a non-main thread. */
+void
+csilk_arena_flush_free_list(void)
+{
+    for (int t = 0; t < CSILK_ARENA_TIER_COUNT; t++) {
+        csilk_arena_chunk_t* curr = tls_tier_free_lists[t];
+        while (curr) {
+            csilk_arena_chunk_t* next = curr->next;
+            arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+            curr = next;
+        }
+        tls_tier_free_lists[t] = NULL;
+        tls_tier_counts[t] = 0;
+    }
+}
+
+static pthread_key_t g_arena_tls_key;
+
+/** @brief Initialize arena subsystem with automatic TLS cleanup.
+ *
+ * Creates a pthread key that automatically flushes the TLS chunk free list
+ * when the thread exits. Safe to call multiple times; subsequent calls are
+ * no-ops. */
+static void
+arena_tls_cleanup(void* unused)
+{
+    (void)unused;
+    csilk_arena_flush_free_list();
+}
+
+/** @brief Register the TLS cleanup key used to flush arena free lists.
+ *
+ * Creates (once) a pthread key whose destructor calls
+ * csilk_arena_flush_free_list so that thread-local arena chunks are reclaimed
+ * when a worker thread exits.
+ */
+static void
+arena_init_tls_key(void)
+{
+    pthread_key_create(&g_arena_tls_key, arena_tls_cleanup);
+}
+
+/**
+ * @brief Initialize the arena subsystem.
+ *
+ * Registers the thread-local arena chunk cleanup handler exactly once per
+ * process via pthread_once. Safe to call multiple times.
+ *
+ * @note Must be called during server startup before any arena allocation on
+ *       worker threads, so their free lists are flushed on thread exit. */
+void
+csilk_arena_init(void)
+{
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, arena_init_tls_key);
+}
+
+static inline void
+arena_ensure_tls_cleanup_registered(void)
+{
+    csilk_arena_init();
+    if (pthread_getspecific(g_arena_tls_key) == NULL) {
+        pthread_setspecific(g_arena_tls_key, (void*)1);
+    }
+}
+
 #ifdef DEBUG_ARENA
 /** @brief Fill redzone bytes after allocation for overflow detection. */
 static void
@@ -434,6 +504,7 @@ csilk_arena_free(csilk_arena_t* arena)
         int tier = arena_size_to_tier(curr->size);
         if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
             arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
+            arena_ensure_tls_cleanup_registered();
             curr->next = tls_tier_free_lists[tier];
             curr->used = 0;
             tls_tier_free_lists[tier] = curr;
@@ -472,6 +543,7 @@ csilk_arena_reset(csilk_arena_t* arena)
             int                  tier = arena_size_to_tier(curr->size);
             if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
                 arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
+                arena_ensure_tls_cleanup_registered();
                 curr->next = tls_tier_free_lists[tier];
                 curr->used = 0;
                 tls_tier_free_lists[tier] = curr;
@@ -485,66 +557,6 @@ csilk_arena_reset(csilk_arena_t* arena)
     } else {
         arena->total_allocated = 0;
     }
-}
-
-/** @brief Flush the thread-local arena chunk free list.
- *
- * Frees all chunks cached in the calling thread's TLS free list. Call this
- * before the thread exits to prevent ASAN from reporting the cached chunks
- * as memory leaks when arenas were used on a non-main thread. */
-void
-csilk_arena_flush_free_list(void)
-{
-    for (int t = 0; t < CSILK_ARENA_TIER_COUNT; t++) {
-        csilk_arena_chunk_t* curr = tls_tier_free_lists[t];
-        while (curr) {
-            csilk_arena_chunk_t* next = curr->next;
-            arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
-            curr = next;
-        }
-        tls_tier_free_lists[t] = NULL;
-        tls_tier_counts[t] = 0;
-    }
-}
-
-/** @brief Initialize arena subsystem with automatic TLS cleanup.
- *
- * Creates a pthread key that automatically flushes the TLS chunk free list
- * when the thread exits. Safe to call multiple times; subsequent calls are
- * no-ops. */
-static void
-arena_tls_cleanup(void* unused)
-{
-    (void)unused;
-    csilk_arena_flush_free_list();
-}
-
-/** @brief Register the TLS cleanup key used to flush arena free lists.
- *
- * Creates (once) a pthread key whose destructor calls
- * csilk_arena_flush_free_list so that thread-local arena chunks are reclaimed
- * when a worker thread exits.
- */
-static void
-arena_init_tls_key(void)
-{
-    static pthread_key_t tls_key;
-    pthread_key_create(&tls_key, arena_tls_cleanup);
-}
-
-/**
- * @brief Initialize the arena subsystem.
- *
- * Registers the thread-local arena chunk cleanup handler exactly once per
- * process via pthread_once. Safe to call multiple times.
- *
- * @note Must be called during server startup before any arena allocation on
- *       worker threads, so their free lists are flushed on thread exit. */
-void
-csilk_arena_init(void)
-{
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, arena_init_tls_key);
 }
 
 #ifdef TEST_OOM

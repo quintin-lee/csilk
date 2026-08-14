@@ -262,5 +262,6 @@ worker_thread(void* arg)
     }
 
     csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
+    csilk_arena_flush_free_list();
     uv_loop_close(loop_ptr);
 }
