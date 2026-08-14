@@ -207,7 +207,8 @@ csilk_arena_new(size_t default_chunk_size)
         return NULL;
     }
     arena->head = NULL;
-    arena->default_chunk_size = default_chunk_size;
+    arena->default_chunk_size =
+        default_chunk_size > 0 ? default_chunk_size : CSILK_DEFAULT_ARENA_SIZE;
     arena->align_64 = 0;
     arena->max_total_bytes = 0; /* Unlimited by default */
     arena->total_allocated = 0; /* Reset counter on creation */
@@ -226,20 +227,6 @@ csilk_arena_set_alignment(csilk_arena_t* arena, int enabled)
         arena->align_64 = enabled;
     }
 }
-
-/**
- * @brief Set maximum total bytes for this arena.
- *
- * If set to 0 (default), the arena has no size limit and will grow
- * unbounded until manually freed. If set to a non-zero value, allocations
- * exceeding this limit will fail and return NULL.
- *
- * @param arena    The arena to configure.
- * @param max_bytes Maximum total bytes (0 = unlimited).
- * @return 0 on success, -1 if arena is NULL.
- * @note Setting a limit resets the total_allocated counter to 0.
- */
-int csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes);
 
 /**
  * @brief Set maximum total bytes for this arena.
@@ -309,6 +296,19 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     size_t chunk_size = size > arena->default_chunk_size ? size : arena->default_chunk_size;
     csilk_arena_chunk_t* chunk = NULL;
 
+    /* Guard sizeof(chunk) + chunk_size against integer overflow.
+     * In practice this is unreachable (requires allocating ~18 EB)
+     * but provides formal correctness for all SIZE_MAX inputs. */
+    if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
+        return NULL;
+    }
+
+    /* Check if allocation would exceed max_total_bytes limit */
+    if (arena->max_total_bytes > 0 &&
+        (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
+        return NULL;
+    }
+
     /* Try to reuse a chunk from the thread-local free list if it matches the
      standard size. This avoids expensive aligned_alloc syscalls in the
      hot path. */
@@ -317,19 +317,6 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
         tls_chunk_free_list = chunk->next;
         tls_chunk_count--;
     } else {
-        /* Guard sizeof(chunk) + chunk_size against integer overflow.
-         * In practice this is unreachable (requires allocating ~18 EB)
-         * but provides formal correctness for all SIZE_MAX inputs. */
-        if (chunk_size > SIZE_MAX - sizeof(csilk_arena_chunk_t)) {
-            return NULL;
-        }
-
-        /* Check if allocation would exceed max_total_bytes limit */
-        if (arena->max_total_bytes > 0 &&
-            (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
-            return NULL;
-        }
-
         chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
     }
 

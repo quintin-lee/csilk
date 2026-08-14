@@ -458,3 +458,9 @@ void csilk_arena_set_alignment(csilk_arena_t* arena, int enabled);
  *  @param[out] total_size  Pointer to receive total allocated bytes (may be NULL).
  *  @param[out] total_used  Pointer to receive bytes actually used (may be NULL). */
 void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
+
+/** @brief Set maximum total allocated bytes for this arena.
+ *  @param arena     The arena allocator.
+ *  @param max_bytes Maximum allowed bytes (0 = unlimited).
+ *  @return 0 on success, -1 if arena is NULL. */
+int csilk_arena_set_max_bytes(csilk_arena_t* arena, size_t max_bytes);
