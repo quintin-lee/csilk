@@ -63,6 +63,7 @@ typedef struct csilk_io_loop_s {
     struct io_uring ring;
     int             stop_flag;
     int             active_handles;
+    int             running;
 } csilk_io_loop_t;
 
 typedef struct csilk_io_handle_s csilk_io_handle_t;
