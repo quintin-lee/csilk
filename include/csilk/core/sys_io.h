@@ -282,11 +282,63 @@ int csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
  */
 int csilk_io_fs_event_stop(csilk_io_fs_event_t* handle);
 
+typedef int csilk_io_os_sock_t;
+typedef void (*csilk_io_connection_cb)(csilk_io_stream_t* server, int status);
+typedef void (*csilk_io_alloc_cb)(csilk_io_handle_t* handle,
+                                  size_t             suggested_size,
+                                  csilk_io_buf_t*    buf);
+typedef void (*csilk_io_read_cb)(csilk_io_stream_t*    stream,
+                                 ssize_t               nread,
+                                 const csilk_io_buf_t* buf);
+typedef void (*csilk_io_signal_cb)(csilk_io_signal_t* handle, int signum);
+
+int      csilk_io_loop_init(csilk_io_loop_t* loop);
+int      csilk_io_loop_close(csilk_io_loop_t* loop);
+void     csilk_io_stop(csilk_io_loop_t* loop);
+uint64_t csilk_io_now(const csilk_io_loop_t* loop);
+void     csilk_io_update_time(csilk_io_loop_t* loop);
+
+int csilk_io_is_active(const csilk_io_handle_t* handle);
+
+int csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle);
+int csilk_io_tcp_open(csilk_io_tcp_t* handle, csilk_io_os_sock_t sock);
+int csilk_io_tcp_bind(csilk_io_tcp_t* handle, const struct sockaddr* addr, unsigned int flags);
+int csilk_io_listen(csilk_io_stream_t* stream, int backlog, csilk_io_connection_cb cb);
+int csilk_io_accept(csilk_io_stream_t* server, csilk_io_stream_t* client);
+int csilk_io_tcp_nodelay(csilk_io_tcp_t* handle, int enable);
+int csilk_io_tcp_keepalive(csilk_io_tcp_t* handle, int enable, unsigned int delay);
+int csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen);
+int csilk_io_ip4_addr(const char* ip, int port, struct sockaddr_in* addr);
+int csilk_io_ip4_name(const struct sockaddr_in* src, char* dst, size_t size);
+int csilk_io_ip6_name(const struct sockaddr_in6* src, char* dst, size_t size);
+
+int csilk_io_read_start(csilk_io_stream_t* stream,
+                        csilk_io_alloc_cb  alloc_cb,
+                        csilk_io_read_cb   read_cb);
+int csilk_io_read_stop(csilk_io_stream_t* stream);
+
+int csilk_io_timer_again(csilk_io_timer_t* handle);
+
+int csilk_io_signal_init(csilk_io_loop_t* loop, csilk_io_signal_t* handle);
+int csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int signum);
+int csilk_io_signal_stop(csilk_io_signal_t* handle);
+
+static inline const char*
+csilk_io_err_name(int err)
+{
+    (void)err;
+    return "IO_ERR";
+}
+
 #else
 
 #include <uv.h>
 /** @brief Event loop type (libuv loop). */
 typedef uv_loop_t csilk_io_loop_t;
+/** @brief Generic handle type (libuv handle). */
+typedef uv_handle_t csilk_io_handle_t;
+/** @brief Stream handle type (libuv stream). */
+typedef uv_stream_t csilk_io_stream_t;
 /** @brief TCP/stream connection handle (libuv tcp handle). */
 typedef uv_tcp_t csilk_io_tcp_t;
 /** @brief Timer handle (libuv timer handle). */
@@ -297,6 +349,21 @@ typedef uv_async_t csilk_io_async_t;
 typedef uv_signal_t csilk_io_signal_t;
 /** @brief Work (thread-pool job) handle (libuv work handle). */
 typedef uv_work_t csilk_io_work_t;
+/** @brief Write request type (libuv write request). */
+typedef uv_write_t csilk_io_write_t;
+/** @brief OS file-descriptor type (libuv os fd). */
+typedef uv_os_fd_t csilk_io_os_fd_t;
+/** @brief File handle type (libuv file descriptor). */
+typedef uv_file csilk_io_file_t;
+
+/** @brief Alias of uv_buf_t. */
+#define csilk_io_buf_t uv_buf_t
+/** @brief Alias of uv_buf_init. */
+#define csilk_io_buf_init uv_buf_init
+/** @brief Alias of uv_write. */
+#define csilk_io_write uv_write
+/** @brief Alias of uv_close. */
+#define csilk_io_close uv_close
 
 /** @brief Alias of uv_hrtime. */
 #define csilk_io_hrtime uv_hrtime
@@ -369,6 +436,147 @@ static inline int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
     return uv_timer_stop(handle);
+}
+
+static inline int
+csilk_io_timer_again(csilk_io_timer_t* handle)
+{
+    return uv_timer_again(handle);
+}
+
+static inline int
+csilk_io_loop_init(csilk_io_loop_t* loop)
+{
+    return uv_loop_init(loop);
+}
+
+static inline int
+csilk_io_loop_close(csilk_io_loop_t* loop)
+{
+    return uv_loop_close(loop);
+}
+
+static inline void
+csilk_io_stop(csilk_io_loop_t* loop)
+{
+    uv_stop(loop);
+}
+
+static inline uint64_t
+csilk_io_now(const csilk_io_loop_t* loop)
+{
+    return uv_now(loop);
+}
+
+static inline void
+csilk_io_update_time(csilk_io_loop_t* loop)
+{
+    uv_update_time(loop);
+}
+
+typedef uv_os_sock_t     csilk_io_os_sock_t;
+typedef uv_connection_cb csilk_io_connection_cb;
+typedef uv_alloc_cb      csilk_io_alloc_cb;
+typedef uv_read_cb       csilk_io_read_cb;
+typedef uv_signal_cb     csilk_io_signal_cb;
+
+#define csilk_io_is_active uv_is_active
+#define csilk_io_err_name uv_err_name
+
+static inline int
+csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle)
+{
+    return uv_tcp_init(loop, handle);
+}
+
+static inline int
+csilk_io_tcp_open(csilk_io_tcp_t* handle, csilk_io_os_sock_t sock)
+{
+    return uv_tcp_open(handle, sock);
+}
+
+static inline int
+csilk_io_tcp_bind(csilk_io_tcp_t* handle, const struct sockaddr* addr, unsigned int flags)
+{
+    return uv_tcp_bind(handle, addr, flags);
+}
+
+static inline int
+csilk_io_listen(csilk_io_stream_t* stream, int backlog, csilk_io_connection_cb cb)
+{
+    return uv_listen(stream, backlog, cb);
+}
+
+static inline int
+csilk_io_accept(csilk_io_stream_t* server, csilk_io_stream_t* client)
+{
+    return uv_accept(server, client);
+}
+
+static inline int
+csilk_io_tcp_nodelay(csilk_io_tcp_t* handle, int enable)
+{
+    return uv_tcp_nodelay(handle, enable);
+}
+
+static inline int
+csilk_io_tcp_keepalive(csilk_io_tcp_t* handle, int enable, unsigned int delay)
+{
+    return uv_tcp_keepalive(handle, enable, delay);
+}
+
+static inline int
+csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen)
+{
+    return uv_tcp_getpeername((const uv_tcp_t*)handle, name, namelen);
+}
+
+static inline int
+csilk_io_ip4_addr(const char* ip, int port, struct sockaddr_in* addr)
+{
+    return uv_ip4_addr(ip, port, addr);
+}
+
+static inline int
+csilk_io_ip4_name(const struct sockaddr_in* src, char* dst, size_t size)
+{
+    return uv_ip4_name(src, dst, size);
+}
+
+static inline int
+csilk_io_ip6_name(const struct sockaddr_in6* src, char* dst, size_t size)
+{
+    return uv_ip6_name(src, dst, size);
+}
+
+static inline int
+csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk_io_read_cb read_cb)
+{
+    return uv_read_start(stream, alloc_cb, read_cb);
+}
+
+static inline int
+csilk_io_read_stop(csilk_io_stream_t* stream)
+{
+    return uv_read_stop(stream);
+}
+
+static inline int
+csilk_io_signal_init(csilk_io_loop_t* loop, csilk_io_signal_t* handle)
+{
+    return uv_signal_init(loop, handle);
+}
+
+static inline int
+csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int signum)
+{
+    return uv_signal_start(handle, cb, signum);
+}
+
+static inline int
+csilk_io_signal_stop(csilk_io_signal_t* handle)
+{
+    return uv_signal_stop(handle);
 }
 
 /**

@@ -35,13 +35,13 @@
 
 /**
  * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
- * @param[in] handle libuv async handle whose data points at the worker_pool_t.
+ * @param[in] handle async handle whose data points at the worker_pool_t.
  * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
  *       runs its callback, freeing each task afterwards. No-op if the pool is
  *       NULL. Runs on the worker loop when the async is signaled.
  */
 static void
-on_dispatch_async(uv_async_t* handle)
+on_dispatch_async(csilk_io_async_t* handle)
 {
     worker_pool_t* wp = (worker_pool_t*)handle->data;
     if (!wp) {
@@ -70,7 +70,7 @@ void
 _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
 {
     csilk_lfq_init(&wp->dispatch_queue);
-    uv_async_init(loop, &wp->dispatch_async, on_dispatch_async);
+    csilk_io_async_init(loop, &wp->dispatch_async, on_dispatch_async);
     wp->dispatch_async.data = wp;
 }
 
@@ -103,13 +103,13 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     task->arg = arg;
     csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
 
-    uv_async_send(&wp->dispatch_async);
+    csilk_io_async_send(&wp->dispatch_async);
 }
 
 /* --- CPU pinning --- */
 
 /**
- * @brief Pin the calling thread to a CPU core via libuv thread affinity.
+ * @brief Pin the calling thread to a CPU core via thread affinity.
  * @param[in] core_id Desired core index (wrapped modulo online core count).
  * @note No-op on Windows or when the wrapped core index is out of range.
  *       Logs the resulting pin via CSILK_LOG_I.
@@ -126,8 +126,8 @@ pin_thread_to_core(int core_id)
     char cpuset[128] = {0};
     if (target_core < 128) {
         cpuset[target_core] = 1;
-        uv_thread_t tid = uv_thread_self();
-        uv_thread_setaffinity(&tid, cpuset, NULL, 128);
+        csilk_thread_t tid = csilk_thread_self();
+        csilk_thread_setaffinity(&tid, cpuset, NULL, 128);
         CSILK_LOG_I("Server: Pinned worker thread %d to CPU core %d", core_id, target_core);
     }
 #else
@@ -140,7 +140,7 @@ pin_thread_to_core(int core_id)
 /** @brief Create, bind, and listen on a TCP socket with optional SO_REUSEPORT. */
 int
 bind_and_listen(csilk_io_loop_t* loop,
-                uv_tcp_t*        out_handle,
+                csilk_io_tcp_t*  out_handle,
                 int              port,
                 int              backlog,
                 bool             reuseport,
@@ -175,7 +175,7 @@ bind_and_listen(csilk_io_loop_t* loop,
         }
 #endif
         struct sockaddr_in addr;
-        uv_ip4_addr("0.0.0.0", port, &addr);
+        csilk_io_ip4_addr("0.0.0.0", port, &addr);
         if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
             close(fd);
             return -1;
@@ -184,31 +184,33 @@ bind_and_listen(csilk_io_loop_t* loop,
             close(fd);
             return -1;
         }
-        int r = uv_tcp_init(loop, out_handle);
+        int r = csilk_io_tcp_init(loop, out_handle);
         if (r < 0) {
             close(fd);
             return -1;
         }
-        r = uv_tcp_open(out_handle, (uv_os_sock_t)fd);
+        r = csilk_io_tcp_open(out_handle, (csilk_io_os_sock_t)fd);
         if (r < 0) {
             close(fd);
             return -1;
         }
+#ifndef CSILK_USE_URING
         out_handle->flags |= UV_HANDLE_BOUND;
-        return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
+#endif
+        return csilk_io_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
     }
 #endif
-    int r = uv_tcp_init(loop, out_handle);
+    int r = csilk_io_tcp_init(loop, out_handle);
     if (r < 0) {
         return -1;
     }
     struct sockaddr_in addr;
-    uv_ip4_addr("0.0.0.0", port, &addr);
-    r = uv_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
+    csilk_io_ip4_addr("0.0.0.0", port, &addr);
+    r = csilk_io_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
     if (r < 0) {
         return -1;
     }
-    return uv_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
+    return csilk_io_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
 }
 
 /* --- Worker thread --- */
@@ -217,11 +219,11 @@ bind_and_listen(csilk_io_loop_t* loop,
 void
 worker_thread(void* arg)
 {
-    worker_data_t*  data = (worker_data_t*)arg;
-    worker_pool_t*  wp = data->wp;
-    csilk_server_t* server = wp->server;
-    int             port = data->port;
-    uv_barrier_t*   barrier = data->barrier;
+    worker_data_t*   data = (worker_data_t*)arg;
+    worker_pool_t*   wp = data->wp;
+    csilk_server_t*  server = wp->server;
+    int              port = data->port;
+    csilk_barrier_t* barrier = data->barrier;
     free(data);
 
     pin_thread_to_core(wp->worker_index);
@@ -232,7 +234,7 @@ worker_thread(void* arg)
     setenv("UV_KQUEUE_OOB", "1", 0);
 #endif
 
-    uv_loop_init(loop_ptr);
+    csilk_io_loop_init(loop_ptr);
 
     wp->loop_ptr = loop_ptr;
     wp->server_handle.data = wp;
@@ -247,21 +249,21 @@ worker_thread(void* arg)
                         true,
                         wp->worker_index) < 0) {
         if (barrier) {
-            uv_barrier_wait(barrier);
+            csilk_barrier_wait(barrier);
         }
-        uv_loop_close(loop_ptr);
+        csilk_io_loop_close(loop_ptr);
         return;
     }
 
     worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
     wp->stop_async.data = &sd;
-    uv_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
+    csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
 
     if (barrier) {
-        uv_barrier_wait(barrier);
+        csilk_barrier_wait(barrier);
     }
 
     csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
     csilk_arena_flush_free_list();
-    uv_loop_close(loop_ptr);
+    csilk_io_loop_close(loop_ptr);
 }
