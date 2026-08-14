@@ -934,9 +934,55 @@ test_csilk_set_ex_destructor()
     printf("csilk_set_ex_destructor passed!\n");
 }
 
+static int   g_drain_called = 0;
+static void* g_drain_arg = NULL;
+
+static void
+mock_drain_callback(csilk_ctx_t* c, void* arg)
+{
+    (void)c;
+    g_drain_called++;
+    g_drain_arg = arg;
+}
+
+static void
+test_csilk_streaming_backpressure()
+{
+    printf("Testing streaming backpressure and flow control...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    // Default watermarks
+    assert(ctx->write_high_water_mark == CSILK_WRITE_HWM_DEFAULT);
+    assert(ctx->write_low_water_mark == CSILK_WRITE_LWM_DEFAULT);
+    assert(ctx->max_write_buffer_size == CSILK_WRITE_MAX_BUFFER_DEFAULT);
+
+    // Custom watermarks
+    csilk_response_set_watermarks(ctx, 128 * 1024, 32 * 1024, 8 * 1024 * 1024);
+    assert(ctx->write_high_water_mark == 128 * 1024);
+    assert(ctx->write_low_water_mark == 32 * 1024);
+    assert(ctx->max_write_buffer_size == 8 * 1024 * 1024);
+
+    // Register on_drain
+    g_drain_called = 0;
+    g_drain_arg = NULL;
+    int user_token = 42;
+    csilk_response_on_drain(ctx, mock_drain_callback, &user_token);
+    assert(ctx->on_drain == mock_drain_callback);
+    assert(ctx->on_drain_data == &user_token);
+
+    // NULL context safety checks
+    assert(csilk_response_get_write_queue_size(NULL) == 0);
+    assert(csilk_response_is_writable(NULL) == 0);
+    assert(csilk_response_write(NULL, (const uint8_t*)"test", 4) == -1);
+    csilk_response_set_watermarks(NULL, 0, 0, 0);
+    csilk_response_on_drain(NULL, NULL, NULL);
+
+    csilk_test_ctx_free(ctx);
+    printf("csilk_streaming_backpressure passed!\n");
+}
+
 int
 main()
-
 {
     test_csilk_next_aborted();
 
@@ -993,6 +1039,7 @@ main()
     test_csilk_read_buffer_dynamic_expansion();
     test_csilk_view_accessors();
     test_csilk_set_ex_destructor();
+    test_csilk_streaming_backpressure();
     printf("test_context_ext: ALL PASSED\n");
     return 0;
 }

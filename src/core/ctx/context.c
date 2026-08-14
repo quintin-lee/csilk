@@ -188,11 +188,15 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->is_sse = 0;
     c->is_async = 0;
     c->response_started = 0;
+    c->write_paused = 0;
+    c->on_drain = NULL;
+    c->on_drain_data = NULL;
     c->handler_index = -1;
     c->handlers = NULL;
     c->handler_count = 0;
     c->current_handler = NULL;
     c->on_ws_message = NULL;
+
     memset(c->request_id, 0, sizeof(c->request_id));
 }
 
@@ -354,7 +358,14 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
     c->read_buffers_capacity = 16;
+    c->write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+    c->write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+    c->max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+    c->write_paused = 0;
+    c->on_drain = NULL;
+    c->on_drain_data = NULL;
     if (s) {
+
         c->storage_driver = s->storage_driver;
         c->crypto_driver = s->crypto_driver;
         c->cipher_driver = s->cipher_driver;

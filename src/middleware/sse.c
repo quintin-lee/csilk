@@ -11,6 +11,7 @@
 
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
 
 /**
  * @brief SSE write completion callback.
@@ -31,10 +32,18 @@ on_sse_write(csilk_io_write_t* req, int status)
     } else {
         CSILK_LOG_T("SSE: write completed successfully");
     }
+    csilk_client_t* client = NULL;
+    if (req->handle) {
+        client = (csilk_client_t*)req->handle->data;
+    }
     if (req->data) {
         free(req->data);
     }
     free(req);
+
+    if (client) {
+        _csilk_check_and_trigger_drain(client);
+    }
 }
 
 /**
@@ -126,24 +135,29 @@ csilk_sse_init(csilk_ctx_t* c)
  *          reads slower than the server writes, the kernel buffer may fill
  *          and writes will fail with EAGAIN (reported via on_sse_write).
  */
-void
+int
 csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 {
     void* internal_client = _csilk_get_internal_client(c);
     if (!c || !internal_client) {
         CSILK_LOG_W("SSE: send failed - context or client missing");
-        return;
+        return -1;
     }
 
-    /* Format the SSE message per RFC 8895 §2.
-     Each message consists of optional "event:" and "data:" fields,
-     terminated by a blank line. Example:
-       event: update\n
-       data: {"key":"value"}\n
-       \n  */
+    csilk_client_t* cl = (csilk_client_t*)internal_client;
+    size_t          q = _csilk_client_get_write_queue_size(cl);
+
     size_t event_len = event ? strlen(event) : 0;
     size_t data_len = data ? strlen(data) : 0;
     size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 2;
+
+    if (c->max_write_buffer_size > 0 && q + buf_size > c->max_write_buffer_size) {
+        CSILK_LOG_E("SSE: max write buffer exceeded (%zu + %zu > %zu)",
+                    q,
+                    buf_size,
+                    c->max_write_buffer_size);
+        return -1;
+    }
 
     CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
                 event ? event : "",
@@ -153,7 +167,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     char* buf = malloc(buf_size);
     if (!buf) {
         CSILK_LOG_E("SSE: failed to allocate memory for event buffer of size %zu", buf_size);
-        return;
+        return -1;
     }
 
     int pos = 0;
@@ -169,14 +183,21 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     if (!req) {
         CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request structure");
         free(buf);
-        return;
+        return -1;
     }
 
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
     req->data = buf;
-    csilk_client_t*    cl = (csilk_client_t*)internal_client;
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
     csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+
+    q = _csilk_client_get_write_queue_size(cl);
+    if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
+        c->write_paused = 1;
+        return 0;
+    }
+
+    return 1;
 }
 
 /**

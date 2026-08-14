@@ -174,10 +174,14 @@ void csilk_redirect_simple(csilk_ctx_t* c, const char* url);
  */
 void csilk_file(csilk_ctx_t* c, const char* file_path);
 
-/* --- Streaming Response (Chunked Transfer Encoding) --- */
+/* --- Streaming Response (Chunked Transfer Encoding & Backpressure) --- */
+
+#define CSILK_WRITE_HWM_DEFAULT (64 * 1024)
+#define CSILK_WRITE_LWM_DEFAULT (16 * 1024)
+#define CSILK_WRITE_MAX_BUFFER_DEFAULT (4 * 1024 * 1024)
 
 /**
- * @brief Write a chunk to the response stream (chunked transfer encoding).
+ * @brief Write a chunk to the response stream (chunked transfer encoding) with backpressure.
  *
  * The first call sends the HTTP response headers with
  * Transfer-Encoding: chunked.  Subsequent calls append chunked frames.
@@ -187,8 +191,11 @@ void csilk_file(csilk_ctx_t* c, const char* file_path);
  * @param c    The request context.
  * @param data Raw data for the chunk.
  * @param len  Byte length of @p data.
+ * @return 1 if written and write queue is healthy (writable),
+ *         0 if backpressure was triggered (queue >= high water mark; caller should pause),
+ *        -1 on error or if max write buffer exceeded.
  */
-void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
+int csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
 
 /**
  * @brief Finalise a chunked streaming response.
@@ -199,6 +206,46 @@ void csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
  * @param c  The request context.
  */
 void csilk_response_end(csilk_ctx_t* c);
+
+/**
+ * @brief Query current pending outbound bytes queued for this connection.
+ *
+ * @param c The request context.
+ * @return Number of queued bytes waiting to be transmitted.
+ */
+size_t csilk_response_get_write_queue_size(csilk_ctx_t* c);
+
+/**
+ * @brief Check if the connection is currently writable (below high water mark).
+ *
+ * @param c The request context.
+ * @return 1 if writable, 0 if paused / backpressure active.
+ */
+int csilk_response_is_writable(csilk_ctx_t* c);
+
+/**
+ * @brief Configure backpressure watermarks for this connection.
+ *
+ * @param c               The request context.
+ * @param high_water_mark High water mark in bytes (0 to disable pause threshold).
+ * @param low_water_mark  Low water mark in bytes (threshold to resume/trigger on_drain).
+ * @param max_buffer_size Hard buffer limit in bytes (0 to disable hard limit).
+ */
+void csilk_response_set_watermarks(csilk_ctx_t* c,
+                                   size_t       high_water_mark,
+                                   size_t       low_water_mark,
+                                   size_t       max_buffer_size);
+
+/**
+ * @brief Register a drain callback to be invoked when the outbound queue drains below low water mark.
+ *
+ * @param c         The request context.
+ * @param on_drain  Drain callback function pointer.
+ * @param user_data User data passed to @p on_drain.
+ */
+void csilk_response_on_drain(csilk_ctx_t* c,
+                             void (*on_drain)(csilk_ctx_t* c, void* user_data),
+                             void* user_data);
 
 /**
  * @brief Signal the server to push a resource via HTTP/2 server push.

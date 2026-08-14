@@ -554,7 +554,7 @@ write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
     _csilk_send_data_owned(c, buf, total);
 }
 
-/** @brief Write data to a streaming response using chunked transfer encoding.
+/** @brief Write data to a streaming response using chunked transfer encoding with backpressure.
  *
  * On the first call, automatically sends chunked headers (status line +
  * Transfer-Encoding: chunked). Subsequent calls append data chunks.
@@ -564,28 +564,118 @@ write_chunk_frame(csilk_ctx_t* c, const uint8_t* data, size_t len)
  * @param c    Request context.
  * @param data Payload data to write.
  * @param len  Length of data in bytes.
+ * @return 1 if written and write queue is healthy (writable),
+ *         0 if backpressure was triggered (queue >= high water mark; caller should pause),
+ *        -1 on error or if max write buffer exceeded.
  * @note After all data has been written, call csilk_response_end() to send
- *       the terminal chunk and finalize the response.
- * @note Calling with len=0 is a no-op. */
-void
+ *       the terminal chunk and finalize the response. */
+int
 csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
 {
     if (!c || c->conn_closed || !c->_internal_client) {
-        return;
+        return -1;
+    }
+
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    size_t          q = _csilk_client_get_write_queue_size(client);
+
+    if (c->max_write_buffer_size > 0 && q + len > c->max_write_buffer_size) {
+        CSILK_LOG_E("Response: max write buffer exceeded (%zu + %zu > %zu), dropping write",
+                    q,
+                    len,
+                    c->max_write_buffer_size);
+        return -1;
     }
 
     if (!c->response_started) {
         if (send_chunked_headers(c) != 0) {
-            return;
+            return -1;
         }
         c->response_started = 1;
         c->is_async = 1;
     }
 
     if (len == 0) {
+        return (c->write_high_water_mark == 0 || q < c->write_high_water_mark) ? 1 : 0;
+    }
+
+    write_chunk_frame(c, data, len);
+
+    q = _csilk_client_get_write_queue_size(client);
+    if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
+        c->write_paused = 1;
+        return 0;
+    }
+
+    return 1;
+}
+
+/** @brief Query current pending outbound bytes queued for this connection.
+ *
+ * @param c The request context.
+ * @return Number of queued bytes waiting to be transmitted. */
+size_t
+csilk_response_get_write_queue_size(csilk_ctx_t* c)
+{
+    if (!c || !c->_internal_client) {
+        return 0;
+    }
+    return _csilk_client_get_write_queue_size((csilk_client_t*)c->_internal_client);
+}
+
+/** @brief Check if the connection is currently writable (below high water mark).
+ *
+ * @param c The request context.
+ * @return 1 if writable, 0 if paused / backpressure active. */
+int
+csilk_response_is_writable(csilk_ctx_t* c)
+{
+    if (!c || c->conn_closed || !c->_internal_client) {
+        return 0;
+    }
+    if (c->write_paused) {
+        return 0;
+    }
+    size_t q = csilk_response_get_write_queue_size(c);
+    return (c->write_high_water_mark == 0 || q < c->write_high_water_mark);
+}
+
+/** @brief Configure backpressure watermarks for this connection.
+ *
+ * @param c               The request context.
+ * @param high_water_mark High water mark in bytes (0 to disable pause threshold).
+ * @param low_water_mark  Low water mark in bytes (threshold to resume/trigger on_drain).
+ * @param max_buffer_size Hard buffer limit in bytes (0 to disable hard limit). */
+void
+csilk_response_set_watermarks(csilk_ctx_t* c,
+                              size_t       high_water_mark,
+                              size_t       low_water_mark,
+                              size_t       max_buffer_size)
+{
+    if (!c) {
         return;
     }
-    write_chunk_frame(c, data, len);
+    c->write_high_water_mark = high_water_mark;
+    c->write_low_water_mark =
+        (low_water_mark <= high_water_mark) ? low_water_mark : (high_water_mark / 2);
+    c->max_write_buffer_size = max_buffer_size;
+}
+
+/** @brief Register a drain callback to be invoked when the outbound queue drains below low water mark.
+ *
+ * @param c         The request context.
+ * @param on_drain  Drain callback function pointer.
+ * @param user_data User data passed to @p on_drain. */
+void
+csilk_response_on_drain(csilk_ctx_t* c,
+                        void (*on_drain)(csilk_ctx_t* c, void* user_data),
+                        void* user_data)
+{
+    if (!c) {
+        return;
+    }
+    c->on_drain = on_drain;
+    c->on_drain_data = user_data;
 }
 
 /** @brief Finalize a streaming response by sending the terminal chunk.

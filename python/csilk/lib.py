@@ -507,11 +507,21 @@ def get_bindings():
     lib.csilk_redirect_simple.restype = None
     lib.csilk_redirect_simple.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
 
-    lib.csilk_response_write.restype = None
+    lib.csilk_response_write.restype = ctypes.c_int32
     lib.csilk_response_write.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t]
+
+    lib.csilk_response_get_write_queue_size.restype = ctypes.c_size_t
+    lib.csilk_response_get_write_queue_size.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_response_is_writable.restype = ctypes.c_int32
+    lib.csilk_response_is_writable.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_response_set_watermarks.restype = None
+    lib.csilk_response_set_watermarks.argtypes = [CsilkCtxPtr, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_size_t]
 
     lib.csilk_response_end.restype = None
     lib.csilk_response_end.argtypes = [CsilkCtxPtr]
+
 
     lib.csilk_push_promise.restype = ctypes.c_int32
     lib.csilk_push_promise.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
