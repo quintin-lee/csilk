@@ -16,22 +16,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <openssl/sha.h>
+
 /**
- * @brief SHA-1 hashing context.
+ * @brief SHA-1 hashing context (backed by OpenSSL).
  *
  * Holds intermediate state and buffered data during a multi-step SHA-1
- * computation.  Use csilk_sha1_init / _update / _final.
+ * computation. Use csilk_sha1_init / _update / _final.
  *
- * @note SHA-1 is considered cryptographically weak for security purposes.
- *       It is used internally only for WebSocket handshake compliance
- *       (RFC 6455).  Do not use for security-critical hashing.
+ * @note SHA-1 is used internally for WebSocket handshake compliance (RFC 6455).
  */
-typedef struct {
-    uint32_t state[5];   /**< 160-bit intermediate hash state (5 × 32-bit words). */
-    uint32_t count[2];   /**< Total message length in bits (64-bit, split into two
-                           32-bit halves). */
-    uint8_t  buffer[64]; /**< 512-bit block buffer for data not yet processed. */
-} csilk_sha1_ctx;
+typedef SHA_CTX csilk_sha1_ctx;
 
 /**
  * @brief Initialise a SHA-1 hashing context.
@@ -64,16 +59,12 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]);
 
 /**
- * @brief SHA-256 hashing context.
+ * @brief SHA-256 hashing context (backed by OpenSSL).
  *
  * Holds intermediate state and buffered data during a multi-step SHA-256
- * computation.  Use csilk_sha256_init / _update / _final.
+ * computation. Use csilk_sha256_init / _update / _final.
  */
-typedef struct {
-    uint32_t state[8];   /**< 256-bit intermediate hash state (8 × 32-bit words). */
-    uint64_t count;      /**< Total message length in bits. */
-    uint8_t  buffer[64]; /**< 512-bit block buffer for data not yet processed. */
-} csilk_sha256_ctx;
+typedef SHA256_CTX csilk_sha256_ctx;
 
 /**
  * @brief Initialise a SHA-256 hashing context.
