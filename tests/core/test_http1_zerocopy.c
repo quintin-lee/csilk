@@ -40,10 +40,54 @@ test_header_slice_parsing(void)
     printf("test_header_slice_parsing passed\n");
 }
 
+static void
+test_view_utilities(void)
+
+{
+    /* Constructors */
+    csilk_view_t v1 = csilk_view("hello world", 5);
+    assert(v1.len == 5);
+    assert(strncmp(v1.ptr, "hello", 5) == 0);
+    assert(strncmp(v1.data, "hello", 5) == 0);
+    assert(!csilk_view_is_empty(v1));
+
+    csilk_view_t v_empty = csilk_view(NULL, 0);
+    assert(csilk_view_is_empty(v_empty));
+
+    csilk_view_t v_str = csilk_view_from_str("csilk framework");
+    assert(v_str.len == 15);
+    assert(!csilk_view_is_empty(v_str));
+
+    /* Comparison */
+    assert(csilk_view_cmp(v1, "hello") == 0);
+    assert(csilk_view_cmp(v1, "hell") > 0);
+    assert(csilk_view_cmp(v1, "hello world") < 0);
+
+    /* Case-insensitive comparison */
+    assert(csilk_view_casecmp(v1, "HELLO") == 0);
+    assert(csilk_view_casecmp(v1, "HeLLo") == 0);
+    assert(csilk_view_casecmp(v1, "WORLD") < 0);
+
+    /* Equality */
+    csilk_view_t v2 = csilk_view("hello there", 5);
+    assert(csilk_view_equal(v1, v2) == 1);
+    csilk_view_t v3 = csilk_view("world", 5);
+    assert(csilk_view_equal(v1, v3) == 0);
+
+    /* Heap materialization */
+    char* heap_s = csilk_view_to_heap(v1);
+    assert(heap_s != NULL);
+    assert(strcmp(heap_s, "hello") == 0);
+    free(heap_s);
+
+    printf("test_view_utilities passed\n");
+}
+
 int
 main(void)
 {
     test_header_slice_parsing();
+    test_view_utilities();
     printf("All test_http1_zerocopy tests passed successfully!\n");
     return 0;
 }

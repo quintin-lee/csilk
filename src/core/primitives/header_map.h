@@ -41,6 +41,15 @@ CSILK_INTERNAL uint32_t hash_key(const char* key);
 CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
 
 /**
+ * @brief Look up a header value by key in the hash map returning a zero-copy view.
+ *
+ * @param map Header hash map (may be NULL).
+ * @param key Header key to find (case-insensitive).
+ * @return A csilk_view_t slice of the header value.
+ */
+CSILK_INTERNAL csilk_view_t map_get_view(csilk_header_map_t* map, const char* key);
+
+/**
  * @brief Set a header value in the hash map, overwriting any existing entry.
  *
  * Hashes the key, searches the bucket for an existing entry, and replaces
