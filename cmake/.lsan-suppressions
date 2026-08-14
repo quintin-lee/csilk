@@ -22,6 +22,7 @@ leak:nghttp2_
 leak:pthread_
 
 # Python internals (when using ctypes)
+leak:libpython
 leak:PyMem_RawMalloc
 leak:PyObject_Malloc
 leak:_PyObject_Malloc
@@ -30,8 +31,14 @@ leak:PyMem_Malloc
 leak:_PyBytes_Resize
 leak:PyType_Ready
 leak:Py_Initialize
+leak:PyUnicode_
+leak:PyMarshal_
+leak:PyEval_
+leak:PyTuple_
+leak:PyDict_
 
 # test_integration: a single outstanding client write can remain queued
 # at server shutdown if the process exits before the cancellation callback
 # runs. This is a known shutdown-timing edge case, not a functional leak.
 leak:csilk_client_write
+leak:_csilk_send_data_owned

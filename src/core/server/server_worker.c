@@ -267,6 +267,9 @@ worker_thread(void* arg)
     }
 
     csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
+    for (int i = 0; i < 16 && csilk_io_loop_alive(loop_ptr); i++) {
+        csilk_io_run(loop_ptr, CSILK_IO_RUN_NOWAIT);
+    }
     csilk_arena_flush_free_list();
     csilk_io_loop_close(loop_ptr);
 }

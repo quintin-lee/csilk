@@ -287,6 +287,15 @@ typedef enum { CSILK_IO_RUN_DEFAULT = 0, CSILK_IO_RUN_ONCE, CSILK_IO_RUN_NOWAIT 
 int csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode);
 
 /**
+ * @brief Check whether the event loop has active handles or pending requests.
+ */
+static inline int
+csilk_io_loop_alive(const csilk_io_loop_t* loop)
+{
+    return loop ? loop->active_handles > 0 : 0;
+}
+
+/**
  * @brief Initialize a timer handle on a loop.
  * @param[in,out] loop Loop that will own the timer.
  * @param[in,out] handle Timer handle to initialize.
@@ -446,6 +455,15 @@ static inline int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
     return uv_run(loop, mode);
+}
+
+/**
+ * @brief Check whether the event loop has active handles or pending requests.
+ */
+static inline int
+csilk_io_loop_alive(const csilk_io_loop_t* loop)
+{
+    return uv_loop_alive(loop);
 }
 
 /**
