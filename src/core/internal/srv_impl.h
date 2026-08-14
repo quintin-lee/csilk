@@ -114,11 +114,11 @@ CSILK_INTERNAL void csilk_client_read_start(csilk_client_t* client);
 CSILK_INTERNAL void csilk_client_read_stop(csilk_client_t* client);
 
 /* --- Server split (server_lifecycle.c, server_shutdown.c, server_worker.c) --- */
-/* These declarations use libuv types and are only needed by the libuv backend. */
 typedef struct {
     worker_pool_t*   wp;
     int              port;
     csilk_barrier_t* barrier;
+    _Atomic int      success;
 } worker_data_t;
 
 typedef struct {
