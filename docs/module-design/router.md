@@ -1,6 +1,10 @@
 # Router Design
 
-csilk uses a **Radix Tree** (compact prefix tree) for efficient route matching. The router supports static routes, named parameters (`:param`), and wildcards (`*wildcard`). Path matching is **SIMD-accelerated** via AVX2 (x86_64) and ARM NEON (aarch64) for byte-level prefix comparison — achieving ~50ns per lookup on AVX2 (P99 ≤ 100ns, 100K routes) and ~80ns per lookup on NEON. Routes **MUST** be registered before server start; the router is read-only during request processing. Wildcard routes **SHOULD** be registered last to ensure static/param routes take priority.
+csilk uses a **Segment-Based Prefix Trie** with SIMD boundary scanning for efficient route matching. The router treats each `/`-delimited URL component as a discrete node, supporting static routes, named parameters (`:param`), and wildcards (`*wildcard`). Path matching is **SIMD-accelerated** via AVX2 (x86_64) and ARM NEON (aarch64) for byte-level delimiter and prefix comparison — achieving ~50ns per lookup on AVX2 (P99 ≤ 100ns, 100K routes) and ~80ns per lookup on NEON.
+
+> [!NOTE]
+> **Segment-Based Trie vs Compressed Radix Tree**:
+> Unlike character-level compressed radix trees (which compress arbitrary substrings and perform edge splitting), csilk segments URLs naturally by the `/` delimiter. This design provides cleaner parameter/wildcard priority resolution (`STATIC > PARAM > WILDCARD`) and allows SIMD vector scanning directly to segment boundaries.
 
 ## Node Structure
 
@@ -36,7 +40,8 @@ graph TB
     end
 ```
 
-## Radix Tree Visualization
+## Segment Trie Visualization
+
 
 ```mermaid
 %%{init: {

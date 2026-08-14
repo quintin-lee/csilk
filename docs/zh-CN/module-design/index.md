@@ -7,7 +7,8 @@ csilk 核心子系统的深度架构文档。
 | 文档 | 焦点 |
 |------|------|
 | [Server Core](server.md) | libuv（默认）/ io_uring（可选，仅 Linux）事件循环、TLS/ALPN、HTTP/2、工作线程池、优雅关闭 |
-| [Router](router.md) | 基数树（Patricia trie）、SIMD 加速匹配、参数提取 |
+| [Router](router.md) | 分段前缀树（Segment Trie）、SIMD 加速匹配、参数提取 |
+
 | [Context](context.md) | 请求/响应生命周期、不透明 API、延迟清理 |
 | [Arena](arena.md) | Bump 分配器、零拷贝头、SIMD 加速内存拷贝 |
 | [Hooks](hooks.md) | 服务器/连接/请求生命周期钩子系统 |

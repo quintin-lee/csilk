@@ -101,7 +101,7 @@ graph TB
 
     subgraph core["fa:fa-cogs Core Framework"]
         SRV["fa:fa-server Server (libuv event loop)"]
-        RTR["fa:fa-sitemap Router (Radix Tree, ~50ns/lookup)"]
+        RTR["fa:fa-sitemap Router (Segment Trie, ~50ns/lookup)"]
         CTX["fa:fa-exchange Context (csilk_ctx_t)"]
         ARENA["fa:fa-database Arena Allocator (~3 CPU instr/alloc)"]
         H2["fa:fa-code-fork HTTP/2 (nghttp2)"]
@@ -300,7 +300,7 @@ Deep-dive architectural documentation for each core subsystem is available under
 |--------|----------|--------|
 | Server Core | [server.md](docs/module-design/server.md) | libuv event loop, TLS/ALPN, HTTP/2, worker pool, graceful shutdown |
 | App Layer | [app.md](docs/module-design/app.md) | csilk_app_t facade, bootstrap sequence, route group matching, static files |
-| Router | [router.md](docs/module-design/router.md) | Radix tree (Patricia trie), SIMD-accelerated matching, param extraction |
+| Router | [router.md](docs/module-design/router.md) | Segment-based prefix trie, SIMD-accelerated matching, param extraction |
 | Context | [context.md](docs/module-design/context.md) | Request/response lifecycle, arena allocator, deferred cleanup |
 | Arena | [arena.md](docs/module-design/arena.md) | Bump allocator, zero-copy headers, SIMD memcpy |
 | Middleware | [middleware.md](docs/module-design/middleware.md) | Onion model, chain assembly, 15 built-in middleware modules |
@@ -513,7 +513,7 @@ The project includes a comprehensive test suite. After building, run individual 
 | 🧵 | Thread-safe logging |
 | 🔍 | Timeouts / Limits |
 | 🎯 | Per-route middleware |
-| 🌲 | Radix Tree router |
+| 🌲 | Segment-based Trie router |
 | 📝 | Form URL-encoded parsing |
 | 🍪 | Session management |
 | 🔀 | HTTP redirect |

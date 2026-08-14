@@ -137,8 +137,9 @@ the table maps each implementation module to where its public surface lives:
 **Key architectural concepts:**
 
 - **Onion middleware model**: Requests pass through a chain of handlers, each can pre-process, call `csilk_next()`, and post-process.
-- **Radix Tree router**: Prefix tree with fixed-array child nodes for O(k) lookup by path.
+- **Segment-Based Trie router**: Prefix tree with fixed-array child nodes and SIMD segment boundary scanning for O(k) path lookup.
 - **Arena allocator**: Request-scoped memory pool for zero-fragmentation allocations, reset between keep-alive requests.
+
 - **libuv event loop**: Single-threaded by default; multi-worker via `SO_REUSEPORT` with configurable `worker_threads`.
 
 ## Coding Standards

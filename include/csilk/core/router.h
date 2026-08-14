@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file router.h
- * @brief High-performance HTTP router based on a compressed radix tree.
+ * @brief High-performance HTTP router based on a SIMD-accelerated segment-based prefix trie.
  *
  * Supports dynamic path segments (:param), wildcards (*wildcard),
  * route metadata for OpenAPI generation, and permission annotations.
@@ -16,14 +16,14 @@
 /**
  * @brief The main HTTP router.
  *
- * Wraps a radix-tree root node and provides methods to register routes,
+ * Wraps a segment-based trie root node and provides methods to register routes,
  * match incoming requests, and generate OpenAPI specs.
  *
  * @note Not thread-safe for mutation after the server starts.  All routes
  *       must be registered before csilk_server_run.
  */
 typedef struct csilk_router_s {
-    csilk_router_node_t* root; /**< Root node of the radix (Patricia) trie. */
+    csilk_router_node_t* root; /**< Root node of the segment-based prefix trie. */
 } csilk_router_t;
 
 /**
@@ -39,7 +39,7 @@ csilk_router_t* csilk_router_new(void);
 /**
  * @brief Register a route with one or more handlers.
  *
- * The route is inserted into the radix tree.  Dynamic segments (:param) and
+ * The route is inserted into the segment trie.  Dynamic segments (:param) and
  * wildcard segments (*wildcard) are supported in @p path.  The handlers are
  * stored by pointer — the caller must ensure they remain valid for the
  * lifetime of the router.
@@ -86,7 +86,7 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c);
 /**
  * @brief Destroy the router and release all its resources.
  *
- * Frees the radix tree nodes and any associated copy of route metadata
+ * Frees the segment trie nodes and any associated copy of route metadata
  * (OpenAPI annotations).
  *
  * @param r  Router instance to free.  Must not be NULL.
@@ -96,7 +96,7 @@ void csilk_router_free(csilk_router_t* r);
 /**
  * @brief Collect metadata for all registered routes.
  *
- * Traverses the radix tree and returns a cJSON array where each element
+ * Traverses the segment trie and returns a cJSON array where each element
  * contains "method", "path", "input_type", "output_type", "summary", and
  * "description" fields.
  *

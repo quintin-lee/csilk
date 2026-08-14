@@ -13,6 +13,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "csilk/core/json.h"
 
@@ -299,7 +300,7 @@ typedef void (*csilk_multipart_handler_t)(csilk_multipart_part_t* part);
 /* --- Forward declarations for key types defined in other modules --- */
 
 /** @brief Opaque router node type.
- *  Nodes form a compressed radix tree (Patricia trie) for efficient path
+ *  Nodes form a SIMD-accelerated segment-based prefix trie for efficient path
  *  matching. */
 typedef struct csilk_router_node_s csilk_router_node_t;
 
