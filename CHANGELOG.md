@@ -18,8 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Crypto module tests**: Comprehensive property-based tests for SHA-256, HMAC-SHA256, Base64/Base64URL roundtrip, `csilk_crypto_fill_random`, `csilk_crypto_generate_nonce`, and `csilk_url_decode` edge cases in `tests/crypto/test_crypto.c`.
 
 ### Changed
+- **OpenSSL-Backed Cryptographic Primitives**: Replaced hand-rolled SHA-256 (`csilk_sha256_*`), HMAC-SHA256 (`csilk_hmac_sha256`), and SHA-1 (`csilk_sha1_*`) implementations with system OpenSSL primitives, eliminating side-channel risks, manual audit overhead, and compiler optimization edge cases while enabling hardware instruction set acceleration (Intel SHA-NI, ARMv8 Crypto).
 - **Portable Release Binary Defaults**: Changed Release build default to portable binaries (without `-march=native`), preventing `SIGILL` crashes on older CPUs, Docker containers, and CI artifacts. Host-native CPU instruction set tuning is now explicitly opt-in via `-DCSILK_ENABLE_NATIVE_ARCH=ON` (enabled automatically in benchmark scripts and CI benchmark workflows).
 - **Server Core Pure Abstraction**: Eliminated all direct `uv_*` references from `src/core/server/` (`connection.c`, `server_lifecycle.c`, `server_shutdown.c`, `server_worker.c`), replacing them with `csilk_io_*` and `csilk_thread_*`/`csilk_barrier_*`.
+
 
 - **io_uring Architecture Streamlining**: Eliminated parallel duplicate server state machines (`uring_server.c`, `uring_connection.c`, `uring_event_loop.c`), consolidated the driver under `src/core/uring/uring_io.c`, and unified single-track server lifecycle execution across backends.
 - **Router Prefix Trie Architecture & Rollback**: Aligned router documentation to reflect segment-based prefix trie architecture and fixed wildcard parameter backtracking on method mismatch or handler failure.

@@ -1,6 +1,9 @@
 # Pluggable Crypto Driver Design
 
-csilk allows developers to replace its internal cryptographic and unique identifier algorithms. This is useful for utilizing hardware-accelerated crypto, integrating with system-level libraries, or using localized algorithms (like SM series). Crypto driver **MUST** implement all required fields in `csilk_crypto_driver_t` — partial implementations **MUST** be rejected at registration. Driver lookup **MUST** be O(1) via a fixed-size registry hash table. SHA-256 hashing **SHOULD** complete in ≤ 1µs for inputs ≤ 256 bytes. UUID v4 generation **MUST** use a cryptographically secure random number generator (CSPRNG).
+csilk delegates all standard cryptographic primitives (SHA-256, HMAC-SHA256, SHA-1, AES-256-GCM, RSA, ECDSA) directly to OpenSSL, eliminating hand-rolled crypto implementations while automatically benefiting from audited security, side-channel protections, and hardware acceleration (e.g., Intel SHA-NI/AES-NI and ARMv8 Crypto Extensions).
+
+The framework also allows developers to replace its internal cryptographic and unique identifier algorithms via pluggable drivers. This is useful for utilizing specialized hardware security modules (HSM), integrating with custom system libraries, or using localized algorithms (like the SM series).
+
 
 The crypto subsystem has two independent pluggable interfaces:
 
