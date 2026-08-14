@@ -75,6 +75,17 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
     csilk_json_free(msg);
 }
 
+/**
+ * @brief Broadcasts an event to all registered workflow monitors.
+ *
+ * Wrapper that forwards the event to broadcast_monitor_event(), emitting a
+ * structured JSON message (via WebSocket or SSE) to every monitor client.
+ *
+ * @param wf      The workflow instance.
+ * @param event   Event name (e.g. "node_start", "workflow_end").
+ * @param node_id Originating node id (may be NULL for workflow-level events).
+ * @param payload Optional event data string (may be NULL).
+ */
 CSILK_INTERNAL void
 _wf_broadcast(csilk_wf_t* wf, const char* event, const char* node_id, const char* payload)
 {

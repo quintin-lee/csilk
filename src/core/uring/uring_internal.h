@@ -1,6 +1,20 @@
 #ifndef CSILK_URING_INTERNAL_H
 #define CSILK_URING_INTERNAL_H
 
+/**
+ * @file uring_internal.h
+ * @brief Internal declarations and helpers for the io_uring event-loop backend.
+ *
+ * Defines the io_uring opcode set used to tag SQE user_data, the per-operation
+ * payload structs, and a set of inline helpers that pack/unpack operation type,
+ * client pointer, and generation counters into the 64-bit user_data word so the
+ * CQE dispatcher can route completions without indirect calls. Also forward
+ * declares the internal worker, thread-pool, barrier, and server-split routines
+ * shared across the uring/*.c translation units.
+ *
+ * @copyright MIT License
+ */
+
 #include "csilk/csilk.h"
 #include "csilk/core/sys_io.h"
 #include "../internal/srv_internal.h" /* csilk_client_t full definition (for generation field access) */
@@ -36,6 +50,14 @@ typedef struct {
 } uring_sqe_data_t;
 
 // Helper to encode type and ptr into __u64
+/**
+ * @brief Encode an operation type, client pointer, and generation into user_data.
+ * @param[in] op      io_uring opcode (stored in the top 8 bits).
+ * @param[in] client  Client owning the op, or NULL; its generation occupies bits 48-55.
+ * @param[in] ptr     Opaque pointer (client/server) stored in the low 48 bits.
+ * @return Packed 64-bit value suitable for io_uring_sqe_set_data64.
+ * @note The pointer is masked to 48 bits; only the low 48 bits of ptr are kept.
+ */
 static inline __u64
 uring_encode_data(uring_op_type_t op, csilk_client_t* client, void* ptr)
 {
@@ -51,6 +73,14 @@ uring_encode_data(uring_op_type_t op, csilk_client_t* client, void* ptr)
 
 /* When the Submission Queue is full, submit pending entries to the kernel
  * to free SQE slots. Returns NULL only on ring-level failure. */
+/**
+ * @brief Acquire a submission queue entry, submitting the ring if full.
+ * @param[in] ring io_uring instance to allocate from.
+ * @return A valid io_uring_sqe*, or NULL only on ring-level failure after a
+ *         submit-and-retry.
+ * @note If io_uring_get_sqe returns NULL the ring is flushed via
+ *       io_uring_submit and one more slot is requested.
+ */
 static inline struct io_uring_sqe*
 uring_get_sqe_or_submit(struct io_uring* ring)
 {
@@ -73,6 +103,14 @@ uring_encode_timer_data(uring_op_type_t op, csilk_io_timer_t* tmr)
     return val;
 }
 
+/**
+ * @brief Decode packed operation data into its components.
+ * @param[in]  val  Packed 64-bit user_data produced by uring_encode_data or
+ *                  uring_encode_timer_data.
+ * @param[out] op   Receives the operation type (top 8 bits).
+ * @param[out] ptr  Receives the low-48-bit opaque pointer.
+ * @param[out] gen  Receives the 8-bit generation, or NULL to ignore it.
+ */
 static inline void
 uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint8_t* gen)
 {

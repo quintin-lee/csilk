@@ -1,3 +1,15 @@
+/**
+ * @file vector_hnsw.c
+ * @brief In-memory HNSW-style vector index implementation.
+ *
+ * Provides a simple single-layer HNSW (Hierarchical Navigable Small World)
+ * index for approximate nearest-neighbour search over float vectors. Vectors
+ * are compared with SIMD distance kernels (see vector_simd.c). The index is
+ * guarded by a mutex so it can be shared across threads.
+ *
+ * @copyright MIT License
+ */
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,6 +17,19 @@
 
 #include "vector_internal.h"
 
+/**
+ * @brief Create a new empty HNSW index.
+ *
+ * Allocates and initialises an index for @p dim-dimensional vectors using the
+ * given @p metric (1 = L2, 2 = dot product, otherwise cosine). The internal
+ * parameters (M, ef_construction, ef_search) are set to fixed defaults and a
+ * mutex is initialised for thread-safe access.
+ *
+ * @param dim    Vector dimensionality (must be non-zero).
+ * @param metric Distance metric selector (1, 2, or other for cosine).
+ * @return Newly allocated index, or NULL on invalid @p dim or OOM.
+ * @note The caller owns the returned index and must free it with
+ *       csilk_hnsw_index_free(). */
 csilk_hnsw_index_t*
 csilk_hnsw_index_new(size_t dim, int metric)
 {
@@ -38,6 +63,14 @@ csilk_hnsw_index_new(size_t dim, int metric)
     return idx;
 }
 
+/**
+ * @brief Free an HNSW index and all of its nodes.
+ *
+ * Releases every node's doc_id, vector, neighbour lists and neighbour counts,
+ * then the node array and the index itself. The index mutex is destroyed
+ * before the index is freed.
+ *
+ * @param index Index to free (may be NULL). */
 void
 csilk_hnsw_index_free(csilk_hnsw_index_t* index)
 {
@@ -75,6 +108,18 @@ csilk_hnsw_index_free(csilk_hnsw_index_t* index)
     free(index);
 }
 
+/**
+ * @brief Insert a vector into the index under a document id.
+ *
+ * Grows the node array if needed, allocates a node whose id is its position
+ * in the array, then links it into the layer-0 neighbour list of the previous
+ * node (if that neighbour still has room for @c M neighbours). The vector is
+ * deep-copied with an aligned allocation.
+ *
+ * @param index   Target index (must not be NULL).
+ * @param doc_id  NUL-terminated document identifier (must not be NULL).
+ * @param vector  Source vector of @c index->dim floats (must not be NULL).
+ * @return 0 on success, -1 on invalid arguments or allocation failure. */
 int
 csilk_hnsw_insert(csilk_hnsw_index_t* index, const char* doc_id, const float* vector)
 {
@@ -126,6 +171,22 @@ csilk_hnsw_insert(csilk_hnsw_index_t* index, const char* doc_id, const float* ve
     return 0;
 }
 
+/**
+ * @brief Brute-force nearest-neighbour search over all indexed vectors.
+ *
+ * Computes the distance from @p query_vector to every stored vector using the
+ * index's configured distance function and returns the closest @p top_k
+ * results. This is an exact linear scan (the HNSW graph structure is not yet
+ * used for traversal). The output arrays are heap-allocated and become owned
+ * by the caller.
+ *
+ * @param index         Index to search (must not be NULL).
+ * @param query_vector  Query vector of @c index->dim floats (must not be NULL).
+ * @param top_k         Maximum number of results (must be > 0).
+ * @param[out] out_doc_ids  Receives a heap-allocated array of strdup'd ids.
+ * @param[out] out_scores   Receives the matching distance scores.
+ * @param[out] out_count    Receives the number of results returned.
+ * @return 0 on success, -1 on invalid arguments. */
 int
 csilk_hnsw_search(csilk_hnsw_index_t* index,
                   const float*        query_vector,

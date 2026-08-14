@@ -39,6 +39,15 @@
 
 /* --- Server creation --- */
 
+/**
+ * @brief Create and initialize an io_uring-backed server instance.
+ * @param[in] router Router the server will dispatch requests to (may be NULL).
+ * @return A newly allocated, initialized server, or NULL on allocation or
+ *         io_uring init failure.
+ * @note Initializes reflection/arena subsystems, creates the main io_uring ring
+ *       (SQPOLL, falling back to polling), wires the llhttp settings, applies
+ *       default timeouts/limits, and creates the message queue.
+ */
 csilk_server_t*
 csilk_server_new(csilk_router_t* router)
 {
@@ -91,6 +100,13 @@ csilk_server_new(csilk_router_t* router)
 
 /* --- SPA fallback --- */
 
+/**
+ * @brief SPA fallback handler: serve index.html for unknown GET routes.
+ * @param[in] c Request context.
+ * @note For non-GET requests, or when no SPA doc root is configured / the file
+ *       is missing/empty, responds 404. Otherwise serves index.html as
+ *       text/html with HTTP 200.
+ */
 static void
 spa_fallback_handler(csilk_ctx_t* c)
 {
@@ -139,6 +155,12 @@ spa_fallback_handler(csilk_ctx_t* c)
 
 /* --- Server configuration --- */
 
+/**
+ * @brief Register a custom 404 (not-found) handler.
+ * @param[in] server  Server whose not-found handler is set.
+ * @param[in] handler Handler invoked when no route matches.
+ * @note No-op if server is NULL; the handler may be NULL to clear it.
+ */
 void
 csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handler)
 {
@@ -148,6 +170,13 @@ csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handl
     server->not_found_handler = handler;
 }
 
+/**
+ * @brief Enable SPA fallback by configuring the document root.
+ * @param[in] server   Server to configure (validated non-NULL).
+ * @param[in] doc_root Directory containing index.html (validated non-NULL).
+ * @note Frees any prior doc root, duplicates doc_root, and installs
+ *       spa_fallback_handler as the not-found handler.
+ */
 void
 csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
 {
@@ -161,6 +190,13 @@ csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
     }
 }
 
+/**
+ * @brief Register a global middleware handler on the server.
+ * @param[in] server  Server to register on (validated non-NULL).
+ * @param[in] handler Middleware handler (validated non-NULL).
+ * @return 0 on success, -1 on NULL args or when the 32-middleware limit is hit.
+ * @note Appends the handler to the server's middleware array.
+ */
 int
 csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 {
@@ -180,6 +216,13 @@ csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 
 /* --- Server free --- */
 
+/**
+ * @brief Tear down and free a server instance.
+ * @param[in] server Server to free (no-op if NULL).
+ * @note Joins worker threads, frees SPA doc root, destroys per-worker thread
+ *       pools/client/arena pools, cleans up TLS, frees the MQ and hook chains,
+ *       flushes the arena free list, exits the io_uring ring, and frees memory.
+ */
 void
 csilk_server_free(csilk_server_t* server)
 {
@@ -240,6 +283,14 @@ csilk_server_free(csilk_server_t* server)
 
 /* --- Server stats --- */
 
+/**
+ * @brief Retrieve server connection statistics.
+ * @param[in]  server       Server to query (validated non-NULL).
+ * @param[out] active_conn  Receives the current active-connection count (may be NULL).
+ * @param[out] pooled_conn  Receives the total pooled-client count across workers
+ *                          (may be NULL).
+ * @note Either output pointer may be NULL to skip that value.
+ */
 void
 csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn)
 {
@@ -260,6 +311,15 @@ csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_con
 
 /* --- Server config --- */
 
+/**
+ * @brief Apply a server configuration, filling zeroed fields with prior defaults.
+ * @param[in] server Server to configure (validated non-NULL).
+ * @param[in] config Configuration to copy; zero-valued fields inherit the
+ *                    previous (or built-in default) values.
+ * @note Copies the entire config struct, then backfills idle/max-body/max-header
+ *       timeout and listen-backlog fields that are zero using the old values or
+ *       CSILK defaults.
+ */
 void
 csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* config)
 {
@@ -291,6 +351,12 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
 
 /* --- Max connections --- */
 
+/**
+ * @brief Set the maximum number of concurrent client connections.
+ * @param[in] server Server to configure (validated non-NULL).
+ * @param[in] max    New maximum (0 means unlimited).
+ * @return The previous maximum value.
+ */
 int
 csilk_server_set_max_connections(csilk_server_t* server, int max)
 {
@@ -304,6 +370,11 @@ csilk_server_set_max_connections(csilk_server_t* server, int max)
 
 /* --- Driver injection --- */
 
+/**
+ * @brief Set the pluggable storage driver.
+ * @param[in] server Server whose storage driver is set (no-op if NULL).
+ * @param[in] driver Storage driver implementation (may be NULL).
+ */
 void
 csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* driver)
 {
@@ -312,6 +383,11 @@ csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_driver_t* 
     }
 }
 
+/**
+ * @brief Set the pluggable cryptographic driver.
+ * @param[in] server Server whose crypto driver is set (no-op if NULL).
+ * @param[in] driver Crypto driver implementation (may be NULL).
+ */
 void
 csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* driver)
 {
@@ -320,6 +396,11 @@ csilk_server_set_crypto_driver(csilk_server_t* server, csilk_crypto_driver_t* dr
     }
 }
 
+/**
+ * @brief Set the pluggable cipher driver.
+ * @param[in] server Server whose cipher driver is set (no-op if NULL).
+ * @param[in] driver Cipher driver implementation (may be NULL).
+ */
 void
 csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* driver)
 {
@@ -330,6 +411,12 @@ csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* dr
 
 /* --- Server run --- */
 
+/**
+ * @brief Handler that serves the auto-generated OpenAPI JSON document.
+ * @param[in] c Request context used to resolve the server/router and respond.
+ * @note Looks up the owning server and router; on success calls
+ *       csilk_serve_openapi, otherwise sets HTTP 500.
+ */
 static void
 openapi_json_handler(csilk_ctx_t* c)
 {
@@ -342,6 +429,18 @@ openapi_json_handler(csilk_ctx_t* c)
     }
 }
 
+/**
+ * @brief Start and run the io_uring server event loop, binding to port.
+ * @param[in] server Server instance to run (validated non-NULL).
+ * @param[in] port   TCP port to bind and listen on.
+ * @return 0 on a clean run, -1 on invalid args or setup failure (TLS init,
+ *         async-handle creation, bind/listen, or worker-pool allocation).
+ * @note Optionally registers a GET /openapi.json handler, initializes TLS when
+ *       enabled, creates the stop async handle, binds the listener with
+ *       SO_REUSEPORT for multi-worker, builds per-worker pools/arenas/thread
+ *       pools, spawns worker threads (with a startup barrier), installs
+ *       signal/poll SQEs for stop/signal/dispatch, and runs the io_uring loop.
+ */
 int
 csilk_server_run(csilk_server_t* server, int port)
 {
@@ -642,18 +741,34 @@ csilk_server_run(csilk_server_t* server, int port)
 
 /* --- Accessors --- */
 
+/**
+ * @brief Get the server's message queue.
+ * @param[in] server Server to query (may be NULL).
+ * @return The server's csilk_mq_t*, or NULL if server is NULL.
+ */
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
     return server ? server->mq : NULL;
 }
 
+/**
+ * @brief Get the server's router.
+ * @param[in] server Server to query (may be NULL).
+ * @return The server's csilk_router_t*, or NULL if server is NULL.
+ */
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
     return server ? server->router : NULL;
 }
 
+/**
+ * @brief Replace the server's router, freeing the previous one.
+ * @param[in] server Server whose router is replaced (validated non-NULL).
+ * @param[in] router New router (validated non-NULL); the old router is freed.
+ * @note No-op if either argument is NULL.
+ */
 void
 csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
 {

@@ -513,6 +513,12 @@ arena_tls_cleanup(void* unused)
     csilk_arena_flush_free_list();
 }
 
+/** @brief Register the TLS cleanup key used to flush arena free lists.
+ *
+ * Creates (once) a pthread key whose destructor calls
+ * csilk_arena_flush_free_list so that thread-local arena chunks are reclaimed
+ * when a worker thread exits.
+ */
 static void
 arena_init_tls_key(void)
 {
@@ -520,6 +526,14 @@ arena_init_tls_key(void)
     pthread_key_create(&tls_key, arena_tls_cleanup);
 }
 
+/**
+ * @brief Initialize the arena subsystem.
+ *
+ * Registers the thread-local arena chunk cleanup handler exactly once per
+ * process via pthread_once. Safe to call multiple times.
+ *
+ * @note Must be called during server startup before any arena allocation on
+ *       worker threads, so their free lists are flushed on thread exit. */
 void
 csilk_arena_init(void)
 {

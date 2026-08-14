@@ -71,6 +71,7 @@ static csilk_logger_t g_logger = {{0}, NULL, 0, {0}, 0};
 
 static _Thread_local char tl_request_id[CSILK_UUID_BUF_SIZE];
 
+/** @brief Return this thread's request-ID buffer (thread-local). */
 static char*
 get_tl_request_id(void)
 {

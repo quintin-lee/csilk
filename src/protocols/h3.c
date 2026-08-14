@@ -10,6 +10,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Encode a value as an RFC 9000 QUIC variable-length integer.
+ *
+ * Produces 1, 2, 4, or 8 bytes depending on magnitude, prefixing the length
+ * in the two most-significant bits of the first byte (00/01/10/11).
+ *
+ * @param[in]  val     The value to encode (must be <= 2^62-1 for 8-byte form).
+ * @param[out] out_buf Destination buffer (must hold up to 8 bytes).
+ * @return The number of bytes written, or 0 if @p out_buf is NULL or @p val is
+ *         too large for the 8-byte form.
+ */
 size_t
 csilk_h3_varint_encode(uint64_t val, uint8_t* out_buf)
 {
@@ -48,6 +59,18 @@ csilk_h3_varint_encode(uint64_t val, uint8_t* out_buf)
     return 0;
 }
 
+/**
+ * @brief Decode an RFC 9000 QUIC variable-length integer from a buffer.
+ *
+ * Reads the two most-significant bits of the first byte to determine the
+ * encoding length (1/2/4/8 bytes) and reconstructs the value.
+ *
+ * @param[in]  in_buf   Source buffer containing the varint.
+ * @param[in]  len      Available bytes in @p in_buf.
+ * @param[out] out_val  Receives the decoded value.
+ * @return The number of bytes consumed, or 0 if @p in_buf/@p out_val is NULL,
+ *         @p len is 0, or the buffer is too short for the encoded length.
+ */
 size_t
 csilk_h3_varint_decode(const uint8_t* in_buf, size_t len, uint64_t* out_val)
 {
@@ -70,6 +93,21 @@ csilk_h3_varint_decode(const uint8_t* in_buf, size_t len, uint64_t* out_val)
     return varint_len;
 }
 
+/**
+ * @brief Encode an HTTP/3 frame (type + length + payload) into a buffer.
+ *
+ * Writes a varint frame type, a varint payload length, and then the payload
+ * bytes. Returns the total encoded size without writing if the buffer is too
+ * small, or writes nothing if @p out_buf is NULL.
+ *
+ * @param[in]  frame_type     The HTTP/3 frame type (varint-encoded).
+ * @param[in]  payload        Frame payload bytes (may be NULL if empty).
+ * @param[in]  payload_len    Number of payload bytes.
+ * @param[out] out_buf        Destination buffer.
+ * @param[in]  max_buf_len    Capacity of @p out_buf in bytes.
+ * @return The number of bytes written, or 0 on NULL buffer, encoding failure,
+ *         or insufficient capacity.
+ */
 size_t
 csilk_h3_frame_encode(uint64_t       frame_type,
                       const uint8_t* payload,
@@ -107,6 +145,21 @@ csilk_h3_frame_encode(uint64_t       frame_type,
     return total_header_len + payload_len;
 }
 
+/**
+ * @brief Decode the header of an HTTP/3 frame.
+ *
+ * Reads the varint frame type and varint payload length, then validates that
+ * the buffer contains the full payload. On success reports the offset where
+ * the payload begins and its length. Does not copy or parse the payload.
+ *
+ * @param[in]  in_buf              Source buffer containing the frame.
+ * @param[in]  in_len              Available bytes in @p in_buf.
+ * @param[out] out_type            Receives the decoded frame type.
+ * @param[out] out_payload_offset  Receives the byte offset of the payload.
+ * @param[out] out_payload_len     Receives the payload length in bytes.
+ * @return 0 on success, or -1 on NULL arguments, truncated header, or an
+ *         incomplete payload.
+ */
 int
 csilk_h3_frame_decode(const uint8_t* in_buf,
                       size_t         in_len,
@@ -141,6 +194,15 @@ csilk_h3_frame_decode(const uint8_t* in_buf,
     return 0;
 }
 
+/**
+ * @brief Add an HTTP/3 "Alt-Svc" response header advertising an h3 endpoint.
+ *
+ * Emits an "Alt-Svc: h3=\":<port>\"; ma=86400" header so HTTP/1.1 clients can
+ * upgrade to HTTP/3. A non-positive port falls back to 443.
+ *
+ * @param[in,out] c        The request context to set the header on.
+ * @param[in]     h3_port  The UDP port the HTTP/3 server listens on.
+ */
 void
 csilk_h3_inject_alt_svc_header(csilk_ctx_t* c, int h3_port)
 {
@@ -160,6 +222,17 @@ struct csilk_h3_listener_s {
     int is_active;
 };
 
+/**
+ * @brief Create an HTTP/3 UDP listener handle bound to a port.
+ *
+ * Allocates a listener struct, records the port, and marks it active. This is
+ * a lightweight handle (no socket is opened here); it is used to associate a
+ * port with the HTTP/3 service.
+ *
+ * @param[in] port The UDP port to bind (1..65535).
+ * @return A newly allocated csilk_h3_listener_t, or NULL on invalid port or
+ *         allocation failure.
+ */
 csilk_h3_listener_t*
 csilk_h3_listener_bind(int port)
 {
@@ -178,6 +251,20 @@ csilk_h3_listener_bind(int port)
     return l;
 }
 
+/**
+ * @brief Extract the QUIC connection ID from an incoming UDP packet.
+ *
+ * Reads up to 8 bytes from the packet header (starting at byte 1) and
+ * reconstructs a 64-bit connection ID. Validates that the listener is active
+ * and the packet carries sufficient bytes.
+ *
+ * @param[in]  listener     The listener (must be active).
+ * @param[in]  packet       Raw packet bytes.
+ * @param[in]  len          Number of packet bytes.
+ * @param[out] out_conn_id  Receives the extracted connection ID.
+ * @return 0 on success, or -1 on NULL/inactive listener, packet shorter than
+ *         9 bytes, or NULL output pointer.
+ */
 int
 csilk_h3_listener_process_packet(csilk_h3_listener_t* listener,
                                  const uint8_t*       packet,
@@ -198,6 +285,14 @@ csilk_h3_listener_process_packet(csilk_h3_listener_t* listener,
     return 0;
 }
 
+/**
+ * @brief Close and free an HTTP/3 listener handle.
+ *
+ * Marks the listener inactive and frees its memory. Safe to call with a NULL
+ * pointer.
+ *
+ * @param[in] listener The listener to close (may be NULL).
+ */
 void
 csilk_h3_listener_close(csilk_h3_listener_t* listener)
 {

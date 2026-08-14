@@ -1,3 +1,16 @@
+/**
+ * @file uv_stubs.c
+ * @brief libuv-compatible API shims for the io_uring backend.
+ *
+ * Implements the subset of the csilk I/O surface that the io_uring backend must
+ * expose to look like the libuv backend: handle closing flags, stream fileno,
+ * vectored writes, and timer lifecycle/default-loop/run glue. Most routines are
+ * thin wrappers that translate libuv-style requests into io_uring SQEs, with a
+ * few no-op callbacks used by the synchronous fallback path.
+ *
+ * @copyright MIT License
+ */
+
 #include <csilk/core/sys_io.h>
 
 #ifdef CSILK_USE_URING
@@ -10,6 +23,11 @@
 
 void csilk_client_close(csilk_client_t* client);
 
+/**
+ * @brief Report whether an I/O handle is in a closing state.
+ * @param[in] handle The handle to query (unused by the io_uring backend).
+ * @return Always 0; the io_uring backend has no libuv closing state machine.
+ */
 int
 csilk_io_is_closing(const csilk_io_handle_t* handle)
 {
@@ -19,6 +37,14 @@ csilk_io_is_closing(const csilk_io_handle_t* handle)
     return 0;
 }
 
+/**
+ * @brief Retrieve the OS file descriptor backing an I/O handle.
+ * @param[in]  handle Stream handle whose fd is requested.
+ * @param[out] fd     Receives the OS file descriptor on success.
+ * @return 0 on success, -1 on NULL handle/fd.
+ * @note The handle is downcast to csilk_io_stream_t; only stream handles carry
+ *       an fd.
+ */
 int
 csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
 {
@@ -30,6 +56,19 @@ csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
     return 0;
 }
 
+/**
+ * @brief Submit a vectored write for a stream over io_uring.
+ * @param[in] req     Write request object; its cb/handle fields are filled in.
+ * @param[in] handle  Stream handle (its data must point at a csilk_client_t).
+ * @param[in] bufs    Array of iovec-style buffers to write.
+ * @param[in] nbufs   Number of buffers in bufs.
+ * @param[in] cb      Completion callback invoked from the CQE dispatcher.
+ * @return 0 on successful submission, -1 on NULL/invalid handle, closed
+ *         connection, or when no SQE slot is available.
+ * @note Allocates an iovec array and a 3-pointer context that travel with the
+ *       SQE and are freed in csilk_uv_on_write_done. Increments the client's
+ *       async_ref so the connection is not torn down mid-write.
+ */
 int
 csilk_io_write(csilk_io_write_t*    req,
                csilk_io_stream_t*   handle,
@@ -72,6 +111,15 @@ csilk_io_write(csilk_io_write_t*    req,
     return 0;
 }
 
+/**
+ * @brief Close an I/O handle on the io_uring backend.
+ * @param[in] handle Stream/timer/async handle to close.
+ * @param[in] cb     Optional close callback (invoked for stream handles only).
+ * @note For stream handles whose data points at a client, delegates to
+ *       csilk_client_close. Non-stream handles (timer/async) have no libuv
+ *       close semantics, so the callback is a no-op for them. NULL handles are
+ *       ignored.
+ */
 void
 csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
@@ -97,18 +145,34 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
     }
 }
 
+/**
+ * @brief No-op libuv close callback for the io_uring backend.
+ * @param[in] handle Unused.
+ */
 void
 on_close(csilk_io_handle_t* handle)
 {
 }
+/**
+ * @brief No-op idle timeout callback (sync fallback path).
+ * @param[in] handle Unused.
+ */
 void
 on_idle_timeout(csilk_io_timer_t* handle)
 {
 }
+/**
+ * @brief No-op read timeout callback (sync fallback path).
+ * @param[in] handle Unused.
+ */
 void
 on_read_timeout(csilk_io_timer_t* handle)
 {
 }
+/**
+ * @brief No-op write timeout callback (sync fallback path).
+ * @param[in] handle Unused.
+ */
 void
 on_write_timeout(csilk_io_timer_t* handle)
 {
@@ -137,6 +201,12 @@ static int g_default_pending = 0;
  * they are submitting to the default ring (vs a per-worker ring). */
 static struct io_uring* g_default_ring_ptr = NULL;
 
+/**
+ * @brief Initialize a timer handle and bind it to its owning loop.
+ * @param[in]  loop   Event loop that owns the timer (stored as ring).
+ * @param[out] handle Timer handle to initialize; fd set to -1, generation to 1.
+ * @return Always 0.
+ */
 int
 csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
 {
@@ -148,6 +218,16 @@ csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
     return 0;
 }
 
+/**
+ * @brief Arm a timer on the io_uring backend.
+ * @param[in] handle  Timer handle (must already have a valid ring).
+ * @param[in] cb      Callback invoked on expiry.
+ * @param[in] timeout Expiry in milliseconds.
+ * @param[in] repeat  Repeat interval in milliseconds (0 for one-shot).
+ * @return 0 on success, -1 on NULL handle/ring or when no SQE slot is free.
+ * @note Bumps the handle generation so stale CQEs from a previous interval are
+ *       ignored. Submits an io_uring timeout SQE tagged URING_OP_TMR_GENERIC.
+ */
 int
 csilk_io_timer_start(csilk_io_timer_t* handle,
                      csilk_io_timer_cb cb,
@@ -181,6 +261,13 @@ csilk_io_timer_start(csilk_io_timer_t* handle,
     return 0;
 }
 
+/**
+ * @brief Disarm a timer on the io_uring backend.
+ * @param[in] handle Timer handle to stop.
+ * @return 0 on success, -1 on NULL handle/ring or when no SQE slot is free.
+ * @note Bumps the generation and submits an io_uring cancel SQE targeting the
+ *       pending timeout; its completion is ignored via generation mismatch.
+ */
 int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
@@ -209,6 +296,12 @@ csilk_io_timer_stop(csilk_io_timer_t* handle)
     return 0;
 }
 
+/**
+ * @brief Return (lazily initializing) the process-wide default io_uring loop.
+ * @return Pointer to the default loop, or NULL if ring initialization failed.
+ * @note The default ring is single-threaded (test/CLI use) and is distinct from
+ *       the per-worker rings the server creates. Initialized exactly once.
+ */
 csilk_io_loop_t*
 csilk_io_default_loop(void)
 {
@@ -222,6 +315,16 @@ csilk_io_default_loop(void)
     return (csilk_io_loop_t*)&g_default_ring;
 }
 
+/**
+ * @brief Run an io_uring loop, draining deferred work and timer CQEs.
+ * @param[in] loop Event loop to run; falls back to the default loop if NULL.
+ * @param[in] mode Run mode: NOWAIT (single poll), ONCE (one poll + optional
+ *                 short wait), or DEFAULT (run until no pending work remains).
+ * @return 0 if any work was processed, -1 if the loop was NULL/unavailable or
+ *         no work was processed.
+ * @note Iteratively drains deferred after-work callbacks and processes
+ *       URING_OP_TMR_GENERIC timer completions, skipping stale generations.
+ */
 int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
@@ -311,6 +414,15 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 
 #endif
 
+/**
+ * @brief Completion handler for a uving-style vectored write SQE.
+ * @param[in] arg Context pointer (client, write req, iovec triple) allocated by
+ *                csilk_io_write.
+ * @param[in] res Bytes written, or a negative error.
+ * @note Frees the iovec and context, invokes the user write callback, then
+ *       releases the client's async_ref; if a close is pending and the ref
+ *       hits zero it triggers on_close_done. No-op if arg is NULL.
+ */
 void
 csilk_uv_on_write_done(void* arg, ssize_t res)
 {

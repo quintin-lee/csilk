@@ -184,8 +184,21 @@ cjson_to_struct_internal(const csilk_json_t*       obj,
     }
 }
 
-/** @brief Deserialize a JSON string into a registered struct or basic type
- * instance. */
+/**
+ * @brief Deserialize a JSON string into a registered struct or basic type.
+ *
+ * For primitive type names, parses the JSON directly into the output pointer
+ * without a registry lookup (fast path). For registered structs, parses the
+ * JSON and populates fields by name via the field descriptors; missing keys
+ * leave the corresponding field unchanged. Pointer strings and nested struct
+ * pointers are allocated as needed.
+ *
+ * @param[in]  type_name Registered struct type name or built-in primitive name.
+ * @param[in]  json_str  NUL-terminated JSON document to parse.
+ * @param[out] ptr       Pointer to the destination struct/value.
+ * @return 1 on success (including when the JSON value was null/skipped), or 0
+ *         on NULL arguments, an unregistered type, or a JSON parse failure.
+ */
 int
 csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
 {

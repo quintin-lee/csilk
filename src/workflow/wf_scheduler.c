@@ -86,6 +86,16 @@ find_active_ctx(csilk_wf_t* wf, const char* exec_id)
     return found;
 }
 
+/**
+ * @brief Terminates and reclaims any stale active context for an exec_id.
+ *
+ * Looks up the active context by exec_id; if found, marks it terminated and,
+ * when no nodes are still running, cleans it up immediately, otherwise just
+ * unregisters it so in-flight nodes free it once drained.
+ *
+ * @param wf      The workflow definition instance.
+ * @param exec_id The execution ID whose stale context should be reclaimed.
+ */
 void
 _wf_cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id)
 {

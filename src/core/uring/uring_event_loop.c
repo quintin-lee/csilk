@@ -33,6 +33,12 @@
 
 /* --- Barrier primitives --- */
 
+/**
+ * @brief Initialize a pthread-based barrier for worker synchronization.
+ * @param[out] b      Barrier to initialize.
+ * @param[in]  count  Number of threads that must reach the barrier.
+ * @note Initializes the mutex/cond and resets the count and waiting counter.
+ */
 void
 uring_barrier_init(csilk_barrier_t* b, int count)
 {
@@ -42,6 +48,12 @@ uring_barrier_init(csilk_barrier_t* b, int count)
     b->waiting = 0;
 }
 
+/**
+ * @brief Block until all expected threads reach the barrier.
+ * @param[in,out] b Barrier to wait on.
+ * @note Increments the waiting count; the last arriver broadcasts, others wait
+ *       on the condition variable until the count is reached.
+ */
 void
 uring_barrier_wait(csilk_barrier_t* b)
 {
@@ -57,6 +69,10 @@ uring_barrier_wait(csilk_barrier_t* b)
     pthread_mutex_unlock(&b->mutex);
 }
 
+/**
+ * @brief Destroy a barrier, freeing its mutex and condition variable.
+ * @param[in,out] b Barrier to destroy.
+ */
 void
 uring_barrier_destroy(csilk_barrier_t* b)
 {
@@ -66,6 +82,11 @@ uring_barrier_destroy(csilk_barrier_t* b)
 
 /* --- Signal handler --- */
 
+/**
+ * @brief Signal handler callback that initiates server stop.
+ * @param[in] server Server to stop (passed via the signal handler context).
+ * @note Simply forwards to csilk_server_stop.
+ */
 void
 on_signal(csilk_server_t* server)
 {
@@ -74,6 +95,14 @@ on_signal(csilk_server_t* server)
 
 /* --- Graceful shutdown --- */
 
+/**
+ * @brief Close all active client connections during shutdown.
+ * @param[in] server Server whose per-worker active client lists are walked.
+ * @param[in] loop   Event loop (currently unused).
+ * @return Number of client sockets closed.
+ * @note For each active client, sends a WebSocket close (1001) or SSE close as
+ *       appropriate, then closes the socket fd and clears the active list.
+ */
 static int
 close_active_clients(csilk_server_t* server, struct io_uring* loop)
 {
@@ -98,6 +127,13 @@ close_active_clients(csilk_server_t* server, struct io_uring* loop)
     return count;
 }
 
+/**
+ * @brief Async callback that performs graceful server shutdown.
+ * @param[in] handle Stop async handle whose data points at the server.
+ * @note Triggers server-stop hooks, closes the listener/signal/dispatch fds,
+ *       drains and closes active clients, signals worker threads to stop, and
+ *       frees the message queue.
+ */
 void
 on_stop_async(csilk_io_async_t* handle)
 {
@@ -137,6 +173,11 @@ on_stop_async(csilk_io_async_t* handle)
 
 /* --- Server stop --- */
 
+/**
+ * @brief Request a graceful server shutdown via the stop async handle.
+ * @param[in] server Server to stop (validated non-NULL).
+ * @note Writes to the async eventfd to wake the loop's on_stop_async handler.
+ */
 void
 csilk_server_stop(csilk_server_t* server)
 {
@@ -151,6 +192,13 @@ csilk_server_stop(csilk_server_t* server)
 
 /* --- Worker stop --- */
 
+/**
+ * @brief Per-worker async callback that stops a worker's loop.
+ * @param[in] handle Worker stop async handle whose data points at
+ *                   uring_worker_stop_data_t (server, loop, listen handle, index).
+ * @note Closes the listen socket, drains active clients, and closes the
+ *       worker's dispatch and stop event fds.
+ */
 static void
 on_worker_stop_async(csilk_io_async_t* handle)
 {
@@ -173,6 +221,12 @@ on_worker_stop_async(csilk_io_async_t* handle)
 
 /* --- Dispatch --- */
 
+/**
+ * @brief io_uring dispatch async handler: drain and run queued dispatch tasks.
+ * @param[in] handle Dispatch async handle whose data points at the worker pool.
+ * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
+ *       runs its callback, freeing each task.
+ */
 void
 on_dispatch_async(csilk_io_async_t* handle)
 {
@@ -192,6 +246,13 @@ on_dispatch_async(csilk_io_async_t* handle)
     }
 }
 
+/**
+ * @brief Initialize the uring worker-pool dispatch queue and async eventfd.
+ * @param[in] wp   Worker pool whose dispatch queue is initialized.
+ * @param[in] loop Event loop (currently unused by the uring backend).
+ * @note Initializes the lock-free dispatch queue and an EFD_NONBLOCK|EFD_CLOEXEC
+ *       eventfd for the dispatch async; the async handle's data is set to wp.
+ */
 void
 _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
 {
@@ -200,6 +261,15 @@ _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
     wp->dispatch_async.data = wp;
 }
 
+/**
+ * @brief Queue a callback to run on the owning worker's uring dispatch loop.
+ * @param[in] c   Request context whose internal client identifies the worker.
+ * @param[in] cb  Callback to invoke with arg on the worker loop.
+ * @param[in] arg Argument passed to cb.
+ * @note No-op if c, its internal client, the client's owner pool, or cb is NULL.
+ *       Allocates a task, enqueues it on the worker dispatch queue, and writes
+ *       to the dispatch eventfd to wake the worker.
+ */
 void
 csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 {
@@ -228,6 +298,18 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 
 /* --- Bind and listen --- */
 
+/**
+ * @brief Create, bind, and listen on a non-blocking TCP socket for the ring.
+ * @param[in]  loop       Event loop (currently unused).
+ * @param[out] out_handle Receives the created socket fd and a NULL data pointer.
+ * @param[in]  port      Port to bind to (INADDR_ANY).
+ * @param[in]  backlog   listen(2) backlog.
+ * @param[in]  reuseport If true, set SO_REUSEADDR and SO_REUSEPORT.
+ * @return The socket fd on success, or -1 on socket/bind/listen failure (or on
+ *         Windows, where this is unsupported).
+ * @note On non-Apple platforms the socket is created SOCK_NONBLOCK|SOCK_CLOEXEC.
+ *       On failure any partially created fd is closed before returning.
+ */
 int
 uring_bind_and_listen(
     csilk_io_loop_t* loop, csilk_io_tcp_t* out_handle, int port, int backlog, bool reuseport)
@@ -282,6 +364,16 @@ uring_bind_and_listen(
 
 /* --- Worker thread --- */
 
+/**
+ * @brief Entry point for a spawned io_uring worker thread.
+ * @param[in] arg Pointer to an uring_worker_data_t (freed on entry) describing
+ *                the worker pool, server, port, and startup barrier.
+ * @return NULL on thread completion.
+ * @note Initializes the worker's io_uring ring (SQPOLL, falling back to
+ *       polling), arena and dispatch queue, a thread pool, binds the listening
+ *       socket, then runs the per-worker event loop until stopped. Signals the
+ *       startup barrier before entering the loop.
+ */
 void*
 uring_worker_thread(void* arg)
 {

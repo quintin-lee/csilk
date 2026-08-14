@@ -79,8 +79,24 @@ CSILK_INTERNAL void _csilk_generate_uuid(csilk_ctx_t* c, char buf[37]);
  */
 CSILK_INTERNAL int _csilk_fill_random(csilk_ctx_t* c, void* out, size_t len);
 
+/**
+ * @brief Internal: Compute SHA-1 of @p data using the crypto driver or the
+ * built-in implementation.
+ * @param c        Request context (for driver lookup).
+ * @param data     Input data.
+ * @param len      Input length.
+ * @param[out] out 20-byte SHA-1 output.
+ */
 CSILK_INTERNAL void _csilk_sha1(csilk_ctx_t* c, const uint8_t* data, size_t len, uint8_t out[20]);
 
+/**
+ * @brief Internal: Compute a bcrypt hash of @p password.
+ * @param c        Request context (for driver lookup).
+ * @param password Password bytes.
+ * @param len      Password length.
+ * @param cost     bcrypt cost factor (work factor).
+ * @param[out] hash 62-byte buffer receiving the NUL-terminated hash.
+ */
 CSILK_INTERNAL void
 _csilk_bcrypt_hash(csilk_ctx_t* c, const char* password, size_t len, int cost, char hash[62]);
 
@@ -259,6 +275,19 @@ CSILK_INTERNAL int _csilk_verify(csilk_ctx_t*   c,
 
 #include "csilk/core/crypto.h"
 
+/**
+ * @brief Internal: Sign data producing a JWT using the context's cipher
+ * driver or the built-in implementation.
+ * @param c            Request context (for driver lookup, may be NULL).
+ * @param key          Signing key.
+ * @param key_len      Key length.
+ * @param data         Data to sign.
+ * @param data_len     Data length.
+ * @param[out] signature  Output signature buffer.
+ * @param[in,out] sig_len  In: capacity, Out: actual signature length.
+ * @param algorithm    JWT algorithm selector.
+ * @return 0 on success, -1 on failure.
+ */
 CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t*    c,
                                    const char*     key,
                                    size_t          key_len,
@@ -268,6 +297,19 @@ CSILK_INTERNAL int _csilk_jwt_sign(csilk_ctx_t*    c,
                                    size_t*         sig_len,
                                    csilk_jwt_alg_t algorithm);
 
+/**
+ * @brief Internal: Verify a JWT signature using the context's cipher
+ * driver or the built-in implementation.
+ * @param c            Request context (for driver lookup, may be NULL).
+ * @param key          Verification key.
+ * @param key_len      Key length.
+ * @param data         Original signed data.
+ * @param data_len     Data length.
+ * @param signature    Signature to verify.
+ * @param sig_len      Signature length.
+ * @param algorithm    JWT algorithm selector.
+ * @return 0 on valid signature, -1 on invalid or error.
+ */
 CSILK_INTERNAL int _csilk_jwt_verify(csilk_ctx_t*    c,
                                      const char*     key,
                                      size_t          key_len,

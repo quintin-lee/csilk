@@ -13,6 +13,19 @@
 
 #include "router_internal.h"
 
+/**
+ * @brief Try to match a static child node against the current URL segment.
+ * @param[in] child    Candidate static child node.
+ * @param[in] method   HTTP method being routed.
+ * @param[in] seg      Current URL segment (not NUL-terminated).
+ * @param[in] len      Length of seg.
+ * @param[in] p        Remaining path after seg.
+ * @param[in] ctx      Request context (for logging/param capture).
+ * @param[out] out_mh  Receives the matched method handler (may be NULL).
+ * @return The matched handler, or NULL if the segment does not equal the child's
+ *         static segment (using SIMD or strncmp per use_simd) or the deeper
+ *         recursion failed.
+ */
 static csilk_handler_t*
 try_match_static(csilk_router_node_t*     child,
                  const char*              method,
@@ -47,6 +60,19 @@ try_match_static(csilk_router_node_t*     child,
     return NULL;
 }
 
+/**
+ * @brief Try to match a parameter child, capturing the segment as a path param.
+ * @param[in] child    Candidate parameter child node (its segment is the key).
+ * @param[in] method   HTTP method being routed.
+ * @param[in] seg      Current URL segment (not NUL-terminated).
+ * @param[in] len      Length of seg.
+ * @param[in] p        Remaining path after seg.
+ * @param[in] ctx      Request context whose params are appended to on success.
+ * @param[out] out_mh  Receives the matched method handler (may be NULL).
+ * @return The matched handler, or NULL if the parameter could not be captured
+ *         (e.g. param limit reached) or the deeper recursion failed. On failure
+ *         any captured param is rolled back.
+ */
 static csilk_handler_t*
 try_match_param(csilk_router_node_t*     child,
                 const char*              method,
@@ -109,6 +135,18 @@ try_match_param(csilk_router_node_t*     child,
     return r;
 }
 
+/**
+ * @brief Try to match a wildcard child, capturing the rest of the path.
+ * @param[in] child    Candidate wildcard child node (its segment is the key).
+ * @param[in] method   HTTP method being routed.
+ * @param[in] path     Remaining request path (may be NULL).
+ * @param[in] ctx      Request context whose params are appended to on success.
+ * @param[out] out_mh  Receives the matched method handler (may be NULL).
+ * @return The matched handler (from the child's method list), or NULL if the
+ *         parameter limit is reached or no method matches.
+ * @note Captures the leading-slash-stripped remainder of path as the wildcard
+ *       parameter value.
+ */
 static csilk_handler_t*
 try_match_wildcard(csilk_router_node_t*     child,
                    const char*              method,
@@ -168,6 +206,18 @@ try_match_wildcard(csilk_router_node_t*     child,
     return NULL;
 }
 
+/**
+ * @brief Recursively match a request path against the router trie.
+ * @param[in] node    Current trie node being visited.
+ * @param[in] method  HTTP method being routed.
+ * @param[in] path    Remaining request path (NULL/empty means terminal).
+ * @param[in] ctx     Request context (for SIMD config, param capture, logging).
+ * @param[out] out_mh Receives the matched method handler (may be NULL).
+ * @return The handler for the matching route, or NULL if no route matches.
+ * @note At a terminal node returns the handler whose method matches; otherwise
+ *       splits off the next segment and tries static, parameter, and wildcard
+ *       children in order.
+ */
 csilk_handler_t*
 match_node(csilk_router_node_t*     node,
            const char*              method,

@@ -1,3 +1,14 @@
+/**
+ * @file mq_pubsub.c
+ * @brief MQ pub/sub registration — middleware, global middleware, subscribers.
+ *
+ * Implements topic handler registration.  A NULL topic registers a global
+ * middleware that runs for every message; a named topic lazily creates a topic
+ * node and appends the handler.  csilk_mq_subscribe is a thin alias over
+ * csilk_mq_use for readability.
+ * @copyright MIT License
+ */
+
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +19,9 @@
 #include "csilk/messaging/mq.h"
 #include "mq_internal.h"
 
+/* Returns the topic node with the given name, creating it (prepended to the
+ * topic linked list) if it does not yet exist.  Returns NULL on allocation
+ * failure. */
 static csilk_mq_topic_t*
 get_or_create_topic(csilk_mq_t* mq, const char* name)
 {
@@ -28,6 +42,20 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
     return t;
 }
 
+/**
+ * @brief Register a middleware or subscriber handler for a topic.
+ *
+ * With @p topic == NULL the handler is appended to the global middleware array
+ * (runs for all messages; array grows from capacity 0, doubling).  With a named
+ * topic the handler is appended to that topic's handler chain, creating the
+ * topic node on first use.  Handlers run in registration order: global
+ * middleware, then matching-topic middleware, then subscribers.
+ *
+ * @param[in] mq         The MQ instance (must not be NULL).
+ * @param[in] topic      Topic name, or NULL for global middleware.
+ * @param[in] middleware Handler function (must not be NULL).
+ * @note NULL arguments or allocation failure are logged and ignored.
+ */
 void
 csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
 {
@@ -95,6 +123,16 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
     }
 }
 
+/**
+ * @brief Register a subscriber handler for a named topic.
+ *
+ * Alias for csilk_mq_use(mq, topic, subscriber); subscribers run after all
+ * applicable middleware for the topic.
+ *
+ * @param[in] mq         The MQ instance.
+ * @param[in] topic      Topic name to subscribe to (must not be NULL).
+ * @param[in] subscriber Handler function (must not be NULL).
+ */
 void
 csilk_mq_subscribe(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t subscriber)
 {

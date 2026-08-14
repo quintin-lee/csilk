@@ -259,6 +259,18 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
     csilk_json_free(json);
 }
 
+/**
+ * @brief Set a JSON string as the response body with an application/json type.
+ *
+ * Sets the response status, assigns the Content-Type header, frees any prior
+ * managed body, and points the response body at @p json_str without copying or
+ * taking ownership (body_is_managed is left 0).
+ *
+ * @param[in] c         Request context (must not be NULL).
+ * @param[in] status    HTTP status code to send.
+ * @param[in] json_str  NUL-terminated JSON text (must not be NULL); must remain
+ *                      valid until the response is written.
+ */
 void
 csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
 {
@@ -369,6 +381,13 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
 
 /* --- Streaming / chunked response --- */
 
+/** @brief Completion callback for streamed/chunked writes.
+ *
+ * Logs write errors and frees the per-write request struct and its associated
+ * data buffer once the asynchronous write finishes.
+ *
+ * @param[in] req    The completed write request.
+ * @param[in] status Write status (< 0 indicates an error). */
 static void
 on_stream_write(csilk_io_write_t* req, int status)
 {

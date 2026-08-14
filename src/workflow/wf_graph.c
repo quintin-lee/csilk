@@ -307,6 +307,15 @@ csilk_wf_add(csilk_wf_t* wf, const char* id, csilk_wf_handler_t handler, void* u
     return node;
 }
 
+/**
+ * @brief Marks a node as an entry point of the workflow.
+ *
+ * Entry nodes are started first when the workflow runs (unless no node is
+ * marked, in which case nodes with zero incoming edges are used).
+ *
+ * @param node     The node to configure.
+ * @param is_entry Non-zero to mark as entry, zero to clear.
+ */
 void
 csilk_wf_node_set_entry(csilk_wf_node_t* node, int is_entry)
 {
@@ -576,6 +585,16 @@ csilk_wf_get_node(csilk_wf_t* wf, const char* id)
     return NULL;
 }
 
+/**
+ * @brief Sets the destructor for a node's opaque user data.
+ *
+ * The supplied free function is invoked when the node (and its user_data) is
+ * released by csilk_wf_free(); use it to clean up resources owned by the
+ * handler configuration.
+ *
+ * @param node    The node to configure.
+ * @param free_fn Destructor callback (may be NULL).
+ */
 void
 csilk_wf_node_set_free(csilk_wf_node_t* node, void (*free_fn)(void*))
 {

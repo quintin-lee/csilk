@@ -618,18 +618,20 @@ csilk_generate_openapi_json(csilk_router_t* router,
     return doc;
 }
 
-/** @brief Serve the generated OpenAPI 3.0 spec as a JSON response.
+/**
+ * @brief Serve the generated OpenAPI 3.0 spec as a JSON response (cached).
  *
- * Intended to be called from within a route handler. Generates the OpenAPI
- * document via csilk_generate_openapi_json() and sends it as a JSON response.
+ * Generates the OpenAPI document once via csilk_generate_openapi_json() and
+ * caches the serialized JSON in a process-global, mutex-guarded buffer;
+ * subsequent calls return the cached copy. Intended to be called from a route
+ * handler. On failure a 500 error response is sent.
  *
  * @param c           The request context.
- * @param r           The router instance.
- * @param title       API title.
- * @param version     API version.
- * @param description API description.
- * @note The response is sent synchronously via csilk_json(). On failure, a
- *       500 error response is sent. */
+ * @param r           The router instance used to build the spec.
+ * @param title       API title (may be NULL for default).
+ * @param version     API version (may be NULL for default "1.0.0").
+ * @param description API description (may be NULL).
+ * @note The response is sent synchronously via csilk_json_string(). */
 static char*         g_openapi_cache_json = NULL;
 static csilk_once_t  g_openapi_cache_once = CSILK_ONCE_INIT;
 static csilk_mutex_t g_openapi_cache_mutex;

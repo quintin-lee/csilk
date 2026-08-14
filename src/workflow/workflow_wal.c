@@ -109,6 +109,14 @@ wal_cleanup(void)
     }
 }
 
+/**
+ * @brief Blocks until the WAL writer queue has fully drained.
+ *
+ * Spins (1 ms sleeps) until the background WAL writer thread has consumed all
+ * queued records. Used before resuming/replaying to guarantee durability.
+ *
+ * @note Internally locks g_wal_mutex while polling. Thread-safe.
+ */
 CSILK_INTERNAL void
 _wf_wal_flush(void)
 {
@@ -121,6 +129,21 @@ _wf_wal_flush(void)
     pthread_mutex_unlock(&g_wal_mutex);
 }
 
+/**
+ * @brief Queues a WAL event record for asynchronous durable write.
+ *
+ * Copies the payload and appends a task to the global queue, lazily starting
+ * the writer thread (and registering an atexit cleanup) on first use. The
+ * writer opens the WAL file in append mode, writes the fixed header followed
+ * by the payload, and fsyncs/datasyncs before closing.
+ *
+ * @param wal_path Path of the WAL file to append to (must not be NULL).
+ * @param type     Event type (WF_EV_START, WF_EV_NODE_START, etc.).
+ * @param payload  Event payload bytes (may be NULL when len is 0).
+ * @param len      Length of payload in bytes.
+ * @return 0 on success, or -1 if wal_path is NULL or memory allocation failed.
+ * @note Thread-safe; the queue is guarded by g_wal_mutex and g_wal_cond.
+ */
 CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len)
 {

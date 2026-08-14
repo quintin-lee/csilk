@@ -14,11 +14,16 @@
 
 typedef float (*csilk_simd_dist_fn)(const float* a, const float* b, size_t dim);
 
+/** @brief Allocate an aligned buffer (see csilk_aligned_alloc()). */
 void* csilk_aligned_alloc(size_t alignment, size_t size);
-void  csilk_aligned_free(void* ptr);
+/** @brief Free an aligned buffer (see csilk_aligned_free()). */
+void csilk_aligned_free(void* ptr);
 
+/** @brief Cosine distance kernel (1 - cos similarity). */
 float csilk_simd_cosine_distance(const float* a, const float* b, size_t dim);
+/** @brief Squared L2 distance kernel. */
 float csilk_simd_l2_distance(const float* a, const float* b, size_t dim);
+/** @brief Negative dot-product kernel. */
 float csilk_simd_dot_product(const float* a, const float* b, size_t dim);
 
 typedef struct csilk_hnsw_node_s {
@@ -45,9 +50,13 @@ typedef struct {
     csilk_mutex_t       mutex;
 } csilk_hnsw_index_t;
 
+/** @brief Create a new empty HNSW index. */
 csilk_hnsw_index_t* csilk_hnsw_index_new(size_t dim, int metric);
-void                csilk_hnsw_index_free(csilk_hnsw_index_t* index);
+/** @brief Free an HNSW index and all its nodes. */
+void csilk_hnsw_index_free(csilk_hnsw_index_t* index);
+/** @brief Insert a vector into the index under a document id. */
 int csilk_hnsw_insert(csilk_hnsw_index_t* index, const char* doc_id, const float* vector);
+/** @brief Exact nearest-neighbour search over all indexed vectors. */
 int csilk_hnsw_search(csilk_hnsw_index_t* index,
                       const float*        query_vector,
                       size_t              top_k,

@@ -166,6 +166,16 @@ csilk_security_get_stats(csilk_security_stats_t* stats)
     stats->auth_failures = atomic_load(&security_auth_failures);
 }
 
+/**
+ * @brief Populate a process/resource-usage statistics snapshot.
+ *
+ * Queries the I/O backend for the current resident set size (RSS) and CPU
+ * user/system times (via getrusage) and writes them into the caller-provided
+ * struct. CPU times default to 0 if the backend call fails.
+ *
+ * @param[out] stats  Struct to populate with RSS and CPU timings. Must not be
+ *                    NULL.
+ */
 void
 csilk_process_get_stats(csilk_process_stats_t* stats)
 {

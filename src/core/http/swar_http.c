@@ -7,12 +7,14 @@
 #include "csilk/core/swar_http.h"
 #include <string.h>
 
+/** @brief SWAR test for any zero byte within a 64-bit word. */
 static inline uint64_t
 has_zero_byte(uint64_t v)
 {
     return (v - 0x0101010101010101ULL) & ~v & 0x8080808080808080ULL;
 }
 
+/** @brief SWAR test returning a mask for bytes in v equal to c. */
 static inline uint64_t
 match_byte(uint64_t v, uint8_t c)
 {
@@ -20,6 +22,14 @@ match_byte(uint64_t v, uint8_t c)
     return has_zero_byte(v ^ target_word);
 }
 
+/**
+ * @brief Find the first occurrence of target in a buffer using SWAR scanning.
+ * @param[in] buf    Buffer to search (may be non-NUL-terminated).
+ * @param[in] len    Length of buf in bytes.
+ * @param[in] target Byte to locate.
+ * @return Index of the first match, or (size_t)-1 if not found or on NULL/empty.
+ * @note Scans 8-byte words in parallel (with a scalar tail) to stay branch-light.
+ */
 size_t
 csilk_swar_find_char(const char* buf, size_t len, char target)
 {
@@ -61,6 +71,14 @@ csilk_swar_find_char(const char* buf, size_t len, char target)
     return (size_t)-1;
 }
 
+/**
+ * @brief Find the position of a CRLF ("\r\n") sequence in a buffer using SWAR.
+ * @param[in] buf Buffer to search.
+ * @param[in] len Length of buf in bytes (must be >= 2).
+ * @return Index of the '\r' of the first CRLF, or (size_t)-1 if none is found.
+ * @note Delegates to csilk_swar_find_char for the '\r' and verifies the
+ *       following byte is '\n'; advances past each candidate to skip false hits.
+ */
 size_t
 csilk_swar_find_crlf(const char* buf, size_t len)
 {
@@ -83,6 +101,16 @@ csilk_swar_find_crlf(const char* buf, size_t len)
     return (size_t)-1;
 }
 
+/**
+ * @brief Parse a single HTTP header line into field/value string views (SWAR).
+ * @param[in]  line  Header line buffer (not required to be NUL-terminated).
+ * @param[in]  len   Length of line in bytes.
+ * @param[out] field Receives the header name view (excludes the ':').
+ * @param[out] value Receives the header value view (OWS stripped, no trailing CR/LF).
+ * @return 0 on success, -1 on NULL args, empty line, or a missing/leading ':'.
+ * @note Views point into line; callers must keep the buffer alive. Uses SWAR
+ *       (SIMD-within-a-register) scans for the colon and trailing whitespace.
+ */
 int
 csilk_swar_parse_header_line(const char*       line,
                              size_t            len,

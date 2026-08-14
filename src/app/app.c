@@ -130,6 +130,8 @@ contains_path_traversal(const char* path)
     return 0;
 }
 
+/** @brief Internal: serve a file from the matched static route prefix,
+ * rejecting directory-traversal paths. */
 static void
 static_serve(csilk_ctx_t* c)
 {
@@ -162,8 +164,12 @@ static_serve(csilk_ctx_t* c)
  * public API
  * =================================================================== */
 
-/** @brief Create a new application instance with optional YAML configuration
- * file. */
+/**
+ * @brief Create a new application instance with optional YAML configuration
+ *        file.
+ * @param[in] config_path Path to a YAML config file, or NULL for defaults.
+ * @return New csilk_app_t* on success, or NULL on allocation/config failure.
+ */
 csilk_app_t*
 csilk_app_new(const char* config_path)
 {
@@ -246,8 +252,11 @@ fail:
     return NULL;
 }
 
-/** @brief Free all application resources: server, router, groups, config, and
- * logger. */
+/**
+ * @brief Free all application resources: server, router, groups, config, and
+ *        logger.
+ * @param[in] app Application instance to free (may be NULL).
+ */
 void
 csilk_app_free(csilk_app_t* app)
 {
@@ -269,6 +278,11 @@ csilk_app_free(csilk_app_t* app)
 
 /* ---- logger ---- */
 
+/**
+ * @brief Set the application's log level and reinitialize the logger.
+ * @param[in] app   Application instance.
+ * @param[in] level New minimum log level to emit.
+ */
 void
 csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level)
 {
@@ -279,6 +293,12 @@ csilk_app_log_level(csilk_app_t* app, csilk_log_level_t level)
     (void)csilk_log_init(app->config.logger);
 }
 
+/**
+ * @brief Configure file-based logging for the application.
+ * @param[in] app    Application instance.
+ * @param[in] path   Log file path, or NULL to disable file logging.
+ * @param[in] max_sz Maximum log file size in bytes before rotation.
+ */
 void
 csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
 {
@@ -293,6 +313,11 @@ csilk_app_log_file(csilk_app_t* app, const char* path, size_t max_sz)
     (void)csilk_log_init(app->config.logger);
 }
 
+/**
+ * @brief Enable or disable JSON-structured log output.
+ * @param[in] app    Application instance.
+ * @param[in] enable Non-zero to enable JSON formatting, zero to disable.
+ */
 void
 csilk_app_log_json(csilk_app_t* app, int enable)
 {
@@ -305,7 +330,11 @@ csilk_app_log_json(csilk_app_t* app, int enable)
 
 /* ---- middleware ---- */
 
-/** @brief Register a middleware handler that applies to all routes globally. */
+/**
+ * @brief Register a middleware handler that applies to all routes globally.
+ * @param[in] app Application instance.
+ * @param[in] h   Middleware handler function.
+ */
 void
 csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 {
@@ -318,6 +347,11 @@ csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 
 /* ---- OpenAPI / Swagger ---- */
 
+/**
+ * @brief Enable or disable the built-in OpenAPI/Swagger endpoints.
+ * @param[in] app    Application instance.
+ * @param[in] enable Non-zero to expose /openapi.json and /docs, zero to hide.
+ */
 void
 csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
@@ -328,8 +362,13 @@ csilk_app_enable_openapi(csilk_app_t* app, int enable)
 
 /* ---- static files ---- */
 
-/** @brief Configure static file serving: map a URL prefix to a local filesystem
- * directory. */
+/**
+ * @brief Configure static file serving: map a URL prefix to a local filesystem
+ *        directory.
+ * @param[in] app      Application instance.
+ * @param[in] prefix   URL prefix to serve static files under (e.g., "/static").
+ * @param[in] root_dir Filesystem directory to serve files from.
+ */
 void
 csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 {
@@ -367,6 +406,11 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
 
 /* ---- config / run / accessors ---- */
 
+/**
+ * @brief Replace the application's server configuration and apply it.
+ * @param[in] app Application instance.
+ * @param[in] c   New server configuration (copied by value).
+ */
 void
 csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c)
 {
@@ -377,6 +421,11 @@ csilk_app_set_server_config(csilk_app_t* app, csilk_server_config_t c)
     csilk_server_set_config(app->server, &app->config.server);
 }
 
+/**
+ * @brief Return a snapshot copy of the application's configuration.
+ * @param[in] app Application instance.
+ * @return Heap-allocated csilk_config_t* copy, or NULL on error. Caller frees.
+ */
 csilk_config_t*
 csilk_app_config(csilk_app_t* app)
 {
@@ -390,6 +439,12 @@ csilk_app_config(csilk_app_t* app)
     return cp;
 }
 
+/**
+ * @brief Start the HTTP server and block while serving requests.
+ * @param[in] app  Application instance.
+ * @param[in] port Listen port; if <= 0, the configured port is used.
+ * @return 0 on normal shutdown, or a negative error code on failure.
+ */
 int
 csilk_app_run(csilk_app_t* app, int port)
 {
@@ -401,12 +456,22 @@ csilk_app_run(csilk_app_t* app, int port)
     return csilk_server_run(app->server, p);
 }
 
+/**
+ * @brief Get the router owned by the application.
+ * @param[in] app Application instance.
+ * @return The app's csilk_router_t*, or NULL if app is NULL.
+ */
 csilk_router_t*
 csilk_app_router(csilk_app_t* app)
 {
     return app ? app->router : NULL;
 }
 
+/**
+ * @brief Get the server owned by the application.
+ * @param[in] app Application instance.
+ * @return The app's csilk_server_t*, or NULL if app is NULL.
+ */
 csilk_server_t*
 csilk_app_server(csilk_app_t* app)
 {

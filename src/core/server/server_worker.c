@@ -33,6 +33,13 @@
 
 /* --- Dispatch --- */
 
+/**
+ * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
+ * @param[in] handle libuv async handle whose data points at the worker_pool_t.
+ * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
+ *       runs its callback, freeing each task afterwards. No-op if the pool is
+ *       NULL. Runs on the worker loop when the async is signaled.
+ */
 static void
 on_dispatch_async(uv_async_t* handle)
 {
@@ -52,6 +59,13 @@ on_dispatch_async(uv_async_t* handle)
     }
 }
 
+/**
+ * @brief Initialize the worker-pool dispatch async channel.
+ * @param[in] wp   Worker pool whose dispatch queue is initialized.
+ * @param[in] loop Event loop on which the dispatch async is registered.
+ * @note Initializes the lock-free dispatch queue and registers on_dispatch_async
+ *       as the async callback; the async handle's data is set to the pool.
+ */
 void
 _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
 {
@@ -60,6 +74,15 @@ _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
     wp->dispatch_async.data = wp;
 }
 
+/**
+ * @brief Queue a callback to run on the owning worker's dispatch loop.
+ * @param[in] c   Request context whose internal client identifies the worker.
+ * @param[in] cb  Callback to invoke with arg on the worker loop.
+ * @param[in] arg Argument passed to cb.
+ * @note No-op if c, its internal client, the client's owner pool, or cb is
+ *       NULL. Allocates a task, enqueues it on the worker dispatch queue, and
+ *       signals the async handle so the worker drains it.
+ */
 void
 csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 {
@@ -85,6 +108,12 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 
 /* --- CPU pinning --- */
 
+/**
+ * @brief Pin the calling thread to a CPU core via libuv thread affinity.
+ * @param[in] core_id Desired core index (wrapped modulo online core count).
+ * @note No-op on Windows or when the wrapped core index is out of range.
+ *       Logs the resulting pin via CSILK_LOG_I.
+ */
 static void
 pin_thread_to_core(int core_id)
 {

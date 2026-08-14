@@ -53,12 +53,26 @@ struct uring_thread_pool_s {
 /* ---- Thread-local pointer set by the event loop thread ---- */
 static _Thread_local uring_thread_pool_t* tls_current_tp = NULL;
 
+/**
+ * @brief Set the thread-local "current" thread pool for the calling thread.
+ * @param[in] tp Thread pool to record in thread-local storage (may be NULL).
+ * @note Used so csilk_io_queue_work can find the pool installed by the event
+ *       loop without passing it through every call.
+ */
 void
 uring_tp_set_current(uring_thread_pool_t* tp)
 {
     tls_current_tp = tp;
 }
 
+/**
+ * @brief Worker thread routine: dequeue, run, and complete work items.
+ * @param[in] arg Thread pool pointer.
+ * @return NULL when the pool is stopped.
+ * @note Loops while tp->running: waits on the queue condvar, runs the work
+ *       callback on a dequeued entry, pushes the result to the done queue, and
+ *       writes to the wakeup eventfd to notify the event loop.
+ */
 static void*
 worker_routine(void* arg)
 {
@@ -102,6 +116,15 @@ worker_routine(void* arg)
     return NULL;
 }
 
+/**
+ * @brief Create and start a thread pool with the given number of workers.
+ * @param[in] nthreads Desired worker count (clamped to >= 1).
+ * @return A newly allocated, running pool, or NULL on allocation or eventfd
+ *         failure.
+ * @note Creates a non-blocking/cloexec wakeup eventfd, initializes the work and
+ *       done queues and their mutex/cond, and spawns the worker threads which
+ *       immediately begin consuming the work queue.
+ */
 uring_thread_pool_t*
 uring_tp_init(int nthreads)
 {
@@ -147,6 +170,13 @@ uring_tp_init(int nthreads)
     return tp;
 }
 
+/**
+ * @brief Stop and tear down a thread pool.
+ * @param[in] tp Pool to destroy (no-op if NULL).
+ * @note Sets running=false, broadcasts the queue condvar to wake workers, joins
+ *       all threads, drains remaining completions (so after-callbacks free work
+ *       handles), then closes the wakeup fd and destroys the mutex/cond.
+ */
 void
 uring_tp_destroy(uring_thread_pool_t* tp)
 {
@@ -177,6 +207,17 @@ uring_tp_destroy(uring_thread_pool_t* tp)
     free(tp);
 }
 
+/**
+ * @brief Enqueue a work item onto the thread pool's bounded queue.
+ * @param[in] tp      Thread pool to enqueue into (validated non-NULL).
+ * @param[in] work    Opaque work object passed to the callbacks.
+ * @param[in] work_cb Callback executed on a worker thread.
+ * @param[in] after_cb Callback executed on the done path after work completes.
+ * @return 0 on success, -1 on NULL tp/work_cb or when the queue is full.
+ * @note Thread-safe: takes the pool queue mutex and signals a worker via
+ *       pthread_cond. The internal ring buffer is bounded by URING_TP_MAX_WORK;
+ *       a full queue is rejected rather than blocking.
+ */
 int
 uring_tp_enqueue(uring_thread_pool_t*   tp,
                  csilk_io_work_t*       work,
@@ -207,6 +248,13 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
     return 0;
 }
 
+/**
+ * @brief Drain the completion queue, invoking each after-work callback.
+ * @param[in] tp Pool whose done queue is drained (no-op if NULL).
+ * @note Iterates the done ring under the done mutex, calling after_cb(work, status)
+ *       for each entry. Safe to call from the event loop after being woken via
+ *       the wakeup eventfd.
+ */
 void
 uring_tp_drain(uring_thread_pool_t* tp)
 {
@@ -230,6 +278,12 @@ uring_tp_drain(uring_thread_pool_t* tp)
     csilk_mutex_unlock(&tp->done_mutex);
 }
 
+/**
+ * @brief Return the wakeup eventfd of the thread pool.
+ * @param[in] tp Pool to query (may be NULL).
+ * @return The pool's wakeup eventfd, or -1 if tp is NULL.
+ * @note The event loop reads this fd to learn when completions are ready.
+ */
 int
 uring_tp_wakeup_fd(uring_thread_pool_t* tp)
 {
@@ -246,6 +300,14 @@ uring_tp_wakeup_fd(uring_thread_pool_t* tp)
 static _Thread_local uring_deferred_t* tls_deferred_head = NULL;
 static _Thread_local uring_deferred_t* tls_deferred_tail = NULL;
 
+/**
+ * @brief Push a deferred after-work callback onto the thread-local queue.
+ * @param[in] work    Work handle passed to after_cb.
+ * @param[in] after_cb Deferred callback (may be NULL).
+ * @param[in] status  Status value delivered to after_cb.
+ * @note Used by the synchronous fallback path so after_cb runs later during
+ *       csilk_io_run(). The queue is thread-local and needs no locking.
+ */
 void
 _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status)
 {
@@ -266,6 +328,12 @@ _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int
     tls_deferred_tail = d;
 }
 
+/**
+ * @brief Drain and run all thread-local deferred after-work callbacks.
+ * @return Number of deferred callbacks invoked.
+ * @note Walks the thread-local deferred list (reset to empty first), invoking
+ *       after_cb(work, status) for each entry and freeing the node.
+ */
 int
 _uring_deferred_drain_all(void)
 {
@@ -295,6 +363,18 @@ _uring_deferred_drain_all(void)
  * immediately to unblock csilk_cond_wait in the caller. */
 static _Thread_local int tls_queue_work_depth = 0;
 
+/**
+ * @brief Submit work through the uring backend's queue-work abstraction.
+ * @param[in] req      Work request passed to the callbacks.
+ * @param[in] work_cb  Callback run synchronously (pool) or inline (fallback).
+ * @param[in] after_cb Callback for post-work notification.
+ * @return 0 on success, or the error from uring_tp_enqueue if the pool is full.
+ * @note If a thread pool is installed it delegates to uring_tp_enqueue. In the
+ *       synchronous fallback (no pool) work_cb runs inline and after_cb is
+ *       deferred to csilk_io_run() at top level, or invoked immediately when
+ *       called from a nested csilk_io_queue_work (tracked via a thread-local
+ *       depth counter) to avoid deadlocking a waiting caller.
+ */
 int
 _csilk_uring_queue_work(csilk_io_work_t*       req,
                         csilk_io_work_cb       work_cb,

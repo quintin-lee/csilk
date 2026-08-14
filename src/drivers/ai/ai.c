@@ -47,6 +47,7 @@ static size_t        g_ai_monitor_count = 0;
 static csilk_mutex_t g_ai_monitor_mutex;
 static atomic_int    g_ai_monitor_init = 0;
 
+/** @brief Lazily initialise the AI monitor registry mutex (idempotent). */
 static void
 ai_ensure_monitor_init(void)
 {
@@ -56,6 +57,11 @@ ai_ensure_monitor_init(void)
     }
 }
 
+/** @brief Broadcast an AI telemetry event to all registered monitor sockets.
+ *
+ * Builds a JSON event object (event, model, status, token counts, duration,
+ * optional error) and pushes it over each registered context's WebSocket.
+ * No-op when no monitors are registered. */
 static void
 _ai_broadcast(const char* event,
               const char* model,
@@ -94,6 +100,13 @@ _ai_broadcast(const char* event,
     csilk_json_free(root);
 }
 
+/**
+ * @brief Snapshot the global AI metrics atomically.
+ *
+ * Copies the cumulative request, token, error and duration counters into the
+ * caller's struct. Safe to call from any thread.
+ *
+ * @param[out] stats Destination for the snapshot (must not be NULL). */
 void
 csilk_ai_get_stats(csilk_ai_stats_t* stats)
 {
@@ -108,6 +121,14 @@ csilk_ai_get_stats(csilk_ai_stats_t* stats)
     stats->duration_us_total = atomic_load(&ai_duration_us_total);
 }
 
+/**
+ * @brief Serialise the AI metrics into a JSON string.
+ *
+ * Produces the same fields as csilk_ai_get_stats() as a JSON object encoded as
+ * a NUL-terminated string.
+ *
+ * @param stats Source metrics snapshot (must not be NULL).
+ * @return Heap-allocated JSON string (caller frees), or NULL on OOM. */
 char*
 csilk_ai_stats_to_json(const csilk_ai_stats_t* stats)
 {
@@ -126,6 +147,14 @@ csilk_ai_stats_to_json(const csilk_ai_stats_t* stats)
     return json;
 }
 
+/**
+ * @brief Register a request context as an AI telemetry monitor.
+ *
+ * Adds the context to the global monitor list so it receives _ai_broadcast()
+ * events over its WebSocket. Up to 16 monitors are kept; excess registrations
+ * are rejected with an error log.
+ *
+ * @param c Request context to register (must not be NULL). */
 void
 csilk_ai_register_monitor(void* c)
 {

@@ -718,12 +718,23 @@ csilk_get_client_ip(csilk_ctx_t* c)
     return NULL;
 }
 
+/**
+ * @brief Begin reading from a client connection via the libuv loop.
+ * @param[in] client Client whose underlying stream is subscribed to reads.
+ * @note Installs alloc_buffer/on_read and starts uv_read_start on the client's
+ *       stream handle.
+ */
 void
 csilk_client_read_start(csilk_client_t* client)
 {
     uv_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
 }
 
+/**
+ * @brief Stop reading from a client connection.
+ * @param[in] client Client whose underlying stream read is halted.
+ * @note Calls uv_read_stop on the client's stream handle.
+ */
 void
 csilk_client_read_stop(csilk_client_t* client)
 {

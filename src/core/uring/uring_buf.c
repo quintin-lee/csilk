@@ -20,6 +20,14 @@ struct csilk_uring_buf_ring_s {
     void** buffers;
 };
 
+/**
+ * @brief Create a ring of page-aligned registered buffers for zero-copy I/O.
+ * @param[in] num_bufs Number of buffers in the ring (must be > 0).
+ * @param[in] buf_size Size of each buffer in bytes (must be > 0).
+ * @return A newly allocated ring, or NULL on invalid args or allocation failure.
+ * @note Each buffer is 4096-byte aligned (via posix_memalign when available) and
+ *       zeroed; on partial failure all allocated buffers are freed first.
+ */
 csilk_uring_buf_ring_t*
 csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
 {
@@ -70,6 +78,12 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
     return ring;
 }
 
+/**
+ * @brief Retrieve a buffer from the ring by index.
+ * @param[in] ring  Buffer ring (validated non-NULL with a buffer array).
+ * @param[in] index Index of the requested buffer.
+ * @return Pointer to the buffer, or NULL if ring is NULL or index is out of range.
+ */
 void*
 csilk_uring_buf_ring_get(csilk_uring_buf_ring_t* ring, size_t index)
 {
@@ -79,18 +93,33 @@ csilk_uring_buf_ring_get(csilk_uring_buf_ring_t* ring, size_t index)
     return ring->buffers[index];
 }
 
+/**
+ * @brief Get the configured size of each buffer in the ring.
+ * @param[in] ring Buffer ring (may be NULL).
+ * @return Buffer size in bytes, or 0 if ring is NULL.
+ */
 size_t
 csilk_uring_buf_ring_get_buf_size(const csilk_uring_buf_ring_t* ring)
 {
     return ring ? ring->buf_size : 0;
 }
 
+/**
+ * @brief Get the number of buffers in the ring.
+ * @param[in] ring Buffer ring (may be NULL).
+ * @return Number of buffers, or 0 if ring is NULL.
+ */
 size_t
 csilk_uring_buf_ring_get_num_bufs(const csilk_uring_buf_ring_t* ring)
 {
     return ring ? ring->num_bufs : 0;
 }
 
+/**
+ * @brief Free a buffer ring and all its backing buffers.
+ * @param[in] ring Ring to free (no-op if NULL).
+ * @note Frees each buffer, the buffer pointer array, and the ring struct.
+ */
 void
 csilk_uring_buf_ring_free(csilk_uring_buf_ring_t* ring)
 {

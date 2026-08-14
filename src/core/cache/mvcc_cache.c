@@ -23,6 +23,7 @@ struct csilk_mvcc_cache_s {
     _Atomic(csilk_mvcc_node_t*) buckets[];
 };
 
+/** @brief FNV-1a hash of a NUL-terminated key. */
 static uint64_t
 hash_key(const char* key)
 {
@@ -34,6 +35,13 @@ hash_key(const char* key)
     return h;
 }
 
+/**
+ * @brief Create an MVCC (epoch/RCU) lock-free in-memory cache.
+ * @param[in] capacity Number of hash buckets (defaults to 1024 when 0).
+ * @return A newly allocated cache, or NULL on allocation failure.
+ * @note Caller owns the returned cache and must free it with
+ *       csilk_mvcc_cache_free. The global epoch starts at 1.
+ */
 csilk_mvcc_cache_t*
 csilk_mvcc_cache_new(size_t capacity)
 {
@@ -50,6 +58,13 @@ csilk_mvcc_cache_new(size_t capacity)
     return cache;
 }
 
+/**
+ * @brief Destroy an MVCC cache, freeing all keys, values, and nodes.
+ * @param[in] cache Cache to free (no-op if NULL).
+ * @note Walks every bucket chain, freeing each node's key, value, and node,
+ *       then frees the cache struct itself. Not thread-safe; callers must
+ *       ensure no concurrent access.
+ */
 void
 csilk_mvcc_cache_free(csilk_mvcc_cache_t* cache)
 {
@@ -69,6 +84,17 @@ csilk_mvcc_cache_free(csilk_mvcc_cache_t* cache)
     free(cache);
 }
 
+/**
+ * @brief Insert/overwrite a key with a new versioned value (RCU CAS prepend).
+ * @param[in] cache  Cache to update (validated non-NULL).
+ * @param[in] key    NUL-terminated key (validated non-NULL).
+ * @param[in] val    Value bytes (validated non-NULL).
+ * @param[in] val_len Length of val in bytes.
+ * @return 0 on success, -1 on NULL args or allocation failure.
+ * @note Bumps the global epoch and atomically prepends a new node to the key's
+ *       bucket via compare-exchange; older versions remain readable until
+ *       reclaimed, providing multi-version concurrency.
+ */
 int
 csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val, size_t val_len)
 {
@@ -104,6 +130,16 @@ csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val
     return 0;
 }
 
+/**
+ * @brief Look up the most recent value for a key in the MVCC cache.
+ * @param[in]  cache   Cache to query (validated non-NULL).
+ * @param[in]  key     NUL-terminated key (validated non-NULL).
+ * @param[out] val_len Receives the value length (may be NULL).
+ * @return Pointer to the value bytes (owned by the cache; do not free), or NULL
+ *         if the key is absent.
+ * @note Uses acquire-ordered loads while traversing the version chain; returns
+ *       the first node whose key matches.
+ */
 const void*
 csilk_mvcc_cache_get(csilk_mvcc_cache_t* cache, const char* key, size_t* val_len)
 {

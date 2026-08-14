@@ -18,6 +18,14 @@ struct csilk_vector_db_s {
     void*                           state;
 };
 
+/**
+ * @brief Register a vector-DB driver in the global registry.
+ *
+ * The driver vtable is stored by pointer (not copied) and must remain valid
+ * for the process lifetime. At most MAX_VECTOR_DRIVERS (4) drivers can be
+ * registered.
+ *
+ * @param driver Driver vtable to register (name must be set). */
 void
 csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver)
 {
@@ -31,6 +39,18 @@ extern void csilk_vector_milvus_init(void);
 
 #include "vector_internal.h"
 
+/**
+ * @brief Create an in-memory embedded vector DB backed by an HNSW index.
+ *
+ * Allocates a csilk_vector_db_t whose state is an HNSW index built with the
+ * given dimensionality and distance metric. The returned handle has no driver
+ * vtable, so upsert/search/free dispatch to the embedded HNSW implementation.
+ *
+ * @param dim    Vector dimensionality (must be non-zero).
+ * @param metric Distance metric selector passed to the HNSW index.
+ * @return Newly allocated DB handle, or NULL on OOM or invalid dimension.
+ * @note The caller owns the handle and must free it with
+ *       csilk_vector_db_free(). */
 csilk_vector_db_t*
 csilk_vector_db_new_embedded(size_t dim, int metric)
 {
@@ -49,6 +69,20 @@ csilk_vector_db_new_embedded(size_t dim, int metric)
     return db;
 }
 
+/**
+ * @brief Create a vector DB, either embedded or via a named remote driver.
+ *
+ * For the literal driver name "embedded" this delegates to
+ * csilk_vector_db_new_embedded() with a default 1536-dimension / cosine
+ * configuration. Otherwise the driver registry is lazily initialised (Qdrant
+ * and Milvus) and the matching driver's init() callback is invoked with the
+ * endpoint and API key.
+ *
+ * @param driver_name Backend name ("embedded", "qdrant", "milvus", ...).
+ * @param endpoint    Remote endpoint URL (ignored for embedded).
+ * @param api_key     Optional API key (ignored for embedded).
+ * @return Newly allocated DB handle, or NULL if the driver is unknown,
+ *         init() fails, or allocation fails. */
 csilk_vector_db_t*
 csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* api_key)
 {
@@ -95,6 +129,19 @@ csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* a
     return db;
 }
 
+/**
+ * @brief Insert or update a batch of vectors in the database.
+ *
+ * If the handle has a driver vtable with an upsert() callback, that is used;
+ * otherwise the points are inserted into the embedded HNSW index keyed by
+ * their id. The operation is all-or-nothing for the embedded path (the first
+ * failing insert aborts and returns -1).
+ *
+ * @param db         Database handle (must not be NULL).
+ * @param collection Collection/namespace name (passed to remote drivers).
+ * @param points     Array of vectors to upsert (must not be NULL).
+ * @param count      Number of points (must be > 0).
+ * @return 0 on success, -1 on invalid arguments or a failed insert. */
 int
 csilk_vector_db_upsert(csilk_vector_db_t*          db,
                        const char*                 collection,
@@ -118,6 +165,21 @@ csilk_vector_db_upsert(csilk_vector_db_t*          db,
     return -1;
 }
 
+/**
+ * @brief Search the database for the @p limit nearest vectors to @p vector.
+ *
+ * Dispatches to the driver's search() callback when present, otherwise to the
+ * embedded HNSW index. On success the response's results array is
+ * heap-allocated and populated with matched ids and scores; the caller must
+ * release it with csilk_vector_search_response_free().
+ *
+ * @param db          Database handle (must not be NULL).
+ * @param collection  Collection/namespace name (passed to remote drivers).
+ * @param vector      Query vector (must not be NULL).
+ * @param dimension   Dimensionality of @p vector.
+ * @param limit       Maximum number of results (must be > 0).
+ * @param[out] res    Response struct to populate (must not be NULL).
+ * @return 0 on success, -1 on invalid arguments or search failure. */
 int
 csilk_vector_db_search(csilk_vector_db_t*              db,
                        const char*                     collection,
@@ -153,6 +215,14 @@ csilk_vector_db_search(csilk_vector_db_t*              db,
     return -1;
 }
 
+/**
+ * @brief Free a vector DB handle and its underlying driver/index state.
+ *
+ * If the handle has a driver vtable with a free() callback it is called;
+ * otherwise the embedded HNSW index is freed. The handle struct itself is
+ * always freed.
+ *
+ * @param db Database handle to free (may be NULL). */
 void
 csilk_vector_db_free(csilk_vector_db_t* db)
 {
@@ -167,6 +237,14 @@ csilk_vector_db_free(csilk_vector_db_t* db)
     free(db);
 }
 
+/**
+ * @brief Release all memory owned by a vector search response.
+ *
+ * Frees each result's id string and payload JSON, the results array, and the
+ * error message, then resets the struct to an empty state. Safe to call on a
+ * zero-initialised response.
+ *
+ * @param res Response to clean (may be NULL). */
 void
 csilk_vector_search_response_free(csilk_vector_search_response_t* res)
 {

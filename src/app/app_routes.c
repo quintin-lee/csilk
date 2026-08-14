@@ -70,6 +70,8 @@ find_or_create_group(csilk_app_t* app, const char* prefix)
     return g;
 }
 
+/** @brief Internal: select the registered group whose prefix longest-matches
+ * the request path, and compute the relative path within it. */
 static csilk_group_t*
 find_matching_group_for_path(csilk_app_t* app, const char* path, const char** out_relative_path)
 {
@@ -106,7 +108,9 @@ find_matching_group_for_path(csilk_app_t* app, const char* path, const char** ou
  *
  * @param app    Application instance.
  * @param prefix URL prefix (e.g., "/api/admin").
- * @param h      Middleware handler function. */
+ * @param h      Middleware handler function.
+ * @return void
+ */
 void
 csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
 {
@@ -126,7 +130,9 @@ csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
  * config.static_files.enable is true and root_dir is configured. The
  * prefix defaults to "/static" if not specified in the config.
  *
- * @param app Application instance. */
+ * @param app Application instance.
+ * @return void
+ */
 void
 csilk_app_apply_config(csilk_app_t* app)
 {
@@ -148,7 +154,9 @@ csilk_app_apply_config(csilk_app_t* app)
  * @param app    Application instance.
  * @param method HTTP method (e.g., "GET", "POST").
  * @param path   URL path (e.g., "/users").
- * @param handler Handler function. */
+ * @param handler Handler function.
+ * @return void
+ */
 void
 csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csilk_handler_t handler)
 {
@@ -175,7 +183,9 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
  * @param input_type  Registered type name for request body JSON schema.
  * @param output_type Registered type name for response body JSON schema.
  * @param summary     Short description for the OpenAPI operation.
- * @param description Detailed description for the OpenAPI operation. */
+ * @param description Detailed description for the OpenAPI operation.
+ * @return void
+ */
 void
 csilk_app_add_route_extended(csilk_app_t*    app,
                              const char*     method,
@@ -247,7 +257,9 @@ csilk_app_add_route_extended_perm(csilk_app_t*    app,
  *  @param path           URL path.
  *  @param handler        Handler function.
  *  @param perm_required  Permission identifier (e.g., "read"), or NULL.
- *  @param perm_resource  Resource pattern (e.g., "users:*"), or NULL. */
+ * @param perm_resource  Resource pattern (e.g., "users:*"), or NULL.
+ * @return void
+ */
 void
 csilk_app_add_route_perm(csilk_app_t*    app,
                          const char*     method,
@@ -266,7 +278,9 @@ csilk_app_add_route_perm(csilk_app_t*    app,
  * @param method   HTTP method.
  * @param path     URL path.
  * @param handlers Array of handler functions.
- * @param n        Number of handlers in the array. */
+ * @param n        Number of handlers in the array.
+ * @return void
+ */
 void
 csilk_app_add_handlers(
     csilk_app_t* app, const char* method, const char* path, csilk_handler_t* handlers, size_t n)

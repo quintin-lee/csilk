@@ -263,6 +263,8 @@ typedef struct {
     csilk_json_t*     result;
 } db_async_work_ctx_t;
 
+/** @brief Thread-pool work callback — runs the query off the main loop.
+ * Stores the resulting JSON in the async context for the after-work callback. */
 static void
 db_async_work_cb(csilk_io_work_t* req)
 {
@@ -270,6 +272,8 @@ db_async_work_cb(csilk_io_work_t* req)
     ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
 }
 
+/** @brief After-work callback — invokes the user callback on the main loop
+ * thread, then frees the SQL string and the async context. */
 static void
 db_async_after_work_cb(csilk_io_work_t* req, int status)
 {
@@ -282,6 +286,19 @@ db_async_after_work_cb(csilk_io_work_t* req, int status)
     free(ctx);
 }
 
+/**
+ * @brief Execute a SQL query asynchronously and deliver the JSON result.
+ *
+ * Allocates an async context, queues csilk_db_query_json() on the I/O thread
+ * pool, and returns immediately. The caller's callback fires on the main loop
+ * thread once the query completes; ownership of the resulting csilk_json
+ * (when non-NULL) passes to the callback.
+ *
+ * @param pool      Database pool (must not be NULL).
+ * @param sql       SQL query string (must not be NULL).
+ * @param cb        Completion callback (must not be NULL).
+ * @param user_data Opaque value forwarded to the callback.
+ * @return 0 if the work was queued, -1 on invalid arguments or OOM. */
 int
 csilk_db_query_json_async(csilk_db_pool_t*  pool,
                           const char*       sql,
@@ -443,6 +460,7 @@ static int                driver_count = 0;
 static csilk_mutex_t      registry_mutex;
 static int                registry_initialized = 0;
 
+/** @brief Lazily initialise the driver-registry mutex (idempotent). */
 static void
 ensure_registry_init(void)
 {

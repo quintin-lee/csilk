@@ -31,6 +31,8 @@
 
 #if defined(CSILK_HAS_AVX512)
 __attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
+/** @brief AVX-512 variant: extract the next '/'- or NUL-delimited path segment.
+ * @see get_next_segment */
 get_next_segment_avx512(const char** p, size_t* len)
 {
     while (**p == '/') {
@@ -75,6 +77,8 @@ get_next_segment_avx512(const char** p, size_t* len)
 
 #if defined(__x86_64__)
 __attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
+/** @brief AVX2 variant: extract the next '/'- or NUL-delimited path segment.
+ * @see get_next_segment */
 get_next_segment_avx2(const char** p, size_t* len)
 {
     while (**p == '/') {
@@ -120,6 +124,8 @@ get_next_segment_avx2(const char** p, size_t* len)
 
 #if defined(__ARM_NEON)
 __attribute__((no_sanitize("address"))) static inline const char*
+/** @brief NEON variant: extract the next '/'- or NUL-delimited path segment.
+ * @see get_next_segment */
 get_next_segment_neon(const char** p, size_t* len)
 {
     while (**p == '/') {
@@ -171,6 +177,18 @@ get_next_segment_neon(const char** p, size_t* len)
 }
 #endif
 
+/**
+ * @brief Extract the next path segment from a URL path.
+ *
+ * Skips leading '/', then scans for the next '/' or NUL to delimit a segment.
+ * Dispatches to the best SIMD implementation (AVX-512/AVX2/NEON) when the
+ * the CPU supports it, falling back to a scalar scan.
+ *
+ * @param[in,out] p   Pointer to the current scan position; advanced past the
+ *                    consumed segment.
+ * @param[out]    len Receives the length of the returned segment.
+ * @return Pointer to the segment start, or NULL at end of string.
+ */
 const char*
 get_next_segment(const char** p, size_t* len)
 {
@@ -214,6 +232,8 @@ get_next_segment(const char** p, size_t* len)
 #if defined(__x86_64__)
 #if defined(CSILK_HAS_AVX512)
 __attribute__((target("avx512f,avx512bw"))) static inline int
+/** @brief AVX-512 variant: constant-time equality test for two byte buffers.
+ * @see csilk_memcmp_fast */
 csilk_memcmp_avx512(const char* s1, const char* s2, size_t n)
 {
     if (n >= 64) {
@@ -233,6 +253,8 @@ csilk_memcmp_avx512(const char* s1, const char* s2, size_t n)
 #endif
 
 __attribute__((target("avx2"))) static inline int
+/** @brief AVX2 variant: constant-time equality test for two byte buffers.
+ * @see csilk_memcmp_fast */
 csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
 {
     if (n >= 32) {
@@ -254,6 +276,8 @@ csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
 
 #if defined(__ARM_NEON)
 static inline int
+/** @brief NEON variant: constant-time equality test for two byte buffers.
+ * @see csilk_memcmp_fast */
 csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 {
     if (n >= 16) {
@@ -274,6 +298,18 @@ csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 }
 #endif
 
+/**
+ * @brief Compare two byte buffers for equality using SIMD when beneficial.
+ *
+ * Returns non-zero when the first @p n bytes of @p s1 and @p s2 are identical.
+ * Uses AVX-512/AVX2/NEON for large aligned runs (once), then a word-at-a-time
+ * scalar fallback, and finally a byte comparison.
+ *
+ * @param[in] s1 First buffer.
+ * @param[in] s2 Second buffer.
+ * @param[in] n  Number of bytes to compare.
+ * @return 1 if equal, 0 otherwise (n == 0 is considered equal).
+ */
 int
 csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 {
@@ -350,6 +386,8 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 
 #if defined(CSILK_HAS_AVX512)
 __attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
+/** @brief AVX-512 variant: find the first occurrence of a byte in a range.
+ * @see csilk_simd_find_char */
 csilk_simd_find_char_avx512(const char* curr, const char* end, char target)
 {
     __m512i target_vec = _mm512_set1_epi8(target);
@@ -373,6 +411,8 @@ csilk_simd_find_char_avx512(const char* curr, const char* end, char target)
 
 #if defined(__x86_64__)
 __attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
+/** @brief AVX2 variant: find the first occurrence of a byte in a range.
+ * @see csilk_simd_find_char */
 csilk_simd_find_char_avx2(const char* curr, const char* end, char target)
 {
     __m256i target_vec = _mm256_set1_epi8(target);
@@ -395,6 +435,17 @@ csilk_simd_find_char_avx2(const char* curr, const char* end, char target)
 }
 #endif
 
+/**
+ * @brief Find the first occurrence of @p target within a byte range.
+ *
+ * Scans [@p s, @p s+@p len) for @p target, dispatching to AVX-512/AVX2/NEON for
+ * aligned vector runs when available and falling back to a scalar scan.
+ *
+ * @param[in] s      Start of the search range.
+ * @param[in] len    Length of the range in bytes.
+ * @param[in] target Byte to find.
+ * @return Pointer to the first match, or NULL if not found / invalid input.
+ */
 const char*
 csilk_simd_find_char(const char* s, size_t len, char target)
 {
@@ -458,6 +509,17 @@ csilk_simd_find_char(const char* s, size_t len, char target)
  * csilk_common_prefix_len_fast — word-at-a-time prefix comparison
  * -------------------------------------------------------------------------*/
 
+/**
+ * @brief Compute the length of the common prefix of two byte buffers.
+ *
+ * Compares @p s1 and @p s2 up to @p max_len bytes, using 8-byte word loads on
+ * supported architectures and stopping at the first differing byte.
+ *
+ * @param[in] s1      First buffer.
+ * @param[in] s2      Second buffer.
+ * @param[in] max_len Maximum number of bytes to compare.
+ * @return Number of leading equal bytes (capped at @p max_len).
+ */
 size_t
 csilk_common_prefix_len_fast(const char* s1, const char* s2, size_t max_len)
 {

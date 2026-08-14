@@ -194,7 +194,9 @@ csilk_group_group(csilk_group_t* parent, const char* prefix)
  * @param handler Middleware handler function. Receives the request context
  *                and should call csilk_next() to pass control forward.
  * @note Middleware from parent groups is automatically inherited by child
- *       groups and prepended before child middleware. */
+ *       groups and prepended before child middleware.
+ * @return 0 on success, or -1 if group is NULL or realloc fails.
+ */
 int
 csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 {
@@ -280,7 +282,9 @@ gather_handlers(csilk_group_t* group, csilk_handler_t** handlers, size_t* count)
  * @param group   The route group.
  * @param method  HTTP method (e.g., "GET", "POST").
  * @param path    Path relative to the group prefix (e.g., "/users").
- * @param handler The route handler function. */
+ * @param handler The route handler function.
+ * @return 0 on success, or -1 on invalid args or allocation failure.
+ */
 int
 csilk_group_add_route(csilk_group_t*  group,
                       const char*     method,
@@ -307,7 +311,9 @@ csilk_group_add_route(csilk_group_t*  group,
  * @param output_type Registered reflection type name for the response body,
  *                    or NULL.
  * @param summary     Short description for OpenAPI operation summary.
- * @param description Detailed description for OpenAPI operation. */
+ * @param description Detailed description for OpenAPI operation.
+ * @return 0 on success, or -1 on invalid args or allocation failure.
+ */
 int
 csilk_group_add_route_extended(csilk_group_t*  group,
                                const char*     method,
@@ -470,7 +476,9 @@ csilk_group_add_route_extended_perm(csilk_group_t*  group,
  * @param handlers Array of handler functions (the chain).
  * @param count    Number of handlers in the array.
  * @note The handlers array is combined with group middleware — group
- *       middleware always runs first, followed by the provided handlers. */
+ *       middleware always runs first, followed by the provided handlers.
+ * @return 0 on success, or -1 on invalid args or allocation failure.
+ */
 int
 csilk_group_add_handlers(csilk_group_t*   group,
                          const char*      method,
@@ -530,7 +538,9 @@ csilk_group_add_handlers(csilk_group_t*   group,
  *
  * @param group The group to free (may be NULL).
  * @note Child groups created with csilk_group_group() must be freed
- *       separately. The router is not owned by the group. */
+ *       separately. The router is not owned by the group.
+ * @return void
+ */
 void
 csilk_group_free(csilk_group_t* group)
 {

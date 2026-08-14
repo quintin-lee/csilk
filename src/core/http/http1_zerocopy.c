@@ -1,9 +1,28 @@
+/**
+ * @file http1_zerocopy.c
+ * @brief Zero-copy HTTP/1 parsing helpers backed by string views.
+ *
+ * Provides lightweight, allocation-free routines for comparing string views
+ * against NUL-terminated strings and for slicing HTTP/1 header lines out of a
+ * flat request buffer without copying the underlying data.
+ *
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "core/io/af_xdp_internal.h"
 
+/**
+ * @brief Compare a string view against a NUL-terminated string for equality.
+ * @param[in] view String view to compare.
+ * @param[in] str NUL-terminated C string to compare against.
+ * @return 1 if the view equals str (same length and content), 0 otherwise.
+ * @note Returns 0 if either argument is NULL or the view has a NULL data
+ *       pointer. Comparison is bounded by view.len and is not NUL-sensitive.
+ */
 int
 csilk_str_view_equal(csilk_str_view_t view, const char* str)
 {
@@ -17,6 +36,18 @@ csilk_str_view_equal(csilk_str_view_t view, const char* str)
     return strncmp(view.data, str, view.len) == 0;
 }
 
+/**
+ * @brief Slice the HTTP/1 header block of a request buffer into name/value views.
+ * @param[in]  buf         Flat request buffer (must contain a request line).
+ * @param[in]  len         Length in bytes of buf.
+ * @param[out] slices      Caller-allocated array to receive name/value views.
+ * @param[in]  max_slices  Capacity of the slices array.
+ * @param[out] out_slice_count Number of header slices written (may be NULL).
+ * @return 0 on success, -1 on invalid input or missing request line.
+ * @note The views point directly into buf; the buffer must outlive the slices.
+ *       Parsing stops at the first empty line, a missing ':' on a line, or when
+ *       max_slices is reached. Leading OWS (space/tab) is stripped from values.
+ */
 int
 csilk_http1_parse_header_slices(const char*           buf,
                                 size_t                len,

@@ -11,6 +11,16 @@
 
 /* --- Memory Helpers --- */
 
+/**
+ * @brief Allocates memory from the workflow execution context's arena.
+ *
+ * Thread-safe allocation backed by the context arena (guarded by
+ * ctx->arena_mutex). Allocations live until the context is destroyed.
+ *
+ * @param ctx  The workflow execution context (must not be NULL).
+ * @param size Number of bytes to allocate.
+ * @return Pointer to allocated memory, or NULL on NULL ctx / failure.
+ */
 void*
 csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
 {
@@ -23,6 +33,13 @@ csilk_wf_alloc(csilk_wf_ctx_t* ctx, size_t size)
     return ptr;
 }
 
+/**
+ * @brief Duplicates a string into the context arena.
+ *
+ * @param ctx The workflow execution context (must not be NULL).
+ * @param s   Null-terminated source string (may be NULL, returns NULL).
+ * @return Arena-allocated copy of s, or NULL on NULL input / allocation failure.
+ */
 char*
 csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
 {
@@ -37,6 +54,18 @@ csilk_wf_strdup(csilk_wf_ctx_t* ctx, const char* s)
     return news;
 }
 
+/**
+ * @brief Creates a csilk_data_t wrapper in the context arena.
+ *
+ * The returned data carries a strdup'd type string and the supplied value
+ * pointer; free_fn and meta are initialized to NULL.
+ *
+ * @param ctx   The workflow execution context (must not be NULL).
+ * @param type  MIME/content type string (will be copied; must not be NULL).
+ * @param value Opaque payload pointer (may be NULL; ownership passes to caller
+ *              to free via free_fn).
+ * @return New csilk_data_t, or NULL on allocation failure.
+ */
 csilk_data_t*
 csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
 {
@@ -97,6 +126,17 @@ _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
 
 /* --- Short-Term Context Memory Store --- */
 
+/**
+ * @brief Stores a key/value string in the workflow execution context memory.
+ *
+ * Updates the value if the key already exists, otherwise prepends a new entry.
+ * The value (and key) are copied into the context arena. Guarded by ctx->mutex.
+ *
+ * @param ctx   The workflow execution context (must not be NULL).
+ * @param key   Memory key (must not be NULL).
+ * @param value Value string (may be NULL to clear).
+ * @note No-op if ctx or key is NULL.
+ */
 void
 csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* value)
 {
@@ -123,6 +163,15 @@ csilk_wf_ctx_set_memory(csilk_wf_ctx_t* ctx, const char* key, const char* value)
     csilk_mutex_unlock(&ctx->mutex);
 }
 
+/**
+ * @brief Retrieves a value from the workflow execution context memory.
+ *
+ * @param ctx The workflow execution context (must not be NULL).
+ * @param key Memory key to look up (must not be NULL).
+ * @return The stored value string, or NULL if absent / invalid args.
+ * @note The returned pointer is owned by the context arena and remains valid
+ *       for the lifetime of the context. Guarded by ctx->mutex.
+ */
 const char*
 csilk_wf_ctx_get_memory(csilk_wf_ctx_t* ctx, const char* key)
 {
@@ -152,6 +201,15 @@ struct csilk_agent_memory_s {
     char*              collection;
 };
 
+/**
+ * @brief Creates a long-term agent memory store backed by a vector database.
+ *
+ * @param ai              AI client used for embeddings (must not be NULL).
+ * @param embedding_model Embedding model name (defaults if NULL).
+ * @param db              Vector database handle (must not be NULL).
+ * @param collection      Target collection name (must not be NULL).
+ * @return New csilk_agent_memory_t, or NULL on invalid args / allocation failure.
+ */
 csilk_agent_memory_t*
 csilk_agent_memory_new(csilk_ai_t*        ai,
                        const char*        embedding_model,
@@ -173,6 +231,18 @@ csilk_agent_memory_new(csilk_ai_t*        ai,
     return mem;
 }
 
+/**
+ * @brief Stores a text memory entry (with optional metadata) in the vector DB.
+ *
+ * Embeds text via the AI client and upserts a vector point carrying the text
+ * (and any provided metadata JSON) into the store's collection.
+ *
+ * @param mem            The memory store (must not be NULL).
+ * @param id             Unique point id (must not be NULL).
+ * @param text           Text to embed and store (must not be NULL).
+ * @param metadata_json  Optional JSON object string merged with "text" (may be NULL).
+ * @return 0 on success, or -1 on invalid args / embedding or upsert failure.
+ */
 int
 csilk_agent_memory_store(csilk_agent_memory_t* mem,
                          const char*           id,
@@ -208,6 +278,18 @@ csilk_agent_memory_store(csilk_agent_memory_t* mem,
     return rc;
 }
 
+/**
+ * @brief Recalls the top-k most similar memories for a query string.
+ *
+ * Embeds the query and performs an approximate nearest-neighbour search in the
+ * store's collection, writing results into the caller-provided response struct.
+ *
+ * @param mem    The memory store (must not be NULL).
+ * @param query  Query text (must not be NULL).
+ * @param limit  Maximum number of results (defaults to 5 when <= 0).
+ * @param res    Output search response to populate (must not be NULL).
+ * @return 0 on success, or -1 on invalid args / embedding or search failure.
+ */
 int
 csilk_agent_memory_recall(csilk_agent_memory_t*           mem,
                           const char*                     query,
@@ -234,6 +316,14 @@ csilk_agent_memory_recall(csilk_agent_memory_t*           mem,
     return rc;
 }
 
+/**
+ * @brief Frees a long-term agent memory store.
+ *
+ * Releases the embedded model name and collection strings and the store struct.
+ * The underlying AI client and vector database handles are NOT freed.
+ *
+ * @param mem The memory store to free (may be NULL).
+ */
 void
 csilk_agent_memory_free(csilk_agent_memory_t* mem)
 {

@@ -32,6 +32,13 @@ static void on_sendfile_complete(csilk_io_fs_t* req);
 
 /* --- Connection pool (per-worker, lock-free) --- */
 
+/**
+ * @brief Acquire a client object from the per-worker pool (or allocate one).
+ * @param[in] wp Worker pool to draw from.
+ * @return A recycled or freshly calloc'd client with file_fd reset to -1.
+ * @note Prefers a pooled client; otherwise calloc's a new one. Caller is
+ *       responsible for full initialization.
+ */
 static csilk_client_t*
 pool_get(worker_pool_t* wp)
 {
@@ -47,6 +54,13 @@ pool_get(worker_pool_t* wp)
     return client;
 }
 
+/**
+ * @brief Return a client to the per-worker pool after teardown.
+ * @param[in] wp     Worker pool to return the client to.
+ * @param[in] client Client to recycle (its SSL/H2 state is freed first).
+ * @note Frees the SSL session and H2 streams, zeroes the struct (preserving the
+ *       generation counter, which is incremented), then either pools or frees it.
+ */
 static void
 pool_put(worker_pool_t* wp, csilk_client_t* client)
 {
@@ -71,6 +85,14 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
     }
 }
 
+/**
+ * @brief Acquire an arena from the per-worker arena pool (or allocate one).
+ * @param[in] wp Worker pool to draw from.
+ * @return A recycled or new arena; new arenas honor the server's arena-alignment
+ *         config when set.
+ * @note Prefers a pooled arena; otherwise creates a CSILK_DEFAULT_ARENA_SIZE
+ *       arena (with alignment applied if configured).
+ */
 static csilk_arena_t*
 pool_get_arena(worker_pool_t* wp)
 {
@@ -86,6 +108,13 @@ pool_get_arena(worker_pool_t* wp)
     return arena;
 }
 
+/**
+ * @brief Return an arena to the per-worker pool after resetting it.
+ * @param[in] wp    Worker pool to return the arena to.
+ * @param[in] arena Arena to recycle (reset to empty first).
+ * @note Resets the arena, then either pools it (up to CSILK_CLIENT_POOL_SIZE) or
+ *       frees it.
+ */
 static void
 pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
 {
@@ -97,6 +126,13 @@ pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
     }
 }
 
+/**
+ * @brief Pre-populate a worker's arena pool at startup.
+ * @param[in] wp Worker pool whose arena pool is filled.
+ * @note Creates up to CSILK_CLIENT_POOL_SIZE default-sized arenas (applying
+ *       alignment when configured), probing each with a 1-byte alloc/reset to
+ *       validate, and stops on the first allocation failure.
+ */
 void
 _csilk_worker_init_arena_pool(worker_pool_t* wp)
 {
@@ -119,6 +155,12 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
     }
 }
 
+/**
+ * @brief Add a client to its owner worker's active-client linked list.
+ * @param[in] server Server (currently unused; the list is per-worker).
+ * @param[in] client Client to insert at the head of the active list.
+ * @note Updates prev/next pointers and the worker's active_clients head.
+ */
 static void
 client_list_add(csilk_server_t* server, csilk_client_t* client)
 {
@@ -132,6 +174,13 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
     wp->active_clients = client;
 }
 
+/**
+ * @brief Unlink a client from its owner worker's active-client list.
+ * @param[in] server Server owning the client (validated non-NULL).
+ * @param[in] client Client to remove.
+ * @note Relinks prev/next neighbors and clears the client's list pointers.
+ *       No-op if server or the client's owner pool is NULL.
+ */
 static void
 client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
 {
@@ -153,12 +202,25 @@ client_list_remove_internal(csilk_server_t* server, csilk_client_t* client)
     client->next = client->prev = NULL;
 }
 
+/**
+ * @brief Remove a client from the active list (public wrapper).
+ * @param[in] server Server owning the client.
+ * @param[in] client Client to remove.
+ * @note Thin wrapper around client_list_remove_internal.
+ */
 static void
 client_list_remove(csilk_server_t* server, csilk_client_t* client)
 {
     client_list_remove_internal(server, client);
 }
 
+/**
+ * @brief Fully tear down a client connection and recycle its resources.
+ * @param[in] client Client to destroy.
+ * @note Decrements the server's active-connection count, removes the client from
+ *       the active list, cleans up its context, closes its fd, returns its arena
+ *       to the pool, frees its read buffer, and returns the client to the pool.
+ */
 void
 client_destroy(csilk_client_t* client)
 {
@@ -182,6 +244,11 @@ client_destroy(csilk_client_t* client)
     pool_put(client->owner_pool, client);
 }
 
+/**
+ * @brief Resolve the io_uring event loop owning a request context.
+ * @param[in] c Request context whose internal client identifies the worker.
+ * @return The worker pool's loop pointer, or NULL if c/server/client is invalid.
+ */
 CSILK_INTERNAL csilk_io_loop_t*
 _csilk_ctx_loop(csilk_ctx_t* c)
 {
@@ -192,6 +259,12 @@ _csilk_ctx_loop(csilk_ctx_t* c)
     return client->owner_pool->loop_ptr;
 }
 
+/**
+ * @brief Increment a client's asynchronous-reference count.
+ * @param[in] c Request context whose client tracks in-flight async ops.
+ * @note No-op if c/server/internal client is invalid. Prevents the client from
+ *       being destroyed while async work is outstanding.
+ */
 CSILK_INTERNAL void
 _csilk_ctx_async_ref_incr(csilk_ctx_t* c)
 {
@@ -202,6 +275,12 @@ _csilk_ctx_async_ref_incr(csilk_ctx_t* c)
     client->async_ref++;
 }
 
+/**
+ * @brief Decrement a client's asynchronous-reference count.
+ * @param[in] c Request context whose client tracks in-flight async ops.
+ * @note No-op if invalid. When the ref count hits zero, no close is pending, and
+ *       the connection is closed, the client is destroyed.
+ */
 CSILK_INTERNAL void
 _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 {
@@ -217,6 +296,15 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
 
 /* --- I/O Operations --- */
 
+/**
+ * @brief Submit an io_uring timeout SQE for a client timer.
+ * @param[in] client      Client owning the timer; its loop provides the ring.
+ * @param[in] tmr         Timer handle whose data receives a heap-allocated timespec.
+ * @param[in] timeout_ms  Timer duration in milliseconds.
+ * @param[in] op          io_uring opcode used to tag the completion.
+ * @note Allocates a timespec (freeing any prior one), prepares a one-shot timeout,
+ *       and tags the SQE with the client pointer and op via uring_encode_data.
+ */
 static void
 submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms, uring_op_type_t op)
 {
@@ -238,6 +326,12 @@ submit_timer(csilk_client_t* client, csilk_io_timer_t* tmr, uint64_t timeout_ms,
     io_uring_sqe_set_data(sqe, (void*)uring_encode_data(op, client, client));
 }
 
+/**
+ * @brief Begin asynchronous reading on a client connection via io_uring recv.
+ * @param[in] client Client to start reading (validated; ignores duplicate starts).
+ * @note Allocates a 64KB read buffer if needed, prepares a recv SQE tagged
+ *       URING_OP_READ, submits it, and marks read_active on success.
+ */
 void
 csilk_client_read_start(csilk_client_t* client)
 {
@@ -267,6 +361,16 @@ csilk_client_read_start(csilk_client_t* client)
     }
 }
 
+/**
+ * @brief Write data to a client connection (TLS-aware) via io_uring send.
+ * @param[in] client Client to write to (no-op if NULL or connection closed).
+ * @param[in] data   Bytes to send.
+ * @param[in] length Number of bytes in data.
+ * @note For TLS clients the data is SSL_write'd and flushed through the BIO.
+ *       Otherwise a uring_write_req_t carrying a copy of the data is allocated,
+ *       a send SQE is prepared (retrying for an SQE up to 100 times), tagged
+ *       URING_OP_WRITE, and submitted with an incremented async_ref.
+ */
 void
 csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
 {
@@ -314,6 +418,15 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t length)
     io_uring_submit(ring);
 }
 
+/**
+ * @brief Completion handler for a client send SQE.
+ * @param[in] arg The uring_write_req_t carrying the client and data.
+ * @param[in] res Bytes written, or a negative error.
+ * @note Frees the write request. On error closes the client; on success, if a
+ *       file is pending, issues a sendfile; otherwise stops the write timer and
+ *       decrements the async ref (destroying the client when it hits zero and
+ *       keep-alive/finalization allows).
+ */
 void
 on_write_done(void* arg, ssize_t res)
 {
@@ -366,6 +479,13 @@ on_write_done(void* arg, ssize_t res)
 }
 
 /* --- Sendfile completion callback (uring backend) --- */
+/**
+ * @brief Completion callback for a client sendfile transfer.
+ * @param[in] req The fs request whose data points at the client context.
+ * @note Frees the fs request, stops the write timer, decrements the async ref,
+ *       finalizes the response, and destroys the client when all references are
+ *       released and the connection is closed.
+ */
 static void
 on_sendfile_complete(csilk_io_fs_t* req)
 {
@@ -396,6 +516,12 @@ on_sendfile_complete(csilk_io_fs_t* req)
     }
 }
 
+/**
+ * @brief Callback invoked when a client close has fully completed.
+ * @param[in] client Client whose close finished.
+ * @note Decrements close_pending; when close_pending and async_ref are both
+ *       zero and the connection is closed, the client is destroyed.
+ */
 void
 on_close_done(csilk_client_t* client)
 {
@@ -414,6 +540,14 @@ on_close_done(csilk_client_t* client)
     }
 }
 
+/**
+ * @brief Initiate graceful closure of a client connection.
+ * @param[in] client Client to close (no-op if NULL or already closed).
+ * @note Fires the connection-close hook, removes the client from the active list,
+ *       marks the context closed, frees the timer timespecs, and submits io_uring
+ *       cancel SQEs for pending reads/timeouts (writes are allowed to drain).
+ *       Destroys the client immediately if nothing is pending.
+ */
 void
 csilk_client_close(csilk_client_t* client)
 {
@@ -467,6 +601,11 @@ csilk_client_close(csilk_client_t* client)
     }
 }
 
+/**
+ * @brief Timer expiry callback that closes a timed-out connection.
+ * @param[in] client Client whose timer fired.
+ * @note If the connection is not already closed, initiates csilk_client_close.
+ */
 void
 on_timeout(csilk_client_t* client)
 {
@@ -476,6 +615,15 @@ on_timeout(csilk_client_t* client)
     }
 }
 
+/**
+ * @brief Accept and initialize a new client connection on a worker.
+ * @param[in] wp        Worker pool that accepted the connection.
+ * @param[in] client_fd Accepted socket fd.
+ * @note Enforces the max-connections limit (closing the fd if exceeded), pulls a
+ *       client from the pool, sets up its context/arena/parser, fires the
+ *       connection-open hook, initializes TLS if configured, arms read/request
+ *       timers, and starts reading.
+ */
 void
 on_new_connection(worker_pool_t* wp, int client_fd)
 {
@@ -544,6 +692,14 @@ on_new_connection(worker_pool_t* wp, int client_fd)
     io_uring_submit(ring);
 }
 
+/**
+ * @brief Handle a completed recv on a client connection.
+ * @param[in] client Client that produced the read.
+ * @param[in] nread  Bytes received, 0 for EOF, or a negative error.
+ * @note Resets read state, re-arms the read timer, then routes the data to TLS
+ *       processing, WebSocket frame parsing, or HTTP (llhttp) parsing. On
+ *       success re-arms the next read; on EOF/error closes the client.
+ */
 void
 on_read(csilk_client_t* client, ssize_t nread)
 {
@@ -617,6 +773,13 @@ on_read(csilk_client_t* client, ssize_t nread)
     }
 }
 
+/**
+ * @brief Resolve the remote IP address of a client context.
+ * @param[in] c Request context whose internal client carries the socket.
+ * @return A heap/arena-duplicated string with the peer IP (IPv4 or IPv6), or
+ *         NULL if the context is invalid or getpeername fails.
+ * @note The returned string is allocated from the context arena.
+ */
 const char*
 csilk_get_client_ip(csilk_ctx_t* c)
 {
@@ -638,6 +801,11 @@ csilk_get_client_ip(csilk_ctx_t* c)
     return NULL;
 }
 
+/**
+ * @brief Pause further reads on a client connection.
+ * @param[in] client Client whose reads are paused.
+ * @note Sets read_paused so the read loop does not re-arm after the next read.
+ */
 void
 csilk_client_read_stop(csilk_client_t* client)
 {

@@ -36,6 +36,7 @@ typedef struct {
 static ws_room_manager_t g_room_manager;
 static int               g_room_manager_initialized = 0;
 
+/** @brief Tear down the global room manager and free all rooms, snapshots, names. */
 static void
 ws_room_manager_cleanup(void)
 {
@@ -67,6 +68,7 @@ ws_room_manager_cleanup(void)
     g_room_manager_initialized = 0;
 }
 
+/** @brief Lazily initialize the global room manager and register an atexit cleanup. */
 static void
 ws_room_manager_init(void)
 {
@@ -79,6 +81,7 @@ ws_room_manager_init(void)
     atexit(ws_room_manager_cleanup);
 }
 
+/** @brief Linear search of the manager's rooms for one matching @p name. */
 static ws_room_t*
 find_room(const char* name)
 {
@@ -90,6 +93,7 @@ find_room(const char* name)
     return NULL;
 }
 
+/** @brief MQ callback: broadcast a "ws.room.<name>" payload to that room's snapshot. */
 static void
 on_room_message(csilk_mq_ctx_t* ctx)
 {
@@ -121,6 +125,17 @@ on_room_message(csilk_mq_ctx_t* ctx)
     }
 }
 
+/**
+ * @brief Add a context (client connection) to a named WebSocket room.
+ *
+ * Lazily initializes the room manager and creates the room on first use,
+ * subscribing the connection's MQ to the "ws.room.<name>" topic. Membership
+ * is tracked via a Copy-On-Write atomic snapshot so broadcasts avoid holding
+ * the room lock. Re-joining an already-joined room is a no-op.
+ *
+ * @param[in,out] c          The client context to add.
+ * @param[in]     room_name  Name of the room to join.
+ */
 void
 csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 {
@@ -191,6 +206,15 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     csilk_mutex_unlock(&g_room_manager.mutex);
 }
 
+/**
+ * @brief Remove a context from a named WebSocket room.
+ *
+ * Rebuilds the room's COW snapshot without @p c and publishes nothing. If the
+ * room is not found the call is a no-op.
+ *
+ * @param[in,out] c          The client context to remove.
+ * @param[in]     room_name  Name of the room to leave.
+ */
 void
 csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
 {
@@ -241,6 +265,17 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
     csilk_mutex_unlock(&g_room_manager.mutex);
 }
 
+/**
+ * @brief Publish a message to every member of a WebSocket room.
+ *
+ * Publishes @p message to the MQ topic "ws.room.<room_name>"; each member's
+ * subscription callback (on_room_message) replays it to that client. Requires
+ * a valid MQ on @p c.
+ *
+ * @param[in,out] c          The sending client context (provides the MQ).
+ * @param[in]     room_name  Name of the room to broadcast to.
+ * @param[in]     message    NUL-terminated message text to publish.
+ */
 void
 csilk_ws_broadcast_room(csilk_ctx_t* c, const char* room_name, const char* message)
 {

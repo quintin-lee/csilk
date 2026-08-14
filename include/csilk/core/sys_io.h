@@ -1,4 +1,15 @@
 #pragma once
+/**
+ * @file csilk/core/sys_io.h
+ * @brief Portable async I/O abstraction over io_uring or libuv.
+ *
+ * When CSILK_USE_URING is defined, this header exposes a libuv-style API
+ * implemented on top of Linux io_uring.  Otherwise it is a thin set of
+ * typedefs, macros and inline wrappers around the equivalent libuv types
+ * and functions, so callers can write backend-agnostic async I/O code.
+ *
+ * @copyright MIT License
+ */
 
 #ifdef CSILK_USE_URING
 
@@ -13,11 +24,18 @@
 #include <sys/sendfile.h>
 #endif
 
+/** @brief A single I/O buffer (base pointer + length). */
 typedef struct {
-    char*  base;
-    size_t len;
+    char*  base; /**< Buffer base pointer. */
+    size_t len;  /**< Buffer length in bytes. */
 } csilk_io_buf_t;
 
+/**
+ * @brief Construct a csilk_io_buf_t from a base pointer and length.
+ * @param[in] base Buffer base pointer.
+ * @param[in] len Buffer length in bytes.
+ * @return Initialized buffer descriptor (by value).
+ */
 static inline csilk_io_buf_t
 csilk_io_buf_init(char* base, unsigned int len)
 {
@@ -27,42 +45,88 @@ csilk_io_buf_init(char* base, unsigned int len)
     return buf;
 }
 
+/** @brief Opaque event loop type (io_uring instance). */
 typedef struct io_uring csilk_io_loop_t;
 
+/** @brief Generic handle with per-handle user data and owning loop. */
 typedef struct csilk_io_handle_s {
-    void*            data;
-    csilk_io_loop_t* loop;
+    void*            data; /**< Opaque user data. */
+    csilk_io_loop_t* loop; /**< Loop that owns this handle. */
 } csilk_io_handle_t;
 
+/** @brief A TCP/stream connection handle. */
 typedef struct {
-    void*            data;
-    csilk_io_loop_t* loop;
-    int              fd;
+    void*            data; /**< Opaque user data. */
+    csilk_io_loop_t* loop; /**< Loop that owns this handle. */
+    int              fd;   /**< Underlying socket file descriptor. */
 } csilk_io_tcp_t;
 
+/** @brief Write request passed to csilk_io_write. */
 typedef struct csilk_io_write_req {
-    void*           data;
-    void*           cb;
-    csilk_io_tcp_t* handle;
+    void*           data;   /**< Opaque user data. */
+    void*           cb;     /**< User callback pointer. */
+    csilk_io_tcp_t* handle; /**< Stream handle the write targets. */
 } csilk_io_write_t;
 
+/**
+ * @brief Write completion callback type.
+ * @param[in,out] req The write request that completed.
+ * @param[in] status 0 on success, or a negative error code.
+ */
 typedef void (*csilk_io_write_cb)(csilk_io_write_t* req, int status);
 
+/** @brief Stream handle alias (a TCP handle is a stream). */
 typedef csilk_io_tcp_t csilk_io_stream_t;
+/**
+ * @brief Close callback type.
+ * @param[in,out] handle The handle that finished closing.
+ */
 typedef void (*csilk_io_close_cb)(csilk_io_handle_t* handle);
+/**
+ * @brief Close a handle asynchronously.
+ * @param[in,out] handle Handle to close.
+ * @param[in] cb Callback invoked when closing completes.
+ */
 void csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb);
 
+/** @brief OS file-descriptor type (int under io_uring). */
 typedef int csilk_io_os_fd_t;
+/** @brief File handle type (int file descriptor under io_uring). */
 typedef int csilk_io_file_t;
 
+/**
+ * @brief Return a human-readable description of an I/O error.
+ * @param[in] err Error code (currently ignored).
+ * @return Static string "liburing error".
+ */
 static inline const char*
 csilk_io_strerror(int err)
 {
     return "liburing error";
 }
+/**
+ * @brief Check whether a handle is closing or closed.
+ * @param[in] handle Handle to query.
+ * @return Non-zero if the handle is closing, 0 otherwise.
+ */
 int csilk_io_is_closing(const csilk_io_handle_t* handle);
+/**
+ * @brief Retrieve the underlying OS file descriptor of a handle.
+ * @param[in] handle Handle to query.
+ * @param[out] fd Receives the file descriptor.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd);
 
+/**
+ * @brief Queue a write of @p nbufs buffers to a stream.
+ * @param[in,out] req Write request (owned by caller until callback).
+ * @param[in,out] handle Stream to write to.
+ * @param[in] bufs Array of buffers to write.
+ * @param[in] nbufs Number of buffers in @p bufs.
+ * @param[in] cb Completion callback.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_write(csilk_io_write_t*    req,
                    csilk_io_stream_t*   handle,
                    const csilk_io_buf_t bufs[],
@@ -73,11 +137,16 @@ int csilk_io_write(csilk_io_write_t*    req,
 typedef struct csilk_io_timer_s csilk_io_timer_t;
 
 // Timer callback type (similar to uv_timer_cb)
+/**
+ * @brief Timer expiration callback type.
+ * @param[in,out] handle The timer handle that fired.
+ */
 typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
+/** @brief Timer handle. */
 struct csilk_io_timer_s {
-    void*             data;
-    int               fd;
+    void*             data;       /**< Opaque user data. */
+    int               fd;         /**< Timer file descriptor (timerfd). */
     struct io_uring*  ring;       /**< io_uring ring for creating timeout SQEs. */
     csilk_io_timer_cb cb;         /**< Timer callback (set by csilk_io_timer_start). */
     uint8_t           generation; /**< Incremented each start to detect stale CQEs. */
@@ -85,30 +154,42 @@ struct csilk_io_timer_s {
 
 /* --- Forward declarations --- */
 typedef struct csilk_io_async_s csilk_io_async_t;
+/**
+ * @brief Async wake-up callback type.
+ * @param[in,out] handle The async handle that was signalled.
+ */
 typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 
+/** @brief Async (cross-thread wake-up) handle. */
 struct csilk_io_async_s {
-    int               event_fd;
-    void*             data;
-    csilk_io_async_cb cb;
+    int               event_fd; /**< eventfd used to signal the loop. */
+    void*             data;     /**< Opaque user data. */
+    csilk_io_async_cb cb;       /**< Callback invoked when signalled. */
 };
 
+/** @brief Signal (POSIX signal) handle. */
 typedef struct {
-    int   signal_fd;
-    void* data;
+    int   signal_fd; /**< Signal file descriptor (signalfd). */
+    void* data;      /**< Opaque user data. */
 } csilk_io_signal_t;
 
+/** @brief Filesystem event (inotify-style) handle. */
 typedef struct {
-    int   fd;
-    void* data;
+    int   fd;   /**< inotify/watch file descriptor. */
+    void* data; /**< Opaque user data. */
 } csilk_io_fs_event_t;
 
+/** @brief Generic work (thread-pool job) handle. */
 typedef struct {
-    void* data;
+    void* data; /**< Opaque user data. */
 } csilk_io_work_t;
 
 #include <time.h>
 #include <unistd.h>
+/**
+ * @brief Return the current monotonic time in nanoseconds.
+ * @return Nanoseconds since an arbitrary monotonic epoch.
+ */
 static inline uint64_t
 csilk_io_hrtime(void)
 {
@@ -116,69 +197,160 @@ csilk_io_hrtime(void)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
+/**
+ * @brief Sleep the calling thread for @p ms milliseconds.
+ * @param[in] ms Milliseconds to sleep.
+ */
 static inline void
 csilk_io_sleep(unsigned int ms)
 {
     usleep(ms * 1000);
 }
 
+/**
+ * @brief Filesystem event callback type.
+ * @param[in,out] handle The fs-event handle.
+ * @param[in] filename Name of the changed path (may be NULL).
+ * @param[in] events Bitmask of events that occurred.
+ * @param[in] status 0 on success, or a negative error code.
+ */
 typedef void (*csilk_io_fs_event_cb)(csilk_io_fs_event_t* handle,
                                      const char*          filename,
                                      int                  events,
                                      int                  status);
 
+/** @brief Loop run modes, controlling how long csilk_io_run blocks. */
 typedef enum { CSILK_IO_RUN_DEFAULT = 0, CSILK_IO_RUN_ONCE, CSILK_IO_RUN_NOWAIT } csilk_io_run_mode;
 
+/**
+ * @brief Run the event loop until it is stopped or has no active work.
+ * @param[in,out] loop Loop to run.
+ * @param[in] mode Run mode (default, once, or non-blocking).
+ * @return 0 when the loop exits, or a negative error code.
+ */
 int csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode);
 
+/**
+ * @brief Initialize a timer handle on a loop.
+ * @param[in,out] loop Loop that will own the timer.
+ * @param[in,out] handle Timer handle to initialize.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle);
+/**
+ * @brief Start (or restart) a timer.
+ * @param[in,out] handle Timer handle.
+ * @param[in] cb Callback invoked on each expiration.
+ * @param[in] timeout Milliseconds until the first expiration.
+ * @param[in] repeat Milliseconds between subsequent expirations (0 = one-shot).
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_timer_start(csilk_io_timer_t* handle,
                          csilk_io_timer_cb cb,
                          uint64_t          timeout,
                          uint64_t          repeat);
+/**
+ * @brief Stop a timer (further expirations are suppressed).
+ * @param[in,out] handle Timer handle to stop.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_timer_stop(csilk_io_timer_t* handle);
 
+/**
+ * @brief Initialize a filesystem-event handle on a loop.
+ * @param[in,out] loop Loop that will own the handle.
+ * @param[in,out] handle Handle to initialize.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_fs_event_init(csilk_io_loop_t* loop, csilk_io_fs_event_t* handle);
+/**
+ * @brief Start watching a path for filesystem events.
+ * @param[in,out] handle Handle to start.
+ * @param[in] cb Callback invoked on events.
+ * @param[in] path Path to watch.
+ * @param[in] flags Backend-specific watch flags.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
                             csilk_io_fs_event_cb cb,
                             const char*          path,
                             unsigned int         flags);
+/**
+ * @brief Stop watching filesystem events.
+ * @param[in,out] handle Handle to stop.
+ * @return 0 on success, or a negative error code.
+ */
 int csilk_io_fs_event_stop(csilk_io_fs_event_t* handle);
 
 #else
 
 #include <uv.h>
-typedef uv_loop_t   csilk_io_loop_t;
-typedef uv_tcp_t    csilk_io_tcp_t;
-typedef uv_timer_t  csilk_io_timer_t;
-typedef uv_async_t  csilk_io_async_t;
+/** @brief Event loop type (libuv loop). */
+typedef uv_loop_t csilk_io_loop_t;
+/** @brief TCP/stream connection handle (libuv tcp handle). */
+typedef uv_tcp_t csilk_io_tcp_t;
+/** @brief Timer handle (libuv timer handle). */
+typedef uv_timer_t csilk_io_timer_t;
+/** @brief Async wake-up handle (libuv async handle). */
+typedef uv_async_t csilk_io_async_t;
+/** @brief Signal handle (libuv signal handle). */
 typedef uv_signal_t csilk_io_signal_t;
-typedef uv_work_t   csilk_io_work_t;
+/** @brief Work (thread-pool job) handle (libuv work handle). */
+typedef uv_work_t csilk_io_work_t;
 
+/** @brief Alias of uv_hrtime. */
 #define csilk_io_hrtime uv_hrtime
+/** @brief Alias of uv_sleep. */
 #define csilk_io_sleep uv_sleep
 
-typedef uv_fs_event_t  csilk_io_fs_event_t;
-typedef uv_timer_cb    csilk_io_timer_cb;
+/** @brief Filesystem-event handle (libuv fs-event handle). */
+typedef uv_fs_event_t csilk_io_fs_event_t;
+/** @brief Timer callback type (libuv timer callback). */
+typedef uv_timer_cb csilk_io_timer_cb;
+/** @brief Filesystem-event callback type (libuv fs-event callback). */
 typedef uv_fs_event_cb csilk_io_fs_event_cb;
 
+/** @brief Loop run mode (libuv run mode). */
 typedef uv_run_mode csilk_io_run_mode;
+/** @brief Alias of UV_RUN_DEFAULT. */
 #define CSILK_IO_RUN_DEFAULT UV_RUN_DEFAULT
+/** @brief Alias of UV_RUN_ONCE. */
 #define CSILK_IO_RUN_ONCE UV_RUN_ONCE
+/** @brief Alias of UV_RUN_NOWAIT. */
 #define CSILK_IO_RUN_NOWAIT UV_RUN_NOWAIT
 
+/**
+ * @brief Run the event loop until it is stopped or has no active work.
+ * @param[in,out] loop Loop to run.
+ * @param[in] mode Run mode (default, once, or non-blocking).
+ * @return 0 when the loop exits, or a negative error code.
+ */
 static inline int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
     return uv_run(loop, mode);
 }
 
+/**
+ * @brief Initialize a timer handle on a loop.
+ * @param[in,out] loop Loop that will own the timer.
+ * @param[in,out] handle Timer handle to initialize.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
 {
     return uv_timer_init(loop, handle);
 }
 
+/**
+ * @brief Start (or restart) a timer.
+ * @param[in,out] handle Timer handle.
+ * @param[in] cb Callback invoked on each expiration.
+ * @param[in] timeout Milliseconds until the first expiration.
+ * @param[in] repeat Milliseconds between subsequent expirations (0 = one-shot).
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_timer_start(csilk_io_timer_t* handle,
                      csilk_io_timer_cb cb,
@@ -188,18 +360,37 @@ csilk_io_timer_start(csilk_io_timer_t* handle,
     return uv_timer_start(handle, cb, timeout, repeat);
 }
 
+/**
+ * @brief Stop a timer.
+ * @param[in,out] handle Timer handle to stop.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
     return uv_timer_stop(handle);
 }
 
+/**
+ * @brief Initialize a filesystem-event handle on a loop.
+ * @param[in,out] loop Loop that will own the handle.
+ * @param[in,out] handle Handle to initialize.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_fs_event_init(csilk_io_loop_t* loop, csilk_io_fs_event_t* handle)
 {
     return uv_fs_event_init(loop, handle);
 }
 
+/**
+ * @brief Start watching a path for filesystem events.
+ * @param[in,out] handle Handle to start.
+ * @param[in] cb Callback invoked on events.
+ * @param[in] path Path to watch.
+ * @param[in] flags Backend-specific watch flags.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
                         csilk_io_fs_event_cb cb,
@@ -209,6 +400,11 @@ csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
     return uv_fs_event_start(handle, cb, path, flags);
 }
 
+/**
+ * @brief Stop watching filesystem events.
+ * @param[in,out] handle Handle to stop.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_fs_event_stop(csilk_io_fs_event_t* handle)
 {
@@ -218,18 +414,46 @@ csilk_io_fs_event_stop(csilk_io_fs_event_t* handle)
 #endif
 
 #ifndef CSILK_USE_URING
+/**
+ * @brief Async wake-up callback type.
+ * @param[in,out] handle The async handle that was signalled.
+ */
 typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
+/**
+ * @brief Initialize an async handle that can wake the loop from another thread.
+ * @param[in,out] loop Loop that will own the handle.
+ * @param[in,out] async Async handle to initialize.
+ * @param[in] async_cb Callback invoked when the handle is signalled.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_async_cb async_cb)
 {
     return uv_async_init(loop, async, async_cb);
 }
+/**
+ * @brief Signal an async handle, waking its loop.
+ * @param[in,out] async Async handle to signal.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_async_send(csilk_io_async_t* async)
 {
     return uv_async_send(async);
 }
 #else
+/**
+ * @brief Async wake-up callback type.
+ * @param[in,out] handle The async handle that was signalled.
+ */
+typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
+/**
+ * @brief Initialize an async handle backed by an eventfd.
+ * @param[in,out] loop Loop that will own the handle (unused under io_uring).
+ * @param[in,out] async Async handle to initialize.
+ * @param[in] async_cb Callback invoked when the handle is signalled.
+ * @return 0 on success, or a negative error code.
+ */
 static inline int
 csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_async_cb async_cb)
 {
@@ -238,6 +462,11 @@ csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_asy
     async->cb = async_cb;
     return 0;
 }
+/**
+ * @brief Signal an async handle, waking its loop.
+ * @param[in,out] async Async handle to signal.
+ * @return 0 on success.
+ */
 static inline int
 csilk_io_async_send(csilk_io_async_t* async)
 {
@@ -250,8 +479,25 @@ csilk_io_async_send(csilk_io_async_t* async)
 #endif
 
 #ifndef CSILK_USE_URING
+/**
+ * @brief Work callback type, run on a thread-pool worker.
+ * @param[in,out] req The work request being executed.
+ */
 typedef void (*csilk_io_work_cb)(csilk_io_work_t* req);
+/**
+ * @brief Completion callback type, run on the loop thread after work finishes.
+ * @param[in,out] req The work request that completed.
+ * @param[in] status 0 on success, or a negative error code.
+ */
 typedef void (*csilk_io_after_work_cb)(csilk_io_work_t* req, int status);
+/**
+ * @brief Queue a function to run on the libuv thread pool.
+ * @param[in,out] loop Loop that runs the completion callback.
+ * @param[in,out] req Work request (owned by caller until after-work callback).
+ * @param[in] work_cb Function executed on a worker thread.
+ * @param[in] after_work_cb Function executed on the loop thread afterwards.
+ * @return 0 on success, or a libuv error code.
+ */
 static inline int
 csilk_io_queue_work(csilk_io_loop_t*       loop,
                     csilk_io_work_t*       req,
@@ -261,13 +507,37 @@ csilk_io_queue_work(csilk_io_loop_t*       loop,
     return uv_queue_work(loop, req, work_cb, after_work_cb);
 }
 #else
+/**
+ * @brief Work callback type, run on a thread-pool worker.
+ * @param[in,out] req The work request being executed.
+ */
 typedef void (*csilk_io_work_cb)(csilk_io_work_t* req);
+/**
+ * @brief Completion callback type, run after work finishes.
+ * @param[in,out] req The work request that completed.
+ * @param[in] status 0 on success, or a negative error code.
+ */
 typedef void (*csilk_io_after_work_cb)(csilk_io_work_t* req, int status);
 
+/**
+ * @brief Internal uring worker-queue entry point.
+ * @param[in,out] req Work request.
+ * @param[in] work_cb Function executed on a worker thread.
+ * @param[in] after_work_cb Function executed after work finishes.
+ * @return 0 on success, or a negative error code.
+ */
 extern int _csilk_uring_queue_work(csilk_io_work_t*       req,
                                    csilk_io_work_cb       work_cb,
                                    csilk_io_after_work_cb after_work_cb);
 
+/**
+ * @brief Queue a function to run on the uring worker pool.
+ * @param[in,out] loop Loop that runs the completion callback (unused).
+ * @param[in,out] req Work request (owned by caller until after-work callback).
+ * @param[in] work_cb Function executed on a worker thread.
+ * @param[in] after_work_cb Function executed after work finishes.
+ * @return 0 on success, or a negative error code.
+ */
 static inline int
 csilk_io_queue_work(csilk_io_loop_t*       loop,
                     csilk_io_work_t*       req,
@@ -280,49 +550,86 @@ csilk_io_queue_work(csilk_io_loop_t*       loop,
 #endif
 
 #ifndef CSILK_USE_URING
+/** @brief Filesystem request type (libuv fs request). */
 typedef uv_fs_t csilk_io_fs_t;
 
+/** @brief File handle type (libuv file descriptor). */
 typedef uv_file csilk_io_file_t;
 
+/** @brief Alias of uv_close. */
 #define csilk_io_close uv_close
+/** @brief Generic handle type (libuv handle). */
 typedef uv_handle_t csilk_io_handle_t;
+/** @brief Close callback type (libuv close callback). */
 typedef uv_close_cb csilk_io_close_cb;
 
+/** @brief Alias of uv_resident_set_memory. */
 #define csilk_io_resident_set_memory uv_resident_set_memory
+/** @brief Resource-usage snapshot type (libuv rusage). */
 typedef uv_rusage_t csilk_io_rusage_t;
+/** @brief Alias of uv_getrusage. */
 #define csilk_io_getrusage uv_getrusage
+/** @brief Alias of uv_strerror. */
 #define csilk_io_strerror uv_strerror
 
+/** @brief Alias of uv_is_closing. */
 #define csilk_io_is_closing uv_is_closing
+/** @brief Alias of uv_fileno. */
 #define csilk_io_fileno uv_fileno
+/** @brief OS file-descriptor type (libuv os fd). */
 typedef uv_os_fd_t csilk_io_os_fd_t;
 
+/** @brief Alias of uv_write. */
 #define csilk_io_write uv_write
-typedef uv_write_t  csilk_io_write_t;
+/** @brief Write request type (libuv write request). */
+typedef uv_write_t csilk_io_write_t;
+/** @brief Stream handle type (libuv stream). */
 typedef uv_stream_t csilk_io_stream_t;
+/** @brief Write completion callback type (libuv write callback). */
 typedef uv_write_cb csilk_io_write_cb;
 
+/** @brief Alias of uv_buf_t. */
 #define csilk_io_buf_t uv_buf_t
+/** @brief Alias of uv_buf_init. */
 #define csilk_io_buf_init uv_buf_init
 
+/** @brief File stat structure type (libuv stat). */
 #define csilk_io_stat_t uv_stat_t
+/** @brief Alias of uv_fs_fstat. */
 #define csilk_io_fs_fstat uv_fs_fstat
 
+/** @brief Alias of uv_fs_open. */
 #define csilk_io_fs_open uv_fs_open
+/** @brief Alias of uv_fs_close. */
 #define csilk_io_fs_close uv_fs_close
+/** @brief Alias of uv_fs_read. */
 #define csilk_io_fs_read uv_fs_read
+/** @brief Alias of uv_fs_write. */
 #define csilk_io_fs_write uv_fs_write
+/** @brief Alias of uv_fs_fsync. */
 #define csilk_io_fs_fsync uv_fs_fsync
+/** @brief Alias of uv_fs_sendfile. */
 #define csilk_io_fs_sendfile uv_fs_sendfile
 #else
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/uio.h>
+/** @brief Filesystem request carrying a result, stat, and user data. */
 typedef struct {
-    ssize_t     result;
-    struct stat statbuf;
-    void*       data;
+    ssize_t     result;  /**< Result/error of the last fs operation. */
+    struct stat statbuf; /**< Stat buffer populated by fstat. */
+    void*       data;    /**< Opaque user data. */
 } csilk_io_fs_t;
+/**
+ * @brief Open a file synchronously via the kernel (used by the uring backend).
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] path Path to open.
+ * @param[in] flags POSIX open flags.
+ * @param[in] mode Permission bits for newly created files.
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return The resulting file descriptor (or negative errno).
+ */
 static inline int
 csilk_io_fs_open(
     csilk_io_loop_t* loop, csilk_io_fs_t* req, const char* path, int flags, int mode, void* cb)
@@ -330,12 +637,31 @@ csilk_io_fs_open(
     req->result = open(path, flags, mode);
     return req->result;
 }
+/**
+ * @brief Close a file descriptor.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] fd File descriptor to close.
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return 0 on success, or a negative errno.
+ */
 static inline int
 csilk_io_fs_close(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
 {
     req->result = close(fd);
     return req->result;
 }
+/**
+ * @brief Read from a file descriptor into @p nbufs buffers at @p offset.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] fd File descriptor to read from.
+ * @param[in] bufs Array of I/O buffers to fill.
+ * @param[in] nbufs Number of buffers.
+ * @param[in] offset Byte offset (negative = current position via preadv semantics).
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return Number of bytes read, or a negative errno.
+ */
 static inline int
 csilk_io_fs_read(csilk_io_loop_t*     loop,
                  csilk_io_fs_t*       req,
@@ -348,6 +674,17 @@ csilk_io_fs_read(csilk_io_loop_t*     loop,
     req->result = preadv(fd, (const struct iovec*)bufs, nbufs, offset);
     return req->result;
 }
+/**
+ * @brief Write @p nbufs buffers to a file descriptor at @p offset.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] fd File descriptor to write to.
+ * @param[in] bufs Array of I/O buffers to write.
+ * @param[in] nbufs Number of buffers.
+ * @param[in] offset Byte offset (-1 = current position).
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return Number of bytes written, or a negative errno.
+ */
 static inline int
 csilk_io_fs_write(csilk_io_loop_t*     loop,
                   csilk_io_fs_t*       req,
@@ -364,6 +701,14 @@ csilk_io_fs_write(csilk_io_loop_t*     loop,
     }
     return req->result;
 }
+/**
+ * @brief Flush a file descriptor's data to stable storage.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] fd File descriptor to sync.
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return 0 on success, or a negative errno.
+ */
 static inline int
 csilk_io_fs_fsync(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
 {
@@ -372,8 +717,17 @@ csilk_io_fs_fsync(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
 }
 
 #include <sys/stat.h>
+/** @brief File stat structure type (struct stat). */
 typedef struct stat csilk_io_stat_t;
 
+/**
+ * @brief Populate @p req->statbuf with the stat of @p fd.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request whose statbuf is filled.
+ * @param[in] fd File descriptor to stat.
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return 0 on success, or a negative errno.
+ */
 static inline int
 csilk_io_fs_fstat(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
 {
@@ -381,6 +735,17 @@ csilk_io_fs_fstat(csilk_io_loop_t* loop, csilk_io_fs_t* req, int fd, void* cb)
     return req->result;
 }
 
+/**
+ * @brief Copy data from @p in_fd to @p out_fd using sendfile.
+ * @param[in,out] loop Loop that owns the request (unused).
+ * @param[in,out] req Request to populate with the result.
+ * @param[in] out_fd Destination file descriptor.
+ * @param[in] in_fd Source file descriptor.
+ * @param[in] in_offset Offset into the source (negative = current position).
+ * @param[in] length Number of bytes to transfer.
+ * @param[in] cb Unused callback parameter (kept for API compatibility).
+ * @return Number of bytes transferred, or a negative errno.
+ */
 int csilk_io_fs_sendfile(csilk_io_loop_t* loop,
                          csilk_io_fs_t*   req,
                          int              out_fd,
@@ -392,8 +757,13 @@ int csilk_io_fs_sendfile(csilk_io_loop_t* loop,
 #endif
 
 #ifndef CSILK_USE_URING
+/** @brief Alias of uv_fs_req_cleanup. */
 #define csilk_io_fs_req_cleanup uv_fs_req_cleanup
 #else
+/**
+ * @brief Release any resources held by a filesystem request.
+ * @param[in,out] req Request to clean up (no-op under io_uring).
+ */
 static inline void
 csilk_io_fs_req_cleanup(csilk_io_fs_t* req)
 {
@@ -401,20 +771,39 @@ csilk_io_fs_req_cleanup(csilk_io_fs_t* req)
 #endif
 
 #ifndef CSILK_USE_URING
+/** @brief Alias of uv_default_loop. */
 #define csilk_io_default_loop uv_default_loop
+/** @brief Alias of uv_resident_set_memory. */
 #define csilk_io_resident_set_memory uv_resident_set_memory
+/** @brief Resource-usage snapshot type (libuv rusage). */
 typedef uv_rusage_t csilk_io_rusage_t;
+/** @brief Alias of uv_getrusage. */
 #define csilk_io_getrusage uv_getrusage
 #else
-csilk_io_loop_t*      csilk_io_default_loop(void);
+/**
+ * @brief Return the process-wide default loop.
+ * @return Pointer to the default loop instance.
+ */
+csilk_io_loop_t* csilk_io_default_loop(void);
 #include <sys/resource.h>
+/** @brief Resource-usage snapshot type (struct rusage). */
 typedef struct rusage csilk_io_rusage_t;
+/**
+ * @brief Query the resident set size of the current process.
+ * @param[out] rss Receives the RSS in bytes (set to 0 under io_uring).
+ * @return 0 on success (always succeeds under io_uring).
+ */
 static inline int
 csilk_io_resident_set_memory(size_t* rss)
 {
     *rss = 0;
     return 0;
 }
+/**
+ * @brief Retrieve resource usage for the current process.
+ * @param[out] rusage Receives the rusage snapshot.
+ * @return 0 on success, or a negative errno.
+ */
 static inline int
 csilk_io_getrusage(csilk_io_rusage_t* rusage)
 {

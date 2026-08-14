@@ -22,6 +22,17 @@ typedef struct handler_entry_s {
 
 static handler_entry_t* g_handlers = NULL;
 
+/**
+ * @brief Registers a named custom handler for use by the declarative loader.
+ *
+ * Adds the handler to a process-global singly-linked registry. DSL steps of
+ * type "handler" reference handlers by this name; handlers must be registered
+ * before csilk_wf_from_json() / csilk_wf_load_yaml() are called.
+ *
+ * @param name    Unique handler name (must not be NULL).
+ * @param handler Node execution callback (must not be NULL).
+ * @note Registry is global and not thread-safe; register handlers at startup.
+ */
 void
 csilk_wf_register_handler(const char* name, csilk_wf_handler_t handler)
 {

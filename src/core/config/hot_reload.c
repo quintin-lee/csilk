@@ -139,6 +139,17 @@ on_file_change(csilk_io_fs_event_t* handle, const char* filename, int events, in
     csilk_io_timer_start(&ctx->debounce_timer, on_debounce_timer, 100, 0);
 }
 
+/**
+ * @brief Start watching a plugin/shared-library for changes and hot-reloading.
+ * @param[in] server   Server whose router is updated on reload.
+ * @param[in] lib_path Path to the shared library to watch and (re)load.
+ * @param[in] init_sym Symbol name invoked to rebuild the router on each load.
+ * @return 0 on success, -1 on NULL arguments, allocation failure, or if the
+ *         initial load_and_swap_router fails.
+ * @note Allocates a hot_reload_ctx_t, performs an initial router load, then
+ *       registers a filesystem watcher and a debounce timer so changes are
+ *       applied after writes settle.
+ */
 int
 csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const char* init_sym)
 {

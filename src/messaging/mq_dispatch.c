@@ -1,3 +1,15 @@
+/**
+ * @file mq_dispatch.c
+ * @brief MQ dispatch and publish path — enqueue, async delivery, monitor
+ * broadcast.
+ *
+ * Implements message publishing (with optional WAL append), the async callback
+ * that drains the in-memory queue on the main event loop, and construction of
+ * the per-message handler chain (global middleware + matching topic handlers,
+ * resolved by fnmatch).  Also broadcasts delivery events to WebSocket monitors.
+ * @copyright MIT License
+ */
+
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +25,9 @@
 /* Forward declaration for synchronous MQ dispatch in io_uring backend */
 void on_mq_async(csilk_io_async_t* handle);
 
+/* Sends a JSON monitor event describing a publish/deliver event to every
+ * registered WebSocket monitor; the event is serialized and sent under
+ * monitor_mutex. */
 static void
 _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 {
@@ -45,6 +60,21 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
     csilk_json_free(root);
 }
 
+/**
+ * @brief Internal: Enqueue a deep-copied message and signal the event loop.
+ *
+ * Allocates a message node, copies the topic (strdup) and payload (malloc with
+ * a trailing NUL), appends it to the queue under queue_mutex, bumps the
+ * published/depth counters, broadcasts a "mq_published" monitor event, and
+ * triggers the async handle.  In the io_uring backend with no running loop the
+ * queue is processed synchronously inline.
+ *
+ * @param[in] mq      The MQ instance.
+ * @param[in] topic   NUL-terminated topic name (copied).
+ * @param[in] payload Opaque payload bytes (copied; may be NULL if len == 0).
+ * @param[in] len     Byte length of @p payload.
+ * @return 0 on success, -1 on allocation failure.
+ */
 CSILK_INTERNAL int
 _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
@@ -111,6 +141,19 @@ _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
     return 0;
 }
 
+/**
+ * @brief Publish a message to a topic (durable + asynchronous).
+ *
+ * If WAL persistence is enabled, appends the message to the WAL first and
+ * fails the publish on WAL error; then enqueues a deep copy for delivery on
+ * the main event loop.  Thread-safe and non-blocking from worker threads.
+ *
+ * @param[in] mq      The MQ instance (must not be NULL).
+ * @param[in] topic   Target topic name (must not be NULL).
+ * @param[in] payload Opaque payload data (copied internally; NULL if len == 0).
+ * @param[in] len     Byte length of @p payload.
+ * @return 0 on success, -1 on invalid arguments, WAL failure, or enqueue failure.
+ */
 int
 csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
@@ -132,6 +175,17 @@ csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t 
     return _mq_enqueue(mq, topic, payload, len);
 }
 
+/**
+ * @brief Internal: Async callback that drains and delivers queued messages.
+ *
+ * Invoked by the event loop when the async handle fires.  Atomically snapshots
+ * and clears the in-memory queue, then for each message builds the handler
+ * chain (global middleware + every topic matched via fnmatch), runs it through
+ * csilk_mq_next, and frees the message.  Also broadcasts "mq_delivered" events
+ * and bumps delivered_total.
+ *
+ * @param[in] handle The async handle whose data points to the csilk_mq_t.
+ */
 CSILK_INTERNAL void
 on_mq_async(csilk_io_async_t* handle)
 {

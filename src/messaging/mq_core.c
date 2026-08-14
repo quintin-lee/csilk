@@ -1,3 +1,15 @@
+/**
+ * @file mq_core.c
+ * @brief MQ core lifecycle and statistics — instance creation, teardown,
+ * monitoring, and metrics.
+ *
+ * Implements the core MQ instance management: allocation/free of the queue
+ * (bound to an I/O event loop), registration of WebSocket monitors, and
+ * collection/serialization of queue statistics.  WAL persistence fields are
+ * initialized here and finalized in on_mq_close().
+ * @copyright MIT License
+ */
+
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +24,17 @@
 
 extern void on_mq_async(csilk_io_async_t* handle);
 
+/**
+ * @brief Snapshot current MQ statistics under the queue lock.
+ *
+ * Copies the published/delivered/failed totals, current queue depth, and the
+ * topic count into @p stats.  Either argument may be NULL, in which case the
+ * call is a no-op.
+ *
+ * @param[in]  mq    The MQ instance.
+ * @param[out] stats Destination stats struct to populate.
+ * @note Access to the counters is serialized by queue_mutex.
+ */
 void
 csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
 {
@@ -32,6 +55,15 @@ csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
     csilk_mutex_unlock(&mq->queue_mutex);
 }
 
+/**
+ * @brief Serialize MQ statistics into a pretty-printed JSON string.
+ *
+ * Builds a JSON object with the published/delivered/failed totals, queue
+ * depth, and topic count, then pretty-serializes it.
+ *
+ * @param[in] stats Pointer to the stats struct (may be NULL — returns NULL).
+ * @return Heap-allocated JSON string (caller must free), or NULL on error.
+ */
 char*
 csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
 {
@@ -49,6 +81,17 @@ csilk_mq_stats_to_json(const csilk_mq_stats_t* stats)
     return json;
 }
 
+/**
+ * @brief Register a WebSocket monitor for live MQ events.
+ *
+ * Appends the framework context to the monitor array, growing the array
+ * (doubling capacity, starting at 4) as needed under monitor_mutex.
+ *
+ * @param[in] mq The MQ instance (must not be NULL).
+ * @param[in] c  Framework context for the monitor connection (must not be NULL).
+ * @note Logs an error and returns without registering if either argument is
+ *       NULL, or reallocation fails.
+ */
 void
 csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 {
@@ -86,6 +129,17 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
     csilk_mutex_unlock(&mq->monitor_mutex);
 }
 
+/**
+ * @brief Internal: Create a new MQ instance bound to an I/O event loop.
+ *
+ * Allocates and zero-initializes the queue, initializes the queue/monitor/WAL
+ * mutexes, and registers the async handle used to bridge worker-thread
+ * publishes into the main loop.  WAL is disabled (wal_fd = -1) until
+ * csilk_mq_set_persistence is called.
+ *
+ * @param[in] loop The I/O event loop (libuv or io_uring).
+ * @return A new MQ instance (heap-allocated), or NULL on allocation failure.
+ */
 CSILK_INTERNAL csilk_mq_t*
 _csilk_mq_new(csilk_io_loop_t* loop)
 {
@@ -110,6 +164,10 @@ _csilk_mq_new(csilk_io_loop_t* loop)
     return mq;
 }
 
+/* Releases all MQ resources: flushes the WAL, closes the WAL fd, frees the
+ * pending message queue, the topic registry, the global middleware array, and
+ * finally the instance.  Invoked by csilk_io_close once the async handle is
+ * fully closed. */
 static void
 on_mq_close(csilk_io_handle_t* handle)
 {
@@ -156,6 +214,15 @@ on_mq_close(csilk_io_handle_t* handle)
     free(mq);
 }
 
+/**
+ * @brief Internal: Destroy an MQ instance asynchronously.
+ *
+ * If the async handle is not already closing, schedules on_mq_close via
+ * csilk_io_close; the actual resource teardown happens in that callback on
+ * the event loop.
+ *
+ * @param[in] mq The MQ instance to free (may be NULL — no-op).
+ */
 CSILK_INTERNAL void
 _csilk_mq_free(csilk_mq_t* mq)
 {

@@ -1,9 +1,31 @@
+/**
+ * @file raft_consensus.c
+ * @brief Raft consensus node operations — peer membership and startup.
+ *
+ * Implements peer registration and node start.  Peers are stored in a fixed
+ * 16-slot array guarded by node->mutex.  Starting a node with no peers elects
+ * it leader immediately (single-node cluster) and bumps the current term.
+ * @copyright MIT License
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "raft_internal.h"
 
+/**
+ * @brief Register a peer node in the cluster topology.
+ *
+ * Appends the peer (id + address, copied via snprintf) to the node's peer
+ * array, initializing its next_index to 1 and match_index to 0.  At most 16
+ * peers are supported; the operation is serialized by node->mutex.
+ *
+ * @param[in] node      Local node instance (must not be NULL).
+ * @param[in] peer_id   Peer node ID string (must not be NULL).
+ * @param[in] peer_addr Peer address string (must not be NULL).
+ * @return 0 on success, -1 on NULL arguments or when the peer table is full.
+ */
 int
 csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const char* peer_addr)
 {
@@ -27,6 +49,16 @@ csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const cha
     return 0;
 }
 
+/**
+ * @brief Start the Raft node's consensus activity.
+ *
+ * If the node has no peers it becomes leader immediately (single-node quorum)
+ * and increments current_term; otherwise it remains a follower awaiting
+ * heartbeats/elections.  Serialized by node->mutex.
+ *
+ * @param[in] node The node instance (must not be NULL).
+ * @return 0 on success, -1 if @p node is NULL.
+ */
 int
 csilk_raft_node_start(csilk_raft_node_t* node)
 {

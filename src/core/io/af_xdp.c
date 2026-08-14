@@ -17,6 +17,15 @@ struct csilk_xdp_socket_s {
     size_t             tx_head;
 };
 
+/**
+ * @brief Create an AF_XDP socket from a configuration.
+ * @param[in] config Socket configuration (validated non-NULL); zero frame_size/
+ *                    frame_num default to 2048/1024.
+ * @return A newly allocated socket with an aligned UMEM area, or NULL on invalid
+ *         config or allocation failure.
+ * @note Copies the config (applying defaults), allocates a 4096-byte aligned
+ *       UMEM of frame_size*frame_num bytes, and initializes rx/tx cursors to 0.
+ */
 csilk_xdp_socket_t*
 csilk_xdp_socket_new(const csilk_xdp_config_t* config)
 {
@@ -52,6 +61,11 @@ csilk_xdp_socket_new(const csilk_xdp_config_t* config)
     return xsk;
 }
 
+/**
+ * @brief Free an AF_XDP socket and its UMEM area.
+ * @param[in] xsk Socket to free (no-op if NULL).
+ * @note Frees the UMEM buffer (if any) and the socket struct.
+ */
 void
 csilk_xdp_socket_free(csilk_xdp_socket_t* xsk)
 {
@@ -64,6 +78,15 @@ csilk_xdp_socket_free(csilk_xdp_socket_t* xsk)
     free(xsk);
 }
 
+/**
+ * @brief Receive one frame from the AF_XDP RX ring (single-frame burst).
+ * @param[in]  xsk        Socket to receive from (validated non-NULL).
+ * @param[out] frame_data Receives a pointer into the UMEM for the next RX frame.
+ * @param[out] frame_len  Receives the frame size.
+ * @return 0 on success, -1 on NULL arguments.
+ * @note Advances an internal RX cursor modulo the frame count; the returned
+ *       pointer aliases UMEM memory owned by the socket.
+ */
 int
 csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* frame_len)
 {
@@ -81,6 +104,14 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
     return 0;
 }
 
+/**
+ * @brief Transmit one frame into the AF_XDP TX ring (single-frame burst).
+ * @param[in] xsk        Socket to transmit on (validated non-NULL).
+ * @param[in] frame_data Frame bytes to copy into UMEM.
+ * @param[in] frame_len  Length of frame_data (must be <= configured frame size).
+ * @return 0 on success, -1 on NULL args, zero length, or oversized frame.
+ * @note Copies frame_data into the next UMEM TX slot and advances the TX cursor.
+ */
 int
 csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t frame_len)
 {

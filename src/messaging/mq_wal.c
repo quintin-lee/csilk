@@ -22,45 +22,6 @@
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
 
-/** @brief Append a message frame to the WAL file on disk.
- *
- * Serializes the message into a self-delimiting frame and writes to the
- * WAL file descriptor. Each frame includes an XOR checksum over the
- * topic + payload bytes for integrity verification during recovery.
- *
- * ## Frame wire format (16 bytes overhead per message)
- * ```
- * +0: topic_len   (uint32_t, 4 bytes, little-endian)
- * +4: topic       (topic_len bytes, NOT null-terminated on disk)
- * +N: payload_len (uint32_t, 4 bytes)
- * +M: payload     (payload_len bytes)
- * +K: checksum    (uint32_t, 4 bytes, XOR of all topic + payload bytes)
- * ```
- *
- * ## Integrity
- * The XOR checksum is a lightweight, non-cryptographic integrity check.
- * It detects single-bit flips and many classes of corruption, but does
- * NOT protect against malicious tampering.
- *
- * ## Performance notes
- *   - Uses a single csilk_io_fs_write with a 5-element scatter/gather buffer to
- *     avoid extra memory copies.
- *   - Calls csilk_io_fs_fsync() after every write for durability. For
- *     high-throughput scenarios, consider batching.
- *
- * ## Call chain
- *   1. csilk_mq_publish(mq, topic, payload, len)
- *       └─ _mq_append_wal(mq, topic, payload, len)   ← here
- *           └─ csilk_io_fs_write()
- *           └─ csilk_io_fs_fsync()
- *       └─ _mq_enqueue(mq, topic, payload, len)
- *
- * @param mq      MQ instance (must have wal_fd >= 0).
- * @param topic   Topic string (not NULL).
- * @param payload Opaque payload data (may be NULL if len == 0).
- * @param len     Payload length in bytes.
- * @return 0 on success, -1 on write or fsync failure.
- * @threadsafe Serialized via wal_mutex. */
 typedef struct mq_wal_task_s {
     int                   fd;
     char*                 topic;
@@ -186,6 +147,8 @@ mq_wal_writer_thread(void* arg)
     return NULL;
 }
 
+/* Signals the WAL writer thread to shut down and joins it.  Registered via
+ * atexit once the writer thread has been started. */
 static void
 mq_wal_cleanup(void)
 {
@@ -213,6 +176,24 @@ _mq_wal_flush(void)
     pthread_mutex_unlock(&g_mq_wal_mutex);
 }
 
+/**
+ * @brief Append a message frame to the WAL file (async, via writer thread).
+ *
+ * Enqueues a deep copy of the topic and payload onto a global writer-thread
+ * queue; the background thread performs the actual framed write (group commit
+ * with a single fsync/fdatasync) for durability.  The writer thread is lazily
+ * started on first use and registered for atexit cleanup.  The on-disk frame
+ * format is [topic_len:4][topic][payload_len:4][payload][xor:4]; recovery
+ * validates each frame via the XOR checksum.
+ *
+ * @param[in] mq      MQ instance (must have wal_fd >= 0).
+ * @param[in] topic   Topic string (not NULL).
+ * @param[in] payload Opaque payload data (may be NULL if len == 0).
+ * @param[in] len     Payload length in bytes.
+ * @return 0 on success, -1 on task allocation failure.
+ * @note No fsync occurs inline here — durability is provided by the writer
+ *       thread; _mq_wal_flush() blocks until all queued writes are durable.
+ */
 CSILK_INTERNAL int
 _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {

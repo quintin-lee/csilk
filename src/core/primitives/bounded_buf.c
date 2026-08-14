@@ -70,6 +70,11 @@ csilk_bounded_buf_str(const csilk_bounded_buf_t* b)
     return b->buf;
 }
 
+/**
+ * @brief Return the number of bytes currently written to the buffer.
+ * @param[in] b The bounded buffer.
+ * @return The current length (excluding the NUL terminator).
+ */
 size_t
 csilk_bounded_buf_len(const csilk_bounded_buf_t* b)
 {
@@ -92,6 +97,15 @@ csilk_bounded_buf_putc(csilk_bounded_buf_t* b, char c)
     }
 }
 
+/**
+ * @brief Append a NUL-terminated string to the buffer.
+ *
+ * Copies each character via csilk_bounded_buf_putc, so the overflow flag is set
+ * if the capacity is exceeded mid-copy.
+ *
+ * @param[in] b The bounded buffer.
+ * @param[in] s Source string (NULL is treated as empty).
+ */
 void
 csilk_bounded_buf_puts(csilk_bounded_buf_t* b, const char* s)
 {
@@ -129,6 +143,11 @@ uint64_to_str(char* buf, size_t size, uint64_t n)
     return end;
 }
 
+/**
+ * @brief Append a signed 64-bit integer to the buffer (decimal).
+ * @param[in] b The bounded buffer.
+ * @param[in] n Value to format and append.
+ */
 void
 csilk_bounded_buf_puti(csilk_bounded_buf_t* b, int64_t n)
 {
@@ -143,6 +162,11 @@ csilk_bounded_buf_puti(csilk_bounded_buf_t* b, int64_t n)
     csilk_bounded_buf_puts(b, end);
 }
 
+/**
+ * @brief Append an unsigned 64-bit integer to the buffer (decimal).
+ * @param[in] b The bounded buffer.
+ * @param[in] n Value to format and append.
+ */
 void
 csilk_bounded_buf_putu(csilk_bounded_buf_t* b, uint64_t n)
 {
@@ -151,6 +175,12 @@ csilk_bounded_buf_putu(csilk_bounded_buf_t* b, uint64_t n)
     csilk_bounded_buf_puts(b, end);
 }
 
+/**
+ * @brief Append a formatted double to the buffer.
+ * @param[in] b         The bounded buffer.
+ * @param[in] d         Floating-point value to format.
+ * @param[in] precision Number of digits after the decimal point.
+ */
 void
 csilk_bounded_buf_putf(csilk_bounded_buf_t* b, double d, int precision)
 {
@@ -182,12 +212,22 @@ csilk_bounded_json_init(csilk_bounded_json_t* j, char* buf, size_t capacity)
     j->comma = 0;
 }
 
+/**
+ * @brief Check whether the JSON builder has overflowed (truncation occurred).
+ * @param[in] j The bounded JSON builder.
+ * @return Non-zero if any write was dropped due to capacity limit.
+ */
 int
 csilk_bounded_json_overflow(const csilk_bounded_json_t* j)
 {
     return csilk_bounded_buf_overflow(&j->buf);
 }
 
+/**
+ * @brief Get the null-terminated JSON output string.
+ * @param[in] j The bounded JSON builder.
+ * @return Pointer to the caller-owned output buffer, always null-terminated.
+ */
 const char*
 csilk_bounded_json_str(const csilk_bounded_json_t* j)
 {
@@ -244,6 +284,12 @@ json_write_escaped(csilk_bounded_json_t* j, const char* s)
 
 /* --- Comma separator --- */
 
+/** @brief Emit a comma separator before the next value if needed.
+ *
+ * Writes a ',' only when a value has already been emitted in the current
+ * container, then arms the comma flag for subsequent values.
+ *
+ * @param[in] j The bounded JSON builder. */
 static void
 json_write_comma(csilk_bounded_json_t* j)
 {
@@ -255,6 +301,14 @@ json_write_comma(csilk_bounded_json_t* j)
 
 /* --- Object / Array --- */
 
+/**
+ * @brief Begin a JSON object, emitting a leading comma if required.
+ *
+ * Writes '{' and resets the comma flag so the first member is not preceded by
+ * a comma.
+ *
+ * @param[in] j The bounded JSON builder.
+ */
 void
 csilk_bounded_json_object_open(csilk_bounded_json_t* j)
 {
@@ -265,6 +319,13 @@ csilk_bounded_json_object_open(csilk_bounded_json_t* j)
     j->comma = 0;
 }
 
+/**
+ * @brief Close the current JSON object.
+ *
+ * Writes '}' and arms the comma flag so a following sibling value is separated.
+ *
+ * @param[in] j The bounded JSON builder.
+ */
 void
 csilk_bounded_json_object_close(csilk_bounded_json_t* j)
 {
@@ -272,6 +333,14 @@ csilk_bounded_json_object_close(csilk_bounded_json_t* j)
     j->comma = 1;
 }
 
+/**
+ * @brief Begin a JSON array, emitting a leading comma if required.
+ *
+ * Writes '[' and resets the comma flag so the first element is not preceded by
+ * a comma.
+ *
+ * @param[in] j The bounded JSON builder.
+ */
 void
 csilk_bounded_json_array_open(csilk_bounded_json_t* j)
 {
@@ -282,6 +351,13 @@ csilk_bounded_json_array_open(csilk_bounded_json_t* j)
     j->comma = 0;
 }
 
+/**
+ * @brief Close the current JSON array.
+ *
+ * Writes ']' and arms the comma flag so a following sibling value is separated.
+ *
+ * @param[in] j The bounded JSON builder.
+ */
 void
 csilk_bounded_json_array_close(csilk_bounded_json_t* j)
 {
@@ -291,6 +367,15 @@ csilk_bounded_json_array_close(csilk_bounded_json_t* j)
 
 /* --- Values --- */
 
+/**
+ * @brief Write a JSON object key followed by ':'.
+ *
+ * Emits the comma separator for the previous value, then an escaped key string
+ * and the ':' delimiter, and resets the comma flag so the value follows.
+ *
+ * @param[in] j   The bounded JSON builder.
+ * @param[in] key NUL-terminated key name.
+ */
 void
 csilk_bounded_json_key(csilk_bounded_json_t* j, const char* key)
 {
@@ -300,6 +385,11 @@ csilk_bounded_json_key(csilk_bounded_json_t* j, const char* key)
     j->comma = 0;
 }
 
+/**
+ * @brief Write a JSON string value (with comma separator and escaping).
+ * @param[in] j The bounded JSON builder.
+ * @param[in] s NUL-terminated string (NULL is written as "null").
+ */
 void
 csilk_bounded_json_string(csilk_bounded_json_t* j, const char* s)
 {
@@ -307,6 +397,11 @@ csilk_bounded_json_string(csilk_bounded_json_t* j, const char* s)
     json_write_escaped(j, s);
 }
 
+/**
+ * @brief Write a signed 64-bit integer JSON value (with comma separator).
+ * @param[in] j The bounded JSON builder.
+ * @param[in] n Value to write.
+ */
 void
 csilk_bounded_json_int(csilk_bounded_json_t* j, int64_t n)
 {
@@ -314,6 +409,11 @@ csilk_bounded_json_int(csilk_bounded_json_t* j, int64_t n)
     csilk_bounded_buf_puti(&j->buf, n);
 }
 
+/**
+ * @brief Write an unsigned 64-bit integer JSON value (with comma separator).
+ * @param[in] j The bounded JSON builder.
+ * @param[in] n Value to write.
+ */
 void
 csilk_bounded_json_uint(csilk_bounded_json_t* j, uint64_t n)
 {
@@ -321,6 +421,12 @@ csilk_bounded_json_uint(csilk_bounded_json_t* j, uint64_t n)
     csilk_bounded_buf_putu(&j->buf, n);
 }
 
+/**
+ * @brief Write a double JSON value with the given precision (comma separated).
+ * @param[in] j         The bounded JSON builder.
+ * @param[in] d         Floating-point value to write.
+ * @param[in] precision Digits after the decimal point.
+ */
 void
 csilk_bounded_json_double(csilk_bounded_json_t* j, double d, int precision)
 {
@@ -328,6 +434,11 @@ csilk_bounded_json_double(csilk_bounded_json_t* j, double d, int precision)
     csilk_bounded_buf_putf(&j->buf, d, precision);
 }
 
+/**
+ * @brief Write a JSON boolean value (with comma separator).
+ * @param[in] j The bounded JSON builder.
+ * @param[in] v Non-zero writes "true", zero writes "false".
+ */
 void
 csilk_bounded_json_bool(csilk_bounded_json_t* j, int v)
 {
@@ -335,6 +446,10 @@ csilk_bounded_json_bool(csilk_bounded_json_t* j, int v)
     csilk_bounded_buf_puts(&j->buf, v ? "true" : "false");
 }
 
+/**
+ * @brief Write a JSON null value (with comma separator).
+ * @param[in] j The bounded JSON builder.
+ */
 void
 csilk_bounded_json_null(csilk_bounded_json_t* j)
 {
@@ -344,6 +459,17 @@ csilk_bounded_json_null(csilk_bounded_json_t* j)
 
 /* --- Convenience helpers --- */
 
+/**
+ * @brief Build a single-key "status" JSON object into the buffer.
+ *
+ * Convenience helper that initialises the builder, opens an object, writes the
+ * key "status" with @p status, and closes the object.
+ *
+ * @param[out] j        The bounded JSON builder (re-initialised here).
+ * @param[out] buf      Caller-owned output buffer.
+ * @param[in]  capacity Size of @p buf in bytes.
+ * @param[in]  status   Status string value.
+ */
 void
 csilk_bounded_json_status(csilk_bounded_json_t* j, char* buf, size_t capacity, const char* status)
 {
@@ -354,6 +480,17 @@ csilk_bounded_json_status(csilk_bounded_json_t* j, char* buf, size_t capacity, c
     csilk_bounded_json_object_close(j);
 }
 
+/**
+ * @brief Build a single-key "error" JSON object into the buffer.
+ *
+ * Convenience helper that initialises the builder, opens an object, writes the
+ * key "error" with @p message, and closes the object.
+ *
+ * @param[out] j        The bounded JSON builder (re-initialised here).
+ * @param[out] buf      Caller-owned output buffer.
+ * @param[in]  capacity Size of @p buf in bytes.
+ * @param[in]  message  Error message string value.
+ */
 void
 csilk_bounded_json_error(csilk_bounded_json_t* j, char* buf, size_t capacity, const char* message)
 {

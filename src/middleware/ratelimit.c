@@ -34,6 +34,7 @@ static atomic_ip_entry_t ip_table[MAX_IP_ENTRIES];
 /* Forward declaration for metrics counter — used in the rate-limit middleware */
 extern void _csilk_metrics_inc_rate_limit_blocks(void);
 
+/** @brief djb2 hash of an IP string, mapped into the ip_table index range. */
 static uint32_t
 ip_hash(const char* ip)
 {
@@ -45,6 +46,13 @@ ip_hash(const char* ip)
     return hash % MAX_IP_ENTRIES;
 }
 
+/** @brief Find or atomically claim the lockless rate-limit slot for an IP.
+ *
+ *  Probes the table starting at the IP's hash index (linear open addressing).
+ *  Claims an empty slot via compare-exchange, or returns the slot already
+ *  holding the matching IP. On table saturation returns the hash-index slot as
+ *  a best-effort fallback. Updates last_seen on a match.
+ */
 static atomic_ip_entry_t*
 get_or_create_ip_entry(const char* ip, time_t now)
 {

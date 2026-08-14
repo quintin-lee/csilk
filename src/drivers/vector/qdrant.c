@@ -22,6 +22,8 @@ struct curl_response {
     size_t size;
 };
 
+/** @brief libcurl write callback that appends body data to a growing buffer.
+ * @return Number of bytes consumed, or 0 to abort the transfer on OOM. */
 static size_t
 write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
 {
@@ -38,6 +40,16 @@ write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
     return realsize;
 }
 
+/**
+ * @brief Initialise a Qdrant driver state from an endpoint and API key.
+ *
+ * Stores the endpoint and optional API key (deep-copied) and performs
+ * one-shot libcurl global init. Returns NULL if no endpoint is supplied or
+ * allocation fails.
+ *
+ * @param endpoint Base URL of the Qdrant REST API (required).
+ * @param api_key  Optional API key sent as the "api-key" header (may be NULL).
+ * @return Heap-allocated state pointer, or NULL on failure. */
 static void*
 qdrant_init(const char* endpoint, const char* api_key)
 {
@@ -61,6 +73,10 @@ qdrant_init(const char* endpoint, const char* api_key)
     return state;
 }
 
+/**
+ * @brief Free Qdrant driver state and its endpoint/api-key strings.
+ *
+ * @param state_ptr Driver state returned by qdrant_init() (may be NULL). */
 static void
 qdrant_free(void* state_ptr)
 {
@@ -73,6 +89,19 @@ qdrant_free(void* state_ptr)
     free(state);
 }
 
+/**
+ * @brief Upsert vectors into a Qdrant collection via the REST API.
+ *
+ * Serialises each point (id, vector, and optional payload) as a JSON entity
+ * and PUTs them to /collections/{collection}/points. A NULL API key omits the
+ * "api-key" header. Returns 0 on HTTP < 400 success, -1 on transport error or
+ * server error.
+ *
+ * @param state_ptr  Driver state (must be a qdrant_state_t).
+ * @param collection Target collection name.
+ * @param points     Array of vectors to upsert.
+ * @param count      Number of points.
+ * @return 0 on success, -1 on transport or HTTP error. */
 static int
 qdrant_upsert(void*                       state_ptr,
               const char*                 collection,
@@ -143,6 +172,21 @@ qdrant_upsert(void*                       state_ptr,
     return ret;
 }
 
+/**
+ * @brief Search a Qdrant collection via the REST API.
+ *
+ * POSTs the query vector, limit and with_payload=1 to
+ * /collections/{collection}/points/search. On success the "result" array is
+ * converted into csilk_vector_search_result_t entries (id, score, and payload
+ * JSON). On failure an error message is set.
+ *
+ * @param state_ptr  Driver state (must be a qdrant_state_t).
+ * @param collection Target collection name.
+ * @param vector     Query vector.
+ * @param dimension  Dimensionality of @p vector.
+ * @param limit      Maximum number of results.
+ * @param[out] res   Response struct to populate.
+ * @return 0 on success, -1 on transport/HTTP/parse error. */
 static int
 qdrant_search(void*                           state_ptr,
               const char*                     collection,
@@ -257,6 +301,22 @@ const csilk_vector_db_driver_t qdrant_driver = {.name = "qdrant",
                                                 .search = qdrant_search,
                                                 .free = qdrant_free};
 
+/**
+ * @brief Register the Qdrant vector-DB driver with the subsystem.
+ *
+ * Adds the qdrant_driver vtable to the global vector driver registry so it can
+ * be selected by name from csilk_vector_db_new().
+ *
+ * @note Idempotency is not enforced here; registering twice would add a
+ *       second entry. */
+/**
+ * @brief Register the Qdrant vector-DB driver with the subsystem.
+ *
+ * Adds the qdrant_driver vtable to the global vector driver registry so it can
+ * be selected by name from csilk_vector_db_new().
+ *
+ * @note Idempotency is not enforced here; registering twice would add a
+ *       second entry. */
 void
 csilk_vector_qdrant_init(void)
 {
