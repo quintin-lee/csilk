@@ -151,11 +151,13 @@ pool_get(worker_pool_t* wp)
         }
         client->state = CSILK_CONN_INIT;
         client->generation = gen;
+#ifdef CSILK_USE_URING
         client->handle.generation = gen;
         client->timer.generation = gen;
         client->read_timer.generation = gen;
         client->write_timer.generation = gen;
         client->request_timer.generation = gen;
+#endif
         client->ctx.file_fd = -1;
     }
     return client;
@@ -345,10 +347,12 @@ client_destroy(csilk_client_t* client)
     if (!client || client->state == CSILK_CONN_CLOSED) {
         return;
     }
+#ifdef CSILK_USE_URING
     if (client->handle.fd >= 0) {
         close(client->handle.fd);
         client->handle.fd = -1;
     }
+#endif
     if (client->server) {
         atomic_fetch_sub(&client->server->active_connections, 1);
     }
@@ -412,10 +416,12 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     client->async_ref--;
     if (client->async_ref <= 0) {
+#ifdef CSILK_USE_URING
         if ((client->handle.flags & CSILK_IO_HANDLE_CLOSING) && client->handle.fd >= 0) {
             close(client->handle.fd);
             client->handle.fd = -1;
         }
+#endif
         if (client->close_pending <= 0 && c->conn_closed) {
             client_destroy(client);
         }
@@ -551,6 +557,7 @@ on_write_timeout(csilk_io_timer_t* handle)
 
 /* --- Rejected connection --- */
 
+#ifndef CSILK_USE_URING
 /** @brief Close callback for rejected (connection-limited) TCP handles.
  *
  *  When the server reaches max_connections, excess connections are accepted
@@ -563,6 +570,29 @@ static void
 on_rejected_close(csilk_io_handle_t* handle)
 {
     free(handle);
+}
+#endif
+
+static void
+reject_connection(csilk_io_stream_t* server_stream)
+{
+#ifdef CSILK_USE_URING
+    csilk_io_tcp_t tmp;
+    csilk_io_tcp_init(server_stream->loop, &tmp);
+    if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
+        csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
+    }
+#else
+    csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
+    if (tmp) {
+        csilk_io_tcp_init(server_stream->loop, tmp);
+        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
+            csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
+        } else {
+            csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
+        }
+    }
+#endif
 }
 
 /* --- Accept new connection --- */
@@ -614,22 +644,14 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     csilk_server_t* server = wp->server;
 
     if (_csilk_server_try_acquire_connection(server) < 0) {
-        csilk_io_tcp_t tmp;
-        csilk_io_tcp_init(server_stream->loop, &tmp);
-        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
-            csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
-        }
+        reject_connection(server_stream);
         return;
     }
 
     csilk_client_t* client = pool_get(wp);
     if (!client) {
         _csilk_server_release_connection(server);
-        csilk_io_tcp_t tmp;
-        csilk_io_tcp_init(server_stream->loop, &tmp);
-        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
-            csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
-        }
+        reject_connection(server_stream);
         return;
     }
 
