@@ -119,36 +119,32 @@ CSILK_INTERNAL void csilk_client_read_stop(csilk_client_t* client);
 
 /* --- Server split (server_lifecycle.c, server_shutdown.c, server_worker.c) --- */
 /* These declarations use libuv types and are only needed by the libuv backend. */
-#ifndef CSILK_USE_URING
-
 typedef struct {
-    worker_pool_t* wp;
-    int            port;
-    uv_barrier_t*  barrier;
+    worker_pool_t*   wp;
+    int              port;
+    csilk_barrier_t* barrier;
 } worker_data_t;
 
 typedef struct {
     csilk_io_loop_t* loop;
-    uv_tcp_t*        listen_handle;
+    csilk_io_tcp_t*  listen_handle;
     csilk_server_t*  server;
     int              worker_index;
 } worker_stop_data_t;
 
 /* server_shutdown.c */
-CSILK_INTERNAL void on_signal(uv_signal_t* handle, int signum);
-CSILK_INTERNAL void on_stop_async(uv_async_t* handle);
-CSILK_INTERNAL void on_worker_stop_async(uv_async_t* handle);
+CSILK_INTERNAL void on_signal(csilk_io_signal_t* handle, int signum);
+CSILK_INTERNAL void on_stop_async(csilk_io_async_t* handle);
+CSILK_INTERNAL void on_worker_stop_async(csilk_io_async_t* handle);
 
 /* server_worker.c */
 CSILK_INTERNAL int  bind_and_listen(csilk_io_loop_t* loop,
-                                    uv_tcp_t*        out_handle,
+                                    csilk_io_tcp_t*  out_handle,
                                     int              port,
                                     int              backlog,
                                     bool             reuseport,
                                     int              worker_index);
 CSILK_INTERNAL void worker_thread(void* arg);
 CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);
-
-#endif /* !CSILK_USE_URING */
 
 #endif /* SRV_IMPL_H */

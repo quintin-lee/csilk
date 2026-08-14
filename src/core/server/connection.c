@@ -387,7 +387,7 @@ on_close(csilk_io_handle_t* handle)
  *
  *  @param handle The idle timer handle (data points to csilk_client_t). */
 void
-on_idle_timeout(uv_timer_t* handle)
+on_idle_timeout(csilk_io_timer_t* handle)
 {
     csilk_client_t* client = (csilk_client_t*)handle->data;
     if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
@@ -403,7 +403,7 @@ on_idle_timeout(uv_timer_t* handle)
  *
  * @param handle The timer handle (castable to client via handle->data). */
 void
-on_read_timeout(uv_timer_t* handle)
+on_read_timeout(csilk_io_timer_t* handle)
 {
     csilk_client_t* client = (csilk_client_t*)handle->data;
     if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
@@ -419,7 +419,7 @@ on_read_timeout(uv_timer_t* handle)
  *
  * @param handle The timer handle (castable to client via handle->data). */
 void
-on_write_timeout(uv_timer_t* handle)
+on_write_timeout(csilk_io_timer_t* handle)
 {
     csilk_client_t* client = (csilk_client_t*)handle->data;
     if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
@@ -432,7 +432,7 @@ on_write_timeout(uv_timer_t* handle)
 /** @brief Close callback for rejected (connection-limited) TCP handles.
  *
  *  When the server reaches max_connections, excess connections are accepted
- *  and immediately closed. The handle (a temporary uv_tcp_t allocated in
+ *  and immediately closed. The handle (a temporary csilk_io_tcp_t allocated in
  *  on_new_connection) is freed here. This drains the kernel TCP backlog
  *  without allocating a full csilk_client_t.
  *
@@ -455,7 +455,7 @@ on_rejected_close(csilk_io_handle_t* handle)
  *   2. Client acquisition: get a client struct from the pool (pool_get).
  *      Pool reuse avoids calloc/free churn for every connection.
  *
- *   3. TCP handle init: uv_tcp_init + uv_accept to attach the fd.
+ *   3. TCP handle init: csilk_io_tcp_init + csilk_io_accept to attach the fd.
  *      TCP_NODELAY is applied if configured (disables Nagle's algorithm).
  *
  *   4. Counters: atomic_fetch_add active_connections.
@@ -492,10 +492,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     csilk_server_t* server = wp->server;
 
     if (_csilk_server_try_acquire_connection(server) < 0) {
-        uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
+        csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
         if (tmp) {
-            uv_tcp_init(server_stream->loop, tmp);
-            if (uv_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
+            csilk_io_tcp_init(server_stream->loop, tmp);
+            if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
                 csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
             } else {
                 csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
@@ -507,10 +507,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     csilk_client_t* client = pool_get(wp);
     if (!client) {
         _csilk_server_release_connection(server);
-        uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
+        csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
         if (tmp) {
-            uv_tcp_init(server_stream->loop, tmp);
-            if (uv_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
+            csilk_io_tcp_init(server_stream->loop, tmp);
+            if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
                 csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
             } else {
                 csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
@@ -521,9 +521,9 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
     client->server = server;
     client->owner_pool = wp;
-    int r = uv_tcp_init(server_stream->loop, &client->handle);
+    int r = csilk_io_tcp_init(server_stream->loop, &client->handle);
     if (r < 0) {
-        CSILK_LOG_E("Connection: uv_tcp_init error: %s", csilk_io_strerror(r));
+        CSILK_LOG_E("Connection: csilk_io_tcp_init error: %s", csilk_io_strerror(r));
         _csilk_server_release_connection(server);
         pool_put(wp, client);
         return;
@@ -535,10 +535,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
     client_list_add(server, client);
 
-    if (uv_accept(server_stream, (csilk_io_stream_t*)&client->handle) == 0) {
+    if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&client->handle) == 0) {
         CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)", (void*)client);
         if (server->config.tcp_nodelay) {
-            uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
+            csilk_io_tcp_nodelay(&client->handle, 1);
         }
         client->protocol = CSILK_PROTO_HTTP1;
         llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
@@ -554,13 +554,13 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
             }
         }
 
-        uv_timer_init(server_stream->loop, &client->timer);
+        csilk_io_timer_init(server_stream->loop, &client->timer);
         client->timer.data = client;
-        uv_timer_init(server_stream->loop, &client->read_timer);
+        csilk_io_timer_init(server_stream->loop, &client->read_timer);
         client->read_timer.data = client;
-        uv_timer_init(server_stream->loop, &client->write_timer);
+        csilk_io_timer_init(server_stream->loop, &client->write_timer);
         client->write_timer.data = client;
-        uv_timer_init(server_stream->loop, &client->request_timer);
+        csilk_io_timer_init(server_stream->loop, &client->request_timer);
         client->request_timer.data = client;
 
         CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
@@ -573,9 +573,9 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
                 &client->request_timer, on_read_timeout, server->config.request_timeout_ms, 0);
         }
 
-        r = uv_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
+        r = csilk_io_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
         if (r < 0) {
-            CSILK_LOG_E("Connection: uv_read_start error: %s", csilk_io_strerror(r));
+            CSILK_LOG_E("Connection: csilk_io_read_start error: %s", csilk_io_strerror(r));
             if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
@@ -662,8 +662,8 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
         }
 
     } else if (nread < 0) {
-        if (nread != UV_EOF) {
-            CSILK_LOG_E("Connection: read error: %s", uv_err_name((int)nread));
+        if (nread != -1 && nread != -4095 /* UV_EOF */) {
+            CSILK_LOG_E("Connection: read error: %s", csilk_io_err_name((int)nread));
         }
         if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
             csilk_io_close((csilk_io_handle_t*)stream, on_close);
@@ -695,12 +695,12 @@ csilk_get_client_ip(csilk_ctx_t* c)
     csilk_client_t*         client = (csilk_client_t*)c->_internal_client;
     struct sockaddr_storage addr;
     int                     len = sizeof(addr);
-    if (uv_tcp_getpeername(&client->handle, (struct sockaddr*)&addr, &len) == 0) {
+    if (csilk_io_tcp_getpeername(&client->handle, (struct sockaddr*)&addr, &len) == 0) {
         char ip[46];
         if (addr.ss_family == AF_INET) {
-            uv_ip4_name((struct sockaddr_in*)&addr, ip, sizeof(ip));
+            csilk_io_ip4_name((const struct sockaddr_in*)&addr, ip, sizeof(ip));
         } else {
-            uv_ip6_name((struct sockaddr_in6*)&addr, ip, sizeof(ip));
+            csilk_io_ip6_name((const struct sockaddr_in6*)&addr, ip, sizeof(ip));
         }
         return csilk_arena_strdup(c->arena, ip);
     }
@@ -709,24 +709,24 @@ csilk_get_client_ip(csilk_ctx_t* c)
 }
 
 /**
- * @brief Begin reading from a client connection via the libuv loop.
+ * @brief Begin reading from a client connection via the loop.
  * @param[in] client Client whose underlying stream is subscribed to reads.
- * @note Installs alloc_buffer/on_read and starts uv_read_start on the client's
+ * @note Installs alloc_buffer/on_read and starts csilk_io_read_start on the client's
  *       stream handle.
  */
 void
 csilk_client_read_start(csilk_client_t* client)
 {
-    uv_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
+    csilk_io_read_start((csilk_io_stream_t*)&client->handle, alloc_buffer, on_read);
 }
 
 /**
  * @brief Stop reading from a client connection.
  * @param[in] client Client whose underlying stream read is halted.
- * @note Calls uv_read_stop on the client's stream handle.
+ * @note Calls csilk_io_read_stop on the client's stream handle.
  */
 void
 csilk_client_read_stop(csilk_client_t* client)
 {
-    uv_read_stop((csilk_io_stream_t*)&client->handle);
+    csilk_io_read_stop((csilk_io_stream_t*)&client->handle);
 }

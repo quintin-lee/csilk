@@ -48,8 +48,9 @@ csilk_server_new(csilk_router_t* router)
     if (!s) {
         return NULL;
     }
-    s->loop = uv_default_loop();
+    s->loop = csilk_io_default_loop();
     if (!s->loop) {
+
         free(s);
         return NULL;
     }
@@ -181,7 +182,7 @@ csilk_server_free(csilk_server_t* server)
 
     if (server->worker_tids) {
         for (int i = 0; i < server->worker_count; i++) {
-            uv_thread_join(&server->worker_tids[i]);
+            csilk_thread_join(&server->worker_tids[i]);
         }
         free(server->worker_tids);
         server->worker_tids = NULL;
@@ -410,7 +411,7 @@ csilk_server_run(csilk_server_t* server, int port)
         workers = 1;
     }
 
-    int r = uv_async_init(server->loop, &server->async_handle, on_stop_async);
+    int r = csilk_io_async_init(server->loop, &server->async_handle, on_stop_async);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to initialize async handle: %s", csilk_io_strerror(r));
         return -1;
@@ -441,7 +442,7 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
     if (server->config.tcp_keepalive > 0) {
-        uv_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
+        csilk_io_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
     }
 
     if (workers > 1) {
@@ -451,8 +452,8 @@ csilk_server_run(csilk_server_t* server, int port)
         if (server->worker_tids) {
             server->worker_count = nworkers;
 
-            uv_barrier_t* barrier = calloc(1, sizeof(uv_barrier_t));
-            int           br = uv_barrier_init(barrier, (unsigned int)workers);
+            csilk_barrier_t* barrier = calloc(1, sizeof(csilk_barrier_t));
+            int              br = csilk_barrier_init(barrier, (unsigned int)workers);
             if (br < 0) {
                 CSILK_LOG_E("Server: failed to init worker barrier: %s", csilk_io_strerror(br));
                 free(barrier);
@@ -473,11 +474,11 @@ csilk_server_run(csilk_server_t* server, int port)
                     data->wp = &server->worker_pools[idx];
                     data->port = port;
                     data->barrier = barrier;
-                    uv_thread_create(&server->worker_tids[i], worker_thread, data);
+                    csilk_thread_create(&server->worker_tids[i], worker_thread, data);
                 }
 
-                uv_barrier_wait(barrier);
-                uv_barrier_destroy(barrier);
+                csilk_barrier_wait(barrier);
+                csilk_barrier_destroy(barrier);
                 free(barrier);
                 CSILK_LOG_I("Server: all %d worker threads spawned successfully", workers - 1);
             }
@@ -488,7 +489,7 @@ csilk_server_run(csilk_server_t* server, int port)
         }
     }
 
-    r = uv_signal_init(server->loop, &server->sig_handle);
+    r = csilk_io_signal_init(server->loop, &server->sig_handle);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
         csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
@@ -496,7 +497,7 @@ csilk_server_run(csilk_server_t* server, int port)
         return -1;
     }
     server->sig_handle.data = server;
-    r = uv_signal_start(&server->sig_handle, on_signal, SIGINT);
+    r = csilk_io_signal_start(&server->sig_handle, on_signal, SIGINT);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", csilk_io_strerror(r));
         csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);

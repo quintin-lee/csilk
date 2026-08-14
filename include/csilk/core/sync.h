@@ -119,6 +119,76 @@ csilk_cond_destroy(csilk_cond_t* cond)
 {
     pthread_cond_destroy(cond);
 }
+
+typedef void (*csilk_thread_cb)(void* arg);
+
+static inline int
+csilk_thread_create(csilk_thread_t* tid, csilk_thread_cb cb, void* arg)
+{
+    return pthread_create(tid, NULL, (void* (*)(void*))cb, arg);
+}
+
+static inline int
+csilk_thread_join(csilk_thread_t* tid)
+{
+    return pthread_join(*tid, NULL);
+}
+
+static inline csilk_thread_t
+csilk_thread_self(void)
+{
+    return pthread_self();
+}
+
+#ifdef __linux__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sched.h>
+static inline int
+csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int maxcpu)
+{
+    (void)oldmask;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    for (int i = 0; i < maxcpu; i++) {
+        if (cpuset[i]) {
+            CPU_SET(i, &set);
+        }
+    }
+    return pthread_setaffinity_np(*tid, sizeof(set), &set);
+}
+#else
+static inline int
+csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int maxcpu)
+{
+    (void)tid;
+    (void)cpuset;
+    (void)oldmask;
+    (void)maxcpu;
+    return 0;
+}
+#endif
+
+typedef pthread_barrier_t csilk_barrier_t;
+
+static inline int
+csilk_barrier_init(csilk_barrier_t* barrier, unsigned int count)
+{
+    return pthread_barrier_init(barrier, NULL, count);
+}
+
+static inline int
+csilk_barrier_wait(csilk_barrier_t* barrier)
+{
+    return pthread_barrier_wait(barrier);
+}
+
+static inline void
+csilk_barrier_destroy(csilk_barrier_t* barrier)
+{
+    pthread_barrier_destroy(barrier);
+}
 #else
 #include <csilk/core/sys_io.h>
 /** @brief Mutex type (uv_mutex_t under the libuv backend). */
@@ -230,5 +300,51 @@ static inline void
 csilk_cond_destroy(csilk_cond_t* cond)
 {
     uv_cond_destroy(cond);
+}
+
+typedef uv_thread_cb csilk_thread_cb;
+
+static inline int
+csilk_thread_create(csilk_thread_t* tid, csilk_thread_cb cb, void* arg)
+{
+    return uv_thread_create(tid, cb, arg);
+}
+
+static inline int
+csilk_thread_join(csilk_thread_t* tid)
+{
+    return uv_thread_join(tid);
+}
+
+static inline csilk_thread_t
+csilk_thread_self(void)
+{
+    return uv_thread_self();
+}
+
+static inline int
+csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int maxcpu)
+{
+    return uv_thread_setaffinity(tid, cpuset, oldmask, maxcpu);
+}
+
+typedef uv_barrier_t csilk_barrier_t;
+
+static inline int
+csilk_barrier_init(csilk_barrier_t* barrier, unsigned int count)
+{
+    return uv_barrier_init(barrier, count);
+}
+
+static inline int
+csilk_barrier_wait(csilk_barrier_t* barrier)
+{
+    return uv_barrier_wait(barrier);
+}
+
+static inline void
+csilk_barrier_destroy(csilk_barrier_t* barrier)
+{
+    uv_barrier_destroy(barrier);
 }
 #endif

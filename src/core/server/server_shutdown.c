@@ -24,7 +24,7 @@ static void on_server_handle_close(csilk_io_handle_t* handle);
 
 /** @brief Signal handler for SIGINT — initiates graceful shutdown. */
 void
-on_signal(uv_signal_t* handle, int signum)
+on_signal(csilk_io_signal_t* handle, int signum)
 {
     (void)signum;
     csilk_server_t* server = (csilk_server_t*)handle->data;
@@ -56,13 +56,13 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
         count++;
         if (client->ctx.is_websocket) {
             csilk_ws_close(&client->ctx, 1001, "Server stopping");
-            uv_close((uv_handle_t*)&client->handle, on_close);
+            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
         } else if (client->ctx.is_sse) {
             csilk_sse_send(&client->ctx, "close", "Server stopping");
             csilk_sse_close(&client->ctx);
         } else {
-            if (!uv_is_closing((uv_handle_t*)&client->handle)) {
-                uv_close((uv_handle_t*)&client->handle, on_close);
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
         }
         client = client->next;
@@ -72,7 +72,7 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
 
 /** @brief Async callback to stop the server gracefully. */
 void
-on_stop_async(uv_async_t* handle)
+on_stop_async(csilk_io_async_t* handle)
 {
     csilk_server_t* server = (csilk_server_t*)handle->data;
     CSILK_LOG_I("Server: initiating graceful shutdown");
@@ -105,7 +105,7 @@ on_stop_async(uv_async_t* handle)
 
     for (int i = 1; i < server->worker_pool_count; i++) {
         CSILK_LOG_D("Server: signaling worker thread %d to stop", i);
-        uv_async_send(&server->worker_pools[i].stop_async);
+        csilk_io_async_send(&server->worker_pools[i].stop_async);
     }
 
     if (server->mq) {
@@ -131,14 +131,14 @@ csilk_server_stop(csilk_server_t* server)
     if (!server) {
         return;
     }
-    uv_async_send(&server->async_handle);
+    csilk_io_async_send(&server->async_handle);
 }
 
 /* --- Worker stop --- */
 
 /** @brief Async callback for stopping a worker's event loop gracefully. */
 void
-on_worker_stop_async(uv_async_t* handle)
+on_worker_stop_async(csilk_io_async_t* handle)
 {
     worker_stop_data_t* sd = (worker_stop_data_t*)handle->data;
     if (!sd) {
@@ -167,5 +167,5 @@ on_worker_stop_async(uv_async_t* handle)
     for (int i = 0; i < 8; i++) {
         csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
     }
-    uv_stop(loop);
+    csilk_io_stop(loop);
 }
