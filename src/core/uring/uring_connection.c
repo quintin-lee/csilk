@@ -623,17 +623,14 @@ on_new_connection(worker_pool_t* wp, int client_fd)
 {
     csilk_server_t* server = wp->server;
 
-    int max_conn = server->config.max_connections;
-    if (max_conn == 0) {
-        max_conn = server->max_connections;
-    }
-    if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
+    if (_csilk_server_try_acquire_connection(server) < 0) {
         close(client_fd);
         return;
     }
 
     csilk_client_t* client = pool_get(wp);
     if (!client) {
+        _csilk_server_release_connection(server);
         close(client_fd);
         return;
     }
@@ -653,7 +650,6 @@ on_new_connection(worker_pool_t* wp, int client_fd)
                 client_fd,
                 (void*)client);
 
-    atomic_fetch_add(&server->active_connections, 1);
     client->protocol = CSILK_PROTO_HTTP1;
     llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
     client->parser.data = client;

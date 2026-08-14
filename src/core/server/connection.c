@@ -491,11 +491,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     worker_pool_t*  wp = (worker_pool_t*)server_stream->data;
     csilk_server_t* server = wp->server;
 
-    int max_conn = server->config.max_connections;
-    if (max_conn == 0) {
-        max_conn = server->max_connections;
-    }
-    if (max_conn > 0 && atomic_load(&server->active_connections) >= max_conn) {
+    if (_csilk_server_try_acquire_connection(server) < 0) {
         uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
         if (tmp) {
             uv_tcp_init(server_stream->loop, tmp);
@@ -510,6 +506,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
     csilk_client_t* client = pool_get(wp);
     if (!client) {
+        _csilk_server_release_connection(server);
         uv_tcp_t* tmp = malloc(sizeof(uv_tcp_t));
         if (tmp) {
             uv_tcp_init(server_stream->loop, tmp);
@@ -527,6 +524,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     int r = uv_tcp_init(server_stream->loop, &client->handle);
     if (r < 0) {
         CSILK_LOG_E("Connection: uv_tcp_init error: %s", csilk_io_strerror(r));
+        _csilk_server_release_connection(server);
         pool_put(wp, client);
         return;
     }
@@ -542,7 +540,6 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
         if (server->config.tcp_nodelay) {
             uv_tcp_nodelay((uv_tcp_t*)&client->handle, 1);
         }
-        atomic_fetch_add(&server->active_connections, 1);
         client->protocol = CSILK_PROTO_HTTP1;
         llhttp_init(&client->parser, HTTP_REQUEST, &server->settings);
         client->parser.data = client;
