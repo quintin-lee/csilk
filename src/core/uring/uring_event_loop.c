@@ -572,6 +572,7 @@ uring_worker_thread(void* arg)
         }
     }
 
+    csilk_arena_flush_free_list();
     io_uring_queue_exit(loop_ptr);
     return NULL;
 }

@@ -277,6 +277,30 @@ test_arena_multi_tier_tls_cache(void)
     printf("multi-tier TLS chunk caching passed!\n");
 }
 
+#include <pthread.h>
+
+static void*
+thread_alloc_and_exit(void* arg)
+{
+    (void)arg;
+    csilk_arena_t* a = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+    assert(a != NULL);
+    void* p = csilk_arena_alloc(a, 100);
+    assert(p != NULL);
+    csilk_arena_free(a); /* Pushes chunk to thread TLS */
+    return NULL;
+}
+
+void
+test_arena_pthread_tls_cleanup(void)
+{
+    printf("Testing pthread key destructor on thread exit...\n");
+    pthread_t tid;
+    assert(pthread_create(&tid, NULL, thread_alloc_and_exit, NULL) == 0);
+    assert(pthread_join(tid, NULL) == 0);
+    printf("pthread key destructor passed!\n");
+}
+
 int
 main()
 {
@@ -291,6 +315,7 @@ main()
     test_arena_max_total_bytes_tls_enforced();
     test_arena_default_chunk_size_zero();
     test_arena_multi_tier_tls_cache();
+    test_arena_pthread_tls_cleanup();
 #ifdef TEST_OOM
     test_arena_tls_cache();
 #endif
