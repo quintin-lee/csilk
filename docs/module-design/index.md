@@ -7,7 +7,8 @@ Deep-dive architectural documentation for each core subsystem of csilk.
 | Document | Focus |
 |----------|-------|
 | [Server Core](server.md) | libuv (default) / io_uring (optional, Linux-only) event loop, TLS/ALPN, HTTP/2, worker pool, graceful shutdown |
-| [Router](router.md) | Radix tree (Patricia trie), SIMD-accelerated matching, param extraction |
+| [Router](router.md) | Segment-based prefix trie, SIMD-accelerated matching, param extraction |
+
 | [Context](context.md) | Request/response lifecycle, opaque API, deferred cleanup |
 | [Arena](arena.md) | Bump allocator, zero-copy headers, SIMD-accelerated memcpy |
 | [Hooks](hooks.md) | Server/Connection/Request lifecycle hook system |

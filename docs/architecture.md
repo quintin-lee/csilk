@@ -292,8 +292,9 @@ flowchart TB
 * Users **MUST** avoid holding arena pointers across `csilk_next()` boundaries if the callee may reset the arena.
 * Long-lived allocations **SHOULD** use `malloc` directly or `csilk_arena_dup()` to copy out of the arena.
 
-### 2.7 Radix Tree Routing
-Prefix tree (Patricia trie) routing with O(path_length) matching, support for static, parameterized, and wildcard routes. On x86_64 with AVX2, SIMD-accelerated path matching achieves ~50ns per route lookup. Routes **MUST** be registered before server start; the router is read-only during request processing (lock-free reads). Wildcard routes **SHOULD** be placed last in the registration order to ensure static routes take priority.
+### 2.7 Segment-Based Prefix Trie Routing
+Segment-based prefix trie routing with O(path_length) matching, support for static, parameterized, and wildcard routes. Path segments delimited by `/` are evaluated with SIMD vector scanning, achieving ~50ns per route lookup on AVX2 (x86_64) and ~80ns on ARM NEON. Routes **MUST** be registered before server start; the router is read-only during request processing (lock-free reads). Wildcard routes **SHOULD** be placed last in the registration order to ensure static routes take priority.
+
 
 ```mermaid
 %%{init: {

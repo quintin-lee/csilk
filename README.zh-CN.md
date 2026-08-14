@@ -101,7 +101,7 @@ graph TB
 
     subgraph core["fa:fa-cogs Core Framework"]
         SRV["fa:fa-server Server (libuv event loop)"]
-        RTR["fa:fa-sitemap Router (Radix Tree, ~50ns/lookup)"]
+        RTR["fa:fa-sitemap Router (Segment Trie, ~50ns/lookup)"]
         CTX["fa:fa-exchange Context (csilk_ctx_t)"]
         ARENA["fa:fa-database Arena Allocator (~3 CPU instr/alloc)"]
         H2["fa:fa-code-fork HTTP/2 (nghttp2)"]
@@ -340,7 +340,7 @@ examples/               # 功能示例（Server、App、AI、WS/TLS/MQ 等）
 | 🧵 | 线程安全日志 |
 | 🔍 | 超时 / 限制 |
 | 🎯 | 每路由中间件 |
-| 🌲 | Radix Tree 路由 |
+| 🌲 | 分段前缀树（Segment Trie）路由 |
 | 📝 | Form URL-encoded 解析 |
 | 🍪 | 会话管理 |
 | 🔀 | HTTP 重定向 |

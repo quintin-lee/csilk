@@ -1,6 +1,10 @@
 # 路由器设计
 
-csilk 使用 **基数树** (紧凑前缀树) 进行高效路由匹配。路由器支持静态路由、命名参数 (`:param`) 和通配符 (`*wildcard`)。路径匹配 **SIMD 加速** 通过 AVX2 (x86_64) 和 ARM NEON (aarch64) 进行字节级前缀比较 — 在 AVX2 上每个查找约 50ns (P99 ≤ 100ns, 100K 路由)，在 NEON 上约 80ns。路由 **MUST** 在服务器启动前注册；路由器在请求处理期间为只读。通配符路由 **SHOULD** 最后注册以确保静态/参数路由优先。
+csilk 使用基于 **路径分段前缀树（Segment-Based Prefix Trie）** 并结合 SIMD 边界探测进行高效路由匹配。路由器将以 `/` 分隔的每个 URL 组件作为独立节点，支持静态路由、命名参数 (`:param`) 和通配符 (`*wildcard`)。路径匹配通过 AVX2 (x86_64) 和 ARM NEON (aarch64) 进行 **SIMD 向量化分段加速** — 在 AVX2 上单次查找仅需 ~50ns (P99 ≤ 100ns, 100K 路由)，在 NEON 上约 80ns。路由 **MUST** 在服务器启动前注册；路由器在请求处理期间为只读。通配符路由 **SHOULD** 最后注册以确保静态/参数路由优先。
+
+> [!NOTE]
+> **分段前缀树（Segment-Based Trie）与压缩基数树（Compressed Radix Tree）的架构区别**：
+> 传统的字符级 Radix Tree 压缩任意公共字符子串并在新增路由时触发边分裂（Edge Splitting）。而 csilk 采用按 `/` 分割的 Segment Trie 架构，天然契合 RESTful 路由的语义层次，使得参数路由（`:param`）与通配符（`*`）的优先级判定更加清晰（`STATIC > PARAM > WILDCARD`），并极大简化了 SIMD 向量化分段扫描。
 
 ## 节点结构
 
@@ -36,7 +40,8 @@ graph TB
     end
 ```
 
-## 基数树可视化
+## 分段前缀树可视化
+
 
 ```mermaid
 %%{init: {
