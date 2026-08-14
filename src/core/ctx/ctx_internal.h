@@ -261,8 +261,10 @@ struct csilk_ctx_s {
     void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
     /* === Zero-Copy Receive Buffers === */
-    char* read_buffers[16];
-    int   read_buffers_count;
+    char** read_buffers;
+    int    read_buffers_count;
+    int    read_buffers_capacity;
+    char*  read_buffers_embedded[16];
 
     /* === Pluggable Driver Pointers === */
     csilk_storage_driver_t* storage_driver; /**< Optional pluggable storage backend for
@@ -283,7 +285,7 @@ struct csilk_ctx_s {
     csilk_storage_item_t* storage_head; /**< Head of the linked list for simple
                                          arena-backed key-value storage.
                                          Managed by csilk_set()/csilk_get()
-                                         when no storage_driver is set. */
+                                         and freed on context cleanup. */
 
     struct csilk_server_s* server;      /**< Pointer to the owning server instance. */
 
@@ -331,6 +333,9 @@ struct csilk_ctx_s {
 
 /** @brief Internal context initialiser. */
 CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
+
+/** @brief Register a raw read buffer with the context for zero-copy view lifetime management. */
+CSILK_INTERNAL int _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base);
 
 /* === Async/Multi-Worker Loop Support === */
 CSILK_INTERNAL csilk_io_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);

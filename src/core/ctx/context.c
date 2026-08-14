@@ -139,7 +139,12 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
             c->read_buffers[i] = NULL;
         }
     }
+    if (c->read_buffers && c->read_buffers != c->read_buffers_embedded) {
+        free(c->read_buffers);
+    }
+    c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
+    c->read_buffers_capacity = 16;
 
     memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
     memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
@@ -312,11 +317,55 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     c->file_fd = -1;
     c->_internal_client = client;
     c->server = s;
+    c->read_buffers = c->read_buffers_embedded;
+    c->read_buffers_count = 0;
+    c->read_buffers_capacity = 16;
     if (s) {
         c->storage_driver = s->storage_driver;
         c->crypto_driver = s->crypto_driver;
         c->cipher_driver = s->cipher_driver;
     }
+}
+
+/** @brief Register a zero-copy read buffer for lifetime management across the request.
+ *
+ * Dynamically expands buffer array if number of TCP reads exceeds embedded capacity.
+ *
+ * @param c    The request context.
+ * @param base Pointer to malloc'd buffer.
+ * @return 0 on success, -1 on memory allocation failure. */
+CSILK_INTERNAL int
+_csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base)
+{
+    if (!c || !base) {
+        return -1;
+    }
+    if (c->read_buffers_capacity <= 0 || !c->read_buffers) {
+        c->read_buffers = c->read_buffers_embedded;
+        c->read_buffers_capacity = 16;
+        c->read_buffers_count = 0;
+    }
+    if (c->read_buffers_count >= c->read_buffers_capacity) {
+        int    new_cap = c->read_buffers_capacity * 2;
+        char** new_arr = NULL;
+        if (c->read_buffers == c->read_buffers_embedded) {
+            new_arr = malloc((size_t)new_cap * sizeof(char*));
+            if (!new_arr) {
+                return -1;
+            }
+            memcpy(
+                new_arr, c->read_buffers_embedded, (size_t)c->read_buffers_count * sizeof(char*));
+        } else {
+            new_arr = realloc(c->read_buffers, (size_t)new_cap * sizeof(char*));
+            if (!new_arr) {
+                return -1;
+            }
+        }
+        c->read_buffers = new_arr;
+        c->read_buffers_capacity = new_cap;
+    }
+    c->read_buffers[c->read_buffers_count++] = base;
+    return 0;
 }
 
 /** @brief Set the storage driver.

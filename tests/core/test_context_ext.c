@@ -5,6 +5,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
+#include "core/ctx/ctx_internal.h"
 
 static void
 test_csilk_next_aborted()
@@ -802,10 +803,46 @@ test_csilk_get_form_field_null()
     printf("csilk_get_form_field_null passed!\n");
 }
 
+static void
+test_csilk_read_buffer_dynamic_expansion()
+{
+    printf("Testing read_buffers dynamic expansion (>16 buffers)...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    /* Register 50 buffers (exceeding embedded capacity of 16) */
+    for (int i = 0; i < 50; i++) {
+        char* buf = (char*)malloc(64);
+        assert(buf != nullptr);
+        snprintf(buf, 64, "packet-%d", i);
+        int r = _csilk_ctx_register_read_buffer(ctx, buf);
+        assert(r == 0);
+    }
+
+    assert(ctx->read_buffers_count == 50);
+    assert(ctx->read_buffers_capacity >= 50);
+    assert(ctx->read_buffers != ctx->read_buffers_embedded);
+
+    for (int i = 0; i < 50; i++) {
+        char expected[64];
+        snprintf(expected, sizeof(expected), "packet-%d", i);
+        assert(strcmp(ctx->read_buffers[i], expected) == 0);
+    }
+
+    /* Cleanup should free all 50 buffers and the dynamic array without leaking */
+    csilk_ctx_cleanup(ctx);
+    assert(ctx->read_buffers_count == 0);
+    assert(ctx->read_buffers_capacity == 16);
+    assert(ctx->read_buffers == ctx->read_buffers_embedded);
+
+    csilk_test_ctx_free(ctx);
+    printf("csilk_read_buffer_dynamic_expansion passed!\n");
+}
+
 int
 main()
 {
     test_csilk_next_aborted();
+
     test_csilk_next_null_handler();
     test_csilk_abort();
     test_csilk_status();
@@ -856,6 +893,7 @@ main()
     test_csilk_response_write_end_null();
     test_csilk_parse_form_urlencoded_null();
     test_csilk_get_form_field_null();
+    test_csilk_read_buffer_dynamic_expansion();
     printf("test_context_ext: ALL PASSED\n");
     return 0;
 }

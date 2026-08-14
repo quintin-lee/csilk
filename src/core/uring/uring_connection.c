@@ -715,29 +715,24 @@ on_read(csilk_client_t* client, ssize_t nread)
         } else if (client->ctx.is_websocket) {
             csilk_ws_parse_frame(&client->ctx, (const uint8_t*)base, (size_t)nread);
         } else {
-            if (client->ctx.read_buffers_count < 16) {
-                client->ctx.read_buffers[client->ctx.read_buffers_count++] = base;
+            if (_csilk_ctx_register_read_buffer(&client->ctx, base) == 0) {
                 is_registered = 1;
             } else {
-                CSILK_LOG_W("Connection: read_buffers capacity exceeded, freeing "
-                            "immediately");
-                free(base);
-                base = NULL;
+                CSILK_LOG_E("Connection: failed to register read buffer, out of memory");
             }
 
-            if (base) {
-                enum llhttp_errno err = llhttp_execute(&client->parser, base, nread);
-                if (err == HPE_CLOSED_CONNECTION) {
-                    llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
-                    client->parser.data = client;
-                } else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
-                    CSILK_LOG_E("Connection: HTTP parse error: %s %s",
-                                llhttp_errno_name(err),
-                                client->parser.reason ? client->parser.reason : "unknown reason");
-                    csilk_client_close(client);
-                }
+            enum llhttp_errno err = llhttp_execute(&client->parser, base, nread);
+            if (err == HPE_CLOSED_CONNECTION) {
+                llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
+                client->parser.data = client;
+            } else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
+                CSILK_LOG_E("Connection: HTTP parse error: %s %s",
+                            llhttp_errno_name(err),
+                            client->parser.reason ? client->parser.reason : "unknown reason");
+                csilk_client_close(client);
             }
         }
+
     } else if (nread < 0) {
         if (nread != -ECONNRESET) {
             CSILK_LOG_E("Connection: read error %zd", nread);
