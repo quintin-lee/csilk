@@ -15,6 +15,7 @@
 #include <csilk/csilk.h>
 #include <csilk/core/server.h>
 #include <csilk/core/internal.h>
+#include "../ctx/ctx_internal.h"
 #include "../internal/srv_internal.h"
 #include "uring_internal.h"
 
@@ -25,110 +26,44 @@
 #include <sys/socket.h>
 #include <sys/signalfd.h>
 #include <unistd.h>
+#include <poll.h>
 
-/**
- * @brief Report whether an I/O handle is in a closing state.
- * @param[in] handle The handle to query (unused by the io_uring backend).
- * @return Always 0; the io_uring backend has no libuv closing state machine.
- */
-int
-csilk_io_is_closing(const csilk_io_handle_t* handle)
-{
-    (void)handle;
-    return 0;
-}
-
-int
-csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
-{
-    if (!handle || !fd) {
-        return -1;
-    }
-    csilk_io_stream_t* stream = (csilk_io_stream_t*)handle;
-    *fd = stream->fd;
-    return 0;
-}
-
-int
-csilk_io_write(csilk_io_write_t*    req,
-               csilk_io_stream_t*   handle,
-               const csilk_io_buf_t bufs[],
-               unsigned int         nbufs,
-               csilk_io_write_cb    cb)
-{
-    if (!handle || !handle->data) {
-        return -1;
-    }
-    csilk_client_t* client = (csilk_client_t*)handle->data;
-    if (client->ctx.conn_closed) {
-        return -1;
-    }
-
-    struct io_uring*     ring = client->owner_pool->loop_ptr;
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-    if (!sqe) {
-        return -1;
-    }
-
-    req->cb = (void*)cb;
-    req->handle = handle;
-
-    struct iovec* iov = malloc(sizeof(struct iovec) * nbufs);
-    for (unsigned int i = 0; i < nbufs; ++i) {
-        iov[i].iov_base = bufs[i].base;
-        iov[i].iov_len = bufs[i].len;
-    }
-
-    io_uring_prep_writev(sqe, handle->fd, iov, nbufs, 0);
-
-    void** ctx = malloc(sizeof(void*) * 3);
-    ctx[0] = client;
-    ctx[1] = req;
-    ctx[2] = iov;
-    io_uring_sqe_set_data(sqe, (void*)uring_encode_data(URING_OP_UV_WRITE, client, ctx));
-    atomic_fetch_add(&client->async_ref, 1);
-    io_uring_submit(ring);
-    return 0;
-}
-
-void
-csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
-{
-    if (!handle) {
-        return;
-    }
-    if (handle->fd >= 0) {
-        close(handle->fd);
-        handle->fd = -1;
-    }
-    if (cb) {
-        cb(handle);
-    }
-}
-
-int
-csilk_io_is_active(const csilk_io_handle_t* handle)
-{
-    return handle != NULL;
-}
+/* Forward declarations */
+static csilk_io_loop_t  g_default_loop;
+static int              g_default_loop_inited = 0;
+static int              g_default_pending = 0;
+static struct io_uring* g_default_ring_ptr = NULL;
 
 int
 csilk_io_loop_init(csilk_io_loop_t* loop)
 {
-    return io_uring_queue_init(4096, loop, 0);
+    if (!loop) {
+        return -1;
+    }
+    memset(loop, 0, sizeof(*loop));
+    return io_uring_queue_init(4096, &loop->ring, 0);
 }
 
 int
 csilk_io_loop_close(csilk_io_loop_t* loop)
 {
-    io_uring_queue_exit(loop);
+    if (!loop) {
+        return -1;
+    }
+    io_uring_queue_exit(&loop->ring);
+    if (loop == &g_default_loop) {
+        g_default_loop_inited = 0;
+        g_default_ring_ptr = NULL;
+    }
     return 0;
 }
 
 void
 csilk_io_stop(csilk_io_loop_t* loop)
 {
-    (void)loop;
+    if (loop) {
+        loop->stop_flag = 1;
+    }
 }
 
 uint64_t
@@ -147,12 +82,154 @@ csilk_io_update_time(csilk_io_loop_t* loop)
 int
 csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle)
 {
-    (void)loop;
     if (!handle) {
         return -1;
     }
+    uint8_t gen = handle->generation ? (uint8_t)(handle->generation + 1) : 1;
+    memset(handle, 0, sizeof(*handle));
+    handle->loop = loop;
     handle->fd = -1;
-    handle->data = NULL;
+    handle->type = CSILK_IO_HANDLE_TCP;
+    handle->generation = gen ? gen : 1;
+    return 0;
+}
+
+int
+csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_async_cb async_cb)
+{
+    if (!async) {
+        return -1;
+    }
+    memset(async, 0, sizeof(*async));
+    if (!loop) {
+        loop = csilk_io_default_loop();
+    }
+    async->loop = loop;
+    async->event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    async->fd = async->event_fd;
+    async->cb = async_cb;
+    async->type = CSILK_IO_HANDLE_ASYNC;
+    async->flags |= CSILK_IO_HANDLE_ACTIVE;
+    async->generation = 1;
+
+    if (async->event_fd < 0) {
+        return -1;
+    }
+
+    if (loop) {
+        loop->active_handles++;
+        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+        if (sqe) {
+            io_uring_prep_poll_add(sqe, async->event_fd, POLLIN);
+            io_uring_sqe_set_data64(
+                sqe, uring_encode_handle_data(URING_OP_POLL_ASYNC, (csilk_io_handle_t*)async));
+            io_uring_submit(&loop->ring);
+        }
+    }
+    return 0;
+}
+
+int
+csilk_io_async_send(csilk_io_async_t* async)
+{
+    if (!async || async->event_fd < 0) {
+        return -1;
+    }
+    uint64_t val = 1;
+    ssize_t  ret = write(async->event_fd, &val, sizeof(val));
+    (void)ret;
+    return 0;
+}
+
+int
+csilk_io_signal_init(csilk_io_loop_t* loop, csilk_io_signal_t* handle)
+{
+    if (!handle) {
+        return -1;
+    }
+    memset(handle, 0, sizeof(*handle));
+    if (!loop) {
+        loop = csilk_io_default_loop();
+    }
+    handle->loop = loop;
+    handle->signal_fd = -1;
+    handle->fd = -1;
+    handle->type = CSILK_IO_HANDLE_SIGNAL;
+    handle->generation = 1;
+    return 0;
+}
+
+int
+csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int signum)
+{
+    if (!handle || signum <= 0) {
+        return -1;
+    }
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, signum);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+
+    int sfd = signalfd(handle->signal_fd, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+    if (sfd < 0) {
+        return -1;
+    }
+    handle->signal_fd = sfd;
+    handle->fd = sfd;
+    handle->cb = cb;
+    handle->signum = signum;
+    handle->flags |= CSILK_IO_HANDLE_ACTIVE;
+    handle->generation++;
+
+    csilk_io_loop_t* loop = handle->loop ? handle->loop : csilk_io_default_loop();
+    handle->loop = loop;
+    loop->active_handles++;
+
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (sqe) {
+        io_uring_prep_poll_add(sqe, handle->signal_fd, POLLIN);
+        io_uring_sqe_set_data64(
+            sqe, uring_encode_handle_data(URING_OP_POLL_SIGNAL, (csilk_io_handle_t*)handle));
+        io_uring_submit(&loop->ring);
+    }
+    return 0;
+}
+
+int
+csilk_io_signal_stop(csilk_io_signal_t* handle)
+{
+    if (!handle || handle->signal_fd < 0) {
+        return -1;
+    }
+    if (handle->flags & CSILK_IO_HANDLE_ACTIVE) {
+        handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+        if (handle->loop && handle->loop->active_handles > 0) {
+            handle->loop->active_handles--;
+        }
+    }
+    handle->generation++;
+    close(handle->signal_fd);
+    handle->signal_fd = -1;
+    handle->fd = -1;
+    return 0;
+}
+
+int
+csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
+{
+    if (!handle) {
+        return -1;
+    }
+    uint8_t gen = handle->generation ? (uint8_t)(handle->generation + 1) : 1;
+    memset(handle, 0, sizeof(*handle));
+    if (!loop) {
+        loop = csilk_io_default_loop();
+    }
+    handle->loop = loop;
+    handle->ring = loop ? &loop->ring : NULL;
+    handle->fd = -1;
+    handle->type = CSILK_IO_HANDLE_TIMER;
+    handle->generation = gen ? gen : 1;
     return 0;
 }
 
@@ -170,20 +247,60 @@ int
 csilk_io_tcp_bind(csilk_io_tcp_t* handle, const struct sockaddr* addr, unsigned int flags)
 {
     (void)flags;
-    if (!handle || handle->fd < 0) {
+    if (!handle || !addr) {
         return -1;
     }
-    return bind(handle->fd, addr, sizeof(*addr));
+    if (handle->fd < 0) {
+        int family = addr->sa_family;
+        if (family != AF_INET && family != AF_INET6) {
+            return -1;
+        }
+        int fd = socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+        if (fd < 0) {
+            return -1;
+        }
+        int on = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+        handle->fd = fd;
+    }
+    socklen_t addrlen =
+        (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    int rc = bind(handle->fd, addr, addrlen);
+    if (rc < 0) {
+        close(handle->fd);
+        handle->fd = -1;
+        return -1;
+    }
+    return 0;
 }
 
 int
 csilk_io_listen(csilk_io_stream_t* stream, int backlog, csilk_io_connection_cb cb)
 {
-    (void)cb;
     if (!stream || stream->fd < 0) {
         return -1;
     }
-    return listen(stream->fd, backlog);
+    if (listen(stream->fd, backlog) < 0) {
+        return -1;
+    }
+    stream->connection_cb = cb;
+    stream->flags |= CSILK_IO_HANDLE_ACTIVE;
+    stream->generation++;
+
+    csilk_io_loop_t* loop = stream->loop ? stream->loop : csilk_io_default_loop();
+    stream->loop = loop;
+    loop->active_handles++;
+
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (!sqe) {
+        return -1;
+    }
+    io_uring_prep_poll_add(sqe, stream->fd, POLLIN);
+    io_uring_sqe_set_data64(
+        sqe, uring_encode_handle_data(URING_OP_POLL_LISTEN, (csilk_io_handle_t*)stream));
+    io_uring_submit(&loop->ring);
+    return 0;
 }
 
 int
@@ -192,15 +309,12 @@ csilk_io_accept(csilk_io_stream_t* server, csilk_io_stream_t* client)
     if (!server || server->fd < 0 || !client) {
         return -1;
     }
-#ifdef __linux__
     int fd = accept4(server->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
-#else
-    int fd = accept(server->fd, NULL, NULL);
-#endif
     if (fd < 0) {
         return -1;
     }
     client->fd = fd;
+    client->loop = server->loop;
     return 0;
 }
 
@@ -271,211 +385,258 @@ csilk_io_ip6_name(const struct sockaddr_in6* src, char* dst, size_t size)
 int
 csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk_io_read_cb read_cb)
 {
-    (void)stream;
-    (void)alloc_cb;
-    (void)read_cb;
+    if (!stream || stream->fd < 0) {
+        return -1;
+    }
+    stream->alloc_cb = alloc_cb;
+    stream->read_cb = read_cb;
+    if (stream->reading && (stream->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        return 0;
+    }
+    stream->reading = 1;
+    if (!(stream->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        stream->flags |= CSILK_IO_HANDLE_ACTIVE;
+        csilk_io_loop_t* loop = stream->loop ? stream->loop : csilk_io_default_loop();
+        stream->loop = loop;
+        loop->active_handles++;
+    }
+    stream->generation++;
+
+    csilk_io_loop_t*     loop = stream->loop ? stream->loop : csilk_io_default_loop();
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (!sqe) {
+        return -1;
+    }
+    io_uring_prep_poll_add(sqe, stream->fd, POLLIN | POLLHUP | POLLERR);
+    io_uring_sqe_set_data64(
+        sqe, uring_encode_handle_data(URING_OP_POLL_READ, (csilk_io_handle_t*)stream));
+    io_uring_submit(&loop->ring);
     return 0;
 }
 
 int
 csilk_io_read_stop(csilk_io_stream_t* stream)
 {
-    (void)stream;
+    if (!stream) {
+        return -1;
+    }
+    if (stream->flags & CSILK_IO_HANDLE_ACTIVE) {
+        stream->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+        if (stream->loop && stream->loop->active_handles > 0) {
+            stream->loop->active_handles--;
+        }
+    }
+    stream->reading = 0;
+    stream->generation++;
     return 0;
 }
 
 int
-csilk_io_timer_again(csilk_io_timer_t* handle)
+csilk_io_write(csilk_io_write_t*    req,
+               csilk_io_stream_t*   handle,
+               const csilk_io_buf_t bufs[],
+               unsigned int         nbufs,
+               csilk_io_write_cb    cb)
 {
-    (void)handle;
+    if (!handle || handle->fd < 0) {
+        return -1;
+    }
+    csilk_client_t* client = (csilk_client_t*)handle->data;
+    if (client && client->ctx.conn_closed) {
+        return -1;
+    }
+
+    csilk_io_loop_t* loop = handle->loop;
+    if (!loop && client && client->owner_pool) {
+        loop = client->owner_pool->loop_ptr;
+    }
+    if (!loop) {
+        loop = csilk_io_default_loop();
+    }
+
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (!sqe) {
+        return -1;
+    }
+
+    req->cb = (void*)cb;
+    req->handle = handle;
+
+    struct iovec* iov = NULL;
+    if (nbufs == 1) {
+        io_uring_prep_send(sqe, handle->fd, bufs[0].base, bufs[0].len, MSG_NOSIGNAL);
+    } else {
+        iov = malloc(sizeof(struct iovec) * nbufs);
+        if (!iov) {
+            return -1;
+        }
+        for (unsigned int i = 0; i < nbufs; ++i) {
+            iov[i].iov_base = bufs[i].base;
+            iov[i].iov_len = bufs[i].len;
+        }
+        io_uring_prep_writev(sqe, handle->fd, iov, nbufs, 0);
+    }
+
+    void** ctx = malloc(sizeof(void*) * 3);
+    if (!ctx) {
+        if (iov) {
+            free(iov);
+        }
+        return -1;
+    }
+    ctx[0] = client;
+    ctx[1] = req;
+    ctx[2] = iov;
+    io_uring_sqe_set_data64(sqe, uring_encode_data(URING_OP_UV_WRITE, client, ctx));
+    if (client) {
+        _csilk_ctx_async_ref_incr(&client->ctx);
+    }
+    io_uring_submit(&loop->ring);
     return 0;
 }
 
-int
-csilk_io_signal_init(csilk_io_loop_t* loop, csilk_io_signal_t* handle)
+void
+csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
-    (void)loop;
     if (!handle) {
-        return -1;
+        return;
     }
-    handle->signal_fd = -1;
-    handle->data = NULL;
-    return 0;
-}
-
-int
-csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int signum)
-{
-    (void)cb;
-    if (!handle) {
-        return -1;
+    if (handle->flags & CSILK_IO_HANDLE_CLOSING) {
+        return;
     }
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, signum);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
-    handle->signal_fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-    return handle->signal_fd >= 0 ? 0 : -1;
-}
-
-int
-csilk_io_signal_stop(csilk_io_signal_t* handle)
-{
-    if (!handle || handle->signal_fd < 0) {
-        return -1;
+    handle->flags |= CSILK_IO_HANDLE_CLOSING;
+    if (handle->flags & CSILK_IO_HANDLE_ACTIVE) {
+        handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+        if (handle->loop && handle->loop->active_handles > 0) {
+            handle->loop->active_handles--;
+        }
     }
-    close(handle->signal_fd);
-    handle->signal_fd = -1;
-    return 0;
+    handle->generation++;
+
+    if (handle->type == CSILK_IO_HANDLE_TIMER) {
+        csilk_io_timer_stop((csilk_io_timer_t*)handle);
+    } else if (handle->type == CSILK_IO_HANDLE_SIGNAL) {
+        csilk_io_signal_stop((csilk_io_signal_t*)handle);
+    } else if (handle->type == CSILK_IO_HANDLE_ASYNC) {
+        csilk_io_async_t* async = (csilk_io_async_t*)handle;
+        if (async->event_fd >= 0) {
+            close(async->event_fd);
+            async->event_fd = -1;
+            async->fd = -1;
+        }
+    } else if (handle->fd >= 0) {
+        csilk_client_t* client = (csilk_client_t*)handle->data;
+        if (!client || client->async_ref <= 0) {
+            close(handle->fd);
+            handle->fd = -1;
+        }
+    }
+
+    if (cb) {
+        cb(handle);
+    }
 }
 
-/* --- Default ring + pending-SQE tracker --- */
-
-/* Lazy-init singleton io_uring ring used by csilk_io_default_loop().
- *
- * This ring is the DEFAULT loop — it is distinct from the per-worker
- * rings the server creates inside uring_thread().  Its main purpose in
- * test / CLI programs is to give csilk_io_timer_start() a valid ring so
- * timeout SQEs can be submitted.  The ring is NOT thread-safe; callers
- * must ensure no concurrent sqe/cqe access (the default is single-
- * threaded test or CLI use). */
-static struct io_uring g_default_ring;
-static int             g_default_ring_inited = 0;
-
-/* Counter: how many SQEs have been submitted to the default ring (via
- * csilk_io_timer_start/stop) but whose completion CQEs have not yet
- * been consumed by csilk_io_run().  Accessed from test/CLI code only
- * (single thread), so no locking is required. */
-static int g_default_pending = 0;
-
-/* Pointer to the default ring so timer functions can check whether
- * they are submitting to the default ring (vs a per-worker ring). */
-static struct io_uring* g_default_ring_ptr = NULL;
-
-/**
- * @brief Initialize a timer handle and bind it to its owning loop.
- * @param[in]  loop   Event loop that owns the timer (stored as ring).
- * @param[out] handle Timer handle to initialize; fd set to -1, generation to 1.
- * @return Always 0.
- */
-int
-csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
-{
-    handle->fd = -1;
-    handle->data = NULL;
-    handle->ring = loop;
-    handle->cb = NULL;
-    handle->generation = 1; /* Start at 1 so the first start() is a new generation. */
-    return 0;
-}
-
-/**
- * @brief Arm a timer on the io_uring backend.
- * @param[in] handle  Timer handle (must already have a valid ring).
- * @param[in] cb      Callback invoked on expiry.
- * @param[in] timeout Expiry in milliseconds.
- * @param[in] repeat  Repeat interval in milliseconds (0 for one-shot).
- * @return 0 on success, -1 on NULL handle/ring or when no SQE slot is free.
- * @note Bumps the handle generation so stale CQEs from a previous interval are
- *       ignored. Submits an io_uring timeout SQE tagged URING_OP_TMR_GENERIC.
- */
 int
 csilk_io_timer_start(csilk_io_timer_t* handle,
                      csilk_io_timer_cb cb,
                      uint64_t          timeout,
                      uint64_t          repeat)
 {
-    if (!handle || !handle->ring) {
+    if (!handle) {
         return -1;
     }
+    csilk_io_loop_t* loop = handle->loop;
+    if (!loop) {
+        loop = csilk_io_default_loop();
+        handle->loop = loop;
+        handle->ring = &loop->ring;
+    }
 
-    /* Bump generation so stale CQEs from a previous interval are ignored. */
     handle->generation++;
+    handle->cb = cb;
+    handle->timeout = timeout;
+    handle->repeat = repeat;
+    if (!(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        handle->flags |= CSILK_IO_HANDLE_ACTIVE;
+        loop->active_handles++;
+    }
 
-    struct io_uring*         ring = handle->ring;
     struct __kernel_timespec ts;
     ts.tv_sec = (__kernel_time64_t)(timeout / 1000);
     ts.tv_nsec = (long long)(timeout % 1000) * 1000000LL;
 
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
     if (!sqe) {
         return -1;
     }
 
-    handle->cb = cb;
-    io_uring_prep_timeout(sqe, &ts, repeat ? 1 : 0, 0);
+    io_uring_prep_timeout(sqe, &ts, 0, 0);
     io_uring_sqe_set_data64(sqe, uring_encode_timer_data(URING_OP_TMR_GENERIC, handle));
-    io_uring_submit(ring);
-    if (ring == g_default_ring_ptr) {
+    io_uring_submit(&loop->ring);
+    if (loop == &g_default_loop) {
         g_default_pending++;
     }
     return 0;
 }
 
-/**
- * @brief Disarm a timer on the io_uring backend.
- * @param[in] handle Timer handle to stop.
- * @return 0 on success, -1 on NULL handle/ring or when no SQE slot is free.
- * @note Bumps the generation and submits an io_uring cancel SQE targeting the
- *       pending timeout; its completion is ignored via generation mismatch.
- */
 int
 csilk_io_timer_stop(csilk_io_timer_t* handle)
 {
-    if (!handle || !handle->ring) {
+    if (!handle) {
         return -1;
     }
-
-    handle->cb = NULL;
-    handle->generation++;
-
-    /* Send a cancel request for the pending timeout.  The cancel completion
-     * will arrive as a TMR_GENERIC CQE with the old generation, so the
-     * handler will skip it (cb == NULL, or generation mismatch). */
-    struct io_uring*     ring = handle->ring;
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-    if (!sqe) {
-        return -1;
+    if (!(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        handle->cb = NULL;
+        return 0;
     }
-
+    handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+    if (handle->loop && handle->loop->active_handles > 0) {
+        handle->loop->active_handles--;
+    }
     uint64_t cancel_val = uring_encode_timer_data(URING_OP_TMR_GENERIC, handle);
-    io_uring_prep_cancel(sqe, (void*)cancel_val, 0);
-    io_uring_sqe_set_data64(sqe, cancel_val);
-    io_uring_submit(ring);
-    /* Don't track pending for cancel ops — the CQE will be skipped
-     * (generation mismatch), so we'd never decrement g_default_pending. */
+    handle->generation++;
+    handle->cb = NULL;
+
+    csilk_io_loop_t* loop = handle->loop;
+    if (!loop) {
+        return 0;
+    }
+
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (sqe) {
+        io_uring_prep_cancel64(sqe, cancel_val, 0);
+        io_uring_sqe_set_data64(sqe, 0);
+        io_uring_submit(&loop->ring);
+    }
     return 0;
 }
 
-/**
- * @brief Return (lazily initializing) the process-wide default io_uring loop.
- * @return Pointer to the default loop, or NULL if ring initialization failed.
- * @note The default ring is single-threaded (test/CLI use) and is distinct from
- *       the per-worker rings the server creates. Initialized exactly once.
- */
+int
+csilk_io_timer_again(csilk_io_timer_t* handle)
+{
+    if (!handle) {
+        return -1;
+    }
+    if (handle->repeat > 0 && handle->cb) {
+        return csilk_io_timer_start(handle, handle->cb, handle->repeat, handle->repeat);
+    }
+    return 0;
+}
+
 csilk_io_loop_t*
 csilk_io_default_loop(void)
 {
-    if (!g_default_ring_inited) {
-        g_default_ring_inited = 1;
-        if (io_uring_queue_init(1024, &g_default_ring, 0) != 0) {
+    if (!g_default_loop_inited) {
+        g_default_loop_inited = 1;
+        if (csilk_io_loop_init(&g_default_loop) != 0) {
             return NULL;
         }
-        g_default_ring_ptr = &g_default_ring;
+        g_default_ring_ptr = &g_default_loop.ring;
     }
-    return (csilk_io_loop_t*)&g_default_ring;
+    return &g_default_loop;
 }
 
-/**
- * @brief Run an io_uring loop, draining deferred work and timer CQEs.
- * @param[in] loop Event loop to run; falls back to the default loop if NULL.
- * @param[in] mode Run mode: NOWAIT (single poll), ONCE (one poll + optional
- *                 short wait), or DEFAULT (run until no pending work remains).
- * @return 0 if any work was processed, -1 if the loop was NULL/unavailable or
- *         no work was processed.
- * @note Iteratively drains deferred after-work callbacks and processes
- *       URING_OP_TMR_GENERIC timer completions, skipping stale generations.
- */
 int
 csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 {
@@ -486,8 +647,9 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
         }
     }
 
-    struct io_uring* ring = (struct io_uring*)loop;
+    struct io_uring* ring = &loop->ring;
     int              total = 0;
+    loop->stop_flag = 0;
 
     do {
         /* 1. Drain deferred after-work callbacks (iteratively). */
@@ -496,84 +658,221 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
             total += n;
         }
 
-        /* 2. Process io_uring CQEs on the ring.  In test/CLI mode
-         *    these are TMR_GENERIC timer completions. */
-        struct io_uring_cqe* cqe;
+        if (loop->stop_flag) {
+            break;
+        }
+
+        /* 2. Wait for / peek CQEs */
+        struct io_uring_cqe* cqe = NULL;
         unsigned             head;
         unsigned             cq_count = 0;
+
+        if (mode == CSILK_IO_RUN_NOWAIT) {
+            int ret = io_uring_peek_cqe(ring, &cqe);
+            if (ret != 0 || !cqe) {
+                break;
+            }
+        } else if (mode == CSILK_IO_RUN_ONCE) {
+            struct __kernel_timespec ts = {0, 10000000}; /* 10 ms */
+            io_uring_wait_cqe_timeout(ring, &cqe, &ts);
+        } else {
+            /* CSILK_IO_RUN_DEFAULT */
+            if (loop->active_handles <= 0) {
+                break;
+            }
+            struct __kernel_timespec ts = {0, 50000000}; /* 50 ms timeout */
+            io_uring_wait_cqe_timeout(ring, &cqe, &ts);
+        }
+
+        /* 3. Process all ready CQEs */
         io_uring_for_each_cqe(ring, head, cqe)
         {
             cq_count++;
-            uint8_t         gen;
-            void*           ptr;
-            uring_op_type_t op;
+            total++;
+
+            int             res = cqe->res;
+            uint8_t         gen = 0;
+            void*           ptr = NULL;
+            uring_op_type_t op = URING_OP_NONE;
             uring_decode_data(cqe->user_data, &op, &ptr, &gen);
-            if (op == URING_OP_TMR_GENERIC) {
+
+            if (op == URING_OP_POLL_LISTEN) {
+                csilk_io_stream_t* s = (csilk_io_stream_t*)ptr;
+                if (s && s->fd >= 0 && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
+                    /* Re-arm listen poll */
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, s->fd, POLLIN);
+                        io_uring_sqe_set_data64(
+                            sqe,
+                            uring_encode_handle_data(URING_OP_POLL_LISTEN, (csilk_io_handle_t*)s));
+                        io_uring_submit(ring);
+                    }
+                    if (res >= 0 && s->connection_cb) {
+                        s->connection_cb(s, 0);
+                    }
+                }
+            } else if (op == URING_OP_POLL_READ) {
+                csilk_io_stream_t* s = (csilk_io_stream_t*)ptr;
+                if (s && s->fd >= 0 && s->reading && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(s->flags & CSILK_IO_HANDLE_CLOSING) && s->generation == gen) {
+                    if (res < 0 && res != -ECANCELED) {
+                        if (s->read_cb) {
+                            csilk_io_buf_t buf = {NULL, 0};
+                            s->read_cb(s, res, &buf);
+                        }
+                    } else if (s->alloc_cb && s->read_cb) {
+                        csilk_io_buf_t buf;
+                        s->alloc_cb((csilk_io_handle_t*)s, 65536, &buf);
+                        if (buf.base && buf.len > 0) {
+                            ssize_t nread = read(s->fd, buf.base, buf.len);
+                            if (nread > 0) {
+                                s->read_cb(s, nread, &buf);
+                                /* Re-arm poll if still reading */
+                                if (s->reading && s->fd >= 0 &&
+                                    !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
+                                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                                    if (sqe) {
+                                        io_uring_prep_poll_add(
+                                            sqe, s->fd, POLLIN | POLLHUP | POLLERR);
+                                        io_uring_sqe_set_data64(
+                                            sqe,
+                                            uring_encode_handle_data(URING_OP_POLL_READ,
+                                                                     (csilk_io_handle_t*)s));
+                                        io_uring_submit(ring);
+                                    }
+                                }
+                            } else if (nread == 0) {
+                                s->reading = 0;
+                                s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+                                if (loop->active_handles > 0) {
+                                    loop->active_handles--;
+                                }
+                                s->read_cb(s, -4095 /* UV_EOF */, &buf);
+                            } else {
+                                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                                    if (buf.base) {
+                                        free(buf.base);
+                                    }
+                                    if (s->reading && s->fd >= 0 &&
+                                        !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
+                                        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                                        if (sqe) {
+                                            io_uring_prep_poll_add(
+                                                sqe, s->fd, POLLIN | POLLHUP | POLLERR);
+                                            io_uring_sqe_set_data64(
+                                                sqe,
+                                                uring_encode_handle_data(URING_OP_POLL_READ,
+                                                                         (csilk_io_handle_t*)s));
+                                            io_uring_submit(ring);
+                                        }
+                                    }
+                                } else {
+                                    s->reading = 0;
+                                    s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+                                    if (loop->active_handles > 0) {
+                                        loop->active_handles--;
+                                    }
+                                    s->read_cb(s, -errno, &buf);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (op == URING_OP_POLL_ASYNC) {
+                csilk_io_async_t* async = (csilk_io_async_t*)ptr;
+                if (async && async->event_fd >= 0 && (async->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(async->flags & CSILK_IO_HANDLE_CLOSING)) {
+                    uint64_t val = 0;
+                    ssize_t  nr = read(async->event_fd, &val, sizeof(val));
+                    /* Re-arm poll */
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, async->event_fd, POLLIN);
+                        io_uring_sqe_set_data64(
+                            sqe,
+                            uring_encode_handle_data(URING_OP_POLL_ASYNC,
+                                                     (csilk_io_handle_t*)async));
+                        io_uring_submit(ring);
+                    }
+                    if (nr > 0 && async->cb) {
+                        async->cb(async);
+                    }
+                }
+            } else if (op == URING_OP_POLL_SIGNAL) {
+                csilk_io_signal_t* sig = (csilk_io_signal_t*)ptr;
+                if (sig && sig->signal_fd >= 0 && (sig->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(sig->flags & CSILK_IO_HANDLE_CLOSING)) {
+                    struct signalfd_siginfo fdsi;
+                    ssize_t                 nr = read(sig->signal_fd, &fdsi, sizeof(fdsi));
+                    /* Re-arm signal poll */
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, sig->signal_fd, POLLIN);
+                        io_uring_sqe_set_data64(sqe,
+                                                uring_encode_handle_data(URING_OP_POLL_SIGNAL,
+                                                                         (csilk_io_handle_t*)sig));
+                        io_uring_submit(ring);
+                    }
+                    if (nr > 0 && sig->cb) {
+                        sig->cb(sig, sig->signum);
+                    }
+                }
+            } else if (op == URING_OP_UV_WRITE) {
+                csilk_uv_on_write_done(ptr, res);
+            } else if (op == URING_OP_TMR_GENERIC) {
                 csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
-                if (tmr && tmr->generation == gen && tmr->cb) {
-                    tmr->cb(tmr);
+                if (tmr && tmr->generation == gen && (tmr->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(tmr->flags & CSILK_IO_HANDLE_CLOSING) && tmr->cb) {
+                    csilk_io_timer_cb cb = tmr->cb;
+                    if (tmr->repeat > 0) {
+                        /* Re-arm repeating timer */
+                        struct __kernel_timespec ts;
+                        ts.tv_sec = (__kernel_time64_t)(tmr->repeat / 1000);
+                        ts.tv_nsec = (long long)(tmr->repeat % 1000) * 1000000LL;
+                        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                        if (sqe) {
+                            io_uring_prep_timeout(sqe, &ts, 0, 0);
+                            io_uring_sqe_set_data64(
+                                sqe, uring_encode_timer_data(URING_OP_TMR_GENERIC, tmr));
+                            io_uring_submit(ring);
+                        }
+                    } else {
+                        tmr->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+                        if (tmr->loop && tmr->loop->active_handles > 0) {
+                            tmr->loop->active_handles--;
+                        }
+                    }
+                    cb(tmr);
                 }
             }
         }
+
         if (cq_count > 0) {
             io_uring_cq_advance(ring, cq_count);
-            /* Each CQE consumed means one SQE submission completed. */
-            if (ring == g_default_ring_ptr) {
+            if (loop == &g_default_loop) {
                 g_default_pending -= (int)cq_count;
                 if (g_default_pending < 0) {
                     g_default_pending = 0;
                 }
             }
-
-            /* Timer callbacks may queue deferred work — drain again. */
             while ((n = _uring_deferred_drain_all()) > 0) {
                 total += n;
             }
         }
 
-        /* 3. Mode-specific decision */
-        if (mode == CSILK_IO_RUN_NOWAIT) {
+        if (mode == CSILK_IO_RUN_NOWAIT || mode == CSILK_IO_RUN_ONCE) {
             break;
         }
 
-        if (mode == CSILK_IO_RUN_ONCE) {
-            if (cq_count == 0) {
-                /* Wait briefly (10 ms) for a timer completion. */
-                struct __kernel_timespec ts = {0, 10000000};
-                io_uring_wait_cqe_timeout(ring, &cqe, &ts);
-            }
-            break;
-        }
-
-        /* CSILK_IO_RUN_DEFAULT */
-        if (cq_count == 0) {
-            if (ring == g_default_ring_ptr && g_default_pending > 0) {
-                /* There are SQEs in-flight — wait for their CQEs.
-                 * Use a short timeout so we re-check the deferred queue
-                 * and the counter periodically. */
-                struct __kernel_timespec ts = {0, 10000000}; /* 10 ms */
-                io_uring_wait_cqe_timeout(ring, &cqe, &ts);
-            } else {
-                /* No pending work on this ring — we are done. */
-                break;
-            }
-        }
-    } while (1);
+    } while (!loop->stop_flag && loop->active_handles > 0);
 
     return total > 0 ? 0 : -1;
 }
 
 #endif
 
-/**
- * @brief Completion handler for a uving-style vectored write SQE.
- * @param[in] arg Context pointer (client, write req, iovec triple) allocated by
- *                csilk_io_write.
- * @param[in] res Bytes written, or a negative error.
- * @note Frees the iovec and context, invokes the user write callback, then
- *       releases the client's async_ref; if a close is pending and the ref
- *       hits zero it triggers on_close_done. No-op if arg is NULL.
- */
 void
 csilk_uv_on_write_done(void* arg, ssize_t res)
 {
@@ -581,6 +880,7 @@ csilk_uv_on_write_done(void* arg, ssize_t res)
     if (!ctx) {
         return;
     }
+    csilk_client_t*   client = (csilk_client_t*)ctx[0];
     csilk_io_write_t* req = (csilk_io_write_t*)ctx[1];
     struct iovec*     iov = (struct iovec*)ctx[2];
 
@@ -592,4 +892,8 @@ csilk_uv_on_write_done(void* arg, ssize_t res)
         cb(req, (int)res);
     }
     free(ctx);
+
+    if (client) {
+        _csilk_ctx_async_ref_decr(&client->ctx);
+    }
 }

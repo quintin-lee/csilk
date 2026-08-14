@@ -139,13 +139,23 @@ static csilk_client_t*
 pool_get(worker_pool_t* wp)
 {
     csilk_client_t* client;
-    if (wp->client_pool_count > 0) {
+    if (wp && wp->client_pool_count > 0) {
         client = wp->client_pool[--wp->client_pool_count];
     } else {
         client = calloc(1, sizeof(csilk_client_t));
     }
     if (client) {
+        uint8_t gen = (uint8_t)((client->generation + 1) & 0xFF);
+        if (gen == 0) {
+            gen = 1;
+        }
         client->state = CSILK_CONN_INIT;
+        client->generation = gen;
+        client->handle.generation = gen;
+        client->timer.generation = gen;
+        client->read_timer.generation = gen;
+        client->write_timer.generation = gen;
+        client->request_timer.generation = gen;
         client->ctx.file_fd = -1;
     }
     return client;
@@ -162,6 +172,9 @@ pool_get(worker_pool_t* wp)
 static void
 pool_put(worker_pool_t* wp, csilk_client_t* client)
 {
+    if (!client) {
+        return;
+    }
     if (client->ssl) {
         SSL_free(client->ssl);
         client->ssl = NULL;
@@ -174,7 +187,7 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
     }
     csilk_h2_free_streams(client);
     memset(client, 0, sizeof(*client));
-    if (wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
+    if (wp && wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
         wp->client_pool[wp->client_pool_count++] = client;
     } else {
         free(client);
@@ -192,6 +205,9 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
 static csilk_arena_t*
 pool_get_arena(worker_pool_t* wp)
 {
+    if (!wp) {
+        return csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+    }
     csilk_arena_t* arena;
     if (wp->arena_pool_count > 0) {
         arena = wp->arena_pool[--wp->arena_pool_count];
@@ -214,8 +230,11 @@ pool_get_arena(worker_pool_t* wp)
 static void
 pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
 {
+    if (!arena) {
+        return;
+    }
     csilk_arena_reset(arena);
-    if (wp->arena_pool_count < CSILK_CLIENT_POOL_SIZE) {
+    if (wp && wp->arena_pool_count < CSILK_CLIENT_POOL_SIZE) {
         wp->arena_pool[wp->arena_pool_count++] = arena;
     } else {
         csilk_arena_free(arena);
@@ -323,6 +342,13 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
 static void
 client_destroy(csilk_client_t* client)
 {
+    if (!client || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
+    if (client->handle.fd >= 0) {
+        close(client->handle.fd);
+        client->handle.fd = -1;
+    }
     if (client->server) {
         atomic_fetch_sub(&client->server->active_connections, 1);
     }
@@ -385,8 +411,14 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     client->async_ref--;
-    if (client->async_ref <= 0 && client->close_pending <= 0 && c->conn_closed) {
-        client_destroy(client);
+    if (client->async_ref <= 0) {
+        if ((client->handle.flags & CSILK_IO_HANDLE_CLOSING) && client->handle.fd >= 0) {
+            close(client->handle.fd);
+            client->handle.fd = -1;
+        }
+        if (client->close_pending <= 0 && c->conn_closed) {
+            client_destroy(client);
+        }
     }
 }
 
@@ -448,15 +480,17 @@ on_close(csilk_io_handle_t* handle)
                                        (csilk_io_handle_t*)&client->read_timer,
                                        (csilk_io_handle_t*)&client->write_timer,
                                        (csilk_io_handle_t*)&client->request_timer};
+        int                closed_count = 0;
         for (int i = 0; i < 4; i++) {
             if (csilk_io_is_closing(timers[i])) {
                 client->close_pending--;
             } else {
+                closed_count++;
                 timers[i]->data = client;
                 csilk_io_close(timers[i], on_timer_close);
             }
         }
-        if (client->close_pending <= 0) {
+        if (closed_count == 0 && client->close_pending <= 0) {
             if (client->async_ref > 0) {
                 return;
             }
@@ -580,14 +614,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     csilk_server_t* server = wp->server;
 
     if (_csilk_server_try_acquire_connection(server) < 0) {
-        csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
-        if (tmp) {
-            csilk_io_tcp_init(server_stream->loop, tmp);
-            if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
-                csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-            } else {
-                csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-            }
+        csilk_io_tcp_t tmp;
+        csilk_io_tcp_init(server_stream->loop, &tmp);
+        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
+            csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
         }
         return;
     }
@@ -595,14 +625,10 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     csilk_client_t* client = pool_get(wp);
     if (!client) {
         _csilk_server_release_connection(server);
-        csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
-        if (tmp) {
-            csilk_io_tcp_init(server_stream->loop, tmp);
-            if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
-                csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-            } else {
-                csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-            }
+        csilk_io_tcp_t tmp;
+        csilk_io_tcp_init(server_stream->loop, &tmp);
+        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
+            csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
         }
         return;
     }
@@ -675,9 +701,13 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
             }
         }
     } else {
-        if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+        client_list_remove(server, client);
+        _csilk_server_release_connection(server);
+        if (client->ctx.arena) {
+            pool_put_arena(wp, client->ctx.arena);
+            client->ctx.arena = NULL;
         }
+        pool_put(wp, client);
     }
 }
 

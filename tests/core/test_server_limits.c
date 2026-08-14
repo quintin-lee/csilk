@@ -49,19 +49,22 @@ run_server(void* arg)
 static int
 connect_server()
 {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        return -1;
-    }
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    addr.sin_port = htons(PORT);
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    for (int retry = 0; retry < 50; retry++) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            return -1;
+        }
+        struct sockaddr_in addr;
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        addr.sin_port = htons(PORT);
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            return sock;
+        }
         close(sock);
-        return -1;
+        usleep(10000);
     }
-    return sock;
+    return -1;
 }
 
 int
@@ -69,8 +72,14 @@ main()
 {
     pthread_t thread;
     pthread_create(&thread, nullptr, run_server, nullptr);
-    while (!server_ready) {
+    int retries = 0;
+    while (!server_ready && retries++ < 100) {
         usleep(10000);
+    }
+    if (!server_ready) {
+        printf("FAIL: server failed to start\n");
+        pthread_join(thread, nullptr);
+        return 1;
     }
 
     printf("Testing max_connections limit...\n");

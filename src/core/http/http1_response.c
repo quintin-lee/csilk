@@ -555,10 +555,8 @@ _csilk_send_response(csilk_ctx_t* c)
             snprintf(write_base + pos, remain, "\r\n");
         }
 
-        _csilk_send_data(c,
-                         (const uint8_t*)write_base,
-                         (use_chunked || is_file ? (size_t)pos + 2 : response_len));
-        free(write_base);
+        _csilk_send_data_owned(
+            c, write_base, (use_chunked || is_file ? (size_t)pos + 2 : response_len));
     }
 
     if (is_file) {

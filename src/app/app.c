@@ -355,7 +355,9 @@ csilk_app_use(csilk_app_t* app, csilk_handler_t h)
 void
 csilk_app_enable_openapi(csilk_app_t* app, int enable)
 {
-    (void)app;
+    if (!app) {
+        return;
+    }
     set_openapi_router(enable ? app->router : NULL);
     CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
