@@ -155,6 +155,7 @@ try_match_wildcard(csilk_router_node_t*     child,
                    csilk_method_handler_t** out_mh)
 {
     CSILK_LOG_T("Router: WILDCARD child '%s' matches remaining path '%s'", child->segment, path);
+    int param_added = 0;
     if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
         const char* val_start = path;
         while (*val_start == '/') {
@@ -171,6 +172,7 @@ try_match_wildcard(csilk_router_node_t*     child,
 
         if (ctx->params[ctx->params_count].key && ctx->params[ctx->params_count].value) {
             ctx->params_count++;
+            param_added = 1;
             CSILK_LOG_T(
                 "Router: captured wildcard parameter '%s' = '%s'", child->segment, val_start);
         } else {
@@ -203,6 +205,19 @@ try_match_wildcard(csilk_router_node_t*     child,
         }
         mh = mh->next;
     }
+
+    if (param_added) {
+        CSILK_LOG_T("Router: backtrack - method '%s' mismatch for WILDCARD "
+                    "child '%s', rolling back parameter",
+                    method,
+                    child->segment);
+        ctx->params_count--;
+        if (!ctx->arena) {
+            free(ctx->params[ctx->params_count].key);
+            free(ctx->params[ctx->params_count].value);
+        }
+    }
+
     return NULL;
 }
 

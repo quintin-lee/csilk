@@ -58,6 +58,18 @@ main()
         csilk_test_ctx_set_request(ctx, "PUT", "/api/v1/users");
         int matched = csilk_router_match_ctx(r, ctx);
         assert(matched == 0);
+        assert(csilk_get_params_count(ctx) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+
+    // Test wildcard method mismatch rollback
+    {
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        csilk_test_ctx_set_request(ctx, "POST", "/api/v1/posts/2023/05/hello");
+        int matched = csilk_router_match_ctx(r, ctx);
+        assert(matched == 0);
+        assert(csilk_get_params_count(ctx) == 0);
+        assert(csilk_get_param(ctx, "path") == NULL);
         csilk_test_ctx_free(ctx);
     }
 
@@ -67,6 +79,7 @@ main()
         csilk_test_ctx_set_request(ctx, "GET", "/api/v1/undefined");
         int matched = csilk_router_match_ctx(r, ctx);
         assert(matched == 0);
+        assert(csilk_get_params_count(ctx) == 0);
         csilk_test_ctx_free(ctx);
     }
 
