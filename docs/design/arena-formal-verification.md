@@ -123,7 +123,7 @@ I2 preserved: head prepend, no cycles.
 
 ---
 
-## 3. `csilk_arena_reset()` — Zero-Allocation Reuse
+## 3. `csilk_arena_reset()` — Head Retention & TLS Ejection
 
 ### Pre-conditions
 ```
@@ -132,18 +132,12 @@ arena ≠ nullptr (null guarded)
 
 ### Post-conditions
 ```
-∀ chunk ∈ arena:  chunk->used == 0
+arena->head != nullptr ⇒ arena->head->used == 0 ∧ arena->head->next == nullptr
+∀ chunk ∈ old_chain \ {arena->head}: chunk is returned to TLS tier cache or freed
 ```
 
-### Proof
-```
-while (curr) {
-    curr->used = 0;
-    curr = curr->next;
-}
-```
-Simple linear walk. By I2, the list is finite and acyclic. Each chunk's `used` counter is zeroed.
-No allocations, no frees — purely O(k) where k = chunk count.
+### Invariants Preserved
+`head` is retained and reset for O(1) reuse in subsequent requests. Chained secondary chunks are ejected back to the thread-local multi-tier cache to prevent memory bloating while avoiding heap re-allocations on future expansion.
 
 ---
 
@@ -151,27 +145,30 @@ No allocations, no frees — purely O(k) where k = chunk count.
 
 ### Post-conditions
 ```
-All chunks freed (returned to TLS cache or free())
+All chunks freed (returned to TLS multi-tier cache or arena_aligned_free())
 arena header freed
 arena pointer becomes dangling (caller must not reuse)
 ```
 
-### TLS Cache Reuse Logic (lines 257–261)
+### Multi-Tier TLS Cache Reuse Logic
 ```
-if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
-    curr->next = tls_chunk_free_list;
-    tls_chunk_free_list = curr;
-    tls_chunk_count++;
+int tier = arena_size_to_tier(curr->size);
+if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+    total_tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
+    arena_ensure_tls_cleanup_registered();
+    curr->next = tls_tier_free_lists[tier];
+    tls_tier_free_lists[tier] = curr;
+    tls_tier_counts[tier]++;
 } else {
-    free(curr);
+    arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 }
 ```
-Standard-size chunks are recycled up to MAX_TLS_ARENA_CHUNKS (16).
-Non-standard-size chunks are freed immediately.
-The TLS list is **not** protected by a mutex — thread-confined by design
-(each arena belongs to one thread/event-loop).
+Standard tiered chunks (4KB, 16KB, 64KB) are recycled up to `MAX_TLS_CHUNKS_PER_TIER` (8) per tier, bounded globally by `CSILK_MAX_TLS_CHUNKS` (16).
+Non-tiered chunks are freed immediately.
+The TLS cache is protected on thread exit via `pthread_key` destructor and explicit worker thread flushes.
 
 ---
+
 
 ## 5. `arena_aligned_alloc()` — Cache-Line Aligned Allocation
 

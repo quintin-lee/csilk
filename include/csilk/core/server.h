@@ -388,17 +388,31 @@ csilk_json_t* csilk_log_make_kv(const char* key, ...);
 csilk_arena_t* csilk_arena_new(size_t default_chunk_size);
 
 /**
- * @brief Allocate zero-initialised memory from an arena.
+ * @brief Allocate memory from an arena (uninitialized bump allocation).
  *
  * The returned memory is valid until csilk_arena_free, csilk_arena_reset, or
- * csilk_ctx_cleanup.  No individual free() is required.
+ * csilk_ctx_cleanup.  No individual free() is required. Note that memory
+ * returned is NOT guaranteed to be zero-initialised when chunks are reused.
+ * Use csilk_arena_calloc() if zero-initialisation is required.
  *
  * @param arena  The arena allocator.
  * @param size   Number of bytes to allocate.
  * @return Pointer to the allocated block (always suitably aligned), or NULL
- *         if the allocation failed (the arena's malloc failed).
+ *         if the allocation failed.
  */
 void* csilk_arena_alloc(csilk_arena_t* arena, size_t size);
+
+/**
+ * @brief Allocate zero-initialised memory for an array from an arena.
+ *
+ * Allocates @p count * @p size bytes from the arena and sets all bytes to 0.
+ *
+ * @param arena The arena allocator.
+ * @param count Number of elements.
+ * @param size  Size of each element in bytes.
+ * @return Pointer to the zero-initialised block, or NULL on allocation failure / overflow.
+ */
+void* csilk_arena_calloc(csilk_arena_t* arena, size_t count, size_t size);
 
 /**
  * @brief Duplicate a NUL-terminated string using the arena allocator.

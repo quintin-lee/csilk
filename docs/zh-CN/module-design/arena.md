@@ -143,10 +143,10 @@ flowchart TB
     NEXT --> DONE["fa:fa-check free arena header"]
 ```
 
-**TLS 分块缓存**：
-- 只有 `CSILK_DEFAULT_ARENA_SIZE`（4096 字节）的块会被缓存
-- 每线程最多缓存 `MAX_TLS_ARENA_CHUNKS`（16）个块
-- 当线程退出时，通过 `pthread_key` 析构函数自动清空（`csilk_arena_flush_free_list()`）
+**TLS 多档分块缓存**：
+- 支持 `4KB`（Small）、`16KB`（Medium）、`64KB`（Large）分档缓存
+- 每档最多缓存 `MAX_TLS_CHUNKS_PER_TIER`（8）个块，全局上限 `CSILK_MAX_TLS_CHUNKS`（16）
+- 线程退出时通过 `pthread_key` 析构函数及 Worker 线程显式清理自动清空（`csilk_arena_flush_free_list()`）
 
 ### 4.2 `csilk_arena_reset()` — 轻量重置
 
@@ -154,14 +154,10 @@ flowchart TB
 void csilk_arena_reset(csilk_arena_t* arena);
 ```
 
-将所有 chunk 的 `used` 置零。**无系统调用**，不释放任何内存。这是请求间复用的核心操作：
-
-```
-calloc + free  = 2 次系统调用
-arena_reset    = 1 次指针赋值（per chunk）
-```
+保留链表头块并将 `head->used` 置零，多余的链接尾块剥离并归还至 TLS 多档空闲列表（或释放）。兼顾单请求零分配复用与防止 Arena 无界膨胀。
 
 ### 4.3 `csilk_arena_flush_free_list()` — 线程清理
+
 
 在线程退出时或测试中清空 TLS 空闲链表，配合 `csilk_arena_init()` 注册的 `pthread_key` 析构函数自动执行。
 

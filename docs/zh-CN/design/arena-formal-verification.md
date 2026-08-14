@@ -123,7 +123,7 @@ I2 保持：头部前置，无环。
 
 ---
 
-## 3. `csilk_arena_reset()` — 零分配复用
+## 3. `csilk_arena_reset()` — 头块保留与尾块归还 TLS
 
 ### 前置条件
 ```
@@ -132,18 +132,12 @@ arena ≠ nullptr（空指针防护）
 
 ### 后置条件
 ```
-∀ chunk ∈ arena:  chunk->used == 0
+arena->head != nullptr ⇒ arena->head->used == 0 ∧ arena->head->next == nullptr
+∀ chunk ∈ old_chain \ {arena->head}: chunk 归还至 TLS 分档缓存或释放
 ```
 
-### 证明
-```
-while (curr) {
-    curr->used = 0;
-    curr = curr->next;
-}
-```
-简单的线性遍历。由 I2 可知，列表有限且无环。每个 chunk 的 `used` 计数器被清零。
-无分配、无释放 — 纯粹的 O(k)，其中 k = chunk 数量。
+### 保持的不变量
+保留 `head` 块并清零其 `used` 计数器供后续请求 O(1) 直接复用；后续多余 chunk 剥离归还至线程本地多档缓存，防止内存膨胀同时消除后续扩容的系统调用。
 
 ---
 
@@ -151,26 +145,30 @@ while (curr) {
 
 ### 后置条件
 ```
-所有 chunk 被释放（返回 TLS 缓存或 free()）
+所有 chunk 被释放（返回 TLS 多档缓存或 arena_aligned_free()）
 arena 头部被释放
 arena 指针变为悬空（调用方不得重用）
 ```
 
-### TLS 缓存复用逻辑（第 257–261 行）
-```
-if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < MAX_TLS_ARENA_CHUNKS) {
-    curr->next = tls_chunk_free_list;
-    tls_chunk_free_list = curr;
-    tls_chunk_count++;
+### 多档 TLS 缓存复用逻辑
+```c
+int tier = arena_size_to_tier(curr->size);
+if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+    total_tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
+    arena_ensure_tls_cleanup_registered();
+    curr->next = tls_tier_free_lists[tier];
+    tls_tier_free_lists[tier] = curr;
+    tls_tier_counts[tier]++;
 } else {
-    free(curr);
+    arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 }
 ```
-标准大小的 chunk 最多回收 MAX_TLS_ARENA_CHUNKS（16）个。
-非标准大小的 chunk 立即释放。
-TLS 列表 **不** 受互斥锁保护 — 按设计是线程专属的（每个 arena 属于一个线程/事件循环）。
+标准分档大小（4KB、16KB、64KB）的 chunk 按档位最多缓存 `MAX_TLS_CHUNKS_PER_TIER`（8）个，全局受限 `CSILK_MAX_TLS_CHUNKS`（16）。
+非分档大小的 chunk 立即释放。
+TLS 缓存通过 `pthread_key` 析构函数及 Worker 线程退出显式清理确保在线程销毁时完全释放。
 
 ---
+
 
 ## 5. `arena_aligned_alloc()` — 缓存行对齐分配
 

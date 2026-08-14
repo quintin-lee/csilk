@@ -416,6 +416,28 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     return chunk->data;
 }
 
+/** @brief Allocate zero-initialised memory for an array from an arena.
+ *
+ * Allocates @p count * @p size bytes from the arena and sets all bytes to 0.
+ *
+ * @param arena The arena allocator.
+ * @param count Number of elements.
+ * @param size  Size of each element in bytes.
+ * @return Pointer to zero-initialised block, or NULL on allocation failure / overflow. */
+void*
+csilk_arena_calloc(csilk_arena_t* arena, size_t count, size_t size)
+{
+    if (count > 0 && size > SIZE_MAX / count) {
+        return NULL;
+    }
+    size_t total = count * size;
+    void*  ptr = csilk_arena_alloc(arena, total);
+    if (ptr && total > 0) {
+        memset(ptr, 0, total);
+    }
+    return ptr;
+}
+
 /** @brief Duplicate a null-terminated string using the arena allocator.
  *
  * Allocates enough arena memory for a copy of @p s, including the null
