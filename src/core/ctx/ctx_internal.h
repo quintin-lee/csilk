@@ -124,10 +124,11 @@ typedef struct csilk_param_s csilk_param_t;
  *   - Permission/ACL checks (perm_required, perm_resource)
  */
 struct csilk_method_handler_s {
-    char*                          method;   /**< HTTP method string (e.g., "GET", "POST"). */
-    csilk_handler_t*               handlers; /**< NULL-terminated array of handler function
+    char*                          method;        /**< HTTP method string (e.g., "GET", "POST"). */
+    csilk_handler_t*               handlers;      /**< NULL-terminated array of handler function
                                 pointers for this method. */
-    struct csilk_method_handler_s* next;     /**< Next method handler in this node's
+    size_t                         handler_count; /**< Number of handlers in the chain. */
+    struct csilk_method_handler_s* next;          /**< Next method handler in this node's
                                          linked list. */
 
     /** Metadata for OpenAPI spec generation */
@@ -209,7 +210,8 @@ struct csilk_ctx_s {
                         -1 (before first handler). */
     csilk_handler_t* handlers;      /**< NULL-terminated array of handler function
                                 pointers for the matched route. */
-    int              aborted; /**< Non-zero if handler execution was aborted via csilk_abort().
+    size_t handler_count; /**< Total number of handlers in the chain (for bounds check). */
+    int    aborted;       /**< Non-zero if handler execution was aborted via csilk_abort().
                   Subsequent csilk_next() calls are no-ops. */
 
     /* === Error Recovery === */

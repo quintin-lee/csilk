@@ -59,6 +59,12 @@ csilk_test_ctx_set_handlers(csilk_ctx_t* c, csilk_handler_t* handlers)
 {
     if (c) {
         c->handlers = handlers;
+        c->handler_count = 0;
+        if (handlers) {
+            while (handlers[c->handler_count] != NULL) {
+                c->handler_count++;
+            }
+        }
     }
 }
 

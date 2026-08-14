@@ -355,6 +355,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
                 }
                 arena_handlers[total_count] = NULL;
                 c->handlers = arena_handlers;
+                c->handler_count = total_count;
             }
         }
 
