@@ -59,9 +59,35 @@ typedef struct csilk_arena_chunk_s {
     uint8_t                     data[]; /**< Flexible array for chunk data. */
 } csilk_arena_chunk_t;
 
-/** @brief Thread-local free list of arena chunks for reuse. */
-static _Thread_local csilk_arena_chunk_t* tls_chunk_free_list = NULL;
-static _Thread_local int                  tls_chunk_count = 0;
+/** @brief Helper to map chunk size to tier index (4KB, 16KB, 64KB). */
+static inline int
+arena_size_to_tier(size_t size)
+{
+    if (size == CSILK_DEFAULT_ARENA_SIZE) {
+        return CSILK_ARENA_TIER_SMALL;  /* 4KB */
+    }
+    if (size == 16384) {
+        return CSILK_ARENA_TIER_MEDIUM; /* 16KB */
+    }
+    if (size == 65536) {
+        return CSILK_ARENA_TIER_LARGE;  /* 64KB */
+    }
+    return -1;
+}
+
+/** @brief Thread-local free lists of arena chunks partitioned by size tier. */
+static _Thread_local csilk_arena_chunk_t* tls_tier_free_lists[CSILK_ARENA_TIER_COUNT] = {NULL};
+static _Thread_local int                  tls_tier_counts[CSILK_ARENA_TIER_COUNT] = {0};
+
+static inline int
+arena_get_total_tls_chunk_count(void)
+{
+    int total = 0;
+    for (int i = 0; i < CSILK_ARENA_TIER_COUNT; i++) {
+        total += tls_tier_counts[i];
+    }
+    return total;
+}
 
 /** @brief Arena allocator for request-scoped memory.
  *
@@ -83,18 +109,6 @@ typedef struct csilk_arena_s {
     uint8_t
         _padding[CSILK_CACHE_LINE_SIZE - (2 * sizeof(size_t)) - sizeof(int) - 2 * sizeof(size_t)];
 } csilk_arena_t;
-
-/** @brief Thread-local cache structure with multiple size tiers.
- *  Each tier maintains an independent free list to avoid size mismatches. */
-typedef struct {
-    csilk_arena_chunk_t* chunks[CSILK_ARENA_TIER_COUNT]; /* Per-tier free lists */
-    int                  count[CSILK_ARENA_TIER_COUNT];  /* Per-tier chunk counts */
-    size_t               total_cached_bytes;             /* Total cached memory */
-} arena_tls_cache_t;
-
-/** @brief Cache line size (typically 64 bytes on modern CPUs).
- * Used for padding structures to prevent false sharing and improve
- * memory alignment. */
 
 /** @brief Helper for cache-line aligned allocations.
  * Ensures the returned pointer starts at a 64-byte boundary.
@@ -309,13 +323,13 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
         return NULL;
     }
 
-    /* Try to reuse a chunk from the thread-local free list if it matches the
-     standard size. This avoids expensive aligned_alloc syscalls in the
-     hot path. */
-    if (chunk_size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_free_list) {
-        chunk = tls_chunk_free_list;
-        tls_chunk_free_list = chunk->next;
-        tls_chunk_count--;
+    /* Try to reuse a chunk from the thread-local free list if it matches a
+     cached size tier (4KB, 16KB, 64KB). */
+    int tier = arena_size_to_tier(chunk_size);
+    if (tier >= 0 && tls_tier_free_lists[tier]) {
+        chunk = tls_tier_free_lists[tier];
+        tls_tier_free_lists[tier] = chunk->next;
+        tls_tier_counts[tier]--;
     } else {
         chunk = arena_aligned_alloc(sizeof(csilk_arena_chunk_t) + chunk_size);
     }
@@ -416,13 +430,14 @@ csilk_arena_free(csilk_arena_t* arena)
          * (heap-use-after-free caught by ASAN/mach_vm_deallocate). */
         arena->total_allocated -= curr->size;
 
-        /* Return standard-sized chunks to the thread-local free list if there is
-        room. This speeds up subsequent allocations on the same thread. */
-        if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
-            curr->next = tls_chunk_free_list;
+        /* Return tiered chunks to the thread-local free list if there is room. */
+        int tier = arena_size_to_tier(curr->size);
+        if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+            arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
+            curr->next = tls_tier_free_lists[tier];
             curr->used = 0;
-            tls_chunk_free_list = curr;
-            tls_chunk_count++;
+            tls_tier_free_lists[tier] = curr;
+            tls_tier_counts[tier]++;
         } else {
             arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
         }
@@ -454,11 +469,13 @@ csilk_arena_reset(csilk_arena_t* arena)
         head->next = NULL;
         while (curr) {
             csilk_arena_chunk_t* next = curr->next;
-            if (curr->size == CSILK_DEFAULT_ARENA_SIZE && tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
-                curr->next = tls_chunk_free_list;
+            int                  tier = arena_size_to_tier(curr->size);
+            if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+                arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
+                curr->next = tls_tier_free_lists[tier];
                 curr->used = 0;
-                tls_chunk_free_list = curr;
-                tls_chunk_count++;
+                tls_tier_free_lists[tier] = curr;
+                tls_tier_counts[tier]++;
             } else {
                 arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
             }
@@ -478,14 +495,16 @@ csilk_arena_reset(csilk_arena_t* arena)
 void
 csilk_arena_flush_free_list(void)
 {
-    csilk_arena_chunk_t* curr = tls_chunk_free_list;
-    while (curr) {
-        csilk_arena_chunk_t* next = curr->next;
-        arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
-        curr = next;
+    for (int t = 0; t < CSILK_ARENA_TIER_COUNT; t++) {
+        csilk_arena_chunk_t* curr = tls_tier_free_lists[t];
+        while (curr) {
+            csilk_arena_chunk_t* next = curr->next;
+            arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
+            curr = next;
+        }
+        tls_tier_free_lists[t] = NULL;
+        tls_tier_counts[t] = 0;
     }
-    tls_chunk_free_list = NULL;
-    tls_chunk_count = 0;
 }
 
 /** @brief Initialize arena subsystem with automatic TLS cleanup.
@@ -534,7 +553,7 @@ csilk_arena_init(void)
 int
 csilk_arena_get_tls_chunk_count(void)
 {
-    return tls_chunk_count;
+    return arena_get_total_tls_chunk_count();
 }
 #endif
 
