@@ -169,6 +169,14 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->file_offset = 0;
     c->file_size = 0;
 
+    csilk_storage_item_t* storage_item = c->storage_head;
+    while (storage_item) {
+        if (storage_item->free_fn && storage_item->value) {
+            storage_item->free_fn(storage_item->value);
+            storage_item->value = NULL;
+        }
+        storage_item = storage_item->next;
+    }
     if (c->storage_driver && c->storage_driver->clear) {
         c->storage_driver->clear(c);
     }

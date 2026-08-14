@@ -414,7 +414,7 @@ csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_j
         }
     }
 
-    csilk_set(c, "jwt_payload", payload);
+    csilk_set_ex(c, "jwt_payload", payload, (void (*)(void*))csilk_json_free);
     csilk_next(c);
 }
 
@@ -459,7 +459,6 @@ csilk_ctx_get_jwt_payload_json(csilk_ctx_t* c)
         return NULL;
     }
     char* json_str = csilk_json_serialize(payload, NULL);
-    csilk_json_free(payload);
     csilk_set(c, "jwt_payload", NULL);
     return json_str;
 }
@@ -478,11 +477,7 @@ csilk_ctx_cleanup_jwt_payload(csilk_ctx_t* c)
     if (!c) {
         return;
     }
-    csilk_json_t* payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
-    if (payload) {
-        csilk_json_free(payload);
-        csilk_set(c, "jwt_payload", NULL);
-    }
+    csilk_set(c, "jwt_payload", NULL);
 }
 
 /**

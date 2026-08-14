@@ -221,9 +221,9 @@ test_jwt_middleware_valid(void)
 
     csilk_json_t* stored = (csilk_json_t*)csilk_get(c, "jwt_payload");
     assert(stored != nullptr);
-    csilk_json_free(stored);
 
     csilk_json_free(payload);
+
     free(token);
     csilk_test_ctx_free(c);
     printf("  passed\n");

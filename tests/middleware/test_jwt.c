@@ -86,7 +86,6 @@ test_jwt_middleware()
     csilk_json_t* stored_payload = (csilk_json_t*)csilk_get(c, "jwt_payload");
     assert(stored_payload != nullptr);
     assert(strcmp(csilk_json_get_string(stored_payload, "user"), "admin") == 0);
-    csilk_json_free(stored_payload);
 
     // 2. Failure case: missing header
     csilk_test_ctx_free(c);

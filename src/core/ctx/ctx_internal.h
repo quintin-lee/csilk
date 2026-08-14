@@ -156,11 +156,11 @@ typedef struct csilk_method_handler_s csilk_method_handler_t;
  * context, it takes precedence over this simple linked list.
  */
 typedef struct csilk_storage_item_s {
-    char*                        key;   /**< Item key name (arena-allocated). */
-    void*                        value; /**< Opaque pointer to user data (not
-                                        copied, not freed). */
-    struct csilk_storage_item_s* next;  /**< Next item in the linked list (NULL if
-                                       tail). */
+    char* key;                         /**< Item key name (arena-allocated). */
+    void* value;                       /**< Opaque pointer to user data. */
+    void (*free_fn)(void*);            /**< Optional destructor callback. */
+    struct csilk_storage_item_s* next; /**< Next item in the linked list (NULL if
+                                         tail). */
 } csilk_storage_item_t;
 
 /**
