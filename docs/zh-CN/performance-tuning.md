@@ -61,13 +61,18 @@ flowchart LR
 | `-O2` | 标准优化，保守且安全 | 基准吞吐量 |
 | `-O3` | 激进优化，启用循环向量化 | 吞吐量 +10~15% |
 | `-Ofast` | 越界优化（**不推荐生产**） | 吞吐量 +15%，IEEE 非严格 |
-| `-march=native` | 针对当前 CPU 指令集 | SIMD 加速命中 |
+| `-march=native` (`-DCSILK_ENABLE_NATIVE_ARCH=ON`) | 针对当前 CPU 指令集优化（基准测试推荐） | 本机 SIMD 加速命中 |
 
-**MUST**: 生产构建使用 `Release` 模式（CMake 默认 `-O3`）。**MUST NOT**: 使用 `-Ofast` — 浮点语义差异可能导致非预期行为。
+**MUST**: 生产/发布构建默认使用 `Release` 模式（生成兼容且安全的可移植二进制）。针对本机极限压测与基准测试，可开启 `-DCSILK_ENABLE_NATIVE_ARCH=ON`。**MUST NOT**: 使用 `-Ofast` — 浮点语义差异可能导致非预期行为。
 
 ```bash
+# 生产与分发构建（默认可移植）：
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+# 本机基准测试与极限压测（启用 -march=native）：
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON
 ```
+
 
 ### 1.2 链接时优化 (LTO)
 

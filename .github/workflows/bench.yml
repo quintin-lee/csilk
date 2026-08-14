@@ -37,8 +37,9 @@ jobs:
 
       - name: Configure & Build
         run: |
-          cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release
+          cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON
           cmake --build build_release --target example_server -j$(nproc)
+
 
       - name: Run Benchmarks
         env:
