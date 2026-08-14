@@ -244,15 +244,15 @@ make -j$(nproc)
 ### 6.1 运行测试
 
 ```bash
-# 运行所有测试
-ctest --test-dir build --output-on-failure
+# 运行所有测试（建议添加 --timeout 防止异常用例无限等待）
+ctest --test-dir build --timeout 10 --output-on-failure
 
 # 运行特定测试
-ctest --test-dir build -R test_router --output-on-failure
+ctest --test-dir build -R test_router --timeout 10 --output-on-failure
 
 # 运行带 ASan 的测试
 export ASAN_OPTIONS=detect_leaks=1:symbolize=1
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --timeout 10 --output-on-failure
 ```
 
 ### 6.2 运行示例

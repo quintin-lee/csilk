@@ -310,7 +310,7 @@ jobs:
         run: cmake --build build -j$(nproc)
 
       - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --timeout 10 --output-on-failure
 
   build_uring:
     runs-on: ubuntu-24.04
@@ -327,12 +327,12 @@ jobs:
         run: cmake --build build_uring -j$(nproc)
 
       - name: Run tests
-        run: ctest --test-dir build_uring --output-on-failure
+        run: ctest --test-dir build_uring --timeout 10 --output-on-failure
 ```
 
 ### 7.2 测试通过条件
 
-- [ ] 所有 122+ 个单元测试通过（libuv 后端 122 个；io_uring 后端 120 个）
+- [ ] 所有 170 个测试全部通过（libuv 后端 170 个；io_uring 后端 170 个）
 - [ ] ASan 检查无泄漏（Debug 构建时）
 - [ ] 测试覆盖率 ≥ 85%（Release 构建时）
 - [ ] 多平台测试通过（Linux + macOS）

@@ -9,14 +9,19 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang
 # Build everything
 cmake --build build -j$(nproc)
 
-# Run unit tests (excludes integration)
-ctest --test-dir build -E test_integration --output-on-failure
+# Run unit tests (excludes integration, with timeout)
+ctest --test-dir build -E test_integration --timeout 10 --output-on-failure
 
 # Run a single test
-ctest --test-dir build -R test_bcrypt --output-on-failure
+ctest --test-dir build -R test_bcrypt --timeout 10 --output-on-failure
 
 # Run integration tests separately
-ctest --test-dir build -R test_integration --output-on-failure
+ctest --test-dir build -R test_integration --timeout 10 --output-on-failure
+
+# Build and run with io_uring backend (Linux only)
+cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Debug -DCSILK_USE_URING=ON
+cmake --build build_uring -j$(nproc)
+ctest --test-dir build_uring --timeout 10 --output-on-failure
 ```
 
 **CI matrix**: `ubuntu-24.04` + `macos-14`, `Debug` + `Release`. ASAN on Linux Debug, TSAN separate job, coverage uses **gcc** (not clang) with `-DENABLE_OOM_TEST=OFF`.

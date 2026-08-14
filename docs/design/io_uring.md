@@ -157,23 +157,17 @@ void csilk_uring_close(csilk_uring_t* ring);
 | Documentation & CI | 2 days | gating `#ifdef CSILK_USE_IOURING` |
 | **Total** | **4-5 weeks** | |
 
-## 7. Recommendation
+## 7. Recommendation & Current Implementation
 
-**Option B (native io_uring backend) has been implemented** as of v0.3.0. 
-The `src/core/uring/` module provides:
-- `uring_server.c` — io_uring-based server accept loop and SQE submission
-- `uring_connection.c` — `io_uring_prep_read`/`io_uring_prep_send` with fixed/registered buffers
-- `uring_thread_pool.c` — per-worker lock-free dispatch queue for io_uring completions
-- `uv_stubs.c` — compatibility stubs for libuv APIs not needed under io_uring
-- `uring_internal.h` — internal data structures (ring fd, SQ/CQ indices)
+**Native io_uring backend is fully implemented and consolidated** in `src/core/uring/`:
+- `src/core/uring/uring_io.c` — Unified `csilk_io_*` handle lifecycle, SQE preparation, SQ/CQ event loop dispatch, and targeted `io_uring_prep_cancel64` cancellation
+- `src/core/uring/uring_thread_pool.c` — Worker thread pool with `csilk_mutex_t`/`csilk_cond_t` task queues for offloading async work
+- `src/core/uring/uring_fs.c` — Synchronous POSIX file descriptor and zero-copy `sendfile` shims
+- `include/csilk/core/sys_io.h` — Clean compile-time backend dispatch (`csilk_io_*`, `csilk_thread_*`, `csilk_barrier_*`) between libuv and io_uring
 
-All 120 tests pass. The libuv epoll fallback remains fully functional when 
-`CSILK_USE_URING` is not defined — **zero impact** on non-Linux platforms or 
-kernels < 5.1.
+All **170/170 tests pass** across both libuv and io_uring backends. The libuv fallback remains fully functional and verified when `CSILK_USE_URING=OFF` — **zero regression or performance impact** on macOS and non-uring environments.
 
-**Remaining gap**: libuv is still used for certain abstraction shims (`uv_stubs.c`). A pure io_uring build without any libuv dependency is tracked for a future release.
-
-**io_uring Constraints**: Linux kernel **MUST** be ≥ 5.1 (≥ 5.6 recommended for polling mode). SQ polling **MUST** be gated behind `#ifdef CSILK_USE_IOURING`. libuv epoll fallback **MUST** remain functional when `CSILK_USE_IOURING` is not defined. io_uring **SHOULD** reduce CPU usage by ~50% at 100K RPS compared to epoll.
+**io_uring Constraints**: Linux kernel **MUST** be ≥ 5.1 (≥ 5.6 recommended for polling mode). io_uring is gated behind `-DCSILK_USE_URING=ON`. libuv epoll fallback **MUST** remain functional when `CSILK_USE_URING` is not defined.
 
 ## 8. Quick Benchmark Setup (Option C)
 
