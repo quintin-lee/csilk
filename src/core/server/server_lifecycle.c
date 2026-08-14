@@ -254,6 +254,7 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
     csilk_server_config_t old = server->config;
 
     server->config = *config;
+    atomic_store(&server->max_connections, server->config.max_connections);
 
     if (server->config.idle_timeout_ms == 0) {
         server->config.idle_timeout_ms =
@@ -301,11 +302,11 @@ csilk_server_check_backpressure(csilk_server_t* server)
 int
 csilk_server_set_max_connections(csilk_server_t* server, int max)
 {
-    if (!server) {
+    if (!server || max < 0) {
         return -1;
     }
-    int prev = server->max_connections;
-    server->max_connections = max;
+    int prev = atomic_exchange(&server->max_connections, max);
+    server->config.max_connections = max;
     return prev;
 }
 

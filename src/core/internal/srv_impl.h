@@ -19,8 +19,58 @@
 
 /* --- Connection pool & I/O (connection.c) --- */
 
+/**
+ * @brief Atomically try to acquire a connection slot under max_connections.
+ *
+ * Uses CAS (Compare-And-Swap) to eliminate TOCTOU race conditions across worker
+ * threads when checking and reserving connection capacity.
+ *
+ * @param server The server instance.
+ * @return 0 on success (slot reserved), -1 if max_connections reached.
+ */
+static inline int
+_csilk_server_try_acquire_connection(csilk_server_t* server)
+{
+    if (!server) {
+        return -1;
+    }
+    int max_conn = atomic_load(&server->max_connections);
+    if (max_conn <= 0) {
+        max_conn = server->config.max_connections;
+    }
+
+    if (max_conn <= 0) {
+        atomic_fetch_add(&server->active_connections, 1);
+        return 0;
+    }
+
+    int curr = atomic_load(&server->active_connections);
+    while (1) {
+        if (curr >= max_conn) {
+            return -1;
+        }
+        if (atomic_compare_exchange_weak(&server->active_connections, &curr, curr + 1)) {
+            return 0;
+        }
+    }
+}
+
+/**
+ * @brief Release a previously reserved connection slot (e.g. on handshake / init failure).
+ *
+ * @param server The server instance.
+ */
+static inline void
+_csilk_server_release_connection(csilk_server_t* server)
+{
+    if (server) {
+        atomic_fetch_sub(&server->active_connections, 1);
+    }
+}
+
 CSILK_INTERNAL void
 alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf);
+
 CSILK_INTERNAL void on_close(csilk_io_handle_t* handle);
 #ifndef CSILK_USE_URING
 CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf);
