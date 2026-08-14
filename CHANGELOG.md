@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Crypto driver extensibility**: `csilk_crypto_driver_t` now supports `sha1` (20-byte digest) and `bcrypt_hash` (password hashing) callbacks with internal dispatch wrappers `_csilk_sha1()` and `_csilk_bcrypt_hash()` — drivers can replace the built-in software implementations.
+- **`csilk_cond_broadcast()`**: New function in `<csilk/core/sync.h>` for broadcasting all waiters on a condition variable. Bridges the gap between `pthread_cond_broadcast` and libuv (which has no broadcast primitive).
+- **Crypto module tests**: Comprehensive property-based tests for SHA-256, HMAC-SHA256, Base64/Base64URL roundtrip, `csilk_crypto_fill_random`, `csilk_crypto_generate_nonce`, and `csilk_url_decode` edge cases in `tests/crypto/test_crypto.c`.
+
+### Changed
+- **Barrier lifecycle**: `uv_barrier_t` in `src/core/server/server_lifecycle.c` is now heap-allocated (`calloc`) to prevent use-after-free when worker threads outlive the stack-local barrier. `uv_barrier_init` return value is now checked.
+- **Threading abstraction**: `src/core/uring/uring_thread_pool.c` replaced raw `pthread_mutex_t`/`pthread_cond_t` with `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sync.h>` for cross-backend consistency.
+- **Header hygiene**: Removed `messaging/mq_internal.h` transitively included via `include/csilk/core/internal.h`. Files needing `_csilk_mq_new`/`_csilk_mq_free` now include `messaging/mq_internal.h` explicitly.
+- **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
+
+### Fixed
+- **uv_barrier_t UAF**: Fixed use-after-free in multi-worker server startup where a stack-allocated `uv_barrier_t` was destroyed by the main thread while worker threads still held its address. Barrier is now heap-allocated and freed after all workers join.
+- **internal.h MQ leak**: Removed `#include "messaging/mq_internal.h"` from `include/csilk/core/internal.h` to stop transitively exposing MQ internals (e.g., `csilk_mq_t`) to every file including the umbrella header.
 
 ## [0.4.0] - 2026-08-13
 

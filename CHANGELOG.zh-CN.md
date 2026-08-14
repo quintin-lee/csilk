@@ -9,6 +9,18 @@
 
 ### 新增
 - **加密驱动扩展性**：`csilk_crypto_driver_t` 新增 `sha1`（20 字节摘要）与 `bcrypt_hash`（密码哈希）回调，配套内部分发包装 `_csilk_sha1()`、`_csilk_bcrypt_hash()`——驱动可替换内置软件实现。
+- **`csilk_cond_broadcast()`**：在 `<csilk/core/sync.h>` 中新增条件变量广播函数，支持一次性唤醒所有等待者，弥补 libuv 无 broadcast 原语的缺口。
+- **Crypto 模块测试**：在 `tests/crypto/test_crypto.c` 中添加覆盖 SHA-256、HMAC-SHA256、Base64/Base64URL 往返、`csilk_crypto_fill_random`、`csilk_crypto_generate_nonce` 及 `csilk_url_decode` 边界情况的属性测试。
+
+### 变更
+- **Barrier 生命周期**：`src/core/server/server_lifecycle.c` 中的 `uv_barrier_t` 改为堆分配（`calloc`），防止多线程 worker 在栈上的 barrier 被销毁后仍持有该地址导致的 UAF。现在检查 `uv_barrier_init` 返回值。
+- **线程抽象统一**：`src/core/uring/uring_thread_pool.c` 中将原始 `pthread_mutex_t`/`pthread_cond_t` 替换为 `<csilk/core/sync.h>` 中的 `csilk_mutex_t`/`csilk_cond_t`，保持跨后端一致性。
+- **头文件卫生**：从 `include/csilk/core/internal.h` 移除隐式包含 `messaging/mq_internal.h`，需使用 `_csilk_mq_new`/`_csilk_mq_free` 的文件现在显式 include。
+- **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
+
+### 修复
+- **uv_barrier_t UAF**：修复多 worker 服务器启动时的 use-after-free——主线程在 `uv_barrier_destroy` 后栈变量析构，而 worker 线程仍持有其地址。现改为堆分配并在所有 worker join 后释放。
+- **internal.h MQ 泄漏**：从 `include/csilk/core/internal.h` 移除 `#include "messaging/mq_internal.h"`，避免所有 include 该头文件的代码都暴露 MQ 内部类型（如 `csilk_mq_t`）。
 
 ## [0.4.0] - 2026-08-13
 
