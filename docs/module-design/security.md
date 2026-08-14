@@ -188,13 +188,15 @@ csilk_jwt_middleware(ctx, secret):
 
 | Feature | Details |
 |---|---|
-| **Algorithm** | HS256 (HMAC-SHA256) |
+| **Algorithm** | HS256 (HMAC-SHA256), RS256, ES256 |
 | **Token source** | `Authorization: Bearer <token>` header |
-| **Expiry** | Checks `exp` claim against `time()` |
-| **Payload** | Stored on context as `"jwt_payload"` (cJSON pointer) |
+| **Expiry & Claims** | Validates `exp`, `nbf`, `iat` claims against `time()` with optional `leeway_sec` clock skew tolerance |
+| **Policy Flags** | Configurable via `csilk_jwt_options_t`: `CSILK_JWT_REQUIRE_EXP`, `CSILK_JWT_REQUIRE_NBF`, `CSILK_JWT_REQUIRE_IAT` |
+| **Payload** | Stored on context as `"jwt_payload"` (cJSON pointer, RAII managed) |
 | **Constant-time comparison** | Signature comparison uses `constant_time_compare()` to prevent timing attacks |
-| **Cleanup** | `csilk_ctx_cleanup_jwt_payload()` frees the payload after handler completes |
-| **Extended API** | `csilk_jwt_middleware_ex()` accepts key length + algorithm parameter for future algorithm support |
+| **Cleanup** | `csilk_ctx_cleanup_jwt_payload()` or RAII context reset frees the payload |
+| **Extended API** | `csilk_jwt_middleware_options()` & `csilk_jwt_verify_options()` support full algorithm, policy flag, and leeway configuration |
+
 
 ---
 

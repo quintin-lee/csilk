@@ -360,6 +360,20 @@ char* csilk_jwt_generate_ex(csilk_ctx_t*    c,
  *  @return Heap-allocated cJSON payload (caller must cJSON_Delete), or NULL if invalid/expired. */
 csilk_json_t* csilk_jwt_verify_ex(
     csilk_ctx_t* c, const char* token, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+
+/** @brief Verify a JWT with configurable validation options (algorithm, require_exp policy, leeway).
+ *  @param c         Request context.
+ *  @param token     The JWT string to verify.
+ *  @param key       Verification key (HMAC secret or PEM public key).
+ *  @param key_len   Length of @p key in bytes.
+ *  @param options   Validation options struct (may be NULL for defaults).
+ *  @return Heap-allocated cJSON payload (caller frees), or NULL on verification failure. */
+csilk_json_t* csilk_jwt_verify_options(csilk_ctx_t*               c,
+                                       const char*                token,
+                                       const char*                key,
+                                       size_t                     key_len,
+                                       const csilk_jwt_options_t* options);
+
 /** @brief JWT middleware with explicit algorithm support (RS256, ES256).
  *  @param c         Request context.
  *  @param key       Verification key (HMAC secret or PEM public key).
@@ -367,6 +381,16 @@ csilk_json_t* csilk_jwt_verify_ex(
  *  @param algorithm Expected JWT algorithm. */
 void
 csilk_jwt_middleware_ex(csilk_ctx_t* c, const char* key, size_t key_len, csilk_jwt_alg_t algorithm);
+
+/** @brief JWT middleware with configurable validation policy (e.g., CSILK_JWT_REQUIRE_EXP).
+ *  @param c         Request context.
+ *  @param key       Verification key (HMAC secret or PEM public key).
+ *  @param key_len   Length of @p key in bytes.
+ *  @param options   Validation options struct (may be NULL for defaults). */
+void csilk_jwt_middleware_options(csilk_ctx_t*               c,
+                                  const char*                key,
+                                  size_t                     key_len,
+                                  const csilk_jwt_options_t* options);
 
 /* --- JWT Payload Accessors --- */
 /** @brief Get the JWT payload as a raw JSON string.

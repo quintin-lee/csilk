@@ -12,7 +12,9 @@
 - **流式背压与高低水位流量控制**：为 HTTP/1.1 分块流（`csilk_response_write`）、SSE（`csilk_sse_send`）及 WebSocket（`csilk_ws_send`）增加连接级出站队列背压机制。支持配置高水位线（`write_high_water_mark`，默认 64KB）、低水位线（`write_low_water_mark`，默认 16KB）、最大排队限制（`max_write_buffer_size`，默认 16MB）及异步排空回调注册（`csilk_on_drain` / `csilk_set_write_watermarks`）。
 - **Context 存储析构器支持（RAII）**：新增 `csilk_set_ex()` 支持传入自定义析构函数（`csilk_destructor_t`），在请求结束释放 Arena 时自动清理堆内存对象；JWT 中间件自动为 `jwt_payload` 绑定 `csilk_json_free` 析构，防止内存泄漏。
 - **强类型零拷贝视图**：新增 `csilk_view_t`（`const char* data; size_t len;`）及借用语义 Getter（`csilk_get_query_view`、`csilk_get_param_view`、`csilk_get_header_view`、`csilk_get_body_view`），明确区分指向解析缓冲区的零拷贝借用与 Arena 分配的以 NUL 结尾的所有权字符串。
+- **JWT 验证策略与选项配置**：新增 `csilk_jwt_flags_t`（`CSILK_JWT_REQUIRE_EXP`、`CSILK_JWT_REQUIRE_NBF`、`CSILK_JWT_REQUIRE_IAT`）、`csilk_jwt_options_t`（算法、策略标志、时钟容差）、`csilk_jwt_verify_options()` 与 `csilk_jwt_middleware_options()`，提供明确且严格的声明校验策略。
 - **Arena Calloc 与多级 TLS 缓存**：新增 `csilk_arena_calloc()` 支持零初始化内存分配；引入 4KB / 16KB / 64KB 三级线程局部 Chunk 空闲链表与 `max_total_bytes` 约束，并在 Worker 线程退出时自动清理（`csilk_arena_flush_free_list`）。
+
 - **加密驱动扩展性**：`csilk_crypto_driver_t` 新增 `sha1`（20 字节摘要）与 `bcrypt_hash`（密码哈希）回调，配套内部分发包装 `_csilk_sha1()`、`_csilk_bcrypt_hash()`——驱动可替换内置软件实现。
 - **`csilk_cond_broadcast()`**：在 `<csilk/core/sync.h>` 中新增条件变量广播函数，支持一次性唤醒所有等待者，弥补 libuv 无 broadcast 原语的缺口。
 - **Crypto 模块测试**：在 `tests/crypto/test_crypto.c` 中添加覆盖 SHA-256、HMAC-SHA256、Base64/Base64URL 往返、`csilk_crypto_fill_random`、`csilk_crypto_generate_nonce` 及 `csilk_url_decode` 边界情况的属性测试。
