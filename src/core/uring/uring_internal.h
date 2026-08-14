@@ -23,13 +23,18 @@
  * High bit selects between I/O ops and timer ops so the CQE dispatch
  * can quickly distinguish completion types without an indirect call. */
 typedef enum {
+    URING_OP_NONE = 0,
     URING_OP_ACCEPT,
+    URING_OP_POLL_LISTEN,
     URING_OP_READ,
+    URING_OP_POLL_READ,
     URING_OP_WRITE,
     URING_OP_TIMEOUT, /* legacy — kept for migration; do NOT use for new timers */
     URING_OP_WAKEUP,
     URING_OP_CLOSE,
     URING_OP_UV_WRITE,
+    URING_OP_POLL_ASYNC,
+    URING_OP_POLL_SIGNAL,
     /* Differentiated timer opcodes so on_timeout knows which timer fired */
     URING_OP_TMR_READ,
     URING_OP_TMR_WRITE,
@@ -99,7 +104,23 @@ uring_encode_timer_data(uring_op_type_t op, csilk_io_timer_t* tmr)
     uint64_t val = (uint64_t)(void*)tmr;
     val &= 0x0000FFFFFFFFFFFFULL;
     val |= ((uint64_t)op) << 56;
-    val |= ((uint64_t)tmr->generation) << 48;
+    if (tmr) {
+        val |= ((uint64_t)tmr->generation) << 48;
+    }
+    return val;
+}
+
+/** @brief Encode generic handle data with generation tracking for stale-CQE detection. */
+static inline __u64
+uring_encode_handle_data(uring_op_type_t op, csilk_io_handle_t* handle)
+{
+    uint64_t val = (uint64_t)(uintptr_t)handle;
+    val &= 0x0000FFFFFFFFFFFFULL;
+    val |= ((uint64_t)op) << 56;
+    if (handle) {
+        uint64_t gen = handle->generation;
+        val |= (gen << 48);
+    }
     return val;
 }
 

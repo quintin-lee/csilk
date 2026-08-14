@@ -45,22 +45,63 @@ csilk_io_buf_init(char* base, unsigned int len)
     return buf;
 }
 
-/** @brief Opaque event loop type (io_uring instance). */
-typedef struct io_uring csilk_io_loop_t;
+/** @brief Loop control flags and state. */
+#define CSILK_IO_HANDLE_CLOSING 0x01
+#define CSILK_IO_HANDLE_ACTIVE 0x02
+
+typedef enum {
+    CSILK_IO_HANDLE_UNKNOWN = 0,
+    CSILK_IO_HANDLE_TCP,
+    CSILK_IO_HANDLE_TIMER,
+    CSILK_IO_HANDLE_ASYNC,
+    CSILK_IO_HANDLE_SIGNAL,
+    CSILK_IO_HANDLE_FS_EVENT
+} csilk_io_handle_type_t;
+
+/** @brief Opaque event loop type (io_uring instance with loop control). */
+typedef struct csilk_io_loop_s {
+    struct io_uring ring;
+    int             stop_flag;
+    int             active_handles;
+} csilk_io_loop_t;
+
+typedef struct csilk_io_handle_s csilk_io_handle_t;
+typedef void (*csilk_io_close_cb)(csilk_io_handle_t* handle);
+
+#define CSILK_IO_HANDLE_FIELDS                                                                     \
+    void*                  data;                                                                   \
+    csilk_io_loop_t*       loop;                                                                   \
+    int                    fd;                                                                     \
+    int                    flags;                                                                  \
+    csilk_io_handle_type_t type;                                                                   \
+    csilk_io_close_cb      close_cb;                                                               \
+    uint8_t                generation;
 
 /** @brief Generic handle with per-handle user data and owning loop. */
-typedef struct csilk_io_handle_s {
-    void*            data; /**< Opaque user data. */
-    csilk_io_loop_t* loop; /**< Loop that owns this handle. */
-    int              fd;   /**< Underlying file descriptor. */
-} csilk_io_handle_t;
+struct csilk_io_handle_s {
+    CSILK_IO_HANDLE_FIELDS
+};
+
+typedef int                   csilk_io_os_sock_t;
+typedef struct csilk_io_tcp_s csilk_io_tcp_t;
+typedef csilk_io_tcp_t        csilk_io_stream_t;
+
+typedef void (*csilk_io_connection_cb)(csilk_io_stream_t* server, int status);
+typedef void (*csilk_io_alloc_cb)(csilk_io_handle_t* handle,
+                                  size_t             suggested_size,
+                                  csilk_io_buf_t*    buf);
+typedef void (*csilk_io_read_cb)(csilk_io_stream_t*    stream,
+                                 ssize_t               nread,
+                                 const csilk_io_buf_t* buf);
 
 /** @brief A TCP/stream connection handle. */
-typedef struct {
-    void*            data; /**< Opaque user data. */
-    csilk_io_loop_t* loop; /**< Loop that owns this handle. */
-    int              fd;   /**< Underlying socket file descriptor. */
-} csilk_io_tcp_t;
+struct csilk_io_tcp_s {
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_connection_cb connection_cb;
+    csilk_io_alloc_cb      alloc_cb;
+    csilk_io_read_cb       read_cb;
+    int                    reading;
+};
 
 /** @brief Write request passed to csilk_io_write. */
 typedef struct csilk_io_write_req {
@@ -76,13 +117,6 @@ typedef struct csilk_io_write_req {
  */
 typedef void (*csilk_io_write_cb)(csilk_io_write_t* req, int status);
 
-/** @brief Stream handle alias (a TCP handle is a stream). */
-typedef csilk_io_tcp_t csilk_io_stream_t;
-/**
- * @brief Close callback type.
- * @param[in,out] handle The handle that finished closing.
- */
-typedef void (*csilk_io_close_cb)(csilk_io_handle_t* handle);
 /**
  * @brief Close a handle asynchronously.
  * @param[in,out] handle Handle to close.
@@ -110,14 +144,27 @@ csilk_io_strerror(int err)
  * @param[in] handle Handle to query.
  * @return Non-zero if the handle is closing, 0 otherwise.
  */
-int csilk_io_is_closing(const csilk_io_handle_t* handle);
+static inline int
+csilk_io_is_closing(const csilk_io_handle_t* handle)
+{
+    return (handle && (handle->flags & CSILK_IO_HANDLE_CLOSING)) ? 1 : 0;
+}
+
 /**
  * @brief Retrieve the underlying OS file descriptor of a handle.
  * @param[in] handle Handle to query.
  * @param[out] fd Receives the file descriptor.
  * @return 0 on success, or a negative error code.
  */
-int csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd);
+static inline int
+csilk_io_fileno(const csilk_io_handle_t* handle, csilk_io_os_fd_t* fd)
+{
+    if (!handle || !fd || handle->fd < 0) {
+        return -1;
+    }
+    *fd = handle->fd;
+    return 0;
+}
 
 /**
  * @brief Queue a write of @p nbufs buffers to a stream.
@@ -146,11 +193,11 @@ typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
 /** @brief Timer handle. */
 struct csilk_io_timer_s {
-    void*             data;       /**< Opaque user data. */
-    int               fd;         /**< Timer file descriptor (timerfd). */
-    struct io_uring*  ring;       /**< io_uring ring for creating timeout SQEs. */
-    csilk_io_timer_cb cb;         /**< Timer callback (set by csilk_io_timer_start). */
-    uint8_t           generation; /**< Incremented each start to detect stale CQEs. */
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_timer_cb cb;   /**< Timer callback (set by csilk_io_timer_start). */
+    uint64_t          timeout;
+    uint64_t          repeat;
+    struct io_uring*  ring; /**< io_uring ring (alias of &loop->ring). */
 };
 
 /* --- Forward declarations --- */
@@ -163,22 +210,42 @@ typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 
 /** @brief Async (cross-thread wake-up) handle. */
 struct csilk_io_async_s {
-    int               event_fd; /**< eventfd used to signal the loop. */
-    void*             data;     /**< Opaque user data. */
+    CSILK_IO_HANDLE_FIELDS
     csilk_io_async_cb cb;       /**< Callback invoked when signalled. */
+    int               event_fd; /**< eventfd used to signal the loop (alias of fd). */
 };
 
+typedef struct csilk_io_signal_s csilk_io_signal_t;
+typedef void (*csilk_io_signal_cb)(csilk_io_signal_t* handle, int signum);
+
 /** @brief Signal (POSIX signal) handle. */
-typedef struct {
-    int   signal_fd; /**< Signal file descriptor (signalfd). */
-    void* data;      /**< Opaque user data. */
-} csilk_io_signal_t;
+struct csilk_io_signal_s {
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_signal_cb cb;
+    int                signal_fd; /**< Signal file descriptor (alias of fd). */
+    int                signum;
+};
+
+typedef struct csilk_io_fs_event_s csilk_io_fs_event_t;
+
+/**
+ * @brief Filesystem event callback type.
+ * @param[in,out] handle The fs-event handle.
+ * @param[in] filename Name of the changed path (may be NULL).
+ * @param[in] events Bitmask of events that occurred.
+ * @param[in] status 0 on success, or a negative error code.
+ */
+typedef void (*csilk_io_fs_event_cb)(csilk_io_fs_event_t* handle,
+                                     const char*          filename,
+                                     int                  events,
+                                     int                  status);
 
 /** @brief Filesystem event (inotify-style) handle. */
-typedef struct {
-    int   fd;   /**< inotify/watch file descriptor. */
-    void* data; /**< Opaque user data. */
-} csilk_io_fs_event_t;
+struct csilk_io_fs_event_s {
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_fs_event_cb cb;
+    char*                path;
+};
 
 /** @brief Generic work (thread-pool job) handle. */
 typedef struct {
@@ -207,18 +274,6 @@ csilk_io_sleep(unsigned int ms)
 {
     usleep(ms * 1000);
 }
-
-/**
- * @brief Filesystem event callback type.
- * @param[in,out] handle The fs-event handle.
- * @param[in] filename Name of the changed path (may be NULL).
- * @param[in] events Bitmask of events that occurred.
- * @param[in] status 0 on success, or a negative error code.
- */
-typedef void (*csilk_io_fs_event_cb)(csilk_io_fs_event_t* handle,
-                                     const char*          filename,
-                                     int                  events,
-                                     int                  status);
 
 /** @brief Loop run modes, controlling how long csilk_io_run blocks. */
 typedef enum { CSILK_IO_RUN_DEFAULT = 0, CSILK_IO_RUN_ONCE, CSILK_IO_RUN_NOWAIT } csilk_io_run_mode;
@@ -283,23 +338,17 @@ int csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
  */
 int csilk_io_fs_event_stop(csilk_io_fs_event_t* handle);
 
-typedef int csilk_io_os_sock_t;
-typedef void (*csilk_io_connection_cb)(csilk_io_stream_t* server, int status);
-typedef void (*csilk_io_alloc_cb)(csilk_io_handle_t* handle,
-                                  size_t             suggested_size,
-                                  csilk_io_buf_t*    buf);
-typedef void (*csilk_io_read_cb)(csilk_io_stream_t*    stream,
-                                 ssize_t               nread,
-                                 const csilk_io_buf_t* buf);
-typedef void (*csilk_io_signal_cb)(csilk_io_signal_t* handle, int signum);
-
 int      csilk_io_loop_init(csilk_io_loop_t* loop);
 int      csilk_io_loop_close(csilk_io_loop_t* loop);
 void     csilk_io_stop(csilk_io_loop_t* loop);
 uint64_t csilk_io_now(const csilk_io_loop_t* loop);
 void     csilk_io_update_time(csilk_io_loop_t* loop);
 
-int csilk_io_is_active(const csilk_io_handle_t* handle);
+static inline int
+csilk_io_is_active(const csilk_io_handle_t* handle)
+{
+    return (handle && (handle->flags & CSILK_IO_HANDLE_ACTIVE)) ? 1 : 0;
+}
 
 int csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle);
 int csilk_io_tcp_open(csilk_io_tcp_t* handle, csilk_io_os_sock_t sock);
@@ -652,39 +701,20 @@ csilk_io_async_send(csilk_io_async_t* async)
 }
 #else
 /**
- * @brief Async wake-up callback type.
- * @param[in,out] handle The async handle that was signalled.
- */
-typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
-/**
  * @brief Initialize an async handle backed by an eventfd.
- * @param[in,out] loop Loop that will own the handle (unused under io_uring).
+ * @param[in,out] loop Loop that will own the handle.
  * @param[in,out] async Async handle to initialize.
  * @param[in] async_cb Callback invoked when the handle is signalled.
  * @return 0 on success, or a negative error code.
  */
-static inline int
-csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_async_cb async_cb)
-{
-    (void)loop;
-    async->event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    async->cb = async_cb;
-    return 0;
-}
+int csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_async_cb async_cb);
+
 /**
  * @brief Signal an async handle, waking its loop.
  * @param[in,out] async Async handle to signal.
  * @return 0 on success.
  */
-static inline int
-csilk_io_async_send(csilk_io_async_t* async)
-{
-    uint64_t val = 1;
-    if (async && async->event_fd >= 0) {
-        write(async->event_fd, &val, sizeof(val));
-    }
-    return 0;
-}
+int csilk_io_async_send(csilk_io_async_t* async);
 #endif
 
 #ifndef CSILK_USE_URING

@@ -184,11 +184,13 @@ bind_and_listen(csilk_io_loop_t* loop,
             close(fd);
             return -1;
         }
-        int r = csilk_io_tcp_init(loop, out_handle);
+        void* data = out_handle->data;
+        int   r = csilk_io_tcp_init(loop, out_handle);
         if (r < 0) {
             close(fd);
             return -1;
         }
+        out_handle->data = data;
         r = csilk_io_tcp_open(out_handle, (csilk_io_os_sock_t)fd);
         if (r < 0) {
             close(fd);
@@ -200,10 +202,12 @@ bind_and_listen(csilk_io_loop_t* loop,
         return csilk_io_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
     }
 #endif
-    int r = csilk_io_tcp_init(loop, out_handle);
+    void* data = out_handle->data;
+    int   r = csilk_io_tcp_init(loop, out_handle);
     if (r < 0) {
         return -1;
     }
+    out_handle->data = data;
     struct sockaddr_in addr;
     csilk_io_ip4_addr("0.0.0.0", port, &addr);
     r = csilk_io_tcp_bind(out_handle, (const struct sockaddr*)&addr, 0);
@@ -254,8 +258,8 @@ worker_thread(void* arg)
     }
 
     worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
-    wp->stop_async.data = &sd;
     csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
+    wp->stop_async.data = &sd;
 
     data->success = 1;
     if (barrier) {

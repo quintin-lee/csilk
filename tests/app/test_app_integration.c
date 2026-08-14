@@ -82,19 +82,22 @@ expect_body(const char* resp, const char* body)
 static int
 connect_server(void)
 {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        return -1;
-    }
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    addr.sin_port = htons(PORT);
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    for (int retry = 0; retry < 50; retry++) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            return -1;
+        }
+        struct sockaddr_in addr;
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        addr.sin_port = htons(PORT);
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            return sock;
+        }
         close(sock);
-        return -1;
+        usleep(10000);
     }
-    return sock;
+    return -1;
 }
 
 static int

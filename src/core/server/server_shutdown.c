@@ -113,6 +113,8 @@ on_stop_async(csilk_io_async_t* handle)
         _csilk_mq_free(server->mq);
         server->mq = NULL;
     }
+
+    csilk_io_stop(server->loop);
 }
 
 /** @brief Close callback for server-level handles during shutdown (libuv path). */
