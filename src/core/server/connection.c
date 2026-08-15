@@ -163,20 +163,16 @@ pool_get(worker_pool_t* wp)
     return client;
 }
 
-/** @brief Return a client to the worker-local free pool for reuse.
+/** @brief Reset only the mutable/hot request and connection fields during recycling.
  *
- * SSL and H2 sessions are cleaned before returning. The client struct is
- * zeroed. If the pool has room, the client is saved for reuse; otherwise
- * freed. No lock — only the owning event-loop thread accesses this.
+ * Avoids expensive full-struct memset (which blows CPU caches and clears
+ * immutable handle memory) while preserving generation counters and pre-allocated
+ * I/O buffers.
  *
- * @param wp     The worker pool (derived from client->owner_pool).
- * @param client The client to return (must not be used after this call). */
+ * @param client The client connection to reset. */
 static void
-pool_put(worker_pool_t* wp, csilk_client_t* client)
+reset_hot_state(csilk_client_t* client)
 {
-    if (!client) {
-        return;
-    }
     if (client->ssl) {
         SSL_free(client->ssl);
         client->ssl = NULL;
@@ -188,10 +184,84 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
         client->h2_session = NULL;
     }
     csilk_h2_free_streams(client);
-    memset(client, 0, sizeof(*client));
+
+    /* Connection lifecycle and parser flags */
+    client->state = CSILK_CONN_INIT;
+    client->close_pending = 0;
+    client->async_ref = 0;
+    client->read_paused = 0;
+    client->read_active = 0;
+    client->keep_alive = 0;
+    client->pending_write_bytes = 0;
+    client->protocol = CSILK_PROTO_HTTP1;
+    client->total_header_size = 0;
+    client->header_count = 0;
+    client->current_url.data = NULL;
+    client->current_url.len = 0;
+    client->current_header_field.data = NULL;
+    client->current_header_field.len = 0;
+    client->current_header_value.data = NULL;
+    client->current_header_value.len = 0;
+    client->next = NULL;
+    client->prev = NULL;
+    client->server = NULL;
+    client->owner_pool = NULL;
+
+    /* Context mutable state */
+    client->ctx.handler_index = -1;
+    client->ctx.handlers = NULL;
+    client->ctx.handler_count = 0;
+    client->ctx.aborted = 0;
+    client->ctx.panicked = 0;
+    client->ctx.defer_head = NULL;
+    client->ctx.params_count = 0;
+    client->ctx.is_websocket = 0;
+    client->ctx.is_sse = 0;
+    client->ctx.is_async = 0;
+    client->ctx.response_started = 0;
+    client->ctx.write_paused = 0;
+    client->ctx.on_drain = NULL;
+    client->ctx.on_drain_data = NULL;
+    client->ctx.file_fd = -1;
+    client->ctx.file_offset = 0;
+    client->ctx.file_size = 0;
+    client->ctx.storage_head = NULL;
+    client->ctx.stream_id = 0;
+    client->ctx.next_stream = NULL;
+    client->ctx.conn_closed = 0;
+    client->ctx.on_ws_message = NULL;
+    client->ctx.on_ws_send = NULL;
+    client->ctx.read_buffers = client->ctx.read_buffers_embedded;
+    client->ctx.read_buffers_count = 0;
+    client->ctx.read_buffers_capacity = 16;
+    memset(client->ctx.request_id, 0, sizeof(client->ctx.request_id));
+}
+
+/** @brief Return a client to the worker-local free pool for reuse.
+ *
+ * SSL and H2 sessions are cleaned before returning. Only hot mutable state is
+ * reset via reset_hot_state() to avoid cache eviction from full struct zeroing.
+ * If the pool has room, the client is saved for reuse; otherwise freed. No lock
+ * — only the owning event-loop thread accesses this.
+ *
+ * @param wp     The worker pool (derived from client->owner_pool).
+ * @param client The client to return (must not be used after this call). */
+static void
+pool_put(worker_pool_t* wp, csilk_client_t* client)
+{
+    if (!client) {
+        return;
+    }
+    reset_hot_state(client);
     if (wp && wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
         wp->client_pool[wp->client_pool_count++] = client;
     } else {
+#ifdef CSILK_USE_URING
+        if (client->read_buf) {
+            free(client->read_buf);
+            client->read_buf = NULL;
+        }
+#endif
         free(client);
     }
 }

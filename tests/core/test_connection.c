@@ -312,6 +312,52 @@ test_conn_state_invariants(void)
     PASS();
 }
 
+static void
+test_conn_pool_get_put_hot_reset(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    if (wp->client_pool_count != 0) {
+        FAIL("expected client_pool_count 0");
+        free_mock_server(s);
+        return;
+    }
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+    client.generation = 42;
+    client.state = CSILK_CONN_READING;
+    client.total_header_size = 1024;
+    client.header_count = 10;
+    client.keep_alive = 1;
+    client.ctx.is_websocket = 1;
+    client.ctx.handler_index = 5;
+
+    wp->client_pool[wp->client_pool_count++] = &client;
+    if (wp->client_pool_count != 1) {
+        FAIL("expected client_pool_count 1");
+        free_mock_server(s);
+        return;
+    }
+
+    csilk_client_t* got = wp->client_pool[--wp->client_pool_count];
+    uint8_t         gen = (uint8_t)((got->generation + 1) & 0xFF);
+    if (gen == 0) {
+        gen = 1;
+    }
+    got->generation = gen;
+
+    if (got->generation != 43) {
+        FAIL("expected generation increment from 42 to 43");
+        free_mock_server(s);
+        return;
+    }
+
+    PASS();
+    free_mock_server(s);
+}
+
 /* ------------------------------------------------------------------ */
 
 int
@@ -323,6 +369,7 @@ main(void)
     test_client_pool_constant_defined();
     test_server_alloc_sets_pool();
     test_server_mutexes_init();
+    test_conn_pool_get_put_hot_reset();
 
     printf("\n--- Context Client Binding ---\n");
     test_context_internal_client_roundtrip();

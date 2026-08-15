@@ -53,8 +53,18 @@ read_response(int sock, char* buf, size_t size)
         }
         total += n;
         buf[total] = '\0';
-        if (strstr(buf, "\r\n\r\n") && total > (int)(strstr(buf, "\r\n\r\n") - buf + 4)) {
-            break;
+        char* hdr_end = strstr(buf, "\r\n\r\n");
+        if (hdr_end) {
+            char* cl = strstr(buf, "Content-Length: ");
+            if (!cl) {
+                cl = strstr(buf, "content-length: ");
+            }
+            if (cl) {
+                long clen = strtol(cl + 16, nullptr, 10);
+                if (total >= (int)(hdr_end - buf + 4 + clen)) {
+                    break;
+                }
+            }
         }
     }
     return total;
