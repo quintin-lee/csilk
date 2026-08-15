@@ -142,7 +142,7 @@ uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint8_t* gen)
     }
 }
 
-void csilk_uv_on_write_done(void* arg, ssize_t res);
+void csilk_uv_on_write_done(void* arg, ssize_t res, uint8_t gen);
 
 /* Forward declarations for functions defined in uring_connection.c */
 void on_read(csilk_client_t* client, ssize_t nread);
