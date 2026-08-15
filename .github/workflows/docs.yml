@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -31,7 +31,7 @@ jobs:
             doxygen graphviz \
             libyaml-dev zlib1g-dev \
             libcurl4-openssl-dev \
-            libpq-dev libuv1-dev
+            libpq-dev libsqlite3-dev libuv1-dev
 
       - name: Validate Mermaid diagrams
         run: python3 scripts/check_mermaid.py .
