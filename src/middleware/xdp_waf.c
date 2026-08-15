@@ -10,7 +10,6 @@
  * @copyright MIT License
  */
 
-#define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
