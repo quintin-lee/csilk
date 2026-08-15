@@ -368,10 +368,20 @@ openapi_json_handler(csilk_ctx_t* c)
     csilk_server_t* server = csilk_ctx_get_server(c);
     if (server && server->router) {
         csilk_serve_openapi(
-            c, server->router, "Csilk API", "1.0.0", "Auto-generated OpenAPI documentation.");
+            c, server->router, "csilk API", CSILK_VERSION, "Auto-generated OpenAPI documentation.");
     } else {
         csilk_set_status(c, 500);
     }
+}
+
+/**
+ * @brief Handler that serves the Swagger UI documentation page.
+ * @param[in] c Request context.
+ */
+static void
+swagger_docs_handler(csilk_ctx_t* c)
+{
+    csilk_serve_swagger_ui(c);
 }
 
 /**
@@ -380,10 +390,10 @@ openapi_json_handler(csilk_ctx_t* c)
  * @param[in] port   TCP port to bind and listen on.
  * @return 0 on a clean run, -1 on invalid args or setup failure (TLS init,
  *         async init, bind/listen, or worker pool allocation).
- * @note Optionally registers a GET /openapi.json handler, initializes TLS when
- *       enabled, sets up the stop async handle, binds the listening socket (with
- *       SO_REUSEPORT when multiple workers are configured), creates per-worker
- *       pools/arenas, spawns worker threads, and runs the libuv loop until stop.
+ * @note Optionally registers GET /openapi.json and /docs /swagger handlers,
+ *       initializes TLS when enabled, sets up the stop async handle, binds the
+ *       listening socket (with SO_REUSEPORT when multiple workers are configured),
+ *       creates per-worker pools/arenas, spawns worker threads, and runs the loop until stop.
  */
 int
 csilk_server_run(csilk_server_t* server, int port)
@@ -393,9 +403,14 @@ csilk_server_run(csilk_server_t* server, int port)
     }
 
     if (server->config.enable_openapi && server->router) {
-        static csilk_handler_t handlers[] = {openapi_json_handler, NULL};
-        csilk_router_add(server->router, "GET", "/openapi.json", handlers, 1);
-        CSILK_LOG_I("Server: OpenAPI endpoint automatically registered at GET /openapi.json");
+        static csilk_handler_t openapi_handlers[] = {openapi_json_handler, NULL};
+        static csilk_handler_t docs_handlers[] = {swagger_docs_handler, NULL};
+        csilk_router_add(server->router, "GET", "/openapi.json", openapi_handlers, 1);
+        csilk_router_add(server->router, "GET", "/docs", docs_handlers, 1);
+        csilk_router_add(server->router, "GET", "/swagger", docs_handlers, 1);
+        csilk_router_add(server->router, "GET", "/swagger-ui", docs_handlers, 1);
+        CSILK_LOG_I("Server: OpenAPI and Swagger UI endpoints automatically registered at "
+                    "/openapi.json, /docs, /swagger");
     }
 
     if (server->config.enable_tls) {

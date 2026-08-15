@@ -258,6 +258,14 @@ void csilk_serve_openapi(csilk_ctx_t*    c,
                          const char*     description);
 
 /**
+ * @brief Serve the embedded Swagger UI page with a custom OpenAPI spec URL.
+ *
+ * @param c        The request context.
+ * @param spec_url URL of the OpenAPI spec (e.g. "/openapi.json"). Pass NULL for default.
+ */
+void csilk_serve_swagger_ui_ext(csilk_ctx_t* c, const char* spec_url);
+
+/**
  * @brief Serve the embedded Swagger UI page.
  *
  * The UI loads the OpenAPI spec from /openapi.json (the client fetches it

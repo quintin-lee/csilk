@@ -632,16 +632,6 @@ csilk_generate_openapi_json(csilk_router_t* router,
  * @param version     API version (may be NULL for default "1.0.0").
  * @param description API description (may be NULL).
  * @note The response is sent synchronously via csilk_json_string(). */
-static char*         g_openapi_cache_json = NULL;
-static csilk_once_t  g_openapi_cache_once = CSILK_ONCE_INIT;
-static csilk_mutex_t g_openapi_cache_mutex;
-
-static void
-init_openapi_cache_mutex(void)
-{
-    csilk_mutex_init(&g_openapi_cache_mutex);
-}
-
 void
 csilk_serve_openapi(csilk_ctx_t*    c,
                     csilk_router_t* r,
@@ -653,21 +643,9 @@ csilk_serve_openapi(csilk_ctx_t*    c,
         return;
     }
 
-    csilk_once(&g_openapi_cache_once, init_openapi_cache_mutex);
-
-    csilk_mutex_lock(&g_openapi_cache_mutex);
-    if (!g_openapi_cache_json) {
-        csilk_json_t* doc = csilk_generate_openapi_json(r, title, version, description);
-        if (doc) {
-            g_openapi_cache_json = csilk_json_serialize(doc, NULL);
-            csilk_json_free(doc);
-        }
-    }
-    const char* cached_json = g_openapi_cache_json;
-    csilk_mutex_unlock(&g_openapi_cache_mutex);
-
-    if (cached_json) {
-        csilk_json_string(c, CSILK_STATUS_OK, cached_json);
+    csilk_json_t* doc = csilk_generate_openapi_json(r, title, version, description);
+    if (doc) {
+        csilk_json(c, CSILK_STATUS_OK, doc);
     } else {
         csilk_json_error(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "Failed to generate OpenAPI spec");
     }
@@ -677,62 +655,110 @@ csilk_serve_openapi(csilk_ctx_t*    c,
  *  Embedded Swagger UI page
  * ========================================================================= */
 
-/** @brief Compiled-in Swagger UI HTML page.
+/** @brief Compiled-in Swagger UI HTML page template.
  *
- * This HTML string is embedded directly into the binary and served at a
- * designated route by csilk_serve_swagger_ui().  It initializes the Swagger
- * UI JavaScript bundle to render an interactive API reference.
- *
- * Loading strategy:
- *   - CSS/JS assets are hosted at "/csilk-docs/" — these are static files
- *     from the official Swagger UI distribution bundled with the server
- *     (either as separate files or embedded via a build step).
- *   - The spec URL is "/openapi.json", served by csilk_serve_openapi().
- *     This decouples UI from spec generation: the UI HTML is loaded once,
- *     and the spec is fetched on page load, always reflecting the latest
- *     routes and types without a server restart.
- *   - SwaggerUIBundle + SwaggerUIStandalonePreset provide the full "Try it
- *     out" feature, response preview, and schema exploration. */
-static const char swagger_ui_html[] =
-    "<!-- HTML for static distribution bundle build -->\n"
+ * Provides self-contained API documentation rendering with local asset loading
+ * and automatic CDN fallback for seamless operation when embedded in external
+ * applications. */
+static const char swagger_ui_html_template[] =
+    "<!-- HTML for csilk Swagger UI with local and CDN fallback -->\n"
     "<!DOCTYPE html>\n"
     "<html lang=\"en\">\n"
     "<head>\n"
     "<meta charset=\"utf-8\">\n"
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
     "<title>csilk API Documentation</title>\n"
-    "<link rel=\"stylesheet\" href=\"/csilk-docs/swagger-ui.css\">\n"
-    "<link rel=\"stylesheet\" href=\"/csilk-docs/index.css\">\n"
-    "<link rel=\"icon\" type=\"image/png\" "
-    "href=\"/csilk-docs/favicon-32x32.png\" sizes=\"32x32\">\n"
-    "<link rel=\"icon\" type=\"image/png\" "
-    "href=\"/csilk-docs/favicon-16x16.png\" sizes=\"16x16\">\n"
+    "<link rel=\"stylesheet\" href=\"/csilk-docs/swagger-ui.css\" "
+    "onerror=\"this.onerror=null;this.href='https://unpkg.com/swagger-ui-dist@5/"
+    "swagger-ui.css';\">\n"
+    "<link rel=\"icon\" type=\"image/png\" href=\"/csilk-docs/favicon-32x32.png\" "
+    "sizes=\"32x32\">\n"
+    "<link rel=\"icon\" type=\"image/png\" href=\"/csilk-docs/favicon-16x16.png\" "
+    "sizes=\"16x16\">\n"
+    "<style>\n"
+    "  html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }\n"
+    "  *, *:before, *:after { box-sizing: inherit; }\n"
+    "  body { margin: 0; background: #fafafa; }\n"
+    "  .swagger-ui .topbar { display: none; }\n"
+    "</style>\n"
     "</head>\n"
-    "<body style=\"margin:0\">\n"
+    "<body>\n"
     "<div id=\"swagger-ui\"></div>\n"
-    "<script src=\"/csilk-docs/swagger-ui-bundle.js\"></script>\n"
-    "<script src=\"/csilk-docs/swagger-ui-standalone-preset.js\"></script>\n"
     "<script>\n"
-    "window.onload=function(){\n"
+    "function initSwaggerUI() {\n"
+    "  if (typeof SwaggerUIBundle === 'undefined' || typeof SwaggerUIStandalonePreset === "
+    "'undefined') {\n"
+    "    return;\n"
+    "  }\n"
     "  window.ui = SwaggerUIBundle({\n"
-    "    url:\"/openapi.json\",\n"
-    "    dom_id:\"#swagger-ui\",\n"
-    "    deepLinking:true,\n"
-    "    presets:[\n"
+    "    url: \"%s\",\n"
+    "    dom_id: \"#swagger-ui\",\n"
+    "    deepLinking: true,\n"
+    "    presets: [\n"
     "      SwaggerUIBundle.presets.apis,\n"
     "      SwaggerUIStandalonePreset\n"
     "    ],\n"
-    "    plugins:[\n"
+    "    plugins: [\n"
     "      SwaggerUIBundle.plugins.DownloadUrl\n"
     "    ],\n"
-    "    layout:\"StandaloneLayout\",\n"
-    "    showExtensions:true,\n"
-    "    showCommonExtensions:true\n"
+    "    layout: \"StandaloneLayout\",\n"
+    "    showExtensions: true,\n"
+    "    showCommonExtensions: true\n"
+    "  });\n"
+    "}\n"
+    "function loadScript(src, fallbackSrc, cb) {\n"
+    "  var s = document.createElement('script');\n"
+    "  s.src = src;\n"
+    "  s.onload = cb;\n"
+    "  s.onerror = function() {\n"
+    "    if (fallbackSrc) {\n"
+    "      var fb = document.createElement('script');\n"
+    "      fb.src = fallbackSrc;\n"
+    "      fb.onload = cb;\n"
+    "      fb.onerror = function() { console.error('Failed to load Swagger UI script:', "
+    "fallbackSrc); };\n"
+    "      document.head.appendChild(fb);\n"
+    "    }\n"
+    "  };\n"
+    "  document.head.appendChild(s);\n"
+    "}\n"
+    "window.onload = function() {\n"
+    "  loadScript('/csilk-docs/swagger-ui-bundle.js', "
+    "'https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js', function() {\n"
+    "    loadScript('/csilk-docs/swagger-ui-standalone-preset.js', "
+    "'https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js', function() {\n"
+    "      initSwaggerUI();\n"
+    "    });\n"
     "  });\n"
     "};\n"
     "</script>\n"
     "</body>\n"
     "</html>\n";
+
+/** @brief Serve the embedded Swagger UI page with a custom OpenAPI spec URL.
+ *  @param c        The request context.
+ *  @param spec_url URL of the OpenAPI JSON specification (e.g. "/openapi.json").
+ */
+void
+csilk_serve_swagger_ui_ext(csilk_ctx_t* c, const char* spec_url)
+{
+    if (!c) {
+        return;
+    }
+    const char*    url = (spec_url && *spec_url) ? spec_url : "/openapi.json";
+    csilk_arena_t* arena = csilk_get_arena(c);
+    char* html = arena ? csilk_arena_alloc(arena, sizeof(swagger_ui_html_template) + 256) : NULL;
+    if (html) {
+        snprintf(html, sizeof(swagger_ui_html_template) + 256, swagger_ui_html_template, url);
+        csilk_set_header(c, "Content-Type", "text/html; charset=utf-8");
+        csilk_string(c, CSILK_STATUS_OK, html);
+    } else {
+        char buf[sizeof(swagger_ui_html_template) + 256];
+        snprintf(buf, sizeof(buf), swagger_ui_html_template, url);
+        csilk_set_header(c, "Content-Type", "text/html; charset=utf-8");
+        csilk_string(c, CSILK_STATUS_OK, buf);
+    }
+}
 
 /** @brief Serve the embedded Swagger UI page.
  *  The page loads /openapi.json at runtime to render interactive documentation.
@@ -740,9 +766,5 @@ static const char swagger_ui_html[] =
 void
 csilk_serve_swagger_ui(csilk_ctx_t* c)
 {
-    if (!c) {
-        return;
-    }
-    csilk_set_header(c, "Content-Type", "text/html; charset=utf-8");
-    csilk_string(c, CSILK_STATUS_OK, swagger_ui_html);
+    csilk_serve_swagger_ui_ext(c, "/openapi.json");
 }

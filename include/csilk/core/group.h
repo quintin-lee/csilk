@@ -180,4 +180,30 @@ void csilk_group_free(csilk_group_t* group);
     do {                                                                                           \
         csilk_group_add_route(group, "HEAD", path, handler);                                       \
     } while (0)
+
+/** @brief Register a GET route on the group with OpenAPI metadata. */
+#define csilk_GET_EXT(group, path, handler, in, out, summary, desc)                                \
+    do {                                                                                           \
+        csilk_group_add_route_extended(group, "GET", path, handler, in, out, summary, desc);       \
+    } while (0)
+/** @brief Register a POST route on the group with OpenAPI metadata. */
+#define csilk_POST_EXT(group, path, handler, in, out, summary, desc)                               \
+    do {                                                                                           \
+        csilk_group_add_route_extended(group, "POST", path, handler, in, out, summary, desc);      \
+    } while (0)
+/** @brief Register a PUT route on the group with OpenAPI metadata. */
+#define csilk_PUT_EXT(group, path, handler, in, out, summary, desc)                                \
+    do {                                                                                           \
+        csilk_group_add_route_extended(group, "PUT", path, handler, in, out, summary, desc);       \
+    } while (0)
+/** @brief Register a DELETE route on the group with OpenAPI metadata. */
+#define csilk_DELETE_EXT(group, path, handler, in, out, summary, desc)                             \
+    do {                                                                                           \
+        csilk_group_add_route_extended(group, "DELETE", path, handler, in, out, summary, desc);    \
+    } while (0)
+/** @brief Register a PATCH route on the group with OpenAPI metadata. */
+#define csilk_PATCH_EXT(group, path, handler, in, out, summary, desc)                              \
+    do {                                                                                           \
+        csilk_group_add_route_extended(group, "PATCH", path, handler, in, out, summary, desc);     \
+    } while (0)
 /** @} */
