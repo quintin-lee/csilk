@@ -230,31 +230,51 @@ cmake ..
 # Build
 make
 
-# By default, csilk builds as a static library with the libuv backend.
-# To build the io_uring backend (Linux-only), use:
+# By default, csilk builds both static (.a) and shared (.so) modular libraries with libuv.
+# To build with io_uring backend (Linux-only), use:
 # cmake .. -DCSILK_USE_URING=ON
-#
-# To build as a shared library, use:
-# cmake .. -DCSILK_BUILD_SHARED=ON
-#
-# Other available options:
-#   -DUSE_ASAN=ON          Enable AddressSanitizer (default OFF)
-#   -DCSILK_BUILD_SHARED=ON Build shared library (default OFF)
-#   -DUSE_FUZZER=ON        Enable libFuzzer (default OFF)
 
-# Optional: Run tests
-make run_tests     # Runs all tests via ctest
-# or: ctest --test-dir . --output-on-failure
+# Available CMake options:
+#   -DCSILK_BUILD_SHARED=ON   Build dynamic libraries in addition to static (default ON)
+#   -DCSILK_USE_URING=ON      Use io_uring backend instead of libuv (Linux-only, default OFF)
+#   -DUSE_ASAN=ON             Enable AddressSanitizer (default OFF)
+#   -DUSE_TSAN=ON             Enable ThreadSanitizer (default OFF)
+#   -DUSE_FUZZER=ON           Enable libFuzzer (default OFF)
 
-# Optional: Run individual test
-./tests/test_logger
-# ... other test executables
+# Run tests
+ctest --output-on-failure
+```
 
-# Optional: Build documentation
-make docs  # Requires Doxygen
+## Modular Sub-Libraries & Integration
 
-# Optional: Format code
-make format  # Requires clang-format
+csilk is decomposed into modular targets available as both static (`.a`) and dynamic (`.so`) libraries:
+
+| Module Target | Shared Target | Static Archive | Dynamic Library | Description |
+|:---|:---|:---|:---|:---|
+| `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | Core arena, context, trie router, logger, crypto primitives |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 server, app abstraction, connection pool, middleware, swagger |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 encryption engine and cipher drivers |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) and HTTP/3 protocol handler |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | Database abstraction, SQLite, embedded HNSW SIMD vector search |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI LLM client drivers (OpenAI, Ollama, DeepSeek) |
+| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | Message queue, PubSub, WAL, Raft consensus engine |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG scheduler, state machine, DSL, MCP protocols |
+| `csilk::csilk` | `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | Monolithic composite umbrella library |
+
+### CMake Integration
+
+```cmake
+find_package(csilk REQUIRED)
+
+# Link only what your application needs:
+add_executable(my_app main.c)
+target_link_libraries(my_app PRIVATE csilk::http csilk::tls)
+```
+
+### pkg-config Integration
+
+```bash
+pkg-config --cflags --libs csilk
 ```
 
 ### Docker

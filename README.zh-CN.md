@@ -230,31 +230,51 @@ cmake ..
 # 构建
 make
 
-# 默认情况下，csilk 构建为静态库，使用 libuv 后端。
+# 默认情况下，csilk 同时构建静态库 (.a) 与动态共享库 (.so)，默认使用 libuv 后端。
 # 要构建 io_uring 后端（仅 Linux），使用：
 # cmake .. -DCSILK_USE_URING=ON
-#
-# 要构建为共享库，使用：
-# cmake .. -DCSILK_BUILD_SHARED=ON
-#
-# 其他可用选项：
-#   -DUSE_ASAN=ON          启用 AddressSanitizer（默认 OFF）
-#   -DCSILK_BUILD_SHARED=ON 构建共享库（默认 OFF）
-#   -DUSE_FUZZER=ON        启用 libFuzzer（默认 OFF）
 
-# 可选：运行测试
-make run_tests     # 通过 ctest 运行所有测试
-# 或：ctest --test-dir . --output-on-failure
+# 可用 CMake 选项：
+#   -DCSILK_BUILD_SHARED=ON   同时构建动态共享库与静态库（默认 ON）
+#   -DCSILK_USE_URING=ON      使用 io_uring 后端替代 libuv（仅 Linux，默认 OFF）
+#   -DUSE_ASAN=ON             启用 AddressSanitizer（默认 OFF）
+#   -DUSE_TSAN=ON             启用 ThreadSanitizer（默认 OFF）
+#   -DUSE_FUZZER=ON           启用 libFuzzer（默认 OFF）
 
-# 可选：运行单个测试
-./tests/test_logger
-# ... 其他测试可执行文件
+# 运行测试
+ctest --output-on-failure
+```
 
-# 可选：构建文档
-make docs  # 需要 Doxygen
+## 模块化子库与集成方式
 
-# 可选：格式化代码
-make format  # 需要 clang-format
+csilk 采用高内聚低耦合的模块化设计，提供静态库（`.a`）与动态共享库（`.so`）双重构建产物：
+
+| 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 说明 |
+|:---|:---|:---|:---|:---|
+| `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | 核心 Arena、上下文 Context、字典树路由、日志与基础加密原语 |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 服务、App 骨架、连接池管理、内置中间件与 Swagger |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 加密引擎与对称/非对称加密驱动 |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) 与 HTTP/3 (QUIC) 协议适配器 |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | 数据库抽象层、SQLite3、嵌入式 HNSW SIMD 向量检索引擎 |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI 大模型客户端驱动（OpenAI、Ollama、DeepSeek） |
+| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | 异步消息队列、PubSub、WAL 持久化与 Raft 分布式共识引擎 |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG 任务编排引擎、断点续传、DSL 与 MCP 协议栈 |
+| `csilk::csilk` | `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | 全功能单体复合伞库 |
+
+### CMake 业务应用链接
+
+```cmake
+find_package(csilk REQUIRED)
+
+# 业务应用仅需链接所需的模块子库：
+add_executable(my_app main.c)
+target_link_libraries(my_app PRIVATE csilk::http csilk::tls)
+```
+
+### pkg-config 集成
+
+```bash
+pkg-config --cflags --libs csilk
 ```
 
 ### Docker

@@ -108,6 +108,33 @@ graph TB
 
 ---
 
+### 1.1 模块化子库拆分架构
+
+csilk 采用高内聚低耦合的模块化设计，提供静态库（`.a`）与动态共享库（`.so`）双重构建产物，允许业务应用按需精准依赖：
+
+| 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 内含功能模块 | 依赖组件 |
+|:---|:---|:---|:---|:---|:---|
+| `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | 内存 Arena、有界缓冲区、上下文/Defer、字典树路由、日志、KV 存储、缓存、加密原语 (bcrypt/base64/sha1/uuid)、I/O (libuv / io_uring) | `yyjson`, `Threads`, `libcrypto`, `libuv`/`liburing`, `libm` |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 解析器与分发、连接池管理、App 骨架与路由组、核心中间件、Swagger、WebSocket、反射、权限 | `csilk::core`, `zlib`, `llhttp` |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 加密引擎与对称加密驱动 | `csilk::core`, `libssl`, `libcrypto` |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) 与 HTTP/3 (QUIC) 协议适配器 | `csilk::core`, `csilk::http`, `nghttp2` |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | 数据库连接抽象、SQLite3、嵌入式 HNSW SIMD 向量检索引擎 | `csilk::core`, `sqlite3`, 可选 DB 驱动 |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI 大模型客户端驱动（OpenAI、Ollama、DeepSeek） | `csilk::core`, `libcurl` |
+| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | 异步消息队列核心、PubSub、WAL 持久化与 Raft 分布式共识引擎 | `csilk::core` |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG 任务编排引擎、断点续传、DSL 与 MCP 协议栈 | `csilk::core`, `csilk::ai`, `csilk::mq`, `libyaml` |
+| `csilk::csilk` | `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | 全功能单体复合伞库 | 全部子模块 |
+
+#### 业务应用 CMake 链接配置
+
+```cmake
+find_package(csilk REQUIRED)
+
+# 业务应用仅链接所需组件：
+target_link_libraries(my_service PRIVATE csilk::http csilk::tls)
+```
+
+---
+
 ## 2. 核心设计原则
 
 ### 2.1 Reactor 事件驱动模型与原生 TLS & ALPN

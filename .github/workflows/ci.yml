@@ -277,7 +277,7 @@ jobs:
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
     - name: Configure (CSILK_USE_URING native)
-      run: cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON -DENABLE_OOM_TEST=ON
+      run: cmake -B build_uring -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_USE_URING=ON -DCSILK_BUILD_SHARED=ON -DENABLE_OOM_TEST=ON
 
     - name: Build (CSILK_USE_URING native)
       run: cmake --build build_uring -j$(nproc)

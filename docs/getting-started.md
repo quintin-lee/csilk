@@ -85,14 +85,26 @@ make -j$(nproc)
 |--------|---------|-------------|
 | `CSILK_USE_URING` | OFF | Use io_uring backend instead of libuv (Linux-only) |
 | `CMAKE_BUILD_TYPE` | - | `Debug`, `Release`, `RelWithDebInfo` |
-| `CSILK_BUILD_SHARED` | OFF | Build shared library (`libcsilk.so`) |
+| `CSILK_BUILD_SHARED` | ON | Build dynamic libraries (`libcsilk-*.so`, `libcsilk.so`) |
 | `USE_ASAN` | OFF | Enable AddressSanitizer |
+| `USE_TSAN` | OFF | Enable ThreadSanitizer |
 | `USE_FUZZER` | OFF | Build fuzz test harness |
 | `USE_COVERAGE` | OFF | Enable gcov coverage reporting |
 | `CSILK_USE_MYSQL` | OFF | Enable MySQL database driver |
 | `CSILK_USE_POSTGRES` | OFF | Enable PostgreSQL database driver |
 | `CSILK_USE_MONGODB` | OFF | Enable MongoDB database driver |
 | `ENABLE_OOM_TEST` | OFF | Enable out-of-memory simulation tests |
+
+### Modular Sub-Libraries & Linking
+
+Csilk provides modular targets for both static and shared libraries:
+
+```cmake
+find_package(csilk REQUIRED)
+
+# Link only what is needed:
+target_link_libraries(my_service PRIVATE csilk::http csilk::tls)
+```
 
 ## Create a New Project
 

@@ -85,14 +85,26 @@ make -j$(nproc)
 |--------|---------|-------------|
 | `CSILK_USE_URING` | OFF | 使用 io_uring 后端替代 libuv（仅 Linux） |
 | `CMAKE_BUILD_TYPE` | - | `Debug`、`Release`、`RelWithDebInfo` |
-| `CSILK_BUILD_SHARED` | OFF | 构建共享库（`libcsilk.so`） |
+| `CSILK_BUILD_SHARED` | ON | 构建动态共享库（`libcsilk-*.so`、`libcsilk.so`） |
 | `USE_ASAN` | OFF | 启用 AddressSanitizer |
+| `USE_TSAN` | OFF | 启用 ThreadSanitizer |
 | `USE_FUZZER` | OFF | 构建模糊测试工具 |
 | `USE_COVERAGE` | OFF | 启用 gcov 覆盖率报告 |
 | `CSILK_USE_MYSQL` | OFF | 启用 MySQL 数据库驱动 |
 | `CSILK_USE_POSTGRES` | OFF | 启用 PostgreSQL 数据库驱动 |
 | `CSILK_USE_MONGODB` | OFF | 启用 MongoDB 数据库驱动 |
 | `ENABLE_OOM_TEST` | OFF | 启用 out-of-memory 模拟测试 |
+
+### 模块化子库与链接方式
+
+Csilk 提供针对各业务场景拆分的模块化 Target，支持静态与动态链接：
+
+```cmake
+find_package(csilk REQUIRED)
+
+# 仅按需链接所需子库：
+target_link_libraries(my_service PRIVATE csilk::http csilk::tls)
+```
 
 ## 创建新项目
 
