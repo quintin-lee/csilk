@@ -87,6 +87,7 @@ enum {
     CSILK_READ_BUF_64KB = 65536,
     CSILK_READ_BUF_POOL_SIZE = 64 /**< Per-tier pool depth. */
 };
+enum { CSILK_DISPATCH_TASK_SLAB_SIZE = 256 };
 
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {
@@ -146,10 +147,13 @@ typedef struct CSILK_CACHE_ALIGNED {
     /**< Per-tier read buffer pool. */
     int read_buf_counts[CSILK_READ_BUF_TIER_COUNT];
     /**< Items in each tier's free list. */
-    csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
-    csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
-    csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
-    void*            thread_pool;    /**< io_uring thread pool (NULL in libuv mode). */
+    csilk_io_async_t      dispatch_async; /**< Cross-thread task dispatch async handle. */
+    csilk_lfqueue_t       dispatch_queue; /**< Lock-free MPSC dispatch queue. */
+    csilk_dispatch_task_t dispatch_task_slab[CSILK_DISPATCH_TASK_SLAB_SIZE];
+    /**< Pre-allocated dispatch task slab. */
+    int             dispatch_task_slab_count; /**< Items in dispatch task free list. */
+    csilk_client_t* active_clients;           /**< Head of worker-local active connections list. */
+    void*           thread_pool;              /**< io_uring thread pool (NULL in libuv mode). */
 } worker_pool_t;
 
 /**
