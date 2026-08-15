@@ -25,7 +25,6 @@ set(CSILK_CORE_SOURCES
     src/core/ctx/ctx_json.c
     src/core/json/json.c
     src/core/primitives/recovery.c
-    src/core/primitives/response.c
     src/core/primitives/router.c
     src/core/primitives/router_simd.c
     src/core/primitives/router_trie.c
@@ -63,6 +62,7 @@ endif()
 
 # ── HTTP Module (HTTP/1, connection, server, app, middleware, ws, swagger) ─
 set(CSILK_HTTP_SOURCES
+    src/core/primitives/response.c
     src/core/http/http1_parse.c
     src/core/http/http1_response.c
     src/core/http/http1_zerocopy.c

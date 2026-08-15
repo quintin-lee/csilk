@@ -20,9 +20,9 @@
 #include "csilk/core/errors.h"
 #include "csilk/version.h"
 
-/** @brief Internal visibility macro for symbols not part of the public API. */
+/** @brief Internal visibility macro for symbols shared across csilk sub-modules. */
 #if defined(__GNUC__) && __GNUC__ >= 4
-#define CSILK_INTERNAL __attribute__((visibility("hidden")))
+#define CSILK_INTERNAL __attribute__((visibility("default")))
 #else
 #define CSILK_INTERNAL
 #endif
