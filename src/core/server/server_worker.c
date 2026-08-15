@@ -33,6 +33,46 @@
 
 /* --- Dispatch --- */
 
+/** @brief Pop a dispatch task from the worker's slab.
+ *
+ * @param wp The worker pool (must not be NULL).
+ * @return A free task, or NULL if the slab is exhausted. */
+static csilk_dispatch_task_t*
+pool_get_dispatch_task(worker_pool_t* wp)
+{
+    if (wp->dispatch_task_slab_count > 0) {
+        return &wp->dispatch_task_slab[--wp->dispatch_task_slab_count];
+    }
+    return NULL;
+}
+
+/** @brief Return a dispatch task to the worker's slab.
+ *
+ * If the slab is full the task is freed instead.
+ *
+ * @param wp     The worker pool (may be NULL — falls back to free).
+ * @param task   Task to return (must not be NULL). */
+static void
+pool_put_dispatch_task(worker_pool_t* wp, csilk_dispatch_task_t* task)
+{
+    if (!task || !wp) {
+        free(task);
+        return;
+    }
+    if (wp->dispatch_task_slab_count < CSILK_DISPATCH_TASK_SLAB_SIZE) {
+        wp->dispatch_task_slab[wp->dispatch_task_slab_count++] = *task;
+    } else {
+        free(task);
+    }
+}
+
+/** @brief Pre-allocate the dispatch task slab at worker startup. */
+void
+_csilk_worker_init_dispatch_task_pool(worker_pool_t* wp)
+{
+    wp->dispatch_task_slab_count = 0;
+}
+
 /**
  * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
  * @param[in] handle async handle whose data points at the worker_pool_t.
@@ -54,7 +94,7 @@ on_dispatch_async(csilk_io_async_t* handle)
         if (task->cb) {
             task->cb(task->arg);
         }
-        free(task);
+        pool_put_dispatch_task(wp, task);
         node = csilk_lfq_dequeue(&wp->dispatch_queue);
     }
 }
@@ -95,9 +135,12 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     }
     worker_pool_t* wp = client->owner_pool;
 
-    csilk_dispatch_task_t* task = malloc(sizeof(csilk_dispatch_task_t));
+    csilk_dispatch_task_t* task = pool_get_dispatch_task(wp);
     if (!task) {
-        return;
+        task = malloc(sizeof(csilk_dispatch_task_t));
+        if (!task) {
+            return;
+        }
     }
     task->cb = cb;
     task->arg = arg;
@@ -244,6 +287,7 @@ worker_thread(void* arg)
 
     _csilk_worker_init_arena_pool(wp);
     _csilk_worker_init_read_buf_pool(wp);
+    _csilk_worker_init_dispatch_task_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
     int bind_res = bind_and_listen(
