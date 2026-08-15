@@ -12,7 +12,7 @@
 #include "csilk/app/app.h"
 #include "csilk/csilk.h"
 
-#define PORT 8101
+#define PORT 8104
 #define BUFSIZE 65536
 
 static _Atomic int     server_ready = 0;
@@ -318,12 +318,19 @@ main(void)
     nanosleep(&(struct timespec){0, 100000000}, nullptr);
 
     test_get_hello();
+    usleep(10000);
     test_openapi_json();
+    usleep(10000);
     test_docs();
+    usleep(10000);
     test_swagger_alias();
+    usleep(10000);
     test_csilk_docs_static();
+    usleep(10000);
     test_openapi_disabled();
+    usleep(10000);
     test_not_found();
+    usleep(10000);
 
     csilk_server_stop(g_server);
     pthread_join(thread, nullptr);

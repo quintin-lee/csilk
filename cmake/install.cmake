@@ -3,10 +3,19 @@
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+set(CSILK_INSTALL_TARGETS
+    csilk
+    csilk_core
+    csilk_http
+    csilk_tls
+    csilk_http2
+    csilk_db
+    csilk_ai
+    csilk_mq
+    csilk_workflow
+)
 if(CSILK_USE_URING)
-    set(CSILK_INSTALL_TARGETS csilk uring)
-else()
-    set(CSILK_INSTALL_TARGETS csilk)
+    list(APPEND CSILK_INSTALL_TARGETS uring)
 endif()
 
 install(TARGETS ${CSILK_INSTALL_TARGETS}

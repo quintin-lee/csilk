@@ -1,4 +1,4 @@
-# cmake/targets.cmake — csilk_target_setup function and library targets
+# cmake/targets.cmake — csilk_target_setup function and modular library targets
 
 # ── Helper function: apply common compile/link/profile to a target ────────
 function(csilk_target_setup TARGET VISIBILITY TYPE)
@@ -45,9 +45,6 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang") AND NOT APPLE)
         target_link_options(${TARGET} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/libcsilk.map")
     endif()
-    # macOS: use @loader_path (equivalent of $ORIGIN) so delocate-wheel can
-    # relocate the dylib and its Homebrew deps into the wheel bundle without
-    # hard-coded /opt/homebrew paths breaking after installation.
     if(APPLE)
       set_target_properties(${TARGET} PROPERTIES
           INSTALL_NAME_DIR         "@loader_path"
@@ -61,8 +58,8 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
       VERSION "${CSILK_VERSION}"
       SOVERSION "${CSILK_VERSION_MAJOR}"
-      OUTPUT_NAME csilk
       INTERFACE_COMPILE_FEATURES c_std_23
+      POSITION_INDEPENDENT_CODE ON
   )
 
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -72,51 +69,6 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       set_target_properties(${TARGET} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
   endif()
-
-  # Public dependencies: exposed in public API headers (transitive includes and link)
-  set(CSILK_PUBLIC_DEPS
-      yyjson
-      OpenSSL::SSL
-      OpenSSL::Crypto
-      Threads::Threads
-  )
-  if(CSILK_USE_URING)
-    list(APPEND CSILK_PUBLIC_DEPS uring)
-    if(NOT APPLE)
-      target_compile_options(${TARGET} PUBLIC "-D_GNU_SOURCE")
-    endif()
-  else()
-    list(APPEND CSILK_PUBLIC_DEPS csilk::libuv)
-  endif()
-
-  # Private dependencies: internal implementation only (link-time dependencies)
-  set(CSILK_PRIVATE_DEPS
-      SQLite3::SQLite3
-      CURL::libcurl
-      ZLIB::ZLIB
-      csilk::yaml
-      nghttp2
-  )
-  if(TARGET csilk::llhttp)
-    list(APPEND CSILK_PRIVATE_DEPS csilk::llhttp)
-  endif()
-
-  foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
-    if(TARGET ${DB_TARGET})
-      list(APPEND CSILK_PRIVATE_DEPS ${DB_TARGET})
-    endif()
-  endforeach()
-
-  if(NOT APPLE AND NOT WIN32)
-    list(APPEND CSILK_PRIVATE_DEPS m)
-  endif()
-
-  target_link_libraries(${TARGET}
-      PUBLIC
-          ${CSILK_PUBLIC_DEPS}
-      PRIVATE
-          ${CSILK_PRIVATE_DEPS}
-  )
 
   target_include_directories(${TARGET} PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -132,20 +84,117 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   endif()
 endfunction()
 
-# ── csilk static library ─────────────────────────────────────────────────
 set(CSILK_AVX2_FLAGS "")
 if(CSILK_HAS_AVX2)
   set(CSILK_AVX2_FLAGS "-mavx2;-D__AVX2__")
 endif()
 
-add_library(csilk STATIC ${CSILK_SOURCES})
-set_target_properties(csilk PROPERTIES POSITION_INDEPENDENT_CODE ON)
-csilk_target_setup(csilk PUBLIC STATIC)
+# ── 1. csilk_core (libcsilk-core.a) ──────────────────────────────────────
+add_library(csilk_core STATIC ${CSILK_CORE_SOURCES})
+set_target_properties(csilk_core PROPERTIES OUTPUT_NAME "csilk-core")
+csilk_target_setup(csilk_core PUBLIC STATIC)
+target_link_libraries(csilk_core PUBLIC yyjson OpenSSL::Crypto Threads::Threads)
+if(CSILK_USE_URING)
+  target_link_libraries(csilk_core PUBLIC uring)
+  if(NOT APPLE)
+    target_compile_options(csilk_core PUBLIC "-D_GNU_SOURCE")
+  endif()
+else()
+  target_link_libraries(csilk_core PUBLIC csilk::libuv)
+endif()
+if(NOT APPLE AND NOT WIN32)
+  target_link_libraries(csilk_core PRIVATE m)
+endif()
+add_library(csilk::core ALIAS csilk_core)
 
-# ── csilk shared library (optional) ──────────────────────────────────────
+# ── 2. csilk_http (libcsilk-http.a) ──────────────────────────────────────
+add_library(csilk_http STATIC ${CSILK_HTTP_SOURCES})
+set_target_properties(csilk_http PROPERTIES OUTPUT_NAME "csilk-http")
+csilk_target_setup(csilk_http PUBLIC STATIC)
+target_link_libraries(csilk_http PUBLIC csilk_core ZLIB::ZLIB)
+if(TARGET csilk::llhttp)
+  target_link_libraries(csilk_http PRIVATE csilk::llhttp)
+endif()
+add_library(csilk::http ALIAS csilk_http)
+
+# ── 3. csilk_tls (libcsilk-tls.a) ────────────────────────────────────────
+add_library(csilk_tls STATIC ${CSILK_TLS_SOURCES})
+set_target_properties(csilk_tls PROPERTIES OUTPUT_NAME "csilk-tls")
+csilk_target_setup(csilk_tls PUBLIC STATIC)
+target_link_libraries(csilk_tls PUBLIC csilk_core OpenSSL::SSL OpenSSL::Crypto)
+add_library(csilk::tls ALIAS csilk_tls)
+
+# ── 4. csilk_http2 (libcsilk-http2.a) ────────────────────────────────────
+add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
+set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
+csilk_target_setup(csilk_http2 PUBLIC STATIC)
+target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_http nghttp2)
+add_library(csilk::http2 ALIAS csilk_http2)
+
+# ── 5. csilk_db (libcsilk-db.a) ──────────────────────────────────────────
+add_library(csilk_db STATIC ${CSILK_DB_SOURCES})
+set_target_properties(csilk_db PROPERTIES OUTPUT_NAME "csilk-db")
+csilk_target_setup(csilk_db PUBLIC STATIC)
+target_link_libraries(csilk_db PUBLIC csilk_core SQLite3::SQLite3)
+foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
+  if(TARGET ${DB_TARGET})
+    target_link_libraries(csilk_db PRIVATE ${DB_TARGET})
+  endif()
+endforeach()
+add_library(csilk::db ALIAS csilk_db)
+
+# ── 6. csilk_ai (libcsilk-ai.a) ──────────────────────────────────────────
+add_library(csilk_ai STATIC ${CSILK_AI_SOURCES})
+set_target_properties(csilk_ai PROPERTIES OUTPUT_NAME "csilk-ai")
+csilk_target_setup(csilk_ai PUBLIC STATIC)
+target_link_libraries(csilk_ai PUBLIC csilk_core CURL::libcurl)
+add_library(csilk::ai ALIAS csilk_ai)
+
+# ── 7. csilk_mq (libcsilk-mq.a) ──────────────────────────────────────────
+add_library(csilk_mq STATIC ${CSILK_MQ_SOURCES})
+set_target_properties(csilk_mq PROPERTIES OUTPUT_NAME "csilk-mq")
+csilk_target_setup(csilk_mq PUBLIC STATIC)
+target_link_libraries(csilk_mq PUBLIC csilk_core)
+add_library(csilk::mq ALIAS csilk_mq)
+
+# ── 8. csilk_workflow (libcsilk-workflow.a) ──────────────────────────────
+add_library(csilk_workflow STATIC ${CSILK_WORKFLOW_SOURCES})
+set_target_properties(csilk_workflow PROPERTIES OUTPUT_NAME "csilk-workflow")
+csilk_target_setup(csilk_workflow PUBLIC STATIC)
+target_link_libraries(csilk_workflow PUBLIC csilk_core csilk_ai csilk_mq csilk::yaml)
+add_library(csilk::workflow ALIAS csilk_workflow)
+
+# ── 9. csilk umbrella static library (libcsilk.a) ────────────────────────
+add_library(csilk STATIC ${CSILK_SOURCES})
+set_target_properties(csilk PROPERTIES OUTPUT_NAME "csilk")
+csilk_target_setup(csilk PUBLIC STATIC)
+target_link_libraries(csilk PUBLIC
+    csilk_core
+    csilk_http
+    csilk_tls
+    csilk_http2
+    csilk_db
+    csilk_ai
+    csilk_mq
+    csilk_workflow
+)
+add_library(csilk::csilk ALIAS csilk)
+
+# ── 10. csilk shared library (libcsilk.so) ───────────────────────────────
 if(CSILK_BUILD_SHARED)
     add_library(csilk_shared SHARED ${CSILK_SOURCES})
+    set_target_properties(csilk_shared PROPERTIES OUTPUT_NAME "csilk")
     csilk_target_setup(csilk_shared PUBLIC SHARED)
+    target_link_libraries(csilk_shared PUBLIC
+        csilk_core
+        csilk_http
+        csilk_tls
+        csilk_http2
+        csilk_db
+        csilk_ai
+        csilk_mq
+        csilk_workflow
+    )
     add_dependencies(csilk csilk_shared)
     message(STATUS "Shared library build enabled: libcsilk.so")
 endif()
