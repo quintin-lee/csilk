@@ -86,12 +86,8 @@ mv "$STAGING_DIR" "$PKG_DIR"
 
 # 5. Strip debug symbols from libraries (Release already strips, but enforce)
 echo "=== Stripping debug symbols ==="
-if [ -f "$PKG_DIR/lib/libcsilk.a" ]; then
-    strip --strip-debug "$PKG_DIR/lib/libcsilk.a" 2>/dev/null || echo "(strip failed for libcsilk.a)"
-fi
-if [ -f "$PKG_DIR/lib/libcsilk.so" ]; then
-    strip --strip-unneeded "$PKG_DIR/lib/libcsilk.so" 2>/dev/null || echo "(strip failed for libcsilk.so)"
-fi
+find "$PKG_DIR/lib" -name "libcsilk*.a" -exec strip --strip-debug {} + 2>/dev/null || true
+find "$PKG_DIR/lib" -name "libcsilk*.so*" -type f -exec strip --strip-unneeded {} + 2>/dev/null || true
 
 # 6. Create tarball
 echo "=== Creating tarball: ${PKG_NAME}.tar.gz ==="

@@ -110,6 +110,33 @@ graph TB
 
 ---
 
+### 1.1 Modular Sub-Library Decomposition
+
+csilk is decomposed into modular targets available as both static (`.a`) and dynamic (`.so`) libraries, allowing applications to link only what they need:
+
+| Module Target | Shared Target | Static Archive | Dynamic Library | Modules Included | Dependencies |
+|:---|:---|:---|:---|:---|:---|
+| `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | Memory Arena, Bounded Buffer, Context/Defer, Trie Router, Logger, KV Store, Cache, Crypto (bcrypt, base64, sha1, uuid), I/O (libuv / io_uring) | `yyjson`, `Threads`, `libcrypto`, `libuv`/`liburing`, `libm` |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 parser & dispatcher, connection pool, App skeleton & route groups, middlewares, Swagger, WebSocket, reflection, permissions | `csilk::core`, `zlib`, `llhttp` |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 engine, cipher symmetric encryption drivers | `csilk::core`, `libssl`, `libcrypto` |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2), HTTP/3 (QUIC) protocol adapters | `csilk::core`, `csilk::http`, `nghttp2` |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | Database abstraction, SQLite3, Vector DB (HNSW/SIMD/Qdrant/Milvus), optional DB drivers | `csilk::core`, `sqlite3`, optional DB drivers |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI LLM client drivers (OpenAI, Ollama, DeepSeek) | `csilk::core`, `libcurl` |
+| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | Message queue core, PubSub, WAL storage, Raft consensus engine | `csilk::core` |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG scheduler, state machine, breakpoint resume, DSL loader, MCP protocol | `csilk::core`, `csilk::ai`, `csilk::mq`, `libyaml` |
+| `csilk::csilk` | `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | Full composite monolithic umbrella library | All sub-modules |
+
+#### Modular Linkage in Application CMakeLists.txt
+
+```cmake
+find_package(csilk REQUIRED)
+
+# Link only what the service needs:
+target_link_libraries(my_service PRIVATE csilk::http csilk::tls)
+```
+
+---
+
 ## 2. Core Design Principles
 
 ### 2.1 Reactor Event-Driven Model with Native TLS & ALPN

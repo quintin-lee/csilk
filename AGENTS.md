@@ -119,6 +119,28 @@ When storing heap-allocated objects (e.g. cJSON nodes or driver handles) in the 
 | `tests/` | Mirrors `src/` module layout |
 | `python/` | CFFI/ctypes bindings |
 
+## Modular Sub-Libraries & Targets
+
+Csilk builds both modular components and composite umbrella libraries in static (`.a`) and dynamic (`.so`) forms:
+
+| Target (Alias) | Static Archive | Shared Library | Description |
+|---|---|---|---|
+| `csilk::core` / `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | Core arena, ctx, router, logger, crypto primitives |
+| `csilk::http` / `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 server, app, connection pool, middleware |
+| `csilk::tls` / `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | TLS 1.3 encryption engine, OpenSSL wrapper |
+| `csilk::http2` / `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2), HTTP/3 protocol handler |
+| `csilk::db` / `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | Database abstraction, SQLite, Vector DB / HNSW |
+| `csilk::ai` / `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI LLM client drivers (OpenAI, Ollama, DeepSeek) |
+| `csilk::mq` / `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | Message queue, PubSub, WAL, Raft consensus |
+| `csilk::workflow` / `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG scheduler, DSL, MCP protocols |
+| `csilk::csilk` / `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | Full composite umbrella library |
+
+### Application Linking Example
+```cmake
+find_package(csilk REQUIRED)
+target_link_libraries(my_app PRIVATE csilk::http csilk::tls)
+```
+
 ## Commit Convention
 
 ```
