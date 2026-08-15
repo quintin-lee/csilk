@@ -198,6 +198,11 @@ csilk_server_free(csilk_server_t* server)
             for (int i = 0; i < wp->arena_pool_count; i++) {
                 csilk_arena_free(wp->arena_pool[i]);
             }
+            for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
+                for (int i = 0; i < wp->read_buf_counts[tier]; i++) {
+                    free(wp->read_buf_tiers[tier][i]);
+                }
+            }
         }
         free(server->worker_pools);
     }
@@ -454,6 +459,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
     server->worker_pools[0].loop_ptr = server->loop;
     _csilk_worker_init_arena_pool(&server->worker_pools[0]);
+    _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
     if (server->config.tcp_keepalive > 0) {
