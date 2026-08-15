@@ -243,6 +243,7 @@ worker_thread(void* arg)
     wp->server_handle.data = wp;
 
     _csilk_worker_init_arena_pool(wp);
+    _csilk_worker_init_read_buf_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
     int bind_res = bind_and_listen(

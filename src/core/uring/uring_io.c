@@ -759,7 +759,10 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                             } else {
                                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                                     if (buf.base) {
-                                        free(buf.base);
+                                        csilk_client_t* cli =
+                                            (csilk_client_t*)((csilk_io_stream_t*)s)->data;
+                                        pool_put_read_buf(
+                                            cli ? cli->owner_pool : NULL, buf.base, buf.len);
                                     }
                                     if (s->reading && s->fd >= 0 &&
                                         !(s->flags & CSILK_IO_HANDLE_CLOSING)) {

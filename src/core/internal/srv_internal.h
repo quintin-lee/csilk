@@ -77,6 +77,17 @@ enum { MAX_TLS_CHUNKS_PER_TIER = 8 }; /* Max cached chunks per tier */
  * to pool on connection close. Increase for high-concurrency scenarios. */
 enum { CSILK_CLIENT_POOL_SIZE = 32 };
 
+/** @brief Read buffer pool: three tiers for different request sizes.
+ *  Buffers are per-worker (thread-local), pre-allocated at startup,
+ *  and returned to the pool after each use. */
+enum {
+    CSILK_READ_BUF_TIER_COUNT = 3,
+    CSILK_READ_BUF_4KB = 4096,
+    CSILK_READ_BUF_16KB = 16384,
+    CSILK_READ_BUF_64KB = 65536,
+    CSILK_READ_BUF_POOL_SIZE = 64 /**< Per-tier pool depth. */
+};
+
 /** @brief Hook handler node in a linked list. */
 typedef struct csilk_hook_node_s {
     void*                     handler;
@@ -131,6 +142,10 @@ typedef struct CSILK_CACHE_ALIGNED {
     int              worker_index;                       /**< 0 = main loop, 1+ = worker threads. */
     csilk_arena_t*   arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
     int              arena_pool_count;                   /**< Items in arena pool. */
+    void*            read_buf_tiers[CSILK_READ_BUF_TIER_COUNT][CSILK_READ_BUF_POOL_SIZE];
+    /**< Per-tier read buffer pool. */
+    int read_buf_counts[CSILK_READ_BUF_TIER_COUNT];
+    /**< Items in each tier's free list. */
     csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
     csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
     csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
