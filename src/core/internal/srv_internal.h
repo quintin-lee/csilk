@@ -279,6 +279,12 @@ CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csil
 CSILK_INTERNAL void
 _csilk_persist_header(csilk_ctx_t* c, const csilk_str_view_t* field, const csilk_str_view_t* value);
 
+/** @brief Return a read buffer to the worker-local pool; falls back to free. */
+CSILK_INTERNAL void pool_put_read_buf(worker_pool_t* wp, char* base, size_t size);
+
+/** @brief Pre-allocate per-tier read buffers at worker startup. */
+CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
+
 /**
  * @brief Initialize arena subsystem with automatic TLS cleanup.
  *
