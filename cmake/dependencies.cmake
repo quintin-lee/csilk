@@ -134,24 +134,53 @@ FetchContent_Declare(
   yyjson
   GIT_REPOSITORY https://github.com/ibireme/yyjson.git
   GIT_TAG        0.12.0
+  GIT_SHALLOW    TRUE
+  GIT_SUBMODULES ""
 )
 FetchContent_MakeAvailable(yyjson)
 
 # ── HTTP/2 Engine (nghttp2) ───────────────────────────────────────────────
-set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
-set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
-set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
-set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-  nghttp2
-  GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
-  GIT_TAG        v1.61.0
-)
-FetchContent_MakeAvailable(nghttp2)
-if(nghttp2_SOURCE_DIR)
-  include_directories(${nghttp2_SOURCE_DIR}/lib/includes)
-  include_directories(${nghttp2_BINARY_DIR}/lib/includes)
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(LIBNGHTTP2 QUIET IMPORTED_TARGET libnghttp2)
+endif()
+if(TARGET PkgConfig::LIBNGHTTP2)
+  if(NOT TARGET nghttp2)
+    add_library(nghttp2 INTERFACE IMPORTED)
+    target_link_libraries(nghttp2 INTERFACE PkgConfig::LIBNGHTTP2)
+  endif()
+  message(STATUS "Found nghttp2 via pkg-config")
+else()
+  find_library(NGHTTP2_LIB NAMES nghttp2 libnghttp2)
+  find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
+  if(NGHTTP2_LIB AND NGHTTP2_INCLUDE_DIR)
+    message(STATUS "Found system nghttp2: ${NGHTTP2_LIB}")
+    if(NOT TARGET nghttp2)
+      add_library(nghttp2 INTERFACE IMPORTED)
+      set_target_properties(nghttp2 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${NGHTTP2_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${NGHTTP2_LIB}"
+      )
+    endif()
+  else()
+    set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
+    set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
+    set(ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      nghttp2
+      GIT_REPOSITORY https://github.com/nghttp2/nghttp2.git
+      GIT_TAG        v1.61.0
+      GIT_SHALLOW    TRUE
+      GIT_SUBMODULES ""
+    )
+    FetchContent_MakeAvailable(nghttp2)
+    if(nghttp2_SOURCE_DIR)
+      include_directories(${nghttp2_SOURCE_DIR}/lib/includes)
+      include_directories(${nghttp2_BINARY_DIR}/lib/includes)
+    endif()
+  endif()
 endif()
 
 # ── HTTP Client & SSL (CURL, OpenSSL, Threads) ───────────────────────────

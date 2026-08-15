@@ -132,8 +132,8 @@ jobs:
 
     - name: List artifacts
       run: |
-        ls -lh csilk-*.tar.gz* || echo "(no packages found)"
-        ls -lh wheelhouse/*.whl || echo "(no wheels found)"
+        ls -lh csilk-*.tar.gz* 2>/dev/null || echo "(no packages found)"
+        find . -name "*.whl" -o -name "*.tar.gz" 2>/dev/null || echo "(no wheels/sdist found)"
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -143,6 +143,9 @@ jobs:
         body_path: ${{ steps.notes.outputs.notes_file }}
         files: |
           csilk-*.tar.gz*
+          wheelhouse/**/*.whl
+          wheelhouse/**/*.tar.gz
           wheelhouse/*.whl
+          wheelhouse/*.tar.gz
         fail_on_unmatched_files: false
         generate_release_notes: false

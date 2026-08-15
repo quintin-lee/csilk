@@ -8,7 +8,7 @@ on:
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
@@ -37,8 +37,8 @@ jobs:
 
       - name: Configure & Build
         run: |
-          cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON
-          cmake --build build_release --target example_server -j$(nproc)
+          cmake -B build_release -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON -DCSILK_ENABLE_NATIVE_ARCH=ON
+          cmake --build build_release --target example_server example_app -j$(nproc)
 
 
       - name: Run Benchmarks
@@ -87,7 +87,7 @@ jobs:
 
   profile:
     name: CPU Profile (FlameGraph)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v5

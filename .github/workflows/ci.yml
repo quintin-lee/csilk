@@ -240,7 +240,9 @@ jobs:
       run: cmake --build build_arm64 -j$(nproc)
 
     - name: Verify binary architecture
-      run: 'readelf -h build_arm64/libcsilk.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)'
+      run: |
+        ls -lh build_arm64/libcsilk*.a
+        readelf -h build_arm64/libcsilk.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)
 
   io_uring:
     name: io_uring compatibility
@@ -265,7 +267,7 @@ jobs:
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure (libuv + io_uring)
-      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_OOM_TEST=ON
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON -DENABLE_OOM_TEST=ON
 
     - name: Build (libuv + io_uring)
       run: cmake --build build -j$(nproc)
@@ -386,10 +388,10 @@ jobs:
           libpq-dev libsqlite3-dev curl libuv1-dev
 
     - name: Configure
-      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 
     - name: Build examples
-      run: cmake --build build --target example_server example_app -j$(nproc)
+      run: cmake --build build --target example_server example_app example_tls example_db example_ai example_ai_workflow example_sse example_websocket -j$(nproc)
 
     - name: Smoke test — example_server
       run: |
@@ -400,3 +402,13 @@ jobs:
         curl -fsS http://127.0.0.1:8080/ && echo " PASS" || echo " FAIL"
         kill $SERVER_PID 2>/dev/null || true
         wait $SERVER_PID 2>/dev/null || true
+
+    - name: Smoke test — example_app
+      run: |
+        cd build
+        ./example_app &
+        APP_PID=$!
+        sleep 2
+        curl -fsS http://127.0.0.1:8080/api/v1/users && echo " PASS" || echo " FAIL"
+        kill $APP_PID 2>/dev/null || true
+        wait $APP_PID 2>/dev/null || true
