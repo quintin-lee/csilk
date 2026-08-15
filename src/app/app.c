@@ -26,6 +26,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#define R_OK 4
+#else
+#include <unistd.h>
+#endif
 
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
@@ -103,6 +109,37 @@ docs_handler(csilk_ctx_t* c)
         return;
     }
     csilk_serve_swagger_ui(c);
+}
+
+/** @brief Resolve the best directory path containing Swagger UI static distribution files. */
+static const char*
+resolve_swagger_ui_dir(void)
+{
+    const char* env_dir = getenv("CSILK_SWAGGER_UI_DIR");
+    if (env_dir && access(env_dir, R_OK) == 0) {
+        return env_dir;
+    }
+#ifdef CSILK_SWAGGER_UI_DIR
+    if (access(CSILK_SWAGGER_UI_DIR, R_OK) == 0) {
+        return CSILK_SWAGGER_UI_DIR;
+    }
+#endif
+    static const char* const candidates[] = {"/usr/local/share/csilk/swagger-ui",
+                                             "/usr/share/csilk/swagger-ui",
+                                             "./share/swagger-ui",
+                                             "../share/swagger-ui",
+                                             "../../share/swagger-ui",
+                                             NULL};
+    for (int i = 0; candidates[i]; i++) {
+        if (access(candidates[i], R_OK) == 0) {
+            return candidates[i];
+        }
+    }
+#ifdef CSILK_SWAGGER_UI_DIR
+    return CSILK_SWAGGER_UI_DIR;
+#else
+    return NULL;
+#endif
 }
 
 /* ---- global static-route table ---- */
@@ -217,7 +254,7 @@ csilk_app_new(const char* config_path)
         goto fail;
     }
 
-    /* Register built-in /openapi.json and /docs endpoints */
+    /* Register built-in /openapi.json and /docs /swagger endpoints */
     set_openapi_router(app->router);
     {
         csilk_handler_t openapi_h[] = {openapi_handler};
@@ -235,9 +272,14 @@ csilk_app_new(const char* config_path)
     {
         csilk_handler_t docs_h[] = {docs_handler};
         csilk_router_add(app->router, "GET", "/docs", docs_h, 1);
+        csilk_router_add(app->router, "GET", "/swagger", docs_h, 1);
+        csilk_router_add(app->router, "GET", "/swagger-ui", docs_h, 1);
     }
-    /* Register static /csilk-docs/ serving the bundled Swagger UI files */
-    csilk_app_static(app, "/csilk-docs", CSILK_SWAGGER_UI_DIR);
+    /* Register static /csilk-docs/ serving the bundled Swagger UI files if available */
+    const char* swagger_dir = resolve_swagger_ui_dir();
+    if (swagger_dir) {
+        csilk_app_static(app, "/csilk-docs", swagger_dir);
+    }
 
     CSILK_LOG_I("csilk app initialized");
     return app;

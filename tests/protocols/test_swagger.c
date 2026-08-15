@@ -513,10 +513,95 @@ test_serve_swagger_ui()
 }
 
 void
+test_serve_swagger_ui_ext()
+{
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    csilk_serve_swagger_ui_ext(ctx, "/v2/api-docs");
+
+    assert(csilk_get_status(ctx) == 200);
+    size_t      body_len = 0;
+    const char* body = csilk_get_response_body(ctx, &body_len);
+    assert(body != nullptr);
+    assert(strstr(body, "/v2/api-docs") != nullptr);
+    assert(strstr(body, "unpkg.com/swagger-ui-dist") != nullptr);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_serve_swagger_ui_ext PASSED\n");
+}
+
+void
 test_serve_swagger_ui_null_ctx()
 {
     csilk_serve_swagger_ui(nullptr);
+    csilk_serve_swagger_ui_ext(nullptr, "/custom.json");
     printf("test_serve_swagger_ui_null_ctx PASSED\n");
+}
+
+void
+test_serve_openapi_dynamic_routes()
+{
+    csilk_router_t* r = csilk_router_new();
+    assert(r);
+
+    csilk_handler_t h[] = {dummy_handler};
+    csilk_router_add(r, "GET", "/first", h, 1);
+
+    csilk_ctx_t* ctx1 = csilk_test_ctx_new();
+    csilk_serve_openapi(ctx1, r, "Dynamic API", "1.0.0", "Dynamic description");
+    assert(csilk_get_status(ctx1) == 200);
+    size_t      len1 = 0;
+    const char* body1 = csilk_get_response_body(ctx1, &len1);
+    assert(body1 != nullptr);
+    assert(strstr(body1, "/first") != nullptr);
+    assert(strstr(body1, "/second") == nullptr);
+    csilk_test_ctx_free(ctx1);
+
+    /* Add route dynamically after first serve */
+    csilk_router_add(r, "POST", "/second", h, 1);
+
+    csilk_ctx_t* ctx2 = csilk_test_ctx_new();
+    csilk_serve_openapi(ctx2, r, "Dynamic API", "1.0.0", "Dynamic description");
+    assert(csilk_get_status(ctx2) == 200);
+    size_t      len2 = 0;
+    const char* body2 = csilk_get_response_body(ctx2, &len2);
+    assert(body2 != nullptr);
+    assert(strstr(body2, "/first") != nullptr);
+    assert(strstr(body2, "/second") != nullptr);
+    csilk_test_ctx_free(ctx2);
+
+    csilk_router_free(r);
+    printf("test_serve_openapi_dynamic_routes PASSED\n");
+}
+
+void
+test_group_extended_macros()
+{
+    csilk_router_t* r = csilk_router_new();
+    assert(r);
+
+    csilk_group_t* g = csilk_group_new(r, "/api/v1");
+    assert(g);
+
+    csilk_GET_EXT(g, "/items", dummy_handler, nullptr, "Product", "List items", "Lists all items");
+    csilk_POST_EXT(
+        g, "/items", dummy_handler, "Product", "Product", "Create item", "Creates an item");
+
+    csilk_json_t* spec = csilk_generate_openapi_json(r, "API", "1.0", "Group API");
+    assert(spec);
+
+    csilk_json_t* get_op = get_path(spec, "get", "/api/v1/items");
+    assert(get_op);
+    assert(json_has_string(get_op, "summary", "List items"));
+
+    csilk_json_t* post_op = get_path(spec, "post", "/api/v1/items");
+    assert(post_op);
+    assert(json_has_string(post_op, "summary", "Create item"));
+
+    csilk_json_free(spec);
+    csilk_group_free(g);
+    csilk_router_free(r);
+    printf("test_group_extended_macros PASSED\n");
 }
 
 void
@@ -587,7 +672,10 @@ main()
     test_descriptions_and_summaries();
     test_serve_openapi_handler();
     test_serve_openapi_null_router();
+    test_serve_openapi_dynamic_routes();
+    test_group_extended_macros();
     test_serve_swagger_ui();
+    test_serve_swagger_ui_ext();
     test_serve_swagger_ui_null_ctx();
     test_empty_router();
     test_auto_register_all_types();

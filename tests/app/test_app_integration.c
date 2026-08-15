@@ -203,6 +203,25 @@ test_docs(void)
 }
 
 static void
+test_swagger_alias(void)
+{
+    int sock = connect_server();
+    if (sock < 0) {
+        test_result("GET /swagger (connect)", 0);
+        return;
+    }
+    const char* req = "GET /swagger HTTP/1.1\r\nHost: "
+                      "localhost\r\nConnection: close\r\n\r\n";
+    send_request(sock, req);
+    char buf[BUFSIZE] = {0};
+    int  n = read_response(sock, buf, sizeof(buf));
+    close(sock);
+    test_result("GET /swagger (response received)", n > 0);
+    test_result("GET /swagger (status 200)", expect_status(buf, 200));
+    test_result("GET /swagger (HTML body)", expect_body(buf, "<html"));
+}
+
+static void
 test_csilk_docs_static(void)
 {
     int sock = connect_server();
@@ -223,10 +242,12 @@ test_csilk_docs_static(void)
     if (!has_html) {
         const char* hdr_end = strstr(buf, "\r\n\r\n");
         if (hdr_end) {
-            printf("FAIL CSS: body=\n%s\n...\n", hdr_end + 4);
+            printf("  [DEBUG] csilk-docs body (%d bytes): %.300s\n",
+                   n - (int)(hdr_end + 4 - buf),
+                   hdr_end + 4);
         }
     }
-    test_result("GET /csilk-docs/index.css (CSS content)", has_html);
+    test_result("GET /csilk-docs/index.css (CSS body)", has_html);
 }
 
 static void
@@ -289,6 +310,7 @@ main(void)
     test_get_hello();
     test_openapi_json();
     test_docs();
+    test_swagger_alias();
     test_csilk_docs_static();
     test_openapi_disabled();
     test_not_found();
