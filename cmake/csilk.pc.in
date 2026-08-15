@@ -1,0 +1,14 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: csilk
+Description: High-performance, lightweight C HTTP server and microservices framework
+Version: @CSILK_VERSION@
+URL: https://github.com/quintin-lee/csilk
+Libs: -L${libdir} -lcsilk
+Libs.private: @CSILK_PC_LIBS_PRIVATE@
+Cflags: -I${includedir}
+Requires: @CSILK_PC_REQUIRES@
+Requires.private: @CSILK_PC_REQUIRES_PRIVATE@

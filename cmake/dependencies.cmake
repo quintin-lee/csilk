@@ -2,6 +2,7 @@
 
 include(FetchContent)
 
+# ── I/O Backend (io_uring or libuv) ──────────────────────────────────────
 if(CSILK_USE_URING)
   message(STATUS "io_uring backend selected — fetching liburing")
   set(CSILK_USE_URING_ONLY TRUE)
@@ -62,25 +63,43 @@ struct __kernel_timespec {
       "${liburing_SOURCE_DIR}/src/version.c"
     )
     add_library(uring STATIC ${LIBURING_SOURCES})
-    target_include_directories(uring PRIVATE
-      "${liburing_SOURCE_DIR}/src/include"
-      "${liburing_BINARY_DIR}/src/include"
+    target_include_directories(uring PUBLIC
+      $<BUILD_INTERFACE:${liburing_SOURCE_DIR}/src/include>
+      $<BUILD_INTERFACE:${liburing_BINARY_DIR}/src/include>
+      $<INSTALL_INTERFACE:include>
     )
     target_compile_definitions(uring PRIVATE -D_GNU_SOURCE)
   endif()
 else()
-  find_library(LIBUV_LIB NAMES uv)
-  find_path(LIBUV_INCLUDE_DIR uv.h)
-  if(LIBUV_LIB AND LIBUV_INCLUDE_DIR)
-    message(STATUS "Found system libuv: ${LIBUV_LIB}")
-    set(libuv_LIBRARIES ${LIBUV_LIB})
-    include_directories(${LIBUV_INCLUDE_DIR})
+  find_package(PkgConfig QUIET)
+  if(PKG_CONFIG_FOUND)
+    pkg_check_modules(LIBUV QUIET IMPORTED_TARGET libuv)
+  endif()
+  if(TARGET PkgConfig::LIBUV)
+    if(NOT TARGET csilk::libuv)
+      add_library(csilk::libuv INTERFACE IMPORTED)
+      target_link_libraries(csilk::libuv INTERFACE PkgConfig::LIBUV)
+    endif()
+    message(STATUS "Found libuv via pkg-config")
   else()
-    message(FATAL_ERROR "libuv not found on system. Please install libuv-dev.")
+    find_library(LIBUV_LIB NAMES uv libuv)
+    find_path(LIBUV_INCLUDE_DIR uv.h)
+    if(LIBUV_LIB AND LIBUV_INCLUDE_DIR)
+      message(STATUS "Found system libuv: ${LIBUV_LIB}")
+      if(NOT TARGET csilk::libuv)
+        add_library(csilk::libuv INTERFACE IMPORTED)
+        set_target_properties(csilk::libuv PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${LIBUV_INCLUDE_DIR}"
+          INTERFACE_LINK_LIBRARIES "${LIBUV_LIB}"
+        )
+      endif()
+    else()
+      message(FATAL_ERROR "libuv not found on system. Please install libuv-dev.")
+    endif()
   endif()
 endif()
 
-# Prefer system llhttp; fallback to FetchContent from source
+# ── HTTP/1 Parser (llhttp) ────────────────────────────────────────────────
 find_library(LLHTTP_LIB NAMES llhttp libllhttp)
 if(NOT LLHTTP_LIB)
   message(STATUS "System llhttp not found — fetching from source and embedding into CSILK_SOURCES")
@@ -98,12 +117,19 @@ if(NOT LLHTTP_LIB)
       ${llhttp_SOURCE_DIR}/src/llhttp.c
     )
   endif()
-  set(LLHTTP_LIB "")
 else()
   message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
+  find_path(LLHTTP_INCLUDE_DIR llhttp.h)
+  if(NOT TARGET csilk::llhttp)
+    add_library(csilk::llhttp INTERFACE IMPORTED)
+    if(LLHTTP_INCLUDE_DIR)
+      set_target_properties(csilk::llhttp PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LLHTTP_INCLUDE_DIR}")
+    endif()
+    set_target_properties(csilk::llhttp PROPERTIES INTERFACE_LINK_LIBRARIES "${LLHTTP_LIB}")
+  endif()
 endif()
 
-# Fetch yyjson (header-only JSON library)
+# ── JSON Engine (yyjson) ──────────────────────────────────────────────────
 FetchContent_Declare(
   yyjson
   GIT_REPOSITORY https://github.com/ibireme/yyjson.git
@@ -111,7 +137,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yyjson)
 
-# Fetch nghttp2
+# ── HTTP/2 Engine (nghttp2) ───────────────────────────────────────────────
 set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
 set(ENABLE_SHARED_LIB OFF CACHE BOOL "" FORCE)
 set(ENABLE_STATIC_LIB ON CACHE BOOL "" FORCE)
@@ -128,18 +154,58 @@ if(nghttp2_SOURCE_DIR)
   include_directories(${nghttp2_BINARY_DIR}/lib/includes)
 endif()
 
-# Find CURL (HTTP/2 support via nghttp2)
+# ── HTTP Client & SSL (CURL, OpenSSL, Threads) ───────────────────────────
 find_package(CURL REQUIRED)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+find_package(OpenSSL 1.1.1 REQUIRED)
+message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 
+# ── Compression & Storage (ZLIB, SQLite3) ────────────────────────────────
+find_package(ZLIB 1.2 REQUIRED)
+message(STATUS "Found zlib: ${ZLIB_VERSION_STRING}")
+find_package(SQLite3 3.20 REQUIRED)
+message(STATUS "Found sqlite3: ${SQLite3_VERSION}")
+
+# ── YAML Parser (libyaml) ─────────────────────────────────────────────────
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(YAML QUIET IMPORTED_TARGET yaml>=0.2.0)
+endif()
+if(TARGET PkgConfig::YAML)
+  if(NOT TARGET csilk::yaml)
+    add_library(csilk::yaml INTERFACE IMPORTED)
+    target_link_libraries(csilk::yaml INTERFACE PkgConfig::YAML)
+  endif()
+  set(YAML_FOUND TRUE)
+else()
+  find_library(YAML_LIB NAMES yaml libyaml)
+  find_path(YAML_INCLUDE_DIR yaml.h PATH_SUFFIXES yaml)
+  if(YAML_LIB AND YAML_INCLUDE_DIR)
+    set(YAML_FOUND TRUE)
+    if(NOT TARGET csilk::yaml)
+      add_library(csilk::yaml INTERFACE IMPORTED)
+      set_target_properties(csilk::yaml PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${YAML_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${YAML_LIB}"
+      )
+    endif()
+  endif()
+endif()
+if(NOT YAML_FOUND)
+  message(FATAL_ERROR "libyaml >= 0.2.0 not found. Install libyaml-dev.\n"
+    "  Debian/Ubuntu: sudo apt install libyaml-dev\n"
+    "  macOS: brew install libyaml")
+endif()
+message(STATUS "Found libyaml target")
+
+# ── Include Directories & Version Config ──────────────────────────────────
 include_directories(include)
 include_directories(src)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories(${yyjson_SOURCE_DIR})
 include_directories(${CURL_INCLUDE_DIRS})
 
-# Generate version.h into the binary include/ tree (mirroring the source
-# include/ layout) so consumers of the csilk target — add_subdirectory,
-# FetchContent, and installed packages alike — can resolve "csilk/version.h".
 configure_file(
   include/csilk/version.h.in
   ${CMAKE_CURRENT_BINARY_DIR}/include/csilk/version.h
@@ -151,7 +217,8 @@ configure_file(
   @ONLY
 )
 
-# Find MySQL (optional)
+# ── Optional Database Client Drivers ──────────────────────────────────────
+# Find MySQL
 find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
 if(MYSQL_LIB)
   message(STATUS "Found MySQL client library: ${MYSQL_LIB}")
@@ -159,12 +226,20 @@ if(MYSQL_LIB)
   if(MYSQL_INCLUDE_DIR)
     include_directories(${MYSQL_INCLUDE_DIR})
     message(STATUS "Found MySQL include dir: ${MYSQL_INCLUDE_DIR}")
+    if(NOT TARGET csilk::mysql)
+      add_library(csilk::mysql INTERFACE IMPORTED)
+      set_target_properties(csilk::mysql PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${MYSQL_LIB}"
+      )
+    endif()
+    set(CSILK_HAS_MYSQL TRUE)
   endif()
 else()
   message(STATUS "MySQL client library not found — mysql driver will not build")
 endif()
 
-# Find PostgreSQL (optional)
+# Find PostgreSQL
 find_library(PQ_LIB NAMES pq libpq)
 if(PQ_LIB)
   message(STATUS "Found PostgreSQL client library: ${PQ_LIB}")
@@ -172,12 +247,20 @@ if(PQ_LIB)
   if(PQ_INCLUDE_DIR)
     include_directories(${PQ_INCLUDE_DIR})
     message(STATUS "Found PostgreSQL include dir: ${PQ_INCLUDE_DIR}")
+    if(NOT TARGET csilk::pq)
+      add_library(csilk::pq INTERFACE IMPORTED)
+      set_target_properties(csilk::pq PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${PQ_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${PQ_LIB}"
+      )
+    endif()
+    set(CSILK_HAS_POSTGRES TRUE)
   endif()
 else()
   message(STATUS "PostgreSQL client library not found — postgres driver will not build")
 endif()
 
-# Find MongoDB (optional)
+# Find MongoDB
 find_library(MONGOC_LIB NAMES mongoc-1.0)
 find_library(BSON_LIB NAMES bson-1.0)
 if(MONGOC_LIB AND BSON_LIB)
@@ -188,13 +271,20 @@ if(MONGOC_LIB AND BSON_LIB)
     include_directories(${MONGOC_INCLUDE_DIR})
     include_directories(${BSON_INCLUDE_DIR})
     message(STATUS "Found MongoDB include dir: ${MONGOC_INCLUDE_DIR}")
+    if(NOT TARGET csilk::mongoc)
+      add_library(csilk::mongoc INTERFACE IMPORTED)
+      set_target_properties(csilk::mongoc PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${MONGOC_INCLUDE_DIR};${BSON_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${MONGOC_LIB};${BSON_LIB}"
+      )
+    endif()
     set(HAS_MONGODB TRUE)
   endif()
 else()
   message(STATUS "MongoDB client library not found — mongodb driver will not build")
 endif()
 
-# Find Redis (hiredis) (optional)
+# Find Redis (hiredis)
 find_library(HIREDIS_LIB NAMES hiredis)
 if(HIREDIS_LIB)
   message(STATUS "Found hiredis library: ${HIREDIS_LIB}")
@@ -202,43 +292,15 @@ if(HIREDIS_LIB)
   if(HIREDIS_INCLUDE_DIR)
     include_directories(${HIREDIS_INCLUDE_DIR})
     message(STATUS "Found hiredis include dir: ${HIREDIS_INCLUDE_DIR}")
+    if(NOT TARGET csilk::hiredis)
+      add_library(csilk::hiredis INTERFACE IMPORTED)
+      set_target_properties(csilk::hiredis PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${HIREDIS_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${HIREDIS_LIB}"
+      )
+    endif()
+    set(CSILK_HAS_REDIS TRUE)
   endif()
 else()
   message(STATUS "hiredis library not found — redis driver will not build")
 endif()
-
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-
-# Find system libyaml (>= 0.2.0)
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-  pkg_check_modules(YAML QUIET yaml>=0.2.0)
-endif()
-if(NOT YAML_FOUND)
-  find_library(YAML_LIB NAMES yaml libyaml)
-  find_path(YAML_INCLUDE_DIR yaml.h PATH_SUFFIXES yaml)
-  if(YAML_LIB AND YAML_INCLUDE_DIR)
-    set(YAML_FOUND TRUE)
-    set(YAML_LIBRARIES ${YAML_LIB})
-    set(YAML_INCLUDE_DIRS ${YAML_INCLUDE_DIR})
-  endif()
-endif()
-if(NOT YAML_FOUND)
-  message(FATAL_ERROR "libyaml >= 0.2.0 not found. Install libyaml-dev.\n"
-    "  Debian/Ubuntu: sudo apt install libyaml-dev\n"
-    "  macOS: brew install libyaml")
-endif()
-message(STATUS "Found libyaml: ${YAML_LIBRARIES}")
-
-# Find system zlib (>= 1.2.0)
-find_package(ZLIB 1.2 REQUIRED)
-message(STATUS "Found zlib: ${ZLIB_VERSION_STRING}")
-
-# Find system sqlite3 (>= 3.20.0)
-find_package(SQLite3 3.20 REQUIRED)
-message(STATUS "Found sqlite3: ${SQLite3_VERSION}")
-
-# Find OpenSSL (>= 1.1.1 for TLS 1.3)
-find_package(OpenSSL 1.1.1 REQUIRED)
-message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")

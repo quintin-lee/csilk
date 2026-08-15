@@ -1,0 +1,38 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Threads)
+find_dependency(OpenSSL)
+find_dependency(ZLIB)
+find_dependency(SQLite3)
+find_dependency(CURL)
+
+set(CSILK_USE_URING @CSILK_USE_URING@)
+if(NOT CSILK_USE_URING)
+  find_package(PkgConfig QUIET)
+  if(PKG_CONFIG_FOUND)
+    pkg_check_modules(LIBUV QUIET IMPORTED_TARGET libuv)
+  endif()
+  if(NOT TARGET PkgConfig::LIBUV)
+    find_library(LIBUV_LIB NAMES uv libuv)
+    find_path(LIBUV_INCLUDE_DIR uv.h)
+    if(LIBUV_LIB AND LIBUV_INCLUDE_DIR)
+      if(NOT TARGET csilk_libuv_target)
+        add_library(csilk_libuv_target INTERFACE)
+        target_include_directories(csilk_libuv_target INTERFACE ${LIBUV_INCLUDE_DIR})
+        target_link_libraries(csilk_libuv_target INTERFACE ${LIBUV_LIB})
+        add_library(csilk::libuv ALIAS csilk_libuv_target)
+      endif()
+    endif()
+  else()
+    if(NOT TARGET csilk::libuv)
+      add_library(csilk::libuv ALIAS PkgConfig::LIBUV)
+    endif()
+  endif()
+endif()
+
+# Include exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/csilk-targets.cmake")
+
+check_required_components(csilk)
