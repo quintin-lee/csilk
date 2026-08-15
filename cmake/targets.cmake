@@ -73,20 +73,50 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
     endif()
   endif()
 
+  # Public dependencies: exposed in public API headers (transitive includes and link)
+  set(CSILK_PUBLIC_DEPS
+      yyjson
+      OpenSSL::SSL
+      OpenSSL::Crypto
+      Threads::Threads
+  )
   if(CSILK_USE_URING)
-    target_link_libraries(${TARGET} PUBLIC uring yyjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2 m)
+    list(APPEND CSILK_PUBLIC_DEPS uring)
     if(NOT APPLE)
       target_compile_options(${TARGET} PUBLIC "-D_GNU_SOURCE")
     endif()
   else()
-    target_link_libraries(${TARGET} PUBLIC ${libuv_LIBRARIES} yyjson OpenSSL::SSL OpenSSL::Crypto Threads::Threads ${SQLite3_LIBRARIES} ${CURL_LIBRARIES} PRIVATE ${LLHTTP_LIB} ${YAML_LIBRARIES} ${ZLIB_LIBRARIES} nghttp2 m)
+    list(APPEND CSILK_PUBLIC_DEPS csilk::libuv)
   endif()
 
-  foreach(DB_LIB MYSQL_LIB PQ_LIB HIREDIS_LIB)
-    if(${DB_LIB})
-      target_link_libraries(${TARGET} PRIVATE ${${DB_LIB}})
+  # Private dependencies: internal implementation only (link-time dependencies)
+  set(CSILK_PRIVATE_DEPS
+      SQLite3::SQLite3
+      CURL::libcurl
+      ZLIB::ZLIB
+      csilk::yaml
+      nghttp2
+  )
+  if(TARGET csilk::llhttp)
+    list(APPEND CSILK_PRIVATE_DEPS csilk::llhttp)
+  endif()
+
+  foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
+    if(TARGET ${DB_TARGET})
+      list(APPEND CSILK_PRIVATE_DEPS ${DB_TARGET})
     endif()
   endforeach()
+
+  if(NOT APPLE AND NOT WIN32)
+    list(APPEND CSILK_PRIVATE_DEPS m)
+  endif()
+
+  target_link_libraries(${TARGET}
+      PUBLIC
+          ${CSILK_PUBLIC_DEPS}
+      PRIVATE
+          ${CSILK_PRIVATE_DEPS}
+  )
 
   target_include_directories(${TARGET} PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
