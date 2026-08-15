@@ -27,9 +27,21 @@ install(TARGETS ${CSILK_INSTALL_TARGETS}
 )
 
 if(CSILK_BUILD_SHARED)
-    install(TARGETS csilk_shared
+    set(CSILK_SHARED_INSTALL_TARGETS
+        csilk_shared
+        csilk_core_shared
+        csilk_http_shared
+        csilk_tls_shared
+        csilk_http2_shared
+        csilk_db_shared
+        csilk_ai_shared
+        csilk_mq_shared
+        csilk_workflow_shared
+    )
+    install(TARGETS ${CSILK_SHARED_INSTALL_TARGETS}
         EXPORT csilk-targets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 endif()

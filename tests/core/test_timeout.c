@@ -61,20 +61,26 @@ main()
         retries++;
     }
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("socket");
-        printf("FAIL: socket creation\n");
-        csilk_server_stop(g_server);
-        pthread_join(thread, nullptr);
-        return 1;
-    }
+    int                sock = -1;
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     addr.sin_port = htons(TEST_PORT);
 
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    for (int r = 0; r < 50; r++) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            continue;
+        }
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            break;
+        }
+        close(sock);
+        sock = -1;
+        usleep(10000);
+    }
+
+    if (sock < 0) {
         perror("connect");
         printf("FAIL: connect\n");
         csilk_server_stop(g_server);
