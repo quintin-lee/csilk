@@ -46,13 +46,36 @@ recv_response(int sock, char* buf, size_t size)
 {
     fd_set         fds;
     struct timeval tv = {3, 0};
-    FD_ZERO(&fds);
-    FD_SET(sock, &fds);
-    int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
-    if (ret <= 0) {
-        return -1;
+    int            total = 0;
+    while (total < (int)size - 1) {
+        FD_ZERO(&fds);
+        FD_SET(sock, &fds);
+        int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
+        if (ret <= 0) {
+            break;
+        }
+        int n = (int)recv(sock, buf + total, (int)size - 1 - total, 0);
+        if (n <= 0) {
+            break;
+        }
+        total += n;
+        buf[total] = '\0';
+        char* hdr_end = strstr(buf, "\r\n\r\n");
+        if (hdr_end) {
+            char* cl = strstr(buf, "Content-Length: ");
+            if (!cl) {
+                cl = strstr(buf, "content-length: ");
+            }
+            if (cl) {
+                int content_len = atoi(cl + 16);
+                int body_len = total - (int)(hdr_end + 4 - buf);
+                if (body_len >= content_len) {
+                    break;
+                }
+            }
+        }
     }
-    return recv(sock, buf, size - 1, 0);
+    return total;
 }
 
 static int

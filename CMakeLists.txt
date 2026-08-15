@@ -99,25 +99,31 @@ include(cmake/dependencies.cmake)
 include(cmake/sources.cmake)
 
 if(LLHTTP_SOURCES)
+  list(APPEND CSILK_HTTP_SOURCES ${LLHTTP_SOURCES})
   list(APPEND CSILK_SOURCES ${LLHTTP_SOURCES})
 endif()
 
 # Conditional driver sources
 if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
+  list(APPEND CSILK_DB_SOURCES src/drivers/db/mysql.c)
   list(APPEND CSILK_SOURCES src/drivers/db/mysql.c)
   set(CSILK_HAS_MYSQL TRUE)
 endif()
 
 if(PQ_LIB AND PQ_INCLUDE_DIR)
+  list(APPEND CSILK_DB_SOURCES src/drivers/db/postgres.c)
   list(APPEND CSILK_SOURCES src/drivers/db/postgres.c)
   set(CSILK_HAS_POSTGRES TRUE)
 endif()
 
 if(HAS_MONGODB)
+  list(APPEND CSILK_DB_SOURCES src/drivers/db/mongodb.c)
   list(APPEND CSILK_SOURCES src/drivers/db/mongodb.c)
 endif()
 
 if(HIREDIS_LIB AND HIREDIS_INCLUDE_DIR)
+  list(APPEND CSILK_DB_SOURCES src/drivers/db/redis.c
+                               src/drivers/db/redis_storage.c)
   list(APPEND CSILK_SOURCES src/drivers/db/redis.c
                             src/drivers/db/redis_storage.c)
   set(CSILK_HAS_REDIS TRUE)
