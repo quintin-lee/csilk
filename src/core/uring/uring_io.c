@@ -829,10 +829,11 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                     }
                 }
             } else if (op == URING_OP_UV_WRITE) {
-                csilk_uv_on_write_done(ptr, res);
+                csilk_uv_on_write_done(ptr, res, gen);
             } else if (op == URING_OP_TMR_GENERIC) {
                 csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
-                if (tmr && tmr->generation == gen && (tmr->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                if (tmr && res >= 0 && tmr->generation == gen &&
+                    (tmr->flags & CSILK_IO_HANDLE_ACTIVE) &&
                     !(tmr->flags & CSILK_IO_HANDLE_CLOSING) && tmr->cb) {
                     csilk_io_timer_cb cb = tmr->cb;
                     if (tmr->repeat > 0) {
@@ -884,7 +885,7 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
 #endif
 
 void
-csilk_uv_on_write_done(void* arg, ssize_t res)
+csilk_uv_on_write_done(void* arg, ssize_t res, uint8_t gen)
 {
     void** ctx = (void**)arg;
     if (!ctx) {
@@ -893,6 +894,26 @@ csilk_uv_on_write_done(void* arg, ssize_t res)
     csilk_client_t*   client = (csilk_client_t*)ctx[0];
     csilk_io_write_t* req = (csilk_io_write_t*)ctx[1];
     struct iovec*     iov = (struct iovec*)ctx[2];
+
+    /* Stale completion: the client struct was recycled (its generation was
+     * bumped in pool_get) while this write was still in flight. The write
+     * belongs to the PREVIOUS incarnation — free the request memory and
+     * return. Running the callback or decrementing the new connection's
+     * async_ref would corrupt the live connection (e.g. close its fd before
+     * its request is ever read). */
+    if (client && gen != client->generation) {
+        if (req) {
+            if (req->data) {
+                free(req->data);
+            }
+            free(req);
+        }
+        if (iov) {
+            free(iov);
+        }
+        free(ctx);
+        return;
+    }
 
     if (iov) {
         free(iov);

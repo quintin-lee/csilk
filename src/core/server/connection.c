@@ -163,6 +163,13 @@ pool_get(worker_pool_t* wp)
         client->read_timer.generation = gen;
         client->write_timer.generation = gen;
         client->request_timer.generation = gen;
+        /* A struct recycled while its previous incarnation is still tearing
+         * down (async write CQE pending) carries stale teardown state; start
+         * pristine so a stale write completion for the old incarnation cannot
+         * trigger destruction of this connection. */
+        client->async_ref = 0;
+        client->close_pending = 0;
+        client->ctx.conn_closed = 0;
 #endif
         client->ctx.file_fd = -1;
     }
