@@ -7,6 +7,7 @@
  */
 
 #include <arpa/inet.h>
+#include <signal.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -382,6 +383,8 @@ int
 main()
 {
     printf("=== Extended Integration Tests ===\n\n");
+
+    signal(SIGPIPE, SIG_IGN);
 
     pthread_t thread;
     pthread_create(&thread, nullptr, run_server, nullptr);
