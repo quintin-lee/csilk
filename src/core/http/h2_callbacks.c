@@ -15,7 +15,7 @@
 #include <string.h>
 
 /** @brief Called by nghttp2 when a HEADERS frame is received and parsing begins. */
-static int
+int
 on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
     (void)session;
@@ -25,7 +25,7 @@ on_begin_headers_callback(nghttp2_session* session, const nghttp2_frame* frame, 
 }
 
 /** @brief Called by nghttp2 for each header name/value pair in a HEADERS frame. */
-static int
+int
 on_header_callback(nghttp2_session*     session,
                    const nghttp2_frame* frame,
                    const uint8_t*       name,
@@ -70,7 +70,7 @@ on_header_callback(nghttp2_session*     session,
 }
 
 /** @brief Called by nghttp2 after a complete frame has been received. */
-static int
+int
 on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
     csilk_client_t* client = (csilk_client_t*)user_data;
@@ -91,7 +91,7 @@ on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, voi
 }
 
 /** @brief Called by nghttp2 for each chunk of DATA frame payload. */
-static int
+int
 on_data_chunk_recv_callback(nghttp2_session* session,
                             uint8_t          flags,
                             int32_t          stream_id,
@@ -126,7 +126,7 @@ on_data_chunk_recv_callback(nghttp2_session* session,
 }
 
 /** @brief Called by nghttp2 when a stream is closed. */
-static int
+int
 on_stream_close_callback(nghttp2_session* session,
                          int32_t          stream_id,
                          uint32_t         error_code,
@@ -157,8 +157,52 @@ on_stream_close_callback(nghttp2_session* session,
     return 0;
 }
 
+/** @brief Response body streaming callback for HTTP/2. */
+ssize_t
+body_read_callback(nghttp2_session*     session,
+                   int32_t              stream_id,
+                   uint8_t*             buf,
+                   size_t               length,
+                   uint32_t*            data_flags,
+                   nghttp2_data_source* source,
+                   void*                user_data)
+{
+    (void)session;
+    (void)stream_id;
+    (void)user_data;
+    csilk_ctx_t* c = (csilk_ctx_t*)source->ptr;
+
+    size_t      body_len = c->response.body_len;
+    const char* body = (const char*)c->response.body;
+
+    if (!body) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        return 0;
+    }
+
+    size_t offset = 0;
+    void*  offset_ptr = csilk_get(c, "_h2_body_offset");
+    if (offset_ptr) {
+        offset = (size_t)(uintptr_t)offset_ptr;
+    }
+
+    size_t remaining = body_len - offset;
+    size_t to_copy = remaining < length ? remaining : length;
+
+    memcpy(buf, body + offset, to_copy);
+    offset += to_copy;
+
+    csilk_set(c, "_h2_body_offset", (void*)(uintptr_t)offset);
+
+    if (offset >= body_len) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    }
+
+    return (ssize_t)to_copy;
+}
+
 /** @brief nghttp2 send callback for writing serialized frames to the client. */
-static ssize_t
+ssize_t
 send_callback(
     nghttp2_session* session, const uint8_t* data, size_t length, int flags, void* user_data)
 {
