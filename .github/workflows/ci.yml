@@ -247,6 +247,7 @@ jobs:
   io_uring:
     name: io_uring compatibility
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
     - uses: actions/checkout@v5
 
