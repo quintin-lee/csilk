@@ -64,6 +64,9 @@ endif()
 set(CSILK_HTTP_SOURCES
     src/core/primitives/response.c
     src/core/http/http1_parse.c
+    src/core/http/http1_serialize.c
+    src/core/http/http1_write.c
+    src/core/http/http1_pipeline.c
     src/core/http/http1_response.c
     src/core/http/http1_zerocopy.c
     src/core/http/swar_http.c
@@ -120,6 +123,9 @@ set(CSILK_TLS_SOURCES
 
 # ── HTTP/2 & HTTP/3 Module (nghttp2 & QUIC protocol adapters) ────────────
 set(CSILK_HTTP2_SOURCES
+    src/core/http/h2_callbacks.c
+    src/core/http/h2_session.c
+    src/core/http/h2_response.c
     src/core/http/h2.c
     src/protocols/h3.c
 )
