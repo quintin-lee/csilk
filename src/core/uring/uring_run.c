@@ -225,10 +225,11 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 csilk_uv_on_write_done(ptr, res, gen);
             } else if (op == URING_OP_TMR_GENERIC) {
                 csilk_io_timer_t* tmr = (csilk_io_timer_t*)ptr;
-                /* io_uring timeout CQEs may return -ECANCELED even when the
-                 * timer fired; treat it the same as a successful completion. */
-                if (tmr && (res >= 0 || res == -ECANCELED) && tmr->generation == gen &&
-                    (tmr->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                /* io_uring timeout CQEs complete with -ETIME when the timer
+                 * fires, and may return -ECANCELED when canceled concurrently;
+                 * treat both the same as a successful completion. */
+                if (tmr && (res >= 0 || res == -ECANCELED || res == -ETIME) &&
+                    tmr->generation == gen && (tmr->flags & CSILK_IO_HANDLE_ACTIVE) &&
                     !(tmr->flags & CSILK_IO_HANDLE_CLOSING) && tmr->cb) {
                     csilk_io_timer_cb cb = tmr->cb;
                     if (tmr->repeat > 0) {
