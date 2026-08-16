@@ -69,6 +69,14 @@ if(CSILK_USE_URING)
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
         src/core/uring/uring_io.c
+        src/core/uring/uring_loop.c
+        src/core/uring/uring_handle.c
+        src/core/uring/uring_tcp.c
+        src/core/uring/uring_stream.c
+        src/core/uring/uring_write.c
+        src/core/uring/uring_close.c
+        src/core/uring/uring_timer.c
+        src/core/uring/uring_run.c
     )
 endif()
 
