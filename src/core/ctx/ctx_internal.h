@@ -49,9 +49,17 @@ typedef struct csilk_header_s csilk_header_t;
 
 /**
  * @brief A fixed-size chained hash table for HTTP headers.
+ *
+ * Nodes, keys and values are ALL arena-allocated by the map writers
+ * (map_set_view/map_set/map_add in header_map.c), so csilk_arena_reset()
+ * reclaims everything — cleanup only needs to clear the bucket head
+ * pointers of maps that were actually written this request.
  */
 struct csilk_header_map_s {
     csilk_header_t* buckets[CSILK_HEADER_BUCKETS];
+    uint8_t         used; /**< Set to 1 by map writers; lets cleanup skip zeroing
+                     unused maps (avoids a 512-byte memset per map per
+                     request). Cleared by the same memset. */
 };
 typedef struct csilk_header_map_s csilk_header_map_t;
 
@@ -61,48 +69,60 @@ typedef struct csilk_header_map_s csilk_header_map_t;
  *
  * Populated by the HTTP/1.1 (llhttp) or HTTP/2 (nghttp2) parser during
  * request finalization.  String fields are arena-allocated and valid until
- * csilk_ctx_cleanup().
+ * csilk_ctx_cleanup().  request.path is the ONLY exception: it is a
+ * malloc'd copy produced by csilk_split_url() and freed individually.
+ *
+ * The three header maps are large (64-bucket chains ≈ 512 B each) and are
+ * therefore placed at the tail of the struct so the scalar request core
+ * above them stays compact and cache-friendly on the parse/handler hot path.
  */
 struct csilk_request_s {
-    char*              method;          /**< HTTP method string (e.g., "GET", "POST", "PUT").
+    char*             method;          /**< HTTP method string (e.g., "GET", "POST", "PUT").
                                Arena-allocated copy of the request method. */
-    char*              path;            /**< Decoded URL path (e.g., "/users/42").
+    char*             path;            /**< Decoded URL path (e.g., "/users/42").
                                Percent-encoding removed, query string stripped.
-                               Arena-allocated. */
-    char*              body;            /**< Raw request body data.
+                               Malloc'd by csilk_split_url() — freed in cleanup. */
+    char*             body;            /**< Raw request body data.
                                For H1: pointer into the recv buffer (not copied).
                                For H2: heap-allocated copy. */
-    size_t             body_len;        /**< Byte length of @p body. 0 for GET/HEAD/DELETE
+    size_t            body_len;        /**< Byte length of @p body. 0 for GET/HEAD/DELETE
                                or when no Content-Length or Transfer-Encoding
                                is present. */
-    csilk_header_map_t headers;         /**< Request headers (key → value) stored in a
+    csilk_ownership_t body_ownership;  /**< Ownership model for request body. */
+    int               body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
+                              must be freed on cleanup. Zero for H1 bodies
+                              (they reference the TCP recv buffer directly). */
+
+    /* --- Header maps (large; kept at the tail — see struct comment) --- */
+    csilk_header_map_t headers;      /**< Request headers (key → value) stored in a
                                      fixed-size chained hash table.
                                      Case-insensitive lookup via djb2
                                      hash + strcasecmp. */
-    csilk_header_map_t query_params;    /**< URL query-string parameters parsed
+    csilk_header_map_t query_params; /**< URL query-string parameters parsed
                                           from the "?" portion of the request
                                           URL. Populated by csilk_parse_query(). */
-    csilk_header_map_t form_params;     /**< Form-urlencoded body parameters parsed
+    csilk_header_map_t form_params;  /**< Form-urlencoded body parameters parsed
                                         from application/x-www-form-urlencoded
                                         body. Populated by
                                         csilk_parse_form_urlencoded(). */
-    csilk_ownership_t  body_ownership;  /**< Ownership model for request body. */
-    int                body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
-                              must be freed on cleanup. Zero for H1 bodies
-                              (they reference the TCP recv buffer directly). */
 };
 typedef struct csilk_request_s csilk_request_t;
 
 /**
  * @brief Mutable HTTP response.
+ *
+ * Like csilk_request_s, the large header map is kept at the tail so the
+ * scalar response core (status/body/body_len) is compact on the handler
+ * and response-serialization hot path.
  */
 struct csilk_response_s {
-    int                status;
-    const char*        body;
-    size_t             body_len;
-    csilk_header_map_t headers;
-    csilk_ownership_t  body_ownership;
-    int                body_is_managed;
+    int               status;
+    const char*       body;
+    size_t            body_len;
+    csilk_ownership_t body_ownership;
+    int               body_is_managed;
+
+    csilk_header_map_t headers; /**< Response headers (large; kept at the tail). */
 };
 typedef struct csilk_response_s csilk_response_t;
 
@@ -205,20 +225,41 @@ typedef struct csilk_defer_item_s {
  * The I/O event loop ensures serialized access per connection. Async
  * operations (uv_queue_work) run on the thread pool but access to the context
  * is synchronized via the event-loop callback pattern.
+ *
+ * ## Memory Layout (hot / cold split)
+ *
+ * The struct is ordered by access frequency so the per-request hot path
+ * (parser, router, handler chain, response send) touches a small cache
+ * footprint:
+ *
+ * - **HOT** — first: dispatch/handler-chain state, arena, request/response
+ *   scalar cores, protocol flags. All fit within the first few cache lines.
+ * - **Large slabs in the middle**: the four 512-byte header maps and the
+ *   embedded URL-params array — needed by every request, but accessed in
+ *   bursts (parse / serialize) rather than per-handler-call.
+ * - **COLD last**: connection-scoped configuration shared by every request —
+ *   pluggable drivers, watermark config, work_req, stream linkage, request_id.
+ *
+ * This is a single flat struct: no pointer indirection was introduced to
+ * split it. Every field keeps its name, so all `c->field` access sites are
+ * unchanged.
  */
 struct csilk_ctx_s {
-    /* === Handler Chain State === */
+    /* ═══════════════════════════════════════════════════════════════════
+     * HOT REGION — read/written on every request
+     * ═══════════════════════════════════════════════════════════════════ */
+
+    /* === Handler Chain + Dispatch State === */
     int              handler_index; /**< Index of the current handler in the chain; starts at
                         -1 (before first handler). */
-    csilk_handler_t* handlers;      /**< NULL-terminated array of handler function
-                                pointers for the matched route. */
-    size_t handler_count; /**< Total number of handlers in the chain (for bounds check). */
-    int    aborted;       /**< Non-zero if handler execution was aborted via csilk_abort().
+    int              aborted;      /**< Non-zero if handler execution was aborted via csilk_abort().
                   Subsequent csilk_next() calls are no-ops. */
-
-    /* === Error Recovery === */
-    int                 panicked;   /**< Non-zero if a handler called csilk_panic().
+    int              panicked;     /**< Non-zero if a handler called csilk_panic().
                                  Subsequent csilk_next() calls are no-ops. */
+    int              params_count; /**< Number of path parameters currently in params[] array. */
+    csilk_handler_t* handlers;     /**< NULL-terminated array of handler function
+                                pointers for the matched route. */
+    size_t handler_count;          /**< Total number of handlers in the chain (for bounds check). */
     csilk_defer_item_t* defer_head; /**< Linked list of deferred cleanup callbacks.
                                     Executed by csilk_ctx_defer_free() on
                                     panic and during normal cleanup (LIFO). */
@@ -229,23 +270,33 @@ struct csilk_ctx_s {
                            (headers, param values, storage items) are served
                            from this arena. */
 
-    /* === Request Data === */
-    csilk_request_t request; /**< Parsed HTTP request data (method, path, headers,
-                              body, query params, form params). Populated by
-                              the llhttp-based HTTP parser. */
+    /* === Internal I/O State (touched on every queued write) === */
+    struct csilk_server_s* server;           /**< Pointer to the owning server instance. */
+    void*                  _internal_client; /**< Opaque pointer to the internal csilk_client_t.
+                             MUST NOT be used directly by handlers. Used
+                             internally by _csilk_send_data() to route data
+                             through TLS or raw TCP. */
+    int conn_closed; /**< Non-zero if the connection has been closed/timed out. */
 
-    /* === Response Data === */
+    /* === Request Data (scalar core; header maps at tail of struct) === */
+    csilk_request_t request; /**< Parsed HTTP request data (method, path, headers,
+                               body, query params, form params). Populated by
+                               the llhttp-based HTTP parser. */
+
+    /* === Response Data (scalar core; header map at tail of struct) === */
     csilk_response_t response; /**< HTTP response data (status, headers, body) to
                                 be sent to the client. Set by handler functions
                                 like csilk_string(), csilk_json(), etc. */
 
-    /* === URL Path Parameters === */
-    csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters captured during routing
-                                   (key/value pairs). Populated by the router
-                                   when matching parameterized routes like
-                                   "/users/:id". */
-    int           params_count; /**< Number of path parameters currently in params[] array.
-                     */
+    /* === Request Flow Flags === */
+    int is_async;         /**< Non-zero if the response will be sent asynchronously
+                   (framework skips auto-send after handler chain returns).
+                   Set by csilk_response_write() for streaming responses or
+                   explicitly by csilk_ctx_set_async(). */
+    int response_started; /**< Non-zero if chunked response headers have already
+                           been sent to the client. Used by
+                           csilk_response_write() to avoid sending headers
+                           multiple times in streaming mode. */
 
     /* === Protocol Mode Flags === */
     int is_websocket; /**< Non-zero if the connection has been upgraded to
@@ -264,7 +315,46 @@ struct csilk_ctx_s {
     /** Callback invoked for each outgoing WebSocket data frame (for testing). */
     void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
-    /* === Zero-Copy Receive Buffers === */
+    /* === Streaming Backpressure & Flow Control === */
+    size_t write_high_water_mark; /**< Outbound write queue high water mark (bytes). */
+    size_t write_low_water_mark;  /**< Outbound write queue low water mark (bytes). */
+    size_t max_write_buffer_size; /**< Hard max write buffer size before drop (bytes). */
+    int    write_paused;          /**< 1 if backpressure paused the stream. */
+    void (*on_drain)(struct csilk_ctx_s* c, void* user_data); /**< Drain callback. */
+    void* on_drain_data;
+
+    /* ═══════════════════════════════════════════════════════════════════
+     * LARGE SLABS — touched in bursts by parse / route / serialize
+     * ═══════════════════════════════════════════════════════════════════ */
+
+    /* === URL Path Parameters (embedded array) === */
+    csilk_param_t params[CSILK_MAX_PARAMS]; /**< URL path parameters captured during routing
+                                   (key/value pairs). Populated by the router
+                                   when matching parameterized routes like
+                                   "/users/:id". */
+
+    /* === Zero-Copy File Serving (sendfile) === */
+    int    file_fd;     /**< File descriptor of the file being sent via sendfile(). -1 if
+                  not in use. Set by static file middleware for large file
+                  responses. */
+    size_t file_offset; /**< Byte offset into the file where sendfile should start
+                         reading (for partial/range requests). */
+    size_t file_size;   /**< Total number of bytes to send from the file. */
+
+    /* === Simple Key-Value Storage (arena-backed linked list) === */
+    csilk_storage_item_t* storage_head; /**< Head of the linked list for simple
+                                         arena-backed key-value storage.
+                                         Managed by csilk_set()/csilk_get()
+                                         and freed on context cleanup. */
+
+    /** OpenAPI spec generation — tracks the current method handler's metadata */
+    csilk_method_handler_t*
+        current_handler; /**< Pointer to the method handler entry for the matched
+                          route (NULL if unmatched). Used by
+                          csilk_bind_reflect() and csilk_json_reflect() to
+                          infer input/output type names from route metadata. */
+
+    /* === Zero-Copy Receive Buffers (connection-scoped containers) === */
     char**  read_buffers;
     int     read_buffers_count;
     int     read_buffers_capacity;
@@ -272,7 +362,11 @@ struct csilk_ctx_s {
     size_t* read_buf_sizes;              /**< Parallel size tracker — embedded or heap. */
     size_t  read_buf_sizes_embedded[16]; /**< Embedded size storage. */
 
-    /* === Pluggable Driver Pointers === */
+    /* ═══════════════════════════════════════════════════════════════════
+     * COLD REGION — connection-scoped configuration, shared by requests
+     * ═══════════════════════════════════════════════════════════════════ */
+
+    /* === Pluggable Driver Pointers (set from the server at init) === */
     csilk_storage_driver_t* storage_driver; /**< Optional pluggable storage backend for
                          csilk_set()/csilk_get(). When set, takes precedence
                          over the internal linked-list storage. Set per-server
@@ -287,59 +381,14 @@ struct csilk_ctx_s {
                                           sign/verify, and RSA-2048 key
                                           generation. */
 
-    /* === Simple Key-Value Storage (arena-backed linked list) === */
-    csilk_storage_item_t* storage_head; /**< Head of the linked list for simple
-                                         arena-backed key-value storage.
-                                         Managed by csilk_set()/csilk_get()
-                                         and freed on context cleanup. */
-
-    struct csilk_server_s* server;      /**< Pointer to the owning server instance. */
-
     /* === HTTP/2 Stream Support === */
     int32_t stream_id; /**< HTTP/2 Stream ID. 0 for HTTP/1.1 connections. */
     struct csilk_ctx_s*
         next_stream;   /**< Linked list of active multiplexed contexts for a single client. */
 
-    /* === Internal I/O State === */
-    void*           _internal_client; /**< Opaque pointer to the internal csilk_client_t.
-                             MUST NOT be used directly by handlers. Used
-                             internally by _csilk_send_data() to route data
-                             through TLS or raw TCP. */
-    int             conn_closed;      /**< Non-zero if the connection has been closed/timed out. */
-    csilk_io_work_t work_req;         /**< I/O work request structure for offloading async
-                             operations to the thread pool. Used by
-                             csilk_ai_chat_async() and other async handlers. */
-    int             is_async;         /**< Non-zero if the response will be sent asynchronously
-                   (framework skips auto-send after handler chain returns).
-                   Set by csilk_response_write() for streaming responses or
-                   explicitly by csilk_ctx_set_async(). */
-    int             response_started; /**< Non-zero if chunked response headers have already
-                           been sent to the client. Used by
-                           csilk_response_write() to avoid sending headers
-                           multiple times in streaming mode. */
-
-    /* === Streaming Backpressure & Flow Control === */
-    size_t write_high_water_mark; /**< Outbound write queue high water mark (bytes). */
-    size_t write_low_water_mark;  /**< Outbound write queue low water mark (bytes). */
-    size_t max_write_buffer_size; /**< Hard max write buffer size before drop (bytes). */
-    int    write_paused;          /**< 1 if backpressure paused the stream. */
-    void (*on_drain)(struct csilk_ctx_s* c, void* user_data); /**< Drain callback. */
-    void* on_drain_data;
-
-    /* === Zero-Copy File Serving (sendfile) === */
-    int    file_fd;     /**< File descriptor of the file being sent via sendfile(). -1 if
-                  not in use. Set by static file middleware for large file
-                  responses. */
-    size_t file_offset; /**< Byte offset into the file where sendfile should start
-                         reading (for partial/range requests). */
-    size_t file_size;   /**< Total number of bytes to send from the file. */
-
-    /** OpenAPI spec generation — tracks the current method handler's metadata */
-    csilk_method_handler_t*
-        current_handler; /**< Pointer to the method handler entry for the matched
-                          route (NULL if unmatched). Used by
-                          csilk_bind_reflect() and csilk_json_reflect() to
-                          infer input/output type names from route metadata. */
+    csilk_io_work_t work_req; /**< I/O work request structure for offloading async
+                     operations to the thread pool. Used by
+                     csilk_ai_chat_async() and other async handlers. */
 
     /** Per-request unique identifier (UUID v4 string, 36 chars + null). */
     char request_id[CSILK_UUID_BUF_SIZE];
