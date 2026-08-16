@@ -67,6 +67,11 @@ set(CSILK_HTTP_SOURCES
     src/core/http/http1_response.c
     src/core/http/http1_zerocopy.c
     src/core/http/swar_http.c
+    src/core/server/connection_pool.c
+    src/core/server/connection_state.c
+    src/core/server/connection_timer.c
+    src/core/server/connection_close.c
+    src/core/server/connection_io.c
     src/core/server/connection.c
     src/core/server/server_lifecycle.c
     src/core/server/server_shutdown.c
