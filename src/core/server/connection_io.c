@@ -274,8 +274,10 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
         } else {
             csilk_conn_set_state(client, CSILK_CONN_READING);
 
-            /* Register the receive buffer so it stays alive for zero-copy header/body views. */
-            if (_csilk_ctx_register_read_buffer(&client->ctx, base) == 0) {
+            /* Register the receive buffer so it stays alive for zero-copy header/body views.
+             * Use pooled registration when the buffer comes from the worker-local pool
+             * (buf->len > 0 indicates a tier-backed buffer). */
+            if (_csilk_ctx_register_pooled_read_buffer(&client->ctx, base, buf->len) == 0) {
                 is_registered = 1;
             } else {
                 CSILK_LOG_E("Connection: failed to register read buffer, out of memory");
