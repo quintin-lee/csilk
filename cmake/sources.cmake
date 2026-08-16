@@ -192,6 +192,10 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_ai_agents.c
     src/workflow/wf_tools.c
     src/workflow/wf_scheduler.c
+    src/workflow/wf_ctx.c
+    src/workflow/wf_wal.c
+    src/workflow/wf_node.c
+    src/workflow/wf_run.c
     src/workflow/wf_resume.c
     src/workflow/wf_trace.c
     src/workflow/workflow_loader.c
