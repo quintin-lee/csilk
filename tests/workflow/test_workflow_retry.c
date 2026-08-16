@@ -53,7 +53,13 @@ test_workflow_automatic_retries()
 
     csilk_wf_run(wf, nullptr, on_retry_complete);
 
-    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    /* Use CSILK_IO_RUN_ONCE to avoid indefinite blocking if timers hang */
+    for (int i = 0; i < 100; i++) {
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_ONCE);
+        if (g_done) {
+            break;
+        }
+    }
 
     assert(g_attempts == 3);
     assert(g_done == 1);
