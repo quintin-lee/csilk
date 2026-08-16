@@ -23,6 +23,18 @@ set(CSILK_CORE_SOURCES
     src/core/ctx/ctx_accessors.c
     src/core/ctx/ctx_defer.c
     src/core/ctx/ctx_json.c
+    src/core/json/json_internal.c
+    src/core/json/json_factory.c
+    src/core/json/json_object.c
+    src/core/json/json_array.c
+    src/core/json/json_access.c
+    src/core/json/json_type.c
+    src/core/json/json_parse.c
+    src/core/json/json_serialize.c
+    src/core/json/json_free.c
+    src/core/json/json_copy.c
+    src/core/json/json_iterate.c
+    src/core/json/json_mutate.c
     src/core/json/json.c
     src/core/primitives/recovery.c
     src/core/primitives/router.c
