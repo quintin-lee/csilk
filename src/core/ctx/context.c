@@ -92,6 +92,12 @@ tls_large_body_pool_cleanup(void)
  * form). Cleans up storage items and resets all state flags for the next
  * request. Called after each HTTP request is fully processed.
  *
+ * The cleanup only releases resources the current request actually used:
+ * heap bodies and the malloc'd path are freed when ownership says so,
+ * registered zero-copy receive buffers are returned to the pool, and
+ * header maps are zeroed only if they were written this request. Everything
+ * else is reclaimed in one shot by csilk_arena_reset().
+ *
  * @param c The request context. */
 void
 csilk_ctx_cleanup(csilk_ctx_t* c)
@@ -100,26 +106,41 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
         return;
     }
 
+    /* 1. Deferred callbacks (LIFO) — may release heap memory / fds. */
     csilk_ctx_defer_free(c);
 
-    if (c->arena) {
-        csilk_arena_reset(c->arena);
-    } else {
-        for (int i = 0; i < c->params_count; i++) {
-            free(c->params[i].key);
-            free(c->params[i].value);
+    /* 2. Storage destructors + driver clear — run BEFORE the arena reset:
+     *    csilk_set_ex() values can be heap-owned (RAII free_fn) while the
+     *    storage nodes themselves are arena-allocated. */
+    if (c->storage_head) {
+        csilk_storage_item_t* storage_item = c->storage_head;
+        while (storage_item) {
+            if (storage_item->free_fn && storage_item->value) {
+                storage_item->free_fn(storage_item->value);
+                storage_item->value = NULL;
+            }
+            storage_item = storage_item->next;
         }
+        if (c->storage_driver && c->storage_driver->clear) {
+            c->storage_driver->clear(c);
+        }
+        c->storage_head = NULL;
     }
-    c->params_count = 0;
 
-    /*
-     * request.path is always strdup'd (malloc'd) by
-     * csilk_split_url (or test_utils).  csilk_arena_reset
-     * above does NOT free it — we must free it here.
-     */
-    free(c->request.path);
-    c->request.path = NULL;
+    /* 3. Zero-copy file response — close the fd if one was opened. */
+    if (c->file_fd >= 0) {
+        csilk_io_fs_t close_req;
+        csilk_io_fs_close(NULL, &close_req, c->file_fd, NULL);
+        csilk_io_fs_req_cleanup(&close_req);
+        c->file_fd = -1;
+    }
+    c->file_offset = 0;
+    c->file_size = 0;
 
+    /* 4. Request body — freed only when this request owned it (heap/transfer
+     *    or H2-managed). Large bodies (>= 64 KiB) are cached per-thread and
+     *    reused via tls_large_body_pool. Borrowed/arena bodies reference the
+     *    recv buffer or the arena and need no free. */
     if (c->request.body &&
         (c->request.body_ownership == CSILK_OWN_HEAP ||
          c->request.body_ownership == CSILK_OWN_TRANSFER || c->request.body_is_managed)) {
@@ -139,6 +160,30 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->request.body_is_managed = 0;
     c->request.body_ownership = CSILK_OWN_BORROWED;
 
+    /* 5. Response body — free only managed/heap/transferred bodies. A stale
+     *    body_len would otherwise leak a bogus Content-Length into the next
+     *    request, so it is zeroed together with status (0 serializes as 200). */
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
+        free((void*)c->response.body);
+    }
+    c->response.body = NULL;
+    c->response.body_len = 0;
+    c->response.body_is_managed = 0;
+    c->response.body_ownership = CSILK_OWN_BORROWED;
+    c->response.status = 0;
+
+    /*
+     * request.path is always strdup'd (malloc'd) by
+     * csilk_split_url (or test_utils).  csilk_arena_reset
+     * does NOT free it — we must free it here.
+     */
+    free(c->request.path);
+    c->request.path = NULL;
+
+    /* 6. Zero-copy receive buffers — return to the worker-local pool (or
+     *    free) only those actually registered this request. */
     for (int i = 0; i < c->read_buffers_count; i++) {
         char* b = c->read_buffers[i];
         if (!b) {
@@ -166,42 +211,36 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->read_buffers_capacity = 16;
     c->read_buf_sizes = c->read_buf_sizes_embedded;
 
-    memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
-    memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
-    memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
-    memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
-
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-        free((void*)c->response.body);
-        c->response.body = NULL;
-        c->response.body_is_managed = 0;
-        c->response.body_ownership = CSILK_OWN_BORROWED;
-    }
-
-    if (c->file_fd >= 0) {
-        csilk_io_fs_t close_req;
-        csilk_io_fs_close(NULL, &close_req, c->file_fd, NULL);
-        csilk_io_fs_req_cleanup(&close_req);
-        c->file_fd = -1;
-    }
-    c->file_offset = 0;
-    c->file_size = 0;
-
-    csilk_storage_item_t* storage_item = c->storage_head;
-    while (storage_item) {
-        if (storage_item->free_fn && storage_item->value) {
-            storage_item->free_fn(storage_item->value);
-            storage_item->value = NULL;
+    /* 7. Arena reset — reclaims ALL request-scoped arena allocations in one
+     *    shot: method, header map nodes/keys/values, query/form params,
+     *    storage nodes, defer nodes, param values, arena bodies. */
+    if (c->arena) {
+        csilk_arena_reset(c->arena);
+    } else {
+        for (int i = 0; i < c->params_count; i++) {
+            free(c->params[i].key);
+            free(c->params[i].value);
         }
-        storage_item = storage_item->next;
     }
-    if (c->storage_driver && c->storage_driver->clear) {
-        c->storage_driver->clear(c);
-    }
-    c->storage_head = NULL;
+    c->params_count = 0;
 
+    /* 8. Header maps — clear bucket chains ONLY for maps written this
+     *    request (map writers set the `used` flag). Saves three 512-byte
+     *    memsets on the typical GET with no query/form/response headers. */
+    if (c->request.headers.used) {
+        memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
+    }
+    if (c->request.query_params.used) {
+        memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
+    }
+    if (c->request.form_params.used) {
+        memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
+    }
+    if (c->response.headers.used) {
+        memset(&c->response.headers, 0, sizeof(csilk_header_map_t));
+    }
+
+    /* 9. Mutable per-request flags + handler chain state. */
     c->aborted = 0;
     c->panicked = 0;
     c->is_websocket = 0;
@@ -217,7 +256,10 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->current_handler = NULL;
     c->on_ws_message = NULL;
 
-    memset(c->request_id, 0, sizeof(c->request_id));
+    /* 10. Request id — clear only if one was issued this request. */
+    if (c->request_id[0]) {
+        memset(c->request_id, 0, sizeof(c->request_id));
+    }
 }
 
 /** @brief Get the request body data and optionally its length.
