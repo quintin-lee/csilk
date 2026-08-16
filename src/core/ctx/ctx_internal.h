@@ -265,10 +265,12 @@ struct csilk_ctx_s {
     void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
 
     /* === Zero-Copy Receive Buffers === */
-    char** read_buffers;
-    int    read_buffers_count;
-    int    read_buffers_capacity;
-    char*  read_buffers_embedded[16];
+    char**  read_buffers;
+    int     read_buffers_count;
+    int     read_buffers_capacity;
+    char*   read_buffers_embedded[16];
+    size_t* read_buf_sizes;              /**< Parallel size tracker — embedded or heap. */
+    size_t  read_buf_sizes_embedded[16]; /**< Embedded size storage. */
 
     /* === Pluggable Driver Pointers === */
     csilk_storage_driver_t* storage_driver; /**< Optional pluggable storage backend for
@@ -348,6 +350,9 @@ CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, vo
 
 /** @brief Register a raw read buffer with the context for zero-copy view lifetime management. */
 CSILK_INTERNAL int _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base);
+
+/** @brief Register a pool-backed read buffer, tracking its size for pool return on cleanup. */
+CSILK_INTERNAL int _csilk_ctx_register_pooled_read_buffer(csilk_ctx_t* c, char* base, size_t size);
 
 /* === Async/Multi-Worker Loop Support === */
 CSILK_INTERNAL csilk_io_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);

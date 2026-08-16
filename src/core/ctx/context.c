@@ -140,17 +140,31 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->request.body_ownership = CSILK_OWN_BORROWED;
 
     for (int i = 0; i < c->read_buffers_count; i++) {
-        if (c->read_buffers[i]) {
-            free(c->read_buffers[i]);
-            c->read_buffers[i] = NULL;
+        char* b = c->read_buffers[i];
+        if (!b) {
+            continue;
         }
+        size_t sz = c->read_buf_sizes[i];
+        if (sz > 0 && c->server && c->server->worker_pools) {
+            /* Pool-backed buffer — return to worker-local pool instead of free(). */
+            extern void    pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
+            worker_pool_t* wp = ((csilk_client_t*)c->_internal_client)->owner_pool;
+            pool_put_read_buf(wp, b, sz);
+        } else {
+            free(b);
+        }
+        c->read_buffers[i] = NULL;
     }
     if (c->read_buffers && c->read_buffers != c->read_buffers_embedded) {
         free(c->read_buffers);
     }
+    if (c->read_buf_sizes && c->read_buf_sizes != c->read_buf_sizes_embedded) {
+        free(c->read_buf_sizes);
+    }
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
     c->read_buffers_capacity = 16;
+    c->read_buf_sizes = c->read_buf_sizes_embedded;
 
     memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
     memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
@@ -392,6 +406,7 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
     c->read_buffers_capacity = 16;
+    c->read_buf_sizes = c->read_buf_sizes_embedded;
     c->write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
     c->write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
     c->max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
@@ -416,6 +431,22 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
 CSILK_INTERNAL int
 _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base)
 {
+    return _csilk_ctx_register_pooled_read_buffer(c, base, 0);
+}
+
+/** @brief Register a pool-backed read buffer, tracking its size for pool return on cleanup.
+ *
+ * Records the buffer size in a parallel array so that csilk_ctx_cleanup() can
+ * route it back to the worker-local read buffer pool instead of calling free().
+ * Size == 0 means the buffer is malloc-owned and must be freed normally.
+ *
+ * @param c      The request context.
+ * @param base   Buffer pointer (must remain valid until cleanup).
+ * @param size   Buffer capacity (pool tier size), or 0 for non-pooled buffers.
+ * @return 0 on success, -1 on allocation failure. */
+CSILK_INTERNAL int
+_csilk_ctx_register_pooled_read_buffer(csilk_ctx_t* c, char* base, size_t size)
+{
     if (!c || !base) {
         return -1;
     }
@@ -423,13 +454,18 @@ _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base)
         c->read_buffers = c->read_buffers_embedded;
         c->read_buffers_capacity = 16;
         c->read_buffers_count = 0;
+        c->read_buf_sizes = c->read_buf_sizes_embedded;
     }
     if (c->read_buffers_count >= c->read_buffers_capacity) {
-        int    new_cap = c->read_buffers_capacity * 2;
-        char** new_arr = NULL;
+        int     new_cap = c->read_buffers_capacity * 2;
+        char**  new_arr = NULL;
+        size_t* new_sizes = NULL;
         if (c->read_buffers == c->read_buffers_embedded) {
             new_arr = malloc((size_t)new_cap * sizeof(char*));
-            if (!new_arr) {
+            new_sizes = malloc((size_t)new_cap * sizeof(size_t));
+            if (!new_arr || !new_sizes) {
+                free(new_arr);
+                free(new_sizes);
                 return -1;
             }
             memcpy(
@@ -439,11 +475,18 @@ _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base)
             if (!new_arr) {
                 return -1;
             }
+            new_sizes = realloc(c->read_buf_sizes, (size_t)new_cap * sizeof(size_t));
+            if (!new_sizes) {
+                free(new_arr);
+                return -1;
+            }
         }
         c->read_buffers = new_arr;
+        c->read_buf_sizes = new_sizes;
         c->read_buffers_capacity = new_cap;
     }
-    c->read_buffers[c->read_buffers_count++] = base;
+    c->read_buffers[c->read_buffers_count] = base;
+    c->read_buf_sizes[c->read_buffers_count++] = size;
     return 0;
 }
 
