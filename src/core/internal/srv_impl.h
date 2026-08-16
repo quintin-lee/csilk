@@ -71,6 +71,14 @@ _csilk_server_release_connection(csilk_server_t* server)
 CSILK_INTERNAL void
 alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf);
 
+CSILK_INTERNAL csilk_client_t* pool_get(worker_pool_t* wp);
+CSILK_INTERNAL void            pool_put(worker_pool_t* wp, csilk_client_t* client);
+CSILK_INTERNAL csilk_arena_t*  pool_get_arena(worker_pool_t* wp);
+CSILK_INTERNAL void            pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena);
+CSILK_INTERNAL void            client_list_add(csilk_server_t* server, csilk_client_t* client);
+CSILK_INTERNAL void            client_list_remove(csilk_server_t* server, csilk_client_t* client);
+CSILK_INTERNAL void            client_destroy(csilk_client_t* client);
+
 CSILK_INTERNAL void on_close(csilk_io_handle_t* handle);
 CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf);
 CSILK_INTERNAL void on_new_connection(csilk_io_stream_t* server_stream, int status);
@@ -84,6 +92,7 @@ CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_dispatch_task_pool(worker_pool_t* wp);
 
 CSILK_INTERNAL void csilk_arena_flush_free_list(void);
+CSILK_INTERNAL void on_timer_close(csilk_io_handle_t* handle);
 CSILK_INTERNAL void on_idle_timeout(csilk_io_timer_t* handle);
 CSILK_INTERNAL void on_read_timeout(csilk_io_timer_t* handle);
 CSILK_INTERNAL void on_write_timeout(csilk_io_timer_t* handle);
