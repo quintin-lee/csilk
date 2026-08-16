@@ -286,7 +286,7 @@ jobs:
       run: cmake --build build_uring -j$(nproc)
 
     - name: Run tests with CSILK_USE_URING
-      run: ctest --test-dir build_uring --output-on-failure
+      run: timeout 600 ctest --test-dir build_uring --timeout 30 --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
