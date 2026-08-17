@@ -58,6 +58,7 @@ node_free(csilk_router_node_t* node)
     while (mh) {
         csilk_method_handler_t* next = mh->next;
         free(mh->method);
+        free(mh->raw_handlers);
         free(mh->handlers);
         free(mh->path);
         free(mh);
@@ -76,12 +77,74 @@ node_free(csilk_router_node_t* node)
 csilk_router_t*
 csilk_router_new()
 {
-    csilk_router_t* r = malloc(sizeof(csilk_router_t));
+    csilk_router_t* r = calloc(1, sizeof(csilk_router_t));
     if (!r) {
         return NULL;
     }
     r->root = node_new("", CSILK_NODE_STATIC);
+    if (!r->root) {
+        free(r);
+        return NULL;
+    }
+    r->global_middleware_count = 0;
     return r;
+}
+
+/**
+ * @brief Recursively compile handler chains on all method handlers under a trie node.
+ */
+static void
+node_compile_handlers(csilk_router_node_t*   node,
+                      const csilk_handler_t* global_mws,
+                      size_t                 global_count)
+{
+    if (!node) {
+        return;
+    }
+    csilk_method_handler_t* mh = node->handlers;
+    while (mh) {
+        size_t           total = global_count + mh->raw_handler_count;
+        csilk_handler_t* compiled = malloc(sizeof(csilk_handler_t) * (total + 1));
+        if (compiled) {
+            if (global_count > 0 && global_mws) {
+                memcpy(compiled, global_mws, sizeof(csilk_handler_t) * global_count);
+            }
+            if (mh->raw_handler_count > 0 && mh->raw_handlers) {
+                memcpy(compiled + global_count,
+                       mh->raw_handlers,
+                       sizeof(csilk_handler_t) * mh->raw_handler_count);
+            }
+            compiled[total] = NULL;
+            free(mh->handlers);
+            mh->handlers = compiled;
+            mh->handler_count = total;
+        }
+        mh = mh->next;
+    }
+    for (int i = 0; i < node->children_count; i++) {
+        node_compile_handlers(node->children[i], global_mws, global_count);
+    }
+}
+
+/**
+ * @brief Compile/finalize handler chains for all routes in the router by prepending
+ *        global middlewares.
+ */
+int
+csilk_router_compile(csilk_router_t* r, const csilk_handler_t* global_mws, size_t count)
+{
+    if (!r) {
+        return -1;
+    }
+    if (count > 32) {
+        count = 32;
+    }
+    if (global_mws && count > 0) {
+        memcpy(r->global_middlewares, global_mws, sizeof(csilk_handler_t) * count);
+    }
+    r->global_middleware_count = count;
+    node_compile_handlers(r->root, r->global_middlewares, r->global_middleware_count);
+    return 0;
 }
 
 /**
@@ -294,22 +357,49 @@ router_add_full(csilk_router_t*  r,
             free(mh);
             return -1;
         }
-        mh->handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
-        if (!mh->handlers) {
-            CSILK_LOG_E("Router: failed to allocate handler array for route: %s %s", method, path);
+
+        /* 1. Store uncompiled raw route/group handlers */
+        mh->raw_handlers = malloc(sizeof(csilk_handler_t) * (handler_count + 1));
+        if (!mh->raw_handlers) {
+            CSILK_LOG_E(
+                "Router: failed to allocate raw handler array for route: %s %s", method, path);
             free(mh->method);
             free(mh);
             return -1;
         }
-        memcpy(mh->handlers, handlers, sizeof(csilk_handler_t) * handler_count);
-        mh->handlers[handler_count] = NULL;
-        mh->handler_count = handler_count;
+        memcpy(mh->raw_handlers, handlers, sizeof(csilk_handler_t) * handler_count);
+        mh->raw_handlers[handler_count] = NULL;
+        mh->raw_handler_count = handler_count;
+
+        /* 2. Compile immutable handler chain (prepending any cached global middlewares) */
+        size_t total_count = r->global_middleware_count + handler_count;
+        mh->handlers = malloc(sizeof(csilk_handler_t) * (total_count + 1));
+        if (!mh->handlers) {
+            CSILK_LOG_E(
+                "Router: failed to allocate compiled handler array for route: %s %s", method, path);
+            free(mh->raw_handlers);
+            free(mh->method);
+            free(mh);
+            return -1;
+        }
+        if (r->global_middleware_count > 0) {
+            memcpy(mh->handlers,
+                   r->global_middlewares,
+                   sizeof(csilk_handler_t) * r->global_middleware_count);
+        }
+        memcpy(mh->handlers + r->global_middleware_count,
+               handlers,
+               sizeof(csilk_handler_t) * handler_count);
+        mh->handlers[total_count] = NULL;
+        mh->handler_count = total_count;
+
         const char* actual_path = path_pattern ? path_pattern : path;
         mh->path = actual_path ? strdup(actual_path) : NULL;
 
         if (actual_path && !mh->path) {
             CSILK_LOG_E("Router: failed to duplicate path pattern for route: %s %s", method, path);
             free(mh->method);
+            free(mh->raw_handlers);
             free(mh->handlers);
             free(mh);
             return -1;

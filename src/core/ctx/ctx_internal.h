@@ -145,12 +145,14 @@ typedef struct csilk_param_s csilk_param_t;
  *   - Permission/ACL checks (perm_required, perm_resource)
  */
 struct csilk_method_handler_s {
-    char*                          method;        /**< HTTP method string (e.g., "GET", "POST"). */
-    csilk_handler_t*               handlers;      /**< NULL-terminated array of handler function
-                                pointers for this method. */
-    size_t                         handler_count; /**< Number of handlers in the chain. */
-    struct csilk_method_handler_s* next;          /**< Next method handler in this node's
-                                         linked list. */
+    char*            method;        /**< HTTP method string (e.g., "GET", "POST"). */
+    csilk_handler_t* handlers;      /**< NULL-terminated array of compiled handler function
+                                    pointers for this method (including prepended global middlewares). */
+    size_t           handler_count; /**< Number of handlers in the compiled chain. */
+    csilk_handler_t* raw_handlers; /**< NULL-terminated array of uncompiled route/group handlers. */
+    size_t           raw_handler_count;  /**< Number of uncompiled route/group handlers. */
+    struct csilk_method_handler_s* next; /**< Next method handler in this node's
+                                             linked list. */
 
     /** Metadata for OpenAPI spec generation */
     char*       path;        /**< URL path pattern (e.g., "/users/:id"). */
