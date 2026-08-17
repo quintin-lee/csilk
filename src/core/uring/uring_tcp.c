@@ -158,6 +158,18 @@ csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, in
     return r;
 }
 
+int
+csilk_io_tcp_getsockname(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen)
+{
+    if (!handle || handle->fd < 0 || !name || !namelen) {
+        return -1;
+    }
+    socklen_t slen = (socklen_t)*namelen;
+    int       r = getsockname(handle->fd, name, &slen);
+    *namelen = (int)slen;
+    return r;
+}
+
 /* ====================================================================
  * Address utilities
  * ==================================================================== */

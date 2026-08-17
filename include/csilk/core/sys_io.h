@@ -138,7 +138,13 @@ typedef int csilk_io_file_t;
 static inline const char*
 csilk_io_strerror(int err)
 {
-    return "liburing error";
+    if (err < 0) {
+        err = -err;
+    }
+    if (err == 0) {
+        return "Success";
+    }
+    return strerror(err);
 }
 /**
  * @brief Check whether a handle is closing or closed.
@@ -368,6 +374,7 @@ int csilk_io_accept(csilk_io_stream_t* server, csilk_io_stream_t* client);
 int csilk_io_tcp_nodelay(csilk_io_tcp_t* handle, int enable);
 int csilk_io_tcp_keepalive(csilk_io_tcp_t* handle, int enable, unsigned int delay);
 int csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen);
+int csilk_io_tcp_getsockname(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen);
 int csilk_io_ip4_addr(const char* ip, int port, struct sockaddr_in* addr);
 int csilk_io_ip4_name(const struct sockaddr_in* src, char* dst, size_t size);
 int csilk_io_ip6_name(const struct sockaddr_in6* src, char* dst, size_t size);
@@ -386,8 +393,13 @@ int csilk_io_signal_stop(csilk_io_signal_t* handle);
 static inline const char*
 csilk_io_err_name(int err)
 {
-    (void)err;
-    return "IO_ERR";
+    if (err < 0) {
+        err = -err;
+    }
+    if (err == 0) {
+        return "OK";
+    }
+    return strerror(err);
 }
 
 #else
@@ -598,6 +610,12 @@ static inline int
 csilk_io_tcp_getpeername(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen)
 {
     return uv_tcp_getpeername((const uv_tcp_t*)handle, name, namelen);
+}
+
+static inline int
+csilk_io_tcp_getsockname(const csilk_io_tcp_t* handle, struct sockaddr* name, int* namelen)
+{
+    return uv_tcp_getsockname((const uv_tcp_t*)handle, name, namelen);
 }
 
 static inline int
@@ -1054,7 +1072,22 @@ typedef struct rusage csilk_io_rusage_t;
 static inline int
 csilk_io_resident_set_memory(size_t* rss)
 {
-    *rss = 0;
+    if (!rss) {
+        return -1;
+    }
+    FILE* f = fopen("/proc/self/statm", "r");
+    if (!f) {
+        *rss = 0;
+        return 0;
+    }
+    long pages = 0, resident = 0;
+    if (fscanf(f, "%ld %ld", &pages, &resident) == 2) {
+        long page_size = sysconf(_SC_PAGESIZE);
+        *rss = (size_t)(resident * (page_size > 0 ? page_size : 4096));
+    } else {
+        *rss = 0;
+    }
+    fclose(f);
     return 0;
 }
 /**
