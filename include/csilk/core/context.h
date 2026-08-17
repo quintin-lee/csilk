@@ -462,6 +462,52 @@ csilk_ownership_t csilk_get_response_body_ownership(csilk_ctx_t* c);
 const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
 /**
+ * @brief Allocate a buffer from the worker/TLS-local HTTP body size-class pool.
+ *
+ * Size classes: 64KB, 128KB, 256KB, 512KB, 1MB. Larger requests fall back to malloc.
+ *
+ * @param size          Requested byte size.
+ * @param[out] out_capacity Actual buffer capacity (>= size). May be NULL.
+ * @return Allocated buffer pointer, or NULL on out-of-memory.
+ */
+void* csilk_body_alloc(size_t size, size_t* out_capacity);
+
+/**
+ * @brief Reallocate / grow a body buffer using the size-class pool.
+ *
+ * @param old_ptr       Existing buffer pointer.
+ * @param old_len       Current content length to preserve.
+ * @param old_capacity  Capacity of existing buffer.
+ * @param new_size      Requested new size.
+ * @param[out] out_capacity Actual new buffer capacity (>= new_size). May be NULL.
+ * @return New buffer pointer, or NULL on failure.
+ */
+void* csilk_body_realloc(
+    void* old_ptr, size_t old_len, size_t old_capacity, size_t new_size, size_t* out_capacity);
+
+/**
+ * @brief Return a body buffer to the worker/TLS-local size-class pool or free it.
+ *
+ * @param ptr      Buffer pointer to return or free.
+ * @param capacity Buffer capacity (used to match size class).
+ */
+void csilk_body_free(void* ptr, size_t capacity);
+
+/**
+ * @brief Flush and release all cached body buffers in the current thread/worker.
+ */
+void csilk_body_pool_cleanup(void);
+
+/**
+ * @brief Allocate a response body buffer from the size-class pool and assign it to the context.
+ *
+ * @param c    The request context.
+ * @param size Requested body size in bytes.
+ * @return Pointer to the allocated buffer, or NULL on failure.
+ */
+char* csilk_set_response_body_pooled(csilk_ctx_t* c, size_t size);
+
+/**
  * @brief Get the server instance associated with the current context.
  * @param c The request context.
  * @return Server handle, or NULL on error.

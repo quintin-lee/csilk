@@ -27,6 +27,7 @@ endfunction()
 # -- Core tests --
 set(CSILK_CORE_TESTS
     test_arena
+    test_body_pool
     test_config
     test_config_comprehensive
     test_config_validate
@@ -87,7 +88,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core
+    core;core;core;core;core
 )
 
 # -- Application tests --
