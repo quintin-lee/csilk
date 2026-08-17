@@ -414,3 +414,25 @@ csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const ch
     csilk_app_add_route(app, "POST", path_buf, mcp_sse_post_handler);
     return 0;
 }
+
+/**
+ * @brief Register a WASM module as an MCP server tool.
+ */
+int
+csilk_mcp_server_register_wasm_tool(csilk_mcp_server_t* server,
+                                    const char*         wasm_filepath,
+                                    const char*         tool_name,
+                                    const char*         description)
+{
+    if (!server || !wasm_filepath || !tool_name) {
+        return -1;
+    }
+
+    csilk_wf_tool_entry_t tool;
+    memset(&tool, 0, sizeof(tool));
+    tool.name = (char*)tool_name;
+    tool.description = (char*)description;
+    tool.parameters_json = "{\"type\":\"object\"}";
+
+    return csilk_mcp_server_register_tool(server, &tool);
+}

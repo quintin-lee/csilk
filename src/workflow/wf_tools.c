@@ -7,6 +7,59 @@
 
 #include "workflow_internal.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/wasm.h"
+
+/**
+ * @brief Workflow node handler that loads and executes a WASM file.
+ */
+static csilk_data_t*
+csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    if (!ctx || !user_data) {
+        return NULL;
+    }
+    (void)input;
+    const char*          wasm_filepath = (const char*)user_data;
+    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(wasm_filepath, NULL);
+    if (!plugin) {
+        return NULL;
+    }
+
+    char          err_buf[128];
+    char*         output = csilk_wasm_plugin_exec(plugin, "run", "{}", err_buf, sizeof(err_buf));
+    csilk_data_t* res_data = NULL;
+    if (output) {
+        res_data = csilk_wf_alloc(ctx, sizeof(csilk_data_t));
+        if (res_data) {
+            res_data->type = csilk_wf_strdup(ctx, "application/json");
+            res_data->value = csilk_wf_strdup(ctx, output);
+            res_data->free_fn = NULL;
+            res_data->meta = NULL;
+        }
+        free(output);
+    }
+
+    csilk_wasm_plugin_free(plugin);
+    return res_data;
+}
+
+/**
+ * @brief Register a WASM module as a workflow node.
+ */
+int
+csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
+{
+    if (!wf || !node_id || !wasm_filepath) {
+        return -1;
+    }
+
+    csilk_wf_node_t* node =
+        csilk_wf_add(wf, node_id, csilk_wasm_node_handler, strdup(wasm_filepath));
+    if (node) {
+        csilk_wf_node_set_free(node, free);
+    }
+    return node != NULL ? 0 : -1;
+}
 
 /**
  * @brief Registers a static tool (function) callable by AI workflow nodes.

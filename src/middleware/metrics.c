@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#include "csilk/drivers/db.h"
 
 /** @brief Maximum number of metrics entries tracked. */
 enum { CSILK_METRICS_MAX_ENTRIES = 1024 };

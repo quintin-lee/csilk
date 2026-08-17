@@ -15,6 +15,7 @@
 
 #include "csilk/core/json.h"
 #include "csilk/core/internal.h"
+#include "csilk/drivers/db.h"
 #include "util/flamegraph.h"
 
 /* Externs from metrics.c */

@@ -279,6 +279,15 @@ csilk_wf_node_t* csilk_wf_add_agent_reflexion(csilk_wf_t*                       
                                               const char*                           id,
                                               const csilk_agent_reflexion_config_t* config);
 
+/**
+ * @brief Registers a WASM plugin step to a Workflow DAG.
+ * @param wf Workflow handle.
+ * @param node_id Unique node ID.
+ * @param wasm_filepath Path to the .wasm file.
+ * @return 0 on success, negative value on failure.
+ */
+int csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath);
+
 /* --- Agent Long-Term Memory Store --- */
 
 /** @brief Opaque handle for Agent Long-Term Memory Store. */

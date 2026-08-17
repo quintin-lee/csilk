@@ -11,8 +11,6 @@
 #include "csilk/core/middleware.h"
 #include "csilk/core/hooks.h"
 #include "csilk/core/crypto.h"
-#include "csilk/drivers/cipher.h"
-#include "csilk/drivers/db.h"
 
 /**
  * @brief Create a new server instance.
@@ -201,80 +199,6 @@ void csilk_server_set_router(csilk_server_t* server, csilk_router_t* router);
  *         determined.  Valid until csilk_ctx_cleanup.
  */
 const char* csilk_get_client_ip(csilk_ctx_t* c);
-
-/* --- Database Interface --- */
-
-/**
- * @brief Initialise the database subsystem.
- *
- * Registers built-in drivers (SQLite3, etc.).  Must be called once before
- * any csilk_db_pool_new call.  Safe to call multiple times.
- */
-void csilk_db_init(void);
-
-/**
- * @brief Create a new database connection pool.
- *
- * The pool maintains a single connection (or opens a new one on demand).
- * All database operations go through the pool, which provides mutex-based
- * thread safety.
- *
- * @param driver_name  Driver identifier (e.g., "sqlite").  Must have been
- *                     registered via csilk_db_register_driver or the built-in
- *                     init.
- * @param dsn          Data source name (driver-specific, e.g., "file:test.db").
- * @return A new pool instance, or NULL if the driver is unknown or connection
- *         fails.
- */
-csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
-
-/**
- * @brief Free a database pool and disconnect.
- *
- * Closes the underlying connection and frees the pool struct.
- *
- * @param pool  The pool to free.  Must not be NULL.
- */
-void csilk_db_pool_free(csilk_db_pool_t* pool);
-
-/**
- * @brief Execute a SELECT query and return the result as a JSON array.
- *
- * Each row becomes a JSON object keyed by column name.
- *
- * @param pool  Connection pool.
- * @param sql   SQL SELECT statement.
- * @return A cJSON array of row objects (caller must free with cJSON_Delete),
- *         or NULL on failure.
- */
-csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
-
-/**
- * @brief Execute a statement that returns no result rows.
- *
- * Suitable for INSERT, UPDATE, DELETE, CREATE TABLE, etc.
- *
- * @param pool  Connection pool.
- * @param sql   SQL statement.
- * @return 0 on success, -1 on failure.
- */
-int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
-
-/**
- * @brief Execute a parameterised SELECT query with ? placeholders.
- *
- * Each ? in @p sql is replaced with the corresponding value from @p params
- * (The driver handles escaping internally).  The result is returned as a
- * JSON array.
- *
- * @param pool   Connection pool.
- * @param sql    SQL with ? placeholders.
- * @param params NULL-terminated array of string values for the placeholders.
- *               The array must end with a NULL sentinel.
- * @return A cJSON array (caller must free), or NULL on failure.
- */
-csilk_json_t*
-csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /* --- Logging API --- */
 

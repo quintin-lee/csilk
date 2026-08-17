@@ -34,9 +34,8 @@
 #endif
 
 #include "csilk/core/internal.h"
-#include "../internal/srv_internal.h"
 
-/* MAX_TLS_ARENA_CHUNKS is now CSILK_MAX_TLS_CHUNKS (from srv_internal.h or CMake) */
+enum { MAX_TLS_CHUNKS_PER_TIER = 8 };
 
 /** @brief CPU cache line size hint for arena alignment. */
 enum { CSILK_CACHE_LINE_SIZE = 64 };

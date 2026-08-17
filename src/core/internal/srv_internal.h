@@ -24,7 +24,6 @@ typedef struct bio_st     BIO;
 #include <nghttp2/nghttp2.h>
 
 #include "csilk/csilk.h"
-#include "csilk/drivers/cipher.h"
 #include "csilk/core/sync.h"
 #include "../primitives/lfqueue.h"
 #include "core/ctx/ctx_internal.h"
@@ -39,37 +38,7 @@ enum { CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL };
 enum { CSILK_DEFAULT_MAX_URL_SIZE = 8192 };
 /** @brief Default TCP listen backlog. */
 enum { CSILK_DEFAULT_LISTEN_BACKLOG = 128 };
-/** @brief Arena chunk size tiers for adaptive caching.
- *  Multiple tiers reduce large-request allocations while bounding memory overhead. */
-enum { CSILK_ARENA_TIER_SMALL = 0 };  /* 4KB - standard requests */
-enum { CSILK_ARENA_TIER_MEDIUM = 1 }; /* 16KB - large forms/JSON */
-enum { CSILK_ARENA_TIER_LARGE = 2 };  /* 64KB - file uploads/large responses */
-
-/**
- * @brief Number of arena chunk size tiers.
- * Overridable via CMake -DCSILK_ARENA_TIER_COUNT=<N>.
- */
-#ifndef CSILK_ARENA_TIER_COUNT
-#define CSILK_ARENA_TIER_COUNT 3
-#endif
-
 enum { MAX_TLS_CHUNKS_PER_TIER = 8 }; /* Max cached chunks per tier */
-
-/**
- * @brief Default request arena chunk size in bytes.
- * Overridable via CMake -DCSILK_DEFAULT_ARENA_SIZE=<N>.
- */
-#ifndef CSILK_DEFAULT_ARENA_SIZE
-#define CSILK_DEFAULT_ARENA_SIZE 4096
-#endif
-
-/**
- * @brief Max cached arena chunks across all tiers (TLS free list limit).
- * Overridable via CMake -DCSILK_MAX_TLS_CHUNKS=<N>.
- */
-#ifndef CSILK_MAX_TLS_CHUNKS
-#define CSILK_MAX_TLS_CHUNKS 16
-#endif
 /** @brief Client connection object pool capacity.
  *
  * Controls the maximum number of idle client objects cached for reuse.

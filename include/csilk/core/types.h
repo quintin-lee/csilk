@@ -57,6 +57,31 @@
 #define CSILK_MAX_STORAGE 64
 #endif
 
+/** @brief Arena chunk size tiers for adaptive caching. */
+enum { CSILK_ARENA_TIER_SMALL = 0 };  /* 4KB - standard requests */
+enum { CSILK_ARENA_TIER_MEDIUM = 1 }; /* 16KB - large forms/JSON */
+enum { CSILK_ARENA_TIER_LARGE = 2 };  /* 64KB - file uploads/large responses */
+
+/** @brief Number of arena chunk size tiers. */
+#ifndef CSILK_ARENA_TIER_COUNT
+#define CSILK_ARENA_TIER_COUNT 3
+#endif
+
+/** @brief Default request arena chunk size in bytes. */
+#ifndef CSILK_DEFAULT_ARENA_SIZE
+#define CSILK_DEFAULT_ARENA_SIZE 4096
+#endif
+
+/** @brief Max cached arena chunks across all tiers (TLS free list limit). */
+#ifndef CSILK_MAX_TLS_CHUNKS
+#define CSILK_MAX_TLS_CHUNKS 16
+#endif
+
+/* Forward declarations for feature module driver types */
+typedef struct csilk_cipher_driver csilk_cipher_driver_t;
+typedef struct csilk_db_pool_s     csilk_db_pool_t;
+typedef struct csilk_mq_s          csilk_mq_t;
+
 /**
  * @brief Opaque request context type.
  * Created per-request by the server and passed to every handler and middleware.

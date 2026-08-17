@@ -29,7 +29,6 @@
 #define CSILK_CONTEXT_INTERNAL_H
 
 #include "csilk/core/internal.h"
-#include "csilk/drivers/cipher.h"
 
 /**
  * @brief A single HTTP header stored as a node in a chained hash table.
