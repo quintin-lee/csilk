@@ -69,9 +69,34 @@ typedef struct csilk_header_map_s csilk_header_map_t;
  * Populated by the HTTP/1.1 (llhttp) or HTTP/2 (nghttp2) parser during
  * request finalization.  String fields are arena-allocated and valid until
  * csilk_ctx_cleanup().  request.path is the ONLY exception: it is a
- * malloc'd copy produced by csilk_split_url() and freed individually.
- *
  * The three header maps are large (64-bucket chains ≈ 512 B each) and are
+ * placed at the tail so the scalar request core stays compact.
+ */
+
+/** @brief Size-class limits and tier definitions for HTTP body cache. */
+#define CSILK_BODY_POOL_64KB (64 * 1024)
+#define CSILK_BODY_POOL_128KB (128 * 1024)
+#define CSILK_BODY_POOL_256KB (256 * 1024)
+#define CSILK_BODY_POOL_512KB (524288)
+#define CSILK_BODY_POOL_1MB (1048576)
+
+#define CSILK_BODY_POOL_TIER_COUNT 5
+#define CSILK_BODY_POOL_MAX_SIZE CSILK_BODY_POOL_1MB
+#define CSILK_BODY_POOL_MAX_PER_TIER 8
+
+typedef struct {
+    void*  buffers[CSILK_BODY_POOL_MAX_PER_TIER];
+    size_t count;
+} csilk_body_tier_t;
+
+typedef struct {
+    csilk_body_tier_t tiers[CSILK_BODY_POOL_TIER_COUNT];
+} csilk_body_pool_t;
+
+/**
+ * @brief Mutable HTTP request received from the client.
+ *
+ * Header maps dominate the struct size (3 maps x 512B buckets = 1536B) and are
  * therefore placed at the tail of the struct so the scalar request core
  * above them stays compact and cache-friendly on the parse/handler hot path.
  */
@@ -87,6 +112,7 @@ struct csilk_request_s {
     size_t            body_len;        /**< Byte length of @p body. 0 for GET/HEAD/DELETE
                                or when no Content-Length or Transfer-Encoding
                                is present. */
+    size_t            body_capacity;   /**< Allocated buffer capacity (for size-class pool). */
     csilk_ownership_t body_ownership;  /**< Ownership model for request body. */
     int               body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
                               must be freed on cleanup. Zero for H1 bodies
@@ -118,6 +144,7 @@ struct csilk_response_s {
     int               status;
     const char*       body;
     size_t            body_len;
+    size_t            body_capacity; /**< Allocated buffer capacity (for size-class pool). */
     csilk_ownership_t body_ownership;
     int               body_is_managed;
 

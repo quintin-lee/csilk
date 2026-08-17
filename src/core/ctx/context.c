@@ -70,19 +70,165 @@ csilk_abort(csilk_ctx_t* c)
     c->aborted = 1;
 }
 
-static _Thread_local char* tls_large_body_pool = NULL;
+static _Thread_local csilk_body_pool_t tls_body_pool;
 
-/** @brief Release the thread-local large-body scratch buffer.
- *
- * Frees the per-thread buffer used for large request bodies and clears the
- * pointer so it is not double-freed. Intended to be called on thread exit. */
-static void
-tls_large_body_pool_cleanup(void)
+static inline int
+csilk_body_tier_index(size_t size)
 {
-    if (tls_large_body_pool) {
-        free(tls_large_body_pool);
-        tls_large_body_pool = NULL;
+    if (size <= CSILK_BODY_POOL_64KB) {
+        return 0;
     }
+    if (size <= CSILK_BODY_POOL_128KB) {
+        return 1;
+    }
+    if (size <= CSILK_BODY_POOL_256KB) {
+        return 2;
+    }
+    if (size <= CSILK_BODY_POOL_512KB) {
+        return 3;
+    }
+    if (size <= CSILK_BODY_POOL_1MB) {
+        return 4;
+    }
+    return -1;
+}
+
+static const size_t k_body_tier_sizes[CSILK_BODY_POOL_TIER_COUNT] = {CSILK_BODY_POOL_64KB,
+                                                                     CSILK_BODY_POOL_128KB,
+                                                                     CSILK_BODY_POOL_256KB,
+                                                                     CSILK_BODY_POOL_512KB,
+                                                                     CSILK_BODY_POOL_1MB};
+
+/** @brief Release all cached body buffers in the current thread. */
+void
+csilk_body_pool_cleanup(void)
+{
+    for (int tier = 0; tier < CSILK_BODY_POOL_TIER_COUNT; tier++) {
+        while (tls_body_pool.tiers[tier].count > 0) {
+            void* p = tls_body_pool.tiers[tier].buffers[--tls_body_pool.tiers[tier].count];
+            free(p);
+        }
+    }
+}
+
+/** @brief Allocate a buffer from the worker/TLS-local HTTP body size-class pool. */
+void*
+csilk_body_alloc(size_t size, size_t* out_capacity)
+{
+    int tier = csilk_body_tier_index(size);
+    if (tier < 0) {
+        void* ptr = malloc(size);
+        if (out_capacity) {
+            *out_capacity = size;
+        }
+        return ptr;
+    }
+
+    size_t tier_size = k_body_tier_sizes[tier];
+    if (out_capacity) {
+        *out_capacity = tier_size;
+    }
+
+    if (tls_body_pool.tiers[tier].count > 0) {
+        return tls_body_pool.tiers[tier].buffers[--tls_body_pool.tiers[tier].count];
+    }
+
+    static _Thread_local int cleanup_registered = 0;
+    if (!cleanup_registered) {
+        atexit(csilk_body_pool_cleanup);
+        cleanup_registered = 1;
+    }
+
+    return malloc(tier_size);
+}
+
+/** @brief Return a body buffer to the worker/TLS-local size-class pool or free it. */
+void
+csilk_body_free(void* ptr, size_t capacity)
+{
+    if (!ptr) {
+        return;
+    }
+
+    int tier = csilk_body_tier_index(capacity);
+    if (tier >= 0 && capacity == k_body_tier_sizes[tier]) {
+        if (tls_body_pool.tiers[tier].count < CSILK_BODY_POOL_MAX_PER_TIER) {
+            tls_body_pool.tiers[tier].buffers[tls_body_pool.tiers[tier].count++] = ptr;
+            return;
+        }
+    }
+
+    free(ptr);
+}
+
+/** @brief Reallocate / grow a body buffer using the size-class pool. */
+void*
+csilk_body_realloc(
+    void* old_ptr, size_t old_len, size_t old_capacity, size_t new_size, size_t* out_capacity)
+{
+    if (!old_ptr) {
+        return csilk_body_alloc(new_size, out_capacity);
+    }
+
+    /* If existing buffer already satisfies the requested new_size, reuse as-is */
+    if (old_capacity >= new_size) {
+        if (out_capacity) {
+            *out_capacity = old_capacity;
+        }
+        return old_ptr;
+    }
+
+    size_t new_cap = 0;
+    void*  new_ptr = csilk_body_alloc(new_size, &new_cap);
+    if (!new_ptr) {
+        return NULL;
+    }
+
+    if (old_len > 0) {
+        size_t copy_len = old_len < new_cap ? old_len : new_cap;
+        memcpy(new_ptr, old_ptr, copy_len);
+        if (copy_len < new_cap) {
+            ((char*)new_ptr)[copy_len] = '\0';
+        }
+    } else if (new_cap > 0) {
+        ((char*)new_ptr)[0] = '\0';
+    }
+
+    csilk_body_free(old_ptr, old_capacity);
+
+    if (out_capacity) {
+        *out_capacity = new_cap;
+    }
+    return new_ptr;
+}
+
+/** @brief Allocate a response body buffer from the size-class pool and assign it to the context. */
+char*
+csilk_set_response_body_pooled(csilk_ctx_t* c, size_t size)
+{
+    if (!c) {
+        return NULL;
+    }
+    size_t cap = 0;
+    char*  buf = (char*)csilk_body_alloc(size, &cap);
+    if (!buf) {
+        return NULL;
+    }
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
+        if (c->response.body_capacity > 0) {
+            csilk_body_free((void*)c->response.body, c->response.body_capacity);
+        } else {
+            free((void*)c->response.body);
+        }
+    }
+    c->response.body = buf;
+    c->response.body_len = size;
+    c->response.body_capacity = cap;
+    c->response.body_ownership = CSILK_OWN_HEAP;
+    c->response.body_is_managed = 1;
+    return buf;
 }
 
 /** @brief Clean up request context resources between requests.
@@ -138,25 +284,20 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->file_size = 0;
 
     /* 4. Request body — freed only when this request owned it (heap/transfer
-     *    or H2-managed). Large bodies (>= 64 KiB) are cached per-thread and
-     *    reused via tls_large_body_pool. Borrowed/arena bodies reference the
-     *    recv buffer or the arena and need no free. */
+     *    or H2-managed). Size-class cached buffers are returned to the TLS pool;
+     *    unmanaged or >1MB buffers are freed via free(). */
     if (c->request.body &&
         (c->request.body_ownership == CSILK_OWN_HEAP ||
          c->request.body_ownership == CSILK_OWN_TRANSFER || c->request.body_is_managed)) {
-        if (!tls_large_body_pool && c->request.body_len >= 65536) {
-            tls_large_body_pool = c->request.body;
-            static _Thread_local int cleanup_registered = 0;
-            if (!cleanup_registered) {
-                atexit(tls_large_body_pool_cleanup);
-                cleanup_registered = 1;
-            }
+        if (c->request.body_capacity > 0) {
+            csilk_body_free(c->request.body, c->request.body_capacity);
         } else {
             free(c->request.body);
         }
     }
     c->request.body = NULL;
     c->request.body_len = 0;
+    c->request.body_capacity = 0;
     c->request.body_is_managed = 0;
     c->request.body_ownership = CSILK_OWN_BORROWED;
 
@@ -166,10 +307,15 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     if (c->response.body &&
         (c->response.body_ownership == CSILK_OWN_HEAP ||
          c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-        free((void*)c->response.body);
+        if (c->response.body_capacity > 0) {
+            csilk_body_free((void*)c->response.body, c->response.body_capacity);
+        } else {
+            free((void*)c->response.body);
+        }
     }
     c->response.body = NULL;
     c->response.body_len = 0;
+    c->response.body_capacity = 0;
     c->response.body_is_managed = 0;
     c->response.body_ownership = CSILK_OWN_BORROWED;
     c->response.status = 0;
@@ -367,10 +513,15 @@ csilk_set_response_body_ex(csilk_ctx_t*      c,
     if (c->response.body &&
         (c->response.body_ownership == CSILK_OWN_HEAP ||
          c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-        free((void*)c->response.body);
+        if (c->response.body_capacity > 0) {
+            csilk_body_free((void*)c->response.body, c->response.body_capacity);
+        } else {
+            free((void*)c->response.body);
+        }
     }
     c->response.body = body;
     c->response.body_len = len;
+    c->response.body_capacity = 0;
     c->response.body_ownership = ownership;
     c->response.body_is_managed =
         (ownership == CSILK_OWN_HEAP || ownership == CSILK_OWN_TRANSFER) ? 1 : 0;

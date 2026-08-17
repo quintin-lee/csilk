@@ -316,5 +316,6 @@ worker_thread(void* arg)
         csilk_io_run(loop_ptr, CSILK_IO_RUN_NOWAIT);
     }
     csilk_arena_flush_free_list();
+    csilk_body_pool_cleanup();
     csilk_io_loop_close(loop_ptr);
 }

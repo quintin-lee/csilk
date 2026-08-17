@@ -281,25 +281,54 @@ on_body(llhttp_t* p, const char* at, size_t length)
         /* First body chunk — store the direct reference. */
         client->ctx.request.body = (char*)at;
         client->ctx.request.body_len = length;
-    } else if (client->ctx.request.body + client->ctx.request.body_len == at) {
+        client->ctx.request.body_capacity = 0;
+        client->ctx.request.body_ownership = CSILK_OWN_BORROWED;
+    } else if (client->ctx.request.body_ownership == CSILK_OWN_BORROWED &&
+               client->ctx.request.body + client->ctx.request.body_len == at) {
         /* Contiguous body — extend the reference. */
         client->ctx.request.body_len += length;
     } else {
-        /* Non-contiguous: must copy. This path is rare (e.g., body
-         * split across multiple TCP packets with intervening data).
-         * Fall back to arena allocation. */
-        char* new_body =
-            csilk_arena_alloc(client->ctx.arena, client->ctx.request.body_len + length + 1);
-        if (!new_body) {
-            client->ctx.request.body = NULL;
-            client->ctx.request.body_len = 0;
-            return HPE_USER;
+        /* Non-contiguous: must copy. Use worker/TLS body size-class pool. */
+        size_t req_size = client->ctx.request.body_len + length + 1;
+        if (client->ctx.request.body_ownership == CSILK_OWN_BORROWED) {
+            size_t cap = 0;
+            char*  new_body = (char*)csilk_body_alloc(req_size, &cap);
+            if (!new_body) {
+                client->ctx.request.body = NULL;
+                client->ctx.request.body_len = 0;
+                client->ctx.request.body_capacity = 0;
+                return HPE_USER;
+            }
+            memcpy(new_body, client->ctx.request.body, client->ctx.request.body_len);
+            memcpy(new_body + client->ctx.request.body_len, at, length);
+            client->ctx.request.body_len += length;
+            new_body[client->ctx.request.body_len] = '\0';
+            client->ctx.request.body = new_body;
+            client->ctx.request.body_capacity = cap;
+            client->ctx.request.body_ownership = CSILK_OWN_HEAP;
+            client->ctx.request.body_is_managed = 1;
+        } else {
+            if (client->ctx.request.body_capacity >= req_size) {
+                memcpy(client->ctx.request.body + client->ctx.request.body_len, at, length);
+                client->ctx.request.body_len += length;
+                client->ctx.request.body[client->ctx.request.body_len] = '\0';
+            } else {
+                size_t cap = 0;
+                char*  new_body = (char*)csilk_body_realloc(client->ctx.request.body,
+                                                            client->ctx.request.body_len,
+                                                            client->ctx.request.body_capacity,
+                                                            req_size,
+                                                            &cap);
+                if (!new_body) {
+                    return HPE_USER;
+                }
+                memcpy(new_body + client->ctx.request.body_len, at, length);
+                client->ctx.request.body_len += length;
+                new_body[client->ctx.request.body_len] = '\0';
+                client->ctx.request.body = new_body;
+                client->ctx.request.body_capacity = cap;
+            }
         }
-        memcpy(new_body, client->ctx.request.body, client->ctx.request.body_len);
-        memcpy(new_body + client->ctx.request.body_len, at, length);
-        client->ctx.request.body_len += length;
-        new_body[client->ctx.request.body_len] = '\0';
-        client->ctx.request.body = new_body;
     }
     return 0;
 }

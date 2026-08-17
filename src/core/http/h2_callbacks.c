@@ -111,15 +111,25 @@ on_data_chunk_recv_callback(nghttp2_session* session,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
-    char* new_body = realloc(c->request.body, c->request.body_len + len + 1);
-    if (new_body) {
+    size_t req_size = c->request.body_len + len + 1;
+    if (c->request.body && c->request.body_capacity >= req_size) {
+        memcpy(c->request.body + c->request.body_len, data, len);
+        c->request.body_len += len;
+        c->request.body[c->request.body_len] = '\0';
+    } else {
+        size_t cap = 0;
+        char*  new_body = (char*)csilk_body_realloc(
+            c->request.body, c->request.body_len, c->request.body_capacity, req_size, &cap);
+        if (!new_body) {
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
         memcpy(new_body + c->request.body_len, data, len);
         c->request.body_len += len;
         new_body[c->request.body_len] = '\0';
         c->request.body = new_body;
+        c->request.body_capacity = cap;
+        c->request.body_ownership = CSILK_OWN_HEAP;
         c->request.body_is_managed = 1;
-    } else {
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
     return 0;
