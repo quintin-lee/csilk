@@ -314,11 +314,12 @@ on_body(llhttp_t* p, const char* at, size_t length)
                 client->ctx.request.body[client->ctx.request.body_len] = '\0';
             } else {
                 size_t cap = 0;
-                char*  new_body = (char*)csilk_body_realloc(client->ctx.request.body,
-                                                            client->ctx.request.body_len,
-                                                            client->ctx.request.body_capacity,
-                                                            req_size,
-                                                            &cap);
+                char*  new_body = NULL;
+                new_body = (char*)csilk_body_realloc(client->ctx.request.body,
+                                                     client->ctx.request.body_len,
+                                                     client->ctx.request.body_capacity,
+                                                     req_size,
+                                                     &cap);
                 if (!new_body) {
                     return HPE_USER;
                 }
