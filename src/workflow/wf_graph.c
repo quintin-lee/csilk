@@ -11,6 +11,32 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* Weak fallbacks when csilk_http is not linked */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) void
+csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csilk_handler_t handler)
+{
+    (void)app;
+    (void)method;
+    (void)path;
+    (void)handler;
+}
+__attribute__((weak)) void
+csilk_set_header(csilk_ctx_t* c, const char* key, const char* value)
+{
+    (void)c;
+    (void)key;
+    (void)value;
+}
+__attribute__((weak)) void
+csilk_string(csilk_ctx_t* c, int status_code, const char* str)
+{
+    (void)c;
+    (void)status_code;
+    (void)str;
+}
+#endif
+
 /* --- UI Handler --- */
 
 static void

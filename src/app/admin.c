@@ -16,7 +16,31 @@
 #include "csilk/core/json.h"
 #include "csilk/core/internal.h"
 #include "csilk/drivers/db.h"
+#include "csilk/drivers/ai.h"
 #include "util/flamegraph.h"
+
+/* Weak fallbacks for optional sub-modules (AI, DB) */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) void
+csilk_ai_get_stats(csilk_ai_stats_t* stats)
+{
+    if (stats) {
+        memset(stats, 0, sizeof(*stats));
+    }
+}
+__attribute__((weak)) void
+csilk_ai_register_monitor(void* c)
+{
+    (void)c;
+}
+__attribute__((weak)) void
+csilk_db_get_stats(csilk_db_stats_t* stats)
+{
+    if (stats) {
+        memset(stats, 0, sizeof(*stats));
+    }
+}
+#endif
 
 /* Externs from metrics.c */
 extern uint64_t atomic_load_http_requests(void);

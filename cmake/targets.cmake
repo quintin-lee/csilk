@@ -109,59 +109,67 @@ else()
   target_link_libraries(csilk_core PUBLIC csilk::libuv)
 endif()
 if(NOT APPLE AND NOT WIN32)
-  target_link_libraries(csilk_core PRIVATE m)
+  target_link_libraries(csilk_core PUBLIC m)
 endif()
 add_library(csilk::core ALIAS csilk_core)
 
-# ── 2. csilk_http (libcsilk-http.a) ──────────────────────────────────────
-add_library(csilk_http STATIC ${CSILK_HTTP_SOURCES})
-set_target_properties(csilk_http PROPERTIES OUTPUT_NAME "csilk-http")
-csilk_target_setup(csilk_http PUBLIC STATIC)
-target_link_libraries(csilk_http PUBLIC csilk_core ZLIB::ZLIB)
-if(TARGET csilk::llhttp)
-  target_link_libraries(csilk_http PRIVATE csilk::llhttp)
-endif()
-add_library(csilk::http ALIAS csilk_http)
-
-# ── 3. csilk_tls (libcsilk-tls.a) ────────────────────────────────────────
+# ── 2. csilk_tls (libcsilk-tls.a) ────────────────────────────────────────
 add_library(csilk_tls STATIC ${CSILK_TLS_SOURCES})
 set_target_properties(csilk_tls PROPERTIES OUTPUT_NAME "csilk-tls")
 csilk_target_setup(csilk_tls PUBLIC STATIC)
 target_link_libraries(csilk_tls PUBLIC csilk_core OpenSSL::SSL OpenSSL::Crypto)
 add_library(csilk::tls ALIAS csilk_tls)
 
+# ── 3. csilk_mq (libcsilk-mq.a) ──────────────────────────────────────────
+add_library(csilk_mq STATIC ${CSILK_MQ_SOURCES})
+set_target_properties(csilk_mq PROPERTIES OUTPUT_NAME "csilk-mq")
+csilk_target_setup(csilk_mq PUBLIC STATIC)
+target_link_libraries(csilk_mq PUBLIC csilk_core)
+add_library(csilk::mq ALIAS csilk_mq)
+
 # ── 4. csilk_http2 (libcsilk-http2.a) ────────────────────────────────────
 add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
 set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
 csilk_target_setup(csilk_http2 PUBLIC STATIC)
-target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_http nghttp2)
+target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls nghttp2)
 add_library(csilk::http2 ALIAS csilk_http2)
 
-# ── 5. csilk_db (libcsilk-db.a) ──────────────────────────────────────────
+# ── 5. csilk_http (libcsilk-http.a) ──────────────────────────────────────
+add_library(csilk_http STATIC ${CSILK_HTTP_SOURCES})
+set_target_properties(csilk_http PROPERTIES OUTPUT_NAME "csilk-http")
+csilk_target_setup(csilk_http PUBLIC STATIC)
+target_link_libraries(csilk_http PUBLIC
+    csilk_core
+    csilk_tls
+    csilk_http2
+    csilk_mq
+    ZLIB::ZLIB
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)
+if(TARGET csilk::llhttp)
+  target_link_libraries(csilk_http PUBLIC csilk::llhttp)
+endif()
+add_library(csilk::http ALIAS csilk_http)
+
+# ── 6. csilk_db (libcsilk-db.a) ──────────────────────────────────────────
 add_library(csilk_db STATIC ${CSILK_DB_SOURCES})
 set_target_properties(csilk_db PROPERTIES OUTPUT_NAME "csilk-db")
 csilk_target_setup(csilk_db PUBLIC STATIC)
 target_link_libraries(csilk_db PUBLIC csilk_core SQLite::SQLite3)
 foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
   if(TARGET ${DB_TARGET})
-    target_link_libraries(csilk_db PRIVATE ${DB_TARGET})
+    target_link_libraries(csilk_db PUBLIC ${DB_TARGET})
   endif()
 endforeach()
 add_library(csilk::db ALIAS csilk_db)
 
-# ── 6. csilk_ai (libcsilk-ai.a) ──────────────────────────────────────────
+# ── 7. csilk_ai (libcsilk-ai.a) ──────────────────────────────────────────
 add_library(csilk_ai STATIC ${CSILK_AI_SOURCES})
 set_target_properties(csilk_ai PROPERTIES OUTPUT_NAME "csilk-ai")
 csilk_target_setup(csilk_ai PUBLIC STATIC)
 target_link_libraries(csilk_ai PUBLIC csilk_core CURL::libcurl)
 add_library(csilk::ai ALIAS csilk_ai)
-
-# ── 7. csilk_mq (libcsilk-mq.a) ──────────────────────────────────────────
-add_library(csilk_mq STATIC ${CSILK_MQ_SOURCES})
-set_target_properties(csilk_mq PROPERTIES OUTPUT_NAME "csilk-mq")
-csilk_target_setup(csilk_mq PUBLIC STATIC)
-target_link_libraries(csilk_mq PUBLIC csilk_core)
-add_library(csilk::mq ALIAS csilk_mq)
 
 # ── 8. csilk_workflow (libcsilk-workflow.a) ──────────────────────────────
 add_library(csilk_workflow STATIC ${CSILK_WORKFLOW_SOURCES})
@@ -176,12 +184,12 @@ set_target_properties(csilk PROPERTIES OUTPUT_NAME "csilk")
 csilk_target_setup(csilk PUBLIC STATIC)
 target_link_libraries(csilk PUBLIC
     csilk_core
-    csilk_http
     csilk_tls
+    csilk_mq
     csilk_http2
+    csilk_http
     csilk_db
     csilk_ai
-    csilk_mq
     csilk_workflow
 )
 add_library(csilk::csilk ALIAS csilk)
@@ -205,19 +213,9 @@ if(CSILK_BUILD_SHARED)
       target_link_libraries(csilk_core_shared PUBLIC csilk::libuv)
     endif()
     if(NOT APPLE AND NOT WIN32)
-      target_link_libraries(csilk_core_shared PRIVATE m)
+      target_link_libraries(csilk_core_shared PUBLIC m)
     endif()
     add_library(csilk::core_shared ALIAS csilk_core_shared)
-
-    # csilk_http_shared (libcsilk-http.so)
-    add_library(csilk_http_shared SHARED ${CSILK_HTTP_SOURCES})
-    set_target_properties(csilk_http_shared PROPERTIES OUTPUT_NAME "csilk-http")
-    csilk_target_setup(csilk_http_shared PUBLIC SHARED)
-    target_link_libraries(csilk_http_shared PUBLIC csilk_core_shared ZLIB::ZLIB)
-    if(TARGET csilk::llhttp)
-      target_link_libraries(csilk_http_shared PRIVATE csilk::llhttp)
-    endif()
-    add_library(csilk::http_shared ALIAS csilk_http_shared)
 
     # csilk_tls_shared (libcsilk-tls.so)
     add_library(csilk_tls_shared SHARED ${CSILK_TLS_SOURCES})
@@ -226,12 +224,37 @@ if(CSILK_BUILD_SHARED)
     target_link_libraries(csilk_tls_shared PUBLIC csilk_core_shared OpenSSL::SSL OpenSSL::Crypto)
     add_library(csilk::tls_shared ALIAS csilk_tls_shared)
 
+    # csilk_mq_shared (libcsilk-mq.so)
+    add_library(csilk_mq_shared SHARED ${CSILK_MQ_SOURCES})
+    set_target_properties(csilk_mq_shared PROPERTIES OUTPUT_NAME "csilk-mq")
+    csilk_target_setup(csilk_mq_shared PUBLIC SHARED)
+    target_link_libraries(csilk_mq_shared PUBLIC csilk_core_shared)
+    add_library(csilk::mq_shared ALIAS csilk_mq_shared)
+
     # csilk_http2_shared (libcsilk-http2.so)
     add_library(csilk_http2_shared SHARED ${CSILK_HTTP2_SOURCES})
     set_target_properties(csilk_http2_shared PROPERTIES OUTPUT_NAME "csilk-http2")
     csilk_target_setup(csilk_http2_shared PUBLIC SHARED)
-    target_link_libraries(csilk_http2_shared PUBLIC csilk_core_shared csilk_http_shared nghttp2)
+    target_link_libraries(csilk_http2_shared PUBLIC csilk_core_shared csilk_tls_shared nghttp2)
     add_library(csilk::http2_shared ALIAS csilk_http2_shared)
+
+    # csilk_http_shared (libcsilk-http.so)
+    add_library(csilk_http_shared SHARED ${CSILK_HTTP_SOURCES})
+    set_target_properties(csilk_http_shared PROPERTIES OUTPUT_NAME "csilk-http")
+    csilk_target_setup(csilk_http_shared PUBLIC SHARED)
+    target_link_libraries(csilk_http_shared PUBLIC
+        csilk_core_shared
+        csilk_tls_shared
+        csilk_http2_shared
+        csilk_mq_shared
+        ZLIB::ZLIB
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+    if(TARGET csilk::llhttp)
+      target_link_libraries(csilk_http_shared PUBLIC csilk::llhttp)
+    endif()
+    add_library(csilk::http_shared ALIAS csilk_http_shared)
 
     # csilk_db_shared (libcsilk-db.so)
     add_library(csilk_db_shared SHARED ${CSILK_DB_SOURCES})
@@ -240,7 +263,7 @@ if(CSILK_BUILD_SHARED)
     target_link_libraries(csilk_db_shared PUBLIC csilk_core_shared SQLite::SQLite3)
     foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
       if(TARGET ${DB_TARGET})
-        target_link_libraries(csilk_db_shared PRIVATE ${DB_TARGET})
+        target_link_libraries(csilk_db_shared PUBLIC ${DB_TARGET})
       endif()
     endforeach()
     add_library(csilk::db_shared ALIAS csilk_db_shared)
@@ -251,13 +274,6 @@ if(CSILK_BUILD_SHARED)
     csilk_target_setup(csilk_ai_shared PUBLIC SHARED)
     target_link_libraries(csilk_ai_shared PUBLIC csilk_core_shared CURL::libcurl)
     add_library(csilk::ai_shared ALIAS csilk_ai_shared)
-
-    # csilk_mq_shared (libcsilk-mq.so)
-    add_library(csilk_mq_shared SHARED ${CSILK_MQ_SOURCES})
-    set_target_properties(csilk_mq_shared PROPERTIES OUTPUT_NAME "csilk-mq")
-    csilk_target_setup(csilk_mq_shared PUBLIC SHARED)
-    target_link_libraries(csilk_mq_shared PUBLIC csilk_core_shared)
-    add_library(csilk::mq_shared ALIAS csilk_mq_shared)
 
     # csilk_workflow_shared (libcsilk-workflow.so)
     add_library(csilk_workflow_shared SHARED ${CSILK_WORKFLOW_SOURCES})
@@ -272,12 +288,12 @@ if(CSILK_BUILD_SHARED)
     csilk_target_setup(csilk_shared PUBLIC SHARED)
     target_link_libraries(csilk_shared PUBLIC
         csilk_core_shared
-        csilk_http_shared
         csilk_tls_shared
+        csilk_mq_shared
         csilk_http2_shared
+        csilk_http_shared
         csilk_db_shared
         csilk_ai_shared
-        csilk_mq_shared
         csilk_workflow_shared
     )
     add_dependencies(csilk csilk_shared)

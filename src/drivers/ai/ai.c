@@ -47,6 +47,19 @@ static size_t        g_ai_monitor_count = 0;
 static csilk_mutex_t g_ai_monitor_mutex;
 static atomic_int    g_ai_monitor_init = 0;
 
+/* Weak fallback when csilk_http (websocket) is not linked */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) int
+csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
+{
+    (void)c;
+    (void)payload;
+    (void)len;
+    (void)opcode;
+    return -1;
+}
+#endif
+
 /** @brief Lazily initialise the AI monitor registry mutex (idempotent). */
 static void
 ai_ensure_monitor_init(void)
