@@ -45,10 +45,10 @@ test_result(const char* name, int ok)
 static int
 recv_response(int sock, char* buf, size_t size)
 {
-    fd_set         fds;
-    struct timeval tv = {3, 0};
-    int            total = 0;
+    fd_set fds;
+    int    total = 0;
     while (total < (int)size - 1) {
+        struct timeval tv = {3, 0};
         FD_ZERO(&fds);
         FD_SET(sock, &fds);
         int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
@@ -398,12 +398,19 @@ main()
     nanosleep(&(struct timespec){0, 50000000}, nullptr);
 
     test_get_root();
+    usleep(10000);
     test_mq_publish();
+    usleep(10000);
     test_admin_ui();
+    usleep(10000);
     test_admin_stats();
+    usleep(10000);
     test_workflow_run();
+    usleep(10000);
     test_keepalive_multi();
+    usleep(10000);
     test_404_not_found();
+    usleep(10000);
     test_get_with_query();
 
     printf("\n=== Extended Integration Results: %d passed, %d failed ===\n",

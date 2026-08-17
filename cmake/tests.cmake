@@ -54,6 +54,7 @@ set(CSILK_CORE_TESTS
     test_redirect
     test_response
     test_router
+    test_middleware_chain
     test_server
     test_server_ext
     test_server_limits
@@ -86,7 +87,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core
+    core;core;core;core
 )
 
 # -- Application tests --

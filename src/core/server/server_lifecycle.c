@@ -167,6 +167,9 @@ csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
     CSILK_LOG_D("Server: registered global middleware %p (count: %d)",
                 (void*)handler,
                 server->middleware_count);
+    if (server->router) {
+        csilk_router_compile(server->router, server->middlewares, (size_t)server->middleware_count);
+    }
     return 0;
 }
 
@@ -407,6 +410,10 @@ csilk_server_run(csilk_server_t* server, int port)
         return -1;
     }
 
+    if (server->router && server->middleware_count > 0) {
+        csilk_router_compile(server->router, server->middlewares, (size_t)server->middleware_count);
+    }
+
     if (server->config.enable_openapi && server->router) {
         static csilk_handler_t openapi_handlers[] = {openapi_json_handler, NULL};
         static csilk_handler_t docs_handlers[] = {swagger_docs_handler, NULL};
@@ -619,6 +626,9 @@ csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
 {
     if (!server || !router) {
         return;
+    }
+    if (server->middleware_count > 0) {
+        csilk_router_compile(router, server->middlewares, (size_t)server->middleware_count);
     }
     csilk_router_t* old_router = server->router;
     server->router = router;

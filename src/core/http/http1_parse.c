@@ -340,29 +340,6 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 
     if (csilk_router_match_ctx(server->router, c)) {
         CSILK_LOG_D("Route matched, calling next handler");
-
-        if (server->middleware_count > 0) {
-            int route_handler_count = 0;
-            while (c->handlers[route_handler_count] != NULL) {
-                route_handler_count++;
-            }
-
-            int              total_count = server->middleware_count + route_handler_count;
-            csilk_handler_t* arena_handlers =
-                csilk_arena_alloc(c->arena, (total_count + 1) * sizeof(csilk_handler_t));
-            if (arena_handlers) {
-                for (int i = 0; i < server->middleware_count; i++) {
-                    arena_handlers[i] = server->middlewares[i];
-                }
-                for (int i = 0; i < route_handler_count; i++) {
-                    arena_handlers[server->middleware_count + i] = c->handlers[i];
-                }
-                arena_handlers[total_count] = NULL;
-                c->handlers = arena_handlers;
-                c->handler_count = total_count;
-            }
-        }
-
         csilk_next(c);
     } else {
         CSILK_LOG_W("Route not found: %s", c->request.path);

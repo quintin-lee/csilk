@@ -23,7 +23,10 @@
  *       must be registered before csilk_server_run.
  */
 typedef struct csilk_router_s {
-    csilk_router_node_t* root; /**< Root node of the segment-based prefix trie. */
+    csilk_router_node_t* root;      /**< Root node of the segment-based prefix trie. */
+    csilk_handler_t
+           global_middlewares[32];  /**< Cached global middlewares compiled onto this router. */
+    size_t global_middleware_count; /**< Number of cached global middlewares. */
 } csilk_router_t;
 
 /**
@@ -35,6 +38,17 @@ typedef struct csilk_router_s {
  *         failure.
  */
 csilk_router_t* csilk_router_new(void);
+
+/**
+ * @brief Compile/finalize handler chains for all routes in the router by prepending
+ *        global middlewares.
+ *
+ * @param r          Router instance.
+ * @param global_mws Array of global middleware handler function pointers.
+ * @param count      Number of global middlewares.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_router_compile(csilk_router_t* r, const csilk_handler_t* global_mws, size_t count);
 
 /**
  * @brief Register a route with one or more handlers.
