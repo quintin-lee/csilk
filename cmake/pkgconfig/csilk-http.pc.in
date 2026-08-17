@@ -1,0 +1,14 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: csilk-http
+Description: Csilk HTTP/1 & HTTP/2 server, router, and middleware
+Version: @CSILK_VERSION@
+URL: https://github.com/quintin-lee/csilk
+Requires: csilk-http2 csilk-mq
+Requires.private: @CSILK_HTTP_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lcsilk-http
+Libs.private: @CSILK_HTTP_PC_LIBS_PRIVATE@
+Cflags: -I${includedir}

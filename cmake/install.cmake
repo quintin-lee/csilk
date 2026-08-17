@@ -79,24 +79,93 @@ install(FILES
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/csilk"
 )
 
-# ── pkg-config (csilk.pc) ────────────────────────────────────────────────
-set(CSILK_PC_LIBS_PRIVATE "")
+# ── pkg-config (.pc files) ──────────────────────────────────────────────
+# Core
+set(CSILK_CORE_PC_REQUIRES_PRIVATE "")
 if(CSILK_USE_URING)
-  string(APPEND CSILK_PC_LIBS_PRIVATE " -luring")
+  set(CSILK_CORE_PC_REQUIRES_PRIVATE "liburing")
 else()
-  string(APPEND CSILK_PC_LIBS_PRIVATE " -luv")
+  set(CSILK_CORE_PC_REQUIRES_PRIVATE "libuv")
 endif()
-string(APPEND CSILK_PC_LIBS_PRIVATE " -lssl -lcrypto -lcurl -lsqlite3 -lz -lyaml -lnghttp2")
+string(APPEND CSILK_CORE_PC_REQUIRES_PRIVATE " libcrypto yaml-0.1")
+
+set(CSILK_CORE_PC_LIBS_PRIVATE "")
+if(CSILK_USE_URING)
+  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -luring")
+else()
+  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -luv")
+endif()
+string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lcrypto -lyaml -lyyjson")
 if(NOT APPLE AND NOT WIN32)
-  string(APPEND CSILK_PC_LIBS_PRIVATE " -lm -lpthread")
+  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lm -lpthread")
 endif()
 
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/csilk.pc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/csilk.pc"
-    @ONLY
+# TLS
+set(CSILK_TLS_PC_REQUIRES_PRIVATE "openssl")
+set(CSILK_TLS_PC_LIBS_PRIVATE "-lssl -lcrypto")
+
+# MQ
+set(CSILK_MQ_PC_REQUIRES_PRIVATE "")
+set(CSILK_MQ_PC_LIBS_PRIVATE "")
+
+# HTTP/2
+set(CSILK_HTTP2_PC_REQUIRES_PRIVATE "libnghttp2")
+set(CSILK_HTTP2_PC_LIBS_PRIVATE "-lnghttp2")
+
+# HTTP
+set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
+set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lllhttp -lssl -lcrypto")
+
+# DB
+set(CSILK_DB_PC_REQUIRES_PRIVATE "sqlite3")
+set(CSILK_DB_PC_LIBS_PRIVATE "-lsqlite3")
+if(CSILK_HAS_MYSQL)
+  string(APPEND CSILK_DB_PC_LIBS_PRIVATE " -lmysqlclient")
+endif()
+if(CSILK_HAS_POSTGRES)
+  string(APPEND CSILK_DB_PC_REQUIRES_PRIVATE " libpq")
+  string(APPEND CSILK_DB_PC_LIBS_PRIVATE " -lpq")
+endif()
+if(CSILK_HAS_REDIS)
+  string(APPEND CSILK_DB_PC_REQUIRES_PRIVATE " hiredis")
+  string(APPEND CSILK_DB_PC_LIBS_PRIVATE " -lhiredis")
+endif()
+if(CSILK_HAS_MONGODB)
+  string(APPEND CSILK_DB_PC_REQUIRES_PRIVATE " libmongoc-1.0")
+  string(APPEND CSILK_DB_PC_LIBS_PRIVATE " -lmongoc-1.0 -lbson-1.0")
+endif()
+
+# AI
+set(CSILK_AI_PC_REQUIRES_PRIVATE "libcurl")
+set(CSILK_AI_PC_LIBS_PRIVATE "-lcurl")
+
+# Workflow
+set(CSILK_WORKFLOW_PC_REQUIRES_PRIVATE "yaml-0.1")
+set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
+
+set(CSILK_PC_FILES
+    csilk-core
+    csilk-tls
+    csilk-mq
+    csilk-http2
+    csilk-http
+    csilk-db
+    csilk-ai
+    csilk-workflow
+    csilk
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/csilk.pc"
+
+set(CSILK_GENERATED_PC_FILES "")
+foreach(pc_mod ${CSILK_PC_FILES})
+  configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkgconfig/${pc_mod}.pc.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/${pc_mod}.pc"
+      @ONLY
+  )
+  list(APPEND CSILK_GENERATED_PC_FILES "${CMAKE_CURRENT_BINARY_DIR}/${pc_mod}.pc")
+endforeach()
+
+install(FILES ${CSILK_GENERATED_PC_FILES}
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
 )
 

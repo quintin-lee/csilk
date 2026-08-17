@@ -1,0 +1,14 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: csilk-workflow
+Description: Csilk workflow DAG execution engine and DSL
+Version: @CSILK_VERSION@
+URL: https://github.com/quintin-lee/csilk
+Requires: csilk-ai csilk-mq
+Requires.private: @CSILK_WORKFLOW_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lcsilk-workflow
+Libs.private: @CSILK_WORKFLOW_PC_LIBS_PRIVATE@
+Cflags: -I${includedir}
