@@ -3,10 +3,12 @@ exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: csilk
-Description: High-performance, lightweight C HTTP server and microservices framework
+Name: csilk-db
+Description: Csilk database abstraction and connection pools
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-http csilk-db csilk-workflow
-Libs: -L${libdir} -lcsilk
+Requires: csilk-core
+Requires.private: @CSILK_DB_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lcsilk-db
+Libs.private: @CSILK_DB_PC_LIBS_PRIVATE@
 Cflags: -I${includedir}

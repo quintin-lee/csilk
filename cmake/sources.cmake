@@ -61,6 +61,7 @@ set(CSILK_CORE_SOURCES
     src/crypto/uuid.c
     src/crypto/crypto.c
     src/crypto/bcrypt.c
+    src/drivers/cipher/openssl.c
     src/util/flamegraph.c
 )
 
@@ -138,7 +139,6 @@ set(CSILK_HTTP_SOURCES
 # ── TLS Module (OpenSSL TLS engine & cipher drivers) ─────────────────────
 set(CSILK_TLS_SOURCES
     src/core/http/tls.c
-    src/drivers/cipher/openssl.c
 )
 
 # ── HTTP/2 & HTTP/3 Module (nghttp2 & QUIC protocol adapters) ────────────
