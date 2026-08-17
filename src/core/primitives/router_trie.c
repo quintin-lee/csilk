@@ -85,7 +85,7 @@ try_match_param(csilk_router_node_t*     child,
     int param_added = 0;
     if (ctx && ctx->params_count < CSILK_MAX_PARAMS) {
         if (ctx->arena) {
-            ctx->params[ctx->params_count].key = csilk_arena_strdup(ctx->arena, child->segment);
+            ctx->params[ctx->params_count].key = (char*)child->segment;
             ctx->params[ctx->params_count].value = csilk_arena_strndup(ctx->arena, seg, len);
         } else {
             ctx->params[ctx->params_count].key = strdup(child->segment);

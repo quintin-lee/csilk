@@ -49,7 +49,9 @@ enum { CSILK_ES256_SIGNATURE_SIZE = 64 };
  * Operations follow the same parameter patterns as their _csilk_*
  * counterparts in internal.h so that the dispatch layer is transparent.
  */
-typedef struct {
+typedef struct csilk_cipher_driver csilk_cipher_driver_t;
+
+struct csilk_cipher_driver {
     /** @brief AES-256-GCM encryption.
    *  @param key            Encryption key (must be CSILK_AES256_KEY_SIZE
    * bytes).
@@ -203,7 +205,7 @@ typedef struct {
                       const uint8_t*  signature,
                       size_t          sig_len,
                       csilk_jwt_alg_t algorithm);
-} csilk_cipher_driver_t;
+};
 
 #ifdef __cplusplus
 }

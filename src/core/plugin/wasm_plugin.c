@@ -14,11 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow.h"
-#include "csilk/app/workflow_dsl.h"
 #include "csilk/core/wasm.h"
 #include "csilk/core/wasm_plugin.h"
-#include "csilk/protocols/mcp.h"
 #include "wasm_internal.h"
 
 /**
@@ -216,98 +213,4 @@ csilk_wasm_host_get_mapped_buffer(const csilk_wasm_plugin_t* plugin, size_t* len
         *len = plugin->memory.current_size;
     }
     return plugin->memory.data;
-}
-
-/**
- * @brief Workflow node handler that loads and executes a WASM file.
- * @param[in] ctx       Workflow context used to allocate output data.
- * @param[in] input     Incoming workflow data (currently unused).
- * @param[in] user_data WASM file path (owned by the registering node).
- * @return An allocated csilk_data_t carrying the plugin's JSON output, or NULL
- *         on missing args, load failure, or execution failure.
- * @note Loads the module, runs "run" with empty input, and frees the plugin
- *       before returning. The returned data value is a strdup of the output.
- */
-static csilk_data_t*
-csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
-{
-    if (!ctx || !user_data) {
-        return NULL;
-    }
-    (void)input;
-    const char*          wasm_filepath = (const char*)user_data;
-    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(wasm_filepath, NULL);
-    if (!plugin) {
-        return NULL;
-    }
-
-    char          err_buf[128];
-    char*         output = csilk_wasm_plugin_exec(plugin, "run", "{}", err_buf, sizeof(err_buf));
-    csilk_data_t* res_data = NULL;
-    if (output) {
-        res_data = csilk_wf_alloc(ctx, sizeof(csilk_data_t));
-        if (res_data) {
-            res_data->type = csilk_wf_strdup(ctx, "application/json");
-            res_data->value = csilk_wf_strdup(ctx, output);
-            res_data->free_fn = NULL;
-            res_data->meta = NULL;
-        }
-        free(output);
-    }
-
-    csilk_wasm_plugin_free(plugin);
-    return res_data;
-}
-
-/**
- * @brief Register a WASM module as a workflow node.
- * @param[in] wf            Workflow to extend.
- * @param[in] node_id       Identifier for the new node.
- * @param[in] wasm_filepath Path to the .wasm file (strdup'd; freed on node free).
- * @return 0 on success, -1 on NULL arguments or node creation failure.
- * @note The node uses csilk_wasm_node_handler; the file path is duplicated and
- *       released via the node's free callback.
- */
-int
-csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
-{
-    if (!wf || !node_id || !wasm_filepath) {
-        return -1;
-    }
-
-    csilk_wf_node_t* node =
-        csilk_wf_add(wf, node_id, csilk_wasm_node_handler, strdup(wasm_filepath));
-    if (node) {
-        csilk_wf_node_set_free(node, free);
-    }
-    return node != NULL ? 0 : -1;
-}
-
-/**
- * @brief Register a WASM module as an MCP server tool.
- * @param[in] server         MCP server to register the tool on.
- * @param[in] wasm_filepath  Path to the .wasm file backing the tool.
- * @param[in] tool_name       Tool name (validated non-NULL).
- * @param[in] description     Optional human-readable description (may be NULL).
- * @return 0 on success (result of csilk_mcp_server_register_tool), -1 on NULL
- *         server/filepath/tool_name.
- * @note Registers the tool with a fixed "{\"type\":\"object\"}" parameter schema.
- */
-int
-csilk_mcp_server_register_wasm_tool(csilk_mcp_server_t* server,
-                                    const char*         wasm_filepath,
-                                    const char*         tool_name,
-                                    const char*         description)
-{
-    if (!server || !wasm_filepath || !tool_name) {
-        return -1;
-    }
-
-    csilk_wf_tool_entry_t tool;
-    memset(&tool, 0, sizeof(tool));
-    tool.name = (char*)tool_name;
-    tool.description = (char*)description;
-    tool.parameters_json = "{\"type\":\"object\"}";
-
-    return csilk_mcp_server_register_tool(server, &tool);
 }

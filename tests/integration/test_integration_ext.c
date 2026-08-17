@@ -24,7 +24,7 @@
 #include "csilk/app/app.h"
 
 #define PORT 8101
-#define BUFSIZE 16384
+#define BUFSIZE 65536
 
 static int         g_tests_passed = 0;
 static int         g_tests_failed = 0;

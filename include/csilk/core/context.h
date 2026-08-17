@@ -14,7 +14,6 @@
 
 #include "csilk/core/types.h"
 #include "csilk/core/crypto.h"
-#include "csilk/drivers/cipher.h"
 
 /**
  * @brief Get the HTTP method of the current request.

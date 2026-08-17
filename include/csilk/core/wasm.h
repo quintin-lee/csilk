@@ -10,9 +10,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/app/workflow_dsl.h"
-#include "csilk/protocols/mcp.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -62,28 +59,6 @@ char* csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
                              const char*          json_input,
                              char*                err_buf,
                              size_t               err_len);
-
-/**
- * @brief Registers a WASM plugin step to a Workflow DAG.
- * @param wf Workflow handle.
- * @param node_id Unique node ID.
- * @param wasm_filepath Path to the .wasm file.
- * @return 0 on success, negative value on failure.
- */
-int csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath);
-
-/**
- * @brief Registers a WASM plugin as an MCP Tool.
- * @param server MCP server handle.
- * @param wasm_filepath Path to the .wasm file.
- * @param tool_name Tool name.
- * @param description Tool description.
- * @return 0 on success, negative value on failure.
- */
-int csilk_mcp_server_register_wasm_tool(csilk_mcp_server_t* server,
-                                        const char*         wasm_filepath,
-                                        const char*         tool_name,
-                                        const char*         description);
 
 #ifdef __cplusplus
 }

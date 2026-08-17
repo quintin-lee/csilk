@@ -54,6 +54,19 @@ int csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_ent
 int csilk_mcp_server_register_workflow(csilk_mcp_server_t* server, csilk_wf_t* wf);
 
 /**
+ * @brief Registers a WASM module as an MCP server tool.
+ * @param server         MCP server handle.
+ * @param wasm_filepath  Path to the .wasm file backing the tool.
+ * @param tool_name      Tool name.
+ * @param description    Tool description.
+ * @return 0 on success, negative on failure.
+ */
+int csilk_mcp_server_register_wasm_tool(csilk_mcp_server_t* server,
+                                        const char*         wasm_filepath,
+                                        const char*         tool_name,
+                                        const char*         description);
+
+/**
  * @brief Starts the MCP Server using non-blocking Stdio transport (stdin/stdout).
  * @param server The server instance.
  * @return 0 on success, non-zero on failure.
