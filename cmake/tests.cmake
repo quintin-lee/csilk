@@ -77,6 +77,7 @@ set(CSILK_CORE_TESTS
     test_af_xdp_zerocopy
     test_uring_sqpoll
     test_uring_io
+    test_io_backend
     test_io_perf_fallback
     test_wasm_vm
     test_wasm_fuel
@@ -88,7 +89,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core
+    core;core;core;core;core;core
 )
 
 # -- Application tests --
