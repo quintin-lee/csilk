@@ -130,6 +130,30 @@ csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 }
 
 /**
+ * @brief Unregister a WebSocket monitor from MQ events.
+ */
+void
+csilk_mq_unregister_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
+{
+    if (!mq || !c) {
+        return;
+    }
+    csilk_mutex_lock(&mq->monitor_mutex);
+    for (size_t i = 0; i < mq->monitor_count; i++) {
+        if (mq->monitors[i] == c) {
+            for (size_t j = i; j + 1 < mq->monitor_count; j++) {
+                mq->monitors[j] = mq->monitors[j + 1];
+            }
+            mq->monitor_count--;
+            CSILK_LOG_I(
+                "MQ: Monitor %p unregistered. Total monitors: %zu", (void*)c, mq->monitor_count);
+            break;
+        }
+    }
+    csilk_mutex_unlock(&mq->monitor_mutex);
+}
+
+/**
  * @brief Internal: Create a new MQ instance bound to an I/O event loop.
  *
  * Allocates and zero-initializes the queue, initializes the queue/monitor/WAL

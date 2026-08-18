@@ -23,6 +23,7 @@ csilk_test_ctx_new(void)
 {
     csilk_ctx_t* c = calloc(1, sizeof(csilk_ctx_t));
     if (c) {
+        c->request_seq = 1;
         c->handler_index = -1;
         c->arena = csilk_arena_new(4096);
         c->file_fd = -1;

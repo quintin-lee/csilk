@@ -710,6 +710,13 @@ char* csilk_wf_to_mermaid(csilk_wf_t* wf);
 void csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c);
 
 /**
+ * @brief Unregister a WebSocket connection from workflow updates.
+ * @param wf Workflow handle.
+ * @param c  Request context to unregister.
+ */
+void csilk_wf_unregister_monitor(csilk_wf_t* wf, csilk_ctx_t* c);
+
+/**
  * @brief Set a maximum token budget for the workflow.
  * @param wf         Workflow handle.
  * @param max_tokens Maximum total tokens (prompt + completion) allowed.

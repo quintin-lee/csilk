@@ -61,6 +61,12 @@ char* csilk_ai_stats_to_json(const csilk_ai_stats_t* stats);
  */
 void csilk_ai_register_monitor(void* c);
 
+/**
+ * @brief Unregister a WebSocket monitor from AI events.
+ * @param c Framework context to unregister.
+ */
+void csilk_ai_unregister_monitor(void* c);
+
 /** @brief Opaque handle for an AI provider instance. */
 typedef struct csilk_ai_s csilk_ai_t;
 

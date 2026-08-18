@@ -406,6 +406,9 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     if (c->request_id[0]) {
         memset(c->request_id, 0, sizeof(c->request_id));
     }
+
+    /* 11. Request sequence/generation counter — increment to invalidate stale async tokens */
+    c->request_seq++;
 }
 
 /** @brief Get the request body data and optionally its length.
@@ -591,7 +594,9 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     if (!c) {
         return;
     }
+    uint64_t old_seq = c->request_seq;
     memset(c, 0, sizeof(csilk_ctx_t));
+    c->request_seq = old_seq ? old_seq + 1 : 1;
     c->handler_index = -1;
     c->file_fd = -1;
     c->_internal_client = client;

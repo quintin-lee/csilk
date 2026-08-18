@@ -34,6 +34,11 @@ csilk_ai_register_monitor(void* c)
     (void)c;
 }
 __attribute__((weak)) void
+csilk_ai_unregister_monitor(void* c)
+{
+    (void)c;
+}
+__attribute__((weak)) void
 csilk_db_get_stats(csilk_db_stats_t* stats)
 {
     if (stats) {
@@ -269,6 +274,24 @@ admin_profile_quick_handler(csilk_ctx_t* c)
     csilk_json_error(c, 200, "Quick profile complete");
 }
 
+typedef struct {
+    csilk_mq_t*  mq;
+    csilk_ctx_t* c;
+} admin_monitor_cleanup_t;
+
+static void
+admin_monitor_on_close(void* arg)
+{
+    admin_monitor_cleanup_t* cl = (admin_monitor_cleanup_t*)arg;
+    if (cl) {
+        if (cl->mq) {
+            csilk_mq_unregister_monitor(cl->mq, cl->c);
+        }
+        csilk_ai_unregister_monitor(cl->c);
+        free(cl);
+    }
+}
+
 /** @brief WebSocket handler that streams multiplexed events. */
 static void
 admin_ws_handler(csilk_ctx_t* c)
@@ -280,6 +303,13 @@ admin_ws_handler(csilk_ctx_t* c)
 
         // Also monitor AI engine
         csilk_ai_register_monitor(c);
+
+        admin_monitor_cleanup_t* cl = malloc(sizeof(admin_monitor_cleanup_t));
+        if (cl) {
+            cl->mq = mq;
+            cl->c = c;
+            csilk_ctx_defer(c, admin_monitor_on_close, cl);
+        }
 
         CSILK_LOG_I("Admin Dashboard connected via WebSocket");
     }
