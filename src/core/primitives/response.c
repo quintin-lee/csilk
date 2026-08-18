@@ -22,6 +22,26 @@
 #include "../primitives/header_map.h"
 #include "../http/h2.h"
 
+static inline void
+_csilk_free_response_body_if_needed(csilk_ctx_t* c)
+{
+    if (c && c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_OWNED ||
+         c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER ||
+         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
+        if (c->response.body_capacity > 0) {
+            csilk_body_free((void*)c->response.body, c->response.body_capacity);
+        } else {
+            free((void*)c->response.body);
+        }
+        c->response.body = NULL;
+        c->response.body_capacity = 0;
+        c->response.body_is_managed = 0;
+        c->response.body_ownership = CSILK_OWN_BORROWED;
+    }
+}
+
 /* --- Status & string --- */
 
 /** @brief Set the HTTP status code for the response.
@@ -38,15 +58,14 @@ csilk_status(csilk_ctx_t* c, int status)
     c->response.status = status;
 }
 
-/** @brief Set the response body as plain text with a status code.
+/** @brief Send a plain text response with the given status code.
  *
- * If the context has an arena allocator, the body string is duplicated into
- * arena memory. Otherwise, it falls back to strdup() and marks the body as
- * managed (so it will be freed during cleanup). The Content-Type header is
- * NOT set automatically — callers should set it explicitly if needed.
+ * Copies the message string to the request arena (when available) or the
+ * heap, sets the Content-Type header to text/plain, and marks the response
+ * ready for sending.
  *
  * @param c      The request context.
- * @param status HTTP status code for the response.
+ * @param status HTTP status code.
  * @param msg    Plain text body (may be NULL).
  * @note Ownership: when arena is unavailable, the strdup'd copy is freed
  *       automatically during csilk_ctx_cleanup(). Safe to pass NULL for msg. */
@@ -60,16 +79,13 @@ csilk_string(csilk_ctx_t* c, int status, const char* msg)
     c->response.status = status;
     size_t msg_len = msg ? strlen(msg) : 0;
     if (c->arena) {
+        _csilk_free_response_body_if_needed(c);
         c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : NULL;
         c->response.body_len = msg_len;
         c->response.body_ownership = CSILK_OWN_ARENA;
         c->response.body_is_managed = 0;
     } else {
-        if (c->response.body &&
-            (c->response.body_ownership == CSILK_OWN_HEAP ||
-             c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-            free((void*)c->response.body);
-        }
+        _csilk_free_response_body_if_needed(c);
         char* body = msg ? strdup(msg) : NULL;
         c->response.body = body;
         c->response.body_len = body ? msg_len : 0;
@@ -248,14 +264,7 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-        free((void*)c->response.body);
-        c->response.body = NULL;
-        c->response.body_is_managed = 0;
-        c->response.body_ownership = CSILK_OWN_BORROWED;
-    }
+    _csilk_free_response_body_if_needed(c);
 
     char* body = csilk_json_serialize(json, NULL);
     if (body) {
@@ -289,14 +298,7 @@ csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-        free((void*)c->response.body);
-        c->response.body = NULL;
-        c->response.body_is_managed = 0;
-        c->response.body_ownership = CSILK_OWN_BORROWED;
-    }
+    _csilk_free_response_body_if_needed(c);
 
     c->response.body = json_str;
     c->response.body_len = strlen(json_str);
@@ -311,62 +313,65 @@ csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
  * Falls back to cJSON if the message is too large for the stack buffer.
  *
  * @param c       The request context.
- * @param status  HTTP status code.
- * @param message Error message string (if NULL, "Unknown error" is used). */
+ * @param status  HTTP status code (e.g., 400, 500).
+ * @param message Error description string. */
 void
 csilk_json_error(csilk_ctx_t* c, int status, const char* message)
 {
-    if (!c || !c->arena) {
+    if (!c) {
         return;
     }
 
-    if (!message) {
-        message = "Unknown error";
-    }
-
-    char                 buf[256];
-    csilk_bounded_json_t j;
-    csilk_bounded_json_error(&j, buf, sizeof(buf), message);
-
-    csilk_set_header(c, "Content-Type", "application/json");
     c->response.status = status;
+    csilk_set_header(c, "Content-Type", "application/json");
 
-    const char* body = csilk_bounded_json_str(&j);
-    size_t      body_len = csilk_bounded_buf_len(&j.buf);
+    _csilk_free_response_body_if_needed(c);
 
-    if (csilk_bounded_json_overflow(&j)) {
-        /* Fall back to cJSON for unusually long messages */
-        csilk_json_t* err = csilk_json_object();
-        if (err) {
-            csilk_json_add_string(err, "error", message);
-            csilk_json(c, status, err);
+    char   stack_buf[256];
+    size_t needed = strlen(message ? message : "") + 32;
+
+    if (needed < sizeof(stack_buf)) {
+        int n = snprintf(stack_buf,
+                         sizeof(stack_buf),
+                         "{\"error\":\"%s\"}",
+                         message ? message : "Unknown error");
+        if (n > 0 && (size_t)n < sizeof(stack_buf)) {
+            if (c->arena) {
+                c->response.body = csilk_arena_strndup(c->arena, stack_buf, (size_t)n);
+                c->response.body_len = (size_t)n;
+                c->response.body_ownership = CSILK_OWN_ARENA;
+                c->response.body_is_managed = 0;
+                return;
+            }
         }
-        return;
     }
 
-    char* arena_body = csilk_arena_strndup(c->arena, body, body_len);
-    if (arena_body) {
-        csilk_set_response_body_ex(c, arena_body, body_len, CSILK_OWN_ARENA);
+    csilk_json_t* json = csilk_json_object();
+    csilk_json_add_string(json, "error", message ? message : "Unknown error");
+    char* body = csilk_json_serialize(json, NULL);
+    csilk_json_free(json);
+
+    if (body) {
+        c->response.body = body;
+        c->response.body_len = strlen(body);
+        c->response.body_ownership = CSILK_OWN_HEAP;
+        c->response.body_is_managed = 1;
     }
 }
 
-/* --- JSON reflect --- */
-
-/** @brief Send a JSON response from a registered struct via reflection.
+/**
+ * @brief Serialize a struct into the response body via reflection metadata.
  *
- * Serializes the provided struct to JSON using the csilk reflection engine
- * and sends it as the HTTP response. If @p type_name is NULL, the type is
- * inferred from the current handler's output_type metadata.
+ * Automatically infers the output type from the matched handler if type_name
+ * is omitted. Returns HTTP 500 if reflection serialization fails.
  *
- * @param c         The request context.
- * @param status    HTTP status code.
- * @param type_name Registered type name, or NULL to infer from route metadata.
- * @param ptr       Pointer to the struct to serialize.
- * @note The serialized JSON string is heap-allocated and managed by the
- *       framework (freed during cleanup). Uses csilk_json_marshal() internally.
+ * @param[in] c         Request context (must not be NULL).
+ * @param[in] status    HTTP status code to set.
+ * @param[in] type_name Registered struct name, or NULL to infer from handler.
+ * @param[in] ptr       Pointer to the struct instance (must not be NULL).
  */
 void
-csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr)
+csilk_json_marshal_response(csilk_ctx_t* c, int status, const char* type_name, const void* ptr)
 {
     if (!c || !ptr) {
         return;
@@ -382,16 +387,19 @@ csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void
     if (json_str) {
         c->response.status = status;
         csilk_set_header(c, "Content-Type", "application/json");
-        if (c->response.body &&
-            (c->response.body_ownership == CSILK_OWN_HEAP ||
-             c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
-            free((void*)c->response.body);
-        }
+        _csilk_free_response_body_if_needed(c);
         c->response.body = json_str;
         c->response.body_len = body_len;
         c->response.body_ownership = c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP;
         c->response.body_is_managed = c->arena ? 0 : 1;
     }
+}
+
+/** @brief Send a JSON response from a registered struct via reflection. */
+void
+csilk_json_reflect(csilk_ctx_t* c, int status, const char* type_name, const void* ptr)
+{
+    csilk_json_marshal_response(c, status, type_name, ptr);
 }
 
 /* --- Streaming / chunked response --- */
