@@ -212,6 +212,34 @@ sequenceDiagram
 
 6. **使用 Arena 分配的内存** 在处理器内的临时数据。分配在 Arena 上的内存会在请求周期结束时自动释放。
 
+## 错误处理流程
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'background': '#2E3440','primaryColor':'#81A1C1','primaryBorderColor':'#4C566A','primaryTextColor':'#ECEFF4','secondaryColor':'#3B4252','secondaryBorderColor':'#434C5E','secondaryTextColor':'#D8DEE9','lineColor':'#81A1C1','textColor':'#ECEFF4','mainBkg': '#3B4252','nodeBorder':'#4C566A','clusterBkg':'#2E3440','clusterBorder':'#4C566A','titleColor':'#ECEFF4','edgeLabelBackground':'#3B4252','nodeTextColor':'#ECEFF4'}, 'flowchart': {'htmlLabels': true, 'curve': 'basis'}}}%%
+flowchart TB
+    REQ["fa:fa-play 请求"]
+
+    REC["fa:fa-medkit Recovery 中间件<br/>(检查 panicked 标志)"]
+
+    AUTH["fa:fa-key 认证中间件"]
+
+    HAND["fa:fa-code 业务处理器"]
+
+    REQ --> REC
+    REC --> AUTH
+
+    AUTH -- "有效" --> HAND
+    AUTH -- "无令牌" --> ERR1["fa:fa-times-circle csilk_json_error(c, 401)<br/>return（跳过 csilk_next）"]
+    AUTH -- "无效令牌" --> ERR2["fa:fa-bomb csilk_panic(c, 'bad token')"]
+
+    HAND -- "正常" --> OK["fa:fa-check-circle csilk_string(c, 200, 'OK')"]
+    HAND -- "崩溃" --> ERR3["fa:fa-bomb csilk_panic(c, 'db error')"]
+
+    ERR2 --> REC_L["fa:fa-arrow-right csilk_panic() → Recovery"]
+    ERR3 --> REC_L
+    REC_L --> RECOVER["csilk_string(c, 500)\ncsilk_abort(c)"]
+```
+
 ---
 
 ## 进一步阅读
