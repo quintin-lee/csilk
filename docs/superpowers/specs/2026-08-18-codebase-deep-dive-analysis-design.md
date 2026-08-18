@@ -1,7 +1,7 @@
 # Csilk 项目代码全景架构与模块独立深度剖析设计规格
 
 - **日期**：2026-08-18
-- **版本**：v1.0.0
+- **版本**：v0.4.0
 - **目标代码库**：Csilk (`csilk`) — 高性能 C 语言异步 Web 与智能体运行时
 
 ---
@@ -9,7 +9,7 @@
 ## 1. 总体执行摘要与设计哲学 (Executive Summary & Philosophy)
 
 ### 1.1 核心定位与设计目标
-Csilk (`csilk`) 是基于 C11 标准构建的高性能异步 Web 服务、微服务运行时与原生智能体（Agentic Workflow）计算引擎。其核心设计遵循五大架构支柱：
+Csilk (`csilk`) 是基于 C23 标准构建的高性能异步 Web 服务、微服务运行时与原生智能体（Agentic Workflow）计算引擎。其核心设计遵循五大架构支柱：
 1. **极致吞吐与零拷贝内存模型**：基于分级自适应 Arena 内存分配器（Small 4K / Medium 16K / Large 64K）与线程局部缓存（TLS Free List），在单请求生命周期内几乎消除动态 `malloc`/`free` 开销；HTTP 解析与 WebSocket 编解码全面采用基于缓冲区分片的零拷贝引用。
 2. **跨平台双 I/O 事件驱动抽象**：底层通过统一的 `sys_io.h` 抽象层，同构兼容全平台成熟的 `libuv` 事件循环与 Linux 原生高性能 `io_uring`（集成 SQPOLL 内核线程轮询与固定缓冲区分片），并向前兼容 AF_XDP/DPDK 极速网络旁路。
 3. **严格不透明句柄与 ABI 稳定性**：所有核心系统结构（如 `csilk_ctx_t`、`csilk_db_pool_t`、`csilk_mq_t`）均采用不透明指针封装，严格分离内部实现与公共头文件，提供稳健且安全的 C ABI 边界。
