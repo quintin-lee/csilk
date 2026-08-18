@@ -92,7 +92,13 @@ csilk_route_result_t csilk_router_match_result(const csilk_router_t* r,
  * If arena allocation fails for a parameter, that parameter is skipped
  * (partial fill) and the function continues with remaining parameters.
  *
- * @param c     Request context (must have a valid arena).
+ * If c->arena is NULL (no-arena mode, e.g. test fixtures), parameters are
+ * allocated via malloc and stored in ctx->params[]. The caller is responsible
+ * for freeing them; csilk_ctx_cleanup() does NOT free params in no-arena mode
+ * (this is a known limitation — no-arena ctx usage is rare and primarily for
+ * testing).
+ *
+ * @param c     Request context.
  * @param result The match result from csilk_router_match_result().
  */
 void csilk_ctx_apply_route_result(csilk_ctx_t* c, const csilk_route_result_t* result);
@@ -191,20 +197,27 @@ free(ctx->params[ctx->params_count].value);
 void csilk_ctx_apply_route_result(csilk_ctx_t* c, const csilk_route_result_t* result)
 {
     if (!c || !result) return;
-    
+
     c->params_count = 0;
     for (int i = 0; i < result->params_count && i < CSILK_MAX_PARAMS; i++) {
         if (!result->params[i].key || !result->params[i].value) continue;
-        
-        // Always arena-allocate — no malloc/free branches in cleanup
-        c->params[i].key = csilk_arena_strdup(c->arena, result->params[i].key);
-        c->params[i].value = csilk_arena_strndup(c->arena, result->params[i].value,
-                                                  strlen(result->params[i].value));
+
+        if (c->arena) {
+            // Arena mode: all params live in the request arena, reclaimed by arena_reset()
+            c->params[i].key = csilk_arena_strdup(c->arena, result->params[i].key);
+            c->params[i].value = csilk_arena_strndup(c->arena, result->params[i].value,
+                                                      strlen(result->params[i].value));
+        } else {
+            // No-arena mode (test fixtures): fall back to malloc
+            c->params[i].key = strdup(result->params[i].key);
+            c->params[i].value = strdup(result->params[i].value);
+        }
+
         if (c->params[i].key && c->params[i].value) {
             c->params_count++;
         }
     }
-    
+
     c->handlers = result->handlers;
     c->handler_count = result->handler_count;
     c->handler_index = -1;
@@ -302,15 +315,22 @@ csilk_handler_t* match_node(csilk_router_node_t* node, const char* method,
 
 #### Cleanup 简化
 
-参数现在全部来自 arena，无需在 cleanup 中单独处理：
+参数现在统一由 `apply_result` 管理。在 arena 模式下由 `arena_reset()` 自动 reclaim；在无 arena 模式下仍需 free：
 
 ```c
-// 原 cleanup 步骤 4（params）可以移除
-// csilk_arena_reset() 自动 reclaim 所有 arena 分配的参数
+/* 8. Arena reset — O(1) reclaim all request-scoped allocations. */
 if (c->arena) {
     csilk_arena_reset(c->arena);
+} else {
+    /* No-arena fallback: free individually allocated params (test mode). */
+    for (int i = 0; i < c->params_count; i++) {
+        free(c->params[i].key);
+        free(c->params[i].value);
+        c->params[i].key = NULL;
+        c->params[i].value = NULL;
+    }
 }
-c->params_count = 0;  // 仅重置计数
+c->params_count = 0;
 ```
 
 ---
