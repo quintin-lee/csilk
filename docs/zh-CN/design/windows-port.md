@@ -20,7 +20,7 @@
 | **sys/socket.h** | Winsock2 | 不同的头文件、类型、常量 |
 | **unistd.h** | io.h / process.h | 不同的头文件映射 |
 | **sendfile()** | TransmitFile() | 完全不同的 API |
-| **setjmp/longjmp** | 部分 | 可用但语义不同 |
+| **setjmp/longjmp** | 不适用 | csilk 不再使用 setjmp/longjmp；panic 恢复通过 `panicked` 标志 + 延迟清理实现 |
 | **signal()** | 有限 | 无 SIGPIPE，不同的信号模型 |
 | **fork()** | 无 | Windows 使用 CreateProcess |
 | **SO_REUSEPORT** | 无 | Windows 对 SO_REUSEADDR 的处理不同 |
