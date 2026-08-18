@@ -100,6 +100,22 @@ void csilk_ctx_apply_route_result(csilk_ctx_t* c, const csilk_route_result_t* re
 
 #### 现有 API 兼容层
 
+`csilk_router_match()` 保留为公开 API，行为与之前完全相同。内部实现改为使用临时 `csilk_route_result_t` 调用新的 `match_node()` 签名，仅提取 `handlers` 返回：
+
+```c
+/* Existing public API — preserved, unchanged behavior. */
+csilk_handler_t* csilk_router_match(const csilk_router_t* r, const char* method, const char* path)
+{
+    if (!r || !r->root || !method || !path) return NULL;
+    csilk_route_result_t tmp;
+    memset(&tmp, 0, sizeof(tmp));
+    match_node(r->root, method, path, &tmp);
+    return tmp.handlers;
+}
+```
+
+`csilk_router_match_ctx()` 也是薄包装：
+
 ```c
 /**
  * @brief Match a request context's method+path against the router.
