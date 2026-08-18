@@ -21,7 +21,7 @@ POSIX API dependencies. Cross-compilation via MinGW or WSL2 is more practical.
 | **sys/socket.h** | Winsock2 | Different headers, types, constants |
 | **unistd.h** | io.h / process.h | Different header mapping |
 | **sendfile()** | TransmitFile() | Completely different API |
-| **setjmp/longjmp** | Partial | Available but different semantics |
+| **setjmp/longjmp** | N/A | csilk no longer uses setjmp/longjmp; panic recovery uses `panicked` flag + deferred cleanup |
 | **signal()** | Limited | No SIGPIPE, different signal model |
 | **fork()** | None | Windows uses CreateProcess |
 | **SO_REUSEPORT** | None | Windows uses SO_REUSEADDR differently |
