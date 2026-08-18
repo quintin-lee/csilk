@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 
 static int global_mw_called = 0;
 static int topic_mw_called = 0;

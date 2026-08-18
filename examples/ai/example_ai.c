@@ -9,6 +9,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
+#include "csilk/core/sys_io.h"
 
 static void
 on_stream_chunk(const char* chunk, void* user_data)

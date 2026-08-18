@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 
 void
 test_mq_persistence_api()

@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 
 #define NUM_PUB_THREADS 4
 #define MSGS_PER_THREAD 100

@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 
 static int   received_count = 0;
 static char* received_payloads[3] = {nullptr, nullptr, nullptr};

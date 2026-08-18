@@ -1,5 +1,4 @@
 #pragma once
-#include "csilk/core/sys_io.h"
 /**
  * @file context.h
  * @brief Per-request context accessors and mutators for the csilk framework.
@@ -426,17 +425,6 @@ int csilk_get_handler_index(csilk_ctx_t* c);
  * @return Total number of handlers (0 if no chain or context is NULL).
  */
 size_t csilk_get_handler_count(csilk_ctx_t* c);
-
-/**
- * @brief Get the I/O work request associated with the context.
- *
- * Use this to offload long-running operations to the thread pool while
- * maintaining context state.
- *
- * @param c  The request context.
- * @return Pointer to the context's internal csilk_io_work_t.
- */
-csilk_io_work_t* csilk_get_work_req(csilk_ctx_t* c);
 
 /**
  * @brief Set the zero-copy file response parameters.

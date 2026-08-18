@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 
 int received_count = 0;
 

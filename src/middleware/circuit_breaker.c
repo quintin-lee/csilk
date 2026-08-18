@@ -11,6 +11,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/sys_io.h"
 
 #include <stdio.h>
 #include <stdlib.h>

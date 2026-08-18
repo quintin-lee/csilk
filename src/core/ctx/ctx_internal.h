@@ -438,5 +438,6 @@ CSILK_INTERNAL int _csilk_ctx_register_pooled_read_buffer(csilk_ctx_t* c, char* 
 CSILK_INTERNAL csilk_io_loop_t* _csilk_ctx_loop(csilk_ctx_t* c);
 CSILK_INTERNAL void             _csilk_ctx_async_ref_incr(csilk_ctx_t* c);
 CSILK_INTERNAL void             _csilk_ctx_async_ref_decr(csilk_ctx_t* c);
+CSILK_INTERNAL csilk_io_work_t* csilk_get_work_req(csilk_ctx_t* c);
 
 #endif /* CSILK_CONTEXT_INTERNAL_H */

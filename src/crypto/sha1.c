@@ -22,7 +22,8 @@ void
 csilk_sha1_init(csilk_sha1_ctx* context)
 {
     if (context) {
-        SHA1_Init(context);
+        _Static_assert(sizeof(csilk_sha1_ctx) >= sizeof(SHA_CTX), "csilk_sha1_ctx too small");
+        SHA1_Init((SHA_CTX*)context);
     }
 }
 
@@ -30,7 +31,7 @@ void
 csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
 {
     if (context && data && len > 0) {
-        SHA1_Update(context, data, len);
+        SHA1_Update((SHA_CTX*)context, data, len);
     }
 }
 
@@ -38,6 +39,6 @@ void
 csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20])
 {
     if (context && digest) {
-        SHA1_Final(digest, context);
+        SHA1_Final(digest, (SHA_CTX*)context);
     }
 }
