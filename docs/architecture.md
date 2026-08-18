@@ -408,10 +408,10 @@ sequenceDiagram
     participant REC as fa:fa-shield Recovery MW
     participant MW as fa:fa-cogs Other Middleware
     participant H as fa:fa-code Business Handler
-    participant JB as fa:fa-bookmark jmp_buf (in ctx)
+    participant REC as fa:fa-shield Recovery MW
+    participant MW as fa:fa-cogs Other Middleware
+    participant H as fa:fa-code Business Handler
 
-    REC->>JB: setjmp(ctx->jump_buffer) → 0
-    Note over REC: First pass: proceed normally
     REC->>MW: csilk_next(ctx)
     MW->>H: csilk_next(ctx)
 
@@ -420,9 +420,8 @@ sequenceDiagram
         H-->>REC: Return through stack
     else fa:fa-exclamation-triangle Panic case
         H->>H: csilk_panic(ctx)
-        Note over H: Trigger longjmp!
-        H-->>JB: longjmp(ctx->jump_buffer, 1)
-        JB-->>REC: setjmp returns 1
+        Note over H: Sets panicked=1, aborted=1, runs defer_free
+        H-->>REC: Return through stack (chain stopped by aborted flag)
         REC->>REC: ctx->response.status = 500
         REC->>REC: csilk_string(ctx, 500, "Internal Server Error")
         REC->>REC: csilk_abort(ctx)

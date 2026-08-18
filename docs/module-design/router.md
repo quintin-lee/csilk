@@ -181,38 +181,38 @@ sequenceDiagram
     participant N as Router Node
     participant P as "Path: /users/42/profile"
 
-    C->>R: match_node(root, "GET", "/users/42/profile", ctx)
-
+    C->>R: csilk_router_match_ctx(r, ctx)
+    R->>R: csilk_router_match_result(r, "GET", "/users/42/profile")
     R->>R: seg = get_next_segment() → "users"
 
     loop For each child of root
         R->>N: Child "users" (STATIC)
         N->>N: strcmp("users", "users") == 0 ✓
-        R->>R: match_node(child, "GET", "/42/profile", ctx)
+        R->>R: match_node(child, "GET", "/42/profile", &result)
         Note over R: Recursive call with remaining path
 
         R->>R: seg = get_next_segment() → "42"
         loop For each child of "users"
             R->>N: Child ":id" (PARAM)
-            N->>N: Type is PARAM → capture "42"
-            N->>P: ctx->params[0] = {":id", "42"}
-            R->>R: match_node(child, "GET", "/profile", ctx)
+            N->>N: Type is PARAM → capture "42" into result.params[0]
+            R->>R: match_node(child, "GET", "/profile", &result)
 
             R->>R: seg = get_next_segment() → "profile"
             loop For each child of ":id"
                 R->>N: Child "profile" (STATIC)
                 N->>N: strcmp("profile", "profile") == 0 ✓
-                R->>R: match_node(child, "GET", "/", ctx)
+                R->>R: match_node(child, "GET", "/", &result)
 
                 Note over R: Path exhausted (/ or empty)
                 N->>N: Lookup method handler for "GET"
+                N->>R: Set result.mh, result.handlers, result.matched = 1
                 N-->>R: return [handler, NULL]
             end
         end
     end
 
-    R-->>C: ctx->handlers = matched_handler_array
-    C->>C: ctx->handler_index = -1
+    R-->>C: csilk_ctx_apply_route_result(ctx, &result)
+    Note over C: params allocated from arena, handlers/handler_index set
 ```
 
 ## Parameter Matching
@@ -243,8 +243,8 @@ sequenceDiagram
 flowchart TB
     subgraph param_types["fa:fa-tags Parameter Types"]
         STATIC["fa:fa-link STATIC: Exact string match<br/>/users/profile"]
-        PARAM["fa:fa-hashtag PARAM: Named capture<br/>/users/:id<br/>  → ctx->params[0] = {':id', '42'}"]
-        WILD["fa:fa-asterisk WILDCARD: Greedy suffix<br/>/static/*filepath<br/>  → ctx->params[0] = {'*filepath', 'css/app.css'}"]
+        PARAM["fa:fa-hashtag PARAM: Named capture<br/>/users/:id<br/>  → result.params[0] = {':id', '42'}<br/>  then csilk_ctx_apply_route_result() arena-allocates"]
+        WILD["fa:fa-asterisk WILDCARD: Greedy suffix<br/>/static/*filepath<br/>  → result.params[0] = {'*filepath', 'css/app.css'}<br/>  then csilk_ctx_apply_route_result() arena-allocates"]
     end
 ```
 
