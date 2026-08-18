@@ -115,13 +115,17 @@ _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
 }
 
 /**
- * @brief Queue a callback to run on the owning worker's dispatch loop.
- * @param[in] c   Request context whose internal client identifies the worker.
- * @param[in] cb  Callback to invoke with arg on the worker loop.
- * @param[in] arg Argument passed to cb.
- * @note No-op if c, its internal client, the client's owner pool, or cb is
- *       NULL. Allocates a task, enqueues it on the worker dispatch queue, and
- *       signals the async handle so the worker drains it.
+ * @brief Queue a callback to run on the owning worker's event loop.
+ *
+ * @param[in] c   Request context whose internal client identifies the target worker.
+ * @param[in] cb  Callback function to invoke with @p arg on the target worker loop.
+ * @param[in] arg User closure argument passed to @p cb.
+ *
+ * @note Thread-Safety: Safe to call from any thread or worker. This is the official mechanism
+ *       for cross-worker communication to preserve strict single-thread confinement of
+ *       wp->active_clients and connection state.
+ * @note Allocates a task from the slab (or falls back to malloc), enqueues it on the worker's
+ *       lock-free dispatch queue, and signals the async handle to wake the target loop.
  */
 void
 csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)

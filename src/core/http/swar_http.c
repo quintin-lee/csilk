@@ -7,14 +7,29 @@
 #include "csilk/core/swar_http.h"
 #include <string.h>
 
-/** @brief SWAR test for any zero byte within a 64-bit word. */
+/**
+ * @brief SWAR test for any zero byte within a 64-bit word.
+ *
+ * Implements Alan Mycroft's branchless null byte detection algorithm:
+ * 1. (v - 0x0101010101010101ULL): Subtracting 1 from each byte causes borrow propagation
+ *    if the byte is 0x00, setting the most significant bit (0x80) of that byte.
+ * 2. ~v: Inverts the original bits so that original zeros become 1s in the MSB.
+ * 3. & 0x8080808080808080ULL: Isolates the high bit of each byte.
+ *
+ * A non-zero result means at least one byte in the 64-bit word is 0x00.
+ */
 static inline uint64_t
 has_zero_byte(uint64_t v)
 {
     return (v - 0x0101010101010101ULL) & ~v & 0x8080808080808080ULL;
 }
 
-/** @brief SWAR test returning a mask for bytes in v equal to c. */
+/**
+ * @brief SWAR test returning a mask for bytes in 64-bit word equal to byte c.
+ *
+ * XORing v with a 64-bit word broadcasted with c (c * 0x0101010101010101ULL)
+ * transforms any byte matching c into 0x00, which has_zero_byte then detects.
+ */
 static inline uint64_t
 match_byte(uint64_t v, uint8_t c)
 {

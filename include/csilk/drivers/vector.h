@@ -96,13 +96,36 @@ csilk_vector_db_t* csilk_vector_db_new_embedded(size_t dim, int metric);
 csilk_vector_db_t*
 csilk_vector_db_new(const char* driver_name, const char* endpoint, const char* api_key);
 
-/** @brief Upsert points. */
+/**
+ * @brief Insert or update high-dimensional vector points in a collection.
+ *
+ * @param[in,out] db         Vector DB instance handle.
+ * @param[in]     collection Target collection name.
+ * @param[in]     points     Array of vector points to upsert.
+ * @param[in]     count      Number of points in the @p points array.
+ * @return 0 on success, or -1 on error.
+ *
+ * @note The points array and underlying floats are borrowed for the duration of the call.
+ */
 int csilk_vector_db_upsert(csilk_vector_db_t*          db,
                            const char*                 collection,
                            const csilk_vector_point_t* points,
                            size_t                      count);
 
-/** @brief Search points. */
+/**
+ * @brief Search for nearest vector points using cosine, L2 or inner product similarity.
+ *
+ * @param[in,out] db         Vector DB instance handle.
+ * @param[in]     collection Collection name to search within.
+ * @param[in]     vector     Query vector float array.
+ * @param[in]     dimension  Dimensionality of the query vector (must match index dimension).
+ * @param[in]     limit      Maximum number of top-k nearest neighbors to return.
+ * @param[out]    res        Pointer to response structure to be populated.
+ * @return 0 on success, or -1 on error (with error_message set in @p res).
+ *
+ * @note Memory Ownership: The @p res structure contains heap-allocated results and strings.
+ *       The caller MUST release it by calling csilk_vector_search_response_free(res).
+ */
 int csilk_vector_db_search(csilk_vector_db_t*              db,
                            const char*                     collection,
                            const float*                    vector,
@@ -110,11 +133,25 @@ int csilk_vector_db_search(csilk_vector_db_t*              db,
                            int                             limit,
                            csilk_vector_search_response_t* res);
 
-/** @brief Free Vector DB instance. */
+/**
+ * @brief Destroy a Vector DB instance and free its underlying resources.
+ *
+ * @param[in,out] db Vector DB handle to free (safe to call with NULL).
+ */
 void csilk_vector_db_free(csilk_vector_db_t* db);
 
-/** @brief Free a search response structure. */
+/**
+ * @brief Free heap memory allocated inside a vector search response structure.
+ *
+ * Frees result IDs, metadata JSON payloads, error message strings, and the results array.
+ *
+ * @param[in,out] res Pointer to the response structure to clean up.
+ */
 void csilk_vector_search_response_free(csilk_vector_search_response_t* res);
 
-/** @brief Register a driver. */
+/**
+ * @brief Register a pluggable Vector DB driver implementation into the global registry.
+ *
+ * @param[in] driver Driver vtable structure (must remain valid for the process lifetime).
+ */
 void csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver);

@@ -170,20 +170,47 @@ csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int m
 }
 #endif
 
+/**
+ * @brief Thread barrier type (pthread_barrier_t under the uring backend).
+ *
+ * @warning Barrier instances shared across threads MUST be heap-allocated (via calloc/malloc)
+ *          and freed after csilk_barrier_wait(). Never declare csilk_barrier_t on the stack
+ *          when shared across threads to avoid use-after-free conditions.
+ */
 typedef pthread_barrier_t csilk_barrier_t;
 
+/**
+ * @brief Initialize a thread barrier.
+ *
+ * @param[in,out] barrier Barrier to initialize (must be heap-allocated).
+ * @param[in]     count   Number of threads that must call csilk_barrier_wait() before synchronization completes.
+ * @return 0 on success, or a pthread error number on failure.
+ */
 static inline int
 csilk_barrier_init(csilk_barrier_t* barrier, unsigned int count)
 {
     return pthread_barrier_init(barrier, NULL, count);
 }
 
+/**
+ * @brief Synchronize participating threads at the barrier.
+ *
+ * Blocks calling threads until @p count threads have called csilk_barrier_wait().
+ *
+ * @param[in,out] barrier Barrier handle.
+ * @return 0 or PTHREAD_BARRIER_SERIAL_THREAD for the serial thread, or an error number.
+ */
 static inline int
 csilk_barrier_wait(csilk_barrier_t* barrier)
 {
     return pthread_barrier_wait(barrier);
 }
 
+/**
+ * @brief Destroy a thread barrier.
+ *
+ * @param[in,out] barrier Barrier handle to destroy.
+ */
 static inline void
 csilk_barrier_destroy(csilk_barrier_t* barrier)
 {
@@ -328,20 +355,47 @@ csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int m
     return uv_thread_setaffinity(tid, cpuset, oldmask, maxcpu);
 }
 
+/**
+ * @brief Thread barrier type (uv_barrier_t under the libuv backend).
+ *
+ * @warning Barrier instances shared across threads MUST be heap-allocated (via calloc/malloc)
+ *          and freed after csilk_barrier_wait(). Never declare csilk_barrier_t on the stack
+ *          when shared across threads to avoid use-after-free conditions.
+ */
 typedef uv_barrier_t csilk_barrier_t;
 
+/**
+ * @brief Initialize a thread barrier.
+ *
+ * @param[in,out] barrier Barrier to initialize (must be heap-allocated).
+ * @param[in]     count   Number of threads that must call csilk_barrier_wait() before synchronization completes.
+ * @return 0 on success, or a libuv error code on failure.
+ */
 static inline int
 csilk_barrier_init(csilk_barrier_t* barrier, unsigned int count)
 {
     return uv_barrier_init(barrier, count);
 }
 
+/**
+ * @brief Synchronize participating threads at the barrier.
+ *
+ * Blocks calling threads until @p count threads have called csilk_barrier_wait().
+ *
+ * @param[in,out] barrier Barrier handle.
+ * @return 0 or non-zero for the serial thread, or a negative libuv error code.
+ */
 static inline int
 csilk_barrier_wait(csilk_barrier_t* barrier)
 {
     return uv_barrier_wait(barrier);
 }
 
+/**
+ * @brief Destroy a thread barrier.
+ *
+ * @param[in,out] barrier Barrier handle to destroy.
+ */
 static inline void
 csilk_barrier_destroy(csilk_barrier_t* barrier)
 {
