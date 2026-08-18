@@ -1,81 +1,68 @@
-# ABI 兼容性评估报告
+# ABI 稳定性与架构边界评估报告
 
-> **更新日期**: 2026-05-31 | 评估 `csilk_ctx_s` 不透明类型转换（docs/meta/PLAN.md P2-1）
+> **更新日期**: 2026-08-18 | 评估 csilk 3 层 ABI 架构与不透明句柄封装
 
 ## 概述
 
-**状态: 已完成** — 不透明类型转换已在 v0.3.0 中完整实现。
+**状态: 已完成** — 3 层 ABI 架构（Public API → Opaque Handle → Internal Implementation）已完整实现。
 
-内部结构体定义（`csilk_ctx_s`、`csilk_client_t`、`csilk_server_s`）已从 `include/csilk/core/` 移至 `src/core/`（`ctx_types.h`、`srv_impl.h`、`srv_internal.h`）。所有非框架代码均通过公共访问器 API 访问上下文状态。
+内部结构体定义（`csilk_ctx_s`、`csilk_server_s`、`csilk_router_s`、`csilk_app_s`、`csilk_group_s`、`csilk_mq_s`、`csilk_raft_s`、`csilk_wf_s`、`csilk_mcp_server_s`）严格封装在 `src/**_internal.h` 中，对公共 `include/` 目录完全隐藏。所有外部用户代码仅依赖稳定的不透明指针句柄与公共函数 API。
+
+---
+
+## 3 层 ABI 架构
+
+```
+Public API (include/csilk/*.h)
+       │
+       ▼
+Opaque Handles (csilk_ctx_t, csilk_router_t, csilk_server_t, csilk_app_t, csilk_mq_t...)
+       │
+       ▼
+Internal Implementation (*_internal.h, ctx_internal.h, router_internal.h, server_internal.h...)
+```
 
 ---
 
 ## 当前状态
 
-### 公共 API — 仅不透明前向声明
+### 公共 API — 不透明前向声明
 ```c
-typedef struct csilk_ctx_s csilk_ctx_t;  // include/csilk/types.h — 不透明句柄
+typedef struct csilk_ctx_s        csilk_ctx_t;        // include/csilk/core/types.h
+typedef struct csilk_server_s     csilk_server_t;     // include/csilk/core/types.h
+typedef struct csilk_router_s     csilk_router_t;     // include/csilk/core/router.h
+typedef struct csilk_app_s        csilk_app_t;        // include/csilk/app/app.h
+typedef struct csilk_group_s      csilk_group_t;      // include/csilk/core/group.h
+typedef struct csilk_mq_s         csilk_mq_t;         // include/csilk/messaging/mq.h
+typedef struct csilk_mq_ctx_s     csilk_mq_ctx_t;     // include/csilk/messaging/mq.h
+typedef struct csilk_raft_s       csilk_raft_t;       // include/csilk/messaging/raft.h
+typedef struct csilk_wf_s         csilk_wf_t;         // include/csilk/app/workflow.h
+typedef struct csilk_mcp_server_s csilk_mcp_server_t; // include/csilk/protocols/mcp.h
+typedef struct csilk_db_pool_s    csilk_db_pool_t;    // include/csilk/drivers/db.h
 ```
 
-### 内部定义（对公共 include/ 隐藏）
+### 内部实现头文件（对公共 `include/` 隐藏）
 ```
-src/core/ctx_types.h    — csilk_ctx_s 布局（30+ 字段）
-src/core/internal/srv_internal.h    — csilk_server_s 布局
-src/core/internal/srv_impl.h     — 内部服务器实现细节
-```
-
-### 访问器 API（全覆盖）
-
-| 访问器 | 提供功能 |
-|---|---|
-| `csilk_get_method` / `csilk_get_path` / `csilk_get_body` | 请求元数据 |
-| `csilk_get_header` / `csilk_get_query` / `csilk_get_cookie` | 请求头/参数 |
-| `csilk_get_param` / `csilk_get_params_count` | URL 路径参数 |
-| `csilk_get_status` / `csilk_set_header` / `csilk_add_header` | 响应控制 |
-| `csilk_get_arena` / `csilk_set` / `csilk_get` | Arena + 键值存储 |
-| `csilk_is_websocket` / `csilk_is_sse` / `csilk_is_aborted` | 协议模式标志 |
-| `csilk_is_async` / `csilk_ctx_set_async` | 异步响应模式 |
-| `csilk_get_handler_index` / `csilk_get_work_req` | 处理器链状态 |
-| `csilk_get_file_fd` / `csilk_set_file_response` | 零拷贝文件 I/O |
-| `csilk_get_response_body` / `csilk_set_response_body` | 响应体操作 |
-| `csilk_ctx_get_server` / `csilk_ctx_get_mq` | 框架对象访问 |
-| `csilk_ctx_defer` / `csilk_ctx_defer_free` | Panic 安全资源清理 |
-| `csilk_for_each_header` / `csilk_for_each_query` / `csilk_for_each_form_field` | 迭代 API |
-| `csilk_bind_json` / `csilk_bind_reflect` / `csilk_parse_form_urlencoded` | 请求体解析 |
-
-### 仅使用不透明类型的公共头文件
-```
-include/csilk/types.h       — 仅前向声明
-include/csilk/context.h     — 所有访问器，无结构体解引用
-include/csilk/response.h    — 状态/头/体/重定向/流式 API
-include/csilk/router.h      — 路由注册与匹配
-include/csilk/server.h      — 服务器生命周期
-include/csilk/middleware.h  — 15 个内置中间件
-include/csilk/hooks.h       — 生命周期钩子
-include/csilk/websocket.h   — WebSocket API
-include/csilk/sse.h         — SSE API
-include/csilk/mq.h          — 消息队列 API
-include/csilk/workflow.h    — 工作流引擎 API
-include/csilk/admin.h       — 管理后台 API
-include/csilk/group.h       — 路由组
-include/csilk/config.h      — 配置类型
-include/csilk/errors.h      — 错误码
-include/csilk/version.h     — 版本信息（由 version.h.in 生成）
+src/core/ctx/ctx_internal.h           — csilk_ctx_s, arena, header_map, request_id, 序列计数器
+src/core/server/server_internal.h     — csilk_server_s, worker 线程池, 连接池管理
+src/core/primitives/router_internal.h — csilk_router_s, trie 节点, SIMD 查找表
+src/messaging/mq_internal.h           — csilk_mq_s, csilk_mq_ctx_s 环形缓冲区与 WAL
+src/messaging/raft_internal.h         — csilk_raft_s 共识状态机与通道
+src/workflow/wf_internal.h            — csilk_wf_s DAG 图执行引擎
+src/protocols/mcp/mcp_internal.h      — csilk_mcp_server_s 工具与 JSON-RPC 分发器
+src/drivers/db/db_internal.h          — csilk_db_pool_s 驱动句柄与连接池
 ```
 
-### 已完成迁移项目：
-- [x] 15 个内置中间件 — 全部仅使用访问器 API
-- [x] 30+ 测试文件 — 移除 `#include "ctx_types.h"`，使用公共 API
-- [x] 11 个示例程序 — 迁移至公共访问器 API
-- [x] 内部头文件已物理移至 `src/core/`（提交: 830daca）
-- [x] 迭代 API（`csilk_for_each_*`）已添加，支持头/查询/表单遍历
-- [x] 延迟清理 API 在 panic 恢复时保护资源不泄漏（`csilk_panic` → `defer_free`）
+### 第三方库与底层后端解耦
+1. **OpenSSL 头文件解耦**：`include/csilk/core/hash.h` 采用 64-bit 内存对齐的 128 字节不透明缓存定义 `csilk_sha1_ctx` 与 `csilk_sha256_ctx`，公共头文件不再直接依赖 `<openssl/sha.h>`。
+2. **底层 I/O 后端句柄解耦**：`include/csilk/core/context.h` 移除 `csilk/core/sys_io.h` 包含，内部 worker 请求钩子（`csilk_get_work_req`）下沉至 `src/core/ctx/ctx_internal.h`。
+3. **Router 结构体完全封装**：`struct csilk_router_s` 定义下沉至 `router_internal.h`，防止外部调用者耦合 Trie 树结构与中间件数组容量。
 
 ---
 
-## 未来规划（v1.0+）
+## 质量验证
 
-不透明类型转换在 v0.3.0 中功能上已完成。对于未来的 v1.0 ABI 冻结：
-1. 考虑将 `csilk_router_t` 和 `csilk_server_t` 同样设为不透明。
-2. 在 `csilk_server_new` 中添加带版本号的 ABI 兼容性检查。
-3. 为驱动虚函数表布局添加预留填充字段，以备未来扩展。
+- [x] 所有 15 个内置中间件完全基于公共访问器 API 实现。
+- [x] 172 个标准单测与 170 个 io_uring 单测全量通过（100% Passed）。
+- [x] 示例代码已完全迁移至干净的公共 API。
+- [x] CI 矩阵（Ubuntu/macOS/ARM64/ASAN/TSAN/Fuzzing/Clang-tidy）全量绿灯通过。

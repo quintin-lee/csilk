@@ -326,6 +326,26 @@ flowchart TB
 * 用户**必须**避免在 `csilk_next()` 边界之间持有 arena 指针（如果调用者可能重置 arena）。
 * 长期分配**应该**使用 `malloc` 直接或 `csilk_arena_dup()` 从 arena 外复制。
 
+#### 2.6.1 统一 6 层内存所有权分类体系 (Ownership Taxonomy)
+
+为杜绝 UAF (Use-After-Free)、Double-Free 及跨线程所有权模糊，csilk 建立了 6 级内存所有权体系（`<csilk/core/types.h>` 中的 `csilk_ownership_t`）：
+
+| 所有权级别 | 常量标识 | 内存来源 | 生命周期绑定 | 清理与归还职责 |
+|---|---|---|---|---|
+| **BORROWED** | `CSILK_OWNERSHIP_BORROWED` (0) | 外部读缓冲区 / 调用者分配 | 当前 Handler 执行 / 单次读取阶段 | 无（由属主负责释放） |
+| **ARENA** | `CSILK_OWNERSHIP_ARENA` (1) | 请求级 Bump 指针分配器 | 请求结束（`_csilk_ctx_cleanup`） | 由 Arena 统一 O(1) 批量重置 |
+| **OWNED** | `CSILK_OWNERSHIP_OWNED` (2) | `malloc()` / `calloc()` 堆分配 | 关联对象显式销毁 | 显式调用 `free()` |
+| **TRANSFER** | `CSILK_OWNERSHIP_TRANSFER` (3) | 动态分配缓冲区 | 所有权转交下游管道或队列 | 交由接收方/后续流程负责释放 |
+| **POOL** | `CSILK_OWNERSHIP_POOL` (4) | 固定大小连接池 / Slab 缓冲池 | 请求 / 单次 I/O 阶段 | 通过 `_csilk_pool_free` 归还池 |
+| **TLS_CACHE** | `CSILK_OWNERSHIP_TLS_CACHE` (5)| Worker 线程局部缓存 | Worker 线程生命周期 | 线程退出时统一释放 |
+
+#### 2.6.2 异步 Context 生命周期安全与代数追踪
+
+当请求卸载到异步工作线程、定时器、消息队列或数据库时：
+1. `_csilk_ctx_async_ref_incr(c)` 与 `_csilk_ctx_async_ref_decr(c)` 精确跟踪活跃异步引用计数。
+2. 递增代数序列号 `c->request_seq` 与全局唯一 `c->request_id` (UUID v4) 防止 Keep-Alive 复用时旧回调误操作新请求。
+3. 通过 `csilk_ctx_defer_ex(c, fn, data, priority)` 注册的延迟清理回调在 Context 最终释放时按优先级倒序执行。
+
 ### 2.7 分段前缀树路由
 
 基于路径分段前缀树（Segment-Based Prefix Trie）路由，具有 O(path_length) 匹配性能，支持静态、参数化和通配符路由。以 `/` 分隔的路径段结合 SIMD 向量化加速，在 x86_64 (AVX2) 上可达到约 50ns 每路由查找，ARM NEON 约 80ns。在服务器启动之前**必须**注册路由；路由器在请求处理期间是只读的（无锁读取）。通配符路由**应该**放在注册顺序的最后以确保静态路由优先。

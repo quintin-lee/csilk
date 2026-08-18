@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Unified Memory Ownership Model**: Defined `csilk_ownership_t` (`CSILK_OWN_BORROWED`, `CSILK_OWN_ARENA`, `CSILK_OWN_HEAP`, `CSILK_OWN_TRANSFER`, `CSILK_OWN_SHARED`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`, replacing ambiguous implicit `int managed` flags. Added `csilk_set_response_body_ex()` and `csilk_get_response_body_ownership()`.
+- **6-Tier Unified Memory Ownership Taxonomy**: Defined comprehensive 6-tier memory ownership model (`csilk_ownership_t`: `BORROWED`, `ARENA`, `OWNED`/`HEAP`, `TRANSFER`, `POOL`, `TLS_CACHE`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`. Standardized capacity-aware buffer cleanup and pool reclamation in `_csilk_ctx_cleanup()`, and unified response body memory replacement guards (`_csilk_free_response_body_if_needed()`).
+- **3-Tier ABI Architecture & Strict Opaque Encapsulation**: Enforced strict `Public API → Opaque Handle → Internal Implementation` architecture across all 52 public headers under `include/`:
+  - Converted `csilk_router_t` into a strictly opaque handle in `<csilk/core/router.h>`, moving `struct csilk_router_s` and trie node structures into `src/core/primitives/router_internal.h`.
+  - Decoupled OpenSSL from public headers: `<csilk/core/hash.h>` now defines `csilk_sha1_ctx` and `csilk_sha256_ctx` as 64-bit aligned opaque memory buffers (128 bytes), verified at compile-time via `_Static_assert`.
+  - Decoupled Backend I/O handles: removed `csilk/core/sys_io.h` from `<csilk/core/context.h>` and relocated `csilk_get_work_req` to `src/core/ctx/ctx_internal.h`.
+- **Asynchronous Context Safety & Generation Tracking**: Added active reference counters (`_csilk_ctx_async_ref_incr` / `_csilk_ctx_async_ref_decr`), monotonically increasing request sequence numbers (`request_seq`), and UUID v4 request tags (`request_id`) to ensure async worker/DB/MQ callbacks cannot touch recycled contexts or cause use-after-free on keep-alive connections.
 - **Connection Lifecycle State Machine**: Implemented explicit 9-state connection lifecycle (`csilk_conn_state_t`: `INIT`, `ACCEPTED`, `TLS`, `READING`, `PROCESSING`, `WRITING`, `STREAMING`, `CLOSING`, `CLOSED`) with invariant transition checks (`csilk_conn_set_state`, `csilk_conn_get_state`, `csilk_conn_state_str`), preventing use-after-free, double close, double free, and async write/streaming race conditions.
-
-
 - **I/O & Sync Abstraction Layer**: Standardized unified, cross-backend `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`), and `csilk_barrier_*` (`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`) APIs in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
 
 - **Streaming Backpressure & Watermark Flow Control**: Implemented per-connection outbound queue backpressure across HTTP/1.1 chunked streaming (`csilk_response_write`), SSE (`csilk_sse_send`), and WebSocket (`csilk_ws_send`). Added configurable high water marks (`write_high_water_mark`, default 64KB), low water marks (`write_low_water_mark`, default 16KB), maximum buffer limits (`max_write_buffer_size`, default 16MB), and asynchronous drain callback registration (`csilk_on_drain` / `csilk_set_write_watermarks`).

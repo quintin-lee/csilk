@@ -319,6 +319,26 @@ flowchart TB
 * Users **MUST** avoid holding arena pointers across `csilk_next()` boundaries if the callee may reset the arena.
 * Long-lived allocations **SHOULD** use `malloc` directly or `csilk_arena_dup()` to copy out of the arena.
 
+#### 2.6.1 Unified 6-Tier Memory Ownership Model
+
+To eliminate use-after-free, double-free, and cross-thread ownership ambiguities, csilk enforces a 6-tier memory taxonomy (`csilk_ownership_t` in `<csilk/core/types.h>`):
+
+| Ownership Tier | Identifier | Allocation Origin | Lifetime Bound | Cleanup Responsibility |
+|---|---|---|---|---|
+| **BORROWED** | `CSILK_OWNERSHIP_BORROWED` (0) | Read buffer / caller memory | Handler execution / read phase | None (owner frees) |
+| **ARENA** | `CSILK_OWNERSHIP_ARENA` (1) | Request bump allocator | Request completion (`_csilk_ctx_cleanup`) | Bulk reset by arena |
+| **OWNED** | `CSILK_OWNERSHIP_OWNED` (2) | `malloc()` / `calloc()` / heap | Object destruction | Explicit `free()` |
+| **TRANSFER** | `CSILK_OWNERSHIP_TRANSFER` (3) | Heap / dynamic buffer | Relinquished to consumer/pipeline | Handed over to callee/queue |
+| **POOL** | `CSILK_OWNERSHIP_POOL` (4) | Fixed-size connection/slab pool | Request / I/O phase | Returned to pool via `_csilk_pool_free` |
+| **TLS_CACHE** | `CSILK_OWNERSHIP_TLS_CACHE` (5)| Worker thread-local cache | Worker thread lifecycle | Flushed on thread exit |
+
+#### 2.6.2 Asynchronous Context Safety & Generation Tracking
+
+When requests offload work to worker threads, timers, message queues, or external DBs:
+1. `_csilk_ctx_async_ref_incr(c)` / `_csilk_ctx_async_ref_decr(c)` track active async references.
+2. `c->request_seq` generation counter and `c->request_id` (UUID v4) prevent stale callbacks from accessing recycled contexts on keep-alive connections.
+3. Deferred cleanups registered via `csilk_ctx_defer_ex(c, fn, data, priority)` execute in strict priority order upon final context release.
+
 ### 2.7 Segment-Based Prefix Trie Routing
 Segment-based prefix trie routing with O(path_length) matching, support for static, parameterized, and wildcard routes. Path segments delimited by `/` are evaluated with SIMD vector scanning, achieving ~50ns per route lookup on AVX2 (x86_64) and ~80ns on ARM NEON. Routes **MUST** be registered before server start; the router is read-only during request processing (lock-free reads). Wildcard routes **SHOULD** be placed last in the registration order to ensure static routes take priority.
 

@@ -8,9 +8,13 @@
 ## [Unreleased]
 
 ### 新增
-- **统一内存所有权模型**：在 `<csilk/core/types.h>` 中规范定义 `csilk_ownership_t`（`CSILK_OWN_BORROWED`、`CSILK_OWN_ARENA`、`CSILK_OWN_HEAP`、`CSILK_OWN_TRANSFER`、`CSILK_OWN_SHARED`）及字符串化函数 `csilk_ownership_str()`，消除模糊的隐式 `int managed` 标志。新增 `csilk_set_response_body_ex()` 与 `csilk_get_response_body_ownership()`。
+- **统一 6 级内存所有权模型**：在 `<csilk/core/types.h>` 中规范定义 6 级内存所有权体系（`csilk_ownership_t`：`BORROWED`、`ARENA`、`OWNED`/`HEAP`、`TRANSFER`、`POOL`、`TLS_CACHE`）及字符串化函数 `csilk_ownership_str()`。在 `_csilk_ctx_cleanup()` 中统一容量感知型的缓冲池归还与堆内存清理，并强化响应体内存置换守卫（`_csilk_free_response_body_if_needed()`）。
+- **3 层 ABI 架构与严格不透明句柄封装**：在 `include/` 下所有 52 个公共头文件中落地 `Public API → Opaque Handle → Internal Implementation` 架构：
+  - 将 `<csilk/core/router.h>` 中的 `csilk_router_t` 彻底转为不透明句柄，将 `struct csilk_router_s` 与 Trie 节点结构下沉至 `src/core/primitives/router_internal.h`。
+  - 解耦公共头文件中的 OpenSSL 依赖：`<csilk/core/hash.h>` 采用 64-bit 内存对齐的 128 字节不透明缓存定义 `csilk_sha1_ctx` 与 `csilk_sha256_ctx`，并在编译期通过 `_Static_assert` 校验尺寸。
+  - 剥离底层 I/O 句柄：从 `<csilk/core/context.h>` 中移除 `csilk/core/sys_io.h` 包含，将 `csilk_get_work_req` 移至 `src/core/ctx/ctx_internal.h`。
+- **异步 Context 生命周期安全与代数追踪**：新增活跃异步引用计数（`_csilk_ctx_async_ref_incr` / `_csilk_ctx_async_ref_decr`）、严格递增的请求代数序列号（`request_seq`）与 UUID v4 唯一请求标识（`request_id`），杜绝异步 Worker、数据库或 MQ 回调在 Keep-Alive 连接复用后操作过期 Context 或引发 UAF。
 - **连接生命周期状态机**：实现显式 9 状态连接生命周期状态机（`csilk_conn_state_t`：`INIT`、`ACCEPTED`、`TLS`、`READING`、`PROCESSING`、`WRITING`、`STREAMING`、`CLOSING`、`CLOSED`）与严格的状态转移不变式校验（`csilk_conn_set_state`、`csilk_conn_get_state`、`csilk_conn_state_str`），彻底消除 UAF、Double Close、Double Free 以及异步流式/Keep-Alive 状态竞态。
-
 - **I/O 与并发抽象层**：在 `<csilk/core/sys_io.h>` 与 `<csilk/core/sync.h>` 中规范统一跨后端 I/O 原语 `csilk_io_*`、跨平台线程抽象 `csilk_thread_*`（`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`）以及屏障 `csilk_barrier_*`（`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`）。
 
 - **流式背压与高低水位流量控制**：为 HTTP/1.1 分块流（`csilk_response_write`）、SSE（`csilk_sse_send`）及 WebSocket（`csilk_ws_send`）增加连接级出站队列背压机制。支持配置高水位线（`write_high_water_mark`，默认 64KB）、低水位线（`write_low_water_mark`，默认 16KB）、最大排队限制（`max_write_buffer_size`，默认 16MB）及异步排空回调注册（`csilk_on_drain` / `csilk_set_write_watermarks`）。
