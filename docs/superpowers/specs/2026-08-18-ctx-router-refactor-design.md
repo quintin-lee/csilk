@@ -130,7 +130,7 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
 |------|------|
 | `include/csilk/core/router.h` | 新增 `csilk_route_result_t`、`csilk_router_match_result()`、`csilk_ctx_apply_route_result()` |
 | `src/core/primitives/router_internal.h` | 更新 `match_node()` 签名，移除 ctx 参数 |
-| `src/core/primitives/router_trie.c` | 重构 `match_node()` 返回 result 而非直接写 ctx |
+| `src/core/primitives/router_trie.c` | 重构 `match_node()`、`try_match_static()`、`try_match_param()`、`try_match_wildcard()` 签名，移除 ctx 参数，改为返回 result；backtrack 使用临时 result 局部变量 |
 | `src/core/primitives/router.c` | 新增 `csilk_router_match_result()`、`csilk_ctx_apply_route_result()`、更新 `csilk_router_match_ctx()` |
 | `src/core/ctx/ctx_internal.h` | 移除 params 相关内部依赖（可选） |
 
@@ -278,12 +278,21 @@ void csilk_ctx_cleanup(csilk_ctx_t* c)
     
     /* 3. Zero-copy file response — close fd if open. */
     if (c->file_fd >= 0) {
+        csilk_io_fs_t close_req;
         csilk_io_fs_close(NULL, &close_req, c->file_fd, NULL);
+        csilk_io_fs_req_cleanup(&close_req);
         c->file_fd = -1;
+        c->file_offset = 0;
+        c->file_size = 0;
     }
     
-    /* 4. Request body — only free when managed (heap-allocated or H2-realloc'd). */
-    if (c->request.body_is_managed && c->request.body) {
+    /* 4. Request body — free only when this request owned it.
+     * Conditions: heap-managed, transfer-owned, or H2-realloc'd.
+     * Size-class cached buffers are returned to the TLS pool;
+     * unmanaged or >1MB buffers are freed via free(). */
+    if (c->request.body &&
+        (c->request.body_ownership == CSILK_OWN_HEAP ||
+         c->request.body_ownership == CSILK_OWN_TRANSFER || c->request.body_is_managed)) {
         if (c->request.body_capacity > 0) {
             csilk_body_free((void*)c->request.body, c->request.body_capacity);
         } else {
@@ -295,9 +304,13 @@ void csilk_ctx_cleanup(csilk_ctx_t* c)
         c->request.body_is_managed = 0;
         c->request.body_ownership = CSILK_OWN_BORROWED;
     }
-    
-    /* 5. Response body — same logic. */
-    if (c->response.body_is_managed && c->response.body) {
+
+    /* 5. Response body — same ownership logic.
+     * A stale body_len would leak a bogus Content-Length into the next
+     * request, so it is zeroed together with status (0 serializes as 200). */
+    if (c->response.body &&
+        (c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
         if (c->response.body_capacity > 0) {
             csilk_body_free((void*)c->response.body, c->response.body_capacity);
         } else {
@@ -315,7 +328,10 @@ void csilk_ctx_cleanup(csilk_ctx_t* c)
     free(c->request.path);
     c->request.path = NULL;
     
-    /* 7. Read buffers — return to worker pool or free. */
+    /* 7. Read buffers — return to worker pool or free, then reset array state.
+     * Pool-backed buffers are returned to the worker-local pool instead of free().
+     * Non-pooled or >1MB buffers go to free(). The array pointers themselves
+     * are reset to embedded storage when no longer heap-allocated. */
     for (int i = 0; i < c->read_buffers_count; i++) {
         char* b = c->read_buffers[i];
         if (!b) continue;
@@ -328,7 +344,16 @@ void csilk_ctx_cleanup(csilk_ctx_t* c)
         }
         c->read_buffers[i] = NULL;
     }
+    if (c->read_buffers && c->read_buffers != c->read_buffers_embedded) {
+        free(c->read_buffers);
+    }
+    if (c->read_buf_sizes && c->read_buf_sizes != c->read_buf_sizes_embedded) {
+        free(c->read_buf_sizes);
+    }
+    c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
+    c->read_buffers_capacity = 16;
+    c->read_buf_sizes = c->read_buf_sizes_embedded;
     
     /* 8. Arena reset — O(1) reclaim all request-scoped allocations. */
     if (c->arena) {
@@ -359,6 +384,7 @@ void csilk_ctx_cleanup(csilk_ctx_t* c)
     c->on_drain = NULL;
     c->on_drain_data = NULL;
     c->on_ws_message = NULL;
+    c->on_ws_send = NULL;
     
     /* 12. Request ID — clear only if set. */
     if (c->request_id[0]) {
