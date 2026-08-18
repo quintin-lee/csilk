@@ -16,17 +16,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <openssl/sha.h>
-
 /**
- * @brief SHA-1 hashing context (backed by OpenSSL).
+ * @brief SHA-1 hashing context.
  *
  * Holds intermediate state and buffered data during a multi-step SHA-1
  * computation. Use csilk_sha1_init / _update / _final.
  *
  * @note SHA-1 is used internally for WebSocket handshake compliance (RFC 6455).
  */
-typedef SHA_CTX csilk_sha1_ctx;
+typedef struct {
+    uint64_t opaque[16]; /**< Opaque aligned internal storage. */
+} csilk_sha1_ctx;
 
 /**
  * @brief Initialise a SHA-1 hashing context.
@@ -59,12 +59,14 @@ void csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
 void csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20]);
 
 /**
- * @brief SHA-256 hashing context (backed by OpenSSL).
+ * @brief SHA-256 hashing context.
  *
  * Holds intermediate state and buffered data during a multi-step SHA-256
  * computation. Use csilk_sha256_init / _update / _final.
  */
-typedef SHA256_CTX csilk_sha256_ctx;
+typedef struct {
+    uint64_t opaque[16]; /**< Opaque aligned internal storage. */
+} csilk_sha256_ctx;
 
 /**
  * @brief Initialise a SHA-256 hashing context.

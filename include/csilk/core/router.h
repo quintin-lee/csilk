@@ -14,7 +14,7 @@
 #include "csilk/core/context.h"
 
 /**
- * @brief The main HTTP router.
+ * @brief Opaque main HTTP router handle.
  *
  * Wraps a segment-based trie root node and provides methods to register routes,
  * match incoming requests, and generate OpenAPI specs.
@@ -22,12 +22,7 @@
  * @note Not thread-safe for mutation after the server starts.  All routes
  *       must be registered before csilk_server_run.
  */
-typedef struct csilk_router_s {
-    csilk_router_node_t* root;      /**< Root node of the segment-based prefix trie. */
-    csilk_handler_t
-           global_middlewares[32];  /**< Cached global middlewares compiled onto this router. */
-    size_t global_middleware_count; /**< Number of cached global middlewares. */
-} csilk_router_t;
+typedef struct csilk_router_s csilk_router_t;
 
 /**
  * @brief Create a new empty router.

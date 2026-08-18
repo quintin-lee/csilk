@@ -53,7 +53,9 @@ void
 csilk_sha256_init(csilk_sha256_ctx* context)
 {
     if (context) {
-        SHA256_Init(context);
+        _Static_assert(sizeof(csilk_sha256_ctx) >= sizeof(SHA256_CTX),
+                       "csilk_sha256_ctx too small");
+        SHA256_Init((SHA256_CTX*)context);
     }
 }
 
@@ -67,7 +69,7 @@ void
 csilk_sha256_update(csilk_sha256_ctx* context, const uint8_t* data, size_t len)
 {
     if (context && data && len > 0) {
-        SHA256_Update(context, data, len);
+        SHA256_Update((SHA256_CTX*)context, data, len);
     }
 }
 
@@ -80,7 +82,7 @@ void
 csilk_sha256_final(csilk_sha256_ctx* context, uint8_t digest[32])
 {
     if (context && digest) {
-        SHA256_Final(digest, context);
+        SHA256_Final(digest, (SHA256_CTX*)context);
     }
 }
 

@@ -34,6 +34,14 @@ struct csilk_router_node_s {
     int                         children_count;
 };
 
+/** @brief Internal layout of the main HTTP router. */
+struct csilk_router_s {
+    csilk_router_node_t* root;      /**< Root node of the segment-based prefix trie. */
+    csilk_handler_t
+           global_middlewares[32];  /**< Cached global middlewares compiled onto this router. */
+    size_t global_middleware_count; /**< Number of cached global middlewares. */
+};
+
 csilk_router_node_t* node_new(const char* segment, csilk_node_type_t type);
 void                 node_free(csilk_router_node_t* node);
 

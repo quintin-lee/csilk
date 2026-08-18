@@ -11,6 +11,7 @@
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
+#include "csilk/core/sys_io.h"
 
 /* --- Custom Router --- */
 
