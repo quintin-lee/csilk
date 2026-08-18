@@ -143,7 +143,7 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
 | `include/csilk/core/router.h` | 新增 `csilk_route_result_t`、`csilk_router_match_result()`、`csilk_ctx_apply_route_result()` |
 | `src/core/primitives/router_internal.h` | 更新 `match_node()` 签名，移除 ctx 参数 |
 | `src/core/primitives/router_trie.c` | 重构 `match_node()`、`try_match_static()`、`try_match_param()`、`try_match_wildcard()` 签名，移除 ctx 参数，改为返回 result；backtrack 使用临时 result 局部变量 |
-| `src/core/primitives/router.c` | 新增 `csilk_router_match_result()`、`csilk_ctx_apply_route_result()`、更新 `csilk_router_match_ctx()` |
+| `src/core/primitives/router.c` | 新增 `csilk_router_match_result()`、`csilk_ctx_apply_route_result()`；更新 `csilk_router_match()`（内部改用临时 result）和 `csilk_router_match_ctx()`（薄包装）|
 | `src/core/ctx/ctx_internal.h` | 移除 params 相关内部依赖（可选） |
 
 ---
@@ -206,35 +206,80 @@ void csilk_ctx_apply_route_result(csilk_ctx_t* c, const csilk_route_result_t* re
 - **原始 segment 引用**（const char* + len）—— 在 match_node 中记录指针和长度
 - 不在 router 内部分配，由 apply_result 统一从 ctx arena 复制
 
-#### Backtrack 简化
+#### Backtrack 简化 + mh 赋值
 
-由于参数现在存储在 `csilk_route_result_t` 中而非 ctx 中，backtrack 只需丢弃临时结果，无需手动 rollback：
+由于参数现在存储在 `csilk_route_result_t` 中而非 ctx 中，backtrack 只需丢弃临时结果，无需手动 rollback。`result->mh` 在终端节点匹配或 wildcard 匹配时赋值：
 
 ```c
 csilk_handler_t* match_node(csilk_router_node_t* node, const char* method,
                              const char* path, csilk_route_result_t* result)
 {
-    // Terminal check...
-    
-    // For param matching, use a temporary result to track potential captures
-    csilk_route_result_t temp = *result;  // shallow copy
-    temp.matched = 0;
-    temp.params_count = 0;
-    
-    // Try param child...
-    if (node->param_child) {
-        temp.params[temp.params_count].key = child->segment;
-        temp.params[temp.params_count].value = seg;
-        temp.params_count++;
-        
-        csilk_handler_t* r = match_node(child, method, p, &temp);
-        if (r) {
-            *result = temp;  // commit on success
-            return r;
+    // Terminal check: path exhausted — look for method handler
+    if (!path || *path == '\0' || (path[0] == '/' && path[1] == '\0')) {
+        csilk_method_handler_t* mh = node->handlers;
+        while (mh) {
+            if (strcmp(mh->method, method) == 0) {
+                result->mh = mh;               // ← populate matched handler
+                result->handlers = mh->handlers;
+                result->handler_count = mh->handler_count;
+                result->matched = 1;
+                return mh->handlers;
+            }
+            mh = mh->next;
         }
-        // No need to rollback — temp goes out of scope
+        return NULL;
     }
-    
+
+    // For param/wildcard matching, use a temporary result to track potential captures.
+    // The temp carries params[] and mh but NOT handlers/handler_count (those are only
+    // set at the terminal node). On successful deeper match, the temp is committed
+    // via *result = temp.
+    csilk_route_result_t temp;
+    memset(&temp, 0, sizeof(temp));
+
+    const char* p = path;
+    size_t len;
+    const char* seg = get_next_segment(&p, &len);
+    if (!seg) return NULL;
+
+    for (int i = 0; i < node->children_count; i++) {
+        csilk_router_node_t* child = node->children[i];
+        if (child->type == CSILK_NODE_STATIC) {
+            // ... try_match_static using temp, commit on success
+        } else if (child->type == CSILK_NODE_PARAM) {
+            // Capture param into temp, recurse
+            temp.params[temp.params_count].key = child->segment;
+            temp.params[temp.params_count].value = seg;
+            temp.params_count++;
+
+            csilk_handler_t* r = match_node(child, method, p, &temp);
+            if (r) {
+                *result = temp;  // commit on success
+                return r;
+            }
+            temp.params_count--;  // backtrack: discard temp param
+        } else if (child->type == CSILK_NODE_WILDCARD) {
+            // Capture wildcard, set mh directly (wildcard always terminates)
+            temp.params[temp.params_count].key = child->segment;
+            temp.params[temp.params_count].value = path;
+            temp.params_count++;
+
+            // Find matching method handler at wildcard node
+            csilk_method_handler_t* mh = child->handlers;
+            while (mh) {
+                if (strcmp(mh->method, method) == 0) {
+                    temp.mh = mh;
+                    temp.handlers = mh->handlers;
+                    temp.handler_count = mh->handler_count;
+                    temp.matched = 1;
+                    *result = temp;
+                    return mh->handlers;
+                }
+                mh = mh->next;
+            }
+            temp.params_count--;
+        }
+    }
     return NULL;
 }
 ```
