@@ -11,50 +11,18 @@
 #   - CSILK_WORKFLOW_SOURCES -> csilk_workflow (libcsilk-workflow.a)
 #   - CSILK_SOURCES          -> csilk          (libcsilk.a / libcsilk.so)
 
-# ── Core Module (primitives, context, config, logging, cache, crypto, io) ─
+# ── Minimal Core Module (arena, bounded_buf, config, logger, sync, crypto) ──
 set(CSILK_CORE_SOURCES
     src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
+    src/core/primitives/kv_store.c
+    src/core/cache/mvcc_cache.c
     src/core/config/config.c
     src/core/config/logger.c
-    src/core/config/hot_reload.c
     src/core/config/hooks.c
-    src/core/ctx/context.c
-    src/core/ctx/ctx_accessors.c
-    src/core/ctx/ctx_defer.c
-    src/core/ctx/ctx_json.c
-    src/core/json/json_internal.c
-    src/core/json/json_factory.c
-    src/core/json/json_object.c
-    src/core/json/json_array.c
-    src/core/json/json_access.c
-    src/core/json/json_type.c
-    src/core/json/json_parse.c
-    src/core/json/json_serialize.c
-    src/core/json/json_free.c
-    src/core/json/json_copy.c
-    src/core/json/json_iterate.c
-    src/core/json/json_mutate.c
-    src/core/json/json.c
-    src/core/primitives/recovery.c
-    src/core/primitives/router.c
-    src/core/primitives/router_simd.c
-    src/core/primitives/router_trie.c
-    src/core/test_utils.c
-    src/core/primitives/header_map.c
-    src/core/primitives/kv_store.c
-    src/core/primitives/query.c
-    src/core/cache/mvcc_cache.c
-    src/core/io/af_xdp.c
-    src/core/io/af_xdp_zerocopy.c
-    src/core/io/io_perf_probe.c
-    src/core/io/dpdk_pmd.c
     src/core/uring/uring_buf.c
     src/core/uring/uring_sqpoll.c
     src/core/uring/uring_vector.c
-    src/core/plugin/wasm_plugin.c
-    src/core/plugin/wasm_vm.c
-    src/core/plugin/wasm_wasi.c
     src/crypto/base64.c
     src/crypto/sha1.c
     src/crypto/url.c
@@ -81,9 +49,53 @@ if(CSILK_USE_URING)
     )
 endif()
 
-# ── HTTP Module (HTTP/1, connection, server, app, middleware, ws, swagger) ─
+# ── JSON Module (yyjson fast serialization engine) ──────────────────────
+set(CSILK_JSON_SOURCES
+    src/core/json/json_internal.c
+    src/core/json/json_factory.c
+    src/core/json/json_object.c
+    src/core/json/json_array.c
+    src/core/json/json_access.c
+    src/core/json/json_type.c
+    src/core/json/json_parse.c
+    src/core/json/json_serialize.c
+    src/core/json/json_free.c
+    src/core/json/json_copy.c
+    src/core/json/json_iterate.c
+    src/core/json/json_mutate.c
+    src/core/json/json.c
+)
+
+# ── WASM Module (WASM VM & WASI sandbox plugin engine) ───────────────────
+set(CSILK_WASM_SOURCES
+    src/core/plugin/wasm_plugin.c
+    src/core/plugin/wasm_vm.c
+    src/core/plugin/wasm_wasi.c
+)
+
+# ── Bypass Module (AF_XDP & DPDK kernel bypass drivers) ──────────────────
+set(CSILK_BYPASS_SOURCES
+    src/core/io/af_xdp.c
+    src/core/io/af_xdp_zerocopy.c
+    src/core/io/dpdk_pmd.c
+    src/core/io/io_perf_probe.c
+)
+
+# ── HTTP Module (HTTP/1, context, router, connection, server, app, middleware) ─
 set(CSILK_HTTP_SOURCES
+    src/core/ctx/context.c
+    src/core/ctx/ctx_accessors.c
+    src/core/ctx/ctx_defer.c
+    src/core/ctx/ctx_json.c
+    src/core/config/hot_reload.c
+    src/core/test_utils.c
+    src/core/primitives/recovery.c
+    src/core/primitives/header_map.c
+    src/core/primitives/query.c
     src/core/primitives/response.c
+    src/core/primitives/router.c
+    src/core/primitives/router_simd.c
+    src/core/primitives/router_trie.c
     src/core/http/http1_parse.c
     src/core/http/http1_serialize.c
     src/core/http/http1_write.c
@@ -212,6 +224,7 @@ set(CSILK_WORKFLOW_SOURCES
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────
 set(CSILK_SOURCES
     ${CSILK_CORE_SOURCES}
+    ${CSILK_JSON_SOURCES}
     ${CSILK_HTTP_SOURCES}
     ${CSILK_TLS_SOURCES}
     ${CSILK_HTTP2_SOURCES}
@@ -219,4 +232,6 @@ set(CSILK_SOURCES
     ${CSILK_AI_SOURCES}
     ${CSILK_MQ_SOURCES}
     ${CSILK_WORKFLOW_SOURCES}
+    ${CSILK_WASM_SOURCES}
+    ${CSILK_BYPASS_SOURCES}
 )
