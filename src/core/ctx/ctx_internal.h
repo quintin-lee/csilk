@@ -420,6 +420,9 @@ struct csilk_ctx_s {
 
     /** Per-request unique identifier (UUID v4 string, 36 chars + null). */
     char request_id[CSILK_UUID_BUF_SIZE];
+
+    /** Monotonically increasing request sequence/generation counter. */
+    uint64_t request_seq;
 };
 
 /** @brief Internal context initialiser. */

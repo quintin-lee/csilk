@@ -105,8 +105,17 @@ _ai_broadcast(const char* event,
 
     char* json = csilk_json_serialize(root, NULL);
     csilk_mutex_lock(&g_ai_monitor_mutex);
-    for (size_t i = 0; i < g_ai_monitor_count; i++) {
-        csilk_ws_send(g_ai_monitors[i], (uint8_t*)json, strlen(json), 0x1);
+    for (size_t i = 0; i < g_ai_monitor_count;) {
+        csilk_ctx_t* mc = g_ai_monitors[i];
+        if (csilk_ctx_is_closed(mc)) {
+            for (size_t j = i; j + 1 < g_ai_monitor_count; j++) {
+                g_ai_monitors[j] = g_ai_monitors[j + 1];
+            }
+            g_ai_monitor_count--;
+            continue;
+        }
+        csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
+        i++;
     }
     csilk_mutex_unlock(&g_ai_monitor_mutex);
     free(json);
@@ -178,6 +187,31 @@ csilk_ai_register_monitor(void* c)
         CSILK_LOG_I("Registered AI monitor: %p", c);
     } else {
         CSILK_LOG_E("Failed to register AI monitor: monitor registry is full");
+    }
+    csilk_mutex_unlock(&g_ai_monitor_mutex);
+}
+
+/**
+ * @brief Unregister a request context from AI telemetry monitors.
+ * @param c Request context to unregister.
+ */
+void
+csilk_ai_unregister_monitor(void* c)
+{
+    if (!c) {
+        return;
+    }
+    ai_ensure_monitor_init();
+    csilk_mutex_lock(&g_ai_monitor_mutex);
+    for (size_t i = 0; i < g_ai_monitor_count; i++) {
+        if (g_ai_monitors[i] == (csilk_ctx_t*)c) {
+            for (size_t j = i; j + 1 < g_ai_monitor_count; j++) {
+                g_ai_monitors[j] = g_ai_monitors[j + 1];
+            }
+            g_ai_monitor_count--;
+            CSILK_LOG_I("Unregistered AI monitor: %p", c);
+            break;
+        }
     }
     csilk_mutex_unlock(&g_ai_monitor_mutex);
 }
@@ -395,16 +429,53 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
 
 /** @brief Per-async-chat-request context passed between the work callback
  *  (on a thread-pool thread) and the after-work callback (on the main loop
- *  thread). Keeps the response on the heap so it survives across threads
- *  without data races on the caller's stack. */
+ *  thread). Keeps the response and request copy on the heap so it survives across threads
+ *  without data races on the caller's stack or arena. */
 typedef struct {
-    csilk_ai_t*                    ai;        /**< AI engine handle. */
-    const csilk_ai_chat_request_t* req;       /**< Request parameters (caller-owned). */
-    csilk_ai_chat_response_t       res;       /**< Response buffer (filled by worker). */
-    csilk_ai_chat_async_cb         cb;        /**< Completion callback. */
-    void*                          user_data; /**< Opaque user context for callback. */
-    int                            status;    /**< Result code from csilk_ai_chat(). */
+    csilk_ai_t*              ai;            /**< AI engine handle. */
+    csilk_ai_chat_request_t  req_copy;      /**< Deep-copied request parameters. */
+    csilk_ai_message_t*      messages_copy; /**< Cloned messages array. */
+    csilk_ai_chat_response_t res;           /**< Response buffer (filled by worker). */
+    csilk_ai_chat_async_cb   cb;            /**< Completion callback. */
+    void*                    user_data;     /**< Opaque user context for callback. */
+    int                      status;        /**< Result code from csilk_ai_chat(). */
 } async_chat_req_t;
+
+static void
+free_async_chat_req(async_chat_req_t* ar)
+{
+    if (!ar) {
+        return;
+    }
+    free((char*)ar->req_copy.model);
+    free((char*)ar->req_copy.user);
+    free((char*)ar->req_copy.tool_choice);
+    if (ar->messages_copy) {
+        for (size_t i = 0; i < ar->req_copy.message_count; i++) {
+            free((char*)ar->messages_copy[i].role);
+            free((char*)ar->messages_copy[i].content);
+        }
+        free(ar->messages_copy);
+    }
+    if (ar->res.content) {
+        free(ar->res.content);
+    }
+    if (ar->res.raw_response) {
+        free(ar->res.raw_response);
+    }
+    if (ar->res.error_message) {
+        free(ar->res.error_message);
+    }
+    if (ar->res.tool_calls) {
+        for (size_t i = 0; i < ar->res.tool_call_count; i++) {
+            free(ar->res.tool_calls[i].id);
+            free(ar->res.tool_calls[i].name);
+            free(ar->res.tool_calls[i].arguments);
+        }
+        free(ar->res.tool_calls);
+    }
+    free(ar);
+}
 
 /** @brief Thread-pool work callback — runs csilk_ai_chat() off the main
  *  loop thread. The response is stored in the heap-allocated async context. */
@@ -412,7 +483,7 @@ static void
 chat_work_cb(csilk_io_work_t* req)
 {
     async_chat_req_t* ar = (async_chat_req_t*)req->data;
-    ar->status = csilk_ai_chat(ar->ai, ar->req, &ar->res);
+    ar->status = csilk_ai_chat(ar->ai, &ar->req_copy, &ar->res);
 }
 
 /** @brief After-work callback — delivers the result on the main loop
@@ -423,7 +494,7 @@ chat_after_work_cb(csilk_io_work_t* req, int status)
     (void)status;
     async_chat_req_t* ar = (async_chat_req_t*)req->data;
     ar->cb(ar->status, &ar->res, ar->user_data);
-    free(ar);
+    free_async_chat_req(ar);
     free(req);
 }
 
@@ -466,7 +537,28 @@ csilk_ai_chat_async(csilk_ai_t*                    ai,
     }
 
     ar->ai = ai;
-    ar->req = req;
+    ar->req_copy = *req;
+    ar->req_copy.model = req->model ? strdup(req->model) : NULL;
+    ar->req_copy.user = req->user ? strdup(req->user) : NULL;
+    ar->req_copy.tool_choice = req->tool_choice ? strdup(req->tool_choice) : NULL;
+    if (req->messages && req->message_count > 0) {
+        ar->messages_copy = calloc(req->message_count, sizeof(csilk_ai_message_t));
+        if (ar->messages_copy) {
+            for (size_t i = 0; i < req->message_count; i++) {
+                ar->messages_copy[i].role =
+                    req->messages[i].role ? strdup(req->messages[i].role) : NULL;
+                ar->messages_copy[i].content =
+                    req->messages[i].content ? strdup(req->messages[i].content) : NULL;
+            }
+            ar->req_copy.messages = ar->messages_copy;
+        } else {
+            ar->req_copy.message_count = 0;
+            ar->req_copy.messages = NULL;
+        }
+    } else {
+        ar->messages_copy = NULL;
+        ar->req_copy.messages = NULL;
+    }
     ar->cb = cb;
     ar->user_data = user_data;
     memset(&ar->res, 0, sizeof(ar->res));

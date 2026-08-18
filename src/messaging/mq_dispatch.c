@@ -51,8 +51,17 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
     char* json = csilk_json_serialize(root, NULL);
 
     csilk_mutex_lock(&mq->monitor_mutex);
-    for (size_t i = 0; i < mq->monitor_count; i++) {
-        csilk_ws_send(mq->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+    for (size_t i = 0; i < mq->monitor_count;) {
+        csilk_ctx_t* mc = mq->monitors[i];
+        if (csilk_ctx_is_closed(mc)) {
+            for (size_t j = i; j + 1 < mq->monitor_count; j++) {
+                mq->monitors[j] = mq->monitors[j + 1];
+            }
+            mq->monitor_count--;
+            continue;
+        }
+        csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
+        i++;
     }
     csilk_mutex_unlock(&mq->monitor_mutex);
 

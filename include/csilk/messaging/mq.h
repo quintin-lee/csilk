@@ -185,6 +185,13 @@ char* csilk_mq_stats_to_json(const csilk_mq_stats_t* stats);
 void csilk_mq_register_monitor(csilk_mq_t* mq, csilk_ctx_t* c);
 
 /**
+ * @brief Unregister a WebSocket monitor from MQ events.
+ * @param mq The MQ instance.
+ * @param c  Framework context to unregister.
+ */
+void csilk_mq_unregister_monitor(csilk_mq_t* mq, csilk_ctx_t* c);
+
+/**
  * @brief Enable Write-Ahead Log (WAL) persistence for the MQ.
  *
  * When enabled, every published message is appended to @p wal_path before

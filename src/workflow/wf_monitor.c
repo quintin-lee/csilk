@@ -37,11 +37,36 @@ csilk_wf_register_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
     csilk_mutex_unlock(&wf->monitor_mutex);
 }
 
+/**
+ * @brief Unregisters a WebSocket context client from receiving workflow monitor events.
+ *
+ * @param wf The workflow instance.
+ * @param c  Pointer to the WebSocket client context to unregister.
+ */
+void
+csilk_wf_unregister_monitor(csilk_wf_t* wf, csilk_ctx_t* c)
+{
+    if (!wf || !c) {
+        return;
+    }
+    csilk_mutex_lock(&wf->monitor_mutex);
+    for (size_t i = 0; i < wf->monitor_count; i++) {
+        if (wf->monitors[i] == c) {
+            for (size_t j = i; j + 1 < wf->monitor_count; j++) {
+                wf->monitors[j] = wf->monitors[j + 1];
+            }
+            wf->monitor_count--;
+            break;
+        }
+    }
+    csilk_mutex_unlock(&wf->monitor_mutex);
+}
+
 /** @brief Internal: broadcast a JSON event to all registered WebSocket monitors.
  *
  * Constructs a JSON payload with event type, optional node_id, and optional
  * data payload string. The message is sent to each monitor via
- * csilk_ws_send(). Dead or closed connections are silently skipped.
+ * csilk_ws_send(). Dead or closed connections are silently skipped and pruned.
  *
  * @param wf      Workflow instance.
  * @param event   Event name (e.g., "node_start", "workflow_end").
@@ -63,12 +88,21 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
     }
     char* json = csilk_json_serialize(msg, NULL);
     csilk_mutex_lock(&wf->monitor_mutex);
-    for (size_t i = 0; i < wf->monitor_count; i++) {
-        if (csilk_is_sse(wf->monitors[i])) {
-            csilk_sse_send(wf->monitors[i], event, json);
-        } else {
-            csilk_ws_send(wf->monitors[i], (uint8_t*)json, strlen(json), 0x1);
+    for (size_t i = 0; i < wf->monitor_count;) {
+        csilk_ctx_t* mc = wf->monitors[i];
+        if (csilk_ctx_is_closed(mc)) {
+            for (size_t j = i; j + 1 < wf->monitor_count; j++) {
+                wf->monitors[j] = wf->monitors[j + 1];
+            }
+            wf->monitor_count--;
+            continue;
         }
+        if (csilk_is_sse(mc)) {
+            csilk_sse_send(mc, event, json);
+        } else {
+            csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
+        }
+        i++;
     }
     csilk_mutex_unlock(&wf->monitor_mutex);
     free(json);

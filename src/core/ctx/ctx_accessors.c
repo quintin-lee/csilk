@@ -357,6 +357,74 @@ csilk_is_async(csilk_ctx_t* c)
 }
 
 /**
+ * @brief Acquire an asynchronous lease for the request context.
+ */
+csilk_async_token_t
+csilk_ctx_acquire_async(csilk_ctx_t* c)
+{
+    csilk_async_token_t token = {0};
+    if (!c) {
+        return token;
+    }
+    if (c->request_seq == 0) {
+        c->request_seq = 1;
+    }
+    _csilk_ctx_async_ref_incr(c);
+    token.ctx = c;
+    token.request_seq = c->request_seq;
+    return token;
+}
+
+/**
+ * @brief Validate an async token before performing operations on the context.
+ */
+int
+csilk_async_token_validate(const csilk_async_token_t* token)
+{
+    if (!token || !token->ctx) {
+        return 0;
+    }
+    csilk_ctx_t* c = token->ctx;
+    if (c->conn_closed) {
+        return 0;
+    }
+    if (c->request_seq != token->request_seq) {
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * @brief Release an asynchronous lease acquired via csilk_ctx_acquire_async().
+ */
+void
+csilk_ctx_release_async(const csilk_async_token_t* token)
+{
+    if (!token || !token->ctx) {
+        return;
+    }
+    _csilk_ctx_async_ref_decr(token->ctx);
+}
+
+/**
+ * @brief Get the current request sequence / generation counter.
+ */
+uint64_t
+csilk_ctx_get_request_seq(csilk_ctx_t* c)
+{
+    return c ? c->request_seq : 0;
+}
+
+/**
+ * @brief Check whether the context's underlying connection has been closed.
+ */
+int
+csilk_ctx_is_closed(csilk_ctx_t* c)
+{
+    return (!c || c->conn_closed);
+}
+
+/**
  * @brief Get the index of the matched handler.
  * @param[in] c Request context (may be NULL).
  * @return The handler index, or -1 if c is NULL.

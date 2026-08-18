@@ -340,6 +340,66 @@ void csilk_ctx_set_async(csilk_ctx_t* c, int is_async);
 int csilk_is_async(csilk_ctx_t* c);
 
 /**
+ * @brief Opaque token representing an async lease for a specific request cycle.
+ *
+ * Prevents stale callbacks (from keep-alive reuse or connection teardown)
+ * from accessing an invalidated or recycled csilk_ctx_t.
+ */
+typedef struct csilk_async_token_s {
+    csilk_ctx_t* ctx;
+    uint64_t     request_seq;
+} csilk_async_token_t;
+
+/**
+ * @brief Acquire an asynchronous lease for the request context.
+ *
+ * Increments the internal async reference count (preventing connection teardown)
+ * and returns a token bound to the current request generation.
+ * Must be paired with csilk_ctx_release_async().
+ *
+ * @param c The request context.
+ * @return An async token to pass to the async callback.
+ */
+csilk_async_token_t csilk_ctx_acquire_async(csilk_ctx_t* c);
+
+/**
+ * @brief Validate an async token before performing operations on the context.
+ *
+ * Checks that the connection has not closed and the request has not been recycled
+ * (e.g. keep-alive reuse).
+ *
+ * @param token Pointer to the async token.
+ * @return 1 if valid, 0 if stale/invalid (caller must discard results and NOT touch context).
+ */
+int csilk_async_token_validate(const csilk_async_token_t* token);
+
+/**
+ * @brief Release an asynchronous lease acquired via csilk_ctx_acquire_async().
+ *
+ * Decrements the internal async reference count. If the connection was pending close,
+ * this may trigger final client destruction.
+ *
+ * @param token Pointer to the async token.
+ */
+void csilk_ctx_release_async(const csilk_async_token_t* token);
+
+/**
+ * @brief Get the current request sequence / generation counter.
+ *
+ * @param c The request context.
+ * @return Monotonically increasing request sequence number.
+ */
+uint64_t csilk_ctx_get_request_seq(csilk_ctx_t* c);
+
+/**
+ * @brief Check whether the context's underlying connection has been closed.
+ *
+ * @param c The request context.
+ * @return 1 if closed or NULL, 0 if still open.
+ */
+int csilk_ctx_is_closed(csilk_ctx_t* c);
+
+/**
  * @brief Dispatch a callback to be executed on the event loop thread owning this context.
  * 
  * This allows background threads (e.g., Python asyncio threads) to safely execute
