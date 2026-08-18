@@ -36,3 +36,24 @@ target_link_libraries(example_tls csilk)
 
 add_executable(example_custom_driver examples/advanced/example_custom_driver.c)
 target_link_libraries(example_custom_driver csilk)
+
+# Context & REST API examples
+add_executable(example_context_deep examples/basic/example_context_deep.c)
+target_link_libraries(example_context_deep csilk)
+
+add_executable(example_rest_api examples/basic/example_rest_api.c)
+target_link_libraries(example_rest_api csilk)
+
+# Middleware examples
+add_executable(example_security_stack examples/middleware/example_security_stack.c)
+target_link_libraries(example_security_stack csilk)
+
+add_executable(example_observability examples/middleware/example_observability.c)
+target_link_libraries(example_observability csilk)
+
+add_executable(example_form_security examples/middleware/example_form_security.c)
+target_link_libraries(example_form_security csilk)
+
+# File I/O example
+add_executable(example_file_io examples/advanced/example_file_io.c)
+target_link_libraries(example_file_io csilk)
