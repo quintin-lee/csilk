@@ -1,6 +1,6 @@
 # Csilk (`csilk`) 代码库全景架构与模块独立深度剖析白皮书
 
-- **版本**：v1.0.0
+- **版本**：v0.4.0
 - **日期**：2026-08-18
 - **目标工程**：Csilk (`csilk`) — 高性能 C 语言异步 Web 服务与智能体运行时
 
@@ -40,7 +40,7 @@
 ## 1. 总体架构与设计哲学
 
 ### 1.1 核心定位与设计准则
-Csilk (`csilk`) 是基于 C11 标准开发的高性能网络服务运行时与分布式智能体工作流底座，旨在为极致并发与极低延迟场景提供现代化 C 原生开发体验。系统贯彻以下设计准则：
+Csilk (`csilk`) 是基于 C23 标准开发的高性能网络服务运行时与分布式智能体工作流底座，旨在为极致并发与极低延迟场景提供现代化 C 原生开发体验。系统贯彻以下设计准则：
 
 1. **极致吞吐与零拷贝内存架构**：
    - 全链路杜绝高频小内存申请与释放开销，依靠请求级自适应 Arena 内存池、线程局部缓存列表（TLS Free List）以及网络接收缓冲区分片（Slice），在请求处理生命周期内达成近乎零 `malloc`/`free` 开销与零冗余拷贝。
@@ -356,7 +356,7 @@ graph TD
 ### 4.2 SIMD 加速向量检索与嵌入式 HNSW 图索引
 - **源文件位置**：[`src/drivers/vector/vector_hnsw.c`](file:///home/quintin/Data/source/c_cpp/server-c/src/drivers/vector/vector_hnsw.c), [`src/drivers/vector/vector_simd.c`](file:///home/quintin/Data/source/c_cpp/server-c/src/drivers/vector/vector_simd.c), [`src/drivers/vector/qdrant.c`](file:///home/quintin/Data/source/c_cpp/server-c/src/drivers/vector/qdrant.c), [`src/drivers/vector/milvus.c`](file:///home/quintin/Data/source/c_cpp/server-c/src/drivers/vector/milvus.c)
 - **纯 C 原生 HNSW 引擎**：
-  - 完全由纯 C11 实现，内存布局紧凑，支持在多层图结构中快速进行启发式贪心最近邻搜索（ANN）；
+  - 完全由纯 C23 实现，内存布局紧凑，支持在多层图结构中快速进行启发式贪心最近邻搜索（ANN）；
   - 零外部依赖，极适合边缘端或嵌入式微服务环境。
 - **SIMD 距离算子优化**：
   - 针对 128/256/512/1536 维的高维嵌入向量，利用 AVX2（`_mm256_fmadd_ps`）指令展开计算；
