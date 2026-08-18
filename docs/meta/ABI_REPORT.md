@@ -71,7 +71,7 @@ include/csilk/version.h     — Version info (generated from version.h.in)
 - [x] 11 example programs — moved to public accessor API
 - [x] Internal headers physically moved to `src/core/` (commit: 830daca)
 - [x] Iteration API (`csilk_for_each_*`) added for header/query/form traversal
-- [x] Deferred cleanup API protects against resource leaks across `longjmp`
+- [x] Deferred cleanup API protects against resource leaks during panic recovery (`csilk_panic` → `defer_free`)
 
 ---
 

@@ -39,7 +39,7 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🔍 URL parsing and query string handling
 - 📝 URL-encoded form body parsing (`csilk_parse_form_urlencoded`, `csilk_for_each_form_field`)
 - ⚡ Keep-alive connection support
-- 🛡️ Graceful error handling with crash recovery (setjmp/longjmp)
+- 🛡️ Graceful error handling with panic recovery (`csilk_panic` → deferred cleanup → 500)
 - 📋 YAML configuration (server, logger, CORS, rate limit, static files, middleware)
 - 🏗️ Arena allocator for request-scoped memory management (~3 CPU instructions per alloc, ≤ 5ns reset)
 - **Deferred Cleanup API** (`csilk_ctx_defer`) — panic-safe resource management

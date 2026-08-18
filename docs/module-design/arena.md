@@ -58,7 +58,7 @@ graph TB
 | **O(1) 分配** | 仅需检查剩余空间并移动指针，无空闲链表搜索 |
 | **零碎片** | 连续分配，不存在释放空洞 |
 | **缓存友好** | 顺序访问模式，CPU cache miss 率低 |
-| **跨 panic 安全** | 结合 `setjmp/longjmp` 恢复机制，panic 后 arena 仍可回收 |
+| **跨 panic 安全** | `csilk_panic()` 标记 `panicked=1` 后，arena 通过 `arena_reset()` 仍可 O(1) 回收 |
 | **零拷贝支持** | HTTP 头部直接引用接收缓冲区，仅需记录在 arena 中 |
 
 ---
@@ -315,13 +315,13 @@ flowchart TB
     ALLOC --> LINK["fa:fa-link 插入 ctx->defer_head 链表头"]
     LINK --> DONE["fa:fa-check return 0"]
 
-    PANIC["fa:fa-exclamation-triangle csilk_panic() → longjmp"] --> RECOVERY["fa:fa-shield Recovery handler"]
+    PANIC["fa:fa-exclamation-triangle csilk_panic() → panicked=1"] --> RECOVERY["fa:fa-shield Recovery handler"]
     RECOVERY --> EXEC["fa:fa-play csilk_ctx_defer_free(ctx)"]
     EXEC --> LIFO["fa:fa-list LIFO 顺序执行所有 fn(arg)"]
     LIFO --> CLEAR["fa:fa-eraser ctx->defer_head = nullptr"]
 ```
 
-**作用**：在 `setjmp/longjmp` 的 panic 恢复路径中安全释放资源。
+**作用**：在 `csilk_panic()` 触发后，按 LIFO 顺序安全释放堆内存、文件描述符和互斥锁。
 
 ```c
 // 示例：注册文件描述符清理
