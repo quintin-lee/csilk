@@ -1,58 +1,33 @@
-# ABI Stability Roadmap — v1.0 Context Opaque Conversion
+# ABI Stability Roadmap — Context, Router & Core Opaque Encapsulation
 
-> Status: **Complete** | Completed: v0.3.0 | Based on: docs/meta/ABI_REPORT.md
+> Status: **Complete** | Completed: v0.4.0 | Based on: docs/meta/ABI_REPORT.md
 >
-> **ABI Rule**: All public API functions **MUST** take/return `csilk_ctx_t*` (opaque) — direct struct access **MUST NOT** be exposed in public headers. Accessor function call overhead **SHOULD** be zero when inlined (single pointer dereference, ≤ 1 CPU cycle).
+> **ABI Rule**: All public API functions **MUST** take/return opaque handles (`csilk_ctx_t*`, `csilk_router_t*`, `csilk_server_t*`, `csilk_app_t*`, `csilk_mq_t*`) — direct struct field access **MUST NOT** be exposed in public headers. Accessor function call overhead **SHOULD** be zero when inlined (single pointer dereference, ≤ 1 CPU cycle).
 
 ## Current State
 
-`csilk_ctx_s` internal layout is hidden in `src/core/ctx_types.h`. All public
-API uses the opaque `csilk_ctx_t*` handle through accessor functions. 
+All internal structure layouts (`csilk_ctx_s`, `csilk_server_s`, `csilk_router_s`, `csilk_app_s`, `csilk_mq_s`, `csilk_raft_s`, `csilk_wf_s`, `csilk_mcp_server_s`, `csilk_db_pool_s`) are strictly confined to `src/**_internal.h`. All public API operates on forward-declared opaque pointer handles.
 
-All phases below were completed during the v0.3.0 development cycle:
+---
 
 ## Completed Phases
 
-### Phase A: Accessor API Expansion (v0.3.0) ✅
+### Phase A: Accessor API Expansion ✅
+Implemented comprehensive accessor/mutator API in `include/csilk/core/context.h`, covering request, response, routing parameters, key-value storage, and streaming flags.
 
-Implemented accessor/mutator API in `include/csilk/context.h`:
+### Phase B: Middleware & Framework Migration ✅
+- Updated all internal modules (`src/`) to use accessor APIs.
+- Migrated all built-in middleware modules to pure accessor interactions.
 
-```c
-const char* csilk_get_method(csilk_ctx_t* c);       // (was csilk_ctx_get_method in plan)
-const char* csilk_get_path(csilk_ctx_t* c);          // (was csilk_ctx_get_path in plan)
-int         csilk_get_status(csilk_ctx_t* c);        // (was csilk_ctx_get_status in plan)
-int         csilk_is_websocket(csilk_ctx_t* c);      // (was csilk_ctx_is_websocket in plan)
-csilk_arena_t* csilk_get_arena(csilk_ctx_t* c);      // (was csilk_ctx_get_arena in plan)
-const char* csilk_get_header(csilk_ctx_t* c, const char* key);
-void        csilk_set_header(csilk_ctx_t* c, const char* key, const char* value);
-void        csilk_set_response_body(csilk_ctx_t* c, const char* data, size_t len, int managed);
-// ... and 30+ more accessors fully implemented
-```
+### Phase C: Test & Example Migration ✅
+- Updated all test files and example applications to use opaque handles and public APIs.
+- Zero internal struct header includes in test or example directories.
 
-### Phase B-E: Migration Complete (v0.3.0) ✅
+### Phase D: Router & Server Opaque Encapsulation ✅
+- Converted `csilk_router_t` and `csilk_server_t` into fully opaque handles.
+- Moved `struct csilk_router_s` and `struct csilk_server_s` into internal implementation units.
 
-- Update all framework source (`src/`) to use accessors instead of direct
-  struct field access
-- Migrate 15 middleware modules to accessor API
-- Ship with `ctx_types.h` marked `@deprecated`
-
-### Phase C: Test & Example Migration (v0.7.0)
-
-- Update 30+ test files to use accessors
-- Update 3 examples
-- Set `CSILK_DEPRECATE_CTX_TYPES` compile flag as a migration aid
-
-### Phase D: Final Opaque (v1.0)
-
-- Move `ctx_types.h` from `include/` to `src/core/`
-- Remove `csilk_request_t` and `csilk_response_t` from public headers
-  (already forward-declared as `csilk_ctx_t`)
-- Bump SOVERSION to 1
-
-## Risks
-
-| Risk | Mitigation |
-|------|-----------|
-| Breaking 30+ test files | Phased migration with deprecation warnings |
-| Performance regression from accessor calls | Inline accessor functions in header |
-| SSE/WebSocket callbacks need struct access | Add dedicated SSE/WS accessor subset |
+### Phase E: 3rd-Party & Backend Decoupling ✅
+- Decoupled OpenSSL from public headers: `include/csilk/core/hash.h` uses 64-bit aligned opaque memory buffers (`csilk_sha1_ctx`, `csilk_sha256_ctx`).
+- Decoupled Backend I/O headers from `context.h`: `sys_io.h` and `csilk_get_work_req` relocated to internal headers.
+- Unified 6-tier memory ownership model (`BORROWED`, `ARENA`, `OWNED`, `TRANSFER`, `POOL`, `TLS_CACHE`).

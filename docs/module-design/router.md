@@ -3,6 +3,10 @@
 csilk uses a **Segment-Based Prefix Trie** with SIMD boundary scanning for efficient route matching. The router treats each `/`-delimited URL component as a discrete node, supporting static routes, named parameters (`:param`), and wildcards (`*wildcard`). Path matching is **SIMD-accelerated** via AVX2 (x86_64) and ARM NEON (aarch64) for byte-level delimiter and prefix comparison — achieving ~50ns per lookup on AVX2 (P99 ≤ 100ns, 100K routes) and ~80ns per lookup on NEON.
 
 > [!NOTE]
+> **Opaque Router Handle & 3-Tier ABI**:
+> `csilk_router_t` is exposed in public headers (`include/csilk/core/router.h`) purely as an opaque pointer handle (`typedef struct csilk_router_s csilk_router_t;`). The concrete struct definition (`struct csilk_router_s`) and trie node arrays are encapsulated within `src/core/primitives/router_internal.h`, preventing external callers from coupling to internal trie layout or static middleware limits.
+
+> [!NOTE]
 > **Segment-Based Trie vs Compressed Radix Tree**:
 > Unlike character-level compressed radix trees (which compress arbitrary substrings and perform edge splitting), csilk segments URLs naturally by the `/` delimiter. This design provides cleaner parameter/wildcard priority resolution (`STATIC > PARAM > WILDCARD`) and allows SIMD vector scanning directly to segment boundaries.
 

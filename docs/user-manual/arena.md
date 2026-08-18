@@ -197,7 +197,7 @@ void load_config(void) {
 
 void handler(csilk_ctx_t* c) {
     // 请求内数据用 Arena
-    char* tmp = csilk_arena_strdup(csil_get_arena(c), "temp");
+    char* tmp = csilk_arena_strdup(csilk_get_arena(c), "temp");
 
     // 全局数据用堆
     csilk_string(c, 200, g_config->greeting);
@@ -206,7 +206,22 @@ void handler(csilk_ctx_t* c) {
 
 ---
 
-## 10. 性能对比
+## 10. 统一 6 层内存所有权分类体系
+
+为了在复杂异步、流式响应和驱动集成中彻底消除 UAF 和 Double-Free，csilk 建立了 6 级内存所有权模型（`csilk_ownership_t`）：
+
+| 所有权级别 | 常量标识 | 内存来源 | 生命周期绑定 | 清理与归还职责 |
+|---|---|---|---|---|
+| **BORROWED** | `CSILK_OWNERSHIP_BORROWED` (0) | 外部读缓冲区 / 调用者分配 | 当前 Handler 执行 / 单次读取阶段 | 无（由属主负责释放） |
+| **ARENA** | `CSILK_OWNERSHIP_ARENA` (1) | 请求级 Bump 指针分配器 | 请求结束（`_csilk_ctx_cleanup`） | 由 Arena 统一 O(1) 批量重置 |
+| **OWNED** | `CSILK_OWNERSHIP_OWNED` (2) | `malloc()` / `calloc()` 堆分配 | 关联对象显式销毁 | 显式调用 `free()` |
+| **TRANSFER** | `CSILK_OWNERSHIP_TRANSFER` (3) | 动态分配缓冲区 | 所有权转交下游管道或队列 | 交由接收方/后续流程负责释放 |
+| **POOL** | `CSILK_OWNERSHIP_POOL` (4) | 固定大小连接池 / Slab 缓冲池 | 请求 / 单次 I/O 阶段 | 通过 `_csilk_pool_free` 归还池 |
+| **TLS_CACHE** | `CSILK_OWNERSHIP_TLS_CACHE` (5)| Worker 线程局部缓存 | Worker 线程生命周期 | 线程退出时统一释放 |
+
+---
+
+## 11. 性能对比
 
 | 操作 | Arena | malloc |
 |:-----|:-----:|:------:|
@@ -223,7 +238,7 @@ void handler(csilk_ctx_t* c) {
 
 ---
 
-## 11. 最佳实践
+## 12. 最佳实践
 
 | 实践 | 说明 |
 |:-----|:------|
