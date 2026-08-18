@@ -234,7 +234,7 @@ flowchart LR
 
     subgraph onion["fa:fa-circle-nodes Onion Layers"]
         direction LR
-        L1i["fa:fa-shield Recovery (pre)<br/>setjmp()"] --> L2i["fa:fa-clock Logger (pre)<br/>start timer"]
+        L1i["fa:fa-shield Recovery (pre)<br/>init deferred list"] --> L2i["fa:fa-clock Logger (pre)<br/>start timer"]
         L2i --> L3i["fa:fa-shield-halved WAF (pre)<br/>check rules"]
         L3i --> L4i["fa:fa-key Auth (pre)<br/>check token"]
         L4i --> L5i["fa:fa-gauge-high RateLimit (pre)<br/>check quota"]
@@ -378,7 +378,7 @@ graph TB
 
 ---
 
-## 3. Crash Recovery Mechanism (setjmp/longjmp)
+## 3. Crash Recovery Mechanism (panic → deferred cleanup)
 
 Lightweight exception handling routes panics cleanly back to the recovery middleware:
 
@@ -963,7 +963,7 @@ csilk/
 │   │   │   ├── kv_store.c         # Key-value store
 │   │   │   ├── lfqueue.h          # Lock-free queue
 │   │   │   ├── query.c/h          # Query string parsing
-│   │   │   ├── recovery.c         # setjmp/longjmp error recovery
+│   │   │   ├── recovery.c         # Panic recovery (panicked flag + deferred cleanup)
 │   │   │   ├── response.c         # Response writing (status/JSON/redirect/chunked)
 │   │   │   ├── router.c           # Radix-tree route matching
 │   │   │   ├── router_simd.c      # SIMD-accelerated route matching

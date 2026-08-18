@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Extended test coverage**: WAF (4→9), Session (5→8), Recovery (1→4), CSRF (3→7), Workflow Lifecycle (1→3).
 - **Zero-copy chunked write**: `_csilk_send_data_owned()` eliminates double-allocation/copy in chunked transfer encoding path.
 - **ABI opaque type conversion**: Moved internal struct definitions (`csilk_ctx_s`, `csilk_server_s`) from `include/csilk/core/` to `src/core/`. All non-framework code now accesses context state exclusively through the public accessor API.
-- **Deferred cleanup API** (`csilk_ctx_defer` / `csilk_ctx_defer_free`): Panic-safe resource management across `setjmp`/`longjmp` boundaries. Protects heap allocations, file descriptors, and mutex locks from leaking during panic recovery.
+- **Deferred cleanup API** (`csilk_ctx_defer` / `csilk_ctx_defer_free`): Panic-safe resource management. When `csilk_panic()` sets `panicked=1`, deferred callbacks run in LIFO order to release heap allocations, file descriptors, and mutex locks before the recovery middleware sends a 500 response.
 - **SIMD-accelerated router**: AVX2 path matching on x86_64 and ARM NEON on aarch64. CMake auto-detection with `-mavx2` flag.
 - **Lock-free per-worker connection pool**: Replaced mutex-based pool with per-worker lock-free pool for multi-core scaling.
 - **macOS 14 ARM64 CI support**: Re-enabled macOS in CI matrix with `fdatasync`→`fsync` and `SOCK_NONBLOCK` fallback.

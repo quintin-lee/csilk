@@ -116,8 +116,8 @@ stateDiagram-v2
         handler3 --> handlerN: csilk_next()
         handlerN --> [*]
         --
-        [*] --> Panic: longjmp (csilk_panic)
-        Panic --> [*]: Returns to Recovery
+        [*] --> Panic: csilk_panic() sets panicked=1
+        Panic --> [*]: Deferred cleanup + 500 response
     }
 
     Executing --> Sending: Response body set OR aborted

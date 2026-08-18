@@ -219,7 +219,7 @@ sequenceDiagram
 flowchart TB
     REQ["fa:fa-play Request"]
 
-    REC["fa:fa-medkit Recovery Middleware<br/>(setjmp here)"]
+    REC["fa:fa-medkit Recovery Middleware<br/>(checks panicked flag)"]
 
     AUTH["fa:fa-key Auth Middleware"]
 
@@ -235,7 +235,7 @@ flowchart TB
     HAND -- "Normal" --> OK["fa:fa-check-circle csilk_string(c, 200, 'OK')"]
     HAND -- "Crash" --> ERR3["fa:fa-bomb csilk_panic(c, 'db error')"]
 
-    ERR2 --> REC_L["fa:fa-arrow-right longjmp -&gt; Recovery"]
+    ERR2 --> REC_L["fa:fa-arrow-right csilk_panic() → Recovery"]
     ERR3 --> REC_L
     REC_L --> RECOVER["csilk_string(c, 500)\ncsilk_abort(c)"]
 ```

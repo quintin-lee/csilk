@@ -4,7 +4,7 @@ csilk 提供 15 个内置中间件处理器，涵盖认证、安全、可观测�
 
 | 中间件 | 文件 | 说明 |
 |-----------|------|-------------|
-| Recovery | `src/core/primitives/recovery.c` | 通过 setjmp/longjmp 的崩溃恢复 |
+| Recovery | `src/core/primitives/recovery.c` | Panic 恢复：设置 `panicked=1`，执行延迟清理，返回 500 |
 | Logger | `src/middleware/logger.c` | 结构化请求日志记录 |
 | Auth | `src/middleware/auth.c` | 基于令牌的认证 |
 | CORS | `src/middleware/cors.c` | 跨域资源共享 |

@@ -69,7 +69,7 @@ include/csilk/version.h     — 版本信息（由 version.h.in 生成）
 - [x] 11 个示例程序 — 迁移至公共访问器 API
 - [x] 内部头文件已物理移至 `src/core/`（提交: 830daca）
 - [x] 迭代 API（`csilk_for_each_*`）已添加，支持头/查询/表单遍历
-- [x] 延迟清理 API 保护跨 `longjmp` 的资源泄漏
+- [x] 延迟清理 API 在 panic 恢复时保护资源不泄漏（`csilk_panic` → `defer_free`）
 
 ---
 

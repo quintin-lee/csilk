@@ -234,7 +234,7 @@ flowchart LR
 
     subgraph onion["fa:fa-circle-nodes 洋葱层"]
         direction LR
-        L1i["fa:fa-shield Recovery（前）<br/>setjmp()"] --> L2i["fa:fa-clock Logger（前）<br/>开始计时"]
+        L1i["fa:fa-shield Recovery（前）<br/>初始化延迟列表"] --> L2i["fa:fa-clock Logger（前）<br/>开始计时"]
         L2i --> L3i["fa:fa-shield-halved WAF（前）<br/>检查规则"]
         L3i --> L4i["fa:fa-key Auth（前）<br/>检查令牌"]
         L4i --> L5i["fa:fa-gauge-high RateLimit（前）<br/>检查配额"]
@@ -386,7 +386,7 @@ graph TB
 
 ---
 
-## 3. 崩溃恢复机制（setjmp/longjmp）
+## 3. 崩溃恢复机制（panic → 延迟清理）
 
 轻量级异常处理可将 panic 清晰路由回恢复中间件：
 
@@ -978,7 +978,7 @@ csilk/
 │   │   │   ├── kv_store.c         # 键值存储
 │   │   │   ├── lfqueue.h          # 无锁队列
 │   │   │   ├── query.c/h          # 查询字符串解析
-│   │   │   ├── recovery.c         # setjmp/longjmp 错误恢复
+│   │   │   ├── recovery.c         # Panic 恢复（panicked 标志 + 延迟清理）
 │   │   │   ├── response.c         # 响应写入（状态/JSON/重定向/分块）
 │   │   │   ├── router.c           # 基数树路由匹配
 │   │   │   ├── router_simd.c      # SIMD 加速路由匹配
