@@ -96,6 +96,8 @@ get_next_segment_avx2(const char** p, size_t* len)
 
     while (1) {
         uintptr_t addr = (uintptr_t)curr;
+        /* 4KB page boundary guard: Ensure 32-byte unaligned SIMD load does not cross
+         * into an unmapped adjacent page, preventing potential SIGSEGV. */
         if ((addr & 4095) <= 4096 - 32) {
             __m256i data = _mm256_loadu_si256((const __m256i*)curr);
             __m256i cmp_slash = _mm256_cmpeq_epi8(data, slash_vec);
@@ -103,12 +105,14 @@ get_next_segment_avx2(const char** p, size_t* len)
             __m256i cmp_combined = _mm256_or_si256(cmp_slash, cmp_zero);
             int     mask = _mm256_movemask_epi8(cmp_combined);
             if (mask != 0) {
+                /* Count trailing zeros to find the exact byte index of the first delimiter ('/' or '\0'). */
                 int idx = __builtin_ctz(mask);
                 curr += idx;
                 break;
             }
             curr += 32;
         } else {
+            /* Fallback to byte-by-byte scan near 4KB page boundaries to safely cross boundary. */
             if (*curr == '/' || *curr == '\0') {
                 break;
             }

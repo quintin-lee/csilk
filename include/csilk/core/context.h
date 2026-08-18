@@ -506,7 +506,16 @@ void csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int m
  * @return Ownership model for the current response body.
  */
 csilk_ownership_t csilk_get_response_body_ownership(csilk_ctx_t* c);
-
+/**
+ * @brief Retrieve the current response body buffer and length.
+ *
+ * @param[in]  c       The request context.
+ * @param[out] out_len Optional pointer to receive the byte length of the response body.
+ * @return Pointer to the response body buffer (not guaranteed NUL-terminated), or NULL if unset.
+ *
+ * @note The returned pointer is owned by the context and valid until the request cycle finishes.
+ * @warning Worker-Local: Only access from the owning worker thread.
+ */
 const char* csilk_get_response_body(csilk_ctx_t* c, size_t* out_len);
 
 /**
