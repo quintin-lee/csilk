@@ -348,28 +348,34 @@ typedef struct csilk_mq_s csilk_mq_t;
 typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
 
 /**
- * @brief Memory ownership and lifecycle management model.
+ * @brief Memory ownership and lifecycle management taxonomy.
  *
- * Defines explicit ownership semantics across context, response bodies,
- * zero-copy views, and internal resources.
+ * Defines explicit ownership semantics across context, request/response bodies,
+ * zero-copy views, pools, caches, and internal resources.
  */
 typedef enum {
-    CSILK_OWN_BORROWED = 0, /**< Caller/external holds buffer; framework does NOT free or copy. */
+    CSILK_OWN_BORROWED =
+        0, /**< Borrowed view; caller/external holds buffer; framework does NOT free or copy. */
     CSILK_OWN_ARENA =
-        1, /**< Memory is allocated from request arena; freed automatically on reset. */
+        1, /**< Memory is allocated from request/subsystem arena; freed automatically on reset. */
     CSILK_OWN_HEAP =
-        2, /**< Memory is heap allocated (malloc); framework calls free() on cleanup. */
+        2, /**< Explicitly heap-allocated buffer (malloc); owner calls free() on cleanup. */
+    CSILK_OWN_OWNED = CSILK_OWN_HEAP, /**< Alias for CSILK_OWN_HEAP (owned heap buffer). */
     CSILK_OWN_TRANSFER =
         3, /**< Ownership transferred to receiver; receiver is responsible for free(). */
+    CSILK_OWN_POOL =
+        4, /**< Buffer from connection or size-class pool; returned to pool on release. */
+    CSILK_OWN_TLS_CACHE =
+        5, /**< Thread-local cached chunk/freelist; recycled to calling thread's cache. */
     CSILK_OWN_SHARED =
-        4  /**< Shared/driver-managed reference; managed by custom destructor/refcount. */
+        6  /**< Shared/driver-managed reference; managed by custom destructor/refcount. */
 } csilk_ownership_t;
 
 /**
  * @brief Convert ownership enum value to human-readable string.
  *
  * @param ownership Ownership enum value.
- * @return Static string representation ("BORROWED", "ARENA", "HEAP", "TRANSFER", "SHARED", "UNKNOWN").
+ * @return Static string representation ("BORROWED", "ARENA", "HEAP", "TRANSFER", "POOL", "TLS_CACHE", "SHARED", "UNKNOWN").
  */
 static inline const char*
 csilk_ownership_str(csilk_ownership_t ownership)
@@ -383,6 +389,10 @@ csilk_ownership_str(csilk_ownership_t ownership)
         return "HEAP";
     case CSILK_OWN_TRANSFER:
         return "TRANSFER";
+    case CSILK_OWN_POOL:
+        return "POOL";
+    case CSILK_OWN_TLS_CACHE:
+        return "TLS_CACHE";
     case CSILK_OWN_SHARED:
         return "SHARED";
     default:

@@ -215,8 +215,10 @@ csilk_set_response_body_pooled(csilk_ctx_t* c, size_t size)
         return NULL;
     }
     if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
+        (c->response.body_ownership == CSILK_OWN_OWNED ||
+         c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER ||
+         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
         if (c->response.body_capacity > 0) {
             csilk_body_free((void*)c->response.body, c->response.body_capacity);
         } else {
@@ -283,12 +285,14 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->file_offset = 0;
     c->file_size = 0;
 
-    /* 4. Request body — freed only when this request owned it (heap/transfer
+    /* 4. Request body — freed only when this request owned it (heap/owned/transfer/pool
      *    or H2-managed). Size-class cached buffers are returned to the TLS pool;
      *    unmanaged or >1MB buffers are freed via free(). */
     if (c->request.body &&
-        (c->request.body_ownership == CSILK_OWN_HEAP ||
-         c->request.body_ownership == CSILK_OWN_TRANSFER || c->request.body_is_managed)) {
+        (c->request.body_ownership == CSILK_OWN_OWNED ||
+         c->request.body_ownership == CSILK_OWN_HEAP ||
+         c->request.body_ownership == CSILK_OWN_TRANSFER ||
+         c->request.body_ownership == CSILK_OWN_POOL || c->request.body_is_managed)) {
         if (c->request.body_capacity > 0) {
             csilk_body_free(c->request.body, c->request.body_capacity);
         } else {
@@ -301,12 +305,12 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->request.body_is_managed = 0;
     c->request.body_ownership = CSILK_OWN_BORROWED;
 
-    /* 5. Response body — free only managed/heap/transferred bodies. A stale
-     *    body_len would otherwise leak a bogus Content-Length into the next
-     *    request, so it is zeroed together with status (0 serializes as 200). */
+    /* 5. Response body — free only managed/heap/owned/transferred/pooled bodies. */
     if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
+        (c->response.body_ownership == CSILK_OWN_OWNED ||
+         c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER ||
+         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
         if (c->response.body_capacity > 0) {
             csilk_body_free((void*)c->response.body, c->response.body_capacity);
         } else {
@@ -514,8 +518,10 @@ csilk_set_response_body_ex(csilk_ctx_t*      c,
         return;
     }
     if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER || c->response.body_is_managed)) {
+        (c->response.body_ownership == CSILK_OWN_OWNED ||
+         c->response.body_ownership == CSILK_OWN_HEAP ||
+         c->response.body_ownership == CSILK_OWN_TRANSFER ||
+         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
         if (c->response.body_capacity > 0) {
             csilk_body_free((void*)c->response.body, c->response.body_capacity);
         } else {
@@ -526,8 +532,10 @@ csilk_set_response_body_ex(csilk_ctx_t*      c,
     c->response.body_len = len;
     c->response.body_capacity = 0;
     c->response.body_ownership = ownership;
-    c->response.body_is_managed =
-        (ownership == CSILK_OWN_HEAP || ownership == CSILK_OWN_TRANSFER) ? 1 : 0;
+    c->response.body_is_managed = (ownership == CSILK_OWN_OWNED || ownership == CSILK_OWN_HEAP ||
+                                   ownership == CSILK_OWN_TRANSFER || ownership == CSILK_OWN_POOL)
+                                      ? 1
+                                      : 0;
 }
 
 /** @brief Legacy helper to set response body.
