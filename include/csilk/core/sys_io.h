@@ -563,7 +563,12 @@ typedef uv_read_cb       csilk_io_read_cb;
 typedef uv_signal_cb     csilk_io_signal_cb;
 
 #define csilk_io_is_active uv_is_active
-#define csilk_io_err_name uv_err_name
+static inline const char*
+_csilk_uv_err_name(int err)
+{
+    return err == 0 ? "OK" : uv_err_name(err);
+}
+#define csilk_io_err_name _csilk_uv_err_name
 
 static inline int
 csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle)
@@ -847,7 +852,12 @@ typedef uv_rusage_t csilk_io_rusage_t;
 /** @brief Alias of uv_getrusage. */
 #define csilk_io_getrusage uv_getrusage
 /** @brief Alias of uv_strerror. */
-#define csilk_io_strerror uv_strerror
+static inline const char*
+_csilk_uv_strerror(int err)
+{
+    return err == 0 ? "Success" : uv_strerror(err);
+}
+#define csilk_io_strerror _csilk_uv_strerror
 
 /** @brief Alias of uv_is_closing. */
 #define csilk_io_is_closing uv_is_closing

@@ -6,6 +6,9 @@ include(CMakePackageConfigHelpers)
 set(CSILK_INSTALL_TARGETS
     csilk
     csilk_core
+    csilk_json
+    csilk_wasm
+    csilk_bypass
     csilk_http
     csilk_tls
     csilk_http2
@@ -30,6 +33,9 @@ if(CSILK_BUILD_SHARED)
     set(CSILK_SHARED_INSTALL_TARGETS
         csilk_shared
         csilk_core_shared
+        csilk_json_shared
+        csilk_wasm_shared
+        csilk_bypass_shared
         csilk_http_shared
         csilk_tls_shared
         csilk_http2_shared
@@ -95,10 +101,22 @@ if(CSILK_USE_URING)
 else()
   string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -luv")
 endif()
-string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lcrypto -lyaml -lyyjson")
+string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lcrypto -lyaml")
 if(NOT APPLE AND NOT WIN32)
   string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lm -lpthread")
 endif()
+
+# JSON
+set(CSILK_JSON_PC_REQUIRES "")
+set(CSILK_JSON_PC_LIBS_PRIVATE "-lyyjson")
+
+# WASM
+set(CSILK_WASM_PC_REQUIRES "csilk-core")
+set(CSILK_WASM_PC_LIBS_PRIVATE "")
+
+# Bypass
+set(CSILK_BYPASS_PC_REQUIRES "csilk-core")
+set(CSILK_BYPASS_PC_LIBS_PRIVATE "")
 
 # TLS
 set(CSILK_TLS_PC_REQUIRES_PRIVATE "openssl")
@@ -113,6 +131,7 @@ set(CSILK_HTTP2_PC_REQUIRES_PRIVATE "libnghttp2")
 set(CSILK_HTTP2_PC_LIBS_PRIVATE "-lnghttp2")
 
 # HTTP
+set(CSILK_HTTP_PC_REQUIRES "csilk-core csilk-tls csilk-http2 csilk-mq")
 set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
 set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lllhttp -lssl -lcrypto")
 
@@ -145,6 +164,9 @@ set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 
 set(CSILK_PC_FILES
     csilk-core
+    csilk-json
+    csilk-wasm
+    csilk-bypass
     csilk-tls
     csilk-mq
     csilk-http2

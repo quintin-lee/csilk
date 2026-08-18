@@ -3,12 +3,10 @@ exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: csilk-core
-Description: Csilk core runtime (arena, context, router, primitives)
+Name: csilk-wasm
+Description: Csilk WASM VM and WASI plugin sandbox engine
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-json
-Libs: -L${libdir} -lcsilk-core
-Libs.private: @CSILK_CORE_PC_LIBS_PRIVATE@
-Requires.private: @CSILK_CORE_PC_REQUIRES_PRIVATE@
+Requires: @CSILK_WASM_PC_REQUIRES@
+Libs: -L${libdir} -lcsilk-wasm
 Cflags: -I${includedir}

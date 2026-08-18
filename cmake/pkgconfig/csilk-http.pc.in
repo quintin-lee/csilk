@@ -7,7 +7,7 @@ Name: csilk-http
 Description: Csilk HTTP/1 & HTTP/2 server, router, and middleware
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-http2 csilk-mq
+Requires: @CSILK_HTTP_PC_REQUIRES@
 Requires.private: @CSILK_HTTP_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-http
 Libs.private: @CSILK_HTTP_PC_LIBS_PRIVATE@
