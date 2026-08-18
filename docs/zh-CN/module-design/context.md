@@ -31,7 +31,7 @@ flowchart TB
     subgraph ctx_t["fa:fa-exchange-alt csilk_ctx_t"]
         HW["fa:fa-list handler_index + handlers[]<br/>(中间件链状态)"]
         AB["fa:fa-ban aborted (链终止标志)"]
-        JB["fa:fa-bookmark jump_buffer<br/>(setjmp/longjmp 位子)"]
+        PN["fa:fa-exclamation-triangle panicked (panic 恢复标志)"]
 
         subgraph Request["fa:fa-arrow-right csilk_request_t"]
             RM["fa:fa-tag method (GET/POST/etc)"]
@@ -124,11 +124,15 @@ stateDiagram-v2
     Sending --> Cleanup: _csilk_send_response()
 
     state Cleanup {
-        [*] --> Reset: csilk_arena_reset()
-        Reset --> ClearParams: Free params
-        ClearParams --> ClearBody: Free body
-        ClearBody --> ResetFlags: Reset flags
-        ResetFlags --> [*]
+        [*] --> Defer: csilk_ctx_defer_free()
+        Defer --> Storage: Storage 析构函数
+        Storage --> BodyFree: 释放管理的 body
+        BodyFree --> PathFree: 释放 path
+        PathFree --> Buffers: 归还读缓冲区
+        Buffers --> Arena: csilk_arena_reset()
+        Arena --> Headers: 清除已使用的 header maps
+        Headers --> Flags: 重置标志
+        Flags --> [*]
     }
 
     Cleanup --> KeepAlive: Connection: keep-alive
@@ -181,7 +185,7 @@ sequenceDiagram
     S->>C: handler_index++ → 0
     S->>H0: handlers[0](ctx)
 
-    H0->>H0: setjmp(jump_buffer)
+    H0->>H0: 执行 recovery 中间件
     H0->>S: csilk_next(ctx)
 
     S->>C: handler_index++ → 1
@@ -231,7 +235,7 @@ sequenceDiagram
   'flowchart': {'htmlLabels': true, 'curve': 'basis'}
 }}%%
 graph TB
-    subgraph header_map["fa:fa-table Header Hash Map (16 buckets)"]
+    subgraph header_map["fa:fa-table Header Hash Map (64 buckets)"]
         B0["fa:fa-folder bucket[0]"] --> H1["fa:fa-tag Key: host<br/>Value: localhost:8080"]
         H1 --> H2["fa:fa-tag Key: content-type<br/>Value: application/json"]
         B1["fa:fa-folder bucket[1]"]
@@ -374,19 +378,22 @@ flowchart TB
 
 在 keep-alive 请求之间 (`csilk_ctx_cleanup`)，高效重置状态：
 
-1. **调用自定义析构器** - 执行通过 `csilk_set_ex()` 注册的对象析构函数以及 `csilk_ctx_defer` 注册的延迟清理。
-2. **释放注册的读缓冲区** - 在请求解析期间积累的所有动态原始网络读缓冲区被安全释放。
-3. `csilk_arena_reset()` - O(1) 指针重置；所有每请求分配被回收。
-4. `free()` 路径参数（键/值）。
-5. `free()` 请求体（如果已复制/分配，否则它作为零拷贝引用在步骤 2 中释放）。
-6. `free()` 请求路径。
-7. `memset()` 头/查询/响应映射为零。
-8. 重置所有标志：`aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`。
-9. 重置 `handler_index = -1`, `storage_head = NULL`, 和 `read_buffers_count = 0`。
+1. **延迟回调 (LIFO)** — `csilk_ctx_defer_free()` 执行所有注册的清理函数。
+2. **Storage 析构函数** — 执行 `csilk_set_ex()` 注册的自定义析构函数和驱动清理。
+3. **零拷贝文件响应** — 如果打开了 `file_fd` 则关闭，重置 `file_offset` 和 `file_size`。
+4. **请求体** — 仅在 managed 时释放（`CSILK_OWN_HEAP`、`CSILK_OWN_TRANSFER` 或 `body_is_managed`）。尺寸类缓存的缓冲区归还到 TLS 池。
+5. **响应体** — 相同的拥有权逻辑；同时重置 `status = 0`。
+6. **路径** — 始终释放（`csilk_split_url` malloc'd）。
+7. **读缓冲区** — 将池支持的缓冲区归还到工作线程本地池；释放其他缓冲区。将数组指针重置为嵌入式存储。
+8. **Arena 重置** — `csilk_arena_reset()` 以 O(1) 回收所有请求范围的分配（headers、params、query/form、storage items、defer nodes）。
+9. **Header maps** — 仅对本题请求中写入的 maps 进行 `memset()` 清零（通过 `used` 标志跟踪）。
+10. **Handler 链** — 重置 `handler_index = -1`、`handlers = NULL`、`handler_count = 0`、`current_handler = NULL`。
+11. **流控** — 重置 `aborted`、`panicked`、`is_websocket`、`is_sse`、`is_async`、`response_started`、`write_paused`、`on_drain`、`on_drain_data`、`on_ws_message`、`on_ws_send`。
+12. **请求 ID** — 仅在本请求中设置时清除。
 
 ### 延迟清理 (Panic-Safe)
 
-延迟清理 API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) 防止在 `setjmp`/`longjmp` 边界上的资源泄漏。当处理器 panic via `csilk_panic`，栈解回被跳过 via `longjmp`，所以处理器持有的堆分配、打开的文件描述符和互斥锁正常会泄漏。延迟清理列表在 arena 重置前按 LIFO 顺序处理，确保所有注册清理回调即使在 panic 路径下也被调用：
+延迟清理 API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) 防止 panic 恢复期间的资源泄漏。当处理器通过 `csilk_panic()` 触发 panic 时，上下文被标记为 `panicked = 1` 和 `aborted = 1`，然后延迟回调立即按 LIFO 顺序执行。这确保处理器持有的堆分配、打开的文件描述符和互斥锁在 recovery 中间件发送 500 响应之前被释放：
 
 ```c
 char* buf = malloc(1024);

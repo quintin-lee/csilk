@@ -416,10 +416,10 @@ sequenceDiagram
     participant REC as fa:fa-shield Recovery MW
     participant MW as fa:fa-cogs 其他中间件
     participant H as fa:fa-code 业务处理程序
-    participant JB as fa:fa-bookmark jmp_buf（在 ctx 中）
+    participant REC as fa:fa-shield Recovery MW
+    participant MW as fa:fa-cogs 其他中间件
+    participant H as fa:fa-code 业务处理程序
 
-    REC->>JB: setjmp(ctx->jump_buffer) → 0
-    Note over REC: 首次传递: 正常继续
     REC->>MW: csilk_next(ctx)
     MW->>H: csilk_next(ctx)
 
@@ -428,9 +428,8 @@ sequenceDiagram
         H-->>REC: 返回堆栈
     else fa:fa-exclamation-triangle Panic 情况
         H->>H: csilk_panic(ctx)
-        Note over H: 触发 longjmp!
-        H-->>JB: longjmp(ctx->jump_buffer, 1)
-        JB-->>REC: setjmp 返回 1
+        Note over H: 设置 panicked=1, aborted=1, 执行 defer_free
+        H-->>REC: 返回堆栈（链由 aborted 标志停止）
         REC->>REC: ctx->response.status = 500
         REC->>REC: csilk_string(ctx, 500, "Internal Server Error")
         REC->>REC: csilk_abort(ctx)

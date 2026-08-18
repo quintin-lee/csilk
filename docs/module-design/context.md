@@ -31,7 +31,7 @@ graph TB
     subgraph ctx_t["fa:fa-exchange-alt csilk_ctx_t"]
         HW["fa:fa-list handler_index + handlers[]<br/>(Middleware chain state)"]
         AB["fa:fa-ban aborted (chain termination flag)"]
-        JB["fa:fa-bookmark jump_buffer<br/>(setjmp/longjmp seat)"]
+        PN["fa:fa-exclamation-triangle panicked (panic recovery flag)"]
 
         subgraph Request["fa:fa-arrow-right csilk_request_t"]
             RM["fa:fa-tag method (GET/POST/etc)"]
@@ -124,11 +124,15 @@ stateDiagram-v2
     Sending --> Cleanup: _csilk_send_response()
 
     state Cleanup {
-        [*] --> Reset: csilk_arena_reset()
-        Reset --> ClearParams: Free params
-        ClearParams --> ClearBody: Free body
-        ClearBody --> ResetFlags: Reset flags
-        ResetFlags --> [*]
+        [*] --> Defer: csilk_ctx_defer_free()
+        Defer --> Storage: Storage destructors
+        Storage --> BodyFree: Free managed bodies
+        BodyFree --> PathFree: Free path
+        PathFree --> Buffers: Return read buffers
+        Buffers --> Arena: csilk_arena_reset()
+        Arena --> Headers: Clear used header maps
+        Headers --> Flags: Reset flags
+        Flags --> [*]
     }
 
     Cleanup --> KeepAlive: Connection: keep-alive
@@ -181,7 +185,7 @@ sequenceDiagram
     S->>C: handler_index++ → 0
     S->>H0: handlers[0](ctx)
 
-    H0->>H0: setjmp(jump_buffer)
+    H0->>H0: Execute recovery middleware
     H0->>S: csilk_next(ctx)
 
     S->>C: handler_index++ → 1
@@ -231,7 +235,7 @@ Headers use a case-insensitive DJB2 hash map with 16 fixed buckets and chaining:
   'flowchart': {'htmlLabels': true, 'curve': 'basis'}
 }}%%
 graph TB
-    subgraph header_map["fa:fa-table Header Hash Map (16 buckets)"]
+    subgraph header_map["fa:fa-table Header Hash Map (64 buckets)"]
         B0["fa:fa-folder bucket[0]"] --> H1["fa:fa-tag Key: host<br/>Value: localhost:8080"]
         H1 --> H2["fa:fa-tag Key: content-type<br/>Value: application/json"]
         B1["fa:fa-folder bucket[1]"]
@@ -374,19 +378,22 @@ flowchart TB
 
 Between requests (keep-alive), `csilk_ctx_cleanup()` efficiently resets state:
 
-1. **Invoke Custom Destructors** - Run custom `csilk_destructor_t` on stored objects (`csilk_set_ex`) and deferred cleanup items (`csilk_ctx_defer`).
-2. **Free registered read buffers** - All dynamic raw network read buffers accumulated during request parsing are freed.
-3. `csilk_arena_reset()` - O(1) pointer reset; all per-request allocations are recycled.
-4. `free()` path parameters (keys/values).
-5. `free()` request body (if it was copied/allocated, otherwise it was zero-copy referenced and freed in step 2).
-6. `free()` request path.
-7. `memset()` header/query/response maps to zero.
-8. Reset all flags: `aborted`, `is_websocket`, `is_sse`, `is_async`, `response_started`.
-9. Reset `handler_index = -1`, `storage_head = NULL`, and `read_buffers_count = 0`.
+1. **Deferred callbacks (LIFO)** — `csilk_ctx_defer_free()` runs all registered cleanup functions.
+2. **Storage destructors** — Run custom `csilk_destructor_t` on `csilk_set_ex()` objects and driver clear.
+3. **Zero-copy file response** — Close `file_fd` if open, reset `file_offset` and `file_size`.
+4. **Request body** — Free only when managed (`CSILK_OWN_HEAP`, `CSILK_OWN_TRANSFER`, or `body_is_managed`). Size-class cached buffers return to the TLS pool.
+5. **Response body** — Same ownership logic; also resets `status = 0`.
+6. **Path** — Always freed (malloc'd by `csilk_split_url`).
+7. **Read buffers** — Return pool-backed buffers to the worker-local pool; free others. Reset array pointers to embedded storage.
+8. **Arena reset** — `csilk_arena_reset()` reclaims all request-scoped allocations (headers, params, query/form, storage items, defer nodes) in O(1).
+9. **Header maps** — `memset()` to zero ONLY for maps that were written this request (tracked via `used` flag).
+10. **Handler chain** — Reset `handler_index = -1`, `handlers = NULL`, `handler_count = 0`, `current_handler = NULL`.
+11. **Flow control** — Reset `aborted`, `panicked`, `is_websocket`, `is_sse`, `is_async`, `response_started`, `write_paused`, `on_drain`, `on_drain_data`, `on_ws_message`, `on_ws_send`.
+12. **Request ID** — Clear only if set this request.
 
 ### Deferred Cleanup (Panic-Safe)
 
-The deferred cleanup API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) protects against resource leaks across `setjmp`/`longjmp` boundaries. When a handler panics via `csilk_panic`, stack unwinding is skipped via `longjmp`, so heap allocations, open file descriptors, and mutex locks held by the handler would normally leak. The deferred cleanup list is processed in LIFO order before arena reset, ensuring all registered cleanup callbacks are invoked even on panic paths:
+The deferred cleanup API (`csilk_ctx_defer` / `csilk_ctx_defer_free`) protects against resource leaks during panic recovery. When a handler panics via `csilk_panic()`, the context is marked with `panicked = 1` and `aborted = 1`, then deferred callbacks run immediately in LIFO order. This ensures heap allocations, open file descriptors, and mutex locks held by the handler are released before the recovery middleware sends a 500 response:
 
 ```c
 char* buf = malloc(1024);
