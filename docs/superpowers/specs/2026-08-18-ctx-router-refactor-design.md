@@ -66,10 +66,17 @@ typedef struct {
  * Unlike csilk_router_match_ctx(), this function does NOT modify any ctx state.
  * It is safe to call from any thread and does not require a csilk_ctx_t.
  *
+ * Unlike csilk_router_match() (which returns only the handler chain), this
+ * function also captures path parameters and returns the matched method handler
+ * for metadata access.
+ *
  * @param r  Router instance.
  * @param method HTTP method string.
  * @param path Decoded URL path.
  * @return A csilk_route_result_t with matched=1 if a route was found.
+ * @note The result is a stack-allocated temporary. Its params[].key pointers
+ *       may reference trie-owned segment strings (lifetime = router lifetime).
+ *       The caller must NOT hold the result across route mutations.
  */
 csilk_route_result_t csilk_router_match_result(const csilk_router_t* r,
                                                 const char* method,
@@ -82,7 +89,10 @@ csilk_route_result_t csilk_router_match_result(const csilk_router_t* r,
  * and ctx->current_handler from the result. All parameters are allocated from
  * the ctx's arena.
  *
- * @param c     Request context.
+ * If arena allocation fails for a parameter, that parameter is skipped
+ * (partial fill) and the function continues with remaining parameters.
+ *
+ * @param c     Request context (must have a valid arena).
  * @param result The match result from csilk_router_match_result().
  */
 void csilk_ctx_apply_route_result(csilk_ctx_t* c, const csilk_route_result_t* result);
@@ -109,8 +119,10 @@ int csilk_router_match_ctx(csilk_router_t* r, csilk_ctx_t* c)
         CSILK_LOG_W("Invalid match parameters: router=%p, ctx=%p", (void*)r, (void*)c);
         return 0;
     }
+    /* Reset params_count unconditionally — on match failure, clear any
+     * parameters left over from a previous request on this keep-alive connection. */
     c->params_count = 0;
-    
+
     csilk_route_result_t result = csilk_router_match_result(r, c->request.method, c->request.path);
     if (result.matched) {
         csilk_ctx_apply_route_result(c, &result);
@@ -434,32 +446,57 @@ struct csilk_router_node_s {
 
 ## 实施计划
 
-### Phase 1：Router-Ctx 解耦（核心变更）
+### Phase 1：Router-Ctx 解耦 + 参数内存统一（核心变更）
+
+> Phase 1 和 Phase 2 高度耦合 — `csilk_ctx_apply_route_result()` 本身就是内存统一的核心。合并为一个 phase 避免中间状态。
 
 1. 在 `router.h` 中定义 `csilk_route_result_t`
-2. 更新 `match_node()` 签名，移除 ctx 参数，返回 result
-3. 实现 `csilk_router_match_result()` 和 `csilk_ctx_apply_route_result()`
-4. 更新 `csilk_router_match_ctx()` 为薄包装
-5. 更新所有测试用例
+2. 更新 `router_internal.h` 中 `match_node()` 声明为 `(node, method, path, csilk_route_result_t* result)`
+3. 重构 `router_trie.c`：`match_node()`、`try_match_static()`、`try_match_param()`、`try_match_wildcard()` 移除 ctx 参数
+4. 实现 `csilk_router_match_result()` — 返回临时 result，backtrack 使用栈上局部变量
+5. 实现 `csilk_ctx_apply_route_result()` — 统一 arena 分配，失败时 skip 单个 param
+6. 更新 `csilk_router_match_ctx()` 为薄包装（内部调用 match_result + apply_result）
+7. 移除 `context.c` 中 `csilk_ctx_cleanup()` 的 no-arena params fallback 清理代码（第 366–369 行）
+8. 更新所有测试用例
 
-### Phase 2：参数内存统一
+### Phase 2：Cleanup 优化
 
-1. 修改 `match_node()` 使用临时 result 进行 backtrack
-2. 实现 `csilk_ctx_apply_route_result()` 的统一 arena 分配逻辑
-3. 简化 `csilk_ctx_cleanup()` 中的 params 处理
-
-### Phase 3：Cleanup 优化
-
-1. 整理 `csilk_ctx_cleanup()` 步骤顺序
+1. 整理 `csilk_ctx_cleanup()` 步骤顺序（arena reset 在 header map 清零之前）
 2. 添加 `body_is_managed` 前置检查
-3. 添加注释说明每步的清理语义
+3. 添加注释说明每步的清理语义和与原步骤号的映射关系
+   - 原 Step 1 → 新 Step 1 (deferred)
+   - 原 Step 2 → 新 Step 2 (storage)
+   - 原 Step 3 → 新 Step 3 (file fd)
+   - 原 Step 4 → 新 Step 4 (request body)
+   - 原 Step 5 → 新 Step 5 (response body)
+   - 原 Step 6 → 新 Step 6 (path)
+   - 原 Step 6b → 新 Step 7 (read buffers)
+   - 原 Step 7 → 新 Step 8 (arena reset)
+   - 原 Step 8 → 新 Step 9 (header maps)
+   - 原 Step 9 → 新 Step 10 (handler chain)
+   - 原 Step 10 → 新 Step 11 (flow control)
+   - 原 Step 10b → 新 Step 12 (request id)
 
-### Phase 4：验证
+### Phase 3：验证
 
-1. 运行所有单元测试
-2. 运行集成测试
+1. 运行所有单元测试（`ctest -E test_integration`）
+2. 运行集成测试（`ctest -R test_integration`）
 3. ASAN/TSAN 验证
 4. 性能基准测试对比
+
+## 测试覆盖计划
+
+以下测试用例需要新增或修改：
+
+| 测试场景 | 操作 | 文件 |
+|----------|------|------|
+| `csilk_router_match_result()` 无 ctx 直接调用 | 新增 | `tests/primitives/test_router_match_result.c` |
+| Backtrack 时 param 不泄漏 | 新增 | 同上 |
+| Wildcard 多段匹配 | 修改现有 | `tests/primitives/test_router_trie.c` |
+| Arena 分配失败时 partial fill | 新增 | 同上 |
+| `csilk_router_match_ctx()` 兼容层行为不变 | 回归 | 现有测试 |
+| Keep-alive 连接 match 失败后 params 已清理 | 新增 | `tests/integration/` |
+| 无 arena 模式下的 ctx_cleanup 不再访问 params | 验证 | `tests/ctx/` |
 
 ---
 
