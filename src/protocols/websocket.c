@@ -110,6 +110,8 @@ on_ws_write(csilk_io_write_t* req, int status)
 
     if (client) {
         _csilk_check_and_trigger_drain(client);
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
     }
 }
 
@@ -205,7 +207,16 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
         csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
         write_req->data = frame;
         csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-        csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
+        csilk_client_ref(cl);
+        _csilk_client_pending_io_inc(cl);
+        int r = csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
+        if (r < 0) {
+            _csilk_client_pending_io_dec(cl);
+            csilk_client_unref(cl);
+            free(frame);
+            free(write_req);
+            return -1;
+        }
     } else {
         free(frame);
         return -1;
@@ -233,10 +244,19 @@ on_close_write(csilk_io_write_t* req, int status)
     if (status < 0) {
         CSILK_LOG_E("WS close write error: %s", csilk_io_strerror(status));
     }
+    csilk_client_t* client = NULL;
+    if (req->handle) {
+        client = (csilk_client_t*)req->handle->data;
+    }
     if (req->data) {
         free(req->data);
     }
     free(req);
+
+    if (client) {
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
+    }
 }
 
 /** @brief Send a WebSocket close frame per RFC 6455 §5.5.1.
@@ -304,7 +324,15 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
         write_req->data = frame;
         csilk_client_t*    cl = (csilk_client_t*)internal_client;
         csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-        csilk_io_write(write_req, stream, &buf, 1, on_close_write);
+        csilk_client_ref(cl);
+        _csilk_client_pending_io_inc(cl);
+        int r = csilk_io_write(write_req, stream, &buf, 1, on_close_write);
+        if (r < 0) {
+            _csilk_client_pending_io_dec(cl);
+            csilk_client_unref(cl);
+            free(frame);
+            free(write_req);
+        }
     } else {
         free(frame);
     }

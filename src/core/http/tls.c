@@ -286,6 +286,15 @@ flush_tls_write(csilk_client_t* client)
 
         csilk_io_buf_t uv_buf = csilk_io_buf_init(data, (unsigned int)n);
         req->data = data;
-        csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &uv_buf, 1, on_write);
+        csilk_client_ref(client);
+        _csilk_client_pending_io_inc(client);
+        int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &uv_buf, 1, on_write);
+        if (r < 0) {
+            _csilk_client_pending_io_dec(client);
+            csilk_client_unref(client);
+            free(data);
+            free(req);
+            break;
+        }
     }
 }

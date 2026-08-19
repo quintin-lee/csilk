@@ -60,20 +60,16 @@ pool_get(worker_pool_t* wp)
         }
         csilk_conn_set_state(client, CSILK_CONN_INIT);
         client->generation = gen;
+        atomic_store(&client->ref_count, 0);
+        atomic_store(&client->pending_io, 0);
 #ifdef CSILK_USE_URING
         client->handle.generation = gen;
         client->timer.generation = gen;
         client->read_timer.generation = gen;
         client->write_timer.generation = gen;
         client->request_timer.generation = gen;
-        /* A struct recycled while its previous incarnation is still tearing
-         * down (async write CQE pending) carries stale teardown state; start
-         * pristine so a stale write completion for the old incarnation cannot
-         * trigger destruction of this connection. */
-        client->async_ref = 0;
-        client->close_pending = 0;
-        client->ctx.conn_closed = 0;
 #endif
+        client->ctx.conn_closed = 0;
         client->ctx.file_fd = -1;
     }
     return client;
@@ -104,8 +100,8 @@ reset_hot_state(csilk_client_t* client)
 
     /* Connection lifecycle and parser flags */
     csilk_conn_set_state(client, CSILK_CONN_INIT);
-    client->close_pending = 0;
-    client->async_ref = 0;
+    atomic_store(&client->ref_count, 0);
+    atomic_store(&client->pending_io, 0);
     client->read_paused = 0;
     client->read_active = 0;
     client->keep_alive = 0;

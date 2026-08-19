@@ -417,10 +417,19 @@ on_stream_write(csilk_io_write_t* req, int status)
     if (status < 0) {
         CSILK_LOG_E("Stream write error: %s", csilk_io_strerror(status));
     }
+    csilk_client_t* client = NULL;
+    if (req->handle) {
+        client = (csilk_client_t*)req->handle->data;
+    }
     if (req->data) {
         free(req->data);
     }
     free(req);
+
+    if (client) {
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
+    }
 }
 
 /** @brief Check if the client requested "Connection: close" in the request.
@@ -536,7 +545,16 @@ send_chunked_headers(csilk_ctx_t* c)
     csilk_io_buf_t buf = csilk_io_buf_init(write_base, (size_t)pos + 2);
     req->data = write_base;
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_stream_write);
+    csilk_client_ref(client);
+    _csilk_client_pending_io_inc(client);
+    int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_stream_write);
+    if (r < 0) {
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
+        free(write_base);
+        free(req);
+        return -1;
+    }
     c->response_started = 1;
     return 0;
 }

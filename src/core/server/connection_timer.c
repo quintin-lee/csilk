@@ -4,15 +4,13 @@
  */
 
 #include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 
-/** @brief Close callback for timer handles — decrements close_pending
- *  and triggers client_destroy when all timers are closed.
+/**
+ * @brief Close callback for timer handles — decrements pending_io
+ * and triggers client_destroy when all pending I/O and references reach zero.
  *
- *  Each of the four timers (idle, read, write, request) calls this once on
- *  close.  Client destruction is deferred until all four have acknowledged
- *  AND async_ref is zero.
- *
- *  @param handle The timer handle being closed (data points to csilk_client_t).
+ * @param handle The timer handle being closed (data points to csilk_client_t).
  */
 void
 on_timer_close(csilk_io_handle_t* handle)
@@ -21,16 +19,7 @@ on_timer_close(csilk_io_handle_t* handle)
     if (!client) {
         return;
     }
-    client->close_pending--;
-    if (client->close_pending > 0) {
-        return;
-    }
-    if (client->async_ref > 0) {
-        return;
-    }
-    /* Forward declaration - defined in connection_close.c */
-    extern void client_destroy(csilk_client_t * client);
-    client_destroy(client);
+    _csilk_client_pending_io_dec(client);
 }
 
 /** @brief Timer callback: fired when no I/O activity occurs within the
