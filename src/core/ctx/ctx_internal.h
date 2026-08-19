@@ -38,6 +38,7 @@ struct csilk_header_s {
     char*                  value;
     size_t                 key_len;
     size_t                 value_len;
+    uint32_t               hash;
     struct csilk_header_s* next;
 };
 typedef struct csilk_header_s csilk_header_t;
