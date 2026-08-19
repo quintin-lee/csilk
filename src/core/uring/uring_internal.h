@@ -10,7 +10,8 @@
  * client pointer, and generation counters into the 64-bit user_data word so the
  * CQE dispatcher can route completions without indirect calls. Also forward
  * declares the internal worker, thread-pool, barrier, and server-split routines
- * shared across the uring/*.c translation units.
+ * shared across the uring directory translation units.
+
  *
  * @copyright MIT License
  */

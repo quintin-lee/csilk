@@ -35,14 +35,28 @@ csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk
     }
     stream->generation++;
 
-    csilk_io_loop_t*     loop = stream->loop ? stream->loop : csilk_io_default_loop();
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
-    if (!sqe) {
+    csilk_io_loop_t* loop = stream->loop ? stream->loop : csilk_io_default_loop();
+
+    /* Allocate buffer from pool for native io_uring recv SQE */
+    if (stream->alloc_cb) {
+        stream->alloc_cb((csilk_io_handle_t*)stream, 65536, &stream->recv_buf);
+    }
+    if (!stream->recv_buf.base || stream->recv_buf.len == 0) {
         return -1;
     }
-    io_uring_prep_poll_add(sqe, stream->fd, POLLIN | POLLHUP | POLLERR);
-    io_uring_sqe_set_data64(
-        sqe, uring_encode_handle_data(URING_OP_POLL_READ, (csilk_io_handle_t*)stream));
+
+    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+    if (!sqe) {
+        if (stream->recv_buf.base) {
+            pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
+            stream->recv_buf.base = NULL;
+            stream->recv_buf.len = 0;
+        }
+        return -1;
+    }
+    io_uring_prep_recv(sqe, stream->fd, stream->recv_buf.base, stream->recv_buf.len, 0);
+    io_uring_sqe_set_data64(sqe,
+                            uring_encode_handle_data(URING_OP_READ, (csilk_io_handle_t*)stream));
     io_uring_submit(&loop->ring);
     return 0;
 }
@@ -61,6 +75,11 @@ csilk_io_read_stop(csilk_io_stream_t* stream)
     }
     stream->reading = 0;
     stream->generation++;
+    if (stream->recv_buf.base) {
+        pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
+        stream->recv_buf.base = NULL;
+        stream->recv_buf.len = 0;
+    }
     return 0;
 }
 

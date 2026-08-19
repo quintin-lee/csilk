@@ -38,6 +38,22 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
             async->event_fd = -1;
             async->fd = -1;
         }
+    } else if (handle->type == CSILK_IO_HANDLE_TCP) {
+        csilk_io_tcp_t* tcp = (csilk_io_tcp_t*)handle;
+        if (tcp->recv_buf.base) {
+            extern void pool_put_read_buf(worker_pool_t * wp, char* buf, size_t len);
+            pool_put_read_buf(NULL, tcp->recv_buf.base, tcp->recv_buf.len);
+            tcp->recv_buf.base = NULL;
+            tcp->recv_buf.len = 0;
+        }
+        if (handle->fd >= 0) {
+            csilk_client_t* client = (csilk_client_t*)handle->data;
+            if (!client ||
+                (atomic_load(&client->ref_count) <= 0 && atomic_load(&client->pending_io) <= 0)) {
+                close(handle->fd);
+                handle->fd = -1;
+            }
+        }
     } else if (handle->fd >= 0) {
         csilk_client_t* client = (csilk_client_t*)handle->data;
         if (!client ||

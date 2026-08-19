@@ -178,109 +178,107 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 }
 
                 /* ----------------------------------------------------------------
-                 * URING_OP_POLL_READ
-                 * Poll readiness → kernel read() → dispatch to read_cb.
+                 * URING_OP_READ / URING_OP_POLL_READ
+                 * Native IORING_OP_RECV completion path (zero-syscall read path).
                  * Stale completions are dropped when generation mismatches or
                  * the handle is closing.
                  * Connection errors (ECONNRESET, EPIPE) are translated to EOF.
                  * ---------------------------------------------------------------- */
-            } else if (op == URING_OP_POLL_READ) {
+            } else if (op == URING_OP_READ || op == URING_OP_POLL_READ) {
                 csilk_io_stream_t* s = (csilk_io_stream_t*)ptr;
                 if (is_stale_poll((csilk_io_handle_t*)s, gen)) {
+                    if (s && s->recv_buf.base) {
+                        pool_put_read_buf(NULL, s->recv_buf.base, s->recv_buf.len);
+                        s->recv_buf.base = NULL;
+                        s->recv_buf.len = 0;
+                    }
                     continue;
                 }
-                if (res < 0) {
-                    /* -ECANCELED means the poll was removed (read_stop/close).
-                     * Any other error is passed through to the read callback. */
-                    if (res == -ECANCELED) {
-                        /* Poll was cancelled — this is normal during shutdown. */
-                    } else {
-                        /* Map connection reset / broken pipe to EOF. */
-                        int err = -res;
-                        if (err == ECONNRESET || err == EPIPE || err == ETIMEDOUT) {
-                            res = -4095; /* UV_EOF */
+                if (res > 0) {
+                    /* Data was received directly into s->recv_buf by kernel */
+                    csilk_io_buf_t buf = s->recv_buf;
+                    s->recv_buf.base = NULL;
+                    s->recv_buf.len = 0;
+
+                    if (s->read_cb) {
+                        s->read_cb(s, (ssize_t)res, &buf);
+                    }
+
+                    /* Re-arm native IORING_OP_RECV if still reading */
+                    if (s->reading && s->fd >= 0 && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                        !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
+                        if (s->alloc_cb) {
+                            s->alloc_cb((csilk_io_handle_t*)s, 65536, &s->recv_buf);
                         }
-                        if (s->read_cb) {
-                            csilk_io_buf_t buf = {NULL, 0};
-                            s->read_cb(s, res, &buf);
+                        if (s->recv_buf.base && s->recv_buf.len > 0) {
+                            struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                            if (sqe) {
+                                io_uring_prep_recv(
+                                    sqe, s->fd, s->recv_buf.base, s->recv_buf.len, 0);
+                                io_uring_sqe_set_data64(
+                                    sqe,
+                                    uring_encode_handle_data(URING_OP_READ, (csilk_io_handle_t*)s));
+                                io_uring_submit(ring);
+                            }
                         }
                     }
-                } else if (s->alloc_cb && s->read_cb) {
-                    csilk_io_buf_t buf;
-                    s->alloc_cb((csilk_io_handle_t*)s, 65536, &buf);
-                    if (buf.base && buf.len > 0) {
-                        ssize_t nread = read(s->fd, buf.base, buf.len);
-                        if (nread > 0) {
-                            /* Double-check generation after read(): the handle may
-                             * have been closed between the poll event and this
-                             * read() call. */
-                            if (s->generation == gen && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
-                                !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
-                                s->read_cb(s, nread, &buf);
+                } else if (res == 0) {
+                    /* EOF: peer closed the connection */
+                    csilk_io_buf_t buf = s->recv_buf;
+                    s->recv_buf.base = NULL;
+                    s->recv_buf.len = 0;
+
+                    s->reading = 0;
+                    s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+                    if (loop->active_handles > 0) {
+                        loop->active_handles--;
+                    }
+                    if (s->read_cb) {
+                        s->read_cb(s, -4095 /* UV_EOF */, &buf);
+                    }
+                } else {
+                    /* res < 0: Error */
+                    if (res == -ECANCELED) {
+                        /* In-flight recv cancelled during read_stop/close */
+                        if (s->recv_buf.base) {
+                            pool_put_read_buf(NULL, s->recv_buf.base, s->recv_buf.len);
+                            s->recv_buf.base = NULL;
+                            s->recv_buf.len = 0;
+                        }
+                    } else if (res == -EAGAIN || res == -EWOULDBLOCK) {
+                        /* Transient — re-arm recv SQE with current buffer */
+                        if (s->reading && s->fd >= 0 && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                            !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
+                            struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                            if (sqe) {
+                                io_uring_prep_recv(
+                                    sqe, s->fd, s->recv_buf.base, s->recv_buf.len, 0);
+                                io_uring_sqe_set_data64(
+                                    sqe,
+                                    uring_encode_handle_data(URING_OP_READ, (csilk_io_handle_t*)s));
+                                io_uring_submit(ring);
+                            }
+                        }
+                    } else {
+                        /* Fatal socket error — translate ECONNRESET/EPIPE/ETIMEDOUT to EOF */
+                        int err = -res;
+                        if (err == ECONNRESET || err == EPIPE || err == ETIMEDOUT) {
+                            err = 0; /* EOF */
+                        }
+                        csilk_io_buf_t buf = s->recv_buf;
+                        s->recv_buf.base = NULL;
+                        s->recv_buf.len = 0;
+
+                        s->reading = 0;
+                        s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+                        if (loop->active_handles > 0) {
+                            loop->active_handles--;
+                        }
+                        if (s->read_cb) {
+                            if (err == 0) {
+                                s->read_cb(s, -4095 /* UV_EOF */, &buf);
                             } else {
-                                /* Stale — discard buffer and skip callback. */
-                                if (buf.base) {
-                                    pool_put_read_buf(NULL, buf.base, buf.len);
-                                }
-                            }
-                            /* Re-arm poll if still reading */
-                            if (s->reading && s->fd >= 0 && (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
-                                !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
-                                struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-                                if (sqe) {
-                                    io_uring_prep_poll_add(sqe, s->fd, POLLIN | POLLHUP | POLLERR);
-                                    io_uring_sqe_set_data64(
-                                        sqe,
-                                        uring_encode_handle_data(URING_OP_POLL_READ,
-                                                                 (csilk_io_handle_t*)s));
-                                    io_uring_submit(ring);
-                                }
-                            }
-                        } else if (nread == 0) {
-                            /* EOF: peer closed the connection. */
-                            s->reading = 0;
-                            s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
-                            if (loop->active_handles > 0) {
-                                loop->active_handles--;
-                            }
-                            s->read_cb(s, -4095 /* UV_EOF */, &buf);
-                        } else {
-                            /* read() returned an error. */
-                            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                                /* Transient — re-arm poll. */
-                                if (buf.base) {
-                                    pool_put_read_buf(NULL, buf.base, buf.len);
-                                }
-                                if (s->reading && s->fd >= 0 &&
-                                    (s->flags & CSILK_IO_HANDLE_ACTIVE) &&
-                                    !(s->flags & CSILK_IO_HANDLE_CLOSING)) {
-                                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-                                    if (sqe) {
-                                        io_uring_prep_poll_add(
-                                            sqe, s->fd, POLLIN | POLLHUP | POLLERR);
-                                        io_uring_sqe_set_data64(
-                                            sqe,
-                                            uring_encode_handle_data(URING_OP_POLL_READ,
-                                                                     (csilk_io_handle_t*)s));
-                                        io_uring_submit(ring);
-                                    }
-                                }
-                            } else {
-                                /* Fatal error — map connection errors to EOF. */
-                                int err = errno;
-                                if (err == ECONNRESET || err == EPIPE || err == ETIMEDOUT) {
-                                    err = 0; /* treat as EOF */
-                                }
-                                s->reading = 0;
-                                s->flags &= ~CSILK_IO_HANDLE_ACTIVE;
-                                if (loop->active_handles > 0) {
-                                    loop->active_handles--;
-                                }
-                                if (err == 0) {
-                                    s->read_cb(s, -4095 /* UV_EOF */, &buf);
-                                } else {
-                                    s->read_cb(s, -err, &buf);
-                                }
+                                s->read_cb(s, -err, &buf);
                             }
                         }
                     }
