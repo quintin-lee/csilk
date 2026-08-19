@@ -14,6 +14,7 @@
  * @copyright MIT License
  */
 
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,81 @@
 #else
 #define CSILK_NO_SANITIZE_ADDR
 #endif
+
+/* ---------------------------------------------------------------------------
+ * Thread-Safe CPU Feature Detection & Caching
+ * -------------------------------------------------------------------------*/
+
+enum {
+    CSILK_CPU_FEAT_INIT = 1U << 0,
+    CSILK_CPU_FEAT_AVX2 = 1U << 1,
+    CSILK_CPU_FEAT_AVX512 = 1U << 2,
+    CSILK_CPU_FEAT_NEON = 1U << 3
+};
+
+static _Atomic(uint32_t) g_csilk_cpu_features = 0;
+
+static inline uint32_t
+csilk_cpu_features_get(void)
+{
+    uint32_t feats = atomic_load_explicit(&g_csilk_cpu_features, memory_order_relaxed);
+    if (__builtin_expect(!(feats & CSILK_CPU_FEAT_INIT), 0)) {
+        uint32_t detected = CSILK_CPU_FEAT_INIT;
+#if defined(CSILK_HAS_AVX512)
+        if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+            detected |= CSILK_CPU_FEAT_AVX512;
+        }
+#endif
+#if defined(__x86_64__)
+        if (__builtin_cpu_supports("avx2")) {
+            detected |= CSILK_CPU_FEAT_AVX2;
+        }
+#elif defined(__ARM_NEON)
+        detected |= CSILK_CPU_FEAT_NEON;
+#endif
+        atomic_store_explicit(&g_csilk_cpu_features, detected, memory_order_relaxed);
+        feats = detected;
+    }
+    return feats;
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+csilk_simd_init_constructor(void)
+{
+    (void)csilk_cpu_features_get();
+}
+#endif
+
+static inline int
+csilk_has_avx512(void)
+{
+#if defined(CSILK_HAS_AVX512)
+    return (csilk_cpu_features_get() & CSILK_CPU_FEAT_AVX512) != 0;
+#else
+    return 0;
+#endif
+}
+
+static inline int
+csilk_has_avx2(void)
+{
+#if defined(__x86_64__)
+    return (csilk_cpu_features_get() & CSILK_CPU_FEAT_AVX2) != 0;
+#else
+    return 0;
+#endif
+}
+
+static inline int
+csilk_has_neon(void)
+{
+#if defined(__ARM_NEON)
+    return 1;
+#else
+    return 0;
+#endif
+}
 
 /* ---------------------------------------------------------------------------
  * get_next_segment — SIMD-accelerated variants
@@ -213,16 +289,18 @@ const char*
 get_next_segment(const char** p, size_t* len)
 {
 #if defined(CSILK_HAS_AVX512)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+    if (csilk_has_avx512()) {
         return get_next_segment_avx512(p, len);
     }
 #endif
 #if defined(__x86_64__)
-    if (__builtin_cpu_supports("avx2")) {
+    if (csilk_has_avx2()) {
         return get_next_segment_avx2(p, len);
     }
 #elif defined(__ARM_NEON)
-    return get_next_segment_neon(p, len);
+    if (csilk_has_neon()) {
+        return get_next_segment_neon(p, len);
+    }
 #endif
 
     if (!*p || **p == '\0') {
@@ -344,24 +422,16 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
     }
 
 #if defined(CSILK_HAS_AVX512)
-    static int has_avx512 = -1;
-    if (has_avx512 < 0) {
-        has_avx512 = __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw");
-    }
-    if (n >= 64 && has_avx512) {
+    if (n >= 64 && csilk_has_avx512()) {
         return csilk_memcmp_avx512(s1, s2, n);
     }
 #endif
 #if defined(__x86_64__)
-    static int has_avx2 = -1;
-    if (has_avx2 < 0) {
-        has_avx2 = __builtin_cpu_supports("avx2");
-    }
-    if (n >= 32 && has_avx2) {
+    if (n >= 32 && csilk_has_avx2()) {
         return csilk_memcmp_avx2(s1, s2, n);
     }
 #elif defined(__ARM_NEON)
-    if (n >= 16) {
+    if (n >= 16 && csilk_has_neon()) {
         return csilk_memcmp_neon(s1, s2, n);
     }
 #endif
@@ -475,7 +545,7 @@ csilk_simd_find_char(const char* s, size_t len, char target)
     const char* end = s + len;
 
 #if defined(CSILK_HAS_AVX512)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
+    if (csilk_has_avx512()) {
         const char* res = csilk_simd_find_char_avx512(curr, end, target);
         if (res < end && *res == target) {
             return res;
@@ -485,7 +555,7 @@ csilk_simd_find_char(const char* s, size_t len, char target)
 #endif
 
 #if defined(__x86_64__)
-    if (__builtin_cpu_supports("avx2")) {
+    if (csilk_has_avx2()) {
         const char* res = csilk_simd_find_char_avx2(curr, end, target);
         if (res < end && *res == target) {
             return res;
@@ -493,20 +563,22 @@ csilk_simd_find_char(const char* s, size_t len, char target)
         curr = res;
     }
 #elif defined(__ARM_NEON)
-    uint8x16_t target_vec = vdupq_n_u8((uint8_t)target);
-    while (curr + 16 <= end) {
-        uint8x16_t data = vld1q_u8((const uint8_t*)curr);
-        uint8x16_t cmp = vceqq_u8(data, target_vec);
-        uint64_t   mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
-        uint64_t   mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
-        if (mask_low != 0) {
-            int idx = __builtin_ctzll(mask_low) / 8;
-            return curr + idx;
-        } else if (mask_high != 0) {
-            int idx = __builtin_ctzll(mask_high) / 8;
-            return curr + 8 + idx;
+    if (csilk_has_neon()) {
+        uint8x16_t target_vec = vdupq_n_u8((uint8_t)target);
+        while (curr + 16 <= end) {
+            uint8x16_t data = vld1q_u8((const uint8_t*)curr);
+            uint8x16_t cmp = vceqq_u8(data, target_vec);
+            uint64_t   mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
+            uint64_t   mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
+            if (mask_low != 0) {
+                int idx = __builtin_ctzll(mask_low) / 8;
+                return curr + idx;
+            } else if (mask_high != 0) {
+                int idx = __builtin_ctzll(mask_high) / 8;
+                return curr + 8 + idx;
+            }
+            curr += 16;
         }
-        curr += 16;
     }
 #endif
 
@@ -540,7 +612,7 @@ csilk_common_prefix_len_fast(const char* s1, const char* s2, size_t max_len)
     size_t i = 0;
 
 #if defined(__x86_64__)
-    if (__builtin_cpu_supports("avx2")) {
+    if (csilk_has_avx2()) {
         while (i + 32 <= max_len) {
             __m256i v1 = _mm256_loadu_si256((const __m256i*)(const void*)(s1 + i));
             __m256i v2 = _mm256_loadu_si256((const __m256i*)(const void*)(s2 + i));
