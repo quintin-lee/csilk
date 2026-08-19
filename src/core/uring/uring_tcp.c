@@ -25,12 +25,13 @@ csilk_io_tcp_init(csilk_io_loop_t* loop, csilk_io_tcp_t* handle)
     if (!handle) {
         return -1;
     }
-    uint8_t gen = handle->generation ? (uint8_t)(handle->generation + 1) : 1;
+    uint64_t gen = handle->generation ? handle->generation + 1 : 1;
     memset(handle, 0, sizeof(*handle));
     handle->loop = loop;
     handle->fd = -1;
     handle->type = CSILK_IO_HANDLE_TCP;
     handle->generation = gen ? gen : 1;
+
     return 0;
 }
 

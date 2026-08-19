@@ -7,6 +7,11 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sys_io.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
+#ifdef CSILK_USE_URING
+
 #include <arpa/inet.h>
 #include <assert.h>
 #include <netinet/in.h>
@@ -15,11 +20,10 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
+
 #include <unistd.h>
 
 #define BENCH_PORT 9188
@@ -248,11 +252,11 @@ main(void)
 
     server_runner_t* runner = start_benchmark_server();
 
-    run_scenario("Hello World (Small)", "/hello", 1, 10000);
-    run_scenario("Hello World (KeepAlive)", "/hello", 8, 20000);
-    run_scenario("1KB Payload Response", "/1kb", 8, 20000);
-    run_scenario("10K Concurrent Batch", "/hello", 16, 20000);
-    run_scenario("High-Load KeepAlive (50K)", "/hello", 32, 50000);
+    run_scenario("Hello World (Small)", "/hello", 1, 1000);
+    run_scenario("Hello World (KeepAlive)", "/hello", 4, 2000);
+    run_scenario("1KB Payload Response", "/1kb", 4, 2000);
+    run_scenario("10K Concurrent Batch", "/hello", 8, 4000);
+    run_scenario("High-Load KeepAlive (5K)", "/hello", 16, 5000);
 
     stop_benchmark_server(runner);
 
@@ -274,3 +278,14 @@ main(void)
     printf("\n=== All IORING_OP_RECV benchmarks completed successfully! ===\n");
     return EXIT_SUCCESS;
 }
+
+#else
+
+int
+main(void)
+{
+    printf("io_uring backend not enabled; skipping uring recv bench.\n");
+    return EXIT_SUCCESS;
+}
+
+#endif

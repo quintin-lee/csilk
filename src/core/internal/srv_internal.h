@@ -204,9 +204,10 @@ struct csilk_server_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-    uint8_t            generation;
+    uint64_t           generation;
     csilk_conn_state_t state;        /**< Connection lifecycle state machine. */
-    csilk_io_tcp_t     handle;       /**< I/O stream handle (libuv or io_uring). */
+
+    csilk_io_tcp_t handle;           /**< I/O stream handle (libuv or io_uring). */
 
     csilk_io_timer_t timer;          /**< Connection idle (keep-alive) timer. */
     csilk_io_timer_t read_timer;     /**< Read timeout timer. */

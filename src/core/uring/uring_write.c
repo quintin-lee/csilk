@@ -78,8 +78,9 @@ csilk_io_write(csilk_io_write_t*    req,
 }
 
 void
-csilk_uv_on_write_done(void* arg, ssize_t res, uint8_t gen)
+csilk_uv_on_write_done(void* arg, ssize_t res, uint64_t gen)
 {
+
     void** ctx = (void**)arg;
     if (!ctx) {
         return;

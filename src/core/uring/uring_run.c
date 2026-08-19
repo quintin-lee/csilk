@@ -45,7 +45,7 @@ extern void pool_put_read_buf(worker_pool_t* wp, char* buf, size_t len);
  *  was bumped (handle reused).  Returns 1 if the completion should be
  *  dropped, 0 if it is still valid. */
 static int
-is_stale_poll(csilk_io_handle_t* handle, uint8_t gen)
+is_stale_poll(csilk_io_handle_t* handle, uint64_t gen)
 {
     if (!handle || handle->fd < 0) {
         return 1;
@@ -68,7 +68,7 @@ is_stale_poll(csilk_io_handle_t* handle, uint8_t gen)
  *  closed, is closing, or its generation no longer matches the one
  *  encoded in the CQE user_data. */
 static int
-is_stale_timer(csilk_io_timer_t* tmr, uint8_t gen)
+is_stale_timer(csilk_io_timer_t* tmr, uint64_t gen)
 {
     if (!tmr) {
         return 1;
@@ -148,11 +148,18 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
             cq_count++;
             total++;
 
-            int             res = cqe->res;
-            uint8_t         gen = 0;
-            void*           ptr = NULL;
-            uring_op_type_t op = URING_OP_NONE;
-            uring_decode_data(cqe->user_data, &op, &ptr, &gen);
+            int                 res = cqe->res;
+            uint64_t            gen = 0;
+            void*               ptr = NULL;
+            uring_op_type_t     op = URING_OP_NONE;
+            uring_op_context_t* op_ctx = (uring_op_context_t*)(uintptr_t)cqe->user_data;
+
+            if (op_ctx) {
+                op = (uring_op_type_t)op_ctx->type;
+                ptr = op_ctx->data ? op_ctx->data : op_ctx->owner;
+                gen = op_ctx->generation;
+                uring_op_free(loop, op_ctx);
+            }
 
             /* ----------------------------------------------------------------
              * URING_OP_POLL_LISTEN

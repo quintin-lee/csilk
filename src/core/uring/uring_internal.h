@@ -50,32 +50,23 @@ typedef struct {
     char            data[]; /* flexible array member — single allocation */
 } uring_write_req_t;
 
-typedef struct {
-    uring_op_type_t op;
-    void*           ptr; // pointer to client or server
-} uring_sqe_data_t;
+typedef struct uring_op_context_s uring_op_context_t;
 
-// Helper to encode type and ptr into __u64
 /**
- * @brief Encode an operation type, client pointer, and generation into user_data.
- * @param[in] op      io_uring opcode (stored in the top 8 bits).
- * @param[in] client  Client owning the op, or NULL; its generation occupies bits 48-55.
- * @param[in] ptr     Opaque pointer (client/server) stored in the low 48 bits.
- * @return Packed 64-bit value suitable for io_uring_sqe_set_data64.
- * @note The pointer is masked to 48 bits; only the low 48 bits of ptr are kept.
+ * @brief Operation context object representing a unique in-flight io_uring SQE.
+ *
+ * Fully eliminates the 48-bit virtual address assumption and expands the generation
+ * counter from 8-bit to a 64-bit monotonically incrementing counter (preventing ABA).
+ * CQE dispatch resolves the context directly in O(1) time without hash table lookup.
  */
-static inline __u64
-uring_encode_data(uring_op_type_t op, csilk_client_t* client, void* ptr)
-{
-    uint64_t val = (uint64_t)ptr;
-    val &= 0x0000FFFFFFFFFFFFULL;
-    val |= ((uint64_t)op) << 56;
-    if (client) {
-        uint64_t gen = client->generation;
-        val |= (gen << 48);
-    }
-    return val;
-}
+struct uring_op_context_s {
+    uint64_t generation; /**< 64-bit generation at submission time. */
+    uint16_t type;       /**< uring_op_type_t operation opcode. */
+    uint16_t flags;      /**< Operation flags or auxiliary state. */
+    uint32_t slot_idx;   /**< Pool slot index for O(1) recycling. */
+    void*    owner;      /**< Full 64-bit pointer to owner handle/client. */
+    void*    data;       /**< Optional ancillary payload pointer. */
+};
 
 /* When the Submission Queue is full, submit pending entries to the kernel
  * to free SQE slots. Returns NULL only on ring-level failure. */
@@ -98,52 +89,139 @@ uring_get_sqe_or_submit(struct io_uring* ring)
     return sqe;
 }
 
-/** @brief Encode timer data with generation tracking for stale-CQE detection. */
-static inline __u64
-uring_encode_timer_data(uring_op_type_t op, csilk_io_timer_t* tmr)
+/**
+ * @brief Allocate a fast, cache-friendly operation context from the loop's pool.
+ */
+static inline uring_op_context_t*
+uring_op_alloc(csilk_io_loop_t* loop)
 {
-    uint64_t val = (uint64_t)(void*)tmr;
-    val &= 0x0000FFFFFFFFFFFFULL;
-    val |= ((uint64_t)op) << 56;
-    if (tmr) {
-        val |= ((uint64_t)tmr->generation) << 48;
+    if (!loop) {
+        loop = csilk_io_default_loop();
+        if (!loop) {
+            return NULL;
+        }
     }
-    return val;
-}
-
-/** @brief Encode generic handle data with generation tracking for stale-CQE detection. */
-static inline __u64
-uring_encode_handle_data(uring_op_type_t op, csilk_io_handle_t* handle)
-{
-    uint64_t val = (uint64_t)(uintptr_t)handle;
-    val &= 0x0000FFFFFFFFFFFFULL;
-    val |= ((uint64_t)op) << 56;
-    if (handle) {
-        uint64_t gen = handle->generation;
-        val |= (gen << 48);
+    if (loop->op_free_head == 0 || !loop->op_free_stack || !loop->op_pool) {
+        uring_op_context_t* ctx = calloc(1, sizeof(uring_op_context_t));
+        if (ctx) {
+            ctx->slot_idx = UINT32_MAX;
+        }
+        return ctx;
     }
-    return val;
+    uint32_t            idx = loop->op_free_stack[--loop->op_free_head];
+    uring_op_context_t* ctx = &loop->op_pool[idx];
+    ctx->slot_idx = idx;
+    return ctx;
 }
 
 /**
- * @brief Decode packed operation data into its components.
- * @param[in]  val  Packed 64-bit user_data produced by uring_encode_data or
- *                  uring_encode_timer_data.
- * @param[out] op   Receives the operation type (top 8 bits).
- * @param[out] ptr  Receives the low-48-bit opaque pointer.
- * @param[out] gen  Receives the 8-bit generation, or NULL to ignore it.
+ * @brief Recycle an operation context back into the loop's pool in O(1).
  */
 static inline void
-uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint8_t* gen)
+uring_op_free(csilk_io_loop_t* loop, uring_op_context_t* ctx)
 {
-    *op = (uring_op_type_t)(val >> 56);
-    *ptr = (void*)(val & 0x0000FFFFFFFFFFFFULL);
-    if (gen) {
-        *gen = (uint8_t)((val >> 48) & 0xFF);
+    if (!ctx) {
+        return;
+    }
+    if (ctx->slot_idx == UINT32_MAX) {
+        free(ctx);
+        return;
+    }
+    if (!loop) {
+        loop = csilk_io_default_loop();
+        if (!loop) {
+            return;
+        }
+    }
+    if (loop->op_free_head < loop->op_pool_capacity && loop->op_free_stack) {
+        loop->op_free_stack[loop->op_free_head++] = ctx->slot_idx;
     }
 }
 
-void csilk_uv_on_write_done(void* arg, ssize_t res, uint8_t gen);
+/**
+ * @brief Encode an operation type, client pointer, and generation into user_data.
+ */
+static inline __u64
+uring_encode_data(uring_op_type_t op, csilk_client_t* client, void* ptr)
+{
+    csilk_io_loop_t*    loop = client && client->owner_pool ? client->owner_pool->loop_ptr : NULL;
+    uring_op_context_t* ctx = uring_op_alloc(loop);
+    if (!ctx) {
+        return 0;
+    }
+    ctx->generation = client ? client->generation : 0;
+    ctx->type = (uint16_t)op;
+    ctx->flags = 0;
+    ctx->owner = client ? (void*)client : ptr;
+    ctx->data = ptr;
+    return (uint64_t)(uintptr_t)ctx;
+}
+
+/** @brief Encode timer data with 64-bit generation tracking for stale-CQE detection. */
+static inline __u64
+uring_encode_timer_data(uring_op_type_t op, csilk_io_timer_t* tmr)
+{
+    csilk_io_loop_t*    loop = tmr ? tmr->loop : NULL;
+    uring_op_context_t* ctx = uring_op_alloc(loop);
+    if (!ctx) {
+        return 0;
+    }
+    ctx->generation = tmr ? tmr->generation : 0;
+    ctx->type = (uint16_t)op;
+    ctx->flags = 0;
+    ctx->owner = tmr;
+    ctx->data = NULL;
+    return (uint64_t)(uintptr_t)ctx;
+}
+
+/** @brief Encode generic handle data with 64-bit generation tracking for stale-CQE detection. */
+static inline __u64
+uring_encode_handle_data(uring_op_type_t op, csilk_io_handle_t* handle)
+{
+    csilk_io_loop_t*    loop = handle ? handle->loop : NULL;
+    uring_op_context_t* ctx = uring_op_alloc(loop);
+    if (!ctx) {
+        return 0;
+    }
+    ctx->generation = handle ? handle->generation : 0;
+    ctx->type = (uint16_t)op;
+    ctx->flags = 0;
+    ctx->owner = handle;
+    ctx->data = NULL;
+    return (uint64_t)(uintptr_t)ctx;
+}
+
+/**
+ * @brief Decode packed user_data directly via operation context pointer.
+ */
+static inline void
+uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint64_t* gen)
+{
+    uring_op_context_t* ctx = (uring_op_context_t*)(uintptr_t)val;
+    if (ctx) {
+        if (op) {
+            *op = (uring_op_type_t)ctx->type;
+        }
+        if (ptr) {
+            *ptr = ctx->data ? ctx->data : ctx->owner;
+        }
+        if (gen) {
+            *gen = ctx->generation;
+        }
+    } else {
+        if (op) {
+            *op = URING_OP_NONE;
+        }
+        if (ptr) {
+            *ptr = NULL;
+        }
+        if (gen) {
+            *gen = 0;
+        }
+    }
+}
+
+void csilk_uv_on_write_done(void* arg, ssize_t res, uint64_t gen);
 
 /* Thread-local default loop state (defined in uring_loop.c) */
 extern csilk_io_loop_t  g_default_loop;
