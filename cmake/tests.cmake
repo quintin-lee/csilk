@@ -77,6 +77,7 @@ set(CSILK_CORE_TESTS
     test_router_bench
     test_router_ordering
     test_router_iterative_bench
+    test_router_simd_fuzz_bench
     test_codec_prop
 
     test_hash_prop
@@ -102,8 +103,9 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
+
 
 
 
