@@ -66,6 +66,7 @@ set(CSILK_CORE_TESTS
     test_url_ext
     test_utils
     test_utils_ext
+    test_zerocopy_lifecycle
     test_codec_prop
     test_hash_prop
     test_simd_router_arena
@@ -90,7 +91,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core
 )
 
 # -- Application tests --

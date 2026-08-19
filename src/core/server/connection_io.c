@@ -278,17 +278,25 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
             /* Register the receive buffer so it stays alive for zero-copy header/body views.
              * Use pooled registration when the buffer comes from the worker-local pool
              * (buf->len > 0 indicates a tier-backed buffer). */
-            if (_csilk_ctx_register_pooled_read_buffer(&client->ctx, base, buf->len) == 0) {
-                is_registered = 1;
-            } else {
+            if (_csilk_ctx_register_pooled_read_buffer(&client->ctx, base, buf->len) != 0) {
                 CSILK_LOG_E("Connection: failed to register read buffer, out of memory");
+                if (base) {
+                    extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
+                    pool_put_read_buf(client->owner_pool, base, buf->len);
+                }
+                if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+                    extern void on_close(csilk_io_handle_t * handle);
+                    csilk_io_close((csilk_io_handle_t*)stream, on_close);
+                }
+                return;
             }
+            is_registered = 1;
 
             enum llhttp_errno err = llhttp_execute(&client->parser, base, nread);
             if (err == HPE_CLOSED_CONNECTION) {
                 llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
                 client->parser.data = client;
-            } else if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
+            } else if (err != HPE_OK && err != HPE_PAUSED && err != HPE_PAUSED_UPGRADE) {
                 CSILK_LOG_E("Connection: HTTP parse error: %s %s",
                             llhttp_errno_name(err),
                             client->parser.reason ? client->parser.reason : "unknown reason");

@@ -133,12 +133,6 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
         CSILK_LOG_W("Total header size limit exceeded on header field");
         return HPE_USER;
     }
-    client->header_count++;
-    if (client->server->config.max_headers_count > 0 &&
-        client->header_count > client->server->config.max_headers_count) {
-        CSILK_LOG_W("Total header count limit exceeded (%zu)", client->header_count);
-        return HPE_USER;
-    }
 
     /* If we have a complete field+value pair from a previous header,
      * persist it into the request header map before starting a new one. */
@@ -149,46 +143,38 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
         client->current_header_field.len = 0;
         client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
+    }
+
+    if (client->current_header_field.data &&
+        at == client->current_header_field.data + client->current_header_field.len) {
+        /* Contiguous field continuation */
+        client->current_header_field.len += length;
     } else if (client->current_header_field.data) {
-        /* Previous field had no value — discard it. */
-        client->current_header_field.data = NULL;
-        client->current_header_field.len = 0;
-    }
-
-    client->current_header_field.data = at;
-    client->current_header_field.len = length;
-    return 0;
-}
-
-/** @brief Grow a heap-allocated buffer to at least @p needed bytes.
- *
- * Uses realloc with capacity doubling for amortized O(1) growth. If @p buf
- * is NULL and *@p cap is 0, this acts as a malloc. On realloc failure the
- * original buffer is NOT freed (caller must free it).
- *
- * @param buf    Existing allocation (may be NULL).
- * @param cap    [in,out] Current capacity — updated on success.
- * @param needed Minimum required size in bytes.
- * @return Pointer to the resized buffer, or NULL on allocation failure. */
-static char*
-buf_grow(char* buf, size_t* cap, size_t needed)
-{
-    if (needed <= *cap) {
-        return buf;
-    }
-    size_t new_cap = *cap ? *cap : 32;
-    while (new_cap < needed) {
-        if (new_cap > SIZE_MAX / 2) {
-            return NULL;
+        /* Non-contiguous split header field across buffers: concatenate in arena */
+        char* new_field =
+            csilk_arena_alloc(client->ctx.arena, client->current_header_field.len + length + 1);
+        if (!new_field) {
+            client->current_header_field.data = NULL;
+            client->current_header_field.len = 0;
+            return HPE_USER;
         }
-        new_cap *= 2;
+        memcpy(new_field, client->current_header_field.data, client->current_header_field.len);
+        memcpy(new_field + client->current_header_field.len, at, length);
+        new_field[client->current_header_field.len + length] = '\0';
+        client->current_header_field.data = new_field;
+        client->current_header_field.len += length;
+    } else {
+        /* First chunk of a new header field */
+        client->header_count++;
+        if (client->server->config.max_headers_count > 0 &&
+            client->header_count > client->server->config.max_headers_count) {
+            CSILK_LOG_W("Total header count limit exceeded (%zu)", client->header_count);
+            return HPE_USER;
+        }
+        client->current_header_field.data = at;
+        client->current_header_field.len = length;
     }
-    char* new_buf = realloc(buf, new_cap);
-    if (!new_buf) {
-        return NULL;
-    }
-    *cap = new_cap;
-    return new_buf;
+    return 0;
 }
 
 /** @brief llhttp callback: header value data received.
@@ -216,11 +202,23 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
         return HPE_USER;
     }
 
-    /* llhttp guarantees that header values arrives contiguously, so
-     * we can simply update the reference end point. */
     if (client->current_header_value.data &&
         at == client->current_header_value.data + client->current_header_value.len) {
-        /* Value continues — extend the reference. */
+        /* Contiguous value continuation */
+        client->current_header_value.len += length;
+    } else if (client->current_header_value.data) {
+        /* Non-contiguous split header value across buffers: concatenate in arena */
+        char* new_val =
+            csilk_arena_alloc(client->ctx.arena, client->current_header_value.len + length + 1);
+        if (!new_val) {
+            client->current_header_value.data = NULL;
+            client->current_header_value.len = 0;
+            return HPE_USER;
+        }
+        memcpy(new_val, client->current_header_value.data, client->current_header_value.len);
+        memcpy(new_val + client->current_header_value.len, at, length);
+        new_val[client->current_header_value.len + length] = '\0';
+        client->current_header_value.data = new_val;
         client->current_header_value.len += length;
     } else {
         /* First chunk of this value. */
@@ -457,6 +455,7 @@ on_message_complete(llhttp_t* p)
     csilk_client_t* client = (csilk_client_t*)p->data;
 
     finalize_request(client, p);
+    llhttp_pause(p);
     _csilk_dispatch_request(&client->ctx);
 
     return 0;
