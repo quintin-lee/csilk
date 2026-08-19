@@ -5,6 +5,7 @@
 
 #include <openssl/ssl.h>
 #include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 #include "../http/h2.h"
 
 /* --- Buffer allocation --- */
@@ -57,7 +58,7 @@ pool_get(worker_pool_t* wp)
         if (gen == 0) {
             gen = 1;
         }
-        client->state = CSILK_CONN_INIT;
+        csilk_conn_set_state(client, CSILK_CONN_INIT);
         client->generation = gen;
 #ifdef CSILK_USE_URING
         client->handle.generation = gen;
@@ -102,7 +103,7 @@ reset_hot_state(csilk_client_t* client)
     csilk_h2_free_streams(client);
 
     /* Connection lifecycle and parser flags */
-    client->state = CSILK_CONN_INIT;
+    csilk_conn_set_state(client, CSILK_CONN_INIT);
     client->close_pending = 0;
     client->async_ref = 0;
     client->read_paused = 0;
