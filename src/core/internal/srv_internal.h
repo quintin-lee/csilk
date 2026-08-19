@@ -133,8 +133,7 @@ typedef struct csilk_rcu_slot_s {
     _Atomic(uint64_t)  active_epoch;  /**< 0 = inactive, >0 = epoch when entered */
     _Atomic(uintptr_t) owner_tid;     /**< Owner thread ID */
     _Atomic(uint32_t)  nesting_depth; /**< Reentrant depth */
-    char               _pad[64 - sizeof(_Atomic(uint64_t)) - sizeof(_Atomic(uintptr_t)) -
-                            sizeof(_Atomic(uint32_t))];
+    char               _pad[44];      /**< Pad to 64-byte cache line (64 - 8 - 8 - 4) */
 } csilk_rcu_slot_t;
 
 /**
