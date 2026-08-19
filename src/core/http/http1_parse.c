@@ -58,6 +58,11 @@ on_message_begin(llhttp_t* p)
     csilk_client_t* client = (csilk_client_t*)p->data;
     client->total_header_size = 0;
     client->header_count = 0;
+    client->header_field_completed = 0;
+    client->current_header_field.data = NULL;
+    client->current_header_field.len = 0;
+    client->current_header_value.data = NULL;
+    client->current_header_value.len = 0;
 
     if (client->server->config.request_timeout_ms > 0) {
         csilk_io_timer_stop(&client->request_timer);
@@ -134,35 +139,41 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
         return HPE_USER;
     }
 
-    /* If we have a complete field+value pair from a previous header,
-     * persist it into the request header map before starting a new one. */
-    if (client->current_header_field.data && client->current_header_value.data) {
-        _csilk_persist_header(
-            &client->ctx, &client->current_header_field, &client->current_header_value);
-        client->current_header_field.data = NULL;
-        client->current_header_field.len = 0;
-        client->current_header_value.data = NULL;
-        client->current_header_value.len = 0;
-    }
-
-    if (client->current_header_field.data &&
-        at == client->current_header_field.data + client->current_header_field.len) {
-        /* Contiguous field continuation */
-        client->current_header_field.len += length;
-    } else if (client->current_header_field.data) {
-        /* Non-contiguous split header field across buffers: concatenate in arena */
-        char* new_field =
-            csilk_arena_alloc(client->ctx.arena, client->current_header_field.len + length + 1);
-        if (!new_field) {
+    if (client->header_field_completed) {
+        /* Previous field completed (e.g. empty value header without on_header_value) */
+        if (client->current_header_field.data) {
+            static const csilk_str_view_t empty_val = {.data = "", .len = 0};
+            const csilk_str_view_t*       val =
+                client->current_header_value.data ? &client->current_header_value : &empty_val;
+            _csilk_persist_header(&client->ctx, &client->current_header_field, val);
             client->current_header_field.data = NULL;
             client->current_header_field.len = 0;
-            return HPE_USER;
+            client->current_header_value.data = NULL;
+            client->current_header_value.len = 0;
         }
-        memcpy(new_field, client->current_header_field.data, client->current_header_field.len);
-        memcpy(new_field + client->current_header_field.len, at, length);
-        new_field[client->current_header_field.len + length] = '\0';
-        client->current_header_field.data = new_field;
-        client->current_header_field.len += length;
+        client->header_field_completed = 0;
+    }
+
+    if (client->current_header_field.data) {
+        /* Contiguous or split chunk continuation of the header field */
+        if (at == client->current_header_field.data + client->current_header_field.len) {
+            /* Contiguous chunk: zero-copy pointer+length extension (0 mallocs, 0 arena allocs) */
+            client->current_header_field.len += length;
+        } else {
+            /* Non-contiguous chunk across buffers: concatenate in arena */
+            char* new_field =
+                csilk_arena_alloc(client->ctx.arena, client->current_header_field.len + length + 1);
+            if (!new_field) {
+                client->current_header_field.data = NULL;
+                client->current_header_field.len = 0;
+                return HPE_USER;
+            }
+            memcpy(new_field, client->current_header_field.data, client->current_header_field.len);
+            memcpy(new_field + client->current_header_field.len, at, length);
+            new_field[client->current_header_field.len + length] = '\0';
+            client->current_header_field.data = new_field;
+            client->current_header_field.len += length;
+        }
     } else {
         /* First chunk of a new header field */
         client->header_count++;
@@ -173,7 +184,18 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
         }
         client->current_header_field.data = at;
         client->current_header_field.len = length;
+        client->current_header_value.data = NULL;
+        client->current_header_value.len = 0;
     }
+    return 0;
+}
+
+/** @brief llhttp callback: header field name parsing completed (hit colon). */
+int
+on_header_field_complete(llhttp_t* p)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    client->header_field_completed = 1;
     return 0;
 }
 
@@ -202,28 +224,54 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
         return HPE_USER;
     }
 
-    if (client->current_header_value.data &&
-        at == client->current_header_value.data + client->current_header_value.len) {
-        /* Contiguous value continuation */
-        client->current_header_value.len += length;
-    } else if (client->current_header_value.data) {
-        /* Non-contiguous split header value across buffers: concatenate in arena */
-        char* new_val =
-            csilk_arena_alloc(client->ctx.arena, client->current_header_value.len + length + 1);
-        if (!new_val) {
-            client->current_header_value.data = NULL;
-            client->current_header_value.len = 0;
-            return HPE_USER;
+    if (client->current_header_value.data) {
+        /* Contiguous or split chunk continuation of the header value */
+        if (at == client->current_header_value.data + client->current_header_value.len) {
+            /* Contiguous chunk: zero-copy pointer+length extension (0 mallocs, 0 arena allocs) */
+            client->current_header_value.len += length;
+        } else {
+            /* Non-contiguous chunk across buffers: concatenate in arena */
+            char* new_val =
+                csilk_arena_alloc(client->ctx.arena, client->current_header_value.len + length + 1);
+            if (!new_val) {
+                client->current_header_value.data = NULL;
+                client->current_header_value.len = 0;
+                return HPE_USER;
+            }
+            memcpy(new_val, client->current_header_value.data, client->current_header_value.len);
+            memcpy(new_val + client->current_header_value.len, at, length);
+            new_val[client->current_header_value.len + length] = '\0';
+            client->current_header_value.data = new_val;
+            client->current_header_value.len += length;
         }
-        memcpy(new_val, client->current_header_value.data, client->current_header_value.len);
-        memcpy(new_val + client->current_header_value.len, at, length);
-        new_val[client->current_header_value.len + length] = '\0';
-        client->current_header_value.data = new_val;
-        client->current_header_value.len += length;
     } else {
         /* First chunk of this value. */
         client->current_header_value.data = at;
         client->current_header_value.len = length;
+    }
+    return 0;
+}
+
+/** @brief llhttp callback: a single header (field+value) is complete.
+ *
+ * Persists the field+value pair into the request header map and clears the views.
+ *
+ * @param p The llhttp parser instance.
+ * @return 0 (HPE_OK) to continue parsing. */
+int
+on_header_value_complete(llhttp_t* p)
+{
+    csilk_client_t* client = (csilk_client_t*)p->data;
+    client->header_field_completed = 0;
+    if (client->current_header_field.data) {
+        static const csilk_str_view_t empty_val = {.data = "", .len = 0};
+        const csilk_str_view_t*       val =
+            client->current_header_value.data ? &client->current_header_value : &empty_val;
+        _csilk_persist_header(&client->ctx, &client->current_header_field, val);
+        client->current_header_field.data = NULL;
+        client->current_header_field.len = 0;
+        client->current_header_value.data = NULL;
+        client->current_header_value.len = 0;
     }
     return 0;
 }
@@ -238,9 +286,12 @@ int
 on_headers_complete(llhttp_t* p)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
-    if (client->current_header_field.data && client->current_header_value.data) {
-        _csilk_persist_header(
-            &client->ctx, &client->current_header_field, &client->current_header_value);
+    client->header_field_completed = 0;
+    if (client->current_header_field.data) {
+        static const csilk_str_view_t empty_val = {.data = "", .len = 0};
+        const csilk_str_view_t*       val =
+            client->current_header_value.data ? &client->current_header_value : &empty_val;
+        _csilk_persist_header(&client->ctx, &client->current_header_field, val);
         client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
         client->current_header_value.data = NULL;
@@ -404,14 +455,17 @@ static void
 finalize_request(csilk_client_t* client, llhttp_t* p)
 {
     /* Persist any remaining header field+value pair into the request context. */
-    if (client->current_header_field.data && client->current_header_value.data) {
-        _csilk_persist_header(
-            &client->ctx, &client->current_header_field, &client->current_header_value);
+    if (client->current_header_field.data) {
+        static const csilk_str_view_t empty_val = {.data = "", .len = 0};
+        const csilk_str_view_t*       val =
+            client->current_header_value.data ? &client->current_header_value : &empty_val;
+        _csilk_persist_header(&client->ctx, &client->current_header_field, val);
         client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
         client->current_header_value.data = NULL;
         client->current_header_value.len = 0;
     }
+    client->header_field_completed = 0;
 
     /* Process the URL: copy to arena (for null-termination), then split. */
     if (client->current_url.data && client->current_url.len > 0) {

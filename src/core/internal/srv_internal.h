@@ -208,6 +208,7 @@ struct csilk_client_s {
     csilk_str_view_t current_url;          /**< Current URL (zero-copy ref to buf). */
     csilk_str_view_t current_header_field; /**< Current header field name. */
     csilk_str_view_t current_header_value; /**< Current header value. */
+    uint8_t header_field_completed;        /**< Whether current header field parsing is complete. */
     /**@}*/
 
     SSL*                   ssl;       /**< OpenSSL session object. */

@@ -186,7 +186,9 @@ test_single_chunk_body_borrowed_view(void)
     llhttp_settings_init(&settings);
     settings.on_url = on_url;
     settings.on_header_field = on_header_field;
+    settings.on_header_field_complete = on_header_field_complete;
     settings.on_header_value = on_header_value;
+    settings.on_header_value_complete = on_header_value_complete;
     settings.on_headers_complete = on_headers_complete;
     settings.on_body = on_body;
     settings.on_message_complete = test_on_message_complete;
@@ -261,7 +263,9 @@ test_multi_chunk_body_upgrade(void)
     llhttp_settings_init(&settings);
     settings.on_url = on_url;
     settings.on_header_field = on_header_field;
+    settings.on_header_field_complete = on_header_field_complete;
     settings.on_header_value = on_header_value;
+    settings.on_header_value_complete = on_header_value_complete;
     settings.on_headers_complete = on_headers_complete;
     settings.on_body = on_body;
     settings.on_message_complete = test_on_message_complete;
@@ -432,7 +436,9 @@ test_keepalive_multi_cycle_isolation(void)
     llhttp_settings_init(&settings);
     settings.on_url = on_url;
     settings.on_header_field = on_header_field;
+    settings.on_header_field_complete = on_header_field_complete;
     settings.on_header_value = on_header_value;
+    settings.on_header_value_complete = on_header_value_complete;
     settings.on_headers_complete = on_headers_complete;
     settings.on_body = on_body;
     settings.on_message_complete = test_on_message_complete;
@@ -516,7 +522,9 @@ test_chunk_boundary_random_fuzzing(void)
     llhttp_settings_init(&settings);
     settings.on_url = on_url;
     settings.on_header_field = on_header_field;
+    settings.on_header_field_complete = on_header_field_complete;
     settings.on_header_value = on_header_value;
+    settings.on_header_value_complete = on_header_value_complete;
     settings.on_headers_complete = on_headers_complete;
     settings.on_body = on_body;
     settings.on_message_complete = test_on_message_complete;
