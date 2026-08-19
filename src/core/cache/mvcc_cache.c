@@ -38,8 +38,7 @@ typedef struct csilk_mvcc_reader_slot_s {
     _Atomic(uint64_t)  active_epoch;  /**< 0 = inactive, >0 = active epoch */
     _Atomic(uintptr_t) owner_tid;     /**< Owner pthread ID or token */
     _Atomic(uint32_t)  nesting_depth; /**< Reader nesting depth on same thread */
-    char               _pad[64 - sizeof(_Atomic(uint64_t)) - sizeof(_Atomic(uintptr_t)) -
-                            sizeof(_Atomic(uint32_t))];
+    char               _pad[44];      /**< Pad to 64-byte cache line (64 - 8 - 8 - 4) */
 } csilk_mvcc_reader_slot_t;
 
 /**
