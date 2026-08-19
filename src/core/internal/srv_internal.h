@@ -85,10 +85,11 @@ typedef struct csilk_client_s csilk_client_t;
 
 /** @brief Task node for cross-thread dispatching. */
 typedef struct csilk_dispatch_task_s {
-    csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
+    csilk_lfq_node_t                       lfq_node;  /**< Lock-free queue node (must be first). */
+    _Atomic(struct csilk_dispatch_task_s*) pool_next; /**< Lock-free task pool next pointer. */
     void (*cb)(void* arg);
     void*           arg;
-    csilk_client_t* client;    /**< Associated client connection for lifetime safety. */
+    csilk_client_t* client; /**< Associated client connection for lifetime safety. */
 } csilk_dispatch_task_t;
 
 /**
@@ -117,13 +118,10 @@ typedef struct CSILK_CACHE_ALIGNED {
     /**< Per-tier read buffer pool. */
     int read_buf_counts[CSILK_READ_BUF_TIER_COUNT];
     /**< Items in each tier's free list. */
-    csilk_io_async_t      dispatch_async; /**< Cross-thread task dispatch async handle. */
-    csilk_lfqueue_t       dispatch_queue; /**< Lock-free MPSC dispatch queue. */
-    csilk_dispatch_task_t dispatch_task_slab[CSILK_DISPATCH_TASK_SLAB_SIZE];
-    /**< Pre-allocated dispatch task slab. */
-    int             dispatch_task_slab_count; /**< Items in dispatch task free list. */
-    csilk_client_t* active_clients;           /**< Head of worker-local active connections list. */
-    void*           thread_pool;              /**< io_uring thread pool (NULL in libuv mode). */
+    csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
+    csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
+    csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
+    void*            thread_pool;    /**< io_uring thread pool (NULL in libuv mode). */
 } worker_pool_t;
 
 #define CSILK_RELOAD_MAX_READERS 256

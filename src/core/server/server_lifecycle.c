@@ -246,6 +246,7 @@ csilk_server_free(csilk_server_t* server)
     csilk_dev_hot_reload_stop(server);
     csilk_server_wait_grace_period(server);
     _csilk_reload_mgr_free(server);
+    _csilk_dispatch_pool_cleanup();
 
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
@@ -490,7 +491,6 @@ csilk_server_run(csilk_server_t* server, int port)
     server->worker_pools[0].loop_ptr = server->loop;
     _csilk_worker_init_arena_pool(&server->worker_pools[0]);
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
-    _csilk_worker_init_dispatch_task_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
     if (server->config.tcp_keepalive > 0) {
