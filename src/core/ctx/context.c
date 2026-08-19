@@ -202,6 +202,86 @@ csilk_body_realloc(
     return new_ptr;
 }
 
+/**
+ * @brief Release response body memory according to its unified ownership state.
+ *
+ * Safe and idempotent (can be called repeatedly without double-free).
+ * Resets body pointer to NULL, length to 0, capacity to 0, and ownership to CSILK_OWN_NONE.
+ */
+void
+csilk_response_body_release(csilk_ctx_t* c)
+{
+    if (!c) {
+        return;
+    }
+
+    switch (c->response.body_ownership) {
+    case CSILK_OWN_POOL:
+        if (c->response.body && c->response.body_capacity > 0) {
+            csilk_body_free((void*)c->response.body, c->response.body_capacity);
+        } else if (c->response.body) {
+            free((void*)c->response.body);
+        }
+        break;
+    case CSILK_OWN_HEAP:
+    case CSILK_OWN_TRANSFER:
+        if (c->response.body) {
+            free((void*)c->response.body);
+        }
+        break;
+    case CSILK_OWN_NONE:
+    case CSILK_OWN_BORROWED:
+    case CSILK_OWN_ARENA:
+    default:
+        /* No manual deallocation: borrowed view or arena-reclaimed memory */
+        break;
+    }
+
+    c->response.body = NULL;
+    c->response.body_len = 0;
+    c->response.body_capacity = 0;
+    c->response.body_ownership = CSILK_OWN_NONE;
+}
+
+/**
+ * @brief Release request body memory according to its unified ownership state.
+ *
+ * Safe and idempotent. Resets body pointer to NULL, length to 0, capacity to 0, and ownership to CSILK_OWN_NONE.
+ */
+void
+csilk_request_body_release(csilk_ctx_t* c)
+{
+    if (!c) {
+        return;
+    }
+
+    switch (c->request.body_ownership) {
+    case CSILK_OWN_POOL:
+        if (c->request.body && c->request.body_capacity > 0) {
+            csilk_body_free(c->request.body, c->request.body_capacity);
+        } else if (c->request.body) {
+            free(c->request.body);
+        }
+        break;
+    case CSILK_OWN_HEAP:
+    case CSILK_OWN_TRANSFER:
+        if (c->request.body) {
+            free(c->request.body);
+        }
+        break;
+    case CSILK_OWN_NONE:
+    case CSILK_OWN_BORROWED:
+    case CSILK_OWN_ARENA:
+    default:
+        break;
+    }
+
+    c->request.body = NULL;
+    c->request.body_len = 0;
+    c->request.body_capacity = 0;
+    c->request.body_ownership = CSILK_OWN_NONE;
+}
+
 /** @brief Allocate a response body buffer from the size-class pool and assign it to the context. */
 char*
 csilk_set_response_body_pooled(csilk_ctx_t* c, size_t size)
@@ -214,22 +294,11 @@ csilk_set_response_body_pooled(csilk_ctx_t* c, size_t size)
     if (!buf) {
         return NULL;
     }
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_OWNED ||
-         c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER ||
-         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
-        if (c->response.body_capacity > 0) {
-            csilk_body_free((void*)c->response.body, c->response.body_capacity);
-        } else {
-            free((void*)c->response.body);
-        }
-    }
+    csilk_response_body_release(c);
     c->response.body = buf;
     c->response.body_len = size;
     c->response.body_capacity = cap;
-    c->response.body_ownership = CSILK_OWN_HEAP;
-    c->response.body_is_managed = 1;
+    c->response.body_ownership = CSILK_OWN_POOL;
     return buf;
 }
 
@@ -290,43 +359,11 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->file_offset = 0;
     c->file_size = 0;
 
-    /* 4. Request body — freed only when this request owned it (heap/owned/transfer/pool
-     *    or H2-managed). Size-class cached buffers are returned to the TLS pool;
-     *    unmanaged or >1MB buffers are freed via free(). */
-    if (c->request.body &&
-        (c->request.body_ownership == CSILK_OWN_OWNED ||
-         c->request.body_ownership == CSILK_OWN_HEAP ||
-         c->request.body_ownership == CSILK_OWN_TRANSFER ||
-         c->request.body_ownership == CSILK_OWN_POOL || c->request.body_is_managed)) {
-        if (c->request.body_capacity > 0) {
-            csilk_body_free(c->request.body, c->request.body_capacity);
-        } else {
-            free(c->request.body);
-        }
-    }
-    c->request.body = NULL;
-    c->request.body_len = 0;
-    c->request.body_capacity = 0;
-    c->request.body_is_managed = 0;
-    c->request.body_ownership = CSILK_OWN_BORROWED;
+    /* 4. Request body — released via unified ownership state */
+    csilk_request_body_release(c);
 
-    /* 5. Response body — free only managed/heap/owned/transferred/pooled bodies. */
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_OWNED ||
-         c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER ||
-         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
-        if (c->response.body_capacity > 0) {
-            csilk_body_free((void*)c->response.body, c->response.body_capacity);
-        } else {
-            free((void*)c->response.body);
-        }
-    }
-    c->response.body = NULL;
-    c->response.body_len = 0;
-    c->response.body_capacity = 0;
-    c->response.body_is_managed = 0;
-    c->response.body_ownership = CSILK_OWN_BORROWED;
+    /* 5. Response body — released via unified ownership state */
+    csilk_response_body_release(c);
     c->response.status = 0;
 
     /*
@@ -522,25 +559,11 @@ csilk_set_response_body_ex(csilk_ctx_t*      c,
     if (!c) {
         return;
     }
-    if (c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_OWNED ||
-         c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER ||
-         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
-        if (c->response.body_capacity > 0) {
-            csilk_body_free((void*)c->response.body, c->response.body_capacity);
-        } else {
-            free((void*)c->response.body);
-        }
-    }
+    csilk_response_body_release(c);
     c->response.body = body;
     c->response.body_len = len;
     c->response.body_capacity = 0;
-    c->response.body_ownership = ownership;
-    c->response.body_is_managed = (ownership == CSILK_OWN_OWNED || ownership == CSILK_OWN_HEAP ||
-                                   ownership == CSILK_OWN_TRANSFER || ownership == CSILK_OWN_POOL)
-                                      ? 1
-                                      : 0;
+    c->response.body_ownership = body ? ownership : CSILK_OWN_NONE;
 }
 
 /** @brief Legacy helper to set response body.
@@ -564,7 +587,7 @@ csilk_set_response_body(csilk_ctx_t* c, const char* body, size_t len, int manage
 csilk_ownership_t
 csilk_get_response_body_ownership(csilk_ctx_t* c)
 {
-    return c ? c->response.body_ownership : CSILK_OWN_BORROWED;
+    return c ? c->response.body_ownership : CSILK_OWN_NONE;
 }
 
 /** @brief Configure zero-copy file transmission.
@@ -577,6 +600,7 @@ void
 csilk_set_file_response(csilk_ctx_t* c, int fd, size_t offset, size_t size)
 {
     if (c) {
+        csilk_response_body_release(c);
         c->file_fd = fd;
         c->file_offset = offset;
         c->file_size = size;

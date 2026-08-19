@@ -128,8 +128,7 @@ on_data_chunk_recv_callback(nghttp2_session* session,
         new_body[c->request.body_len] = '\0';
         c->request.body = new_body;
         c->request.body_capacity = cap;
-        c->request.body_ownership = CSILK_OWN_HEAP;
-        c->request.body_is_managed = 1;
+        c->request.body_ownership = CSILK_OWN_POOL;
     }
 
     return 0;

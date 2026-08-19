@@ -543,6 +543,25 @@ void csilk_set_response_body_ex(csilk_ctx_t*      c,
                                 csilk_ownership_t ownership);
 
 /**
+ * @brief Release the response body memory according to its unified ownership state.
+ *
+ * Safe and idempotent (can be called multiple times without double-free).
+ * Resets body pointer to NULL, length to 0, capacity to 0, and ownership to CSILK_OWN_NONE.
+ *
+ * @param c The request context.
+ */
+void csilk_response_body_release(csilk_ctx_t* c);
+
+/**
+ * @brief Release the request body memory according to its unified ownership state.
+ *
+ * Safe and idempotent. Resets body pointer to NULL, length to 0, capacity to 0, and ownership to CSILK_OWN_NONE.
+ *
+ * @param c The request context.
+ */
+void csilk_request_body_release(csilk_ctx_t* c);
+
+/**
  * @brief Overwrite the response body from middleware (legacy compatibility).
  *
  * @param c       The request context.

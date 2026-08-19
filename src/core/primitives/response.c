@@ -22,26 +22,6 @@
 #include "../primitives/header_map.h"
 #include "../http/h2.h"
 
-static inline void
-_csilk_free_response_body_if_needed(csilk_ctx_t* c)
-{
-    if (c && c->response.body &&
-        (c->response.body_ownership == CSILK_OWN_OWNED ||
-         c->response.body_ownership == CSILK_OWN_HEAP ||
-         c->response.body_ownership == CSILK_OWN_TRANSFER ||
-         c->response.body_ownership == CSILK_OWN_POOL || c->response.body_is_managed)) {
-        if (c->response.body_capacity > 0) {
-            csilk_body_free((void*)c->response.body, c->response.body_capacity);
-        } else {
-            free((void*)c->response.body);
-        }
-        c->response.body = NULL;
-        c->response.body_capacity = 0;
-        c->response.body_is_managed = 0;
-        c->response.body_ownership = CSILK_OWN_BORROWED;
-    }
-}
-
 /* --- Status & string --- */
 
 /** @brief Set the HTTP status code for the response.
@@ -77,20 +57,18 @@ csilk_string(csilk_ctx_t* c, int status, const char* msg)
         return;
     }
     c->response.status = status;
+    csilk_response_body_release(c);
+
     size_t msg_len = msg ? strlen(msg) : 0;
     if (c->arena) {
-        _csilk_free_response_body_if_needed(c);
         c->response.body = msg ? csilk_arena_strdup(c->arena, msg) : NULL;
         c->response.body_len = msg_len;
-        c->response.body_ownership = CSILK_OWN_ARENA;
-        c->response.body_is_managed = 0;
+        c->response.body_ownership = msg ? CSILK_OWN_ARENA : CSILK_OWN_NONE;
     } else {
-        _csilk_free_response_body_if_needed(c);
         char* body = msg ? strdup(msg) : NULL;
         c->response.body = body;
         c->response.body_len = body ? msg_len : 0;
-        c->response.body_ownership = body ? CSILK_OWN_HEAP : CSILK_OWN_BORROWED;
-        c->response.body_is_managed = body ? 1 : 0;
+        c->response.body_ownership = body ? CSILK_OWN_HEAP : CSILK_OWN_NONE;
     }
 }
 
@@ -264,16 +242,16 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    _csilk_free_response_body_if_needed(c);
-
     char* body = csilk_json_serialize(json, NULL);
+    csilk_json_free(json);
+
+    csilk_response_body_release(c);
+
     if (body) {
         c->response.body = body;
         c->response.body_len = strlen(body);
         c->response.body_ownership = CSILK_OWN_HEAP;
-        c->response.body_is_managed = 1;
     }
-    csilk_json_free(json);
 }
 
 /**
@@ -281,7 +259,7 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
  *
  * Sets the response status, assigns the Content-Type header, frees any prior
  * managed body, and points the response body at @p json_str without copying or
- * taking ownership (body_is_managed is left 0).
+ * taking ownership (ownership set to CSILK_OWN_BORROWED).
  *
  * @param[in] c         Request context (must not be NULL).
  * @param[in] status    HTTP status code to send.
@@ -298,12 +276,11 @@ csilk_json_string(csilk_ctx_t* c, int status, const char* json_str)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    _csilk_free_response_body_if_needed(c);
+    csilk_response_body_release(c);
 
     c->response.body = json_str;
     c->response.body_len = strlen(json_str);
     c->response.body_ownership = CSILK_OWN_BORROWED;
-    c->response.body_is_managed = 0;
 }
 
 /** @brief Send a JSON error response containing an "error" field (no-heap
@@ -325,7 +302,7 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    _csilk_free_response_body_if_needed(c);
+    csilk_response_body_release(c);
 
     char   stack_buf[256];
     size_t needed = strlen(message ? message : "") + 32;
@@ -340,7 +317,6 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
                 c->response.body = csilk_arena_strndup(c->arena, stack_buf, (size_t)n);
                 c->response.body_len = (size_t)n;
                 c->response.body_ownership = CSILK_OWN_ARENA;
-                c->response.body_is_managed = 0;
                 return;
             }
         }
@@ -355,7 +331,6 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
         c->response.body = body;
         c->response.body_len = strlen(body);
         c->response.body_ownership = CSILK_OWN_HEAP;
-        c->response.body_is_managed = 1;
     }
 }
 
@@ -387,11 +362,10 @@ csilk_json_marshal_response(csilk_ctx_t* c, int status, const char* type_name, c
     if (json_str) {
         c->response.status = status;
         csilk_set_header(c, "Content-Type", "application/json");
-        _csilk_free_response_body_if_needed(c);
+        csilk_response_body_release(c);
         c->response.body = json_str;
         c->response.body_len = body_len;
-        c->response.body_ownership = c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP;
-        c->response.body_is_managed = c->arena ? 0 : 1;
+        c->response.body_ownership = (json_str && c->arena) ? CSILK_OWN_ARENA : CSILK_OWN_HEAP;
     }
 }
 
@@ -487,6 +461,8 @@ send_chunked_headers(csilk_ctx_t* c)
     if (!c || c->conn_closed || !c->_internal_client) {
         return -1;
     }
+
+    csilk_response_body_release(c);
 
     int         status = c->response.status ? c->response.status : CSILK_STATUS_OK;
     const char* status_text = get_status_text(status);

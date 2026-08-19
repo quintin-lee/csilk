@@ -395,48 +395,52 @@ typedef struct csilk_mq_ctx_s csilk_mq_ctx_t;
  * Defines explicit ownership semantics across context, request/response bodies,
  * zero-copy views, pools, caches, and internal resources.
  */
+/**
+ * @brief Unified memory ownership state for HTTP request/response bodies.
+ *
+ * Defines exact cleanup and release semantics for memory associated with
+ * bodies. Eliminates ambiguous flags (body_is_managed) in favor of a single
+ * deterministic state machine.
+ */
 typedef enum {
+    CSILK_OWN_NONE = 0, /**< No body attached, or released / uninitialized (0 bytes). */
     CSILK_OWN_BORROWED =
-        0, /**< Borrowed view; caller/external holds buffer; framework does NOT free or copy. */
+        1, /**< Borrowed view; caller/external holds buffer; framework does NOT free or copy. */
     CSILK_OWN_ARENA =
-        1, /**< Memory is allocated from request/subsystem arena; freed automatically on reset. */
+        2, /**< Memory allocated from request arena; freed automatically on arena reset. */
     CSILK_OWN_HEAP =
-        2, /**< Explicitly heap-allocated buffer (malloc); owner calls free() on cleanup. */
-    CSILK_OWN_OWNED = CSILK_OWN_HEAP, /**< Alias for CSILK_OWN_HEAP (owned heap buffer). */
-    CSILK_OWN_TRANSFER =
-        3, /**< Ownership transferred to receiver; receiver is responsible for free(). */
+        3, /**< Explicitly heap-allocated buffer (malloc); freed via free() on release. */
     CSILK_OWN_POOL =
-        4, /**< Buffer from connection or size-class pool; returned to pool on release. */
-    CSILK_OWN_TLS_CACHE =
-        5, /**< Thread-local cached chunk/freelist; recycled to calling thread's cache. */
-    CSILK_OWN_SHARED =
-        6  /**< Shared/driver-managed reference; managed by custom destructor/refcount. */
+        4, /**< Buffer from size-class pool; returned to pool via csilk_body_free(ptr, capacity). */
+    CSILK_OWN_TRANSFER = 5, /**< Ownership transferred to context; freed via free() on release. */
+    /* Backward compatibility aliases */
+    CSILK_OWN_OWNED = CSILK_OWN_HEAP,
+    CSILK_OWN_TLS_CACHE = CSILK_OWN_POOL,
+    CSILK_OWN_SHARED = CSILK_OWN_BORROWED
 } csilk_ownership_t;
 
 /**
  * @brief Convert ownership enum value to human-readable string.
  *
  * @param ownership Ownership enum value.
- * @return Static string representation ("BORROWED", "ARENA", "HEAP", "TRANSFER", "POOL", "TLS_CACHE", "SHARED", "UNKNOWN").
+ * @return Static string representation ("NONE", "BORROWED", "ARENA", "HEAP", "POOL", "TRANSFER", "UNKNOWN").
  */
 static inline const char*
 csilk_ownership_str(csilk_ownership_t ownership)
 {
     switch (ownership) {
+    case CSILK_OWN_NONE:
+        return "NONE";
     case CSILK_OWN_BORROWED:
         return "BORROWED";
     case CSILK_OWN_ARENA:
         return "ARENA";
     case CSILK_OWN_HEAP:
         return "HEAP";
-    case CSILK_OWN_TRANSFER:
-        return "TRANSFER";
     case CSILK_OWN_POOL:
         return "POOL";
-    case CSILK_OWN_TLS_CACHE:
-        return "TLS_CACHE";
-    case CSILK_OWN_SHARED:
-        return "SHARED";
+    case CSILK_OWN_TRANSFER:
+        return "TRANSFER";
     default:
         return "UNKNOWN";
     }

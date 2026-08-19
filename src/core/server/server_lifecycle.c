@@ -134,12 +134,8 @@ spa_fallback_handler(csilk_ctx_t* c)
     }
     size_t nread = fread(body, 1, (size_t)fsize, f);
     fclose(f);
-    body[nread] = '\0'; // NOLINT(clang-analyzer-security.ArrayBound)
-
     csilk_set_header(c, "Content-Type", "text/html");
-    c->response.body = body;
-    c->response.body_len = nread;
-    c->response.body_is_managed = 1;
+    csilk_set_response_body_ex(c, body, nread, CSILK_OWN_HEAP);
     csilk_status(c, CSILK_STATUS_OK);
 }
 
