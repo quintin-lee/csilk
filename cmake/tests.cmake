@@ -72,6 +72,7 @@ set(CSILK_CORE_TESTS
     test_hot_reload_stress
     test_dispatch_bench
     test_lfqueue_stress
+    test_uring_recv_bench
     test_codec_prop
 
     test_hash_prop
@@ -97,8 +98,9 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
+
 
 
 

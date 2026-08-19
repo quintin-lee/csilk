@@ -103,6 +103,7 @@ struct csilk_io_tcp_s {
     csilk_io_alloc_cb      alloc_cb;
     csilk_io_read_cb       read_cb;
     int                    reading;
+    csilk_io_buf_t         recv_buf;
 };
 
 /** @brief Write request passed to csilk_io_write. */
