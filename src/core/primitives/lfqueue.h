@@ -37,7 +37,7 @@ csilk_lfq_init(csilk_lfqueue_t* q)
 static inline void
 csilk_lfq_enqueue(csilk_lfqueue_t* q, csilk_lfq_node_t* n)
 {
-    atomic_init(&n->next, NULL);
+    atomic_store_explicit(&n->next, NULL, memory_order_relaxed);
     csilk_lfq_node_t* prev = atomic_exchange_explicit(&q->head, n, memory_order_acq_rel);
     atomic_store_explicit(&prev->next, n, memory_order_release);
 }
