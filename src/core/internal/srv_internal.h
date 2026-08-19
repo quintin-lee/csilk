@@ -87,7 +87,8 @@ typedef struct csilk_client_s csilk_client_t;
 typedef struct csilk_dispatch_task_s {
     csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
     void (*cb)(void* arg);
-    void* arg;
+    void*           arg;
+    csilk_client_t* client;    /**< Associated client connection for lifetime safety. */
 } csilk_dispatch_task_t;
 
 /**
@@ -175,8 +176,8 @@ struct csilk_client_s {
     csilk_io_timer_t read_timer;     /**< Read timeout timer. */
     csilk_io_timer_t write_timer;    /**< Write timeout timer. */
     csilk_io_timer_t request_timer;  /**< Request timeout timer. */
-    int              close_pending;  /**< Pending close refs before freeing client. */
-    _Atomic int      async_ref;      /**< Active asynchronous tasks reference counter. */
+    _Atomic int      ref_count;      /**< Unified connection reference count. */
+    _Atomic int      pending_io;     /**< In-flight I/O operations and closing timer handles. */
     int              read_paused;
     unsigned         read_active : 1;
     unsigned         keep_alive : 1; /**< Cached keep-alive decision from

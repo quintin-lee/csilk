@@ -143,6 +143,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&client->handle) == 0) {
         CSILK_LOG_D("Connection: accepted new TCP connection (client pointer: %p)", (void*)client);
         csilk_conn_set_state(client, CSILK_CONN_ACCEPTED);
+        csilk_client_ref(client);
         if (server->config.tcp_nodelay) {
             csilk_io_tcp_nodelay(&client->handle, 1);
         }

@@ -809,6 +809,329 @@ test_conn_state_boundary_and_null(void)
     PASS();
 }
 
+/* --- Lifetime & Reference Subsystem Tests --- */
+
+static void
+test_lifetime_ref_unref_basic(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    csilk_client_t* client = pool_get(wp);
+    client->server = s;
+    client->owner_pool = wp;
+
+    if (atomic_load(&client->ref_count) != 0 || atomic_load(&client->pending_io) != 0) {
+        FAIL("Initial ref_count or pending_io is non-zero");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Ref count operations */
+    int r1 = csilk_client_ref(client);
+    if (r1 != 1 || atomic_load(&client->ref_count) != 1) {
+        FAIL("csilk_client_ref failed");
+        free_mock_server(s);
+        return;
+    }
+
+    int r2 = csilk_client_ref(client);
+    if (r2 != 2 || atomic_load(&client->ref_count) != 2) {
+        FAIL("second csilk_client_ref failed");
+        free_mock_server(s);
+        return;
+    }
+
+    int u1 = csilk_client_unref(client);
+    if (u1 != 1 || atomic_load(&client->ref_count) != 1) {
+        FAIL("csilk_client_unref failed");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Pending I/O operations */
+    int p1 = _csilk_client_pending_io_inc(client);
+    if (p1 != 1 || atomic_load(&client->pending_io) != 1) {
+        FAIL("_csilk_client_pending_io_inc failed");
+        free_mock_server(s);
+        return;
+    }
+
+    int p2 = _csilk_client_pending_io_dec(client);
+    if (p2 != 0 || atomic_load(&client->pending_io) != 0) {
+        FAIL("_csilk_client_pending_io_dec failed");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Clean unref */
+    csilk_client_unref(client);
+    free(client);
+    free_mock_server(s);
+    PASS();
+}
+
+static void
+test_lifetime_async_ref_prevents_uaf_and_early_recycle(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    csilk_client_t* client = pool_get(wp);
+    client->server = s;
+    client->owner_pool = wp;
+    client->generation = 1;
+    s->active_connections = 1;
+
+    csilk_conn_set_state(client, CSILK_CONN_ACCEPTED);
+    csilk_client_ref(client); /* Base connection reference (ref=1) */
+
+    /* 3 async background tasks borrow references */
+    csilk_client_ref(client); /* ref=2 (e.g. gzip compression) */
+    csilk_client_ref(client); /* ref=3 (e.g. async DB query) */
+    csilk_client_ref(client); /* ref=4 (e.g. dispatch task) */
+
+    /* Simulate client disconnect / timeout occurring on event loop */
+    csilk_conn_set_state(client, CSILK_CONN_CLOSING);
+    client->ctx.conn_closed = 1;
+
+    /* Base connection ref released */
+    csilk_client_unref(client); /* ref=3 */
+
+    /* Invariant: Cannot recycle because refs > 0 */
+    _csilk_client_check_recycle(client);
+    if (wp->client_pool_count != 0 || client->state != CSILK_CONN_CLOSING) {
+        FAIL("Client was prematurely recycled while async refs were active!");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Task 1 finishes */
+    csilk_client_unref(client); /* ref=2 */
+    _csilk_client_check_recycle(client);
+    if (wp->client_pool_count != 0) {
+        FAIL("Client was recycled with 2 refs remaining");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Task 2 finishes */
+    csilk_client_unref(client); /* ref=1 */
+    _csilk_client_check_recycle(client);
+    if (wp->client_pool_count != 0) {
+        FAIL("Client was recycled with 1 ref remaining");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Task 3 finishes -> ref drops to 0 -> triggers recycle! */
+    csilk_client_unref(client); /* ref=0 -> recycled */
+
+    if (wp->client_pool_count != 1) {
+        FAIL("Client was not recycled to pool after all refs dropped to 0");
+        free_mock_server(s);
+        return;
+    }
+
+    csilk_client_t* recycled = wp->client_pool[0];
+    if (recycled != client || recycled->state != CSILK_CONN_INIT) {
+        FAIL("Recycled client corrupted or wrong state");
+        free_mock_server(s);
+        return;
+    }
+
+    free_mock_server(s);
+    free(client);
+    PASS();
+}
+
+static void
+test_lifetime_pending_io_prevents_uaf_and_early_recycle(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    csilk_client_t* client = pool_get(wp);
+    client->server = s;
+    client->owner_pool = wp;
+    client->generation = 1;
+    s->active_connections = 1;
+
+    csilk_conn_set_state(client, CSILK_CONN_ACCEPTED);
+    csilk_client_ref(client); /* Base connection reference (ref=1) */
+
+    /* 2 in-flight writes queued */
+    _csilk_client_pending_io_inc(client); /* pending_io = 1 */
+    _csilk_client_pending_io_inc(client); /* pending_io = 2 */
+
+    /* Connection close */
+    csilk_conn_set_state(client, CSILK_CONN_CLOSING);
+    client->ctx.conn_closed = 1;
+    csilk_client_unref(client); /* ref drops to 0, but pending_io is 2! */
+
+    /* Must NOT recycle while pending_io > 0 */
+    _csilk_client_check_recycle(client);
+    if (wp->client_pool_count != 0) {
+        FAIL("Client was prematurely recycled while pending_io > 0!");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Write 1 completes */
+    _csilk_client_pending_io_dec(client); /* pending_io = 1 */
+    if (wp->client_pool_count != 0) {
+        FAIL("Client was prematurely recycled while pending_io == 1");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Write 2 completes -> pending_io drops to 0 -> triggers recycle! */
+    _csilk_client_pending_io_dec(client); /* pending_io = 0 -> recycled */
+
+    if (wp->client_pool_count != 1) {
+        FAIL("Client was not recycled after pending_io reached 0");
+        free_mock_server(s);
+        return;
+    }
+
+    free_mock_server(s);
+    free(client);
+    PASS();
+}
+
+static void
+test_lifetime_aba_protection_generation_cycle(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    /* Incarnation A */
+    csilk_client_t* client_a = pool_get(wp);
+    client_a->server = s;
+    client_a->owner_pool = wp;
+    uint8_t gen_a = client_a->generation;
+
+    /* Acquire async lease with Incarnation A */
+    csilk_async_token_t token_a = csilk_ctx_acquire_async(&client_a->ctx);
+    if (csilk_async_token_validate(&token_a) != 1) {
+        FAIL("Token A should be valid initially");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Incarnation A completes and is recycled */
+    csilk_conn_set_state(client_a, CSILK_CONN_CLOSING);
+    client_a->ctx.conn_closed = 1;
+    csilk_ctx_release_async(&token_a); /* Drops lease ref */
+    _csilk_client_check_recycle(client_a);
+
+    if (wp->client_pool_count != 1) {
+        FAIL("Incarnation A should be in pool");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Incarnation B reuses same client pointer */
+    csilk_client_t* client_b = pool_get(wp);
+    if (client_b != client_a) {
+        FAIL("Expected pool to reuse same memory buffer");
+        free_mock_server(s);
+        return;
+    }
+    uint8_t gen_b = client_b->generation;
+
+    /* ABA Protection Check 1: Generation must be strictly different */
+    if (gen_b == gen_a) {
+        FAIL("Generation must increment upon pool_get recycling to prevent ABA");
+        free_mock_server(s);
+        return;
+    }
+
+    /* ABA Protection Check 2: Stale token A must be rejected for Incarnation B */
+    if (csilk_async_token_validate(&token_a) != 0) {
+        FAIL("Stale token A must be rejected for Incarnation B");
+        free_mock_server(s);
+        return;
+    }
+
+    free_mock_server(s);
+    free(client_b);
+    PASS();
+}
+
+typedef struct {
+    csilk_client_t* client;
+    int             iterations;
+} thread_stress_arg_t;
+
+static void
+thread_stress_worker(void* arg)
+{
+    thread_stress_arg_t* t = (thread_stress_arg_t*)arg;
+    for (int i = 0; i < t->iterations; i++) {
+        csilk_client_ref(t->client);
+        _csilk_client_pending_io_inc(t->client);
+        _csilk_client_pending_io_dec(t->client);
+        csilk_client_unref(t->client);
+    }
+}
+
+static void
+test_lifetime_concurrent_multithread_stress(void)
+{
+    csilk_server_t* s = mock_server();
+    worker_pool_t*  wp = &s->worker_pools[0];
+
+    csilk_client_t* client = pool_get(wp);
+    client->server = s;
+    client->owner_pool = wp;
+    client->generation = 1;
+    csilk_conn_set_state(client, CSILK_CONN_READING);
+    csilk_client_ref(client); /* Base connection reference */
+
+    const int           NUM_THREADS = 8;
+    const int           ITERS_PER_THREAD = 10000;
+    csilk_thread_t      threads[8];
+    thread_stress_arg_t args[8];
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        args[i].client = client;
+        args[i].iterations = ITERS_PER_THREAD;
+        csilk_thread_create(&threads[i], thread_stress_worker, &args[i]);
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        csilk_thread_join(&threads[i]);
+    }
+
+    /* All worker threads joined; ref_count must be exactly 1 (base ref), pending_io == 0 */
+    if (atomic_load(&client->ref_count) != 1) {
+        FAIL("Concurrent ref/unref corrupted ref_count");
+        free_mock_server(s);
+        return;
+    }
+    if (atomic_load(&client->pending_io) != 0) {
+        FAIL("Concurrent pending_io inc/dec corrupted pending_io");
+        free_mock_server(s);
+        return;
+    }
+
+    /* Close and unref base */
+    csilk_conn_set_state(client, CSILK_CONN_CLOSING);
+    client->ctx.conn_closed = 1;
+    csilk_client_unref(client);
+
+    if (wp->client_pool_count != 1) {
+        FAIL("Client was not recycled after multithread stress test");
+        free_mock_server(s);
+        return;
+    }
+
+    free_mock_server(s);
+    free(client);
+    PASS();
+}
+
 /* ------------------------------------------------------------------ */
 
 int
@@ -844,6 +1167,13 @@ main(void)
     test_conn_state_lifecycle_flows_comprehensive();
     test_conn_state_boundary_and_null();
     test_conn_state_fuzz_transitions();
+
+    printf("\n--- Connection Lifetime & Reference Subsystem (UAF & ABA) ---\n");
+    test_lifetime_ref_unref_basic();
+    test_lifetime_async_ref_prevents_uaf_and_early_recycle();
+    test_lifetime_pending_io_prevents_uaf_and_early_recycle();
+    test_lifetime_aba_protection_generation_cycle();
+    test_lifetime_concurrent_multithread_stress();
 
     printf("\n=== Results: %d passed, %d failed ===\n", tests_passed, tests_run - tests_passed);
     return (tests_passed == tests_run) ? EXIT_SUCCESS : EXIT_FAILURE;

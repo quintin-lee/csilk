@@ -91,8 +91,12 @@ on_dispatch_async(csilk_io_async_t* handle)
     csilk_lfq_node_t* node = csilk_lfq_dequeue(&wp->dispatch_queue);
     while (node) {
         csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)node;
+        csilk_client_t*        client = task->client;
         if (task->cb) {
             task->cb(task->arg);
+        }
+        if (client) {
+            csilk_client_unref(client);
         }
         pool_put_dispatch_task(wp, task);
         node = csilk_lfq_dequeue(&wp->dispatch_queue);
@@ -148,6 +152,8 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     }
     task->cb = cb;
     task->arg = arg;
+    task->client = client;
+    csilk_client_ref(client);
     csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
 
     csilk_io_async_send(&wp->dispatch_async);

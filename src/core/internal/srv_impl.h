@@ -78,6 +78,11 @@ CSILK_INTERNAL void            pool_put_arena(worker_pool_t* wp, csilk_arena_t* 
 CSILK_INTERNAL void            client_list_add(csilk_server_t* server, csilk_client_t* client);
 CSILK_INTERNAL void            client_list_remove(csilk_server_t* server, csilk_client_t* client);
 CSILK_INTERNAL void            client_destroy(csilk_client_t* client);
+CSILK_INTERNAL int             csilk_client_ref(csilk_client_t* client);
+CSILK_INTERNAL int             csilk_client_unref(csilk_client_t* client);
+CSILK_INTERNAL int             _csilk_client_pending_io_inc(csilk_client_t* client);
+CSILK_INTERNAL int             _csilk_client_pending_io_dec(csilk_client_t* client);
+CSILK_INTERNAL void            _csilk_client_check_recycle(csilk_client_t* client);
 
 CSILK_INTERNAL void on_close(csilk_io_handle_t* handle);
 CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf);

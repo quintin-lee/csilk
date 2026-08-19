@@ -56,6 +56,9 @@ on_sendfile_complete(csilk_io_fs_t* req)
 
     _csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_REQUEST_END);
     csilk_ctx_cleanup(&client->ctx);
+
+    _csilk_client_pending_io_dec(client);
+    csilk_client_unref(client);
 }
 
 /* --- Write completion --- */
@@ -89,6 +92,8 @@ on_write(csilk_io_write_t* req, int status)
                 size_t size = client->ctx.file_size;
                 client->ctx.file_fd = -1;
 
+                csilk_client_ref(client);
+                _csilk_client_pending_io_inc(client);
                 int r = csilk_io_fs_sendfile(csilk_io_default_loop(),
                                              fs_req,
                                              sock_fd,
@@ -97,9 +102,13 @@ on_write(csilk_io_write_t* req, int status)
                                              size,
                                              on_sendfile_complete);
                 if (r < 0) {
+                    _csilk_client_pending_io_dec(client);
+                    csilk_client_unref(client);
                     free(fs_req);
                 } else {
                     free(req);
+                    _csilk_client_pending_io_dec(client);
+                    csilk_client_unref(client);
                     return;
                 }
             }
@@ -111,6 +120,8 @@ on_write(csilk_io_write_t* req, int status)
     if (client) {
         extern void _csilk_check_and_trigger_drain(csilk_client_t * client);
         _csilk_check_and_trigger_drain(client);
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
     }
 }
 
@@ -146,7 +157,15 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 
     csilk_io_buf_t buf = csilk_io_buf_init(buf_copy, (unsigned int)len);
     req->data = buf_copy;
-    csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
+    csilk_client_ref(client);
+    _csilk_client_pending_io_inc(client);
+    int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
+    if (r < 0) {
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
+        free(buf_copy);
+        free(req);
+    }
 }
 
 /* --- Send data helpers --- */
@@ -230,5 +249,13 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
 
     req->data = data;
     csilk_io_buf_t buf = csilk_io_buf_init(data, (unsigned int)len);
-    csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
+    csilk_client_ref(client);
+    _csilk_client_pending_io_inc(client);
+    int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
+    if (r < 0) {
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
+        free(data);
+        free(req);
+    }
 }

@@ -43,6 +43,8 @@ on_sse_write(csilk_io_write_t* req, int status)
 
     if (client) {
         _csilk_check_and_trigger_drain(client);
+        _csilk_client_pending_io_dec(client);
+        csilk_client_unref(client);
     }
 }
 
@@ -106,13 +108,20 @@ csilk_sse_init(csilk_ctx_t* c)
         return;
     }
     memcpy(buf, hdr, hdr_len);
-
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
     req->data = buf;
     csilk_client_t* cl = (csilk_client_t*)internal_client;
     csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-    csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    csilk_client_ref(cl);
+    _csilk_client_pending_io_inc(cl);
+    int r = csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    if (r < 0) {
+        _csilk_client_pending_io_dec(cl);
+        csilk_client_unref(cl);
+        free(buf);
+        free(req);
+    }
 }
 
 /**
@@ -139,41 +148,38 @@ csilk_sse_init(csilk_ctx_t* c)
 int
 csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 {
-    void* internal_client = _csilk_get_internal_client(c);
-    if (!c || !internal_client) {
-        CSILK_LOG_W("SSE: send failed - context or client missing");
+    size_t q = 0;
+    void*  internal_client = _csilk_get_internal_client(c);
+    if (!c || !internal_client || !c->is_sse) {
+        CSILK_LOG_E("SSE: send failed - invalid context, client, or non-SSE mode (request: %p)",
+                    (void*)c);
         return -1;
     }
 
     csilk_client_t* cl = (csilk_client_t*)internal_client;
-    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
-    size_t q = _csilk_client_get_write_queue_size(cl);
-
-    size_t event_len = event ? strlen(event) : 0;
-    size_t data_len = data ? strlen(data) : 0;
-    size_t buf_size = (event ? 7 + event_len + 1 : 0) + (data ? 6 + data_len + 1 : 0) + 2;
-
-    if (c->max_write_buffer_size > 0 && q + buf_size > c->max_write_buffer_size) {
-        CSILK_LOG_E("SSE: max write buffer exceeded (%zu + %zu > %zu)",
-                    q,
-                    buf_size,
-                    c->max_write_buffer_size);
+    if (cl->state == CSILK_CONN_CLOSING || cl->state == CSILK_CONN_CLOSED) {
         return -1;
     }
 
-    CSILK_LOG_D("SSE: sending event '%s' (data len: %zu) for request %p",
-                event ? event : "",
-                data_len,
-                (void*)c);
+    /* Backpressure check */
+    q = _csilk_client_get_write_queue_size(cl);
+    if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
+        c->write_paused = 1;
+        return 0;
+    }
 
-    char* buf = malloc(buf_size);
+    size_t ev_len = event ? strlen(event) : 0;
+    size_t data_len = data ? strlen(data) : 0;
+
+    size_t buf_size = ev_len + data_len + 32;
+    char*  buf = malloc(buf_size);
     if (!buf) {
-        CSILK_LOG_E("SSE: failed to allocate memory for event buffer of size %zu", buf_size);
+        CSILK_LOG_E("SSE: malloc failed for payload formatting buffer");
         return -1;
     }
 
     int pos = 0;
-    if (event && event_len > 0) {
+    if (event) {
         pos += snprintf(buf + pos, buf_size - pos, "event: %s\n", event);
     }
     if (data) {
@@ -191,7 +197,16 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
     req->data = buf;
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-    csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    csilk_client_ref(cl);
+    _csilk_client_pending_io_inc(cl);
+    int r = csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
+    if (r < 0) {
+        _csilk_client_pending_io_dec(cl);
+        csilk_client_unref(cl);
+        free(buf);
+        free(req);
+        return -1;
+    }
 
     q = _csilk_client_get_write_queue_size(cl);
     if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
