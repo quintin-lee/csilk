@@ -299,10 +299,9 @@ test_multi_chunk_body_upgrade(void)
     _csilk_ctx_register_pooled_read_buffer(&client.ctx, buf2, CSILK_READ_BUF_4KB);
     llhttp_execute(&client.parser, buf2, strlen(part2));
 
-    /* Verify upgrade to managed heap */
-    if (client.ctx.request.body_ownership != CSILK_OWN_HEAP ||
-        client.ctx.request.body_is_managed != 1) {
-        FAIL("Split body should be upgraded to CSILK_OWN_HEAP");
+    /* Verify upgrade to pooled heap */
+    if (client.ctx.request.body_ownership != CSILK_OWN_POOL) {
+        FAIL("Split body should be upgraded to CSILK_OWN_POOL");
         csilk_arena_free(client.ctx.arena);
         mock_server_teardown(s);
         return;

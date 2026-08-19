@@ -354,8 +354,7 @@ on_body(llhttp_t* p, const char* at, size_t length)
             new_body[client->ctx.request.body_len] = '\0';
             client->ctx.request.body = new_body;
             client->ctx.request.body_capacity = cap;
-            client->ctx.request.body_ownership = CSILK_OWN_HEAP;
-            client->ctx.request.body_is_managed = 1;
+            client->ctx.request.body_ownership = CSILK_OWN_POOL;
         } else {
             if (client->ctx.request.body_capacity >= req_size) {
                 memcpy(client->ctx.request.body + client->ctx.request.body_len, at, length);

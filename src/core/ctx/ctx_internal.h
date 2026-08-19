@@ -103,22 +103,16 @@ typedef struct {
  * above them stays compact and cache-friendly on the parse/handler hot path.
  */
 struct csilk_request_s {
-    char*             method;          /**< HTTP method string (e.g., "GET", "POST", "PUT").
+    char*  method;        /**< HTTP method string (e.g., "GET", "POST", "PUT").
                                Arena-allocated copy of the request method. */
-    char*             path;            /**< Decoded URL path (e.g., "/users/42").
+    char*  path;          /**< Decoded URL path (e.g., "/users/42").
                                Percent-encoding removed, query string stripped.
                                Malloc'd by csilk_split_url() — freed in cleanup. */
-    char*             body;            /**< Raw request body data.
-                               For H1: pointer into the recv buffer (not copied).
-                               For H2: heap-allocated copy. */
-    size_t            body_len;        /**< Byte length of @p body. 0 for GET/HEAD/DELETE
-                               or when no Content-Length or Transfer-Encoding
-                               is present. */
-    size_t            body_capacity;   /**< Allocated buffer capacity (for size-class pool). */
-    csilk_ownership_t body_ownership;  /**< Ownership model for request body. */
-    int               body_is_managed; /**< Non-zero if body is heap-allocated (H2 realloc),
-                              must be freed on cleanup. Zero for H1 bodies
-                              (they reference the TCP recv buffer directly). */
+    char*  body;          /**< Raw request body data. */
+    size_t body_len;      /**< Byte length of @p body. */
+    size_t body_capacity; /**< Allocated buffer capacity (for size-class pool). */
+    csilk_ownership_t
+        body_ownership; /**< Deterministic ownership state (NONE, BORROWED, ARENA, HEAP, POOL, TRANSFER). */
 
     /* --- Header maps (large; kept at the tail — see struct comment) --- */
     csilk_header_map_t headers;      /**< Request headers (key → value) stored in a
@@ -143,12 +137,12 @@ typedef struct csilk_request_s csilk_request_t;
  * and response-serialization hot path.
  */
 struct csilk_response_s {
-    int               status;
-    const char*       body;
-    size_t            body_len;
-    size_t            body_capacity; /**< Allocated buffer capacity (for size-class pool). */
-    csilk_ownership_t body_ownership;
-    int               body_is_managed;
+    int         status;
+    const char* body;
+    size_t      body_len;
+    size_t      body_capacity; /**< Allocated buffer capacity (for size-class pool). */
+    csilk_ownership_t
+        body_ownership; /**< Deterministic ownership state (NONE, BORROWED, ARENA, HEAP, POOL, TRANSFER). */
 
     csilk_header_map_t headers; /**< Response headers (large; kept at the tail). */
 };

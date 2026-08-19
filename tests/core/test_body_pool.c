@@ -193,15 +193,13 @@ test_context_cleanup_recycling(void)
     ctx->request.body = req_body;
     ctx->request.body_len = 120 * 1024;
     ctx->request.body_capacity = req_cap;
-    ctx->request.body_ownership = CSILK_OWN_HEAP;
-    ctx->request.body_is_managed = 1;
+    ctx->request.body_ownership = CSILK_OWN_POOL;
 
     /* 2. Allocate response body via csilk_set_response_body_pooled */
     char* resp_body = csilk_set_response_body_pooled(ctx, 250 * 1024);
     assert(resp_body != NULL);
     assert(ctx->response.body_capacity == 256 * 1024);
-    assert(ctx->response.body_ownership == CSILK_OWN_HEAP);
-    assert(ctx->response.body_is_managed == 1);
+    assert(ctx->response.body_ownership == CSILK_OWN_POOL);
 
     /* 3. Run cleanup */
     csilk_ctx_cleanup(ctx);
