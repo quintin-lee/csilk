@@ -84,6 +84,7 @@ CSILK_INTERNAL void on_read(csilk_io_stream_t* stream, ssize_t nread, const csil
 CSILK_INTERNAL void on_new_connection(csilk_io_stream_t* server_stream, int status);
 
 CSILK_INTERNAL const char* csilk_conn_state_str(csilk_conn_state_t state);
+CSILK_INTERNAL bool csilk_conn_is_valid_transition(csilk_conn_state_t from, csilk_conn_state_t to);
 CSILK_INTERNAL void csilk_conn_set_state(csilk_client_t* client, csilk_conn_state_t new_state);
 CSILK_INTERNAL csilk_conn_state_t csilk_conn_get_state(const csilk_client_t* client);
 
