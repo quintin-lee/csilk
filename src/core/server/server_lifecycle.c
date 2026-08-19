@@ -59,7 +59,9 @@ csilk_server_new(csilk_router_t* router)
     s->settings.on_message_begin = on_message_begin;
     s->settings.on_url = on_url;
     s->settings.on_header_field = on_header_field;
+    s->settings.on_header_field_complete = on_header_field_complete;
     s->settings.on_header_value = on_header_value;
+    s->settings.on_header_value_complete = on_header_value_complete;
     s->settings.on_headers_complete = on_headers_complete;
     s->settings.on_body = on_body;
     s->settings.on_message_complete = on_message_complete;

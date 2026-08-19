@@ -111,7 +111,9 @@ CSILK_INTERNAL void        _csilk_send_data_owned(csilk_ctx_t* c, char* data, si
 CSILK_INTERNAL int         on_message_begin(llhttp_t* p);
 CSILK_INTERNAL int         on_url(llhttp_t* p, const char* at, size_t length);
 CSILK_INTERNAL int         on_header_field(llhttp_t* p, const char* at, size_t length);
+CSILK_INTERNAL int         on_header_field_complete(llhttp_t* p);
 CSILK_INTERNAL int         on_header_value(llhttp_t* p, const char* at, size_t length);
+CSILK_INTERNAL int         on_header_value_complete(llhttp_t* p);
 CSILK_INTERNAL int         on_headers_complete(llhttp_t* p);
 CSILK_INTERNAL int         on_body(llhttp_t* p, const char* at, size_t length);
 CSILK_INTERNAL int         on_message_complete(llhttp_t* p);
