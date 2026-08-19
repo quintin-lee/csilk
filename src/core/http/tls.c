@@ -178,14 +178,7 @@ setup_client_tls(csilk_client_t* client)
 void
 process_tls_read(csilk_client_t* client)
 {
-    char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
-    if (!buf) {
-        CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
-        csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
-        return;
-    }
-    int n;
-
+    int n = 0;
     if (!SSL_is_init_finished(client->ssl)) {
         int r = SSL_do_handshake(client->ssl);
         flush_tls_write(client);
@@ -214,7 +207,20 @@ process_tls_read(csilk_client_t* client)
         csilk_conn_set_state(client, CSILK_CONN_READING);
     }
 
-    while ((n = SSL_read(client->ssl, buf, 4096)) > 0) {
+    while (1) {
+        char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
+        if (!buf) {
+            CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
+            break;
+        }
+        n = SSL_read(client->ssl, buf, 4096);
+        if (n <= 0) {
+            break;
+        }
+
         if (client->ctx.is_websocket) {
             csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
         } else if (client->protocol == CSILK_PROTO_HTTP2) {
@@ -227,7 +233,7 @@ process_tls_read(csilk_client_t* client)
             }
         } else {
             enum llhttp_errno err = llhttp_execute(&client->parser, buf, (size_t)n);
-            if (err != HPE_OK && err != HPE_PAUSED_UPGRADE) {
+            if (err != HPE_OK && err != HPE_PAUSED && err != HPE_PAUSED_UPGRADE) {
                 if (err == HPE_CLOSED_CONNECTION) {
                     llhttp_init(&client->parser, HTTP_REQUEST, &client->server->settings);
                     client->parser.data = client;
