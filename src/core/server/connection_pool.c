@@ -54,12 +54,13 @@ pool_get(worker_pool_t* wp)
         client = calloc(1, sizeof(csilk_client_t));
     }
     if (client) {
-        uint8_t gen = (uint8_t)((client->generation + 1) & 0xFF);
+        uint64_t gen = client->generation + 1;
         if (gen == 0) {
             gen = 1;
         }
         csilk_conn_set_state(client, CSILK_CONN_INIT);
         client->generation = gen;
+
         atomic_store(&client->ref_count, 0);
         atomic_store(&client->pending_io, 0);
 #ifdef CSILK_USE_URING

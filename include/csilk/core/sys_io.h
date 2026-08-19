@@ -59,12 +59,18 @@ typedef enum {
     CSILK_IO_HANDLE_FS_EVENT
 } csilk_io_handle_type_t;
 
+typedef struct uring_op_context_s uring_op_context_t;
+
 /** @brief Opaque event loop type (io_uring instance with loop control). */
 typedef struct csilk_io_loop_s {
-    struct io_uring ring;
-    int             stop_flag;
-    int             active_handles;
-    int             running;
+    struct io_uring     ring;
+    int                 stop_flag;
+    int                 active_handles;
+    int                 running;
+    uring_op_context_t* op_pool;
+    uint32_t*           op_free_stack;
+    uint32_t            op_free_head;
+    uint32_t            op_pool_capacity;
 } csilk_io_loop_t;
 
 typedef struct csilk_io_handle_s csilk_io_handle_t;
@@ -77,7 +83,7 @@ typedef void (*csilk_io_close_cb)(csilk_io_handle_t* handle);
     int                    flags;                                                                  \
     csilk_io_handle_type_t type;                                                                   \
     csilk_io_close_cb      close_cb;                                                               \
-    uint8_t                generation;
+    uint64_t               generation;
 
 /** @brief Generic handle with per-handle user data and owning loop. */
 struct csilk_io_handle_s {

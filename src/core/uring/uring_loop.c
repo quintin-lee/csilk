@@ -30,7 +30,22 @@ csilk_io_loop_init(csilk_io_loop_t* loop)
         return -1;
     }
     memset(loop, 0, sizeof(*loop));
-    return io_uring_queue_init(4096, &loop->ring, 0);
+    int rc = io_uring_queue_init(4096, &loop->ring, 0);
+    if (rc < 0) {
+        return rc;
+    }
+
+    loop->op_pool_capacity = 8192;
+    loop->op_pool = calloc(loop->op_pool_capacity, sizeof(uring_op_context_t));
+    loop->op_free_stack = malloc(loop->op_pool_capacity * sizeof(uint32_t));
+    if (loop->op_pool && loop->op_free_stack) {
+        for (uint32_t i = 0; i < loop->op_pool_capacity; i++) {
+            loop->op_free_stack[i] = loop->op_pool_capacity - 1 - i;
+            loop->op_pool[i].slot_idx = i;
+        }
+        loop->op_free_head = loop->op_pool_capacity;
+    }
+    return 0;
 }
 
 int
@@ -40,6 +55,14 @@ csilk_io_loop_close(csilk_io_loop_t* loop)
         return -1;
     }
     io_uring_queue_exit(&loop->ring);
+    if (loop->op_pool) {
+        free(loop->op_pool);
+        loop->op_pool = NULL;
+    }
+    if (loop->op_free_stack) {
+        free(loop->op_free_stack);
+        loop->op_free_stack = NULL;
+    }
     if (loop == &g_default_loop) {
         g_default_loop_inited = 0;
         g_default_ring_ptr = NULL;
