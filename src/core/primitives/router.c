@@ -44,6 +44,47 @@ node_new(const char* segment, csilk_node_type_t type)
     return node;
 }
 
+static inline int
+node_cmp_key(csilk_node_type_t type, const char* segment, const csilk_router_node_t* node)
+{
+    if (type != node->type) {
+        return (type < node->type) ? -1 : 1;
+    }
+    return strcmp(segment, node->segment);
+}
+
+static int
+node_find_child(const csilk_router_node_t* parent,
+                csilk_node_type_t          type,
+                const char*                segment,
+                int*                       out_insert_pos)
+{
+    csilk_router_node_t** children = node_children(parent);
+    int                   low = 0;
+    int                   high = parent->children_count - 1;
+
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        int cmp = node_cmp_key(type, segment, children[mid]);
+        if (cmp == 0) {
+            if (out_insert_pos) {
+                *out_insert_pos = mid;
+            }
+            return mid;
+        }
+        if (cmp < 0) {
+            high = mid - 1;
+        } else {
+            low = mid + 1;
+        }
+    }
+
+    if (out_insert_pos) {
+        *out_insert_pos = low;
+    }
+    return -1;
+}
+
 static int
 node_add_child(csilk_router_node_t* parent, csilk_router_node_t* child, int insert_pos)
 {
@@ -65,8 +106,10 @@ node_add_child(csilk_router_node_t* parent, csilk_router_node_t* child, int inse
     }
 
     csilk_router_node_t** children = node_children(parent);
-    for (int i = parent->children_count; i > insert_pos; i--) {
-        children[i] = children[i - 1];
+    if (parent->children_count > insert_pos) {
+        memmove(&children[insert_pos + 1],
+                &children[insert_pos],
+                sizeof(csilk_router_node_t*) * (size_t)(parent->children_count - insert_pos));
     }
     children[insert_pos] = child;
     parent->children_count++;
@@ -320,24 +363,15 @@ router_add_full(csilk_router_t*  r,
         memcpy(seg_name, seg_name_start, seg_name_len);
         seg_name[seg_name_len] = '\0';
 
-        csilk_router_node_t** children = node_children(curr);
-        csilk_router_node_t*  found = NULL;
-        int                   insert_pos = curr->children_count;
-
-        for (int i = 0; i < curr->children_count; i++) {
-            if (children[i]->type == type && strcmp(children[i]->segment, seg_name) == 0) {
-                found = children[i];
-                break;
-            }
-            if (found == NULL && children[i]->type > type) {
-                insert_pos = i;
-            }
-        }
+        int                  insert_pos = 0;
+        int                  found_idx = node_find_child(curr, type, seg_name, &insert_pos);
+        csilk_router_node_t* found = (found_idx >= 0) ? node_children(curr)[found_idx] : NULL;
 
         if (!found) {
             found = node_new(seg_name, type);
             if (found) {
                 if (node_add_child(curr, found, insert_pos) != 0) {
+
                     node_free(found);
                     found = NULL;
                     CSILK_LOG_E("Router: failed to add child node for segment '%s'", seg_name);
