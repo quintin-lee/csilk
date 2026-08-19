@@ -39,6 +39,7 @@ struct csilk_header_s {
     size_t                 key_len;
     size_t                 value_len;
     uint32_t               hash;
+    csilk_header_id_t      id;
     struct csilk_header_s* next;
 };
 typedef struct csilk_header_s csilk_header_t;
@@ -48,7 +49,7 @@ typedef struct csilk_header_s csilk_header_t;
 #endif
 
 /**
- * @brief A fixed-size chained hash table for HTTP headers.
+ * @brief A fixed-size chained hash table with direct O(1) slots for interned HTTP headers.
  *
  * Nodes, keys and values are ALL arena-allocated by the map writers
  * (map_set_view/map_set/map_add in header_map.c), so csilk_arena_reset()
@@ -56,10 +57,10 @@ typedef struct csilk_header_s csilk_header_t;
  * pointers of maps that were actually written this request.
  */
 struct csilk_header_map_s {
-    csilk_header_t* buckets[CSILK_HEADER_BUCKETS];
-    uint8_t         used; /**< Set to 1 by map writers; lets cleanup skip zeroing
-                     unused maps (avoids a 512-byte memset per map per
-                     request). Cleared by the same memset. */
+    csilk_header_t* known[CSILK_HDR_MAX_KNOWN]; /**< O(1) direct slot array for interned headers */
+    csilk_header_t*
+            buckets[CSILK_HEADER_BUCKETS]; /**< Chained hash buckets for all / custom headers */
+    uint8_t used; /**< Set to 1 by map writers; lets cleanup skip zeroing */
 };
 typedef struct csilk_header_map_s csilk_header_map_t;
 

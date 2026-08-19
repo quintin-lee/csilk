@@ -50,6 +50,24 @@ CSILK_INTERNAL const char* map_get(csilk_header_map_t* map, const char* key);
 CSILK_INTERNAL csilk_view_t map_get_view(csilk_header_map_t* map, const char* key);
 
 /**
+ * @brief Look up a header value by its interned ID (O(1) direct slot access).
+ *
+ * @param map Header hash map (may be NULL).
+ * @param id  Interned header ID.
+ * @return Pointer to the value string, or NULL if not found.
+ */
+CSILK_INTERNAL const char* map_get_id(csilk_header_map_t* map, csilk_header_id_t id);
+
+/**
+ * @brief Look up a header value by its interned ID returning a zero-copy slice view.
+ *
+ * @param map Header hash map (may be NULL).
+ * @param id  Interned header ID.
+ * @return A csilk_view_t slice of the header value.
+ */
+CSILK_INTERNAL csilk_view_t map_get_id_view(csilk_header_map_t* map, csilk_header_id_t id);
+
+/**
  * @brief Set a header value in the hash map, overwriting any existing entry.
  *
  * Hashes the key, searches the bucket for an existing entry, and replaces

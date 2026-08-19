@@ -170,6 +170,59 @@ const char* csilk_get_header(csilk_ctx_t* c, const char* key);
 csilk_view_t csilk_get_header_view(csilk_ctx_t* c, const char* key);
 
 /**
+ * @brief Look up a request header value by its interned ID (O(1) direct slot access).
+ *
+ * @param c  The request context.
+ * @param id Interned header ID (e.g. CSILK_HDR_HOST, CSILK_HDR_CONTENT_TYPE).
+ * @return Header value string, or NULL if absent. Valid until csilk_ctx_cleanup.
+ */
+const char* csilk_get_header_id(csilk_ctx_t* c, csilk_header_id_t id);
+
+/**
+ * @brief Look up a request header value by its interned ID as a zero-copy slice view.
+ *
+ * @param c  The request context.
+ * @param id Interned header ID.
+ * @return A csilk_view_t slice (empty view if absent).
+ */
+csilk_view_t csilk_get_header_id_view(csilk_ctx_t* c, csilk_header_id_t id);
+
+/**
+ * @brief Look up a response header value by its interned ID.
+ *
+ * @param c  The request context.
+ * @param id Interned header ID.
+ * @return Header value string, or NULL if absent. Valid until csilk_ctx_cleanup.
+ */
+const char* csilk_get_response_header_id(csilk_ctx_t* c, csilk_header_id_t id);
+
+/**
+ * @brief Look up a response header value by its interned ID as a zero-copy slice view.
+ *
+ * @param c  The request context.
+ * @param id Interned header ID.
+ * @return A csilk_view_t slice (empty view if absent).
+ */
+csilk_view_t csilk_get_response_header_id_view(csilk_ctx_t* c, csilk_header_id_t id);
+
+/**
+ * @brief Convert a header name string to its interned ID (case-insensitive).
+ *
+ * @param name Header name string.
+ * @param len  Length of @p name in bytes.
+ * @return The matching csilk_header_id_t, or CSILK_HDR_UNKNOWN if not recognized.
+ */
+csilk_header_id_t csilk_header_id_from_name(const char* name, size_t len);
+
+/**
+ * @brief Get the canonical header name string for an interned header ID.
+ *
+ * @param id Interned header ID.
+ * @return Canonical header name (e.g. "Content-Type"), or "Unknown".
+ */
+const char* csilk_header_id_name(csilk_header_id_t id);
+
+/**
  * @brief Get a response header value by name (case-insensitive).
  *
  * @param c   The request context.
