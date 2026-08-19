@@ -31,49 +31,92 @@
 #define UV_HANDLE_BOUND 0x00002000
 #endif
 
-/* --- Dispatch --- */
+/* --- Producer-Safe Dispatch Task Cache --- */
 
-/** @brief Pop a dispatch task from the worker's slab.
- *
- * @param wp The worker pool (must not be NULL).
- * @return A free task, or NULL if the slab is exhausted. */
-static csilk_dispatch_task_t*
-pool_get_dispatch_task(worker_pool_t* wp)
+#define CSILK_DISPATCH_TLS_CAPACITY 64
+
+typedef struct {
+    csilk_dispatch_task_t* items[CSILK_DISPATCH_TLS_CAPACITY];
+    int                    count;
+} csilk_dispatch_tls_cache_t;
+
+static _Thread_local csilk_dispatch_tls_cache_t g_dispatch_tls_cache = {.count = 0};
+
+static pthread_key_t  g_dispatch_tls_key;
+static pthread_once_t g_dispatch_tls_once = PTHREAD_ONCE_INIT;
+
+static void
+dispatch_tls_cleanup(void* unused)
 {
-    if (wp->dispatch_task_slab_count > 0) {
-        return &wp->dispatch_task_slab[--wp->dispatch_task_slab_count];
+    (void)unused;
+    while (g_dispatch_tls_cache.count > 0) {
+        csilk_dispatch_task_t* task = g_dispatch_tls_cache.items[--g_dispatch_tls_cache.count];
+        free(task);
     }
-    return NULL;
 }
 
-/** @brief Return a dispatch task to the worker's slab.
- *
- * If the slab is full the task is freed instead.
- *
- * @param wp     The worker pool (may be NULL — falls back to free).
- * @param task   Task to return (must not be NULL). */
 static void
-pool_put_dispatch_task(worker_pool_t* wp, csilk_dispatch_task_t* task)
+dispatch_init_tls_key(void)
 {
-    if (!task || !wp) {
-        free(task);
+    pthread_key_create(&g_dispatch_tls_key, dispatch_tls_cleanup);
+    atexit(_csilk_dispatch_pool_cleanup);
+}
+
+static inline void
+ensure_dispatch_tls_registered(void)
+{
+    pthread_once(&g_dispatch_tls_once, dispatch_init_tls_key);
+    if (!pthread_getspecific(g_dispatch_tls_key)) {
+        pthread_setspecific(g_dispatch_tls_key, (void*)1);
+    }
+}
+
+static csilk_dispatch_task_t*
+dispatch_task_alloc(void)
+{
+    ensure_dispatch_tls_registered();
+
+    /* Fast path from thread-local cache */
+    if (g_dispatch_tls_cache.count > 0) {
+        return g_dispatch_tls_cache.items[--g_dispatch_tls_cache.count];
+    }
+
+    /* Direct allocator fallback */
+    csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)malloc(sizeof(csilk_dispatch_task_t));
+    if (task) {
+        atomic_init(&task->pool_next, NULL);
+    }
+    return task;
+}
+
+static void
+dispatch_task_free(csilk_dispatch_task_t* task)
+{
+    if (!task) {
         return;
     }
-    if (wp->dispatch_task_slab_count < CSILK_DISPATCH_TASK_SLAB_SIZE) {
-        wp->dispatch_task_slab[wp->dispatch_task_slab_count++] = *task;
-    } else {
-        free(task);
+
+    ensure_dispatch_tls_registered();
+
+    /* Fast path to thread-local cache */
+    if (g_dispatch_tls_cache.count < CSILK_DISPATCH_TLS_CAPACITY) {
+        g_dispatch_tls_cache.items[g_dispatch_tls_cache.count++] = task;
+        return;
     }
+
+    /* Free to OS */
+    free(task);
 }
 
-/** @brief Pre-allocate the dispatch task slab at worker startup. */
 void
-_csilk_worker_init_dispatch_task_pool(worker_pool_t* wp)
+_csilk_dispatch_pool_cleanup(void)
 {
-    wp->dispatch_task_slab_count = 0;
+    /* Clean up caller thread's TLS cache */
+    dispatch_tls_cleanup(NULL);
 }
 
 /**
+
  * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
  * @param[in] handle async handle whose data points at the worker_pool_t.
  * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
@@ -98,7 +141,7 @@ on_dispatch_async(csilk_io_async_t* handle)
         if (client) {
             csilk_client_unref(client);
         }
-        pool_put_dispatch_task(wp, task);
+        dispatch_task_free(task);
         node = csilk_lfq_dequeue(&wp->dispatch_queue);
     }
 }
@@ -128,8 +171,8 @@ _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
  * @note Thread-Safety: Safe to call from any thread or worker. This is the official mechanism
  *       for cross-worker communication to preserve strict single-thread confinement of
  *       wp->active_clients and connection state.
- * @note Allocates a task from the slab (or falls back to malloc), enqueues it on the worker's
- *       lock-free dispatch queue, and signals the async handle to wake the target loop.
+ * @note Allocates a task from the producer-safe task pool (or falls back to malloc),
+ *       enqueues it on the worker's lock-free dispatch queue, and signals the async handle.
  */
 void
 csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
@@ -143,12 +186,9 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     }
     worker_pool_t* wp = client->owner_pool;
 
-    csilk_dispatch_task_t* task = pool_get_dispatch_task(wp);
+    csilk_dispatch_task_t* task = dispatch_task_alloc();
     if (!task) {
-        task = malloc(sizeof(csilk_dispatch_task_t));
-        if (!task) {
-            return;
-        }
+        return;
     }
     task->cb = cb;
     task->arg = arg;
@@ -297,7 +337,6 @@ worker_thread(void* arg)
 
     _csilk_worker_init_arena_pool(wp);
     _csilk_worker_init_read_buf_pool(wp);
-    _csilk_worker_init_dispatch_task_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
     int bind_res = bind_and_listen(

@@ -70,6 +70,7 @@ set(CSILK_CORE_TESTS
     test_headers_fragmented
     test_hot_reload
     test_hot_reload_stress
+    test_dispatch_bench
     test_codec_prop
 
     test_hash_prop
@@ -95,8 +96,9 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core
 )
+
 
 
 # -- Application tests --
