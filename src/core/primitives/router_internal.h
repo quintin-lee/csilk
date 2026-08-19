@@ -18,8 +18,8 @@
 #include "../internal/srv_internal.h"
 #include "csilk/core/router.h"
 
-/** @brief Inline capacity for small-vector children optimization. */
-enum { CSILK_ROUTER_INLINE_CHILDREN = 8 };
+/** @brief Router trie limits and small-vector capacities. */
+enum { CSILK_ROUTER_INLINE_CHILDREN = 8, CSILK_ROUTER_MAX_DEPTH = 64 };
 
 /** @brief Node type for router trie. */
 typedef enum { CSILK_NODE_STATIC, CSILK_NODE_PARAM, CSILK_NODE_WILDCARD } csilk_node_type_t;
