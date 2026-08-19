@@ -254,6 +254,11 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
         return;
     }
 
+    /* Release RCU read-side lease if held (e.g. async handler completion, abort, or reset) */
+    if (c->router_token.active && c->server) {
+        csilk_server_router_release(c->server, &c->router_token);
+    }
+
     /* 1. Deferred callbacks (LIFO) — may release heap memory / fds. */
     csilk_ctx_defer_free(c);
 

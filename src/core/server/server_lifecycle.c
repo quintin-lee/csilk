@@ -26,11 +26,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dlfcn.h>
+#else
+#include <windows.h>
 #endif
 
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/hot_reload.h"
 #include "csilk/reflection/reflect.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
@@ -48,13 +52,25 @@ csilk_server_new(csilk_router_t* router)
     if (!s) {
         return NULL;
     }
-    s->loop = csilk_io_default_loop();
-    if (!s->loop) {
-
+#if defined(CSILK_USE_URING) && CSILK_USE_URING
+    s->loop = calloc(1, sizeof(csilk_io_loop_t));
+    if (!s->loop || csilk_io_loop_init(s->loop) != 0) {
+        free(s->loop);
         free(s);
         return NULL;
     }
-    s->router = router;
+    s->loop_owned = 1;
+#else
+    s->loop = csilk_io_default_loop();
+    if (!s->loop) {
+        free(s);
+        return NULL;
+    }
+    s->loop_owned = 0;
+#endif
+    _csilk_reload_mgr_init(s);
+    atomic_init(&s->router, router);
+    s->hot_reload_ctx = NULL;
     llhttp_settings_init(&s->settings);
     s->settings.on_message_begin = on_message_begin;
     s->settings.on_url = on_url;
@@ -226,6 +242,10 @@ csilk_server_free(csilk_server_t* server)
             curr = next;
         }
     }
+
+    csilk_dev_hot_reload_stop(server);
+    csilk_server_wait_grace_period(server);
+    _csilk_reload_mgr_free(server);
 
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
@@ -607,7 +627,7 @@ csilk_server_run(csilk_server_t* server, int port)
     return ret;
 }
 
-/* --- Accessors --- */
+/* --- Accessors & RCU Router Management --- */
 
 /** @brief Get the internal message queue instance for the server. */
 csilk_mq_t*
@@ -616,26 +636,331 @@ csilk_server_get_mq(csilk_server_t* server)
     return server ? server->mq : NULL;
 }
 
-/** @brief Get the server's radix-tree router. */
+/** @brief Get the server's active radix-tree router atomically. */
 csilk_router_t*
 csilk_server_get_router(csilk_server_t* server)
 {
-    return server ? server->router : NULL;
+    return server ? atomic_load_explicit(&server->router, memory_order_acquire) : NULL;
 }
 
-/** @brief Swap the router instance attached to a server. */
+CSILK_INTERNAL void
+_csilk_reload_mgr_init(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+    atomic_init(&mgr->global_epoch, 1);
+    atomic_init(&mgr->reclaim_lock, 0);
+    atomic_init(&mgr->retired_count, 0);
+    atomic_init(&mgr->retired_head, NULL);
+
+    for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+        atomic_init(&mgr->reader_slots[i].active_epoch, 0);
+        atomic_init(&mgr->reader_slots[i].owner_tid, 0);
+        atomic_init(&mgr->reader_slots[i].nesting_depth, 0);
+    }
+}
+
+static csilk_rcu_slot_t*
+acquire_rcu_slot(csilk_reload_mgr_t* mgr)
+{
+    uintptr_t my_tid = (uintptr_t)pthread_self();
+    if (my_tid == 0) {
+        my_tid = 1;
+    }
+
+    size_t start = (size_t)(my_tid % CSILK_RELOAD_MAX_READERS);
+
+    /* 1. Fast path: check if this thread already owns a slot */
+    for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+        size_t idx = (start + i) % CSILK_RELOAD_MAX_READERS;
+        if (atomic_load_explicit(&mgr->reader_slots[idx].owner_tid, memory_order_relaxed) ==
+            my_tid) {
+            return &mgr->reader_slots[idx];
+        }
+    }
+
+    /* 2. Slow path: claim an unused slot */
+    for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+        size_t    idx = (start + i) % CSILK_RELOAD_MAX_READERS;
+        uintptr_t expected = 0;
+        if (atomic_compare_exchange_strong_explicit(&mgr->reader_slots[idx].owner_tid,
+                                                    &expected,
+                                                    my_tid,
+                                                    memory_order_acq_rel,
+                                                    memory_order_relaxed)) {
+            return &mgr->reader_slots[idx];
+        }
+    }
+
+    /* Fallback: deterministic slot */
+    return &mgr->reader_slots[start];
+}
+
+csilk_router_t*
+csilk_server_router_acquire(csilk_server_t* server, csilk_rcu_token_t* token)
+{
+    if (!server) {
+        if (token) {
+            token->active = 0;
+            token->slot = NULL;
+            token->epoch = 0;
+        }
+        return NULL;
+    }
+
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+    csilk_rcu_slot_t*   slot = acquire_rcu_slot(mgr);
+
+    uint32_t depth = atomic_fetch_add_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
+    uint64_t epoch = 0;
+    if (depth == 0) {
+        epoch = atomic_load_explicit(&mgr->global_epoch, memory_order_acquire);
+        atomic_store_explicit(&slot->active_epoch, epoch, memory_order_release);
+        atomic_thread_fence(memory_order_seq_cst);
+    } else {
+        epoch = atomic_load_explicit(&slot->active_epoch, memory_order_relaxed);
+    }
+
+    if (token) {
+        token->slot = slot;
+        token->epoch = epoch;
+        token->active = 1;
+    }
+
+    return atomic_load_explicit(&server->router, memory_order_acquire);
+}
+
 void
-csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
+csilk_server_router_release(csilk_server_t* server, csilk_rcu_token_t* token)
+{
+    if (!token || !token->active || !token->slot) {
+        return;
+    }
+    (void)server;
+    csilk_rcu_slot_t* slot = (csilk_rcu_slot_t*)token->slot;
+    token->active = 0;
+    token->slot = NULL;
+    token->epoch = 0;
+
+    uint32_t depth = atomic_fetch_sub_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
+    if (depth <= 1) {
+        atomic_store_explicit(&slot->active_epoch, 0, memory_order_release);
+    }
+}
+
+CSILK_INTERNAL void
+_csilk_reload_try_reclaim(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+
+    uint32_t expected = 0;
+    if (!atomic_compare_exchange_strong_explicit(
+            &mgr->reclaim_lock, &expected, 1, memory_order_acquire, memory_order_relaxed)) {
+        return; /* Another thread is currently performing reclamation */
+    }
+
+    uint64_t current_epoch = atomic_load_explicit(&mgr->global_epoch, memory_order_acquire);
+    uint64_t min_active_epoch = UINT64_MAX;
+    bool     has_active_readers = false;
+
+    for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+        uint64_t r_epoch =
+            atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire);
+        if (r_epoch != 0) {
+            has_active_readers = true;
+            if (r_epoch < min_active_epoch) {
+                min_active_epoch = r_epoch;
+            }
+        }
+    }
+
+    if (!has_active_readers) {
+        min_active_epoch = current_epoch + 2;
+    }
+
+    csilk_retired_router_t* list =
+        atomic_exchange_explicit(&mgr->retired_head, NULL, memory_order_acq_rel);
+    csilk_retired_router_t* retain_head = NULL;
+    uint32_t                retained_count = 0;
+
+    while (list) {
+        csilk_retired_router_t* next =
+            atomic_load_explicit(&list->retired_next, memory_order_relaxed);
+        if (list->retired_epoch < min_active_epoch) {
+            /* Safe to free: no active reader can reach this router or dynamic library */
+            if (list->router) {
+                csilk_router_free(list->router);
+            }
+            if (list->dl_handle) {
+#ifndef _WIN32
+                dlclose(list->dl_handle);
+#else
+                FreeLibrary((HMODULE)list->dl_handle);
+#endif
+            }
+            if (list->tmp_path) {
+                unlink(list->tmp_path);
+                free(list->tmp_path);
+            }
+            free(list);
+        } else {
+            atomic_store_explicit(&list->retired_next, retain_head, memory_order_relaxed);
+            retain_head = list;
+            retained_count++;
+        }
+        list = next;
+    }
+
+    if (retain_head) {
+        csilk_retired_router_t* tail = retain_head;
+        while (atomic_load_explicit(&tail->retired_next, memory_order_relaxed) != NULL) {
+            tail = atomic_load_explicit(&tail->retired_next, memory_order_relaxed);
+        }
+        csilk_retired_router_t* cur_retired =
+            atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
+        do {
+            atomic_store_explicit(&tail->retired_next, cur_retired, memory_order_relaxed);
+        } while (!atomic_compare_exchange_weak_explicit(&mgr->retired_head,
+                                                        &cur_retired,
+                                                        retain_head,
+                                                        memory_order_release,
+                                                        memory_order_relaxed));
+    }
+
+    atomic_store_explicit(&mgr->retired_count, retained_count, memory_order_relaxed);
+    atomic_store_explicit(&mgr->reclaim_lock, 0, memory_order_release);
+}
+
+void
+csilk_server_set_router_full(csilk_server_t* server,
+                             csilk_router_t* router,
+                             void*           dl_handle,
+                             const char*     tmp_path)
 {
     if (!server || !router) {
         return;
     }
+
     if (server->middleware_count > 0) {
         csilk_router_compile(router, server->middlewares, (size_t)server->middleware_count);
     }
-    csilk_router_t* old_router = server->router;
-    server->router = router;
-    if (old_router) {
-        csilk_router_free(old_router);
+
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+
+    /* Atomically swap new router into place */
+    csilk_router_t* old_router =
+        atomic_exchange_explicit(&server->router, router, memory_order_acq_rel);
+
+    /* Monotonically advance global reload epoch */
+    uint64_t retired_epoch = atomic_fetch_add_explicit(&mgr->global_epoch, 1, memory_order_acq_rel);
+
+    if (old_router || dl_handle || tmp_path) {
+        csilk_retired_router_t* rec = calloc(1, sizeof(csilk_retired_router_t));
+        if (rec) {
+            rec->router = old_router;
+            rec->dl_handle = dl_handle;
+            rec->tmp_path = tmp_path ? strdup(tmp_path) : NULL;
+            rec->retired_epoch = retired_epoch;
+            atomic_init(&rec->retired_next, NULL);
+
+            csilk_retired_router_t* old_head =
+                atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
+            do {
+                atomic_store_explicit(&rec->retired_next, old_head, memory_order_relaxed);
+            } while (!atomic_compare_exchange_weak_explicit(
+                &mgr->retired_head, &old_head, rec, memory_order_release, memory_order_relaxed));
+
+            atomic_fetch_add_explicit(&mgr->retired_count, 1, memory_order_relaxed);
+        }
+    }
+
+    /* Opportunistic non-blocking reclamation */
+    _csilk_reload_try_reclaim(server);
+}
+
+void
+csilk_server_set_router_ex(csilk_server_t* server, csilk_router_t* router, void* dl_handle)
+{
+    csilk_server_set_router_full(server, router, dl_handle, NULL);
+}
+
+void
+csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
+{
+    csilk_server_set_router_full(server, router, NULL, NULL);
+}
+
+void
+csilk_server_wait_grace_period(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+    uint64_t target_epoch = atomic_load_explicit(&mgr->global_epoch, memory_order_acquire);
+
+    while (1) {
+        bool all_done = true;
+        for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+            uint64_t r_epoch =
+                atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire);
+            if (r_epoch != 0 && r_epoch <= target_epoch) {
+                all_done = false;
+                break;
+            }
+        }
+        if (all_done) {
+            break;
+        }
+        sched_yield();
+        usleep(1000); /* 1 ms */
+    }
+
+    _csilk_reload_try_reclaim(server);
+}
+
+CSILK_INTERNAL void
+_csilk_reload_mgr_free(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+
+    /* Wait for all readers to exit */
+    for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
+        while (atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire) !=
+               0) {
+            sched_yield();
+        }
+    }
+
+    /* Reclaim all retired entries unconditionally */
+    csilk_retired_router_t* list =
+        atomic_exchange_explicit(&mgr->retired_head, NULL, memory_order_acq_rel);
+    while (list) {
+        csilk_retired_router_t* next =
+            atomic_load_explicit(&list->retired_next, memory_order_relaxed);
+        if (list->router) {
+            csilk_router_free(list->router);
+        }
+        if (list->dl_handle) {
+#ifndef _WIN32
+            dlclose(list->dl_handle);
+#else
+            FreeLibrary((HMODULE)list->dl_handle);
+#endif
+        }
+        if (list->tmp_path) {
+            unlink(list->tmp_path);
+            free(list->tmp_path);
+        }
+        free(list);
+        list = next;
     }
 }

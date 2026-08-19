@@ -176,17 +176,82 @@ void csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_drive
  */
 int csilk_server_run(csilk_server_t* server, int port);
 
+/** @brief RCU / EBR read-side lease token for safe router and code lifecycle. */
+typedef struct csilk_rcu_token_s {
+    void*    slot;   /**< Opaque reader slot pointer. */
+    uint64_t epoch;  /**< Sampled epoch at acquisition. */
+    uint8_t  active; /**< 1 if currently in a read-side critical section. */
+} csilk_rcu_token_t;
+
 /** @brief Get the router instance attached to a server.
  *  @param server The server instance.
  *  @return Pointer to csilk_router_t. */
 csilk_router_t* csilk_server_get_router(csilk_server_t* server);
 
+/**
+ * @brief Acquire the active router in an RCU / EBR read-side critical section.
+ *
+ * Atomically samples the active router and enters a read-side epoch slot,
+ * ensuring the router and any dynamic library (.so) code remain valid for the
+ * entire duration of request execution.
+ *
+ * @param server Pointer to server instance.
+ * @param token  Pointer to token populated with lease tracking state.
+ * @return Active router pointer, or NULL if server is NULL.
+ */
+csilk_router_t* csilk_server_router_acquire(csilk_server_t* server, csilk_rcu_token_t* token);
+
+/**
+ * @brief Release an RCU / EBR read-side critical section.
+ *
+ * Signals that request handler execution on the acquired router has completed.
+ *
+ * @param server Pointer to server instance.
+ * @param token  Pointer to token populated by csilk_server_router_acquire().
+ */
+void csilk_server_router_release(csilk_server_t* server, csilk_rcu_token_t* token);
+
 /** @brief Swap the router instance attached to a server (for hot-reloading).
- *  Frees the old router and attaches the new one. Thread-safe if called
- *  from the main event loop thread (e.g. during a hot-reload callback).
+ *  Atomically publishes the new router using RCU / EBR.  The previous router
+ *  is retired and reclaimed safely once all in-flight requests complete.
  *  @param server The server instance.
  *  @param router The new router instance. */
 void csilk_server_set_router(csilk_server_t* server, csilk_router_t* router);
+
+/**
+ * @brief Swap the router and schedule the old dynamic library handle for deferred cleanup.
+ *
+ * Atomically publishes new_router and enqueues old_router + dl_handle into the
+ * server's EBR retired list. dlclose() and csilk_router_free() are performed
+ * only after all in-flight requests that observed the previous generation have finished.
+ *
+ * @param server    The server instance.
+ * @param router    The new router instance.
+ * @param dl_handle Dynamic library handle of the OLD library (or NULL if static).
+ */
+void csilk_server_set_router_ex(csilk_server_t* server, csilk_router_t* router, void* dl_handle);
+
+/**
+ * @brief Swap the router with both dynamic library handle and temp file path for deferred cleanup.
+ *
+ * @param server    The server instance.
+ * @param router    The new router instance.
+ * @param dl_handle Dynamic library handle of the OLD library (or NULL if static).
+ * @param tmp_path  Temporary .so file path to unlink after grace period (or NULL).
+ */
+void csilk_server_set_router_full(csilk_server_t* server,
+                                  csilk_router_t* router,
+                                  void*           dl_handle,
+                                  const char*     tmp_path);
+
+/**
+ * @brief Synchronously wait until all in-flight requests on previous router generations finish.
+ *
+ * Reclaims all retired routers and unloads dynamic libraries whose grace period has expired.
+ *
+ * @param server Pointer to server instance.
+ */
+void csilk_server_wait_grace_period(csilk_server_t* server);
 
 /**
  * @brief Get the client's IP address.

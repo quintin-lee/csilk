@@ -417,7 +417,10 @@ _csilk_dispatch_request(csilk_ctx_t* c)
 
     _csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
 
-    if (csilk_router_match_ctx(server->router, c)) {
+    /* Acquire router in RCU / EBR read-side critical section */
+    csilk_router_t* router = csilk_server_router_acquire(server, &c->router_token);
+
+    if (router && csilk_router_match_ctx(router, c)) {
         CSILK_LOG_D("Route matched, calling next handler");
         csilk_next(c);
     } else {
@@ -437,6 +440,7 @@ _csilk_dispatch_request(csilk_ctx_t* c)
     }
 
     if (!c->is_async) {
+        csilk_server_router_release(server, &c->router_token);
         _csilk_send_response(c);
     }
 }

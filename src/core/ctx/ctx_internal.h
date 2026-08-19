@@ -304,6 +304,7 @@ struct csilk_ctx_s {
                              MUST NOT be used directly by handlers. Used
                              internally by _csilk_send_data() to route data
                              through TLS or raw TCP. */
+    csilk_rcu_token_t      router_token;     /**< RCU / EBR read-side lease token. */
     int conn_closed; /**< Non-zero if the connection has been closed/timed out. */
 
     /* === Request Data (scalar core; header maps at tail of struct) === */

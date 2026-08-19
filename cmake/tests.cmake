@@ -68,7 +68,10 @@ set(CSILK_CORE_TESTS
     test_utils_ext
     test_zerocopy_lifecycle
     test_headers_fragmented
+    test_hot_reload
+    test_hot_reload_stress
     test_codec_prop
+
     test_hash_prop
     test_simd_router_arena
     test_uring_buf
@@ -92,8 +95,9 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core
 )
+
 
 # -- Application tests --
 set(CSILK_APP_TESTS
