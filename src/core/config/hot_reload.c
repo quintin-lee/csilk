@@ -54,17 +54,26 @@ copy_file(const char* src, const char* dst)
         fclose(in);
         return -1;
     }
-    char   buf[8192];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
-        if (fwrite(buf, 1, n, out) != n) {
-            fclose(in);
-            fclose(out);
-            return -1;
+    char buf[8192];
+    int  err = 0;
+    while (!feof(in) && !ferror(in)) {
+        size_t n = fread(buf, 1, sizeof(buf), in);
+        if (n > 0) {
+            if (fwrite(buf, 1, n, out) != n) {
+                err = 1;
+                break;
+            }
         }
+    }
+    if (ferror(in)) {
+        err = 1;
     }
     fclose(in);
     fclose(out);
+
+    if (err) {
+        return -1;
+    }
 
 #ifndef _WIN32
     chmod(dst, 0755);

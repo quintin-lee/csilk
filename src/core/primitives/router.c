@@ -88,10 +88,15 @@ node_find_child(const csilk_router_node_t* parent,
 static int
 node_add_child(csilk_router_node_t* parent, csilk_router_node_t* child, int insert_pos)
 {
+    if (!parent || !child || insert_pos < 0 || insert_pos > (int)parent->children_count) {
+        return -1;
+    }
+
     if (parent->children_count >= parent->children_cap) {
-        uint16_t              new_cap = parent->children_cap == CSILK_ROUTER_INLINE_CHILDREN
-                                            ? 16
-                                            : (uint16_t)(parent->children_cap * 2);
+        uint16_t new_cap = (uint16_t)(parent->children_cap * 2);
+        if (new_cap < 16) {
+            new_cap = 16;
+        }
         csilk_router_node_t** new_arr = malloc(sizeof(csilk_router_node_t*) * new_cap);
         if (!new_arr) {
             return -1;
