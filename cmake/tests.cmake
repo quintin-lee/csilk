@@ -75,6 +75,7 @@ set(CSILK_CORE_TESTS
     test_uring_recv_bench
     test_uring_stale_stress
     test_router_bench
+    test_router_ordering
     test_codec_prop
 
     test_hash_prop
@@ -100,8 +101,9 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
+
 
 
 
