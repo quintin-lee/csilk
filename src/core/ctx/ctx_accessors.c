@@ -97,7 +97,19 @@ csilk_get_param_value(csilk_ctx_t* c, int index)
 const char*
 csilk_get_header(csilk_ctx_t* c, const char* key)
 {
+    if (!c || !key) {
+        return NULL;
+    }
     return map_get(&c->request.headers, key);
+}
+
+const char*
+csilk_get_header_id(csilk_ctx_t* c, csilk_header_id_t id)
+{
+    if (!c) {
+        return NULL;
+    }
+    return map_get_id(&c->request.headers, id);
 }
 
 csilk_view_t
@@ -109,6 +121,15 @@ csilk_get_header_view(csilk_ctx_t* c, const char* key)
     return map_get_view(&c->request.headers, key);
 }
 
+csilk_view_t
+csilk_get_header_id_view(csilk_ctx_t* c, csilk_header_id_t id)
+{
+    if (!c) {
+        return csilk_view(NULL, 0);
+    }
+    return map_get_id_view(&c->request.headers, id);
+}
+
 /**
  * @brief Get a response header value by name.
  * @param[in] c   Request context (validated non-NULL).
@@ -118,7 +139,19 @@ csilk_get_header_view(csilk_ctx_t* c, const char* key)
 const char*
 csilk_get_response_header(csilk_ctx_t* c, const char* key)
 {
+    if (!c || !key) {
+        return NULL;
+    }
     return map_get(&c->response.headers, key);
+}
+
+const char*
+csilk_get_response_header_id(csilk_ctx_t* c, csilk_header_id_t id)
+{
+    if (!c) {
+        return NULL;
+    }
+    return map_get_id(&c->response.headers, id);
 }
 
 csilk_view_t
@@ -128,6 +161,15 @@ csilk_get_response_header_view(csilk_ctx_t* c, const char* key)
         return csilk_view(NULL, 0);
     }
     return map_get_view(&c->response.headers, key);
+}
+
+csilk_view_t
+csilk_get_response_header_id_view(csilk_ctx_t* c, csilk_header_id_t id)
+{
+    if (!c) {
+        return csilk_view(NULL, 0);
+    }
+    return map_get_id_view(&c->response.headers, id);
 }
 
 /**

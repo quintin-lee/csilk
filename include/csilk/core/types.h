@@ -157,6 +157,48 @@ typedef struct {
  */
 typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
+/**
+ * @brief Interned IDs for well-known standard HTTP header names.
+ *
+ * Enables O(1) integer-based direct array indexing and header routing without
+ * string comparison or hash computation overhead.
+ */
+typedef enum {
+    CSILK_HDR_UNKNOWN = 0,
+    CSILK_HDR_HOST,                     /**< Host */
+    CSILK_HDR_CONTENT_TYPE,             /**< Content-Type */
+    CSILK_HDR_CONTENT_LENGTH,           /**< Content-Length */
+    CSILK_HDR_AUTHORIZATION,            /**< Authorization */
+    CSILK_HDR_COOKIE,                   /**< Cookie */
+    CSILK_HDR_SET_COOKIE,               /**< Set-Cookie */
+    CSILK_HDR_ACCEPT,                   /**< Accept */
+    CSILK_HDR_ACCEPT_ENCODING,          /**< Accept-Encoding */
+    CSILK_HDR_ACCEPT_LANGUAGE,          /**< Accept-Language */
+    CSILK_HDR_USER_AGENT,               /**< User-Agent */
+    CSILK_HDR_CONNECTION,               /**< Connection */
+    CSILK_HDR_UPGRADE,                  /**< Upgrade */
+    CSILK_HDR_CACHE_CONTROL,            /**< Cache-Control */
+    CSILK_HDR_ORIGIN,                   /**< Origin */
+    CSILK_HDR_REFERER,                  /**< Referer */
+    CSILK_HDR_SEC_WEBSOCKET_KEY,        /**< Sec-WebSocket-Key */
+    CSILK_HDR_SEC_WEBSOCKET_VERSION,    /**< Sec-WebSocket-Version */
+    CSILK_HDR_SEC_WEBSOCKET_EXTENSIONS, /**< Sec-WebSocket-Extensions */
+    CSILK_HDR_SEC_WEBSOCKET_PROTOCOL,   /**< Sec-WebSocket-Protocol */
+    CSILK_HDR_TRANSFER_ENCODING,        /**< Transfer-Encoding */
+    CSILK_HDR_LOCATION,                 /**< Location */
+    CSILK_HDR_IF_MODIFIED_SINCE,        /**< If-Modified-Since */
+    CSILK_HDR_IF_NONE_MATCH,            /**< If-None-Match */
+    CSILK_HDR_ETAG,                     /**< ETag */
+    CSILK_HDR_SERVER,                   /**< Server */
+    CSILK_HDR_DATE,                     /**< Date */
+    CSILK_HDR_VARY,                     /**< Vary */
+    CSILK_HDR_X_REQUEST_ID,             /**< X-Request-ID */
+    CSILK_HDR_X_FORWARDED_FOR,          /**< X-Forwarded-For */
+    CSILK_HDR_X_REAL_IP,                /**< X-Real-IP */
+    CSILK_HDR_CONTENT_ENCODING,         /**< Content-Encoding */
+    CSILK_HDR_MAX_KNOWN = 32
+} csilk_header_id_t;
+
 /** @brief Opaque header map type. */
 typedef struct csilk_header_map_s csilk_header_map_t;
 
