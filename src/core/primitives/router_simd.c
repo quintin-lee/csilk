@@ -8,9 +8,13 @@
  *  - SIMD character search (csilk_simd_find_char)
  *  - Fast common prefix length (csilk_common_prefix_len_fast)
  *
+ * All unaligned word loads strictly comply with ISO C23 alignment and strict aliasing
+ * rules using memcpy or standard unaligned vector intrinsics.
+ *
  * @copyright MIT License
  */
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,12 +29,24 @@
 
 #include "router_internal.h"
 
+#if defined(__has_attribute)
+#if __has_attribute(no_sanitize)
+#define CSILK_NO_SANITIZE_ADDR __attribute__((no_sanitize("address")))
+#elif __has_attribute(no_sanitize_address)
+#define CSILK_NO_SANITIZE_ADDR __attribute__((no_sanitize_address))
+#else
+#define CSILK_NO_SANITIZE_ADDR
+#endif
+#else
+#define CSILK_NO_SANITIZE_ADDR
+#endif
+
 /* ---------------------------------------------------------------------------
  * get_next_segment — SIMD-accelerated variants
  * -------------------------------------------------------------------------*/
 
 #if defined(CSILK_HAS_AVX512)
-__attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
+__attribute__((target("avx512f,avx512bw"))) CSILK_NO_SANITIZE_ADDR static inline const char*
 /** @brief AVX-512 variant: extract the next '/'- or NUL-delimited path segment.
  * @see get_next_segment */
 get_next_segment_avx512(const char** p, size_t* len)
@@ -51,7 +67,7 @@ get_next_segment_avx512(const char** p, size_t* len)
     while (1) {
         uintptr_t addr = (uintptr_t)curr;
         if ((addr & 4095) <= 4096 - 64) {
-            __m512i   data = _mm512_loadu_si512((const __m512i*)curr);
+            __m512i   data = _mm512_loadu_si512((const void*)curr);
             __mmask64 cmp_slash = _mm512_cmpeq_epi8_mask(data, slash_vec);
             __mmask64 cmp_zero = _mm512_cmpeq_epi8_mask(data, zero_vec);
             __mmask64 cmp_combined = cmp_slash | cmp_zero;
@@ -76,7 +92,7 @@ get_next_segment_avx512(const char** p, size_t* len)
 #endif
 
 #if defined(__x86_64__)
-__attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
+__attribute__((target("avx2"))) CSILK_NO_SANITIZE_ADDR static inline const char*
 /** @brief AVX2 variant: extract the next '/'- or NUL-delimited path segment.
  * @see get_next_segment */
 get_next_segment_avx2(const char** p, size_t* len)
@@ -99,13 +115,13 @@ get_next_segment_avx2(const char** p, size_t* len)
         /* 4KB page boundary guard: Ensure 32-byte unaligned SIMD load does not cross
          * into an unmapped adjacent page, preventing potential SIGSEGV. */
         if ((addr & 4095) <= 4096 - 32) {
-            __m256i data = _mm256_loadu_si256((const __m256i*)curr);
+            __m256i data = _mm256_loadu_si256((const __m256i*)(const void*)curr);
             __m256i cmp_slash = _mm256_cmpeq_epi8(data, slash_vec);
             __m256i cmp_zero = _mm256_cmpeq_epi8(data, zero_vec);
             __m256i cmp_combined = _mm256_or_si256(cmp_slash, cmp_zero);
             int     mask = _mm256_movemask_epi8(cmp_combined);
             if (mask != 0) {
-                /* Count trailing zeros to find the exact byte index of the first delimiter ('/' or '\0'). */
+                /* Count trailing zeros to find exact byte index of the first delimiter ('/' or '\0'). */
                 int idx = __builtin_ctz(mask);
                 curr += idx;
                 break;
@@ -127,7 +143,7 @@ get_next_segment_avx2(const char** p, size_t* len)
 #endif
 
 #if defined(__ARM_NEON)
-__attribute__((no_sanitize("address"))) static inline const char*
+CSILK_NO_SANITIZE_ADDR static inline const char*
 /** @brief NEON variant: extract the next '/'- or NUL-delimited path segment.
  * @see get_next_segment */
 get_next_segment_neon(const char** p, size_t* len)
@@ -186,7 +202,7 @@ get_next_segment_neon(const char** p, size_t* len)
  *
  * Skips leading '/', then scans for the next '/' or NUL to delimit a segment.
  * Dispatches to the best SIMD implementation (AVX-512/AVX2/NEON) when the
- * the CPU supports it, falling back to a scalar scan.
+ * CPU supports it, falling back to a scalar scan.
  *
  * @param[in,out] p   Pointer to the current scan position; advanced past the
  *                    consumed segment.
@@ -240,19 +256,21 @@ __attribute__((target("avx512f,avx512bw"))) static inline int
  * @see csilk_memcmp_fast */
 csilk_memcmp_avx512(const char* s1, const char* s2, size_t n)
 {
-    if (n >= 64) {
-        __m512i   v1 = _mm512_loadu_si512((const __m512i*)s1);
-        __m512i   v2 = _mm512_loadu_si512((const __m512i*)s2);
+    while (n >= 64) {
+        __m512i   v1 = _mm512_loadu_si512((const void*)s1);
+        __m512i   v2 = _mm512_loadu_si512((const void*)s2);
         __mmask64 cmp = _mm512_cmpeq_epi8_mask(v1, v2);
         if (cmp != 0xFFFFFFFFFFFFFFFFULL) {
             return 0;
         }
-        if (n == 64) {
-            return 1;
-        }
-        return memcmp(s1 + 64, s2 + 64, n - 64) == 0;
+        s1 += 64;
+        s2 += 64;
+        n -= 64;
     }
-    return memcmp(s1, s2, n) == 0;
+    if (n == 0) {
+        return 1;
+    }
+    return csilk_memcmp_fast(s1, s2, n);
 }
 #endif
 
@@ -261,20 +279,22 @@ __attribute__((target("avx2"))) static inline int
  * @see csilk_memcmp_fast */
 csilk_memcmp_avx2(const char* s1, const char* s2, size_t n)
 {
-    if (n >= 32) {
-        __m256i v1 = _mm256_loadu_si256((const __m256i*)s1);
-        __m256i v2 = _mm256_loadu_si256((const __m256i*)s2);
+    while (n >= 32) {
+        __m256i v1 = _mm256_loadu_si256((const __m256i*)(const void*)s1);
+        __m256i v2 = _mm256_loadu_si256((const __m256i*)(const void*)s2);
         __m256i cmp = _mm256_cmpeq_epi8(v1, v2);
         int     mask = _mm256_movemask_epi8(cmp);
         if (mask != (int)0xFFFFFFFF) {
             return 0;
         }
-        if (n == 32) {
-            return 1;
-        }
-        return memcmp(s1 + 32, s2 + 32, n - 32) == 0;
+        s1 += 32;
+        s2 += 32;
+        n -= 32;
     }
-    return memcmp(s1, s2, n) == 0;
+    if (n == 0) {
+        return 1;
+    }
+    return csilk_memcmp_fast(s1, s2, n);
 }
 #endif
 
@@ -284,7 +304,7 @@ static inline int
  * @see csilk_memcmp_fast */
 csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 {
-    if (n >= 16) {
+    while (n >= 16) {
         uint8x16_t v1 = vld1q_u8((const uint8_t*)s1);
         uint8x16_t v2 = vld1q_u8((const uint8_t*)s2);
         uint8x16_t cmp = vceqq_u8(v1, v2);
@@ -293,12 +313,14 @@ csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
         if (mask_low != UINT64_MAX || mask_high != UINT64_MAX) {
             return 0;
         }
-        if (n == 16) {
-            return 1;
-        }
-        return memcmp(s1 + 16, s2 + 16, n - 16) == 0;
+        s1 += 16;
+        s2 += 16;
+        n -= 16;
     }
-    return memcmp(s1, s2, n) == 0;
+    if (n == 0) {
+        return 1;
+    }
+    return csilk_memcmp_fast(s1, s2, n);
 }
 #endif
 
@@ -306,8 +328,8 @@ csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
  * @brief Compare two byte buffers for equality using SIMD when beneficial.
  *
  * Returns non-zero when the first @p n bytes of @p s1 and @p s2 are identical.
- * Uses AVX-512/AVX2/NEON for large aligned runs (once), then a word-at-a-time
- * scalar fallback, and finally a byte comparison.
+ * Uses AVX-512/AVX2/NEON for large aligned runs, followed by ISO C23 strictly
+ * conforming unaligned word-at-a-time (memcpy) loads, and finally byte comparison.
  *
  * @param[in] s1 First buffer.
  * @param[in] s2 Second buffer.
@@ -317,6 +339,10 @@ csilk_memcmp_neon(const char* s1, const char* s2, size_t n)
 int
 csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
 {
+    if (n == 0) {
+        return 1;
+    }
+
 #if defined(CSILK_HAS_AVX512)
     static int has_avx512 = -1;
     if (has_avx512 < 0) {
@@ -340,45 +366,44 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
     }
 #endif
 
-    if (n == 0) {
-        return 1;
-    }
-
 #if defined(__x86_64__) || defined(__aarch64__)
-    if (n >= 8) {
-        if (*(const uint64_t*)s1 != *(const uint64_t*)s2) {
+    while (n >= 8) {
+        uint64_t v1, v2;
+        memcpy(&v1, s1, sizeof(v1));
+        memcpy(&v2, s2, sizeof(v2));
+        if (v1 != v2) {
             return 0;
-        }
-        if (n == 8) {
-            return 1;
         }
         s1 += 8;
         s2 += 8;
         n -= 8;
     }
     if (n >= 4) {
-        if (*(const uint32_t*)s1 != *(const uint32_t*)s2) {
+        uint32_t v1, v2;
+        memcpy(&v1, s1, sizeof(v1));
+        memcpy(&v2, s2, sizeof(v2));
+        if (v1 != v2) {
             return 0;
-        }
-        if (n == 4) {
-            return 1;
         }
         s1 += 4;
         s2 += 4;
         n -= 4;
     }
     if (n >= 2) {
-        if (*(const uint16_t*)s1 != *(const uint16_t*)s2) {
+        uint16_t v1, v2;
+        memcpy(&v1, s1, sizeof(v1));
+        memcpy(&v2, s2, sizeof(v2));
+        if (v1 != v2) {
             return 0;
-        }
-        if (n == 2) {
-            return 1;
         }
         s1 += 2;
         s2 += 2;
         n -= 2;
     }
-    return *s1 == *s2;
+    if (n == 1) {
+        return *s1 == *s2;
+    }
+    return 1;
 #else
     return memcmp(s1, s2, n) == 0;
 #endif
@@ -389,51 +414,41 @@ csilk_memcmp_fast(const char* s1, const char* s2, size_t n)
  * -------------------------------------------------------------------------*/
 
 #if defined(CSILK_HAS_AVX512)
-__attribute__((target("avx512f,avx512bw"), no_sanitize("address"))) static inline const char*
+__attribute__((target("avx512f,avx512bw"))) static inline const char*
 /** @brief AVX-512 variant: find the first occurrence of a byte in a range.
  * @see csilk_simd_find_char */
 csilk_simd_find_char_avx512(const char* curr, const char* end, char target)
 {
     __m512i target_vec = _mm512_set1_epi8(target);
     while (curr + 64 <= end) {
-        uintptr_t addr = (uintptr_t)curr;
-        if ((addr & 4095) <= 4096 - 64) {
-            __m512i   data = _mm512_loadu_si512((const __m512i*)curr);
-            __mmask64 cmp = _mm512_cmpeq_epi8_mask(data, target_vec);
-            if (cmp != 0) {
-                int idx = __builtin_ctzll(cmp);
-                return curr + idx;
-            }
-            curr += 64;
-        } else {
-            break;
+        __m512i   data = _mm512_loadu_si512((const void*)curr);
+        __mmask64 cmp = _mm512_cmpeq_epi8_mask(data, target_vec);
+        if (cmp != 0) {
+            int idx = __builtin_ctzll(cmp);
+            return curr + idx;
         }
+        curr += 64;
     }
     return curr;
 }
 #endif
 
 #if defined(__x86_64__)
-__attribute__((target("avx2"), no_sanitize("address"))) static inline const char*
+__attribute__((target("avx2"))) static inline const char*
 /** @brief AVX2 variant: find the first occurrence of a byte in a range.
  * @see csilk_simd_find_char */
 csilk_simd_find_char_avx2(const char* curr, const char* end, char target)
 {
     __m256i target_vec = _mm256_set1_epi8(target);
     while (curr + 32 <= end) {
-        uintptr_t addr = (uintptr_t)curr;
-        if ((addr & 4095) <= 4096 - 32) {
-            __m256i  data = _mm256_loadu_si256((const __m256i*)curr);
-            __m256i  cmp = _mm256_cmpeq_epi8(data, target_vec);
-            uint32_t mask = (uint32_t)_mm256_movemask_epi8(cmp);
-            if (mask != 0) {
-                int idx = __builtin_ctz(mask);
-                return curr + idx;
-            }
-            curr += 32;
-        } else {
-            break;
+        __m256i  data = _mm256_loadu_si256((const __m256i*)(const void*)curr);
+        __m256i  cmp = _mm256_cmpeq_epi8(data, target_vec);
+        uint32_t mask = (uint32_t)_mm256_movemask_epi8(cmp);
+        if (mask != 0) {
+            int idx = __builtin_ctz(mask);
+            return curr + idx;
         }
+        curr += 32;
     }
     return curr;
 }
@@ -443,7 +458,7 @@ csilk_simd_find_char_avx2(const char* curr, const char* end, char target)
  * @brief Find the first occurrence of @p target within a byte range.
  *
  * Scans [@p s, @p s+@p len) for @p target, dispatching to AVX-512/AVX2/NEON for
- * aligned vector runs when available and falling back to a scalar scan.
+ * vector runs when available and falling back to a scalar scan.
  *
  * @param[in] s      Start of the search range.
  * @param[in] len    Length of the range in bytes.
@@ -462,7 +477,7 @@ csilk_simd_find_char(const char* s, size_t len, char target)
 #if defined(CSILK_HAS_AVX512)
     if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw")) {
         const char* res = csilk_simd_find_char_avx512(curr, end, target);
-        if (res != curr && res < end && *res == target) {
+        if (res < end && *res == target) {
             return res;
         }
         curr = res;
@@ -472,7 +487,7 @@ csilk_simd_find_char(const char* s, size_t len, char target)
 #if defined(__x86_64__)
     if (__builtin_cpu_supports("avx2")) {
         const char* res = csilk_simd_find_char_avx2(curr, end, target);
-        if (res != curr && res < end && *res == target) {
+        if (res < end && *res == target) {
             return res;
         }
         curr = res;
@@ -480,23 +495,18 @@ csilk_simd_find_char(const char* s, size_t len, char target)
 #elif defined(__ARM_NEON)
     uint8x16_t target_vec = vdupq_n_u8((uint8_t)target);
     while (curr + 16 <= end) {
-        uintptr_t addr = (uintptr_t)curr;
-        if ((addr & 4095) <= 4096 - 16) {
-            uint8x16_t data = vld1q_u8((const uint8_t*)curr);
-            uint8x16_t cmp = vceqq_u8(data, target_vec);
-            uint64_t   mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
-            uint64_t   mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
-            if (mask_low != 0) {
-                int idx = __builtin_ctzll(mask_low) / 8;
-                return curr + idx;
-            } else if (mask_high != 0) {
-                int idx = __builtin_ctzll(mask_high) / 8;
-                return curr + 8 + idx;
-            }
-            curr += 16;
-        } else {
-            break;
+        uint8x16_t data = vld1q_u8((const uint8_t*)curr);
+        uint8x16_t cmp = vceqq_u8(data, target_vec);
+        uint64_t   mask_low = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 0);
+        uint64_t   mask_high = vgetq_lane_u64(vreinterpretq_u64_u8(cmp), 1);
+        if (mask_low != 0) {
+            int idx = __builtin_ctzll(mask_low) / 8;
+            return curr + idx;
+        } else if (mask_high != 0) {
+            int idx = __builtin_ctzll(mask_high) / 8;
+            return curr + 8 + idx;
         }
+        curr += 16;
     }
 #endif
 
@@ -510,14 +520,14 @@ csilk_simd_find_char(const char* s, size_t len, char target)
 }
 
 /* ---------------------------------------------------------------------------
- * csilk_common_prefix_len_fast — word-at-a-time prefix comparison
+ * csilk_common_prefix_len_fast — SIMD and word-at-a-time prefix comparison
  * -------------------------------------------------------------------------*/
 
 /**
  * @brief Compute the length of the common prefix of two byte buffers.
  *
- * Compares @p s1 and @p s2 up to @p max_len bytes, using 8-byte word loads on
- * supported architectures and stopping at the first differing byte.
+ * Compares @p s1 and @p s2 up to @p max_len bytes, using AVX2 (32-byte chunks) and
+ * 8-byte word loads on supported architectures, stopping at the first differing byte.
  *
  * @param[in] s1      First buffer.
  * @param[in] s2      Second buffer.
@@ -528,6 +538,22 @@ size_t
 csilk_common_prefix_len_fast(const char* s1, const char* s2, size_t max_len)
 {
     size_t i = 0;
+
+#if defined(__x86_64__)
+    if (__builtin_cpu_supports("avx2")) {
+        while (i + 32 <= max_len) {
+            __m256i v1 = _mm256_loadu_si256((const __m256i*)(const void*)(s1 + i));
+            __m256i v2 = _mm256_loadu_si256((const __m256i*)(const void*)(s2 + i));
+            __m256i cmp = _mm256_cmpeq_epi8(v1, v2);
+            int     mask = _mm256_movemask_epi8(cmp);
+            if (mask != (int)0xFFFFFFFF) {
+                int diff_byte = __builtin_ctz(~(uint32_t)mask);
+                return i + (size_t)diff_byte;
+            }
+            i += 32;
+        }
+    }
+#endif
 
 #if defined(__x86_64__) || defined(__aarch64__)
     while (i + 8 <= max_len) {
