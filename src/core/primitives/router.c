@@ -37,8 +37,40 @@ node_new(const char* segment, csilk_node_type_t type)
     }
     node->segment_len = strlen(node->segment);
     node->type = type;
+    node->children_cap = CSILK_ROUTER_INLINE_CHILDREN;
+    node->children_count = 0;
+    node->overflow_children = NULL;
     CSILK_LOG_T("Router: allocated new node (segment: '%s', type: %d)", segment, type);
     return node;
+}
+
+static int
+node_add_child(csilk_router_node_t* parent, csilk_router_node_t* child, int insert_pos)
+{
+    if (parent->children_count >= parent->children_cap) {
+        uint16_t              new_cap = parent->children_cap == CSILK_ROUTER_INLINE_CHILDREN
+                                            ? 16
+                                            : (uint16_t)(parent->children_cap * 2);
+        csilk_router_node_t** new_arr = malloc(sizeof(csilk_router_node_t*) * new_cap);
+        if (!new_arr) {
+            return -1;
+        }
+        csilk_router_node_t** old_arr = node_children(parent);
+        memcpy(new_arr, old_arr, sizeof(csilk_router_node_t*) * parent->children_count);
+        if (parent->overflow_children) {
+            free(parent->overflow_children);
+        }
+        parent->overflow_children = new_arr;
+        parent->children_cap = new_cap;
+    }
+
+    csilk_router_node_t** children = node_children(parent);
+    for (int i = parent->children_count; i > insert_pos; i--) {
+        children[i] = children[i - 1];
+    }
+    children[insert_pos] = child;
+    parent->children_count++;
+    return 0;
 }
 
 /**
@@ -64,8 +96,13 @@ node_free(csilk_router_node_t* node)
         free(mh);
         mh = next;
     }
+    csilk_router_node_t** children = node_children(node);
     for (int i = 0; i < node->children_count; i++) {
-        node_free(node->children[i]);
+        node_free(children[i]);
+    }
+    if (node->overflow_children) {
+        free(node->overflow_children);
+        node->overflow_children = NULL;
     }
     free(node);
 }
@@ -121,8 +158,9 @@ node_compile_handlers(csilk_router_node_t*   node,
         }
         mh = mh->next;
     }
+    csilk_router_node_t** children = node_children(node);
     for (int i = 0; i < node->children_count; i++) {
-        node_compile_handlers(node->children[i], global_mws, global_count);
+        node_compile_handlers(children[i], global_mws, global_count);
     }
 }
 
@@ -191,8 +229,9 @@ node_collect_routes(csilk_router_node_t* node, csilk_json_t* routes)
         mh = mh->next;
     }
 
+    csilk_router_node_t** children = node_children(node);
     for (int i = 0; i < node->children_count; i++) {
-        node_collect_routes(node->children[i], routes);
+        node_collect_routes(children[i], routes);
     }
 }
 
@@ -281,47 +320,40 @@ router_add_full(csilk_router_t*  r,
         memcpy(seg_name, seg_name_start, seg_name_len);
         seg_name[seg_name_len] = '\0';
 
-        csilk_router_node_t* found = NULL;
-        int                  insert_pos = curr->children_count;
+        csilk_router_node_t** children = node_children(curr);
+        csilk_router_node_t*  found = NULL;
+        int                   insert_pos = curr->children_count;
 
         for (int i = 0; i < curr->children_count; i++) {
-            if (curr->children[i]->type == type &&
-                strcmp(curr->children[i]->segment, seg_name) == 0) {
-                found = curr->children[i];
+            if (children[i]->type == type && strcmp(children[i]->segment, seg_name) == 0) {
+                found = children[i];
                 break;
             }
-            if (found == NULL && curr->children[i]->type > type) {
+            if (found == NULL && children[i]->type > type) {
                 insert_pos = i;
             }
         }
 
         if (!found) {
-            if (curr->children_count < CSILK_MAX_CHILDREN) {
-                found = node_new(seg_name, type);
-                if (found) {
-                    for (int i = curr->children_count; i > insert_pos; i--) {
-                        curr->children[i] = curr->children[i - 1];
-                    }
-                    curr->children[insert_pos] = found;
-                    curr->children_count++;
+            found = node_new(seg_name, type);
+            if (found) {
+                if (node_add_child(curr, found, insert_pos) != 0) {
+                    node_free(found);
+                    found = NULL;
+                    CSILK_LOG_E("Router: failed to add child node for segment '%s'", seg_name);
+                } else {
                     CSILK_LOG_D("Router: inserted new node '%s' (type: %d) at "
                                 "index %d under node '%s'",
                                 seg_name,
                                 type,
                                 insert_pos,
                                 curr->segment[0] ? curr->segment : "/");
-                } else {
-                    CSILK_LOG_E("Router: failed to allocate new route node for segment "
-                                "'%s' in path '%s'",
-                                seg_name,
-                                path);
                 }
             } else {
-                CSILK_LOG_E("Router: failed to insert route segment '%s' in path '%s': "
-                            "maximum node children limit (%d) exceeded",
+                CSILK_LOG_E("Router: failed to allocate new route node for segment "
+                            "'%s' in path '%s'",
                             seg_name,
-                            path,
-                            CSILK_MAX_CHILDREN);
+                            path);
             }
         } else {
             CSILK_LOG_T("Router: matched existing node '%s' (type: %d) under node '%s'",
@@ -330,6 +362,7 @@ router_add_full(csilk_router_t*  r,
                         curr->segment[0] ? curr->segment : "/");
         }
         free(seg_name);
+
         if (!found) {
             return -1;
         }

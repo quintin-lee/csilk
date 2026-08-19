@@ -18,21 +18,33 @@
 #include "../internal/srv_internal.h"
 #include "csilk/core/router.h"
 
-/** @brief Maximum number of children per router tree node. */
-enum { CSILK_MAX_CHILDREN = 128 };
+/** @brief Inline capacity for small-vector children optimization. */
+enum { CSILK_ROUTER_INLINE_CHILDREN = 8 };
 
 /** @brief Node type for router trie. */
 typedef enum { CSILK_NODE_STATIC, CSILK_NODE_PARAM, CSILK_NODE_WILDCARD } csilk_node_type_t;
 
 /** @brief Node in the router trie — represents a URL path segment. */
 struct csilk_router_node_s {
-    char*                       segment;
-    size_t                      segment_len;
-    csilk_node_type_t           type;
-    csilk_method_handler_t*     handlers;
-    struct csilk_router_node_s* children[CSILK_MAX_CHILDREN];
-    int                         children_count;
+    char*                        segment;
+    size_t                       segment_len;
+    csilk_node_type_t            type;
+    csilk_method_handler_t*      handlers;
+    uint16_t                     children_count;
+    uint16_t                     children_cap;
+    struct csilk_router_node_s*  inline_children[CSILK_ROUTER_INLINE_CHILDREN];
+    struct csilk_router_node_s** overflow_children;
 };
+
+/**
+ * @brief Get pointer to children array (inline or overflow) in O(1).
+ */
+static inline struct csilk_router_node_s**
+node_children(const csilk_router_node_t* node)
+{
+    return node->overflow_children ? node->overflow_children
+                                   : (struct csilk_router_node_s**)node->inline_children;
+}
 
 /** @brief Internal layout of the main HTTP router. */
 struct csilk_router_s {

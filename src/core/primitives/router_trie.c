@@ -283,9 +283,10 @@ match_node(csilk_router_node_t*     node,
                 node->children_count,
                 node->segment[0] ? node->segment : "/");
 
-    csilk_handler_t* result = NULL;
+    csilk_handler_t*      result = NULL;
+    csilk_router_node_t** children = node_children(node);
     for (int i = 0; i < node->children_count; i++) {
-        csilk_router_node_t* child = node->children[i];
+        csilk_router_node_t* child = children[i];
         if (child->type == CSILK_NODE_STATIC) {
             result = try_match_static(child, method, seg, len, p, ctx, out_mh, use_simd);
         } else if (child->type == CSILK_NODE_PARAM) {
