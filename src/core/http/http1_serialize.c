@@ -171,16 +171,22 @@ _csilk_send_response(csilk_ctx_t* c)
         pos = append_custom_headers(&client->ctx.response.headers, write_base, pos);
 
         if (!use_chunked && !is_file) {
-            size_t remain = response_len + 1 - pos;
-            snprintf(write_base + pos, remain, "\r\n%s", body);
+            write_base[pos++] = '\r';
+            write_base[pos++] = '\n';
+            if (body && body_len > 0) {
+                memcpy(write_base + pos, body, body_len);
+                pos += body_len;
+            }
+            write_base[pos] = '\0';
         } else {
-            size_t remain = response_len + 1 - pos;
-            snprintf(write_base + pos, remain, "\r\n");
+            write_base[pos++] = '\r';
+            write_base[pos++] = '\n';
+            write_base[pos] = '\0';
         }
 
         extern void _csilk_send_data_owned(csilk_ctx_t * c, char* data, size_t len);
         _csilk_send_data_owned(
-            c, write_base, (use_chunked || is_file ? (size_t)pos + 2 : response_len));
+            c, write_base, (use_chunked || is_file ? (size_t)pos : response_len));
     }
 
     if (is_file) {

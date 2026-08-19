@@ -17,6 +17,16 @@
 #include "csilk/core/mvcc_cache.h"
 #include "csilk/test/test.h"
 
+#undef assert
+#define assert(expr)                                                                               \
+    do {                                                                                           \
+        if (!(expr)) {                                                                             \
+            fprintf(                                                                               \
+                stderr, "Assertion failed: (%s), file %s, line %d\n", #expr, __FILE__, __LINE__);  \
+            abort();                                                                               \
+        }                                                                                          \
+    } while (0)
+
 static int tests_run = 0;
 static int tests_passed = 0;
 
