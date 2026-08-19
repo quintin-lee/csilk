@@ -98,3 +98,44 @@ csilk_io_fs_sendfile(csilk_io_loop_t* loop,
     return -1;
 #endif
 }
+
+int
+csilk_io_fs_event_init(csilk_io_loop_t* loop, csilk_io_fs_event_t* handle)
+{
+    if (!handle) {
+        return -1;
+    }
+    memset(handle, 0, sizeof(*handle));
+    handle->type = CSILK_IO_HANDLE_FS_EVENT;
+    handle->loop = loop;
+    return 0;
+}
+
+int
+csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
+                        csilk_io_fs_event_cb cb,
+                        const char*          path,
+                        unsigned int         flags)
+{
+    (void)flags;
+    if (!handle || !path) {
+        return -1;
+    }
+    handle->cb = cb;
+    handle->path = strdup(path);
+    return 0;
+}
+
+int
+csilk_io_fs_event_stop(csilk_io_fs_event_t* handle)
+{
+    if (!handle) {
+        return -1;
+    }
+    if (handle->path) {
+        free(handle->path);
+        handle->path = NULL;
+    }
+    handle->cb = NULL;
+    return 0;
+}

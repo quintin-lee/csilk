@@ -26,3 +26,20 @@ typedef struct csilk_server_s csilk_server_t;
  * @return 0 on success, -1 on failure.
  */
 int csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const char* init_sym);
+
+/**
+ * @brief Stop file watching and clean up the hot reload subsystem on the server.
+ *
+ * @param server The server instance.
+ */
+void csilk_dev_hot_reload_stop(csilk_server_t* server);
+
+/**
+ * @brief Manually trigger an immediate reload and swap of the watched shared library.
+ *
+ * Useful for automated tests or programmatic hot-reload triggers.
+ *
+ * @param server The server instance.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_dev_hot_reload_trigger(csilk_server_t* server);

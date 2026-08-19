@@ -126,6 +126,41 @@ typedef struct CSILK_CACHE_ALIGNED {
     void*           thread_pool;              /**< io_uring thread pool (NULL in libuv mode). */
 } worker_pool_t;
 
+#define CSILK_RELOAD_MAX_READERS 256
+
+/**
+ * @brief Per-reader epoch tracking slot aligned to 64-byte cache line.
+ */
+typedef struct csilk_rcu_slot_s {
+    _Atomic(uint64_t)  active_epoch;  /**< 0 = inactive, >0 = epoch when entered */
+    _Atomic(uintptr_t) owner_tid;     /**< Owner thread ID */
+    _Atomic(uint32_t)  nesting_depth; /**< Reentrant depth */
+    char               _pad[64 - sizeof(_Atomic(uint64_t)) - sizeof(_Atomic(uintptr_t)) -
+                            sizeof(_Atomic(uint32_t))];
+} csilk_rcu_slot_t;
+
+/**
+ * @brief Node in the retired router list awaiting grace period completion.
+ */
+typedef struct csilk_retired_router_s {
+    csilk_router_t* router;        /**< Router instance to be freed. */
+    void*           dl_handle;     /**< dlopen() handle to dlclose (if dynamic). */
+    char*           tmp_path;      /**< Temp file path to unlink (if any). */
+    uint64_t        retired_epoch; /**< Epoch when retired. */
+    _Atomic(struct csilk_retired_router_s*) retired_next; /**< Singly linked retired list. */
+} csilk_retired_router_t;
+
+/**
+ * @brief RCU / EBR Manager for atomic router publishing and safe reclamation.
+ */
+typedef struct csilk_reload_mgr_s {
+    _Atomic(uint64_t) global_epoch;  /**< Monotonically increasing epoch (starts at 1). */
+    _Atomic(uint32_t) reclaim_lock;  /**< Lock-free reclamation mutual exclusion lock. */
+    _Atomic(uint32_t) retired_count; /**< Count of retired routers. */
+    _Atomic(csilk_retired_router_t*) retired_head; /**< Singly-linked list of retired routers. */
+    csilk_rcu_slot_t                 reader_slots[CSILK_RELOAD_MAX_READERS]; /**< Epoch slots. */
+} csilk_reload_mgr_t;
+
 /**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
@@ -134,19 +169,22 @@ typedef struct CSILK_CACHE_ALIGNED {
  * Thread-safe for multi-threaded operation via atomic counters and mutexes.
  */
 struct csilk_server_s {
-    csilk_io_loop_t*      loop;               /**< I/O event loop (libuv or io_uring). */
-    csilk_router_t*       router;             /**< Associated router instance. */
-    csilk_io_tcp_t        server_handle;      /**< TCP server handle. */
-    csilk_io_signal_t     sig_handle;         /**< SIGINT signal handler. */
-    csilk_io_async_t      async_handle;       /**< Async handle for cross-thread wakeup. */
-    llhttp_settings_t     settings;           /**< HTTP parser callback settings. */
-    csilk_server_config_t config;             /**< Server configuration. */
-    csilk_handler_t       middlewares[32];    /**< Global middlewares. */
-    int                   middleware_count;   /**< Number of global middlewares. */
-    atomic_int            max_connections;    /**< Max concurrent connections (0=unlimited). */
-    atomic_int            active_connections; /**< Current connection count (atomic). */
-    csilk_thread_t*       worker_tids;        /**< Worker thread IDs (NULL if single-thread). */
-    int                   worker_count;       /**< Number of worker threads created. */
+    csilk_io_loop_t*         loop;             /**< I/O event loop (libuv or io_uring). */
+    int                      loop_owned;       /**< 1 if loop was allocated by server_new. */
+    _Atomic(csilk_router_t*) router;           /**< Associated router instance (atomic pointer). */
+    csilk_reload_mgr_t       reload_mgr;       /**< Safe hot reload & EBR manager. */
+    void*                    hot_reload_ctx;   /**< Hot reload file watcher context. */
+    csilk_io_tcp_t           server_handle;    /**< TCP server handle. */
+    csilk_io_signal_t        sig_handle;       /**< SIGINT signal handler. */
+    csilk_io_async_t         async_handle;     /**< Async handle for cross-thread wakeup. */
+    llhttp_settings_t        settings;         /**< HTTP parser callback settings. */
+    csilk_server_config_t    config;           /**< Server configuration. */
+    csilk_handler_t          middlewares[32];  /**< Global middlewares. */
+    int                      middleware_count; /**< Number of global middlewares. */
+    atomic_int               max_connections;  /**< Max concurrent connections (0=unlimited). */
+    atomic_int               active_connections; /**< Current connection count (atomic). */
+    csilk_thread_t*          worker_tids;        /**< Worker thread IDs (NULL if single-thread). */
+    int                      worker_count;       /**< Number of worker threads created. */
     worker_pool_t*
         worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
     int worker_pool_count; /**< Number of worker pools (= worker_threads). */
@@ -267,5 +305,14 @@ CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
  * that flushes the TLS chunk free list when threads exit.
  */
 CSILK_INTERNAL void csilk_arena_init(void);
+
+/** @brief Initialize the RCU / EBR reload manager on a server. */
+CSILK_INTERNAL void _csilk_reload_mgr_init(csilk_server_t* server);
+
+/** @brief Try to reclaim retired routers and dynamic libraries whose grace period has expired. */
+CSILK_INTERNAL void _csilk_reload_try_reclaim(csilk_server_t* server);
+
+/** @brief Destroy the reload manager and force reclamation of all remaining records. */
+CSILK_INTERNAL void _csilk_reload_mgr_free(csilk_server_t* server);
 
 #endif /* CSILK_SERVER_INTERNAL_H */
