@@ -47,13 +47,21 @@ alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* b
 csilk_client_t*
 pool_get(worker_pool_t* wp)
 {
-    csilk_client_t* client;
-    if (wp && wp->client_pool_count > 0) {
-        client = wp->client_pool[--wp->client_pool_count];
-    } else {
+    csilk_client_t* client = NULL;
+    if (wp) {
+        int cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+        if (cnt > 0) {
+            client = wp->client_pool[cnt - 1];
+            atomic_store_explicit(&wp->client_pool_count, cnt - 1, memory_order_relaxed);
+        }
+    }
+    if (!client) {
         client = calloc(1, sizeof(csilk_client_t));
     }
     if (client) {
+        if (wp) {
+            atomic_fetch_add_explicit(&wp->active_connections, 1, memory_order_relaxed);
+        }
         uint64_t gen = client->generation + 1;
         if (gen == 0) {
             gen = 1;
@@ -168,18 +176,25 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
     if (!client) {
         return;
     }
-    reset_hot_state(client);
-    if (wp && wp->client_pool_count < CSILK_CLIENT_POOL_SIZE) {
-        wp->client_pool[wp->client_pool_count++] = client;
-    } else {
-#ifdef CSILK_USE_URING
-        if (client->read_buf) {
-            pool_put_read_buf(wp, (char*)client->read_buf, CSILK_READ_BUF_64KB);
-            client->read_buf = NULL;
-        }
-#endif
-        free(client);
+    if (wp) {
+        atomic_fetch_sub_explicit(&wp->active_connections, 1, memory_order_relaxed);
     }
+    reset_hot_state(client);
+    if (wp) {
+        int cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+        if (cnt < CSILK_CLIENT_POOL_SIZE) {
+            wp->client_pool[cnt] = client;
+            atomic_store_explicit(&wp->client_pool_count, cnt + 1, memory_order_relaxed);
+            return;
+        }
+    }
+#ifdef CSILK_USE_URING
+    if (client->read_buf) {
+        pool_put_read_buf(wp, (char*)client->read_buf, CSILK_READ_BUF_64KB);
+        client->read_buf = NULL;
+    }
+#endif
+    free(client);
 }
 
 /* --- Arena pool --- */
@@ -199,9 +214,11 @@ pool_get_arena(worker_pool_t* wp)
     if (!wp) {
         return csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
     }
-    csilk_arena_t* arena;
-    if (wp->arena_pool_count > 0) {
-        arena = wp->arena_pool[--wp->arena_pool_count];
+    csilk_arena_t* arena = NULL;
+    int            cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+    if (cnt > 0) {
+        arena = wp->arena_pool[cnt - 1];
+        atomic_store_explicit(&wp->arena_pool_count, cnt - 1, memory_order_relaxed);
     } else {
         arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
         if (arena && wp->server->config.enable_arena_alignment) {
@@ -226,11 +243,15 @@ pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
         return;
     }
     csilk_arena_reset(arena);
-    if (wp && wp->arena_pool_count < CSILK_CLIENT_POOL_SIZE) {
-        wp->arena_pool[wp->arena_pool_count++] = arena;
-    } else {
-        csilk_arena_free(arena);
+    if (wp) {
+        int cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+        if (cnt < CSILK_CLIENT_POOL_SIZE) {
+            wp->arena_pool[cnt] = arena;
+            atomic_store_explicit(&wp->arena_pool_count, cnt + 1, memory_order_relaxed);
+            return;
+        }
     }
+    csilk_arena_free(arena);
 }
 
 /** @brief Pre-populate the worker-local arena pool with ready-to-use arenas.
@@ -316,13 +337,17 @@ pool_get_read_buf(worker_pool_t* wp, size_t suggested_size, csilk_io_buf_t* buf)
         break;
     }
 
-    if (wp && wp->read_buf_counts[tier] > 0) {
-        buf->base = (char*)wp->read_buf_tiers[tier][--wp->read_buf_counts[tier]];
-        buf->len = tier_size;
-    } else {
-        buf->base = (char*)malloc(tier_size);
-        buf->len = tier_size;
+    if (wp) {
+        int cnt = atomic_load_explicit(&wp->read_buf_counts[tier], memory_order_relaxed);
+        if (cnt > 0) {
+            buf->base = (char*)wp->read_buf_tiers[tier][cnt - 1];
+            buf->len = tier_size;
+            atomic_store_explicit(&wp->read_buf_counts[tier], cnt - 1, memory_order_relaxed);
+            return;
+        }
     }
+    buf->base = (char*)malloc(tier_size);
+    buf->len = tier_size;
 }
 
 /** @brief Return a read buffer to the worker-local pool.
@@ -342,8 +367,10 @@ pool_put_read_buf(worker_pool_t* wp, char* base, size_t size)
         return;
     }
     int tier = read_buf_tier_index(size);
-    if (wp->read_buf_counts[tier] < CSILK_READ_BUF_POOL_SIZE) {
-        wp->read_buf_tiers[tier][wp->read_buf_counts[tier]++] = (void*)base;
+    int cnt = atomic_load_explicit(&wp->read_buf_counts[tier], memory_order_relaxed);
+    if (cnt < CSILK_READ_BUF_POOL_SIZE) {
+        wp->read_buf_tiers[tier][cnt] = (void*)base;
+        atomic_store_explicit(&wp->read_buf_counts[tier], cnt + 1, memory_order_relaxed);
     } else {
         free(base);
     }
