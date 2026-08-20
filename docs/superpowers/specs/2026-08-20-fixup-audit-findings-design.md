@@ -3,7 +3,7 @@
 **Date:** 2026-08-20
 **Source:** Client Lifetime Audit (2026-08-20), TSan/ASan stress runs
 **Scope:** `src/messaging/mq_core.c`, `src/core/server/connection_close.c`, `tests/core/test_sendfile_workers.c`
-**Philosophy:** Minimal, targeted fixes. No architectural changes. ~13 lines total.
+**Philosophy:** Minimal, targeted fixes. No architectural changes. ~10 lines total.
 
 ---
 
@@ -118,7 +118,7 @@ Detect ASan at compile time and extend warmup:
 | File | Lines Changed | Type |
 |------|--------------|------|
 | `src/messaging/mq_core.c` | +1, -1 | Bug fix |
-| `src/core/server/connection_close.c` | +4 | Defensive fix |
+| `src/core/server/connection_close.c` | +4 | Defensive hardening |
 | `tests/core/test_sendfile_workers.c` | +5 | Test fix |
 | **Total** | **~10 lines** | |
 
