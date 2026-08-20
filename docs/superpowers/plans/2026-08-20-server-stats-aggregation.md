@@ -13,13 +13,13 @@
 - Modify: `src/core/server/connection_pool.c`
 - Modify: `src/core/server/server_lifecycle.c`
 
-- [ ] **Step 1: Convert `client_pool_count`, `active_connections`, `arena_pool_count`, `read_buf_counts` to `_Atomic(int)` in `src/core/internal/srv_internal.h`**
+- [x] **Step 1: Convert `client_pool_count`, `active_connections`, `arena_pool_count`, `read_buf_counts` to `_Atomic(int)` in `src/core/internal/srv_internal.h`**
 
-- [ ] **Step 2: Update `pool_get` and `pool_put` in `src/core/server/connection_pool.c` to use relaxed atomic operations and update worker `active_connections`**
+- [x] **Step 2: Update `pool_get` and `pool_put` in `src/core/server/connection_pool.c` to use relaxed atomic operations and update worker `active_connections`**
 
-- [ ] **Step 3: Update `csilk_server_get_stats` in `src/core/server/server_lifecycle.c` to aggregate worker-local atomic stats**
+- [x] **Step 3: Update `csilk_server_get_stats` in `src/core/server/server_lifecycle.c` to aggregate worker-local atomic stats**
 
-- [ ] **Step 4: Commit Task 1**
+- [x] **Step 4: Commit Task 1**
 ```bash
 git add src/core/internal/srv_internal.h src/core/server/connection_pool.c src/core/server/server_lifecycle.c
 git commit -m "feat(server): ✨ implement worker-local stats and lock-free snapshot aggregation"
@@ -33,14 +33,14 @@ git commit -m "feat(server): ✨ implement worker-local stats and lock-free snap
 - Create: `tests/core/test_server_stats_bench.c`
 - Modify: `cmake/tests.cmake`
 
-- [ ] **Step 1: Write `tests/core/test_server_stats_bench.c`**
+- [x] **Step 1: Write `tests/core/test_server_stats_bench.c`**
   Concurrent test: 8 worker threads continuously acquiring/releasing connections while 4 reader threads continuously call `csilk_server_get_stats()`. Benchmark query latency and throughput.
 
-- [ ] **Step 2: Register in `cmake/tests.cmake`**
+- [x] **Step 2: Register in `cmake/tests.cmake`**
 
-- [ ] **Step 3: Build and run test under Default and TSAN builds**
+- [x] **Step 3: Build and run test under Default and TSAN builds**
 
-- [ ] **Step 4: Commit Task 2**
+- [x] **Step 4: Commit Task 2**
 ```bash
 git add tests/core/test_server_stats_bench.c cmake/tests.cmake
 git commit -m "test(server): ✅ add concurrent server stats benchmark and TSAN verification"
@@ -50,7 +50,7 @@ git commit -m "test(server): ✅ add concurrent server stats benchmark and TSAN 
 
 ### Task 3: Full Verification & Code Formatting
 
-- [ ] **Step 1: Run full unit test suite via `ctest`**
-- [ ] **Step 2: Run full TSAN test suite**
-- [ ] **Step 3: Run code formatting**
-- [ ] **Step 4: Final commit**
+- [x] **Step 1: Run full unit test suite via `ctest`**
+- [x] **Step 2: Run full TSAN test suite**
+- [x] **Step 3: Run code formatting**
+- [x] **Step 4: Final commit**
