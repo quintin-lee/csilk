@@ -196,6 +196,14 @@ CSILK_INTERNAL bool csilk_conn_is_valid_transition(csilk_conn_state_t from, csil
 CSILK_INTERNAL void csilk_conn_set_state(csilk_client_t* client, csilk_conn_state_t new_state);
 CSILK_INTERNAL csilk_conn_state_t csilk_conn_get_state(const csilk_client_t* client);
 
+/* --- Centralized Atomic Initializers --- */
+CSILK_INTERNAL void _csilk_runtime_config_init(csilk_runtime_config_t*      rc,
+                                               const csilk_server_config_t* cfg);
+CSILK_INTERNAL void _csilk_server_atomics_init(csilk_server_t* s, csilk_router_t* router);
+CSILK_INTERNAL void
+_csilk_worker_pool_atomics_init(worker_pool_t* wp, csilk_server_t* server, int worker_index);
+CSILK_INTERNAL void _csilk_client_atomics_init(csilk_client_t* client);
+
 CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);

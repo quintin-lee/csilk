@@ -159,7 +159,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         csilk_mutex_init(&room->mutex);
 
         ws_room_snapshot_t* empty_snap = calloc(1, sizeof(ws_room_snapshot_t));
-        atomic_store(&room->snapshot, empty_snap);
+        atomic_init(&room->snapshot, empty_snap);
 
         g_room_manager.rooms[g_room_manager.rooms_count++] = room;
 

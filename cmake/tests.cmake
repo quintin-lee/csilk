@@ -105,6 +105,7 @@ set(CSILK_CORE_TESTS
     test_logger_async_bench
     test_server_config_race
     test_core_concurrency_stress
+    test_atomic_lifecycle
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -112,7 +113,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
 
 

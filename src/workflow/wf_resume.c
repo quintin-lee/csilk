@@ -45,6 +45,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
         return;
     }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+    atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
     ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
@@ -204,6 +205,7 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
     }
 
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+    atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
     ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
