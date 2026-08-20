@@ -198,6 +198,8 @@ CSILK_INTERNAL csilk_conn_state_t csilk_conn_get_state(const csilk_client_t* cli
 
 CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
+CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);
+CSILK_INTERNAL void _csilk_worker_drain_dispatch(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_dispatch_pool_cleanup(void);
 
 CSILK_INTERNAL void csilk_arena_flush_free_list(void);
