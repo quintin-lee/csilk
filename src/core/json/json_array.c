@@ -11,41 +11,52 @@ csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
     if (!arr || !item) {
         return false;
     }
-    if (arr->kind != CSILK_JSON_MUTABLE || !arr->doc.mdoc) {
+    if (!json_is_mutable(arr) || !arr->doc.mdoc) {
         return false;
     }
-    if (item->kind == CSILK_JSON_MUTABLE) {
+    if (json_is_mutable(item)) {
         if (item->doc.mdoc == arr->doc.mdoc) {
-            return yyjson_mut_arr_add_val(arr->u.mval, item->u.mval);
+            return yyjson_mut_arr_add_val((yyjson_mut_val*)arr->u.mval,
+                                          (yyjson_mut_val*)item->u.mval);
         }
-        yyjson_mut_val* mval = yyjson_mut_val_mut_copy(arr->doc.mdoc, item->u.mval);
+        yyjson_mut_val* mval =
+            yyjson_mut_val_mut_copy((yyjson_mut_doc*)arr->doc.mdoc, (yyjson_mut_val*)item->u.mval);
         if (!mval) {
             return false;
         }
-        if (!yyjson_mut_arr_add_val(arr->u.mval, mval)) {
+        if (!yyjson_mut_arr_add_val((yyjson_mut_val*)arr->u.mval, mval)) {
             return false;
         }
-        if (item->is_owner && item->doc.mdoc) {
-            yyjson_mut_doc_free(item->doc.mdoc);
+        if (json_is_owner(item) && item->doc.mdoc) {
+            yyjson_mut_doc_free((yyjson_mut_doc*)item->doc.mdoc);
         }
+        bool is_heap = (item->flags & CSILK_JSON_F_HEAP) != 0;
         item->u.mval = mval;
         item->doc.mdoc = arr->doc.mdoc;
-        item->is_owner = false;
+        item->flags &= ~(CSILK_JSON_F_OWNER | CSILK_JSON_F_HEAP);
+        if (is_heap) {
+            free(item);
+        }
         return true;
     }
-    yyjson_mut_val* mval = yyjson_val_mut_copy(arr->doc.mdoc, item->u.ival);
+    yyjson_mut_val* mval =
+        yyjson_val_mut_copy((yyjson_mut_doc*)arr->doc.mdoc, (yyjson_val*)item->u.ival);
     if (!mval) {
         return false;
     }
-    if (!yyjson_mut_arr_add_val(arr->u.mval, mval)) {
+    if (!yyjson_mut_arr_add_val((yyjson_mut_val*)arr->u.mval, mval)) {
         return false;
     }
-    if (item->is_owner && item->doc.idoc) {
-        yyjson_doc_free(item->doc.idoc);
+    if (json_is_owner(item) && item->doc.idoc) {
+        yyjson_doc_free((yyjson_doc*)item->doc.idoc);
     }
+    bool is_heap = (item->flags & CSILK_JSON_F_HEAP) != 0;
     item->u.mval = mval;
     item->doc.mdoc = arr->doc.mdoc;
-    item->is_owner = false;
-    item->kind = CSILK_JSON_MUTABLE;
+    item->flags &= ~(CSILK_JSON_F_OWNER | CSILK_JSON_F_HEAP);
+    item->flags |= CSILK_JSON_F_MUTABLE;
+    if (is_heap) {
+        free(item);
+    }
     return true;
 }

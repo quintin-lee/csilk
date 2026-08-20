@@ -8,15 +8,15 @@
 const char*
 csilk_json_object_key(const csilk_json_t* obj, size_t index)
 {
-    if (!obj) {
+    if (!obj || !obj->u.raw) {
         return NULL;
     }
-    if (obj->kind == CSILK_JSON_MUTABLE) {
-        if (!yyjson_mut_is_obj(obj->u.mval)) {
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
             return NULL;
         }
         yyjson_mut_obj_iter it;
-        yyjson_mut_obj_iter_init(obj->u.mval, &it);
+        yyjson_mut_obj_iter_init((yyjson_mut_val*)obj->u.mval, &it);
         yyjson_mut_val* key_val;
         size_t          i = 0;
         while ((key_val = yyjson_mut_obj_iter_next(&it))) {
@@ -27,11 +27,11 @@ csilk_json_object_key(const csilk_json_t* obj, size_t index)
         }
         return NULL;
     }
-    if (!yyjson_is_obj(obj->u.ival)) {
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
         return NULL;
     }
     yyjson_obj_iter it;
-    yyjson_obj_iter_init(obj->u.ival, &it);
+    yyjson_obj_iter_init((yyjson_val*)obj->u.ival, &it);
     yyjson_val* key_val;
     size_t      i = 0;
     while ((key_val = yyjson_obj_iter_next(&it))) {
@@ -46,53 +46,55 @@ csilk_json_object_key(const csilk_json_t* obj, size_t index)
 size_t
 csilk_json_object_size(const csilk_json_t* obj)
 {
-    if (!obj) {
+    if (!obj || !obj->u.raw) {
         return 0;
     }
-    if (obj->kind == CSILK_JSON_MUTABLE) {
-        if (!yyjson_mut_is_obj(obj->u.mval)) {
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
             return 0;
         }
-        return yyjson_mut_obj_size(obj->u.mval);
+        return yyjson_mut_obj_size((yyjson_mut_val*)obj->u.mval);
     }
-    if (!yyjson_is_obj(obj->u.ival)) {
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
         return 0;
     }
-    return yyjson_obj_size(obj->u.ival);
+    return yyjson_obj_size((yyjson_val*)obj->u.ival);
 }
 
 csilk_json_t*
 csilk_json_object_val(const csilk_json_t* obj, size_t index)
 {
-    if (!obj) {
+    if (!obj || !obj->u.raw) {
         return NULL;
     }
-    if (obj->kind == CSILK_JSON_MUTABLE) {
-        if (!yyjson_mut_is_obj(obj->u.mval)) {
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
             return NULL;
         }
         yyjson_mut_obj_iter it;
-        yyjson_mut_obj_iter_init(obj->u.mval, &it);
+        yyjson_mut_obj_iter_init((yyjson_mut_val*)obj->u.mval, &it);
         yyjson_mut_val* key_val;
         size_t          i = 0;
         while ((key_val = yyjson_mut_obj_iter_next(&it))) {
             if (i == index) {
-                return json_view_mutable(obj->doc.mdoc, yyjson_mut_obj_iter_get_val(key_val));
+                return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc,
+                                         yyjson_mut_obj_iter_get_val(key_val));
             }
             i++;
         }
         return NULL;
     }
-    if (!yyjson_is_obj(obj->u.ival)) {
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
         return NULL;
     }
     yyjson_obj_iter it;
-    yyjson_obj_iter_init(obj->u.ival, &it);
+    yyjson_obj_iter_init((yyjson_val*)obj->u.ival, &it);
     yyjson_val* key_val;
     size_t      i = 0;
     while ((key_val = yyjson_obj_iter_next(&it))) {
         if (i == index) {
-            return json_view_immutable(obj->doc.idoc, yyjson_obj_iter_get_val(key_val));
+            return json_view_immutable((yyjson_doc*)obj->doc.idoc,
+                                       yyjson_obj_iter_get_val(key_val));
         }
         i++;
     }

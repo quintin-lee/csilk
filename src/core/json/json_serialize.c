@@ -8,23 +8,23 @@
 char*
 csilk_json_serialize(const csilk_json_t* v, size_t* len)
 {
-    if (!v) {
+    if (!v || !v->u.raw) {
         return NULL;
     }
-    if (v->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_val_write(v->u.mval, 0, len);
+    if (json_is_mutable(v)) {
+        return yyjson_mut_val_write((yyjson_mut_val*)v->u.mval, 0, len);
     }
-    return yyjson_val_write(v->u.ival, 0, len);
+    return yyjson_val_write((yyjson_val*)v->u.ival, 0, len);
 }
 
 char*
 csilk_json_serialize_pretty(const csilk_json_t* v, size_t* len)
 {
-    if (!v) {
+    if (!v || !v->u.raw) {
         return NULL;
     }
-    if (v->kind == CSILK_JSON_MUTABLE) {
-        return yyjson_mut_val_write(v->u.mval, YYJSON_WRITE_PRETTY, len);
+    if (json_is_mutable(v)) {
+        return yyjson_mut_val_write((yyjson_mut_val*)v->u.mval, YYJSON_WRITE_PRETTY, len);
     }
-    return yyjson_val_write(v->u.ival, YYJSON_WRITE_PRETTY, len);
+    return yyjson_val_write((yyjson_val*)v->u.ival, YYJSON_WRITE_PRETTY, len);
 }
