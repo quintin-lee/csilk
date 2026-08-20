@@ -131,10 +131,14 @@ typedef struct CSILK_CACHE_ALIGNED {
  * @brief Per-reader epoch tracking slot aligned to 64-byte cache line.
  */
 typedef struct csilk_rcu_slot_s {
-    _Atomic(uint64_t)  active_epoch;  /**< 0 = inactive, >0 = epoch when entered */
-    _Atomic(uintptr_t) owner_tid;     /**< Owner thread ID */
-    _Atomic(uint32_t)  nesting_depth; /**< Reentrant depth */
-    char               _pad[44];      /**< Pad to 64-byte cache line (64 - 8 - 8 - 4) */
+    _Atomic(uint64_t)                 active_epoch;  /**< 0 = inactive, >0 = epoch when entered */
+    _Atomic(uintptr_t)                owner_tid;     /**< Owner thread ID (0 = unowned/free) */
+    _Atomic(uint32_t)                 nesting_depth; /**< Reentrant depth */
+    _Atomic(struct csilk_rcu_slot_s*) next_overflow; /**< Next dynamic overflow slot link */
+    struct csilk_reload_mgr_s*        owner_mgr;     /**< Owning reload manager pointer */
+    uint32_t                          server_gen;    /**< Unique server generation stamp */
+    bool                              is_dynamic;    /**< True if allocated on heap for overflow */
+    char                              _pad[23];      /**< Pad to 64-byte cache line */
 } csilk_rcu_slot_t;
 
 /**
@@ -156,7 +160,10 @@ typedef struct csilk_reload_mgr_s {
     _Atomic(uint32_t) reclaim_lock;  /**< Lock-free reclamation mutual exclusion lock. */
     _Atomic(uint32_t) retired_count; /**< Count of retired routers. */
     _Atomic(csilk_retired_router_t*) retired_head; /**< Singly-linked list of retired routers. */
-    csilk_rcu_slot_t                 reader_slots[CSILK_RELOAD_MAX_READERS]; /**< Epoch slots. */
+    uint32_t                         server_gen;   /**< Unique process-wide server generation ID. */
+    _Atomic(csilk_rcu_slot_t*)
+                     overflow_head; /**< Lock-free linked list of dynamic overflow slots (>256). */
+    csilk_rcu_slot_t reader_slots[CSILK_RELOAD_MAX_READERS]; /**< Epoch slots. */
 } csilk_reload_mgr_t;
 
 /**
