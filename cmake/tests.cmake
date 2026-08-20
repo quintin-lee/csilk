@@ -88,6 +88,7 @@ set(CSILK_CORE_TESTS
     test_simd_router_arena
     test_uring_buf
     test_wasm_plugin
+    test_server_stats_bench
     test_swar_http
     test_af_xdp
     test_dpdk_pmd
@@ -109,7 +110,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
 
 

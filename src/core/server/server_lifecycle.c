@@ -213,14 +213,18 @@ csilk_server_free(csilk_server_t* server)
     if (server->worker_pools) {
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
-            for (int i = 0; i < wp->client_pool_count; i++) {
+            int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+            for (int i = 0; i < client_cnt; i++) {
                 free(wp->client_pool[i]);
             }
-            for (int i = 0; i < wp->arena_pool_count; i++) {
+            int arena_cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+            for (int i = 0; i < arena_cnt; i++) {
                 csilk_arena_free(wp->arena_pool[i]);
             }
             for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
-                for (int i = 0; i < wp->read_buf_counts[tier]; i++) {
+                int buf_cnt =
+                    atomic_load_explicit(&wp->read_buf_counts[tier], memory_order_relaxed);
+                for (int i = 0; i < buf_cnt; i++) {
                     free(wp->read_buf_tiers[tier][i]);
                 }
             }
@@ -262,15 +266,25 @@ csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_con
     if (!server) {
         return;
     }
+    int active_total = 0;
+    int pooled_total = 0;
+    int n = server->worker_pool_count;
+
+    if (server->worker_pools && n > 0) {
+        for (int w = 0; w < n; w++) {
+            worker_pool_t* wp = &server->worker_pools[w];
+            pooled_total += atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+            active_total += atomic_load_explicit(&wp->active_connections, memory_order_relaxed);
+        }
+    } else {
+        active_total = atomic_load_explicit(&server->active_connections, memory_order_relaxed);
+    }
+
     if (active_conn) {
-        *active_conn = atomic_load(&server->active_connections);
+        *active_conn = active_total > 0 ? active_total : 0;
     }
     if (pooled_conn) {
-        int total = 0;
-        for (int w = 0; w < server->worker_pool_count; w++) {
-            total += server->worker_pools[w].client_pool_count;
-        }
-        *pooled_conn = total;
+        *pooled_conn = pooled_total > 0 ? pooled_total : 0;
     }
 }
 
