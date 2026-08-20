@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "router_internal.h"
+#include "../internal/srv_impl.h"
 
 /**
  * @brief Stack frame for iterative non-recursive trie traversal.
@@ -158,7 +159,7 @@ match_node(csilk_router_node_t*     node,
         path = "";
     }
 
-    int use_simd = (ctx && ctx->server) ? ctx->server->config.enable_simd : 1;
+    int use_simd = (ctx && ctx->server) ? _csilk_server_get_enable_simd(ctx->server) : 1;
 
     router_stack_frame_t stack[CSILK_ROUTER_MAX_DEPTH];
     int                  depth = 0;

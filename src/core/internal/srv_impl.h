@@ -34,11 +34,7 @@ _csilk_server_try_acquire_connection(csilk_server_t* server)
     if (!server) {
         return -1;
     }
-    int max_conn = atomic_load(&server->max_connections);
-    if (max_conn <= 0) {
-        max_conn = server->config.max_connections;
-    }
-
+    int max_conn = atomic_load_explicit(&server->max_connections, memory_order_relaxed);
     if (max_conn <= 0) {
         atomic_fetch_add(&server->active_connections, 1);
         return 0;
@@ -66,6 +62,113 @@ _csilk_server_release_connection(csilk_server_t* server)
     if (server) {
         atomic_fetch_sub(&server->active_connections, 1);
     }
+}
+
+/* --- Runtime Config Fast Inline Accessors --- */
+
+static inline size_t
+_csilk_server_get_max_body_size(const csilk_server_t* server)
+{
+    if (!server) {
+        return CSILK_DEFAULT_MAX_BODY_SIZE;
+    }
+    size_t sz = atomic_load_explicit(&server->runtime_config.max_body_size, memory_order_relaxed);
+    return sz > 0 ? sz : CSILK_DEFAULT_MAX_BODY_SIZE;
+}
+
+static inline size_t
+_csilk_server_get_max_header_size(const csilk_server_t* server)
+{
+    if (!server) {
+        return CSILK_DEFAULT_MAX_HEADER_SIZE;
+    }
+    size_t sz = atomic_load_explicit(&server->runtime_config.max_header_size, memory_order_relaxed);
+    return sz > 0 ? sz : CSILK_DEFAULT_MAX_HEADER_SIZE;
+}
+
+static inline size_t
+_csilk_server_get_max_url_size(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.max_url_size, memory_order_relaxed);
+}
+
+static inline size_t
+_csilk_server_get_max_headers_count(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.max_headers_count, memory_order_relaxed);
+}
+
+static inline unsigned int
+_csilk_server_get_idle_timeout_ms(const csilk_server_t* server)
+{
+    if (!server) {
+        return CSILK_DEFAULT_IDLE_TIMEOUT;
+    }
+    unsigned int t =
+        atomic_load_explicit(&server->runtime_config.idle_timeout_ms, memory_order_relaxed);
+    return t > 0 ? t : CSILK_DEFAULT_IDLE_TIMEOUT;
+}
+
+static inline unsigned int
+_csilk_server_get_read_timeout_ms(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.read_timeout_ms, memory_order_relaxed);
+}
+
+static inline unsigned int
+_csilk_server_get_write_timeout_ms(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.write_timeout_ms, memory_order_relaxed);
+}
+
+static inline unsigned int
+_csilk_server_get_request_timeout_ms(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.request_timeout_ms, memory_order_relaxed);
+}
+
+static inline int
+_csilk_server_get_enable_simd(const csilk_server_t* server)
+{
+    if (!server) {
+        return 1;
+    }
+    return atomic_load_explicit(&server->runtime_config.enable_simd, memory_order_relaxed);
+}
+
+static inline int
+_csilk_server_get_h2_push_enable(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    return atomic_load_explicit(&server->runtime_config.h2_push_enable, memory_order_relaxed);
+}
+
+static inline int
+_csilk_server_get_h2_max_push(const csilk_server_t* server)
+{
+    if (!server) {
+        return 10;
+    }
+    int m =
+        atomic_load_explicit(&server->runtime_config.h2_max_push_per_request, memory_order_relaxed);
+    return m > 0 ? m : 10;
 }
 
 CSILK_INTERNAL void

@@ -24,10 +24,10 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 {
     csilk_io_timer_stop(&client->read_timer);
 
-    if (client->server->config.write_timeout_ms > 0) {
+    unsigned int write_timeout = _csilk_server_get_write_timeout_ms(client->server);
+    if (write_timeout > 0) {
         extern void on_write_timeout(csilk_io_timer_t * handle);
-        csilk_io_timer_start(
-            &client->write_timer, on_write_timeout, client->server->config.write_timeout_ms, 0);
+        csilk_io_timer_start(&client->write_timer, on_write_timeout, write_timeout, 0);
     }
 
     int   is_ws = client->ctx.is_websocket;
@@ -57,8 +57,8 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         extern void on_idle_timeout(csilk_io_timer_t * handle);
         extern void csilk_client_read_start(csilk_client_t * client);
         csilk_conn_set_state(client, CSILK_CONN_READING);
-        csilk_io_timer_start(
-            &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
+        unsigned int idle_timeout = _csilk_server_get_idle_timeout_ms(client->server);
+        csilk_io_timer_start(&client->timer, on_idle_timeout, idle_timeout, 0);
         llhttp_resume(&client->parser);
         csilk_client_read_start(client);
     } else {

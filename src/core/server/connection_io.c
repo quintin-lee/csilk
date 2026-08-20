@@ -175,13 +175,13 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
         client->request_timer.data = client;
 
         CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
-        if (server->config.read_timeout_ms > 0) {
-            csilk_io_timer_start(
-                &client->read_timer, on_read_timeout, server->config.read_timeout_ms, 0);
+        unsigned int read_timeout = _csilk_server_get_read_timeout_ms(server);
+        if (read_timeout > 0) {
+            csilk_io_timer_start(&client->read_timer, on_read_timeout, read_timeout, 0);
         }
-        if (server->config.request_timeout_ms > 0) {
-            csilk_io_timer_start(
-                &client->request_timer, on_read_timeout, server->config.request_timeout_ms, 0);
+        unsigned int req_timeout = _csilk_server_get_request_timeout_ms(server);
+        if (req_timeout > 0) {
+            csilk_io_timer_start(&client->request_timer, on_read_timeout, req_timeout, 0);
         }
 
         if (!server->ssl_ctx) {
@@ -260,9 +260,9 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
     }
 
     csilk_io_timer_stop(&client->timer);
-    if (client->server->config.read_timeout_ms > 0) {
-        csilk_io_timer_start(
-            &client->read_timer, on_read_timeout, client->server->config.read_timeout_ms, 0);
+    unsigned int read_timeout = _csilk_server_get_read_timeout_ms(client->server);
+    if (read_timeout > 0) {
+        csilk_io_timer_start(&client->read_timer, on_read_timeout, read_timeout, 0);
     }
     if (nread > 0) {
         if (client->ssl) {

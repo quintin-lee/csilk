@@ -64,10 +64,10 @@ on_message_begin(llhttp_t* p)
     client->current_header_value.data = NULL;
     client->current_header_value.len = 0;
 
-    if (client->server->config.request_timeout_ms > 0) {
+    unsigned int req_timeout = _csilk_server_get_request_timeout_ms(client->server);
+    if (req_timeout > 0) {
         csilk_io_timer_stop(&client->request_timer);
-        csilk_io_timer_start(
-            &client->request_timer, on_read_timeout, client->server->config.request_timeout_ms, 0);
+        csilk_io_timer_start(&client->request_timer, on_read_timeout, req_timeout, 0);
     }
 
     csilk_log_set_request_id(NULL);
@@ -88,7 +88,7 @@ int
 on_url(llhttp_t* p, const char* at, size_t length)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
-    size_t          max_url = client->server->config.max_url_size;
+    size_t          max_url = _csilk_server_get_max_url_size(client->server);
     if (max_url > 0 && length > max_url) {
         CSILK_LOG_W("URL length (%zu) exceeds max_url_size limit (%zu)", length, max_url);
         client->current_url.data = NULL;
@@ -134,7 +134,8 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
     client->total_header_size += length;
-    if (client->total_header_size > client->server->config.max_header_size) {
+    size_t max_header = _csilk_server_get_max_header_size(client->server);
+    if (client->total_header_size > max_header) {
         CSILK_LOG_W("Total header size limit exceeded on header field");
         return HPE_USER;
     }
@@ -177,8 +178,8 @@ on_header_field(llhttp_t* p, const char* at, size_t length)
     } else {
         /* First chunk of a new header field */
         client->header_count++;
-        if (client->server->config.max_headers_count > 0 &&
-            client->header_count > client->server->config.max_headers_count) {
+        size_t max_count = _csilk_server_get_max_headers_count(client->server);
+        if (max_count > 0 && client->header_count > max_count) {
             CSILK_LOG_W("Total header count limit exceeded (%zu)", client->header_count);
             return HPE_USER;
         }
@@ -215,7 +216,8 @@ on_header_value(llhttp_t* p, const char* at, size_t length)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
     client->total_header_size += length;
-    if (client->total_header_size > client->server->config.max_header_size) {
+    size_t max_header = _csilk_server_get_max_header_size(client->server);
+    if (client->total_header_size > max_header) {
         CSILK_LOG_W("Total header size limit exceeded on header value");
         client->current_header_field.data = NULL;
         client->current_header_field.len = 0;
@@ -314,7 +316,8 @@ int
 on_body(llhttp_t* p, const char* at, size_t length)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
-    if (client->ctx.request.body_len + length > client->server->config.max_body_size) {
+    size_t          max_body = _csilk_server_get_max_body_size(client->server);
+    if (client->ctx.request.body_len + length > max_body) {
         return HPE_USER;
     }
 
