@@ -196,7 +196,10 @@ format_text_line(char*             dest,
                      func);
     }
 
-    if (n < 0 || (size_t)n >= cap) {
+    if (n < 0) {
+        n = 0;
+        dest[0] = '\0';
+    } else if ((size_t)n >= cap) {
         n = (int)cap - 1;
     }
 
@@ -219,7 +222,7 @@ format_text_line(char*             dest,
     }
 
     /* Add newline */
-    if ((size_t)n < cap - 1) {
+    if (n >= 0 && (size_t)n < cap - 1) {
         dest[n++] = '\n';
         dest[n] = '\0';
     } else if (cap > 1) {
