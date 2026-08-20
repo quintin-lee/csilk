@@ -302,7 +302,7 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
     }
     size_t aligned_size = (size + alignment - 1) & ~(alignment - 1);
 
-    if (arena->head) {
+    if (arena->head && arena->ptr) {
         arena->head->used = (size_t)(arena->ptr - arena->head->data);
     }
 
