@@ -594,3 +594,20 @@ csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_us
         curr = curr->next;
     }
 }
+
+int
+csilk_arena_contains(const csilk_arena_t* arena, const void* ptr)
+{
+    if (!arena || !ptr) {
+        return 0;
+    }
+    const uint8_t* p = (const uint8_t*)ptr;
+    for (csilk_arena_chunk_t* ch = arena->head; ch; ch = ch->next) {
+        const uint8_t* start = (const uint8_t*)ch->data;
+        const uint8_t* end = start + ch->size;
+        if (p >= start && p < end) {
+            return 1;
+        }
+    }
+    return 0;
+}

@@ -404,8 +404,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
             // Get or create path item
             csilk_json_t* path_obj = csilk_json_get(paths, oa_path);
             if (!path_obj) {
-                path_obj = csilk_json_object();
-                csilk_json_add_object(paths, oa_path, path_obj);
+                csilk_json_add_object(paths, oa_path, csilk_json_object());
+                path_obj = csilk_json_get(paths, oa_path);
             }
             if (!path_obj) {
                 continue;
@@ -427,8 +427,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                 continue;
             }
 
-            csilk_json_t* operation = csilk_json_object();
-            csilk_json_add_object(path_obj, method_lower, operation);
+            csilk_json_add_object(path_obj, method_lower, csilk_json_object());
+            csilk_json_t* operation = csilk_json_get(path_obj, method_lower);
             if (!operation) {
                 continue;
             }
@@ -477,10 +477,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
                     csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_string(schema_obj, "type", "string");
                     csilk_json_add_object(param, "schema", schema_obj);
-                    if (schema_obj) {
-                        csilk_json_add_string(schema_obj, "type", "string");
-                    }
                     csilk_json_array_append(params, param);
                 } else if (*p == '*') {
                     p++;
@@ -501,10 +499,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
                     csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_string(schema_obj, "type", "string");
                     csilk_json_add_object(param, "schema", schema_obj);
-                    if (schema_obj) {
-                        csilk_json_add_string(schema_obj, "type", "string");
-                    }
                     csilk_json_array_append(params, param);
                 } else {
                     p++;
@@ -519,75 +515,60 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     add_schema(schemas, input_type);
                 }
 
+                csilk_json_t* ref_schema = csilk_json_object();
+                char          ref[256];
+                snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
+                csilk_json_add_string(ref_schema, "$ref", ref);
+
+                csilk_json_t* json_content = csilk_json_object();
+                csilk_json_add_object(json_content, "schema", ref_schema);
+
+                csilk_json_t* content = csilk_json_object();
+                csilk_json_add_object(content, "application/json", json_content);
+
                 csilk_json_t* req_body = csilk_json_object();
+                csilk_json_add_bool(req_body, "required", 1);
+                csilk_json_add_object(req_body, "content", content);
+
                 csilk_json_add_object(operation, "requestBody", req_body);
-                if (req_body) {
-                    csilk_json_add_bool(req_body, "required", 1);
-                    csilk_json_t* content = csilk_json_object();
-                    csilk_json_add_object(req_body, "content", content);
-                    if (content) {
-                        csilk_json_t* json_content = csilk_json_object();
-                        csilk_json_add_object(content, "application/json", json_content);
-                        if (json_content) {
-                            csilk_json_t* ref_schema = csilk_json_object();
-                            char          ref[256];
-                            snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
-                            csilk_json_add_string(ref_schema, "$ref", ref);
-                            csilk_json_add_object(json_content, "schema", ref_schema);
-                        }
-                    }
-                }
             }
 
             // Responses
-            csilk_json_t* responses = csilk_json_object();
-            csilk_json_add_object(operation, "responses", responses);
-            if (responses) {
-                const char* output_type = output_item ? csilk_json_string_value(output_item) : NULL;
-                int         has_output = (output_type && *output_type != '\0');
+            const char* output_type = output_item ? csilk_json_string_value(output_item) : NULL;
+            int         has_output = (output_type && *output_type != '\0');
 
-                if (has_output && schemas) {
-                    add_schema(schemas, output_type);
-                }
-
-                // Default 200 response
-                csilk_json_t* resp200 = csilk_json_object();
-                csilk_json_add_object(responses, "200", resp200);
-                if (resp200) {
-                    csilk_json_add_string(resp200, "description", "Success");
-                    if (has_output) {
-                        csilk_json_t* content = csilk_json_object();
-                        csilk_json_add_object(resp200, "content", content);
-                        if (content) {
-                            csilk_json_t* json_content = csilk_json_object();
-                            csilk_json_add_object(content, "application/json", json_content);
-                            if (json_content) {
-                                csilk_json_t* ref_schema = csilk_json_object();
-                                char          ref[256];
-                                snprintf(ref,
-                                         sizeof(ref),
-                                         "#/components/"
-                                         "schemas/%s",
-                                         output_type);
-                                csilk_json_add_string(ref_schema, "$ref", ref);
-                                csilk_json_add_object(json_content, "schema", ref_schema);
-                            }
-                        }
-                    }
-                }
-
-                csilk_json_t* resp400 = csilk_json_object();
-                csilk_json_add_object(responses, "400", resp400);
-                if (resp400) {
-                    csilk_json_add_string(resp400, "description", "Bad Request");
-                }
-
-                csilk_json_t* resp500 = csilk_json_object();
-                csilk_json_add_object(responses, "500", resp500);
-                if (resp500) {
-                    csilk_json_add_string(resp500, "description", "Internal Server Error");
-                }
+            if (has_output && schemas) {
+                add_schema(schemas, output_type);
             }
+
+            csilk_json_t* responses = csilk_json_object();
+
+            // Default 200 response
+            csilk_json_t* resp200 = csilk_json_object();
+            csilk_json_add_string(resp200, "description", "Success");
+            if (has_output) {
+                csilk_json_t* json_content = csilk_json_object();
+                csilk_json_t* ref_schema = csilk_json_object();
+                char          ref[256];
+                snprintf(ref, sizeof(ref), "#/components/schemas/%s", output_type);
+                csilk_json_add_string(ref_schema, "$ref", ref);
+                csilk_json_add_object(json_content, "schema", ref_schema);
+
+                csilk_json_t* content = csilk_json_object();
+                csilk_json_add_object(content, "application/json", json_content);
+                csilk_json_add_object(resp200, "content", content);
+            }
+            csilk_json_add_object(responses, "200", resp200);
+
+            csilk_json_t* resp400 = csilk_json_object();
+            csilk_json_add_string(resp400, "description", "Bad Request");
+            csilk_json_add_object(responses, "400", resp400);
+
+            csilk_json_t* resp500 = csilk_json_object();
+            csilk_json_add_string(resp500, "description", "Internal Server Error");
+            csilk_json_add_object(responses, "500", resp500);
+
+            csilk_json_add_object(operation, "responses", responses);
         }
     }
 

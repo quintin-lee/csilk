@@ -90,23 +90,8 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     csilk_mutex_lock(&exp->mutex);
     int exported_count = exp->count;
 
-    /* Build OTLP JSON hierarchy: root -> resourceSpans -> scopeSpans -> spans */
-    csilk_json_t* root = csilk_json_object();
-    csilk_json_t* resource_spans = csilk_json_array();
-    csilk_json_add_object(root, "resourceSpans", resource_spans);
-
-    csilk_json_t* res_span = csilk_json_object();
-    csilk_json_array_append(resource_spans, res_span);
-
-    csilk_json_t* scope_spans = csilk_json_array();
-    csilk_json_add_object(res_span, "scopeSpans", scope_spans);
-
-    csilk_json_t* scope_span = csilk_json_object();
-    csilk_json_array_append(scope_spans, scope_span);
-
+    /* Build OTLP JSON hierarchy bottom-up: spans -> scope_span -> scope_spans -> res_span -> resource_spans -> root */
     csilk_json_t* spans_arr = csilk_json_array();
-    csilk_json_add_object(scope_span, "spans", spans_arr);
-
     for (int i = 0; i < exp->count; i++) {
         csilk_json_t* s = csilk_json_object();
         csilk_json_add_string(s, "traceId", exp->spans[i].trace_id);
@@ -120,6 +105,21 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
         csilk_json_add_number(s, "statusCode", exp->spans[i].status_code);
         csilk_json_array_append(spans_arr, s);
     }
+
+    csilk_json_t* scope_span = csilk_json_object();
+    csilk_json_add_object(scope_span, "spans", spans_arr);
+
+    csilk_json_t* scope_spans = csilk_json_array();
+    csilk_json_array_append(scope_spans, scope_span);
+
+    csilk_json_t* res_span = csilk_json_object();
+    csilk_json_add_object(res_span, "scopeSpans", scope_spans);
+
+    csilk_json_t* resource_spans = csilk_json_array();
+    csilk_json_array_append(resource_spans, res_span);
+
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_object(root, "resourceSpans", resource_spans);
 
     char* json_str = csilk_json_serialize(root, NULL);
     if (json_str) {
