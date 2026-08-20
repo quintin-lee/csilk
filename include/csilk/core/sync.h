@@ -13,6 +13,8 @@
 
 #ifdef CSILK_USE_URING
 #include <pthread.h>
+#include <stddef.h>
+#include <stdint.h>
 /** @brief Mutex type (pthread_mutex_t under the uring backend). */
 typedef pthread_mutex_t csilk_mutex_t;
 /** @brief Thread handle type (pthread_t under the uring backend). */
