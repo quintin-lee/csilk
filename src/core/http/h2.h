@@ -41,6 +41,14 @@ csilk_ctx_t* csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t strea
 void csilk_h2_free_streams(csilk_client_t* client);
 
 /**
+ * @brief Remove and free a stream context from the client's stream map by stream ID.
+ * @param client    The client connection.
+ * @param stream_id The HTTP/2 stream ID.
+ * @return 0 on success, -1 if not found.
+ */
+int csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id);
+
+/**
  * @brief Send an HTTP/2 response for a given stream context.
  * @param c The stream context.
  */

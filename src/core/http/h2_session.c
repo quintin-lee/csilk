@@ -8,17 +8,87 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 
+/* --- Multiplicative Hash & Table Resizing --- */
+
+static inline uint32_t
+_csilk_h2_stream_hash(int32_t stream_id, uint32_t mask)
+{
+    /* Knuth golden ratio 32-bit multiplicative hash for 31-bit stream IDs */
+    return (uint32_t)(((uint32_t)stream_id * 2654435761u) & mask);
+}
+
+static inline void
+_csilk_h2_stream_map_ensure_init(csilk_h2_stream_map_t* map)
+{
+    if (!map->buckets) {
+        map->capacity = CSILK_H2_INLINE_BUCKETS;
+        map->mask = CSILK_H2_INLINE_BUCKETS - 1;
+        map->count = 0;
+        map->buckets = map->inline_buckets;
+        memset(map->inline_buckets, 0, sizeof(map->inline_buckets));
+    }
+}
+
+static void
+_csilk_h2_stream_map_resize(csilk_h2_stream_map_t* map)
+{
+    uint32_t old_cap = map->capacity;
+    uint32_t new_cap = old_cap * 2;
+    if (new_cap < old_cap || new_cap > 65536) {
+        return; /* Bounded max bucket capacity */
+    }
+
+    csilk_ctx_t** new_buckets = calloc(new_cap, sizeof(csilk_ctx_t*));
+    if (!new_buckets) {
+        return; /* Keep running on existing capacity on OOM */
+    }
+
+    uint32_t new_mask = new_cap - 1;
+    for (uint32_t i = 0; i < old_cap; i++) {
+        csilk_ctx_t* curr = map->buckets[i];
+        while (curr) {
+            csilk_ctx_t* next = curr->next_stream;
+            uint32_t     new_idx = _csilk_h2_stream_hash(curr->stream_id, new_mask);
+            curr->next_stream = new_buckets[new_idx];
+            new_buckets[new_idx] = curr;
+            curr = next;
+        }
+    }
+
+    if (map->buckets != map->inline_buckets) {
+        free(map->buckets);
+    }
+
+    map->buckets = new_buckets;
+    map->capacity = new_cap;
+    map->mask = new_mask;
+}
+
 /* --- Stream lookup/creation --- */
 
 csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
-    csilk_ctx_t* curr = client->h2_streams;
+    if (!client) {
+        return NULL;
+    }
+
+    csilk_h2_stream_map_t* map = &client->h2_stream_map;
+    _csilk_h2_stream_map_ensure_init(map);
+
+    uint32_t     idx = _csilk_h2_stream_hash(stream_id, map->mask);
+    csilk_ctx_t* curr = map->buckets[idx];
     while (curr) {
         if (curr->stream_id == stream_id) {
             return curr;
         }
         curr = curr->next_stream;
+    }
+
+    /* Auto-resize when load factor threshold reached */
+    if (map->count >= map->capacity) {
+        _csilk_h2_stream_map_resize(map);
+        idx = _csilk_h2_stream_hash(stream_id, map->mask);
     }
 
     /* Create new context for stream */
@@ -30,36 +100,99 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
     _csilk_ctx_init(ctx, client->server, client);
     ctx->stream_id = stream_id;
     ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
-    if (client->server->config.enable_arena_alignment) {
+    if (client->server && client->server->config.enable_arena_alignment) {
         csilk_arena_set_alignment(ctx->arena, 1);
     }
 
-    /* Prepend to list */
-    ctx->next_stream = client->h2_streams;
-    client->h2_streams = ctx;
+    /* Insert into bucket chain head */
+    ctx->next_stream = map->buckets[idx];
+    map->buckets[idx] = ctx;
+    map->count++;
 
     return ctx;
 }
 
 /**
+ * @brief Remove and free a stream context from the client's stream map by stream ID.
+ * @param[in] client    Client whose stream is being removed.
+ * @param[in] stream_id HTTP/2 stream ID to close.
+ * @return 0 on success, -1 if not found.
+ */
+int
+csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id)
+{
+    if (!client) {
+        return -1;
+    }
+
+    csilk_h2_stream_map_t* map = &client->h2_stream_map;
+    if (!map->buckets || map->count == 0) {
+        return -1;
+    }
+
+    uint32_t      idx = _csilk_h2_stream_hash(stream_id, map->mask);
+    csilk_ctx_t** curr = &map->buckets[idx];
+    while (*curr) {
+        if ((*curr)->stream_id == stream_id) {
+            csilk_ctx_t* found = *curr;
+            *curr = found->next_stream;
+            found->next_stream = NULL;
+            map->count--;
+
+            csilk_ctx_cleanup(found);
+            if (found->arena) {
+                csilk_arena_free(found->arena);
+                found->arena = NULL;
+            }
+            free(found);
+            return 0;
+        }
+        curr = &((*curr)->next_stream);
+    }
+
+    return -1;
+}
+
+/**
  * @brief Free all HTTP/2 streams associated with a client connection.
- * @param[in] client Client whose h2_streams list is torn down.
+ * @param[in] client Client whose stream map is torn down.
  */
 void
 csilk_h2_free_streams(csilk_client_t* client)
 {
-    csilk_ctx_t* curr = client->h2_streams;
-    while (curr) {
-        csilk_ctx_t* next = curr->next_stream;
-        csilk_ctx_cleanup(curr);
-        if (curr->arena) {
-            csilk_arena_free(curr->arena);
-            curr->arena = NULL;
-        }
-        free(curr);
-        curr = next;
+    if (!client) {
+        return;
     }
-    client->h2_streams = NULL;
+
+    csilk_h2_stream_map_t* map = &client->h2_stream_map;
+    if (!map->buckets) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < map->capacity; i++) {
+        csilk_ctx_t* curr = map->buckets[i];
+        while (curr) {
+            csilk_ctx_t* next = curr->next_stream;
+            csilk_ctx_cleanup(curr);
+            if (curr->arena) {
+                csilk_arena_free(curr->arena);
+                curr->arena = NULL;
+            }
+            free(curr);
+            curr = next;
+        }
+        map->buckets[i] = NULL;
+    }
+
+    if (map->buckets != map->inline_buckets) {
+        free(map->buckets);
+    }
+
+    map->buckets = map->inline_buckets;
+    map->capacity = CSILK_H2_INLINE_BUCKETS;
+    map->mask = CSILK_H2_INLINE_BUCKETS - 1;
+    map->count = 0;
+    memset(map->inline_buckets, 0, sizeof(map->inline_buckets));
 }
 
 /* --- Session initialization --- */
