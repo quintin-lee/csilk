@@ -107,6 +107,7 @@ set(CSILK_CORE_TESTS
     test_core_concurrency_stress
     test_atomic_lifecycle
     test_rcu_lifecycle_stress
+    test_sendfile_workers
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -114,7 +115,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
 
 

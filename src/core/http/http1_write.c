@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
@@ -91,21 +92,28 @@ on_write(csilk_io_write_t* req, int status)
                 int    fd = client->ctx.file_fd;
                 size_t offset = client->ctx.file_offset;
                 size_t size = client->ctx.file_size;
-                client->ctx.file_fd = -1;
+
+                csilk_io_loop_t* loop = NULL;
+                if (client->owner_pool && client->owner_pool->loop_ptr) {
+                    loop = client->owner_pool->loop_ptr;
+                } else if (client->handle.loop) {
+                    loop = client->handle.loop;
+                } else if (client->server && client->server->loop) {
+                    loop = client->server->loop;
+                } else {
+                    loop = csilk_io_default_loop();
+                }
 
                 csilk_client_ref(client);
                 _csilk_client_pending_io_inc(client);
-                int r = csilk_io_fs_sendfile(csilk_io_default_loop(),
-                                             fs_req,
-                                             sock_fd,
-                                             fd,
-                                             offset,
-                                             size,
-                                             on_sendfile_complete);
+                int r = csilk_io_fs_sendfile(
+                    loop, fs_req, sock_fd, fd, offset, size, on_sendfile_complete);
                 if (r < 0) {
                     _csilk_client_pending_io_dec(client);
                     csilk_client_unref(client);
                     free(fs_req);
+                    close(fd);
+                    client->ctx.file_fd = -1;
                 } else {
                     if (client && req == &client->primary_write_req) {
                         client->primary_write_in_flight = 0;
