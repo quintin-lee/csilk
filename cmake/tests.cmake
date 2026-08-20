@@ -130,9 +130,10 @@ set(CSILK_APP_TESTS
     test_group
     test_group_ext
     test_hooks
+    test_hooks_rcu
 )
 set(CSILK_APP_TEST_DIRS
-    app;app;app;app;app;app;app;app;app
+    app;app;app;app;app;app;app;app;app;app
 )
 
 # -- Workflow tests --

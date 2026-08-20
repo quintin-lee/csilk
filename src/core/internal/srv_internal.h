@@ -58,11 +58,11 @@ enum {
 };
 enum { CSILK_DISPATCH_TASK_SLAB_SIZE = 256 };
 
-/** @brief Hook handler node in a linked list. */
-typedef struct csilk_hook_node_s {
-    void*                     handler;
-    struct csilk_hook_node_s* next;
-} csilk_hook_node_t;
+/** @brief Immutable contiguous array of lifecycle hook handlers. */
+typedef struct csilk_hook_array_s {
+    size_t count;
+    void*  handlers[];
+} csilk_hook_array_t;
 
 /** @brief Protocol type for a client connection. */
 typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk_protocol_t;
@@ -185,15 +185,16 @@ struct csilk_server_s {
     worker_pool_t*
         worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
     int worker_pool_count; /**< Number of worker pools (= worker_threads). */
-    csilk_handler_t         not_found_handler; /**< Custom 404 handler (NULL = default). */
-    char*                   spa_doc_root;      /**< SPA fallback doc root (NULL = disabled). */
-    csilk_storage_driver_t* storage_driver;    /**< Context storage driver. */
-    csilk_crypto_driver_t*  crypto_driver;     /**< Crypto algorithm driver. */
-    csilk_cipher_driver_t*  cipher_driver;     /**< Cipher algorithm driver. */
-    SSL_CTX*                ssl_ctx;           /**< OpenSSL context. */
-    csilk_mq_t*             mq;                /**< Message Queue instance. */
-    csilk_hook_node_t*      hooks[CSILK_HOOK_COUNT]; /**< Registered hooks. */
-    void*                   quic_transport; /**< Optional QUIC transport callbacks for HTTP/3. */
+    csilk_handler_t              not_found_handler; /**< Custom 404 handler (NULL = default). */
+    char*                        spa_doc_root;      /**< SPA fallback doc root (NULL = disabled). */
+    csilk_storage_driver_t*      storage_driver;    /**< Context storage driver. */
+    csilk_crypto_driver_t*       crypto_driver;     /**< Crypto algorithm driver. */
+    csilk_cipher_driver_t*       cipher_driver;     /**< Cipher algorithm driver. */
+    SSL_CTX*                     ssl_ctx;           /**< OpenSSL context. */
+    csilk_mq_t*                  mq;                /**< Message Queue instance. */
+    _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
+    csilk_mutex_t                hook_mutex; /**< Protects hook registration/removal CoW. */
+    void* quic_transport;                    /**< Optional QUIC transport callbacks for HTTP/3. */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
