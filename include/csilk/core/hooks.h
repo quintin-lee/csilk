@@ -62,3 +62,26 @@ typedef void (*csilk_ctx_hook_handler_t)(csilk_ctx_t* c);
  *                SERVER_*, csilk_ctx_hook_handler_t for others).
  */
 void csilk_server_add_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler);
+
+/**
+ * @brief Remove a previously registered lifecycle hook callback.
+ *
+ * Removes the first matching instance of @p handler for @p type.
+ * Uses Copy-On-Write and RCU grace-period synchronization to safely reclaim memory.
+ *
+ * @param s       The server instance.
+ * @param type    The hook type.
+ * @param handler Pointer to the callback function to remove.
+ * @return 0 if removed, -1 if not found or invalid parameters.
+ */
+int csilk_server_remove_hook(csilk_server_t* s, csilk_hook_type_t type, void* handler);
+
+/**
+ * @brief Clear all registered lifecycle hooks for a given hook type.
+ *
+ * Atomically replaces the handler array with an empty array and reclaims old memory safely.
+ *
+ * @param s    The server instance.
+ * @param type The hook type to clear.
+ */
+void csilk_server_clear_hooks(csilk_server_t* s, csilk_hook_type_t type);

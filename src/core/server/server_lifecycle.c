@@ -86,6 +86,10 @@ csilk_server_new(csilk_router_t* router)
     s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
     s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
     s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
+    csilk_mutex_init(&s->hook_mutex);
+    for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
+        atomic_init(&s->hooks[i], NULL);
+    }
 
     s->mq = _csilk_mq_new(s->loop);
 
@@ -231,13 +235,13 @@ csilk_server_free(csilk_server_t* server)
     }
 
     for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
-        csilk_hook_node_t* curr = server->hooks[i];
-        while (curr) {
-            csilk_hook_node_t* next = curr->next;
-            free(curr);
-            curr = next;
+        csilk_hook_array_t* arr = atomic_load_explicit(&server->hooks[i], memory_order_relaxed);
+        if (arr) {
+            free(arr);
+            atomic_store_explicit(&server->hooks[i], NULL, memory_order_relaxed);
         }
     }
+    csilk_mutex_destroy(&server->hook_mutex);
 
     csilk_dev_hot_reload_stop(server);
     csilk_server_wait_grace_period(server);
