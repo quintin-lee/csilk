@@ -197,9 +197,10 @@ struct csilk_server_s {
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
+#define CSILK_H2_STREAM_POOL_MAX 64
 
 /**
- * @brief Adaptive hash table for multiplexed HTTP/2 streams on a client connection.
+ * @brief Adaptive hash table and pool for multiplexed HTTP/2 streams on a client connection.
  */
 typedef struct csilk_h2_stream_map_s {
     csilk_ctx_t** buckets;  /**< Active bucket array (inline or heap). */
@@ -207,6 +208,9 @@ typedef struct csilk_h2_stream_map_s {
     uint32_t      mask;     /**< Mask for fast modulo (capacity - 1). */
     uint32_t      count;    /**< Current active stream count. */
     csilk_ctx_t*  inline_buckets[CSILK_H2_INLINE_BUCKETS]; /**< Embedded fast-path buckets. */
+    csilk_ctx_t*  free_list;  /**< Pool of idle recycled stream contexts. */
+    uint32_t      pool_count; /**< Current number of pooled contexts. */
+    uint32_t      pool_max;   /**< Maximum number of pooled contexts. */
 } csilk_h2_stream_map_t;
 
 /** @brief Client connection structure — represents a single TCP connection.

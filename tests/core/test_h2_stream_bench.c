@@ -69,6 +69,7 @@ test_h2_stream_crud(void)
     int r = csilk_h2_remove_stream(&client, 3);
     assert(r == 0);
     assert(client.h2_stream_map.count == 3);
+    assert(client.h2_stream_map.pool_count == 1);
 
     /* Try removing stream 3 again (must fail with -1) */
     assert(csilk_h2_remove_stream(&client, 3) == -1);
@@ -84,6 +85,8 @@ test_h2_stream_crud(void)
     /* Cleanup all remaining streams */
     csilk_h2_free_streams(&client);
     assert(client.h2_stream_map.count == 0);
+    assert(client.h2_stream_map.pool_count == 0);
+    assert(client.h2_stream_map.free_list == NULL);
     assert(client.h2_stream_map.buckets == client.h2_stream_map.inline_buckets);
 
     printf("test_h2_stream_crud: PASS\n");
@@ -122,12 +125,13 @@ test_h2_stream_resize_and_collision(void)
         assert(found == ptrs[i]);
     }
 
-    /* Delete even-indexed streams */
+    /* Delete even-indexed streams (they will be returned to pool up to pool_max) */
     for (int i = 0; i < NUM_STREAMS; i += 2) {
         int32_t stream_id = i * 2 + 1;
         assert(csilk_h2_remove_stream(&client, stream_id) == 0);
     }
     assert(client.h2_stream_map.count == NUM_STREAMS / 2);
+    assert(client.h2_stream_map.pool_count == CSILK_H2_STREAM_POOL_MAX);
 
     /* Verify odd-indexed streams still present */
     for (int i = 1; i < NUM_STREAMS; i += 2) {
@@ -138,13 +142,111 @@ test_h2_stream_resize_and_collision(void)
 
     csilk_h2_free_streams(&client);
     assert(client.h2_stream_map.count == 0);
+    assert(client.h2_stream_map.pool_count == 0);
+    assert(client.h2_stream_map.free_list == NULL);
     assert(client.h2_stream_map.buckets == client.h2_stream_map.inline_buckets);
 
     printf("test_h2_stream_resize_and_collision: PASS\n");
 }
 
 /* -------------------------------------------------------------------------- */
-/* Test 3: Benchmark for 100, 1,000, 10,000 Concurrent Streams               */
+/* Test 3: Stream Context & Arena Pool Recycling                              */
+/* -------------------------------------------------------------------------- */
+static void
+test_h2_stream_pool_recycling(void)
+{
+    printf("Testing HTTP/2 stream context and arena pool recycling...\n");
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    /* Create initial stream */
+    csilk_ctx_t* orig_ctx = csilk_h2_get_or_create_stream(&client, 1);
+    assert(orig_ctx != NULL);
+    csilk_arena_t* orig_arena = orig_ctx->arena;
+    assert(orig_arena != NULL);
+
+    /* Allocate memory inside arena */
+    char* str = csilk_arena_strdup(orig_ctx->arena, "stream 1 initial arena content");
+    assert(str != NULL && strcmp(str, "stream 1 initial arena content") == 0);
+
+    /* Close stream 1 -> should enter free_list */
+    assert(csilk_h2_remove_stream(&client, 1) == 0);
+    assert(client.h2_stream_map.count == 0);
+    assert(client.h2_stream_map.pool_count == 1);
+    assert(client.h2_stream_map.free_list == orig_ctx);
+
+    /* Perform 100 consecutive stream cycles, ensuring 100% address reuse and zero leak */
+    for (int cycle = 0; cycle < 100; cycle++) {
+        int32_t      stream_id = cycle * 2 + 3;
+        csilk_ctx_t* c = csilk_h2_get_or_create_stream(&client, stream_id);
+        assert(c == orig_ctx);
+        assert(c->arena == orig_arena);
+        assert(c->stream_id == stream_id);
+        assert(client.h2_stream_map.pool_count == 0);
+
+        /* Write to arena */
+        char* data = csilk_arena_alloc(c->arena, 512);
+        assert(data != NULL);
+        snprintf(data, 512, "Stream ID %d test payload", stream_id);
+
+        /* Close stream */
+        assert(csilk_h2_remove_stream(&client, stream_id) == 0);
+        assert(client.h2_stream_map.pool_count == 1);
+    }
+
+    csilk_h2_free_streams(&client);
+    assert(client.h2_stream_map.pool_count == 0);
+    assert(client.h2_stream_map.free_list == NULL);
+
+    printf("test_h2_stream_pool_recycling: PASS\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Test 4: Pool Lifecycle Benchmark (Acquire + Arena Alloc + Release)          */
+/* -------------------------------------------------------------------------- */
+static void
+benchmark_stream_pool_lifecycle(int iterations)
+{
+    printf("\n=== Benchmarking Stream Pool Lifecycle (Acquire -> Arena Alloc -> Release) ===\n");
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    uint64_t c_start = rdtsc();
+    double   t_start = now_ns();
+
+    for (int i = 0; i < iterations; i++) {
+        int32_t      stream_id = (i % 64) * 2 + 1;
+        csilk_ctx_t* c = csilk_h2_get_or_create_stream(&client, stream_id);
+        assert(c != NULL);
+
+        /* Use arena */
+        void* p = csilk_arena_alloc(c->arena, 128);
+        assert(p != NULL);
+
+        /* Close stream (recycles to pool) */
+        int r = csilk_h2_remove_stream(&client, stream_id);
+        assert(r == 0);
+    }
+
+    double   t_elapsed = now_ns() - t_start;
+    uint64_t c_elapsed = rdtsc() - c_start;
+
+    double ns_per_cycle = t_elapsed / iterations;
+    double cycles_per_cycle = (double)c_elapsed / iterations;
+    double cycles_per_sec = (double)iterations / (t_elapsed / 1e9);
+
+    printf("  Pool throughput:   %.2f ns/cycle | %.2f cycles/cycle | %.2f M stream-cycles/sec\n",
+           ns_per_cycle,
+           cycles_per_cycle,
+           cycles_per_sec / 1e6);
+
+    csilk_h2_free_streams(&client);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Test 5: Benchmark for 100, 1,000, 10,000 Concurrent Streams               */
 /* -------------------------------------------------------------------------- */
 static void
 benchmark_stream_scale(int stream_count, int lookup_iterations)
@@ -228,15 +330,18 @@ benchmark_stream_scale(int stream_count, int lookup_iterations)
 int
 main(void)
 {
-    printf("=== Running HTTP/2 Stream Hash Map Tests & Benchmarks ===\n\n");
+    printf("=== Running HTTP/2 Stream Hash Map & Pool Tests & Benchmarks ===\n\n");
 
     test_h2_stream_crud();
     test_h2_stream_resize_and_collision();
+    test_h2_stream_pool_recycling();
+
+    benchmark_stream_pool_lifecycle(500000);
 
     benchmark_stream_scale(100, 500000);
     benchmark_stream_scale(1000, 500000);
     benchmark_stream_scale(10000, 500000);
 
-    printf("\n=== All HTTP/2 Stream Hash Map Tests Passed! ===\n");
+    printf("\n=== All HTTP/2 Stream Hash Map & Pool Tests Passed! ===\n");
     return 0;
 }
