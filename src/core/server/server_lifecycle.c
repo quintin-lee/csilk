@@ -769,6 +769,49 @@ csilk_server_get_router(csilk_server_t* server)
     return server ? atomic_load_explicit(&server->router, memory_order_acquire) : NULL;
 }
 
+static _Atomic(uint32_t) g_rcu_server_gen_seq = 1;
+
+typedef struct {
+    csilk_rcu_slot_t*   slot;
+    csilk_reload_mgr_t* mgr;
+    uint32_t            server_gen;
+} csilk_tls_rcu_t;
+
+static _Thread_local csilk_tls_rcu_t g_tls_rcu = {0};
+static pthread_key_t                 g_rcu_tls_key;
+static pthread_once_t                g_rcu_tls_once = PTHREAD_ONCE_INIT;
+
+static void
+rcu_thread_exit_destructor(void* val)
+{
+    (void)val;
+    if (g_tls_rcu.slot) {
+        csilk_rcu_slot_t* slot = g_tls_rcu.slot;
+        atomic_store_explicit(&slot->active_epoch, 0, memory_order_release);
+        atomic_store_explicit(&slot->nesting_depth, 0, memory_order_relaxed);
+        atomic_store_explicit(&slot->owner_tid, 0, memory_order_release);
+
+        g_tls_rcu.slot = NULL;
+        g_tls_rcu.mgr = NULL;
+        g_tls_rcu.server_gen = 0;
+    }
+}
+
+static void
+rcu_init_tls_key(void)
+{
+    pthread_key_create(&g_rcu_tls_key, rcu_thread_exit_destructor);
+}
+
+static inline void
+ensure_rcu_tls_registered(void)
+{
+    pthread_once(&g_rcu_tls_once, rcu_init_tls_key);
+    if (!pthread_getspecific(g_rcu_tls_key)) {
+        pthread_setspecific(g_rcu_tls_key, (void*)1);
+    }
+}
+
 CSILK_INTERNAL void
 _csilk_reload_mgr_init(csilk_server_t* server)
 {
@@ -780,23 +823,29 @@ _csilk_reload_mgr_init(csilk_server_t* server)
     atomic_init(&mgr->reclaim_lock, 0);
     atomic_init(&mgr->retired_count, 0);
     atomic_init(&mgr->retired_head, NULL);
+    atomic_init(&mgr->overflow_head, NULL);
+
+    uint32_t gen = atomic_fetch_add_explicit(&g_rcu_server_gen_seq, 1, memory_order_relaxed);
+    if (gen == 0) {
+        gen = atomic_fetch_add_explicit(&g_rcu_server_gen_seq, 1, memory_order_relaxed);
+    }
+    mgr->server_gen = gen;
 
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         atomic_init(&mgr->reader_slots[i].active_epoch, 0);
         atomic_init(&mgr->reader_slots[i].owner_tid, 0);
         atomic_init(&mgr->reader_slots[i].nesting_depth, 0);
+        atomic_init(&mgr->reader_slots[i].next_overflow, NULL);
+        mgr->reader_slots[i].owner_mgr = mgr;
+        mgr->reader_slots[i].server_gen = gen;
+        mgr->reader_slots[i].is_dynamic = false;
     }
 }
 
-static _Thread_local csilk_rcu_slot_t*   tls_rcu_slot = NULL;
-static _Thread_local csilk_reload_mgr_t* tls_rcu_mgr = NULL;
-
 static csilk_rcu_slot_t*
-acquire_rcu_slot(csilk_reload_mgr_t* mgr)
+acquire_rcu_slot_slow(csilk_reload_mgr_t* mgr)
 {
-    if (__builtin_expect(tls_rcu_slot != NULL && tls_rcu_mgr == mgr, 1)) {
-        return tls_rcu_slot;
-    }
+    ensure_rcu_tls_registered();
 
     uintptr_t my_tid = (uintptr_t)pthread_self();
     if (my_tid == 0) {
@@ -805,18 +854,23 @@ acquire_rcu_slot(csilk_reload_mgr_t* mgr)
 
     size_t start = (size_t)(my_tid % CSILK_RELOAD_MAX_READERS);
 
-    /* 1. Fast path: check if this thread already owns a slot */
+    /* 1. Fast path: check if this thread already owns a static slot */
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         size_t idx = (start + i) % CSILK_RELOAD_MAX_READERS;
         if (atomic_load_explicit(&mgr->reader_slots[idx].owner_tid, memory_order_relaxed) ==
             my_tid) {
-            tls_rcu_slot = &mgr->reader_slots[idx];
-            tls_rcu_mgr = mgr;
-            return tls_rcu_slot;
+            csilk_rcu_slot_t* s = &mgr->reader_slots[idx];
+            s->owner_mgr = mgr;
+            s->server_gen = mgr->server_gen;
+            s->is_dynamic = false;
+            g_tls_rcu.slot = s;
+            g_tls_rcu.mgr = mgr;
+            g_tls_rcu.server_gen = mgr->server_gen;
+            return s;
         }
     }
 
-    /* 2. Slow path: claim an unused slot */
+    /* 2. Slow path: claim an unused static slot */
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         size_t    idx = (start + i) % CSILK_RELOAD_MAX_READERS;
         uintptr_t expected = 0;
@@ -825,16 +879,79 @@ acquire_rcu_slot(csilk_reload_mgr_t* mgr)
                                                     my_tid,
                                                     memory_order_acq_rel,
                                                     memory_order_relaxed)) {
-            tls_rcu_slot = &mgr->reader_slots[idx];
-            tls_rcu_mgr = mgr;
-            return tls_rcu_slot;
+            csilk_rcu_slot_t* s = &mgr->reader_slots[idx];
+            atomic_store_explicit(&s->active_epoch, 0, memory_order_relaxed);
+            atomic_store_explicit(&s->nesting_depth, 0, memory_order_relaxed);
+            s->owner_mgr = mgr;
+            s->server_gen = mgr->server_gen;
+            s->is_dynamic = false;
+            g_tls_rcu.slot = s;
+            g_tls_rcu.mgr = mgr;
+            g_tls_rcu.server_gen = mgr->server_gen;
+            return s;
         }
     }
 
-    /* Fallback: deterministic slot */
-    tls_rcu_slot = &mgr->reader_slots[start];
-    tls_rcu_mgr = mgr;
-    return tls_rcu_slot;
+    /* 3. Static slots saturated (>256 concurrent readers): check dynamic overflow slots */
+    csilk_rcu_slot_t* cur_ov = atomic_load_explicit(&mgr->overflow_head, memory_order_acquire);
+    while (cur_ov) {
+        if (atomic_load_explicit(&cur_ov->owner_tid, memory_order_relaxed) == my_tid) {
+            cur_ov->owner_mgr = mgr;
+            cur_ov->server_gen = mgr->server_gen;
+            g_tls_rcu.slot = cur_ov;
+            g_tls_rcu.mgr = mgr;
+            g_tls_rcu.server_gen = mgr->server_gen;
+            return cur_ov;
+        }
+        uintptr_t exp = 0;
+        if (atomic_compare_exchange_strong_explicit(
+                &cur_ov->owner_tid, &exp, my_tid, memory_order_acq_rel, memory_order_relaxed)) {
+            atomic_store_explicit(&cur_ov->active_epoch, 0, memory_order_relaxed);
+            atomic_store_explicit(&cur_ov->nesting_depth, 0, memory_order_relaxed);
+            cur_ov->owner_mgr = mgr;
+            cur_ov->server_gen = mgr->server_gen;
+            g_tls_rcu.slot = cur_ov;
+            g_tls_rcu.mgr = mgr;
+            g_tls_rcu.server_gen = mgr->server_gen;
+            return cur_ov;
+        }
+        cur_ov = atomic_load_explicit(&cur_ov->next_overflow, memory_order_acquire);
+    }
+
+    /* 4. Allocate a dedicated new dynamic overflow slot */
+    csilk_rcu_slot_t* new_slot = calloc(1, sizeof(csilk_rcu_slot_t));
+    if (!new_slot) {
+        return NULL;
+    }
+    atomic_init(&new_slot->active_epoch, 0);
+    atomic_init(&new_slot->owner_tid, my_tid);
+    atomic_init(&new_slot->nesting_depth, 0);
+    atomic_init(&new_slot->next_overflow, NULL);
+    new_slot->owner_mgr = mgr;
+    new_slot->server_gen = mgr->server_gen;
+    new_slot->is_dynamic = true;
+
+    csilk_rcu_slot_t* old_head = atomic_load_explicit(&mgr->overflow_head, memory_order_relaxed);
+    do {
+        atomic_store_explicit(&new_slot->next_overflow, old_head, memory_order_relaxed);
+    } while (!atomic_compare_exchange_weak_explicit(
+        &mgr->overflow_head, &old_head, new_slot, memory_order_release, memory_order_relaxed));
+
+    g_tls_rcu.slot = new_slot;
+    g_tls_rcu.mgr = mgr;
+    g_tls_rcu.server_gen = mgr->server_gen;
+    return new_slot;
+}
+
+static inline csilk_rcu_slot_t*
+acquire_rcu_slot(csilk_reload_mgr_t* mgr)
+{
+    if (__builtin_expect(g_tls_rcu.slot != NULL && g_tls_rcu.mgr == mgr &&
+                             g_tls_rcu.server_gen == mgr->server_gen,
+                         1)) {
+        return g_tls_rcu.slot;
+    }
+    return acquire_rcu_slot_slow(mgr);
 }
 
 csilk_router_t*
@@ -851,6 +968,14 @@ csilk_server_router_acquire(csilk_server_t* server, csilk_rcu_token_t* token)
 
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
     csilk_rcu_slot_t*   slot = acquire_rcu_slot(mgr);
+    if (!slot) {
+        if (token) {
+            token->active = 0;
+            token->slot = NULL;
+            token->epoch = 0;
+        }
+        return atomic_load_explicit(&server->router, memory_order_acquire);
+    }
 
     uint32_t depth = atomic_fetch_add_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
     uint64_t epoch = 0;
@@ -907,6 +1032,7 @@ _csilk_reload_try_reclaim(csilk_server_t* server)
     uint64_t min_active_epoch = UINT64_MAX;
     bool     has_active_readers = false;
 
+    /* Scan static reader slots */
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         uint64_t r_epoch =
             atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire);
@@ -916,6 +1042,19 @@ _csilk_reload_try_reclaim(csilk_server_t* server)
                 min_active_epoch = r_epoch;
             }
         }
+    }
+
+    /* Scan dynamic overflow slots */
+    csilk_rcu_slot_t* ov = atomic_load_explicit(&mgr->overflow_head, memory_order_acquire);
+    while (ov) {
+        uint64_t r_epoch = atomic_load_explicit(&ov->active_epoch, memory_order_acquire);
+        if (r_epoch != 0) {
+            has_active_readers = true;
+            if (r_epoch < min_active_epoch) {
+                min_active_epoch = r_epoch;
+            }
+        }
+        ov = atomic_load_explicit(&ov->next_overflow, memory_order_acquire);
     }
 
     if (!has_active_readers) {
@@ -1054,6 +1193,17 @@ csilk_server_wait_grace_period(csilk_server_t* server)
             }
         }
         if (all_done) {
+            csilk_rcu_slot_t* ov = atomic_load_explicit(&mgr->overflow_head, memory_order_acquire);
+            while (ov) {
+                uint64_t r_epoch = atomic_load_explicit(&ov->active_epoch, memory_order_acquire);
+                if (r_epoch != 0 && r_epoch <= target_epoch) {
+                    all_done = false;
+                    break;
+                }
+                ov = atomic_load_explicit(&ov->next_overflow, memory_order_acquire);
+            }
+        }
+        if (all_done) {
             break;
         }
         sched_yield();
@@ -1071,12 +1221,41 @@ _csilk_reload_mgr_free(csilk_server_t* server)
     }
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
 
-    /* Wait for all readers to exit */
+    /* Invalidate calling thread's cached TLS pointer if it refers to this server */
+    if (g_tls_rcu.mgr == mgr) {
+        g_tls_rcu.slot = NULL;
+        g_tls_rcu.mgr = NULL;
+        g_tls_rcu.server_gen = 0;
+    }
+
+    /* Wait for all static readers to exit */
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         while (atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire) !=
                0) {
             sched_yield();
         }
+        atomic_store_explicit(&mgr->reader_slots[i].owner_tid, 0, memory_order_relaxed);
+    }
+
+    /* Wait for all overflow dynamic readers to exit */
+    csilk_rcu_slot_t* ov = atomic_load_explicit(&mgr->overflow_head, memory_order_acquire);
+    while (ov) {
+        while (atomic_load_explicit(&ov->active_epoch, memory_order_acquire) != 0) {
+            sched_yield();
+        }
+        atomic_store_explicit(&ov->owner_tid, 0, memory_order_relaxed);
+        ov = atomic_load_explicit(&ov->next_overflow, memory_order_acquire);
+    }
+
+    /* Invalidate server_gen so other threads will not match */
+    mgr->server_gen = 0;
+
+    /* Free all dynamic overflow slots */
+    ov = atomic_exchange_explicit(&mgr->overflow_head, NULL, memory_order_acq_rel);
+    while (ov) {
+        csilk_rcu_slot_t* next = atomic_load_explicit(&ov->next_overflow, memory_order_relaxed);
+        free(ov);
+        ov = next;
     }
 
     /* Reclaim all retired entries unconditionally */
