@@ -108,7 +108,7 @@ Replace the current function body in `src/core/server/connection_close.c` (lines
 ```c
 // BEFORE:
 void
-_mcsilk_client_check_recycle(csilk_client_t* client)
+_csilk_client_check_recycle(csilk_client_t* client)
 {
     if (!client) {
         return;
@@ -278,6 +278,14 @@ cmake --build build --target check-format 2>&1 | tail -5
 ```
 
 Expected: No formatting issues.
+
+- [ ] **Run clang-tidy**
+
+```bash
+cmake --build build --target tidy 2>&1 | tail -10
+```
+
+Expected: No warnings or errors from clang-tidy on modified files.
 
 - [ ] **Final commit message for review**
 
