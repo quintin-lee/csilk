@@ -25,6 +25,9 @@ _csilk_h2_stream_map_ensure_init(csilk_h2_stream_map_t* map)
         map->mask = CSILK_H2_INLINE_BUCKETS - 1;
         map->count = 0;
         map->buckets = map->inline_buckets;
+        map->free_list = NULL;
+        map->pool_count = 0;
+        map->pool_max = CSILK_H2_STREAM_POOL_MAX;
         memset(map->inline_buckets, 0, sizeof(map->inline_buckets));
     }
 }
@@ -91,18 +94,33 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         idx = _csilk_h2_stream_hash(stream_id, map->mask);
     }
 
-    /* Create new context for stream */
-    csilk_ctx_t* ctx = malloc(sizeof(csilk_ctx_t));
-    if (!ctx) {
-        return NULL;
+    csilk_ctx_t*   ctx = NULL;
+    csilk_arena_t* arena = NULL;
+
+    /* Acquire from pool if available */
+    if (map->free_list) {
+        ctx = map->free_list;
+        map->free_list = ctx->next_stream;
+        map->pool_count--;
+
+        arena = ctx->arena;
+        /* Reset arena to clean initial state (keeps 4KB head chunk, 0 syscall) */
+        csilk_arena_reset(arena);
+    } else {
+        /* Allocate new context and arena */
+        ctx = malloc(sizeof(csilk_ctx_t));
+        if (!ctx) {
+            return NULL;
+        }
+        arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+        if (client->server && client->server->config.enable_arena_alignment) {
+            csilk_arena_set_alignment(arena, 1);
+        }
     }
 
     _csilk_ctx_init(ctx, client->server, client);
+    ctx->arena = arena;
     ctx->stream_id = stream_id;
-    ctx->arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
-    if (client->server && client->server->config.enable_arena_alignment) {
-        csilk_arena_set_alignment(ctx->arena, 1);
-    }
 
     /* Insert into bucket chain head */
     ctx->next_stream = map->buckets[idx];
@@ -139,12 +157,22 @@ csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id)
             found->next_stream = NULL;
             map->count--;
 
+            /* Clean up any request/response bodies, storage items, defers */
             csilk_ctx_cleanup(found);
-            if (found->arena) {
-                csilk_arena_free(found->arena);
-                found->arena = NULL;
+
+            /* Recycle to per-connection stream pool if under capacity */
+            if (map->pool_count < map->pool_max) {
+                csilk_arena_reset(found->arena);
+                found->next_stream = map->free_list;
+                map->free_list = found;
+                map->pool_count++;
+            } else {
+                if (found->arena) {
+                    csilk_arena_free(found->arena);
+                    found->arena = NULL;
+                }
+                free(found);
             }
-            free(found);
             return 0;
         }
         curr = &((*curr)->next_stream);
@@ -169,6 +197,7 @@ csilk_h2_free_streams(csilk_client_t* client)
         return;
     }
 
+    /* Free all active streams */
     for (uint32_t i = 0; i < map->capacity; i++) {
         csilk_ctx_t* curr = map->buckets[i];
         while (curr) {
@@ -183,6 +212,20 @@ csilk_h2_free_streams(csilk_client_t* client)
         }
         map->buckets[i] = NULL;
     }
+
+    /* Free all pooled idle streams */
+    csilk_ctx_t* pool_curr = map->free_list;
+    while (pool_curr) {
+        csilk_ctx_t* next = pool_curr->next_stream;
+        if (pool_curr->arena) {
+            csilk_arena_free(pool_curr->arena);
+            pool_curr->arena = NULL;
+        }
+        free(pool_curr);
+        pool_curr = next;
+    }
+    map->free_list = NULL;
+    map->pool_count = 0;
 
     if (map->buckets != map->inline_buckets) {
         free(map->buckets);
