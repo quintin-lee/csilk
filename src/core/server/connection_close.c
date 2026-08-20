@@ -194,7 +194,10 @@ _csilk_ctx_loop(csilk_ctx_t* c)
         return csilk_io_default_loop();
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    return client->handle.loop;
+    if (client->owner_pool && client->owner_pool->loop_ptr) {
+        return client->owner_pool->loop_ptr;
+    }
+    return client->handle.loop ? client->handle.loop : csilk_io_default_loop();
 }
 
 /** @brief Context async lease helper — increments client ref_count. */
