@@ -251,21 +251,30 @@ typedef enum {
 } csilk_log_level_t;
 
 /**
+ * @brief Behavior when the asynchronous log queue is full.
+ */
+typedef enum {
+    CSILK_LOG_OVERFLOW_DROP = 0,    /**< Drop new messages when queue is full. */
+    CSILK_LOG_OVERFLOW_BLOCK = 1,   /**< Block/yield until space is available. */
+    CSILK_LOG_OVERFLOW_FALLBACK = 2 /**< Write synchronously to stderr on overflow. */
+} csilk_log_overflow_t;
+
+/**
  * @brief Logger initialisation configuration.
  *
  * Controls log output destination, formatting, level filtering, and rotation.
  * Passed by value (not pointer) to csilk_log_init.
  */
 typedef struct {
-    csilk_log_level_t level;         /**< Minimum level to emit (messages below this are
-                              filtered out). */
-    const char*       file_path;     /**< Path to the log file, or NULL to log to stderr. */
-    size_t            max_file_size; /**< Maximum file size in bytes before rotation (0 =
-                        rotation disabled). Requires @p file_path to be set. */
-    int               use_colors;    /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 =
-                        auto-detect (default). */
-    int               json_format;   /**< When non-zero, emit newline-delimited JSON records
-                        instead of human-readable lines. */
+    csilk_log_level_t level; /**< Minimum level to emit (messages below this are filtered out). */
+    const char*       file_path; /**< Path to the log file, or NULL to log to stderr. */
+    size_t
+        max_file_size; /**< Maximum file size in bytes before rotation (0 = rotation disabled). Requires @p file_path to be set. */
+    int use_colors; /**< Enable ANSI colour escape codes: 1 = on, 0 = off, -1 = auto-detect (default). */
+    int json_format; /**< When non-zero, emit newline-delimited JSON records instead of human-readable lines. */
+    csilk_log_overflow_t
+        overflow_strategy; /**< Behavior when async queue is full (default: CSILK_LOG_OVERFLOW_DROP). */
+    size_t queue_capacity; /**< Preallocated node pool capacity (0 = default 8192). */
 } csilk_log_config_t;
 
 /**

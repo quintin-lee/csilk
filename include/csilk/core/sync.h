@@ -111,6 +111,26 @@ csilk_cond_wait(csilk_cond_t* cond, csilk_mutex_t* mutex)
     pthread_cond_wait(cond, mutex);
 }
 /**
+ * @brief Wait on a condition variable with a timeout in nanoseconds.
+ * @param[in,out] cond Condition variable to wait on.
+ * @param[in,out] mutex Mutex currently held by the caller.
+ * @param timeout_ns Timeout duration in nanoseconds.
+ * @return 0 on success, or a non-zero error/timeout code.
+ */
+static inline int
+csilk_cond_timedwait(csilk_cond_t* cond, csilk_mutex_t* mutex, uint64_t timeout_ns)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += (time_t)(timeout_ns / 1000000000ULL);
+    ts.tv_nsec += (long)(timeout_ns % 1000000000ULL);
+    if (ts.tv_nsec >= 1000000000L) {
+        ts.tv_sec += 1;
+        ts.tv_nsec -= 1000000000L;
+    }
+    return pthread_cond_timedwait(cond, mutex, &ts);
+}
+/**
  * @brief Destroy a condition variable.
  * @param[in,out] cond Condition variable to destroy.
  */
@@ -138,6 +158,12 @@ static inline csilk_thread_t
 csilk_thread_self(void)
 {
     return pthread_self();
+}
+
+static inline void
+csilk_thread_yield(void)
+{
+    sched_yield();
 }
 
 #ifdef __linux__
@@ -320,6 +346,18 @@ csilk_cond_wait(csilk_cond_t* cond, csilk_mutex_t* mutex)
     uv_cond_wait(cond, mutex);
 }
 /**
+ * @brief Wait on a condition variable with a timeout in nanoseconds.
+ * @param[in,out] cond Condition variable to wait on.
+ * @param[in,out] mutex Mutex currently held by the caller.
+ * @param timeout_ns Timeout duration in nanoseconds.
+ * @return 0 on success, or a libuv error code (UV_ETIMEDOUT) on timeout.
+ */
+static inline int
+csilk_cond_timedwait(csilk_cond_t* cond, csilk_mutex_t* mutex, uint64_t timeout_ns)
+{
+    return uv_cond_timedwait(cond, mutex, timeout_ns);
+}
+/**
  * @brief Destroy a condition variable.
  * @param[in,out] cond Condition variable to destroy.
  */
@@ -347,6 +385,12 @@ static inline csilk_thread_t
 csilk_thread_self(void)
 {
     return uv_thread_self();
+}
+
+static inline void
+csilk_thread_yield(void)
+{
+    sched_yield();
 }
 
 static inline int

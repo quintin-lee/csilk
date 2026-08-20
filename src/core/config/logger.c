@@ -1,78 +1,88 @@
 /**
  * @file logger.c
- * @brief Thread-safe structured logger with JSON and human-readable output,
- *        file rotation, and ANSI color support.
+ * @brief High-performance asynchronous lock-free structured logger.
  *
- * === Design ===
+ * Architecture:
+ *   Producers (Workers):
+ *     1. Zero-overhead atomic filter check (CSILK_LOG_IS_ENABLED)
+ *     2. Lock-free node acquisition from pre-allocated slab (Treiber stack)
+ *     3. In-place TLS/stack formatting (Text / JSON with request-ID)
+ *     4. Intrusive wait-free MPSC enqueue (csilk_lfqueue_t)
+ *     5. Configurable overflow policies: DROP, BLOCK, FALLBACK
  *
- * The logger is a global singleton (g_logger) protected by a mutex for
- * thread-safe access. Two output modes are available:
+ *   Consumer (Background Logger Thread):
+ *     1. Batch dequeue from lock-free MPSC queue
+ *     2. Atomic file size accounting and single-backup file rotation (.1)
+ *     3. Single-threaded non-blocking disk I/O (fwrite, periodic fflush)
+ *     4. Return nodes to lock-free pool
+ *     5. Crash-safe shutdown flushing
  *
- *   Text mode (default):
- *     [2024-01-15 10:30:00] INFO  [file.c:42] function(): <request_id> message
- *     ANSI color codes are added for each level when use_colors is enabled.
- *
- *   JSON mode:
- *     {"time_epoch":1705312200,"level":"INFO","request_id":"...",
- *      "file":"file.c","line":42,"func":"function","msg":"..."}
- *     Uses the csilk reflection engine (CSILK_REGISTER_REFLECT) for automatic
- *     struct-to-JSON serialization, avoiding manual JSON string building.
- *
- * === Thread Safety ===
- *
- * All public log macros (CSILK_LOG_I, CSILK_LOG_E, etc.) acquire
- * g_logger.mutex before writing. The thread-local request ID (tl_request_id)
- * allows each thread to track its own request context without contention.
- *
- * === File Rotation ===
- *
- * When max_file_size is set and the current file exceeds it, the logger
- * renames <path> to <path>.1 (single-backup rotation) and opens a new file.
- * Rotation happens inline during log write, protected by the mutex.
- *
- * === Log Levels ===
- *
- *   TRACE (0) - Most verbose, for debugging internals
- *   DEBUG (1) - Detailed information for developers
- *   INFO  (2) - Normal operational messages (default)
- *   WARN  (3) - Unexpected but handled situations
- *   ERROR (4) - Errors that don't stop the server
- *   FATAL (5) - Critical errors causing shutdown
- *
- * The level filter is checked inside each log macro call before any formatting
- * or I/O occurs, so disabled levels have near-zero overhead.
  * @copyright MIT License
  */
 
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/server.h"
+#include "../primitives/lfqueue.h"
 
-/* ---- internal logger state ---- */
+/* Exported atomic level and init flags for zero-overhead inline macro checks */
+_Atomic(int) g_csilk_log_level_val = CSILK_LOG_INFO;
+_Atomic(int) g_csilk_log_is_init = 0;
 
-/** @brief Internal logger singleton — holds configuration, file pointer, mutex,
- * and current file size. */
+#define CSILK_LOG_NODE_BUF_SIZE 2048
+#define CSILK_LOG_DEFAULT_QUEUE_CAPACITY 8192
+
+/** @brief Pre-allocated node in the lock-free logging ring/slab. */
+typedef struct csilk_log_node_s {
+    csilk_lfq_node_t lfq_node;           /**< Intrusive node for MPSC queue (must be first). */
+    _Atomic(struct csilk_log_node_s*)
+           next_free;                    /**< Intrusive link for lock-free node pool stack. */
+    size_t len;                          /**< Number of bytes in buf. */
+    char   buf[CSILK_LOG_NODE_BUF_SIZE]; /**< Formatted line. */
+} csilk_log_node_t;
+
+/** @brief Internal asynchronous logger singleton. */
 typedef struct {
     csilk_log_config_t config;       /**< Logger configuration. */
     FILE*              fp;           /**< Output file pointer. */
-    size_t             current_size; /**< Current log file size. */
-    csilk_mutex_t      mutex;        /**< Mutex for thread-safe logging. */
-    int                initialized;  /**< Whether logger is initialized. */
-} csilk_logger_t;
+    size_t             current_size; /**< Current log file size (updated by consumer). */
+    int                initialized;  /**< Local initialization flag. */
 
-static csilk_logger_t g_logger = {{0}, NULL, 0, {0}, 0};
+    /* Lock-free MPSC queue & Node Pool */
+    csilk_lfqueue_t            queue;
+    _Atomic(csilk_log_node_t*) free_stack;
+    csilk_log_node_t*          node_slab;
+    size_t                     slab_capacity;
+
+    /* Thread management & synchronization */
+    csilk_thread_t    consumer_tid;
+    _Atomic(int)      running;
+    _Atomic(int)      consumer_sleeping;
+    _Atomic(uint64_t) dropped_count;
+    _Atomic(uint64_t) queued_seq;
+    _Atomic(uint64_t) flushed_seq;
+
+    csilk_mutex_t wake_mutex;
+    csilk_cond_t  wake_cond;
+    csilk_mutex_t fallback_mutex; /**< Mutex for fallback sync writing / direct stderr. */
+} csilk_async_logger_t;
+
+static csilk_async_logger_t g_logger = {0};
 
 static _Thread_local char tl_request_id[CSILK_UUID_BUF_SIZE];
 
 /** @brief Return this thread's request-ID buffer (thread-local). */
-static char*
+static inline char*
 get_tl_request_id(void)
 {
     return tl_request_id;
@@ -82,32 +92,49 @@ static const char* level_names[] = {"TRACE", "DEBUG", "INFO ", "WARN ", "ERROR",
 static const char* level_colors[] = {
     "\x1b[35m", "\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[31m", "\x1b[41;1m"};
 
-/** @brief Cached formatted timestamp, refreshed once per second.
- *
- * Avoids calling time() (system call) and localtime_r() (tz lock) on
- * every log line.  Thread-local so each writer thread has its own cache. */
+/** @brief Cached formatted timestamp, refreshed once per second. */
 static _Thread_local struct {
     time_t last_sec;
     char   text[20]; /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
 } tls_time_cache = {0, {0}};
 
-/* ---- rotation ---- */
+/* --- Lock-Free Node Pool (Treiber Stack) --- */
 
-/** @brief Rotate the current log file by renaming it with a ".1" suffix.
- *
- * Closes the current file, renames "<path>" to "<path>.1", opens a new
- * file at the original path in append mode, and resets the current_size
- * counter. This is a simple single-backup rotation (not multi-generational).
- *
- * @note Only called when g_logger.config.max_file_size is exceeded.
- * @note Not thread-safe on its own; the caller must hold g_logger.mutex. */
+static inline csilk_log_node_t*
+log_pool_pop(void)
+{
+    csilk_log_node_t* head = atomic_load_explicit(&g_logger.free_stack, memory_order_acquire);
+    while (head) {
+        csilk_log_node_t* next = atomic_load_explicit(&head->next_free, memory_order_relaxed);
+        if (atomic_compare_exchange_weak_explicit(
+                &g_logger.free_stack, &head, next, memory_order_release, memory_order_acquire)) {
+            return head;
+        }
+    }
+    return NULL;
+}
+
+static inline void
+log_pool_push(csilk_log_node_t* node)
+{
+    csilk_log_node_t* head = atomic_load_explicit(&g_logger.free_stack, memory_order_relaxed);
+    do {
+        atomic_store_explicit(&node->next_free, head, memory_order_relaxed);
+    } while (!atomic_compare_exchange_weak_explicit(
+        &g_logger.free_stack, &head, node, memory_order_release, memory_order_relaxed));
+}
+
+/* --- File Rotation (Run exclusively by consumer thread) --- */
+
 static void
 rotate_log_files(void)
 {
-    if (!g_logger.config.file_path) {
+    if (!g_logger.config.file_path || !g_logger.fp) {
         return;
     }
-    fclose(g_logger.fp);
+    if (g_logger.fp != stdout && g_logger.fp != stderr) {
+        fclose(g_logger.fp);
+    }
     char old[512];
     snprintf(old, sizeof(old), "%s.1", g_logger.config.file_path);
     rename(g_logger.config.file_path, old);
@@ -115,90 +142,27 @@ rotate_log_files(void)
     g_logger.current_size = 0;
 }
 
-/* ---- text-format output ---- */
+/* --- Formatting Helpers --- */
 
-/** @brief Format and write a human-readable plain-text log line.
- *
- * Produces output like:
- *   "2024-01-15 10:30:00 INFO  [file.c:42] function(): <request_id> message"
- * ANSI color codes are added when use_colors is enabled. Thread-local
- * request ID is appended if set via csilk_log_set_request_id().
- *
- * @param lv      Log level enum (controls coloring/level label).
- * @param file    Source file name (only basename is used).
- * @param line    Source line number.
- * @param func    Function name.
- * @param msg     Log message content (not null-terminated).
- * @param msg_len Length of the message content.
- * @return Number of bytes written to g_logger.fp. */
-static int
-log_text(csilk_log_level_t lv,
-         const char*       file,
-         int               line,
-         const char*       func,
-         const char*       msg,
-         int               msg_len)
+static inline void
+update_time_cache(time_t* out_now)
 {
-    const char* fn = strrchr(file, '/');
-    fn = fn ? fn + 1 : file;
-
-    /* Refresh cached timestamp once per second to avoid repeated
-     * time() system calls and localtime_r() tz-lock contention. */
     time_t now = time(NULL);
+    if (out_now) {
+        *out_now = now;
+    }
     if (now != tls_time_cache.last_sec) {
         tls_time_cache.last_sec = now;
         struct tm tm;
         localtime_r(&now, &tm);
         strftime(tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
     }
-
-    int n = 0;
-    if (g_logger.config.use_colors) {
-        n += fprintf(g_logger.fp,
-                     "%s %s%s\x1b[0m [%s:%d] %s(): ",
-                     tls_time_cache.text,
-                     level_colors[lv],
-                     level_names[lv],
-                     fn,
-                     line,
-                     func);
-    } else {
-        n += fprintf(g_logger.fp,
-                     "%s %s [%s:%d] %s(): ",
-                     tls_time_cache.text,
-                     level_names[lv],
-                     fn,
-                     line,
-                     func);
-    }
-
-    char* tl_request_id = get_tl_request_id();
-    if (tl_request_id[0] != '\0') {
-        n += fprintf(g_logger.fp, "<%s> ", tl_request_id);
-    }
-
-    n += (int)fwrite(msg, 1, (size_t)msg_len, g_logger.fp);
-    n += fprintf(g_logger.fp, "\n");
-    return n;
 }
 
-/* ---- JSON-format output (uses reflect) ---- */
-
-/** @brief Build a cJSON object from log entry fields directly.
- *
- * Constructs a cJSON object by adding each field individually, avoiding
- * the expensive struct→JSON→cJSON round-trip previously used.
- *
- * @param lv      Log level.
- * @param file    Source file name.
- * @param line    Source line number.
- * @param func    Function name.
- * @param msg     Log message content.
- * @param msg_len Message length (may truncate to fit the entry struct).
- * @return cJSON object ready for merging extra fields, or NULL on failure.
- * @note The returned cJSON must be freed by the caller with csilk_json_free(). */
-static csilk_json_t*
-build_json_entry(csilk_log_level_t lv,
+static size_t
+format_text_line(char*             dest,
+                 size_t            cap,
+                 csilk_log_level_t lv,
                  const char*       file,
                  int               line,
                  const char*       func,
@@ -208,73 +172,108 @@ build_json_entry(csilk_log_level_t lv,
     const char* fn = strrchr(file, '/');
     fn = fn ? fn + 1 : file;
 
-    csilk_json_t* root = csilk_json_object();
-    if (!root) {
-        return NULL;
+    update_time_cache(NULL);
+
+    int n = 0;
+    if (g_logger.config.use_colors) {
+        n = snprintf(dest,
+                     cap,
+                     "%s %s%s\x1b[0m [%s:%d] %s(): ",
+                     tls_time_cache.text,
+                     level_colors[lv],
+                     level_names[lv],
+                     fn,
+                     line,
+                     func);
+    } else {
+        n = snprintf(dest,
+                     cap,
+                     "%s %s [%s:%d] %s(): ",
+                     tls_time_cache.text,
+                     level_names[lv],
+                     fn,
+                     line,
+                     func);
     }
 
-    /* Refresh cached time once per second (shared with log_text) */
-    time_t now = time(NULL);
-    if (now != tls_time_cache.last_sec) {
-        tls_time_cache.last_sec = now;
-        struct tm tm;
-        localtime_r(&now, &tm);
-        strftime(tls_time_cache.text, sizeof(tls_time_cache.text), "%Y-%m-%d %H:%M:%S", &tm);
+    if (n < 0 || (size_t)n >= cap) {
+        n = (int)cap - 1;
+    }
+
+    char* tl_req = get_tl_request_id();
+    if (tl_req[0] != '\0' && (size_t)n < cap) {
+        int req_n = snprintf(dest + n, cap - (size_t)n, "<%s> ", tl_req);
+        if (req_n > 0) {
+            n += req_n;
+            if ((size_t)n >= cap) {
+                n = (int)cap - 1;
+            }
+        }
+    }
+
+    if (msg && msg_len > 0 && (size_t)n < cap) {
+        size_t remaining = cap - (size_t)n;
+        size_t to_copy = (size_t)msg_len < remaining ? (size_t)msg_len : remaining;
+        memcpy(dest + n, msg, to_copy);
+        n += (int)to_copy;
+    }
+
+    /* Add newline */
+    if ((size_t)n < cap - 1) {
+        dest[n++] = '\n';
+        dest[n] = '\0';
+    } else if (cap > 1) {
+        dest[cap - 2] = '\n';
+        dest[cap - 1] = '\0';
+        n = (int)cap - 1;
+    }
+
+    return (size_t)n;
+}
+
+static size_t
+format_json_line(char*             dest,
+                 size_t            cap,
+                 csilk_log_level_t lv,
+                 const char*       file,
+                 int               line,
+                 const char*       func,
+                 csilk_json_t*     extra,
+                 const char*       msg,
+                 int               msg_len)
+{
+    const char* fn = strrchr(file, '/');
+    fn = fn ? fn + 1 : file;
+
+    time_t now = 0;
+    update_time_cache(&now);
+
+    csilk_json_t* root = csilk_json_object();
+    if (!root) {
+        if (extra) {
+            csilk_json_free(extra);
+        }
+        return 0;
     }
 
     csilk_json_add_number(root, "time_epoch", (double)(int64_t)now);
     csilk_json_add_string(root, "level", level_names[lv]);
 
-    char* tl_request_id = get_tl_request_id();
-    csilk_json_add_string(root, "request_id", tl_request_id);
+    char* tl_req = get_tl_request_id();
+    csilk_json_add_string(root, "request_id", tl_req);
 
     csilk_json_add_string(root, "file", fn);
     csilk_json_add_number(root, "line", line);
     csilk_json_add_string(root, "func", func);
 
     if (msg && msg_len > 0) {
-        /* Truncate to fit the message field limit (same as before) */
         size_t cp = (size_t)msg_len < 1023 ? (size_t)msg_len : 1023;
-        char   buf[1024];
-        memcpy(buf, msg, cp);
-        buf[cp] = '\0';
-        csilk_json_add_string(root, "msg", buf);
+        char   tmp[1024];
+        memcpy(tmp, msg, cp);
+        tmp[cp] = '\0';
+        csilk_json_add_string(root, "msg", tmp);
     } else {
         csilk_json_add_string(root, "msg", "");
-    }
-
-    return root;
-}
-
-/** @brief Format and write a structured JSON log line with optional extra
- * fields.
- *
- * Builds the base log entry via build_json_entry(), merges any extra cJSON
- * fields (the @p extra object's children are duplicated into the root),
- * serializes to a compact JSON string, and writes it to the output.
- *
- * @param lv      Log level.
- * @param file    Source file name.
- * @param line    Source line number.
- * @param func    Function name.
- * @param extra   Extra cJSON object with additional key-value pairs to merge
- *                into the log entry. Ownership is taken (cJSON_Delete is
- * called). May be NULL.
- * @param msg     Log message content.
- * @param msg_len Message length.
- * @return Number of bytes written, or 0 on failure. */
-static int
-log_json(csilk_log_level_t lv,
-         const char*       file,
-         int               line,
-         const char*       func,
-         csilk_json_t*     extra,
-         const char*       msg,
-         int               msg_len)
-{
-    csilk_json_t* root = build_json_entry(lv, file, line, func, msg, msg_len);
-    if (!root) {
-        return 0;
     }
 
     if (extra) {
@@ -292,43 +291,95 @@ log_json(csilk_log_level_t lv,
         csilk_json_free(extra);
     }
 
-    char* line_str = csilk_json_serialize(root, NULL);
-    int   n = 0;
-    if (line_str) {
-        n = fprintf(g_logger.fp, "%s\n", line_str);
-        free(line_str);
+    char*  serialized = csilk_json_serialize(root, NULL);
+    size_t len = 0;
+    if (serialized) {
+        size_t slen = strlen(serialized);
+        if (slen + 2 <= cap) {
+            memcpy(dest, serialized, slen);
+            dest[slen] = '\n';
+            dest[slen + 1] = '\0';
+            len = slen + 1;
+        } else if (cap > 2) {
+            memcpy(dest, serialized, cap - 2);
+            dest[cap - 2] = '\n';
+            dest[cap - 1] = '\0';
+            len = cap - 1;
+        }
+        free(serialized);
     }
     csilk_json_free(root);
-    return n;
+    return len;
+}
+
+/* --- Consumer Background Thread --- */
+
+static void
+logger_consumer_loop(void* arg)
+{
+    (void)arg;
+
+    while (atomic_load_explicit(&g_logger.running, memory_order_acquire) ||
+           atomic_load_explicit(&g_logger.queued_seq, memory_order_acquire) >
+               atomic_load_explicit(&g_logger.flushed_seq, memory_order_acquire)) {
+
+        int               processed = 0;
+        csilk_lfq_node_t* raw_node = NULL;
+
+        while ((raw_node = csilk_lfq_dequeue(&g_logger.queue)) != NULL) {
+            csilk_log_node_t* node = (csilk_log_node_t*)raw_node;
+
+            /* Check file rotation */
+            if (g_logger.config.max_file_size > 0 &&
+                g_logger.current_size + node->len >= g_logger.config.max_file_size) {
+                rotate_log_files();
+            }
+
+            if (g_logger.fp && node->len > 0) {
+                fwrite(node->buf, 1, node->len, g_logger.fp);
+                g_logger.current_size += node->len;
+            }
+
+            log_pool_push(node);
+            processed++;
+            atomic_fetch_add_explicit(&g_logger.flushed_seq, 1, memory_order_release);
+        }
+
+        if (processed > 0 && g_logger.fp) {
+            fflush(g_logger.fp);
+        }
+
+        if (!atomic_load_explicit(&g_logger.running, memory_order_acquire) &&
+            atomic_load_explicit(&g_logger.queued_seq, memory_order_acquire) ==
+                atomic_load_explicit(&g_logger.flushed_seq, memory_order_acquire)) {
+            break;
+        }
+
+        if (processed == 0) {
+            atomic_store_explicit(&g_logger.consumer_sleeping, 1, memory_order_release);
+            csilk_mutex_lock(&g_logger.wake_mutex);
+            csilk_cond_timedwait(&g_logger.wake_cond, &g_logger.wake_mutex, 5000000ULL /* 5 ms */);
+            csilk_mutex_unlock(&g_logger.wake_mutex);
+            atomic_store_explicit(&g_logger.consumer_sleeping, 0, memory_order_release);
+        }
+    }
+
+    if (g_logger.fp) {
+        fflush(g_logger.fp);
+    }
 }
 
 /* ================================================================
- * public API
+ * Public API
  * ================================================================ */
 
-/* ================================================================
- * public API
- * ================================================================ */
-
-/** @brief Initialize (or reinitialize) the global logger with the given
- * configuration.
- *
- * Configures the output destination (stdout if no file_path, or a file if
- * set), the minimum log level, coloring (auto-detected for terminals when
- * use_colors is -1), and whether to use structured JSON format. If the logger
- * was previously initialized, csilk_log_close() is called first. A mutex is
- * initialized for thread-safe operation.
- *
- * @param config Logger configuration struct with desired settings.
- * @return 0 on success, -1 if the file could not be opened or mutex init fails.
- * @note If file_path is NULL, output goes to stdout and max_file_size is
- *       effectively ignored (set to 0 internally). */
 int
 csilk_log_init(csilk_log_config_t config)
 {
     if (g_logger.initialized) {
         csilk_log_close();
     }
+
     g_logger.config = config;
     if (config.file_path) {
         g_logger.fp = fopen(config.file_path, "a");
@@ -338,89 +389,231 @@ csilk_log_init(csilk_log_config_t config)
         struct stat st;
         if (stat(config.file_path, &st) == 0) {
             g_logger.current_size = (size_t)st.st_size;
+        } else {
+            g_logger.current_size = 0;
         }
     } else {
         g_logger.fp = stdout;
         g_logger.config.max_file_size = 0;
+        g_logger.current_size = 0;
     }
+
     if (g_logger.config.use_colors == -1) {
         g_logger.config.use_colors = isatty(fileno(g_logger.fp));
     }
-    if (csilk_mutex_init(&g_logger.mutex) != 0) {
-        if (config.file_path) {
+
+    size_t cap =
+        config.queue_capacity > 0 ? config.queue_capacity : CSILK_LOG_DEFAULT_QUEUE_CAPACITY;
+    g_logger.slab_capacity = cap;
+    g_logger.node_slab = calloc(cap, sizeof(csilk_log_node_t));
+    if (!g_logger.node_slab) {
+        if (config.file_path && g_logger.fp) {
             fclose(g_logger.fp);
         }
         return -1;
     }
+
+    /* Initialize MPSC Queue & Node Pool */
+    csilk_lfq_init(&g_logger.queue);
+    atomic_init(&g_logger.free_stack, NULL);
+    for (size_t i = 0; i < cap; i++) {
+        log_pool_push(&g_logger.node_slab[i]);
+    }
+
+    atomic_init(&g_logger.dropped_count, 0);
+    atomic_init(&g_logger.queued_seq, 0);
+    atomic_init(&g_logger.flushed_seq, 0);
+    atomic_init(&g_logger.running, 1);
+    atomic_init(&g_logger.consumer_sleeping, 0);
+
+    csilk_mutex_init(&g_logger.wake_mutex);
+    csilk_cond_init(&g_logger.wake_cond);
+    csilk_mutex_init(&g_logger.fallback_mutex);
+
+    /* Start background consumer thread */
+    if (csilk_thread_create(&g_logger.consumer_tid, logger_consumer_loop, NULL) != 0) {
+        free(g_logger.node_slab);
+        g_logger.node_slab = NULL;
+        if (config.file_path && g_logger.fp) {
+            fclose(g_logger.fp);
+        }
+        return -1;
+    }
+
+    atomic_store_explicit(&g_csilk_log_level_val, (int)config.level, memory_order_release);
+    atomic_store_explicit(&g_csilk_log_is_init, 1, memory_order_release);
     g_logger.initialized = 1;
+
     return 0;
 }
 
-/** @brief Internal: format and emit a log message to the global logger.
- *
- * Formats the variadic message via vsnprintf, acquires the logger mutex,
- * checks file rotation (if file logging and max_file_size exceeded), and
- * writes the entry as either JSON or plain text depending on configuration.
- *
- * @param lv   Log severity level (filtered against g_logger.config.level).
- * @param file Source file name (provided by CSILK_LOG_* macro).
- * @param line Source line number (provided by CSILK_LOG_* macro).
- * @param func Function name (provided by CSILK_LOG_* macro).
- * @param fmt  printf-style format string.
- * @param ...  Variadic arguments for the format string.
- * @note Use the CSILK_LOG_* macros (CSILK_LOG_I, CSILK_LOG_E, etc.) instead
- *       of calling this function directly. The macros automatically supply
- *       __FILE__, __LINE__, and __func__. */
+void
+csilk_log_flush(void)
+{
+    if (!g_logger.initialized) {
+        return;
+    }
+
+    uint64_t target = atomic_load_explicit(&g_logger.queued_seq, memory_order_acquire);
+    csilk_cond_signal(&g_logger.wake_cond);
+
+    while (atomic_load_explicit(&g_logger.flushed_seq, memory_order_acquire) < target) {
+        csilk_thread_yield();
+    }
+
+    csilk_mutex_lock(&g_logger.fallback_mutex);
+    if (g_logger.fp) {
+        fflush(g_logger.fp);
+    }
+    csilk_mutex_unlock(&g_logger.fallback_mutex);
+}
+
+void
+csilk_log_close(void)
+{
+    if (!g_logger.initialized) {
+        return;
+    }
+
+    atomic_store_explicit(&g_csilk_log_is_init, 0, memory_order_release);
+    atomic_store_explicit(&g_logger.running, 0, memory_order_release);
+
+    csilk_cond_signal(&g_logger.wake_cond);
+    csilk_thread_join(&g_logger.consumer_tid);
+
+    csilk_mutex_lock(&g_logger.fallback_mutex);
+    if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {
+        fclose(g_logger.fp);
+    }
+    g_logger.fp = NULL;
+    csilk_mutex_unlock(&g_logger.fallback_mutex);
+
+    if (g_logger.node_slab) {
+        free(g_logger.node_slab);
+        g_logger.node_slab = NULL;
+    }
+
+    csilk_mutex_destroy(&g_logger.wake_mutex);
+    csilk_cond_destroy(&g_logger.wake_cond);
+    csilk_mutex_destroy(&g_logger.fallback_mutex);
+
+    g_logger.initialized = 0;
+}
+
+/* --- Internal Log Emission --- */
+
+static void
+emit_log_payload(csilk_log_level_t lv,
+                 const char*       file,
+                 int               line,
+                 const char*       func,
+                 csilk_json_t*     extra,
+                 const char*       msg,
+                 int               msg_len)
+{
+    if (!g_logger.initialized || !atomic_load_explicit(&g_logger.running, memory_order_acquire)) {
+        if (extra) {
+            csilk_json_free(extra);
+        }
+        return;
+    }
+
+    csilk_log_node_t* node = log_pool_pop();
+    if (!node) {
+        if (g_logger.config.overflow_strategy == CSILK_LOG_OVERFLOW_BLOCK) {
+            /* Block/spin waiting for a node */
+            while (!node && atomic_load_explicit(&g_logger.running, memory_order_acquire)) {
+                if (atomic_load_explicit(&g_logger.consumer_sleeping, memory_order_relaxed)) {
+                    atomic_store_explicit(&g_logger.consumer_sleeping, 0, memory_order_relaxed);
+                    csilk_cond_signal(&g_logger.wake_cond);
+                }
+                csilk_thread_yield();
+                node = log_pool_pop();
+            }
+        }
+
+        if (!node) {
+            if (g_logger.config.overflow_strategy == CSILK_LOG_OVERFLOW_FALLBACK) {
+                /* Synchronous fallback */
+                char   fallback_buf[CSILK_LOG_NODE_BUF_SIZE];
+                size_t flen = g_logger.config.json_format ? format_json_line(fallback_buf,
+                                                                             sizeof(fallback_buf),
+                                                                             lv,
+                                                                             file,
+                                                                             line,
+                                                                             func,
+                                                                             extra,
+                                                                             msg,
+                                                                             msg_len)
+                                                          : format_text_line(fallback_buf,
+                                                                             sizeof(fallback_buf),
+                                                                             lv,
+                                                                             file,
+                                                                             line,
+                                                                             func,
+                                                                             msg,
+                                                                             msg_len);
+
+                csilk_mutex_lock(&g_logger.fallback_mutex);
+                FILE* out = g_logger.fp ? g_logger.fp : stderr;
+                fwrite(fallback_buf, 1, flen, out);
+                fflush(out);
+                csilk_mutex_unlock(&g_logger.fallback_mutex);
+                return;
+            }
+
+            /* DROP strategy */
+            atomic_fetch_add_explicit(&g_logger.dropped_count, 1, memory_order_relaxed);
+            if (extra) {
+                csilk_json_free(extra);
+            }
+            return;
+        }
+    }
+
+    /* Format directly into acquired node */
+    if (g_logger.config.json_format) {
+        node->len = format_json_line(
+            node->buf, sizeof(node->buf), lv, file, line, func, extra, msg, msg_len);
+    } else {
+        if (extra) {
+            csilk_json_free(extra);
+        }
+        node->len =
+            format_text_line(node->buf, sizeof(node->buf), lv, file, line, func, msg, msg_len);
+    }
+
+    csilk_lfq_enqueue(&g_logger.queue, &node->lfq_node);
+    atomic_fetch_add_explicit(&g_logger.queued_seq, 1, memory_order_release);
+    if (atomic_load_explicit(&g_logger.consumer_sleeping, memory_order_relaxed)) {
+        atomic_store_explicit(&g_logger.consumer_sleeping, 0, memory_order_relaxed);
+        csilk_cond_signal(&g_logger.wake_cond);
+    }
+}
+
 CSILK_INTERNAL void
 _csilk_log_internal(
     csilk_log_level_t lv, const char* file, int line, const char* func, const char* fmt, ...)
 {
-    if (!g_logger.initialized || lv < g_logger.config.level) {
+    if (!csilk_log_is_enabled(lv)) {
         return;
     }
 
-    char    buf[4096];
+    char    msg_buf[1024];
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args); // NOLINT
+    int len = vsnprintf(msg_buf, sizeof(msg_buf), fmt, args); // NOLINT
     va_end(args);
     if (len < 0) {
         len = 0;
     }
-    if (len >= (int)sizeof(buf)) {
-        len = (int)sizeof(buf) - 1;
+    if (len >= (int)sizeof(msg_buf)) {
+        len = (int)sizeof(msg_buf) - 1;
     }
 
-    csilk_mutex_lock(&g_logger.mutex);
-    if (g_logger.config.max_file_size > 0 &&
-        g_logger.current_size >= g_logger.config.max_file_size) {
-        rotate_log_files();
-    }
-
-    int n = g_logger.config.json_format ? log_json(lv, file, line, func, NULL, buf, len)
-                                        : log_text(lv, file, line, func, buf, len);
-
-    if (g_logger.config.file_path) {
-        g_logger.current_size += (size_t)n;
-    }
-    csilk_mutex_unlock(&g_logger.mutex);
+    emit_log_payload(lv, file, line, func, NULL, msg_buf, len);
 }
 
-/** @brief Internal: emit a structured JSON log entry with extra key-value
- * fields.
- *
- * Like _csilk_log_internal() but accepts an additional cJSON object of extra
- * fields. In JSON mode, the extra fields are merged into the output. In text
- * mode, the extra fields are discarded (cJSON_Delete is called).
- *
- * @param lv   Log severity level.
- * @param file Source file name.
- * @param line Source line number.
- * @param func Function name.
- * @param extra cJSON object of extra fields to include (ownership taken).
- * @param fmt  printf-style format string.
- * @param ...  Variadic arguments.
- * @note Use the CSILK_LOG_KV macro instead of calling this directly. */
 CSILK_INTERNAL void
 _csilk_log_structured(csilk_log_level_t lv,
                       const char*       file,
@@ -430,77 +623,45 @@ _csilk_log_structured(csilk_log_level_t lv,
                       const char*       fmt,
                       ...)
 {
-    if (!g_logger.initialized || lv < g_logger.config.level) {
+    if (!csilk_log_is_enabled(lv)) {
+        if (extra) {
+            csilk_json_free(extra);
+        }
         return;
     }
 
-    char    buf[4096];
+    char    msg_buf[1024];
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(buf, sizeof(buf), fmt, args); // NOLINT
+    int len = vsnprintf(msg_buf, sizeof(msg_buf), fmt, args); // NOLINT
     va_end(args);
     if (len < 0) {
         len = 0;
     }
-    if (len >= (int)sizeof(buf)) {
-        len = (int)sizeof(buf) - 1;
+    if (len >= (int)sizeof(msg_buf)) {
+        len = (int)sizeof(msg_buf) - 1;
     }
 
-    csilk_mutex_lock(&g_logger.mutex);
-    if (g_logger.config.max_file_size > 0 &&
-        g_logger.current_size >= g_logger.config.max_file_size) {
-        rotate_log_files();
-    }
-
-    int n;
-    if (g_logger.config.json_format) {
-        n = log_json(lv, file, line, func, extra, buf, len);
-    } else {
-        if (extra) {
-            csilk_json_free(extra);
-        }
-        n = log_text(lv, file, line, func, buf, len);
-    }
-
-    if (g_logger.config.file_path) {
-        g_logger.current_size += (size_t)n;
-    }
-    csilk_mutex_unlock(&g_logger.mutex);
+    emit_log_payload(lv, file, line, func, extra, msg_buf, len);
 }
 
-/** @brief Check whether the global logger is configured for structured JSON
- * output.
- *
- * @return 1 if the logger is initialized and json_format is enabled, 0
- * otherwise.
- * @note Useful for handlers that want to produce consistent log output
- *       format matching the global setting. */
 int
 csilk_log_is_json(void)
 {
     return g_logger.initialized && g_logger.config.json_format;
 }
 
-/** @brief Set the Request ID for the current thread.
- *
- * Stores the request ID in thread-local storage, allowing subsequent log
- * calls on the same thread to automatically include it without passing
- * the context explicitly. */
 void
 csilk_log_set_request_id(const char* request_id)
 {
-    char* tl_request_id = get_tl_request_id();
+    char* tl_req = get_tl_request_id();
     if (request_id) {
-        snprintf(tl_request_id, CSILK_UUID_BUF_SIZE, "%s", request_id);
+        snprintf(tl_req, CSILK_UUID_BUF_SIZE, "%s", request_id);
     } else {
-        tl_request_id[0] = '\0';
+        tl_req[0] = '\0';
     }
 }
 
-/** @brief Build a key-value cJSON object for structured logging.
- *
- * Helper to create a flat JSON object from a NULL-terminated list of strings.
- * Used primarily with CSILK_LOG_KV. */
 csilk_json_t*
 csilk_log_make_kv(const char* key, ...)
 {
@@ -523,22 +684,4 @@ csilk_log_make_kv(const char* key, ...)
     }
     va_end(args);
     return obj;
-}
-
-/** @brief Close the global logger and release resources.
- *
- * Closes file handles and destroys mutexes. Safe to call multiple times. */
-void
-csilk_log_close(void)
-{
-    if (!g_logger.initialized) {
-        return;
-    }
-    csilk_mutex_lock(&g_logger.mutex);
-    if (g_logger.fp && g_logger.fp != stdout && g_logger.fp != stderr) {
-        fclose(g_logger.fp);
-    }
-    g_logger.initialized = 0;
-    csilk_mutex_unlock(&g_logger.mutex);
-    csilk_mutex_destroy(&g_logger.mutex);
 }
