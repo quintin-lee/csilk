@@ -94,33 +94,40 @@ csilk_header_id_from_name(const char* name, size_t len)
 
     switch (len) {
     case 4: {
-        char c0 = (char)(name[0] | 0x20);
-        if (c0 == 'h' && strncasecmp(name + 1, "ost", 3) == 0) {
+        uint32_t v;
+        memcpy(&v, name, 4);
+        v |= 0x20202020U;
+        if (v == 0x74736f68U) {
             return CSILK_HDR_HOST;
         }
-        if (c0 == 'e' && strncasecmp(name + 1, "tag", 3) == 0) {
+        if (v == 0x67617465U) {
             return CSILK_HDR_ETAG;
         }
-        if (c0 == 'd' && strncasecmp(name + 1, "ate", 3) == 0) {
+        if (v == 0x65746164U) {
             return CSILK_HDR_DATE;
         }
-        if (c0 == 'v' && strncasecmp(name + 1, "ary", 3) == 0) {
+        if (v == 0x79726176U) {
             return CSILK_HDR_VARY;
         }
         break;
     }
     case 6: {
-        char c0 = (char)(name[0] | 0x20);
-        if (c0 == 'a' && strncasecmp(name + 1, "ccept", 5) == 0) {
+        uint32_t v4;
+        uint16_t v2;
+        memcpy(&v4, name, 4);
+        memcpy(&v2, name + 4, 2);
+        v4 |= 0x20202020U;
+        v2 |= 0x2020U;
+        if (v4 == 0x65636361U && v2 == 0x7470U) {
             return CSILK_HDR_ACCEPT;
         }
-        if (c0 == 'c' && strncasecmp(name + 1, "ookie", 5) == 0) {
+        if (v4 == 0x6b6f6f63U && v2 == 0x6569U) {
             return CSILK_HDR_COOKIE;
         }
-        if (c0 == 'o' && strncasecmp(name + 1, "rigin", 5) == 0) {
+        if (v4 == 0x6769726fU && v2 == 0x6e69U) {
             return CSILK_HDR_ORIGIN;
         }
-        if (c0 == 's' && strncasecmp(name + 1, "erver", 5) == 0) {
+        if (v4 == 0x76726573U && v2 == 0x7265U) {
             return CSILK_HDR_SERVER;
         }
         break;
@@ -136,7 +143,10 @@ csilk_header_id_from_name(const char* name, size_t len)
         break;
     }
     case 8: {
-        if (strncasecmp(name, "location", 8) == 0) {
+        uint64_t v8;
+        memcpy(&v8, name, 8);
+        v8 |= 0x2020202020202020ULL;
+        if (v8 == 0x6e6f697461636f6cULL) {
             return CSILK_HDR_LOCATION;
         }
         break;
@@ -148,24 +158,34 @@ csilk_header_id_from_name(const char* name, size_t len)
         break;
     }
     case 10: {
-        char c0 = (char)(name[0] | 0x20);
-        if (c0 == 'c' && strncasecmp(name + 1, "onnection", 9) == 0) {
+        uint64_t v8;
+        uint16_t v2;
+        memcpy(&v8, name, 8);
+        memcpy(&v2, name + 8, 2);
+        v8 |= 0x2020202020202020ULL;
+        v2 |= 0x2020U;
+        if (v8 == 0x697463656e6e6f63ULL && v2 == 0x6e6fU) {
             return CSILK_HDR_CONNECTION;
         }
-        if (c0 == 'u' && strncasecmp(name + 1, "ser-agent", 9) == 0) {
+        if (v8 == 0x6567612d72657375ULL && v2 == 0x746eU) {
             return CSILK_HDR_USER_AGENT;
         }
-        if (c0 == 's' && strncasecmp(name + 1, "et-cookie", 9) == 0) {
+        if (v8 == 0x6b6f6f632d746573ULL && v2 == 0x6569U) {
             return CSILK_HDR_SET_COOKIE;
         }
         break;
     }
     case 12: {
-        char c0 = (char)(name[0] | 0x20);
-        if (c0 == 'c' && strncasecmp(name + 1, "ontent-type", 11) == 0) {
+        uint64_t v8;
+        uint32_t v4;
+        memcpy(&v8, name, 8);
+        memcpy(&v4, name + 8, 4);
+        v8 |= 0x2020202020202020ULL;
+        v4 |= 0x20202020U;
+        if (v8 == 0x2d746e65746e6f63ULL && v4 == 0x65707974U) {
             return CSILK_HDR_CONTENT_TYPE;
         }
-        if (c0 == 'x' && strncasecmp(name + 1, "-request-id", 11) == 0) {
+        if (v8 == 0x7365757165722d78ULL && v4 == 0x64692d74U) {
             return CSILK_HDR_X_REQUEST_ID;
         }
         break;
@@ -184,7 +204,16 @@ csilk_header_id_from_name(const char* name, size_t len)
         break;
     }
     case 14: {
-        if (strncasecmp(name, "content-length", 14) == 0) {
+        uint64_t v8;
+        uint32_t v4;
+        uint16_t v2;
+        memcpy(&v8, name, 8);
+        memcpy(&v4, name + 8, 4);
+        memcpy(&v2, name + 12, 2);
+        v8 |= 0x2020202020202020ULL;
+        v4 |= 0x20202020U;
+        v2 |= 0x2020U;
+        if (v8 == 0x2d746e65746e6f63ULL && v4 == 0x676e656cU && v2 == 0x6874U) {
             return CSILK_HDR_CONTENT_LENGTH;
         }
         break;

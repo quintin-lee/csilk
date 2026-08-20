@@ -67,12 +67,19 @@ hash_key(const char* key)
     return h;
 }
 
+static _Thread_local csilk_mvcc_reader_slot_t* tls_mvcc_slot = NULL;
+static _Thread_local csilk_mvcc_cache_t*       tls_mvcc_cache = NULL;
+
 /**
  * @brief Acquire or locate a reader epoch slot for the current thread.
  */
 static csilk_mvcc_reader_slot_t*
 acquire_reader_slot(csilk_mvcc_cache_t* cache)
 {
+    if (__builtin_expect(tls_mvcc_slot != NULL && tls_mvcc_cache == cache, 1)) {
+        return tls_mvcc_slot;
+    }
+
     uintptr_t my_tid = (uintptr_t)pthread_self();
     if (my_tid == 0) {
         my_tid = 1;
@@ -85,7 +92,9 @@ acquire_reader_slot(csilk_mvcc_cache_t* cache)
         size_t idx = (start + i) % CSILK_MVCC_MAX_READERS;
         if (atomic_load_explicit(&cache->reader_slots[idx].owner_tid, memory_order_relaxed) ==
             my_tid) {
-            return &cache->reader_slots[idx];
+            tls_mvcc_slot = &cache->reader_slots[idx];
+            tls_mvcc_cache = cache;
+            return tls_mvcc_slot;
         }
     }
 
@@ -98,12 +107,16 @@ acquire_reader_slot(csilk_mvcc_cache_t* cache)
                                                     my_tid,
                                                     memory_order_acq_rel,
                                                     memory_order_relaxed)) {
-            return &cache->reader_slots[idx];
+            tls_mvcc_slot = &cache->reader_slots[idx];
+            tls_mvcc_cache = cache;
+            return tls_mvcc_slot;
         }
     }
 
     /* Fallback: deterministic slot hashing */
-    return &cache->reader_slots[start];
+    tls_mvcc_slot = &cache->reader_slots[start];
+    tls_mvcc_cache = cache;
+    return tls_mvcc_slot;
 }
 
 /**

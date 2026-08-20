@@ -80,6 +80,7 @@ pool_get(worker_pool_t* wp)
 #endif
         client->ctx.conn_closed = 0;
         client->ctx.file_fd = -1;
+        client->primary_write_in_flight = 0;
     }
     return client;
 }
@@ -114,6 +115,7 @@ reset_hot_state(csilk_client_t* client)
     client->read_paused = 0;
     client->read_active = 0;
     client->keep_alive = 0;
+    client->primary_write_in_flight = 0;
     client->pending_write_bytes = 0;
     client->protocol = CSILK_PROTO_HTTP1;
     client->total_header_size = 0;

@@ -242,14 +242,15 @@ csilk_json(csilk_ctx_t* c, int status, csilk_json_t* json)
     c->response.status = status;
     csilk_set_header(c, "Content-Type", "application/json");
 
-    char* body = csilk_json_serialize(json, NULL);
+    size_t out_len = 0;
+    char*  body = csilk_json_serialize(json, &out_len);
     csilk_json_free(json);
 
     csilk_response_body_release(c);
 
     if (body) {
         c->response.body = body;
-        c->response.body_len = strlen(body);
+        c->response.body_len = out_len;
         c->response.body_ownership = CSILK_OWN_HEAP;
     }
 }
