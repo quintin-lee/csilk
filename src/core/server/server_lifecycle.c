@@ -40,6 +40,64 @@
 #include "../internal/srv_impl.h"
 #include "messaging/mq_internal.h"
 
+/* --- Centralized Atomic Initializers --- */
+
+/** @brief Centralized initialization for all runtime config atomic fields. */
+void
+_csilk_runtime_config_init(csilk_runtime_config_t* rc, const csilk_server_config_t* cfg)
+{
+    if (!rc) {
+        return;
+    }
+    unsigned int idle =
+        cfg && cfg->idle_timeout_ms ? cfg->idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT;
+    unsigned int read_t = cfg ? cfg->read_timeout_ms : 0;
+    unsigned int write_t = cfg ? cfg->write_timeout_ms : 0;
+    unsigned int req_t = cfg ? cfg->request_timeout_ms : 0;
+    size_t body = cfg && cfg->max_body_size ? cfg->max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
+    size_t hdr = cfg && cfg->max_header_size ? cfg->max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE;
+    size_t url = cfg ? cfg->max_url_size : 0;
+    size_t hdr_cnt = cfg ? cfg->max_headers_count : 0;
+    int    max_conn = cfg ? cfg->max_connections : 0;
+    int    simd = cfg ? cfg->enable_simd : 1;
+    int    h2_push = cfg ? cfg->h2_push_enable : 0;
+    int    h2_push_max = cfg && cfg->h2_max_push_per_request ? cfg->h2_max_push_per_request : 10;
+    size_t bp_queue = cfg ? cfg->backpressure_max_queue_depth : 0;
+    unsigned int bp_lat = cfg ? cfg->backpressure_max_latency_us : 0;
+
+    atomic_init(&rc->idle_timeout_ms, idle);
+    atomic_init(&rc->read_timeout_ms, read_t);
+    atomic_init(&rc->write_timeout_ms, write_t);
+    atomic_init(&rc->request_timeout_ms, req_t);
+    atomic_init(&rc->max_body_size, body);
+    atomic_init(&rc->max_header_size, hdr);
+    atomic_init(&rc->max_url_size, url);
+    atomic_init(&rc->max_headers_count, hdr_cnt);
+    atomic_init(&rc->max_connections, max_conn);
+    atomic_init(&rc->enable_simd, simd);
+    atomic_init(&rc->h2_push_enable, h2_push);
+    atomic_init(&rc->h2_max_push_per_request, h2_push_max);
+    atomic_init(&rc->backpressure_max_queue_depth, bp_queue);
+    atomic_init(&rc->backpressure_max_latency_us, bp_lat);
+}
+
+/** @brief Centralized initialization for all server atomic fields. */
+void
+_csilk_server_atomics_init(csilk_server_t* s, csilk_router_t* router)
+{
+    if (!s) {
+        return;
+    }
+    atomic_init(&s->router, router);
+    atomic_init(&s->max_connections, 0);
+    atomic_init(&s->active_connections, 0);
+    for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
+        atomic_init(&s->hooks[i], NULL);
+    }
+    _csilk_runtime_config_init(&s->runtime_config, &s->config);
+    _csilk_reload_mgr_init(s);
+}
+
 /* --- Server creation --- */
 
 /** @brief Create a new server instance associated with a router. */
@@ -52,24 +110,33 @@ csilk_server_new(csilk_router_t* router)
     if (!s) {
         return NULL;
     }
+
+    s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
+    s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
+    s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
+    s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
+
+    /* Centralized initialization of all server atomics and runtime configs */
+    _csilk_server_atomics_init(s, router);
+
 #if defined(CSILK_USE_URING) && CSILK_USE_URING
     s->loop = calloc(1, sizeof(csilk_io_loop_t));
     if (!s->loop || csilk_io_loop_init(s->loop) != 0) {
         free(s->loop);
-        free(s);
+        s->loop = NULL;
+        csilk_server_free(s);
         return NULL;
     }
     s->loop_owned = 1;
 #else
     s->loop = csilk_io_default_loop();
     if (!s->loop) {
-        free(s);
+        csilk_server_free(s);
         return NULL;
     }
     s->loop_owned = 0;
 #endif
-    _csilk_reload_mgr_init(s);
-    atomic_init(&s->router, router);
+
     s->hot_reload_ctx = NULL;
     llhttp_settings_init(&s->settings);
     s->settings.on_message_begin = on_message_begin;
@@ -82,21 +149,8 @@ csilk_server_new(csilk_router_t* router)
     s->settings.on_body = on_body;
     s->settings.on_message_complete = on_message_complete;
 
-    s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
-    s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
-    s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
-    s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
-
-    atomic_init(&s->runtime_config.idle_timeout_ms, CSILK_DEFAULT_IDLE_TIMEOUT);
-    atomic_init(&s->runtime_config.max_body_size, CSILK_DEFAULT_MAX_BODY_SIZE);
-    atomic_init(&s->runtime_config.max_header_size, CSILK_DEFAULT_MAX_HEADER_SIZE);
-    atomic_init(&s->runtime_config.enable_simd, 1);
-    atomic_init(&s->runtime_config.h2_max_push_per_request, 10);
     csilk_mutex_init(&s->hook_mutex);
     csilk_mutex_init(&s->config_mutex);
-    for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
-        atomic_init(&s->hooks[i], NULL);
-    }
 
     s->mq = _csilk_mq_new(s->loop);
 
@@ -559,8 +613,9 @@ csilk_server_run(csilk_server_t* server, int port)
         csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
         return -1;
     }
-    server->worker_pools[0].server = server;
-    server->worker_pools[0].worker_index = 0;
+    for (int w = 0; w < workers; w++) {
+        _csilk_worker_pool_atomics_init(&server->worker_pools[w], server, w);
+    }
     server->server_handle.data = &server->worker_pools[0];
 
     server->worker_pools[0].loop_ptr = server->loop;
@@ -609,13 +664,10 @@ csilk_server_run(csilk_server_t* server, int port)
         int spawned = 0;
         for (int i = 0; i < nworkers; i++) {
             int idx = i + 1;
-            server->worker_pools[idx].server = server;
-            server->worker_pools[idx].worker_index = idx;
-
             worker_datas[i].wp = &server->worker_pools[idx];
             worker_datas[i].port = port;
             worker_datas[i].barrier = barrier;
-            worker_datas[i].success = 0;
+            atomic_init(&worker_datas[i].success, 0);
 
             int tr =
                 csilk_thread_create(&server->worker_tids[spawned], worker_thread, &worker_datas[i]);
@@ -642,7 +694,7 @@ csilk_server_run(csilk_server_t* server, int port)
         bool all_ok = (spawned == nworkers);
         if (all_ok) {
             for (int i = 0; i < spawned; i++) {
-                if (!worker_datas[i].success) {
+                if (!atomic_load_explicit(&worker_datas[i].success, memory_order_acquire)) {
                     all_ok = false;
                     break;
                 }

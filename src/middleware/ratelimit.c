@@ -67,9 +67,9 @@ get_or_create_ip_entry(const char* ip, time_t now)
             int expected = 0;
             if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
                 snprintf(slot->ip, sizeof(slot->ip), "%s", ip);
-                atomic_store(&slot->count, 0);
-                atomic_store(&slot->last_reset, now);
-                atomic_store(&slot->last_seen, now);
+                atomic_init(&slot->count, 0);
+                atomic_init(&slot->last_reset, now);
+                atomic_init(&slot->last_seen, now);
                 atomic_store(&slot->in_use, 2);
                 return slot;
             }

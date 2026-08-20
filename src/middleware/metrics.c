@@ -131,6 +131,11 @@ get_metric_slot(const char* method, const char* route, int status)
                 snprintf(slot->method, sizeof(slot->method), "%s", method);
                 snprintf(slot->route, sizeof(slot->route), "%s", route);
                 slot->status = status;
+                atomic_init(&slot->count, 0);
+                atomic_init(&slot->duration_us, 0);
+                for (int b = 0; b <= CSILK_METRICS_BUCKET_COUNT; b++) {
+                    atomic_init(&slot->buckets[b], 0);
+                }
                 atomic_store(&slot->in_use, 2);
                 return slot;
             }

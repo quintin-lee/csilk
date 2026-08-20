@@ -348,7 +348,7 @@ worker_thread(void* arg)
         loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true, wp->worker_index);
     if (bind_res < 0) {
         CSILK_LOG_E("Server: worker %d failed to bind and listen", wp->worker_index);
-        data->success = 0;
+        atomic_store_explicit(&data->success, 0, memory_order_relaxed);
         if (barrier) {
             csilk_barrier_wait(barrier);
         }
@@ -360,7 +360,7 @@ worker_thread(void* arg)
     csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
     wp->stop_async.data = &sd;
 
-    data->success = 1;
+    atomic_store_explicit(&data->success, 1, memory_order_release);
     if (barrier) {
         csilk_barrier_wait(barrier);
     }

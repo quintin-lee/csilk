@@ -104,6 +104,7 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
         return NULL;
     }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+    atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->initial_input = input;
     ctx->callback = callback;

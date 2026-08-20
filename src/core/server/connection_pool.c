@@ -33,6 +33,40 @@ alloc_buffer(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* b
     pool_get_read_buf(wp, suggested_size, buf);
 }
 
+/* --- Client and Worker Pool Atomic Initializers --- */
+
+/** @brief Centralized initialization for all client connection atomic fields. */
+void
+_csilk_client_atomics_init(csilk_client_t* client)
+{
+    if (!client) {
+        return;
+    }
+    atomic_init(&client->ref_count, 0);
+    atomic_init(&client->pending_io, 0);
+}
+
+/** @brief Centralized initialization for all worker pool atomic fields. */
+void
+_csilk_worker_pool_atomics_init(worker_pool_t* wp, csilk_server_t* server, int worker_index)
+{
+    if (!wp) {
+        return;
+    }
+    wp->server = server;
+    wp->worker_index = worker_index;
+    atomic_init(&wp->client_pool_count, 0);
+    atomic_init(&wp->active_connections, 0);
+    atomic_init(&wp->arena_pool_count, 0);
+    for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
+        atomic_init(&wp->read_buf_counts[tier], 0);
+    }
+    for (int i = 0; i < CSILK_CLIENT_POOL_SIZE; i++) {
+        wp->client_pool[i] = NULL;
+    }
+    csilk_lfq_init(&wp->dispatch_queue);
+}
+
 /* --- Connection pool (per-worker, lock-free) --- */
 
 /** @brief Get a client connection object from the worker-local free pool or
@@ -57,6 +91,9 @@ pool_get(worker_pool_t* wp)
     }
     if (!client) {
         client = calloc(1, sizeof(csilk_client_t));
+        if (client) {
+            _csilk_client_atomics_init(client);
+        }
     }
     if (client) {
         if (wp) {
@@ -69,8 +106,8 @@ pool_get(worker_pool_t* wp)
         csilk_conn_set_state(client, CSILK_CONN_INIT);
         client->generation = gen;
 
-        atomic_store(&client->ref_count, 0);
-        atomic_store(&client->pending_io, 0);
+        atomic_store_explicit(&client->ref_count, 0, memory_order_relaxed);
+        atomic_store_explicit(&client->pending_io, 0, memory_order_relaxed);
 #ifdef CSILK_USE_URING
         client->handle.generation = gen;
         client->timer.generation = gen;
@@ -270,7 +307,8 @@ pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
 void
 _csilk_worker_init_arena_pool(worker_pool_t* wp)
 {
-    int align = wp->server->config.enable_arena_alignment;
+    int align = wp->server ? wp->server->config.enable_arena_alignment : 0;
+    int count = 0;
     for (int i = 0; i < CSILK_CLIENT_POOL_SIZE; i++) {
         csilk_arena_t* a = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
         if (!a) {
@@ -287,8 +325,9 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
             break;
         }
         csilk_arena_reset(a);
-        wp->arena_pool[wp->arena_pool_count++] = a;
+        wp->arena_pool[count++] = a;
     }
+    atomic_store_explicit(&wp->arena_pool_count, count, memory_order_relaxed);
 }
 
 /* --- Read buffer pool (three-tier: 4KB / 16KB / 64KB) --- */
@@ -390,12 +429,14 @@ _csilk_worker_init_read_buf_pool(worker_pool_t* wp)
 {
     const size_t tier_sizes[] = {CSILK_READ_BUF_4KB, CSILK_READ_BUF_16KB, CSILK_READ_BUF_64KB};
     for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
+        int count = 0;
         for (int i = 0; i < CSILK_READ_BUF_POOL_SIZE; i++) {
             void* p = malloc(tier_sizes[tier]);
             if (!p) {
                 break;
             }
-            wp->read_buf_tiers[tier][wp->read_buf_counts[tier]++] = p;
+            wp->read_buf_tiers[tier][count++] = p;
         }
+        atomic_store_explicit(&wp->read_buf_counts[tier], count, memory_order_relaxed);
     }
 }
