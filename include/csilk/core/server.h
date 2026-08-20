@@ -7,6 +7,8 @@
  * @copyright MIT License
  */
 
+#include <stdatomic.h>
+
 #include "csilk/core/router.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/hooks.h"
@@ -331,27 +333,65 @@ void csilk_log_set_request_id(const char* request_id);
  *  @return New cJSON object (caller owns). */
 csilk_json_t* csilk_log_make_kv(const char* key, ...);
 
+/** @brief Flush any pending asynchronous log messages to disk. */
+void csilk_log_flush(void);
+
+extern _Atomic(int) g_csilk_log_level_val;
+extern _Atomic(int) g_csilk_log_is_init;
+
+/** @brief Fast inline check whether a log level is currently enabled. */
+static inline int
+csilk_log_is_enabled(csilk_log_level_t lv)
+{
+    return atomic_load_explicit(&g_csilk_log_is_init, memory_order_relaxed) &&
+           ((int)lv >= atomic_load_explicit(&g_csilk_log_level_val, memory_order_relaxed));
+}
+
 /** @name Logging Macros
- *  Convenience macros that capture source location.
+ *  Convenience macros that capture source location with zero-overhead disabled filtering.
  *  @{ */
 /** @brief Log a TRACE-level message. */
 #define CSILK_LOG_T(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_TRACE)) {                                               \
+            _csilk_log_internal(CSILK_LOG_TRACE, __FILE__, __LINE__, __func__, __VA_ARGS__);       \
+        }                                                                                          \
+    } while (0)
 /** @brief Log a DEBUG-level message. */
 #define CSILK_LOG_D(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_DEBUG)) {                                               \
+            _csilk_log_internal(CSILK_LOG_DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__);       \
+        }                                                                                          \
+    } while (0)
 /** @brief Log an INFO-level message. */
 #define CSILK_LOG_I(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_INFO)) {                                                \
+            _csilk_log_internal(CSILK_LOG_INFO, __FILE__, __LINE__, __func__, __VA_ARGS__);        \
+        }                                                                                          \
+    } while (0)
 /** @brief Log a WARN-level message. */
 #define CSILK_LOG_W(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_WARN)) {                                                \
+            _csilk_log_internal(CSILK_LOG_WARN, __FILE__, __LINE__, __func__, __VA_ARGS__);        \
+        }                                                                                          \
+    } while (0)
 /** @brief Log an ERROR-level message. */
 #define CSILK_LOG_E(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_ERROR)) {                                               \
+            _csilk_log_internal(CSILK_LOG_ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__);       \
+        }                                                                                          \
+    } while (0)
 /** @brief Log a FATAL-level message. */
 #define CSILK_LOG_F(...)                                                                           \
-    _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(CSILK_LOG_FATAL)) {                                               \
+            _csilk_log_internal(CSILK_LOG_FATAL, __FILE__, __LINE__, __func__, __VA_ARGS__);       \
+        }                                                                                          \
+    } while (0)
 
 /** @brief Log a structured JSON message (only meaningful when json_format is
  *  on).
@@ -359,7 +399,13 @@ csilk_json_t* csilk_log_make_kv(const char* key, ...);
  *  @param extra  csilk_json_t* with extra fields (can be NULL).
  *  @param ...    printf-style format and args for the message string. */
 #define CSILK_LOG_STRUCT(level, extra, ...)                                                        \
-    _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__)
+    do {                                                                                           \
+        if (csilk_log_is_enabled(level)) {                                                         \
+            _csilk_log_structured(level, __FILE__, __LINE__, __func__, extra, __VA_ARGS__);        \
+        } else if (extra) {                                                                        \
+            csilk_json_free(extra);                                                                \
+        }                                                                                          \
+    } while (0)
 /** @} */
 
 /* --- Arena API --- */
