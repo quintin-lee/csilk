@@ -196,6 +196,19 @@ struct csilk_server_s {
     void*                   quic_transport; /**< Optional QUIC transport callbacks for HTTP/3. */
 };
 
+#define CSILK_H2_INLINE_BUCKETS 16
+
+/**
+ * @brief Adaptive hash table for multiplexed HTTP/2 streams on a client connection.
+ */
+typedef struct csilk_h2_stream_map_s {
+    csilk_ctx_t** buckets;  /**< Active bucket array (inline or heap). */
+    uint32_t      capacity; /**< Total bucket capacity (power of 2). */
+    uint32_t      mask;     /**< Mask for fast modulo (capacity - 1). */
+    uint32_t      count;    /**< Current active stream count. */
+    csilk_ctx_t*  inline_buckets[CSILK_H2_INLINE_BUCKETS]; /**< Embedded fast-path buckets. */
+} csilk_h2_stream_map_t;
+
 /** @brief Client connection structure — represents a single TCP connection.
  *
  * Holds the I/O stream handle (libuv or io_uring), HTTP parser state, timers for keep-alive
@@ -221,20 +234,20 @@ struct csilk_client_s {
                    * because llhttp clears F_CONNECTION_CLOSE
                    * after on_message_complete returns. */
     void*            read_buf;       /**< Pre-allocated read buffer for io_uring */
-    size_t pending_write_bytes;  /**< In-flight outbound write bytes for io_uring/backpressure. */
+    size_t pending_write_bytes; /**< In-flight outbound write bytes for io_uring/backpressure. */
 
-    csilk_protocol_t protocol;   /**< Protocol negotiated for this connection. */
+    csilk_protocol_t protocol;  /**< Protocol negotiated for this connection. */
 
-    nghttp2_session* h2_session; /**< HTTP/2 session state (if HTTP/2). */
-    csilk_ctx_t*     h2_streams; /**< Linked list of active HTTP/2 stream contexts. */
+    nghttp2_session*      h2_session;    /**< HTTP/2 session state (if HTTP/2). */
+    csilk_h2_stream_map_t h2_stream_map; /**< Adaptive hash table for active HTTP/2 streams. */
 
-    llhttp_t parser;             /**< HTTP request parser (if HTTP/1.1). */
+    llhttp_t parser;                     /**< HTTP request parser (if HTTP/1.1). */
 
-    csilk_server_t* server;      /**< Owning server instance. */
-    worker_pool_t*  owner_pool;  /**< Per-worker pool that owns this client. */
-    csilk_ctx_t     ctx;         /**< Request context for this connection. */
-    size_t          total_header_size; /**< Total size of headers parsed so far. */
-    size_t          header_count;      /**< Number of headers parsed so far. */
+    csilk_server_t* server;              /**< Owning server instance. */
+    worker_pool_t*  owner_pool;          /**< Per-worker pool that owns this client. */
+    csilk_ctx_t     ctx;                 /**< Request context for this connection. */
+    size_t          total_header_size;   /**< Total size of headers parsed so far. */
+    size_t          header_count;        /**< Number of headers parsed so far. */
 
     /** @name Zero-Copy Parsing State
      *  HTTP parser callbacks store direct references to the receive buffer

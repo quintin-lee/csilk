@@ -144,25 +144,9 @@ on_stream_close_callback(nghttp2_session* session,
     (void)session;
     (void)error_code;
     csilk_client_t* client = (csilk_client_t*)user_data;
-
-    csilk_ctx_t** curr = &client->h2_streams;
-    while (*curr) {
-        if ((*curr)->stream_id == stream_id) {
-            csilk_ctx_t* found = *curr;
-            *curr = found->next_stream;
-
-            csilk_ctx_cleanup(found);
-            if (found->arena) {
-                csilk_arena_free(found->arena);
-                found->arena = NULL;
-            }
-
-            free(found);
-            return 0;
-        }
-        curr = &((*curr)->next_stream);
+    if (client) {
+        csilk_h2_remove_stream(client, stream_id);
     }
-
     return 0;
 }
 
