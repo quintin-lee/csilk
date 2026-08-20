@@ -11,19 +11,19 @@
 **Files:**
 - Modify: `src/core/primitives/arena.c`
 
-- [ ] **Step 1: Update `csilk_arena_s` struct definition**
+- [x] **Step 1: Update `csilk_arena_s` struct definition**
   Include `uint8_t* ptr`, `uint8_t* end`, `csilk_arena_chunk_t* head`, `size_t default_chunk_size`, `size_t max_total_bytes`, `size_t total_allocated`, `int align_64`, with padding to 64 bytes.
 
-- [ ] **Step 2: Implement `arena_alloc_slow()` and `csilk_arena_alloc()` fast-path**
+- [x] **Step 2: Implement `arena_alloc_slow()` and `csilk_arena_alloc()` fast-path**
   Ensure 8-byte fast path has minimal branches and cache references.
 
-- [ ] **Step 3: Update `csilk_arena_new()`, `csilk_arena_reset()`, `csilk_arena_free()`, `csilk_arena_get_stats()`**
+- [x] **Step 3: Update `csilk_arena_new()`, `csilk_arena_reset()`, `csilk_arena_free()`, `csilk_arena_get_stats()`**
   Keep `arena->ptr` and `arena->end` in sync with active chunk.
 
-- [ ] **Step 4: Verify existing arena tests pass**
+- [x] **Step 4: Verify existing arena tests pass**
   Run `ctest --test-dir build -R test_arena`
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 ```bash
 git add src/core/primitives/arena.c
 git commit -m "feat(arena): ✨ optimize allocation fast path with cached ptr/end pointers"
@@ -37,14 +37,14 @@ git commit -m "feat(arena): ✨ optimize allocation fast path with cached ptr/en
 - Create: `tests/core/test_arena_bench.c`
 - Modify: `cmake/tests.cmake`
 
-- [ ] **Step 1: Write `tests/core/test_arena_bench.c`**
+- [x] **Step 1: Write `tests/core/test_arena_bench.c`**
   Benchmark 8B, 32B, 128B, 1024B allocations with `__rdtsc()` cycles measurement.
 
-- [ ] **Step 2: Register in `cmake/tests.cmake`**
+- [x] **Step 2: Register in `cmake/tests.cmake`**
 
-- [ ] **Step 3: Build and run benchmark**
+- [x] **Step 3: Build and run benchmark**
 
-- [ ] **Step 4: Commit Task 2**
+- [x] **Step 4: Commit Task 2**
 ```bash
 git add tests/core/test_arena_bench.c cmake/tests.cmake
 git commit -m "test(arena): ✅ add arena allocation fast-path latency & cycles benchmark"
@@ -54,7 +54,7 @@ git commit -m "test(arena): ✅ add arena allocation fast-path latency & cycles 
 
 ### Task 3: Full Verification (Unit Tests, ASAN, TSAN, Formatting)
 
-- [ ] **Step 1: Run full unit test suite via `ctest`**
-- [ ] **Step 2: Run TSAN tests**
-- [ ] **Step 3: Run code formatting**
-- [ ] **Step 4: Final commit**
+- [x] **Step 1: Run full unit test suite via `ctest`**
+- [x] **Step 2: Run TSAN tests**
+- [x] **Step 3: Run code formatting**
+- [x] **Step 4: Final commit**
