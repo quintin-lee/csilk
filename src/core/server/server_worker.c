@@ -115,18 +115,9 @@ _csilk_dispatch_pool_cleanup(void)
     dispatch_tls_cleanup(NULL);
 }
 
-/**
-
- * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
- * @param[in] handle async handle whose data points at the worker_pool_t.
- * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
- *       runs its callback, freeing each task afterwards. No-op if the pool is
- *       NULL. Runs on the worker loop when the async is signaled.
- */
-static void
-on_dispatch_async(csilk_io_async_t* handle)
+void
+_csilk_worker_drain_dispatch(worker_pool_t* wp)
 {
-    worker_pool_t* wp = (worker_pool_t*)handle->data;
     if (!wp) {
         return;
     }
@@ -144,6 +135,20 @@ on_dispatch_async(csilk_io_async_t* handle)
         dispatch_task_free(task);
         node = csilk_lfq_dequeue(&wp->dispatch_queue);
     }
+}
+
+/**
+ * @brief Drain and invoke tasks queued on a worker's dispatch async handle.
+ * @param[in] handle async handle whose data points at the worker_pool_t.
+ * @note Dequeues every csilk_dispatch_task_t from the worker dispatch queue and
+ *       runs its callback, freeing each task afterwards. No-op if the pool is
+ *       NULL. Runs on the worker loop when the async is signaled.
+ */
+static void
+on_dispatch_async(csilk_io_async_t* handle)
+{
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    _csilk_worker_drain_dispatch(wp);
 }
 
 /**
