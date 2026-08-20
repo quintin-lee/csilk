@@ -508,6 +508,12 @@ void csilk_arena_set_alignment(csilk_arena_t* arena, int enabled);
  *  @param[out] total_used  Pointer to receive bytes actually used (may be NULL). */
 void csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_used);
 
+/** @brief Check whether a pointer was allocated from this arena.
+ *  @param arena  The arena allocator.
+ *  @param ptr    Pointer to test.
+ *  @return 1 if ptr is contained within arena chunks, 0 otherwise. */
+int csilk_arena_contains(const csilk_arena_t* arena, const void* ptr);
+
 /** @brief Set maximum total allocated bytes for this arena.
  *  @param arena     The arena allocator.
  *  @param max_bytes Maximum allowed bytes (0 = unlimited).

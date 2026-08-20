@@ -473,25 +473,68 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
     }
     client->header_field_completed = 0;
 
-    /* Process the URL: copy to arena (for null-termination), then split. */
+    /* Process the URL: zero-copy fast arena allocation path */
     if (client->current_url.data && client->current_url.len > 0) {
-        char* url_copy = csilk_arena_strndup(
-            client->ctx.arena, client->current_url.data, client->current_url.len);
-        if (url_copy) {
-            char* path = NULL;
-            char* query = NULL;
-            csilk_split_url(url_copy, &path, &query);
-            client->ctx.request.path = path;
+        size_t      ulen = client->current_url.len;
+        const char* udata = client->current_url.data;
+
+        const char* qmark = memchr(udata, '?', ulen);
+        if (__builtin_expect(!qmark, 1)) {
+            char* path = csilk_arena_alloc(client->ctx.arena, ulen + 1);
+            if (path) {
+                memcpy(path, udata, ulen);
+                path[ulen] = '\0';
+                csilk_url_decode(path);
+                client->ctx.request.path = path;
+            }
+        } else {
+            size_t path_len = (size_t)(qmark - udata);
+            char*  path = csilk_arena_alloc(client->ctx.arena, path_len + 1);
+            if (path) {
+                memcpy(path, udata, path_len);
+                path[path_len] = '\0';
+                csilk_url_decode(path);
+                client->ctx.request.path = path;
+            }
+            size_t query_len = ulen - path_len - 1;
+            char*  query = csilk_arena_alloc(client->ctx.arena, query_len + 1);
             if (query) {
+                memcpy(query, qmark + 1, query_len);
+                query[query_len] = '\0';
                 csilk_parse_query(&client->ctx, query);
-                free(query);
             }
         }
         client->current_url.data = NULL;
         client->current_url.len = 0;
     }
 
-    client->ctx.request.method = (char*)llhttp_method_name(llhttp_get_method(p));
+    enum llhttp_method m = (enum llhttp_method)llhttp_get_method(p);
+    switch (m) {
+    case HTTP_GET:
+        client->ctx.request.method = "GET";
+        break;
+    case HTTP_POST:
+        client->ctx.request.method = "POST";
+        break;
+    case HTTP_PUT:
+        client->ctx.request.method = "PUT";
+        break;
+    case HTTP_DELETE:
+        client->ctx.request.method = "DELETE";
+        break;
+    case HTTP_HEAD:
+        client->ctx.request.method = "HEAD";
+        break;
+    case HTTP_OPTIONS:
+        client->ctx.request.method = "OPTIONS";
+        break;
+    case HTTP_PATCH:
+        client->ctx.request.method = "PATCH";
+        break;
+    default:
+        client->ctx.request.method = (char*)llhttp_method_name(m);
+        break;
+    }
 }
 
 /* --- Message complete --- */

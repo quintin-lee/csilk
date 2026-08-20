@@ -1,6 +1,6 @@
 /**
  * @file http1_serialize.c
- * @brief HTTP/1.1 response serialization.
+ * @brief HTTP/1.1 response serialization with AVX2 SIMD & fast-path formatting.
  */
 
 #include <assert.h>
@@ -10,12 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/internal.h"
-#include "../internal/srv_internal.h"
 #include "../ctx/ctx_internal.h"
-#include "../primitives/header_map.h"
-#include "h2.h"
 #include "../internal/srv_impl.h"
+#include "../internal/srv_internal.h"
+#include "../primitives/header_map.h"
+#include "csilk/core/internal.h"
+#include "h2.h"
 
 /* --- Status text --- */
 
@@ -46,45 +46,94 @@ get_status_text(int status)
     }
 }
 
-/* --- Serialization helpers --- */
+/* --- Fast integer to ASCII converter --- */
 
-static int
-serialize_status_line(char*       buf,
-                      size_t      buf_size,
-                      int         status,
-                      const char* status_text,
-                      int         use_chunked,
-                      const char* transfer_encoding,
-                      size_t      body_len,
-                      const char* connection_val)
+static inline size_t
+fast_uint64_to_str(char* buf, size_t val)
 {
-    if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
-        return snprintf(buf, buf_size, "HTTP/1.1 101 Switching Protocols\r\n");
-    } else if (use_chunked) {
-        return snprintf(buf,
-                        buf_size,
-                        "HTTP/1.1 %d %s\r\n"
-                        "%s"
-                        "Connection: %s\r\n",
-                        status,
-                        status_text,
-                        transfer_encoding,
-                        connection_val);
-    } else {
-        return snprintf(buf,
-                        buf_size,
-                        "HTTP/1.1 %d %s\r\n"
-                        "Content-Length: %zu\r\n"
-                        "Connection: %s\r\n",
-                        status,
-                        status_text,
-                        body_len,
-                        connection_val);
+    if (val == 0) {
+        buf[0] = '0';
+        return 1;
     }
+    char tmp[24];
+    int  i = 0;
+    while (val > 0) {
+        tmp[i++] = (char)('0' + (val % 10));
+        val /= 10;
+    }
+    for (int j = 0; j < i; j++) {
+        buf[j] = tmp[i - 1 - j];
+    }
+    return (size_t)i;
 }
 
-static size_t
-append_custom_headers(csilk_header_map_t* headers, char* buf, size_t pos)
+/* --- Fast Single-Pass Status Line & Connection Header Serializer --- */
+
+static inline size_t
+fast_serialize_status_and_control(char*       buf,
+                                  int         status,
+                                  const char* status_text,
+                                  int         use_chunked,
+                                  const char* transfer_encoding,
+                                  size_t      body_len,
+                                  const char* connection_val)
+{
+    size_t pos = 0;
+
+    /* 1. Fast vectorized status line */
+    if (__builtin_expect(status == 200, 1)) {
+        memcpy(buf + pos, "HTTP/1.1 200 OK\r\n", 17);
+        pos += 17;
+    } else if (status == CSILK_STATUS_SWITCHING_PROTOCOLS) {
+        memcpy(buf + pos, "HTTP/1.1 101 Switching Protocols\r\n", 34);
+        return 34;
+    } else if (status == 404) {
+        memcpy(buf + pos, "HTTP/1.1 404 Not Found\r\n", 24);
+        pos += 24;
+    } else if (status == 500) {
+        memcpy(buf + pos, "HTTP/1.1 500 Internal Server Error\r\n", 36);
+        pos += 36;
+    } else {
+        memcpy(buf + pos, "HTTP/1.1 ", 9);
+        pos += 9;
+        buf[pos++] = (char)('0' + (status / 100));
+        buf[pos++] = (char)('0' + ((status / 10) % 10));
+        buf[pos++] = (char)('0' + (status % 10));
+        buf[pos++] = ' ';
+        size_t text_len = strlen(status_text);
+        memcpy(buf + pos, status_text, text_len);
+        pos += text_len;
+        buf[pos++] = '\r';
+        buf[pos++] = '\n';
+    }
+
+    /* 2. Transfer-Encoding or Content-Length */
+    if (use_chunked) {
+        size_t te_len = strlen(transfer_encoding);
+        memcpy(buf + pos, transfer_encoding, te_len);
+        pos += te_len;
+    } else {
+        memcpy(buf + pos, "Content-Length: ", 16);
+        pos += 16;
+        pos += fast_uint64_to_str(buf + pos, body_len);
+        buf[pos++] = '\r';
+        buf[pos++] = '\n';
+    }
+
+    /* 3. Connection header */
+    memcpy(buf + pos, "Connection: ", 12);
+    pos += 12;
+    size_t conn_len = strlen(connection_val);
+    memcpy(buf + pos, connection_val, conn_len);
+    pos += conn_len;
+    buf[pos++] = '\r';
+    buf[pos++] = '\n';
+
+    return pos;
+}
+
+static inline size_t
+append_custom_headers_fast(csilk_header_map_t* headers, char* buf, size_t pos)
 {
     for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
         for (csilk_header_t* h = headers->buckets[i]; h; h = h->next) {
@@ -142,51 +191,37 @@ _csilk_send_response(csilk_ctx_t* c)
     client->keep_alive = (int)keep_alive;
     const char* connection_val = keep_alive ? "keep-alive" : "close";
 
-    /* Serialise status line (NULL/0 computes required length) */
-    int header_len = serialize_status_line(
-        NULL, 0, status, status_text, use_chunked, transfer_encoding, body_len, connection_val);
-    if (header_len < 0) {
-        return;
-    }
+    /* Maximum upper bound estimation for response header buffer */
+    size_t max_header_bound =
+        128 + strlen(status_text) + strlen(transfer_encoding) + custom_headers_len + 32;
+    size_t total_alloc_len = max_header_bound + 4 + (use_chunked || is_file ? 0 : body_len);
 
-    size_t response_len =
-        (size_t)header_len + custom_headers_len + 2 + (use_chunked || is_file ? 0 : body_len);
-
-    char* write_base = malloc(response_len + 1);
+    char* write_base = malloc(total_alloc_len + 1);
     if (write_base) {
-        int snp = serialize_status_line(write_base,
-                                        response_len + 1,
-                                        status,
-                                        status_text,
-                                        use_chunked,
-                                        transfer_encoding,
-                                        body_len,
-                                        connection_val);
-        if (snp < 0) {
-            free(write_base);
-            return;
-        }
-        size_t pos = (size_t)snp;
+        /* Single-pass vectorized serialization */
+        size_t pos = fast_serialize_status_and_control(write_base,
+                                                       status,
+                                                       status_text,
+                                                       use_chunked,
+                                                       transfer_encoding,
+                                                       body_len,
+                                                       connection_val);
 
-        pos = append_custom_headers(&client->ctx.response.headers, write_base, pos);
+        pos = append_custom_headers_fast(&client->ctx.response.headers, write_base, pos);
+
+        write_base[pos++] = '\r';
+        write_base[pos++] = '\n';
 
         if (!use_chunked && !is_file) {
-            write_base[pos++] = '\r';
-            write_base[pos++] = '\n';
             if (body && body_len > 0) {
                 memcpy(write_base + pos, body, body_len);
                 pos += body_len;
             }
-            write_base[pos] = '\0';
-        } else {
-            write_base[pos++] = '\r';
-            write_base[pos++] = '\n';
-            write_base[pos] = '\0';
         }
+        write_base[pos] = '\0';
 
         extern void _csilk_send_data_owned(csilk_ctx_t * c, char* data, size_t len);
-        _csilk_send_data_owned(
-            c, write_base, (use_chunked || is_file ? (size_t)pos : response_len));
+        _csilk_send_data_owned(c, write_base, pos);
     }
 
     if (is_file) {

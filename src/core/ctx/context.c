@@ -44,15 +44,20 @@
 void
 csilk_next(csilk_ctx_t* c)
 {
-    if (!c || c->aborted || c->panicked || c->handlers == NULL) {
+    if (__builtin_expect(!c || c->aborted || c->panicked, 0)) {
         return;
     }
-    c->handler_index++;
-    if (c->handler_count > 0 && (size_t)c->handler_index >= c->handler_count) {
+    csilk_handler_t* handlers = c->handlers;
+    if (__builtin_expect(!handlers, 0)) {
         return;
     }
-    if (c->handlers[c->handler_index] != NULL) {
-        c->handlers[c->handler_index](c);
+    int next_idx = ++c->handler_index;
+    if (__builtin_expect(c->handler_count > 0 && (size_t)next_idx >= c->handler_count, 0)) {
+        return;
+    }
+    csilk_handler_t fn = handlers[next_idx];
+    if (__builtin_expect(fn != NULL, 1)) {
+        fn(c);
     }
 }
 
@@ -367,11 +372,13 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     c->response.status = 0;
 
     /*
-     * request.path is always strdup'd (malloc'd) by
-     * csilk_split_url (or test_utils).  csilk_arena_reset
-     * does NOT free it — we must free it here.
+     * request.path is freed here only if it was allocated on the heap (e.g.
+     * by test utilities or legacy callers). If it was allocated from the
+     * request arena, csilk_arena_reset() will reclaim it.
      */
-    free(c->request.path);
+    if (c->request.path && (!c->arena || !csilk_arena_contains(c->arena, c->request.path))) {
+        free(c->request.path);
+    }
     c->request.path = NULL;
 
     /* 6. Zero-copy receive buffers — return to the worker-local pool (or
