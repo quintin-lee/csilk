@@ -18,7 +18,7 @@
 - Modify: `include/csilk/core/json.h`
 - Modify: `src/core/json/json_internal.h`
 
-- [ ] **Step 1: Define `csilk_json_t` as a transparent 16-byte struct in `include/csilk/core/json.h`**
+- [x] **Step 1: Define `csilk_json_t` as a transparent 16-byte struct in `include/csilk/core/json.h`**
 ```c
 typedef struct csilk_json_s {
     union {
@@ -35,17 +35,17 @@ typedef struct csilk_json_s {
 } csilk_json_t;
 ```
 
-- [ ] **Step 2: Add Value Object Function Declarations**
+- [x] **Step 2: Add Value Object Function Declarations**
 ```c
 csilk_json_t csilk_json_get_v(csilk_json_t obj, const char* key);
 csilk_json_t csilk_json_array_get_v(csilk_json_t arr, size_t index);
 bool         csilk_json_is_valid(csilk_json_t v);
 ```
 
-- [ ] **Step 3: Update `src/core/json/json_internal.h`**
+- [x] **Step 3: Update `src/core/json/json_internal.h`**
 Update internal flags and helper signatures.
 
-- [ ] **Step 4: Commit Task 1**
+- [x] **Step 4: Commit Task 1**
 ```bash
 git add include/csilk/core/json.h src/core/json/json_internal.h
 git commit -m "refactor(json): ♻️ define 16-byte value struct and value accessor declarations"
@@ -64,10 +64,10 @@ git commit -m "refactor(json): ♻️ define 16-byte value struct and value acce
 - Modify: `src/core/json/json_array.c`
 - Modify: `src/core/json/json_object.c`
 
-- [ ] **Step 1: Eliminate `tls_view_ring` in `src/core/json/json_internal.c`**
-- [ ] **Step 2: Implement `csilk_json_get_v`, `csilk_json_array_get_v`, `csilk_json_is_valid` in `src/core/json/json_access.c`**
-- [ ] **Step 3: Update parsing and factory methods with clean root handle allocation**
-- [ ] **Step 4: Commit Task 2**
+- [x] **Step 1: Eliminate `tls_view_ring` in `src/core/json/json_internal.c`**
+- [x] **Step 2: Implement `csilk_json_get_v`, `csilk_json_array_get_v`, `csilk_json_is_valid` in `src/core/json/json_access.c`**
+- [x] **Step 3: Update parsing and factory methods with clean root handle allocation**
+- [x] **Step 4: Commit Task 2**
 ```bash
 git add src/core/json/
 git commit -m "feat(json): ✨ eliminate TLS ring and implement zero-overhead value accessors"
@@ -81,19 +81,19 @@ git commit -m "feat(json): ✨ eliminate TLS ring and implement zero-overhead va
 - Create: `tests/core/test_json_accessor_bench.c`
 - Modify: `cmake/tests.cmake`
 
-- [ ] **Step 1: Implement `tests/core/test_json_accessor_bench.c`**
+- [x] **Step 1: Implement `tests/core/test_json_accessor_bench.c`**
 Benchmark:
 1. Flat object key lookup (Value object vs Pointer).
 2. Deep nested object lookup.
 3. 100,000 element array iteration (verifying 0 ring overwrite corruption).
 4. Multi-threaded async view retention and cross-thread read safety under TSAN.
-- [ ] **Step 2: Register test in `cmake/tests.cmake`**
-- [ ] **Step 3: Build and run test**
+- [x] **Step 2: Register test in `cmake/tests.cmake`**
+- [x] **Step 3: Build and run test**
 ```bash
 cmake -B build -S . && cmake --build build --target test_json_accessor_bench
 ./build/test_json_accessor_bench
 ```
-- [ ] **Step 4: Commit Task 3**
+- [x] **Step 4: Commit Task 3**
 ```bash
 git add tests/core/test_json_accessor_bench.c cmake/tests.cmake
 git commit -m "test(json): ✅ add JSON accessor benchmark and ring overwrite verification"
@@ -103,8 +103,8 @@ git commit -m "test(json): ✅ add JSON accessor benchmark and ring overwrite ve
 
 ### Task 4: Full Test Suite, ASAN/TSAN Verification & Formatting
 
-- [ ] **Step 1: Run full unit test suite**
-- [ ] **Step 2: Run ASAN test suite**
-- [ ] **Step 3: Run TSAN test suite**
-- [ ] **Step 4: Code formatting**
-- [ ] **Step 5: Final commit**
+- [x] **Step 1: Run full unit test suite**
+- [x] **Step 2: Run ASAN test suite**
+- [x] **Step 3: Run TSAN test suite**
+- [x] **Step 4: Code formatting**
+- [x] **Step 5: Final commit**
