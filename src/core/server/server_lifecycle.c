@@ -736,9 +736,16 @@ _csilk_reload_mgr_init(csilk_server_t* server)
     }
 }
 
+static _Thread_local csilk_rcu_slot_t*   tls_rcu_slot = NULL;
+static _Thread_local csilk_reload_mgr_t* tls_rcu_mgr = NULL;
+
 static csilk_rcu_slot_t*
 acquire_rcu_slot(csilk_reload_mgr_t* mgr)
 {
+    if (__builtin_expect(tls_rcu_slot != NULL && tls_rcu_mgr == mgr, 1)) {
+        return tls_rcu_slot;
+    }
+
     uintptr_t my_tid = (uintptr_t)pthread_self();
     if (my_tid == 0) {
         my_tid = 1;
@@ -751,7 +758,9 @@ acquire_rcu_slot(csilk_reload_mgr_t* mgr)
         size_t idx = (start + i) % CSILK_RELOAD_MAX_READERS;
         if (atomic_load_explicit(&mgr->reader_slots[idx].owner_tid, memory_order_relaxed) ==
             my_tid) {
-            return &mgr->reader_slots[idx];
+            tls_rcu_slot = &mgr->reader_slots[idx];
+            tls_rcu_mgr = mgr;
+            return tls_rcu_slot;
         }
     }
 
@@ -764,12 +773,16 @@ acquire_rcu_slot(csilk_reload_mgr_t* mgr)
                                                     my_tid,
                                                     memory_order_acq_rel,
                                                     memory_order_relaxed)) {
-            return &mgr->reader_slots[idx];
+            tls_rcu_slot = &mgr->reader_slots[idx];
+            tls_rcu_mgr = mgr;
+            return tls_rcu_slot;
         }
     }
 
     /* Fallback: deterministic slot */
-    return &mgr->reader_slots[start];
+    tls_rcu_slot = &mgr->reader_slots[start];
+    tls_rcu_mgr = mgr;
+    return tls_rcu_slot;
 }
 
 csilk_router_t*

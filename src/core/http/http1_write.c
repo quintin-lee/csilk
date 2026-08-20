@@ -79,6 +79,7 @@ on_write(csilk_io_write_t* req, int status)
 
     if (req->data) {
         free(req->data);
+        req->data = NULL;
     }
 
     if (client && client->ctx.file_fd >= 0) {
@@ -106,7 +107,11 @@ on_write(csilk_io_write_t* req, int status)
                     csilk_client_unref(client);
                     free(fs_req);
                 } else {
-                    free(req);
+                    if (client && req == &client->primary_write_req) {
+                        client->primary_write_in_flight = 0;
+                    } else {
+                        free(req);
+                    }
                     _csilk_client_pending_io_dec(client);
                     csilk_client_unref(client);
                     return;
@@ -115,7 +120,11 @@ on_write(csilk_io_write_t* req, int status)
         }
     }
 
-    free(req);
+    if (client && req == &client->primary_write_req) {
+        client->primary_write_in_flight = 0;
+    } else {
+        free(req);
+    }
 
     if (client) {
         extern void _csilk_check_and_trigger_drain(csilk_client_t * client);
@@ -143,14 +152,26 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
         return;
     }
 
-    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-    if (!req) {
-        return;
+    csilk_io_write_t* req;
+    int               is_inline = 0;
+    if (!client->primary_write_in_flight) {
+        client->primary_write_in_flight = 1;
+        req = &client->primary_write_req;
+        is_inline = 1;
+    } else {
+        req = malloc(sizeof(csilk_io_write_t));
+        if (!req) {
+            return;
+        }
     }
 
     char* buf_copy = malloc(len);
     if (!buf_copy) {
-        free(req);
+        if (is_inline) {
+            client->primary_write_in_flight = 0;
+        } else {
+            free(req);
+        }
         return;
     }
     memcpy(buf_copy, data, len);
@@ -164,7 +185,11 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
         _csilk_client_pending_io_dec(client);
         csilk_client_unref(client);
         free(buf_copy);
-        free(req);
+        if (is_inline) {
+            client->primary_write_in_flight = 0;
+        } else {
+            free(req);
+        }
     }
 }
 
@@ -241,10 +266,18 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
         return;
     }
 
-    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
-    if (!req) {
-        free(data);
-        return;
+    csilk_io_write_t* req;
+    int               is_inline = 0;
+    if (!client->primary_write_in_flight) {
+        client->primary_write_in_flight = 1;
+        req = &client->primary_write_req;
+        is_inline = 1;
+    } else {
+        req = malloc(sizeof(csilk_io_write_t));
+        if (!req) {
+            free(data);
+            return;
+        }
     }
 
     req->data = data;
@@ -256,6 +289,10 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
         _csilk_client_pending_io_dec(client);
         csilk_client_unref(client);
         free(data);
-        free(req);
+        if (is_inline) {
+            client->primary_write_in_flight = 0;
+        } else {
+            free(req);
+        }
     }
 }

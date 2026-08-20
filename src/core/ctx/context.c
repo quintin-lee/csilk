@@ -75,7 +75,10 @@ csilk_abort(csilk_ctx_t* c)
     c->aborted = 1;
 }
 
+#include <pthread.h>
+
 static _Thread_local csilk_body_pool_t tls_body_pool;
+static pthread_key_t                   g_body_pool_key;
 
 static inline int
 csilk_body_tier_index(size_t size)
@@ -116,6 +119,29 @@ csilk_body_pool_cleanup(void)
     }
 }
 
+static void
+body_pool_tls_destructor(void* val)
+{
+    (void)val;
+    csilk_body_pool_cleanup();
+}
+
+static void
+body_pool_init_key(void)
+{
+    pthread_key_create(&g_body_pool_key, body_pool_tls_destructor);
+}
+
+static inline void
+body_pool_ensure_cleanup(void)
+{
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, body_pool_init_key);
+    if (pthread_getspecific(g_body_pool_key) == NULL) {
+        pthread_setspecific(g_body_pool_key, (void*)1);
+    }
+}
+
 /** @brief Allocate a buffer from the worker/TLS-local HTTP body size-class pool. */
 void*
 csilk_body_alloc(size_t size, size_t* out_capacity)
@@ -138,11 +164,7 @@ csilk_body_alloc(size_t size, size_t* out_capacity)
         return tls_body_pool.tiers[tier].buffers[--tls_body_pool.tiers[tier].count];
     }
 
-    static _Thread_local int cleanup_registered = 0;
-    if (!cleanup_registered) {
-        atexit(csilk_body_pool_cleanup);
-        cleanup_registered = 1;
-    }
+    body_pool_ensure_cleanup();
 
     return malloc(tier_size);
 }

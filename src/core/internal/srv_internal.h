@@ -265,7 +265,9 @@ struct csilk_client_s {
                    * _csilk_send_response, used by on_write_done
                    * because llhttp clears F_CONNECTION_CLOSE
                    * after on_message_complete returns. */
-    void*            read_buf;       /**< Pre-allocated read buffer for io_uring */
+    unsigned         primary_write_in_flight : 1; /**< Whether primary_write_req is in flight */
+    csilk_io_write_t primary_write_req;           /**< Pre-allocated inline primary write handle */
+    void*            read_buf;                    /**< Pre-allocated read buffer for io_uring */
     size_t pending_write_bytes; /**< In-flight outbound write bytes for io_uring/backpressure. */
 
     csilk_protocol_t protocol;  /**< Protocol negotiated for this connection. */
