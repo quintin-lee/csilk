@@ -10,6 +10,7 @@
 
 #include "h2.h"
 #include "csilk/csilk.h"
+#include "../internal/srv_impl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -107,7 +108,7 @@ on_data_chunk_recv_callback(nghttp2_session* session,
         return 0;
     }
 
-    if (c->request.body_len + len > client->server->config.max_body_size) {
+    if (c->request.body_len + len > _csilk_server_get_max_body_size(client->server)) {
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 

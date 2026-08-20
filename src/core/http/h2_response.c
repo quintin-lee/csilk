@@ -97,15 +97,12 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
         return -1;
     }
 
-    if (!server->config.h2_push_enable) {
+    if (!_csilk_server_get_h2_push_enable(server)) {
         return -1;
     }
 
     /* Enforce per-request push limit */
-    int max_push = server->config.h2_max_push_per_request;
-    if (max_push <= 0) {
-        max_push = 10;
-    }
+    int   max_push = _csilk_server_get_h2_max_push(server);
     int   push_count = 0;
     void* count_ptr = csilk_get(c, "_h2_push_count");
     if (count_ptr) {

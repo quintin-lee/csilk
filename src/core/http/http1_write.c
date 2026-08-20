@@ -34,7 +34,7 @@ on_sendfile_complete(csilk_io_fs_t* req)
     int keep_alive = llhttp_should_keep_alive(&client->parser);
     client->keep_alive = (int)keep_alive;
 
-    if (client->server->config.write_timeout_ms > 0) {
+    if (_csilk_server_get_write_timeout_ms(client->server) > 0) {
         csilk_io_timer_stop(&client->write_timer);
     }
 
@@ -45,8 +45,8 @@ on_sendfile_complete(csilk_io_fs_t* req)
     extern void csilk_ctx_cleanup(csilk_ctx_t * c);
 
     if (keep_alive) {
-        csilk_io_timer_start(
-            &client->timer, on_idle_timeout, client->server->config.idle_timeout_ms, 0);
+        unsigned int idle_timeout = _csilk_server_get_idle_timeout_ms(client->server);
+        csilk_io_timer_start(&client->timer, on_idle_timeout, idle_timeout, 0);
         csilk_client_read_start(client);
     } else {
         if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {

@@ -160,6 +160,29 @@ typedef struct csilk_reload_mgr_s {
 } csilk_reload_mgr_t;
 
 /**
+ * @brief Dynamic runtime configuration with atomic scalar accessors.
+ *
+ * Separates immutable startup options from mutable runtime settings to ensure
+ * zero data races and zero lock contention during live configuration updates.
+ */
+typedef struct csilk_runtime_config_s {
+    _Atomic(unsigned int) idle_timeout_ms;
+    _Atomic(unsigned int) read_timeout_ms;
+    _Atomic(unsigned int) write_timeout_ms;
+    _Atomic(unsigned int) request_timeout_ms;
+    _Atomic(size_t)       max_body_size;
+    _Atomic(size_t)       max_header_size;
+    _Atomic(size_t)       max_url_size;
+    _Atomic(size_t)       max_headers_count;
+    _Atomic(int)          max_connections;
+    _Atomic(int)          enable_simd;
+    _Atomic(int)          h2_push_enable;
+    _Atomic(int)          h2_max_push_per_request;
+    _Atomic(size_t)       backpressure_max_queue_depth;
+    _Atomic(unsigned int) backpressure_max_latency_us;
+} csilk_runtime_config_t;
+
+/**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
  * Manages the I/O event loop (libuv or io_uring), HTTP listener, configuration, global
@@ -176,13 +199,15 @@ struct csilk_server_s {
     csilk_io_signal_t        sig_handle;       /**< SIGINT signal handler. */
     csilk_io_async_t         async_handle;     /**< Async handle for cross-thread wakeup. */
     llhttp_settings_t        settings;         /**< HTTP parser callback settings. */
-    csilk_server_config_t    config;           /**< Server configuration. */
+    csilk_server_config_t    config;           /**< Immutable startup base configuration. */
+    csilk_runtime_config_t   runtime_config;   /**< Atomic dynamic runtime settings. */
     csilk_handler_t          middlewares[32];  /**< Global middlewares. */
     int                      middleware_count; /**< Number of global middlewares. */
     atomic_int               max_connections;  /**< Max concurrent connections (0=unlimited). */
     atomic_int               active_connections; /**< Current connection count (atomic). */
     csilk_thread_t*          worker_tids;        /**< Worker thread IDs (NULL if single-thread). */
     int                      worker_count;       /**< Number of worker threads created. */
+    csilk_barrier_t*         worker_barrier;     /**< Barrier for worker thread startup sync. */
     worker_pool_t*
         worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
     int worker_pool_count; /**< Number of worker pools (= worker_threads). */
@@ -194,8 +219,9 @@ struct csilk_server_s {
     SSL_CTX*                     ssl_ctx;           /**< OpenSSL context. */
     csilk_mq_t*                  mq;                /**< Message Queue instance. */
     _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
-    csilk_mutex_t                hook_mutex; /**< Protects hook registration/removal CoW. */
-    void* quic_transport;                    /**< Optional QUIC transport callbacks for HTTP/3. */
+    csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
+    csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
+    void* quic_transport;                      /**< Optional QUIC transport callbacks for HTTP/3. */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16

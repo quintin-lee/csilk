@@ -86,7 +86,14 @@ csilk_server_new(csilk_router_t* router)
     s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
     s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
     s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
+
+    atomic_init(&s->runtime_config.idle_timeout_ms, CSILK_DEFAULT_IDLE_TIMEOUT);
+    atomic_init(&s->runtime_config.max_body_size, CSILK_DEFAULT_MAX_BODY_SIZE);
+    atomic_init(&s->runtime_config.max_header_size, CSILK_DEFAULT_MAX_HEADER_SIZE);
+    atomic_init(&s->runtime_config.enable_simd, 1);
+    atomic_init(&s->runtime_config.h2_max_push_per_request, 10);
     csilk_mutex_init(&s->hook_mutex);
+    csilk_mutex_init(&s->config_mutex);
     for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
         atomic_init(&s->hooks[i], NULL);
     }
@@ -209,6 +216,12 @@ csilk_server_free(csilk_server_t* server)
         server->worker_tids = NULL;
     }
 
+    if (server->worker_barrier) {
+        csilk_barrier_destroy(server->worker_barrier);
+        free(server->worker_barrier);
+        server->worker_barrier = NULL;
+    }
+
     free(server->spa_doc_root);
     if (server->worker_pools) {
         for (int w = 0; w < server->worker_pool_count; w++) {
@@ -246,6 +259,7 @@ csilk_server_free(csilk_server_t* server)
         }
     }
     csilk_mutex_destroy(&server->hook_mutex);
+    csilk_mutex_destroy(&server->config_mutex);
 
     csilk_dev_hot_reload_stop(server);
     csilk_server_wait_grace_period(server);
@@ -298,27 +312,68 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
         return;
     }
 
+    csilk_mutex_lock(&server->config_mutex);
     csilk_server_config_t old = server->config;
 
     server->config = *config;
-    atomic_store(&server->max_connections, server->config.max_connections);
 
-    if (server->config.idle_timeout_ms == 0) {
-        server->config.idle_timeout_ms =
-            old.idle_timeout_ms ? old.idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT;
-    }
-    if (server->config.max_body_size == 0) {
-        server->config.max_body_size =
-            old.max_body_size ? old.max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
-    }
-    if (server->config.max_header_size == 0) {
-        server->config.max_header_size =
-            old.max_header_size ? old.max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE;
-    }
-    if (server->config.listen_backlog == 0) {
-        server->config.listen_backlog =
-            old.listen_backlog ? old.listen_backlog : CSILK_DEFAULT_LISTEN_BACKLOG;
-    }
+    unsigned int idle =
+        server->config.idle_timeout_ms
+            ? server->config.idle_timeout_ms
+            : (old.idle_timeout_ms ? old.idle_timeout_ms : CSILK_DEFAULT_IDLE_TIMEOUT);
+    size_t body = server->config.max_body_size
+                      ? server->config.max_body_size
+                      : (old.max_body_size ? old.max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE);
+    size_t hdr = server->config.max_header_size
+                     ? server->config.max_header_size
+                     : (old.max_header_size ? old.max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE);
+    int    backlog = server->config.listen_backlog
+                         ? server->config.listen_backlog
+                         : (old.listen_backlog ? old.listen_backlog : CSILK_DEFAULT_LISTEN_BACKLOG);
+
+    server->config.idle_timeout_ms = idle;
+    server->config.max_body_size = body;
+    server->config.max_header_size = hdr;
+    server->config.listen_backlog = backlog;
+
+    /* Atomically update dynamic runtime configuration */
+    atomic_store_explicit(
+        &server->max_connections, server->config.max_connections, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.max_connections,
+                          server->config.max_connections,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.idle_timeout_ms, idle, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.read_timeout_ms,
+                          server->config.read_timeout_ms,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.write_timeout_ms,
+                          server->config.write_timeout_ms,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.request_timeout_ms,
+                          server->config.request_timeout_ms,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.max_body_size, body, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.max_header_size, hdr, memory_order_relaxed);
+    atomic_store_explicit(
+        &server->runtime_config.max_url_size, server->config.max_url_size, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.max_headers_count,
+                          server->config.max_headers_count,
+                          memory_order_relaxed);
+    atomic_store_explicit(
+        &server->runtime_config.enable_simd, server->config.enable_simd, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.h2_push_enable,
+                          server->config.h2_push_enable,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.h2_max_push_per_request,
+                          server->config.h2_max_push_per_request,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.backpressure_max_queue_depth,
+                          server->config.backpressure_max_queue_depth,
+                          memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.backpressure_max_latency_us,
+                          server->config.backpressure_max_latency_us,
+                          memory_order_relaxed);
+    csilk_mutex_unlock(&server->config_mutex);
 }
 
 /**
@@ -334,9 +389,12 @@ csilk_server_check_backpressure(csilk_server_t* server)
     if (!server) {
         return 0;
     }
-    if (server->config.backpressure_max_queue_depth > 0) {
-        size_t total_active = (size_t)atomic_load(&server->active_connections);
-        if (total_active > server->config.backpressure_max_queue_depth) {
+    size_t limit = atomic_load_explicit(&server->runtime_config.backpressure_max_queue_depth,
+                                        memory_order_relaxed);
+    if (limit > 0) {
+        size_t total_active =
+            (size_t)atomic_load_explicit(&server->active_connections, memory_order_relaxed);
+        if (total_active > limit) {
             return 1;
         }
     }
@@ -352,8 +410,11 @@ csilk_server_set_max_connections(csilk_server_t* server, int max)
     if (!server || max < 0) {
         return -1;
     }
-    int prev = atomic_exchange(&server->max_connections, max);
+    csilk_mutex_lock(&server->config_mutex);
+    int prev = atomic_exchange_explicit(&server->max_connections, max, memory_order_relaxed);
+    atomic_store_explicit(&server->runtime_config.max_connections, max, memory_order_relaxed);
     server->config.max_connections = max;
+    csilk_mutex_unlock(&server->config_mutex);
     return prev;
 }
 
@@ -575,8 +636,7 @@ csilk_server_run(csilk_server_t* server, int port)
 
         /* Wait for all spawned workers to complete bind_and_listen */
         csilk_barrier_wait(barrier);
-        csilk_barrier_destroy(barrier);
-        free(barrier);
+        server->worker_barrier = barrier;
 
         /* Check whether all requested workers were spawned and bound successfully */
         bool all_ok = (spawned == nworkers);
