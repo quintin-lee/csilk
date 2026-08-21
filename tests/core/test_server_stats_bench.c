@@ -4,6 +4,7 @@
  */
 
 #include "core/internal/srv_impl.h"
+#include "csilk/reflection/reflect.h"
 #include "core/internal/srv_internal.h"
 #include "csilk/core/server.h"
 
@@ -162,6 +163,8 @@ test_concurrent_stats_stress_and_bench(void)
 int
 main(void)
 {
+    csilk_arena_init();
+    csilk_reflect_init();
     printf("=================================================================\n");
     printf("        CSILK SERVER STATS CONCURRENCY & BENCHMARK SUITE         \n");
     printf("=================================================================\n\n");

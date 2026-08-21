@@ -10,6 +10,8 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/server.h"
+#include "core/internal/srv_internal.h"
+#include "csilk/reflection/reflect.h"
 
 /* Timing helpers */
 static inline double
@@ -435,6 +437,8 @@ run_benchmark_case(int num_threads, int num_requests_per_thread, int logs_per_re
 int
 main(void)
 {
+    csilk_arena_init();
+    csilk_reflect_init();
     printf("=================================================================\n");
     printf("     Asynchronous Lock-Free Logger Tests & Benchmark Suite       \n");
     printf("=================================================================\n\n");
