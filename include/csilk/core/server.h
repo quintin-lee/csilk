@@ -68,6 +68,11 @@ void csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
  * Stops the server if running, closes all connections, and frees the
  * router, hooks, and internal structures.
  *
+ * **Thread-safety contract**: All worker threads MUST be joined before
+ * calling this function.  The RCU/EBR reader-slot destructors run on each
+ * thread exit via pthread_key; if a thread is still alive when this function
+ * writes to the reload manager, it may access freed memory.
+ *
  * @param server Server instance to free.
  */
 void csilk_server_free(csilk_server_t* server);
