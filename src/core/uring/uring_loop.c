@@ -30,12 +30,21 @@ csilk_io_loop_init(csilk_io_loop_t* loop)
         return -1;
     }
     memset(loop, 0, sizeof(*loop));
-    int rc = io_uring_queue_init(4096, &loop->ring, 0);
+
+    int entries = 1024;
+    int rc = -1;
+    while (entries >= 64) {
+        rc = io_uring_queue_init((unsigned)entries, &loop->ring, 0);
+        if (rc == 0) {
+            break;
+        }
+        entries /= 2;
+    }
     if (rc < 0) {
         return rc;
     }
 
-    loop->op_pool_capacity = 8192;
+    loop->op_pool_capacity = (uint32_t)(entries * 2);
     loop->op_pool = calloc(loop->op_pool_capacity, sizeof(uring_op_context_t));
     loop->op_free_stack = malloc(loop->op_pool_capacity * sizeof(uint32_t));
     if (loop->op_pool && loop->op_free_stack) {
