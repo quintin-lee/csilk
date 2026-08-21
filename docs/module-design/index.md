@@ -50,6 +50,27 @@ Deep-dive architectural documentation for each core subsystem of csilk.
 |----------|-------|
 | [Metrics](metrics.md) | Prometheus exposition, lock-free counters, latency histograms |
 
+## Core Infrastructure
+
+| Document | Focus |
+|----------|-------|
+| [io_uring Backend](io-uring.md) | Linux native async I/O, ring management, op context pool, thread pool integration |
+| [RCU Hot Reload](rcu-hot-reload.md) | Read-Copy-Update mechanism, epoch tracking, memory reclamation |
+| [Connection Management](connection-management.md) | TCP lifecycle, connection pool, backpressure control |
+| [HTTP/2 Stack](http2-stack.md) | nghttp2 integration, stream management, flow control, server push |
+
+## Security
+
+| Document | Focus |
+|----------|-------|
+| [Security Middleware](security-middleware.md) | Circuit breaker, sliding rate limiter, WAF, eBPF XDP firewall |
+
+## Protocols
+
+| Document | Focus |
+|----------|-------|
+| [MCP Protocol](mcp-protocol.md) | Model Context Protocol, STDIO/SSE transport, tool registration |
+
 ---
 
 ## How to Read
