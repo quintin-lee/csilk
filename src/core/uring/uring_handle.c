@@ -31,19 +31,28 @@ csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_asy
     if (!async) {
         return -1;
     }
-    memset(async, 0, sizeof(*async));
+    /* Explicit field-by-field init avoids a raw memset over the _Atomic(int)
+     * event_fd field, which TSan flags as a data race against the atomic
+     * load in csilk_io_async_send().  The struct is typically calloc'd by the
+     * caller (server_new), so fields are already zero — we only set what we
+     * change. */
     if (!loop) {
         loop = csilk_io_default_loop();
     }
     async->loop = loop;
-    async->event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    async->fd = async->event_fd;
-    async->cb = async_cb;
+    async->data = NULL;
+    async->fd = -1;
+    async->flags = 0;
     async->type = CSILK_IO_HANDLE_ASYNC;
-    async->flags |= CSILK_IO_HANDLE_ACTIVE;
+    async->close_cb = NULL;
     async->generation = 1;
+    async->cb = async_cb;
+    int efds = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    atomic_store_explicit(&async->event_fd, efds, memory_order_relaxed);
+    async->fd = efds;
+    async->flags |= CSILK_IO_HANDLE_ACTIVE;
 
-    if (async->event_fd < 0) {
+    if (atomic_load_explicit(&async->event_fd, memory_order_relaxed) < 0) {
         return -1;
     }
 
@@ -51,7 +60,8 @@ csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_asy
         loop->active_handles++;
         struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
         if (sqe) {
-            io_uring_prep_poll_add(sqe, async->event_fd, POLLIN);
+            int event_fd_val = atomic_load_explicit(&async->event_fd, memory_order_relaxed);
+            io_uring_prep_poll_add(sqe, event_fd_val, POLLIN);
             io_uring_sqe_set_data64(
                 sqe, uring_encode_handle_data(URING_OP_POLL_ASYNC, (csilk_io_handle_t*)async));
             io_uring_submit(&loop->ring);
@@ -63,11 +73,12 @@ csilk_io_async_init(csilk_io_loop_t* loop, csilk_io_async_t* async, csilk_io_asy
 int
 csilk_io_async_send(csilk_io_async_t* async)
 {
-    if (!async || async->event_fd < 0) {
+    int event_fd_val = atomic_load_explicit(&async->event_fd, memory_order_acquire);
+    if (!async || event_fd_val < 0) {
         return -1;
     }
     uint64_t val = 1;
-    ssize_t  ret = write(async->event_fd, &val, sizeof(val));
+    ssize_t  ret = write(event_fd_val, &val, sizeof(val));
     (void)ret;
     return 0;
 }

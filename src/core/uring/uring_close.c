@@ -33,9 +33,10 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
         csilk_io_signal_stop((csilk_io_signal_t*)handle);
     } else if (handle->type == CSILK_IO_HANDLE_ASYNC) {
         csilk_io_async_t* async = (csilk_io_async_t*)handle;
-        if (async->event_fd >= 0) {
-            close(async->event_fd);
-            async->event_fd = -1;
+        int event_fd_val = atomic_load_explicit(&async->event_fd, memory_order_relaxed);
+        if (event_fd_val >= 0) {
+            close(event_fd_val);
+            atomic_store_explicit(&async->event_fd, -1, memory_order_release);
             async->fd = -1;
         }
     } else if (handle->type == CSILK_IO_HANDLE_TCP) {

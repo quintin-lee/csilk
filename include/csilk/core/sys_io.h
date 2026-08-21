@@ -19,6 +19,7 @@
 #include <string.h>
 #include <errno.h>
 #include <liburing.h>
+#include <stdatomic.h>
 #include <sys/socket.h>
 #include <sys/eventfd.h>
 #ifdef __linux__
@@ -227,7 +228,7 @@ typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 struct csilk_io_async_s {
     CSILK_IO_HANDLE_FIELDS
     csilk_io_async_cb cb;       /**< Callback invoked when signalled. */
-    int               event_fd; /**< eventfd used to signal the loop (alias of fd). */
+    _Atomic(int)      event_fd; /**< eventfd used to signal the loop (alias of fd). Atomically accessed to avoid TSan data races between send/close threads. */
 };
 
 typedef struct csilk_io_signal_s csilk_io_signal_t;
