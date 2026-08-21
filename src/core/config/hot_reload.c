@@ -21,6 +21,8 @@
 #include <unistd.h>
 #endif
 
+#include "csilk/core/sync.h"
+
 typedef csilk_router_t* (*csilk_app_init_t)(void);
 
 /** @brief Internal context for the hot-reload subsystem.
@@ -37,6 +39,7 @@ typedef struct {
     csilk_io_fs_event_t fs_event;       /**< I/O filesystem watcher (libuv or io_uring). */
     csilk_io_timer_t    debounce_timer; /**< Debounce timer (100 ms). */
     int                 is_watching;    /**< 1 if filesystem watcher is active. */
+    csilk_mutex_t       reload_mutex;   /**< Mutex ensuring serialized reload executions. */
 } hot_reload_ctx_t;
 
 /**
@@ -91,11 +94,9 @@ create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
     snprintf(out_path, max_len, "/tmp/csilk_reload_XXXXXX");
     int fd = mkstemp(out_path);
     if (fd < 0) {
-        snprintf(
-            out_path, max_len, "/tmp/csilk_reload_%lu_%d.so", (unsigned long)time(NULL), rand());
-    } else {
-        close(fd);
+        return -1;
     }
+    close(fd);
 #else
     char temp_dir[MAX_PATH];
     GetTempPathA(sizeof(temp_dir), temp_dir);
@@ -107,6 +108,7 @@ create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
              rand());
 #endif
     if (copy_file(src_path, out_path) != 0) {
+        unlink(out_path);
         return -1;
     }
     return 0;
@@ -129,9 +131,15 @@ create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
 static int
 load_and_swap_router(hot_reload_ctx_t* ctx)
 {
+    if (!ctx) {
+        return -1;
+    }
+    csilk_mutex_lock(&ctx->reload_mutex);
+
     char tmp_path[512];
     if (create_temp_lib_copy(ctx->lib_path, tmp_path, sizeof(tmp_path)) != 0) {
         CSILK_LOG_E("[Hot-Reload] Failed to create temp copy of %s", ctx->lib_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
 
@@ -143,6 +151,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
     if (!new_handle) {
         CSILK_LOG_E("[Hot-Reload] Failed to load library: %s", tmp_path);
         unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
     init_fn = (csilk_app_init_t)GetProcAddress((HMODULE)new_handle, ctx->init_sym);
@@ -150,6 +159,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
         CSILK_LOG_E("[Hot-Reload] Failed to find symbol: %s", ctx->init_sym);
         FreeLibrary((HMODULE)new_handle);
         unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
 #else
@@ -157,6 +167,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
     if (!new_handle) {
         CSILK_LOG_E("[Hot-Reload] Failed to load library: %s (%s)", tmp_path, dlerror());
         unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
 
@@ -169,6 +180,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
                     dlsym_error ? dlsym_error : "NULL symbol");
         dlclose(new_handle);
         unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
 #endif
@@ -182,6 +194,21 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
         FreeLibrary((HMODULE)new_handle);
 #endif
         unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
+        return -1;
+    }
+
+    char* new_tmp_dup = strdup(tmp_path);
+    if (!new_tmp_dup) {
+        CSILK_LOG_E("[Hot-Reload] OOM allocating temp path copy");
+        csilk_router_free(new_router);
+#ifndef _WIN32
+        dlclose(new_handle);
+#else
+        FreeLibrary((HMODULE)new_handle);
+#endif
+        unlink(tmp_path);
+        csilk_mutex_unlock(&ctx->reload_mutex);
         return -1;
     }
 
@@ -189,7 +216,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
     char* old_tmp = ctx->tmp_path;
 
     ctx->dl_handle = new_handle;
-    ctx->tmp_path = strdup(tmp_path);
+    ctx->tmp_path = new_tmp_dup;
 
     /* Atomically swap router and schedule old resources for EBR grace-period reclamation */
     csilk_server_set_router_full(ctx->server, new_router, old_handle, old_tmp);
@@ -198,6 +225,7 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
     CSILK_LOG_I("[Hot-Reload] Successfully published new router from %s (temp: %s)",
                 ctx->lib_path,
                 tmp_path);
+    csilk_mutex_unlock(&ctx->reload_mutex);
     return 0;
 }
 
@@ -249,10 +277,12 @@ csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const c
         free(ctx);
         return -1;
     }
+    csilk_mutex_init(&ctx->reload_mutex);
     ctx->fs_event.data = ctx;
     ctx->debounce_timer.data = ctx;
 
     if (load_and_swap_router(ctx) != 0) {
+        csilk_mutex_destroy(&ctx->reload_mutex);
         free(ctx->lib_path);
         free(ctx->init_sym);
         free(ctx);
@@ -329,6 +359,7 @@ csilk_dev_hot_reload_stop(csilk_server_t* server)
         }
     }
 
+    csilk_mutex_destroy(&ctx->reload_mutex);
     free(ctx->lib_path);
     free(ctx->init_sym);
     free(ctx);
