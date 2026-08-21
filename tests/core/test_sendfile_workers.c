@@ -214,7 +214,11 @@ run_sendfile_worker_test(int num_workers, int port)
         usleep(20000);
         wait_cnt++;
     }
-    usleep(50000); /* 50ms warm-up */
+#if defined(__SANITIZE_ADDRESS__)
+    usleep(200000); /* 200ms warmup under ASan (~4x slowdown) */
+#else
+    usleep(50000); /* 50ms warmup normal */
+#endif
 
     int                 num_clients = 8;
     int                 reqs_per_client = 5;
