@@ -16,8 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NUM_THREADS 8
-#define ITERATIONS 1000
+#define NUM_THREADS 4
+#define ITERATIONS 500
 
 typedef struct {
     csilk_server_t* server;
