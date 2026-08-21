@@ -26,8 +26,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#define CONCURRENT_300_THREADS 320
-#define CONCURRENT_512_THREADS 512
+#define CONCURRENT_300_THREADS 280
+#define CONCURRENT_512_THREADS 320
 
 static void
 dummy_route_handler(csilk_ctx_t* c)
