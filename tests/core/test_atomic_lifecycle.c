@@ -31,7 +31,8 @@ test_direct_atomic_initializers(void)
 {
     /* 1. Runtime config initialization */
     csilk_runtime_config_t rc;
-    csilk_server_config_t  cfg = {
+    memset(&rc, 0, sizeof(rc));
+    csilk_server_config_t cfg = {
         .idle_timeout_ms = 45000,
         .read_timeout_ms = 5000,
         .write_timeout_ms = 5000,
@@ -66,12 +67,14 @@ test_direct_atomic_initializers(void)
 
     /* 2. Client atomics initialization */
     csilk_client_t client;
+    memset(&client, 0, sizeof(client));
     _csilk_client_atomics_init(&client);
     assert(atomic_load(&client.ref_count) == 0);
     assert(atomic_load(&client.pending_io) == 0);
 
     /* 3. Worker pool atomics initialization */
     worker_pool_t wp;
+    memset(&wp, 0, sizeof(wp));
     _csilk_worker_pool_atomics_init(&wp, NULL, 1);
     assert(atomic_load(&wp.client_pool_count) == 0);
     assert(atomic_load(&wp.active_connections) == 0);
@@ -187,6 +190,7 @@ static void
 test_client_pool_lifecycle(void)
 {
     worker_pool_t wp;
+    memset(&wp, 0, sizeof(wp));
     _csilk_worker_pool_atomics_init(&wp, NULL, 0);
 
     /* Allocate clients using pool_get */
