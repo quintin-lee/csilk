@@ -150,8 +150,12 @@ _csilk_client_check_recycle(csilk_client_t* client)
         return;
     }
     csilk_conn_state_t st = client->state;
-    if ((st == CSILK_CONN_CLOSING || st == CSILK_CONN_CLOSED) &&
-        atomic_load(&client->ref_count) <= 0 && atomic_load(&client->pending_io) <= 0) {
+    if (st != CSILK_CONN_CLOSING && st != CSILK_CONN_CLOSED) {
+        return;
+    }
+    int ref = atomic_load(&client->ref_count);
+    int pio = atomic_load(&client->pending_io);
+    if (client->state == st && ref <= 0 && pio <= 0) {
         client_destroy(client);
     }
 }
