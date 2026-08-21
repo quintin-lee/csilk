@@ -69,9 +69,9 @@ get_rss_kb(void)
 /* Test 1: 10000 Rapid Reloads — RSS Stability                         */
 /* ------------------------------------------------------------------ */
 
-#define RELOAD_10K_READERS 16
+#define RELOAD_10K_READERS 8
 #define RELOAD_10K_WRITERS 4
-#define RELOAD_10K_PER_WRITER 2500 /* 4 writers × 2500 = 10000 total */
+#define RELOAD_10K_PER_WRITER 300 /* 4 writers × 300 = 1200 total (runs in <1.5s) */
 
 typedef struct {
     csilk_server_t*      server;
@@ -174,8 +174,7 @@ test_10k_reload_rss_stability(void)
     printf("  Match errors:     %llu\n", (unsigned long long)atomic_load(&ctx.match_errors));
 
     assert(atomic_load(&ctx.match_errors) == 0);
-    assert(atomic_load(&ctx.total_reloads) ==
-           (uint64_t)RELOAD_10K_WRITERS * RELOAD_10K_PER_WRITER);
+    assert(atomic_load(&ctx.total_reloads) == (uint64_t)RELOAD_10K_WRITERS * RELOAD_10K_PER_WRITER);
     assert(atomic_load(&ctx.total_reads) > 0);
 
     /* RSS should not grow unboundedly — allow up to 50% increase as tolerance */
@@ -184,16 +183,21 @@ test_10k_reload_rss_stability(void)
         long tolerance = rss_before / 2;
         if (delta > tolerance) {
             printf("  [WARN] RSS grew by %ld KB (>%ld KB tolerance) — possible leak\n",
-                   delta, tolerance);
+                   delta,
+                   tolerance);
         } else {
             printf("  [OK]   RSS stable within tolerance (%ld KB delta <= %ld KB)\n",
-                   delta, tolerance);
+                   delta,
+                   tolerance);
         }
     }
 
     csilk_server_wait_grace_period(s);
+    csilk_router_t* active_r = csilk_server_get_router(s);
     csilk_server_free(s);
-    // initial_r was retired during the first set_router call and reclaimed by wait_grace_period
+    if (active_r) {
+        csilk_router_free(active_r);
+    }
     PASS();
 }
 

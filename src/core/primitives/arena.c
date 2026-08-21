@@ -309,8 +309,7 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
     size_t chunk_size =
         aligned_size > arena->default_chunk_size ? aligned_size : arena->default_chunk_size;
     /* Guard aligned_size + alignment against overflow before using it. */
-    if (alignment > 8 && chunk_size < aligned_size &&
-        chunk_size <= SIZE_MAX - alignment) {
+    if (alignment > 8 && chunk_size < aligned_size && chunk_size <= SIZE_MAX - alignment) {
         chunk_size = aligned_size + alignment;
     }
 
@@ -321,7 +320,8 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
 
     /* Check if allocation would exceed max_total_bytes limit.
      * Use subtraction to avoid overflow on total_allocated + chunk_size. */
-    if (arena->max_total_bytes > 0 && chunk_size > arena->max_total_bytes - arena->total_allocated) {
+    if (arena->max_total_bytes > 0 &&
+        chunk_size > arena->max_total_bytes - arena->total_allocated) {
         return NULL;
     }
 
@@ -427,9 +427,9 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
         if (__builtin_expect(size > SIZE_MAX - 7, 0)) {
             return NULL;
         }
-        size_t       aligned_size = (size + 7) & ~7ULL;
-        uintptr_t    cur     = (uintptr_t)arena->ptr;
-        uintptr_t    next    = cur + aligned_size;
+        size_t    aligned_size = (size + 7) & ~7ULL;
+        uintptr_t cur = (uintptr_t)arena->ptr;
+        uintptr_t next = cur + aligned_size;
 
         if (__builtin_expect(next <= (uintptr_t)arena->end && cur != 0, 1)) {
             arena->ptr = (uint8_t*)next;

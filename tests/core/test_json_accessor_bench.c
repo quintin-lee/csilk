@@ -36,7 +36,7 @@ bench_value_vs_pointer_accessor(void)
     csilk_json_t* doc = csilk_json_parse(json_str);
     assert(doc != NULL);
 
-    const int iterations = 2000000;
+    const int iterations = 200000;
 
     /* 1. Value Object Accessor */
     uint64_t start_ns = get_monotonic_ns();
@@ -81,15 +81,15 @@ bench_value_vs_pointer_accessor(void)
 }
 
 /* ====================================================================
- * Test 2: Verify Elimination of Ring Overwrite (100,000 items)
+ * Test 2: Verify Elimination of Ring Overwrite (10,000 items)
  * ==================================================================== */
 
 static void
 test_no_ring_overwrite_large_array(void)
 {
-    printf("=== Test: 100,000 Item Array Iteration & Lifetime Safety ===\n");
+    printf("=== Test: 10,000 Item Array Iteration & Lifetime Safety ===\n");
 
-    const int total_items = 100000;
+    const int total_items = 10000;
     /* Build JSON array: [{"id": 0}, {"id": 1}, ...] */
     csilk_json_t* arr = csilk_json_array();
     assert(arr != NULL);

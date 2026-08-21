@@ -19,6 +19,7 @@
 #include <string.h>
 #include <unistd.h>
 #ifdef __linux__
+#include <poll.h>
 #include <sys/sendfile.h>
 #endif
 
@@ -68,9 +69,15 @@ csilk_io_fs_sendfile(csilk_io_loop_t* loop,
             total_sent += sent;
             remaining -= (size_t)sent;
         } else if (sent < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-                /* Non-blocking socket buffer full or interrupted, yield and continue */
+            if (errno == EINTR) {
                 continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = {.fd = out_fd, .events = POLLOUT, .revents = 0};
+                int           pr = poll(&pfd, 1, 100);
+                if (pr > 0 && (pfd.revents & POLLOUT)) {
+                    continue;
+                }
             }
             break;
         } else {

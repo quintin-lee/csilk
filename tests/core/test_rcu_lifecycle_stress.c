@@ -341,10 +341,10 @@ test_512_plus_readers(void)
 
     pthread_t            threads[CONCURRENT_512_THREADS];
     readers_stress_ctx_t ctx = {
-        .server      = server,
-        .start_gate  = false,
+        .server = server,
+        .start_gate = false,
         .active_readers = 0,
-        .success_count   = 0,
+        .success_count = 0,
     };
 
     for (int i = 0; i < CONCURRENT_512_THREADS; i++) {

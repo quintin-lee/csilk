@@ -12,6 +12,7 @@ function(add_csilk_test name source)
       "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
       "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
       "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
+      -UNDEBUG
   )
   target_link_options(${name} PRIVATE
       "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
