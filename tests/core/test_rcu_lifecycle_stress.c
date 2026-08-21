@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #define CONCURRENT_300_THREADS 320
+#define CONCURRENT_512_THREADS 512
 
 static void
 dummy_route_handler(csilk_ctx_t* c)
@@ -324,6 +325,49 @@ test_concurrent_reload_race(void)
     csilk_router_free(final_r);
 }
 
+/* ------------------------------------------------------------------ */
+/* Test 5: 512 Concurrent Readers (Extreme Overflow Stress)            */
+/* ------------------------------------------------------------------ */
+
+static void
+test_512_plus_readers(void)
+{
+    printf("Running test_512_plus_readers (512 concurrent threads)...\n");
+    csilk_router_t* router = csilk_router_new();
+    csilk_handler_t h = dummy_route_handler;
+    csilk_router_add(router, "GET", "/test512", &h, 1);
+    csilk_server_t* server = csilk_server_new(router);
+    assert(server != NULL);
+
+    pthread_t            threads[CONCURRENT_512_THREADS];
+    readers_stress_ctx_t ctx = {
+        .server      = server,
+        .start_gate  = false,
+        .active_readers = 0,
+        .success_count   = 0,
+    };
+
+    for (int i = 0; i < CONCURRENT_512_THREADS; i++) {
+        int rc = pthread_create(&threads[i], NULL, reader_300_worker, &ctx);
+        assert(rc == 0);
+    }
+
+    atomic_store_explicit(&ctx.start_gate, true, memory_order_release);
+
+    for (int i = 0; i < CONCURRENT_512_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    assert(atomic_load_explicit(&ctx.success_count, memory_order_relaxed) ==
+           CONCURRENT_512_THREADS);
+    /* All 512 threads should have used overflow slots (256 static + 256 dynamic) */
+    printf("  -> All %d threads completed successfully (static+overflow slots).\n",
+           CONCURRENT_512_THREADS);
+
+    csilk_server_free(server);
+    csilk_router_free(router);
+}
+
 int
 main(void)
 {
@@ -332,6 +376,7 @@ main(void)
     test_256_plus_readers();
     test_server_destruction_tls_invalidation();
     test_concurrent_reload_race();
+    test_512_plus_readers();
     printf("=== All RCU / EBR Tests Passed Successfully! ===\n");
     return 0;
 }

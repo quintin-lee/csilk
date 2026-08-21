@@ -300,12 +300,13 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 if (is_stale_poll((csilk_io_handle_t*)async, gen)) {
                     continue;
                 }
+                int event_fd_val = atomic_load_explicit(&async->event_fd, memory_order_relaxed);
                 uint64_t val = 0;
-                ssize_t  nr = read(async->event_fd, &val, sizeof(val));
+                ssize_t  nr = read(event_fd_val, &val, sizeof(val));
                 /* Re-arm async poll */
                 struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
                 if (sqe) {
-                    io_uring_prep_poll_add(sqe, async->event_fd, POLLIN);
+                    io_uring_prep_poll_add(sqe, event_fd_val, POLLIN);
                     io_uring_sqe_set_data64(
                         sqe,
                         uring_encode_handle_data(URING_OP_POLL_ASYNC, (csilk_io_handle_t*)async));
