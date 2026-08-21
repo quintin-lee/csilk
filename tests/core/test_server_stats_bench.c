@@ -5,6 +5,7 @@
 
 #include "core/internal/srv_impl.h"
 #include "csilk/reflection/reflect.h"
+#include "csilk/reflection/reflect.h"
 #include "core/internal/srv_internal.h"
 #include "csilk/core/server.h"
 
@@ -40,6 +41,14 @@ typedef struct {
     _Atomic(bool)   running;
     uint64_t        query_count;
 } reader_bench_arg_t;
+
+/* Helper to prevent DCE of thread creation */
+static int
+csilk_test_pthread_create(pthread_t* tid, const pthread_attr_t* attr,
+                          void* (*start_routine)(void*), void* arg)
+{
+    return pthread_create(tid, attr, start_routine, arg);
+}
 
 static void*
 worker_thread_func(void* raw_arg)
@@ -102,7 +111,13 @@ test_concurrent_stats_stress_and_bench(void)
         worker_args[i].server = server;
         worker_args[i].worker_index = i;
         atomic_init(&worker_args[i].running, true);
-        assert(pthread_create(&worker_tids[i], NULL, worker_thread_func, &worker_args[i]) == 0);
+        assert(csilk_test_pthread_create(&worker_tids[i], NULL, worker_thread_func, &worker_args[i]) == 0);
+    }
+    /* Prevent DCE: keep thread function pointer and array alive */
+    {
+        void* (*fp)(void*) = worker_thread_func;
+        volatile void* vp = fp;
+        (void)vp;
     }
 
     pthread_t          reader_tids[NUM_READERS];
@@ -113,7 +128,13 @@ test_concurrent_stats_stress_and_bench(void)
     for (int i = 0; i < NUM_READERS; i++) {
         reader_args[i].server = server;
         atomic_init(&reader_args[i].running, true);
-        assert(pthread_create(&reader_tids[i], NULL, reader_thread_func, &reader_args[i]) == 0);
+        assert(csilk_test_pthread_create(&reader_tids[i], NULL, reader_thread_func, &reader_args[i]) == 0);
+    }
+    /* Prevent DCE: keep thread function pointer alive */
+    {
+        void* (*fp)(void*) = reader_thread_func;
+        volatile void* vp = fp;
+        (void)vp;
     }
 
     /* Run for 200 ms */
@@ -160,7 +181,7 @@ test_concurrent_stats_stress_and_bench(void)
     free(server);
 }
 
-int
+__attribute__((optimize("O0"))) int
 main(void)
 {
     csilk_arena_init();

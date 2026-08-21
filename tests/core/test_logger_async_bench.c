@@ -434,7 +434,7 @@ run_benchmark_case(int num_threads, int num_requests_per_thread, int logs_per_re
 /* -------------------------------------------------------------------------- */
 /* Main Test Runner                                                           */
 /* -------------------------------------------------------------------------- */
-int
+__attribute__((optimize("O0"))) int
 main(void)
 {
     csilk_arena_init();

@@ -177,7 +177,7 @@ test_concurrent_config_updates(void)
     csilk_router_free(router);
 }
 
-int
+__attribute__((optimize("O0"))) int
 main(void)
 {
     csilk_arena_init();
