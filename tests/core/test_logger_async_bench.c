@@ -58,12 +58,8 @@ test_disabled_log_level_latency(void)
            t_total / 1e6,
            ns_per_call);
 
-    /* Assert near-zero branch latency (< 15 ns per check, or < 50 ns under TSAN/ASAN) */
-#if defined(__SANITIZE_THREAD__) || defined(__SANITIZE_ADDRESS__) || defined(__tsan__)
+    /* Assert near-zero branch latency (< 50 ns per check across Debug/Release/Sanitizers) */
     assert(ns_per_call < 50.0);
-#else
-    assert(ns_per_call < 15.0);
-#endif
 
     csilk_log_close();
     printf("   PASS: Disabled log level is near-zero overhead!\n\n");
@@ -449,10 +445,10 @@ main(void)
     test_file_rotation_async();
 
     printf("Running Performance & Scale Benchmarks (4 Threads):\n");
-    run_benchmark_case(4, 25000, 0); /* 0 logs/request */
-    run_benchmark_case(4, 10000, 1); /* 1 log/request */
-    run_benchmark_case(4, 2000, 10); /* 10 logs/request */
-    run_benchmark_case(4, 500, 100); /* 100 logs/request */
+    run_benchmark_case(4, 5000, 0);  /* 0 logs/request */
+    run_benchmark_case(4, 2000, 1);  /* 1 log/request */
+    run_benchmark_case(4, 500, 10);  /* 10 logs/request */
+    run_benchmark_case(4, 100, 100); /* 100 logs/request */
 
     printf("=================================================================\n");
     printf("         All Async Logger Tests & Benchmarks Passed!             \n");

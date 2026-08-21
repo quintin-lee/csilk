@@ -44,8 +44,10 @@ typedef struct {
 
 /* Helper to prevent DCE of thread creation */
 static int
-csilk_test_pthread_create(pthread_t* tid, const pthread_attr_t* attr,
-                          void* (*start_routine)(void*), void* arg)
+csilk_test_pthread_create(pthread_t*            tid,
+                          const pthread_attr_t* attr,
+                          void* (*start_routine)(void*),
+                          void* arg)
 {
     return pthread_create(tid, attr, start_routine, arg);
 }
@@ -111,7 +113,8 @@ test_concurrent_stats_stress_and_bench(void)
         worker_args[i].server = server;
         worker_args[i].worker_index = i;
         atomic_init(&worker_args[i].running, true);
-        assert(csilk_test_pthread_create(&worker_tids[i], NULL, worker_thread_func, &worker_args[i]) == 0);
+        assert(csilk_test_pthread_create(
+                   &worker_tids[i], NULL, worker_thread_func, &worker_args[i]) == 0);
     }
     /* Prevent DCE: keep thread function pointer and array alive */
     {
@@ -128,7 +131,8 @@ test_concurrent_stats_stress_and_bench(void)
     for (int i = 0; i < NUM_READERS; i++) {
         reader_args[i].server = server;
         atomic_init(&reader_args[i].running, true);
-        assert(csilk_test_pthread_create(&reader_tids[i], NULL, reader_thread_func, &reader_args[i]) == 0);
+        assert(csilk_test_pthread_create(
+                   &reader_tids[i], NULL, reader_thread_func, &reader_args[i]) == 0);
     }
     /* Prevent DCE: keep thread function pointer alive */
     {

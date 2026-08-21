@@ -227,8 +227,9 @@ typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 /** @brief Async (cross-thread wake-up) handle. */
 struct csilk_io_async_s {
     CSILK_IO_HANDLE_FIELDS
-    csilk_io_async_cb cb;       /**< Callback invoked when signalled. */
-    _Atomic(int)      event_fd; /**< eventfd used to signal the loop (alias of fd). Atomically accessed to avoid TSan data races between send/close threads. */
+    csilk_io_async_cb cb; /**< Callback invoked when signalled. */
+    _Atomic(int)
+        event_fd; /**< eventfd used to signal the loop (alias of fd). Atomically accessed to avoid TSan data races between send/close threads. */
 };
 
 typedef struct csilk_io_signal_s csilk_io_signal_t;

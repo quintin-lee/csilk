@@ -48,20 +48,14 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
             tcp->recv_buf.len = 0;
         }
         if (handle->fd >= 0) {
-            csilk_client_t* client = (csilk_client_t*)handle->data;
-            if (!client ||
-                (atomic_load(&client->ref_count) <= 0 && atomic_load(&client->pending_io) <= 0)) {
-                close(handle->fd);
-                handle->fd = -1;
-            }
-        }
-    } else if (handle->fd >= 0) {
-        csilk_client_t* client = (csilk_client_t*)handle->data;
-        if (!client ||
-            (atomic_load(&client->ref_count) <= 0 && atomic_load(&client->pending_io) <= 0)) {
+            shutdown(handle->fd, SHUT_WR);
             close(handle->fd);
             handle->fd = -1;
         }
+    } else if (handle->fd >= 0) {
+        shutdown(handle->fd, SHUT_WR);
+        close(handle->fd);
+        handle->fd = -1;
     }
 
     if (cb) {
