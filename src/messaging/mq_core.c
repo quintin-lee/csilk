@@ -233,6 +233,7 @@ on_mq_close(csilk_io_handle_t* handle)
     }
 
     free(mq->global_middlewares);
+    free(mq->monitors);
 
     CSILK_LOG_I("MQ: Message queue closed and resource cleanup complete");
     free(mq);
@@ -257,5 +258,4 @@ _csilk_mq_free(csilk_mq_t* mq)
         mq->async_handle.data = mq;
         csilk_io_close((csilk_io_handle_t*)&mq->async_handle, on_mq_close);
     }
-    free(mq->monitors);
 }
