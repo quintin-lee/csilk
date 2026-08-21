@@ -320,6 +320,12 @@ csilk_server_free(csilk_server_t* server)
     _csilk_reload_mgr_free(server);
     _csilk_dispatch_pool_cleanup();
 
+    if (server->loop_owned && server->loop) {
+        csilk_io_loop_close(server->loop);
+        free(server->loop);
+        server->loop = NULL;
+    }
+
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
     free(server);
