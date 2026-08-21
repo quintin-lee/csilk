@@ -28,6 +28,7 @@ endfunction()
 set(CSILK_CORE_TESTS
     test_arena
     test_arena_bench
+    test_arena_overflow
     test_body_pool
     test_config
     test_config_comprehensive
@@ -116,7 +117,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
 )
 
 

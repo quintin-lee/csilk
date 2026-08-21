@@ -308,7 +308,9 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
 
     size_t chunk_size =
         aligned_size > arena->default_chunk_size ? aligned_size : arena->default_chunk_size;
-    if (alignment > 8 && chunk_size < aligned_size + alignment) {
+    /* Guard aligned_size + alignment against overflow before using it. */
+    if (alignment > 8 && chunk_size < aligned_size &&
+        chunk_size <= SIZE_MAX - alignment) {
         chunk_size = aligned_size + alignment;
     }
 
@@ -317,9 +319,9 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
         return NULL;
     }
 
-    /* Check if allocation would exceed max_total_bytes limit */
-    if (arena->max_total_bytes > 0 &&
-        (arena->total_allocated + chunk_size > arena->max_total_bytes)) {
+    /* Check if allocation would exceed max_total_bytes limit.
+     * Use subtraction to avoid overflow on total_allocated + chunk_size. */
+    if (arena->max_total_bytes > 0 && chunk_size > arena->max_total_bytes - arena->total_allocated) {
         return NULL;
     }
 
@@ -341,6 +343,20 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
     chunk->size = chunk_size;
     chunk->next = arena->head;
     arena->head = chunk;
+    /* Guard total_allocated against overflow. */
+    if (chunk_size > SIZE_MAX - arena->total_allocated) {
+        /* Roll back: unsplice chunk and free it. */
+        arena->head = chunk->next;
+        if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+            arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
+            chunk->next = tls_tier_free_lists[tier];
+            tls_tier_free_lists[tier] = chunk;
+            tls_tier_counts[tier]++;
+        } else {
+            arena_aligned_free(chunk, chunk->size + sizeof(csilk_arena_chunk_t));
+        }
+        return NULL;
+    }
     arena->total_allocated += chunk_size;
 
     uintptr_t base = (uintptr_t)chunk->data;
@@ -411,13 +427,13 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
         if (__builtin_expect(size > SIZE_MAX - 7, 0)) {
             return NULL;
         }
-        size_t   aligned_size = (size + 7) & ~7ULL;
-        uint8_t* cur = arena->ptr;
-        uint8_t* next = cur + aligned_size;
+        size_t       aligned_size = (size + 7) & ~7ULL;
+        uintptr_t    cur     = (uintptr_t)arena->ptr;
+        uintptr_t    next    = cur + aligned_size;
 
-        if (__builtin_expect(next <= arena->end && cur != NULL, 1)) {
-            arena->ptr = next;
-            return cur;
+        if (__builtin_expect(next <= (uintptr_t)arena->end && cur != 0, 1)) {
+            arena->ptr = (uint8_t*)next;
+            return (void*)cur;
         }
         return arena_alloc_slow(arena, size, 8);
     }
@@ -509,7 +525,12 @@ csilk_arena_free(csilk_arena_t* arena)
             }
         }
 #endif
-        arena->total_allocated -= curr->size;
+        /* Guard total_allocated against underflow. */
+        if (curr->size > arena->total_allocated) {
+            arena->total_allocated = 0;
+        } else {
+            arena->total_allocated -= curr->size;
+        }
 
         /* Return tiered chunks to the thread-local free list if there is room. */
         int tier = arena_size_to_tier(curr->size);
@@ -589,8 +610,17 @@ csilk_arena_get_stats(csilk_arena_t* arena, size_t* total_size, size_t* total_us
     }
     csilk_arena_chunk_t* curr = arena->head;
     while (curr) {
-        *total_size += curr->size;
-        *total_used += curr->used;
+        /* Guard against overflow when summing chunk sizes. */
+        if (curr->size > SIZE_MAX - *total_size) {
+            *total_size = SIZE_MAX;
+        } else {
+            *total_size += curr->size;
+        }
+        if (curr->used > SIZE_MAX - *total_used) {
+            *total_used = SIZE_MAX;
+        } else {
+            *total_used += curr->used;
+        }
         curr = curr->next;
     }
 }
