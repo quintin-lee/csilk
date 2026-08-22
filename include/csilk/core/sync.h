@@ -398,7 +398,15 @@ csilk_thread_yield(void)
 static inline int
 csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int maxcpu)
 {
+#if defined(UV_VERSION_HEX) && (UV_VERSION_HEX >= 0x012d00)
     return uv_thread_setaffinity(tid, cpuset, oldmask, maxcpu);
+#else
+    (void)tid;
+    (void)cpuset;
+    (void)oldmask;
+    (void)maxcpu;
+    return 0;
+#endif
 }
 
 /**
