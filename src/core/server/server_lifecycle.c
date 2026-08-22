@@ -286,6 +286,13 @@ csilk_server_free(csilk_server_t* server)
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
             _csilk_worker_drain_dispatch(wp);
+            if (wp->dispatch_async.type != 0 &&
+                !csilk_io_is_closing((csilk_io_handle_t*)&wp->dispatch_async)) {
+                csilk_io_close((csilk_io_handle_t*)&wp->dispatch_async, NULL);
+                if (server->loop) {
+                    csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
+                }
+            }
             int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
             for (int i = 0; i < client_cnt; i++) {
                 free(wp->client_pool[i]);
@@ -1143,6 +1150,8 @@ csilk_server_set_router_full(csilk_server_t* server,
 
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
 
+    csilk_mutex_lock(&server->config_mutex);
+
     /* Atomically swap new router into place */
     csilk_router_t* old_router =
         atomic_exchange_explicit(&server->router, router, memory_order_acq_rel);
@@ -1172,6 +1181,8 @@ csilk_server_set_router_full(csilk_server_t* server,
 
     /* Opportunistic non-blocking reclamation */
     _csilk_reload_try_reclaim(server);
+
+    csilk_mutex_unlock(&server->config_mutex);
 }
 
 void
