@@ -1,6 +1,6 @@
 # io_uring 后端深度解析
 
-> **Version**: 0.5.0 | **Last updated**: 2026-08-21
+> **Version**: 0.5.1 | **Last updated**: 2026-08-22
 
 csilk 的 io_uring 后端是 Linux 原生异步 I/O 的高性能实现，提供超越 libuv 的极低延迟和更高吞吐量。
 

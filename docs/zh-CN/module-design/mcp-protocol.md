@@ -1,6 +1,6 @@
 # MCP 协议支持深度解析
 
-> **Version**: 0.5.0 | **Last updated**: 2026-08-21
+> **Version**: 0.5.1 | **Last updated**: 2026-08-22
 
 csilk 支持 Model Context Protocol (MCP)，允许 AI 模型通过标准协议访问外部工具和上下文。本文档深入解析 MCP 传输层、工具注册和客户端实现。
 

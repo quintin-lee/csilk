@@ -3,7 +3,7 @@
  * @file af_xdp.h
  * @brief AF_XDP (XSK) kernel bypass zero-copy network socket driver.
  *
- * @version 0.5.0
+ * @version 0.5.1
  * @copyright MIT License
  */
 

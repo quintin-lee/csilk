@@ -1,7 +1,7 @@
 # HTTP/2 Integration — Implementation Status
 
 > **Status**: Phase 1 (Session scaffolding), Phase 2 (Request dispatch/response), and Phase 3 (Server Push) complete.  
-> **Version**: v0.5.0+ | **Last updated**: 2026-05-31
+> **Version**: v0.5.1+ | **Last updated**: 2026-05-31
 >
 > **HTTP/2 Rules**: ALPN negotiation **MUST** complete before any data routing. Stream contexts **MUST** use arena allocation — no individual `malloc`/`free` per stream. Server Push **MUST NOT** be advertised on HTTP/1.1 connections. HPACK dynamic table size **SHOULD** be tuned per deployment (default: nghttp2 4096 bytes).
 

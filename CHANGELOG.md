@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-22
+
 ### Added
 - **Formal Client Lifetime Verification & Owner Confinement**: Formally verified client lifecycle state machine across 100,000 reuse iterations, proving `client_destroy` executes strictly on the owning worker loop, non-owner threads enqueue generation-tagged recycle tasks (`_csilk_client_recycle_dispatch_cb`), and pending I/O / reference counters never underflow.
 - **RCU / EBR Formal Verification & 512-Reader Scaling**: Added formal RCU lifecycle stress suite with 512 concurrent readers (static 256 + dynamic overflow slots) and 10,000 short-lived threads, proving zero dynamic slot leaks, safe TID reuse, and lock-free/wait-free read paths. Serialized router swaps under `config_mutex` for monotonic epoch progression.
