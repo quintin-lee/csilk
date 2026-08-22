@@ -62,12 +62,17 @@ dispatch_init_tls_key(void)
     atexit(_csilk_dispatch_pool_cleanup);
 }
 
+static _Thread_local bool g_dispatch_tls_registered = false;
+
 static inline void
 ensure_dispatch_tls_registered(void)
 {
-    pthread_once(&g_dispatch_tls_once, dispatch_init_tls_key);
-    if (!pthread_getspecific(g_dispatch_tls_key)) {
-        pthread_setspecific(g_dispatch_tls_key, (void*)1);
+    if (__builtin_expect(!g_dispatch_tls_registered, 0)) {
+        pthread_once(&g_dispatch_tls_once, dispatch_init_tls_key);
+        if (!pthread_getspecific(g_dispatch_tls_key)) {
+            pthread_setspecific(g_dispatch_tls_key, (void*)1);
+        }
+        g_dispatch_tls_registered = true;
     }
 }
 

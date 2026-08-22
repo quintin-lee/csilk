@@ -75,9 +75,9 @@ build_new/
 .qoder/
 
 # Swagger UI dist — downloaded at build time, not tracked
-share/swagger-ui/swagger-ui.css
-share/swagger-ui/swagger-ui-bundle.js
-share/swagger-ui/swagger-ui-standalone-preset.js
+# share/swagger-ui/swagger-ui.css
+# share/swagger-ui/swagger-ui-bundle.js
+# share/swagger-ui/swagger-ui-standalone-preset.js
 python/csilk.egg-info/
 python/*.egg-info/
 python/.pytest_cache/

@@ -400,7 +400,7 @@ map_get(csilk_header_map_t* map, const char* key)
 csilk_view_t
 map_get_view(csilk_header_map_t* map, const char* key)
 {
-    if (!map || !key) {
+    if (__builtin_expect(!map || !map->used || !key || !key[0], 0)) {
         return csilk_view(NULL, 0);
     }
 
