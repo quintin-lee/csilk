@@ -181,7 +181,7 @@ _csilk_memmem(const void* haystack, size_t haystacklen, const void* needle, size
 }
 
 csilk_xdp_action_t
-csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const void* payload, size_t len)
+csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payload, size_t len)
 {
     if (!waf) {
         return CSILK_XDP_ACTION_PASS;
