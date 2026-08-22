@@ -95,6 +95,7 @@ on_stop_async(csilk_io_async_t* handle)
         csilk_io_close((csilk_io_handle_t*)&server->sig_handle, on_server_handle_close);
     }
 
+    _csilk_worker_drain_dispatch(&server->worker_pools[0]);
     if (!csilk_io_is_closing((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async)) {
         csilk_io_close((csilk_io_handle_t*)&server->worker_pools[0].dispatch_async, NULL);
     }
@@ -106,12 +107,6 @@ on_stop_async(csilk_io_async_t* handle)
     for (int i = 1; i < server->worker_pool_count; i++) {
         CSILK_LOG_D("Server: signaling worker thread %d to stop", i);
         csilk_io_async_send(&server->worker_pools[i].stop_async);
-    }
-
-    if (server->mq) {
-        CSILK_LOG_D("Server: freeing message queue");
-        _csilk_mq_free(server->mq);
-        server->mq = NULL;
     }
 
     csilk_io_stop(server->loop);
@@ -157,6 +152,7 @@ on_worker_stop_async(csilk_io_async_t* handle)
     close_active_clients(server, loop);
 
     int worker_idx = sd->worker_index;
+    _csilk_worker_drain_dispatch(&server->worker_pools[worker_idx]);
     if (!csilk_io_is_closing(
             (csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async)) {
         csilk_io_close((csilk_io_handle_t*)&server->worker_pools[worker_idx].dispatch_async, NULL);
