@@ -104,6 +104,15 @@ When storing heap-allocated objects (e.g. cJSON nodes or driver handles) in the 
 ### Adaptive io_uring loop initialization & cleanup
 Under `CSILK_USE_URING`, `csilk_io_loop_init()` performs adaptive queue sizing (1024 -> 512 -> 256 -> 128 -> 64) with proportional operation pool allocation to avoid `-ENOMEM` under constrained `RLIMIT_MEMLOCK` limits. `csilk_server_free()` must close and free `server->loop` whenever `server->loop_owned` is true.
 
+### Router Writer Serialization (config_mutex)
+`csilk_server_set_router_full()` locks `server->config_mutex` around writer updates to guarantee strictly monotonic `global_epoch` advancement and retirement list ordering under concurrent writer contention, while all reader paths (`csilk_server_router_acquire`/`release`) remain 100% wait-free.
+
+### Client Lifetime & Generation Defense
+`client_destroy()` is strictly single-thread-confined to the owning worker thread. Non-owner threads must enqueue recycling tasks with generation tags (`_csilk_client_recycle_dispatch_cb`). Recycling tasks must verify `client->generation == gen && client->state == CSILK_CONN_CLOSING` before executing destruction, preventing ABA / UAF on reused connection structs.
+
+### Ordered Teardown & Deferred MQ Destruction
+During server shutdown, active clients, timers, and `wp->dispatch_async` queues must be drained before worker threads are joined. `csilk_mq_t` teardown is deferred until after all worker threads are joined (`csilk_thread_join`) to prevent asynchronous callbacks from touching destroyed MQ handles.
+
 ### internal.h is a public umbrella header
 `include/csilk/core/internal.h` must NOT include messaging/internal headers — doing so leaks MQ internals to any file that includes it. Add explicit `#include "messaging/mq_internal.h"` only in files that directly use `_csilk_mq_new()` / `_csilk_mq_free()`.
 

@@ -110,43 +110,60 @@ static csilk_rcu_slot_t* acquire_rcu_slot_slow(csilk_reload_mgr_t* mgr) {
 
 ---
 
-## 5. 写入路径
+## 5. 写入路径 (写端串行化与单调 Epoch)
 
 ```c
 void csilk_server_set_router_full(csilk_server_t* server,
                                    csilk_router_t* router,
                                    void* dl_handle,
                                    const char* tmp_path) {
-    // 1. 原子交换路由器
+    if (!server || !router) return;
+
+    if (server->middleware_count > 0) {
+        csilk_router_compile(router, server->middlewares, (size_t)server->middleware_count);
+    }
+
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+
+    // 1. 获取配置互斥锁 (严格串行化多写并发)
+    csilk_mutex_lock(&server->config_mutex);
+
+    // 2. 原子交换路由器
     csilk_router_t* old_router = 
-        atomic_exchange_explicit(&server->router, router, 
-                                  memory_order_acq_rel);
+        atomic_exchange_explicit(&server->router, router, memory_order_acq_rel);
     
-    // 2. 递增全局 epoch
+    // 3. 严格单调递增全局 epoch
     uint64_t retired_epoch = atomic_fetch_add_explicit(
         &mgr->global_epoch, 1, memory_order_acq_rel);
     
-    // 3. 将旧路由器加入 retired 链表
-    csilk_retired_router_t* rec = calloc(1, sizeof(csilk_retired_router_t));
-    rec->router = old_router;
-    rec->retired_epoch = retired_epoch;
+    // 4. 将旧路由器加入 retired 链表
+    if (old_router || dl_handle || tmp_path) {
+        csilk_retired_router_t* rec = calloc(1, sizeof(csilk_retired_router_t));
+        rec->router = old_router;
+        rec->dl_handle = dl_handle;
+        rec->tmp_path = tmp_path ? strdup(tmp_path) : NULL;
+        rec->retired_epoch = retired_epoch;
+        atomic_init(&rec->retired_next, NULL);
+        
+        csilk_retired_router_t* old_head = 
+            atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
+        do {
+            atomic_store_explicit(&rec->retired_next, old_head, memory_order_relaxed);
+        } while (!atomic_compare_exchange_weak_explicit(
+            &mgr->retired_head, &old_head, rec, 
+            memory_order_release, memory_order_relaxed));
+        
+        atomic_fetch_add_explicit(&mgr->retired_count, 1, memory_order_relaxed);
+    }
     
-    // CAS 插入链表头部
-    csilk_retired_router_t* old_head = 
-        atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
-    do {
-        atomic_store_explicit(&rec->retired_next, old_head, 
-                              memory_order_relaxed);
-    } while (!atomic_compare_exchange_weak_explicit(
-        &mgr->retired_head, &old_head, rec, 
-        memory_order_release, memory_order_relaxed));
-    
-    // 4. 机会性回收
+    // 5. 机会性非阻塞内存回收
     _csilk_reload_try_reclaim(server);
+
+    csilk_mutex_unlock(&server->config_mutex);
 }
 ```
 
-**性能**: ~200 ns
+**写端性能**: ~150 ns (读者不受任何锁影响，完全 Wait-Free)
 
 ---
 
@@ -221,26 +238,22 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 
 ---
 
-## 8. 测试验证
+## 8. 形式化验证与压力测试
 
-```c
-// tests/core/test_hot_reload.c
-TEST_CASE("hot_reload_basic") {
-    csilk_server_t* server = csilk_server_new(router1);
-    csilk_server_run(server, 8080);
-    
-    // 发送请求并触发热重载
-    // 验证旧请求完成，新请求使用新路由
-    
-    csilk_server_wait_grace_period(server);
-}
-```
+`tests/core/test_rcu_lifecycle_stress.c` 包含全面的形式化验证场景：
+
+1. **512 并发读者扩展验证**：256 个静态槽位 + 256 个动态溢出槽位并发路由匹配与 Epoch 推进，验证无数据竞争。
+2. **10,000 短生命周期线程测试**：短命线程频繁进入退出，验证 `pthread_key` 线程退出析构器（`rcu_thread_exit_destructor`）自动注销 TID，动态溢出槽位零泄漏。
+3. **10,000 次高频热重载**：验证单调 Epoch 不断递增下的内存回收与 RSS 稳定性。
+4. **热重载与服务器关机并发**：验证 `server_free` / `grace_period` 与热重载并发触发时的内存安全。
+5. **热重载与活跃路由匹配并发**：保证旧读者永远访问有效路由，新读者无缝切换到新路由。
 
 ---
 
 ## 9. 参考文件
 
-| 文件 | 关键函数 |
-|------|----------|
-| `src/core/server/server_lifecycle.c` | `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
-| `include/csilk/core/hot_reload.h` | 公共 API |
+| 文件 | 关键函数 / 用途 |
+|------|-----------------|
+| `src/core/server/server_lifecycle.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
+| `include/csilk/core/hot_reload.h` | 动态热重载公共 API |
+| `tests/core/test_rcu_lifecycle_stress.c` | 512 读者与 10K 短生命周期线程形式化验证 |

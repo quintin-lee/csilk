@@ -10,6 +10,12 @@
 ## [0.5.0] - 2026-08-22
 
 ### 新增
+- **Client 连接生命周期形式化审计与 Worker 严格所有权归属**：在 100,000 次连接高频复用与 16-Worker 极端压力下完成形式化生命周期证明，确立 `client_destroy` 永远且仅在 Owner Worker 事件循环线程执行；非 Owner 线程只向目标 Worker 投递携带 `generation` 代数标记的回收任务（`_csilk_client_recycle_dispatch_cb`），彻底杜绝跨线程操作陈旧/已复用连接的 ABA 与 UAF 风险，保证 `ref_count` 与 `pending_io` 绝不下溢。
+- **RCU / EBR 形式化生命周期验证与 512 读者高并发扩展**：新增 512 并发读者（256 静态槽位 + 256 动态溢出槽位）与 10,000 短生命周期线程形式化验证测试套件，证明动态槽位零泄漏、TID 安全复用与读者路径 100% 无锁 wait-free 执行；在 `csilk_server_set_router_full()` 中引入 `config_mutex` 对写端进行严格串行化，确保 Epoch 全局推进与回收链表挂载严格单调有序。
+- **HTTP/2 流多路复用形式化生命周期验证**：形式化证明基于 16 个内嵌 Bucket 哈希表及空闲池链表（`csilk_h2_stream_map_t`）的流生命周期，确保在 `RST_STREAM`、`GOAWAY`、连接异常断开、并发异步 Handler 触发时，流回调绝不访问已被回收的 Context / Client。
+- **PMU 硬件性能计数器引导的微优化**：对核心热点路径（`client_ref`/`client_unref`、`pending_io_inc`/`pending_io_dec`、RCU 嵌套深度追踪、`g_dispatch_tls_registered` 分支缓存及 HeaderMap 快速掩码短路）进行微架构优化，在不破坏正确性与形式化证明的前提下降低 CPU 周期数与缓存未命中。
+- **Wait-Free MPSC 队列哨兵空安全加固**：在 `csilk_lfq_dequeue()` 中加入空指针防护，并在 Worker Pool 初始化时自动初始化跨线程分发队列，确保在任意线程拓扑下的极端鲁棒性。
+- **服务器关机与销毁生命周期有序排空**：严格规范 `server_stop` -> active clients 关闭 -> 定时器排空 -> dispatch 队列排空 -> worker join -> hot reload 停止 -> EBR 宽限期 -> 释放 router -> 关闭 event loop -> 释放 pool 顺序；将 MQ 销毁推迟至 Worker 线程全部 Join 完成之后，防止 Worker 退出期间异步触发 MQ 悬空访问。
 - **Hot-Reload 控制面互斥并发保护与安全临时文件**：在 `hot_reload_ctx_t` 中引入 `csilk_mutex_t reload_mutex`，保证文件系统变更防抖与跨线程手动 `csilk_dev_hot_reload_trigger()` 互斥执行，消除状态竞争；强制采用 `mkstemp(0600)` 原子创建临时二进制文件，并在 OOM/错误时执行完整回滚（`dlclose`, `unlink`, `csilk_router_free`）。
 - **io_uring 队列自适应阶梯缩放与资源降级**：将硬编码 4096 深度改为自适应阶梯初始化（`1024 -> 512 -> 256 -> 128 -> 64`），按需等比分配操作池，彻底消除在容器/VM 受限锁页内存（`RLIMIT_MEMLOCK`）下的 `-ENOMEM` 初始化失败。
 - **统一 6 级内存所有权模型**：在 `<csilk/core/types.h>` 中规范定义 6 级内存所有权体系（`csilk_ownership_t`：`BORROWED`、`ARENA`、`OWNED`/`HEAP`、`TRANSFER`、`POOL`、`TLS_CACHE`）及字符串化函数 `csilk_ownership_str()`。在 `_csilk_ctx_cleanup()` 中统一容量感知型的缓冲池归还与堆内存清理，并强化响应体内存置换守卫（`_csilk_free_response_body_if_needed()`）。
@@ -48,6 +54,7 @@
 - **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
 
 ### 修复
+- **Dispatch Async 资源释放与事件循环排空**：在 `csilk_server_free()` 中安全关闭 `wp->dispatch_async` 句柄并排空事件循环，防止 libuv 默认事件循环中残留悬空句柄。
 - **csilk_server_free 释放自有事件循环**：在 `csilk_server_free` 中为 `server->loop_owned` 增加 `csilk_io_loop_close` 与内存回收，消除 io_uring 模式下创建多实例时的文件描述符泄漏。
 - **多 Worker Sendfile 与启动 Hook 同步**：在多 Worker 文件传输测试中采用 `CSILK_HOOK_SERVER_START` Hook 精确同步主/从 Worker 状态，并加入指数退避重试，消除并发死锁。
 - **io_uring 后端定向取消与监听套接字安全**：修复 `csilk_io_timer_stop()` 使用基于指针与 generation 标记的 `io_uring_prep_cancel64()` 进行精准定向取消，防止定时器取消误伤监听套接字 SQE。

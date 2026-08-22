@@ -1,6 +1,6 @@
 # ABI Stability Roadmap — Context, Router & Core Opaque Encapsulation
 
-> Status: **Complete** | Completed: v0.4.0 | Based on: docs/meta/ABI_REPORT.md
+> Status: **Complete** | Completed: v0.5.0 | Based on: docs/meta/ABI_REPORT.md
 >
 > **ABI Rule**: All public API functions **MUST** take/return opaque handles (`csilk_ctx_t*`, `csilk_router_t*`, `csilk_server_t*`, `csilk_app_t*`, `csilk_mq_t*`) — direct struct field access **MUST NOT** be exposed in public headers. Accessor function call overhead **SHOULD** be zero when inlined (single pointer dereference, ≤ 1 CPU cycle).
 
