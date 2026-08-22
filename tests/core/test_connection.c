@@ -32,9 +32,8 @@ static csilk_server_t*
 mock_server(void)
 {
     csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
-    // removed clients_mutex
     s->worker_pools = calloc(1, sizeof(worker_pool_t));
-    s->worker_pools[0].server = s;
+    _csilk_worker_pool_atomics_init(&s->worker_pools[0], s, 0);
     s->worker_pool_count = 1;
     return s;
 }

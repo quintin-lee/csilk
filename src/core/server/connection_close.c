@@ -65,6 +65,67 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
     client->next = client->prev = NULL;
 }
 
+/* --- Thread-Local Worker Pool Identification --- */
+
+static _Thread_local worker_pool_t* g_current_worker_pool = NULL;
+
+void
+_csilk_worker_set_current_pool(worker_pool_t* wp)
+{
+    g_current_worker_pool = wp;
+}
+
+worker_pool_t*
+_csilk_worker_get_current_pool(void)
+{
+    return g_current_worker_pool;
+}
+
+static inline bool
+_csilk_is_owner_worker_thread(const worker_pool_t* wp)
+{
+    if (!wp) {
+        return false;
+    }
+    if (g_current_worker_pool == wp) {
+        return true;
+    }
+    /* If no loop is active (e.g. standalone unit testing), caller thread owns execution */
+    if (!wp->loop_ptr) {
+        return true;
+    }
+    return false;
+}
+
+/* Recycle dispatch task payload */
+typedef struct {
+    csilk_client_t* client;
+    uint64_t        generation;
+} csilk_recycle_task_payload_t;
+
+static void
+_csilk_client_recycle_dispatch_cb(void* arg)
+{
+    csilk_recycle_task_payload_t* p = (csilk_recycle_task_payload_t*)arg;
+    if (!p) {
+        return;
+    }
+    csilk_client_t* client = p->client;
+    uint64_t        gen = p->generation;
+    free(p);
+
+    if (!client) {
+        return;
+    }
+    /* Verify generation and closing state to eliminate ABA */
+    if (client->generation == gen && client->state == CSILK_CONN_CLOSING) {
+        if (atomic_load_explicit(&client->ref_count, memory_order_acquire) <= 0 &&
+            atomic_load_explicit(&client->pending_io, memory_order_acquire) <= 0) {
+            client_destroy(client);
+        }
+    }
+}
+
 /* --- Connection Lifetime & Reference Subsystem --- */
 
 /**
@@ -78,7 +139,7 @@ csilk_client_ref(csilk_client_t* client)
     if (!client) {
         return 0;
     }
-    return atomic_fetch_add(&client->ref_count, 1) + 1;
+    return atomic_fetch_add_explicit(&client->ref_count, 1, memory_order_acq_rel) + 1;
 }
 
 /**
@@ -92,12 +153,18 @@ csilk_client_unref(csilk_client_t* client)
     if (!client) {
         return 0;
     }
-    int prev = atomic_fetch_sub(&client->ref_count, 1);
-    int curr = prev - 1;
-    if (curr <= 0) {
-        _csilk_client_check_recycle(client);
+    int prev = atomic_load_explicit(&client->ref_count, memory_order_relaxed);
+    while (prev > 0) {
+        if (atomic_compare_exchange_weak_explicit(
+                &client->ref_count, &prev, prev - 1, memory_order_acq_rel, memory_order_relaxed)) {
+            int curr = prev - 1;
+            if (curr == 0) {
+                _csilk_client_check_recycle(client);
+            }
+            return curr;
+        }
     }
-    return curr;
+    return 0;
 }
 
 /**
@@ -111,7 +178,7 @@ _csilk_client_pending_io_inc(csilk_client_t* client)
     if (!client) {
         return 0;
     }
-    return atomic_fetch_add(&client->pending_io, 1) + 1;
+    return atomic_fetch_add_explicit(&client->pending_io, 1, memory_order_acq_rel) + 1;
 }
 
 /**
@@ -125,12 +192,18 @@ _csilk_client_pending_io_dec(csilk_client_t* client)
     if (!client) {
         return 0;
     }
-    int prev = atomic_fetch_sub(&client->pending_io, 1);
-    int curr = prev - 1;
-    if (curr <= 0) {
-        _csilk_client_check_recycle(client);
+    int prev = atomic_load_explicit(&client->pending_io, memory_order_relaxed);
+    while (prev > 0) {
+        if (atomic_compare_exchange_weak_explicit(
+                &client->pending_io, &prev, prev - 1, memory_order_acq_rel, memory_order_relaxed)) {
+            int curr = prev - 1;
+            if (curr == 0) {
+                _csilk_client_check_recycle(client);
+            }
+            return curr;
+        }
     }
-    return curr;
+    return 0;
 }
 
 /**
@@ -153,10 +226,30 @@ _csilk_client_check_recycle(csilk_client_t* client)
     if (st != CSILK_CONN_CLOSING && st != CSILK_CONN_CLOSED) {
         return;
     }
-    int ref = atomic_load(&client->ref_count);
-    int pio = atomic_load(&client->pending_io);
+    int ref = atomic_load_explicit(&client->ref_count, memory_order_acquire);
+    int pio = atomic_load_explicit(&client->pending_io, memory_order_acquire);
     if (client->state == st && ref <= 0 && pio <= 0) {
-        client_destroy(client);
+        worker_pool_t* wp = client->owner_pool;
+        if (_csilk_is_owner_worker_thread(wp)) {
+            client_destroy(client);
+        } else if (wp) {
+            /* Dispatch recycle task to owner worker thread */
+            csilk_recycle_task_payload_t* p = malloc(sizeof(csilk_recycle_task_payload_t));
+            if (p) {
+                p->client = client;
+                p->generation = client->generation;
+                csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
+                if (task) {
+                    task->cb = _csilk_client_recycle_dispatch_cb;
+                    task->arg = p;
+                    task->client = NULL; /* Avoid recursive client_ref */
+                    csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
+                    csilk_io_async_send(&wp->dispatch_async);
+                } else {
+                    free(p);
+                }
+            }
+        }
     }
 }
 
@@ -167,9 +260,20 @@ _csilk_client_check_recycle(csilk_client_t* client)
 void
 client_destroy(csilk_client_t* client)
 {
-    if (!client || client->state == CSILK_CONN_CLOSED) {
+    if (!client) {
         return;
     }
+
+    /* Atomic CAS: strictly ensure single, idempotent teardown */
+    csilk_conn_state_t expected = CSILK_CONN_CLOSING;
+    if (!atomic_compare_exchange_strong_explicit((_Atomic int*)&client->state,
+                                                 (int*)&expected,
+                                                 CSILK_CONN_CLOSED,
+                                                 memory_order_acq_rel,
+                                                 memory_order_relaxed)) {
+        return;
+    }
+
 #ifdef CSILK_USE_URING
     if (client->handle.fd >= 0) {
         close(client->handle.fd);
@@ -177,9 +281,8 @@ client_destroy(csilk_client_t* client)
     }
 #endif
     if (client->server) {
-        atomic_fetch_sub(&client->server->active_connections, 1);
+        atomic_fetch_sub_explicit(&client->server->active_connections, 1, memory_order_relaxed);
     }
-    csilk_conn_set_state(client, CSILK_CONN_CLOSED);
     csilk_ctx_cleanup(&client->ctx);
     if (client->ctx.arena) {
         extern void pool_put_arena(worker_pool_t * wp, csilk_arena_t * arena);
