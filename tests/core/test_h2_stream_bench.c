@@ -4,9 +4,11 @@
 #include <string.h>
 #include <time.h>
 
+#include "csilk/core/internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
 #include "core/http/h2.h"
 
 /* Simple cycle counter for x86 / fallback */
@@ -325,6 +327,90 @@ benchmark_stream_scale(int stream_count, int lookup_iterations)
 }
 
 /* -------------------------------------------------------------------------- */
+/* Test 6: Formal RST_STREAM, 10k Reuse, and Connection Close Verification    */
+/* -------------------------------------------------------------------------- */
+
+static void
+test_h2_formal_lifecycle(void)
+{
+    printf("\n=== Running HTTP/2 Formal Lifecycle Verification ===\n");
+
+    csilk_server_t s;
+    memset(&s, 0, sizeof(s));
+    worker_pool_t wp;
+    memset(&wp, 0, sizeof(wp));
+    _csilk_worker_pool_atomics_init(&wp, &s, 0);
+    _csilk_worker_init_arena_pool(&wp);
+    _csilk_worker_init_read_buf_pool(&wp);
+    s.worker_pools = &wp;
+    s.worker_pool_count = 1;
+    _csilk_worker_set_current_pool(&wp);
+
+    csilk_client_t* client = pool_get(&wp);
+    client->server = &s;
+    client->owner_pool = &wp;
+    client->protocol = CSILK_PROTO_HTTP2;
+
+    /* 1. RST_STREAM cleanup */
+    csilk_ctx_t* c1 = csilk_h2_get_or_create_stream(client, 1);
+    assert(c1 != NULL);
+    c1->request.body = malloc(1024);
+    c1->request.body_len = 1024;
+    c1->request.body_ownership = CSILK_OWN_HEAP;
+
+    extern int on_stream_close_callback(nghttp2_session*, int32_t, uint32_t, void*);
+    on_stream_close_callback(NULL, 1, 0, client);
+
+    assert(client->h2_stream_map.count == 0);
+    assert(client->h2_stream_map.pool_count == 1);
+    assert(client->h2_stream_map.free_list == c1);
+
+    /* 2. 10,000 stream reuses */
+    for (int i = 0; i < 10000; i++) {
+        int32_t      stream_id = i * 2 + 3;
+        csilk_ctx_t* ctx = csilk_h2_get_or_create_stream(client, stream_id);
+        assert(ctx == c1);
+        assert(ctx->stream_id == stream_id);
+        assert(ctx->request.body == NULL);
+        assert(csilk_h2_remove_stream(client, stream_id) == 0);
+    }
+    assert(client->h2_stream_map.pool_count == 1);
+
+    /* 3. Connection close with 50 active streams */
+    for (int i = 0; i < 50; i++) {
+        csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, i * 2 + 1);
+        assert(c != NULL);
+        csilk_arena_alloc(c->arena, 512);
+    }
+    assert(client->h2_stream_map.count == 50);
+
+    csilk_conn_set_state(client, CSILK_CONN_CLOSING);
+    client_destroy(client);
+
+    assert(client->state == CSILK_CONN_INIT);
+    assert(client->h2_stream_map.count == 0);
+    assert(client->h2_stream_map.pool_count == 0);
+
+    int client_cnt = atomic_load_explicit(&wp.client_pool_count, memory_order_relaxed);
+    for (int i = 0; i < client_cnt; i++) {
+        free(wp.client_pool[i]);
+    }
+    int arena_cnt = atomic_load_explicit(&wp.arena_pool_count, memory_order_relaxed);
+    for (int i = 0; i < arena_cnt; i++) {
+        csilk_arena_free(wp.arena_pool[i]);
+    }
+    for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
+        int buf_cnt = atomic_load_explicit(&wp.read_buf_counts[tier], memory_order_relaxed);
+        for (int i = 0; i < buf_cnt; i++) {
+            free(wp.read_buf_tiers[tier][i]);
+        }
+    }
+
+    printf(
+        "  -> PASS: RST_STREAM, 10k reuses, and Connection Close with active streams verified!\n");
+}
+
+/* -------------------------------------------------------------------------- */
 /* Main Runner                                                                */
 /* -------------------------------------------------------------------------- */
 int
@@ -335,6 +421,7 @@ main(void)
     test_h2_stream_crud();
     test_h2_stream_resize_and_collision();
     test_h2_stream_pool_recycling();
+    test_h2_formal_lifecycle();
 
     benchmark_stream_pool_lifecycle(500000);
 
