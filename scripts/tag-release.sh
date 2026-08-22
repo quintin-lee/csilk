@@ -157,17 +157,31 @@ if [[ -f "$VCPKG_FILE" ]]; then
     ok "  $VCPKG_FILE updated"
 fi
 
+# ── Step 2d: Update scripts/csilkskel ───────────────────────────────────────
+CSILKSKEL_FILE="scripts/csilkskel"
+if [[ -f "$CSILKSKEL_FILE" ]]; then
+    info "Updating $CSILKSKEL_FILE ..."
+    run_or_print "sed -i 's/VERSION = \"${OLD_VERSION}\"/VERSION = \"${VERSION}\"/' '$CSILKSKEL_FILE'"
+    ok "  $CSILKSKEL_FILE updated"
+fi
+
 # ── Step 3: Update version in documentation ──────────────────────────────────
 info "Updating version in documentation ..."
 
 DOC_COUNT=0
 
-# Pattern 1: > **Version**: X.Y.Z and > **版本**: X.Y.Z
+# Pattern 1: > **Version**: X.Y.Z, > **版本**: X.Y.Z, **Version**: vX.Y.Z, **版本**: vX.Y.Z
 while IFS= read -r file; do
     run_or_print "sed -i 's/Version\*\*: ${OLD_VERSION}/Version**: ${VERSION}/g' '$file'"
     run_or_print "sed -i 's/版本\*\*: ${OLD_VERSION}/版本**: ${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/Version\*\*: v${OLD_VERSION}/Version**: v${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/版本\*\*: v${OLD_VERSION}/版本**: v${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/Version\*\*：v${OLD_VERSION}/Version**：v${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/版本\*\*：v${OLD_VERSION}/版本**：v${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/Version\*\*：${OLD_VERSION}/Version**：${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/版本\*\*：${OLD_VERSION}/版本**：${VERSION}/g' '$file'"
     DOC_COUNT=$((DOC_COUNT + 1))
-done < <(grep -rl "Version\*\*: ${OLD_VERSION}\|版本\*\*: ${OLD_VERSION}" --include="*.md" docs/ README.md README.zh-CN.md 2>/dev/null || true)
+done < <(grep -rl "Version\*\*[:：] *v\?${OLD_VERSION}\|版本\*\*[:：] *v\?${OLD_VERSION}" --include="*.md" docs/ README.md README.zh-CN.md 2>/dev/null || true)
 
 # Pattern 2: Hardcoded version strings in docs (e.g., cJSON_AddStringToObject)
 while IFS= read -r file; do
@@ -175,34 +189,43 @@ while IFS= read -r file; do
     DOC_COUNT=$((DOC_COUNT + 1))
 done < <(grep -rl "\"${OLD_VERSION}\"" --include="*.md" docs/ 2>/dev/null || true)
 
-# Pattern 3: Version**: vX.Y.Z+ and 版本**: vX.Y.Z+ (bold markers only)
-# Matches `> **Version**: v0.3.0+` headers but NOT `Implemented (v0.3.0+)`.
+# Pattern 3: Status / Implemented (vX.Y.Z+) and 已实现（vX.Y.Z+）
 while IFS= read -r file; do
-    run_or_print "sed -i 's/Version\*\*: v${OLD_VERSION}+/Version**: v${VERSION}+/g' '$file'"
-    run_or_print "sed -i 's/版本\*\*: v${OLD_VERSION}+/版本**: v${VERSION}+/g' '$file'"
+    run_or_print "sed -i 's/(v${OLD_VERSION}+)/(v${VERSION}+)/g' '$file'"
+    run_or_print "sed -i 's/(v${OLD_VERSION})/(v${VERSION})/g' '$file'"
+    run_or_print "sed -i 's/（v${OLD_VERSION}+）/（v${VERSION}+）/g' '$file'"
+    run_or_print "sed -i 's/（v${OLD_VERSION}）/（v${VERSION}）/g' '$file'"
+    run_or_print "sed -i 's/Completed: v${OLD_VERSION}/Completed: v${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/Completed: ${OLD_VERSION}/Completed: ${VERSION}/g' '$file'"
     DOC_COUNT=$((DOC_COUNT + 1))
-done < <(grep -rl "Version\*\*: v${OLD_VERSION}+\|版本\*\*: v${OLD_VERSION}+" --include="*.md" docs/ 2>/dev/null || true)
+done < <(grep -rl "(v${OLD_VERSION}\|（v${OLD_VERSION}\|Completed: v\?${OLD_VERSION}" --include="*.md" docs/ 2>/dev/null || true)
 
 # Pattern 4: "| Version: X.Y.Z" in doc metadata lines (design docs)
-# Catches `> Date: ... | Version: X.Y.Z | ...`
 while IFS= read -r file; do
     run_or_print "sed -i 's/| Version: ${OLD_VERSION}/| Version: ${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/| Version: v${OLD_VERSION}/| Version: v${VERSION}/g' '$file'"
     DOC_COUNT=$((DOC_COUNT + 1))
-done < <(grep -rl "| Version: ${OLD_VERSION}" --include="*.md" docs/ 2>/dev/null || true)
+done < <(grep -rl "| Version: v\?${OLD_VERSION}" --include="*.md" docs/ 2>/dev/null || true)
 
 # Pattern 5: "CMakeLists.txt ... version/版本 X.Y.Z" in ASCII diagrams
-# Matches lines like `└── CMakeLists.txt  # C23, version 0.3.0` in architecture.md
 while IFS= read -r file; do
     run_or_print "sed -i 's/version ${OLD_VERSION}/version ${VERSION}/g' '$file'"
     run_or_print "sed -i 's/版本 ${OLD_VERSION}/版本 ${VERSION}/g' '$file'"
     DOC_COUNT=$((DOC_COUNT + 1))
 done < <(grep -rl "CMakeLists\.txt.*\(version\|版本\) ${OLD_VERSION}" --include="*.md" docs/ 2>/dev/null || true)
 
-# Pattern 6: "version: X.Y.Z" in code-block examples (e.g., benchmarks/README.md)
+# Pattern 6: "version: X.Y.Z" or "csilk_version: X.Y.Z" in code-block examples
 while IFS= read -r file; do
     run_or_print "sed -i 's/version: ${OLD_VERSION}/version: ${VERSION}/g' '$file'"
+    run_or_print "sed -i 's/csilk_version: ${OLD_VERSION}/csilk_version: ${VERSION}/g' '$file'"
     DOC_COUNT=$((DOC_COUNT + 1))
-done < <(grep -rl "version: ${OLD_VERSION}" --include="*.md" docs/ benchmarks/ 2>/dev/null || true)
+done < <(grep -rl "\(version:\|csilk_version:\) ${OLD_VERSION}" --include="*.md" docs/ benchmarks/ 2>/dev/null || true)
+
+# Pattern 7: Spec / plan version lines ("C23 与 vX.Y.Z" / "C23 and vX.Y.Z")
+while IFS= read -r file; do
+    run_or_print "sed -i 's/v${OLD_VERSION} 标准/v${VERSION} 标准/g' '$file'"
+    DOC_COUNT=$((DOC_COUNT + 1))
+done < <(grep -rl "v${OLD_VERSION} 标准" --include="*.md" docs/ 2>/dev/null || true)
 
 ok "  Updated ${DOC_COUNT} documentation files"
 
