@@ -8,6 +8,8 @@
 ## [Unreleased]
 
 ### 新增
+- **Hot-Reload 控制面互斥并发保护与安全临时文件**：在 `hot_reload_ctx_t` 中引入 `csilk_mutex_t reload_mutex`，保证文件系统变更防抖与跨线程手动 `csilk_dev_hot_reload_trigger()` 互斥执行，消除状态竞争；强制采用 `mkstemp(0600)` 原子创建临时二进制文件，并在 OOM/错误时执行完整回滚（`dlclose`, `unlink`, `csilk_router_free`）。
+- **io_uring 队列自适应阶梯缩放与资源降级**：将硬编码 4096 深度改为自适应阶梯初始化（`1024 -> 512 -> 256 -> 128 -> 64`），按需等比分配操作池，彻底消除在容器/VM 受限锁页内存（`RLIMIT_MEMLOCK`）下的 `-ENOMEM` 初始化失败。
 - **统一 6 级内存所有权模型**：在 `<csilk/core/types.h>` 中规范定义 6 级内存所有权体系（`csilk_ownership_t`：`BORROWED`、`ARENA`、`OWNED`/`HEAP`、`TRANSFER`、`POOL`、`TLS_CACHE`）及字符串化函数 `csilk_ownership_str()`。在 `_csilk_ctx_cleanup()` 中统一容量感知型的缓冲池归还与堆内存清理，并强化响应体内存置换守卫（`_csilk_free_response_body_if_needed()`）。
 - **3 层 ABI 架构与严格不透明句柄封装**：在 `include/` 下所有 52 个公共头文件中落地 `Public API → Opaque Handle → Internal Implementation` 架构：
   - 将 `<csilk/core/router.h>` 中的 `csilk_router_t` 彻底转为不透明句柄，将 `struct csilk_router_s` 与 Trie 节点结构下沉至 `src/core/primitives/router_internal.h`。
@@ -44,6 +46,8 @@
 - **代码清理**：将 1200+ 处 `nullptr` 统一替换为 `NULL` 以符合 C23 风格；修复 connection.c 的 `-Wcomment`、qdrant.c 和 workflow_dsl.c 的 `-Wformat`、session.c 的 `strdup` null 检查。
 
 ### 修复
+- **csilk_server_free 释放自有事件循环**：在 `csilk_server_free` 中为 `server->loop_owned` 增加 `csilk_io_loop_close` 与内存回收，消除 io_uring 模式下创建多实例时的文件描述符泄漏。
+- **多 Worker Sendfile 与启动 Hook 同步**：在多 Worker 文件传输测试中采用 `CSILK_HOOK_SERVER_START` Hook 精确同步主/从 Worker 状态，并加入指数退避重试，消除并发死锁。
 - **io_uring 后端定向取消与监听套接字安全**：修复 `csilk_io_timer_stop()` 使用基于指针与 generation 标记的 `io_uring_prep_cancel64()` 进行精准定向取消，防止定时器取消误伤监听套接字 SQE。
 - **io_uring 异步与信号轮询唤醒可靠性**：在 `URING_OP_POLL_ASYNC` 与 `URING_OP_POLL_SIGNAL` 事件分发前增加 `read() > 0` 校验，防止伪就绪事件触发错误回调。
 - **双后端构建字段隔离与跨后端兼容**：在 `src/core/server/connection.c` 中通过 `#ifdef CSILK_USE_URING` 严格隔离 `generation` 与 `fd` 成员访问，并引入统一的 `reject_connection()` 辅助函数，确保 libuv 模式与 io_uring 模式下 100% 编译通过且全量测试通过。

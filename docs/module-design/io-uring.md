@@ -46,11 +46,11 @@ graph TB
 typedef struct csilk_io_loop_s {
     struct io_uring ring;              // io_uring 底层 ring
     
-    // 操作上下文池
+    // 操作上下文池 (根据 ring entries 自适应等比分配)
     uring_op_context_t* op_pool;
     uint32_t* op_free_stack;
     uint32_t op_free_head;
-    uint32_t op_pool_capacity;         // 默认 8192
+    uint32_t op_pool_capacity;         // entries * 2 (例如 2048)
     
     int stop_flag;
     uint64_t now_cache;
@@ -74,15 +74,25 @@ typedef struct uring_op_context_s {
 
 ## 3. 事件循环流程
 
-### 3.1 初始化
+### 3.1 初始化 (自适应阶梯与资源回退)
 
 ```c
 int csilk_io_loop_init(csilk_io_loop_t* loop) {
-    // 1. 初始化 io_uring ring
-    io_uring_queue_init(4096, &loop->ring, 0);
+    if (!loop) return -1;
+    memset(loop, 0, sizeof(*loop));
+
+    // 1. 自适应阶梯降级初始化 (1024 -> 512 -> 256 -> 128 -> 64)，适应受限 RLIMIT_MEMLOCK 环境
+    int entries = 1024;
+    int rc = -1;
+    while (entries >= 64) {
+        rc = io_uring_queue_init((unsigned)entries, &loop->ring, 0);
+        if (rc == 0) break;
+        entries /= 2;
+    }
+    if (rc < 0) return rc;
     
-    // 2. 分配操作上下文池
-    loop->op_pool_capacity = 8192;
+    // 2. 等比分配操作上下文池
+    loop->op_pool_capacity = (uint32_t)(entries * 2);
     loop->op_pool = calloc(loop->op_pool_capacity, sizeof(uring_op_context_t));
     loop->op_free_stack = malloc(loop->op_pool_capacity * sizeof(uint32_t));
     

@@ -1,106 +1,95 @@
-# Hot Reload — Live Router Swapping
+# Hot Reload — Live Router Swapping (RCU & EBR)
 
-> **Status**: Implemented (v0.3.0+) | **Last updated**: 2026-06-29
+> **Status**: Implemented (v0.4.0+) | **Last updated**: 2026-08-22
 >
-> **Hot-Reload Rules**: The entry function **MUST** have signature `csilk_router_t* (*)(void)`. ABI compatibility between the loaded `.so` and the server binary **MUST** be maintained. The listening socket **MUST NOT** be closed during reload. Router swap **MUST** be atomic (pointer assignment, no lock). File-system events **MUST** be debounced (100 ms window).
+> **Hot-Reload Rules**: The entry function **MUST** have signature `csilk_router_t* (*)(void)`. ABI compatibility between the loaded `.so` and the server binary **MUST** be maintained. The listening socket **MUST NOT** be closed during reload. Router swap **MUST** be atomic (`atomic_exchange`, lock-free reading). Control plane reload executions **MUST** be mutex-serialized (`reload_mutex`). File-system events **MUST** be debounced (100 ms window). Dynamic libraries **MUST** be copied to isolated temporary files via `mkstemp(0600)` to bypass dynamic linker caching. Old routers and `.so` handles **MUST** be reclaimed via Epoch-Based Reclamation (EBR) grace period.
 
 ## 1. Overview
 
-The Hot-Reload mechanism lets developers update route handlers without restarting the server process. The workflow is:
+The Hot-Reload mechanism lets developers update route handlers without restarting the server process or dropping active connections:
 
-1. Routes are compiled into a **shared library** (`.so`/`.dylib`) exposing a factory function.
-2. A launcher process loads the library via `dlopen()`, calls the factory, and attaches the returned router to the server.
-3. A **libuv `fs_event` watcher** monitors the `.so` file for modifications.
-4. On file change, the old library is `dlclose()`-d, the new one is `dlopen()`-d, and the router pointer is swapped atomically.
+1. Routes are compiled into a **shared library** (`.so`/`.dylib`) exposing a factory function (e.g. `csilk_app_init`).
+2. A uniquely named temp copy of the library is created via `mkstemp(0600)` to bypass dynamic linker (`dlopen`) handle caching.
+3. The launcher process loads the library via `dlopen(..., RTLD_NOW | RTLD_LOCAL)`, calls the factory, and attaches the returned router to the server.
+4. A **`csilk_io_fs_event_t` watcher** monitors the `.so` file on the control plane event loop (`server->loop`).
+5. On file change (debounced for 100 ms), the new library is loaded, the new router is atomically published, and the old router, library handle, and temp file are queued into the **EBR (Epoch-Based Reclamation)** retired list for safe reclamation after in-flight requests finish.
 
 ## 2. Architecture
 
 ```mermaid
 sequenceDiagram
-    participant Launcher as Launcher (main.c)
-    participant Server as csilk_server_t
-    participant Watcher as fs_event Watcher
-    participant Lib as Shared Library (.so)
+    participant ControlPlane as Control Plane (server->loop)
+    participant Linker as Dynamic Linker (dlopen/dlsym)
+    participant Server as csilk_server_t (Global Router)
+    participant EBR as EBR Retired List
+    participant Readers as In-flight Worker Readers
 
-    Launcher->>Server: csilk_server_new(nullptr)
-    Launcher->>Server: csilk_dev_hot_reload_start(path, "csilk_app_init")
-    Server->>Lib: dlopen(path, RTLD_NOW)
-    Server->>Lib: dlsym("csilk_app_init")
-    Lib-->>Server: csilk_router_t* factory()
-    Server->>Server: router = factory()
-    Server->>Watcher: uv_fs_event_start(path)
-    Note over Watcher: Waiting for IN_CLOSE_WRITE...
-
-    Watcher-->>Server: File modified event
-    Server->>Server: 100 ms debounce timer
-    Server->>Lib: dlclose(old_handle)
-    Server->>Lib: dlopen(path, RTLD_NOW)
-    Server->>Lib: dlsym("csilk_app_init")
-    Lib-->>Server: new csilk_router_t*
-    Server->>Server: atomic swap: server->router = new_router
-    Server->>Server: csilk_router_free(old_router)
+    ControlPlane->>ControlPlane: File modified event (csilk_io_fs_event_t)
+    ControlPlane->>ControlPlane: 100 ms debounce timer fires
+    ControlPlane->>ControlPlane: csilk_mutex_lock(&ctx->reload_mutex)
+    ControlPlane->>Linker: mkstemp(/tmp/csilk_reload_XXXXXX) + copy_file()
+    ControlPlane->>Linker: dlopen(tmp_path, RTLD_NOW | RTLD_LOCAL)
+    ControlPlane->>Linker: init_fn = dlsym("csilk_app_init")
+    Linker-->>ControlPlane: new_router = init_fn()
+    ControlPlane->>Server: csilk_server_set_router_full(new_router)
+    Server->>Server: atomic_exchange(&server->router, new_router)
+    Server->>Server: retired_epoch = global_epoch++
+    Server->>EBR: Push {old_router, old_handle, old_tmp, retired_epoch}
+    ControlPlane->>ControlPlane: csilk_mutex_unlock(&ctx->reload_mutex)
+    
+    Note over Readers,EBR: In-flight requests safely finish using old_router
+    Readers-->>Server: All readers exit (active_epochs > retired_epoch)
+    Server->>EBR: _csilk_reload_try_reclaim()
+    EBR->>EBR: 1. csilk_router_free(old_router)
+    EBR->>Linker: 2. dlclose(old_handle)
+    EBR->>Linker: 3. unlink(old_tmp)
 ```
 
 ## 3. Key Data Structures
 
 ```c
-// include/csilk/hot_reload.h
+// include/csilk/core/hot_reload.h
 int csilk_dev_hot_reload_start(csilk_server_t* server,
-                                const char* lib_path,
-                                const char* init_sym);
+                               const char*     lib_path,
+                               const char*     init_sym);
+int csilk_dev_hot_reload_trigger(csilk_server_t* server);
+void csilk_dev_hot_reload_stop(csilk_server_t* server);
 ```
 
-### Internal State
+### Internal State (`src/core/config/hot_reload.c`)
 
 ```c
-// src/core/hot_reload.c
 typedef struct {
-    csilk_server_t* server;           // Owning server instance
-    char* lib_path;                   // Path to .so (arena-duped)
-    char* init_sym;                   // Factory function symbol name
-    void* dl_handle;                  // Current dlopen() handle
-    csilk_io_fs_event_t fs_event;     // libuv filesystem watcher
-    csilk_io_timer_t debounce_timer;  // 100 ms debounce timer
+    csilk_server_t*     server;         // Owning server instance
+    char*               lib_path;       // Path to .so (heap allocated)
+    char*               init_sym;       // Factory function symbol name
+    void*               dl_handle;      // Current dlopen() handle
+    char*               tmp_path;       // Current loaded temp file path
+    csilk_io_fs_event_t fs_event;       // Cross-backend filesystem watcher
+    csilk_io_timer_t    debounce_timer; // 100 ms debounce timer
+    int                 is_watching;    // 1 if filesystem watcher is active
+    csilk_mutex_t       reload_mutex;   // Mutex ensuring serialized reload executions
 } hot_reload_ctx_t;
 ```
 
-## 4. Core Algorithm
+## 4. Core Algorithms & Guarantees
 
-### 4.1 Initialization (`csilk_dev_hot_reload_start`)
+### 4.1 Safe Loading & Swapping (`load_and_swap_router`)
 
-```
-1. Allocate hot_reload_ctx_t (heap).
-2. Store server pointer, dup lib_path and init_sym.
-3. Call load_and_swap_router() to do the initial load.
-4. Create uv_fs_event_t, start watching lib_path.
-5. On event → debounce → reload.
-```
+1. **Mutex Serialization**: Acquires `ctx->reload_mutex` to protect `hot_reload_ctx_t` from concurrent trigger calls.
+2. **Isolated Temp Copy**: Calls `create_temp_lib_copy()` using `mkstemp(0600)` to generate a unique temp file, failing fast on error.
+3. **Dynamic Loading**:
+   - `dlopen(tmp_path, RTLD_NOW | RTLD_LOCAL)`: Resolves all symbols immediately and keeps them local.
+   - `dlsym(handle, init_sym)`: Resolves the factory symbol.
+   - `init_fn()`: Instantiates the new router.
+4. **Strict OOM Rollback**: If `dlsym`, `init_fn`, or `strdup(tmp_path)` fails, cleanly rolls back via `dlclose`, `unlink`, `csilk_router_free` and releases the mutex.
+5. **EBR Atomic Publish**: Invokes `csilk_server_set_router_full()`, atomically swapping the pointer and queuing the previous generation for deferred reclamation.
 
-### 4.2 Loading and Swapping (`load_and_swap_router`)
+### 4.2 Epoch-Based Reclamation (EBR)
 
-```
-1. dlopen(lib_path, RTLD_NOW | RTLD_LOCAL)
-   - RTLD_NOW: resolve all symbols immediately (fail fast).
-   - RTLD_LOCAL: symbols not exported to subsequently loaded libraries
-     (prevents symbol collision across reloads).
-2. dlsym(handle, init_sym)
-3. Call init_fn() → get new csilk_router_t*.
-4. csilk_server_set_router(server, new_router)
-   - Internally swaps the router pointer (atomic store).
-   - Frees the old router (csilk_router_free).
-5. If dl_handle was previously set, dlclose(old_handle).
-6. Store new dl_handle in ctx->dl_handle.
-```
-
-### 4.3 File Event Handling
-
-```
-1. uv_fs_event_t callback fires (IN_CLOSE_WRITE on Linux).
-2. Start (or restart) a 100 ms debounce timer.
-3. On timer expiry, call load_and_swap_router().
-   - If loading the new library fails, log error and keep the old one.
-   - The server continues serving with the previous router.
-```
+- Each Worker reading routes holds an RCU read token registered in its thread-local `csilk_rcu_slot_t`.
+- When an old router is replaced, it is timestamped with `retired_epoch = global_epoch++`.
+- Background / opportunistic reclamation inspects all active reader slots; once $\min(\text{active\_epochs}) > \text{retired\_epoch}$, the old router, `dl_handle`, and temp file are safely destroyed.
 
 ## 5. Thread Safety
 
