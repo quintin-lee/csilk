@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-08-22
-
 ### Added
 - **Formal Client Lifetime Verification & Owner Confinement**: Formally verified client lifecycle state machine across 100,000 reuse iterations, proving `client_destroy` executes strictly on the owning worker loop, non-owner threads enqueue generation-tagged recycle tasks (`_csilk_client_recycle_dispatch_cb`), and pending I/O / reference counters never underflow.
 - **RCU / EBR Formal Verification & 512-Reader Scaling**: Added formal RCU lifecycle stress suite with 512 concurrent readers (static 256 + dynamic overflow slots) and 10,000 short-lived threads, proving zero dynamic slot leaks, safe TID reuse, and lock-free/wait-free read paths. Serialized router swaps under `config_mutex` for monotonic epoch progression.
@@ -16,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PMU-Guided Micro-Optimizations**: Micro-optimized critical paths (`client_ref`/`client_unref`, `pending_io_inc`/`pending_io_dec`, RCU nesting depth tracking, `g_dispatch_tls_registered` branch caching, and HeaderMap fast bitmask short-circuit), reducing core cycle footprint without compromising correctness.
 - **Wait-Free MPSC Queue Hardening**: Added null-safety guards in `csilk_lfq_dequeue()` and automatic worker pool queue initialization, ensuring robust multi-producer dispatching across arbitrary thread topologies.
 - **Ordered Teardown Sequence**: Enforced clean teardown order (`server_stop` -> drain active clients -> drain timers -> drain dispatch queues -> join workers -> stop hot reload -> EBR grace period -> destroy router -> close event loop -> free pools). Deferred MQ teardown past worker thread join to prevent async crashes on worker exit.
+
+### Fixed
+- **Dispatch Async Cleanup & Loop Draining**: Safely closed `wp->dispatch_async` and drained pending event loop handles during `csilk_server_free()`, preventing dangling handles in default libuv event loop.
+
+## [0.5.0] - 2026-08-22
+
+### Added
 - **Hot-Reload Mutual Exclusion & Secure Temp Files**: Added `csilk_mutex_t reload_mutex` in `hot_reload_ctx_t` ensuring filesystem watcher debounce and manual `csilk_dev_hot_reload_trigger()` never race or concurrently mutate reload state. Enforced secure `mkstemp(0600)` with immediate failure reporting, and implemented complete OOM rollback (`dlclose`, `unlink`, `csilk_router_free`).
 - **Adaptive io_uring Queue Sizing & Resource Fallback**: Replaced hardcoded 4096-entry ring initialization with adaptive fallback (1024 -> 512 -> 256 -> 128 -> 64) and proportional pool capacity, eliminating `-ENOMEM` errors on constrained container / VM environments (`RLIMIT_MEMLOCK`).
 - **6-Tier Unified Memory Ownership Taxonomy**: Defined comprehensive 6-tier memory ownership model (`csilk_ownership_t`: `BORROWED`, `ARENA`, `OWNED`/`HEAP`, `TRANSFER`, `POOL`, `TLS_CACHE`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`. Standardized capacity-aware buffer cleanup and pool reclamation in `_csilk_ctx_cleanup()`, and unified response body memory replacement guards (`_csilk_free_response_body_if_needed()`).
@@ -54,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### Fixed
-- **Dispatch Async Cleanup & Loop Draining**: Safely closed `wp->dispatch_async` and drained pending event loop handles during `csilk_server_free()`, preventing dangling handles in default libuv event loop.
 - **Owned Event Loop Cleanup in csilk_server_free**: Added `csilk_io_loop_close` and memory release for `server->loop` when `server->loop_owned` is true, eliminating io_uring file descriptor leaks across rapid server instantiations.
 - **Multi-Worker Sendfile & Hook Synchronization**: Synchronized multi-worker sendfile operations using `CSILK_HOOK_SERVER_START` and added timeout / retry policies preventing deadlocks during multi-worker socket binding.
 - **io_uring Backend Cancellation & Listen Socket Safety**: Fixed `csilk_io_timer_stop()` using targeted `io_uring_prep_cancel64` with pointer and generation tagging instead of broad cancellation, preventing timer stops from inadvertently cancelling server listening socket SQEs.
