@@ -387,7 +387,7 @@ if __name__ == "__main__":
     app.run(8080)
 ```
 
-更多细节请参阅 [Python 绑定手册](docs/user-manual/python.md) 和 [python/README.md](python/README.md)。
+更多细节请参阅 [Python 绑定手册](docs/zh-CN/user-manual/python.md) 和 [python/README.md](python/README.md)。
 
 ## 更新日志
 

@@ -261,7 +261,7 @@ Results are saved as JSON in `benchmarks/results/` for comparison tracking.
 
 | Document | Content |
 |:---------|:--------|
-| [Performance Tuning Guide](../docs/performance-tuning.md) | Compiler flags, kernel tuning, PGO |
-| [Server Core Design](../docs/module-design/server.md) | Multi-worker internals |
+| [Performance Tuning Guide](../docs/en/performance-tuning.md) | Compiler flags, kernel tuning, PGO |
+| [Server Core Design](../docs/en/module-design/server.md) | Multi-worker internals |
 | [compare_benchmarks.py](../scripts/compare_benchmarks.py) | Result comparison script |
 | [run_benchmarks.sh](../scripts/run_benchmarks.sh) | Automated benchmark runner |
