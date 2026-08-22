@@ -204,6 +204,11 @@ CSILK_INTERNAL void
 _csilk_worker_pool_atomics_init(worker_pool_t* wp, csilk_server_t* server, int worker_index);
 CSILK_INTERNAL void _csilk_client_atomics_init(csilk_client_t* client);
 
+CSILK_INTERNAL void                   _csilk_worker_set_current_pool(worker_pool_t* wp);
+CSILK_INTERNAL worker_pool_t*         _csilk_worker_get_current_pool(void);
+CSILK_INTERNAL csilk_dispatch_task_t* _csilk_dispatch_task_alloc(void);
+CSILK_INTERNAL void                   _csilk_dispatch_task_free(csilk_dispatch_task_t* task);
+
 CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);

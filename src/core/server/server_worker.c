@@ -71,8 +71,8 @@ ensure_dispatch_tls_registered(void)
     }
 }
 
-static csilk_dispatch_task_t*
-dispatch_task_alloc(void)
+csilk_dispatch_task_t*
+_csilk_dispatch_task_alloc(void)
 {
     ensure_dispatch_tls_registered();
 
@@ -89,8 +89,8 @@ dispatch_task_alloc(void)
     return task;
 }
 
-static void
-dispatch_task_free(csilk_dispatch_task_t* task)
+void
+_csilk_dispatch_task_free(csilk_dispatch_task_t* task)
 {
     if (!task) {
         return;
@@ -132,7 +132,7 @@ _csilk_worker_drain_dispatch(worker_pool_t* wp)
         if (client) {
             csilk_client_unref(client);
         }
-        dispatch_task_free(task);
+        _csilk_dispatch_task_free(task);
         node = csilk_lfq_dequeue(&wp->dispatch_queue);
     }
 }
@@ -191,7 +191,7 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     }
     worker_pool_t* wp = client->owner_pool;
 
-    csilk_dispatch_task_t* task = dispatch_task_alloc();
+    csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
     if (!task) {
         return;
     }
@@ -327,6 +327,7 @@ worker_thread(void* arg)
     int              port = data->port;
     csilk_barrier_t* barrier = data->barrier;
 
+    _csilk_worker_set_current_pool(wp);
     pin_thread_to_core(wp->worker_index);
 
     csilk_io_loop_t* loop_ptr = &wp->loop;

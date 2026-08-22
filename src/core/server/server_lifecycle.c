@@ -625,6 +625,7 @@ csilk_server_run(csilk_server_t* server, int port)
     server->server_handle.data = &server->worker_pools[0];
 
     server->worker_pools[0].loop_ptr = server->loop;
+    _csilk_worker_set_current_pool(&server->worker_pools[0]);
     _csilk_worker_init_arena_pool(&server->worker_pools[0]);
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
