@@ -98,6 +98,12 @@ When storing heap-allocated objects (e.g. cJSON nodes or driver handles) in the 
 ### Outbound streaming backpressure
 `csilk_response_write()`, `csilk_sse_send()`, and `csilk_ws_send()` enforce connection-level outbound watermarks. When they return `0`, the queue has reached the high watermark (`write_high_water_mark`) — pause producer output and resume only after `csilk_on_drain()` fires. Returning `-1` indicates queue overflow or error.
 
+### Hot-Reload mutex & temp copy isolation
+`hot_reload_ctx_t` embeds `csilk_mutex_t reload_mutex` to ensure file watcher debounce timers and cross-thread manual `csilk_dev_hot_reload_trigger()` never execute concurrently. Temp library copies must be created using `mkstemp(0600)` without predictable fallbacks, and all resources (`new_router`, `new_handle`, `tmp_path`) must be rolled back on OOM.
+
+### Adaptive io_uring loop initialization & cleanup
+Under `CSILK_USE_URING`, `csilk_io_loop_init()` performs adaptive queue sizing (1024 -> 512 -> 256 -> 128 -> 64) with proportional operation pool allocation to avoid `-ENOMEM` under constrained `RLIMIT_MEMLOCK` limits. `csilk_server_free()` must close and free `server->loop` whenever `server->loop_owned` is true.
+
 ### internal.h is a public umbrella header
 `include/csilk/core/internal.h` must NOT include messaging/internal headers — doing so leaks MQ internals to any file that includes it. Add explicit `#include "messaging/mq_internal.h"` only in files that directly use `_csilk_mq_new()` / `_csilk_mq_free()`.
 

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Hot-Reload Mutual Exclusion & Secure Temp Files**: Added `csilk_mutex_t reload_mutex` in `hot_reload_ctx_t` ensuring filesystem watcher debounce and manual `csilk_dev_hot_reload_trigger()` never race or concurrently mutate reload state. Enforced secure `mkstemp(0600)` with immediate failure reporting, and implemented complete OOM rollback (`dlclose`, `unlink`, `csilk_router_free`).
+- **Adaptive io_uring Queue Sizing & Resource Fallback**: Replaced hardcoded 4096-entry ring initialization with adaptive fallback (1024 -> 512 -> 256 -> 128 -> 64) and proportional pool capacity, eliminating `-ENOMEM` errors on constrained container / VM environments (`RLIMIT_MEMLOCK`).
 - **6-Tier Unified Memory Ownership Taxonomy**: Defined comprehensive 6-tier memory ownership model (`csilk_ownership_t`: `BORROWED`, `ARENA`, `OWNED`/`HEAP`, `TRANSFER`, `POOL`, `TLS_CACHE`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`. Standardized capacity-aware buffer cleanup and pool reclamation in `_csilk_ctx_cleanup()`, and unified response body memory replacement guards (`_csilk_free_response_body_if_needed()`).
 - **3-Tier ABI Architecture & Strict Opaque Encapsulation**: Enforced strict `Public API → Opaque Handle → Internal Implementation` architecture across all 52 public headers under `include/`:
   - Converted `csilk_router_t` into a strictly opaque handle in `<csilk/core/router.h>`, moving `struct csilk_router_s` and trie node structures into `src/core/primitives/router_internal.h`.
@@ -44,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### Fixed
+- **Owned Event Loop Cleanup in csilk_server_free**: Added `csilk_io_loop_close` and memory release for `server->loop` when `server->loop_owned` is true, eliminating io_uring file descriptor leaks across rapid server instantiations.
+- **Multi-Worker Sendfile & Hook Synchronization**: Synchronized multi-worker sendfile operations using `CSILK_HOOK_SERVER_START` and added timeout / retry policies preventing deadlocks during multi-worker socket binding.
 - **io_uring Backend Cancellation & Listen Socket Safety**: Fixed `csilk_io_timer_stop()` using targeted `io_uring_prep_cancel64` with pointer and generation tagging instead of broad cancellation, preventing timer stops from inadvertently cancelling server listening socket SQEs.
 - **io_uring Async & Signal Poll Notification Reliability**: Added `read() > 0` validation for `URING_OP_POLL_ASYNC` and `URING_OP_POLL_SIGNAL` before firing callbacks to prevent spurious executions.
 - **Dual-Backend Build & Field Isolation**: Isolated io_uring-specific handle fields (`generation`, `fd`) in `src/core/server/connection.c` under `#ifdef CSILK_USE_URING`, and introduced portable `reject_connection()` helper ensuring clean compilation and 100% test pass rate across both libuv and io_uring backends.
