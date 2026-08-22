@@ -95,10 +95,10 @@ test_fs_event_init_ok(void)
 
     csilk_io_fs_event_t handle;
     int                 rc = csilk_io_fs_event_init(&loop, &handle);
-    csilk_io_loop_close(&loop);
     assert(rc == 0);
     assert(handle.type == CSILK_IO_HANDLE_FS_EVENT);
     assert(handle.loop == &loop);
+    csilk_io_loop_close(&loop);
     printf("  passed\n");
 }
 
