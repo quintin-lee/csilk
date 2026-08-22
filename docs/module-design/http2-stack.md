@@ -53,46 +53,28 @@ graph TB
 
 ## 3. 会话管理
 
-### 3.1 会话结构
+### 3.1 会话与流映射结构 (csilk_h2_stream_map_t)
 
 ```c
-typedef struct csilk_h2_session_s {
-    // nghttp2 核心
-    nghttp2_session* session;
-    nghttp2_settings settings;
-    
-    // 流管理
-    csilk_h2_stream_t** streams;      // 活跃流数组
-    uint32_t stream_count;
-    uint32_t stream_capacity;
-    
-    // 状态
-    uint32_t next_stream_id;          // 下一个流 ID
-    uint32_t max_concurrent_streams;  // 最大并发流数
-    int32_t window_size;              // 连接窗口大小
-    
-    // 背压
-    bool paused;
-    size_t pending_bytes;
-} csilk_h2_session_t;
+#define CSILK_H2_INLINE_BUCKETS 16
+#define CSILK_H2_STREAM_POOL_MAX 64
 
-// HTTP/2 流
-typedef struct csilk_h2_stream_s {
-    int32_t stream_id;                    // 流标识符
-    csilk_ctx_t* ctx;                     // 请求上下文
-    nghttp2_data_provider data_prd;       // 数据提供者
-    
-    // 状态
-    uint8_t state;                        // OPEN/CLOSED
-    uint32_t window_size;                 // 流窗口
-    size_t processed_len;                 // 已处理字节数
-    
-    // 回调
-    h2_on_header_cb on_header;
-    h2_on_data_cb on_data;
-    h2_on_finish_cb on_finish;
-} csilk_h2_stream_t;
+/**
+ * @brief HTTP/2 自适应流哈希映射表与 Context 回收池
+ */
+typedef struct csilk_h2_stream_map_s {
+    csilk_ctx_t** buckets;  /**< 活跃 Bucket 数组指针 (指向内嵌或堆分配数组) */
+    uint32_t      capacity; /**< 总 Bucket 容量 (2 的整数次幂) */
+    uint32_t      mask;     /**< 快速按位与掩码 (capacity - 1) */
+    uint32_t      count;    /**< 当前活跃流数量 */
+    csilk_ctx_t*  inline_buckets[CSILK_H2_INLINE_BUCKETS]; /**< 快速路径内嵌 16 槽位 */
+    csilk_ctx_t*  free_list;  /**< 空闲已重置的 Context 单向回收链表 */
+    uint32_t      pool_count; /**< 当前连接池内缓存 Context 数量 */
+    uint32_t      pool_max;   /**< 连接池允许缓存的最大 Context 上限 (默认 64) */
+} csilk_h2_stream_map_t;
 ```
+
+HTTP/2 流上下文（`csilk_ctx_t`）直接内联在 Client 的 `h2_stream_map` 中，每个流拥有独立的 Arena，在流关闭时重置并回收到 `free_list`，避免频繁调用 `malloc`/`free`。
 
 ### 3.2 会话创建
 
@@ -468,12 +450,17 @@ static void h2_reset_stream(csilk_h2_session_t* h2, int32_t stream_id,
 
 ---
 
-## 10. 参考实现
+## 10. 形式化生命周期验证与参考实现
+
+HTTP/2 流多路复用通过 `tests/protocols/test_h2_stream_lifecycle.c` 进行严格形式化生命周期审计：
+- **RST_STREAM 异步中途销毁**：验证重置流时立即移除路由上下文，排空中的写回调或异步任务安全失效。
+- **GOAWAY 优雅排空**：验证拒绝新流建立的同时，活跃流全部正常完成并释放。
+- **10,000 次流高频复用**：验证单连接内 10,000 个流在 `inline_buckets` 与 `free_list` 之间的快速回收复用，零内存泄漏。
+- **连接断开级联清理**：连接关闭时 `csilk_h2_free_streams()` 级联排空所有活跃流并归还 Worker 连接池。
 
 | 文件 | 作用 |
 |------|------|
-| `src/core/http/h2.c` | HTTP/2 入口 |
-| `src/core/http/h2_session.c` | 会话管理 |
-| `src/core/http/h2_callbacks.c` | nghttp2 回调 |
-| `src/core/http/h2_response.c` | 响应构建 |
+| `src/core/http/h2.c` | HTTP/2 入口、nghttp2 回调绑定与响应构建 |
+| `src/core/http/h2.h` | `csilk_h2_stream_map_t` 声明与流操作接口 |
+| `tests/protocols/test_h2_stream_lifecycle.c` | RST_STREAM / GOAWAY / 10K 流复用形式化审计测试 |
 | `docs/design/http2.md` | 设计文档 |
