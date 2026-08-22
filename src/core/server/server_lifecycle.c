@@ -986,7 +986,8 @@ csilk_server_router_acquire(csilk_server_t* server, csilk_rcu_token_t* token)
         return atomic_load_explicit(&server->router, memory_order_acquire);
     }
 
-    uint32_t depth = atomic_fetch_add_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
+    uint32_t depth = atomic_load_explicit(&slot->nesting_depth, memory_order_relaxed);
+    atomic_store_explicit(&slot->nesting_depth, depth + 1, memory_order_relaxed);
     uint64_t epoch = 0;
     if (depth == 0) {
         epoch = atomic_load_explicit(&mgr->global_epoch, memory_order_acquire);
@@ -1017,7 +1018,10 @@ csilk_server_router_release(csilk_server_t* server, csilk_rcu_token_t* token)
     token->slot = NULL;
     token->epoch = 0;
 
-    uint32_t depth = atomic_fetch_sub_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
+    uint32_t depth = atomic_load_explicit(&slot->nesting_depth, memory_order_relaxed);
+    if (depth > 0) {
+        atomic_store_explicit(&slot->nesting_depth, depth - 1, memory_order_relaxed);
+    }
     if (depth <= 1) {
         atomic_store_explicit(&slot->active_epoch, 0, memory_order_release);
     }

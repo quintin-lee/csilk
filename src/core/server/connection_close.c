@@ -150,21 +150,19 @@ csilk_client_ref(csilk_client_t* client)
 int
 csilk_client_unref(csilk_client_t* client)
 {
-    if (!client) {
+    if (__builtin_expect(!client, 0)) {
         return 0;
     }
-    int prev = atomic_load_explicit(&client->ref_count, memory_order_relaxed);
-    while (prev > 0) {
-        if (atomic_compare_exchange_weak_explicit(
-                &client->ref_count, &prev, prev - 1, memory_order_acq_rel, memory_order_relaxed)) {
-            int curr = prev - 1;
-            if (curr == 0) {
-                _csilk_client_check_recycle(client);
-            }
-            return curr;
-        }
+    int prev = atomic_fetch_sub_explicit(&client->ref_count, 1, memory_order_acq_rel);
+    if (__builtin_expect(prev <= 0, 0)) {
+        atomic_store_explicit(&client->ref_count, 0, memory_order_relaxed);
+        return 0;
     }
-    return 0;
+    int curr = prev - 1;
+    if (__builtin_expect(curr == 0, 0)) {
+        _csilk_client_check_recycle(client);
+    }
+    return curr;
 }
 
 /**
@@ -175,7 +173,7 @@ csilk_client_unref(csilk_client_t* client)
 int
 _csilk_client_pending_io_inc(csilk_client_t* client)
 {
-    if (!client) {
+    if (__builtin_expect(!client, 0)) {
         return 0;
     }
     return atomic_fetch_add_explicit(&client->pending_io, 1, memory_order_acq_rel) + 1;
@@ -189,21 +187,19 @@ _csilk_client_pending_io_inc(csilk_client_t* client)
 int
 _csilk_client_pending_io_dec(csilk_client_t* client)
 {
-    if (!client) {
+    if (__builtin_expect(!client, 0)) {
         return 0;
     }
-    int prev = atomic_load_explicit(&client->pending_io, memory_order_relaxed);
-    while (prev > 0) {
-        if (atomic_compare_exchange_weak_explicit(
-                &client->pending_io, &prev, prev - 1, memory_order_acq_rel, memory_order_relaxed)) {
-            int curr = prev - 1;
-            if (curr == 0) {
-                _csilk_client_check_recycle(client);
-            }
-            return curr;
-        }
+    int prev = atomic_fetch_sub_explicit(&client->pending_io, 1, memory_order_acq_rel);
+    if (__builtin_expect(prev <= 0, 0)) {
+        atomic_store_explicit(&client->pending_io, 0, memory_order_relaxed);
+        return 0;
     }
-    return 0;
+    int curr = prev - 1;
+    if (__builtin_expect(curr == 0, 0)) {
+        _csilk_client_check_recycle(client);
+    }
+    return curr;
 }
 
 /**
