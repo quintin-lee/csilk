@@ -131,59 +131,66 @@ endif()
 
 include(cmake/targets.cmake)
 
-# Only build tests and examples when csilk is the top-level project
+option(CSILK_BUILD_TESTS "Build test suite" ON)
+option(CSILK_BUILD_EXAMPLES "Build example applications" ON)
+
+# Only build tests and examples when csilk is the top-level project and enabled
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  include(cmake/tests.cmake)
+  if(CSILK_BUILD_TESTS)
+    include(cmake/tests.cmake)
 
-  # test_timeout needs an extended CTest timeout
-  add_csilk_test(test_timeout tests/core/test_timeout.c)
-  set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
-  list(APPEND CSILK_ALL_TEST_NAMES test_timeout)
+    # test_timeout needs an extended CTest timeout
+    add_csilk_test(test_timeout tests/core/test_timeout.c)
+    set_tests_properties(test_timeout PROPERTIES TIMEOUT 10)
+    list(APPEND CSILK_ALL_TEST_NAMES test_timeout)
 
-  # test_multi_worker needs a longer timeout for multi-threaded requests
-  set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
+    # test_multi_worker needs a longer timeout for multi-threaded requests
+    set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
 
-  # Concurrent scenario tests involve thread spawning or multiple streams
-  set_tests_properties(test_mq_concurrent PROPERTIES TIMEOUT 30)
-  set_tests_properties(test_ws_concurrent PROPERTIES TIMEOUT 15)
-  set_tests_properties(test_sse_concurrent PROPERTIES TIMEOUT 15)
+    # Concurrent scenario tests involve thread spawning or multiple streams
+    set_tests_properties(test_mq_concurrent PROPERTIES TIMEOUT 30)
+    set_tests_properties(test_ws_concurrent PROPERTIES TIMEOUT 15)
+    set_tests_properties(test_sse_concurrent PROPERTIES TIMEOUT 15)
 
-  if(ENABLE_OOM_TEST)
-      add_executable(test_oom tests/core/test_oom.c)
-      target_compile_definitions(test_oom PRIVATE TEST_OOM)
-      target_link_libraries(test_oom csilk pthread)
-      add_test(NAME test_oom COMMAND test_oom)
+    if(ENABLE_OOM_TEST)
+        add_executable(test_oom tests/core/test_oom.c)
+        target_compile_definitions(test_oom PRIVATE TEST_OOM)
+        target_link_libraries(test_oom csilk pthread)
+        add_test(NAME test_oom COMMAND test_oom)
 
-      add_executable(test_oom_io tests/core/test_oom_io.c)
-      target_compile_definitions(test_oom_io PRIVATE TEST_OOM)
-      target_link_libraries(test_oom_io csilk pthread)
-      add_test(NAME test_oom_io COMMAND test_oom_io)
+        add_executable(test_oom_io tests/core/test_oom_io.c)
+        target_compile_definitions(test_oom_io PRIVATE TEST_OOM)
+        target_link_libraries(test_oom_io csilk pthread)
+        add_test(NAME test_oom_io COMMAND test_oom_io)
+    endif()
+
+    option(USE_FUZZER "Enable libFuzzer" OFF)
+    if(USE_FUZZER)
+        add_executable(fuzz_test fuzz/fuzz_test.c)
+        target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_test csilk)
+
+        add_executable(fuzz_yaml fuzz/fuzz_yaml.c)
+        target_compile_options(fuzz_yaml PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_yaml PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_yaml csilk)
+
+        add_executable(fuzz_url fuzz/fuzz_url.c)
+        target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_url csilk)
+
+        add_executable(fuzz_headers fuzz/fuzz_headers.c)
+        target_compile_options(fuzz_headers PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_headers PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_headers csilk)
+    endif()
   endif()
 
-  option(USE_FUZZER "Enable libFuzzer" OFF)
-  if(USE_FUZZER)
-      add_executable(fuzz_test fuzz/fuzz_test.c)
-      target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer -std=c23)
-      target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer)
-      target_link_libraries(fuzz_test csilk)
-
-      add_executable(fuzz_yaml fuzz/fuzz_yaml.c)
-      target_compile_options(fuzz_yaml PRIVATE -fsanitize=fuzzer -std=c23)
-      target_link_options(fuzz_yaml PRIVATE -fsanitize=fuzzer)
-      target_link_libraries(fuzz_yaml csilk)
-
-      add_executable(fuzz_url fuzz/fuzz_url.c)
-      target_compile_options(fuzz_url PRIVATE -fsanitize=fuzzer -std=c23)
-      target_link_options(fuzz_url PRIVATE -fsanitize=fuzzer)
-      target_link_libraries(fuzz_url csilk)
-
-      add_executable(fuzz_headers fuzz/fuzz_headers.c)
-      target_compile_options(fuzz_headers PRIVATE -fsanitize=fuzzer -std=c23)
-      target_link_options(fuzz_headers PRIVATE -fsanitize=fuzzer)
-      target_link_libraries(fuzz_headers csilk)
+  if(CSILK_BUILD_EXAMPLES)
+    include(cmake/examples.cmake)
   endif()
-
-  include(cmake/examples.cmake)
 endif()
 
 # Add run_tests custom target

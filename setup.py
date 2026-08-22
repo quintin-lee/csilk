@@ -47,7 +47,7 @@ class CMakeBuild(build_ext):
             brew_prefix = subprocess.check_output(["brew", "--prefix"], text=True).strip()
             cmake_args.append(f"-DCMAKE_PREFIX_PATH={brew_prefix};{brew_prefix}/opt/openssl;{brew_prefix}/opt/libyaml;{brew_prefix}/opt/zlib;{brew_prefix}/opt/curl;{brew_prefix}/opt/sqlite3")
         
-        build_args = ["--config", cfg, "--parallel"]
+        build_args = ["--config", cfg, "--parallel", "--target", "csilk_shared"]
 
         if platform.system() == "Windows":
             cmake_args += [f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={csilk_pkg_dir}"]
