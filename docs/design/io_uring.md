@@ -1,6 +1,6 @@
 # io_uring Integration Feasibility Study
 
-> Date: 2026-06-05 | Version: 0.4.0 | Status: **Implemented (Unified single-track csilk_io abstraction)**
+> Date: 2026-06-05 | Version: 0.5.0 | Status: **Implemented (Unified single-track csilk_io abstraction)**
 
 > **Update (2026-08)**: A pure cross-backend I/O abstraction (`csilk_io_*`, `csilk_thread_*`, `csilk_barrier_*`) is implemented in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`. The unified server core (`src/core/server/`) drives both `libuv` (default) and native `io_uring` (`src/core/uring/uring_io.c`, `uring_thread_pool.c`, `uring_fs.c`) without duplicate server state machines. Build with `-DCSILK_USE_URING=ON` (Linux-only). For current usage, see the [build guide](../contributing/how-to-build.md) and [architecture whitepaper](../architecture.md).
 

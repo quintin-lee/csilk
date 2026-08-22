@@ -7,7 +7,7 @@
  * access the complete csilk API.  For finer-grained compilation, include
  * individual module headers (csilk/types.h, csilk/router.h, etc.).
  *
- * @version 0.4.0
+ * @version 0.5.0
  * @copyright MIT License
  */
 

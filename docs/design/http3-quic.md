@@ -1,6 +1,6 @@
 # HTTP/3 & QUIC Feasibility Assessment
 
-> Date: 2026-05-30 | Version: 0.4.0
+> Date: 2026-05-30 | Version: 0.5.0
 
 ## Summary
 

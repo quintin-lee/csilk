@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-22
+
 ### 新增
 - **Hot-Reload 控制面互斥并发保护与安全临时文件**：在 `hot_reload_ctx_t` 中引入 `csilk_mutex_t reload_mutex`，保证文件系统变更防抖与跨线程手动 `csilk_dev_hot_reload_trigger()` 互斥执行，消除状态竞争；强制采用 `mkstemp(0600)` 原子创建临时二进制文件，并在 OOM/错误时执行完整回滚（`dlclose`, `unlink`, `csilk_router_free`）。
 - **io_uring 队列自适应阶梯缩放与资源降级**：将硬编码 4096 深度改为自适应阶梯初始化（`1024 -> 512 -> 256 -> 128 -> 64`），按需等比分配操作池，彻底消除在容器/VM 受限锁页内存（`RLIMIT_MEMLOCK`）下的 `-ENOMEM` 初始化失败。
