@@ -51,6 +51,7 @@ set(CSILK_CORE_TESTS
     test_json
     test_json_ext
     test_json_accessor_bench
+    test_json_mutate
     test_keepalive
     test_async_keepalive
     test_multi_worker
@@ -77,6 +78,7 @@ set(CSILK_CORE_TESTS
     test_hot_reload
     test_hot_reload_stress
     test_hot_reload_10k_stress
+    test_hot_reload_null
     test_dispatch_bench
     test_lfqueue_stress
     test_uring_recv_bench
@@ -123,7 +125,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core
+    core;core;core;core;core;core;core
 )
 
 
@@ -245,17 +247,10 @@ set(CSILK_PROTOCOL_TESTS
     test_h3
     test_mcp_jsonrpc
     test_mcp_server_client
+    test_mcp_server_core
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols
-    protocols
-    protocols
-    protocols
-    protocols
-    protocols
-    protocols
-    protocols
-    protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
