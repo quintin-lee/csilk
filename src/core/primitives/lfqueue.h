@@ -47,6 +47,9 @@ csilk_lfq_enqueue(csilk_lfqueue_t* q, csilk_lfq_node_t* n)
 static inline csilk_lfq_node_t*
 csilk_lfq_dequeue(csilk_lfqueue_t* q)
 {
+    if (!q || !q->tail) {
+        return NULL;
+    }
     csilk_lfq_node_t* tail = q->tail;
     csilk_lfq_node_t* next = atomic_load_explicit(&tail->next, memory_order_acquire);
 

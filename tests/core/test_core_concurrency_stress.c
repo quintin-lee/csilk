@@ -78,10 +78,9 @@ create_test_server(csilk_router_t* router)
     }
     server->worker_pools = (worker_pool_t*)calloc(1, sizeof(worker_pool_t));
     server->worker_pool_count = 1;
-    server->worker_pools[0].server = server;
+    _csilk_worker_pool_atomics_init(&server->worker_pools[0], server, 0);
     _csilk_worker_init_arena_pool(&server->worker_pools[0]);
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
-    _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
     return server;
 }
 
@@ -504,9 +503,12 @@ test_scenario_cross_thread_dispatch(void)
 {
     printf("[Scenario 10] Testing Cross-Thread Dispatch Queue & TLS Task Pool...\n");
 
+    atomic_store_explicit(&g_dispatched_count, 0, memory_order_relaxed);
+
     csilk_router_t* router = csilk_router_new();
     csilk_server_t* server = create_test_server(router);
     worker_pool_t*  wp = &server->worker_pools[0];
+    _csilk_worker_init_dispatch(wp, server->loop);
 
     csilk_client_t* client = pool_get(wp);
     client->server = server;
