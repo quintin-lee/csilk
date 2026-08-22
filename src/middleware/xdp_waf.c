@@ -164,8 +164,24 @@ csilk_xdp_waf_block_pattern(csilk_xdp_waf_t* waf, const char* pattern)
  * @return CSILK_XDP_ACTION_DROP if a rule/pattern matches, else
  *         CSILK_XDP_ACTION_PASS.
  */
+static const void*
+_csilk_memmem(const void* haystack, size_t haystacklen, const void* needle, size_t needlelen)
+{
+    if (!haystack || !needle || needlelen == 0 || haystacklen < needlelen) {
+        return NULL;
+    }
+    const unsigned char* h = (const unsigned char*)haystack;
+    const unsigned char* n = (const unsigned char*)needle;
+    for (size_t i = 0; i <= haystacklen - needlelen; i++) {
+        if (h[i] == n[0] && memcmp(h + i, n, needlelen) == 0) {
+            return h + i;
+        }
+    }
+    return NULL;
+}
+
 csilk_xdp_action_t
-csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payload, size_t len)
+csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const void* payload, size_t len)
 {
     if (!waf) {
         return CSILK_XDP_ACTION_PASS;
@@ -183,7 +199,7 @@ csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payl
     if (payload && len > 0) {
         for (size_t i = 0; i < waf->pattern_count; i++) {
             if (waf->patterns[i] &&
-                memmem(payload, len, waf->patterns[i], strlen(waf->patterns[i]))) {
+                _csilk_memmem(payload, len, waf->patterns[i], strlen(waf->patterns[i]))) {
                 csilk_mutex_unlock(&waf->mutex);
                 return CSILK_XDP_ACTION_DROP;
             }
