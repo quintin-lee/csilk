@@ -288,10 +288,11 @@ set(CSILK_AI_TESTS
     test_vector_db_embedded
     test_db
     test_mongodb
+    test_openai_mock
 )
 set(CSILK_AI_TEST_DIRS
     drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
-    drivers/db;drivers/db
+    drivers/db;drivers/db;drivers
 )
 
 # -- Reflection tests --
