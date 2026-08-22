@@ -7,7 +7,7 @@
  * read/write access to the request, response, path parameters, arena,
  * storage, and connection state.
  *
- * @version 0.4.0
+ * @version 0.5.0
  * @copyright MIT License
  */
 

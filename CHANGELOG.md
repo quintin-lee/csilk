@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-22
+
 ### Added
 - **Hot-Reload Mutual Exclusion & Secure Temp Files**: Added `csilk_mutex_t reload_mutex` in `hot_reload_ctx_t` ensuring filesystem watcher debounce and manual `csilk_dev_hot_reload_trigger()` never race or concurrently mutate reload state. Enforced secure `mkstemp(0600)` with immediate failure reporting, and implemented complete OOM rollback (`dlclose`, `unlink`, `csilk_router_free`).
 - **Adaptive io_uring Queue Sizing & Resource Fallback**: Replaced hardcoded 4096-entry ring initialization with adaptive fallback (1024 -> 512 -> 256 -> 128 -> 64) and proportional pool capacity, eliminating `-ENOMEM` errors on constrained container / VM environments (`RLIMIT_MEMLOCK`).
