@@ -276,10 +276,16 @@ csilk_server_free(csilk_server_t* server)
         server->worker_barrier = NULL;
     }
 
+    if (server->mq) {
+        _csilk_mq_free(server->mq);
+        server->mq = NULL;
+    }
+
     free(server->spa_doc_root);
     if (server->worker_pools) {
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
+            _csilk_worker_drain_dispatch(wp);
             int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
             for (int i = 0; i < client_cnt; i++) {
                 free(wp->client_pool[i]);
@@ -300,10 +306,6 @@ csilk_server_free(csilk_server_t* server)
     }
 
     cleanup_tls(server);
-
-    if (server->mq) {
-        _csilk_mq_free(server->mq);
-    }
 
     for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
         csilk_hook_array_t* arr = atomic_load_explicit(&server->hooks[i], memory_order_relaxed);
