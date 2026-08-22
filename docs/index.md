@@ -1,6 +1,6 @@
 # Csilk Documentation Portal | 文档中心
 
-> **Version**: 0.5.0 | **Last updated**: 2026-08-22
+> **Version**: 0.5.1 | **Last updated**: 2026-08-22
 
 Welcome to the official documentation for **Csilk (`csilk`)**, a high-performance C23 asynchronous Web framework, microservice runtime, and distributed agentic workflow engine.
 

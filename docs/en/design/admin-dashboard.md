@@ -1,6 +1,6 @@
 # Admin Dashboard — Unified Monitoring Controller
 
-> **Status**: Implemented (v0.5.0) | **Last updated**: 2026-08-22
+> **Status**: Implemented (v0.5.1) | **Last updated**: 2026-08-22
 >
 > **Admin Rules**: The admin panel **MUST** be disabled by default in production — opt-in via `csilk_admin_serve`. All admin routes **SHOULD** be protected by authentication in production environments. The stats endpoint **MUST** aggregate data from all instrumented subsystems without blocking the event loop. Lock-free counters **MUST** be used for all hot-path metrics.
 

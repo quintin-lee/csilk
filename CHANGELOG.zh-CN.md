@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-22
+
 ### 新增
 - **Client 连接生命周期形式化审计与 Worker 严格所有权归属**：在 100,000 次连接高频复用与 16-Worker 极端压力下完成形式化生命周期证明，确立 `client_destroy` 永远且仅在 Owner Worker 事件循环线程执行；非 Owner 线程只向目标 Worker 投递携带 `generation` 代数标记的回收任务（`_csilk_client_recycle_dispatch_cb`），彻底杜绝跨线程操作陈旧/已复用连接的 ABA 与 UAF 风险，保证 `ref_count` 与 `pending_io` 绝不下溢。
 - **RCU / EBR 形式化生命周期验证与 512 读者高并发扩展**：新增 512 并发读者（256 静态槽位 + 256 动态溢出槽位）与 10,000 短生命周期线程形式化验证测试套件，证明动态槽位零泄漏、TID 安全复用与读者路径 100% 无锁 wait-free 执行；在 `csilk_server_set_router_full()` 中引入 `config_mutex` 对写端进行严格串行化，确保 Epoch 全局推进与回收链表挂载严格单调有序。

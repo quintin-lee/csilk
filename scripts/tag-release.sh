@@ -382,8 +382,8 @@ done
 info "Performing post-update residual audit ..."
 
 if ! $DRY_RUN; then
-    # 1. Check version sync
-    ./scripts/check_version_sync.sh || die "Version sync check failed after update."
+    # 1. Check version sync against target release version
+    ./scripts/check_version_sync.sh --expected "$VERSION" || die "Version sync check failed for target $VERSION."
     
     # 2. Residual scanner (excluding build, git, and past changelog history)
     RESIDUALS=$(grep -rn "${OLD_VERSION}" \
@@ -423,6 +423,9 @@ if ! $NO_COMMIT && ! $NO_TAG; then
     if ! $DRY_RUN; then
         git tag -a "$TAG" -m "Release ${TAG}"
         ok "Git tag ${TAG} created"
+        
+        # Verify git tag and CMake version are now in full sync
+        ./scripts/check_version_sync.sh || die "Final git tag version sync check failed."
     else
         warn "[dry-run] Would execute: git tag -a ${TAG} -m \"Release ${TAG}\""
     fi

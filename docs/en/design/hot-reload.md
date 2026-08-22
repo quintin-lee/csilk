@@ -1,6 +1,6 @@
 # Hot Reload — Live Router Swapping (RCU & EBR)
 
-> **Status**: Implemented (v0.5.0) | **Last updated**: 2026-08-22
+> **Status**: Implemented (v0.5.1) | **Last updated**: 2026-08-22
 >
 > **Hot-Reload Rules**: The entry function **MUST** have signature `csilk_router_t* (*)(void)`. ABI compatibility between the loaded `.so` and the server binary **MUST** be maintained. The listening socket **MUST NOT** be closed during reload. Router swap **MUST** be atomic (`atomic_exchange`, lock-free reading). Control plane reload executions **MUST** be mutex-serialized (`reload_mutex`). File-system events **MUST** be debounced (100 ms window). Dynamic libraries **MUST** be copied to isolated temporary files via `mkstemp(0600)` to bypass dynamic linker caching. Old routers and `.so` handles **MUST** be reclaimed via Epoch-Based Reclamation (EBR) grace period.
 
