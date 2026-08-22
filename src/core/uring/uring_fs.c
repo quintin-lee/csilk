@@ -48,6 +48,9 @@ csilk_io_fs_sendfile(csilk_io_loop_t* loop,
 {
     (void)loop;
 #ifdef __linux__
+    if (req == NULL) {
+        return -1;
+    }
     if (length == 0) {
         req->result = 0;
         if (cb) {
