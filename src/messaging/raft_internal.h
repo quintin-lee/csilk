@@ -57,4 +57,13 @@ struct csilk_raft_node_s {
     uint64_t last_heartbeat_time;
 };
 
+/** @brief Create a snapshot of the current committed state. */
+int
+csilk_raft_snapshot_create(csilk_raft_node_t* node, const uint8_t* state_data, size_t state_len);
+
+/** @brief Restore node state from a snapshot. */
+int csilk_raft_snapshot_restore(csilk_raft_node_t* node,
+                                const uint8_t*     snapshot_data,
+                                size_t             snapshot_len);
+
 #endif /* CSILK_RAFT_INTERNAL_H */

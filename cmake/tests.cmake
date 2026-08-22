@@ -100,6 +100,7 @@ set(CSILK_CORE_TESTS
     test_af_xdp_zerocopy
     test_uring_sqpoll
     test_uring_io
+    test_uring_fs
     test_io_backend
     test_io_perf_fallback
     test_wasm_vm
@@ -119,8 +120,12 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core;core;core
 )
+
 
 
 
@@ -211,6 +216,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_sse_concurrent
     test_static
     test_trace_circuit_breaker
+    test_circuit_breaker
     test_otlp_exporter
     test_grpc_gateway
     test_file
@@ -225,7 +231,7 @@ set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware
+    middleware;middleware
 )
 
 # -- Protocol tests --
@@ -315,9 +321,11 @@ set(CSILK_MESSAGING_TESTS
     test_raft_rpc
     test_raft_consensus
     test_raft_failover
+    test_raft_snapshot
 )
 set(CSILK_MESSAGING_TEST_DIRS
-    mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging;messaging;messaging
+    mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging
+    messaging;messaging;messaging
 )
 
 # -- Extra / integration tests --
