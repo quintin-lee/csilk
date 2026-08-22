@@ -23,11 +23,13 @@ static void
 test_reload_start_null_lib_path(void)
 {
     printf("Testing csilk_dev_hot_reload_start with NULL lib_path...\n");
-    csilk_server_t* server = csilk_server_new(csilk_router_new());
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
     assert(server != NULL);
     int rc = csilk_dev_hot_reload_start(server, NULL, "init");
     assert(rc == -1);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("  passed\n");
 }
 
@@ -35,11 +37,13 @@ static void
 test_reload_start_null_init_sym(void)
 {
     printf("Testing csilk_dev_hot_reload_start with NULL init_sym...\n");
-    csilk_server_t* server = csilk_server_new(csilk_router_new());
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
     assert(server != NULL);
     int rc = csilk_dev_hot_reload_start(server, "/tmp/lib.so", NULL);
     assert(rc == -1);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("  passed\n");
 }
 
@@ -56,11 +60,13 @@ static void
 test_reload_trigger_uninitialized(void)
 {
     printf("Testing csilk_dev_hot_reload_trigger on uninitialized server...\n");
-    csilk_server_t* server = csilk_server_new(csilk_router_new());
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
     assert(server != NULL);
     int rc = csilk_dev_hot_reload_trigger(server);
     assert(rc == -1);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("  passed\n");
 }
 
@@ -76,10 +82,12 @@ static void
 test_reload_stop_uninitialized(void)
 {
     printf("Testing csilk_dev_hot_reload_stop on uninitialized server...\n");
-    csilk_server_t* server = csilk_server_new(csilk_router_new());
+    csilk_router_t* router = csilk_router_new();
+    csilk_server_t* server = csilk_server_new(router);
     assert(server != NULL);
     csilk_dev_hot_reload_stop(server);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("  passed\n");
 }
 
