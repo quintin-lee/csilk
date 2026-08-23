@@ -20,7 +20,7 @@ csilk 是一个 C23 标准编写的高性能异步 Web 框架，定位介于 Ngi
 |------|--------|------|
 | `src/` 源码 | 248 | ~30K |
 | `include/` 头文件 | 53 | ~15K |
-| `tests/` 测试 | 203 | ~34K |
+| `tests/` 测试 | 213 | ~36K |
 | `examples/` 示例 | 22 | ~5K |
 | `cmake/` 构建模块 | — | ~5K |
 | `python/` CFFI 绑定 | — | ~4K |
@@ -211,7 +211,7 @@ memcpy(pwd_buf, password, len);
 | `csrf.c` | 164 | CSRF Token 验证 |
 | `auth.c` | 48 | 基础认证 |
 | `sse.c` | 245 | Server-Sent Events |
-| `request_id.c` | 204 | 请求 ID 注入 |
+| `request_id.c` | 204 | 请求 ID 注入 + 健康检查 |
 | `grpc_gateway.c` | 102 | gRPC 网关 |
 | `otlp_exporter.c` | 186 | OpenTelemetry 导出 |
 | `otlp_trace.c` | 232 | 分布式追踪 |
@@ -340,7 +340,7 @@ memcpy(pwd_buf, password, len);
 | uring Release | clang | 否 | ✅ | io_uring 性能 |
 | uring ASAN | clang | ✅ | ✅ | io_uring 内存安全 |
 
-### 9.2 测试覆盖（203 个测试文件，34K 行）
+### 9.2 测试覆盖（213 个测试文件，34K 行）
 
 | 分类 | 文件数 | 代表性测试 |
 |------|--------|----------|
@@ -428,7 +428,7 @@ src/core/server/
 
 - **零拷贝热路径**：HTTP header/body 直接引用 recv buffer，无额外 malloc
 - **模块化程度高**：9 个子库可独立链接，依赖关系清晰单向
-- **测试驱动**：203 测试文件覆盖核心路径 + 形式化压力测试（RCU 10K stress）
+- **测试驱动**：213 测试文件覆盖核心路径 + 形式化压力测试（RCU 10K stress）
 - **双后端 I/O**：同一套核心代码支持 libuv 和 io_uring
 - **ABI 稳定性**：不透明句柄模式保障向后兼容
 - **并发安全文档化**：AGENTS.md 记录了所有关键陷阱和 invariant
