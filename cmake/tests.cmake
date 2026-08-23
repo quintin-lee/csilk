@@ -249,9 +249,10 @@ set(CSILK_PROTOCOL_TESTS
     test_mcp_jsonrpc
     test_mcp_server_client
     test_mcp_server_core
+    test_mcp_stdio
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
@@ -333,9 +334,10 @@ set(CSILK_EXTRA_TESTS
     test_session_integration
     test_middleware_chain_integration
     test_openapi_integration
+    test_sse_integration
 )
 set(CSILK_EXTRA_TEST_DIRS
-    integration;integration;integration;integration;integration;integration;integration
+    integration;integration;integration;integration;integration;integration;integration;integration
 )
 
 # Collect all test names for run_tests DEPENDS

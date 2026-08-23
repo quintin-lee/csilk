@@ -110,6 +110,31 @@ test_set_string_empty_string(void)
     printf("  passed\n");
 }
 
+static void
+test_set_string_immutable_no_idoc(void)
+{
+    printf("Testing csilk_json_set_string on immutable with no idoc...\n");
+    csilk_json_t v = {0};
+    v.u.raw = (void*)0x1234; /* fake pointer so !v->u.raw is false */
+    v.doc.idoc = NULL;
+    bool result = csilk_json_set_string(&v, "new");
+    assert(result == false);
+    printf("  passed\n");
+}
+
+static void
+test_set_string_mutable_no_mdoc(void)
+{
+    printf("Testing csilk_json_set_string on mutable with no mdoc...\n");
+    csilk_json_t v = {0};
+    v.u.raw = (void*)0x1234;
+    v.flags |= CSILK_JSON_F_MUTABLE;
+    v.doc.mdoc = NULL;
+    bool result = csilk_json_set_string(&v, "new");
+    assert(result == false);
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -119,6 +144,8 @@ main(void)
     test_set_string_mutable_update();
     test_set_string_non_string_value();
     test_set_string_empty_string();
+    test_set_string_immutable_no_idoc();
+    test_set_string_mutable_no_mdoc();
 
     printf("All test_json_mutate tests passed successfully!\n");
     return 0;
