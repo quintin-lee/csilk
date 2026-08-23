@@ -310,6 +310,20 @@ test_jwt_options()
     csilk_test_ctx_free(c);
 }
 
+static void
+test_jwt_middleware_null_key(void)
+{
+    printf("Testing JWT middleware with NULL key...\n");
+    csilk_ctx_t*    c = csilk_test_ctx_new();
+    csilk_handler_t handlers[] = {nullptr};
+    csilk_test_ctx_set_handlers(c, handlers);
+    csilk_jwt_middleware(c, NULL);
+    assert(csilk_is_aborted(c) == 1);
+    assert(csilk_get_status(c) == CSILK_STATUS_INTERNAL_SERVER_ERROR);
+    csilk_test_ctx_free(c);
+    printf("  passed\n");
+}
+
 int
 main()
 {
