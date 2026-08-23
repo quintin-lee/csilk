@@ -241,8 +241,14 @@ make
 #   -DUSE_TSAN=ON             Enable ThreadSanitizer (default OFF)
 #   -DUSE_FUZZER=ON           Enable libFuzzer (default OFF)
 
-# Run tests
-ctest --output-on-failure
+# Run tests (excludes integration, ~28s)
+ctest -E test_integration --output-on-failure
+
+# Run with coverage (requires gcc + gcovr)
+cmake -B build_cov -S . -DCMAKE_C_COMPILER=gcc -DUSE_COVERAGE=ON
+cmake --build build_cov
+ctest --test-dir build_cov -E test_integration --output-on-failure
+gcovr -r build_cov --filter src/  # 66% line coverage
 ```
 
 ## Modular Sub-Libraries & Integration
@@ -491,7 +497,7 @@ include/csilk/        # Public Hierarchical Headers
   └── csilk.h         # Main entry point (includes all modules)
 
 scripts/                # Developer tools (csilkskel scaffold generator, benchmarks, packaging)
-tests/                  # 120+ comprehensive unit tests
+tests/                  # 213 comprehensive unit + integration tests
 examples/               # Functional usage examples (Server, App, AI, WS/TLS/MQ, etc.)
 ```
 
