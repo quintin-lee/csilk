@@ -319,6 +319,7 @@ main()
     test_jwt_options();
     test_jwt_rs256();
     test_jwt_es256();
+    test_jwt_middleware_null_key();
     printf("All JWT tests passed!\n");
     return 0;
 }

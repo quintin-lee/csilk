@@ -488,6 +488,10 @@ csilk_jwt_middleware_options(csilk_ctx_t*               c,
 {
     if (!c || !key) {
         CSILK_LOG_E("JWT: Middleware error: invalid arguments");
+        if (c) {
+            csilk_json_error(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "JWT configuration error");
+            csilk_abort(c);
+        }
         return;
     }
 
