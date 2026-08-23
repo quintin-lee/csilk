@@ -163,7 +163,7 @@ void csilk_uring_close(csilk_uring_t* ring);
 - `uv_stubs.c` — io_uring 下不需要的 libuv API 的兼容性存根
 - `uring_internal.h` — 内部数据结构（ring fd、SQ/CQ 索引）
 
-所有 120 个测试通过。当未定义 `CSILK_USE_URING` 时，libuv epoll 回退保持完全功能 — **对非 Linux 平台或内核 < 5.1 零影响**。
+所有 211 个单元测试通过（io_uring 后端）。当未定义 `CSILK_USE_URING` 时，libuv epoll 回退保持完全功能 — **对非 Linux 平台或内核 < 5.1 零影响**。
 
 **剩余差距**：libuv 仍用于某些抽象垫片（`uv_stubs.c`）。不依赖任何 libuv 的纯 io_uring 构建将在未来版本中跟踪。
 
