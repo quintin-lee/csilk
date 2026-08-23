@@ -103,6 +103,7 @@ set(CSILK_CORE_TESTS
     test_uring_sqpoll
     test_uring_io
     test_uring_fs
+    test_ctx_json
     test_io_backend
     test_io_perf_fallback
     test_wasm_vm
@@ -125,7 +126,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core
 )
 
 
@@ -328,9 +329,13 @@ set(CSILK_EXTRA_TESTS
     test_extra
     test_integration
     test_integration_ext
+    test_admin_integration
+    test_session_integration
+    test_middleware_chain_integration
+    test_openapi_integration
 )
 set(CSILK_EXTRA_TEST_DIRS
-    integration;integration;integration
+    integration;integration;integration;integration;integration;integration;integration
 )
 
 # Collect all test names for run_tests DEPENDS
