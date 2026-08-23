@@ -1,0 +1,8 @@
+[gcovr]
+root = .
+filter = src/
+exclude_files = 
+    src/util/flamegraph\\.c
+    src/drivers/db/redis_storage\\.c
+    src/workflow/workflow_debug\\.c
+    src/core/uring/uring_vector\\.c

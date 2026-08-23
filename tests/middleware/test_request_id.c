@@ -86,6 +86,14 @@ test_health_check_handler()
     printf("health check handler passed!\n");
 }
 
+static void
+test_ready_check_handler_null()
+{
+    printf("Testing ready check handler with nullptr...\n");
+    csilk_ready_check_handler(nullptr);
+    printf("ready check nullptr passed!\n");
+}
+
 int
 main()
 {
@@ -94,6 +102,7 @@ main()
     test_request_id_preserves_existing();
     test_health_check_handler_null();
     test_health_check_handler();
+    test_ready_check_handler_null();
     printf("test_request_id: ALL PASSED\n");
     return 0;
 }
