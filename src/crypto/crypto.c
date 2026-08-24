@@ -308,3 +308,46 @@ csilk_crypto_generate_nonce(uint8_t* out, size_t len)
         }
     }
 }
+
+/**
+ * @brief Allocate memory via the standard allocator.
+ *
+ * Thin convenience wrapper around malloc().  Provided so callers throughout
+ * the framework use a single allocation entry point.
+ *
+ * @param size Number of bytes to allocate.
+ * @return Pointer to the allocated memory, or NULL on failure.
+ */
+void*
+csilk_malloc(size_t size)
+{
+    return malloc(size);
+}
+
+/**
+ * @brief Free memory previously allocated by csilk_malloc()/csilk_strdup().
+ *
+ * Thin convenience wrapper around free().
+ *
+ * @param ptr Pointer to free (may be NULL).
+ */
+void
+csilk_free(void* ptr)
+{
+    free(ptr);
+}
+
+/**
+ * @brief Duplicate a NUL-terminated string.
+ *
+ * Thin convenience wrapper around strdup() that is NULL-safe: a NULL input
+ * yields a NULL return rather than dereferencing NULL.
+ *
+ * @param s NUL-terminated string to duplicate (may be NULL).
+ * @return Heap-allocated copy of @p s, or NULL on allocation failure / NULL input.
+ */
+char*
+csilk_strdup(const char* s)
+{
+    return s ? strdup(s) : NULL;
+}
