@@ -25,7 +25,7 @@ set(CSILK_CORE_SOURCES
     src/core/uring/uring_vector.c
     src/crypto/base64.c
     src/crypto/sha1.c
-    src/crypto/url.c
+    src/crypto/cipher_dispatch.c
     src/crypto/uuid.c
     src/crypto/crypto.c
     src/crypto/bcrypt.c
@@ -92,6 +92,7 @@ set(CSILK_HTTP_SOURCES
     src/core/primitives/recovery.c
     src/core/primitives/header_map.c
     src/core/primitives/query.c
+    src/core/primitives/url.c
     src/core/primitives/response.c
     src/core/primitives/router.c
     src/core/primitives/router_simd.c
