@@ -348,3 +348,161 @@ _csilk_jwt_verify(csilk_ctx_t*    c,
     }
     return d->jwt_verify(key, key_len, data, data_len, signature, sig_len, algorithm);
 }
+
+/* ============================================================================
+ * Public API — standalone cipher operations (no request context required)
+ * ============================================================================ */
+
+/**
+ * @brief AES-256-GCM symmetric encryption.
+ *
+ * Validates parameters then delegates to the built-in cipher driver.
+ */
+int
+csilk_symmetric_encrypt(const uint8_t* key,
+                        size_t         key_len,
+                        const uint8_t* plaintext,
+                        size_t         plaintext_len,
+                        const uint8_t* iv,
+                        size_t         iv_len,
+                        uint8_t*       ciphertext,
+                        size_t*        ciphertext_len,
+                        uint8_t*       tag,
+                        size_t         tag_len)
+{
+    if (!key || !plaintext || !iv || !ciphertext || !ciphertext_len || !tag) {
+        return -1;
+    }
+    if (key_len != CSILK_AES256_KEY_SIZE || iv_len != CSILK_GCM_IV_SIZE ||
+        tag_len != CSILK_GCM_TAG_SIZE) {
+        return -1;
+    }
+    return _csilk_symmetric_encrypt(NULL,
+                                    key,
+                                    key_len,
+                                    plaintext,
+                                    plaintext_len,
+                                    iv,
+                                    iv_len,
+                                    ciphertext,
+                                    ciphertext_len,
+                                    tag,
+                                    tag_len);
+}
+
+/**
+ * @brief AES-256-GCM symmetric decryption with tag verification.
+ */
+int
+csilk_symmetric_decrypt(const uint8_t* key,
+                        size_t         key_len,
+                        const uint8_t* ciphertext,
+                        size_t         ciphertext_len,
+                        const uint8_t* iv,
+                        size_t         iv_len,
+                        const uint8_t* tag,
+                        size_t         tag_len,
+                        uint8_t*       plaintext,
+                        size_t*        plaintext_len)
+{
+    if (!key || !ciphertext || !iv || !tag || !plaintext || !plaintext_len) {
+        return -1;
+    }
+    if (key_len != CSILK_AES256_KEY_SIZE || iv_len != CSILK_GCM_IV_SIZE ||
+        tag_len != CSILK_GCM_TAG_SIZE) {
+        return -1;
+    }
+    return _csilk_symmetric_decrypt(NULL,
+                                    key,
+                                    key_len,
+                                    ciphertext,
+                                    ciphertext_len,
+                                    iv,
+                                    iv_len,
+                                    tag,
+                                    tag_len,
+                                    plaintext,
+                                    plaintext_len);
+}
+
+/**
+ * @brief Generate an RSA-2048 key pair (PEM-encoded).
+ */
+int
+csilk_rsa_generate_keypair(char* public_key, size_t* pub_len, char* private_key, size_t* priv_len)
+{
+    if (!pub_len || !priv_len) {
+        return -1;
+    }
+    return _csilk_generate_keypair(NULL, public_key, pub_len, private_key, priv_len);
+}
+
+/**
+ * @brief RSA-OAEP encryption.
+ */
+int
+csilk_rsa_encrypt(const char*    public_key,
+                  size_t         pub_len,
+                  const uint8_t* plaintext,
+                  size_t         plaintext_len,
+                  uint8_t*       ciphertext,
+                  size_t*        ciphertext_len)
+{
+    if (!public_key || !plaintext || !ciphertext || !ciphertext_len) {
+        return -1;
+    }
+    return _csilk_asymmetric_encrypt(
+        NULL, public_key, pub_len, plaintext, plaintext_len, ciphertext, ciphertext_len);
+}
+
+/**
+ * @brief RSA-OAEP decryption.
+ */
+int
+csilk_rsa_decrypt(const char*    private_key,
+                  size_t         priv_len,
+                  const uint8_t* ciphertext,
+                  size_t         ciphertext_len,
+                  uint8_t*       plaintext,
+                  size_t*        plaintext_len)
+{
+    if (!private_key || !ciphertext || !plaintext || !plaintext_len) {
+        return -1;
+    }
+    return _csilk_asymmetric_decrypt(
+        NULL, private_key, priv_len, ciphertext, ciphertext_len, plaintext, plaintext_len);
+}
+
+/**
+ * @brief RSA-PSS signature generation.
+ */
+int
+csilk_rsa_sign(const char*    private_key,
+               size_t         priv_len,
+               const uint8_t* data,
+               size_t         data_len,
+               uint8_t*       signature,
+               size_t*        sig_len)
+{
+    if (!private_key || !data || !signature || !sig_len) {
+        return -1;
+    }
+    return _csilk_sign(NULL, private_key, priv_len, data, data_len, signature, sig_len);
+}
+
+/**
+ * @brief RSA-PSS signature verification.
+ */
+int
+csilk_rsa_verify(const char*    public_key,
+                 size_t         pub_len,
+                 const uint8_t* data,
+                 size_t         data_len,
+                 const uint8_t* signature,
+                 size_t         sig_len)
+{
+    if (!public_key || !data || !signature) {
+        return -1;
+    }
+    return _csilk_verify(NULL, public_key, pub_len, data, data_len, signature, sig_len);
+}
