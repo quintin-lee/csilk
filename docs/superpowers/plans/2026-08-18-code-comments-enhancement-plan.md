@@ -1,7 +1,7 @@
 # Csilk 代码库注释完善与 API 文档化实施计划 (Implementation Plan)
 
 - **日期**：2026-08-18
-- **版本**：v0.5.1
+- **版本**：v0.5.2
 - **关联设计文档**：[docs/superpowers/specs/2026-08-18-code-comments-enhancement-design.md](file:///home/quintin/Data/source/c_cpp/server-c/docs/superpowers/specs/2026-08-18-code-comments-enhancement-design.md)
 - **目标**：分 4 大阶段逐步推进全库公共 API 头文件 Doxygen 文档化与核心源文件关键路径算法/并发注释。
 

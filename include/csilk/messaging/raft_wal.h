@@ -3,7 +3,7 @@
  * @file raft_wal.h
  * @brief Distributed Raft consensus WAL log replication engine for csilk.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

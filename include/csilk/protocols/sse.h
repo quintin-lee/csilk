@@ -3,7 +3,7 @@
  * @file sse.h
  * @brief Server-Sent Events (SSE) functions for the csilk framework.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

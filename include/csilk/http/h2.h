@@ -5,7 +5,8 @@
  *
  * Provides HTTP/2 session management, stream handling, and server push.
  *
- * @copyright MIT License
+ \* @version 0.5.2
+ \* @copyright MIT License
  */
 
 #include <stdint.h>

@@ -1,6 +1,6 @@
 # AI 引擎使用指南
 
-> **Version**: 0.5.1 | **Last updated**: 2026-08-22
+> **Version**: 0.5.2 | **Last updated**: 2026-08-22
 
 csilk 的 AI 引擎提供了一个供应商无关的统一接口，用于集成大语言模型（LLM）和向量嵌入服务。支持 OpenAI、Ollama 等后端，可通过 `csilk_ai_register_driver` 注册自定义驱动。
 

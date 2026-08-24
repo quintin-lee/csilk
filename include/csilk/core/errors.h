@@ -3,7 +3,7 @@
  * @file errors.h
  * @brief Standard HTTP status codes and validation flags for csilk.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

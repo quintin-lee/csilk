@@ -6,7 +6,7 @@
  * Provides functions to write status codes, body content, headers,
  * cookies, JSON, redirects, file responses, and streaming responses.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

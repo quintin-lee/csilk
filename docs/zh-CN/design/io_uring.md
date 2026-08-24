@@ -1,6 +1,6 @@
 # io_uring 集成可行性研究
 
-> **日期**: 2026-06-05 | **版本**: 0.5.1 | **状态**: **已实现（统一跨后端 csilk_io 抽象层）**
+> **日期**: 2026-06-05 | **版本**: 0.5.2 | **状态**: **已实现（统一跨后端 csilk_io 抽象层）**
 >
 > **更新（2026-08）**: 在 `<csilk/core/sys_io.h>` 与 `<csilk/core/sync.h>` 中规范实现了跨后端纯净 I/O 抽象（`csilk_io_*`、`csilk_thread_*`、`csilk_barrier_*`）。统一服务器核心（`src/core/server/`）无需维护冗余副本即可无缝驱动 `libuv`（默认）与原生 `io_uring`（`src/core/uring/uring_io.c`、`uring_thread_pool.c`、`uring_fs.c`）。使用 `-DCSILK_USE_URING=ON` 构建（仅 Linux）。当前用法请参见[构建指南](../contributing/how-to-build.md)和[架构白皮书](../architecture.md)。
 

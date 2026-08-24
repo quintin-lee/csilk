@@ -3,7 +3,7 @@
  * @file server.h
  * @brief Server lifecycle: creation, configuration, execution, and shutdown.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 
