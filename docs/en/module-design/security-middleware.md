@@ -1,6 +1,6 @@
 # Security Middleware Deep Dive
 
-> **Version**: 0.5.1 | **Last updated**: 2026-08-22
+> **Version**: 0.5.2 | **Last updated**: 2026-08-22
 
 This document provides deep architectural analysis of csilk's security middleware stack: Circuit Breaker, Sliding Window Rate Limiter, Web Application Firewall (WAF), and eBPF XDP kernel-level firewall.
 

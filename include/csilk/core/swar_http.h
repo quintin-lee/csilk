@@ -3,7 +3,7 @@
  * @file swar_http.h
  * @brief SWAR (SIMD Within A Register) branchless HTTP/1.1 header scanner.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

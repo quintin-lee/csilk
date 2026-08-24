@@ -6,7 +6,7 @@
  * Provides a high-performance, concurrent, lock-free key-value cache
  * utilizing Epoch-Based Reclamation (EBR) for safe memory management.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

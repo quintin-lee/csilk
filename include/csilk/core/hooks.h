@@ -6,7 +6,7 @@
  * Hooks allow users to inject custom logic at well-defined points in the
  * server and request lifecycle without modifying the framework code.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

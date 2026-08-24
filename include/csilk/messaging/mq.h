@@ -8,7 +8,7 @@
  * main event loop.  Supports middleware chains, persistence via WAL, and
  * background offloading.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-08-24
+
+### Added
+- **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
+- **Public HTTP/2 API** (`csilk_http/h2.h`): Moved from internal `src/core/http/h2.h` to public `include/csilk/http/h2.h`; now includes `csilk_h2_init_session`, `csilk_h2_process_data`, `csilk_h2_get_or_create_stream`, `csilk_h2_free_streams`, `csilk_h2_remove_stream`, `csilk_h2_send_response`, `csilk_h2_submit_push`.
+- **Public Flame Graph API** (`csilk/util/flamegraph.h`): Moved from internal `src/util/flamegraph.h` to public `include/csilk/util/flamegraph.h`; now includes `csilk_flamegraph_start`, `csilk_flamegraph_stop`, `csilk_flamegraph_is_running`.
+
+### Changed
+- **Crypto module refactoring**: Split 711-line `src/crypto/crypto.c` into `crypto.c` (primitives: SHA-256, HMAC, UUID, RNG, nonce, ~297 lines) and `src/crypto/cipher_dispatch.c` (cipher dispatch: AES/RSA/JWT, ~350 lines). Moved `src/crypto/url.c` to `src/core/primitives/url.c` (HTTP parsing utility, not cryptography).
+- **Include directory alignment**: All public headers now match src/ module layout. Internal-only headers (header_map.h, query.h, lfqueue.h) remain in src/ only.
+
+### Fixed
+- **clang-tidy**: Zero warnings on all changed files.
+
 ## [Unreleased]
 
 ### Fixed

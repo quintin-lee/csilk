@@ -32,7 +32,7 @@
  *   csilk_app_run(app, 8080);
  *   csilk_app_free(app);
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

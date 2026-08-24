@@ -3,7 +3,7 @@
  * @file dpdk_pmd.h
  * @brief DPDK (Data Plane Development Kit) Poll Mode Driver user-space network engine.
  *
- * @version 0.5.1
+ * @version 0.5.2
  * @copyright MIT License
  */
 

@@ -1,6 +1,6 @@
 # WAL Persistence — Write-Ahead Log for Message Queue & Workflow
 
-> **Status**: Implemented (v0.5.1) | **Last updated**: 2026-08-22
+> **Status**: Implemented (v0.5.2) | **Last updated**: 2026-08-22
 >
 > **WAL Rules**: Every message **MUST** be appended to the WAL before it is enqueued in memory. WAL frames **MUST** include a checksum for integrity verification. Recovery **MUST** replay frames in append order. The WAL file **MUST** be fsync()'d after every write for durability.
 
