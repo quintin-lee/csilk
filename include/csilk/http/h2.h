@@ -1,14 +1,22 @@
+#pragma once
 /**
  * @file h2.h
  * @brief HTTP/2 integration for csilk.
  *
+ * Provides HTTP/2 session management, stream handling, and server push.
+ *
  * @copyright MIT License
  */
 
-#ifndef CSILK_H2_H
-#define CSILK_H2_H
+#include <stdint.h>
+#include "csilk/core/context.h"
 
-#include "../internal/srv_internal.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Opaque client handle — see core/internal/srv_internal.h */
+typedef struct csilk_client_s csilk_client_t;
 
 /**
  * @brief Initialize HTTP/2 session for a client connection.
@@ -68,4 +76,6 @@ void csilk_h2_send_response(csilk_ctx_t* c);
  */
 int32_t csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path);
 
-#endif /* CSILK_H2_H */
+#ifdef __cplusplus
+}
+#endif

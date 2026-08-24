@@ -17,7 +17,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/ai.h"
-#include "util/flamegraph.h"
+#include "csilk/util/flamegraph.h"
 
 /* Weak fallbacks for optional sub-modules (AI, DB) */
 #if defined(__GNUC__) || defined(__clang__)
