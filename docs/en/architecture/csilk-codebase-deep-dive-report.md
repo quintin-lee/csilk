@@ -1,7 +1,7 @@
 # Csilk (`csilk`) Codebase Architecture & Subsystem Deep-Dive Whitepaper
 
 - **Version**: v0.5.2
-- **Date**: 2026-08-22
+- **Date**: 2026-08-24
 - **Target Project**: Csilk (`csilk`) — High-Performance C23 Asynchronous Web Service & Agentic Runtime
 
 ---
