@@ -17,7 +17,7 @@
 
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
-#include "h2.h"
+#include "csilk/http/h2.h"
 #include "../internal/srv_impl.h"
 
 /* --- ALPN Selection --- */

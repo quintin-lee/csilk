@@ -23,7 +23,7 @@
  */
 
 #include "core/ctx/ctx_internal.h"
-#include "core/http/h2.h"
+#include "csilk/http/h2.h"
 #include "core/internal/srv_impl.h"
 #include "core/internal/srv_internal.h"
 #include "core/primitives/header_map.h"

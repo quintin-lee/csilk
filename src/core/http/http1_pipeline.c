@@ -14,7 +14,7 @@
 #include "../internal/srv_internal.h"
 #include "../ctx/ctx_internal.h"
 #include "../primitives/header_map.h"
-#include "h2.h"
+#include "csilk/http/h2.h"
 #include "../internal/srv_impl.h"
 
 /* --- Post-response cleanup --- */

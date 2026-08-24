@@ -3,7 +3,7 @@
  * @brief HTTP/2 response sending and server push.
  */
 
-#include "h2.h"
+#include "csilk/http/h2.h"
 #include "csilk/csilk.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"

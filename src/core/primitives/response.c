@@ -20,7 +20,7 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "../primitives/header_map.h"
-#include "../http/h2.h"
+#include "csilk/http/h2.h"
 
 /* --- Status & string --- */
 
