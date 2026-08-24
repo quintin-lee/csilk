@@ -18,6 +18,13 @@
 
 #include "csilk/core/hash.h"
 
+/**
+ * @brief Initialise a SHA-1 hashing context.
+ *
+ * Must be called before any csilk_sha1_update or csilk_sha1_final calls.
+ *
+ * @param context  Pointer to an uninitialised csilk_sha1_ctx (zeroed on entry).
+ */
 void
 csilk_sha1_init(csilk_sha1_ctx* context)
 {
@@ -27,6 +34,16 @@ csilk_sha1_init(csilk_sha1_ctx* context)
     }
 }
 
+/**
+ * @brief Feed data into the SHA-1 hashing context.
+ *
+ * May be called multiple times with arbitrary-length inputs.  The context
+ * must have been initialised by a prior csilk_sha1_init call.
+ *
+ * @param context  SHA-1 context (initialised).
+ * @param data     Input bytes.
+ * @param len      Number of bytes in @p data.
+ */
 void
 csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
 {
@@ -35,6 +52,15 @@ csilk_sha1_update(csilk_sha1_ctx* context, const uint8_t* data, size_t len)
     }
 }
 
+/**
+ * @brief Finalise the SHA-1 hash and write the 20-byte digest.
+ *
+ * After calling this function the context is in an indeterminate state and
+ * must be re-initialised via csilk_sha1_init before further use.
+ *
+ * @param context  SHA-1 context (all data fed via csilk_sha1_update).
+ * @param[out] digest  20-byte array receiving the SHA-1 hash output.
+ */
 void
 csilk_sha1_final(csilk_sha1_ctx* context, uint8_t digest[20])
 {

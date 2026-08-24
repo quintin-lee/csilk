@@ -356,7 +356,30 @@ _csilk_jwt_verify(csilk_ctx_t*    c,
 /**
  * @brief AES-256-GCM symmetric encryption.
  *
- * Validates parameters then delegates to the built-in cipher driver.
+ * Validates that all required pointers are non-NULL and that key, IV,
+ * and tag sizes match AES-256-GCM constants (32 / 12 / 16 bytes) before
+ * delegating to the cipher driver dispatch.
+ *
+ * When a cipher driver is installed on the default server, it is used
+ * automatically.  Otherwise the built-in OpenSSL AES-256-GCM backend
+ * performs the encryption.
+ *
+ * @param key            Encryption key (must be CSILK_AES256_KEY_SIZE = 32 bytes).
+ * @param key_len        Key length (must equal CSILK_AES256_KEY_SIZE).
+ * @param plaintext      Data to encrypt.
+ * @param plaintext_len  Plaintext length in bytes.
+ * @param iv             12-byte initialisation vector (nonce per NIST SP 800-38D).
+ * @param iv_len         IV length (must equal CSILK_GCM_IV_SIZE = 12).
+ * @param[out] ciphertext  Output buffer; must be at least @p plaintext_len bytes.
+ * @param[in,out] ciphertext_len  In: capacity of @p ciphertext; Out: actual length
+ *                                written (≤ plaintext_len + CSILK_GCM_TAG_SIZE if
+ *                                the caller reserves tag space inline, or just
+ *                                plaintext_len when tag is separate).
+ * @param[out] tag       16-byte authentication tag buffer (CSILK_GCM_TAG_SIZE).
+ * @param tag_len        Tag buffer size (must equal CSILK_GCM_TAG_SIZE = 16).
+ * @return 0 on success; -1 on parameter validation failure or driver error.
+ * @note Ciphertext may be up to 16 bytes longer than plaintext (GCM tag).
+ *       Ensure @p ciphertext has sufficient capacity.
  */
 int
 csilk_symmetric_encrypt(const uint8_t* key,
@@ -391,7 +414,26 @@ csilk_symmetric_encrypt(const uint8_t* key,
 }
 
 /**
- * @brief AES-256-GCM symmetric decryption with tag verification.
+ * @brief AES-256-GCM symmetric decryption with authentication tag verification.
+ *
+ * Validates that all required pointers are non-NULL and that key, IV,
+ * and tag sizes match AES-256-GCM constants (32 / 12 / 16 bytes) before
+ * delegating to the cipher driver dispatch.
+ *
+ * The authentication tag is verified before any plaintext is written.
+ * A tag mismatch causes the function to return -1 without decrypting.
+ *
+ * @param key            Decryption key (must be CSILK_AES256_KEY_SIZE = 32 bytes).
+ * @param key_len        Key length (must equal CSILK_AES256_KEY_SIZE).
+ * @param ciphertext     Data to decrypt.
+ * @param ciphertext_len Ciphertext length in bytes.
+ * @param iv             12-byte initialisation vector (must match the encryption IV).
+ * @param iv_len         IV length (must equal CSILK_GCM_IV_SIZE = 12).
+ * @param tag            16-byte authentication tag produced during encryption.
+ * @param tag_len        Tag length (must equal CSILK_GCM_TAG_SIZE = 16).
+ * @param[out] plaintext   Output buffer; must be at least @p ciphertext_len bytes.
+ * @param[in,out] plaintext_len  In: capacity of @p plaintext; Out: actual length.
+ * @return 0 on success; -1 on parameter validation failure, tag mismatch, or driver error.
  */
 int
 csilk_symmetric_decrypt(const uint8_t* key,
@@ -426,7 +468,22 @@ csilk_symmetric_decrypt(const uint8_t* key,
 }
 
 /**
- * @brief Generate an RSA-2048 key pair (PEM-encoded).
+ * @brief Generate an RSA-2048 key pair, output as PEM-encoded strings.
+ *
+ * Creates a new RSA-2048 key pair using the configured cipher driver
+ * (or the built-in OpenSSL backend) and writes the resulting PEM blocks
+ * into the supplied buffers.
+ *
+ * @param[out] public_key   Buffer to receive the PEM public key.
+ * @param[in,out] pub_len   In: capacity of @p public_key; Out: actual PEM length
+ *                          (including NUL terminator).
+ * @param[out] private_key  Buffer to receive the PEM private key.
+ * @param[in,out] priv_len  In: capacity of @p private_key; Out: actual PEM length
+ *                          (including NUL terminator).
+ * @return 0 on success; -1 on allocation failure, driver error, or insufficient
+ *         buffer capacity.
+ * @note Callers should ensure @p pub_len and @p priv_len have enough capacity
+ *       to hold the PEM output (typically ~600 bytes for RSA-2048).
  */
 int
 csilk_rsa_generate_keypair(char* public_key, size_t* pub_len, char* private_key, size_t* priv_len)
@@ -438,7 +495,19 @@ csilk_rsa_generate_keypair(char* public_key, size_t* pub_len, char* private_key,
 }
 
 /**
- * @brief RSA-OAEP encryption.
+ * @brief RSA-OAEP encryption with SHA-256.
+ *
+ * Encrypts @p plaintext using the RSA public key with OAEP padding
+ * (PKCS#1 v2.2) and SHA-256 as the MGF hash.  The ciphertext length
+ * equals the RSA key size (256 bytes for RSA-2048).
+ *
+ * @param public_key     PEM-encoded RSA public key.
+ * @param pub_len        Length of @p public_key in bytes.
+ * @param plaintext      Data to encrypt (must be ≤ 190 bytes for RSA-2048/OAEP-SHA256).
+ * @param plaintext_len  Length of @p plaintext in bytes.
+ * @param[out] ciphertext  Output buffer; must be at least CSILK_RSA_KEY_SIZE (256) bytes.
+ * @param[in,out] ciphertext_len  In: capacity; Out: actual ciphertext length (always 256).
+ * @return 0 on success; -1 on parameter validation failure or driver error.
  */
 int
 csilk_rsa_encrypt(const char*    public_key,
@@ -456,7 +525,19 @@ csilk_rsa_encrypt(const char*    public_key,
 }
 
 /**
- * @brief RSA-OAEP decryption.
+ * @brief RSA-OAEP decryption with SHA-256.
+ *
+ * Decrypts @p ciphertext using the RSA private key with OAEP padding
+ * (PKCS#1 v2.2) and SHA-256.  The plaintext length depends on how much
+ * data was encrypted (≤ 190 bytes for RSA-2048/OAEP-SHA256).
+ *
+ * @param private_key    PEM-encoded RSA private key.
+ * @param priv_len       Length of @p private_key in bytes.
+ * @param ciphertext     Data to decrypt (typically 256 bytes for RSA-2048).
+ * @param ciphertext_len Ciphertext length in bytes.
+ * @param[out] plaintext   Output buffer; must be at least CSILK_RSA_KEY_SIZE bytes.
+ * @param[in,out] plaintext_len  In: capacity; Out: actual plaintext length.
+ * @return 0 on success; -1 on parameter validation failure or driver error.
  */
 int
 csilk_rsa_decrypt(const char*    private_key,
@@ -474,7 +555,20 @@ csilk_rsa_decrypt(const char*    private_key,
 }
 
 /**
- * @brief RSA-PSS signature generation.
+ * @brief RSA-PSS signature generation with SHA-256.
+ *
+ * Signs @p data using the RSA private key with the PSS padding scheme
+ * (PKCS#1 v2.1) and SHA-256.  The signature length equals the RSA key
+ * size in bytes (256 for RSA-2048).
+ *
+ * @param private_key    PEM-encoded RSA private key.
+ * @param priv_len       Length of @p private_key in bytes.
+ * @param data           Data to sign.
+ * @param data_len       Length of @p data in bytes.
+ * @param[out] signature  Output buffer; must be at least
+ *                        CSILK_RSA_SIGNATURE_SIZE (256) bytes.
+ * @param[in,out] sig_len  In: capacity; Out: actual signature length.
+ * @return 0 on success; -1 on parameter validation failure or driver error.
  */
 int
 csilk_rsa_sign(const char*    private_key,
@@ -491,7 +585,18 @@ csilk_rsa_sign(const char*    private_key,
 }
 
 /**
- * @brief RSA-PSS signature verification.
+ * @brief RSA-PSS signature verification with SHA-256.
+ *
+ * Verifies that @p signature is a valid RSA-PSS/SHA-256 signature over
+ * the original @p data using the provided RSA public key.
+ *
+ * @param public_key     PEM-encoded RSA public key.
+ * @param pub_len        Length of @p public_key in bytes.
+ * @param data           The original signed data.
+ * @param data_len       Length of @p data in bytes.
+ * @param signature      Signature to verify.
+ * @param sig_len        Length of @p signature in bytes.
+ * @return 0 if the signature is valid; -1 if invalid or on error.
  */
 int
 csilk_rsa_verify(const char*    public_key,
