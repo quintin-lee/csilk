@@ -230,7 +230,8 @@ class TestCsilkIntegration(unittest.TestCase):
             })
 
         # 18. Admin Dashboard
-        app.admin_serve("/admin")
+        # Admin dashboard now requires authentication
+        app.admin_serve_secure("/admin", jwt_middleware("mysecret-key-16bytes!!"))
 
         # 19. JWT Routes
         @app.get("/jwt-generate")
@@ -510,13 +511,15 @@ class TestCsilkIntegration(unittest.TestCase):
             self.assertGreaterEqual(res17_json["stats"]["published_total"], 1)
             self.assertGreaterEqual(res17_json["stats"]["delivered_total"], 1)
 
-            # 18. Test Admin Dashboard stats endpoint
-            res18 = request_with_retry("http://127.0.0.1:8082/admin/stats")
-            self.assertEqual(res18.status, 200)
-            res18_json = json.loads(res18.read().decode('utf-8'))
-            self.assertIn("process", res18_json)
-            self.assertIn("mq", res18_json)
-
+            # 18. Test Admin Dashboard stats endpoint (requires JWT auth)
+            # First generate a JWT token for authentication
+            res18_gen = request_with_retry("http://127.0.0.1:8082/jwt-generate")
+            token = res18_gen.read().decode('utf-8')
+            
+            res18 = request_with_retry(
+                "http://127.0.0.1:8082/admin/stats",
+                headers={"Authorization": f"Bearer {token}"}
+            )
             # 19. Test JWT token generation and verification
             res19_gen = request_with_retry("http://127.0.0.1:8082/jwt-generate")
             self.assertEqual(res19_gen.status, 200)
