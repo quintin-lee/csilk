@@ -119,54 +119,46 @@ csilk_csrf_generate_token(char* buf, size_t buf_size)
     /* use /dev/urandom for cryptographically random bytes */
     FILE* fp = fopen("/dev/urandom", "rb");
     if (!fp) {
-        CSILK_LOG_E("CSRF: Cannot open /dev/urandom - token generation failed");
-        return -1;
-    }
-
-    uint8_t random[32];
-    if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
-        explicit_bzero(random, sizeof(random));
+        CSILK_LOG_W("CSRF: Failed to open /dev/urandom. Falling back to "
+                    "non-cryptographically secure PRNG.");
+        /* fallback: use time+pid as weak entropy (better than nothing) */
+        unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid();
+        snprintf(buf,
+                 buf_size,
+                 "%08x%08x%08x%08x",
+                 rand_r(&seed),
+                 rand_r(&seed),
+                 rand_r(&seed),
+                 rand_r(&seed));
+    } else {
+        uint8_t random[16];
+        if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
+            explicit_bzero(random, sizeof(random));
+            fclose(fp);
+            return -1;
+        }
         fclose(fp);
-        return -1;
+        snprintf(buf,
+                 buf_size,
+                 "%02x%02x%02x%02x%02x%02x%02x%02x"
+                 "%02x%02x%02x%02x%02x%02x%02x%02x",
+                 random[0],
+                 random[1],
+                 random[2],
+                 random[3],
+                 random[4],
+                 random[5],
+                 random[6],
+                 random[7],
+                 random[8],
+                 random[9],
+                 random[10],
+                 random[11],
+                 random[12],
+                 random[13],
+                 random[14],
+                 random[15]);
+        explicit_bzero(random, sizeof(random));
     }
-    fclose(fp);
-
-    // Generate 64-char hex token from 32 random bytes
-    for (size_t i = 0; i < sizeof(random); i++) {
-        snprintf(buf + i * 2, 3, "%02x", random[i]);
-    }
-    buf[sizeof(random) * 2] = '\0';
-
-    explicit_bzero(random, sizeof(random));
     return 0;
-    uint8_t random[16];
-    if (fread(random, 1, sizeof(random), fp) != sizeof(random)) {
-        explicit_bzero(random, sizeof(random));
-        fclose(fp);
-        return -1;
-    }
-    fclose(fp);
-    snprintf(buf,
-             buf_size,
-             "%02x%02x%02x%02x%02x%02x%02x%02x"
-             "%02x%02x%02x%02x%02x%02x%02x%02x",
-             random[0],
-             random[1],
-             random[2],
-             random[3],
-             random[4],
-             random[5],
-             random[6],
-             random[7],
-             random[8],
-             random[9],
-             random[10],
-             random[11],
-             random[12],
-             random[13],
-             random[14],
-             random[15]);
-    explicit_bzero(random, sizeof(random));
-}
-return 0;
 }
