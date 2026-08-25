@@ -282,7 +282,11 @@ generate_bg_traffic(void* arg)
                     csilk_app_get(app, "/metrics", csilk_metrics_handler);
                     csilk_app_get(app, "/healthz", csilk_health_check_handler);
                     csilk_app_get(app, "/readyz", csilk_ready_check_handler);
-                    csilk_admin_serve(app, "/admin");
+                    // Require authentication for admin dashboard
+                    csilk_handler_t jwt_auth = [](csilk_ctx_t* c) {
+                        csilk_jwt_middleware(c, "admin-secret-key-32bytes!!");
+                    };
+                    csilk_admin_serve_secure(app, "/admin", jwt_auth);
 
                     /* Business Logic Routes */
                     csilk_app_get(app, "/", hello_handler);
