@@ -176,7 +176,13 @@ wf_greeting(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 }
 
 static void
-admin_stats_check(csilk_ctx_t* c)
+dummy_auth_middleware(csilk_ctx_t* c)
+{
+    csilk_next(c);
+}
+
+static void
+admin_stats_check(csilk_ctx_t* c) static void admin_stats_check(csilk_ctx_t* c)
 {
     csilk_string(c, CSILK_STATUS_OK, "Admin OK");
 }
