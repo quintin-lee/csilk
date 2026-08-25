@@ -5,37 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.4] - 2026-08-25
-
-### Security Fixes
-
-**Critical:**
-- **CSRF token entropy**: Removed fallback to `rand_r()` when `/dev/urandom` is unavailable. Now aborts with error instead of using weak PRNG (CWE-330).
-- **Session cookie Secure flag**: Added `Secure` attribute to session cookies to prevent transmission over unencrypted HTTP (CWE-1004).
-
-**High:**
-- **CSRF cookie Secure flag**: Added `Secure` attribute to CSRF token cookies.
-- **Security response headers**: Added new `csilk_security_headers_middleware()` middleware that sets `X-Frame-Options`, `X-Content-Type-Options`, `X-XSS-Protection`, and `Referrer-Policy` headers (CWE-79, CWE-1021).
-- **Multipart upload size limit**: Added `CSILK_MAX_PART_SIZE` (10 MB) constant and validation to prevent DoS via large file uploads (CWE-434).
-
-**Medium:**
-- **OTLP trace random**: Replaced `rand()` with OpenSSL `RAND_bytes()` for span ID generation (CWE-330).
-- **XDP WAF atoi validation**: Added range check (0-128) for CIDR prefix length parsing (CWE-284).
-- **Config timeout validation**: Added range validation for timeout configuration values (0-3600000ms) (CWE-284).
-
-### Changed
-- **CSRF token generation**: Simplified to single path using only `/dev/urandom`; removed weak fallback entirely.
-- **Session cookie**: Now sets `Secure` flag by default; `HttpOnly` flag retained.
-- **Multipart parser**: Added size validation before invoking user handler callback.
-- **OTLP tracer**: Uses cryptographically secure random for span ID generation.
-
-### Test Coverage
-- **Total tests**: 211 (all passing)
-- **CI**: Linux Debug/Release, macOS Release — all green
-
----
-
 ## [Unreleased]
+
 
 ### Added
 - **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
