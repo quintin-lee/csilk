@@ -201,7 +201,7 @@ run_server(void* arg)
     csilk_app_get(app, "/mq/publish", mq_test_publish);
 
     /* --- Admin Dashboard --- */
-    csilk_admin_serve(app, "/admin");
+    csilk_admin_serve_secure(app, "/admin", dummy_auth_middleware);
     csilk_app_get(app, "/admin/status", admin_stats_check);
 
     /* --- Workflow --- */
