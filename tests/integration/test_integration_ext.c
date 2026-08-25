@@ -7,7 +7,6 @@
  */
 
 #include <arpa/inet.h>
-#include <signal.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -24,7 +23,7 @@
 #include "csilk/app/app.h"
 
 #define PORT 8101
-#define BUFSIZE 65536
+#define BUFSIZE 16384
 
 static int         g_tests_passed = 0;
 static int         g_tests_failed = 0;
@@ -45,38 +44,15 @@ test_result(const char* name, int ok)
 static int
 recv_response(int sock, char* buf, size_t size)
 {
-    fd_set fds;
-    int    total = 0;
-    while (total < (int)size - 1) {
-        struct timeval tv = {3, 0};
-        FD_ZERO(&fds);
-        FD_SET(sock, &fds);
-        int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
-        if (ret <= 0) {
-            break;
-        }
-        int n = (int)recv(sock, buf + total, (int)size - 1 - total, 0);
-        if (n <= 0) {
-            break;
-        }
-        total += n;
-        buf[total] = '\0';
-        char* hdr_end = strstr(buf, "\r\n\r\n");
-        if (hdr_end) {
-            char* cl = strstr(buf, "Content-Length: ");
-            if (!cl) {
-                cl = strstr(buf, "content-length: ");
-            }
-            if (cl) {
-                int content_len = atoi(cl + 16);
-                int body_len = total - (int)(hdr_end + 4 - buf);
-                if (body_len >= content_len) {
-                    break;
-                }
-            }
-        }
+    fd_set         fds;
+    struct timeval tv = {3, 0};
+    FD_ZERO(&fds);
+    FD_SET(sock, &fds);
+    int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
+    if (ret <= 0) {
+        return -1;
     }
-    return total;
+    return recv(sock, buf, size - 1, 0);
 }
 
 static int
@@ -101,23 +77,19 @@ expect_body(const char* resp, const char* body)
 static int
 connect_server()
 {
-    int sock;
-    for (int retry = 0; retry < 50; retry++) {
-        sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
-            return -1;
-        }
-        struct sockaddr_in addr;
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        addr.sin_port = htons(PORT);
-        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) >= 0) {
-            return sock;
-        }
-        close(sock);
-        usleep(20000); /* 20 ms */
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        return -1;
     }
-    return -1;
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr.sin_port = htons(PORT);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(sock);
+        return -1;
+    }
+    return sock;
 }
 
 static int
@@ -176,31 +148,20 @@ wf_greeting(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 }
 
 static void
-dummy_auth_middleware(csilk_ctx_t* c)
-{
-    csilk_next(c);
-}
-
-static void
-dummy_auth(csilk_ctx_t* c)
-{
-    csilk_next(c);
-}
-static void
 dummy_auth(csilk_ctx_t* c)
 {
     csilk_next(c);
 }
 
 static void
-admin_stats_check(csilk_ctx_t* c) static void admin_stats_check(csilk_ctx_t* c)
+admin_stats_check(csilk_ctx_t* c)
 {
     csilk_string(c, CSILK_STATUS_OK, "Admin OK");
 }
 
 /* ---- Server thread ---- */
 
-static _Atomic int server_ready = 0;
+static volatile int server_ready = 0;
 
 static void*
 run_server(void* arg)
@@ -218,7 +179,7 @@ run_server(void* arg)
     csilk_app_get(app, "/mq/publish", mq_test_publish);
 
     /* --- Admin Dashboard --- */
-    csilk_admin_serve_secure(app, "/admin", dummy_auth_middleware);
+    csilk_admin_serve_secure(app, "/admin", dummy_auth);
     csilk_app_get(app, "/admin/status", admin_stats_check);
 
     /* --- Workflow --- */
@@ -282,8 +243,7 @@ test_admin_ui()
         test_result("Admin UI (connect)", 0);
         return;
     }
-    const char* req = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer "
-                      "test-token\r\nConnection: close\r\n\r\n";
+    const char* req = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     send_request(sock, req);
     char buf[BUFSIZE] = {0};
     int  n = recv_response(sock, buf, sizeof(buf));
@@ -301,8 +261,7 @@ test_admin_stats()
         test_result("Admin stats (connect)", 0);
         return;
     }
-    const char* req = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer "
-                      "test-token\r\nConnection: close\r\n\r\n";
+    const char* req = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     send_request(sock, req);
     char buf[BUFSIZE] = {0};
     int  n = recv_response(sock, buf, sizeof(buf));
@@ -407,8 +366,6 @@ main()
 {
     printf("=== Extended Integration Tests ===\n\n");
 
-    signal(SIGPIPE, SIG_IGN);
-
     pthread_t thread;
     pthread_create(&thread, nullptr, run_server, nullptr);
     while (!server_ready) {
@@ -417,19 +374,12 @@ main()
     nanosleep(&(struct timespec){0, 50000000}, nullptr);
 
     test_get_root();
-    usleep(10000);
     test_mq_publish();
-    usleep(10000);
     test_admin_ui();
-    usleep(10000);
     test_admin_stats();
-    usleep(10000);
     test_workflow_run();
-    usleep(10000);
     test_keepalive_multi();
-    usleep(10000);
     test_404_not_found();
-    usleep(10000);
     test_get_with_query();
 
     printf("\n=== Extended Integration Results: %d passed, %d failed ===\n",
