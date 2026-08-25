@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security Fixes
+
+**Critical:**
+- **CSRF token entropy**: Removed fallback to `rand_r()` when `/dev/urandom` is unavailable. Now aborts with error instead of using weak PRNG (CWE-330).
+- **Session cookie Secure flag**: Added `Secure` attribute to session cookies (CWE-1004).
+
+**High:**
+- **CSRF cookie Secure flag**: Added `Secure` attribute to CSRF token cookies.
+- **Security response headers**: Added new `csilk_security_headers_middleware()` setting `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` (CWE-79, CWE-1021).
+- **Multipart size limit**: Added `CSILK_MAX_PART_SIZE` (10 MB) to prevent DoS (CWE-434).
+
+**Medium:**
+- **OTLP trace random**: Replaced `rand()` with OpenSSL `RAND_bytes()` (CWE-330).
+- **XDP WAF atoi validation**: Added range check for CIDR prefix length (CWE-284).
+- **Config timeout validation**: Added range validation for timeout values (CWE-284).
 
 ### Added
 - **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
@@ -19,11 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test count**: 211 → 213 (added cipher public API tests: 5 test functions).
 
 ### Fixed
-- **clang-tidy**: Zero warnings on all changed files.
-
-# Changelog
-
-All notable changes to this project will be documented in this file.
+- **clang-tidy**: Zero warnings on all changed files. to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
