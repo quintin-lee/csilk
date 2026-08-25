@@ -235,13 +235,13 @@ class TestCsilkIntegration(unittest.TestCase):
         # 19. JWT Routes
         @app.get("/jwt-generate")
         def handle_jwt_generate(ctx: Context):
-            token = ctx.jwt_generate({"user": "gemini", "role": "tester"}, "mysecret")
+            token = ctx.jwt_generate({"user": "gemini", "role": "tester"}, "mysecret-key-16bytes!!")
             if token:
                 ctx.string(200, token)
             else:
                 ctx.string(500, "generation failed")
 
-        app.use_group("/jwt-protected", jwt_middleware("mysecret"))
+        app.use_group("/jwt-protected", jwt_middleware("mysecret-key-16bytes!!"))
         @app.get("/jwt-protected/info")
         def handle_jwt_info(ctx: Context):
             payload = ctx.jwt_payload
