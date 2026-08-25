@@ -404,7 +404,7 @@ test_jwt_middleware_missing(void)
     csilk_handler_t handlers[] = {dummy_next_handler, NULL};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    csilk_jwt_middleware(c, "secret");
+    csilk_jwt_middleware(c, "secret-key-for-testing");
     assert(csilk_is_aborted(c) == 1);
     assert(csilk_get_status(c) == CSILK_STATUS_UNAUTHORIZED);
 
