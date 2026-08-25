@@ -118,6 +118,11 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
         return;
     }
 
+    /* Normalize status to valid redirect range (300-308) */
+    if (status < 300 || status > 308) {
+        status = CSILK_STATUS_FOUND; /* 302 */
+    }
+
     /* Sanitize Location header to prevent open redirect and header injection */
     char   sanitized[1024];
     size_t i = 0;
