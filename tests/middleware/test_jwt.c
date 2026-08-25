@@ -24,7 +24,7 @@ test_jwt_core()
     csilk_json_add_string(payload, "name", "John Doe");
     csilk_json_add_number(payload, "iat", 1516239022);
 
-    const char* secret = "secret";
+    const char* secret = "supersecretkey12345";
 
     csilk_ctx_t* c = csilk_test_ctx_new();
 
@@ -70,7 +70,7 @@ test_jwt_middleware()
     csilk_handler_t handlers[] = {dummy_handler, dummy_handler, nullptr};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    const char*   secret = "supersecret";
+    const char*   secret = "supersecret-key-1234";
     csilk_json_t* payload = csilk_json_object();
     csilk_json_add_string(payload, "user", "admin");
     char* token = csilk_jwt_generate(c, payload, secret);
@@ -118,7 +118,7 @@ test_jwt_expiration()
     csilk_handler_t handlers[] = {dummy_handler, nullptr};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    const char*   secret = "secret";
+    const char*   secret = "supersecretkey12345";
     csilk_json_t* payload = csilk_json_object();
     csilk_json_add_number(payload, "exp",
                           (double)time(nullptr) - 10); // Expired 10s ago
@@ -263,7 +263,7 @@ test_jwt_options()
     csilk_handler_t handlers[] = {dummy_handler, NULL};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    const char*   secret = "secret";
+    const char*   secret = "supersecretkey12345";
     csilk_json_t* payload = csilk_json_object();
     csilk_json_add_string(payload, "user", "alice");
 
