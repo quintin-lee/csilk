@@ -99,7 +99,11 @@ run_srv(void* a)
     (void)a;
     csilk_app_t* app = csilk_app_new(NULL);
     csilk_app_get(app, "/", hello_h);
-    csilk_admin_serve(app, "/admin");
+    // Use secure variant with auth middleware for testing
+    csilk_handler_t dummy_auth = [](csilk_ctx_t* c) { csilk_next(c); };
+    csilk_admin_serve_secure(app, "/admin", dummy_auth);
+    csilk_handler_t dummy_auth = [](csilk_ctx_t* c) { csilk_next(c); };
+    csilk_admin_serve_secure(app, "/admin", dummy_auth);
     ready = 1;
     srv = csilk_app_server(app);
     csilk_app_run(app, PORT);
