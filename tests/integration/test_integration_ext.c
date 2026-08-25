@@ -186,6 +186,11 @@ dummy_auth(csilk_ctx_t* c)
 {
     csilk_next(c);
 }
+static void
+dummy_auth(csilk_ctx_t* c)
+{
+    csilk_next(c);
+}
 
 static void
 admin_stats_check(csilk_ctx_t* c) static void admin_stats_check(csilk_ctx_t* c)
