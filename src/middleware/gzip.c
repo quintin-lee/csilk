@@ -68,7 +68,12 @@ gzip_work_cb(csilk_io_work_t* req)
         return;
     }
 
+    /* Limit output size to prevent gzip bombs (CWE-400) */
+    const size_t MAX_OUTPUT = (size_t)src_len * 1024;
     state->dest_cap = deflateBound(&strm, (uLong)src_len);
+    if (state->dest_cap > MAX_OUTPUT) {
+        state->dest_cap = MAX_OUTPUT;
+    }
     state->dest = malloc(state->dest_cap);
     if (!state->dest) {
         CSILK_LOG_E("Gzip: failed to allocate compressed destination buffer of %zu bytes",

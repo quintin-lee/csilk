@@ -14,7 +14,7 @@
 #include "../core/ctx/ctx_internal.h"
 
 /** @brief Maximum number of distinct IP addresses tracked concurrently. */
-enum { MAX_IP_ENTRIES = 1024 };
+enum { MAX_IP_ENTRIES = 65536 };
 /** @brief Rate limiting sliding window size in seconds. */
 enum { WINDOW_SIZE = 60 };
 

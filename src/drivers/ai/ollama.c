@@ -19,6 +19,7 @@
 
 #include "csilk/core/json.h"
 #include "csilk/drivers/ai.h"
+#include "csilk/csilk.h"
 
 /** @brief Per-instance state for the Ollama driver. */
 typedef struct {
@@ -154,6 +155,14 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
 
+    /* Validate base_url scheme to prevent SSRF (CWE-918) */
+    if (strncmp(state->base_url, "http://", 7) != 0 &&
+        strncmp(state->base_url, "https://", 8) != 0) {
+        CSILK_LOG_E("AI Ollama: Invalid URL scheme: %.50s...", state->base_url);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
     /* --- Step 2: Perform the HTTP POST --- */
     char url[512];
     snprintf(url, sizeof(url), "%s/api/chat", state->base_url);
@@ -167,6 +176,8 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);

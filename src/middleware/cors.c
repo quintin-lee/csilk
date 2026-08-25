@@ -51,11 +51,18 @@ csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
     /* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
      so caches do not serve CORS responses across different origins. */
     if (config->allow_origin) {
-        CSILK_LOG_T("CORS: Setting CORS header Access-Control-Allow-Origin: %s",
-                    config->allow_origin);
-        csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
-        if (strcmp(config->allow_origin, "*") != 0) {
-            csilk_set_header(c, "Vary", "Origin");
+        /* Reject wildcard origin with credentials (RFC 6454 §6.2) */
+        int reject_wildcard = (config->allow_credentials && strcmp(config->allow_origin, "*") == 0);
+
+        if (reject_wildcard) {
+            CSILK_LOG_W("CORS: Cannot use wildcard origin with credentials");
+        } else {
+            CSILK_LOG_T("CORS: Setting CORS header Access-Control-Allow-Origin: %s",
+                        config->allow_origin);
+            csilk_set_header(c, "Access-Control-Allow-Origin", config->allow_origin);
+            if (strcmp(config->allow_origin, "*") != 0) {
+                csilk_set_header(c, "Vary", "Origin");
+            }
         }
     }
 
