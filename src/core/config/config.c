@@ -143,12 +143,37 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
                 } else if (strcmp(current_section, "server") == 0) {
                     if (strcmp(current_key, "idle_timeout_ms") == 0) {
                         config->server.idle_timeout_ms = atoi(val);
+                        if (config->server.idle_timeout_ms < 0 ||
+                            config->server.idle_timeout_ms > 3600000) {
+                            CSILK_LOG_E("Config: Invalid idle_timeout_ms: %d (must be 0-3600000)",
+                                        config->server.idle_timeout_ms);
+                            config->server.idle_timeout_ms = 30000; /* default */
+                        }
                     } else if (strcmp(current_key, "read_timeout_ms") == 0) {
                         config->server.read_timeout_ms = atoi(val);
+                        if (config->server.read_timeout_ms < 0 ||
+                            config->server.read_timeout_ms > 3600000) {
+                            CSILK_LOG_E("Config: Invalid read_timeout_ms: %d (must be 0-3600000)",
+                                        config->server.read_timeout_ms);
+                            config->server.read_timeout_ms = 30000; /* default */
+                        }
                     } else if (strcmp(current_key, "write_timeout_ms") == 0) {
                         config->server.write_timeout_ms = atoi(val);
+                        if (config->server.write_timeout_ms < 0 ||
+                            config->server.write_timeout_ms > 3600000) {
+                            CSILK_LOG_E("Config: Invalid write_timeout_ms: %d (must be 0-3600000)",
+                                        config->server.write_timeout_ms);
+                            config->server.write_timeout_ms = 30000; /* default */
+                        }
                     } else if (strcmp(current_key, "request_timeout_ms") == 0) {
                         config->server.request_timeout_ms = atoi(val);
+                        if (config->server.request_timeout_ms < 0 ||
+                            config->server.request_timeout_ms > 3600000) {
+                            CSILK_LOG_E(
+                                "Config: Invalid request_timeout_ms: %d (must be 0-3600000)",
+                                config->server.request_timeout_ms);
+                            config->server.request_timeout_ms = 30000; /* default */
+                        }
                     } else if (strcmp(current_key, "max_body_size") == 0) {
                         config->server.max_body_size = (size_t)atoll(val);
                     } else if (strcmp(current_key, "max_header_size") == 0) {
