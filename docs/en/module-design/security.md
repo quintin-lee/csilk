@@ -224,8 +224,8 @@ State-changing methods (POST, PUT, DELETE, etc.):
 
 ### Token Generation
 
-1. Primary: 16 bytes from `/dev/urandom`, formatted as 32-char hex string
-2. Fallback (if `/dev/urandom` unavailable): `rand_r()` seeded with `time() ^ getpid()`
+1. **Primary**: 16 bytes from `/dev/urandom`, formatted as 32-char hex string
+2. **Fallback**: Removed — now aborts with error if `/dev/urandom` unavailable (CWE-330)
 
 ---
 
@@ -346,6 +346,70 @@ csilk_app_add_route_extended_perm(app, "POST", "/orders",
 | `src/middleware/ratelimit.c` | Token-bucket rate limiter |
 | `src/middleware/request_id.c` | X-Request-Id tracing middleware |
 | `tests/security/test_perm.c` | Permission system tests (14 test cases, all passing) |
+
+---
+
+## 12. Security Response Headers
+
+csilk provides `csilk_security_headers_middleware()` to add defensive response headers:
+
+```c
+#include "csilk/core/security_headers.h"
+
+csilk_server_use(server, csilk_security_headers_middleware);
+```
+
+| Header | Value | Protection |
+|---|---|---|
+| `X-Frame-Options` | `DENY` | Prevents clickjacking (CWE-1021) |
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME sniffing |
+| `X-XSS-Protection` | `0` | Disables legacy XSS filter |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer leakage |
+
+> **Note**: `Content-Security-Policy` (CSP) and `Strict-Transport-Security` (HSTS) must be configured per-application requirements.
+
+---
+
+## 13. Cookie Security
+
+### Session Cookie
+
+Session cookies are automatically created with `Secure` and `HttpOnly` flags:
+
+```c
+csilk_session_start(c);
+// Sets: Set-Cookie: csilk_session=<id>; Max-Age=86400; Path=/; Secure; HttpOnly
+```
+
+| Flag | Value | Purpose |
+|---|---|---|
+| `Secure` | `1` | Transmitted only over HTTPS (CWE-1004) |
+| `HttpOnly` | `1` | Blocked from JavaScript access |
+
+### CSRF Token Cookie
+
+CSRF tokens also use `Secure` + `HttpOnly`:
+
+```c
+csilk_app_use(app, csilk_csrf_middleware);
+// Sets: Set-Cookie: csrf_token=<token>; Max-Age=86400; Path=/; Secure; HttpOnly
+```
+
+---
+
+## 14. Multipart Upload Limits
+
+The multipart parser enforces size limits to prevent DoS attacks:
+
+| Limit | Value | File |
+|---|---|---|
+| `CSILK_MAX_PART_NAME` | 128 bytes | Part header name |
+| `CSILK_MAX_PART_FILENAME` | 256 bytes | Upload filename |
+| `CSILK_MAX_PART_SIZE` | 10 MB | Part body size |
+
+Exceeded parts return `413 Payload Too Large` (CWE-434).
+
+---
 
 ---
 
