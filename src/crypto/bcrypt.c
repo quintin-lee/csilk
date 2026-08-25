@@ -380,7 +380,9 @@ csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BC
 #else
     if (RAND_bytes(salt, sizeof(salt)) != 1) {
         if (RAND_priv_bytes(salt, sizeof(salt)) != 1) {
-            memset(salt, 0, sizeof(salt));
+            /* Salt generation failed — do not fall back to zeroed salt (CWE-330).
+             * This is a fatal entropy failure; abort rather than compromise security. */
+            abort();
         }
     }
 #endif

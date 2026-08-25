@@ -91,7 +91,7 @@ static int
 create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
 {
 #ifndef _WIN32
-    snprintf(out_path, max_len, "/tmp/csilk_reload_XXXXXX");
+    snprintf(out_path, max_len, "/tmp/csilk_reload_%lu_XXXXXX", (unsigned long)getpid());
     int fd = mkstemp(out_path);
     if (fd < 0) {
         return -1;
