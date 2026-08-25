@@ -91,108 +91,113 @@ static void
 hello_h(csilk_ctx_t* c)
 {
     csilk_string(c, 200, "Hello");
+}
 
-    static void dummy_auth_middleware(csilk_ctx_t * c)
-    {
-        csilk_next(c);
+static void
+dummy_auth_middleware(csilk_ctx_t* c)
+{
+    csilk_next(c);
+}
+static _Atomic int ready = 0;
+static void*
+run_srv(void* a)
+{
+    (void)a;
+    csilk_app_t* app = csilk_app_new(NULL);
+    csilk_app_get(app, "/", hello_h);
+    csilk_admin_serve_secure(app, "/admin", dummy_auth_middleware);
+    ready = 1;
+    srv = csilk_app_server(app);
+    csilk_app_run(app, PORT);
+    csilk_app_free(app);
+    return NULL;
+}
+static void
+t_stats(void)
+{
+    int s = conn();
+    if (s < 0) {
+        TR("stats connect", 0);
+        return;
     }
-
-    static _Atomic int ready = 0;
-    static _Atomic int ready = 0;
-    static void*       run_srv(void* a)
-    {
-        (void)a;
-        csilk_app_t* app = csilk_app_new(NULL);
-        // Use secure variant with auth middleware for testing
-        csilk_handler_t dummy_auth = dummy_auth_middleware;
-        csilk_admin_serve_secure(app, "/admin", dummy_auth);
-        srv = csilk_app_server(app);
-        csilk_app_run(app, PORT);
-        csilk_app_free(app);
-        return NULL;
+    const char* r = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    send(s, r, strlen(r), 0);
+    char b[BUF] = {0};
+    int  n = recv_resp(s, b, sizeof(b));
+    close(s);
+    TR("stats resp", n > 0);
+    TR("stats 200", exp_status(b, 200));
+    TR("stats JSON", exp_body(b, "total_requests"));
+    TR("stats mq", exp_body(b, "mq"));
+    TR("stats sys", exp_body(b, "sys"));
+}
+static void
+t_root(void)
+{
+    int s = conn();
+    if (s < 0) {
+        TR("root connect", 0);
+        return;
     }
-    static void t_stats(void)
-    {
-        int s = conn();
-        if (s < 0) {
-            TR("stats connect", 0);
-            return;
-        }
-        const char* r = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-        send(s, r, strlen(r), 0);
-        char b[BUF] = {0};
-        int  n = recv_resp(s, b, sizeof(b));
-        close(s);
-        TR("stats resp", n > 0);
-        TR("stats 200", exp_status(b, 200));
-        TR("stats JSON", exp_body(b, "total_requests"));
-        TR("stats mq", exp_body(b, "mq"));
-        TR("stats sys", exp_body(b, "sys"));
+    const char* r = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    send(s, r, strlen(r), 0);
+    char b[BUF] = {0};
+    int  n = recv_resp(s, b, sizeof(b));
+    close(s);
+    TR("root resp", n > 0);
+    TR("root 200/404", exp_status(b, 200) || exp_status(b, 404));
+}
+static void
+t_topology(void)
+{
+    int s = conn();
+    if (s < 0) {
+        TR("topo connect", 0);
+        return;
     }
-    static void t_root(void)
-    {
-        int s = conn();
-        if (s < 0) {
-            TR("root connect", 0);
-            return;
-        }
-        const char* r = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-        send(s, r, strlen(r), 0);
-        char b[BUF] = {0};
-        int  n = recv_resp(s, b, sizeof(b));
-        close(s);
-        TR("root resp", n > 0);
-        TR("root 200/404", exp_status(b, 200) || exp_status(b, 404));
+    const char* r = "GET /admin/topology HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    send(s, r, strlen(r), 0);
+    char b[BUF] = {0};
+    int  n = recv_resp(s, b, sizeof(b));
+    close(s);
+    TR("topo resp", n > 0);
+    TR("topo 200", exp_status(b, 200));
+}
+static void
+t_404(void)
+{
+    int s = conn();
+    if (s < 0) {
+        TR("404 connect", 0);
+        return;
     }
-    static void t_topology(void)
-    {
-        int s = conn();
-        if (s < 0) {
-            TR("topo connect", 0);
-            return;
-        }
-        const char* r =
-            "GET /admin/topology HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-        send(s, r, strlen(r), 0);
-        char b[BUF] = {0};
-        int  n = recv_resp(s, b, sizeof(b));
-        close(s);
-        TR("topo resp", n > 0);
-        TR("topo 200", exp_status(b, 200));
+    const char* r = "GET /admin/nope HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    send(s, r, strlen(r), 0);
+    char b[BUF] = {0};
+    int  n = recv_resp(s, b, sizeof(b));
+    close(s);
+    TR("404 resp", n > 0);
+    TR("404 status", exp_status(b, 404));
+}
+int
+main(void)
+{
+    printf("=== Admin Integration ===\n\n");
+    signal(SIGPIPE, SIG_IGN);
+    pthread_t th;
+    pthread_create(&th, NULL, run_srv, NULL);
+    while (!ready) {
+        nanosleep(&(struct timespec){0, 10000000}, NULL);
     }
-    static void t_404(void)
-    {
-        int s = conn();
-        if (s < 0) {
-            TR("404 connect", 0);
-            return;
-        }
-        const char* r = "GET /admin/nope HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-        send(s, r, strlen(r), 0);
-        char b[BUF] = {0};
-        int  n = recv_resp(s, b, sizeof(b));
-        close(s);
-        TR("404 resp", n > 0);
-        TR("404 status", exp_status(b, 404));
+    nanosleep(&(struct timespec){0, 50000000}, NULL);
+    t_stats();
+    t_root();
+    t_topology();
+    t_404();
+    if (srv) {
+        csilk_server_stop(srv);
     }
-    int main(void)
-    {
-        printf("=== Admin Integration ===\n\n");
-        signal(SIGPIPE, SIG_IGN);
-        pthread_t th;
-        pthread_create(&th, NULL, run_srv, NULL);
-        while (!ready) {
-            nanosleep(&(struct timespec){0, 10000000}, NULL);
-        }
-        nanosleep(&(struct timespec){0, 50000000}, NULL);
-        t_stats();
-        t_root();
-        t_topology();
-        t_404();
-        if (srv) {
-            csilk_server_stop(srv);
-        }
-        pthread_join(th, NULL);
-        printf("\n=== %d passed, %d failed ===\n", pass, fail);
-        return fail > 0 ? 1 : 0;
-    }
+    pthread_join(th, NULL);
+    printf("\n=== %d passed, %d failed ===\n", pass, fail);
+    return fail > 0 ? 1 : 0;
+}
