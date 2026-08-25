@@ -333,6 +333,11 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         }
     }
 
+    /* Extended thinking / reasoning effort (o1, o3, GPT-5, etc.) */
+    if (req->reasoning_effort) {
+        csilk_json_add_string(root, "reasoning_effort", req->reasoning_effort);
+    }
+
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
 
