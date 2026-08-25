@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk/core/server.h"
 #include "xdp_waf_internal.h"
 
 /**
@@ -80,7 +81,13 @@ csilk_xdp_waf_add_ip_rule(csilk_xdp_waf_t* waf, const char* ip_cidr, uint8_t act
 
     if (slash) {
         *slash = '\0';
-        prefix_len = (uint32_t)atoi(slash + 1);
+        long parsed = atol(slash + 1);
+        if (parsed < 0 || parsed > 128) {
+            csilk_mutex_unlock(&waf->mutex);
+            CSILK_LOG_E("XDP WAF: Invalid prefix length: %ld (must be 0-128)", parsed);
+            return -1;
+        }
+        prefix_len = (uint32_t)parsed;
     }
 
     struct in_addr addr;

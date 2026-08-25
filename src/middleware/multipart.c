@@ -17,6 +17,8 @@ enum { CSILK_MAX_PART_HEADERS = 32 };
 enum { CSILK_MAX_PART_NAME = 128 };
 /** @brief Maximum multipart form part filename length. */
 enum { CSILK_MAX_PART_FILENAME = 256 };
+/** @brief Maximum multipart form part body size (10 MB). */
+enum { CSILK_MAX_PART_SIZE = 10 * 1024 * 1024 };
 
 /**
  * @brief Parse a multipart/form-data request body and invoke a handler for
@@ -224,6 +226,16 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
                     part.data_len);
 
         part.ctx = c;
+
+        /* Check part size limit to prevent DoS (CWE-434) */
+        if (part.data_len > CSILK_MAX_PART_SIZE) {
+            CSILK_LOG_E("Multipart: Part '%s' exceeds size limit (%zu > %d bytes)",
+                        part.name[0] ? part.name : "(unnamed)",
+                        part.data_len,
+                        CSILK_MAX_PART_SIZE);
+            csilk_status(c, 413); /* Payload Too Large */
+            return;
+        }
 
         CSILK_LOG_T("Multipart: invoking user handler for part '%s'", part.name);
         handler(&part);

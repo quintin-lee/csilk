@@ -9,6 +9,7 @@
 #include <string.h>
 #include <time.h>
 
+#include <openssl/rand.h>
 #include "csilk/core/internal.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/sync.h"
@@ -171,7 +172,30 @@ csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
 
     snprintf(span->name, sizeof(span->name), "%s", name ? name : "unnamed_span");
     snprintf(span->trace_id, sizeof(span->trace_id), "4bf92f3577b34da6a3ce929d0e0e4736");
-    snprintf(span->span_id, sizeof(span->span_id), "%016lx", (unsigned long)rand());
+    uint8_t span_id_bytes[8];
+    if (RAND_bytes(span_id_bytes, sizeof(span_id_bytes)) != 1) {
+        /* Fallback to urandom if OpenSSL fails */
+        FILE* fp = fopen("/dev/urandom", "rb");
+        if (fp && fread(span_id_bytes, 1, sizeof(span_id_bytes), fp) == sizeof(span_id_bytes)) {
+            fclose(fp);
+        } else {
+            if (fp) {
+                fclose(fp);
+            }
+            memset(span_id_bytes, 0, sizeof(span_id_bytes));
+        }
+    }
+    snprintf(span->span_id,
+             sizeof(span->span_id),
+             "%02x%02x%02x%02x%02x%02x%02x%02x",
+             span_id_bytes[0],
+             span_id_bytes[1],
+             span_id_bytes[2],
+             span_id_bytes[3],
+             span_id_bytes[4],
+             span_id_bytes[5],
+             span_id_bytes[6],
+             span_id_bytes[7]);
 
     if (parent_span_id) {
         snprintf(span->parent_span_id, sizeof(span->parent_span_id), "%s", parent_span_id);

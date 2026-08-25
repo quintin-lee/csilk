@@ -306,7 +306,7 @@ csilk_session_start(csilk_ctx_t* c)
         add_session_locked(session);
 
         CSILK_LOG_D("Session: Created new session '%s' for request %p", session->id, (void*)c);
-        csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 0, 1);
+        csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 1, 1);
     } else {
         /* Existing session: extend the expiry window. */
         session->expires_at = time(NULL) + SESSION_TTL;
