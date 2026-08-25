@@ -167,7 +167,8 @@ void setup_custom_auth(csilk_app_t* app) {
 
 ---
 
-## 5. CSRF 保护
+
+> **工作原理**：中间件从请求头或表单字段中提取 CSRF token，与服务端 Session 中存储的 token 比对。不匹配或缺失的请求将被拒绝。Token 生成仅使用 `/dev/urandom`，不可用时直接返回错误（CWE-330）。
 
 ### 5.1 基本用法
 
@@ -382,6 +383,74 @@ int main() {
 ---
 
 ## 延伸阅读
+
+---
+
+## 9. 安全响应头（Security Headers）
+
+csilk 提供了 `csilk_security_headers_middleware()` 中间件，自动添加防御性响应头：
+
+```c
+#include "csilk/core/security_headers.h"
+
+void setup_security_headers(csilk_app_t* app) {
+    csilk_app_use(app, csilk_security_headers_middleware);
+}
+```
+
+### 设置的响应头
+
+| 头名 | 值 | 防护目标 |
+|:-----|:---|:---------|
+| `X-Frame-Options` | `DENY` | 防止点击劫持 (Clickjacking) |
+| `X-Content-Type-Options` | `nosniff` | 防止 MIME 类型嗅探 |
+| `X-XSS-Protection` | `0` | 禁用旧版 XSS 过滤器 |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | 控制 Referrer 信息泄露 |
+
+> **注意**: `Content-Security-Policy` (CSP) 和 `Strict-Transport-Security` (HSTS) 需要根据应用需求单独配置。
+
+---
+
+## 10. Cookie 安全最佳实践
+
+### Session Cookie
+
+Session cookie 默认设置 `Secure` 和 `HttpOnly` 标志：
+
+```c
+// Session 创建时自动设置 Secure + HttpOnly
+csilk_session_start(c);
+```
+
+| 标志 | 值 | 说明 |
+|:-----|:---|:-----|
+| `Secure` | `1` | 仅通过 HTTPS 传输 |
+| `HttpOnly` | `1` | 禁止 JavaScript 访问 |
+
+### CSRF Token Cookie
+
+CSRF token cookie 同样设置 `Secure` 标志：
+
+```c
+// CSRF 中间件自动生成 Secure + HttpOnly cookie
+csilk_app_use(app, csilk_csrf_middleware);
+```
+
+---
+
+## 11. Multipart 上传安全
+
+Multipart 解析器内置大小限制，防止大文件 DoS 攻击：
+
+| 限制项 | 值 |
+|:-------|:---|
+| `CSILK_MAX_PART_NAME` | 128 字节 |
+| `CSILK_MAX_PART_FILENAME` | 256 字节 |
+| `CSILK_MAX_PART_SIZE` | 10 MB |
+
+超过限制的 part 将返回 `413 Payload Too Large`。
+
+---
 
 | 文档 | 内容 |
 |:-----|:------|
