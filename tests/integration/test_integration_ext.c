@@ -282,7 +282,8 @@ test_admin_ui()
         test_result("Admin UI (connect)", 0);
         return;
     }
-    const char* req = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    const char* req = "GET /admin/ HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer "
+                      "test-token\r\nConnection: close\r\n\r\n";
     send_request(sock, req);
     char buf[BUFSIZE] = {0};
     int  n = recv_response(sock, buf, sizeof(buf));
@@ -300,7 +301,8 @@ test_admin_stats()
         test_result("Admin stats (connect)", 0);
         return;
     }
-    const char* req = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    const char* req = "GET /admin/stats HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer "
+                      "test-token\r\nConnection: close\r\n\r\n";
     send_request(sock, req);
     char buf[BUFSIZE] = {0};
     int  n = recv_response(sock, buf, sizeof(buf));
