@@ -316,7 +316,10 @@ admin_ws_handler(csilk_ctx_t* c)
 }
 
 /**
- * @brief Register the admin dashboard routes without authentication.
+ * @brief Register the admin dashboard routes.
+ * @note This function REQUIRES authentication. Use csilk_admin_serve_secure()
+ *       with a valid auth middleware. Calling this without auth will log a
+ *       critical error and refuse to register routes.
  * @param[in] app      Application instance.
  * @param[in] app_path Base URL path for the admin panel (e.g., "/admin").
  * @return void
@@ -324,7 +327,10 @@ admin_ws_handler(csilk_ctx_t* c)
 void
 csilk_admin_serve(csilk_app_t* app, const char* app_path)
 {
-    csilk_admin_serve_secure(app, app_path, NULL);
+    // Enforce authentication requirement for security
+    CSILK_LOG_F("CRITICAL: Admin dashboard must use authentication! "
+                "Use csilk_admin_serve_secure(app, path, auth_middleware) instead.");
+    // Do NOT register routes without auth - prevent accidental exposure
 }
 
 /**
