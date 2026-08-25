@@ -145,6 +145,7 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
     csilk_set_header(c, "Location", sanitized);
     csilk_status(c, status);
     csilk_string(c, status, "");
+    csilk_abort(c);
 }
 
 /** @brief Redirect to another URL using the default status code 302 (Found).
