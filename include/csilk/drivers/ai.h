@@ -121,6 +121,8 @@ typedef struct {
     csilk_ai_tool_t*    tools;             /**< Available tools for the model. */
     size_t              tool_count;        /**< Number of tools. */
     const char*         tool_choice;       /**< "none", "auto", or "required". */
+    const char*
+        reasoning_effort; /**< "low", "medium", or "high" for extended reasoning models (o1/o3). */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
