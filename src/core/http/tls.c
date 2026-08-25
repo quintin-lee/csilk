@@ -84,6 +84,15 @@ init_tls(csilk_server_t* s)
         return;
     }
 
+    /* Restrict to TLS 1.2+ and configure strong cipher suites */
+    SSL_CTX_set_min_proto_version(s->ssl_ctx, TLS1_2_VERSION);
+    SSL_CTX_set_max_proto_version(s->ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_cipher_list(s->ssl_ctx,
+                            "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+                            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+                            "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+                            "DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384");
+
     SSL_CTX_set_alpn_select_cb(s->ssl_ctx, alpn_select_cb, NULL);
 
     if (s->config.tls_cert_file && s->config.tls_key_file) {
