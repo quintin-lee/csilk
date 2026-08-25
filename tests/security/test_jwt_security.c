@@ -19,7 +19,7 @@ test_jwt_hs256_roundtrip(void)
     csilk_json_add_string(payload, "role", "admin");
     csilk_json_add_number(payload, "iat", 1700000000);
 
-    const char* secret = "my-secret-key-for-testing";
+    const char* secret = "my-secret-key-for-testing-123";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != NULL);
 
@@ -66,7 +66,7 @@ test_jwt_expired_token(void)
     csilk_json_add_string(payload, "sub", "user");
     csilk_json_add_number(payload, "exp", 1000000);
 
-    const char* secret = "test-secret";
+    const char* secret = "test-secret-key-1234";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != NULL);
 
@@ -113,7 +113,7 @@ test_jwt_no_exp_claim(void)
     csilk_json_add_string(payload, "sub", "user");
     csilk_json_add_string(payload, "name", "Test User");
 
-    const char* secret = "secret";
+    const char* secret = "secure-secret-key-1234";
     char*       token = csilk_jwt_generate(c, payload, secret);
     assert(token != NULL);
 
@@ -145,7 +145,7 @@ test_jwt_require_exp_policy(void)
     printf("Testing JWT CSILK_JWT_REQUIRE_EXP policy...\n");
 
     csilk_ctx_t* c = csilk_test_ctx_new();
-    const char*  secret = "secret";
+    const char*  secret = "secure-secret-key-1234";
 
     /* Token with future exp */
     csilk_json_t* p1 = csilk_json_object();
@@ -197,7 +197,7 @@ test_jwt_nbf_and_iat_policy(void)
     printf("Testing JWT nbf and iat policy...\n");
 
     csilk_ctx_t* c = csilk_test_ctx_new();
-    const char*  secret = "secret";
+    const char*  secret = "secure-secret-key-1234";
 
     /* Token not yet valid (future nbf) */
     csilk_json_t* p1 = csilk_json_object();
@@ -244,7 +244,7 @@ test_jwt_generate_json(void)
     printf("Testing csilk_jwt_generate_json...\n");
 
     csilk_ctx_t* c = csilk_test_ctx_new();
-    const char*  secret = "my-secret-key-123";
+    const char*  secret = "my-secret-key-1234";
     const char*  payload_json = "{\"sub\":\"12345\",\"role\":\"admin\"}";
 
     char* token = csilk_jwt_generate_json(c, payload_json, secret);
@@ -337,7 +337,7 @@ test_jwt_middleware_valid(void)
     csilk_handler_t handlers[] = {dummy_next_handler, NULL};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    const char*   secret = "supersecret";
+    const char*   secret = "supersecret-key-123";
     csilk_json_t* payload = csilk_json_object();
     csilk_json_add_string(payload, "user", "admin");
     char* token = csilk_jwt_generate(c, payload, secret);
@@ -368,7 +368,7 @@ test_jwt_middleware_require_exp(void)
     csilk_handler_t handlers[] = {dummy_next_handler, NULL};
     csilk_test_ctx_set_handlers(c, handlers);
 
-    const char*   secret = "supersecret";
+    const char*   secret = "supersecret-key-123";
     csilk_json_t* payload_no_exp = csilk_json_object();
     csilk_json_add_string(payload_no_exp, "user", "admin");
     char* token_no_exp = csilk_jwt_generate(c, payload_no_exp, secret);

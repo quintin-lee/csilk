@@ -12,6 +12,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/crypto.h"
 #include "csilk/drivers/cipher.h"
+#include <openssl/crypto.h>
 
 /**
  * @brief Map a JWT algorithm to its RFC 7518 "alg" header value.
@@ -24,8 +25,10 @@ jwt_alg_str(csilk_jwt_alg_t alg)
         return "RS256";
     case CSILK_JWT_ES256:
         return "ES256";
-    default:
+    case CSILK_JWT_HS256:
         return "HS256";
+    default:
+        return "unknown algorithm";
     }
 }
 
@@ -250,6 +253,13 @@ jwt_verify_internal(csilk_ctx_t*               c,
         return NULL;
     }
 
+    /* Reject trivially weak HMAC keys (< 16 bytes) - brute-force attack surface. */
+    if (key_len < 16) {
+        CSILK_LOG_E("JWT: Verification failed: HMAC key too short (min 16 bytes, got %zu)",
+                    key_len);
+        return NULL;
+    }
+
     csilk_jwt_alg_t algorithm = options ? options->algorithm : CSILK_JWT_HS256;
     uint32_t        flags = options ? options->flags : CSILK_JWT_NONE;
     int64_t         leeway = options ? options->leeway_sec : 0;
@@ -279,10 +289,15 @@ jwt_verify_internal(csilk_ctx_t*               c,
         char sig_expected_b64[45];
         csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
         explicit_bzero(sig_actual, sizeof(sig_actual));
-        size_t sig_len = strlen(sig_ptr);
-        sig_ok = (sig_len == strlen(sig_expected_b64)) &&
-                 (constant_time_compare(
-                      (const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, sig_len) == 0);
+        /* Fixed-length comparison with OpenSSL CRYPTO_memcmp:
+         * - Compares exactly 43 bytes (32 bytes base64url-encoded, no padding)
+         * - Compiler-resilient against timing optimization
+         * - No OOB risk since length is known at compile time */
+        size_t expected_len = strlen(sig_expected_b64);
+        sig_ok =
+            (strlen(sig_ptr) == expected_len) &&
+            (CRYPTO_memcmp(
+                 (const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, expected_len) == 0);
     } else {
         /* RS256/ES256: base64url-decode sig, then verify via cipher driver */
         uint8_t sig_decoded[CSILK_RSA_SIGNATURE_SIZE];
