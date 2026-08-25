@@ -117,12 +117,34 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
     if (!c || !location) {
         return;
     }
-    if (status < 300 || status > 308) {
-        status = CSILK_STATUS_FOUND;
+
+    /* Sanitize Location header to prevent open redirect and header injection */
+    char   sanitized[1024];
+    size_t i = 0;
+    size_t j = 0;
+
+    /* Reject absolute URLs (http://, https://, //) to prevent open redirect */
+    if (location[0] == 'h' && location[1] == 't' && location[2] == 't' && location[3] == 'p') {
+        CSILK_LOG_W("Redirect blocked: absolute URL not allowed: %.30s...", location);
+        csilk_status(c, 400);
+        csilk_string(c, 400, "Invalid redirect URL");
+        return;
     }
-    csilk_set_header(c, "Location", location);
-    c->response.status = status;
-    csilk_abort(c);
+
+    /* Filter out control characters to prevent header injection */
+    while (location[i] != '\0' && j < sizeof(sanitized) - 1) {
+        unsigned char c = (unsigned char)location[i];
+        /* Allow printable ASCII except CR, LF */
+        if (c >= 0x20 && c <= 0x7E && c != '\r' && c != '\n') {
+            sanitized[j++] = (char)c;
+        }
+        i++;
+    }
+    sanitized[j] = '\0';
+
+    csilk_set_header(c, "Location", sanitized);
+    csilk_status(c, status);
+    csilk_string(c, status, "");
 }
 
 /** @brief Redirect to another URL using the default status code 302 (Found).
