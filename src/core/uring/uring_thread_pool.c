@@ -15,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/eventfd.h>
+#include <stdatomic.h>
 #include "csilk/core/sync.h"
 
 /** @brief Maximum pending work items in the queue. */
@@ -36,15 +37,15 @@ struct uring_thread_pool_s {
 
     /* Work queue — single producer (event loop) → multiple consumers (threads). */
     uring_tp_entry_t queue[URING_TP_MAX_WORK];
-    volatile int     queue_head;
-    volatile int     queue_tail;
+    atomic_int       queue_head;
+    atomic_int       queue_tail;
     csilk_mutex_t    queue_mutex;
     csilk_cond_t     queue_cond;
 
     /* Completion queue — multiple producers (threads) → single consumer (event loop). */
     uring_tp_entry_t done[URING_TP_MAX_WORK];
-    volatile int     done_head;
-    volatile int     done_tail;
+    atomic_int       done_head;
+    atomic_int       done_tail;
     csilk_mutex_t    done_mutex;
 
     int wakeup_fd; /**< eventfd — signalled when work completes. */
@@ -80,7 +81,7 @@ worker_routine(void* arg)
 
     while (tp->running) {
         csilk_mutex_lock(&tp->queue_mutex);
-        while (tp->queue_head == tp->queue_tail && tp->running) {
+        while (atomic_load(&tp->queue_head) == tp->queue_tail && tp->running) {
             csilk_cond_wait(&tp->queue_cond, &tp->queue_mutex);
         }
         if (!tp->running) {
@@ -89,9 +90,9 @@ worker_routine(void* arg)
         }
 
         /* Dequeue one item. */
-        int              idx = tp->queue_head % URING_TP_MAX_WORK;
+        int              idx = atomic_load(&tp->queue_head) % URING_TP_MAX_WORK;
         uring_tp_entry_t entry = tp->queue[idx];
-        tp->queue_head++;
+        atomic_fetch_add(&tp->queue_head, 1);
         csilk_mutex_unlock(&tp->queue_mutex);
 
         /* Execute the work callback. */
@@ -102,9 +103,9 @@ worker_routine(void* arg)
 
         /* Push to the completion queue. */
         csilk_mutex_lock(&tp->done_mutex);
-        int done_idx = tp->done_tail % URING_TP_MAX_WORK;
+        int done_idx = atomic_load(&tp->done_tail) % URING_TP_MAX_WORK;
         tp->done[done_idx] = entry;
-        tp->done_tail++;
+        atomic_fetch_add(&tp->done_tail, 1);
         csilk_mutex_unlock(&tp->done_mutex);
 
         /* Wake the event loop. */
@@ -140,10 +141,10 @@ uring_tp_init(int nthreads)
     }
 
     tp->running = true;
-    tp->queue_head = 0;
-    tp->queue_tail = 0;
-    tp->done_head = 0;
-    tp->done_tail = 0;
+    atomic_store(&tp->queue_head, 0);
+    atomic_store(&tp->queue_tail, 0);
+    atomic_store(&tp->done_head, 0);
+    atomic_store(&tp->done_tail, 0);
 
     csilk_mutex_init(&tp->queue_mutex);
     csilk_cond_init(&tp->queue_cond);
@@ -228,19 +229,17 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
         return -1;
     }
 
-    csilk_mutex_lock(&tp->queue_mutex);
-    int count = tp->queue_tail - tp->queue_head;
+    int count = atomic_load(&tp->queue_tail) - atomic_load(&tp->queue_head);
     if (count >= URING_TP_MAX_WORK) {
         csilk_mutex_unlock(&tp->queue_mutex);
         return -1; /* Queue full. */
     }
-
-    int idx = tp->queue_tail % URING_TP_MAX_WORK;
+    int idx = atomic_load(&tp->queue_tail) % URING_TP_MAX_WORK;
     tp->queue[idx].work = work;
     tp->queue[idx].work_cb = work_cb;
     tp->queue[idx].after_cb = after_cb;
     tp->queue[idx].status = 0;
-    tp->queue_tail++;
+    atomic_fetch_add(&tp->queue_tail, 1);
 
     pthread_cond_signal(&tp->queue_cond);
     csilk_mutex_unlock(&tp->queue_mutex);
@@ -262,11 +261,10 @@ uring_tp_drain(uring_thread_pool_t* tp)
         return;
     }
 
-    csilk_mutex_lock(&tp->done_mutex);
-    while (tp->done_head != tp->done_tail) {
-        int              idx = tp->done_head % URING_TP_MAX_WORK;
+    while (atomic_load(&tp->done_head) != tp->done_tail) {
+        int              idx = atomic_load(&tp->done_head) % URING_TP_MAX_WORK;
         uring_tp_entry_t entry = tp->done[idx];
-        tp->done_head++;
+        atomic_fetch_add(&tp->done_head, 1);
         csilk_mutex_unlock(&tp->done_mutex);
 
         if (entry.after_cb && entry.work) {

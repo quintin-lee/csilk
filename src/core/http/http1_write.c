@@ -25,8 +25,11 @@ on_sendfile_complete(csilk_io_fs_t* req)
 {
     csilk_ctx_t*    c = (csilk_ctx_t*)req->data;
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+
     csilk_io_fs_req_cleanup(req);
     free(req);
+    req = NULL; /* Prevent use-after-free of req */
+    c = NULL;   /* Prevent dangling pointer access */
 
     if (!client) {
         return;

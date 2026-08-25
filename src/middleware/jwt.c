@@ -294,10 +294,15 @@ jwt_verify_internal(csilk_ctx_t*               c,
          * - Compiler-resilient against timing optimization
          * - No OOB risk since length is known at compile time */
         size_t expected_len = strlen(sig_expected_b64);
-        sig_ok =
-            (strlen(sig_ptr) == expected_len) &&
-            (CRYPTO_memcmp(
-                 (const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, expected_len) == 0);
+        size_t sig_len = strlen(sig_ptr);
+        int    len_mismatch = (sig_len != expected_len);
+        /* Always run CRYPTO_memcmp to prevent timing side-channel:
+         * even if lengths differ, we compare to avoid leaking info */
+        int cmp_result = len_mismatch ? 1
+                                      : CRYPTO_memcmp((const uint8_t*)sig_ptr,
+                                                      (const uint8_t*)sig_expected_b64,
+                                                      expected_len);
+        sig_ok = (cmp_result == 0);
     } else {
         /* RS256/ES256: base64url-decode sig, then verify via cipher driver */
         uint8_t sig_decoded[CSILK_RSA_SIGNATURE_SIZE];
