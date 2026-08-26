@@ -99,12 +99,6 @@ class CsilkWfToolEntry(ctypes.Structure):
         ("user_data", ctypes.c_void_p)
     ]
 CsilkWfToolEntryPtr = ctypes.POINTER(CsilkWfToolEntry)
-class CsilkAiMessage(ctypes.Structure):
-    _fields_ = [
-        ("role", ctypes.c_char_p),
-        ("content", ctypes.c_char_p)
-    ]
-
 class CsilkAiToolCall(ctypes.Structure):
     _fields_ = [
         ("id", ctypes.c_char_p),
@@ -112,6 +106,15 @@ class CsilkAiToolCall(ctypes.Structure):
         ("arguments", ctypes.c_char_p)
     ]
 CsilkAiToolCallPtr = ctypes.POINTER(CsilkAiToolCall)
+
+class CsilkAiMessage(ctypes.Structure):
+    _fields_ = [
+        ("role", ctypes.c_char_p),
+        ("content", ctypes.c_char_p),
+        ("tool_call_count", ctypes.c_size_t),
+        ("tool_calls", CsilkAiToolCallPtr),
+        ("tool_call_id", ctypes.c_char_p),
+    ]
 
 class CsilkAiChatResponse(ctypes.Structure):
     _fields_ = [
