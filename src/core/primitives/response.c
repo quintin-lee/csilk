@@ -189,16 +189,17 @@ csilk_redirect_simple(csilk_ctx_t* c, const char* url)
  * @note The cookie is arena-allocated. The name+value and attribute strings
  *       should not contain characters that break cookie formatting. */
 void
-csilk_set_cookie(csilk_ctx_t* c,
-                 const char*  name,
-                 const char*  value,
-                 int          max_age,
-                 const char*  path,
-                 const char*  domain,
-                 int          secure,
-                 int          http_only)
+csilk_set_cookie_ex(csilk_ctx_t* c,
+                    const char*  name,
+                    const char*  value,
+                    int          max_age,
+                    const char*  path,
+                    const char*  domain,
+                    int          secure,
+                    int          http_only,
+                    const char*  same_site)
 {
-    if (!c || !c->arena) {
+    if (!c || !c->arena || !name || !value) {
         return;
     }
     size_t buf_size = strlen(name) + strlen(value) + 256;
@@ -207,6 +208,9 @@ csilk_set_cookie(csilk_ctx_t* c,
     }
     if (domain) {
         buf_size += strlen(domain);
+    }
+    if (same_site) {
+        buf_size += strlen(same_site) + 16;
     }
 
     char* buf = csilk_arena_alloc(c->arena, buf_size);
@@ -240,7 +244,24 @@ csilk_set_cookie(csilk_ctx_t* c,
         pos += snprintf(buf + pos, buf_size - (size_t)pos, "; HttpOnly");
     }
 
+    if (same_site && same_site[0] != '\0') {
+        pos += snprintf(buf + pos, buf_size - (size_t)pos, "; SameSite=%s", same_site);
+    }
+
     csilk_add_header(c, "Set-Cookie", buf);
+}
+
+void
+csilk_set_cookie(csilk_ctx_t* c,
+                 const char*  name,
+                 const char*  value,
+                 int          max_age,
+                 const char*  path,
+                 const char*  domain,
+                 int          secure,
+                 int          http_only)
+{
+    csilk_set_cookie_ex(c, name, value, max_age, path, domain, secure, http_only, NULL);
 }
 
 /* --- JSON --- */

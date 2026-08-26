@@ -45,6 +45,24 @@ enum { CSILK_MAX_PART_SIZE = 10 * 1024 * 1024 };
  *          is 255 bytes, and maximum part headers per section is 32. Parts
  *          exceeding these limits will be silently truncated.
  */
+/** @brief Binary-safe substring search within bounded memory. */
+static const void*
+_csilk_memmem(const void* haystack, size_t haystack_len, const void* needle, size_t needle_len)
+{
+    if (!haystack || !needle || needle_len == 0 || haystack_len < needle_len) {
+        return NULL;
+    }
+    const uint8_t* h = (const uint8_t*)haystack;
+    const uint8_t* n = (const uint8_t*)needle;
+    const uint8_t* end = h + (haystack_len - needle_len);
+    for (const uint8_t* p = h; p <= end; p++) {
+        if (*p == *n && memcmp(p, n, needle_len) == 0) {
+            return (const void*)p;
+        }
+    }
+    return NULL;
+}
+
 void
 csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 {
@@ -195,7 +213,9 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
         const char* body_end = NULL;
         const char* search = pos;
         while (search < data + data_len) {
-            const char* next_boundary = strstr(search, delimiter);
+            size_t      remaining = (size_t)((data + data_len) - search);
+            const char* next_boundary =
+                (const char*)_csilk_memmem(search, remaining, delimiter, delim_len);
             if (!next_boundary) {
                 body_end = data + data_len;
                 break;
