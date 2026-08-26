@@ -208,6 +208,23 @@ csilk_waf_middleware(csilk_ctx_t* c)
         }
     }
 
+    /* Check request body for SQLi/XSS/Traversal attacks */
+    if (!blocked) {
+        const char* body = csilk_get_body(c, NULL);
+        size_t      body_len = csilk_get_body_len(c);
+        if (body && body_len > 0 && body_len <= 1024 * 1024) {
+            check_pattern_cb("body", body, &wctx);
+            if (wctx.blocked) {
+                CSILK_LOG_W("WAF: Blocked request %p: %s attack detected in body "
+                            "(pattern: '%s')",
+                            (void*)c,
+                            wctx.attack_type,
+                            wctx.matched_pattern ? wctx.matched_pattern : "");
+                blocked = 1;
+            }
+        }
+    }
+
     if (blocked) {
         csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Request blocked by WAF");
         csilk_abort(c);

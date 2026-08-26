@@ -85,6 +85,29 @@ void csilk_set_cookie(csilk_ctx_t* c,
                       int          http_only);
 
 /**
+ * @brief Set a cookie with full attribute control including SameSite.
+ *
+ * @param c         The request context.
+ * @param name      Cookie name.
+ * @param value     Cookie value.
+ * @param max_age   Lifetime in seconds (0 = session, -1 = delete).
+ * @param path      Cookie path scope, or NULL for "/".
+ * @param domain    Cookie domain scope, or NULL for omit.
+ * @param secure    Non-zero adds the Secure flag.
+ * @param http_only Non-zero adds the HttpOnly flag.
+ * @param same_site SameSite policy ("Strict", "Lax", "None", or NULL to omit).
+ */
+void csilk_set_cookie_ex(csilk_ctx_t* c,
+                         const char*  name,
+                         const char*  value,
+                         int          max_age,
+                         const char*  path,
+                         const char*  domain,
+                         int          secure,
+                         int          http_only,
+                         const char*  same_site);
+
+/**
  * @brief Send a JSON response (takes ownership of the cJSON object).
  *
  * Serializes @p json to a string, sets the Content-Type header to
