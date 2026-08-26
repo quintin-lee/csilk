@@ -850,12 +850,14 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
     }
 
     if (ctx->count >= ctx->capacity) {
+        size_t              old_cap = ctx->capacity;
         size_t              new_cap = ctx->capacity == 0 ? 8 : ctx->capacity * 2;
         csilk_ai_message_t* new_msgs = realloc(ctx->messages, sizeof(csilk_ai_message_t) * new_cap);
         if (!new_msgs) {
             CSILK_LOG_E("Failed to allocate memory to expand AI context messages array");
             return;
         }
+        memset(new_msgs + old_cap, 0, sizeof(csilk_ai_message_t) * (new_cap - old_cap));
         ctx->messages = new_msgs;
         ctx->capacity = new_cap;
     }
@@ -867,13 +869,26 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
         /* Remove oldest message */
         free((char*)ctx->messages[0].role);
         free((char*)ctx->messages[0].content);
+        if (ctx->messages[0].tool_calls) {
+            for (size_t j = 0; j < ctx->messages[0].tool_call_count; j++) {
+                free(ctx->messages[0].tool_calls[j].id);
+                free(ctx->messages[0].tool_calls[j].name);
+                free(ctx->messages[0].tool_calls[j].arguments);
+            }
+            free((void*)ctx->messages[0].tool_calls);
+        }
+        free((char*)ctx->messages[0].tool_call_id);
         memmove(
             &ctx->messages[0], &ctx->messages[1], sizeof(csilk_ai_message_t) * (ctx->count - 1));
         ctx->count--;
     }
 
+    memset(&ctx->messages[ctx->count], 0, sizeof(csilk_ai_message_t));
     ctx->messages[ctx->count].role = strdup(role);
     ctx->messages[ctx->count].content = strdup(content);
+    ctx->messages[ctx->count].tool_calls = NULL;
+    ctx->messages[ctx->count].tool_call_count = 0;
+    ctx->messages[ctx->count].tool_call_id = NULL;
     CSILK_LOG_T("Added message to AI context. Role: '%s', Content: '%.30s...'", role, content);
     ctx->count++;
 }
@@ -895,6 +910,7 @@ csilk_ai_context_add_tool_result(csilk_ai_context_t* ctx, const csilk_ai_chat_re
     /* Expand capacity if needed */
     size_t needed = ctx->count + 1 + res->tool_call_count;
     if (needed > ctx->capacity) {
+        size_t old_cap = ctx->capacity;
         size_t new_cap = ctx->capacity == 0 ? 8 : ctx->capacity * 2;
         if (new_cap < needed) {
             new_cap = needed;
@@ -904,12 +920,14 @@ csilk_ai_context_add_tool_result(csilk_ai_context_t* ctx, const csilk_ai_chat_re
             CSILK_LOG_E("Failed to expand AI context for tool result");
             return;
         }
+        memset(new_msgs + old_cap, 0, sizeof(csilk_ai_message_t) * (new_cap - old_cap));
         ctx->messages = new_msgs;
         ctx->capacity = new_cap;
     }
 
     /* Append assistant message with tool_calls struct fields */
     size_t ai_idx = ctx->count++;
+    memset(&ctx->messages[ai_idx], 0, sizeof(csilk_ai_message_t));
     ctx->messages[ai_idx].role = strdup("assistant");
     ctx->messages[ai_idx].content = res->content ? strdup(res->content) : strdup("");
     ctx->messages[ai_idx].tool_call_count = res->tool_call_count;
@@ -929,6 +947,7 @@ csilk_ai_context_add_tool_result(csilk_ai_context_t* ctx, const csilk_ai_chat_re
     /* Append one tool message per call */
     for (size_t i = 0; i < res->tool_call_count; i++) {
         size_t ti = ctx->count++;
+        memset(&ctx->messages[ti], 0, sizeof(csilk_ai_message_t));
         ctx->messages[ti].role = strdup("tool");
         ctx->messages[ti].content = strdup("{}");
         ctx->messages[ti].tool_call_id = strdup(res->tool_calls[i].id ? res->tool_calls[i].id : "");

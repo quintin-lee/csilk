@@ -411,6 +411,15 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             size_t discard_count = msg_count - (size_t)config->max_history_messages;
             for (size_t i = discard_start; i < discard_start + discard_count; i++) {
                 free((void*)msgs[i].content);
+                if (msgs[i].tool_calls) {
+                    for (size_t j = 0; j < msgs[i].tool_call_count; j++) {
+                        free(msgs[i].tool_calls[j].id);
+                        free(msgs[i].tool_calls[j].name);
+                        free(msgs[i].tool_calls[j].arguments);
+                    }
+                    free((void*)msgs[i].tool_calls);
+                }
+                free((void*)msgs[i].tool_call_id);
             }
 
             memmove(&msgs[move_to],
@@ -435,9 +444,18 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
         }
         if (res.tool_call_count > 0) {
             if (msg_count + res.tool_call_count + 1 >= msg_capacity) {
+                size_t old_capacity = msg_capacity;
                 msg_capacity += res.tool_call_count + 16;
-                msgs = realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity);
+                csilk_ai_message_t* new_msgs =
+                    realloc(msgs, sizeof(csilk_ai_message_t) * msg_capacity);
+                if (new_msgs) {
+                    memset(new_msgs + old_capacity,
+                           0,
+                           sizeof(csilk_ai_message_t) * (msg_capacity - old_capacity));
+                    msgs = new_msgs;
+                }
             }
+            memset(&msgs[msg_count], 0, sizeof(csilk_ai_message_t));
             msgs[msg_count].role = "assistant";
             msgs[msg_count].content = res.content ? strdup(res.content) : strdup("");
             if (res.tool_call_count > 0) {
@@ -445,12 +463,15 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
                 msgs[msg_count].tool_calls =
                     calloc(res.tool_call_count, sizeof(csilk_ai_tool_call_t));
                 for (size_t j = 0; j < res.tool_call_count; j++) {
-                    msgs[msg_count].tool_calls[j].id = strdup(res.tool_calls[j].id ?: "");
-                    msgs[msg_count].tool_calls[j].name = strdup(res.tool_calls[j].name ?: "");
+                    msgs[msg_count].tool_calls[j].id =
+                        strdup(res.tool_calls[j].id ? res.tool_calls[j].id : "");
+                    msgs[msg_count].tool_calls[j].name =
+                        strdup(res.tool_calls[j].name ? res.tool_calls[j].name : "");
                     msgs[msg_count].tool_calls[j].arguments =
-                        strdup(res.tool_calls[j].arguments ?: "{}");
+                        strdup(res.tool_calls[j].arguments ? res.tool_calls[j].arguments : "{}");
                 }
             }
+            msgs[msg_count].tool_call_id = NULL;
             msg_count++;
 
             csilk_mutex_t m;
@@ -480,9 +501,13 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             csilk_mutex_unlock(&m);
 
             for (size_t i = 0; i < res.tool_call_count; i++) {
+                memset(&msgs[msg_count], 0, sizeof(csilk_ai_message_t));
                 msgs[msg_count].role = "tool";
                 msgs[msg_count].content = sws[i].result ? sws[i].result : strdup("{}");
-                msgs[msg_count].tool_call_id = strdup(res.tool_calls[i].id ?: "");
+                msgs[msg_count].tool_call_id =
+                    strdup(res.tool_calls[i].id ? res.tool_calls[i].id : "");
+                msgs[msg_count].tool_calls = NULL;
+                msgs[msg_count].tool_call_count = 0;
                 msg_count++;
             }
 
