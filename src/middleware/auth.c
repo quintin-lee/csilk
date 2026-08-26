@@ -44,5 +44,6 @@ csilk_auth_middleware(csilk_ctx_t* c, csilk_auth_validator_t validator)
         csilk_abort(c);
     } else {
         CSILK_LOG_D("Auth: Authentication successful for request %p", (void*)c);
+        csilk_next(c);
     }
 }

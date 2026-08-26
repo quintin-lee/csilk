@@ -276,6 +276,58 @@ jwt_verify_internal(csilk_ctx_t*               c,
         return NULL;
     }
 
+    /* --- Algorithm confusion guard (CWE-327) ---
+     * Decode the JWT header and verify that the declared "alg" matches the
+     * server-configured expected algorithm.  This prevents attacks where an
+     * attacker forges a token with alg=HS256 using an RS256 public key as
+     * the HMAC secret. */
+    {
+        size_t hdr_b64_len = (size_t)(dot1 - token);
+        char*  hdr_b64 = malloc(hdr_b64_len + 1);
+        if (!hdr_b64) {
+            return NULL;
+        }
+        memcpy(hdr_b64, token, hdr_b64_len);
+        hdr_b64[hdr_b64_len] = '\0';
+
+        uint8_t* hdr_json = malloc(hdr_b64_len + 1);
+        if (!hdr_json) {
+            free(hdr_b64);
+            return NULL;
+        }
+        int hdr_decoded_len = csilk_base64url_decode(hdr_b64, hdr_json, hdr_b64_len + 1);
+        free(hdr_b64);
+        if (hdr_decoded_len < 0) {
+            CSILK_LOG_W("JWT: Verification failed: header base64url decode error");
+            free(hdr_json);
+            return NULL;
+        }
+        hdr_json[hdr_decoded_len] = '\0';
+
+        csilk_json_t* hdr_obj = csilk_json_parse((const char*)hdr_json);
+        free(hdr_json);
+        if (!hdr_obj) {
+            CSILK_LOG_W("JWT: Verification failed: header JSON parse error");
+            return NULL;
+        }
+        csilk_json_t* alg_val = csilk_json_get(hdr_obj, "alg");
+        const char*   alg_str_in_token = alg_val ? csilk_json_string_value(alg_val) : NULL;
+        const char*   expected_alg = jwt_alg_str(algorithm);
+        int           alg_match = 0;
+        if (alg_str_in_token && expected_alg) {
+            alg_match = (strcmp(alg_str_in_token, expected_alg) == 0);
+        }
+        csilk_json_free(hdr_obj);
+
+        if (!alg_match) {
+            CSILK_LOG_W("JWT: Verification failed: algorithm mismatch "
+                        "(header: '%s', expected: '%s')",
+                        alg_str_in_token ? alg_str_in_token : "null",
+                        expected_alg ? expected_alg : "null");
+            return NULL;
+        }
+    }
+
     size_t      payload_len = (size_t)(dot2 - dot1 - 1);
     const char* sig_ptr = dot2 + 1;
     size_t      sign_input_len = (size_t)(dot2 - token);

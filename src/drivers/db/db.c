@@ -452,6 +452,110 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
     return result;
 }
 
+/** @brief Build a SQL string with escaped parameter substitution.
+ *
+ * Replaces each '?' in @p sql with the corresponding value from @p params,
+ * wrapping each value in single quotes and escaping embedded single quotes
+ * by doubling them ('→'').
+ *
+ * @param sql    SQL pattern with ? placeholders.
+ * @param params NULL-terminated array of string values.
+ * @return Heap-allocated SQL string (caller must free), or NULL on failure. */
+static char*
+_csilk_db_build_param_sql(const char* sql, const char** params)
+{
+    if (!sql || !params) {
+        return NULL;
+    }
+
+    /* Pre-scan: compute output size with SQL-escaped param values. */
+    size_t len = strlen(sql);
+    for (int i = 0; params[i]; i++) {
+        len += 2; /* surrounding single quotes */
+        for (const char* c = params[i]; *c; c++) {
+            len += (*c == '\'') ? 2 : 1;
+        }
+    }
+
+    char* full_sql = malloc(len + 1);
+    if (!full_sql) {
+        return NULL;
+    }
+
+    char* p = full_sql;
+    int   param_idx = 0;
+    for (const char* c = sql; *c; c++) {
+        if (*c == '?' && params[param_idx]) {
+            *p++ = '\'';
+            for (const char* v = params[param_idx]; *v; v++) {
+                if (*v == '\'') {
+                    *p++ = '\'';
+                    *p++ = '\'';
+                } else {
+                    *p++ = *v;
+                }
+            }
+            *p++ = '\'';
+            param_idx++;
+        } else {
+            *p++ = *c;
+        }
+    }
+    *p = '\0';
+    return full_sql;
+}
+
+/** @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
+ *  placeholders.
+ *
+ * Each ? in @p sql is substituted with the corresponding value from
+ * @p params (single quotes escaped by doubling).  This prevents SQL injection
+ * in DML statements that do not return result rows.
+ *
+ * @param pool   Database pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params NULL-terminated array of string values.
+ * @return 0 on success, -1 on failure. */
+int
+csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** params)
+{
+    if (!pool || !pool->driver || !pool->driver->exec || !sql || !params) {
+        CSILK_LOG_E("Parameterized exec failed: invalid arguments");
+        return -1;
+    }
+
+    char* full_sql = _csilk_db_build_param_sql(sql, params);
+    if (!full_sql) {
+        CSILK_LOG_E("Parameterized exec failed: could not build SQL");
+        return -1;
+    }
+
+    uint64_t start = csilk_io_hrtime();
+    CSILK_LOG_D("Parameterized database exec initiated: %s", sql);
+
+    csilk_mutex_lock(&pool->mutex);
+    int rc = pool->driver->exec(pool, full_sql);
+    csilk_mutex_unlock(&pool->mutex);
+
+    uint64_t duration = (csilk_io_hrtime() - start) / 1000;
+    atomic_fetch_add(&db_duration_us_total, duration);
+
+    if (rc != 0) {
+        atomic_fetch_add(&db_errors_total, 1);
+        CSILK_LOG_E("Parameterized database exec failed (duration: %.2f ms): %s",
+                    (double)duration / 1000.0,
+                    full_sql);
+    } else {
+        atomic_fetch_add(&db_execs_total, 1);
+        CSILK_LOG_T("Parameterized database exec succeeded (duration: %.2f ms): %s",
+                    (double)duration / 1000.0,
+                    full_sql);
+    }
+
+    free(full_sql);
+    return rc;
+}
+
 /* --- Driver Registry --- */
 
 /** @brief Statically-sized registry of registered database drivers (max 16). */
