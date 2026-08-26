@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Blowfish Endianness Portability**: Explicitly extracted bytes via shift operations in Blowfish `fo()`.
 
 ### Added
+- **OpenAI Streaming Driver Upgrade** (`src/drivers/ai/openai.c`): Full SSE streaming support (`stream = 1`) with real-time token dispatch (`on_chunk`), streamed `delta.tool_calls` dynamic reassembly across chunks (matching `index`, concatenating chunk arguments, support for pure tool calls and mixed modes), and stream token usage capture (`stream_options: {"include_usage": true}`).
 - **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
 - **Public HTTP/2 API** (`csilk/http/h2.h`): Promoted from internal `src/core/http/h2.h` to public `include/csilk/http/h2.h`; now includes `csilk_h2_init_session`, `csilk_h2_process_data`, `csilk_h2_get_or_create_stream`, `csilk_h2_free_streams`, `csilk_h2_remove_stream`, `csilk_h2_send_response`, `csilk_h2_submit_push`.
 - **Public Flame Graph API** (`csilk/util/flamegraph.h`): Promoted from internal `src/util/flamegraph.h` to public `include/csilk/util/flamegraph.h`; now includes `csilk_flamegraph_start`, `csilk_flamegraph_stop`, `csilk_flamegraph_is_running`.

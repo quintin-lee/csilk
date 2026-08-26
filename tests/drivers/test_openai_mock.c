@@ -29,7 +29,11 @@ start_mock_server(void)
     if (g_mock_pid == 0) {
         char port_str[8];
         snprintf(port_str, sizeof(port_str), "%d", MOCK_PORT);
-        execlp("python3", "python3", "tests/drivers/openai_mock_server.py", port_str, (char*)NULL);
+        const char* script_path = "tests/drivers/openai_mock_server.py";
+        if (access(script_path, R_OK) != 0) {
+            script_path = "../tests/drivers/openai_mock_server.py";
+        }
+        execlp("python3", "python3", script_path, port_str, (char*)NULL);
         _exit(127);
     }
     usleep(300000); /* 300ms to let server start */
@@ -148,6 +152,54 @@ test_chat_streaming(void)
     assert(res.content != NULL);
     assert(strcmp(res.content, "Hello world!") == 0);
     assert(strcmp(acc.buf, "Hello world!") == 0);
+    assert(res.prompt_tokens == 10);
+    assert(res.completion_tokens == 5);
+    assert(res.total_tokens == 15);
+
+    csilk_ai_chat_response_free(&res);
+    csilk_ai_free(ai);
+    printf("  passed\n");
+}
+
+static void
+test_chat_streaming_with_tools(void)
+{
+    printf("Testing chat completion streaming with tool calls...\n");
+    csilk_ai_t* ai = csilk_ai_new("openai", "mock-key", get_base_url());
+    assert(ai != NULL);
+
+    csilk_ai_message_t msg = {
+        .role = "user",
+        .content = "What's the weather in Beijing?",
+    };
+
+    csilk_ai_tool_function_t fn = {
+        .name = "get_weather",
+        .description = "Get weather for a city",
+    };
+    csilk_ai_tool_t tool = {.type = "function", .function = fn};
+
+    csilk_ai_chat_request_t req = {0};
+    req.messages = &msg;
+    req.message_count = 1;
+    req.tools = &tool;
+    req.tool_count = 1;
+    req.stream = 1;
+
+    stream_accum_t acc = {.buf = {0}, .len = 0};
+    req.on_chunk = stream_cb;
+    req.user_data = &acc;
+
+    csilk_ai_chat_response_t res = {0};
+    int                      rc = csilk_ai_chat(ai, &req, &res);
+    assert(rc == 0);
+    assert(res.tool_call_count == 1);
+    assert(strcmp(res.tool_calls[0].name, "get_weather") == 0);
+    assert(strcmp(res.tool_calls[0].id, "call_mock_001") == 0);
+    assert(strstr(res.tool_calls[0].arguments, "Beijing") != NULL);
+    assert(res.prompt_tokens == 12);
+    assert(res.completion_tokens == 8);
+    assert(res.total_tokens == 20);
 
     csilk_ai_chat_response_free(&res);
     csilk_ai_free(ai);
@@ -321,6 +373,7 @@ main(void)
     test_init_invalid_driver();
     test_chat_non_streaming();
     test_chat_streaming();
+    test_chat_streaming_with_tools();
     test_chat_with_tools();
     test_chat_null_request();
     test_chat_null_response();

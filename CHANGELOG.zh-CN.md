@@ -37,6 +37,7 @@
 - **Blowfish 跨端序移植性**: 显式使用位移提取字节，保障大小端架构一致性。
 
 ### 新增
+- **OpenAI 驱动流式全面升级**（`src/drivers/ai/openai.c`）：全面支持 SSE 流式接收（`stream = 1`），包含实时 Token 毫秒级派发（`on_chunk`）、流式 `delta.tool_calls` 动态索引识别与参数增量重组（兼容常规对话、纯函数调用与混合模式）以及流式 Token 统计捕获（`stream_options: {"include_usage": true}`）。
 - **公开 Cipher API**: 在 `<csilk/core/cipher.h>` 中新增 `csilk_symmetric_encrypt/decrypt`（AES-256-GCM）、`csilk_rsa_generate_keypair`、`csilk_rsa_encrypt/decrypt`、`csilk_rsa_sign/verify`，支持脱离请求上下文的独立加解密操作。
 - **公开 HTTP/2 API**（`csilk/http/h2.h`）：由内部 `src/core/http/h2.h` 提升为公开头文件 `include/csilk/http/h2.h`，现包含 `csilk_h2_init_session`、`csilk_h2_process_data`、`csilk_h2_get_or_create_stream`、`csilk_h2_free_streams`、`csilk_h2_remove_stream`、`csilk_h2_send_response`、`csilk_h2_submit_push`。
 - **公开火焰图 API**（`csilk/util/flamegraph.h`）：由内部 `src/util/flamegraph.h` 提升为公开头文件 `include/csilk/util/flamegraph.h`，现包含 `csilk_flamegraph_start`、`csilk_flamegraph_stop`、`csilk_flamegraph_is_running`。
