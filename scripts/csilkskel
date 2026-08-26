@@ -24,7 +24,7 @@ import shutil
 import sys
 import textwrap
 
-VERSION = "0.5.1"
+VERSION = "0.5.3"
 
 # ─── color helpers ──────────────────────────────────────────────────
 def bold(s):   return f"\033[1m{s}\033[0m"

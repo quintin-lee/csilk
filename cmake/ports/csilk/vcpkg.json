@@ -1,6 +1,6 @@
 {
   "name": "csilk",
-  "version-semver": "0.5.1",
+  "version-semver": "0.5.3",
   "description": "A lightweight, high-performance HTTP web framework written in C, inspired by Gin (Golang) and built on top of libuv, llhttp, nghttp2, and yyjson. Supports HTTP/1.1, HTTP/2, WebSocket, SSE, TLS, JWT auth, AI workflow, message queue, Prometheus metrics, and pluggable database drivers (SQLite, MySQL, PostgreSQL, MongoDB, Redis).",
   "homepage": "https://github.com/quintin-lee/csilk",
   "license": "MIT",
