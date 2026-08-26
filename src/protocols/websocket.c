@@ -404,15 +404,23 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
         offset += 4;
     }
 
-    if (nread < offset + payload_len) {
+    /* Check against integer overflow and enforce maximum frame payload size limit (CWE-190, CWE-122) */
+    enum { CSILK_WS_MAX_FRAME_PAYLOAD = 64 * 1024 * 1024 };
+    if (payload_len > CSILK_WS_MAX_FRAME_PAYLOAD || payload_len > SIZE_MAX - offset - 1) {
+        CSILK_LOG_W("WebSocket: Frame payload length (%llu) exceeds maximum limit",
+                    (unsigned long long)payload_len);
         return;
     }
 
-    uint8_t* payload = malloc(payload_len + 1);
+    if (nread < offset + (size_t)payload_len) {
+        return;
+    }
+
+    uint8_t* payload = malloc((size_t)payload_len + 1);
     if (!payload) {
         return;
     }
-    memcpy(payload, buf + offset, payload_len);
+    memcpy(payload, buf + offset, (size_t)payload_len);
 
     /*
    * Unmask the payload per RFC 6455 §5.3: each payload byte XOR'd with the

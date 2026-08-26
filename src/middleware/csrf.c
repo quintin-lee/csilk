@@ -4,6 +4,7 @@
  * @copyright MIT License
  */
 
+#include <openssl/crypto.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,13 +46,13 @@ csilk_csrf_middleware(csilk_ctx_t* c)
         CSILK_LOG_T("CSRF: Safe method (%s) bypasses validation for request %p",
                     csilk_get_method(c),
                     (void*)c);
-        // Set CSRF cookie on safe methods so frontend can read it
+        // Set CSRF cookie on safe methods so frontend can read it (http_only = 0)
         const char* existing = csilk_get_cookie(c, "csrf_token");
         if (!existing) {
             char token_buf[33];
             if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
-                csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 0, 1);
+                csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 0, 0);
             }
             explicit_bzero(token_buf, sizeof(token_buf));
         }
@@ -73,12 +74,16 @@ csilk_csrf_middleware(csilk_ctx_t* c)
         return;
     }
 
-    /* Double-submit cookie pattern: the server compares a header value against
-     the cookie value. This is stateless (no server-side token storage needed)
-     but relies on the browser's same-origin policy to prevent the attacker
-     from reading/writing the cookie on the target origin. */
+    /* Double-submit cookie pattern: constant-time comparison against cookie */
     const char* cookie_token = csilk_get_cookie(c, "csrf_token");
-    if (cookie_token && strcmp(cookie_token, token) == 0) {
+    size_t      cookie_len = cookie_token ? strlen(cookie_token) : 0;
+    size_t      token_len = strlen(token);
+    int         match = 0;
+    if (cookie_token && cookie_len == token_len && cookie_len > 0) {
+        match = (CRYPTO_memcmp(cookie_token, token, token_len) == 0);
+    }
+
+    if (match) {
         CSILK_LOG_D("CSRF: Validation successful for request %p", (void*)c);
         csilk_next(c);
     } else {

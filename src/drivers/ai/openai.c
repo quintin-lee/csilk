@@ -347,7 +347,6 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         strncmp(state->base_url, "https://", 8) != 0) {
         CSILK_LOG_E("AI OpenAI: Invalid URL scheme: %.50s...", state->base_url);
         free(json_body);
-        csilk_json_free(root);
         return -1;
     }
 
@@ -505,6 +504,15 @@ openai_embeddings(void*                           state_ptr,
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
 
+    /* Validate base_url scheme to prevent SSRF (CWE-918) */
+    if (strncmp(state->base_url, "http://", 7) != 0 &&
+        strncmp(state->base_url, "https://", 8) != 0) {
+        CSILK_LOG_E("AI OpenAI: Invalid URL scheme: %.50s...", state->base_url);
+        free(json_body);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
     /* --- Prepare the HTTP request --- */
     char url[512];
     snprintf(url, sizeof(url), "%s/embeddings", state->base_url);
@@ -521,6 +529,8 @@ openai_embeddings(void*                           state_ptr,
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb_simple);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
