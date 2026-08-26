@@ -10,21 +10,21 @@
 ### 安全修复
 
 **严重:**
-- **CSRF token entropy**: Removed fallback to `rand_r()` when `/dev/urandom` is unavailable. Now aborts with error instead of using weak PRNG (CWE-330).
-- **Session cookie Secure flag**: Added `Secure` attribute to session cookies (CWE-1004).
+- **CSRF token entropy**: 移除降级路径 to `rand_r()` when `/dev/urandom` is unavailable. 现在 aborts with error instead of using weak PRNG (CWE-330).
+- **Session cookie Secure flag**: 新增 `Secure` attribute to session cookies (CWE-1004).
 
 **高危:**
-- **CSRF cookie Secure flag**: Added `Secure` attribute to CSRF token cookies.
-- **Security response headers**: Added new `csilk_security_headers_middleware()` setting `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` (CWE-79, CWE-1021).
-- **Multipart size limit**: Added `CSILK_MAX_PART_SIZE` (10 MB) to prevent DoS (CWE-434).
+- **CSRF cookie Secure flag**: 新增 `Secure` attribute to CSRF token cookies.
+- **Security response headers**: 新增 new `csilk_security_headers_middleware()` setting `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` (CWE-79, CWE-1021).
+- **Multipart size limit**: 新增 `CSILK_MAX_PART_SIZE` (10 MB) to prevent DoS (CWE-434).
 
 **中危:**
-- **OTLP trace random**: Replaced `rand()` with OpenSSL `RAND_bytes()` (CWE-330).
-- **XDP WAF atoi validation**: Added range check for CIDR prefix length (CWE-284).
-- **Config timeout validation**: Added range validation for timeout values (CWE-284).
+- **OTLP trace random**: 替换d `rand()` with OpenSSL `RAND_bytes()` (CWE-330).
+- **XDP WAF atoi validation**: 新增 range check for CIDR prefix length (CWE-284).
+- **Config timeout validation**: 新增 range validation for timeout values (CWE-284).
 
 ### 新增
-- **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
+- **Public Cipher API**: 新增 `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.
 - **Public HTTP/2 API** (`csilk/http/h2.h`): Promoted from internal `src/core/http/h2.h` to public `include/csilk/http/h2.h`; now includes `csilk_h2_init_session`, `csilk_h2_process_data`, `csilk_h2_get_or_create_stream`, `csilk_h2_free_streams`, `csilk_h2_remove_stream`, `csilk_h2_send_response`, `csilk_h2_submit_push`.
 - **Public Flame Graph API** (`csilk/util/flamegraph.h`): Promoted from internal `src/util/flamegraph.h` to public `include/csilk/util/flamegraph.h`; now includes `csilk_flamegraph_start`, `csilk_flamegraph_stop`, `csilk_flamegraph_is_running`.
 
@@ -45,9 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.2] - 2026-08-23
 
 ### 修复
-- **JWT middleware NULL-key path**: `csilk_jwt_middleware(c, NULL)` no longer silently returns without sending a response. Now sends HTTP 500 `Internal Server Error` and aborts the handler chain, matching the behavior of other middlewares (ratelimit, csrf). Added `test_jwt_middleware_null_key` test case.
-- **ASAN memory leaks**: Fixed heap leaks in `test_hot_reload_null` (missing `csilk_router_free`), `test_uring_fs` (use-after-free from premature `csilk_io_loop_close`), and `csilk_io_fs_sendfile` segfault on NULL request.
-- **Clang build compatibility**: Added forward declarations for test functions defined after `main()` — GCC tolerates this but Clang rejects it.
+- **JWT middleware NULL-key path**: `csilk_jwt_middleware(c, NULL)` no longer silently returns without sending a response. 现在 sends HTTP 500 `Internal Server Error` and aborts the handler chain, matching the behavior of other middlewares (ratelimit, csrf). 新增 `test_jwt_middleware_null_key` test case.
+- **ASAN memory leaks**: 修复 heap leaks in `test_hot_reload_null` (missing `csilk_router_free`), `test_uring_fs` (use-after-free from premature `csilk_io_loop_close`), and `csilk_io_fs_sendfile` segfault on NULL request.
+- **Clang build compatibility**: 新增 forward declarations for test functions defined after `main()` — GCC tolerates this but Clang rejects it.
 
 ### 新增
 - **SSE integration test** (`test_sse_integration`): 7 test cases covering SSE init, send, close, and header validation via live HTTP server.
@@ -57,12 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Middleware chain integration test** (`test_middleware_chain_integration`): 6 test cases verifying middleware execution order.
 - **OpenAPI integration test** (`test_openapi_integration`): 5 test cases for OpenAPI JSON and Swagger UI endpoints.
 - **ctx_json unit tests** (`test_ctx_json`): 10 test cases for `csilk_bind_json`, `csilk_bind_json_err`, `csilk_get_cookie`, `csilk_bind_reflect`.
-- **JSON mutate edge-case tests**: Added null-idoc and null-mdoc guard cases to `test_json_mutate`.
-- **Request ID readiness handler tests**: Added null-safety tests for `csilk_ready_check_handler`.
+- **JSON mutate edge-case tests**: 新增 null-idoc and null-mdoc guard cases to `test_json_mutate`.
+- **Request ID readiness handler tests**: 新增 null-safety tests for `csilk_ready_check_handler`.
 
 ### 变更
 - **Refactored server_lifecycle.c**: Extracted RCU management into `server_rcu.c` (569 lines) and driver injection into `server_driver.c` (59 lines).
-- **Added .gcovr config**: Excludes non-testable files (`flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c`) from coverage reports.
+- **新增 .gcovr config**: Excludes non-testable files (`flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c`) from coverage reports.
 
 ### 测试覆盖
 - **Total tests**: 213 (211 unit + 2 integration families)
@@ -77,10 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 - **Formal Client Lifetime Verification & Owner Confinement**: Formally verified client lifecycle state machine across 100,000 reuse iterations, proving `client_destroy` executes strictly on the owning worker loop, non-owner threads enqueue generation-tagged recycle tasks (`_csilk_client_recycle_dispatch_cb`), and pending I/O / reference counters never underflow.
-- **RCU / EBR Formal Verification & 512-Reader Scaling**: Added formal RCU lifecycle stress suite with 512 concurrent readers (static 256 + dynamic overflow slots) and 10,000 short-lived threads, proving zero dynamic slot leaks, safe TID reuse, and lock-free/wait-free read paths. Serialized router swaps under `config_mutex` for monotonic epoch progression.
+- **RCU / EBR Formal Verification & 512-Reader Scaling**: 新增 formal RCU lifecycle stress suite with 512 concurrent readers (static 256 + dynamic overflow slots) and 10,000 short-lived threads, proving zero dynamic slot leaks, safe TID reuse, and lock-free/wait-free read paths. Serialized router swaps under `config_mutex` for monotonic epoch progression.
 - **HTTP/2 Stream Multiplexing Formal Lifecycle**: Formally verified stream multiplexing lifecycle (`stream_new`, `h2_stream_map` lookup/eviction with 16 inline buckets, `free_list` recycling, RST_STREAM, GOAWAY, and async completions) guaranteeing stream callbacks never access recycled contexts.
 - **PMU-Guided Micro-Optimizations**: Micro-optimized critical paths (`client_ref`/`client_unref`, `pending_io_inc`/`pending_io_dec`, RCU nesting depth tracking, `g_dispatch_tls_registered` branch caching, and HeaderMap fast bitmask short-circuit), reducing core cycle footprint without compromising correctness.
-- **Wait-Free MPSC Queue Hardening**: Added null-safety guards in `csilk_lfq_dequeue()` and automatic worker pool queue initialization, ensuring robust multi-producer dispatching across arbitrary thread topologies.
+- **Wait-Free MPSC Queue Hardening**: 新增 null-safety guards in `csilk_lfq_dequeue()` and automatic worker pool queue initialization, ensuring robust multi-producer dispatching across arbitrary thread topologies.
 - **Ordered Teardown Sequence**: Enforced clean teardown order (`server_stop` -> drain active clients -> drain timers -> drain dispatch queues -> join workers -> stop hot reload -> EBR grace period -> destroy router -> close event loop -> free pools). Deferred MQ teardown past worker thread join to prevent async crashes on worker exit.
 
 ### 修复
@@ -92,29 +92,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - 2026-08-22
 
 ### 新增
-- **Hot-Reload Mutual Exclusion & Secure Temp Files**: Added `csilk_mutex_t reload_mutex` in `hot_reload_ctx_t` ensuring filesystem watcher debounce and manual `csilk_dev_hot_reload_trigger()` never race or concurrently mutate reload state. Enforced secure `mkstemp(0600)` with immediate failure reporting, and implemented complete OOM rollback (`dlclose`, `unlink`, `csilk_router_free`).
-- **Adaptive io_uring Queue Sizing & Resource Fallback**: Replaced hardcoded 4096-entry ring initialization with adaptive fallback (1024 -> 512 -> 256 -> 128 -> 64) and proportional pool capacity, eliminating `-ENOMEM` errors on constrained container / VM environments (`RLIMIT_MEMLOCK`).
+- **Hot-Reload Mutual Exclusion & Secure Temp Files**: 新增 `csilk_mutex_t reload_mutex` in `hot_reload_ctx_t` ensuring filesystem watcher debounce and manual `csilk_dev_hot_reload_trigger()` never race or concurrently mutate reload state. Enforced secure `mkstemp(0600)` with immediate failure reporting, and implemented complete OOM rollback (`dlclose`, `unlink`, `csilk_router_free`).
+- **Adaptive io_uring Queue Sizing & Resource Fallback**: 替换d hardcoded 4096-entry ring initialization with adaptive fallback (1024 -> 512 -> 256 -> 128 -> 64) and proportional pool capacity, eliminating `-ENOMEM` errors on constrained container / VM environments (`RLIMIT_MEMLOCK`).
 - **6-Tier Unified Memory Ownership Taxonomy**: Defined comprehensive 6-tier memory ownership model (`csilk_ownership_t`: `BORROWED`, `ARENA`, `OWNED`/`HEAP`, `TRANSFER`, `POOL`, `TLS_CACHE`) and stringifier `csilk_ownership_str()` in `<csilk/core/types.h>`. Standardized capacity-aware buffer cleanup and pool reclamation in `_csilk_ctx_cleanup()`, and unified response body memory replacement guards (`_csilk_free_response_body_if_needed()`).
 - **3-Tier ABI Architecture & Strict Opaque Encapsulation**: Enforced strict `Public API → Opaque Handle → Internal Implementation` architecture across all 52 public headers under `include/`:
   - Converted `csilk_router_t` into a strictly opaque handle in `<csilk/core/router.h>`, moving `struct csilk_router_s` and trie node structures into `src/core/primitives/router_internal.h`.
   - Decoupled OpenSSL from public headers: `<csilk/core/hash.h>` now defines `csilk_sha1_ctx` and `csilk_sha256_ctx` as 64-bit aligned opaque memory buffers (128 bytes), verified at compile-time via `_Static_assert`.
   - Decoupled Backend I/O handles: removed `csilk/core/sys_io.h` from `<csilk/core/context.h>` and relocated `csilk_get_work_req` to `src/core/ctx/ctx_internal.h`.
-- **Asynchronous Context Safety & Generation Tracking**: Added active reference counters (`_csilk_ctx_async_ref_incr` / `_csilk_ctx_async_ref_decr`), monotonically increasing request sequence numbers (`request_seq`), and UUID v4 request tags (`request_id`) to ensure async worker/DB/MQ callbacks cannot touch recycled contexts or cause use-after-free on keep-alive connections.
+- **Asynchronous Context Safety & Generation Tracking**: 新增 active reference counters (`_csilk_ctx_async_ref_incr` / `_csilk_ctx_async_ref_decr`), monotonically increasing request sequence numbers (`request_seq`), and UUID v4 request tags (`request_id`) to ensure async worker/DB/MQ callbacks cannot touch recycled contexts or cause use-after-free on keep-alive connections.
 - **Connection Lifecycle State Machine**: Implemented explicit 9-state connection lifecycle (`csilk_conn_state_t`: `INIT`, `ACCEPTED`, `TLS`, `READING`, `PROCESSING`, `WRITING`, `STREAMING`, `CLOSING`, `CLOSED`) with invariant transition checks (`csilk_conn_set_state`, `csilk_conn_get_state`, `csilk_conn_state_str`), preventing use-after-free, double close, double free, and async write/streaming race conditions.
 - **I/O & Sync Abstraction Layer**: Standardized unified, cross-backend `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`, `csilk_thread_join`, `csilk_thread_self`, `csilk_thread_setaffinity`), and `csilk_barrier_*` (`csilk_barrier_init`, `csilk_barrier_wait`, `csilk_barrier_destroy`) APIs in `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
 
-- **Streaming Backpressure & Watermark Flow Control**: Implemented per-connection outbound queue backpressure across HTTP/1.1 chunked streaming (`csilk_response_write`), SSE (`csilk_sse_send`), and WebSocket (`csilk_ws_send`). Added configurable high water marks (`write_high_water_mark`, default 64KB), low water marks (`write_low_water_mark`, default 16KB), maximum buffer limits (`max_write_buffer_size`, default 16MB), and asynchronous drain callback registration (`csilk_on_drain` / `csilk_set_write_watermarks`).
-- **Context Storage Destructor Support**: Added `csilk_set_ex()` with `csilk_destructor_t` callback for RAII cleanup of heap values when context arenas reset. JWT middleware now automatically binds `csilk_json_free` to `jwt_payload`.
-- **Typed Zero-Copy Views**: Added `csilk_view_t` (`const char* data; size_t len;`) with explicit borrowed view accessors (`csilk_get_query_view`, `csilk_get_param_view`, `csilk_get_header_view`, `csilk_get_body_view`) distinguishing zero-copy parser buffers from owned NUL-terminated arena strings.
-- **JWT Validation Policies & Options**: Added `csilk_jwt_flags_t` (`CSILK_JWT_REQUIRE_EXP`, `CSILK_JWT_REQUIRE_NBF`, `CSILK_JWT_REQUIRE_IAT`), `csilk_jwt_options_t` (algorithm, flags, clock skew leeway), `csilk_jwt_verify_options()`, and `csilk_jwt_middleware_options()` for strict JWT claim enforcement.
-- **Arena Calloc & Multi-Tier TLS Caching**: Added `csilk_arena_calloc()` for zero-initialized arena allocations, 3-tier thread-local chunk free lists (4KB, 16KB, 64KB) with `max_total_bytes` constraint, and worker thread exit cleanup (`csilk_arena_flush_free_list`).
+- **Streaming Backpressure & Watermark Flow Control**: Implemented per-connection outbound queue backpressure across HTTP/1.1 chunked streaming (`csilk_response_write`), SSE (`csilk_sse_send`), and WebSocket (`csilk_ws_send`). 新增 configurable high water marks (`write_high_water_mark`, default 64KB), low water marks (`write_low_water_mark`, default 16KB), maximum buffer limits (`max_write_buffer_size`, default 16MB), and asynchronous drain callback registration (`csilk_on_drain` / `csilk_set_write_watermarks`).
+- **Context Storage Destructor 支持**: 新增 `csilk_set_ex()` with `csilk_destructor_t` callback for RAII cleanup of heap values when context arenas reset. JWT middleware now automatically binds `csilk_json_free` to `jwt_payload`.
+- **Typed Zero-Copy Views**: 新增 `csilk_view_t` (`const char* data; size_t len;`) with explicit borrowed view accessors (`csilk_get_query_view`, `csilk_get_param_view`, `csilk_get_header_view`, `csilk_get_body_view`) distinguishing zero-copy parser buffers from owned NUL-terminated arena strings.
+- **JWT Validation Policies & Options**: 新增 `csilk_jwt_flags_t` (`CSILK_JWT_REQUIRE_EXP`, `CSILK_JWT_REQUIRE_NBF`, `CSILK_JWT_REQUIRE_IAT`), `csilk_jwt_options_t` (algorithm, flags, clock skew leeway), `csilk_jwt_verify_options()`, and `csilk_jwt_middleware_options()` for strict JWT claim enforcement.
+- **Arena Calloc & Multi-Tier TLS Caching**: 新增 `csilk_arena_calloc()` for zero-initialized arena allocations, 3-tier thread-local chunk free lists (4KB, 16KB, 64KB) with `max_total_bytes` constraint, and worker thread exit cleanup (`csilk_arena_flush_free_list`).
 
 - **Crypto driver extensibility**: `csilk_crypto_driver_t` now supports `sha1` (20-byte digest) and `bcrypt_hash` (password hashing) callbacks with internal dispatch wrappers `_csilk_sha1()` and `_csilk_bcrypt_hash()` — drivers can replace the built-in software implementations.
 - **`csilk_cond_broadcast()`**: New function in `<csilk/core/sync.h>` for broadcasting all waiters on a condition variable. Bridges the gap between `pthread_cond_broadcast` and libuv (which has no broadcast primitive).
 - **Crypto module tests**: Comprehensive property-based tests for SHA-256, HMAC-SHA256, Base64/Base64URL roundtrip, `csilk_crypto_fill_random`, `csilk_crypto_generate_nonce`, and `csilk_url_decode` edge cases in `tests/crypto/test_crypto.c`.
 
 ### 变更
-- **OpenSSL-Backed Cryptographic Primitives**: Replaced hand-rolled SHA-256 (`csilk_sha256_*`), HMAC-SHA256 (`csilk_hmac_sha256`), and SHA-1 (`csilk_sha1_*`) implementations with system OpenSSL primitives, and re-engineered `bcrypt` to use OpenSSL `RAND_bytes()` / `RAND_priv_bytes()`, constant-time `CRYPTO_memcmp()`, secure memory zeroization via `OPENSSL_cleanse()`, and re-entrant thread-safe cipher state.
+- **OpenSSL-Backed Cryptographic Primitives**: 替换d hand-rolled SHA-256 (`csilk_sha256_*`), HMAC-SHA256 (`csilk_hmac_sha256`), and SHA-1 (`csilk_sha1_*`) implementations with system OpenSSL primitives, and re-engineered `bcrypt` to use OpenSSL `RAND_bytes()` / `RAND_priv_bytes()`, constant-time `CRYPTO_memcmp()`, secure memory zeroization via `OPENSSL_cleanse()`, and re-entrant thread-safe cipher state.
 - **Portable Release Binary Defaults**: Changed Release build default to portable binaries (without `-march=native`), preventing `SIGILL` crashes on older CPUs, Docker containers, and CI artifacts. Host-native CPU instruction set tuning is now explicitly opt-in via `-DCSILK_ENABLE_NATIVE_ARCH=ON` (enabled automatically in benchmark scripts and CI benchmark workflows).
 
 - **Server Core Pure Abstraction**: Eliminated all direct `uv_*` references from `src/core/server/` (`connection.c`, `server_lifecycle.c`, `server_shutdown.c`, `server_worker.c`), replacing them with `csilk_io_*` and `csilk_thread_*`/`csilk_barrier_*`.
@@ -122,25 +122,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **io_uring Architecture Streamlining**: Eliminated parallel duplicate server state machines (`uring_server.c`, `uring_connection.c`, `uring_event_loop.c`), consolidated the driver under `src/core/uring/uring_io.c`, and unified single-track server lifecycle execution across backends.
 - **Router Prefix Trie Architecture & Rollback**: Aligned router documentation to reflect segment-based prefix trie architecture and fixed wildcard parameter backtracking on method mismatch or handler failure.
-- **Handler Chain Boundary Safety**: Added explicit `handler_count` check in `csilk_next()` to guard against corrupted or unterminated handler arrays.
+- **Handler Chain Boundary Safety**: 新增 explicit `handler_count` check in `csilk_next()` to guard against corrupted or unterminated handler arrays.
 - **Thread Confinement & Dispatch**: Explicitly documented worker-local `active_clients` confinement; cross-thread work must use `csilk_dispatch()`.
 - **Barrier lifecycle**: `uv_barrier_t` in `src/core/server/server_lifecycle.c` is now heap-allocated (`calloc`) to prevent use-after-free when worker threads outlive the stack-local barrier. `uv_barrier_init` return value is now checked.
 - **Threading abstraction**: `src/core/uring/uring_thread_pool.c` replaced raw `pthread_mutex_t`/`pthread_cond_t` with `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sync.h>` for cross-backend consistency.
 - **Header hygiene**: Removed `messaging/mq_internal.h` transitively included via `include/csilk/core/internal.h`. Files needing `_csilk_mq_new`/`_csilk_mq_free` now include `messaging/mq_internal.h` explicitly.
-- **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. Fixed `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
+- **Code cleanup**: Standardized `nullptr` → `NULL` across 1200+ occurrences for C23 consistency. 修复 `-Wcomment` (connection.c), `-Wformat` (qdrant.c, workflow_dsl.c), and `-Wformat` (session.c strdup null check).
 
 ### 修复
-- **Owned Event Loop Cleanup in csilk_server_free**: Added `csilk_io_loop_close` and memory release for `server->loop` when `server->loop_owned` is true, eliminating io_uring file descriptor leaks across rapid server instantiations.
+- **Owned Event Loop Cleanup in csilk_server_free**: 新增 `csilk_io_loop_close` and memory release for `server->loop` when `server->loop_owned` is true, eliminating io_uring file descriptor leaks across rapid server instantiations.
 - **Multi-Worker Sendfile & Hook Synchronization**: Synchronized multi-worker sendfile operations using `CSILK_HOOK_SERVER_START` and added timeout / retry policies preventing deadlocks during multi-worker socket binding.
-- **io_uring Backend Cancellation & Listen Socket Safety**: Fixed `csilk_io_timer_stop()` using targeted `io_uring_prep_cancel64` with pointer and generation tagging instead of broad cancellation, preventing timer stops from inadvertently cancelling server listening socket SQEs.
-- **io_uring Async & Signal Poll Notification Reliability**: Added `read() > 0` validation for `URING_OP_POLL_ASYNC` and `URING_OP_POLL_SIGNAL` before firing callbacks to prevent spurious executions.
+- **io_uring Backend Cancellation & Listen Socket Safety**: 修复 `csilk_io_timer_stop()` using targeted `io_uring_prep_cancel64` with pointer and generation tagging instead of broad cancellation, preventing timer stops from inadvertently cancelling server listening socket SQEs.
+- **io_uring Async & Signal Poll Notification Reliability**: 新增 `read() > 0` validation for `URING_OP_POLL_ASYNC` and `URING_OP_POLL_SIGNAL` before firing callbacks to prevent spurious executions.
 - **Dual-Backend Build & Field Isolation**: Isolated io_uring-specific handle fields (`generation`, `fd`) in `src/core/server/connection.c` under `#ifdef CSILK_USE_URING`, and introduced portable `reject_connection()` helper ensuring clean compilation and 100% test pass rate across both libuv and io_uring backends.
-- **Router Match Debug Logging Safety**: Added defensive null check for `mh` in `csilk_router_match_ctx()` log statement, eliminating `clang-analyzer-core.NullDereference` during `clang-tidy` checks.
+- **Router Match Debug Logging Safety**: 新增 defensive null check for `mh` in `csilk_router_match_ctx()` log statement, eliminating `clang-analyzer-core.NullDereference` during `clang-tidy` checks.
 - **Multi-Worker Startup Barrier Deadlock**: Eliminated infinite hangs and deadlocks during multi-worker initialization when worker allocations (`worker_data_t`) or thread creations (`csilk_thread_create`) fail midway, compensating the barrier count for unspawned workers and performing clean graceful aborts.
 - **Dynamic TCP Read Buffers**: Expanded `read_buffers` dynamically (doubling initial 16 slots) to prevent data dropping when a request requires >16 TCP reads.
 - **Atomic Max Connections**: Converted `max_connections` check to atomic CAS reservation (`_csilk_server_try_acquire_connection`) and rollback to eliminate high-concurrency TOCTOU race conditions.
 - **JWT Memory Leak**: Bound automatic destructor via `csilk_set_ex()` to free cJSON payload heap allocations on context reset.
-- **uv_barrier_t UAF**: Fixed use-after-free in multi-worker server startup where a stack-allocated `uv_barrier_t` was destroyed by the main thread while worker threads still held its address. Barrier is now heap-allocated and freed after all workers join.
+- **uv_barrier_t UAF**: 修复 use-after-free in multi-worker server startup where a stack-allocated `uv_barrier_t` was destroyed by the main thread while worker threads still held its address. Barrier is now heap-allocated and freed after all workers join.
 - **internal.h MQ leak**: Removed `#include "messaging/mq_internal.h"` from `include/csilk/core/internal.h` to stop transitively exposing MQ internals (e.g., `csilk_mq_t`) to every file including the umbrella header.
 
 
@@ -162,7 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JWT integer overflow guards**: Add overflow protection to base64 length calculations in JWT parsing.
 
 ### 修复
-- **bcrypt verify failure on empty passwords**: Fixed three bugs in the bcrypt implementation that caused `csilk_bcrypt_verify` to always return -1 for empty passwords: (1) `CSILK_BCRYPT_CIPHER_OUT` was 23 instead of 24 — 24 bytes encode to 32 base64 chars, but verify read only 31, dropping the last byte; (2) `datal`/`datar` were not zero-initialized before the Eksblowfish P-array keying loop (Step 2), causing salt to XOR against stack garbage for empty passwords; (3) `pwd_buf` was not `memset`-zeroed before `memcpy`, leaving uninitialized memory when `len == 0`. Updated `CSILK_BCRYPT_HASH_LEN` from 61 to 62 to match the corrected hash format (`$2a$XX$` + 22 salt + 32 checksum + NUL).
+- **bcrypt verify failure on empty passwords**: 修复 three bugs in the bcrypt implementation that caused `csilk_bcrypt_verify` to always return -1 for empty passwords: (1) `CSILK_BCRYPT_CIPHER_OUT` was 23 instead of 24 — 24 bytes encode to 32 base64 chars, but verify read only 31, dropping the last byte; (2) `datal`/`datar` were not zero-initialized before the Eksblowfish P-array keying loop (Step 2), causing salt to XOR against stack garbage for empty passwords; (3) `pwd_buf` was not `memset`-zeroed before `memcpy`, leaving uninitialized memory when `len == 0`. 更新 `CSILK_BCRYPT_HASH_LEN` from 61 to 62 to match the corrected hash format (`$2a$XX$` + 22 salt + 32 checksum + NUL).
 - **clang-tidy false positive**: Suppress `clang-analyzer-core.uninitialized.Assign` on `XL ^= p[i]` in `blowfish_encipher` — the analyzer cannot trace through the array-pointer parameter; the code is correct.
 - **Compile warnings**: Fix `-Wcomment` (invalid `/*` inside block comment in connection.c), `-Wformat` in qdrant.c (use `%lld` for `int64_t`) and workflow_dsl.c (remove dead NULL arg from snprintf), apply clang-format to bcrypt signatures in crypto.h and crypto_dispatch.h.
 - **Python wheel bundling**: Remove nested `csilk/` subdirectory path in `setup.py`; add `if(NOT DEFINED)` guards in CMakeLists.txt so `-D` values from setuptools are preserved.
@@ -172,7 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **macOS compatibility**: Add portable `explicit_bzero` shim for macOS builds.
 
 ### 变更
-- **Include guards modernized**: Replace `#ifndef`/`#define` include guards with `#pragma once` across all 38 public headers.
+- **Include guards modernized**: 替换 `#ifndef`/`#define` include guards with `#pragma once` across all 38 public headers.
 - **API documentation**: Add Doxygen documentation to undocumented public API functions in middleware, server, and group headers.
 - **tag-release.sh**: Extend to cover all version locations — `src/` `.c` `@version`, `python/csilk/_version.py`, `cmake/ports/csilk/vcpkg.json`, `vX.Y.Z+` doc headers, `| Version: X.Y.Z` metadata, ASCII diagram versions, and `version: X.Y.Z` code-block references.
 
@@ -183,22 +183,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 - **io_uring backend (Linux-only, optional)**: Full event loop, accept, read, write, and timer implementation using `CSILK_USE_URING=ON` at build time. Square-submission-polling (SQPOLL) with automatic fallback. Per-worker thread pools with lock-free dispatch queue. All 122 tests pass.
-- **Documentation**: Updated all docs (architecture, build guide, test guide, deployment, performance tuning, troubleshooting, design) with comprehensive io_uring backend coverage.
+- **Documentation**: 更新 all docs (architecture, build guide, test guide, deployment, performance tuning, troubleshooting, design) with comprehensive io_uring backend coverage.
 - **Zero-copy HTTP Parsing** — Integrated C23-style string views (`csilk_str_view_t`) for HTTP headers, URLs, and bodies, referencing network receive buffers directly to eliminate heap malloc/free churn.
-- **Deep struct freeing** — Added `csilk_struct_free_reflect` to recursively free nested struct pointers inside the reflection engine.
-- **Static cyclic reference detection** — Added compile/startup-time DFS graph cycle-finding algorithm to validate registered reflection types and prevent recursion stack overflows.
+- **Deep struct freeing** — 新增 `csilk_struct_free_reflect` to recursively free nested struct pointers inside the reflection engine.
+- **Static cyclic reference detection** — 新增 compile/startup-time DFS graph cycle-finding algorithm to validate registered reflection types and prevent recursion stack overflows.
 - **Fuzz testing in CI**: Re-enabled fuzz testing job (clang-19 expected available on Ubuntu 24.04 by June 2026).
 - **Extended test coverage**: WAF (4→9), Session (5→8), Recovery (1→4), CSRF (3→7), Workflow Lifecycle (1→3).
 - **Zero-copy chunked write**: `_csilk_send_data_owned()` eliminates double-allocation/copy in chunked transfer encoding path.
 - **ABI opaque type conversion**: Moved internal struct definitions (`csilk_ctx_s`, `csilk_server_s`) from `include/csilk/core/` to `src/core/`. All non-framework code now accesses context state exclusively through the public accessor API.
 - **Deferred cleanup API** (`csilk_ctx_defer` / `csilk_ctx_defer_free`): Panic-safe resource management. When `csilk_panic()` sets `panicked=1`, deferred callbacks run in LIFO order to release heap allocations, file descriptors, and mutex locks before the recovery middleware sends a 500 response.
 - **SIMD-accelerated router**: AVX2 path matching on x86_64 and ARM NEON on aarch64. CMake auto-detection with `-mavx2` flag.
-- **Lock-free per-worker connection pool**: Replaced mutex-based pool with per-worker lock-free pool for multi-core scaling.
+- **Lock-free per-worker connection pool**: 替换d mutex-based pool with per-worker lock-free pool for multi-core scaling.
 - **macOS 14 ARM64 CI support**: Re-enabled macOS in CI matrix with `fdatasync`→`fsync` and `SOCK_NONBLOCK` fallback.
 - **Real-time CPU flame graph**: Backtrace sampling and flame graph rendering in admin dashboard.
 - **TypeScript/Python SDK generation**: Auto-generate API clients from OpenAPI spec.
 - **Dynamic AI tool discovery**: MCP-like tool discovery API for agentic workflows.
-- **Constant-time JWT signature comparison**: Replaced `strcmp` with constant-time comparison.
+- **Constant-time JWT signature comparison**: 替换d `strcmp` with constant-time comparison.
 - **Python scaffold tool**: Rewrote `csilkskel` from C to interactive Python tool.
 - **Hot reload support**: `csilk_server_set_router` for runtime router replacement.
 - **HTTP/2 Phase 1 — Session scaffolding**: TLS ALPN negotiation (`h2` vs
@@ -210,14 +210,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Implemented nghttp2 callbacks (`on_header_callback` for pseudo-header + regular
   header parsing, `on_frame_recv_callback` for dispatch on END_STREAM,
   `on_data_chunk_recv_callback` for body accumulation, `on_stream_close_callback`
-  for context cleanup). Added `csilk_h2_send_response` with
+  for context cleanup). 新增 `csilk_h2_send_response` with
   `body_read_callback` data provider for streaming response bodies.
 - **`test_h2` test suite**: Registered in `cmake/tests.cmake`.
 - **C23 language standard**: Upgraded from C11 to C23 (`CMAKE_C_STANDARD 23`).
   Converted `#define` constants to `static constexpr` for type-safe compile-time
   values. Removed 6 `#include <stdbool.h>` lines (now a C23 keyword).
-- **Form URL-encoded Parser**: Added `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
-- **Session Support**: Cookie-based in-memory session management with `csilk_session_init/start/set/get/destroy` API (P5-2).
+- **Form URL-encoded Parser**: 新增 `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
+- **Session 支持**: Cookie-based in-memory session management with `csilk_session_init/start/set/get/destroy` API (P5-2).
 - **HTTP Range Requests**: Static file middleware now supports `Range` header with 206 Partial Content responses (P5-3).
 - **Request Validation Middleware**: `csilk_validate()` with REQUIRED/INT/STRING/EMAIL flags and min/max range validation (P5-4).
 - **Connection Object Pool**: Reuses `csilk_client_t` objects via free list to reduce allocation overhead (P3-5).
@@ -228,15 +228,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Redirect Tests**: Enhanced with `csilk_redirect_simple`, 301/302/307 status codes, null-safety edge cases.
 
 ### 变更
-- **Atomic builtins standardization** — Replaced all legacy compiler-dependent GCC `__sync_*` atomics with standard C11 `<stdatomic.h>` APIs.
+- **Atomic builtins standardization** — 替换d all legacy compiler-dependent GCC `__sync_*` atomics with standard C11 `<stdatomic.h>` APIs.
 - **Multi-worker loop safety** — Removed hardcoded `uv_default_loop()` reference, dynamically resolving the active worker thread's event loop to prevent multi-worker data races.
 - **HTTPS read path optimization** — SSL read buffers are now allocated from the connection arena instead of the stack, keeping decrypted data safe for zero-copy string views.
-- **Arena safety**: Added overflow guards and zero-size sentinel handling in `csilk_arena_alloc`.
-- **Middleware middleware**: Added WAF (Web Application Firewall) to 15 built-in middleware.
-- **Admin storage limit test**: Fixed `test_admin` storage overflow to store non-null values.
+- **Arena safety**: 新增 overflow guards and zero-size sentinel handling in `csilk_arena_alloc`.
+- **Middleware middleware**: 新增 WAF (Web Application Firewall) to 15 built-in middleware.
+- **Admin storage limit test**: 修复 `test_admin` storage overflow to store non-null values.
 - **`_csilk_trigger_hooks`**: Made non-static and declared in `server_internal.h`
   so the H2 module can fire lifecycle hooks.
-- **`pool_put`**: Now calls `csilk_h2_free_streams` to clean up any H2 stream
+- **`pool_put`**: 现在 calls `csilk_h2_free_streams` to clean up any H2 stream
   contexts before returning the client to the free pool.
 - **Version bumped**: 0.2.5 → 0.3.0 across all 18 version references.
 - **Constants migrated**: `CSILK_DEFAULT_*` (5), `CSILK_MAX_PARAMS`,
@@ -244,31 +244,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WINDOW_SIZE` converted to `static constexpr` and moved to appropriate headers.
 - **Connection Pool**: Pool size of 32 clients; pool drained in `csilk_server_free`.
 - **Streaming Response**: `csilk_response_write/end` now sets `is_async` flag to prevent double-write; chunked headers respect client `Connection: close` header.
-- **Static Middleware**: Added `Accept-Ranges: bytes` header on all static responses.
+- **Static Middleware**: 新增 `Accept-Ranges: bytes` header on all static responses.
 - **Streaming Cleanup**: Terminal chunk write callback closes connection instead of leaving cleanup to timer (fixes use-after-free).
 - **Header Location**: `context_internal.h` moved from `src/core/` to `include/`; `src/core` include path removed from CMakeLists.txt.
 - **Doxygen Documentation**: Completed full Doxygen comments across all 37 source/header files with `@brief`, `@param`, `@return`, `@note` annotations.
 
 ### 修复
-- **io_uring SQE starvation**: `csilk_client_write` could silently drop responses when the io_uring Submission Queue ring was full. Added retry loop with backoff.
+- **io_uring SQE starvation**: `csilk_client_write` could silently drop responses when the io_uring Submission Queue ring was full. 新增 retry loop with backoff.
 - **Stale keep_alive in on_write_done**: llhttp 9.3.1 clears `F_CONNECTION_CLOSE` after `on_message_complete` returns, causing `llhttp_should_keep_alive()` in write-completion callbacks to return the wrong value. Cached the decision in `client->keep_alive` when it's computed in `_csilk_send_response`.
-- **Zero-copy form body parsing**: Fixed `csilk_parse_form_urlencoded` to use explicit body length (`csilk_arena_strndup` instead of `csilk_arena_strdup`) when zero-copy HTTP body references llhttp's TCP buffer which is not null-terminated at the body boundary.
+- **Zero-copy form body parsing**: 修复 `csilk_parse_form_urlencoded` to use explicit body length (`csilk_arena_strndup` instead of `csilk_arena_strdup`) when zero-copy HTTP body references llhttp's TCP buffer which is not null-terminated at the body boundary.
 - **ASan leaks**: Resolved memory leaks in new tests and Doxyfile generation.
 - **macOS compatibility**: `fdatasync` → `fsync`, `SOCK_NONBLOCK` handling.
-- **CI ASan suppression**: Added suppression for macOS false positives.
-- **Arena TLS free list leak**: Added `csilk_arena_flush_free_list()` called on server free to prevent ASAN-detected leaks when server runs on a non-main thread.
-- **MQ realloc overflow**: Added integer overflow guards and NULL checks in monitor array, global middleware array, and per-topic handler array growth paths.
-- **SQL injection in `csilk_db_query_param_json`**: Added standard SQL single-quote doubling escaping.
+- **CI ASan suppression**: 新增 suppression for macOS false positives.
+- **Arena TLS free list leak**: 新增 `csilk_arena_flush_free_list()` called on server free to prevent ASAN-detected leaks when server runs on a non-main thread.
+- **MQ realloc overflow**: 新增 integer overflow guards and NULL checks in monitor array, global middleware array, and per-topic handler array growth paths.
+- **SQL injection in `csilk_db_query_param_json`**: 新增 standard SQL single-quote doubling escaping.
 - **HTTP parser memory leaks**: `on_url` max URL exceeded, `on_header_value` max size exceeded / buffer grow failure now free `current_url`, `current_header_field`, and `current_header_value`.
 - **app.c server leak on error**: `csilk_server_new(NULL)` succeeds when `csilk_router_new()` fails; added `csilk_server_free()` in failure path.
 - **hot_reload.c resource leak**: `dlclose`/`FreeLibrary` not called when `dlsym`/`GetProcAddress` or init function fails.
 - **WAF null context segfault**: `csilk_waf_middleware(nullptr)` crashed on unblocked path calling `csilk_next(nullptr)`.
 - **4 const-qualifier warnings**: `bounded_buf.c` return type and `static.c` C23 `strchr` overload.
 - **GCC builtin atomics**: `perm.c` `__sync_val_compare_and_swap` → C11 `atomic_compare_exchange_strong`.
-- Fixed `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
-- Fixed memory leak in static middleware: `body_is_managed = 1` for full file buffer ensures cleanup.
-- Fixed `csilk_ctx_cleanup` + timer interaction in streaming response lifecycle.
-- Fixed 3 `csilK_` typos in server.c (pool_get/pool_put parameter types) and session.c (typedef).
+- 修复 `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
+- 修复 memory leak in static middleware: `body_is_managed = 1` for full file buffer ensures cleanup.
+- 修复 `csilk_ctx_cleanup` + timer interaction in streaming response lifecycle.
+- 修复 3 `csilK_` typos in server.c (pool_get/pool_put parameter types) and session.c (typedef).
 
 
 ---
@@ -281,7 +281,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode, `on_new_connection` runs on any event loop thread, causing two threads
   to acquire the same client object. This triggered a libuv assertion crash:
   `uv_accept: Assertion 'server->loop == client->loop' failed`.
-  Added `pool_mutex` to protect all pool operations.
+  新增 `pool_mutex` to protect all pool operations.
 
 
 ---
@@ -290,7 +290,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 - **Redis Database Driver**: New `src/drivers/redis.c` driver using hiredis.
-  Supports connection pooling with password auth and DB index selection.
+  支持s connection pooling with password auth and DB index selection.
   Maps Redis reply types to tabular results: GET→1-row, HGETALL→field/value
   pairs, KEYS/LRANGE→N-row flat arrays. Transactions via MULTI/EXEC/DISCARD.
 
@@ -304,7 +304,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTTP metrics, workflow execution graphs, MQ queue status, DB pool telemetry, AI model
   call tracking, and process metrics. Serves `admin_ui.html` SPA with WebSocket live events.
 - **MongoDB Database Driver**: New `src/drivers/mongodb.c` driver using libmongoc.
-  Supports connection pooling and unified DB query interface.
+  支持s connection pooling and unified DB query interface.
 - **MQ Message Status Monitoring**: Real-time MQ events, depth tracking, and JSON stats
   endpoint for admin dashboard integration.
 - **Global AI Telemetry**: `src/ai/ai.c` now tracks model calls, token counts, and latency
@@ -313,16 +313,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   query latency across all database drivers.
 
 ### 修复
-- **test_workflow_monitor SEGFAULT**: Fixed heap-buffer-overflow caused by
+- **test_workflow_monitor SEGFAULT**: 修复 heap-buffer-overflow caused by
   `calloc(1, 1024)` — `csilk_ctx_t` is 2944 bytes, allocated buffer was too
   small. Under ASan this triggered a SEGFAULT on every CI run.
-- **scaffold `csilk_perm_auto_middleware_passthrough`**: Replaced with
+- **scaffold `csilk_perm_auto_middleware_passthrough`**: 替换d with
   existing `csilk_perm_auto_middleware` — the former never existed,
   causing compile failure in core API + perm mode.
-- **MQ recovery regression**: Fixed message queue recovery after connection drop.
+- **MQ recovery regression**: 修复 message queue recovery after connection drop.
 - **Admin struct privacy**: Resolved incomplete type for `csilk_ctx_t` in admin module.
-- **Mermaid syntax**: Fixed workflow Mermaid visualization for version 10+ quoting.
-- **test_timeout flakiness**: Fixed port conflict by adding server readiness sync.
+- **Mermaid syntax**: 修复 workflow Mermaid visualization for version 10+ quoting.
+- **test_timeout flakiness**: 修复 port conflict by adding server readiness sync.
 
 ### 变更
 - **Header relocation**: `workflow_wal.h` moved from `src/app/` to
@@ -346,8 +346,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   driver plugin, custom keygen, and NULL context fallback.
 
 ### 变更
-- **`csilk_ctx_t`**: Added `cipher_driver` field for per-request cipher access.
-- **Project structure**: Added `src/crypto/` and `include/csilk/drivers/cipher.h`.
+- **`csilk_ctx_t`**: 新增 `cipher_driver` field for per-request cipher access.
+- **Project structure**: 新增 `src/crypto/` and `include/csilk/drivers/cipher.h`.
 
 
 ---
@@ -355,8 +355,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - 2026-05-25
 
 ### 新增
-- **Form URL-encoded Parser**: Added `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
-- **Session Support**: Cookie-based in-memory session management with `csilk_session_init/start/set/get/destroy` API (P5-2).
+- **Form URL-encoded Parser**: 新增 `csilk_parse_form_urlencoded()` and `csilk_get_form_field()` for `application/x-www-form-urlencoded` body parsing (P5-1).
+- **Session 支持**: Cookie-based in-memory session management with `csilk_session_init/start/set/get/destroy` API (P5-2).
 - **HTTP Range Requests**: Static file middleware now supports `Range` header with 206 Partial Content responses (P5-3).
 - **Request Validation Middleware**: `csilk_validate()` with REQUIRED/INT/STRING/EMAIL flags and min/max range validation (P5-4).
 - **Connection Object Pool**: Reuses `csilk_client_t` objects via free list to reduce allocation overhead (P3-5).
@@ -369,16 +369,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 变更
 - **Connection Pool**: Pool size of 32 clients; pool drained in `csilk_server_free`.
 - **Streaming Response**: `csilk_response_write/end` now sets `is_async` flag to prevent double-write; chunked headers respect client `Connection: close` header.
-- **Static Middleware**: Added `Accept-Ranges: bytes` header on all static responses.
+- **Static Middleware**: 新增 `Accept-Ranges: bytes` header on all static responses.
 - **Streaming Cleanup**: Terminal chunk write callback closes connection instead of leaving cleanup to timer (fixes use-after-free).
 - **Header Location**: `context_internal.h` moved from `src/core/` to `include/`; `src/core` include path removed from CMakeLists.txt.
 - **Doxygen Documentation**: Completed full Doxygen comments across all 37 source/header files with `@brief`, `@param`, `@return`, `@note` annotations.
 
 ### 修复
-- Fixed `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
-- Fixed memory leak in static middleware: `body_is_managed = 1` for full file buffer ensures cleanup.
-- Fixed `csilk_ctx_cleanup` + timer interaction in streaming response lifecycle.
-- Fixed 3 `csilK_` typos in server.c (pool_get/pool_put parameter types) and session.c (typedef).
+- 修复 `csilk_parse_form_urlencoded` Content-Type check logic (strict `application/x-www-form-urlencoded` check).
+- 修复 memory leak in static middleware: `body_is_managed = 1` for full file buffer ensures cleanup.
+- 修复 `csilk_ctx_cleanup` + timer interaction in streaming response lifecycle.
+- 修复 3 `csilK_` typos in server.c (pool_get/pool_put parameter types) and session.c (typedef).
 
 
 ---
@@ -392,7 +392,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 新增
 - Initial release with core routing, middleware, and server implementation.
-- Support for JSON (cJSON), WebSocket, and YAML configuration.
+- 支持 for JSON (cJSON), WebSocket, and YAML configuration.
 - Built-in middleware: Logger, Recovery, Auth, CORS, CSRF, Rate Limiting, Static Files.
 - Comprehensive Doxygen documentation.
 
