@@ -88,11 +88,13 @@ csilk_grpc_gateway_middleware(csilk_ctx_t* c)
         csilk_set_header(c, "grpc-status", "0"); // 0 = OK (Success)
 
         if (body && body_len > 0) {
-            uint8_t frame_buf[4096];
-            int     frame_len = csilk_grpc_frame_encode(
-                (const uint8_t*)body, body_len, frame_buf, sizeof(frame_buf));
-            if (frame_len > 0) {
-                csilk_set_response_body(c, (const char*)frame_buf, (size_t)frame_len, 1);
+            uint8_t* frame_buf = csilk_arena_alloc(csilk_get_arena(c), body_len + 5);
+            if (frame_buf) {
+                int frame_len = csilk_grpc_frame_encode(
+                    (const uint8_t*)body, body_len, frame_buf, body_len + 5);
+                if (frame_len > 0) {
+                    csilk_set_response_body(c, (const char*)frame_buf, (size_t)frame_len, 0);
+                }
             }
         }
     }
