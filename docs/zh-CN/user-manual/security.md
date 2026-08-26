@@ -99,22 +99,24 @@ void setup_waf(csilk_app_t* app) {
 
 | 攻击类型 | 检测目标 | 示例 |
 |:---------|:---------|:-----|
-| SQL 注入 | 路径、查询参数 | `?id=1' OR '1'='1` |
-| XSS | 路径、查询参数、请求头 | `<script>alert(1)</script>` |
-| 路径穿越 | 路径 | `../../etc/passwd` |
-| 命令注入 | 查询参数 | `; rm -rf /` |
+| SQL 注入 | 路径、查询参数、表单、JSON/文本请求体 | `?id=1' OR '1'='1`、`{"query": "1 UNION SELECT"}` |
+| XSS | 路径、查询参数、表单、JSON/文本请求体 | `<script>alert(1)</script>` |
+| 路径穿越 | 路径、请求体 | `../../etc/passwd`、`..\..\windows\win.ini` |
+| 命令注入 | 查询参数、请求体 | `; rm -rf /` |
 
 ---
 
 ## 4. JWT 认证
 
-### 4.1 支持的算法
+### 4.1 支持的算法与防混淆校验
 
-| 算法 | 枚举值 | 类型 | 密钥 |
-|:-----|:------:|:----:|:----:|
-| HS256 | `CSILK_JWT_HS256` | 对称 | 字符串密钥 |
-| RS256 | `CSILK_JWT_RS256` | 非对称 | PEM RSA 私钥 |
-| ES256 | `CSILK_JWT_ES256` | 非对称 | PEM ECDSA P-256 私钥 |
+| 算法 | 枚举值 | 类型 | 密钥 | 安全策略 |
+|:-----|:------:|:----:|:----:|:--------|
+| HS256 | `CSILK_JWT_HS256` | 对称 | 字符串密钥 | 强制校验 Header `alg="HS256"` |
+| RS256 | `CSILK_JWT_RS256` | 非对称 | PEM RSA 私钥 | 强制校验 Header `alg="RS256"` |
+| ES256 | `CSILK_JWT_ES256` | 非对称 | PEM ECDSA P-256 私钥 | 强制校验 Header `alg="ES256"` |
+
+> **安全增强**：csilk 强制解码 JWT Header 并验证其 `alg` 字段与服务端期望的算法完全一致，彻底免疫 `alg: "none"` 绕过和 RSA/HMAC 公钥混淆攻击（CWE-327）。签名校验采用 OpenSSL `CRYPTO_memcmp()` 恒定时间比对，杜绝时序攻击。
 
 ### 4.2 基本用法
 
@@ -167,8 +169,7 @@ void setup_custom_auth(csilk_app_t* app) {
 
 ---
 
-
-> **工作原理**：中间件从请求头或表单字段中提取 CSRF token，与服务端 Session 中存储的 token 比对。不匹配或缺失的请求将被拒绝。Token 生成仅使用 `/dev/urandom`，不可用时直接返回错误（CWE-330）。
+## 5. CSRF 保护
 
 ### 5.1 基本用法
 
@@ -180,7 +181,7 @@ void setup_csrf(csilk_app_t* app) {
 }
 ```
 
-> **工作原理**：中间件从请求头或表单字段中提取 CSRF token，与服务端 Session 中存储的 token 比对。不匹配或缺失的请求将被拒绝。
+> **工作原理**：中间件采用双重提交 Cookie 模式（Double Submit Cookie），从 `X-CSRF-Token` 请求头或表单字段中提取 token，与 Cookie 中的 token 进行 OpenSSL `CRYPTO_memcmp()` 恒定时间比对（CWE-208）。CSRF Cookie 默认设置 `Secure` 且保持 `http_only = 0`，以允许前端单页应用（SPA / XHR）读取并附加到请求头中。Token 生成使用 `/dev/urandom`，不可用时返回安全错误（CWE-330）。
 
 ---
 
@@ -382,11 +383,9 @@ int main() {
 
 ---
 
-## 延伸阅读
+## 9. 安全响应头与 CRLF 注入防御
 
----
-
-## 9. 安全响应头（Security Headers）
+### 9.1 安全响应头中间件
 
 csilk 提供了 `csilk_security_headers_middleware()` 中间件，自动添加防御性响应头：
 
@@ -404,53 +403,59 @@ void setup_security_headers(csilk_app_t* app) {
 |:-----|:---|:---------|
 | `X-Frame-Options` | `DENY` | 防止点击劫持 (Clickjacking) |
 | `X-Content-Type-Options` | `nosniff` | 防止 MIME 类型嗅探 |
-| `X-XSS-Protection` | `0` | 禁用旧版 XSS 过滤器 |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | 控制 Referrer 信息泄露 |
+| `X-XSS-Protection` | `0` | 禁用旧版易引发漏洞的 XSS 过滤器 |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | 控制 Referrer 敏感信息泄露 |
 
-> **注意**: `Content-Security-Policy` (CSP) 和 `Strict-Transport-Security` (HSTS) 需要根据应用需求单独配置。
+### 9.2 CRLF 响应拆分防御 (CWE-113)
+
+框架在底层 `map_set` 和 `map_add` 写入响应头时，自动过滤键（Key）和值（Value）中的 `\r` 与 `\n` 控制字符，彻底杜绝 HTTP 响应拆分（Response Splitting）与伪造响应头漏洞。
 
 ---
 
-## 10. Cookie 安全最佳实践
+## 10. Cookie 安全与 SameSite 属性
 
-### Session Cookie
-
-Session cookie 默认设置 `Secure` 和 `HttpOnly` 标志：
+csilk 提供了细粒度的 Cookie 控制接口 `csilk_set_cookie_ex()`，完整支持 `SameSite` 属性配置：
 
 ```c
-// Session 创建时自动设置 Secure + HttpOnly
-csilk_session_start(c);
+// 设置携带 SameSite 策略的安全 Cookie
+csilk_set_cookie_ex(c, "session_id", sid, 86400, "/", "example.com", 1, 1, "Strict");
 ```
 
-| 标志 | 值 | 说明 |
-|:-----|:---|:-----|
-| `Secure` | `1` | 仅通过 HTTPS 传输 |
-| `HttpOnly` | `1` | 禁止 JavaScript 访问 |
+| 属性 | 说明 | 推荐值 |
+|:-----|:-----|:-------|
+| `Secure` | 强制仅通过 HTTPS 传输 | `1` |
+| `HttpOnly` | 禁止 JavaScript 访问（防 XSS 窃取） | `1`（会话 Cookie）/ `0`（CSRF Cookie） |
+| `SameSite` | 跨站请求限制策略 (`Strict` / `Lax` / `None`) | `Lax` 或 `Strict` |
 
-### CSRF Token Cookie
+---
 
-CSRF token cookie 同样设置 `Secure` 标志：
+## 11. Multipart 上传与二进制安全
+
+Multipart 解析器采用定长二进制安全搜索（`_csilk_memmem`），支持包含 `\0` 空字节的图片、PDF、压缩包等二进制文件上传，内置大小限制防止 DoS 攻击：
+
+| 限制项 | 值 | 说明 |
+|:-------|:---|:-----|
+| `CSILK_MAX_PART_NAME` | 128 字节 | 表单字段名称长度上限 |
+| `CSILK_MAX_PART_FILENAME` | 256 字节 | 文件名称长度上限 |
+| `CSILK_MAX_PART_SIZE` | 10 MB | 单个文件分片大小上限 |
+
+---
+
+## 12. 数据库安全与参数化 DML 执行 (CWE-89)
+
+为了防止 SQL 注入漏洞，除参数化 `SELECT` 预编译语句外，csilk 驱动层提供了统一的参数化 DML 执行接口 `csilk_db_exec_param()`：
 
 ```c
-// CSRF 中间件自动生成 Secure + HttpOnly cookie
-csilk_app_use(app, csilk_csrf_middleware);
+// 安全的参数化执行：内部自动对参数进行 SQL 转义和边界处理
+const char* params[] = { "john_doe", "john@example.com" };
+int affected = csilk_db_exec_param(pool, 
+    "INSERT INTO users (username, email) VALUES (?, ?)", 
+    params, 2);
 ```
 
 ---
 
-## 11. Multipart 上传安全
-
-Multipart 解析器内置大小限制，防止大文件 DoS 攻击：
-
-| 限制项 | 值 |
-|:-------|:---|
-| `CSILK_MAX_PART_NAME` | 128 字节 |
-| `CSILK_MAX_PART_FILENAME` | 256 字节 |
-| `CSILK_MAX_PART_SIZE` | 10 MB |
-
-超过限制的 part 将返回 `413 Payload Too Large`。
-
----
+## 延伸阅读
 
 | 文档 | 内容 |
 |:-----|:------|

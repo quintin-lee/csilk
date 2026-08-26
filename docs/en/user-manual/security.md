@@ -95,28 +95,30 @@ void setup_waf(csilk_app_t* app) {
 }
 ```
 
-### 3.2 WAF 检测范围
+### 3.2 WAF Detection Scope
 
-| 攻击类型 | 检测目标 | 示例 |
-|:---------|:---------|:-----|
-| SQL 注入 | 路径、查询参数 | `?id=1' OR '1'='1` |
-| XSS | 路径、查询参数、请求头 | `<script>alert(1)</script>` |
-| 路径穿越 | 路径 | `../../etc/passwd` |
-| 命令注入 | 查询参数 | `; rm -rf /` |
+| Attack Type | Target Fields | Example |
+|:------------|:--------------|:--------|
+| SQL Injection | Path, Query Params, Form, JSON/Text Request Body | `?id=1' OR '1'='1`, `{"query": "1 UNION SELECT"}` |
+| XSS | Path, Query Params, Form, JSON/Text Request Body | `<script>alert(1)</script>` |
+| Path Traversal | Path, Request Body | `../../etc/passwd`, `..\..\windows\win.ini` |
+| Command Injection | Query Params, Request Body | `; rm -rf /` |
 
 ---
 
-## 4. JWT 认证
+## 4. JWT Authentication
 
-### 4.1 支持的算法
+### 4.1 Supported Algorithms & Cross-Validation
 
-| 算法 | 枚举值 | 类型 | 密钥 |
-|:-----|:------:|:----:|:----:|
-| HS256 | `CSILK_JWT_HS256` | 对称 | 字符串密钥 |
-| RS256 | `CSILK_JWT_RS256` | 非对称 | PEM RSA 私钥 |
-| ES256 | `CSILK_JWT_ES256` | 非对称 | PEM ECDSA P-256 私钥 |
+| Algorithm | Enum | Type | Key | Security Policy |
+|:----------|:----:|:----:|:---:|:----------------|
+| HS256 | `CSILK_JWT_HS256` | Symmetric | Secret string | Enforces Header `alg="HS256"` |
+| RS256 | `CSILK_JWT_RS256` | Asymmetric | PEM RSA Private Key | Enforces Header `alg="RS256"` |
+| ES256 | `CSILK_JWT_ES256` | Asymmetric | PEM ECDSA P-256 Key | Enforces Header `alg="ES256"` |
 
-### 4.2 基本用法
+> **Security Note**: csilk decodes the JWT header and validates that the `alg` field strictly matches the server's expected algorithm, preventing `alg: "none"` bypasses and RSA/HMAC algorithm confusion attacks (CWE-327). Signature comparison uses OpenSSL `CRYPTO_memcmp()` for constant-time evaluation.
+
+### 4.2 Basic Usage
 
 ```c
 void setup_jwt(csilk_app_t* app) {
@@ -167,11 +169,11 @@ void setup_custom_auth(csilk_app_t* app) {
 
 ---
 
-## 5. CSRF 保护
+## 5. CSRF Protection
 
-### 5.1 基本用法
+### 5.1 Basic Usage
 
-对状态变更方法（POST、PUT、DELETE、PATCH）校验 CSRF token。token 无效时返回 403 Forbidden。
+Validates CSRF tokens on state-changing methods (POST, PUT, DELETE, PATCH). Rejects invalid requests with 403 Forbidden.
 
 ```c
 void setup_csrf(csilk_app_t* app) {
@@ -179,7 +181,7 @@ void setup_csrf(csilk_app_t* app) {
 }
 ```
 
-> **工作原理**：中间件从请求头或表单字段中提取 CSRF token，与服务端 Session 中存储的 token 比对。不匹配或缺失的请求将被拒绝。
+> **How It Works**: The middleware uses a Double Submit Cookie pattern, extracting the token from the `X-CSRF-Token` header (or form field) and comparing it against the cookie value using OpenSSL `CRYPTO_memcmp()` for constant-time security (CWE-208). The CSRF cookie is set with `Secure` and `http_only = 0` so that Single Page Applications (SPAs / XHR) can read it and attach it to subsequent mutation requests. Token generation uses `/dev/urandom`, failing securely if unavailable (CWE-330).
 
 ---
 
@@ -381,10 +383,81 @@ int main() {
 
 ---
 
-## 延伸阅读
+---
 
-| 文档 | 内容 |
-|:-----|:------|
-| [模块设计 — 安全子系统](../../docs/module-design/security.md) | 安全模块内部实现、驱动接口设计 |
-| [JWT 配置参考](./configuration.md) | JWT 密钥与算法配置选项 |
-| [配置指南](./configuration.md) | YAML 安全配置完整参考 |
+## 9. Security Headers & CRLF Injection Prevention
+
+### 9.1 Security Headers Middleware
+
+csilk provides `csilk_security_headers_middleware()` to automatically append defensive HTTP headers:
+
+```c
+#include "csilk/core/security_headers.h"
+
+void setup_security_headers(csilk_app_t* app) {
+    csilk_app_use(app, csilk_security_headers_middleware);
+}
+```
+
+| Header | Value | Purpose |
+|:-------|:------|:--------|
+| `X-Frame-Options` | `DENY` | Prevents Clickjacking |
+| `X-Content-Type-Options` | `nosniff` | Disables MIME type sniffing |
+| `X-XSS-Protection` | `0` | Disables legacy buggy XSS auditors |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limits Referrer exposure |
+
+### 9.2 CRLF Response Splitting Protection (CWE-113)
+
+When response headers are stored in `map_set` and `map_add`, `\r` and `\n` control characters are automatically stripped from both header keys and values, immunizing against HTTP response splitting and header injection attacks.
+
+---
+
+## 10. Cookie Security & SameSite Attribute
+
+csilk provides fine-grained cookie control via `csilk_set_cookie_ex()`, fully supporting the `SameSite` attribute:
+
+```c
+// Set a secure cookie with SameSite policy
+csilk_set_cookie_ex(c, "session_id", sid, 86400, "/", "example.com", 1, 1, "Strict");
+```
+
+| Attribute | Description | Recommended Setting |
+|:----------|:------------|:--------------------|
+| `Secure` | Enforces HTTPS-only transmission | `1` |
+| `HttpOnly` | Restricts access from JavaScript | `1` (Session cookies) / `0` (CSRF cookies) |
+| `SameSite` | Cross-site request policy (`Strict` / `Lax` / `None`) | `Lax` or `Strict` |
+
+---
+
+## 11. Multipart Upload & Binary Safety
+
+The multipart parser uses length-bounded binary searching (`_csilk_memmem`), safely handling binary uploads containing `\0` bytes (images, PDFs, archives) without boundary truncation, backed by built-in limits:
+
+| Limit Item | Value | Description |
+|:-----------|:------|:------------|
+| `CSILK_MAX_PART_NAME` | 128 bytes | Max part field name length |
+| `CSILK_MAX_PART_FILENAME` | 256 bytes | Max uploaded file name length |
+| `CSILK_MAX_PART_SIZE` | 10 MB | Max single part size |
+
+---
+
+## 12. Database Security & Parameterized DML Execution (CWE-89)
+
+To prevent SQL injection in data modification operations, csilk provides `csilk_db_exec_param()` across all database drivers:
+
+```c
+// Safe parameterized DML: escapes and binds parameters automatically
+const char* params[] = { "john_doe", "john@example.com" };
+int affected = csilk_db_exec_param(pool, 
+    "INSERT INTO users (username, email) VALUES (?, ?)", 
+    params, 2);
+```
+
+---
+
+## Further Reading
+
+| Document | Content |
+|:---------|:--------|
+| [Module Design — Security](../../docs/module-design/security.md) | Internal security architecture and driver design |
+| [Configuration Guide](./configuration.md) | Full YAML configuration reference |
