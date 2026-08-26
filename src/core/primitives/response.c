@@ -128,9 +128,13 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
     size_t i = 0;
     size_t j = 0;
 
-    /* Reject absolute URLs (http://, https://, //) to prevent open redirect */
-    if (location[0] == 'h' && location[1] == 't' && location[2] == 't' && location[3] == 'p') {
-        CSILK_LOG_W("Redirect blocked: absolute URL not allowed: %.30s...", location);
+    /* Reject absolute and unsafe URLs (http://, https://, //, javascript:, etc.) to prevent open redirect (CWE-601) */
+    if ((location[0] == '/' && (location[1] == '/' || location[1] == '\\')) ||
+        (location[0] == '\\' && (location[1] == '\\' || location[1] == '/')) ||
+        strncasecmp(location, "http:", 5) == 0 || strncasecmp(location, "https:", 6) == 0 ||
+        strncasecmp(location, "javascript:", 11) == 0 || strncasecmp(location, "data:", 5) == 0 ||
+        strncasecmp(location, "vbscript:", 9) == 0 || strstr(location, "://") != NULL) {
+        CSILK_LOG_W("Redirect blocked: absolute or unsafe URL not allowed: %.30s...", location);
         csilk_status(c, 400);
         csilk_string(c, 400, "Invalid redirect URL");
         return;

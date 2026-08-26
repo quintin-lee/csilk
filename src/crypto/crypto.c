@@ -304,7 +304,8 @@ csilk_crypto_generate_nonce(uint8_t* out, size_t len)
             out[i] = (uint8_t)(ts >> (i * 8));
         }
         for (; i < len; i++) {
-            out[i] = (uint8_t)(count >> ((i - 8) * 8));
+            size_t shift = ((i - 8) % 4) * 8;
+            out[i] = (uint8_t)(count >> shift);
         }
     }
 }

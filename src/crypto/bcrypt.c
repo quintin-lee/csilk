@@ -110,8 +110,11 @@ b64_decode_char(char c)
 static inline uint32_t
 fo(const csilk_bcrypt_state_t* state, uint32_t x)
 {
-    uint8_t* b = (uint8_t*)&x;
-    return state->S[0][b[0]] ^ state->S[1][b[1]] ^ state->S[2][b[2]] ^ state->S[3][b[3]];
+    uint8_t b0 = (uint8_t)(x & 0xFF);
+    uint8_t b1 = (uint8_t)((x >> 8) & 0xFF);
+    uint8_t b2 = (uint8_t)((x >> 16) & 0xFF);
+    uint8_t b3 = (uint8_t)((x >> 24) & 0xFF);
+    return state->S[0][b0] ^ state->S[1][b1] ^ state->S[2][b2] ^ state->S[3][b3];
 }
 
 static void
