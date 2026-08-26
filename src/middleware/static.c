@@ -90,12 +90,10 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
     }
 
     long long range_start = 0, range_end = (long long)size - 1;
-    *dash = '\0';
-    if (range_val[0] != '\0') {
+    if (range_val != dash) {
         char* endptr = NULL;
         range_start = strtoll(range_val, &endptr, 10);
         if (endptr == range_val || range_start < 0) {
-            *dash = '-';
             CSILK_LOG_W("Static: Range request unsatisfiable: invalid start (Range "
                         "header: '%s')",
                         range_hdr);
@@ -112,7 +110,6 @@ set_range_response(csilk_ctx_t* c, int fd, size_t size, const char* mime_type)
             range_end = (long long)size - 1;
         }
     }
-    *dash = '-';
 
     if (range_start > range_end || range_start >= (long long)size) {
         CSILK_LOG_W("Static: Range request unsatisfiable: range out of bounds (Range "
@@ -211,7 +208,9 @@ contains_path_traversal(const char* path)
         if (p[0] == '.' && p[1] == '.') {
             char prev = (p == path) ? '/' : *(p - 1);
             char next = *(p + 2);
-            if ((prev == '/' || prev == '\0') && (next == '/' || next == '\0' || next == '\0')) {
+            int  is_prev_sep = (prev == '/' || prev == '\\' || prev == '\0');
+            int  is_next_sep = (next == '/' || next == '\\' || next == '\0');
+            if (is_prev_sep && is_next_sep) {
                 return 1;
             }
         }

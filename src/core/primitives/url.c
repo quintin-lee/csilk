@@ -60,7 +60,7 @@ csilk_url_decode(char* str)
     char* src = str;
     char* dst = str;
     while (*src) {
-        if (*src == '%' && isxdigit(src[1]) && isxdigit(src[2])) {
+        if (*src == '%' && isxdigit((unsigned char)src[1]) && isxdigit((unsigned char)src[2])) {
             int hi = hex_to_int(src[1]);
             int lo = hex_to_int(src[2]);
             if (hi >= 0 && lo >= 0) {
