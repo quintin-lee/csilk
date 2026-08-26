@@ -70,10 +70,21 @@ void csilk_ai_unregister_monitor(void* c);
 /** @brief Opaque handle for an AI provider instance. */
 typedef struct csilk_ai_s csilk_ai_t;
 
+/** @brief a tool call requested by the model. */
+typedef struct {
+    char* id;        /**< Unique call ID. */
+    char* name;      /**< Function name to call. */
+    char* arguments; /**< JSON-formatted arguments string. */
+} csilk_ai_tool_call_t;
+
 /** @brief A single message in a chat conversation. */
 typedef struct {
-    const char* role;    /**< Message role (e.g., "system", "user", "assistant"). */
-    const char* content; /**< Message text content. */
+    const char* role;    /**< Message role ("system", "user", "assistant", "tool"). */
+    const char* content; /**< Message text content (NULL when role=="assistant" with tool_calls). */
+    csilk_ai_tool_call_t*
+        tool_calls; /**< Tool calls requested by the model (NULL if none; only valid when role=="assistant"). */
+    size_t      tool_call_count; /**< Number of entries in tool_calls (0 when NULL). */
+    const char* tool_call_id;    /**< Tool call result ID (NULL unless role=="tool"). */
 } csilk_ai_message_t;
 
 /** @brief Callback for streaming mode.
@@ -93,13 +104,6 @@ typedef struct {
     const char*              type; /**< Currently only "function" is supported. */
     csilk_ai_tool_function_t function;
 } csilk_ai_tool_t;
-
-/** @brief a tool call requested by the model. */
-typedef struct {
-    char* id;        /**< Unique call ID. */
-    char* name;      /**< Function name to call. */
-    char* arguments; /**< JSON-formatted arguments string. */
-} csilk_ai_tool_call_t;
 
 /** @brief Request parameters for chat completion. */
 typedef struct {
@@ -133,9 +137,8 @@ typedef struct {
     int                   prompt_tokens;     /**< Tokens used in the prompt. */
     int                   completion_tokens; /**< Tokens used in the generation. */
     int                   total_tokens;      /**< Total tokens used. */
-    char*                 raw_response;  /**< Full raw JSON response (optional, heap-allocated). */
-    char*                 error_message; /**< Detailed error message if call failed
-                          (heap-allocated). */
+    char*                 raw_response; /**< Full raw JSON response (optional, heap-allocated). */
+    char* error_message; /**< Detailed error message if call failed (heap-allocated). */
 } csilk_ai_chat_response_t;
 
 /** @brief Response data for embeddings. */
@@ -264,13 +267,17 @@ void csilk_ai_register_driver(const csilk_ai_driver_t* driver);
 /* --- Context Helpers --- */
 
 /** @brief Initialize a new conversation context.
- * @param max_history Maximum number of messages to keep (FIFO sliding window).
- */
+ * @param max_history Maximum number of messages to keep (FIFO sliding window). */
 csilk_ai_context_t* csilk_ai_context_new(size_t max_history);
 
 /** @brief Add a message to the context.
  * @note Strings are duplicated internally. */
 void csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* content);
+
+/** @brief Add a tool result message to the context.
+ * @note Creates an assistant message with tool_calls from the response,
+ *       followed by tool messages with results. Strings are duplicated internally. */
+void csilk_ai_context_add_tool_result(csilk_ai_context_t* ctx, const csilk_ai_chat_response_t* res);
 
 /** @brief Clear all messages from the context. */
 void csilk_ai_context_clear(csilk_ai_context_t* ctx);

@@ -403,10 +403,33 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     csilk_json_t* msgs = csilk_json_array();
     for (size_t i = 0; i < req->message_count; i++) {
-        csilk_json_t* m = csilk_json_object();
-        csilk_json_add_string(m, "role", req->messages[i].role);
-        csilk_json_add_string(m, "content", req->messages[i].content);
-        csilk_json_array_append(msgs, m);
+        const csilk_ai_message_t* m = &req->messages[i];
+        csilk_json_t*             obj = csilk_json_object();
+        csilk_json_add_string(obj, "role", m->role ? m->role : "user");
+        if (m->role && strcmp(m->role, "tool") == 0) {
+            /* role=tool messages carry tool_call_id at top level */
+            csilk_json_add_string(obj, "tool_call_id", m->tool_call_id ? m->tool_call_id : "");
+            csilk_json_add_string(obj, "content", m->content ? m->content : "");
+        } else if (m->tool_call_count > 0) {
+            /* role=assistant with tool_calls: build the tool_calls array */
+            csilk_json_add_string(obj, "content", m->content ? m->content : "");
+            csilk_json_t* tc_arr = csilk_json_array();
+            for (size_t j = 0; j < m->tool_call_count; j++) {
+                const csilk_ai_tool_call_t* tc = &m->tool_calls[j];
+                csilk_json_t*               tc_obj = csilk_json_object();
+                csilk_json_add_string(tc_obj, "id", tc->id ? tc->id : "");
+                csilk_json_add_string(tc_obj, "type", "function");
+                csilk_json_t* fn = csilk_json_object();
+                csilk_json_add_string(fn, "name", tc->name ? tc->name : "");
+                csilk_json_add_string(fn, "arguments", tc->arguments ? tc->arguments : "{}");
+                csilk_json_add_object(tc_obj, "function", fn);
+                csilk_json_array_append(tc_arr, tc_obj);
+            }
+            csilk_json_add_array(obj, "tool_calls", tc_arr);
+        } else {
+            csilk_json_add_string(obj, "content", m->content ? m->content : "");
+        }
+        csilk_json_array_append(msgs, obj);
     }
     csilk_json_add_object(root, "messages", msgs);
 

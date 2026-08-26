@@ -454,6 +454,15 @@ free_async_chat_req(async_chat_req_t* ar)
         for (size_t i = 0; i < ar->req_copy.message_count; i++) {
             free((char*)ar->messages_copy[i].role);
             free((char*)ar->messages_copy[i].content);
+            if (ar->messages_copy[i].tool_calls) {
+                for (size_t j = 0; j < ar->messages_copy[i].tool_call_count; j++) {
+                    free(ar->messages_copy[i].tool_calls[j].id);
+                    free(ar->messages_copy[i].tool_calls[j].name);
+                    free(ar->messages_copy[i].tool_calls[j].arguments);
+                }
+                free(ar->messages_copy[i].tool_calls);
+            }
+            free((char*)ar->messages_copy[i].tool_call_id);
         }
         free(ar->messages_copy);
     }
@@ -549,6 +558,29 @@ csilk_ai_chat_async(csilk_ai_t*                    ai,
                     req->messages[i].role ? strdup(req->messages[i].role) : NULL;
                 ar->messages_copy[i].content =
                     req->messages[i].content ? strdup(req->messages[i].content) : NULL;
+                ar->messages_copy[i].tool_call_id =
+                    req->messages[i].tool_call_id ? strdup(req->messages[i].tool_call_id) : NULL;
+                if (req->messages[i].tool_calls && req->messages[i].tool_call_count > 0) {
+                    ar->messages_copy[i].tool_call_count = req->messages[i].tool_call_count;
+                    ar->messages_copy[i].tool_calls =
+                        calloc(req->messages[i].tool_call_count, sizeof(csilk_ai_tool_call_t));
+                    if (ar->messages_copy[i].tool_calls) {
+                        for (size_t j = 0; j < req->messages[i].tool_call_count; j++) {
+                            ar->messages_copy[i].tool_calls[j].id =
+                                req->messages[i].tool_calls[j].id
+                                    ? strdup(req->messages[i].tool_calls[j].id)
+                                    : NULL;
+                            ar->messages_copy[i].tool_calls[j].name =
+                                req->messages[i].tool_calls[j].name
+                                    ? strdup(req->messages[i].tool_calls[j].name)
+                                    : NULL;
+                            ar->messages_copy[i].tool_calls[j].arguments =
+                                req->messages[i].tool_calls[j].arguments
+                                    ? strdup(req->messages[i].tool_calls[j].arguments)
+                                    : NULL;
+                        }
+                    }
+                }
             }
             ar->req_copy.messages = ar->messages_copy;
         } else {
@@ -846,6 +878,65 @@ csilk_ai_context_add(csilk_ai_context_t* ctx, const char* role, const char* cont
     ctx->count++;
 }
 
+/** @brief Add a tool-result sequence to the context.
+ *
+ * Serializes the assistant response (with tool_calls) as an assistant message,
+ * then appends one tool message per call result. All strings are deep-copied.
+ *
+ * @param ctx Conversation context.
+ * @param res Chat response containing tool_calls (must have tool_call_count > 0). */
+void
+csilk_ai_context_add_tool_result(csilk_ai_context_t* ctx, const csilk_ai_chat_response_t* res)
+{
+    if (!ctx || !res || res->tool_call_count == 0) {
+        return;
+    }
+
+    /* Expand capacity if needed */
+    size_t needed = ctx->count + 1 + res->tool_call_count;
+    if (needed > ctx->capacity) {
+        size_t new_cap = ctx->capacity == 0 ? 8 : ctx->capacity * 2;
+        if (new_cap < needed) {
+            new_cap = needed;
+        }
+        csilk_ai_message_t* new_msgs = realloc(ctx->messages, sizeof(csilk_ai_message_t) * new_cap);
+        if (!new_msgs) {
+            CSILK_LOG_E("Failed to expand AI context for tool result");
+            return;
+        }
+        ctx->messages = new_msgs;
+        ctx->capacity = new_cap;
+    }
+
+    /* Append assistant message with tool_calls struct fields */
+    size_t ai_idx = ctx->count++;
+    ctx->messages[ai_idx].role = strdup("assistant");
+    ctx->messages[ai_idx].content = res->content ? strdup(res->content) : strdup("");
+    ctx->messages[ai_idx].tool_call_count = res->tool_call_count;
+    ctx->messages[ai_idx].tool_calls = calloc(res->tool_call_count, sizeof(csilk_ai_tool_call_t));
+    if (ctx->messages[ai_idx].tool_calls) {
+        for (size_t i = 0; i < res->tool_call_count; i++) {
+            ctx->messages[ai_idx].tool_calls[i].id =
+                strdup(res->tool_calls[i].id ? res->tool_calls[i].id : "");
+            ctx->messages[ai_idx].tool_calls[i].name =
+                strdup(res->tool_calls[i].name ? res->tool_calls[i].name : "");
+            ctx->messages[ai_idx].tool_calls[i].arguments =
+                strdup(res->tool_calls[i].arguments ? res->tool_calls[i].arguments : "{}");
+        }
+    }
+    ctx->messages[ai_idx].tool_call_id = NULL;
+
+    /* Append one tool message per call */
+    for (size_t i = 0; i < res->tool_call_count; i++) {
+        size_t ti = ctx->count++;
+        ctx->messages[ti].role = strdup("tool");
+        ctx->messages[ti].content = strdup("{}");
+        ctx->messages[ti].tool_call_id = strdup(res->tool_calls[i].id ? res->tool_calls[i].id : "");
+        ctx->messages[ti].tool_calls = NULL;
+        ctx->messages[ti].tool_call_count = 0;
+    }
+}
+
 /** @brief Clear all messages from the conversation context.
  *  Frees each message's role and content strings and resets the
  *  message count to zero. The internal array capacity is preserved
@@ -857,10 +948,26 @@ csilk_ai_context_clear(csilk_ai_context_t* ctx)
     if (!ctx) {
         return;
     }
-    CSILK_LOG_D("Clearing %zu messages from AI context", ctx->count);
     for (size_t i = 0; i < ctx->count; i++) {
         free((char*)ctx->messages[i].role);
+        ctx->messages[i].role = NULL;
         free((char*)ctx->messages[i].content);
+        ctx->messages[i].content = NULL;
+        if (ctx->messages[i].tool_calls) {
+            for (size_t j = 0; j < ctx->messages[i].tool_call_count; j++) {
+                free(ctx->messages[i].tool_calls[j].id);
+                ctx->messages[i].tool_calls[j].id = NULL;
+                free(ctx->messages[i].tool_calls[j].name);
+                ctx->messages[i].tool_calls[j].name = NULL;
+                free(ctx->messages[i].tool_calls[j].arguments);
+                ctx->messages[i].tool_calls[j].arguments = NULL;
+            }
+            free(ctx->messages[i].tool_calls);
+            ctx->messages[i].tool_calls = NULL;
+            ctx->messages[i].tool_call_count = 0;
+        }
+        free((char*)ctx->messages[i].tool_call_id);
+        ctx->messages[i].tool_call_id = NULL;
     }
     ctx->count = 0;
 }
