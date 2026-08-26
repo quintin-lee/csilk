@@ -131,8 +131,10 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     csilk_json_t* msgs = csilk_json_array();
     for (size_t i = 0; i < req->message_count; i++) {
         csilk_json_t* m = csilk_json_object();
-        csilk_json_add_string(m, "role", req->messages[i].role);
-        csilk_json_add_string(m, "content", req->messages[i].content);
+        csilk_json_add_string(m, "role", req->messages[i].role ? req->messages[i].role : "user");
+        /* Ollama does not support tool_calls in messages; only serialize content */
+        csilk_json_add_string(
+            m, "content", req->messages[i].content ? req->messages[i].content : "");
         csilk_json_array_append(msgs, m);
     }
     csilk_json_add_object(root, "messages", msgs);

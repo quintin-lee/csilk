@@ -440,6 +440,17 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             }
             msgs[msg_count].role = "assistant";
             msgs[msg_count].content = res.content ? strdup(res.content) : strdup("");
+            if (res.tool_call_count > 0) {
+                msgs[msg_count].tool_call_count = res.tool_call_count;
+                msgs[msg_count].tool_calls =
+                    calloc(res.tool_call_count, sizeof(csilk_ai_tool_call_t));
+                for (size_t j = 0; j < res.tool_call_count; j++) {
+                    msgs[msg_count].tool_calls[j].id = strdup(res.tool_calls[j].id ?: "");
+                    msgs[msg_count].tool_calls[j].name = strdup(res.tool_calls[j].name ?: "");
+                    msgs[msg_count].tool_calls[j].arguments =
+                        strdup(res.tool_calls[j].arguments ?: "{}");
+                }
+            }
             msg_count++;
 
             csilk_mutex_t m;
@@ -471,6 +482,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             for (size_t i = 0; i < res.tool_call_count; i++) {
                 msgs[msg_count].role = "tool";
                 msgs[msg_count].content = sws[i].result ? sws[i].result : strdup("{}");
+                msgs[msg_count].tool_call_id = strdup(res.tool_calls[i].id ?: "");
                 msg_count++;
             }
 
@@ -492,6 +504,15 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     }
     for (size_t i = 0; i < msg_count; i++) {
         free((void*)msgs[i].content);
+        if (msgs[i].tool_calls) {
+            for (size_t j = 0; j < msgs[i].tool_call_count; j++) {
+                free(msgs[i].tool_calls[j].id);
+                free(msgs[i].tool_calls[j].name);
+                free(msgs[i].tool_calls[j].arguments);
+            }
+            free(msgs[i].tool_calls);
+        }
+        free((void*)msgs[i].tool_call_id);
     }
     free(msgs);
     if (tools) {
