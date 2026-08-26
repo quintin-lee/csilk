@@ -214,10 +214,12 @@ process_stream_line(struct curl_context* ctx, const char* line)
                     }
 
                     csilk_json_t* idx_json = csilk_json_get(tc, "index");
-                    size_t        idx =
-                        idx_json
-                            ? (size_t)csilk_json_int_value(idx_json)
-                            : (ctx->res->tool_call_count > 0 ? ctx->res->tool_call_count - 1 : 0);
+                    size_t        idx = 0;
+                    if (idx_json) {
+                        idx = (size_t)csilk_json_int_value(idx_json);
+                    } else if (ctx->res->tool_call_count > 0) {
+                        idx = ctx->res->tool_call_count - 1;
+                    }
 
                     /* Expand tool_calls array if needed */
                     if (idx >= ctx->res->tool_call_count) {
@@ -244,8 +246,8 @@ process_stream_line(struct curl_context* ctx, const char* line)
                         } else {
                             size_t cur_id_len = strlen(ctx->res->tool_calls[idx].id);
                             size_t id_len = strlen(id_str);
-                            char*  new_id =
-                                realloc(ctx->res->tool_calls[idx].id, cur_id_len + id_len + 1);
+                            size_t total_id_len = cur_id_len + id_len + 1;
+                            char*  new_id = realloc(ctx->res->tool_calls[idx].id, total_id_len);
                             if (new_id) {
                                 ctx->res->tool_calls[idx].id = new_id;
                                 memcpy(new_id + cur_id_len, id_str, id_len);
@@ -265,8 +267,9 @@ process_stream_line(struct curl_context* ctx, const char* line)
                             } else {
                                 size_t cur_name_len = strlen(ctx->res->tool_calls[idx].name);
                                 size_t name_len = strlen(name_str);
-                                char*  new_name = realloc(ctx->res->tool_calls[idx].name,
-                                                          cur_name_len + name_len + 1);
+                                size_t total_name_len = cur_name_len + name_len + 1;
+                                char*  new_name =
+                                    realloc(ctx->res->tool_calls[idx].name, total_name_len);
                                 if (new_name) {
                                     ctx->res->tool_calls[idx].name = new_name;
                                     memcpy(new_name + cur_name_len, name_str, name_len);
@@ -283,8 +286,9 @@ process_stream_line(struct curl_context* ctx, const char* line)
                                 size_t cur_alen = ctx->res->tool_calls[idx].arguments
                                                       ? strlen(ctx->res->tool_calls[idx].arguments)
                                                       : 0;
-                                char*  new_args = realloc(ctx->res->tool_calls[idx].arguments,
-                                                          cur_alen + alen + 1);
+                                size_t total_args_len = cur_alen + alen + 1;
+                                char*  new_args =
+                                    realloc(ctx->res->tool_calls[idx].arguments, total_args_len);
                                 if (new_args) {
                                     ctx->res->tool_calls[idx].arguments = new_args;
                                     memcpy(new_args + cur_alen, arg_chunk, alen);
