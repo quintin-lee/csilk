@@ -128,17 +128,27 @@ write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
  * The special "[DONE]" token signals stream completion.
  *
  * For each delta chunk, the function:
- *   1. Appends the content to the accumulated response.
- *   2. Calls the user's on_chunk callback for real-time consumption.
+ *   1. Captures stream-level token usage statistics if present.
+ *   2. Appends content to the accumulated response and fires on_chunk callback.
+ *   3. Reassembles streamed tool calls dynamically across chunks.
  */
 static void
 process_stream_line(struct curl_context* ctx, const char* line)
 {
-    /* Only process "data: " lines; ignore event type lines, empty keepalives */
-    if (strncmp(line, "data: ", 5) != 0) {
+    /* Skip leading whitespace */
+    while (*line == ' ' || *line == '\t') {
+        line++;
+    }
+
+    /* Only process "data:" lines; ignore event type lines, empty keepalives */
+    if (strncmp(line, "data:", 5) != 0) {
         return;
     }
-    const char* data = line + 6;
+    const char* data = line + 5;
+    if (*data == ' ') {
+        data++;
+    }
+
     /* End-of-stream sentinel */
     if (strcmp(data, "[DONE]") == 0) {
         return;
@@ -149,28 +159,145 @@ process_stream_line(struct curl_context* ctx, const char* line)
         return;
     }
 
+    /* 1. Capture stream-level token usage statistics */
+    csilk_json_t* usage = csilk_json_get(root, "usage");
+    if (usage && !csilk_json_is_null(usage)) {
+        csilk_json_t* pt = csilk_json_get(usage, "prompt_tokens");
+        csilk_json_t* ct = csilk_json_get(usage, "completion_tokens");
+        csilk_json_t* tt = csilk_json_get(usage, "total_tokens");
+        if (pt) {
+            ctx->res->prompt_tokens = (int)csilk_json_int_value(pt);
+        }
+        if (ct) {
+            ctx->res->completion_tokens = (int)csilk_json_int_value(ct);
+        }
+        if (tt) {
+            ctx->res->total_tokens = (int)csilk_json_int_value(tt);
+        }
+    }
+
+    /* 2. Process choices deltas */
     csilk_json_t* choices = csilk_json_get(root, "choices");
     if (csilk_json_is_array(choices) && csilk_json_array_size(choices) > 0) {
         csilk_json_t* first = csilk_json_array_get(choices, 0);
         csilk_json_t* delta = csilk_json_get(first, "delta");
-        csilk_json_t* content = csilk_json_get(delta, "content");
-        if (csilk_json_is_string(content)) {
-            /* Append this chunk to the accumulated full content */
-            size_t clen = strlen(csilk_json_string_value(content));
-            size_t current_len = ctx->res->content ? strlen(ctx->res->content) : 0;
-            char*  new_content = realloc(ctx->res->content, current_len + clen + 1);
-            if (new_content) {
-                ctx->res->content = new_content;
-                memcpy(ctx->res->content + current_len, csilk_json_string_value(content), clen);
-                ctx->res->content[current_len + clen] = '\0';
+        if (delta) {
+            /* 2a. Real-time text token dispatch */
+            csilk_json_t* content = csilk_json_get(delta, "content");
+            if (csilk_json_is_string(content)) {
+                const char* chunk_str = csilk_json_string_value(content);
+                size_t      clen = strlen(chunk_str);
+                if (clen > 0) {
+                    size_t current_len = ctx->res->content ? strlen(ctx->res->content) : 0;
+                    char*  new_content = realloc(ctx->res->content, current_len + clen + 1);
+                    if (new_content) {
+                        ctx->res->content = new_content;
+                        memcpy(ctx->res->content + current_len, chunk_str, clen);
+                        ctx->res->content[current_len + clen] = '\0';
+                    }
+
+                    /* Forward chunk to user streaming callback */
+                    if (ctx->req->on_chunk) {
+                        ctx->req->on_chunk(chunk_str, ctx->req->user_data);
+                    }
+                }
             }
 
-            /* Forward the chunk to the caller's streaming callback */
-            if (ctx->req->on_chunk) {
-                ctx->req->on_chunk(csilk_json_string_value(content), ctx->req->user_data);
+            /* 2b. Streamed Tool Calling Reassembly (delta.tool_calls) */
+            csilk_json_t* tool_calls = csilk_json_get(delta, "tool_calls");
+            if (csilk_json_is_array(tool_calls)) {
+                size_t tc_count = csilk_json_array_size(tool_calls);
+                for (size_t i = 0; i < tc_count; i++) {
+                    csilk_json_t* tc = csilk_json_array_get(tool_calls, i);
+                    if (!tc) {
+                        continue;
+                    }
+
+                    csilk_json_t* idx_json = csilk_json_get(tc, "index");
+                    size_t        idx =
+                        idx_json
+                            ? (size_t)csilk_json_int_value(idx_json)
+                            : (ctx->res->tool_call_count > 0 ? ctx->res->tool_call_count - 1 : 0);
+
+                    /* Expand tool_calls array if needed */
+                    if (idx >= ctx->res->tool_call_count) {
+                        size_t                new_count = idx + 1;
+                        csilk_ai_tool_call_t* new_tcs =
+                            realloc(ctx->res->tool_calls, new_count * sizeof(csilk_ai_tool_call_t));
+                        if (new_tcs) {
+                            for (size_t k = ctx->res->tool_call_count; k < new_count; k++) {
+                                memset(&new_tcs[k], 0, sizeof(csilk_ai_tool_call_t));
+                            }
+                            ctx->res->tool_calls = new_tcs;
+                            ctx->res->tool_call_count = new_count;
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    /* Capture function id */
+                    csilk_json_t* fid = csilk_json_get(tc, "id");
+                    if (fid && csilk_json_is_string(fid)) {
+                        const char* id_str = csilk_json_string_value(fid);
+                        if (!ctx->res->tool_calls[idx].id) {
+                            ctx->res->tool_calls[idx].id = strdup(id_str);
+                        } else {
+                            size_t cur_id_len = strlen(ctx->res->tool_calls[idx].id);
+                            size_t id_len = strlen(id_str);
+                            char*  new_id =
+                                realloc(ctx->res->tool_calls[idx].id, cur_id_len + id_len + 1);
+                            if (new_id) {
+                                ctx->res->tool_calls[idx].id = new_id;
+                                memcpy(new_id + cur_id_len, id_str, id_len);
+                                new_id[cur_id_len + id_len] = '\0';
+                            }
+                        }
+                    }
+
+                    /* Capture function name & arguments */
+                    csilk_json_t* func = csilk_json_get(tc, "function");
+                    if (func) {
+                        csilk_json_t* fname = csilk_json_get(func, "name");
+                        if (fname && csilk_json_is_string(fname)) {
+                            const char* name_str = csilk_json_string_value(fname);
+                            if (!ctx->res->tool_calls[idx].name) {
+                                ctx->res->tool_calls[idx].name = strdup(name_str);
+                            } else {
+                                size_t cur_name_len = strlen(ctx->res->tool_calls[idx].name);
+                                size_t name_len = strlen(name_str);
+                                char*  new_name = realloc(ctx->res->tool_calls[idx].name,
+                                                          cur_name_len + name_len + 1);
+                                if (new_name) {
+                                    ctx->res->tool_calls[idx].name = new_name;
+                                    memcpy(new_name + cur_name_len, name_str, name_len);
+                                    new_name[cur_name_len + name_len] = '\0';
+                                }
+                            }
+                        }
+
+                        csilk_json_t* fargs = csilk_json_get(func, "arguments");
+                        if (fargs && csilk_json_is_string(fargs)) {
+                            const char* arg_chunk = csilk_json_string_value(fargs);
+                            size_t      alen = strlen(arg_chunk);
+                            if (alen > 0) {
+                                size_t cur_alen = ctx->res->tool_calls[idx].arguments
+                                                      ? strlen(ctx->res->tool_calls[idx].arguments)
+                                                      : 0;
+                                char*  new_args = realloc(ctx->res->tool_calls[idx].arguments,
+                                                          cur_alen + alen + 1);
+                                if (new_args) {
+                                    ctx->res->tool_calls[idx].arguments = new_args;
+                                    memcpy(new_args + cur_alen, arg_chunk, alen);
+                                    new_args[cur_alen + alen] = '\0';
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+
     csilk_json_free(root);
 }
 
@@ -210,7 +337,10 @@ write_cb(void* contents, size_t size, size_t nmemb, void* userp)
         char* line_start = ctx->line_buf;
         char* newline;
         while ((newline = strchr(line_start, '\n')) != NULL) {
-            *newline = '\0';          /* null-terminate the line */
+            *newline = '\0'; /* null-terminate the line */
+            if (newline > line_start && *(newline - 1) == '\r') {
+                *(newline - 1) = '\0';
+            }
             process_stream_line(ctx, line_start);
             line_start = newline + 1; /* advance past the newline */
         }
@@ -297,6 +427,9 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
     if (req->stream) {
         csilk_json_add_bool(root, "stream", true);
+        csilk_json_t* stream_opts = csilk_json_object();
+        csilk_json_add_bool(stream_opts, "include_usage", true);
+        csilk_json_add_object(root, "stream_options", stream_opts);
     }
 
     /* Stop sequences array */
@@ -408,10 +541,16 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         return -1;
     }
 
-    /* --- Step 4a: Streaming path -- content already built by write_cb --- */
+    /* --- Step 4a: Streaming path -- content or tool calls already built by write_cb --- */
     if (req->stream) {
         curl_easy_cleanup(curl);
-        return res->content ? 0 : -1;
+        if (res->total_tokens == 0 && (res->prompt_tokens > 0 || res->completion_tokens > 0)) {
+            res->total_tokens = res->prompt_tokens + res->completion_tokens;
+        }
+        if (!res->content && res->tool_call_count == 0) {
+            res->content = strdup("");
+        }
+        return 0;
     }
 
     /* --- Step 4b: Non-streaming path -- parse the JSON response --- */
@@ -463,7 +602,7 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     curl_easy_cleanup(curl);
-    return res->content ? 0 : -1;
+    return (res->content != NULL || res->tool_call_count > 0) ? 0 : -1;
 }
 
 /**

@@ -284,6 +284,7 @@ set(CSILK_DATA_TEST_DIRS
 set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
+    test_openai_mock
     test_vector_db
     test_vector_simd
     test_vector_hnsw
@@ -292,7 +293,7 @@ set(CSILK_AI_TESTS
     test_mongodb
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
+    drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
     drivers/db;drivers/db
 )
 
