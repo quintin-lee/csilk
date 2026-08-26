@@ -46,12 +46,11 @@ static int             g_mq_wal_shutdown = 0;
  *  the WAL fd while the writer thread is mid-write. */
 static int g_mq_wal_writing = 0;
 
-/** @brief WAL flush timeout in milliseconds.
- *
- *  When the queue is empty, the writer thread waits up to this many
- *  milliseconds before returning to the wait loop. This bounds the
- *  latency of a single isolated message to ~1ms. */
-enum { MQ_WAL_FLUSH_TIMEOUT_MS = 1 };
+enum {
+    MQ_WAL_FLUSH_TIMEOUT_MS = 1,
+    MQ_WAL_MAX_TOPIC_LEN = 64 * 1024,          /**< 64 KB maximum topic length */
+    MQ_WAL_MAX_PAYLOAD_LEN = 64 * 1024 * 1024, /**< 64 MB maximum payload length */
+};
 
 static void*
 mq_wal_writer_thread(void* arg)
@@ -216,12 +215,19 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
     }
     task->fd = mq->wal_fd;
     task->topic = strdup(topic);
+    if (!task->topic) {
+        free(task);
+        return -1;
+    }
     task->len = len;
     if (len > 0 && payload) {
         task->payload = malloc(len);
-        if (task->payload) {
-            memcpy(task->payload, payload, len);
+        if (!task->payload) {
+            free(task->topic);
+            free(task);
+            return -1;
         }
+        memcpy(task->payload, payload, len);
     } else {
         task->payload = NULL;
     }
@@ -308,6 +314,14 @@ _mq_recovery(csilk_mq_t* mq)
         }
         offset += 4;
 
+        /* Validate topic_len sanity */
+        if (topic_len == 0 || topic_len > MQ_WAL_MAX_TOPIC_LEN) {
+            CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: invalid topic_len %u",
+                        (size_t)offset - 4,
+                        topic_len);
+            break;
+        }
+
         /* 2. Read topic bytes */
         char* topic = malloc(topic_len + 1);
         if (!topic) {
@@ -338,6 +352,15 @@ _mq_recovery(csilk_mq_t* mq)
             break;
         }
         offset += 4;
+
+        /* Validate payload_len sanity */
+        if (payload_len > MQ_WAL_MAX_PAYLOAD_LEN) {
+            CSILK_LOG_W("MQ: WAL recovery stopped at offset %zu: payload_len %u exceeds limit",
+                        (size_t)offset - 4,
+                        payload_len);
+            free(topic);
+            break;
+        }
 
         /* 4. Read payload bytes (if payload_len > 0) */
         void* payload = NULL;
