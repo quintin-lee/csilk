@@ -230,6 +230,22 @@ csilk_json_t*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /**
+ * @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
+ *        placeholders.
+ *
+ * Each ? in @p sql is substituted with the corresponding value from
+ * @p params (single quotes escaped by doubling).  This prevents SQL injection
+ * in DML statements that do not return result rows.
+ *
+ * @param pool   Connection pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params NULL-terminated array of string values.  The number of
+ *               values must match the number of ? placeholders.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** params);
+
+/**
  * @brief Register a database driver implementation.
  *
  * Makes the driver available for use with csilk_db_pool_new.  The @p name
