@@ -292,3 +292,51 @@
 ---
 
 *此 changelog 遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式并 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。*
+
+---
+
+## [0.2.1] - 2026-05-25
+
+### 新增
+- **Form URL-encoded 解析器**: 新增 `csilk_parse_form_urlencoded()` 和 `csilk_get_form_field()` 用于 `application/x-www-form-urlencoded` body 解析 (P5-1)。
+- **Session 支持**: 带 `csilk_session_init/start/set/get/destroy` API 的基于 cookie 的内存 session 管理 (P5-2)。
+- **HTTP Range 请求**: Static file 中间件现在支持 `Range` 头带 206 Partial Content 响应 (P5-3)。
+- **请求验证中间件**: `csilk_validate()` 带 REQUIRED/INT/STRING/EMAIL 标志和 min/max 范围验证 (P5-4)。
+- **连接对象池**: 通过空闲列表重用 `csilk_client_t` 对象以减少分配开销 (P3-5)。
+- **URL 解码**: 实现 `csilk_url_decode()` 用于百分号解码查询参数。
+- **SHA1/Base64 已知答案测试**: 14 个测试用例覆盖 RFC 3174 和 RFC 4648 向量。
+- **WebSocket 集成测试**: 验证 101 Switching Protocols + `Sec-WebSocket-Accept` 头。
+- **流式响应集成测试**: 验证带 `csilk_response_write/end` 的分块编码。
+- **重定向测试**: 增强带 `csilk_redirect_simple`、301/302/307 状态码、空安全边界情况。
+
+### 变更
+- **连接池**: Pool size of 32 clients；pool 在 `csilk_server_free` 中排空。
+- **流式响应**: `csilk_response_write/end` 现在设置 `is_async` 标志以防止双重写入；分块头尊重客户端 `Connection: close` 头。
+- **Static Middleware**: 在所有 static 响应上添加 `Accept-Ranges: bytes` 头。
+- **流式清理**: Terminal chunk 写入回调关闭连接而不是留给 timer (修复 use-after-free)。
+- **Header Location**: `context_internal.h` 从 `src/core/` 移到 `include/`；`src/core` include 路径从 CMakeLists.txt 移除。
+- **Doxygen 文档**: 使用 `@brief`、`@param`、`@return`、`@note` 注释完成所有 37 源/头文件的完整 Doxygen 注释。
+
+### 修复
+- 修复 `csilk_parse_form_urlencoded` Content-Type 检查逻辑 (严格 `application/x-www-form-urlencoded` 检查)。
+- 修复 static 中间件中的内存泄漏: `body_is_managed = 1` for full file buffer ensures cleanup。
+- 修复 `csilk_ctx_cleanup` + timer 交互在流式响应生命周期中。
+- 修复 server.c 中 3 个 `csilK_` 拼写错误 (pool_get/pool_put parameter types) 和 session.c (typedef)。
+
+---
+
+## [0.2.0] - 2026-05-23
+
+---
+
+## [0.1.0] - 2026-05-15
+
+### 新增
+- 首次发布，包含核心路由、中间件和服务器实现。
+- 支持 JSON (cJSON)、WebSocket 和 YAML 配置。
+- 内置中间件: Logger、Recovery、Auth、CORS、CSRF、Rate Limiting、Static Files。
+- 全面的 Doxygen 文档。
+
+---
+
+*此 changelog 遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式并 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。*
