@@ -10,18 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security Fixes
 
 **Critical:**
-- **CSRF token entropy**: Removed fallback to `rand_r()` when `/dev/urandom` is unavailable. Now aborts with error instead of using weak PRNG (CWE-330).
-- **Session cookie Secure flag**: Added `Secure` attribute to session cookies (CWE-1004).
+- **Auth Pipeline Execution (CWE-285)**: Added missing `csilk_next(c)` when authentication succeeded in `csilk_auth_middleware`, preventing request pipeline starvation.
+- **Session Key Zeroing (CWE-665)**: Corrected sensitive key zeroing timing to avoid clearing the session key prior to cache retrieval.
+- **SQL Injection Defense (CWE-89)**: Added `csilk_db_exec_param()` with parameter escaping across all database drivers.
+- **JWT Algorithm Confusion (CWE-327)**: Forced decoding and validation of the JWT header `alg` field against expected server algorithm, preventing `alg: "none"` and RSA/HMAC confusion attacks.
+- **WebSocket Frame Integer Overflow (CWE-190, CWE-122)**: Added 64-bit frame payload length validation with 64 MB maximum threshold (`CSILK_WS_MAX_FRAME_PAYLOAD`) and integer overflow prevention.
+- **AI Driver Double Free (CWE-415)**: Eliminated duplicate `csilk_json_free()` in `openai.c` error path on invalid URL schemes.
 
 **High:**
-- **CSRF cookie Secure flag**: Added `Secure` attribute to CSRF token cookies.
-- **Security response headers**: Added new `csilk_security_headers_middleware()` setting `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` (CWE-79, CWE-1021).
-- **Multipart size limit**: Added `CSILK_MAX_PART_SIZE` (10 MB) to prevent DoS (CWE-434).
+- **Base64URL Table Initialization (CWE-20)**: Initialized all 256 entries in `b64_rev_table` to prevent invalid ASCII bytes from decoding as 0 (`'A'`).
+- **Open Redirect Protection (CWE-601)**: Hardened `csilk_redirect` against scheme-relative `//` and case-insensitive pseudo-protocol bypasses (`javascript:`, `data:`, `vbscript:`).
+- **CSRF Constant-Time Compare (CWE-208, CWE-352)**: Used `CRYPTO_memcmp()` for constant-time CSRF token comparison and set `http_only = 0` so frontend SPA can read the Double Submit cookie.
+- **Multipart Binary Upload Safety (CWE-125)**: Replaced `strstr()` with binary-safe `_csilk_memmem()` to support uploads containing `\0` null bytes without boundary truncation.
+- **HTTP Response Header CRLF Injection (CWE-113)**: Sanitized header keys and values in `map_set` and `map_add` by stripping `\r` and `\n` to prevent HTTP response splitting.
+- **MQ WAL Frame Length Validation (CWE-190, CWE-122)**: Added strict bounds checking (`MQ_WAL_MAX_TOPIC_LEN` 64 KB, `MQ_WAL_MAX_PAYLOAD_LEN` 64 MB) during WAL recovery.
 
-**Medium:**
-- **OTLP trace random**: Replaced `rand()` with OpenSSL `RAND_bytes()` (CWE-330).
-- **XDP WAF atoi validation**: Added range check for CIDR prefix length (CWE-284).
-- **Config timeout validation**: Added range validation for timeout values (CWE-284).
+**Medium & Low:**
+- **Cookie SameSite Attribute Support (CWE-352)**: Added `csilk_set_cookie_ex()` supporting `SameSite=Strict`, `Lax`, and `None`.
+- **WAF Request Body Malicious Pattern Inspection (CWE-693)**: Added inspection of POST JSON and form request bodies for SQLi, XSS, and path traversal patterns.
+- **MQ WAL Task Allocation OOM Guard (CWE-476)**: Added NULL checks on `strdup` and `malloc` in `_mq_append_wal()`.
+- **Static File Range Header Memory Mutation (CWE-704)**: Removed in-place `*dash = '\0'` mutation of `Range` request header.
+- **Static File Traversal Separator Robustness (CWE-22)**: Added support for Windows backslash `\` path separators in `contains_path_traversal()`.
+- **gRPC Gateway Dynamic Payload Sizing (CWE-400)**: Replaced fixed 4KB stack buffer with arena-allocated dynamic buffers.
+- **URL Percent Decoding Signedness (CWE-20)**: Added explicit `(unsigned char)` casts in `isxdigit()` within `csilk_url_decode()`.
+- **Nonce Generation Bit-Shift Bound (CWE-330)**: Bound bit-shift widths to within 32 bits during pseudo-random fallback.
+- **Blowfish Endianness Portability**: Explicitly extracted bytes via shift operations in Blowfish `fo()`.
 
 ### Added
 - **Public Cipher API**: Added `csilk_symmetric_encrypt/decrypt` (AES-256-GCM), `csilk_rsa_generate_keypair`, `csilk_rsa_encrypt/decrypt`, `csilk_rsa_sign/verify` in `<csilk/core/cipher.h>` — standalone operations without request context.

@@ -9,19 +9,32 @@
 
 ### 安全修复
 
-**严重:**
-- **CSRF token 熵源**: 当 `/dev/urandom` 不可用时，移除对 `rand_r()` 的回退逻辑，现直接报错中止，而非使用弱伪随机数生成器（CWE-330）。
-- **Session Cookie Secure 标志**: 为 Session Cookie 添加 `Secure` 属性（CWE-1004）。
+**严重 (Critical):**
+- **Auth 中间件请求管道中断 (CWE-285)**: 修复鉴权成功后未调用 `csilk_next(c)` 导致请求被静默阻断的问题。
+- **Session 密钥提前清零 Bug (CWE-665)**: 纠正敏感键清零时机，避免在缓存检索前清空 Session ID。
+- **SQL 注入漏洞防御 (CWE-89)**: 在数据库驱动层统一增加参数化 DML 执行接口 `csilk_db_exec_param()`。
+- **JWT 算法混淆漏洞 (CWE-327)**: 强制解码并校验 JWT Header `alg` 字段与服务端期望算法一致，彻底杜绝 `alg: "none"` 及 RSA/HMAC 混淆攻击。
+- **WebSocket 帧 64 位整型溢出 (CWE-190, CWE-122)**: 增加载荷长度 64 MB 上限（`CSILK_WS_MAX_FRAME_PAYLOAD`）与整型防溢出检查。
+- **AI 驱动 Double Free (CWE-415)**: 修复 `openai.c` 在无效 URL 协议错误分支中的重复 `csilk_json_free()`。
 
-**高危:**
-- **CSRF Cookie Secure 标志**: 为 CSRF Token Cookie 添加 `Secure` 属性。
-- **安全响应头**: 新增 `csilk_security_headers_middleware()` 中间件，设置 `X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`（CWE-79, CWE-1021）。
-- **Multipart 大小限制**: 新增 `CSILK_MAX_PART_SIZE`（10 MB）以防止 DoS 攻击（CWE-434）。
+**高危 (High):**
+- **Base64URL 解码表初始化 (CWE-20)**: 显式填满 256 元素，防止非 ASCII 字节解码为 0 (`'A'`)。
+- **开放重定向与各类伪协议绕过 (CWE-601)**: 增强 `csilk_redirect`，拦截 `//`、大小写混淆及 `javascript:/data:` 等伪协议。
+- **CSRF 恒定时间比对与 Cookie 标志 (CWE-208, CWE-352)**: 使用 `CRYPTO_memcmp()` 防止时序攻击，并将 CSRF Cookie 设置为 `http_only = 0` 以适配单页应用。
+- **Multipart 二进制上传截断 (CWE-125)**: 替换 `strstr` 为二进制安全 `_csilk_memmem`，安全支持包含 `\0` 字节的文件上传。
+- **HTTP 响应头 CRLF 注入 / 响应拆分 (CWE-113)**: 在响应头写入底层自动过滤 `\r` 和 `\n` 控制字符。
+- **MQ WAL 恢复帧长度整型溢出 (CWE-190, CWE-122)**: WAL 恢复增加 `topic_len`（64 KB）和 `payload_len`（64 MB）上限检查。
 
-**中危:**
-- **OTLP 链路追踪随机数**: 将 `rand()` 替换为 OpenSSL `RAND_bytes()`（CWE-330）。
-- **XDP WAF atoi 校验**: 为 CIDR 前缀长度添加范围校验（CWE-284）。
-- **配置超时校验**: 为超时配置项添加取值范围校验（CWE-284）。
+**中危与低危 (Medium & Low):**
+- **Cookie SameSite 属性支持 (CWE-352)**: 增加 `csilk_set_cookie_ex()`，支持 `SameSite=Strict/Lax/None`。
+- **WAF 请求体恶意载荷扫描 (CWE-693)**: 中间件增加对 POST JSON 和 Form 请求体的 SQL 注入、XSS 和路径穿越扫描。
+- **MQ WAL 任务分配 OOM 空指针防御 (CWE-476)**: 为 `_mq_append_wal` 中的 `strdup` 和 `malloc` 补充严格 NULL 检查。
+- **静态资源 Range 头部原地内存修改 (CWE-704)**: 移除对 `Range` 请求头的 `*dash = '\0'` 原地修改操作。
+- **静态文件路径穿越 Windows 分隔符增强 (CWE-22)**: 补充对 `\` 反斜杠路径穿越序列的支持。
+- **gRPC 网关 4KB 栈溢出与截断 (CWE-400)**: 改用 Arena 动态分配转码载荷，支持任意大小消息。
+- **URL 百分号解码符号性防御 (CWE-20)**: `isxdigit()` 参数统一添加 `(unsigned char)` 转换。
+- **Nonce 生成 32 位移位越界 (CWE-330)**: 将移位宽度限定在 32 位以内。
+- **Blowfish 跨端序移植性**: 显式使用位移提取字节，保障大小端架构一致性。
 
 ### 新增
 - **公开 Cipher API**: 在 `<csilk/core/cipher.h>` 中新增 `csilk_symmetric_encrypt/decrypt`（AES-256-GCM）、`csilk_rsa_generate_keypair`、`csilk_rsa_encrypt/decrypt`、`csilk_rsa_sign/verify`，支持脱离请求上下文的独立加解密操作。
