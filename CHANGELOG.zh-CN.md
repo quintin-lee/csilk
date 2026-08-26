@@ -7,6 +7,63 @@
 
 ## [Unreleased]
 
+### 安全修复
+
+**严重:**
+- **CSRF token 熵源**: 当 `/dev/urandom` 不可用时，移除对 `rand_r()` 的回退逻辑，现直接报错中止，而非使用弱伪随机数生成器（CWE-330）。
+- **Session Cookie Secure 标志**: 为 Session Cookie 添加 `Secure` 属性（CWE-1004）。
+
+**高危:**
+- **CSRF Cookie Secure 标志**: 为 CSRF Token Cookie 添加 `Secure` 属性。
+- **安全响应头**: 新增 `csilk_security_headers_middleware()` 中间件，设置 `X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`（CWE-79, CWE-1021）。
+- **Multipart 大小限制**: 新增 `CSILK_MAX_PART_SIZE`（10 MB）以防止 DoS 攻击（CWE-434）。
+
+**中危:**
+- **OTLP 链路追踪随机数**: 将 `rand()` 替换为 OpenSSL `RAND_bytes()`（CWE-330）。
+- **XDP WAF atoi 校验**: 为 CIDR 前缀长度添加范围校验（CWE-284）。
+- **配置超时校验**: 为超时配置项添加取值范围校验（CWE-284）。
+
+### 新增
+- **公开 Cipher API**: 在 `<csilk/core/cipher.h>` 中新增 `csilk_symmetric_encrypt/decrypt`（AES-256-GCM）、`csilk_rsa_generate_keypair`、`csilk_rsa_encrypt/decrypt`、`csilk_rsa_sign/verify`，支持脱离请求上下文的独立加解密操作。
+- **公开 HTTP/2 API**（`csilk/http/h2.h`）：由内部 `src/core/http/h2.h` 提升为公开头文件 `include/csilk/http/h2.h`，现包含 `csilk_h2_init_session`、`csilk_h2_process_data`、`csilk_h2_get_or_create_stream`、`csilk_h2_free_streams`、`csilk_h2_remove_stream`、`csilk_h2_send_response`、`csilk_h2_submit_push`。
+- **公开火焰图 API**（`csilk/util/flamegraph.h`）：由内部 `src/util/flamegraph.h` 提升为公开头文件 `include/csilk/util/flamegraph.h`，现包含 `csilk_flamegraph_start`、`csilk_flamegraph_stop`、`csilk_flamegraph_is_running`。
+
+### 变更
+- **Crypto 模块重构**: 将 711 行的 `src/crypto/crypto.c` 拆分为 `crypto.c`（基础原语：SHA-256、HMAC、UUID、RNG、nonce，约 297 行）与 `src/crypto/cipher_dispatch.c`（密码调度：AES/RSA/JWT，约 350 行）。将 `src/crypto/url.c` 移动至 `src/core/primitives/url.c`（作为 HTTP 解析工具，非密码学范畴）。
+- **头文件目录对齐**: 所有公共头文件现已镜像 `src/` 模块布局。仅内部使用的头文件（`header_map.h`、`query.h`、`lfqueue.h`）仍仅保留在 `src/` 中。
+- **测试数量**: 211 → 213（新增 Cipher 公开 API 测试：5 个测试函数）。
+
+### 修复
+- **clang-tidy**: 所有变更文件零警告。
+
+## [0.5.2] - 2026-08-23
+
+### 修复
+- **JWT 中间件 NULL Key 路径**: `csilk_jwt_middleware(c, NULL)` 不再静默返回而不发送响应，现发送 HTTP 500 `Internal Server Error` 并中止处理器链，与 ratelimit、csrf 等其他中间件行为一致。新增 `test_jwt_middleware_null_key` 测试用例。
+- **ASAN 内存泄漏**: 修复 `test_hot_reload_null`（缺失 `csilk_router_free`）、`test_uring_fs`（过早调用 `csilk_io_loop_close` 导致 use-after-free）以及 `csilk_io_fs_sendfile` 在 NULL 请求下的段错误等堆泄漏问题。
+- **Clang 构建兼容性**: 为 `main()` 之后定义的测试函数添加前向声明——GCC 可容忍此写法，但 Clang 会报错。
+
+### 新增
+- **SSE 集成测试**（`test_sse_integration`）：7 个测试用例，覆盖通过真实 HTTP 服务器进行的 SSE 初始化、发送、关闭及响应头校验。
+- **MCP stdio 测试**（`test_mcp_stdio`）：5 个测试用例，通过 fork 子进程覆盖 JSON-RPC 的 initialize、tools/list、tools/call、未知方法以及缺失参数。
+- **Session 集成测试**（`test_session_integration`）：7 个测试用例，覆盖 session 的 start/get/set 生命周期。
+- **Admin 集成测试**（`test_admin_integration`）：11 个测试用例，覆盖 `/admin/stats`、`/admin/`、`/admin/topology` 及 404 路径。
+- **中间件链集成测试**（`test_middleware_chain_integration`）：6 个测试用例，验证中间件执行顺序。
+- **OpenAPI 集成测试**（`test_openapi_integration`）：5 个测试用例，覆盖 OpenAPI JSON 与 Swagger UI 端点。
+- **ctx_json 单元测试**（`test_ctx_json`）：10 个测试用例，覆盖 `csilk_bind_json`、`csilk_bind_json_err`、`csilk_get_cookie`、`csilk_bind_reflect`。
+- **JSON mutate 边界测试**: 为 `test_json_mutate` 新增 null-idoc 与 null-mdoc 守卫用例。
+- **请求 ID 就绪处理器测试**: 为 `csilk_ready_check_handler` 新增空安全测试。
+
+### 变更
+- **重构 server_lifecycle.c**: 将 RCU 管理抽取为 `server_rcu.c`（569 行），将驱动注入抽取为 `server_driver.c`（59 行）。
+- **新增 .gcovr 配置**: 将不可测试文件（`flamegraph.c`、`redis_storage.c`、`workflow_debug.c`、`uring_vector.c`）排除在覆盖率报告之外。
+
+### 测试覆盖率
+- **测试总数**: 213（211 个单元测试 + 2 个集成测试族）
+- **行覆盖率**: 66%（11,765/17,773 行）
+- **sse.c**: 22% → 77%（SSE 集成测试）
+- **hot_reload.c**: 5% → 66%（动态库重载测试）
+
 ## [0.5.1] - 2026-08-22
 
 ### 新增
