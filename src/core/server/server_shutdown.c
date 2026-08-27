@@ -53,6 +53,7 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
 
     csilk_client_t* client = wp->active_clients;
     while (client) {
+        csilk_client_t* next = client->next;
         count++;
         if (client->ctx.is_websocket) {
             csilk_ws_close(&client->ctx, 1001, "Server stopping");
@@ -65,7 +66,7 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
         }
-        client = client->next;
+        client = next;
     }
     return count;
 }

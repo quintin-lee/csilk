@@ -9,7 +9,6 @@
 #include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
