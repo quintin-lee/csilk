@@ -1,6 +1,6 @@
 # Admin Dashboard 使用指南
 
-> **Version**: 0.5.2 | **Last updated**: 2026-08-24
+> **Version**: 0.5.3 | **Last updated**: 2026-08-27
 
 csilk 的 Admin Dashboard 是一个统一的 Web 管理界面，提供对 HTTP 指标、AI 引擎、消息队列（MQ）和数据库运行状态的实时监控。
 
