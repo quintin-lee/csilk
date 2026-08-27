@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Connection UAF on Graceful Shutdown (CWE-416)**: In `close_active_clients()`, snapshot `client->next` before calling `csilk_io_close()` to prevent Use-After-Free when the close callback fires synchronously and modifies the active client linked list.
+- **Data Race on Client State Read (CWE-362)**: Restructured `_csilk_client_check_recycle()` to only read `client->state` on the owning worker thread. Non-owner threads now dispatch recycle tasks exclusively, eliminating a TSAN-flagged data race on the non-atomic state field.
+- **C23 `<stdbool.h>` Compliance**: Removed 4 unnecessary `#include <stdbool.h>` directives from `connection_state.c`, `mvcc_cache.c`, `json.h`, and `mvcc_cache.h`. C23 provides `bool`/`true`/`false` as built-in keywords.
+
 ## [0.5.3] - 2026-08-26
 
 ### Security Fixes
