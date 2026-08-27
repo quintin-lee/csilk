@@ -218,34 +218,40 @@ _csilk_client_check_recycle(csilk_client_t* client)
     if (!client) {
         return;
     }
-    csilk_conn_state_t st = client->state;
-    if (st != CSILK_CONN_CLOSING && st != CSILK_CONN_CLOSED) {
+
+    worker_pool_t* wp = client->owner_pool;
+
+    /* Owner thread: check state and recycle directly (single-threaded access) */
+    if (_csilk_is_owner_worker_thread(wp)) {
+        if (client->state != CSILK_CONN_CLOSING && client->state != CSILK_CONN_CLOSED) {
+            return;
+        }
+        int ref = atomic_load_explicit(&client->ref_count, memory_order_acquire);
+        int pio = atomic_load_explicit(&client->pending_io, memory_order_acquire);
+        if (ref <= 0 && pio <= 0) {
+            client_destroy(client);
+        }
         return;
     }
-    int ref = atomic_load_explicit(&client->ref_count, memory_order_acquire);
-    int pio = atomic_load_explicit(&client->pending_io, memory_order_acquire);
-    if (client->state == st && ref <= 0 && pio <= 0) {
-        worker_pool_t* wp = client->owner_pool;
-        if (_csilk_is_owner_worker_thread(wp)) {
-            client_destroy(client);
-        } else if (wp) {
-            /* Dispatch recycle task to owner worker thread */
-            csilk_recycle_task_payload_t* p = malloc(sizeof(csilk_recycle_task_payload_t));
-            if (p) {
-                p->client = client;
-                p->generation = client->generation;
-                csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
-                if (task) {
-                    task->cb = _csilk_client_recycle_dispatch_cb;
-                    task->arg = p;
-                    task->client = NULL; /* Avoid recursive client_ref */
-                    csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
-                    csilk_io_async_send(&wp->dispatch_async);
-                } else {
-                    free(p);
-                }
-            }
+
+    /* Non-owner thread: dispatch recycle task to owner (callback checks state safely) */
+    if (wp) {
+        csilk_recycle_task_payload_t* p = malloc(sizeof(csilk_recycle_task_payload_t));
+        if (!p) {
+            return;
         }
+        p->client = client;
+        p->generation = client->generation;
+        csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
+        if (!task) {
+            free(p);
+            return;
+        }
+        task->cb = _csilk_client_recycle_dispatch_cb;
+        task->arg = p;
+        task->client = NULL;
+        csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
+        csilk_io_async_send(&wp->dispatch_async);
     }
 }
 

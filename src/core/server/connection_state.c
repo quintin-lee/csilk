@@ -3,7 +3,6 @@
  * @brief Connection lifecycle state machine.
  */
 
-#include <stdbool.h>
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 

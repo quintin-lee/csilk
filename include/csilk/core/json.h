@@ -21,7 +21,6 @@
  * cJSON_* API onto the csilk_json_* API listed below.
  */
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
