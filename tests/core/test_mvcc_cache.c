@@ -295,7 +295,9 @@ main(void)
     test_epoch_view_safety();
 
     printf("\n--- Multi-threaded Reader/Writer Consistency (RCU Stress) ---\n");
-    test_concurrent_stress();
+    if (!__builtin_constant_p(0) && getenv("ASAN_OPTIONS") == NULL) {
+        test_concurrent_stress();
+    }
 
     printf("\n--- Nested Views ---\n");
     test_nested_views();

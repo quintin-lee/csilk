@@ -502,8 +502,8 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 
             for (size_t i = 0; i < res.tool_call_count; i++) {
                 memset(&msgs[msg_count], 0, sizeof(csilk_ai_message_t));
-                msgs[msg_count].role = "tool";
                 msgs[msg_count].content = strdup(sws[i].result ?: "{}");
+                free((void*)sws[i].result);
                 msgs[msg_count].tool_call_id =
                     strdup(res.tool_calls[i].id ? res.tool_calls[i].id : "");
                 msgs[msg_count].tool_calls = NULL;
