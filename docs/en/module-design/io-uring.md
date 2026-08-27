@@ -1,6 +1,6 @@
 # io_uring Backend Deep Dive
 
-> **Version**: 0.5.2 | **Last updated**: 2026-08-24
+> **Version**: 0.5.3 | **Last updated**: 2026-08-27
 
 The csilk `io_uring` backend is a high-performance Linux-native asynchronous I/O driver designed to deliver sub-microsecond latency and ultra-high throughput under extreme concurrency.
 

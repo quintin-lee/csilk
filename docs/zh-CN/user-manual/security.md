@@ -1,6 +1,6 @@
 # 安全中间件使用指南
 
-> **Version**: 0.5.2 | **Last updated**: 2026-08-24
+> **Version**: 0.5.3 | **Last updated**: 2026-08-27
 
 csilk 提供了一套层次化的安全中间件体系，覆盖认证（JWT）、授权（RBAC Perm）、请求验证（CSRF、WAF）和传输层保护（CORS、Rate Limiting）。所有安全中间件 **MUST** 按以下顺序注册：
 
