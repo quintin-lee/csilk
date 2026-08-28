@@ -354,23 +354,7 @@ on_close(csilk_io_handle_t* handle)
     client_list_remove(client->server, client);
     client->ctx.conn_closed = 1;
 
-    csilk_io_timer_stop(&client->timer);
-    csilk_io_timer_stop(&client->read_timer);
-    csilk_io_timer_stop(&client->write_timer);
-    csilk_io_timer_stop(&client->request_timer);
-
-    csilk_io_handle_t* timers[] = {(csilk_io_handle_t*)&client->timer,
-                                   (csilk_io_handle_t*)&client->read_timer,
-                                   (csilk_io_handle_t*)&client->write_timer,
-                                   (csilk_io_handle_t*)&client->request_timer};
-    for (int i = 0; i < 4; i++) {
-        if (!csilk_io_is_closing(timers[i])) {
-            _csilk_client_pending_io_inc(client);
-            timers[i]->data = client;
-            timers[i]->close_cb = on_timer_close;
-            csilk_io_close(timers[i], on_timer_close);
-        }
-    }
+    _csilk_client_stop_timers(client);
 
     /* Release base connection reference held since on_new_connection */
     csilk_client_unref(client);

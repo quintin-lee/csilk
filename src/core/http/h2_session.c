@@ -121,6 +121,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
     _csilk_ctx_init(ctx, client->server, client);
     ctx->arena = arena;
     ctx->stream_id = stream_id;
+    ctx->h2_stream_owner = client;
 
     /* Insert into bucket chain head */
     ctx->next_stream = map->buckets[idx];
@@ -153,6 +154,9 @@ csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id)
     while (*curr) {
         if ((*curr)->stream_id == stream_id) {
             csilk_ctx_t* found = *curr;
+            if (found->h2_stream_owner != client) {
+                return -1;
+            }
             *curr = found->next_stream;
             found->next_stream = NULL;
             map->count--;
