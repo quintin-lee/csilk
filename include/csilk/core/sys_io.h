@@ -134,6 +134,160 @@ typedef void (*csilk_io_write_cb)(csilk_io_write_t* req, int status);
  */
 void csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb);
 
+/** @brief Async I/O operation type. */
+typedef enum {
+    CSILK_IO_OP_NONE = 0,
+    CSILK_IO_OP_ACCEPT,
+    CSILK_IO_OP_READ,
+    CSILK_IO_OP_WRITE,
+    CSILK_IO_OP_CONNECT,
+    CSILK_IO_OP_TIMER,
+    CSILK_IO_OP_CLOSE,
+    CSILK_IO_OP_FS,
+    CSILK_IO_OP_CANCEL
+} csilk_io_op_type_t;
+
+/** @brief Async I/O operation lifecycle state. */
+typedef enum {
+    CSILK_IO_OP_STATE_CREATED = 0,
+    CSILK_IO_OP_STATE_SUBMITTED,
+    CSILK_IO_OP_STATE_COMPLETED,
+    CSILK_IO_OP_STATE_CANCEL_REQUESTED,
+    CSILK_IO_OP_STATE_CANCELLED,
+    CSILK_IO_OP_STATE_RETIRED
+} csilk_io_op_state_t;
+
+/** @brief Opaque async operation handle. */
+typedef struct csilk_io_op_s csilk_io_op_t;
+
+/** @brief Operation completion callback.
+ *  @param  op   Completed operation.
+ *  @param  status 0 on success, negative error on failure. */
+typedef void (*csilk_io_op_complete_fn)(csilk_io_op_t* op, int status);
+
+/** @brief Operation cancellation callback.
+ *  @param  op  Operation being cancelled. */
+typedef void (*csilk_io_op_cancel_fn)(csilk_io_op_t* op);
+
+/** @brief Explicit async I/O operation with ownership, lifetime, and stale guards.
+ *  The owner pointer is set at submit time; the generation is checked on completion
+ *  to detect retired/recycled targets. State transitions are enforced atomically:
+ *  CREATED -> SUBMITTED -> COMPLETED/CANCEL_REQUESTED -> CANCELLED -> RETIRED. */
+struct csilk_io_op_s {
+    csilk_io_op_type_t           type;
+    void*                        owner;
+    uint64_t                     generation;
+    _Atomic(csilk_io_op_state_t) state;
+    void*                        user_data;
+    csilk_io_op_complete_fn      complete;
+    csilk_io_op_cancel_fn        cancel;
+};
+
+/** @brief Initialize an operation object. */
+static inline int
+csilk_io_op_init(csilk_io_op_t* op, csilk_io_op_type_t type, void* owner, uint64_t generation)
+{
+    if (!op) {
+        return -1;
+    }
+    op->type = type;
+    op->owner = owner;
+    op->generation = generation;
+    atomic_init(&op->state, CSILK_IO_OP_STATE_CREATED);
+    op->user_data = NULL;
+    op->complete = NULL;
+    op->cancel = NULL;
+    return 0;
+}
+
+/** @brief Mark operation as submitted. */
+static inline int
+csilk_io_op_submit(csilk_io_op_t* op)
+{
+    if (!op) {
+        return -1;
+    }
+    csilk_io_op_state_t expected = CSILK_IO_OP_STATE_CREATED;
+    if (atomic_compare_exchange_strong_explicit(&op->state,
+                                                &expected,
+                                                CSILK_IO_OP_STATE_SUBMITTED,
+                                                memory_order_acq_rel,
+                                                memory_order_relaxed)) {
+        return 0;
+    }
+    return -1;
+}
+
+/** @brief Mark operation completed if still submitted. */
+static inline int
+csilk_io_op_complete(csilk_io_op_t* op, int status)
+{
+    if (!op) {
+        return -1;
+    }
+    csilk_io_op_state_t expected = CSILK_IO_OP_STATE_SUBMITTED;
+    if (atomic_compare_exchange_strong_explicit(&op->state,
+                                                &expected,
+                                                CSILK_IO_OP_STATE_COMPLETED,
+                                                memory_order_acq_rel,
+                                                memory_order_relaxed)) {
+        if (op->complete) {
+            op->complete(op, status);
+        }
+        return 0;
+    }
+    return -1;
+}
+
+/** @brief Request cancellation if still submitted. */
+static inline int
+csilk_io_op_cancel(csilk_io_op_t* op)
+{
+    if (!op) {
+        return -1;
+    }
+    csilk_io_op_state_t expected = CSILK_IO_OP_STATE_SUBMITTED;
+    if (atomic_compare_exchange_strong_explicit(&op->state,
+                                                &expected,
+                                                CSILK_IO_OP_STATE_CANCEL_REQUESTED,
+                                                memory_order_acq_rel,
+                                                memory_order_relaxed)) {
+        if (op->cancel) {
+            op->cancel(op);
+        }
+        return 0;
+    }
+    return -1;
+}
+
+/** @brief Retire operation from any terminal state. */
+static inline int
+csilk_io_op_retire(csilk_io_op_t* op)
+{
+    if (!op) {
+        return -1;
+    }
+    csilk_io_op_state_t current = atomic_load_explicit(&op->state, memory_order_acquire);
+    if (current == CSILK_IO_OP_STATE_COMPLETED || current == CSILK_IO_OP_STATE_CANCELLED) {
+        atomic_store_explicit(&op->state, CSILK_IO_OP_STATE_RETIRED, memory_order_release);
+        return 0;
+    }
+    return -1;
+}
+
+/** @brief Return true if operation is stale relative to current owner generation. */
+static inline int
+csilk_io_op_is_stale(const csilk_io_op_t* op, uint64_t current_generation)
+{
+    return op && op->generation != current_generation;
+}
+/**
+ * @brief Close a handle asynchronously.
+ * @param[in,out] handle Handle to close.
+ * @param[in] cb Callback invoked when closing completes.
+ */
+void csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb);
+
 /** @brief OS file-descriptor type (int under io_uring). */
 typedef int csilk_io_os_fd_t;
 /** @brief File handle type (int file descriptor under io_uring). */
@@ -207,21 +361,22 @@ typedef struct csilk_io_timer_s csilk_io_timer_t;
  */
 typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
+/** @brief Explicit timer operation wrapper for io_uring timer completions/cancels. */
++ typedef struct csilk_io_timer_op_s {
+    + csilk_io_op_t     op;
+    + csilk_io_timer_t* handle;
+    +
+} csilk_io_timer_op_t;
+
 /** @brief Timer handle. */
 struct csilk_io_timer_s {
     CSILK_IO_HANDLE_FIELDS
-    csilk_io_timer_cb cb;   /**< Timer callback (set by csilk_io_timer_start). */
-    uint64_t          timeout;
-    uint64_t          repeat;
-    struct io_uring*  ring; /**< io_uring ring (alias of &loop->ring). */
+    csilk_io_timer_cb      cb;   /**< Timer callback (set by csilk_io_timer_start). */
+    uint64_t               timeout;
+    uint64_t               repeat;
+    struct io_uring*       ring; /**< io_uring ring (alias of &loop->ring). */
+    + csilk_io_timer_op_t* op;   /**< Active op wrapper, or NULL when not started. */
 };
-
-/* --- Forward declarations --- */
-typedef struct csilk_io_async_s csilk_io_async_t;
-/**
- * @brief Async wake-up callback type.
- * @param[in,out] handle The async handle that was signalled.
- */
 typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 
 /** @brief Async (cross-thread wake-up) handle. */

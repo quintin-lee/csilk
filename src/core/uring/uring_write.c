@@ -13,6 +13,55 @@
 #include "../internal/srv_internal.h"
 #include "uring_internal.h"
 
+typedef struct {
+    csilk_io_op_t    op;
+    csilk_io_write_t req;
+    struct iovec*    iov;
+} csilk_io_write_op_t;
+
+static void
+csilk_io_write_op_complete(csilk_io_op_t* op, int status)
+{
+    if (!op || !op->user_data) {
+        return;
+    }
+    csilk_io_write_op_t* write_op = (csilk_io_write_op_t*)op->user_data;
+    csilk_io_write_cb    cb = (csilk_io_write_cb)write_op->req.cb;
+    if (cb) {
+        cb(&write_op->req, status);
+    }
+    free(write_op);
+}
+
+static void
+csilk_io_write_op_cancel(csilk_io_op_t* op)
+{
+    if (!op || !op->user_data) {
+        return;
+    }
+    csilk_io_write_op_t* write_op = (csilk_io_write_op_t*)op->user_data;
+    if (write_op->iov) {
+        free(write_op->iov);
+        write_op->iov = NULL;
+    }
+}
+
+static csilk_io_write_op_t*
+csilk_io_write_op_alloc(csilk_client_t* client)
+{
+    csilk_io_write_op_t* write_op = malloc(sizeof(csilk_io_write_op_t));
+    if (!write_op) {
+        return NULL;
+    }
+    uint64_t generation = client ? client->generation : 0;
+    csilk_io_op_init(&write_op->op, CSILK_IO_OP_WRITE, client, generation);
+    write_op->op.complete = csilk_io_write_op_complete;
+    write_op->op.cancel = csilk_io_write_op_cancel;
+    write_op->op.user_data = write_op;
+    write_op->iov = NULL;
+    return write_op;
+}
+
 int
 csilk_io_write(csilk_io_write_t*    req,
                csilk_io_stream_t*   handle,
@@ -41,8 +90,13 @@ csilk_io_write(csilk_io_write_t*    req,
         return -1;
     }
 
-    req->cb = (void*)cb;
-    req->handle = handle;
+    csilk_io_write_op_t* write_op = csilk_io_write_op_alloc(client);
+    if (!write_op) {
+        return -1;
+    }
+
+    write_op->req.cb = (void*)cb;
+    write_op->req.handle = handle;
 
     struct iovec* iov = NULL;
     if (nbufs == 1) {
@@ -50,6 +104,7 @@ csilk_io_write(csilk_io_write_t*    req,
     } else {
         iov = malloc(sizeof(struct iovec) * nbufs);
         if (!iov) {
+            free(write_op);
             return -1;
         }
         for (unsigned int i = 0; i < nbufs; ++i) {
@@ -58,20 +113,30 @@ csilk_io_write(csilk_io_write_t*    req,
         }
         io_uring_prep_writev(sqe, handle->fd, iov, nbufs, 0);
     }
+    write_op->iov = iov;
 
     void** ctx = malloc(sizeof(void*) * 3);
     if (!ctx) {
         if (iov) {
             free(iov);
         }
+        free(write_op);
         return -1;
     }
     ctx[0] = client;
-    ctx[1] = req;
+    ctx[1] = &write_op->req;
     ctx[2] = iov;
     io_uring_sqe_set_data64(sqe, uring_encode_data(URING_OP_UV_WRITE, client, ctx));
     if (client) {
         _csilk_ctx_async_ref_incr(&client->ctx);
+    }
+    if (csilk_io_op_submit(&write_op->op) != 0) {
+        if (client) {
+            _csilk_ctx_async_ref_decr(&client->ctx);
+        }
+        free(ctx);
+        free(write_op);
+        return -1;
     }
     io_uring_submit(&loop->ring);
     return 0;

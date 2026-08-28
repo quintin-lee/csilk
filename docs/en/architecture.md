@@ -341,6 +341,52 @@ When requests offload work to worker threads, timers, message queues, or externa
 
 ### 2.7 Segment-Based Prefix Trie Routing
 Segment-based prefix trie routing with O(path_length) matching, support for static, parameterized, and wildcard routes. Path segments delimited by `/` are evaluated with SIMD vector scanning, achieving ~50ns per route lookup on AVX2 (x86_64) and ~80ns on ARM NEON. Routes **MUST** be registered before server start; the router is read-only during request processing (lock-free reads). Wildcard routes **SHOULD** be placed last in the registration order to ensure static routes take priority.
+### 2.8 Explicit Async I/O Operation Model
+
+To improve ownership safety and lifetime guarantees, csilk introduces an explicit async I/O operation model in `include/csilk/core/sys_io.h`. This model applies first to the io_uring backend and is designed for gradual adoption across all I/O paths.
+
+| Concept | Type / API | Purpose |
+|---|---|---|
+| Operation type | `csilk_io_op_type_t` | Classifies I/O work: ACCEPT, READ, WRITE, TIMER, CLOSE, FS, CANCEL |
+| Operation state | `csilk_io_op_state_t` | Enforces state machine transitions: CREATED → SUBMITTED → COMPLETED/CANCEL_REQUESTED → CANCELLED → RETIRED |
+| Operation handle | `csilk_io_op_t` | Owns `type`, `owner`, `generation`, atomic `state`, and `complete`/`cancel` callbacks |
+| Submit helpers | `csilk_io_op_init()`, `csilk_io_op_submit()`, `csilk_io_op_complete()`, `csilk_io_op_cancel()`, `csilk_io_op_retire()` | Manage operation lifetime atomically |
+| Stale guard | `csilk_io_op_is_stale()` | Detects retired/recycled owners via generation mismatch |
+
+**Key properties:**
+
+* **Owner binding**: every submitted operation records its owner and generation; completions reject stale callbacks before user code runs.
+* **Cancel safety**: cancellation is state-validated, so stop/close paths can retire operations without races.
+* **Backend adoption**: currently adopted in `src/core/uring/uring_timer.c`, `src/core/uring/uring_stream.c`, and `src/core/uring/uring_close.c`; public callers still use the existing `csilk_io_timer_start()` / `csilk_io_timer_stop()` / `csilk_io_read_start()` / `csilk_io_read_stop()` / `csilk_io_close()` APIs.
+
+### 2.9 Timer and Stream Lifetime Ownership
+
+Timer lifetime is centralized through `_csilk_client_stop_timers()` in `src/core/server/timer_lifetime.c`, replacing repeated inline timer shutdown boilerplate in connection close paths.
+
+HTTP/2 stream lifetime is enforced via `csilk_ctx_t::h2_stream_owner`, set when a stream is created and checked on removal. This prevents one client from removing another client’s stream context.
+
+### 2.10 CMake Backend Abstraction
+
+The I/O backend selection is centralized under `csilk::io`, an interface target that exposes either `uring` or `csilk::libuv` plus backend-specific compile definitions/options. Downstream targets link `csilk::io` instead of duplicating conditional backend blocks.
+## 2.11 Migration Summary
+
+The current refactor track introduces explicit runtime boundaries without breaking existing behavior:
+
+1. `include/csilk/core/sys_io.h` now defines `csilk_io_op_t` and lifecycle helpers.
+2. `src/core/uring/uring_timer.c` submits timer work through the op model and routes completions/cancels through typed callbacks.
+3. `src/core/uring/uring_stream.c` wraps read start in `csilk_io_read_op_t`, preserving the legacy `csilk_io_read_start()` API.
+4. `src/core/uring/uring_close.c` wraps close completion/cancel/retire in `csilk_io_close_op_t`.
+5. `src/core/http/h2_session.c` sets `csilk_ctx_t::h2_stream_owner` on stream creation and rejects removal from non-owners.
+6. `src/core/server/timer_lifetime.c` centralizes client timer shutdown in `_csilk_client_stop_timers()`.
+7. `cmake/targets.cmake` introduces `csilk::io` to centralize backend selection.
+
+Public API compatibility is preserved; internal ownership/lifetime checks are additive.
+
+
+
+
+
+
 
 
 ```mermaid

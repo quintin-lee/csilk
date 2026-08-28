@@ -104,7 +104,7 @@ set(CSILK_CORE_TESTS
     test_uring_io
     test_uring_fs
     test_ctx_json
-    test_io_backend
+    test_io_op_model
     test_io_perf_fallback
     test_wasm_vm
     test_wasm_fuel

@@ -9,15 +9,53 @@
 
 #include "uring_internal.h"
 
+typedef struct {
+    csilk_io_op_t      op;
+    csilk_io_handle_t* handle;
+    csilk_io_close_cb  cb;
+} csilk_io_close_op_t;
+
+static void
+csilk_io_close_op_complete(csilk_io_op_t* op, int status)
+{
+    (void)status;
+    csilk_io_close_op_t* close_op = (csilk_io_close_op_t*)op;
+    csilk_io_close_cb    cb = close_op ? close_op->cb : NULL;
+    if (cb && close_op && close_op->handle) {
+        cb(close_op->handle);
+    }
+}
+
+static void
+csilk_io_close_op_cancel(csilk_io_op_t* op)
+{
+    (void)op;
+}
+
 void
 csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
     if (!handle) {
+        if (cb) {
+            cb(handle);
+        }
         return;
     }
     if (handle->flags & CSILK_IO_HANDLE_CLOSING) {
+        if (cb) {
+            cb(handle);
+        }
         return;
     }
+
+    csilk_io_close_op_t* close_op = calloc(1, sizeof(*close_op));
+    if (!close_op) {
+        if (cb) {
+            cb(handle);
+        }
+        return;
+    }
+
     handle->flags |= CSILK_IO_HANDLE_CLOSING;
     if (handle->flags & CSILK_IO_HANDLE_ACTIVE) {
         handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
@@ -26,6 +64,12 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
         }
     }
     handle->generation++;
+
+    csilk_io_op_init(&close_op->op, CSILK_IO_OP_CLOSE, handle, handle->generation);
+    close_op->op.complete = csilk_io_close_op_complete;
+    close_op->op.cancel = csilk_io_close_op_cancel;
+    close_op->handle = handle;
+    close_op->cb = cb;
 
     if (handle->type == CSILK_IO_HANDLE_TIMER) {
         csilk_io_timer_stop((csilk_io_timer_t*)handle);
@@ -58,9 +102,9 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
         handle->fd = -1;
     }
 
-    if (cb) {
-        cb(handle);
-    }
+    csilk_io_op_complete(&close_op->op, 0);
+    csilk_io_op_retire(&close_op->op);
+    free(close_op);
 }
 
 #endif

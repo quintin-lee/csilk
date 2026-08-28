@@ -15,6 +15,45 @@
 /* Pool helpers declared in connection_pool.c */
 extern void pool_put_read_buf(worker_pool_t* wp, char* buf, size_t len);
 
+typedef struct {
+    csilk_io_op_t      op;
+    csilk_io_stream_t* stream;
+    csilk_io_read_cb   read_cb;
+} csilk_io_read_op_t;
+
+static void
+csilk_io_read_op_complete(csilk_io_op_t* op, int status)
+{
+    csilk_io_read_op_t* read_op = (csilk_io_read_op_t*)op;
+    if (!read_op || !read_op->stream || !read_op->read_cb) {
+        return;
+    }
+
+    csilk_io_stream_t* stream = read_op->stream;
+    csilk_io_read_cb   cb = read_op->read_cb;
+
+    if (status < 0) {
+        stream->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+        stream->reading = 0;
+        if (stream->loop && stream->loop->active_handles > 0) {
+            stream->loop->active_handles--;
+        }
+        if (stream->recv_buf.base) {
+            pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
+            stream->recv_buf.base = NULL;
+            stream->recv_buf.len = 0;
+        }
+    }
+
+    cb(stream, status, stream->recv_buf.base, stream->recv_buf.len);
+}
+
+static void
+csilk_io_read_op_cancel(csilk_io_op_t* op)
+{
+    (void)op;
+}
+
 int
 csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk_io_read_cb read_cb)
 {
@@ -45,8 +84,37 @@ csilk_io_read_start(csilk_io_stream_t* stream, csilk_io_alloc_cb alloc_cb, csilk
         return -1;
     }
 
+    csilk_io_read_op_t* read_op = calloc(1, sizeof(*read_op));
+    if (!read_op) {
+        if (stream->recv_buf.base) {
+            pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
+            stream->recv_buf.base = NULL;
+            stream->recv_buf.len = 0;
+        }
+        return -1;
+    }
+
+    csilk_io_op_init(&read_op->op, CSILK_IO_OP_READ, stream, stream->generation);
+    read_op->op.complete = csilk_io_read_op_complete;
+    read_op->op.cancel = csilk_io_read_op_cancel;
+    read_op->stream = stream;
+    read_op->read_cb = read_cb;
+
+    if (csilk_io_op_submit(&read_op->op) != 0) {
+        free(read_op);
+        if (stream->recv_buf.base) {
+            pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
+            stream->recv_buf.base = NULL;
+            stream->recv_buf.len = 0;
+        }
+        return -1;
+    }
+
     struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
     if (!sqe) {
+        csilk_io_op_cancel(&read_op->op);
+        csilk_io_op_retire(&read_op->op);
+        free(read_op);
         if (stream->recv_buf.base) {
             pool_put_read_buf(NULL, stream->recv_buf.base, stream->recv_buf.len);
             stream->recv_buf.base = NULL;
