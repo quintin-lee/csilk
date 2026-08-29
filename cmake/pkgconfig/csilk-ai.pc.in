@@ -11,4 +11,4 @@ Requires: csilk-core
 Requires.private: @CSILK_AI_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-ai
 Libs.private: @CSILK_AI_PC_LIBS_PRIVATE@
-Cflags: -I${includedir}
+Cflags: -I${includedir} -D_GNU_SOURCE

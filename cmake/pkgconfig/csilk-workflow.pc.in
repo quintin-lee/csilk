@@ -11,4 +11,4 @@ Requires: csilk-ai csilk-mq
 Requires.private: @CSILK_WORKFLOW_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-workflow
 Libs.private: @CSILK_WORKFLOW_PC_LIBS_PRIVATE@
-Cflags: -I${includedir}
+Cflags: -I${includedir} -D_GNU_SOURCE

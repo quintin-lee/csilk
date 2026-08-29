@@ -3,12 +3,10 @@ exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: csilk-tls
-Description: Csilk TLS 1.3 / OpenSSL engine
+Name: csilk-base
+Description: Csilk foundation primitives (arena, bounded buffer, kv store)
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-core
-Requires.private: @CSILK_TLS_PC_REQUIRES_PRIVATE@
-Libs: -L${libdir} -lcsilk-tls
-Libs.private: @CSILK_TLS_PC_LIBS_PRIVATE@
+Libs: -L${libdir} -lcsilk-base
+Libs.private: @CSILK_BASE_PC_LIBS_PRIVATE@
 Cflags: -I${includedir} -D_GNU_SOURCE

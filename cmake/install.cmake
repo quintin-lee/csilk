@@ -21,6 +21,15 @@ set(CSILK_INSTALL_TARGETS
 if(CSILK_USE_URING)
     list(APPEND CSILK_INSTALL_TARGETS uring)
 endif()
+if(TARGET yyjson)
+    list(APPEND CSILK_INSTALL_TARGETS yyjson)
+endif()
+if(TARGET csilk_llhttp)
+    list(APPEND CSILK_INSTALL_TARGETS csilk_llhttp)
+endif()
+if(TARGET nghttp2_static)
+    list(APPEND CSILK_INSTALL_TARGETS nghttp2_static)
+endif()
 
 install(TARGETS ${CSILK_INSTALL_TARGETS}
     EXPORT csilk-targets
@@ -88,6 +97,12 @@ install(FILES
 )
 
 # ── pkg-config (.pc files) ──────────────────────────────────────────────
+# Base
+set(CSILK_BASE_PC_LIBS_PRIVATE "")
+if(NOT APPLE AND NOT WIN32)
+  string(APPEND CSILK_BASE_PC_LIBS_PRIVATE "-lm -lpthread")
+endif()
+
 # Core
 set(CSILK_CORE_PC_REQUIRES_PRIVATE "")
 if(CSILK_USE_URING)
@@ -168,6 +183,7 @@ set(CSILK_WORKFLOW_PC_REQUIRES_PRIVATE "yaml-0.1")
 set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 
 set(CSILK_PC_FILES
+    csilk-base
     csilk-core
     csilk-json
     csilk-wasm

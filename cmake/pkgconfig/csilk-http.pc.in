@@ -11,4 +11,4 @@ Requires: @CSILK_HTTP_PC_REQUIRES@
 Requires.private: @CSILK_HTTP_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-http
 Libs.private: @CSILK_HTTP_PC_LIBS_PRIVATE@
-Cflags: -I${includedir}
+Cflags: -I${includedir} -D_GNU_SOURCE

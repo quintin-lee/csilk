@@ -9,4 +9,4 @@ Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
 Requires: csilk-core
 Libs: -L${libdir} -lcsilk-mq
-Cflags: -I${includedir}
+Cflags: -I${includedir} -D_GNU_SOURCE

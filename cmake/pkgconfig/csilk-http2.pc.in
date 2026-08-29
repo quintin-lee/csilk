@@ -11,4 +11,4 @@ Requires: csilk-tls
 Requires.private: @CSILK_HTTP2_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-http2
 Libs.private: @CSILK_HTTP2_PC_LIBS_PRIVATE@
-Cflags: -I${includedir}
+Cflags: -I${includedir} -D_GNU_SOURCE
