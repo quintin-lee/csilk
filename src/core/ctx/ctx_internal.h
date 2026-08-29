@@ -347,66 +347,81 @@ struct csilk_ctx_s {
     /* ═══════════════════════════════════════════════════════════════════
      * 1. REQUEST SCOPE — reset between requests (Arena, Handler, Rsp)
      * ═══════════════════════════════════════════════════════════════════ */
-    struct {
-        int handler_index; /**< Index of the current handler in the chain; starts at -1. */
-        int aborted;       /**< Non-zero if handler execution was aborted. */
-        int panicked;      /**< Non-zero if a handler called csilk_panic(). */
-        int params_count;  /**< Number of path parameters in params[] array. */
-        csilk_handler_t*    handlers;      /**< Handler function pointers for matched route. */
-        size_t              handler_count; /**< Total number of handlers in chain. */
-        csilk_defer_item_t* defer_head;    /**< LIFO deferred cleanup callbacks. */
-        csilk_arena_t*      arena;         /**< Request-scoped arena allocator. */
-        csilk_request_t     request;       /**< Parsed HTTP request data. */
-        csilk_response_t    response;      /**< HTTP response data. */
-        int                 is_async;      /**< Non-zero if response is deferred asynchronously. */
-        int                 response_started;             /**< Non-zero if headers already sent. */
-        int                 is_websocket;                 /**< Non-zero if upgraded to WebSocket. */
-        int                 is_sse;                       /**< Non-zero if SSE stream. */
-        void (*on_ws_message)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
-        void (*on_ws_send)(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode);
-        csilk_param_t           params[CSILK_MAX_PARAMS]; /**< URL path parameters. */
-        csilk_storage_item_t*   storage_head;             /**< Arena-backed KV storage head. */
-        csilk_method_handler_t* current_handler;          /**< OpenAPI method handler metadata. */
-        char                    request_id[CSILK_UUID_BUF_SIZE]; /**< Request UUID v4. */
-        uint64_t                request_seq; /**< Request sequence generation tag. */
+    union {
+        csilk_request_scope_t request_scope;
+        struct {
+            int                 handler_index;
+            int                 aborted;
+            int                 panicked;
+            int                 params_count;
+            csilk_handler_t*    handlers;
+            size_t              handler_count;
+            csilk_defer_item_t* defer_head;
+            csilk_arena_t*      arena;
+            csilk_request_t     request;
+            csilk_response_t    response;
+            int                 is_async;
+            int                 response_started;
+            int                 is_websocket;
+            int                 is_sse;
+            void (*on_ws_message)(struct csilk_ctx_s* c,
+                                  const uint8_t*      payload,
+                                  size_t              len,
+                                  int                 opcode);
+            void (*on_ws_send)(struct csilk_ctx_s* c,
+                               const uint8_t*      payload,
+                               size_t              len,
+                               int                 opcode);
+            csilk_param_t           params[CSILK_MAX_PARAMS];
+            csilk_storage_item_t*   storage_head;
+            csilk_method_handler_t* current_handler;
+            char                    request_id[CSILK_UUID_BUF_SIZE];
+            uint64_t                request_seq;
+        };
     };
 
     /* ═══════════════════════════════════════════════════════════════════
      * 2. CONNECTION STATE — persists across keep-alive requests
      * ═══════════════════════════════════════════════════════════════════ */
-    struct {
-        struct csilk_server_s* server;           /**< Owning server instance. */
-        void*                  _internal_client; /**< Opaque pointer to csilk_client_t. */
-        csilk_rcu_token_t      router_token;     /**< RCU / EBR read-side lease token. */
-        int                    conn_closed;      /**< Non-zero if connection timed out / closed. */
-        size_t                 write_high_water_mark; /**< Write queue high watermark. */
-        size_t                 write_low_water_mark;  /**< Write queue low watermark. */
-        size_t                 max_write_buffer_size; /**< Hard max write buffer cap. */
-        int                    write_paused;          /**< 1 if backpressure paused stream. */
-        void (*on_drain)(struct csilk_ctx_s* c, void* user_data); /**< Drain callback. */
-        void*                   on_drain_data;
-        int                     file_fd;      /**< Zero-copy sendfile descriptor (-1 if unused). */
-        size_t                  file_offset;  /**< Offset for sendfile. */
-        size_t                  file_size;    /**< Byte count for sendfile. */
-        char**                  read_buffers; /**< Receive buffer pointers. */
-        int                     read_buffers_count;
-        int                     read_buffers_capacity;
-        char*                   read_buffers_embedded[16];
-        size_t*                 read_buf_sizes; /**< Receive buffer size tracker. */
-        size_t                  read_buf_sizes_embedded[16];
-        csilk_storage_driver_t* storage_driver; /**< Pluggable storage driver. */
-        csilk_crypto_driver_t*  crypto_driver;  /**< Pluggable crypto driver. */
-        csilk_cipher_driver_t*  cipher_driver;  /**< Pluggable cipher driver. */
+    union {
+        csilk_conn_scope_t conn_scope;
+        struct {
+            struct csilk_server_s* server;
+            void*                  _internal_client;
+            csilk_rcu_token_t      router_token;
+            int                    conn_closed;
+            size_t                 write_high_water_mark;
+            size_t                 write_low_water_mark;
+            size_t                 max_write_buffer_size;
+            int                    write_paused;
+            void (*on_drain)(struct csilk_ctx_s* c, void* user_data);
+            void*                   on_drain_data;
+            int                     file_fd;
+            size_t                  file_offset;
+            size_t                  file_size;
+            char**                  read_buffers;
+            int                     read_buffers_count;
+            int                     read_buffers_capacity;
+            char*                   read_buffers_embedded[16];
+            size_t*                 read_buf_sizes;
+            size_t                  read_buf_sizes_embedded[16];
+            csilk_storage_driver_t* storage_driver;
+            csilk_crypto_driver_t*  crypto_driver;
+            csilk_cipher_driver_t*  cipher_driver;
+        };
     };
 
     /* ═══════════════════════════════════════════════════════════════════
      * 3. STREAM STATE — multiplexed HTTP/2 stream metadata
      * ═══════════════════════════════════════════════════════════════════ */
-    struct {
-        int32_t             stream_id;       /**< HTTP/2 Stream ID (0 for HTTP/1.1). */
-        struct csilk_ctx_s* next_stream;     /**< Next stream in hash bucket. */
-        csilk_client_t*     h2_stream_owner; /**< Owning client connection. */
-        csilk_io_work_t     work_req;        /**< Async worker request structure. */
+    union {
+        csilk_stream_scope_t stream_scope;
+        struct {
+            int32_t             stream_id;
+            struct csilk_ctx_s* next_stream;
+            csilk_client_t*     h2_stream_owner;
+            csilk_io_work_t     work_req;
+        };
     };
 };
 
