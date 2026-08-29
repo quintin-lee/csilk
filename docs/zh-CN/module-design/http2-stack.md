@@ -74,7 +74,18 @@ typedef struct csilk_h2_stream_map_s {
 } csilk_h2_stream_map_t;
 ```
 
-HTTP/2 流上下文（`csilk_ctx_t`）直接内联在 Client 的 `h2_stream_map` 中，每个流拥有独立的 Arena，在流关闭时重置并回收到 `free_list`，避免频繁调用 `malloc`/`free`。
+HTTP/2 流上下文（`csilk_ctx_t`）直接内联在 Client 的 `h2_stream_map` 中。
+
+### 3.2 显式流所有权与异步生命周期安全 (Stream Ownership)
+
+为彻底避免异步调用或对端提前重置（`RST_STREAM`）引发的释放后使用（UAF）与 ABA 竞争问题，HTTP/2 流采用显式引用计数模型：
+
+1. **活跃流表所有权**：在 `csilk_h2_get_or_create_stream()` 创建或获取流时，赋予基础引用 `stream_ref = 1`。
+2. **异步操作所有权**：任何在途的 `csilk_async_op_t` 均调用 `_csilk_stream_ref(c)` 强持有流上下文与 Arena 内存。
+3. **逻辑关闭与物理销毁分离**：
+   - 当 nghttp2 触发 `on_stream_close_callback` 时，`csilk_h2_remove_stream()` 将其从活跃 Bucket 哈希链表中移除并标记 `stream_closed = 1`，同时释放活跃表引用（`_csilk_stream_unref(c)`）。
+   - 只要有异步操作尚未完成（`stream_ref > 0`），流上下文、请求序号与 Arena 绝对不被重置或提前回收到 Pool。
+4. **延迟物理回收**：当最后一个引用持有者释放（`stream_ref == 0`）时，才正式触发 `csilk_ctx_cleanup()` 和 `csilk_arena_reset()`，将干净的上下文回收到 `map->free_list`（若超出池上限则彻底 free）。
 
 ### 3.2 会话创建
 

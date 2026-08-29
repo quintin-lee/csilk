@@ -74,7 +74,18 @@ typedef struct csilk_h2_stream_map_s {
 } csilk_h2_stream_map_t;
 ```
 
-HTTP/2 stream contexts (`csilk_ctx_t`) are managed directly inside the client's `h2_stream_map`. Each stream possesses an isolated request arena that resets and returns to `free_list` upon stream closure, eliminating per-stream `malloc`/`free` overhead.
+HTTP/2 stream contexts (`csilk_ctx_t`) are managed directly inside the client's `h2_stream_map`.
+
+### 3.2 Explicit Stream Ownership & Async Safety
+
+To ensure zero use-after-free (UAF) and prevent ABA race conditions during asynchronous operations or early client resets (`RST_STREAM`), HTTP/2 streams follow an explicit reference-counted lifecycle:
+
+1. **Active Map Reference**: On creation via `csilk_h2_get_or_create_stream()`, the stream receives `stream_ref = 1`.
+2. **Async Operation Reference**: Any in-flight `csilk_async_op_t` increments `_csilk_stream_ref(c)` to hold the stream in memory.
+3. **Logical vs Physical Teardown**:
+   - When nghttp2 reports `on_stream_close_callback`, `csilk_h2_remove_stream()` unlinks the stream from active hash buckets, sets `stream_closed = 1`, and releases the active-map reference via `_csilk_stream_unref(c)`.
+   - The stream context, request sequence, and arena remain intact while `stream_ref > 0`.
+4. **Deferred Recycling**: When the last reference is released (`stream_ref == 0`), `csilk_ctx_cleanup()` and `csilk_arena_reset()` execute, returning the clean context to `map->free_list` (or freeing it if the pool limit is exceeded).
 
 ---
 
