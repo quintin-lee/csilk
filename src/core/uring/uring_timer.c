@@ -10,11 +10,6 @@
 #include <stdatomic.h>
 #include "uring_internal.h"
 
-typedef struct {
-    csilk_io_op_t     op;
-    csilk_io_timer_t* handle;
-} csilk_io_timer_op_t;
-
 static void
 csilk_io_timer_op_complete(csilk_io_op_t* op, int status)
 {

@@ -362,21 +362,22 @@ typedef struct csilk_io_timer_s csilk_io_timer_t;
 typedef void (*csilk_io_timer_cb)(csilk_io_timer_t* handle);
 
 /** @brief Explicit timer operation wrapper for io_uring timer completions/cancels. */
-+ typedef struct csilk_io_timer_op_s {
-    + csilk_io_op_t     op;
-    + csilk_io_timer_t* handle;
-    +
+typedef struct csilk_io_timer_op_s {
+    csilk_io_op_t     op;
+    csilk_io_timer_t* handle;
 } csilk_io_timer_op_t;
 
 /** @brief Timer handle. */
 struct csilk_io_timer_s {
     CSILK_IO_HANDLE_FIELDS
-    csilk_io_timer_cb      cb;   /**< Timer callback (set by csilk_io_timer_start). */
-    uint64_t               timeout;
-    uint64_t               repeat;
-    struct io_uring*       ring; /**< io_uring ring (alias of &loop->ring). */
-    + csilk_io_timer_op_t* op;   /**< Active op wrapper, or NULL when not started. */
+    csilk_io_timer_cb    cb;   /**< Timer callback (set by csilk_io_timer_start). */
+    uint64_t             timeout;
+    uint64_t             repeat;
+    struct io_uring*     ring; /**< io_uring ring (alias of &loop->ring). */
+    csilk_io_timer_op_t* op;   /**< Active op wrapper, or NULL when not started. */
 };
+typedef struct csilk_io_async_s csilk_io_async_t;
+
 typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
 
 /** @brief Async (cross-thread wake-up) handle. */
