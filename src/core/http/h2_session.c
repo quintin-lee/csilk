@@ -202,7 +202,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         _csilk_stream_ctx_init(ctx, client, stream_id);
     } else {
         /* Allocate new context and arena */
-        ctx = malloc(sizeof(csilk_ctx_t));
+        ctx = calloc(1, sizeof(csilk_ctx_t));
         if (!ctx) {
             return NULL;
         }

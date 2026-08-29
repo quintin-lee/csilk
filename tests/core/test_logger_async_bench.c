@@ -58,8 +58,12 @@ test_disabled_log_level_latency(void)
            t_total / 1e6,
            ns_per_call);
 
-    /* Assert near-zero branch latency (< 50 ns per check across Debug/Release/Sanitizers) */
+    /* Assert near-zero branch latency (< 50 ns per check, < 200 ns under TSAN instrumentation) */
+#if defined(__SANITIZE_THREAD__) || (defined(__has_feature) && __has_feature(thread_sanitizer))
+    assert(ns_per_call < 200.0);
+#else
     assert(ns_per_call < 50.0);
+#endif
 
     csilk_log_close();
     printf("   PASS: Disabled log level is near-zero overhead!\n\n");

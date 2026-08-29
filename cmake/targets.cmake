@@ -19,16 +19,16 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
       "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
+  )
+  target_compile_definitions(${TARGET} PUBLIC
+      _GNU_SOURCE
+      "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
       "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
       "CSILK_MAX_STORAGE=${CSILK_MAX_STORAGE}"
       "CSILK_DEFAULT_ARENA_SIZE=${CSILK_DEFAULT_ARENA_SIZE}"
       "CSILK_ARENA_TIER_COUNT=${CSILK_ARENA_TIER_COUNT}"
       "CSILK_MAX_TLS_CHUNKS=${CSILK_MAX_TLS_CHUNKS}"
-  )
-  target_compile_definitions(${TARGET} PUBLIC
-      _GNU_SOURCE
-      "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
   )
   target_link_options(${TARGET} PUBLIC
       "$<$<BOOL:${USE_COVERAGE}>:--coverage>"

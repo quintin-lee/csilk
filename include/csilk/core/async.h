@@ -43,7 +43,7 @@ struct csilk_async_op_s {
     csilk_ctx_t*     ctx;         /**< Associated request context. */
     uint64_t         generation;  /**< Generation tag of the owning connection. */
     uint64_t         request_seq; /**< Request sequence generation tag. */
-    uint32_t         stream_gen;  /**< Stream generation tag (for HTTP/2 multiplexed streams). */
+    uint64_t         stream_gen;  /**< Stream generation tag (for HTTP/2 multiplexed streams). */
     csilk_io_timer_t timer;       /**< Timeout timer handle. */
     csilk_async_cb   on_complete; /**< Completion callback. */
     csilk_async_timeout_cb on_timeout; /**< Timeout callback. */
