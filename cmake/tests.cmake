@@ -246,6 +246,7 @@ set(CSILK_PROTOCOL_TESTS
     test_ws_room
     test_ws_concurrent
     test_h2
+    test_h2_dispatch_lifecycle
     test_h3
     test_mcp_jsonrpc
     test_mcp_server_client
@@ -253,7 +254,7 @@ set(CSILK_PROTOCOL_TESTS
     test_mcp_stdio
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --

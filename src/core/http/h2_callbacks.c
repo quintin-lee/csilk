@@ -36,6 +36,7 @@ on_header_callback(nghttp2_session*     session,
                    uint8_t              flags,
                    void*                user_data)
 {
+    (void)session;
     (void)flags;
     csilk_client_t* client = (csilk_client_t*)user_data;
     if (frame->hd.type != NGHTTP2_HEADERS) {
@@ -47,24 +48,40 @@ on_header_callback(nghttp2_session*     session,
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
-    if (name[0] == ':') {
-        if (strncmp((const char*)name, ":method", namelen) == 0) {
-            c->request.method = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-        } else if (strncmp((const char*)name, ":path", namelen) == 0) {
-            char* full_path = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-            char* path;
-            char* query;
-            csilk_split_url(full_path, &path, &query);
-            c->request.path = path;
-            if (query) {
-                csilk_parse_query(c, query);
-                free(query);
+    /* Distinguish initial request headers from trailing headers (trailers) */
+    if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
+        c->headers_received = 1;
+        if (namelen > 0 && name[0] == ':') {
+            if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
+                c->request.method = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+            } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
+                char* full_path = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+                char* path = NULL;
+                char* query = NULL;
+                csilk_split_url(full_path, &path, &query);
+                c->request.path = path;
+                if (query) {
+                    csilk_parse_query(c, query);
+                    free(query);
+                }
+            } else if (namelen == 10 && memcmp(name, ":authority", 10) == 0) {
+                char* h_host = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+                csilk_set_request_header(c, "Host", h_host);
+            } else if (namelen == 7 && memcmp(name, ":scheme", 7) == 0) {
+                /* Scheme recognized */
             }
+        } else {
+            char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
+            char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+            csilk_set_request_header(c, h_name, h_value);
         }
-    } else {
-        char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
-        char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-        csilk_set_request_header(c, h_name, h_value);
+    } else if (frame->headers.cat == NGHTTP2_HCAT_HEADERS) {
+        /* Trailing headers (trailers) — pseudo-headers are forbidden in trailers */
+        if (namelen > 0 && name[0] != ':') {
+            char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
+            char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
+            csilk_set_request_header(c, h_name, h_value);
+        }
     }
 
     return 0;
@@ -74,17 +91,29 @@ on_header_callback(nghttp2_session*     session,
 int
 on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame, void* user_data)
 {
+    (void)session;
     csilk_client_t* client = (csilk_client_t*)user_data;
+    if (!client) {
+        return 0;
+    }
 
-    if (frame->hd.type == NGHTTP2_HEADERS && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
-        csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
+    /* Check if frame has END_STREAM flag */
+    if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_DATA) &&
+        (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        csilk_ctx_t* c = csilk_h2_get_stream(client, frame->hd.stream_id);
         if (c) {
-            _csilk_dispatch_request(c);
-        }
-    } else if (frame->hd.type == NGHTTP2_DATA && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
-        csilk_ctx_t* c = csilk_h2_get_or_create_stream(client, frame->hd.stream_id);
-        if (c) {
-            _csilk_dispatch_request(c);
+            c->end_stream_received = 1;
+            /* Exactly-once application dispatch guard */
+            if (!c->request_dispatched && !c->request_cancelled && !c->stream_closed) {
+                c->request_dispatched = 1;
+                if (!c->request.method) {
+                    c->request.method = csilk_arena_strdup(c->arena, "GET");
+                }
+                if (!c->request.path) {
+                    c->request.path = csilk_arena_strdup(c->arena, "/");
+                }
+                _csilk_dispatch_request(c);
+            }
         }
     }
 
@@ -103,8 +132,8 @@ on_data_chunk_recv_callback(nghttp2_session* session,
     (void)session;
     (void)flags;
     csilk_client_t* client = (csilk_client_t*)user_data;
-    csilk_ctx_t*    c = csilk_h2_get_or_create_stream(client, stream_id);
-    if (!c) {
+    csilk_ctx_t*    c = csilk_h2_get_stream(client, stream_id);
+    if (!c || c->stream_closed || c->request_cancelled) {
         return 0;
     }
 
@@ -146,6 +175,11 @@ on_stream_close_callback(nghttp2_session* session,
     (void)error_code;
     csilk_client_t* client = (csilk_client_t*)user_data;
     if (client) {
+        csilk_ctx_t* c = csilk_h2_get_stream(client, stream_id);
+        if (c) {
+            c->request_cancelled = 1;
+            c->stream_closed = 1;
+        }
         csilk_h2_remove_stream(client, stream_id);
     }
     return 0;

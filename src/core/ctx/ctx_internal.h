@@ -361,6 +361,10 @@ typedef struct csilk_stream_scope_s {
     int                  stream_closed;
     uint64_t             stream_gen;
     csilk_stream_state_t stream_state;
+    uint8_t              headers_received;
+    uint8_t              end_stream_received;
+    uint8_t              request_dispatched;
+    uint8_t              request_cancelled;
 } csilk_stream_scope_t;
 
 struct csilk_ctx_s {
@@ -445,6 +449,10 @@ struct csilk_ctx_s {
             int                  stream_closed;
             uint64_t             stream_gen;
             csilk_stream_state_t stream_state;
+            uint8_t              headers_received;
+            uint8_t              end_stream_received;
+            uint8_t              request_dispatched;
+            uint8_t              request_cancelled;
         };
     };
 };
