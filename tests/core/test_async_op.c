@@ -12,6 +12,8 @@
 #include "csilk/core/async.h"
 #include "csilk/test/test.h"
 #include "core/ctx/ctx_internal.h"
+#include "core/internal/srv_internal.h"
+#include "csilk/http/h2.h"
 
 static int g_async_completed = 0;
 static int g_async_timeout = 0;
@@ -78,6 +80,77 @@ test_async_op_null_safety(void)
     printf("✓ test_async_op_null_safety passed\n");
 }
 
+static void
+test_async_op_h2_stream_lifecycle(void)
+{
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    csilk_ctx_t* stream = csilk_h2_get_or_create_stream(&client, 1);
+    assert(stream != NULL);
+    assert(stream->stream_ref == 1);
+    assert(stream->stream_closed == 0);
+
+    g_async_completed = 0;
+    csilk_async_op_t* op =
+        csilk_async_op_begin(stream, 0, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op != NULL);
+    assert(stream->stream_ref == 2);
+
+    int result = 42;
+    int rc = csilk_async_op_complete(op, &result);
+    assert(rc == 0);
+    assert(g_async_completed == 1);
+    assert(stream->stream_ref == 1);
+
+    /* Close stream from nghttp2 */
+    rc = csilk_h2_remove_stream(&client, 1);
+    assert(rc == 0);
+    assert(client.h2_stream_map.count == 0);
+    assert(client.h2_stream_map.pool_count == 1);
+
+    csilk_h2_free_streams(&client);
+    printf("✓ test_async_op_h2_stream_lifecycle passed\n");
+}
+
+static void
+test_async_op_h2_stream_close_before_complete(void)
+{
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    csilk_ctx_t* stream = csilk_h2_get_or_create_stream(&client, 3);
+    assert(stream != NULL);
+    assert(stream->stream_ref == 1);
+
+    g_async_completed = 0;
+    csilk_async_op_t* op =
+        csilk_async_op_begin(stream, 0, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op != NULL);
+    assert(stream->stream_ref == 2);
+
+    /* Simulate RST_STREAM / client disconnect while async operation is pending */
+    int rc = csilk_h2_remove_stream(&client, 3);
+    assert(rc == 0);
+    assert(client.h2_stream_map.count == 0);
+    /* Stream should NOT be in free_list yet because op holds ref */
+    assert(client.h2_stream_map.pool_count == 0);
+    assert(stream->stream_closed == 1);
+    assert(stream->stream_ref == 1);
+
+    /* Complete async op now */
+    int result = 42;
+    rc = csilk_async_op_complete(op, &result);
+    assert(rc == 0);
+    /* on_complete should NOT be called because stream was closed */
+    assert(g_async_completed == 0);
+    /* Stream is now recycled to pool */
+    assert(client.h2_stream_map.pool_count == 1);
+
+    csilk_h2_free_streams(&client);
+    printf("✓ test_async_op_h2_stream_close_before_complete passed\n");
+}
+
 int
 main(void)
 {
@@ -85,6 +158,8 @@ main(void)
     test_async_op_basic_lifecycle();
     test_async_op_cancellation();
     test_async_op_null_safety();
+    test_async_op_h2_stream_lifecycle();
+    test_async_op_h2_stream_close_before_complete();
     printf("All csilk_async_op_t tests passed successfully!\n");
     return 0;
 }

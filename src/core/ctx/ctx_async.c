@@ -34,8 +34,9 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
     csilk_ctx_t*    c = op->ctx;
     csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
 
-    /* Verify anti-ABA generation validity */
-    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq)) {
+    /* Verify anti-ABA generation validity and stream not closed */
+    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq &&
+                    !c->stream_closed)) {
         if (op->on_timeout) {
             op->on_timeout(c);
         } else {
@@ -46,6 +47,7 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
     }
 
     csilk_io_timer_stop(&op->timer);
+    _csilk_stream_unref(c);
     if (client) {
         csilk_client_unref(client);
     }
@@ -80,6 +82,7 @@ csilk_async_op_begin(csilk_ctx_t*           c,
         op->generation = client->generation;
         csilk_client_ref(client);
     }
+    _csilk_stream_ref(c);
 
     c->is_async = 1;
 
@@ -119,13 +122,15 @@ _csilk_async_complete_dispatch_cb(void* arg)
         csilk_io_timer_stop(&op->timer);
     }
 
-    /* Verify anti-ABA generation validity */
-    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq)) {
+    /* Verify anti-ABA generation validity and stream not closed */
+    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq &&
+                    !c->stream_closed)) {
         if (op->on_complete) {
             op->on_complete(c, result);
         }
     }
 
+    _csilk_stream_unref(c);
     if (client) {
         csilk_client_unref(client);
     }
@@ -153,12 +158,13 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
         if (op->timer_armed) {
             csilk_io_timer_stop(&op->timer);
         }
-        if (!client ||
-            (client->generation == op->generation && c->request_seq == op->request_seq)) {
+        if (!client || (client->generation == op->generation && c->request_seq == op->request_seq &&
+                        !c->stream_closed)) {
             if (op->on_complete) {
                 op->on_complete(c, result);
             }
         }
+        _csilk_stream_unref(c);
         if (client) {
             csilk_client_unref(client);
         }
@@ -169,6 +175,11 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     csilk_async_dispatch_payload_t* payload =
         (csilk_async_dispatch_payload_t*)malloc(sizeof(csilk_async_dispatch_payload_t));
     if (!payload) {
+        _csilk_stream_unref(c);
+        if (client) {
+            csilk_client_unref(client);
+        }
+        free(op);
         return -1;
     }
     payload->op = op;
@@ -195,7 +206,9 @@ csilk_async_op_cancel(csilk_async_op_t* op)
         csilk_io_timer_stop(&op->timer);
     }
 
-    csilk_client_t* client = op->ctx ? (csilk_client_t*)op->ctx->_internal_client : NULL;
+    csilk_ctx_t*    c = op->ctx;
+    csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
+    _csilk_stream_unref(c);
     if (client) {
         csilk_client_unref(client);
     }

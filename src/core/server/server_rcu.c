@@ -40,7 +40,11 @@ csilk_server_get_mq(csilk_server_t* server)
         return NULL;
     }
     if (!server->mq) {
-        server->mq = _csilk_mq_new(server->loop);
+        csilk_mutex_lock(&server->config_mutex);
+        if (!server->mq) {
+            server->mq = _csilk_mq_new(server->loop);
+        }
+        csilk_mutex_unlock(&server->config_mutex);
     }
     return server->mq;
 }

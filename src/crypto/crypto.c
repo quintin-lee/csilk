@@ -38,11 +38,6 @@
 
 static _Atomic uint32_t g_nonce_counter = 0;
 
-#ifdef TEST_OOM
-_Atomic int g_oom_fail_after = -1;
-_Atomic int g_oom_count = 0;
-#endif
-
 /**
  * @brief Initialize a SHA-256 hashing context using OpenSSL.
  * @param context SHA-256 context to initialize (must not be NULL).

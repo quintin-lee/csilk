@@ -36,6 +36,11 @@
 
 #include "csilk/core/internal.h"
 
+#ifdef TEST_OOM
+_Atomic int g_oom_fail_after = -1;
+_Atomic int g_oom_count = 0;
+#endif
+
 enum { MAX_TLS_CHUNKS_PER_TIER = 8 };
 
 /** @brief CPU cache line size hint for arena alignment. */
