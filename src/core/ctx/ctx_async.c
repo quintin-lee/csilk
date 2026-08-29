@@ -35,7 +35,7 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
     csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
 
     /* Verify anti-ABA generation validity */
-    if (client && client->generation == op->generation && c->request_seq == op->request_seq) {
+    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq)) {
         if (op->on_timeout) {
             op->on_timeout(c);
         } else {
@@ -120,7 +120,7 @@ _csilk_async_complete_dispatch_cb(void* arg)
     }
 
     /* Verify anti-ABA generation validity */
-    if (client && client->generation == op->generation && c->request_seq == op->request_seq) {
+    if (!client || (client->generation == op->generation && c->request_seq == op->request_seq)) {
         if (op->on_complete) {
             op->on_complete(c, result);
         }
@@ -143,6 +143,27 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     if (!atomic_compare_exchange_strong_explicit(
             &op->completed, &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
         return -1; /* Already completed or timed out */
+    }
+
+    csilk_ctx_t*    c = op->ctx;
+    csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
+
+    /* If on owner worker thread or standalone mock context without worker pool, execute inline */
+    if (!client || !client->owner_pool || _csilk_is_owner_worker_thread(client->owner_pool)) {
+        if (op->timer_armed) {
+            csilk_io_timer_stop(&op->timer);
+        }
+        if (!client ||
+            (client->generation == op->generation && c->request_seq == op->request_seq)) {
+            if (op->on_complete) {
+                op->on_complete(c, result);
+            }
+        }
+        if (client) {
+            csilk_client_unref(client);
+        }
+        free(op);
+        return 0;
     }
 
     csilk_async_dispatch_payload_t* payload =
