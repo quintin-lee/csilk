@@ -106,6 +106,17 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         arena = ctx->arena;
         /* Reset arena to clean initial state (keeps 4KB head chunk, 0 syscall) */
         csilk_arena_reset(arena);
+        ctx->stream_id = stream_id;
+        ctx->request_seq++;
+        ctx->handler_index = -1;
+        ctx->aborted = 0;
+        ctx->panicked = 0;
+        ctx->is_async = 0;
+        ctx->response_started = 0;
+        ctx->params_count = 0;
+        ctx->defer_head = NULL;
+        ctx->storage_head = NULL;
+        ctx->current_handler = NULL;
     } else {
         /* Allocate new context and arena */
         ctx = malloc(sizeof(csilk_ctx_t));
@@ -116,12 +127,9 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         if (client->server && client->server->config.enable_arena_alignment) {
             csilk_arena_set_alignment(arena, 1);
         }
+        _csilk_stream_ctx_init(ctx, client, stream_id);
+        ctx->arena = arena;
     }
-
-    _csilk_ctx_init(ctx, client->server, client);
-    ctx->arena = arena;
-    ctx->stream_id = stream_id;
-    ctx->h2_stream_owner = client;
 
     /* Insert into bucket chain head */
     ctx->next_stream = map->buckets[idx];

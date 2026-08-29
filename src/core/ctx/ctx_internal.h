@@ -413,6 +413,10 @@ struct csilk_ctx_s {
 /** @brief Internal context initialiser. */
 CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client);
 
+/** @brief Specialized stream-scoped context initialiser for HTTP/2 multiplexing. */
+CSILK_INTERNAL void
+_csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id);
+
 /** @brief Register a raw read buffer with the context for zero-copy view lifetime management. */
 CSILK_INTERNAL int _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base);
 

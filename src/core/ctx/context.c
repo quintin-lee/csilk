@@ -738,6 +738,29 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     }
 }
 
+/** @brief Specialized stream-scoped context initialiser for HTTP/2 multiplexing. */
+CSILK_INTERNAL void
+_csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id)
+{
+    if (!c || !client) {
+        return;
+    }
+    uint64_t old_seq = c->request_seq;
+    memset(c, 0, sizeof(csilk_ctx_t));
+    c->request_seq = old_seq ? old_seq + 1 : 1;
+    c->handler_index = -1;
+    c->file_fd = -1;
+    c->_internal_client = client;
+    c->server = client->server;
+    c->stream_id = stream_id;
+    c->h2_stream_owner = client;
+    if (client->server) {
+        c->storage_driver = client->server->storage_driver;
+        c->crypto_driver = client->server->crypto_driver;
+        c->cipher_driver = client->server->cipher_driver;
+    }
+}
+
 /** @brief Register a zero-copy read buffer for lifetime management across the request.
  *
  * Dynamically expands buffer array if number of TCP reads exceeds embedded capacity.
