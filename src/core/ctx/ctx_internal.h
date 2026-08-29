@@ -410,8 +410,9 @@ struct csilk_ctx_s {
     int32_t stream_id; /**< HTTP/2 Stream ID. 0 for HTTP/1.1 connections. */
     struct csilk_ctx_s*
         next_stream;   /**< Linked list of active multiplexed contexts for a single client. */
+    csilk_client_t* h2_stream_owner; /**< Owning client for this multiplexed stream context. */
 
-    csilk_io_work_t work_req; /**< I/O work request structure for offloading async
+    csilk_io_work_t work_req;        /**< I/O work request structure for offloading async
                      operations to the thread pool. Used by
                      csilk_ai_chat_async() and other async handlers. */
 

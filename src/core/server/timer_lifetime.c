@@ -3,7 +3,8 @@
  * @brief Centralized timer lifecycle helpers for client shutdown.
  */
 
-#include "csilk/core/sys_io.h"
+#include "../internal/srv_impl.h"
+
 #include "../internal/srv_internal.h"
 
 void
