@@ -141,6 +141,27 @@ _csilk_stream_unref(csilk_ctx_t* c)
 /* --- Stream lookup/creation --- */
 
 csilk_ctx_t*
+csilk_h2_get_stream(csilk_client_t* client, int32_t stream_id)
+{
+    if (!client) {
+        return NULL;
+    }
+    csilk_h2_stream_map_t* map = &client->h2_stream_map;
+    if (!map->buckets || map->count == 0) {
+        return NULL;
+    }
+    uint32_t     idx = _csilk_h2_stream_hash(stream_id, map->mask);
+    csilk_ctx_t* curr = map->buckets[idx];
+    while (curr) {
+        if (curr->stream_id == stream_id) {
+            return curr;
+        }
+        curr = curr->next_stream;
+    }
+    return NULL;
+}
+
+csilk_ctx_t*
 csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 {
     if (!client) {
@@ -183,6 +204,10 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         atomic_store_explicit(&ctx->stream_ref, 1, memory_order_relaxed);
         ctx->stream_state = CSILK_STREAM_STATE_ACTIVE;
         ctx->stream_closed = 0;
+        ctx->headers_received = 0;
+        ctx->end_stream_received = 0;
+        ctx->request_dispatched = 0;
+        ctx->request_cancelled = 0;
         ctx->handler_index = -1;
         ctx->aborted = 0;
         ctx->panicked = 0;
