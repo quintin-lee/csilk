@@ -242,7 +242,8 @@ jobs:
     - name: Verify binary architecture
       run: |
         ls -lh build_arm64/libcsilk*.a
-        readelf -h build_arm64/libcsilk.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)
+        readelf -h build_arm64/libcsilk-core.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)
+        readelf -h build_arm64/libcsilk-base.a | grep -i -E "AArch64|ARM" || (echo "ERROR: binary is not ARM64" && exit 1)
 
   io_uring:
     name: io_uring compatibility
