@@ -17,6 +17,26 @@
 #include "csilk/csilk.h"
 #include "core/internal/srv_internal.h"
 
+/* --- Thread-Local Worker Pool Identification --- */
+void           _csilk_worker_set_current_pool(worker_pool_t* wp);
+worker_pool_t* _csilk_worker_get_current_pool(void);
+
+static inline bool
+_csilk_is_owner_worker_thread(const worker_pool_t* wp)
+{
+    if (!wp) {
+        return false;
+    }
+    if (_csilk_worker_get_current_pool() == wp) {
+        return true;
+    }
+    /* If no loop is active (e.g. standalone unit testing), caller thread owns execution */
+    if (!wp->loop_ptr) {
+        return true;
+    }
+    return false;
+}
+
 /* --- Connection pool & I/O (connection.c) --- */
 
 /**
