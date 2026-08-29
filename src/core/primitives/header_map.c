@@ -493,6 +493,7 @@ map_set_view(csilk_ctx_t*            c,
     new_h->id = id;
     new_h->next = map->buckets[bucket];
     map->buckets[bucket] = new_h;
+    map->count++;
 
     if (id != CSILK_HDR_UNKNOWN) {
         map->known[id] = new_h;
@@ -590,6 +591,7 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
     new_h->id = id;
     new_h->next = map->buckets[bucket];
     map->buckets[bucket] = new_h;
+    map->count++;
 
     if (id != CSILK_HDR_UNKNOWN) {
         map->known[id] = new_h;
@@ -633,6 +635,7 @@ map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
     new_h->id = id;
     new_h->next = map->buckets[bucket];
     map->buckets[bucket] = new_h;
+    map->count++;
 
     if (id != CSILK_HDR_UNKNOWN) {
         map->known[id] = new_h;

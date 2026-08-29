@@ -19,10 +19,8 @@ csilk_h2_send_response(csilk_ctx_t* c)
     }
 
     int header_count = 1; /* :status */
-    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-            header_count++;
-        }
+    if (c->response.headers.used && c->response.headers.count > 0) {
+        header_count += (int)c->response.headers.count;
     }
 
     nghttp2_nv  stack_hdrs[32];
@@ -43,15 +41,17 @@ csilk_h2_send_response(csilk_ctx_t* c)
     nva[0].valuelen = strlen(status_str);
     nva[0].flags = NGHTTP2_NV_FLAG_NONE;
 
-    int idx = 1;
-    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
-        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
-            nva[idx].name = (uint8_t*)h->key;
-            nva[idx].namelen = h->key_len;
-            nva[idx].value = (uint8_t*)h->value;
-            nva[idx].valuelen = h->value_len;
-            nva[idx].flags = NGHTTP2_NV_FLAG_NONE;
-            idx++;
+    if (header_count > 1) {
+        int idx = 1;
+        for (int i = 0; i < CSILK_HEADER_BUCKETS && idx < header_count; i++) {
+            for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+                nva[idx].name = (uint8_t*)h->key;
+                nva[idx].namelen = h->key_len;
+                nva[idx].value = (uint8_t*)h->value;
+                nva[idx].valuelen = h->value_len;
+                nva[idx].flags = NGHTTP2_NV_FLAG_NONE;
+                idx++;
+            }
         }
     }
 

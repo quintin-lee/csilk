@@ -11,6 +11,7 @@
 #include "csilk/http/h2.h"
 #include "csilk/csilk.h"
 #include "../internal/srv_impl.h"
+#include "../primitives/header_map.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,22 +66,23 @@ on_header_callback(nghttp2_session*     session,
                     free(query);
                 }
             } else if (namelen == 10 && memcmp(name, ":authority", 10) == 0) {
-                char* h_host = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-                csilk_set_request_header(c, "Host", h_host);
+                csilk_str_view_t host_k = {.data = "Host", .len = 4};
+                csilk_str_view_t host_v = {.data = (const char*)value, .len = valuelen};
+                map_set_view(c, &c->request.headers, &host_k, &host_v);
             } else if (namelen == 7 && memcmp(name, ":scheme", 7) == 0) {
                 /* Scheme recognized */
             }
         } else {
-            char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
-            char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-            csilk_set_request_header(c, h_name, h_value);
+            csilk_str_view_t h_k = {.data = (const char*)name, .len = namelen};
+            csilk_str_view_t h_v = {.data = (const char*)value, .len = valuelen};
+            map_set_view(c, &c->request.headers, &h_k, &h_v);
         }
     } else if (frame->headers.cat == NGHTTP2_HCAT_HEADERS) {
         /* Trailing headers (trailers) — pseudo-headers are forbidden in trailers */
         if (namelen > 0 && name[0] != ':') {
-            char* h_name = csilk_arena_strndup(c->arena, (const char*)name, namelen);
-            char* h_value = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
-            csilk_set_request_header(c, h_name, h_value);
+            csilk_str_view_t h_k = {.data = (const char*)name, .len = namelen};
+            csilk_str_view_t h_v = {.data = (const char*)value, .len = valuelen};
+            map_set_view(c, &c->request.headers, &h_k, &h_v);
         }
     }
 
