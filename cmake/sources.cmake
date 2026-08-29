@@ -233,6 +233,7 @@ set(CSILK_WORKFLOW_SOURCES
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────
 set(CSILK_SOURCES
+    ${CSILK_BASE_SOURCES}
     ${CSILK_CORE_SOURCES}
     ${CSILK_JSON_SOURCES}
     ${CSILK_HTTP_SOURCES}
