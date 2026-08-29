@@ -151,8 +151,7 @@ csilk_server_new(csilk_router_t* router)
 
     csilk_mutex_init(&s->hook_mutex);
     csilk_mutex_init(&s->config_mutex);
-
-    s->mq = _csilk_mq_new(s->loop);
+    s->mq = NULL;
 
     return s;
 }
