@@ -105,7 +105,7 @@ test_read_buffer_dynamic_expansion(void)
     memset(&c, 0, sizeof(c));
     c.arena = csilk_arena_new(4096);
     c.read_buffers = c.read_buffers_embedded;
-    c.read_buffers_capacity = 16;
+    c.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     c.read_buf_sizes = c.read_buf_sizes_embedded;
 
     /* Register 40 buffers (exceeding 16 embedded capacity) */
@@ -165,7 +165,7 @@ test_single_chunk_body_borrowed_view(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -255,7 +255,7 @@ test_multi_chunk_body_upgrade(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -346,7 +346,7 @@ test_async_response_buffer_safety(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -427,7 +427,7 @@ test_keepalive_multi_cycle_isolation(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -540,7 +540,7 @@ test_chunk_boundary_random_fuzzing(void)
         client.ctx.server = s;
         client.ctx.arena = csilk_arena_new(8192);
         client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-        client.ctx.read_buffers_capacity = 16;
+        client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
         client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
         _csilk_set_internal_client(&client.ctx, &client);
 

@@ -482,7 +482,7 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     }
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
-    c->read_buffers_capacity = 16;
+    c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     c->read_buf_sizes = c->read_buf_sizes_embedded;
 
     /* 7. Arena reset — reclaims ALL request-scoped arena allocations in one
@@ -722,7 +722,7 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     c->server = s;
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_count = 0;
-    c->read_buffers_capacity = 16;
+    c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     c->read_buf_sizes = c->read_buf_sizes_embedded;
     c->write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
     c->write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
@@ -797,7 +797,7 @@ _csilk_ctx_register_pooled_read_buffer(csilk_ctx_t* c, char* base, size_t size)
     }
     if (c->read_buffers_capacity <= 0 || !c->read_buffers) {
         c->read_buffers = c->read_buffers_embedded;
-        c->read_buffers_capacity = 16;
+        c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
         c->read_buffers_count = 0;
         c->read_buf_sizes = c->read_buf_sizes_embedded;
     }

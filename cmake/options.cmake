@@ -45,7 +45,7 @@ option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" O
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 
 # ── Configurable compile-time constants ──────────────────────────────────
-set(CSILK_HEADER_BUCKETS 64  CACHE STRING "Header hash-table bucket count")
+set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")
 set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request")
 set(CSILK_MAX_STORAGE    64  CACHE STRING "Max context key-value storage entries")
 set(CSILK_DEFAULT_ARENA_SIZE 4096 CACHE STRING "Default arena chunk size in bytes")

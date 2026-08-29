@@ -831,7 +831,7 @@ test_csilk_read_buffer_dynamic_expansion()
     /* Cleanup should free all 50 buffers and the dynamic array without leaking */
     csilk_ctx_cleanup(ctx);
     assert(ctx->read_buffers_count == 0);
-    assert(ctx->read_buffers_capacity == 16);
+    assert(ctx->read_buffers_capacity == CSILK_READ_BUF_EMBEDDED);
     assert(ctx->read_buffers == ctx->read_buffers_embedded);
 
     csilk_test_ctx_free(ctx);
