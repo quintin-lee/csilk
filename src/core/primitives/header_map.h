@@ -106,4 +106,10 @@ map_set(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
 CSILK_INTERNAL void
 map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* value);
 
+/* --- Key-Value Map operations (Query / Form parameters) --- */
+CSILK_INTERNAL const char*  map_kv_get(const csilk_kv_map_t* map, const char* key);
+CSILK_INTERNAL csilk_view_t map_kv_get_view(const csilk_kv_map_t* map, const char* key);
+CSILK_INTERNAL void
+map_kv_add(csilk_ctx_t* c, csilk_kv_map_t* map, const char* key, const char* value);
+
 #endif /* CSILK_HEADER_MAP_H */

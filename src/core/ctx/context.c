@@ -505,10 +505,10 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
         memset(&c->request.headers, 0, sizeof(csilk_header_map_t));
     }
     if (c->request.query_params.used) {
-        memset(&c->request.query_params, 0, sizeof(csilk_header_map_t));
+        memset(&c->request.query_params, 0, sizeof(csilk_kv_map_t));
     }
     if (c->request.form_params.used) {
-        memset(&c->request.form_params, 0, sizeof(csilk_header_map_t));
+        memset(&c->request.form_params, 0, sizeof(csilk_kv_map_t));
     }
     if (c->response.headers.used) {
         memset(&c->response.headers, 0, sizeof(csilk_header_map_t));

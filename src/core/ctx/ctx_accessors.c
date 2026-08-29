@@ -181,7 +181,7 @@ csilk_get_response_header_id_view(csilk_ctx_t* c, csilk_header_id_t id)
 const char*
 csilk_get_query(csilk_ctx_t* c, const char* key)
 {
-    return map_get(&c->request.query_params, key);
+    return map_kv_get(&c->request.query_params, key);
 }
 
 csilk_view_t
@@ -190,7 +190,7 @@ csilk_get_query_view(csilk_ctx_t* c, const char* key)
     if (!c || !key) {
         return csilk_view(NULL, 0);
     }
-    return map_get_view(&c->request.query_params, key);
+    return map_kv_get_view(&c->request.query_params, key);
 }
 
 /**
@@ -575,6 +575,23 @@ for_each_in_map(csilk_header_map_t* map, csilk_header_cb cb, void* arg)
     }
 }
 
+static void
+for_each_in_kv_map(const csilk_kv_map_t* map, csilk_header_cb cb, void* arg)
+{
+    if (!map || !cb) {
+        return;
+    }
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        csilk_header_t* h = map->buckets[i];
+        while (h) {
+            if (!cb(h->key, h->value, arg)) {
+                return;
+            }
+            h = h->next;
+        }
+    }
+}
+
 /**
  * @brief Iterate the request headers, invoking a callback per entry.
  * @param[in] c   Request context (validated non-NULL).
@@ -599,7 +616,7 @@ void
 csilk_for_each_query(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
 {
     if (c) {
-        for_each_in_map(&c->request.query_params, cb, arg);
+        for_each_in_kv_map(&c->request.query_params, cb, arg);
     }
 }
 
@@ -613,7 +630,7 @@ void
 csilk_for_each_form_field(csilk_ctx_t* c, csilk_header_cb cb, void* arg)
 {
     if (c) {
-        for_each_in_map(&c->request.form_params, cb, arg);
+        for_each_in_kv_map(&c->request.form_params, cb, arg);
     }
 }
 

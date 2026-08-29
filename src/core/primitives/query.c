@@ -17,7 +17,7 @@
 #include "csilk/core/internal.h"
 
 /* Forward declaration */
-static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map);
+static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_kv_map_t* target_map);
 
 /** @brief Common key-value pair parser for query strings and form bodies.
  *
@@ -30,7 +30,7 @@ static void parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* 
  * @param target_map  Pointer to the target hash map (query_params or form_params).
  */
 static void
-parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
+parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_kv_map_t* target_map)
 {
     char* pos = qs;
     while (pos && *pos) {
@@ -55,7 +55,7 @@ parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_header_map_t* target_map)
             if (value && *value != '\0') {
                 csilk_url_decode(value);
             }
-            map_add(c, target_map, key, value);
+            map_kv_add(c, target_map, key, value);
             CSILK_LOG_T("Context: parsed %s = %s", key, value);
         }
 
@@ -168,5 +168,5 @@ csilk_get_form_field(csilk_ctx_t* c, const char* key)
     if (!c || !key) {
         return NULL;
     }
-    return map_get(&c->request.form_params, key);
+    return map_kv_get(&c->request.form_params, key);
 }
