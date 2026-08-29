@@ -73,8 +73,9 @@ typedef struct csilk_kv_map_s csilk_kv_map_t;
 struct csilk_header_map_s {
     csilk_header_t* known[CSILK_HDR_MAX_KNOWN]; /**< O(1) direct slot array for interned headers */
     csilk_header_t*
-            buckets[CSILK_HEADER_BUCKETS]; /**< Chained hash buckets for all / custom headers */
-    uint8_t used; /**< Set to 1 by map writers; lets cleanup skip zeroing */
+             buckets[CSILK_HEADER_BUCKETS]; /**< Chained hash buckets for all / custom headers */
+    uint16_t count;                         /**< Number of header entries in map */
+    uint8_t  used; /**< Set to 1 by map writers; lets cleanup skip zeroing */
 };
 typedef struct csilk_header_map_s csilk_header_map_t;
 
