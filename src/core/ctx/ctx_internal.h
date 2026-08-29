@@ -49,6 +49,16 @@ typedef struct csilk_header_s csilk_header_t;
 #endif
 
 /**
+ * @brief A lightweight chained hash table for query and form key-value pairs (no interned header slots).
+ */
+struct csilk_kv_map_s {
+    csilk_header_t*
+            buckets[CSILK_HEADER_BUCKETS]; /**< Chained hash buckets for key-value entries */
+    uint8_t used; /**< Set to 1 by map writers; lets cleanup skip zeroing */
+};
+typedef struct csilk_kv_map_s csilk_kv_map_t;
+
+/**
  * @brief A fixed-size chained hash table with direct O(1) slots for interned HTTP headers.
  *
  * Nodes, keys and values are ALL arena-allocated by the map writers
@@ -114,18 +124,18 @@ struct csilk_request_s {
     csilk_ownership_t
         body_ownership; /**< Deterministic ownership state (NONE, BORROWED, ARENA, HEAP, POOL, TRANSFER). */
 
-    /* --- Header maps (large; kept at the tail — see struct comment) --- */
+    /* --- Header & KV maps (large; kept at the tail — see struct comment) --- */
     csilk_header_map_t headers;      /**< Request headers (key → value) stored in a
                                      fixed-size chained hash table.
                                      Case-insensitive lookup via djb2
                                      hash + strcasecmp. */
-    csilk_header_map_t query_params; /**< URL query-string parameters parsed
-                                          from the "?" portion of the request
-                                          URL. Populated by csilk_parse_query(). */
-    csilk_header_map_t form_params;  /**< Form-urlencoded body parameters parsed
-                                        from application/x-www-form-urlencoded
-                                        body. Populated by
-                                        csilk_parse_form_urlencoded(). */
+    csilk_kv_map_t     query_params; /**< URL query-string parameters parsed
+                                      from the "?" portion of the request
+                                      URL. Populated by csilk_parse_query(). */
+    csilk_kv_map_t     form_params;  /**< Form-urlencoded body parameters parsed
+                                    from application/x-www-form-urlencoded
+                                    body. Populated by
+                                    csilk_parse_form_urlencoded(). */
 };
 typedef struct csilk_request_s csilk_request_t;
 

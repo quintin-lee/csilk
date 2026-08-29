@@ -638,3 +638,100 @@ map_add(csilk_ctx_t* c, csilk_header_map_t* map, const char* key, const char* va
         map->known[id] = new_h;
     }
 }
+
+/* ---------------------------------------------------------------------------
+ * Key-Value Map Operations (Query / Form parameters)
+ * -------------------------------------------------------------------------*/
+
+const char*
+map_kv_get(const csilk_kv_map_t* map, const char* key)
+{
+    if (!map || !key) {
+        return NULL;
+    }
+
+    size_t key_len = 0;
+    while (key[key_len]) {
+        key_len++;
+    }
+
+    uint32_t        hash = header_hash(key, NULL);
+    uint32_t        bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+    csilk_header_t* h = map->buckets[bucket];
+
+    while (h) {
+        if (h->hash == hash && h->key_len == key_len) {
+            if (memcmp(h->key, key, key_len) == 0 || strncasecmp(h->key, key, key_len) == 0) {
+                return h->value;
+            }
+        }
+        h = h->next;
+    }
+    return NULL;
+}
+
+csilk_view_t
+map_kv_get_view(const csilk_kv_map_t* map, const char* key)
+{
+    if (__builtin_expect(!map || !map->used || !key || !key[0], 0)) {
+        return csilk_view(NULL, 0);
+    }
+
+    size_t key_len = 0;
+    while (key[key_len]) {
+        key_len++;
+    }
+
+    uint32_t        hash = header_hash(key, NULL);
+    uint32_t        bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+    csilk_header_t* h = map->buckets[bucket];
+
+    while (h) {
+        if (h->hash == hash && h->key_len == key_len) {
+            if (memcmp(h->key, key, key_len) == 0 || strncasecmp(h->key, key, key_len) == 0) {
+                return csilk_view(h->value,
+                                  h->value_len ? h->value_len : (h->value ? strlen(h->value) : 0));
+            }
+        }
+        h = h->next;
+    }
+    return csilk_view(NULL, 0);
+}
+
+void
+map_kv_add(csilk_ctx_t* c, csilk_kv_map_t* map, const char* key, const char* value)
+{
+    if (!c || !c->arena || !map || !key || !value) {
+        return;
+    }
+    map->used = 1;
+
+    size_t clean_key_len = 0;
+    char*  clean_key = _csilk_sanitize_header_str(c->arena, key, strlen(key), &clean_key_len);
+    if (!clean_key || clean_key_len == 0) {
+        return;
+    }
+
+    size_t clean_val_len = 0;
+    char*  clean_val = _csilk_sanitize_header_str(c->arena, value, strlen(value), &clean_val_len);
+    if (!clean_val) {
+        return;
+    }
+
+    uint32_t hash = header_hash_view(clean_key, clean_key_len);
+    uint32_t bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+
+    csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
+    if (!new_h) {
+        return;
+    }
+
+    new_h->key = clean_key;
+    new_h->key_len = clean_key_len;
+    new_h->value = clean_val;
+    new_h->value_len = clean_val_len;
+    new_h->hash = hash;
+    new_h->id = CSILK_HDR_UNKNOWN;
+    new_h->next = map->buckets[bucket];
+    map->buckets[bucket] = new_h;
+}
