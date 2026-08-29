@@ -41,6 +41,7 @@ set(CSILK_CORE_TESTS
     test_context
     test_context_ext
     test_context_reflect_ext
+    test_async_op
     test_ctx_lifecycle_async
     test_edge
     test_get_param
@@ -126,7 +127,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core
 )
 
 

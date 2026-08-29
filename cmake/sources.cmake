@@ -93,6 +93,7 @@ set(CSILK_BYPASS_SOURCES
 set(CSILK_HTTP_SOURCES
     src/core/ctx/context.c
     src/core/ctx/ctx_accessors.c
+    src/core/ctx/ctx_async.c
     src/core/ctx/ctx_defer.c
     src/core/ctx/ctx_json.c
     src/core/config/hot_reload.c

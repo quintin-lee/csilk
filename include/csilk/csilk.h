@@ -17,6 +17,7 @@
 #include "csilk/core/hooks.h"
 #include "csilk/core/config.h"
 #include "csilk/core/context.h"
+#include "csilk/core/async.h"
 #include "csilk/core/response.h"
 #include "csilk/core/router.h"
 #include "csilk/core/group.h"
