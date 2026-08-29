@@ -392,61 +392,6 @@ on_body(llhttp_t* p, const char* at, size_t length)
  *
  * Triggers the CSILK_HOOK_REQUEST_BEGIN lifecycle hook, then attempts to
  * match the request path against the server's radix-tree router.  On a
- * match the route-level handlers are prepended with any registered global
- * middlewares and execution begins via csilk_next().  On a miss the
- * not-found handler (or a default 404 string response) is invoked.
- *
- * After dispatch the function handles the async / sync split: for async
- * handlers the HTTP/1 connection read loop is stopped (the handler is
- * responsible for sending the response later); for sync handlers the
- * response is sent immediately via _csilk_send_response().
- *
- * @param c The request context populated by the HTTP parser. */
-CSILK_INTERNAL void
-_csilk_dispatch_request(csilk_ctx_t* c)
-{
-    if (!c || !c->server) {
-        return;
-    }
-
-    csilk_server_t* server = (csilk_server_t*)c->server;
-    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-
-    CSILK_LOG_I("Request: %s %s", c->request.method, c->request.path);
-    if (client) {
-        csilk_conn_set_state(client, CSILK_CONN_PROCESSING);
-    }
-
-    _csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
-
-    /* Acquire router in RCU / EBR read-side critical section */
-    csilk_router_t* router = csilk_server_router_acquire(server, &c->router_token);
-
-    if (router && csilk_router_match_ctx(router, c)) {
-        CSILK_LOG_D("Route matched, calling next handler");
-        csilk_next(c);
-    } else {
-        CSILK_LOG_W("Route not found: %s", c->request.path);
-        if (server->not_found_handler) {
-            server->not_found_handler(c);
-        } else {
-            csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
-        }
-    }
-
-    if (c->is_async) {
-        csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-        if (client && client->protocol == CSILK_PROTO_HTTP1) {
-            csilk_client_read_stop(client);
-        }
-    }
-
-    if (!c->is_async) {
-        csilk_server_router_release(server, &c->router_token);
-        _csilk_send_response(c);
-    }
-}
-
 /* --- Request finalization --- */
 
 /** @brief Finalize the parsed request data before routing.

@@ -31,6 +31,7 @@
 #include "../primitives/query.h"
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 
 /** @brief Invoke the next handler in the middleware/route chain.
  *
@@ -73,6 +74,58 @@ void
 csilk_abort(csilk_ctx_t* c)
 {
     c->aborted = 1;
+}
+
+/** @brief Dispatch the fully parsed request to the router and middleware chain.
+ *
+ * Triggers request hooks, executes the router match, invokes the handler
+ * chain, and decides whether to send the response synchronously or defer
+ * (for async handlers or streaming responses).
+ *
+ * @param c The request context populated by the HTTP parser. */
+CSILK_INTERNAL void
+_csilk_dispatch_request(csilk_ctx_t* c)
+{
+    if (!c || !c->server) {
+        return;
+    }
+
+    csilk_server_t* server = (csilk_server_t*)c->server;
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+
+    CSILK_LOG_I("Request: %s %s", c->request.method, c->request.path);
+    if (client) {
+        csilk_conn_set_state(client, CSILK_CONN_PROCESSING);
+    }
+
+    _csilk_trigger_hooks(server, c, CSILK_HOOK_REQUEST_BEGIN);
+
+    /* Acquire router in RCU / EBR read-side critical section */
+    csilk_router_t* router = csilk_server_router_acquire(server, &c->router_token);
+
+    if (router && csilk_router_match_ctx(router, c)) {
+        CSILK_LOG_D("Route matched, calling next handler");
+        csilk_next(c);
+    } else {
+        CSILK_LOG_W("Route not found: %s", c->request.path);
+        if (server->not_found_handler) {
+            server->not_found_handler(c);
+        } else {
+            csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        }
+    }
+
+    if (c->is_async) {
+        csilk_client_t* client_ptr = (csilk_client_t*)c->_internal_client;
+        if (client_ptr && client_ptr->protocol == CSILK_PROTO_HTTP1) {
+            csilk_client_read_stop(client_ptr);
+        }
+    }
+
+    if (!c->is_async) {
+        csilk_server_router_release(server, &c->router_token);
+        _csilk_send_response(c);
+    }
 }
 
 #include <pthread.h>
