@@ -48,13 +48,17 @@ typedef struct csilk_header_s csilk_header_t;
 #define CSILK_HEADER_BUCKETS 64
 #endif
 
+#ifndef CSILK_KV_BUCKETS
+#define CSILK_KV_BUCKETS 16
+#endif
+
 /**
  * @brief A lightweight chained hash table for query and form key-value pairs (no interned header slots).
  */
 struct csilk_kv_map_s {
-    csilk_header_t*
-            buckets[CSILK_HEADER_BUCKETS]; /**< Chained hash buckets for key-value entries */
-    uint8_t used; /**< Set to 1 by map writers; lets cleanup skip zeroing */
+    csilk_header_t* buckets
+        [CSILK_KV_BUCKETS]; /**< Chained hash buckets for key-value entries (16 slots = 128B) */
+    uint8_t used;           /**< Set to 1 by map writers; lets cleanup skip zeroing */
 };
 typedef struct csilk_kv_map_s csilk_kv_map_t;
 

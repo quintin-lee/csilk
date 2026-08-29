@@ -656,7 +656,7 @@ map_kv_get(const csilk_kv_map_t* map, const char* key)
     }
 
     uint32_t        hash = header_hash(key, NULL);
-    uint32_t        bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+    uint32_t        bucket = hash & (CSILK_KV_BUCKETS - 1);
     csilk_header_t* h = map->buckets[bucket];
 
     while (h) {
@@ -683,7 +683,7 @@ map_kv_get_view(const csilk_kv_map_t* map, const char* key)
     }
 
     uint32_t        hash = header_hash(key, NULL);
-    uint32_t        bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+    uint32_t        bucket = hash & (CSILK_KV_BUCKETS - 1);
     csilk_header_t* h = map->buckets[bucket];
 
     while (h) {
@@ -719,7 +719,7 @@ map_kv_add(csilk_ctx_t* c, csilk_kv_map_t* map, const char* key, const char* val
     }
 
     uint32_t hash = header_hash_view(clean_key, clean_key_len);
-    uint32_t bucket = hash & (CSILK_HEADER_BUCKETS - 1);
+    uint32_t bucket = hash & (CSILK_KV_BUCKETS - 1);
 
     csilk_header_t* new_h = csilk_arena_alloc(c->arena, sizeof(csilk_header_t));
     if (!new_h) {
