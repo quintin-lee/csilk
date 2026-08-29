@@ -45,7 +45,7 @@ csilk_io_read_op_complete(csilk_io_op_t* op, int status)
         }
     }
 
-    cb(stream, status, stream->recv_buf.base, stream->recv_buf.len);
+    cb(stream, status, &stream->recv_buf);
 }
 
 static void
