@@ -39,14 +39,17 @@ csilk_server_get_mq(csilk_server_t* server)
     if (!server) {
         return NULL;
     }
-    if (!server->mq) {
+    csilk_mq_t* mq = atomic_load_explicit(&server->mq, memory_order_acquire);
+    if (!mq) {
         csilk_mutex_lock(&server->config_mutex);
-        if (!server->mq) {
-            server->mq = _csilk_mq_new(server->loop);
+        mq = atomic_load_explicit(&server->mq, memory_order_relaxed);
+        if (!mq) {
+            mq = _csilk_mq_new(server->loop);
+            atomic_store_explicit(&server->mq, mq, memory_order_release);
         }
         csilk_mutex_unlock(&server->config_mutex);
     }
-    return server->mq;
+    return mq;
 }
 
 /** @brief Get the server's active radix-tree router atomically. */

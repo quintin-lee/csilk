@@ -275,9 +275,10 @@ csilk_server_free(csilk_server_t* server)
         server->worker_barrier = NULL;
     }
 
-    if (server->mq) {
-        _csilk_mq_free(server->mq);
-        server->mq = NULL;
+    csilk_mq_t* mq = atomic_load_explicit(&server->mq, memory_order_acquire);
+    if (mq) {
+        _csilk_mq_free(mq);
+        atomic_store_explicit(&server->mq, NULL, memory_order_release);
     }
 
     free(server->spa_doc_root);

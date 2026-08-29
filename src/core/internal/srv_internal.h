@@ -224,7 +224,7 @@ struct csilk_server_s {
     csilk_crypto_driver_t*       crypto_driver;     /**< Crypto algorithm driver. */
     csilk_cipher_driver_t*       cipher_driver;     /**< Cipher algorithm driver. */
     SSL_CTX*                     ssl_ctx;           /**< OpenSSL context. */
-    csilk_mq_t*                  mq;                /**< Message Queue instance. */
+    _Atomic(csilk_mq_t*)         mq;                /**< Message Queue instance (atomic pointer). */
     _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
     csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
