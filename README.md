@@ -6,7 +6,7 @@
 ![CI](https://github.com/quintin-lee/csilk/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/quintin-lee/csilk/actions/workflows/release.yml/badge.svg)
 
-A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Inspired by Gin (Golang) and built on top of **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and cJSON.
+A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) HTTP web framework written in C23, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Inspired by Gin (Golang) and built on top of **libuv (default) or io_uring (optional, Linux-only)**, llhttp, nghttp2, and yyjson.
 
 
 ## Features
@@ -22,7 +22,8 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 📈 **Native Prometheus Metrics** - Built-in observability for QPS, latency, and status codes
 - 🖥️ **Unified Admin Dashboard** - Web-based real-time monitoring of HTTP, AI Workflows, MQ, and CPU flame graphs
 - 🛡️ **Native HTTPS/TLS support** via OpenSSL integration (TLS 1.3 **MUST** be used in production)
-- 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK, Server Push)
+- 🌐 **HTTP/2 support** via nghttp2 (ALPN negotiation, multiplexing, HPACK, Server Push, zero-copy `map_set_view` header materialization, and 4.47M ops/s stream recycling pool)
+- ⏳ **Managed AsyncOp Lifecycle** (`csilk_async_op_t`) — Generation tag and request sequence validation against ABA, and asynchronous timer cleanup on event loop
 - 🔑 **JWT (JSON Web Token)** authentication middleware (HS256)
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
@@ -30,7 +31,7 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB, Redis
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
 - 🌐 RESTful API routing with parameter handling and route groups
-- 📦 JSON support via cJSON (parse, serialize, error responses, reflection binding)
+- 📦 High-Performance JSON support via yyjson (parse, serialize, error responses, reflection binding)
 - 🍪 Cookie parsing and setting (with Max-Age, Secure, HttpOnly, etc.)
 - 🔌 WebSocket support (RFC 6455 handshake, frame send/receive)
 - 📡 Server-Sent Events (SSE) with csilk_sse_init/send/close
@@ -257,10 +258,11 @@ csilk is decomposed into modular targets available as both static (`.a`) and dyn
 
 | Module Target | Shared Target | Static Archive | Dynamic Library | Description |
 |:---|:---|:---|:---|:---|
+| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | Foundation abstractions, base definitions, thread-safe sync primitives |
 | `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | Core arena, context, trie router, logger, crypto primitives |
 | `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 server, app abstraction, connection pool, middleware, swagger |
 | `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 encryption engine and cipher drivers |
-| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) and HTTP/3 protocol handler |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) session, zero-copy header materialization, stream pool |
 | `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | Database abstraction, SQLite, embedded HNSW SIMD vector search |
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI LLM client drivers (OpenAI, Ollama, DeepSeek) |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | Message queue, PubSub, WAL, Raft consensus engine |
@@ -334,6 +336,7 @@ Deep-dive architectural documentation for each core subsystem is available under
 | Messaging | [messaging.md](docs/en/module-design/messaging.md) | Event bus, pub/sub, uv_async_t dispatch, WAL persistence |
 | Security | [security.md](docs/en/module-design/security.md) | RBAC, JWT, CSRF, CORS, WAF, rate limiter |
 | Protocols | [protocols.md](docs/en/module-design/protocols.md) | WebSocket, SSE, Swagger UI, WebSocket Rooms |
+| HTTP/2 Stack | [http2-stack.md](docs/en/module-design/http2-stack.md) | nghttp2 integration, zero-copy header materialization, stream pool |
 | Drivers | [drivers.md](docs/en/module-design/drivers.md) | AI/Cipher/DB/Perm/Vector DB pluggable driver lifecycle |
 | Metrics | [metrics.md](docs/en/module-design/metrics.md) | Prometheus, lock-free counters, latency histograms |
 | AI Engine | [ai.md](docs/en/module-design/ai.md) | Unified chat/embeddings, tool calls, streaming |

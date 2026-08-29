@@ -6,7 +6,7 @@
 ![CI](https://github.com/quintin-lee/csilk/actions/workflows/ci.yml/badge.svg)
 ![Release](https://github.com/quintin-lee/csilk/actions/workflows/release.yml/badge.svg)
 
-一个轻量级（静态二进制文件约 150KB，10K 长连接时 RSS 小于 2 MB）的 HTTP Web 框架，用 C 语言编写，在普通硬件上 **10K QPS 下 P99 延迟 ≤ 5ms**。灵感来自 Gin（Golang），构建于 **libuv（默认）或 io_uring（可选，仅 Linux）**、llhttp、nghttp2 和 cJSON 之上。
+一个轻量级（静态二进制文件约 150KB，10K 长连接时 RSS 小于 2 MB）的 HTTP Web 框架，用 C23 语言编写，在普通硬件上 **10K QPS 下 P99 延迟 ≤ 5ms**。灵感来自 Gin（Golang），构建于 **libuv（默认）或 io_uring（可选，仅 Linux）**、llhttp、nghttp2 和 yyjson 之上。
 
 
 ## 特性
@@ -22,7 +22,8 @@
 - 📈 **原生 Prometheus 指标** — 内置 QPS、延迟和状态码可观测性
 - 🖥️ **统一管理后台** — 基于 Web 的 HTTP、AI 工作流、MQ 和 CPU 火焰图实时监控
 - 🛡️ **原生 HTTPS/TLS 支持** — 通过 OpenSSL 集成（生产环境 **MUST** 使用 TLS 1.3）
-- 🌐 **HTTP/2 支持** — 通过 nghttp2（ALPN 协商、多路复用、HPACK、Server Push）
+- 🌐 **HTTP/2 支持** — 通过 nghttp2（ALPN 协商、多路复用、HPACK、Server Push、`map_set_view` 零拷贝头部物化与 4.47M ops/s 流池复用）
+- ⏳ **受管异步操作生命周期** (`csilk_async_op_t`) — 代际标记（Generation Tag）与请求序号校验防 ABA 竞态，事件循环安全关闭定时器
 - 🔑 **JWT（JSON Web Token）** 认证中间件（HS256）
 - 🔌 **可扩展 Hook 系统** — 覆盖生命周期事件（Server、Connection、Request）
 - 🔧 **可插拔加密驱动** — 用于自定义哈希和 UUID 算法
@@ -30,7 +31,7 @@
 - 🗄️ **可插拔数据库驱动** — SQLite、MySQL、PostgreSQL、MongoDB、Redis
 - 🔧 中间件支持（logger、recovery、auth、CORS、CSRF、限流、静态文件）
 - 🌐 RESTful API 路由，支持参数处理和路由组
-- 📦 JSON 支持（通过 cJSON 解析、序列化、错误响应、反射绑定）
+- 📦 高性能 JSON 支持（通过 yyjson 解析、序列化、错误响应、反射绑定）
 - 🍪 Cookie 解析和设置（支持 Max-Age、Secure、HttpOnly 等）
 - 🔌 WebSocket 支持（RFC 6455 握手、帧发送/接收）
 - 📡 Server-Sent Events（SSE），支持 `csilk_sse_init/send/close`
@@ -251,10 +252,11 @@ csilk 采用高内聚低耦合的模块化设计，提供静态库（`.a`）与�
 
 | 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 说明 |
 |:---|:---|:---|:---|:---|
+| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | 基础抽象层、全局定义与跨后端线程同步原语 |
 | `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | 核心 Arena、上下文 Context、字典树路由、日志与基础加密原语 |
 | `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 服务、App 骨架、连接池管理、内置中间件与 Swagger |
 | `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 加密引擎与对称/非对称加密驱动 |
-| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) 与 HTTP/3 (QUIC) 协议适配器 |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) 会话、零拷贝头部物化与流回收池 |
 | `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | 数据库抽象层、SQLite3、嵌入式 HNSW SIMD 向量检索引擎 |
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI 大模型客户端驱动（OpenAI、Ollama、DeepSeek） |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | 异步消息队列、PubSub、WAL 持久化与 Raft 分布式共识引擎 |
@@ -321,6 +323,31 @@ tools/                  # 开发者工具（csilkskel 脚手架生成器）
 tests/                  # 120+ 个全面的单元测试
 examples/               # 功能示例（Server、App、AI、WS/TLS/MQ 等）
 ```
+
+### 模块设计文档
+
+核心子系统的深度架构设计文档位于 `docs/zh-CN/module-design/`：
+
+| 模块 | 文档 | 涵盖内容 |
+|--------|----------|--------|
+| 服务端内核 | [server.md](docs/zh-CN/module-design/server.md) | libuv/io_uring 事件循环、TLS/ALPN、Worker 线程池、优雅停机 |
+| 应用层 | [app.md](docs/zh-CN/module-design/app.md) | csilk_app_t 门面、启动流程、路由组匹配、静态文件分发 |
+| 路由系统 | [router.md](docs/zh-CN/module-design/router.md) | 分段前缀树、SIMD 加速匹配、参数提取 |
+| 上下文 Context | [context.md](docs/zh-CN/module-design/context.md) | 请求/响应生命周期、Arena 分配器、延迟清理、异步操作生命周期 |
+| 内存池 Arena | [arena.md](docs/zh-CN/module-design/arena.md) | Bump 分配器、零拷贝请求头、SIMD 内存拷贝 |
+| 中间件 | [middleware.md](docs/zh-CN/module-design/middleware.md) | 洋葱模型、调用链组装、15 个内置中间件 |
+| 数据访问 | [data.md](docs/zh-CN/module-design/data.md) | DB 抽象层、可插拔驱动、连接池 |
+| 消息总线 | [messaging.md](docs/zh-CN/module-design/messaging.md) | 事件总线、Pub/Sub、uv_async_t 派发、WAL 持久化、Raft 共识 |
+| 安全系统 | [security.md](docs/zh-CN/module-design/security.md) | RBAC、JWT、CSRF、CORS、WAF 防火墙、滑动窗口限流 |
+| 协议扩展 | [protocols.md](docs/zh-CN/module-design/protocols.md) | WebSocket、SSE、Swagger UI、WebSocket 房间 |
+| HTTP/2 协议栈 | [http2-stack.md](docs/zh-CN/module-design/http2-stack.md) | nghttp2 集成、零拷贝请求头物化、流回收池 |
+| 驱动架构 | [drivers.md](docs/zh-CN/module-design/drivers.md) | AI/Cipher/DB/Perm/Vector DB 可插拔驱动生命周期 |
+| 监控指标 | [metrics.md](docs/zh-CN/module-design/metrics.md) | Prometheus 指标、无锁计数器、延迟直方图 |
+| AI 引擎 | [ai.md](docs/zh-CN/module-design/ai.md) | 统一对话/嵌入、工具调用、SSE 流式输出 |
+| 任务流工作流 | [workflow.md](docs/zh-CN/module-design/workflow.md) | DAG 调度器、热重载、WAL 断点续传、交互节点 |
+| 反射引擎 | [reflection.md](docs/zh-CN/module-design/reflection.md) | 运行时类型自省、JSON 结构体自动绑定 |
+| 加密原语 | [crypto.md](docs/zh-CN/module-design/crypto.md) | SHA-256、HMAC、UUID、随机数、AES/RSA 加密驱动 |
+| 生命周期钩子 | [hooks.md](docs/zh-CN/module-design/hooks.md) | Server/Connection/Request 级生命周期钩子 |
 
 ## 测试
 
@@ -391,7 +418,7 @@ if __name__ == "__main__":
 
 ## 更新日志
 
-完整的变更历史请参阅 [CHANGELOG.md](CHANGELOG.md)。
+完整的变更历史请参阅 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md) 与 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 贡献
 
@@ -404,4 +431,4 @@ if __name__ == "__main__":
 ## 致谢
 
 - 灵感来自 [Gin](https://github.com/gin-gonic/gin) Web 框架
-- 构建于优秀的 C 语言库之上：libuv、llhttp、nghttp2 和 cJSON
+- 构建于优秀的 C 语言库之上：libuv、llhttp、nghttp2 和 yyjson
