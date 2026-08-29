@@ -169,7 +169,8 @@ add_library(csilk::mq ALIAS csilk_mq)
 add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
 set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
 csilk_target_setup(csilk_http2 PUBLIC STATIC)
-target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls nghttp2 csilk_http)
+target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls csilk_http)
+target_link_libraries(csilk_http2 PRIVATE nghttp2)
 add_library(csilk::http2 ALIAS csilk_http2)
 
 # ── 8. csilk_http (libcsilk-http.a) ──────────────────────────────────────
@@ -182,12 +183,14 @@ target_link_libraries(csilk_http PUBLIC
     csilk_tls
     csilk_http2
     csilk_mq
+)
+target_link_libraries(csilk_http PRIVATE
     ZLIB::ZLIB
     OpenSSL::SSL
     OpenSSL::Crypto
 )
 if(TARGET csilk::llhttp)
-  target_link_libraries(csilk_http PUBLIC csilk::llhttp)
+  target_link_libraries(csilk_http PRIVATE csilk::llhttp)
 endif()
 add_library(csilk::http ALIAS csilk_http)
 
@@ -305,7 +308,8 @@ if(CSILK_BUILD_SHARED)
     add_library(csilk_http2_shared SHARED ${CSILK_HTTP2_SOURCES})
     set_target_properties(csilk_http2_shared PROPERTIES OUTPUT_NAME "csilk-http2")
     csilk_target_setup(csilk_http2_shared PUBLIC SHARED)
-    target_link_libraries(csilk_http2_shared PUBLIC csilk_core_shared csilk_tls_shared nghttp2)
+    target_link_libraries(csilk_http2_shared PUBLIC csilk_core_shared csilk_tls_shared)
+    target_link_libraries(csilk_http2_shared PRIVATE nghttp2)
     add_library(csilk::http2_shared ALIAS csilk_http2_shared)
 
     # csilk_http_shared (libcsilk-http.so)
@@ -318,12 +322,14 @@ if(CSILK_BUILD_SHARED)
         csilk_tls_shared
         csilk_http2_shared
         csilk_mq_shared
+    )
+    target_link_libraries(csilk_http_shared PRIVATE
         ZLIB::ZLIB
         OpenSSL::SSL
         OpenSSL::Crypto
     )
     if(TARGET csilk::llhttp)
-      target_link_libraries(csilk_http_shared PUBLIC csilk::llhttp)
+      target_link_libraries(csilk_http_shared PRIVATE csilk::llhttp)
     endif()
     add_library(csilk::http_shared ALIAS csilk_http_shared)
 
