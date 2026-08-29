@@ -151,6 +151,64 @@ test_async_op_h2_stream_close_before_complete(void)
     printf("✓ test_async_op_h2_stream_close_before_complete passed\n");
 }
 
+static void
+test_async_op_timeout_cancellation_active_timer(void)
+{
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    assert(c != NULL);
+
+    /* Begin async op with 5000ms timeout on default loop */
+    csilk_async_op_t* op = csilk_async_op_begin(c, 5000, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op != NULL);
+    assert(op->timer_armed == 1);
+    assert(op->ref_count == 2); /* 1 for user, 1 for timer */
+
+    /* Cancel op immediately */
+    int rc = csilk_async_op_cancel(op);
+    assert(rc == 0);
+
+    /* Run event loop tick to let timer close callback finish */
+    uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+
+    csilk_test_ctx_free(c);
+    printf("✓ test_async_op_timeout_cancellation_active_timer passed\n");
+}
+
+static void
+test_async_op_h2_aba_protection(void)
+{
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    /* Generation 1 of stream 5 */
+    csilk_ctx_t* stream_gen1 = csilk_h2_get_or_create_stream(&client, 5);
+    assert(stream_gen1 != NULL);
+    uint32_t gen1 = stream_gen1->stream_gen;
+
+    g_async_completed = 0;
+    csilk_async_op_t* op_gen1 =
+        csilk_async_op_begin(stream_gen1, 0, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op_gen1 != NULL);
+    assert(op_gen1->stream_gen == gen1);
+
+    /* Close stream from nghttp2 (removes from bucket map) */
+    csilk_h2_remove_stream(&client, 5);
+
+    /* Now drop op ref so it returns to free_list pool */
+    int result = 42;
+    csilk_async_op_complete(op_gen1, &result);
+    assert(g_async_completed == 0); /* Suppressed because stream was closed */
+    assert(client.h2_stream_map.pool_count == 1);
+
+    /* Recreate stream 5 from pool - will receive Generation 2 */
+    csilk_ctx_t* stream_gen2 = csilk_h2_get_or_create_stream(&client, 5);
+    assert(stream_gen2 == stream_gen1);
+    assert(stream_gen2->stream_gen > gen1);
+
+    csilk_h2_free_streams(&client);
+    printf("✓ test_async_op_h2_aba_protection passed\n");
+}
+
 int
 main(void)
 {
@@ -160,6 +218,8 @@ main(void)
     test_async_op_null_safety();
     test_async_op_h2_stream_lifecycle();
     test_async_op_h2_stream_close_before_complete();
+    test_async_op_timeout_cancellation_active_timer();
+    test_async_op_h2_aba_protection();
     printf("All csilk_async_op_t tests passed successfully!\n");
     return 0;
 }

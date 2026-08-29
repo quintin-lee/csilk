@@ -746,17 +746,19 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
         return;
     }
     uint64_t old_seq = c->request_seq;
+    uint64_t old_stream_gen = c->stream_gen;
     memset(c, 0, sizeof(csilk_ctx_t));
     c->request_seq = old_seq ? old_seq + 1 : 1;
+    c->stream_gen = old_stream_gen ? old_stream_gen + 1 : 1;
+    c->stream_state = CSILK_STREAM_STATE_ACTIVE;
     c->handler_index = -1;
     c->file_fd = -1;
     c->_internal_client = client;
     c->server = client->server;
     c->stream_id = stream_id;
     c->h2_stream_owner = client;
-    c->stream_ref = 1;
+    atomic_init(&c->stream_ref, 1);
     c->stream_closed = 0;
-    c->stream_gen = 1;
     if (client->server) {
         c->storage_driver = client->server->storage_driver;
         c->crypto_driver = client->server->crypto_driver;

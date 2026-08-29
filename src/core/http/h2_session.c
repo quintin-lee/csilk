@@ -69,11 +69,51 @@ _csilk_h2_stream_map_resize(csilk_h2_stream_map_t* map)
 
 /* --- Stream reference counting & lifecycle --- */
 
+static void
+_csilk_stream_destroy_physically(csilk_ctx_t* c)
+{
+    if (!c) {
+        return;
+    }
+    csilk_client_t*        client = c->h2_stream_owner;
+    csilk_h2_stream_map_t* map = client ? &client->h2_stream_map : NULL;
+
+    /* Clean up any request/response bodies, storage items, defers */
+    csilk_ctx_cleanup(c);
+
+    if (map && map->pool_count < map->pool_max) {
+        c->stream_state = CSILK_STREAM_STATE_RECYCLED;
+        if (c->arena) {
+            csilk_arena_reset(c->arena);
+        }
+        c->next_stream = map->free_list;
+        map->free_list = c;
+        map->pool_count++;
+    } else {
+        c->stream_state = CSILK_STREAM_STATE_CLOSED;
+        if (c->arena) {
+            csilk_arena_free(c->arena);
+            c->arena = NULL;
+        }
+        free(c);
+    }
+}
+
+static void
+_csilk_stream_destroy_dispatch_cb(void* arg)
+{
+    csilk_ctx_t* c = (csilk_ctx_t*)arg;
+    if (!c) {
+        return;
+    }
+    _csilk_stream_destroy_physically(c);
+}
+
 void
 _csilk_stream_ref(csilk_ctx_t* c)
 {
     if (c && c->h2_stream_owner) {
-        c->stream_ref++;
+        atomic_fetch_add_explicit(&c->stream_ref, 1, memory_order_relaxed);
     }
 }
 
@@ -83,31 +123,19 @@ _csilk_stream_unref(csilk_ctx_t* c)
     if (!c || !c->h2_stream_owner) {
         return;
     }
-    if (--c->stream_ref > 0) {
+    if (atomic_fetch_sub_explicit(&c->stream_ref, 1, memory_order_acq_rel) > 1) {
         return;
     }
 
     /* stream_ref reached 0 — perform physical teardown / recycling */
-    csilk_client_t*        client = c->h2_stream_owner;
-    csilk_h2_stream_map_t* map = client ? &client->h2_stream_map : NULL;
-
-    /* Clean up any request/response bodies, storage items, defers */
-    csilk_ctx_cleanup(c);
-
-    if (map && map->pool_count < map->pool_max) {
-        if (c->arena) {
-            csilk_arena_reset(c->arena);
-        }
-        c->next_stream = map->free_list;
-        map->free_list = c;
-        map->pool_count++;
-    } else {
-        if (c->arena) {
-            csilk_arena_free(c->arena);
-            c->arena = NULL;
-        }
-        free(c);
+    csilk_client_t* client = c->h2_stream_owner;
+    if (client && client->owner_pool && !_csilk_is_owner_worker_thread(client->owner_pool)) {
+        /* If not on owner worker thread, dispatch physical cleanup to owner worker */
+        csilk_dispatch(c, _csilk_stream_destroy_dispatch_cb, c);
+        return;
     }
+
+    _csilk_stream_destroy_physically(c);
 }
 
 /* --- Stream lookup/creation --- */
@@ -152,7 +180,8 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         ctx->stream_id = stream_id;
         ctx->request_seq++;
         ctx->stream_gen++;
-        ctx->stream_ref = 1;
+        atomic_store_explicit(&ctx->stream_ref, 1, memory_order_relaxed);
+        ctx->stream_state = CSILK_STREAM_STATE_ACTIVE;
         ctx->stream_closed = 0;
         ctx->handler_index = -1;
         ctx->aborted = 0;
@@ -175,9 +204,6 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         }
         _csilk_stream_ctx_init(ctx, client, stream_id);
         ctx->arena = arena;
-        ctx->stream_ref = 1;
-        ctx->stream_closed = 0;
-        ctx->stream_gen = 1;
     }
 
     /* Insert into bucket chain head */
@@ -217,6 +243,7 @@ csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id)
             *curr = found->next_stream;
             found->next_stream = NULL;
             found->stream_closed = 1;
+            found->stream_state = CSILK_STREAM_STATE_CLOSED;
             map->count--;
 
             /* Release active map reference (defers destruction/recycling if async op holds reference) */
@@ -252,6 +279,7 @@ csilk_h2_free_streams(csilk_client_t* client)
             csilk_ctx_t* next = curr->next_stream;
             curr->next_stream = NULL;
             curr->stream_closed = 1;
+            curr->stream_state = CSILK_STREAM_STATE_CLOSED;
             _csilk_stream_unref(curr);
             curr = next;
         }

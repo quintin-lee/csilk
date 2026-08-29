@@ -338,16 +338,29 @@ typedef struct csilk_conn_scope_s {
 } csilk_conn_scope_t;
 
 /**
+ * @brief Lifecycle states for multiplexed HTTP/2 streams.
+ */
+typedef enum {
+    CSILK_STREAM_STATE_INIT = 0,    /**< Newly allocated / uninitialized stream */
+    CSILK_STREAM_STATE_ACTIVE = 1,  /**< Active in hash map, receiving/sending frames */
+    CSILK_STREAM_STATE_CLOSING = 2, /**< Marked closing (e.g. RST_STREAM received) */
+    CSILK_STREAM_STATE_CLOSED =
+        3, /**< Removed from active hash map, awaiting async op completion */
+    CSILK_STREAM_STATE_RECYCLED = 4 /**< Physically cleaned, in free_list pool */
+} csilk_stream_state_t;
+
+/**
  * @brief State specific to a multiplexed HTTP/2 stream.
  */
 typedef struct csilk_stream_scope_s {
-    int32_t             stream_id;
-    struct csilk_ctx_s* next_stream;
-    csilk_client_t*     h2_stream_owner;
-    csilk_io_work_t     work_req;
-    int                 stream_ref;
-    int                 stream_closed;
-    uint64_t            stream_gen;
+    int32_t              stream_id;
+    struct csilk_ctx_s*  next_stream;
+    csilk_client_t*      h2_stream_owner;
+    csilk_io_work_t      work_req;
+    _Atomic int32_t      stream_ref;
+    int                  stream_closed;
+    uint64_t             stream_gen;
+    csilk_stream_state_t stream_state;
 } csilk_stream_scope_t;
 
 struct csilk_ctx_s {
@@ -424,13 +437,14 @@ struct csilk_ctx_s {
     union {
         csilk_stream_scope_t stream_scope;
         struct {
-            int32_t             stream_id;
-            struct csilk_ctx_s* next_stream;
-            csilk_client_t*     h2_stream_owner;
-            csilk_io_work_t     work_req;
-            int                 stream_ref;
-            int                 stream_closed;
-            uint64_t            stream_gen;
+            int32_t              stream_id;
+            struct csilk_ctx_s*  next_stream;
+            csilk_client_t*      h2_stream_owner;
+            csilk_io_work_t      work_req;
+            _Atomic int32_t      stream_ref;
+            int                  stream_closed;
+            uint64_t             stream_gen;
+            csilk_stream_state_t stream_state;
         };
     };
 };
