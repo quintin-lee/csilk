@@ -188,18 +188,16 @@ spa_fallback_handler(csilk_ctx_t* c)
         return;
     }
     rewind(f);
-    char* body = malloc((size_t)fsize + 1); // NOLINT(clang-analyzer-unix.Errno)
+    char* body = csilk_arena_calloc(c->arena, 1, (size_t)fsize + 1);
     if (!body) {
-        int saved_errno = errno;
         fclose(f);
-        errno = saved_errno;
         csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
         return;
     }
     size_t nread = fread(body, 1, (size_t)fsize, f);
     fclose(f);
     csilk_set_header(c, "Content-Type", "text/html");
-    csilk_set_response_body_ex(c, body, nread, CSILK_OWN_HEAP);
+    csilk_set_response_body_ex(c, body, nread, CSILK_OWN_ARENA);
     csilk_status(c, CSILK_STATUS_OK);
 }
 
