@@ -35,6 +35,9 @@ set(CSILK_CORE_SOURCES
     src/crypto/crypto.c
     src/crypto/bcrypt.c
     src/drivers/cipher/openssl.c
+    src/core/primitives/header_map.c
+    src/core/primitives/query.c
+    src/core/primitives/url.c
     src/util/flamegraph.c
 )
 
@@ -95,9 +98,6 @@ set(CSILK_HTTP_SOURCES
     src/core/config/hot_reload.c
     src/core/test_utils.c
     src/core/primitives/recovery.c
-    src/core/primitives/header_map.c
-    src/core/primitives/query.c
-    src/core/primitives/url.c
     src/core/primitives/response.c
     src/core/primitives/router.c
     src/core/primitives/router_simd.c

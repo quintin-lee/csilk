@@ -169,7 +169,7 @@ add_library(csilk::mq ALIAS csilk_mq)
 add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
 set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
 csilk_target_setup(csilk_http2 PUBLIC STATIC)
-target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls csilk_http)
+target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls)
 target_link_libraries(csilk_http2 PRIVATE nghttp2)
 add_library(csilk::http2 ALIAS csilk_http2)
 
