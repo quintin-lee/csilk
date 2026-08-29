@@ -45,11 +45,15 @@ struct csilk_header_s {
 typedef struct csilk_header_s csilk_header_t;
 
 #ifndef CSILK_HEADER_BUCKETS
-#define CSILK_HEADER_BUCKETS 64
+#define CSILK_HEADER_BUCKETS 16
 #endif
 
 #ifndef CSILK_KV_BUCKETS
 #define CSILK_KV_BUCKETS 16
+#endif
+
+#ifndef CSILK_READ_BUF_EMBEDDED
+#define CSILK_READ_BUF_EMBEDDED 4
 #endif
 
 /**
@@ -330,9 +334,9 @@ typedef struct csilk_conn_scope_s {
     char**                  read_buffers;
     int                     read_buffers_count;
     int                     read_buffers_capacity;
-    char*                   read_buffers_embedded[16];
+    char*                   read_buffers_embedded[CSILK_READ_BUF_EMBEDDED];
     size_t*                 read_buf_sizes;
-    size_t                  read_buf_sizes_embedded[16];
+    size_t                  read_buf_sizes_embedded[CSILK_READ_BUF_EMBEDDED];
     csilk_storage_driver_t* storage_driver;
     csilk_crypto_driver_t*  crypto_driver;
     csilk_cipher_driver_t*  cipher_driver;
@@ -427,9 +431,9 @@ struct csilk_ctx_s {
             char**                  read_buffers;
             int                     read_buffers_count;
             int                     read_buffers_capacity;
-            char*                   read_buffers_embedded[16];
+            char*                   read_buffers_embedded[CSILK_READ_BUF_EMBEDDED];
             size_t*                 read_buf_sizes;
-            size_t                  read_buf_sizes_embedded[16];
+            size_t                  read_buf_sizes_embedded[CSILK_READ_BUF_EMBEDDED];
             csilk_storage_driver_t* storage_driver;
             csilk_crypto_driver_t*  crypto_driver;
             csilk_cipher_driver_t*  cipher_driver;

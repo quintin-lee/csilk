@@ -70,7 +70,7 @@ test_fuzz_case_content_type_split(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -160,7 +160,7 @@ test_contiguous_chunk_zero_copy(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -222,7 +222,7 @@ test_non_contiguous_and_empty_headers(void)
     client.ctx.server = s;
     client.ctx.arena = csilk_arena_new(4096);
     client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-    client.ctx.read_buffers_capacity = 16;
+    client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
     _csilk_set_internal_client(&client.ctx, &client);
 
@@ -329,7 +329,7 @@ test_header_fragment_fuzzing(void)
         client.ctx.server = s;
         client.ctx.arena = csilk_arena_new(4096);
         client.ctx.read_buffers = client.ctx.read_buffers_embedded;
-        client.ctx.read_buffers_capacity = 16;
+        client.ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
         client.ctx.read_buf_sizes = client.ctx.read_buf_sizes_embedded;
         _csilk_set_internal_client(&client.ctx, &client);
 

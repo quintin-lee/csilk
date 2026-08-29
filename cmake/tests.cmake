@@ -40,6 +40,7 @@ set(CSILK_CORE_TESTS
     test_client_lifetime_stress
     test_context
     test_context_ext
+    test_context_sizeof
     test_context_reflect_ext
     test_async_op
     test_ctx_lifecycle_async
@@ -127,7 +128,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
 )
 
 
