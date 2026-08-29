@@ -36,7 +36,13 @@
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
-    return server ? server->mq : NULL;
+    if (!server) {
+        return NULL;
+    }
+    if (!server->mq) {
+        server->mq = _csilk_mq_new(server->loop);
+    }
+    return server->mq;
 }
 
 /** @brief Get the server's active radix-tree router atomically. */

@@ -384,7 +384,7 @@ csilk_ctx_get_server(csilk_ctx_t* c)
 csilk_mq_t*
 csilk_ctx_get_mq(csilk_ctx_t* c)
 {
-    return (c && c->server) ? c->server->mq : NULL;
+    return (c && c->server) ? csilk_server_get_mq(c->server) : NULL;
 }
 
 /**
