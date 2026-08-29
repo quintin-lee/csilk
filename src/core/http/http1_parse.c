@@ -385,13 +385,6 @@ on_body(llhttp_t* p, const char* at, size_t length)
     return 0;
 }
 
-/* --- Request dispatch --- */
-
-/** @brief Dispatch an incoming request through the middleware and routing
- * pipeline.
- *
- * Triggers the CSILK_HOOK_REQUEST_BEGIN lifecycle hook, then attempts to
- * match the request path against the server's radix-tree router.  On a
 /* --- Request finalization --- */
 
 /** @brief Finalize the parsed request data before routing.
