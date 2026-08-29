@@ -27,6 +27,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "CSILK_MAX_TLS_CHUNKS=${CSILK_MAX_TLS_CHUNKS}"
   )
   target_compile_definitions(${TARGET} PUBLIC
+      _GNU_SOURCE
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
   )
   target_link_options(${TARGET} PUBLIC
@@ -54,6 +55,11 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
           INSTALL_RPATH            "@loader_path"
       )
       target_link_options(${TARGET} PRIVATE "-undefined" "dynamic_lookup")
+    else()
+      set_target_properties(${TARGET} PROPERTIES
+          BUILD_RPATH_USE_ORIGIN   TRUE
+          INSTALL_RPATH            "$ORIGIN"
+      )
     endif()
   endif()
 
@@ -109,20 +115,6 @@ csilk_target_setup(csilk_json PUBLIC STATIC)
 target_link_libraries(csilk_json PUBLIC yyjson)
 add_library(csilk::json ALIAS csilk_json)
 
-# ── 1b. csilk_io (backend abstraction: uring or libuv) ────────────────────
-add_library(csilk_io INTERFACE IMPORTED)
-if(CSILK_USE_URING)
-  target_link_libraries(csilk_io INTERFACE uring)
-  if(NOT APPLE)
-    target_compile_definitions(csilk_io INTERFACE _GNU_SOURCE)
-  endif()
-else()
-  target_link_libraries(csilk_io INTERFACE csilk::libuv)
-  target_compile_definitions(csilk_io INTERFACE CSILK_USE_LIBUV)
-endif()
-add_library(csilk::io ALIAS csilk_io)
-
-
 # ── 2. csilk_core (libcsilk-core.a) ──────────────────────────────────────
 add_library(csilk_core STATIC ${CSILK_CORE_SOURCES})
 set_target_properties(csilk_core PROPERTIES OUTPUT_NAME "csilk-core")
@@ -131,7 +123,15 @@ target_link_libraries(csilk_core PUBLIC csilk_base csilk_json OpenSSL::Crypto Th
 if(TARGET csilk::yaml)
   target_link_libraries(csilk_core PUBLIC csilk::yaml)
 endif()
-target_link_libraries(csilk_core PUBLIC csilk::io)
+if(CSILK_USE_URING)
+  target_link_libraries(csilk_core PUBLIC uring)
+  if(NOT APPLE)
+    target_compile_definitions(csilk_core PUBLIC _GNU_SOURCE)
+  endif()
+else()
+  target_link_libraries(csilk_core PUBLIC csilk::libuv)
+  target_compile_definitions(csilk_core PUBLIC CSILK_USE_LIBUV)
+endif()
 if(NOT APPLE AND NOT WIN32)
   target_link_libraries(csilk_core PUBLIC m)
 endif()
@@ -228,13 +228,13 @@ target_link_libraries(csilk INTERFACE
     csilk_db
     csilk_http
     csilk_http2
-    csilk_http
     csilk_tls
     csilk_mq
     csilk_wasm
     csilk_bypass
     csilk_core
     csilk_json
+    csilk_base
 )
 target_include_directories(csilk INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -270,7 +270,15 @@ if(CSILK_BUILD_SHARED)
     if(TARGET csilk::yaml)
       target_link_libraries(csilk_core_shared PUBLIC csilk::yaml)
     endif()
-    target_link_libraries(csilk_core_shared PUBLIC csilk::io)
+    if(CSILK_USE_URING)
+      target_link_libraries(csilk_core_shared PUBLIC uring)
+      if(NOT APPLE)
+        target_compile_definitions(csilk_core_shared PUBLIC _GNU_SOURCE)
+      endif()
+    else()
+      target_link_libraries(csilk_core_shared PUBLIC csilk::libuv)
+      target_compile_definitions(csilk_core_shared PUBLIC CSILK_USE_LIBUV)
+    endif()
     if(NOT APPLE AND NOT WIN32)
       target_link_libraries(csilk_core_shared PUBLIC m)
     endif()

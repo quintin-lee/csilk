@@ -11,8 +11,7 @@
  */
 
 #include <stddef.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,7 +23,7 @@ extern "C" {
  * @param interval_us Sampling interval in microseconds (10ms = 10000).
  * @return 0 on success, -1 if already running or allocation failure.
  */
-int csilk_flamegraph_start(useconds_t interval_us);
+int csilk_flamegraph_start(unsigned int interval_us);
 
 /**
  * @brief Stop sampling and generate an SVG flame graph.

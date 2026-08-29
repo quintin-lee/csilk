@@ -102,7 +102,7 @@ endif()
 # ── HTTP/1 Parser (llhttp) ────────────────────────────────────────────────
 find_library(LLHTTP_LIB NAMES llhttp libllhttp)
 if(NOT LLHTTP_LIB)
-  message(STATUS "System llhttp not found — fetching from source and embedding into CSILK_SOURCES")
+  message(STATUS "System llhttp not found — fetching from source and creating csilk::llhttp")
   FetchContent_Declare(
     llhttp
     GIT_REPOSITORY https://github.com/nodejs/llhttp.git
@@ -116,6 +116,15 @@ if(NOT LLHTTP_LIB)
       ${llhttp_SOURCE_DIR}/src/http.c
       ${llhttp_SOURCE_DIR}/src/llhttp.c
     )
+    if(NOT TARGET csilk_llhttp)
+      add_library(csilk_llhttp STATIC ${LLHTTP_SOURCES})
+      set_target_properties(csilk_llhttp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+      target_include_directories(csilk_llhttp PUBLIC
+        $<BUILD_INTERFACE:${llhttp_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+      )
+      add_library(csilk::llhttp ALIAS csilk_llhttp)
+    endif()
   endif()
 else()
   message(STATUS "Found system llhttp: ${LLHTTP_LIB}")
@@ -179,6 +188,10 @@ else()
     if(nghttp2_SOURCE_DIR)
       include_directories(${nghttp2_SOURCE_DIR}/lib/includes)
       include_directories(${nghttp2_BINARY_DIR}/lib/includes)
+      if(TARGET nghttp2_static AND NOT TARGET nghttp2)
+        add_library(nghttp2 INTERFACE IMPORTED)
+        target_link_libraries(nghttp2 INTERFACE nghttp2_static)
+      endif()
     endif()
   endif()
 endif()

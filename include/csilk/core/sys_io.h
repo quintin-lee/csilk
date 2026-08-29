@@ -570,6 +570,10 @@ csilk_io_err_name(int err)
 
 #else
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+#include <pthread.h>
 #include <uv.h>
 /** @brief Event loop type (libuv loop). */
 typedef uv_loop_t csilk_io_loop_t;

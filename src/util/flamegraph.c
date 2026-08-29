@@ -306,7 +306,7 @@ done:
  *                    100 samples/sec).  Must be > 0.
  * @return 0 on success, -1 on allocation or thread-creation failure. */
 int
-csilk_flamegraph_start(useconds_t interval_us)
+csilk_flamegraph_start(unsigned int interval_us)
 {
     if (g_profiler) {
         return -1;
