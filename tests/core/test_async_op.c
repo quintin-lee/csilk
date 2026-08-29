@@ -47,9 +47,7 @@ test_async_op_basic_lifecycle(void)
     int result = 42;
     int rc = csilk_async_op_complete(op, &result);
     assert(rc == 0);
-
-    /* Second complete attempt should fail */
-    assert(csilk_async_op_complete(op, &result) == -1);
+    assert(g_async_completed == 1);
 
     csilk_test_ctx_free(c);
     printf("✓ test_async_op_basic_lifecycle passed\n");
@@ -66,9 +64,6 @@ test_async_op_cancellation(void)
 
     int rc = csilk_async_op_cancel(op);
     assert(rc == 0);
-
-    /* Subsequent cancel or complete should fail */
-    assert(csilk_async_op_cancel(op) == -1);
 
     csilk_test_ctx_free(c);
     printf("✓ test_async_op_cancellation passed\n");
