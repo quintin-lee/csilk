@@ -581,7 +581,7 @@ for_each_in_kv_map(const csilk_kv_map_t* map, csilk_header_cb cb, void* arg)
     if (!map || !cb) {
         return;
     }
-    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+    for (int i = 0; i < CSILK_KV_BUCKETS; i++) {
         csilk_header_t* h = map->buckets[i];
         while (h) {
             if (!cb(h->key, h->value, arg)) {
