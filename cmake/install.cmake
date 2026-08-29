@@ -5,6 +5,7 @@ include(CMakePackageConfigHelpers)
 
 set(CSILK_INSTALL_TARGETS
     csilk
+    csilk_base
     csilk_core
     csilk_json
     csilk_wasm
@@ -32,6 +33,7 @@ install(TARGETS ${CSILK_INSTALL_TARGETS}
 if(CSILK_BUILD_SHARED)
     set(CSILK_SHARED_INSTALL_TARGETS
         csilk_shared
+        csilk_base_shared
         csilk_core_shared
         csilk_json_shared
         csilk_wasm_shared

@@ -38,7 +38,7 @@
 #include "csilk/reflection/reflect.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
-#include "messaging/mq_internal.h"
+#include "csilk/messaging/mq.h"
 
 /* --- Centralized Atomic Initializers --- */
 

@@ -11,11 +11,16 @@
 #   - CSILK_WORKFLOW_SOURCES -> csilk_workflow (libcsilk-workflow.a)
 #   - CSILK_SOURCES          -> csilk          (libcsilk.a / libcsilk.so)
 
-# ── Minimal Core Module (arena, bounded_buf, config, logger, sync, crypto) ──
-set(CSILK_CORE_SOURCES
+# ── Foundation Primitives Module (arena, bounded_buf, kv_store) ───────────
+set(CSILK_BASE_SOURCES
     src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
     src/core/primitives/kv_store.c
+)
+
+# ── Minimal Core Module (config, logger, sync, crypto, uring primitives) ───
+set(CSILK_CORE_SOURCES
+    ${CSILK_BASE_SOURCES}
     src/core/cache/mvcc_cache.c
     src/core/config/config.c
     src/core/config/logger.c

@@ -13,6 +13,7 @@
  */
 
 #include "csilk/core/types.h"
+#include "csilk/core/sys_io.h"
 
 /**
  * @brief Opaque Message Queue (event bus) instance.
@@ -59,6 +60,10 @@ typedef void (*csilk_mq_worker_t)(const char* topic, const void* payload, size_t
  *         initialised.
  */
 csilk_mq_t* csilk_server_get_mq(csilk_server_t* server);
+
+/** @brief Internal allocator and deallocator for the server's MQ instance. */
+CSILK_INTERNAL csilk_mq_t* _csilk_mq_new(csilk_io_loop_t* loop);
+CSILK_INTERNAL void        _csilk_mq_free(csilk_mq_t* mq);
 
 /**
  * @brief Register MQ middleware for a topic.

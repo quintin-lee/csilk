@@ -3,6 +3,7 @@
  * @brief Connection pool, arena pool, and read buffer pool management.
  */
 
+#include <assert.h>
 #include <openssl/ssl.h>
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
@@ -216,6 +217,7 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
         return;
     }
     if (wp) {
+        assert(_csilk_is_owner_worker_thread(wp) && "pool_put called from non-owner worker thread");
         atomic_fetch_sub_explicit(&wp->active_connections, 1, memory_order_relaxed);
     }
     reset_hot_state(client);

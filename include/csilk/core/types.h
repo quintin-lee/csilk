@@ -15,10 +15,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "csilk/core/json.h"
-
 #include "csilk/core/errors.h"
 #include "csilk/version.h"
+
+/** @brief Forward declaration of opaque JSON value type. */
+typedef struct csilk_json_s csilk_json_t;
 
 /** @brief Internal visibility macro for symbols shared across csilk sub-modules. */
 #if defined(__GNUC__) && __GNUC__ >= 4
