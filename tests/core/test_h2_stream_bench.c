@@ -95,6 +95,55 @@ test_h2_stream_crud(void)
 }
 
 /* -------------------------------------------------------------------------- */
+/* Test 1b: Stream Reference Counting & Deferred Recycling                    */
+/* -------------------------------------------------------------------------- */
+static void
+test_h2_stream_refcounting_and_deferred_recycle(void)
+{
+    printf("Testing HTTP/2 stream refcounting & deferred recycling...\n");
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    /* Create stream 1 */
+    csilk_ctx_t* s1 = csilk_h2_get_or_create_stream(&client, 1);
+    assert(s1 != NULL && s1->stream_id == 1);
+    assert(s1->stream_ref == 1);
+    assert(s1->stream_closed == 0);
+
+    /* Simulate async operation holding a reference */
+    _csilk_stream_ref(s1);
+    assert(s1->stream_ref == 2);
+
+    /* Simulate nghttp2 stream close callback */
+    int r = csilk_h2_remove_stream(&client, 1);
+    assert(r == 0);
+    assert(client.h2_stream_map.count == 0);
+    /* Should NOT be in free_list yet because stream_ref == 1 */
+    assert(client.h2_stream_map.pool_count == 0);
+    assert(client.h2_stream_map.free_list == NULL);
+    assert(s1->stream_closed == 1);
+    assert(s1->stream_ref == 1);
+
+    /* Simulate async completion releasing the last reference */
+    _csilk_stream_unref(s1);
+    /* Now it should be recycled into the pool */
+    assert(client.h2_stream_map.pool_count == 1);
+    assert(client.h2_stream_map.free_list == s1);
+
+    /* Re-acquire stream 1 - should reuse recycled s1 from free_list */
+    csilk_ctx_t* reused = csilk_h2_get_or_create_stream(&client, 3);
+    assert(reused == s1);
+    assert(reused->stream_id == 3);
+    assert(reused->stream_ref == 1);
+    assert(reused->stream_closed == 0);
+    assert(client.h2_stream_map.pool_count == 0);
+
+    csilk_h2_free_streams(&client);
+    printf("test_h2_stream_refcounting_and_deferred_recycle: PASS\n");
+}
+
+/* -------------------------------------------------------------------------- */
 /* Test 2: Table Resizing and Collision Handling                              */
 /* -------------------------------------------------------------------------- */
 static void
@@ -419,6 +468,7 @@ main(void)
     printf("=== Running HTTP/2 Stream Hash Map & Pool Tests & Benchmarks ===\n\n");
 
     test_h2_stream_crud();
+    test_h2_stream_refcounting_and_deferred_recycle();
     test_h2_stream_resize_and_collision();
     test_h2_stream_pool_recycling();
     test_h2_formal_lifecycle();
