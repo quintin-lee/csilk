@@ -745,9 +745,11 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
     if (!c || !client) {
         return;
     }
-    uint64_t old_seq = c->request_seq;
-    uint64_t old_stream_gen = c->stream_gen;
+    uint64_t       old_seq = c->request_seq;
+    uint64_t       old_stream_gen = c->stream_gen;
+    csilk_arena_t* saved_arena = c->arena;
     memset(c, 0, sizeof(csilk_ctx_t));
+    c->arena = saved_arena;
     c->request_seq = old_seq ? old_seq + 1 : 1;
     c->stream_gen = old_stream_gen ? old_stream_gen + 1 : 1;
     c->stream_state = CSILK_STREAM_STATE_ACTIVE;
@@ -759,6 +761,12 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
     c->h2_stream_owner = client;
     atomic_init(&c->stream_ref, 1);
     c->stream_closed = 0;
+    c->read_buffers = c->read_buffers_embedded;
+    c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
+    c->read_buf_sizes = c->read_buf_sizes_embedded;
+    c->write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+    c->write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+    c->max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
     if (client->server) {
         c->storage_driver = client->server->storage_driver;
         c->crypto_driver = client->server->crypto_driver;

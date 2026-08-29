@@ -9,6 +9,7 @@
 #include "csilk/test/test.h"
 #include "core/internal/srv_internal.h"
 #include "core/internal/srv_impl.h"
+#include "core/primitives/header_map.h"
 #include "csilk/http/h2.h"
 
 /* Simple cycle counter for x86 / fallback */
@@ -459,6 +460,95 @@ test_h2_formal_lifecycle(void)
         "  -> PASS: RST_STREAM, 10k reuses, and Connection Close with active streams verified!\n");
 }
 
+static void
+test_h2_stream_full_field_reset_contract(void)
+{
+    printf("Testing HTTP/2 stream pool full field reset contract...\n");
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+
+    csilk_ctx_t* c1 = csilk_h2_get_or_create_stream(&client, 1);
+    assert(c1 != NULL);
+
+    /* Dirty all fields */
+    c1->request.method = "POST";
+    c1->request.path = strdup("/api/test");
+    c1->request.body = malloc(256);
+    c1->request.body_len = 256;
+    c1->request.body_ownership = CSILK_OWN_HEAP;
+    csilk_set_request_header(c1, "X-Request-Dirty", "dirty-value");
+    csilk_set_header(c1, "X-Response-Dirty", "dirty-response");
+    map_set(c1, (csilk_header_map_t*)&c1->request.query_params, "q", "search");
+    map_set(c1, (csilk_header_map_t*)&c1->request.form_params, "user", "admin");
+    c1->response.status = 404;
+    c1->response.body = "error";
+    c1->response.body_len = 5;
+    c1->is_async = 1;
+    c1->is_websocket = 1;
+    c1->is_sse = 1;
+    c1->response_started = 1;
+    c1->aborted = 1;
+    c1->panicked = 1;
+    c1->headers_received = 1;
+    c1->end_stream_received = 1;
+    c1->request_dispatched = 1;
+    c1->request_cancelled = 1;
+    c1->params_count = 5;
+    c1->handler_index = 3;
+
+    uint64_t old_seq = c1->request_seq;
+    uint64_t old_gen = c1->stream_gen;
+
+    /* Close stream -> enters free_list */
+    assert(csilk_h2_remove_stream(&client, 1) == 0);
+    assert(client.h2_stream_map.pool_count == 1);
+    assert(client.h2_stream_map.free_list == c1);
+
+    /* Re-acquire -> must get c1 with 100% clean fields */
+    csilk_ctx_t* reused = csilk_h2_get_or_create_stream(&client, 3);
+    assert(reused == c1);
+    assert(reused->stream_id == 3);
+    assert(reused->request_seq > old_seq);
+    assert(reused->stream_gen > old_gen);
+    assert(reused->stream_ref == 1);
+    assert(reused->stream_state == CSILK_STREAM_STATE_ACTIVE);
+    assert(reused->stream_closed == 0);
+    assert(reused->headers_received == 0);
+    assert(reused->end_stream_received == 0);
+    assert(reused->request_dispatched == 0);
+    assert(reused->request_cancelled == 0);
+    assert(reused->handler_index == -1);
+    assert(reused->aborted == 0);
+    assert(reused->panicked == 0);
+    assert(reused->is_async == 0);
+    assert(reused->is_websocket == 0);
+    assert(reused->is_sse == 0);
+    assert(reused->response_started == 0);
+    assert(reused->params_count == 0);
+    assert(reused->defer_head == NULL);
+    assert(reused->storage_head == NULL);
+    assert(reused->current_handler == NULL);
+
+    /* Verify request / response scalar and map resets */
+    assert(reused->request.method == NULL);
+    assert(reused->request.path == NULL);
+    assert(reused->request.body == NULL);
+    assert(reused->request.body_len == 0);
+    assert(reused->request.headers.count == 0);
+    assert(reused->request.headers.used == 0);
+    assert(reused->request.query_params.used == 0);
+    assert(reused->request.form_params.used == 0);
+    assert(reused->response.status == 0);
+    assert(reused->response.body == NULL);
+    assert(reused->response.body_len == 0);
+    assert(reused->response.headers.count == 0);
+    assert(reused->response.headers.used == 0);
+
+    csilk_h2_free_streams(&client);
+    printf("test_h2_stream_full_field_reset_contract: PASS\n");
+}
+
 /* -------------------------------------------------------------------------- */
 /* Main Runner                                                                */
 /* -------------------------------------------------------------------------- */
@@ -471,10 +561,12 @@ main(void)
     test_h2_stream_refcounting_and_deferred_recycle();
     test_h2_stream_resize_and_collision();
     test_h2_stream_pool_recycling();
+    test_h2_stream_full_field_reset_contract();
     test_h2_formal_lifecycle();
 
     benchmark_stream_pool_lifecycle(500000);
 
+    benchmark_stream_scale(10, 500000);
     benchmark_stream_scale(100, 500000);
     benchmark_stream_scale(1000, 500000);
     benchmark_stream_scale(10000, 500000);
