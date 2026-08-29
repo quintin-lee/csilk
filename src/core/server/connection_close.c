@@ -86,22 +86,6 @@ _csilk_worker_get_current_pool(void)
     return g_current_worker_pool;
 }
 
-static inline bool
-_csilk_is_owner_worker_thread(const worker_pool_t* wp)
-{
-    if (!wp) {
-        return false;
-    }
-    if (g_current_worker_pool == wp) {
-        return true;
-    }
-    /* If no loop is active (e.g. standalone unit testing), caller thread owns execution */
-    if (!wp->loop_ptr) {
-        return true;
-    }
-    return false;
-}
-
 /* Recycle dispatch task payload */
 typedef struct {
     csilk_client_t* client;
