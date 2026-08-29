@@ -308,6 +308,7 @@ test_not_found(void)
 int
 main(void)
 {
+    signal(SIGPIPE, SIG_IGN);
     printf("=== App Integration Tests ===\n\n");
 
     pthread_t thread;

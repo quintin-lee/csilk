@@ -60,14 +60,12 @@ int on_header_callback(nghttp2_session*     session,
 static void
 benchmark_h2_header_materialization(int header_count, int iterations)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
-    assert(c != NULL);
-
     csilk_client_t client;
     memset(&client, 0, sizeof(client));
     client.protocol = CSILK_PROTO_HTTP2;
-    c->_internal_client = &client;
-    c->h2_stream_owner = &client;
+
+    csilk_ctx_t* c = csilk_h2_get_or_create_stream(&client, 1);
+    assert(c != NULL);
 
     nghttp2_frame frame;
     memset(&frame, 0, sizeof(frame));
@@ -144,8 +142,7 @@ benchmark_h2_header_materialization(int header_count, int iterations)
            mops);
 
     free(latencies);
-    c->_internal_client = NULL;
-    csilk_test_ctx_free(c);
+    csilk_h2_free_streams(&client);
 }
 
 /* -------------------------------------------------------------------------- */

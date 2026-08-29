@@ -145,6 +145,7 @@ test_h2_headers_end_stream(void)
 
     csilk_h2_free_streams(&client);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("test_h2_headers_end_stream: PASS\n");
 }
 
@@ -223,6 +224,7 @@ test_h2_headers_data_end_stream(void)
 
     csilk_h2_free_streams(&client);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("test_h2_headers_data_end_stream: PASS\n");
 }
 
@@ -307,6 +309,7 @@ test_h2_headers_data_trailers_end_stream(void)
 
     csilk_h2_free_streams(&client);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("test_h2_headers_data_trailers_end_stream: PASS\n");
 }
 
@@ -360,6 +363,7 @@ test_h2_rst_stream_before_dispatch(void)
 
     csilk_h2_free_streams(&client);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("test_h2_rst_stream_before_dispatch: PASS\n");
 }
 
@@ -425,6 +429,7 @@ test_h2_100_concurrent_streams_dispatch(void)
 
     csilk_h2_free_streams(&client);
     csilk_server_free(server);
+    csilk_router_free(router);
     printf("test_h2_100_concurrent_streams_dispatch: PASS\n");
 }
 
