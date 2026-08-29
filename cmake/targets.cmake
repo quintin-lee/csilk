@@ -92,6 +92,16 @@ if(CSILK_HAS_AVX2)
   set(CSILK_AVX2_FLAGS "-mavx2;-D__AVX2__")
 endif()
 
+# ── 0. csilk_base (libcsilk-base.a) ──────────────────────────────────────
+add_library(csilk_base STATIC ${CSILK_BASE_SOURCES})
+set_target_properties(csilk_base PROPERTIES OUTPUT_NAME "csilk-base")
+csilk_target_setup(csilk_base PUBLIC STATIC)
+target_link_libraries(csilk_base PRIVATE Threads::Threads)
+if(NOT APPLE AND NOT WIN32)
+  target_link_libraries(csilk_base PRIVATE m)
+endif()
+add_library(csilk::base ALIAS csilk_base)
+
 # ── 1. csilk_json (libcsilk-json.a) ────────────────────────────────────
 add_library(csilk_json STATIC ${CSILK_JSON_SOURCES})
 set_target_properties(csilk_json PROPERTIES OUTPUT_NAME "csilk-json")
@@ -117,7 +127,7 @@ add_library(csilk::io ALIAS csilk_io)
 add_library(csilk_core STATIC ${CSILK_CORE_SOURCES})
 set_target_properties(csilk_core PROPERTIES OUTPUT_NAME "csilk-core")
 csilk_target_setup(csilk_core PUBLIC STATIC)
-target_link_libraries(csilk_core PUBLIC csilk_json OpenSSL::Crypto Threads::Threads)
+target_link_libraries(csilk_core PUBLIC csilk_base csilk_json OpenSSL::Crypto Threads::Threads)
 if(TARGET csilk::yaml)
   target_link_libraries(csilk_core PUBLIC csilk::yaml)
 endif()
@@ -159,7 +169,7 @@ add_library(csilk::mq ALIAS csilk_mq)
 add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
 set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
 csilk_target_setup(csilk_http2 PUBLIC STATIC)
-target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls nghttp2)
+target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls nghttp2 csilk_http)
 add_library(csilk::http2 ALIAS csilk_http2)
 
 # ── 8. csilk_http (libcsilk-http.a) ──────────────────────────────────────
@@ -207,27 +217,41 @@ csilk_target_setup(csilk_workflow PUBLIC STATIC)
 target_link_libraries(csilk_workflow PUBLIC csilk_core csilk_json csilk_ai csilk_mq csilk_wasm csilk::yaml)
 add_library(csilk::workflow ALIAS csilk_workflow)
 
-# ── 12. csilk umbrella static library (libcsilk.a) ────────────────────────
-add_library(csilk STATIC ${CSILK_SOURCES})
-set_target_properties(csilk PROPERTIES OUTPUT_NAME "csilk")
-csilk_target_setup(csilk PUBLIC STATIC)
-target_link_libraries(csilk PUBLIC
-    csilk_core
-    csilk_json
-    csilk_tls
-    csilk_mq
+# ── 12. csilk umbrella interface library ──────────────────────────────────
+add_library(csilk INTERFACE)
+target_link_libraries(csilk INTERFACE
+    csilk_workflow
+    csilk_ai
+    csilk_db
+    csilk_http
     csilk_http2
     csilk_http
-    csilk_db
-    csilk_ai
-    csilk_workflow
+    csilk_tls
+    csilk_mq
     csilk_wasm
     csilk_bypass
+    csilk_core
+    csilk_json
+)
+target_include_directories(csilk INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 add_library(csilk::csilk ALIAS csilk)
 
 # ── 13. Shared library targets (libcsilk*.so) ────────────────────────────
 if(CSILK_BUILD_SHARED)
+    # csilk_base_shared (libcsilk-base.so)
+    add_library(csilk_base_shared SHARED ${CSILK_BASE_SOURCES})
+    set_target_properties(csilk_base_shared PROPERTIES OUTPUT_NAME "csilk-base")
+    csilk_target_setup(csilk_base_shared PUBLIC SHARED)
+    target_link_libraries(csilk_base_shared PRIVATE Threads::Threads)
+    if(NOT APPLE AND NOT WIN32)
+      target_link_libraries(csilk_base_shared PRIVATE m)
+    endif()
+    add_library(csilk::base_shared ALIAS csilk_base_shared)
+
     # csilk_json_shared (libcsilk-json.so)
     add_library(csilk_json_shared SHARED ${CSILK_JSON_SOURCES})
     set_target_properties(csilk_json_shared PROPERTIES OUTPUT_NAME "csilk-json")
@@ -239,7 +263,7 @@ if(CSILK_BUILD_SHARED)
     add_library(csilk_core_shared SHARED ${CSILK_CORE_SOURCES})
     set_target_properties(csilk_core_shared PROPERTIES OUTPUT_NAME "csilk-core")
     csilk_target_setup(csilk_core_shared PUBLIC SHARED)
-    target_link_libraries(csilk_core_shared PUBLIC csilk_json_shared OpenSSL::Crypto Threads::Threads)
+    target_link_libraries(csilk_core_shared PUBLIC csilk_base_shared csilk_json_shared OpenSSL::Crypto Threads::Threads)
     if(TARGET csilk::yaml)
       target_link_libraries(csilk_core_shared PUBLIC csilk::yaml)
     endif()
@@ -334,6 +358,7 @@ if(CSILK_BUILD_SHARED)
     set_target_properties(csilk_shared PROPERTIES OUTPUT_NAME "csilk")
     csilk_target_setup(csilk_shared PUBLIC SHARED)
     target_link_libraries(csilk_shared PUBLIC
+        csilk_base_shared
         csilk_core_shared
         csilk_json_shared
         csilk_tls_shared
@@ -346,6 +371,5 @@ if(CSILK_BUILD_SHARED)
         csilk_wasm_shared
         csilk_bypass_shared
     )
-    add_dependencies(csilk csilk_shared)
     message(STATUS "Shared library builds enabled: libcsilk*.so")
 endif()

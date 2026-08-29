@@ -16,7 +16,6 @@
 #include "csilk/core/sync.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
-#include "messaging/mq_internal.h"
 
 /* --- Signal handler --- */
 

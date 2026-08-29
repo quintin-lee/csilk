@@ -3,6 +3,7 @@
  * @brief Connection lifetime, reference counting, close, and teardown logic.
  */
 
+#include <assert.h>
 #include <stdatomic.h>
 #include <unistd.h>
 #include "../internal/srv_internal.h"
@@ -27,6 +28,8 @@ client_list_add(csilk_server_t* server, csilk_client_t* client)
     if (!wp) {
         return;
     }
+    assert(_csilk_is_owner_worker_thread(wp) &&
+           "client_list_add called from non-owner worker thread");
     client->next = wp->active_clients;
     client->prev = NULL;
     if (wp->active_clients) {
@@ -54,6 +57,8 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
     if (!wp) {
         return;
     }
+    assert(_csilk_is_owner_worker_thread(wp) &&
+           "client_list_remove called from non-owner worker thread");
     if (client->prev) {
         client->prev->next = client->next;
     } else if (wp->active_clients == client) {

@@ -32,7 +32,7 @@
 #include "csilk/core/hot_reload.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
-#include "messaging/mq_internal.h"
+#include "csilk/messaging/mq.h"
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
