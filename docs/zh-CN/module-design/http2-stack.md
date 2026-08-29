@@ -471,7 +471,12 @@ HTTP/2 流多路复用通过 `tests/protocols/test_h2_stream_lifecycle.c` 进行
 
 | 文件 | 作用 |
 |------|------|
-| `src/core/http/h2.c` | HTTP/2 入口、nghttp2 回调绑定与响应构建 |
-| `src/core/http/h2.h` | `csilk_h2_stream_map_t` 声明与流操作接口 |
+| `include/csilk/http/h2.h` | 公共 HTTP/2 API 接口声明 (`csilk_h2_*`) |
+| `src/core/internal/srv_internal.h` | `csilk_h2_stream_map_t` 内部结构体与流池常量 |
+| `src/core/http/h2_session.c` | 会话管理、流分配、自适应哈希表与流池回收 |
+| `src/core/http/h2_callbacks.c` | nghttp2 帧回调、零拷贝头部物化与尾部头解析 |
+| `tests/protocols/test_h2_dispatch_lifecycle.c` | 严格恰好一次分发与尾部头测试用例 |
+| `tests/protocols/test_h2_header_bench.c` | 头部物化延迟与吞吐量基准测试 |
+| `tests/protocols/test_h2_stream_bench.c` | 流规模 (1..10k) 与流池回收基准测试 |
 | `tests/protocols/test_h2_stream_lifecycle.c` | RST_STREAM / GOAWAY / 10K 流复用形式化审计测试 |
-| `docs/design/http2.md` | 设计文档 |
+| `docs/zh-CN/design/http2.md` | 设计文档 |

@@ -7,10 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AsyncOp & Stream Lifetime Model**: Introduced reference-counted asynchronous operation lifecycle (`csilk_async_op_t`) with generation tag and request sequence validation against ABA, and asynchronous timer cleanup on event loop to prevent timer Use-After-Free.
+- **HTTP/2 Trailer Support & Exactly-Once Dispatch**: Hardened nghttp2 callback pipeline to strictly distinguish initial request `HEADERS` from trailing `HEADERS` (Trailers), enforce exactly-once application dispatch, handle `RST_STREAM` before dispatch cleanly, and separate passive frame lookups (`csilk_h2_get_stream`) from active stream allocation (`csilk_h2_get_or_create_stream`).
+- **HTTP/2 Zero-Copy Header Materialization**: Implemented `map_set_view` allowing zero-copy string views directly into nghttp2 memory buffers during request header ingestion, and single-pass header counting and `nghttp2_nv` response encoding.
+- **HTTP/2 Stream Pool Deterministic Reset**: Formalized stream recycling contract with zero-syscall reuse, chunk arena preservation across stream lifecycles, and deterministic struct field resets.
+- **Formalized Worker Ownership**: Worker threads own mutable connection and stream state; cross-worker unrefs dispatch back to owning worker event loop; lazy Message Queue initialization uses lock-free Double-Checked Locking (DCLP) with acquire/release memory barriers.
+- **Modular CMake Target DAG & Package Export**: Established `csilk_base` as foundation, fully exported `yyjson`, bundled `llhttp`, and `nghttp2` targets, and normalized `pkg-config` `.pc` templates with `-D_GNU_SOURCE`.
+
+### Performance & Memory
+- **Per-Request Context Memory Reduction**: Compacted `csilk_ctx_t` layout with 16-bucket chained hash map and compact 4-slot embedded read buffers, reducing per-context memory footprint and improving 0-header throughput by +62.6% (11.35 M req/s).
+- **HTTP/2 Stream Allocation Scaling**: High-performance per-connection adaptive hash table delivering 4.47 M stream-cycles/sec pool throughput, 26.2 ns lookup latency for 10 concurrent streams, and 62.8 ns lookup latency for 10,000 concurrent streams.
+
 ### Fixed
 - **Connection UAF on Graceful Shutdown (CWE-416)**: In `close_active_clients()`, snapshot `client->next` before calling `csilk_io_close()` to prevent Use-After-Free when the close callback fires synchronously and modifies the active client linked list.
 - **Data Race on Client State Read (CWE-362)**: Restructured `_csilk_client_check_recycle()` to only read `client->state` on the owning worker thread. Non-owner threads now dispatch recycle tasks exclusively, eliminating a TSAN-flagged data race on the non-atomic state field.
 - **C23 `<stdbool.h>` Compliance**: Removed 4 unnecessary `#include <stdbool.h>` directives from `connection_state.c`, `mvcc_cache.c`, `json.h`, and `mvcc_cache.h`. C23 provides `bool`/`true`/`false` as built-in keywords.
+- **Clang-Tidy SPA Fallback Memory**: Replaced heap allocation in `spa_fallback_handler` with arena-managed memory allocation, resolving static analyzer warnings.
 
 ## [0.5.3] - 2026-08-26
 

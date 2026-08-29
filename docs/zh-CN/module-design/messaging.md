@@ -4,7 +4,7 @@
 
 Messaging 模块提供了一个 **进程内发布/订阅事件总线**（消息队列）用于 csilk 服务器内的组件之间解耦通信。它通过基于主题的消息交换实现路由、中间件、AI 工作流、WebSocket 处理器和自定义模块之间的通信。发布 **MUST** 为单生产者场景锁自由；多生产者发布 **MUST** 使用原子 CAS。订阅处理器 **MUST NOT** 阻塞 — 长时间运行的工作 **SHOULD** 分发到 libuv 线程池。消息传递 **MUST** 默认为最多一次语义；确切一次 **SHOULD** 通过 WAL 持久化和 ACK 跟踪选择加入。每个主题订阅分发开销 **SHOULD** 每订阅链链接 ≤ 200ns。
 
-**文件**: `src/messaging/`, `include/csilk/mq.h`
+**文件**: `src/messaging/`, `include/csilk/messaging/mq.h`
 
 ---
 

@@ -37,7 +37,7 @@ graph TB
             RM["fa:fa-tag method (GET/POST/etc)"]
             RP["fa:fa-link path (/api/v1/users)"]
             RB["fa:fa-file body + body_len"]
-            RH["fa:fa-table headers (hash map, 64 buckets)"]
+            RH["fa:fa-table headers (hash map, 16 buckets + 64 interned slots)"]
             RQ["fa:fa-search query_params (hash map)"]
         end
 

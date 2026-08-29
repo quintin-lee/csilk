@@ -115,7 +115,12 @@ To ensure zero use-after-free (UAF) and prevent ABA race conditions during async
 
 | File | Purpose |
 |------|---------|
-| `src/core/http/h2.c` | HTTP/2 entry point, nghttp2 callbacks, frame routing |
-| `src/core/http/h2.h` | `csilk_h2_stream_map_t` and stream manipulation APIs |
+| `include/csilk/http/h2.h` | Public HTTP/2 API definitions (`csilk_h2_*`) |
+| `src/core/internal/srv_internal.h` | `csilk_h2_stream_map_t` internal struct & stream pool constants |
+| `src/core/http/h2_session.c` | Session management, stream allocation, adaptive hashing, pool recycling |
+| `src/core/http/h2_callbacks.c` | nghttp2 frame callbacks, zero-copy header materialization, trailer handling |
+| `tests/protocols/test_h2_dispatch_lifecycle.c` | Exactly-once dispatch and trailer unit tests |
+| `tests/protocols/test_h2_header_bench.c` | Header materialization latency and throughput benchmark |
+| `tests/protocols/test_h2_stream_bench.c` | Stream scaling (1..10k) and pool recycling benchmark |
 | `tests/protocols/test_h2_stream_lifecycle.c` | RST_STREAM / GOAWAY / 10k stream recycling formal audit |
-| `docs/design/http2.md` | Architecture design specification |
+| `docs/en/design/http2.md` | Architecture design specification |
