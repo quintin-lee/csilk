@@ -754,6 +754,9 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
     c->server = client->server;
     c->stream_id = stream_id;
     c->h2_stream_owner = client;
+    c->stream_ref = 1;
+    c->stream_closed = 0;
+    c->stream_gen = 1;
     if (client->server) {
         c->storage_driver = client->server->storage_driver;
         c->crypto_driver = client->server->crypto_driver;

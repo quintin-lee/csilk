@@ -20,7 +20,6 @@ set(CSILK_BASE_SOURCES
 
 # ── Minimal Core Module (config, logger, sync, crypto, uring primitives) ───
 set(CSILK_CORE_SOURCES
-    ${CSILK_BASE_SOURCES}
     src/core/cache/mvcc_cache.c
     src/core/config/config.c
     src/core/config/logger.c

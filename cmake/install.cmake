@@ -110,7 +110,7 @@ endif()
 
 # JSON
 set(CSILK_JSON_PC_REQUIRES "")
-set(CSILK_JSON_PC_LIBS_PRIVATE "-lyyjson")
+set(CSILK_JSON_PC_LIBS_PRIVATE "")
 
 # WASM
 set(CSILK_WASM_PC_REQUIRES "csilk-core")
@@ -135,7 +135,10 @@ set(CSILK_HTTP2_PC_LIBS_PRIVATE "-lnghttp2")
 # HTTP
 set(CSILK_HTTP_PC_REQUIRES "csilk-core csilk-tls csilk-http2 csilk-mq")
 set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
-set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lllhttp -lssl -lcrypto")
+set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lssl -lcrypto")
+if(LLHTTP_LIB)
+  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lllhttp")
+endif()
 
 # DB
 set(CSILK_DB_PC_REQUIRES_PRIVATE "sqlite3")

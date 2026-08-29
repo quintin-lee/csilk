@@ -341,6 +341,9 @@ typedef struct csilk_stream_scope_s {
     struct csilk_ctx_s* next_stream;
     csilk_client_t*     h2_stream_owner;
     csilk_io_work_t     work_req;
+    int                 stream_ref;
+    int                 stream_closed;
+    uint64_t            stream_gen;
 } csilk_stream_scope_t;
 
 struct csilk_ctx_s {
@@ -421,6 +424,9 @@ struct csilk_ctx_s {
             struct csilk_ctx_s* next_stream;
             csilk_client_t*     h2_stream_owner;
             csilk_io_work_t     work_req;
+            int                 stream_ref;
+            int                 stream_closed;
+            uint64_t            stream_gen;
         };
     };
 };
@@ -431,6 +437,12 @@ CSILK_INTERNAL void _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, vo
 /** @brief Specialized stream-scoped context initialiser for HTTP/2 multiplexing. */
 CSILK_INTERNAL void
 _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id);
+
+/** @brief Increment reference count of an HTTP/2 stream context. */
+CSILK_INTERNAL void _csilk_stream_ref(csilk_ctx_t* c);
+
+/** @brief Decrement reference count of an HTTP/2 stream context, recycling or freeing when zero. */
+CSILK_INTERNAL void _csilk_stream_unref(csilk_ctx_t* c);
 
 /** @brief Register a raw read buffer with the context for zero-copy view lifetime management. */
 CSILK_INTERNAL int _csilk_ctx_register_read_buffer(csilk_ctx_t* c, char* base);
