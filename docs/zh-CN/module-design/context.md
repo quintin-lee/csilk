@@ -37,7 +37,7 @@ flowchart TB
             RM["fa:fa-tag method (GET/POST/etc)"]
             RP["fa:fa-link path (/api/v1/users)"]
             RB["fa:fa-file body + body_len"]
-            RH["fa:fa-table headers (hash map, 64 buckets)"]
+            RH["fa:fa-table headers (哈希映射, 16 桶 + 64 驻留快速槽位)"]
             RQ["fa:fa-search query_params (hash map)"]
         end
 
