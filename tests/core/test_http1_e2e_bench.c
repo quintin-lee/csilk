@@ -19,8 +19,11 @@
 #include "csilk/csilk.h"
 
 #define E2E_BASE_PORT 18991
-#define E2E_REQUESTS 1000
+#define E2E_CLIENTS 4
+#define E2E_REQUESTS_PER_CLIENT 250
+#define E2E_ROUNDS 3
 #define E2E_TIMEOUT_SEC 5
+#define E2E_TOTAL_SAMPLES (E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT * E2E_ROUNDS)
 
 static volatile int    server_ready;
 static csilk_server_t* server;
@@ -43,6 +46,14 @@ typedef struct {
     int port;
     int workers;
 } server_args_t;
+
+typedef struct {
+    int       port;
+    size_t    requests;
+    uint64_t* samples;
+    size_t    sample_offset;
+    size_t    completed;
+} client_args_t;
 
 static void*
 server_main(void* raw_args)
@@ -109,6 +120,28 @@ read_response(int fd)
     return -1;
 }
 
+static void*
+client_main(void* raw_args)
+{
+    client_args_t* args = raw_args;
+    int            fd = connect_client(args->port);
+    if (fd < 0) {
+        return NULL;
+    }
+    static const char request[] = "GET /health HTTP/1.1\r\nHost: localhost\r\n"
+                                  "Connection: keep-alive\r\n\r\n";
+    for (size_t i = 0; i < args->requests; i++) {
+        uint64_t start = now_ns();
+        if (send(fd, request, sizeof(request) - 1, 0) != (ssize_t)(sizeof(request) - 1) ||
+            read_response(fd) != 0) {
+            break;
+        }
+        args->samples[args->sample_offset + args->completed++] = now_ns() - start;
+    }
+    close(fd);
+    return NULL;
+}
+
 static int
 compare_u64(const void* left, const void* right)
 {
@@ -122,59 +155,62 @@ run_worker_benchmark(int workers, int port)
 {
     server_ready = 0;
     server = NULL;
-    server_args_t args = {.port = port, .workers = workers};
-    pthread_t     thread;
-    assert(pthread_create(&thread, NULL, server_main, &args) == 0);
+    server_args_t server_args = {.port = port, .workers = workers};
+    pthread_t     server_thread;
+    assert(pthread_create(&server_thread, NULL, server_main, &server_args) == 0);
     for (int i = 0; i < E2E_TIMEOUT_SEC * 100 && !server_ready; i++) {
         struct timespec pause = {.tv_sec = 0, .tv_nsec = 10000000L};
         nanosleep(&pause, NULL);
     }
     assert(server_ready);
 
-    int fd = -1;
-    for (int i = 0; i < 100 && fd < 0; i++) {
-        fd = connect_client(port);
-        if (fd < 0) {
-            usleep(10000);
+    uint64_t* samples = calloc(E2E_TOTAL_SAMPLES, sizeof(*samples));
+    assert(samples != NULL);
+    size_t   completed = 0;
+    uint64_t start_all = now_ns();
+    for (int round = 0; round < E2E_ROUNDS; round++) {
+        pthread_t     clients[E2E_CLIENTS];
+        client_args_t client_args[E2E_CLIENTS];
+        size_t        round_offset = (size_t)round * E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT;
+        for (int i = 0; i < E2E_CLIENTS; i++) {
+            client_args[i] = (client_args_t){
+                .port = port,
+                .requests = E2E_REQUESTS_PER_CLIENT,
+                .samples = samples,
+                .sample_offset = round_offset + (size_t)i * E2E_REQUESTS_PER_CLIENT,
+                .completed = 0,
+            };
+            assert(pthread_create(&clients[i], NULL, client_main, &client_args[i]) == 0);
         }
-    }
-    assert(fd >= 0);
-
-    static const char request[] = "GET /health HTTP/1.1\r\nHost: localhost\r\n"
-                                  "Connection: keep-alive\r\n\r\n";
-    uint64_t          latencies[E2E_REQUESTS];
-    size_t            completed = 0;
-    uint64_t          start_all = now_ns();
-    for (size_t i = 0; i < E2E_REQUESTS; i++) {
-        uint64_t start = now_ns();
-        if (send(fd, request, sizeof(request) - 1, 0) != (ssize_t)(sizeof(request) - 1) ||
-            read_response(fd) != 0) {
-            break;
+        for (int i = 0; i < E2E_CLIENTS; i++) {
+            pthread_join(clients[i], NULL);
+            completed += client_args[i].completed;
         }
-        latencies[completed++] = now_ns() - start;
     }
     uint64_t elapsed = now_ns() - start_all;
-    close(fd);
     csilk_server_stop(server);
-    pthread_join(thread, NULL);
+    pthread_join(server_thread, NULL);
 
-    assert(completed == E2E_REQUESTS);
-    qsort(latencies, completed, sizeof(latencies[0]), compare_u64);
-    printf("HTTP1_E2E workers=%d requests=%zu qps=%.2f p50_ns=%" PRIu64 " p95_ns=%" PRIu64
-           " p99_ns=%" PRIu64 " errors=%zu\n",
+    assert(completed == E2E_TOTAL_SAMPLES);
+    qsort(samples, completed, sizeof(samples[0]), compare_u64);
+    printf("HTTP1_E2E workers=%d clients=%d rounds=%d requests=%zu qps=%.2f p50_ns=%" PRIu64
+           " p95_ns=%" PRIu64 " p99_ns=%" PRIu64 " errors=%zu\n",
            workers,
+           E2E_CLIENTS,
+           E2E_ROUNDS,
            completed,
            (double)completed * 1000000000.0 / (double)elapsed,
-           latencies[completed * 50 / 100],
-           latencies[completed * 95 / 100],
-           latencies[completed * 99 / 100],
-           E2E_REQUESTS - completed);
+           samples[completed * 50 / 100],
+           samples[completed * 95 / 100],
+           samples[completed * 99 / 100],
+           E2E_TOTAL_SAMPLES - completed);
+    free(samples);
 }
 
 int
 main(void)
 {
-    alarm(60);
+    alarm(120);
     const int worker_counts[] = {1, 2, 4, 8};
     for (size_t i = 0; i < sizeof(worker_counts) / sizeof(worker_counts[0]); i++) {
         run_worker_benchmark(worker_counts[i], E2E_BASE_PORT + (int)i);
