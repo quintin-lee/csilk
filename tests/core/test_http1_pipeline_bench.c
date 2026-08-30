@@ -264,9 +264,8 @@ run_router_benchmark(void)
     }
     print_stage("router_match", now_ns() - start, HTTP1_BENCH_ITERS);
 
-    context->server = NULL;
-    context->arena = NULL;
-    free(context);
+    context->request.path = NULL;
+    csilk_test_ctx_free(context);
     csilk_router_free(router);
 }
 

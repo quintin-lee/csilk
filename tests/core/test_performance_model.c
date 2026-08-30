@@ -124,9 +124,8 @@ benchmark_router_mode(int route_count, int use_simd, const char* pattern, const 
              pattern[1] == ':' ? "param" : (strchr(pattern, '*') ? "wildcard" : "static"),
              route_count);
     print_result(stage, lookups, elapsed_ns, elapsed_cycles);
-    context->server = NULL;
-    context->arena = NULL;
-    free(context);
+    context->request.path = NULL;
+    csilk_test_ctx_free(context);
     csilk_router_free(router);
 }
 
