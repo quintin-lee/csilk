@@ -5,6 +5,7 @@
 
 #include <llhttp.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,6 +78,28 @@ print_stage(const char* name, uint64_t elapsed, size_t operations)
            name,
            operations,
            (double)elapsed / (double)operations);
+}
+
+static int
+compare_u64(const void* left, const void* right)
+{
+    const uint64_t a = *(const uint64_t*)left;
+    const uint64_t b = *(const uint64_t*)right;
+    return (a > b) - (a < b);
+}
+
+static double
+confidence95_half_width(const uint64_t* values, size_t count, double mean)
+{
+    if (count < 2) {
+        return 0.0;
+    }
+    double sum = 0.0;
+    for (size_t i = 0; i < count; i++) {
+        double delta = (double)values[i] - mean;
+        sum += delta * delta;
+    }
+    return 2.7764451051977987 * sqrt(sum / (double)(count - 1)) / (double)count;
 }
 
 static void
@@ -154,14 +177,6 @@ run_header_matrix_benchmark(int header_count)
     run_parse_benchmark("parse_headers", request, (size_t)offset);
 }
 
-static int
-compare_u64(const void* left, const void* right)
-{
-    const uint64_t a = *(const uint64_t*)left;
-    const uint64_t b = *(const uint64_t*)right;
-    return (a > b) - (a < b);
-}
-
 static void
 run_parse_rounds(const char* name, const char* request, size_t length)
 {
@@ -172,10 +187,18 @@ run_parse_rounds(const char* name, const char* request, size_t length)
         samples[round] = now_ns() - start;
     }
     qsort(samples, HTTP1_PARSE_ROUNDS, sizeof(samples[0]), compare_u64);
-    printf("HTTP1 parse_summary=%s rounds=%d median_total_ns=%" PRIu64 "\n",
+    double mean = 0.0;
+    for (size_t i = 0; i < HTTP1_PARSE_ROUNDS; i++) {
+        mean += (double)samples[i];
+    }
+    mean /= (double)HTTP1_PARSE_ROUNDS;
+    printf("HTTP1 parse_summary=%s rounds=%d median_total_ns=%" PRIu64
+           " mean_total_ns=%.0f ci95_ns=+/-%.0f\n",
            name,
            HTTP1_PARSE_ROUNDS,
-           samples[HTTP1_PARSE_ROUNDS / 2]);
+           samples[HTTP1_PARSE_ROUNDS / 2],
+           mean,
+           confidence95_half_width(samples, HTTP1_PARSE_ROUNDS, mean));
 }
 
 static void
