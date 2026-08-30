@@ -4,6 +4,7 @@
  */
 
 #include <llhttp.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@
 #include "csilk/test/test.h"
 
 #define HTTP1_BENCH_ITERS 100000U
+#define HTTP1_PARSE_ROUNDS 5
 
 static volatile size_t sink;
 
@@ -152,6 +154,30 @@ run_header_matrix_benchmark(int header_count)
     run_parse_benchmark("parse_headers", request, (size_t)offset);
 }
 
+static int
+compare_u64(const void* left, const void* right)
+{
+    const uint64_t a = *(const uint64_t*)left;
+    const uint64_t b = *(const uint64_t*)right;
+    return (a > b) - (a < b);
+}
+
+static void
+run_parse_rounds(const char* name, const char* request, size_t length)
+{
+    uint64_t samples[HTTP1_PARSE_ROUNDS];
+    for (size_t round = 0; round < HTTP1_PARSE_ROUNDS; round++) {
+        uint64_t start = now_ns();
+        run_parse_benchmark(name, request, length);
+        samples[round] = now_ns() - start;
+    }
+    qsort(samples, HTTP1_PARSE_ROUNDS, sizeof(samples[0]), compare_u64);
+    printf("HTTP1 parse_summary=%s rounds=%d median_total_ns=%" PRIu64 "\n",
+           name,
+           HTTP1_PARSE_ROUNDS,
+           samples[HTTP1_PARSE_ROUNDS / 2]);
+}
+
 static void
 run_copy_benchmark(const char* name, const char* request, size_t length)
 {
@@ -275,9 +301,9 @@ main(void)
         "\r\n"
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-    run_parse_benchmark("parse_tiny", tiny_request, sizeof(tiny_request) - 1);
-    run_parse_benchmark("parse_json", json_request, sizeof(json_request) - 1);
-    run_parse_benchmark("parse_body", body_request, sizeof(body_request) - 1);
+    run_parse_rounds("parse_tiny", tiny_request, sizeof(tiny_request) - 1);
+    run_parse_rounds("parse_json", json_request, sizeof(json_request) - 1);
+    run_parse_rounds("parse_body", body_request, sizeof(body_request) - 1);
     run_fragmented_parse_benchmark();
     run_header_matrix_benchmark(5);
     run_header_matrix_benchmark(10);
