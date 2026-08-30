@@ -82,8 +82,10 @@ get_or_create_ip_entry(const char* ip, time_t now)
         }
     }
 
-    /* Table saturated — fallback to index hash slot */
-    return &ip_table[start_idx];
+    /* Table saturated: return NULL. The caller MUST fail open (skip rate
+     * limiting) rather than fall back to a shared slot, which would rate
+     * limit unrelated IPs against each other. */
+    return NULL;
 }
 
 /**
@@ -136,6 +138,14 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
     /* Lockless in-memory rate limiting fallback */
     time_t             now = time(NULL);
     atomic_ip_entry_t* entry = get_or_create_ip_entry(ip, now);
+
+    if (!entry) {
+        /* Table saturated: fail open (unlimited) instead of sharing a slot
+         * between unrelated IPs, which would block innocent clients. */
+        CSILK_LOG_W("RateLimit: [Local] IP table saturated, skipping rate limiting for IP %s", ip);
+        csilk_next(c);
+        return;
+    }
 
     time_t   reset = atomic_load(&entry->last_reset);
     uint32_t current_count = 0;
