@@ -229,7 +229,7 @@ match_node(csilk_router_node_t*     node,
                     if (use_simd) {
                         match = csilk_memcmp_fast(child->segment, frame->seg, frame->seg_len);
                     } else {
-                        match = (strncmp(child->segment, frame->seg, frame->seg_len) == 0);
+                        match = (memcmp(child->segment, frame->seg, frame->seg_len) == 0);
                     }
                     if (match) {
                         int next_depth = depth + 1;
