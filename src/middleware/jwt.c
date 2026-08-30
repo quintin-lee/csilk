@@ -10,6 +10,12 @@
 #include <time.h>
 
 #include "csilk/core/internal.h"
+
+static void
+_csilk_jwt_json_free(void* value)
+{
+    csilk_json_free((csilk_json_t*)value);
+}
 #include "csilk/core/crypto.h"
 #include "csilk/drivers/cipher.h"
 #include <openssl/crypto.h>
@@ -583,7 +589,7 @@ csilk_jwt_middleware_options(csilk_ctx_t*               c,
         return;
     }
 
-    csilk_set_ex(c, "jwt_payload", payload, (void (*)(void*))csilk_json_free);
+    csilk_set_ex(c, "jwt_payload", payload, _csilk_jwt_json_free);
     csilk_next(c);
 }
 

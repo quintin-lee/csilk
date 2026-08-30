@@ -189,11 +189,15 @@ _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
 
     if (type <= CSILK_HOOK_SERVER_STOP) {
         for (size_t i = 0; i < count; i++) {
-            ((csilk_server_hook_handler_t)handlers[i])(s);
+            csilk_server_hook_handler_t handler = NULL;
+            memcpy(&handler, &handlers[i], sizeof(handler));
+            handler(s);
         }
     } else if (c) {
         for (size_t i = 0; i < count; i++) {
-            ((csilk_ctx_hook_handler_t)handlers[i])(c);
+            csilk_ctx_hook_handler_t handler = NULL;
+            memcpy(&handler, &handlers[i], sizeof(handler));
+            handler(c);
         }
     }
 }

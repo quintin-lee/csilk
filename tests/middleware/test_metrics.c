@@ -23,13 +23,12 @@ test_metrics()
 {
     printf("Testing Metrics middleware...\n");
 
-    csilk_handler_t handlers[] = {
-        (csilk_handler_t)csilk_metrics_middleware, dummy_handler, nullptr};
-    csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_handler_t handlers[] = {dummy_handler, nullptr};
+    csilk_ctx_t*    c = csilk_test_ctx_new();
     csilk_test_ctx_set_handlers(c, handlers);
 
     /* Simulate a request through middleware */
-    csilk_next(c);
+    csilk_metrics_middleware(c, NULL);
 
     /* Call metrics handler to get output */
     csilk_metrics_handler(c);

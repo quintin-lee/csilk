@@ -20,11 +20,9 @@ test_handler(csilk_ctx_t* c)
 }
 
 static void
-on_server_start(csilk_server_t* s, csilk_ctx_t* c, void* arg)
+on_server_start(csilk_server_t* s)
 {
     (void)s;
-    (void)c;
-    (void)arg;
     server_ready = 1;
 }
 

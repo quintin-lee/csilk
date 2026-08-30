@@ -364,6 +364,7 @@ typedef struct csilk_stream_scope_s {
     csilk_io_work_t      work_req;
     _Atomic int32_t      stream_ref;
     int                  stream_closed;
+    _Atomic int          stream_destroy_pending;
     uint64_t             stream_gen;
     csilk_stream_state_t stream_state;
     uint8_t              headers_received;
@@ -452,6 +453,8 @@ struct csilk_ctx_s {
             csilk_io_work_t      work_req;
             _Atomic int32_t      stream_ref;
             int                  stream_closed;
+            _Atomic int          stream_destroy_pending;
+            _Atomic int          stream_destroy_queued;
             uint64_t             stream_gen;
             csilk_stream_state_t stream_state;
             uint8_t              headers_received;

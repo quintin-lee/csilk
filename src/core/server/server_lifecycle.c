@@ -576,7 +576,11 @@ csilk_server_run(csilk_server_t* server, int port)
     }
 
     server->worker_pool_count = workers;
-    server->worker_pools = calloc((size_t)workers, sizeof(worker_pool_t));
+    size_t worker_pool_size = (size_t)workers * sizeof(worker_pool_t);
+    server->worker_pools = aligned_alloc(64, worker_pool_size);
+    if (server->worker_pools) {
+        memset(server->worker_pools, 0, worker_pool_size);
+    }
     if (!server->worker_pools) {
         CSILK_LOG_E("Server: failed to allocate memory for worker pools");
         csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);

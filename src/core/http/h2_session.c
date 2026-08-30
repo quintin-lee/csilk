@@ -106,6 +106,10 @@ _csilk_stream_destroy_dispatch_cb(void* arg)
     if (!c) {
         return;
     }
+    /* The zero-count transition already reserved physical destruction. The
+     * dispatch task's Connection reference keeps the owning client alive while
+     * this callback runs; the stream remains detached until this point. */
+    atomic_store_explicit(&c->stream_destroy_pending, 0, memory_order_release);
     _csilk_stream_destroy_physically(c);
 }
 
@@ -130,8 +134,22 @@ _csilk_stream_unref(csilk_ctx_t* c)
     /* stream_ref reached 0 — perform physical teardown / recycling */
     csilk_client_t* client = c->h2_stream_owner;
     if (client && client->owner_pool && !_csilk_is_owner_worker_thread(client->owner_pool)) {
-        /* If not on owner worker thread, dispatch physical cleanup to owner worker */
-        csilk_dispatch(c, _csilk_stream_destroy_dispatch_cb, c);
+        /* Reserve destruction exactly once. The context remains detached and
+         * cannot be recycled until the owner callback runs. */
+        int expected_pending = 0;
+        if (!atomic_compare_exchange_strong_explicit(&c->stream_destroy_pending,
+                                                     &expected_pending,
+                                                     1,
+                                                     memory_order_acq_rel,
+                                                     memory_order_acquire)) {
+            return;
+        }
+        _csilk_stream_ref(c);
+        if (_csilk_dispatch_try(c, _csilk_stream_destroy_dispatch_cb, c) == 0) {
+            return;
+        }
+        _csilk_stream_unref(c);
+        atomic_store_explicit(&c->stream_destroy_pending, 0, memory_order_release);
         return;
     }
 
@@ -295,8 +313,11 @@ csilk_h2_free_streams(csilk_client_t* client)
     }
     map->count = 0;
 
-    /* Free all pooled idle streams */
+    /* Only contexts already physically recycled (stream_ref == 0) may be
+     * present on the free list. They have no asynchronous users. */
     csilk_ctx_t* pool_curr = map->free_list;
+    map->free_list = NULL;
+    map->pool_count = 0;
     while (pool_curr) {
         csilk_ctx_t* next = pool_curr->next_stream;
         if (pool_curr->arena) {
@@ -306,8 +327,6 @@ csilk_h2_free_streams(csilk_client_t* client)
         free(pool_curr);
         pool_curr = next;
     }
-    map->free_list = NULL;
-    map->pool_count = 0;
 
     if (map->buckets != map->inline_buckets) {
         free(map->buckets);

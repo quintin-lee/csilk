@@ -233,6 +233,7 @@ CSILK_INTERNAL void _csilk_worker_init_arena_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_read_buf_pool(worker_pool_t* wp);
 CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);
 CSILK_INTERNAL void _csilk_worker_drain_dispatch(worker_pool_t* wp);
+CSILK_INTERNAL int  _csilk_dispatch_try(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
 CSILK_INTERNAL void _csilk_dispatch_pool_cleanup(void);
 
 CSILK_INTERNAL void csilk_arena_flush_free_list(void);
