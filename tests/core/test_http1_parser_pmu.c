@@ -1,7 +1,19 @@
 /**
  * @file test_http1_parser_pmu.c
  * @brief Independent PMU measurements for HTTP/1 parser workloads.
+ *
+ * Linux-only: requires perf_event_open. On other platforms, prints skip.
  */
+
+#ifndef __linux__
+#include <stdio.h>
+int
+main(void)
+{
+    printf("HTTP1_PMU: skipped (Linux-only perf_event_open)\n");
+    return 0;
+}
+#else
 
 #include <errno.h>
 #include <inttypes.h>
@@ -241,3 +253,5 @@ main(void)
     printf("HTTP1_PMU sink=%zu\n", sink);
     return 0;
 }
+
+#endif /* __linux__ */
