@@ -183,6 +183,121 @@ test_parse_frame_truncated()
 }
 
 static void
+test_parse_frame_len126_truncated()
+{
+    printf("Testing WebSocket 16-bit extended length truncated header...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    /* byte1 == 126 requests a 2-byte extended length, but only the 2-byte base
+     * header is present: nread < 4 -> early return (websocket.c:383). */
+    uint8_t f[] = {0x81, 126};
+    csilk_ws_parse_frame(ctx, f, sizeof(f));
+    assert(messages_received == 0);
+    csilk_test_ctx_free(ctx);
+    printf("len126-truncated passed!\n");
+}
+
+static void
+test_parse_frame_len127_truncated()
+{
+    printf("Testing WebSocket 64-bit extended length truncated header...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    /* byte1 == 127 requests an 8-byte extended length, but fewer than 10 header
+     * bytes are present: nread < 10 -> early return (websocket.c:389). */
+    uint8_t f[3] = {0x81, 127, 0x00};
+    csilk_ws_parse_frame(ctx, f, sizeof(f));
+    assert(messages_received == 0);
+    csilk_test_ctx_free(ctx);
+    printf("len127-truncated passed!\n");
+}
+
+static void
+test_parse_frame_oversized()
+{
+    printf("Testing WebSocket oversized frame (>64MB) rejected...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    /* 64-bit extended length claiming 1<<30 bytes (2^30 > 64 MiB limit). The size
+     * guard fires before any payload is required, so the 10-byte header alone
+     * exercises the reject path (websocket.c:409-412). */
+    uint8_t f[10] = {0x81, 127, 0x40, 0, 0, 0, 0, 0, 0, 0};
+    csilk_ws_parse_frame(ctx, f, sizeof(f));
+    assert(messages_received == 0);
+    csilk_test_ctx_free(ctx);
+    printf("oversized passed!\n");
+}
+
+static void
+test_parse_frame_len16bit()
+{
+    printf("Testing WebSocket 16-bit extended length complete frame...\n");
+    size_t   payload_len = 300;
+    size_t   frame_len = 2 + 2 + payload_len;
+    uint8_t* frame = calloc(1, frame_len);
+    assert(frame != nullptr);
+    frame[0] = 0x81;
+    frame[1] = 126; /* unmasked, 16-bit extended length */
+    frame[2] = (uint8_t)((payload_len >> 8) & 0xFF);
+    frame[3] = (uint8_t)(payload_len & 0xFF);
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    csilk_ws_parse_frame(ctx, frame, frame_len);
+    assert(messages_received == 1);
+    messages_received = 0;
+    csilk_test_ctx_free(ctx);
+    free(frame);
+    printf("len16bit passed!\n");
+}
+
+static void
+test_parse_frame_len64bit()
+{
+    printf("Testing WebSocket 64-bit extended length complete frame...\n");
+    size_t   payload_len = 70000;
+    size_t   frame_len = 2 + 8 + payload_len;
+    uint8_t* frame = calloc(1, frame_len);
+    assert(frame != nullptr);
+    frame[0] = 0x81;
+    frame[1] = 127; /* unmasked, 64-bit extended length */
+    for (int i = 0; i < 8; i++) {
+        frame[2 + i] = (uint8_t)((payload_len >> (56 - i * 8)) & 0xFF);
+    }
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    csilk_ws_parse_frame(ctx, frame, frame_len);
+    assert(messages_received == 1);
+    messages_received = 0;
+    csilk_test_ctx_free(ctx);
+    free(frame);
+    printf("len64bit passed!\n");
+}
+
+static void
+test_parse_frame_partial_payload()
+{
+    printf("Testing WebSocket partial payload...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    messages_received = 0;
+    csilk_set_on_ws_message(ctx, on_any_message);
+    /* Masked text frame declaring a 5-byte payload but only 2 payload bytes are
+     * present after the 2-byte header + 4-byte mask: nread < offset + len ->
+     * early return (websocket.c:415-417). */
+    uint8_t f[] = {0x81, 0x85, 0x00, 0x00, 0x00, 0x00, 'h', 'e'};
+    csilk_ws_parse_frame(ctx, f, sizeof(f));
+    assert(messages_received == 0);
+    csilk_test_ctx_free(ctx);
+    printf("partial payload passed!\n");
+}
+
+static void
 test_ws_send_null()
 {
     printf("Testing csilk_ws_send with nullptr context/client...\n");
@@ -280,6 +395,12 @@ main()
     test_parse_frame_medium_payload();
     test_parse_frame_ping_pong_close();
     test_parse_frame_truncated();
+    test_parse_frame_len126_truncated();
+    test_parse_frame_len127_truncated();
+    test_parse_frame_oversized();
+    test_parse_frame_len16bit();
+    test_parse_frame_len64bit();
+    test_parse_frame_partial_payload();
     test_ws_send_null();
     test_parse_frame_large_payload();
     test_ws_close_normal();

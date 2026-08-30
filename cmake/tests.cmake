@@ -353,9 +353,10 @@ set(CSILK_EXTRA_TESTS
     test_middleware_chain_integration
     test_openapi_integration
     test_sse_integration
+    test_ws_integration
 )
 set(CSILK_EXTRA_TEST_DIRS
-    integration;integration;integration;integration;integration;integration;integration;integration
+    integration;integration;integration;integration;integration;integration;integration;integration;integration
 )
 
 # Collect all test names for run_tests DEPENDS
