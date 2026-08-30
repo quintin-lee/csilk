@@ -13,6 +13,10 @@
 #include "core/internal/srv_internal.h"
 #include "csilk/reflection/reflect.h"
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
 /* Timing helpers */
 static inline double
 now_ns(void)
@@ -59,7 +63,7 @@ test_disabled_log_level_latency(void)
            ns_per_call);
 
     /* Assert near-zero branch latency (< 50 ns per check, < 200 ns under TSAN instrumentation) */
-#if defined(__SANITIZE_THREAD__) || (defined(__has_feature) && __has_feature(thread_sanitizer))
+#if defined(__SANITIZE_THREAD__) || __has_feature(thread_sanitizer)
     assert(ns_per_call < 200.0);
 #else
     assert(ns_per_call < 50.0);
