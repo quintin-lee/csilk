@@ -1,4 +1,4 @@
-prefix=@CMAKE_INSTALL_PREFIX@
+prefix=${pcfiledir}/../..
 exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
@@ -11,4 +11,4 @@ Requires: csilk-base csilk-json
 Libs: -L${libdir} -lcsilk-core
 Libs.private: @CSILK_CORE_PC_LIBS_PRIVATE@
 Requires.private: @CSILK_CORE_PC_REQUIRES_PRIVATE@
-Cflags: -I${includedir} -D_GNU_SOURCE
+Cflags: -I${includedir} -D_GNU_SOURCE -pthread

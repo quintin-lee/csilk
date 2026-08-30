@@ -1,4 +1,4 @@
-prefix=@CMAKE_INSTALL_PREFIX@
+prefix=${pcfiledir}/../..
 exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
@@ -11,4 +11,4 @@ Requires: csilk-ai csilk-mq
 Requires.private: @CSILK_WORKFLOW_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-workflow
 Libs.private: @CSILK_WORKFLOW_PC_LIBS_PRIVATE@
-Cflags: -I${includedir} -D_GNU_SOURCE
+Cflags: -I${includedir} -D_GNU_SOURCE -pthread
