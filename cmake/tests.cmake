@@ -119,6 +119,7 @@ set(CSILK_CORE_TESTS
     test_pool_economics
     test_performance_model
     test_http1_pipeline_bench
+    test_http1_e2e_bench
     test_logger_async_bench
     test_server_config_race
     test_core_concurrency_stress
@@ -136,7 +137,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core
+    core;core;core;core
 )
 
 
