@@ -220,7 +220,12 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
 
     /* Increment reference for dispatch task */
     atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
-    csilk_dispatch(op->ctx, _csilk_async_complete_dispatch_cb, payload);
+    if (_csilk_dispatch_try(op->ctx, _csilk_async_complete_dispatch_cb, payload) < 0) {
+        free(payload);
+        /* Release the dispatch reference acquired above. */
+        _csilk_async_op_unref(op);
+        return -1;
+    }
 
     /* Release caller's reference */
     _csilk_async_op_unref(op);

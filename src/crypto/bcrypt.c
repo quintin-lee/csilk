@@ -243,7 +243,8 @@ bcrypt_hash_internal(const uint8_t password[],
     csilk_bcrypt_state_t state;
 
     /* Run Eksblowfish with 2^cost iterations. */
-    for (int i = 0; i < (1 << cost); i++) {
+    uint32_t rounds = UINT32_C(1) << (unsigned)cost;
+    for (uint32_t i = 0; i < rounds; i++) {
         eksblowfish_key_setup(password, pwd_len, salt, CSILK_BCRYPT_SALT_BYTES, &state);
     }
 

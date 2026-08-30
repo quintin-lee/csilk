@@ -184,21 +184,21 @@ _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop)
  * @note Allocates a task from the producer-safe task pool (or falls back to malloc),
  *       enqueues it on the worker's lock-free dispatch queue, and signals the async handle.
  */
-void
-csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
+CSILK_INTERNAL int
+_csilk_dispatch_try(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
 {
     if (!c || !c->_internal_client || !cb) {
-        return;
+        return -1;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     if (!client->owner_pool) {
-        return;
+        return -1;
     }
     worker_pool_t* wp = client->owner_pool;
 
     csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
     if (!task) {
-        return;
+        return -1;
     }
     task->cb = cb;
     task->arg = arg;
@@ -207,6 +207,13 @@ csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
     csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
 
     csilk_io_async_send(&wp->dispatch_async);
+    return 0;
+}
+
+void
+csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg)
+{
+    (void)_csilk_dispatch_try(c, cb, arg);
 }
 
 /* --- CPU pinning --- */

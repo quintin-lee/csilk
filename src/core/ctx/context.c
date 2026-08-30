@@ -418,7 +418,8 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
         csilk_storage_item_t* storage_item = c->storage_head;
         while (storage_item) {
             if (storage_item->free_fn && storage_item->value) {
-                storage_item->free_fn(storage_item->value);
+                void (*free_fn)(void*) = storage_item->free_fn;
+                free_fn(storage_item->value);
                 storage_item->value = NULL;
             }
             storage_item = storage_item->next;
@@ -761,6 +762,7 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
     c->h2_stream_owner = client;
     atomic_init(&c->stream_ref, 1);
     c->stream_closed = 0;
+    atomic_init(&c->stream_destroy_pending, 0);
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     c->read_buf_sizes = c->read_buf_sizes_embedded;
