@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -21,7 +22,7 @@
 #define E2E_BASE_PORT 18991
 #define E2E_CLIENTS 4
 #define E2E_REQUESTS_PER_CLIENT 250
-#define E2E_ROUNDS 3
+#define E2E_ROUNDS 5
 #define E2E_TIMEOUT_SEC 5
 #define E2E_TOTAL_SAMPLES (E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT * E2E_ROUNDS)
 
@@ -150,6 +151,39 @@ compare_u64(const void* left, const void* right)
     return (a > b) - (a < b);
 }
 
+static uint64_t
+percentile_u64(uint64_t* values, size_t count, size_t numerator, size_t denominator)
+{
+    qsort(values, count, sizeof(values[0]), compare_u64);
+    size_t index = (count - 1) * numerator / denominator;
+    return values[index];
+}
+
+static double
+mean_double(const double* values, size_t count)
+{
+    double sum = 0.0;
+    for (size_t i = 0; i < count; i++) {
+        sum += values[i];
+    }
+    return sum / (double)count;
+}
+
+static double
+confidence95_half_width(const double* values, size_t count, double mean)
+{
+    if (count < 2) {
+        return 0.0;
+    }
+    double sum = 0.0;
+    for (size_t i = 0; i < count; i++) {
+        double delta = values[i] - mean;
+        sum += delta * delta;
+    }
+    double standard_error = sqrt(sum / (double)(count - 1)) / (double)count;
+    return 2.7764451051977987 * standard_error;
+}
+
 static void
 run_worker_benchmark(int workers, int port)
 {
@@ -167,6 +201,8 @@ run_worker_benchmark(int workers, int port)
     uint64_t* samples = calloc(E2E_TOTAL_SAMPLES, sizeof(*samples));
     assert(samples != NULL);
     size_t   completed = 0;
+    double   round_qps[E2E_ROUNDS];
+    double   round_p99[E2E_ROUNDS];
     uint64_t start_all = now_ns();
     for (int round = 0; round < E2E_ROUNDS; round++) {
         pthread_t     clients[E2E_CLIENTS];
@@ -182,28 +218,51 @@ run_worker_benchmark(int workers, int port)
             };
             assert(pthread_create(&clients[i], NULL, client_main, &client_args[i]) == 0);
         }
+        uint64_t round_start = now_ns();
+        size_t   round_completed = 0;
         for (int i = 0; i < E2E_CLIENTS; i++) {
             pthread_join(clients[i], NULL);
             completed += client_args[i].completed;
+            round_completed += client_args[i].completed;
         }
+        uint64_t  round_end = now_ns();
+        uint64_t* round_samples = samples + round_offset;
+        round_qps[round] =
+            (double)round_completed * 1000000000.0 / (double)(round_end - round_start);
+        round_p99[round] = (double)percentile_u64(round_samples, round_completed, 99, 100);
     }
     uint64_t elapsed = now_ns() - start_all;
     csilk_server_stop(server);
     pthread_join(server_thread, NULL);
 
     assert(completed == E2E_TOTAL_SAMPLES);
-    qsort(samples, completed, sizeof(samples[0]), compare_u64);
-    printf("HTTP1_E2E workers=%d clients=%d rounds=%d requests=%zu qps=%.2f p50_ns=%" PRIu64
-           " p95_ns=%" PRIu64 " p99_ns=%" PRIu64 " errors=%zu\n",
+    uint64_t p50 = percentile_u64(samples, completed, 50, 100);
+    uint64_t p95 = percentile_u64(samples, completed, 95, 100);
+    uint64_t p99 = percentile_u64(samples, completed, 99, 100);
+    double   mean_qps = mean_double(round_qps, E2E_ROUNDS);
+    double   mean_p99 = 0.0;
+    for (size_t i = 0; i < E2E_ROUNDS; i++) {
+        mean_p99 += (double)round_p99[i];
+    }
+    mean_p99 /= (double)E2E_ROUNDS;
+    double qps_ci = confidence95_half_width(round_qps, E2E_ROUNDS, mean_qps);
+    double p99_ci = confidence95_half_width(round_p99, E2E_ROUNDS, mean_p99);
+    printf("HTTP1_E2E workers=%d clients=%d rounds=%d requests=%zu qps=%.2f qps_ci95=+/-%.2f"
+           " p50_ns=%" PRIu64 " p95_ns=%" PRIu64 " p99_ns=%" PRIu64
+           " p99_round_mean_ns=%.0f p99_ci95=+/-%.0f errors=%zu elapsed_ns=%" PRIu64 "\n",
            workers,
            E2E_CLIENTS,
            E2E_ROUNDS,
            completed,
-           (double)completed * 1000000000.0 / (double)elapsed,
-           samples[completed * 50 / 100],
-           samples[completed * 95 / 100],
-           samples[completed * 99 / 100],
-           E2E_TOTAL_SAMPLES - completed);
+           mean_qps,
+           qps_ci,
+           p50,
+           p95,
+           p99,
+           mean_p99,
+           p99_ci,
+           E2E_TOTAL_SAMPLES - completed,
+           elapsed);
     free(samples);
 }
 
