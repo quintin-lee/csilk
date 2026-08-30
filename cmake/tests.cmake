@@ -5,6 +5,10 @@
 # Helper to add a test executable and register with CTest
 function(add_csilk_test name source)
   add_executable(${name} ${source})
+  if(name STREQUAL "test_pool_economics")
+    target_compile_definitions(${name} PRIVATE CSILK_POOL_STATS)
+    target_sources(${name} PRIVATE tests/core/pool_stats.c)
+  endif()
   target_link_libraries(${name} csilk pthread m)
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE

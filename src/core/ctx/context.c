@@ -201,6 +201,8 @@ csilk_body_alloc(size_t size, size_t* out_capacity)
 {
     int tier = csilk_body_tier_index(size);
     if (tier < 0) {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_BODY_BUFFER, false);
+        CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_BODY_BUFFER);
         void* ptr = malloc(size);
         if (out_capacity) {
             *out_capacity = size;
@@ -214,11 +216,14 @@ csilk_body_alloc(size_t size, size_t* out_capacity)
     }
 
     if (tls_body_pool.tiers[tier].count > 0) {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_BODY_BUFFER, true);
         return tls_body_pool.tiers[tier].buffers[--tls_body_pool.tiers[tier].count];
     }
 
     body_pool_ensure_cleanup();
 
+    CSILK_POOL_STAT_GET(CSILK_POOL_STAT_BODY_BUFFER, false);
+    CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_BODY_BUFFER);
     return malloc(tier_size);
 }
 
@@ -234,10 +239,12 @@ csilk_body_free(void* ptr, size_t capacity)
     if (tier >= 0 && capacity == k_body_tier_sizes[tier]) {
         if (tls_body_pool.tiers[tier].count < CSILK_BODY_POOL_MAX_PER_TIER) {
             tls_body_pool.tiers[tier].buffers[tls_body_pool.tiers[tier].count++] = ptr;
+            CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_BODY_BUFFER, tls_body_pool.tiers[tier].count);
             return;
         }
     }
 
+    CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_BODY_BUFFER);
     free(ptr);
 }
 
