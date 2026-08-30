@@ -111,7 +111,7 @@ _csilk_gzip_after_work_cb(csilk_io_work_t* req, int status)
     csilk_ctx_t*        c = (csilk_ctx_t*)req->data;
     gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
 
-    if (state && state->ret == Z_STREAM_END) {
+    if (state && state->dest && state->ret == Z_STREAM_END) {
         CSILK_LOG_D("Gzip: applying compressed response body for request %p (len: %zu)",
                     (void*)c,
                     state->compressed_len);

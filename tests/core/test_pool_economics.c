@@ -263,6 +263,12 @@ main(int argc, char** argv)
     print_pool_counts(&worker, "preallocated");
     free_worker_pool_storage(&worker);
     print_pool_counts(&worker, "after_cleanup");
+    /* Clear the TLS worker-pool pointer before the stack frame dies — otherwise the
+     * address of the just-destroyed stack `worker` remains latched in TLS and would be a
+     * use-after-free if another test in the same process later reads it. Also release the
+     * arena chunk free-list cached on this thread. */
+    _csilk_worker_set_current_pool(NULL);
+    csilk_arena_flush_free_list();
 #ifdef CSILK_POOL_STATS
     csilk_pool_stats_print(stdout);
 #endif

@@ -77,6 +77,11 @@ on_stop_async(csilk_io_async_t* handle)
     csilk_server_t* server = (csilk_server_t*)handle->data;
     CSILK_LOG_I("Server: initiating graceful shutdown");
 
+    /* Ordering matters here (H3): hooks MUST run first so in-flight work can
+     * register late stop-time cleanup, then the listener closes so no new
+     * connections are accepted, then active clients are drained, then the
+     * dispatch async and signal handles close, then workers are signaled and
+     * the loop is stopped. Any reordering can strand references mid-shutdown. */
     _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_STOP);
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
