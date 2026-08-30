@@ -27,6 +27,9 @@ function(add_csilk_test name source)
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
   )
   add_test(NAME ${name} COMMAND ${name})
+  if(name STREQUAL "test_performance_model")
+    set_tests_properties(${name} PROPERTIES TIMEOUT 180)
+  endif()
 endfunction()
 
 # -- Core tests --
