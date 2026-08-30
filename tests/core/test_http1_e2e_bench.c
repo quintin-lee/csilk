@@ -27,7 +27,7 @@
 #define E2E_TIMEOUT_SEC 5
 #define E2E_TOTAL_SAMPLES (E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT * E2E_ROUNDS)
 
-static volatile int    server_ready;
+static _Atomic(int)    server_ready;
 static csilk_server_t* server;
 
 static uint64_t

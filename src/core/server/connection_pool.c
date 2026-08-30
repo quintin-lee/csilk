@@ -320,6 +320,15 @@ pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
 void
 _csilk_worker_init_arena_pool(worker_pool_t* wp)
 {
+    /* Free any arenas already in the pool to avoid leaking them when
+     * pre-allocating fresh arenas. */
+    int old_count = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+    for (int i = 0; i < old_count; i++) {
+        if (wp->arena_pool[i]) {
+            csilk_arena_free(wp->arena_pool[i]);
+            wp->arena_pool[i] = NULL;
+        }
+    }
     int align = wp->server ? wp->server->config.enable_arena_alignment : 0;
     int count = 0;
     for (int i = 0; i < CSILK_CLIENT_POOL_SIZE; i++) {
