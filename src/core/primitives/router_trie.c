@@ -219,6 +219,10 @@ match_node(csilk_router_node_t*     node,
         while (frame->child_idx < curr->children_count) {
             int                  i = frame->child_idx++;
             csilk_router_node_t* child = children[i];
+            if (frame->seg && child->type == CSILK_NODE_STATIC && child->segment_len > 0 &&
+                (unsigned char)child->segment[0] != (unsigned char)frame->seg[0]) {
+                continue;
+            }
 
             if (child->type == CSILK_NODE_STATIC) {
                 if (!frame->seg) {
