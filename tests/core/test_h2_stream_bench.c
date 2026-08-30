@@ -376,6 +376,57 @@ benchmark_stream_scale(int stream_count, int lookup_iterations)
     free(stream_ids);
 }
 
+static void
+benchmark_stream_scale_rounds(int stream_count, int rounds)
+{
+    enum { lookup_iterations = 200000 };
+    double insert_samples[8];
+    double lookup_samples[8];
+    double delete_samples[8];
+    assert(rounds > 0 && rounds <= 8);
+
+    for (int round = 0; round < rounds; round++) {
+        csilk_client_t client;
+        memset(&client, 0, sizeof(client));
+        int32_t* stream_ids = malloc(sizeof(*stream_ids) * (size_t)stream_count);
+        assert(stream_ids != NULL);
+        for (int i = 0; i < stream_count; i++) {
+            stream_ids[i] = (int32_t)(i * 2 + 1);
+        }
+
+        double start = now_ns();
+        for (int i = 0; i < stream_count; i++) {
+            assert(csilk_h2_get_or_create_stream(&client, stream_ids[i]) != NULL);
+        }
+        insert_samples[round] = now_ns() - start;
+
+        uint32_t lfsr = 0xACE1u;
+        start = now_ns();
+        for (int i = 0; i < lookup_iterations; i++) {
+            lfsr = (lfsr >> 1) ^ (-(lfsr & 1u) & 0xB400u);
+            assert(csilk_h2_get_or_create_stream(
+                       &client, stream_ids[lfsr % (uint32_t)stream_count]) != NULL);
+        }
+        lookup_samples[round] = now_ns() - start;
+
+        start = now_ns();
+        for (int i = 0; i < stream_count; i++) {
+            assert(csilk_h2_remove_stream(&client, stream_ids[i]) == 0);
+        }
+        delete_samples[round] = now_ns() - start;
+        csilk_h2_free_streams(&client);
+        free(stream_ids);
+    }
+
+    printf("H2_ROUNDS streams=%d rounds=%d insert_median_ns=%.2f lookup_median_ns=%.2f "
+           "delete_median_ns=%.2f\n",
+           stream_count,
+           rounds,
+           insert_samples[rounds / 2] / stream_count,
+           lookup_samples[rounds / 2] / lookup_iterations,
+           delete_samples[rounds / 2] / stream_count);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Test 6: Formal RST_STREAM, 10k Reuse, and Connection Close Verification    */
 /* -------------------------------------------------------------------------- */
@@ -570,6 +621,10 @@ main(void)
     benchmark_stream_scale(100, 500000);
     benchmark_stream_scale(1000, 500000);
     benchmark_stream_scale(10000, 500000);
+    benchmark_stream_scale_rounds(10, 5);
+    benchmark_stream_scale_rounds(100, 5);
+    benchmark_stream_scale_rounds(1000, 5);
+    benchmark_stream_scale_rounds(10000, 5);
 
     printf("\n=== All HTTP/2 Stream Hash Map & Pool Tests Passed! ===\n");
     return 0;
