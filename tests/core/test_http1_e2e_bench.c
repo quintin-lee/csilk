@@ -5,10 +5,10 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdint.h>
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +18,7 @@
 
 #include "csilk/csilk.h"
 
-#define E2E_PORT 18991
+#define E2E_BASE_PORT 18991
 #define E2E_REQUESTS 1000
 #define E2E_TIMEOUT_SEC 5
 
@@ -39,25 +39,38 @@ handler(csilk_ctx_t* c)
     csilk_string(c, 200, "ok");
 }
 
+typedef struct {
+    int port;
+    int workers;
+} server_args_t;
+
 static void*
-server_main(void* arg)
+server_main(void* raw_args)
 {
-    (void)arg;
+    server_args_t*  args = raw_args;
     csilk_router_t* router = csilk_router_new();
     csilk_handler_t handlers[] = {handler};
     assert(router != NULL);
     assert(csilk_router_add(router, "GET", "/health", handlers, 1) == 0);
     server = csilk_server_new(router);
     assert(server != NULL);
+    csilk_server_config_t config = {
+        .worker_threads = args->workers,
+        .idle_timeout_ms = 5000,
+        .max_body_size = 1024 * 1024,
+        .max_header_size = 64 * 1024,
+        .listen_backlog = 128,
+    };
+    csilk_server_set_config(server, &config);
     server_ready = 1;
-    csilk_server_run(server, E2E_PORT);
+    csilk_server_run(server, args->port);
     csilk_server_free(server);
     csilk_router_free(router);
     return NULL;
 }
 
 static int
-connect_client(void)
+connect_client(int port)
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -69,7 +82,7 @@ connect_client(void)
     struct sockaddr_in address = {0};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    address.sin_port = htons(E2E_PORT);
+    address.sin_port = htons((uint16_t)port);
     if (connect(fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
         close(fd);
         return -1;
@@ -104,11 +117,14 @@ compare_u64(const void* left, const void* right)
     return (a > b) - (a < b);
 }
 
-int
-main(void)
+static void
+run_worker_benchmark(int workers, int port)
 {
-    pthread_t thread;
-    assert(pthread_create(&thread, NULL, server_main, NULL) == 0);
+    server_ready = 0;
+    server = NULL;
+    server_args_t args = {.port = port, .workers = workers};
+    pthread_t     thread;
+    assert(pthread_create(&thread, NULL, server_main, &args) == 0);
     for (int i = 0; i < E2E_TIMEOUT_SEC * 100 && !server_ready; i++) {
         struct timespec pause = {.tv_sec = 0, .tv_nsec = 10000000L};
         nanosleep(&pause, NULL);
@@ -117,7 +133,7 @@ main(void)
 
     int fd = -1;
     for (int i = 0; i < 100 && fd < 0; i++) {
-        fd = connect_client();
+        fd = connect_client(port);
         if (fd < 0) {
             usleep(10000);
         }
@@ -144,13 +160,24 @@ main(void)
 
     assert(completed == E2E_REQUESTS);
     qsort(latencies, completed, sizeof(latencies[0]), compare_u64);
-    printf("HTTP1_E2E requests=%zu qps=%.2f p50_ns=%" PRIu64 " p95_ns=%" PRIu64 " p99_ns=%" PRIu64
-           " errors=%zu\n",
+    printf("HTTP1_E2E workers=%d requests=%zu qps=%.2f p50_ns=%" PRIu64 " p95_ns=%" PRIu64
+           " p99_ns=%" PRIu64 " errors=%zu\n",
+           workers,
            completed,
            (double)completed * 1000000000.0 / (double)elapsed,
            latencies[completed * 50 / 100],
            latencies[completed * 95 / 100],
            latencies[completed * 99 / 100],
            E2E_REQUESTS - completed);
+}
+
+int
+main(void)
+{
+    alarm(60);
+    const int worker_counts[] = {1, 2, 4, 8};
+    for (size_t i = 0; i < sizeof(worker_counts) / sizeof(worker_counts[0]); i++) {
+        run_worker_benchmark(worker_counts[i], E2E_BASE_PORT + (int)i);
+    }
     return 0;
 }
