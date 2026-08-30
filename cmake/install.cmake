@@ -125,7 +125,7 @@ endif()
 
 # JSON
 set(CSILK_JSON_PC_REQUIRES "")
-set(CSILK_JSON_PC_LIBS_PRIVATE "")
+set(CSILK_JSON_PC_LIBS_PRIVATE "-lyyjson")
 
 # WASM
 set(CSILK_WASM_PC_REQUIRES "csilk-core")
@@ -153,6 +153,8 @@ set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
 set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lssl -lcrypto")
 if(LLHTTP_LIB)
   string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lllhttp")
+else()
+  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lcsilk-llhttp")
 endif()
 
 # DB
@@ -181,6 +183,16 @@ set(CSILK_AI_PC_LIBS_PRIVATE "-lcurl")
 # Workflow
 set(CSILK_WORKFLOW_PC_REQUIRES_PRIVATE "yaml-0.1")
 set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
+
+# Umbrella static closure. Requires lists pull the modular CSilk archives;
+# Libs.private supplies implementation dependencies for --static consumers.
+set(CSILK_PC_REQUIRES "csilk-http csilk-db csilk-workflow csilk-wasm")
+set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luv -lpthread -lm")
+if(LLHTTP_LIB)
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -lllhttp")
+else()
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -lcsilk-llhttp")
+endif()
 
 set(CSILK_PC_FILES
     csilk-base
