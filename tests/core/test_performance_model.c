@@ -8,6 +8,7 @@
 
 #include "core/ctx/ctx_internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/primitives/router_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 
@@ -56,6 +57,27 @@ print_result(const char* stage, uint64_t operations, uint64_t elapsed_ns, uint64
            ns_per_operation,
            cycles_per_operation,
            elapsed_ns);
+}
+
+static void
+benchmark_segment_scan(void)
+{
+    enum { operations = 1000000 };
+    const char*     path = "/api/v1/users/12345/profile/details";
+    volatile size_t total_length = 0;
+    uint64_t        start_ns = read_time_ns();
+    uint64_t        start_cycles = read_cycles();
+    for (int i = 0; i < operations; i++) {
+        const char* cursor = path;
+        size_t      length = 0;
+        while (get_next_segment(&cursor, &length) != NULL) {
+            total_length += length;
+        }
+    }
+    uint64_t elapsed_cycles = read_cycles() - start_cycles;
+    uint64_t elapsed_ns = read_time_ns() - start_ns;
+    (void)total_length;
+    print_result("router_segment_scan", operations, elapsed_ns, elapsed_cycles);
 }
 
 static void
@@ -195,6 +217,7 @@ int
 main(void)
 {
     printf("=== CSilk Performance Model Baseline ===\n");
+    benchmark_segment_scan();
     const char* patterns[] = {"/api/service%d/items/:id/detail",
                               "/api/service%d/items/*path",
                               "/api/service%d/items/detail"};
