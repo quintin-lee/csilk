@@ -23,6 +23,7 @@
 #define E2E_CLIENTS 4
 #define E2E_REQUESTS_PER_CLIENT 250
 #define E2E_ROUNDS 5
+#define E2E_WARMUP_REQUESTS 100
 #define E2E_TIMEOUT_SEC 5
 #define E2E_TOTAL_SAMPLES (E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT * E2E_ROUNDS)
 
@@ -185,6 +186,28 @@ confidence95_half_width(const double* values, size_t count, double mean)
 }
 
 static void
+run_warmup(int port)
+{
+    pthread_t     clients[E2E_CLIENTS];
+    client_args_t args[E2E_CLIENTS];
+    uint64_t      samples[E2E_CLIENTS * E2E_WARMUP_REQUESTS];
+    for (int i = 0; i < E2E_CLIENTS; i++) {
+        args[i] = (client_args_t){
+            .port = port,
+            .requests = E2E_WARMUP_REQUESTS,
+            .samples = samples,
+            .sample_offset = (size_t)i * E2E_WARMUP_REQUESTS,
+            .completed = 0,
+        };
+        assert(pthread_create(&clients[i], NULL, client_main, &args[i]) == 0);
+    }
+    for (int i = 0; i < E2E_CLIENTS; i++) {
+        pthread_join(clients[i], NULL);
+        assert(args[i].completed == E2E_WARMUP_REQUESTS);
+    }
+}
+
+static void
 run_worker_benchmark(int workers, int port)
 {
     server_ready = 0;
@@ -198,6 +221,7 @@ run_worker_benchmark(int workers, int port)
     }
     assert(server_ready);
 
+    run_warmup(port);
     uint64_t* samples = calloc(E2E_TOTAL_SAMPLES, sizeof(*samples));
     assert(samples != NULL);
     size_t   completed = 0;
