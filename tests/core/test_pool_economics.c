@@ -78,8 +78,10 @@ free_worker_pool_storage(worker_pool_t* wp)
     atomic_store_explicit(&wp->client_pool_count, 0, memory_order_relaxed);
     int arena_count = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
     for (int i = 0; i < arena_count; i++) {
-        csilk_arena_free(wp->arena_pool[i]);
-        wp->arena_pool[i] = NULL;
+        if (wp->arena_pool[i]) {
+            csilk_arena_free(wp->arena_pool[i]);
+            wp->arena_pool[i] = NULL;
+        }
     }
     atomic_store_explicit(&wp->arena_pool_count, 0, memory_order_relaxed);
     for (int tier = 0; tier < CSILK_READ_BUF_TIER_COUNT; tier++) {
