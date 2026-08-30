@@ -7,6 +7,8 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "csilk/core/internal.h"
+#include "core/ctx/ctx_internal.h"
+#include "core/internal/gzip_internal.h"
 
 /* Mock _csilk_send_response to capture the result. */
 static int response_sent = 0;
@@ -119,14 +121,40 @@ test_gzip_sync_happy(void)
 }
 
 static void
-test_gzip_async_offload(void)
+test_gzip_async_callbacks_direct(void)
 {
-    printf("Testing gzip async thread-pool offload (>32KB body)...\n");
-    csilk_ctx_t* c = run_gzip(1, 50000, "gzip", NULL, NULL);
+    printf("Testing gzip async work/after callbacks (direct, no thread pool)...\n");
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    /* Leave _internal_client NULL: the real after-work callback's
+     * _csilk_ctx_async_ref_decr() is a guarded no-op then, and we never
+     * increment, so no client struct is dereferenced. (Binding a single char
+     * and letting ref-count atomics run on it would corrupt memory.) */
+
+    char* body = malloc(50000);
+    assert(body != NULL);
+    for (int i = 0; i < 50000; i++) {
+        body[i] = 'A';
+    }
+    csilk_set_response_body(c, body, 50000, 1);
+    csilk_status(c, CSILK_STATUS_OK);
+
+    /* Replicate the middleware's async orchestration on the current thread so
+     * the real work/after callbacks are exercised without spawning the
+     * persistent libuv thread pool (which would outlive main() under ASAN). */
+    gzip_async_state_t* st = calloc(1, sizeof(gzip_async_state_t));
+    assert(st != NULL);
+    csilk_set(c, "gzip_state", st);
+
+    csilk_io_work_t* req = csilk_get_work_req(c);
+    req->data = c;
+
+    _csilk_gzip_work_cb(req);
+    _csilk_gzip_after_work_cb(req, 0);
+
     assert(response_sent == 1);
     assert_valid_gzip(c, 50000);
     csilk_test_ctx_free(c);
-    printf("async offload passed!\n");
+    printf("async callbacks direct passed!\n");
 }
 
 static void
@@ -195,7 +223,7 @@ main(void)
     setbuf(stdout, NULL);
     printf("Testing Gzip Middleware...\n");
     test_gzip_sync_happy();
-    test_gzip_async_offload();
+    test_gzip_async_callbacks_direct();
     test_gzip_skip_empty_body();
     test_gzip_skip_already_encoded();
     test_gzip_skip_incompressible();

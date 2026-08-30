@@ -12,25 +12,12 @@
 
 #include "csilk/core/internal.h"
 #include "core/ctx/ctx_internal.h"
+#include "core/internal/gzip_internal.h"
 
 /** @brief Gzip compression chunk size in bytes. */
 enum { CSILK_GZIP_CHUNK = 16384 };
 /** @brief Minimum content length to enable gzip compression. */
 enum { CSILK_GZIP_MIN_LENGTH = 1024 };
-
-/**
- * @brief State for asynchronous gzip compression offloading.
- *
- * Carries the compressed output buffer, capacity, actual compressed length,
- * and the zlib return status between the work callback (running on the
- * thread pool) and the after-work callback (running on the event loop).
- */
-typedef struct {
-    uint8_t* dest;           /**< Compressed output buffer. */
-    size_t   dest_cap;       /**< Capacity of the output buffer. */
-    int      ret;            /**< zlib return status. */
-    size_t   compressed_len; /**< Actual compressed data length. */
-} gzip_async_state_t;
 
 /**
  * @brief Work callback: perform gzip compression off the event loop.
@@ -44,8 +31,8 @@ typedef struct {
  * @note Runs on a thread-pool thread. Must not touch non-thread-safe
  *       resources.
  */
-static void
-gzip_work_cb(csilk_io_work_t* req)
+CSILK_INTERNAL void
+_csilk_gzip_work_cb(csilk_io_work_t* req)
 {
     csilk_ctx_t*        c = (csilk_ctx_t*)req->data;
     gzip_async_state_t* state = (gzip_async_state_t*)csilk_get(c, "gzip_state");
@@ -117,8 +104,8 @@ gzip_work_cb(csilk_io_work_t* req)
  * @note The original (uncompressed) response body is freed only if it was
  *       heap-managed (body_is_managed == 1).
  */
-static void
-gzip_after_work_cb(csilk_io_work_t* req, int status)
+CSILK_INTERNAL void
+_csilk_gzip_after_work_cb(csilk_io_work_t* req, int status)
 {
     (void)status;
     csilk_ctx_t*        c = (csilk_ctx_t*)req->data;
@@ -286,7 +273,7 @@ csilk_gzip_middleware(csilk_ctx_t* c)
 
     csilk_io_loop_t* loop = _csilk_ctx_loop(c);
     _csilk_ctx_async_ref_incr(c);
-    int rc = csilk_io_queue_work(loop, req, gzip_work_cb, gzip_after_work_cb);
+    int rc = csilk_io_queue_work(loop, req, _csilk_gzip_work_cb, _csilk_gzip_after_work_cb);
     if (rc != 0) {
         CSILK_LOG_E("Gzip: failed to queue work: %d", rc);
         _csilk_ctx_async_ref_decr(c);
