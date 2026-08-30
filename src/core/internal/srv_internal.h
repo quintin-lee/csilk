@@ -234,7 +234,9 @@ struct csilk_server_s {
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
+#ifndef CSILK_H2_STREAM_POOL_MAX
 #define CSILK_H2_STREAM_POOL_MAX 64
+#endif
 
 /**
  * @brief Adaptive hash table and pool for multiplexed HTTP/2 streams on a client connection.
