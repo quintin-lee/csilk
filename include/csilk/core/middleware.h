@@ -113,6 +113,18 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config);
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
 
 /**
+ * @brief Enforce the lockless in-memory rate-limit decision for an explicit IP.
+ *
+ * Internal hook used by csilk_rate_limit_middleware once the client IP is
+ * resolved. Exposed for unit tests, which cannot resolve an IP from a mock
+ * socket. On table saturation the request fails open (unlimited).
+ * @param c     The request context.
+ * @param ip    Client IP string (must outlive the call).
+ * @param limit Maximum requests allowed per IP within the 60-second window.
+ */
+CSILK_INTERNAL void _csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int limit);
+
+/**
  * @brief Stateless CSRF protection middleware.
  *
  * Checks for a valid CSRF token in the request (via header or form field)
