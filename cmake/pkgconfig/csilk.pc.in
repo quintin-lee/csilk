@@ -7,6 +7,7 @@ Name: csilk
 Description: High-performance, lightweight C HTTP server and microservices framework
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-http csilk-db csilk-workflow csilk-wasm
-Libs: -L${libdir}
+Requires: @CSILK_PC_REQUIRES@
+Libs: -L${libdir} -lcsilk
+Libs.private: @CSILK_PC_LIBS_PRIVATE@
 Cflags: -I${includedir} -D_GNU_SOURCE

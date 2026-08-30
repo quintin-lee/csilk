@@ -102,7 +102,7 @@ endif()
 add_library(csilk_base STATIC ${CSILK_BASE_SOURCES})
 set_target_properties(csilk_base PROPERTIES OUTPUT_NAME "csilk-base")
 csilk_target_setup(csilk_base PUBLIC STATIC)
-target_link_libraries(csilk_base PRIVATE Threads::Threads)
+target_link_libraries(csilk_base PUBLIC Threads::Threads)
 if(NOT APPLE AND NOT WIN32)
   target_link_libraries(csilk_base PRIVATE m)
 endif()
@@ -170,7 +170,7 @@ add_library(csilk_http2 STATIC ${CSILK_HTTP2_SOURCES})
 set_target_properties(csilk_http2 PROPERTIES OUTPUT_NAME "csilk-http2")
 csilk_target_setup(csilk_http2 PUBLIC STATIC)
 target_link_libraries(csilk_http2 PUBLIC csilk_core csilk_tls)
-target_link_libraries(csilk_http2 PRIVATE nghttp2)
+target_link_libraries(csilk_http2 PUBLIC nghttp2)
 add_library(csilk::http2 ALIAS csilk_http2)
 
 # ── 8. csilk_http (libcsilk-http.a) ──────────────────────────────────────
@@ -184,13 +184,13 @@ target_link_libraries(csilk_http PUBLIC
     csilk_http2
     csilk_mq
 )
-target_link_libraries(csilk_http PRIVATE
+target_link_libraries(csilk_http PUBLIC
     ZLIB::ZLIB
     OpenSSL::SSL
     OpenSSL::Crypto
 )
 if(TARGET csilk::llhttp)
-  target_link_libraries(csilk_http PRIVATE csilk::llhttp)
+  target_link_libraries(csilk_http PUBLIC csilk::llhttp)
 endif()
 add_library(csilk::http ALIAS csilk_http)
 
@@ -249,7 +249,7 @@ if(CSILK_BUILD_SHARED)
     add_library(csilk_base_shared SHARED ${CSILK_BASE_SOURCES})
     set_target_properties(csilk_base_shared PROPERTIES OUTPUT_NAME "csilk-base")
     csilk_target_setup(csilk_base_shared PUBLIC SHARED)
-    target_link_libraries(csilk_base_shared PRIVATE Threads::Threads)
+    target_link_libraries(csilk_base_shared PUBLIC Threads::Threads)
     if(NOT APPLE AND NOT WIN32)
       target_link_libraries(csilk_base_shared PRIVATE m)
     endif()
@@ -317,7 +317,7 @@ if(CSILK_BUILD_SHARED)
     set_target_properties(csilk_http2_shared PROPERTIES OUTPUT_NAME "csilk-http2")
     csilk_target_setup(csilk_http2_shared PUBLIC SHARED)
     target_link_libraries(csilk_http2_shared PUBLIC csilk_core_shared csilk_tls_shared)
-    target_link_libraries(csilk_http2_shared PRIVATE nghttp2)
+    target_link_libraries(csilk_http2_shared PUBLIC nghttp2)
     add_library(csilk::http2_shared ALIAS csilk_http2_shared)
 
     # csilk_http_shared (libcsilk-http.so)
@@ -331,13 +331,13 @@ if(CSILK_BUILD_SHARED)
         csilk_http2_shared
         csilk_mq_shared
     )
-    target_link_libraries(csilk_http_shared PRIVATE
+    target_link_libraries(csilk_http_shared PUBLIC
         ZLIB::ZLIB
         OpenSSL::SSL
         OpenSSL::Crypto
     )
     if(TARGET csilk::llhttp)
-      target_link_libraries(csilk_http_shared PRIVATE csilk::llhttp)
+      target_link_libraries(csilk_http_shared PUBLIC csilk::llhttp)
     endif()
     add_library(csilk::http_shared ALIAS csilk_http_shared)
 
