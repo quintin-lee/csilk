@@ -181,18 +181,29 @@ run_response_serialization_benchmark(void)
         abort();
     }
     const char* body = "{\"status\":\"ok\"}";
-    uint64_t    start = now_ns();
+    context->response.status = 200;
+    context->response.body = body;
+    context->response.body_len = strlen(body);
+    context->response.body_ownership = CSILK_OWN_BORROWED;
+    csilk_set_header(context, "Content-Type", "application/json");
+    size_t capacity = 512;
+    char*  output = malloc(capacity);
+    if (!output) {
+        abort();
+    }
+    uint64_t start = now_ns();
     for (size_t i = 0; i < HTTP1_BENCH_ITERS; i++) {
-        size_t length = strlen(body);
-        char*  output = malloc(length + 1);
-        if (!output) {
+        size_t length = _csilk_serialize_http1_response(context, output, capacity);
+        if (length == 0) {
             abort();
         }
-        memcpy(output, body, length + 1);
         sink += output[0];
-        free(output);
     }
-    print_stage("response_body_copy", now_ns() - start, HTTP1_BENCH_ITERS);
+    print_stage("response_serialize", now_ns() - start, HTTP1_BENCH_ITERS);
+    free(output);
+    context->response.body = NULL;
+    context->response.body_len = 0;
+    context->response.body_ownership = CSILK_OWN_NONE;
     csilk_test_ctx_free(context);
 }
 
