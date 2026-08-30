@@ -143,6 +143,28 @@ on_complete(llhttp_t* parser)
     return 0;
 }
 
+static size_t
+build_header_workload(char* buffer, size_t capacity, size_t header_count)
+{
+    int written = snprintf(buffer, capacity, "GET /headers HTTP/1.1\r\nHost: localhost\r\n");
+    if (written < 0 || (size_t)written >= capacity) {
+        return 0;
+    }
+    size_t length = (size_t)written;
+    for (size_t i = 0; i < header_count; i++) {
+        written = snprintf(buffer + length, capacity - length, "X-Header-%zu: value\r\n", i);
+        if (written < 0 || (size_t)written >= capacity - length) {
+            return 0;
+        }
+        length += (size_t)written;
+    }
+    if (capacity - length < 3) {
+        return 0;
+    }
+    memcpy(buffer + length, "\r\n", 3);
+    return length + 2;
+}
+
 static void
 run_workload(const char* name, const char* request, size_t length, int fragmented)
 {
@@ -188,22 +210,34 @@ run_workload(const char* name, const char* request, size_t length, int fragmente
 int
 main(void)
 {
-    static const char tiny[] = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
-    static const char json[] = "POST /api HTTP/1.1\r\nHost: localhost\r\n"
-                               "Content-Type: application/json\r\nContent-Length: 13\r\n\r\n"
-                               "{\"ok\":true}";
-    static const char body[] = "POST /upload HTTP/1.1\r\nHost: localhost\r\n"
-                               "Content-Length: 64\r\n\r\n"
-                               "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    static const char headers[] = "GET /headers HTTP/1.1\r\nHost: localhost\r\n"
-                                  "X-One: 1\r\nX-Two: 2\r\nX-Three: 3\r\nX-Four: 4\r\n"
-                                  "X-Five: 5\r\nX-Six: 6\r\nX-Seven: 7\r\nX-Eight: 8\r\n\r\n";
+    static const char   tiny[] = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    static const char   json[] = "POST /api HTTP/1.1\r\nHost: localhost\r\n"
+                                 "Content-Type: application/json\r\nContent-Length: 13\r\n\r\n"
+                                 "{\"ok\":true}";
+    static const char   body[] = "POST /upload HTTP/1.1\r\nHost: localhost\r\n"
+                                 "Content-Length: 64\r\n\r\n"
+                                 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    static const char   headers[] = "GET /headers HTTP/1.1\r\nHost: localhost\r\n"
+                                    "X-One: 1\r\nX-Two: 2\r\nX-Three: 3\r\nX-Four: 4\r\n"
+                                    "X-Five: 5\r\nX-Six: 6\r\nX-Seven: 7\r\nX-Eight: 8\r\n\r\n";
+    static const size_t header_counts[] = {5, 10, 20, 50};
+    char                header_matrix[4096];
 
     run_workload("tiny", tiny, sizeof(tiny) - 1, 0);
     run_workload("json", json, sizeof(json) - 1, 0);
     run_workload("body", body, sizeof(body) - 1, 0);
     run_workload("fragmented", headers, sizeof(headers) - 1, 1);
     run_workload("headers_8", headers, sizeof(headers) - 1, 0);
+    for (size_t i = 0; i < sizeof(header_counts) / sizeof(header_counts[0]); i++) {
+        size_t length =
+            build_header_workload(header_matrix, sizeof(header_matrix), header_counts[i]);
+        if (length == 0) {
+            return 1;
+        }
+        char name[32];
+        snprintf(name, sizeof(name), "headers_%zu", header_counts[i]);
+        run_workload(name, header_matrix, length, 0);
+    }
     printf("HTTP1_PMU sink=%zu\n", sink);
     return 0;
 }
