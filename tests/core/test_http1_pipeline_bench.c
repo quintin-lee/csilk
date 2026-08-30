@@ -107,7 +107,7 @@ run_parse_benchmark(const char* name, const char* request, size_t length)
 static void
 run_copy_benchmark(const char* name, const char* request, size_t length)
 {
-    char     buffer[1024];
+    char     buffer[8192];
     uint64_t start = now_ns();
     for (size_t i = 0; i < HTTP1_BENCH_ITERS; i++) {
         memcpy(buffer, request, length);
@@ -218,9 +218,18 @@ main(void)
                                        "Authorization: Bearer token\r\n"
                                        "\r\n"
                                        "{\"name\":\"csilk\",\"ok\":true}";
+    static const char body_request[] =
+        "POST /upload HTTP/1.1\r\n"
+        "Host: localhost\r\n"
+        "Content-Length: 64\r\n"
+        "Content-Type: application/octet-stream\r\n"
+        "X-Request-ID: benchmark\r\n"
+        "\r\n"
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     run_parse_benchmark("parse_tiny", tiny_request, sizeof(tiny_request) - 1);
     run_parse_benchmark("parse_json", json_request, sizeof(json_request) - 1);
+    run_parse_benchmark("parse_body", body_request, sizeof(body_request) - 1);
     run_context_header_benchmark();
     run_router_benchmark();
     run_response_serialization_benchmark();
