@@ -336,7 +336,8 @@ CSILK_INTERNAL void csilk_client_write(csilk_client_t* client, const uint8_t* da
  * @brief Dispatch a request context to the router and handler chain.
  * @param c The request context.
  */
-CSILK_INTERNAL void _csilk_dispatch_request(csilk_ctx_t* c);
+CSILK_INTERNAL void   _csilk_dispatch_request(csilk_ctx_t* c);
+CSILK_INTERNAL size_t _csilk_serialize_http1_response(csilk_ctx_t* c, char* buf, size_t capacity);
 
 /**
  * @brief Internal: invoke all registered handlers for a given hook type.

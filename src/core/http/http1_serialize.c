@@ -152,6 +152,41 @@ append_custom_headers_fast(csilk_header_map_t* headers, char* buf, size_t pos)
 
 /* --- Main response sender --- */
 
+CSILK_INTERNAL size_t
+_csilk_serialize_http1_response(csilk_ctx_t* c, char* buf, size_t capacity)
+{
+    if (!c || !buf || capacity == 0) {
+        return 0;
+    }
+
+    int         status = c->response.status ? c->response.status : 200;
+    const char* status_text = get_status_text(status);
+    const char* connection_val = "keep-alive";
+    size_t      body_len = c->response.body_len;
+    const char* body = c->response.body ? c->response.body : "";
+    size_t      custom_headers_len = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            custom_headers_len += h->key_len + 4 + h->value_len;
+        }
+    }
+    size_t bound = 128 + strlen(status_text) + custom_headers_len + body_len + 32;
+    if (bound > capacity) {
+        return 0;
+    }
+
+    size_t pos = fast_serialize_status_and_control(
+        buf, status, status_text, 0, "", body_len, connection_val);
+    pos = append_custom_headers_fast(&c->response.headers, buf, pos);
+    buf[pos++] = '\r';
+    buf[pos++] = '\n';
+    if (body_len > 0) {
+        memcpy(buf + pos, body, body_len);
+        pos += body_len;
+    }
+    return pos;
+}
+
 CSILK_INTERNAL void
 _csilk_send_response(csilk_ctx_t* c)
 {
@@ -199,24 +234,20 @@ _csilk_send_response(csilk_ctx_t* c)
     char* write_base = malloc(total_alloc_len + 1);
     if (write_base) {
         /* Single-pass vectorized serialization */
-        size_t pos = fast_serialize_status_and_control(write_base,
-                                                       status,
-                                                       status_text,
-                                                       use_chunked,
-                                                       transfer_encoding,
-                                                       body_len,
-                                                       connection_val);
-
-        pos = append_custom_headers_fast(&client->ctx.response.headers, write_base, pos);
-
-        write_base[pos++] = '\r';
-        write_base[pos++] = '\n';
-
-        if (!use_chunked && !is_file) {
-            if (body && body_len > 0) {
-                memcpy(write_base + pos, body, body_len);
-                pos += body_len;
-            }
+        size_t pos;
+        if (use_chunked || is_file) {
+            pos = fast_serialize_status_and_control(write_base,
+                                                    status,
+                                                    status_text,
+                                                    use_chunked,
+                                                    transfer_encoding,
+                                                    body_len,
+                                                    connection_val);
+            pos = append_custom_headers_fast(&client->ctx.response.headers, write_base, pos);
+            write_base[pos++] = '\r';
+            write_base[pos++] = '\n';
+        } else {
+            pos = _csilk_serialize_http1_response(&client->ctx, write_base, total_alloc_len + 1);
         }
         write_base[pos] = '\0';
 
