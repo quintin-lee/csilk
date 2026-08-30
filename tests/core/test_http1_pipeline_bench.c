@@ -105,6 +105,54 @@ run_parse_benchmark(const char* name, const char* request, size_t length)
 }
 
 static void
+run_fragmented_parse_benchmark(void)
+{
+    static const char* fragments[] = {
+        "GET /fragmented HTTP/1.1\r\n",
+        "Host: localhost\r\n",
+        "User-Agent: csilk\r\n",
+        "Accept: */*\r\n",
+        "\r\n",
+    };
+    llhttp_settings_t settings;
+    llhttp_settings_init(&settings);
+    settings.on_url = on_url;
+    settings.on_header_field = on_header;
+    settings.on_header_value = on_header;
+    settings.on_message_complete = on_complete;
+    llhttp_t parser;
+    llhttp_init(&parser, HTTP_REQUEST, &settings);
+    uint64_t start = now_ns();
+    for (size_t i = 0; i < HTTP1_BENCH_ITERS; i++) {
+        for (size_t fragment = 0; fragment < sizeof(fragments) / sizeof(fragments[0]); fragment++) {
+            const char* chunk = fragments[fragment];
+            size_t      length = strlen(chunk);
+            if (llhttp_execute(&parser, chunk, length) != HPE_OK) {
+                abort();
+            }
+        }
+        llhttp_reset(&parser);
+    }
+    print_stage("parse_fragmented", now_ns() - start, HTTP1_BENCH_ITERS);
+}
+
+static void
+run_header_matrix_benchmark(int header_count)
+{
+    char request[8192];
+    int offset = snprintf(request, sizeof(request), "GET /headers HTTP/1.1\r\nHost: localhost\r\n");
+    for (int i = 0; i < header_count && offset > 0 && (size_t)offset < sizeof(request); i++) {
+        offset += snprintf(request + offset,
+                           sizeof(request) - (size_t)offset,
+                           "X-Benchmark-%d: value-%d\r\n",
+                           i,
+                           i);
+    }
+    offset += snprintf(request + offset, sizeof(request) - (size_t)offset, "\r\n");
+    run_parse_benchmark("parse_headers", request, (size_t)offset);
+}
+
+static void
 run_copy_benchmark(const char* name, const char* request, size_t length)
 {
     char     buffer[8192];
@@ -230,6 +278,11 @@ main(void)
     run_parse_benchmark("parse_tiny", tiny_request, sizeof(tiny_request) - 1);
     run_parse_benchmark("parse_json", json_request, sizeof(json_request) - 1);
     run_parse_benchmark("parse_body", body_request, sizeof(body_request) - 1);
+    run_fragmented_parse_benchmark();
+    run_header_matrix_benchmark(5);
+    run_header_matrix_benchmark(10);
+    run_header_matrix_benchmark(20);
+    run_header_matrix_benchmark(50);
     run_context_header_benchmark();
     run_router_benchmark();
     run_response_serialization_benchmark();
