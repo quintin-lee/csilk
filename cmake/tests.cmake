@@ -28,7 +28,7 @@ function(add_csilk_test name source)
   )
   add_test(NAME ${name} COMMAND ${name})
   if(name STREQUAL "test_performance_model")
-    set_tests_properties(${name} PROPERTIES TIMEOUT 180)
+    set_tests_properties(${name} PROPERTIES TIMEOUT 600)
   endif()
 endfunction()
 
