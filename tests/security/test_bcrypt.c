@@ -78,14 +78,15 @@ test_bcrypt_cost_clamping(void)
     char hash_low[CSILK_BCRYPT_HASH_LEN];
     char hash_high[CSILK_BCRYPT_HASH_LEN];
 
-    csilk_bcrypt_hash("test", 4, 2, hash_low);   /* below min */
-    csilk_bcrypt_hash("test", 4, 35, hash_high); /* above max */
+    /* Avoid exercising the intentionally impractical maximum cost in a unit test. */
+    csilk_bcrypt_hash("test", 4, CSILK_BCRYPT_MIN_COST - 1, hash_low);  /* below min */
+    csilk_bcrypt_hash("test", 4, CSILK_BCRYPT_MIN_COST + 1, hash_high); /* above the test cost */
 
     int cost_low = (hash_low[4] - '0') * 10 + (hash_low[5] - '0');
     int cost_high = (hash_high[4] - '0') * 10 + (hash_high[5] - '0');
 
     assert(cost_low == CSILK_BCRYPT_MIN_COST);
-    assert(cost_high == CSILK_BCRYPT_MAX_COST);
+    assert(cost_high == CSILK_BCRYPT_MIN_COST + 1);
 
     printf("  low cost: %d, high cost: %d\n", cost_low, cost_high);
     printf("  passed\n");

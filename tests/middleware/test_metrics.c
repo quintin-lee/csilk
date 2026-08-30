@@ -42,10 +42,10 @@ test_metrics()
 
     csilk_test_ctx_free(c);
 
-    /* Second request */
+    /* Second request: run the metrics middleware so it records the request. */
     c = csilk_test_ctx_new();
     csilk_test_ctx_set_handlers(c, handlers);
-    csilk_next(c);
+    csilk_metrics_middleware(c, NULL);
     csilk_metrics_handler(c);
     body = csilk_get_response_body(c, nullptr);
     assert(strstr(body, "http_requests_total_agg 2") != nullptr);
