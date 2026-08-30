@@ -59,7 +59,7 @@ print_result(const char* stage, uint64_t operations, uint64_t elapsed_ns, uint64
 }
 
 static void
-benchmark_router_mode(int route_count, int use_simd)
+benchmark_router_mode(int route_count, int use_simd, const char* pattern, const char* query)
 {
     enum { lookups = 100000 };
     csilk_router_t* router = csilk_router_new();
@@ -69,7 +69,7 @@ benchmark_router_mode(int route_count, int use_simd)
     char            route[128];
     char            path[128];
     for (int i = 0; i < route_count; i++) {
-        snprintf(route, sizeof(route), "/api/service%d/items/:id/detail", i);
+        snprintf(route, sizeof(route), pattern, i);
         assert(csilk_router_add(router, "GET", route, handlers, 1) == 0);
     }
     assert(csilk_router_compile(router, NULL, 0) == 0);
@@ -86,7 +86,7 @@ benchmark_router_mode(int route_count, int use_simd)
     uint64_t           start_cycles = read_cycles();
     for (int i = 0; i < lookups; i++) {
         int index = i % route_count;
-        snprintf(path, sizeof(path), "/api/service%d/items/%d/detail", index, i);
+        snprintf(path, sizeof(path), query, index, i);
         context->request.path = path;
         sink ^= (uintptr_t)csilk_router_match_ctx(router, context);
     }
@@ -95,8 +95,12 @@ benchmark_router_mode(int route_count, int use_simd)
     (void)sink;
 
     char stage[64];
-    snprintf(
-        stage, sizeof(stage), "router_%s_%d_routes", use_simd ? "simd" : "scalar", route_count);
+    snprintf(stage,
+             sizeof(stage),
+             "router_%s_%s_%d_routes",
+             use_simd ? "simd" : "scalar",
+             pattern[1] == ':' ? "param" : (strchr(pattern, '*') ? "wildcard" : "static"),
+             route_count);
     print_result(stage, lookups, elapsed_ns, elapsed_cycles);
     context->server = NULL;
     context->arena = NULL;
@@ -191,16 +195,19 @@ int
 main(void)
 {
     printf("=== CSilk Performance Model Baseline ===\n");
-    benchmark_router_mode(1, 0);
-    benchmark_router_mode(1, 1);
-    benchmark_router_mode(10, 0);
-    benchmark_router_mode(10, 1);
-    benchmark_router_mode(100, 0);
-    benchmark_router_mode(100, 1);
-    benchmark_router_mode(1000, 0);
-    benchmark_router_mode(1000, 1);
-    benchmark_router_mode(10000, 0);
-    benchmark_router_mode(10000, 1);
+    const char* patterns[] = {"/api/service%d/items/:id/detail",
+                              "/api/service%d/items/*path",
+                              "/api/service%d/items/detail"};
+    const char* queries[] = {"/api/service%d/items/%d/detail",
+                             "/api/service%d/items/%d/extra/detail",
+                             "/api/service%d/items/detail"};
+    const int   route_counts[] = {1, 10, 100, 1000, 10000};
+    for (size_t kind = 0; kind < 3; kind++) {
+        for (size_t count = 0; count < sizeof(route_counts) / sizeof(route_counts[0]); count++) {
+            benchmark_router_mode(route_counts[count], 0, patterns[kind], queries[kind]);
+            benchmark_router_mode(route_counts[count], 1, patterns[kind], queries[kind]);
+        }
+    }
     benchmark_headers_scale(5);
     benchmark_headers_scale(10);
     benchmark_headers_scale(20);
