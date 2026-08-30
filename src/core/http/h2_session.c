@@ -83,6 +83,7 @@ _csilk_stream_destroy_physically(csilk_ctx_t* c)
 
     if (map && map->pool_count < map->pool_max) {
         c->stream_state = CSILK_STREAM_STATE_RECYCLED;
+        CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_STREAM, map->pool_count + 1);
         if (c->arena) {
             csilk_arena_reset(c->arena);
         }
@@ -91,6 +92,7 @@ _csilk_stream_destroy_physically(csilk_ctx_t* c)
         map->pool_count++;
     } else {
         c->stream_state = CSILK_STREAM_STATE_CLOSED;
+        CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_STREAM);
         if (c->arena) {
             csilk_arena_free(c->arena);
             c->arena = NULL;
@@ -209,6 +211,7 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
 
     /* Acquire from pool if available */
     if (map->free_list) {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_STREAM, true);
         ctx = map->free_list;
         map->free_list = ctx->next_stream;
         map->pool_count--;
@@ -219,9 +222,11 @@ csilk_h2_get_or_create_stream(csilk_client_t* client, int32_t stream_id)
         }
         _csilk_stream_ctx_init(ctx, client, stream_id);
     } else {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_STREAM, false);
         /* Allocate new context and arena */
         ctx = calloc(1, sizeof(csilk_ctx_t));
         if (!ctx) {
+            CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_STREAM);
             return NULL;
         }
         arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);

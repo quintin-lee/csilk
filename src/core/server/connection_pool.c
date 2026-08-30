@@ -86,13 +86,17 @@ pool_get(worker_pool_t* wp)
     if (wp) {
         int cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
         if (cnt > 0) {
+            CSILK_POOL_STAT_GET(CSILK_POOL_STAT_CONNECTION, true);
             client = wp->client_pool[cnt - 1];
             atomic_store_explicit(&wp->client_pool_count, cnt - 1, memory_order_relaxed);
+            CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_CONNECTION, (uint64_t)(cnt - 1));
         }
     }
     if (!client) {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_CONNECTION, false);
         client = calloc(1, sizeof(csilk_client_t));
         if (client) {
+            CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_CONNECTION);
             _csilk_client_atomics_init(client);
         }
     }
@@ -226,6 +230,7 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
         if (cnt < CSILK_CLIENT_POOL_SIZE) {
             wp->client_pool[cnt] = client;
             atomic_store_explicit(&wp->client_pool_count, cnt + 1, memory_order_relaxed);
+            CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_CONNECTION, (uint64_t)(cnt + 1));
             return;
         }
     }
@@ -235,6 +240,7 @@ pool_put(worker_pool_t* wp, csilk_client_t* client)
         client->read_buf = NULL;
     }
 #endif
+    CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_CONNECTION);
     free(client);
 }
 
@@ -258,9 +264,12 @@ pool_get_arena(worker_pool_t* wp)
     csilk_arena_t* arena = NULL;
     int            cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
     if (cnt > 0) {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_ARENA, true);
         arena = wp->arena_pool[cnt - 1];
         atomic_store_explicit(&wp->arena_pool_count, cnt - 1, memory_order_relaxed);
+        CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_ARENA, (uint64_t)(cnt - 1));
     } else {
+        CSILK_POOL_STAT_GET(CSILK_POOL_STAT_ARENA, false);
         arena = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
         if (arena && wp->server->config.enable_arena_alignment) {
             csilk_arena_set_alignment(arena, 1);
@@ -289,9 +298,11 @@ pool_put_arena(worker_pool_t* wp, csilk_arena_t* arena)
         if (cnt < CSILK_CLIENT_POOL_SIZE) {
             wp->arena_pool[cnt] = arena;
             atomic_store_explicit(&wp->arena_pool_count, cnt + 1, memory_order_relaxed);
+            CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_ARENA, (uint64_t)(cnt + 1));
             return;
         }
     }
+    CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_ARENA);
     csilk_arena_free(arena);
 }
 
@@ -313,6 +324,7 @@ _csilk_worker_init_arena_pool(worker_pool_t* wp)
     int count = 0;
     for (int i = 0; i < CSILK_CLIENT_POOL_SIZE; i++) {
         csilk_arena_t* a = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+        CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_ARENA);
         if (!a) {
             break;
         }
@@ -383,12 +395,16 @@ pool_get_read_buf(worker_pool_t* wp, size_t suggested_size, csilk_io_buf_t* buf)
     if (wp) {
         int cnt = atomic_load_explicit(&wp->read_buf_counts[tier], memory_order_relaxed);
         if (cnt > 0) {
+            CSILK_POOL_STAT_GET(CSILK_POOL_STAT_READ_BUFFER, true);
             buf->base = (char*)wp->read_buf_tiers[tier][cnt - 1];
             buf->len = tier_size;
             atomic_store_explicit(&wp->read_buf_counts[tier], cnt - 1, memory_order_relaxed);
+            CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_READ_BUFFER, (uint64_t)(cnt - 1));
             return;
         }
     }
+    CSILK_POOL_STAT_GET(CSILK_POOL_STAT_READ_BUFFER, false);
+    CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_READ_BUFFER);
     buf->base = (char*)malloc(tier_size);
     buf->len = tier_size;
 }
@@ -414,7 +430,9 @@ pool_put_read_buf(worker_pool_t* wp, char* base, size_t size)
     if (cnt < CSILK_READ_BUF_POOL_SIZE) {
         wp->read_buf_tiers[tier][cnt] = (void*)base;
         atomic_store_explicit(&wp->read_buf_counts[tier], cnt + 1, memory_order_relaxed);
+        CSILK_POOL_STAT_RETAINED(CSILK_POOL_STAT_READ_BUFFER, (uint64_t)(cnt + 1));
     } else {
+        CSILK_POOL_STAT_FREE(CSILK_POOL_STAT_READ_BUFFER);
         free(base);
     }
 }
@@ -434,6 +452,7 @@ _csilk_worker_init_read_buf_pool(worker_pool_t* wp)
         int count = 0;
         for (int i = 0; i < CSILK_READ_BUF_POOL_SIZE; i++) {
             void* p = malloc(tier_sizes[tier]);
+            CSILK_POOL_STAT_ALLOC(CSILK_POOL_STAT_READ_BUFFER);
             if (!p) {
                 break;
             }

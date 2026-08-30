@@ -11,6 +11,9 @@
 #include "core/internal/srv_internal.h"
 #include "core/internal/srv_impl.h"
 #include "csilk/http/h2.h"
+#ifdef CSILK_POOL_STATS
+#include "core/internal/pool_stats.h"
+#endif
 
 static uint64_t
 now_ns(void)
@@ -202,6 +205,10 @@ main(int argc, char** argv)
     }
 
     printf("=== CSilk Pool Economics Baseline ===\n");
+#ifdef CSILK_POOL_STATS
+    csilk_pool_stats_reset();
+    csilk_pool_stats_enable(true);
+#endif
     printf("CONFIG stream_pool_max=%d client_pool_size=%d read_pool_size=%d "
            "body_tiers=%d body_max_per_tier=%d\n",
            CSILK_H2_STREAM_POOL_MAX,
@@ -254,6 +261,9 @@ main(int argc, char** argv)
     print_pool_counts(&worker, "preallocated");
     free_worker_pool_storage(&worker);
     print_pool_counts(&worker, "after_cleanup");
+#ifdef CSILK_POOL_STATS
+    csilk_pool_stats_print(stdout);
+#endif
     printf("=== Pool Economics Complete ===\n");
     return 0;
 }

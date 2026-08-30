@@ -22,6 +22,18 @@ typedef struct bio_st     BIO;
 #include <csilk/core/sys_io.h>
 #include <llhttp.h>
 #include <nghttp2/nghttp2.h>
+#ifdef CSILK_POOL_STATS
+#include "pool_stats.h"
+#define CSILK_POOL_STAT_GET(kind, hit) csilk_pool_stats_record_get((kind), (hit))
+#define CSILK_POOL_STAT_ALLOC(kind) csilk_pool_stats_record_alloc((kind))
+#define CSILK_POOL_STAT_FREE(kind) csilk_pool_stats_record_free((kind))
+#define CSILK_POOL_STAT_RETAINED(kind, count) csilk_pool_stats_set_retained((kind), (count))
+#else
+#define CSILK_POOL_STAT_GET(kind, hit) ((void)0)
+#define CSILK_POOL_STAT_ALLOC(kind) ((void)0)
+#define CSILK_POOL_STAT_FREE(kind) ((void)0)
+#define CSILK_POOL_STAT_RETAINED(kind, count) ((void)0)
+#endif
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
