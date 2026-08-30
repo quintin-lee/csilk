@@ -23,13 +23,28 @@ now_ns(void)
 static long
 rss_kib(void)
 {
+#ifdef __linux__
+    FILE* status = fopen("/proc/self/status", "r");
+    if (!status) {
+        return -1;
+    }
+    char line[128];
+    long rss = -1;
+    while (fgets(line, sizeof(line), status)) {
+        if (sscanf(line, "VmRSS: %ld kB", &rss) == 1) {
+            break;
+        }
+    }
+    fclose(status);
+    return rss;
+#else
     struct rusage usage;
     if (getrusage(RUSAGE_SELF, &usage) != 0) {
         return -1;
     }
     return usage.ru_maxrss;
+#endif
 }
-
 static void
 print_pool_counts(const worker_pool_t* wp, const char* phase)
 {
@@ -175,8 +190,17 @@ run_body_workload(int requests, size_t request_size)
 }
 
 int
-main(void)
+main(int argc, char** argv)
 {
+    int workers = 1;
+    if (argc == 3 && strcmp(argv[1], "--workers") == 0) {
+        workers = atoi(argv[2]);
+    }
+    if (workers < 1 || workers > 256) {
+        fprintf(stderr, "usage: %s [--workers N]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
     printf("=== CSilk Pool Economics Baseline ===\n");
     printf("CONFIG stream_pool_max=%d client_pool_size=%d read_pool_size=%d "
            "body_tiers=%d body_max_per_tier=%d\n",
@@ -185,6 +209,20 @@ main(void)
            CSILK_READ_BUF_POOL_SIZE,
            CSILK_BODY_POOL_TIER_COUNT,
            CSILK_BODY_POOL_MAX_PER_TIER);
+    size_t read_retention_per_worker =
+        (size_t)CSILK_READ_BUF_POOL_SIZE *
+        (CSILK_READ_BUF_4KB + CSILK_READ_BUF_16KB + CSILK_READ_BUF_64KB);
+    size_t body_retention_per_thread =
+        (size_t)CSILK_BODY_POOL_MAX_PER_TIER *
+        (CSILK_BODY_POOL_64KB + CSILK_BODY_POOL_128KB + CSILK_BODY_POOL_256KB +
+         CSILK_BODY_POOL_512KB + CSILK_BODY_POOL_1MB);
+    printf("RETENTION workers=%d read_max_per_worker=%zu read_max_total=%zu "
+           "body_max_per_thread=%zu body_max_total=%zu\n",
+           workers,
+           read_retention_per_worker,
+           read_retention_per_worker * (size_t)workers,
+           body_retention_per_thread,
+           body_retention_per_thread * (size_t)workers);
 
     csilk_server_t server;
     memset(&server, 0, sizeof(server));
