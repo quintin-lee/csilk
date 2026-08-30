@@ -32,6 +32,7 @@ struct csilk_router_node_s {
     csilk_method_handler_t*      handlers;
     uint16_t                     children_count;
     uint16_t                     children_cap;
+    int16_t                      static_first[256]; /**< First static child by leading byte. */
     struct csilk_router_node_s*  inline_children[CSILK_ROUTER_INLINE_CHILDREN];
     struct csilk_router_node_s** overflow_children;
 };

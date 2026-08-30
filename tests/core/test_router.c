@@ -52,9 +52,30 @@ test_router_simd()
     printf("test_router_simd passed!\n");
 }
 
+static void
+test_router_many_static_children(void)
+{
+    csilk_router_t* router = csilk_router_new();
+    assert(router != nullptr);
+    csilk_handler_t handlers[] = {mock_handler1};
+    char            route[64];
+    char            path[64];
+    for (int i = 0; i < 64; i++) {
+        snprintf(route, sizeof(route), "/api/item_%02d/detail", i);
+        assert(csilk_router_add(router, "GET", route, handlers, 1) == 0);
+    }
+    for (int i = 0; i < 64; i++) {
+        snprintf(path, sizeof(path), "/api/item_%02d/detail", i);
+        assert(csilk_router_match(router, "GET", path) != nullptr);
+    }
+    assert(csilk_router_match(router, "GET", "/api/item_99/detail") == nullptr);
+    csilk_router_free(router);
+}
+
 int
 main()
 {
+    test_router_many_static_children();
     test_router_simd();
     csilk_router_t* r = csilk_router_new();
     assert(r != nullptr);
