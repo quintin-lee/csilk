@@ -109,16 +109,18 @@ typedef struct CSILK_CACHE_ALIGNED {
     csilk_io_loop_t* loop_ptr;      /**< Pointer to the active loop. */
     csilk_io_tcp_t   server_handle; /**< Worker-local listen handle. */
     csilk_client_t*  client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
-    _Atomic(int)     client_pool_count;                   /**< Items in local free list (atomic). */
-    _Atomic(int)     active_connections; /**< Active connections on this worker (atomic). */
+    _Atomic(int)
+        client_pool_count; /**< Owner-worker pool count; read cross-thread for stats/shutdown. */
+    _Atomic(int)     active_connections; /**< Owner-worker count; read cross-thread for stats. */
     csilk_io_async_t stop_async;         /**< Async for graceful worker stop. */
     int              worker_index;       /**< 0 = main loop, 1+ = worker threads. */
     csilk_arena_t*   arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
-    _Atomic(int)     arena_pool_count;                   /**< Items in arena pool (atomic). */
-    void*            read_buf_tiers[CSILK_READ_BUF_TIER_COUNT][CSILK_READ_BUF_POOL_SIZE];
+    _Atomic(int)
+          arena_pool_count; /**< Owner-worker pool count; read cross-thread during shutdown. */
+    void* read_buf_tiers[CSILK_READ_BUF_TIER_COUNT][CSILK_READ_BUF_POOL_SIZE];
     /**< Per-tier read buffer pool. */
     _Atomic(int) read_buf_counts[CSILK_READ_BUF_TIER_COUNT];
-    /**< Items in each tier's free list (atomic). */
+    /**< Owner-worker counts; read cross-thread during shutdown and diagnostics. */
     csilk_io_async_t dispatch_async; /**< Cross-thread task dispatch async handle. */
     csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
     csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
