@@ -59,9 +59,9 @@ print_result(const char* stage, uint64_t operations, uint64_t elapsed_ns, uint64
 }
 
 static void
-benchmark_router(void)
+benchmark_router_mode(int route_count, int use_simd)
 {
-    enum { route_count = 1000, lookups = 200000 };
+    enum { lookups = 100000 };
     csilk_router_t* router = csilk_router_new();
     assert(router != NULL);
 
@@ -73,6 +73,13 @@ benchmark_router(void)
         assert(csilk_router_add(router, "GET", route, handlers, 1) == 0);
     }
     assert(csilk_router_compile(router, NULL, 0) == 0);
+    csilk_server_t server;
+    memset(&server, 0, sizeof(server));
+    atomic_init(&server.runtime_config.enable_simd, use_simd);
+    csilk_ctx_t* context = csilk_test_ctx_new();
+    assert(context != NULL);
+    context->server = &server;
+    context->request.method = "GET";
 
     volatile uintptr_t sink = 0;
     uint64_t           start_ns = read_time_ns();
@@ -80,54 +87,67 @@ benchmark_router(void)
     for (int i = 0; i < lookups; i++) {
         int index = i % route_count;
         snprintf(path, sizeof(path), "/api/service%d/items/%d/detail", index, i);
-        sink ^= (uintptr_t)csilk_router_match(router, "GET", path);
+        context->request.path = path;
+        sink ^= (uintptr_t)csilk_router_match_ctx(router, context);
     }
     uint64_t elapsed_cycles = read_cycles() - start_cycles;
     uint64_t elapsed_ns = read_time_ns() - start_ns;
     (void)sink;
 
-    print_result("router_match_1000_routes", lookups, elapsed_ns, elapsed_cycles);
+    char stage[64];
+    snprintf(
+        stage, sizeof(stage), "router_%s_%d_routes", use_simd ? "simd" : "scalar", route_count);
+    print_result(stage, lookups, elapsed_ns, elapsed_cycles);
+    context->server = NULL;
+    context->arena = NULL;
+    free(context);
     csilk_router_free(router);
 }
 
 static void
-benchmark_headers(void)
+benchmark_headers_scale(int header_count)
 {
-    enum { lookups = 400000 };
+    enum { lookups = 200000 };
     csilk_ctx_t* context = csilk_test_ctx_new();
     assert(context != NULL);
-    csilk_set_request_header(context, "Host", "api.csilk.test");
-    csilk_set_request_header(context, "Authorization", "Bearer benchmark");
-    csilk_set_request_header(context, "Content-Type", "application/json");
-    csilk_set_request_header(context, "X-Request-ID", "benchmark-request");
-    csilk_set_request_header(context, "Accept", "application/json");
+
+    char name[64];
+    char value[64];
+    for (int i = 0; i < header_count; i++) {
+        snprintf(name, sizeof(name), "X-Benchmark-%d", i);
+        snprintf(value, sizeof(value), "value-%d", i);
+        csilk_set_request_header(context, name, value);
+    }
 
     volatile uintptr_t sink = 0;
     uint64_t           start_ns = read_time_ns();
     uint64_t           start_cycles = read_cycles();
     for (int i = 0; i < lookups; i++) {
-        sink ^= (uintptr_t)csilk_get_header(context, "Authorization");
-        sink ^= (uintptr_t)csilk_get_header_id(context, CSILK_HDR_CONTENT_TYPE);
+        int index = i % header_count;
+        snprintf(name, sizeof(name), "X-Benchmark-%d", index);
+        sink ^= (uintptr_t)csilk_get_header(context, name);
     }
     uint64_t elapsed_cycles = read_cycles() - start_cycles;
     uint64_t elapsed_ns = read_time_ns() - start_ns;
     (void)sink;
 
-    print_result("header_lookup_5_headers", lookups * 2, elapsed_ns, elapsed_cycles);
+    char stage[64];
+    snprintf(stage, sizeof(stage), "header_lookup_%d_headers", header_count);
+    print_result(stage, lookups, elapsed_ns, elapsed_cycles);
     csilk_test_ctx_free(context);
 }
 
 static void
-benchmark_streams(void)
+benchmark_stream_scale(int stream_count)
 {
-    enum { streams = 100, cycles = 10000 };
+    enum { cycles = 2000 };
     csilk_client_t client;
     memset(&client, 0, sizeof(client));
 
     uint64_t start_ns = read_time_ns();
     uint64_t start_cycles = read_cycles();
     for (int i = 0; i < cycles; i++) {
-        for (int stream = 0; stream < streams; stream++) {
+        for (int stream = 0; stream < stream_count; stream++) {
             int32_t      id = (int32_t)(stream * 2 + 1);
             csilk_ctx_t* context = csilk_h2_get_or_create_stream(&client, id);
             assert(context != NULL);
@@ -137,8 +157,9 @@ benchmark_streams(void)
     uint64_t elapsed_cycles = read_cycles() - start_cycles;
     uint64_t elapsed_ns = read_time_ns() - start_ns;
 
-    print_result(
-        "h2_stream_create_recycle_100", (uint64_t)streams * cycles, elapsed_ns, elapsed_cycles);
+    char stage[64];
+    snprintf(stage, sizeof(stage), "h2_stream_create_recycle_%d", stream_count);
+    print_result(stage, (uint64_t)stream_count * cycles, elapsed_ns, elapsed_cycles);
     csilk_h2_free_streams(&client);
 }
 
@@ -170,9 +191,25 @@ int
 main(void)
 {
     printf("=== CSilk Performance Model Baseline ===\n");
-    benchmark_router();
-    benchmark_headers();
-    benchmark_streams();
+    benchmark_router_mode(1, 0);
+    benchmark_router_mode(1, 1);
+    benchmark_router_mode(10, 0);
+    benchmark_router_mode(10, 1);
+    benchmark_router_mode(100, 0);
+    benchmark_router_mode(100, 1);
+    benchmark_router_mode(1000, 0);
+    benchmark_router_mode(1000, 1);
+    benchmark_router_mode(10000, 0);
+    benchmark_router_mode(10000, 1);
+    benchmark_headers_scale(5);
+    benchmark_headers_scale(10);
+    benchmark_headers_scale(20);
+    benchmark_headers_scale(50);
+    benchmark_headers_scale(100);
+    benchmark_stream_scale(1);
+    benchmark_stream_scale(10);
+    benchmark_stream_scale(100);
+    benchmark_stream_scale(1000);
     benchmark_arena();
     printf("=== Performance Model Complete ===\n");
     return EXIT_SUCCESS;
