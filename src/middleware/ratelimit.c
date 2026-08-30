@@ -89,12 +89,71 @@ get_or_create_ip_entry(const char* ip, time_t now)
 }
 
 /**
+ * @brief Enforce the lockless in-memory rate-limit decision for a given IP.
+ *
+ * Tracks request counts per client IP within a 60-second sliding window. If the
+ * number of requests from a given IP exceeds the limit, a 429 Too Many
+ * Requests response is sent (with a Retry-After header) and the pipeline is
+ * aborted. On table saturation the request FAILS OPEN (unlimited) rather than
+ * sharing a hash slot with unrelated IPs, which would block innocent clients.
+ *
+ * Extracted from csilk_rate_limit_middleware so the local lockless path can be
+ * exercised directly by tests with a fabricated client IP (the middleware
+ * resolves the IP from the live socket, which is not available in a mock ctx).
+ *
+ * @param c     The request context.
+ * @param ip    Client IP string (must outlive the call).
+ * @param limit Maximum number of requests allowed per IP within the 60-second window.
+ */
+CSILK_INTERNAL void
+_csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int limit)
+{
+    time_t             now = time(NULL);
+    atomic_ip_entry_t* entry = get_or_create_ip_entry(ip, now);
+
+    if (!entry) {
+        /* Table saturated: fail open (unlimited) instead of sharing a slot
+         * between unrelated IPs, which would block innocent clients. */
+        CSILK_LOG_W("RateLimit: [Local] IP table saturated, skipping rate limiting for IP %s", ip);
+        csilk_next(c);
+        return;
+    }
+
+    time_t   reset = atomic_load(&entry->last_reset);
+    uint32_t current_count = 0;
+
+    if (now - reset > WINDOW_SIZE) {
+        if (atomic_compare_exchange_strong(&entry->last_reset, &reset, now)) {
+            atomic_store(&entry->count, 1);
+            current_count = 1;
+        } else {
+            current_count = atomic_fetch_add(&entry->count, 1) + 1;
+        }
+    } else {
+        current_count = atomic_fetch_add(&entry->count, 1) + 1;
+    }
+
+    if ((int)current_count > limit) {
+        CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %u "
+                    "exceeds limit %d",
+                    ip,
+                    current_count,
+                    limit);
+        _csilk_metrics_inc_rate_limit_blocks();
+        csilk_set_header(c, "Retry-After", "60");
+        csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
+        csilk_abort(c);
+    } else {
+        csilk_next(c);
+    }
+}
+
+/**
  * @brief IP-based rate limiting middleware with lockless sliding window.
  *
- * Tracks request counts per client IP address within a 60-second sliding window.
- * If the number of requests from a given IP exceeds the limit, a 429 Too
- * Many Requests response is sent (with a Retry-After header) and the
- * pipeline is aborted.
+ * Resolves the client IP from the live socket, uses the distributed storage
+ * path when a storage driver is configured, and otherwise delegates to the
+ * lockless in-memory path (see _csilk_rate_limit_local).
  *
  * @param c     The request context.
  * @param limit Maximum number of requests allowed per IP within the 60-second window.
@@ -135,43 +194,5 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
         }
     }
 
-    /* Lockless in-memory rate limiting fallback */
-    time_t             now = time(NULL);
-    atomic_ip_entry_t* entry = get_or_create_ip_entry(ip, now);
-
-    if (!entry) {
-        /* Table saturated: fail open (unlimited) instead of sharing a slot
-         * between unrelated IPs, which would block innocent clients. */
-        CSILK_LOG_W("RateLimit: [Local] IP table saturated, skipping rate limiting for IP %s", ip);
-        csilk_next(c);
-        return;
-    }
-
-    time_t   reset = atomic_load(&entry->last_reset);
-    uint32_t current_count = 0;
-
-    if (now - reset > WINDOW_SIZE) {
-        if (atomic_compare_exchange_strong(&entry->last_reset, &reset, now)) {
-            atomic_store(&entry->count, 1);
-            current_count = 1;
-        } else {
-            current_count = atomic_fetch_add(&entry->count, 1) + 1;
-        }
-    } else {
-        current_count = atomic_fetch_add(&entry->count, 1) + 1;
-    }
-
-    if ((int)current_count > limit) {
-        CSILK_LOG_W("RateLimit: [Local] Blocked request from IP %s: current count %u "
-                    "exceeds limit %d",
-                    ip,
-                    current_count,
-                    limit);
-        _csilk_metrics_inc_rate_limit_blocks();
-        csilk_set_header(c, "Retry-After", "60");
-        csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
-        csilk_abort(c);
-    } else {
-        csilk_next(c);
-    }
+    _csilk_rate_limit_local(c, ip, limit);
 }
