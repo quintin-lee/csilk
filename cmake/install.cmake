@@ -6,14 +6,22 @@ include(CMakePackageConfigHelpers)
 set(CSILK_INSTALL_TARGETS
     csilk
     csilk_base
+    csilk_crypto
     csilk_core
+    csilk_runtime
     csilk_json
     csilk_wasm
     csilk_bypass
     csilk_http
     csilk_tls
     csilk_http2
+    csilk_protocols
+    csilk_middleware
+    csilk_reflection
+    csilk_permission
+    csilk_app
     csilk_db
+    csilk_vector
     csilk_ai
     csilk_mq
     csilk_workflow
@@ -43,14 +51,22 @@ if(CSILK_BUILD_SHARED)
     set(CSILK_SHARED_INSTALL_TARGETS
         csilk_shared
         csilk_base_shared
+        csilk_crypto_shared
         csilk_core_shared
+        csilk_runtime_shared
         csilk_json_shared
         csilk_wasm_shared
         csilk_bypass_shared
         csilk_http_shared
         csilk_tls_shared
         csilk_http2_shared
+        csilk_protocols_shared
+        csilk_middleware_shared
+        csilk_reflection_shared
+        csilk_permission_shared
+        csilk_app_shared
         csilk_db_shared
+        csilk_vector_shared
         csilk_ai_shared
         csilk_mq_shared
         csilk_workflow_shared
@@ -127,6 +143,49 @@ endif()
 set(CSILK_JSON_PC_REQUIRES "")
 set(CSILK_JSON_PC_LIBS_PRIVATE "-lyyjson")
 
+# Crypto
+set(CSILK_CRYPTO_PC_REQUIRES "csilk-base openssl")
+set(CSILK_CRYPTO_PC_LIBS_PRIVATE "-lcrypto")
+
+# Runtime
+set(CSILK_RUNTIME_PC_REQUIRES "csilk-base csilk-crypto csilk-json")
+set(CSILK_RUNTIME_PC_REQUIRES_PRIVATE "")
+set(CSILK_RUNTIME_PC_LIBS_PRIVATE "-luv -lyaml -lpthread -lm")
+if(CSILK_USE_URING)
+  set(CSILK_RUNTIME_PC_REQUIRES "csilk-base csilk-crypto csilk-json liburing")
+  set(CSILK_RUNTIME_PC_LIBS_PRIVATE "-luring -lyaml -lpthread -lm")
+endif()
+
+# Protocols
+set(CSILK_PROTOCOLS_PC_REQUIRES "csilk-http csilk-http2 csilk-reflection csilk-workflow csilk-mq")
+set(CSILK_PROTOCOLS_PC_REQUIRES_PRIVATE "")
+set(CSILK_PROTOCOLS_PC_LIBS_PRIVATE "")
+
+# Middleware
+set(CSILK_MIDDLEWARE_PC_REQUIRES "csilk-http csilk-tls")
+set(CSILK_MIDDLEWARE_PC_REQUIRES_PRIVATE "zlib")
+set(CSILK_MIDDLEWARE_PC_LIBS_PRIVATE "-lz -lcrypto -lpthread")
+
+# Permission
+set(CSILK_PERMISSION_PC_REQUIRES "csilk-runtime csilk-json")
+set(CSILK_PERMISSION_PC_REQUIRES_PRIVATE "")
+set(CSILK_PERMISSION_PC_LIBS_PRIVATE "")
+
+# Reflection
+set(CSILK_REFLECTION_PC_REQUIRES "csilk-runtime csilk-json")
+set(CSILK_REFLECTION_PC_REQUIRES_PRIVATE "")
+set(CSILK_REFLECTION_PC_LIBS_PRIVATE "")
+
+# Application
+set(CSILK_APP_PC_REQUIRES "csilk-http csilk-protocols csilk-middleware csilk-reflection csilk-db csilk-ai")
+set(CSILK_APP_PC_REQUIRES_PRIVATE "")
+set(CSILK_APP_PC_LIBS_PRIVATE "")
+
+# Vector
+set(CSILK_VECTOR_PC_REQUIRES "csilk-runtime csilk-json")
+set(CSILK_VECTOR_PC_REQUIRES_PRIVATE "libcurl")
+set(CSILK_VECTOR_PC_LIBS_PRIVATE "-lcurl")
+
 # WASM
 set(CSILK_WASM_PC_REQUIRES "csilk-core")
 set(CSILK_WASM_PC_LIBS_PRIVATE "")
@@ -186,7 +245,7 @@ set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 
 # Umbrella static closure. Requires lists pull the modular CSilk archives;
 # Libs.private supplies implementation dependencies for --static consumers.
-set(CSILK_PC_REQUIRES "csilk-http csilk-db csilk-workflow csilk-wasm")
+set(CSILK_PC_REQUIRES "csilk-http csilk-permission csilk-db csilk-workflow csilk-wasm")
 set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luv -lpthread -lm")
 if(LLHTTP_LIB)
   string(APPEND CSILK_PC_LIBS_PRIVATE " -lllhttp")
@@ -198,13 +257,21 @@ set(CSILK_PC_FILES
     csilk-base
     csilk-core
     csilk-json
+    csilk-crypto
+    csilk-runtime
     csilk-wasm
     csilk-bypass
     csilk-tls
     csilk-mq
     csilk-http2
     csilk-http
+    csilk-protocols
+    csilk-middleware
+    csilk-reflection
+    csilk-permission
+    csilk-app
     csilk-db
+    csilk-vector
     csilk-ai
     csilk-workflow
     csilk

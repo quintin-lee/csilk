@@ -202,3 +202,18 @@ add_custom_target(run_tests
 
 include(cmake/tooling.cmake)
 include(cmake/install.cmake)
+
+# Package/export smoke test. It installs the current build tree into an
+# isolated prefix, then configures a tiny external consumer against it.
+if(CSILK_BUILD_TESTS AND CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  add_test(
+      NAME test_cmake_package_target_split
+      COMMAND ${CMAKE_COMMAND}
+          -DCSILK_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+          -DCSILK_BUILD_DIR=${CMAKE_BINARY_DIR}
+          -DCSILK_BUILD_SHARED=${CSILK_BUILD_SHARED}
+          -DCSILK_TEST_BINARY_DIR=${CMAKE_BINARY_DIR}/cmake-package-smoke
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/test_package.cmake
+  )
+  set_tests_properties(test_cmake_package_target_split PROPERTIES TIMEOUT 120)
+endif()

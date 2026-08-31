@@ -2,6 +2,12 @@
 # This file defines the add_csilk_test helper and registers all test executables.
 # Only include when csilk is the top-level project.
 
+# Test helpers are compiled into a test-only support library. They remain out
+# of every production module and are linked transitively by test executables.
+add_library(csilk_test_support STATIC ${CSILK_TEST_SUPPORT_SOURCES})
+csilk_target_setup(csilk_test_support PRIVATE STATIC)
+target_link_libraries(csilk_test_support PRIVATE csilk_runtime csilk_base)
+
 # Helper to add a test executable and register with CTest
 function(add_csilk_test name source)
   add_executable(${name} ${source})
@@ -9,7 +15,7 @@ function(add_csilk_test name source)
     target_compile_definitions(${name} PRIVATE CSILK_POOL_STATS)
     target_sources(${name} PRIVATE tests/core/pool_stats.c)
   endif()
-  target_link_libraries(${name} csilk pthread m)
+  target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
       "${CSILK_COMMON_FLAGS}"
