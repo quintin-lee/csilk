@@ -424,7 +424,7 @@ csilk_get(app, "/api/echo", echo_handler);
 
 ### Coverage
 
-Built with `-DUSE_COVERAGE=ON` under gcc (ASAN/TSAN incompatible). GCOV excludes `flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c` via `.gcovr`. Current reported coverage: **66%** (11 765 / 17 773 lines). Target: increase via integration tests (SSE alone drove sse.c from 22% → 77%).
+Built with `-DUSE_COVERAGE=ON` under gcc (ASAN/TSAN incompatible). GCOV excludes `flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c` via `.gcovr`. Current reported coverage: **69%** (12 609 / 18 281 lines). Target: increase via integration tests (SSE alone drove sse.c from 22% → 77%; the coverage campaign further raised websocket.c → 85%, gzip.c → 68%, bounded_buf.c → 100%).
 
 ### CI matrix (`.github/workflows/ci.yml`)
 

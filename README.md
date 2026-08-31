@@ -249,7 +249,7 @@ ctest -E test_integration --output-on-failure
 cmake -B build_cov -S . -DCMAKE_C_COMPILER=gcc -DUSE_COVERAGE=ON
 cmake --build build_cov
 ctest --test-dir build_cov -E test_integration --output-on-failure
-gcovr -r build_cov --filter src/  # 66% line coverage
+gcovr -r build_cov --filter src/  # 69% line coverage
 ```
 
 ## Modular Sub-Libraries & Integration
