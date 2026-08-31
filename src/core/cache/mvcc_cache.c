@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/mvcc_cache.h"
+#include "csilk/core/cache/mvcc_cache.h"
 
 #include <pthread.h>
 #include <sched.h>

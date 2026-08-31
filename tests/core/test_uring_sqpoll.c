@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "csilk/core/io_perf.h"
+#include "csilk/core/uring/io_perf.h"
 
 int csilk_uring_sqpoll_init(void* ring, int cpu_core, uint32_t idle_ms);
 int csilk_uring_sqpoll_wakeup(void* ring);

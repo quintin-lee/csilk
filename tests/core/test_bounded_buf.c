@@ -10,7 +10,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "csilk/core/bounded_buf.h"
+#include "csilk/core/primitives/bounded_buf.h"
 
 #define BUFN 512
 static char                 g_buf[BUFN];

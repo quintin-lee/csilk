@@ -6,7 +6,7 @@
 #ifndef CSILK_MCP_INTERNAL_H
 #define CSILK_MCP_INTERNAL_H
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include <stddef.h>
 #include <stdint.h>
 

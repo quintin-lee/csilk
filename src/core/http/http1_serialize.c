@@ -15,7 +15,7 @@
 #include "../internal/srv_internal.h"
 #include "../primitives/header_map.h"
 #include "csilk/core/internal.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 
 /* --- Status text --- */
 

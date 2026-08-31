@@ -7,7 +7,7 @@
 
 #include "workflow_internal.h"
 #include "csilk/core/sync.h"
-#include "csilk/core/wasm.h"
+#include "csilk/core/plugin/wasm.h"
 
 /**
  * @brief Workflow node handler that loads and executes a WASM file.

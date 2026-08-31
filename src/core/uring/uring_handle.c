@@ -8,7 +8,7 @@
 #ifdef CSILK_USE_URING
 
 #include <csilk/csilk.h>
-#include <csilk/core/server.h>
+#include <csilk/core/server/server.h>
 #include <csilk/core/internal.h>
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_internal.h"

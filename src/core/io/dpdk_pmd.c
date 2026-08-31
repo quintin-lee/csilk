@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/dpdk_pmd.h"
+#include "csilk/core/io/dpdk_pmd.h"
 #include <stdlib.h>
 #include <string.h>
 

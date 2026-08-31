@@ -15,7 +15,7 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/app/workflow_wal.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /** @brief Trace record for a single node execution. */
 typedef struct csilk_wf_trace_node_s {

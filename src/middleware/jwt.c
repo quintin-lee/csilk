@@ -16,7 +16,7 @@ _csilk_jwt_json_free(void* value)
 {
     csilk_json_free((csilk_json_t*)value);
 }
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 #include "csilk/drivers/cipher.h"
 #include <openssl/crypto.h>
 

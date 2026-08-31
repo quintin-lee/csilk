@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/swar_http.h"
+#include "csilk/core/http/swar_http.h"
 #include <string.h>
 
 /**

@@ -29,7 +29,7 @@
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
-#include "csilk/core/hot_reload.h"
+#include "csilk/core/server/hot_reload.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/messaging/mq.h"

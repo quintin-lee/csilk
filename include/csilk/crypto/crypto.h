@@ -13,8 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/core/bcrypt.h"
-#include "csilk/core/hash.h"
+#include "csilk/crypto/bcrypt.h"
+#include "csilk/core/primitives/hash.h"
 
 #ifdef __cplusplus
 extern "C" {

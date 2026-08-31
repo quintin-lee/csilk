@@ -8,7 +8,7 @@
  */
 
 #include <stdlib.h>
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include <yyjson.h>
 
 static inline yyjson_val*

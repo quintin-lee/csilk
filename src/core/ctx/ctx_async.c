@@ -5,9 +5,9 @@
 
 #include <stdatomic.h>
 #include <stdlib.h>
-#include "csilk/core/async.h"
+#include "csilk/core/ctx/async.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/response.h"
+#include "csilk/core/ctx/response.h"
 #include "../internal/srv_impl.h"
 #include "../internal/srv_internal.h"
 #include "ctx_internal.h"

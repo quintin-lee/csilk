@@ -7,7 +7,7 @@
 
 #include <string.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "ctx_internal.h"
 #include "csilk/core/internal.h"
 #include "csilk/reflection/reflect.h"

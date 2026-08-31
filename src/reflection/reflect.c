@@ -38,7 +38,7 @@
  */
 
 #include "csilk/reflection/reflect.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 
 #include <stdio.h>
 #include "csilk/core/sync.h"

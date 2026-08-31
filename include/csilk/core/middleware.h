@@ -13,9 +13,9 @@
  */
 
 #include "csilk/core/types.h"
-#include "csilk/core/context.h"
-#include "csilk/core/response.h"
-#include "csilk/core/crypto.h"
+#include "csilk/core/ctx/context.h"
+#include "csilk/core/ctx/response.h"
+#include "csilk/crypto/crypto.h"
 
 /**
  * @brief Pass control to the next handler in the middleware/handler chain.

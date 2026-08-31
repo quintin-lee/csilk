@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "csilk/core/io_perf.h"
+#include "csilk/core/uring/io_perf.h"
 
 static void
 test_io_perf_probing_and_fallback(void)

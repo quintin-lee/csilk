@@ -44,7 +44,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /* --- Global DB Metrics --- */
 static atomic_uint_fast64_t db_queries_total = 0;

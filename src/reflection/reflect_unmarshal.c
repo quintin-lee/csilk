@@ -9,7 +9,7 @@
  */
 
 #include "reflect_internal.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 
 #include <stdio.h>
 #include <stdlib.h>

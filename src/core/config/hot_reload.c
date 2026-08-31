@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/hot_reload.h"
+#include "csilk/core/server/hot_reload.h"
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
 

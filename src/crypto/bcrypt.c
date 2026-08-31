@@ -24,7 +24,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/bcrypt.h"
+#include "csilk/crypto/bcrypt.h"
 
 #include <stdint.h>
 #include <string.h>

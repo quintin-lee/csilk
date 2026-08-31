@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "csilk/core/errors.h"
+#include "csilk/core/config/errors.h"
 #include "csilk/version.h"
 
 /** @brief Forward declaration of opaque JSON value type. */

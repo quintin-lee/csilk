@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #include "csilk/core/sync.h"
-#include "csilk/core/wasm.h"
+#include "csilk/core/plugin/wasm.h"
 
 #define CSILK_WASM_MAGIC 0x6d736100u   /* \0asm */
 #define CSILK_WASM_VERSION 0x00000001u /* v1.0 */

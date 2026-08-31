@@ -12,7 +12,7 @@
 #include <time.h>
 
 #include "csilk/csilk.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #include "csilk/test/test.h"
 #include "core/ctx/ctx_internal.h"
 #include "core/internal/srv_internal.h"
