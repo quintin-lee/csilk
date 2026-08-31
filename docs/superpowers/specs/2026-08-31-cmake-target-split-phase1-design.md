@@ -1,7 +1,7 @@
 # CMake Target 拆分（第一阶段）设计说明
 
 - **日期**：2026-08-31
-- **状态**：已获用户确认，待实现
+- **状态**：已实现；CMake 构建与安装验证完成，Python test-support 兼容性待后续处理
 - **范围**：仅调整 CMake source manifest、target 依赖、安装导出与兼容层
 - **迁移策略**：渐进迁移
 - **核心约束**：不移动 `src/` 文件、不改变 public API、不改变 Python 扩展入口、不修改版本号
@@ -17,11 +17,11 @@
 - `csilk_db` 与 `csilk_vector` 独立构建；`csilk::db` 继续指向数据库 target。
 - 静态库、共享库、CMake package export 和 pkg-config 元数据保持可用。
 - 既有测试仍可通过 umbrella target `csilk` 链接，不要求第一阶段移动测试文件。
-- 默认 libuv、io_uring、静态库、共享库、可选数据库驱动和 Python CMake 构建路径均能通过验证。
+- 默认 libuv、io_uring、静态库、共享库和可选数据库驱动构建路径均能通过验证；Python wrapper 对测试专用 context helper 的加载仍需后续适配。
 
 ## 2. 总体架构
 
-本阶段采用单向依赖图。`base` 提供最底层公共设施，`runtime` 提供框架运行时，`http` 提供 HTTP/1 与 TLS 适配，`protocols`、`middleware`、`app` 位于更高层。数据库、向量、AI、消息和插件作为 runtime 的旁路扩展。`csilk` 仅聚合 targets，不拥有独立业务实现源码。
+本阶段按职责建立模块 target。`base` 提供最底层公共设施，`runtime` 提供框架运行时，`http` 提供 HTTP/1 与 TLS 适配，`protocols`、`middleware`、`app` 位于更高层。数据库、向量、AI、消息和插件作为 runtime 的旁路扩展。`csilk` 仅聚合 targets；`csilk_shared` 复用各模块 object library，避免 shared 构建重复编译实现源码。
 
 ```mermaid
 %%{init: {
@@ -118,6 +118,7 @@ graph TD
 - **`csilk_app`**：app builder、route/group、admin handlers。
 - **`csilk_db` / `csilk_vector` / `csilk_ai` / `csilk_messaging` / `csilk_workflow` / `csilk_wasm` / `csilk_bypass`**：面向领域的旁路扩展。
 - **`csilk`**：interface umbrella；只链接模块，不直接编译实现源码。
+- **`csilk_shared`**：兼容 ABI shared library；复用模块 object library，不重复编译实现源码。
 
 ## 3. Target 与 source ownership
 
@@ -446,12 +447,7 @@ target_link_libraries(csilk INTERFACE
 
 共享库 target MUST 与静态 target 使用相同 source ownership 和依赖图，不能继续用旧的 `${CSILK_SOURCES}` 直接把所有实现重新编译进 `csilk_shared` 后再链接模块 shared libraries，否则会造成重复符号和边界失真。
 
-第一阶段可采用以下两种实现之一：
-
-1. 共享模块逐一编译并由 `csilk_shared` 作为统一链接层聚合；
-2. 共享模块共用对象源集合，但每个源文件只属于一个 object set。
-
-推荐方案 1，改动更直观、便于后续安装和 ABI 检查。
+本阶段采用 object-library 方案：每个模块只有一个 object compilation owner；静态 archive、模块 shared library 和兼容 ABI 的 `csilk_shared` 均复用对应对象。模块 shared target 的依赖优先映射到对应 `_shared` provider，避免 shared target 意外回落到静态库。
 
 ## 5. 安装、pkg-config 与 Python 影响
 
@@ -499,7 +495,7 @@ Python CMake extension MUST 继续只构建 `csilk_shared`，不改变 `csilk._d
 
 ## 7. 验证矩阵
 
-实现后 MUST 执行：
+CMake 实现已执行并通过：
 
 ```bash
 cmake --build build --target csilk_base csilk_crypto csilk_runtime
@@ -520,7 +516,7 @@ cmake --build build --target check-format
 - 独立 io_uring build variant 构建；
 - `CSILK_BUILD_SHARED=ON`；
 - 可选 DB client source 条件；
-- Python shared library 构建；
+- Python shared library 构建目标 `csilk_shared`；Python wrapper 的完整测试因其仍无条件绑定 test-only symbols，暂列为后续兼容工作；
 - 安装导出的 CMake package 至少完成一个下游 compile smoke test；
 - `python3 scripts/check_mermaid.py .`；
 - `./scripts/check_version_sync.sh`。

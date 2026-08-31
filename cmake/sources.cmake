@@ -1,32 +1,20 @@
-# cmake/sources.cmake — Source files organized by modular sub-library.
+# cmake/sources.cmake — source ownership for modular sub-libraries.
 #
-# Modular sub-libraries:
-#   - CSILK_CORE_SOURCES     -> csilk_core     (libcsilk-core.a)
-#   - CSILK_HTTP_SOURCES     -> csilk_http     (libcsilk-http.a)
-#   - CSILK_TLS_SOURCES      -> csilk_tls      (libcsilk-tls.a)
-#   - CSILK_HTTP2_SOURCES    -> csilk_http2    (libcsilk-http2.a)
-#   - CSILK_DB_SOURCES       -> csilk_db       (libcsilk-db.a)
-#   - CSILK_AI_SOURCES       -> csilk_ai       (libcsilk-ai.a)
-#   - CSILK_MQ_SOURCES       -> csilk_mq       (libcsilk-mq.a)
-#   - CSILK_WORKFLOW_SOURCES -> csilk_workflow (libcsilk-workflow.a)
-#   - CSILK_SOURCES          -> csilk          (libcsilk.a / libcsilk.so)
+# Every implementation source belongs to one module list below.  The full
+# CSILK_SOURCES list at the end is the only aggregate closure.
 
-# ── Foundation Primitives Module (arena, bounded_buf, kv_store) ───────────
+# ── Foundation primitives ────────────────────────────────────────────────
 set(CSILK_BASE_SOURCES
     src/core/primitives/arena.c
     src/core/primitives/bounded_buf.c
     src/core/primitives/kv_store.c
+    src/core/primitives/header_map.c
+    src/core/primitives/query.c
+    src/core/primitives/url.c
 )
 
-# ── Minimal Core Module (config, logger, sync, crypto, uring primitives) ───
-set(CSILK_CORE_SOURCES
-    src/core/cache/mvcc_cache.c
-    src/core/config/config.c
-    src/core/config/logger.c
-    src/core/config/hooks.c
-    src/core/uring/uring_buf.c
-    src/core/uring/uring_sqpoll.c
-    src/core/uring/uring_vector.c
+# ── Crypto and cipher implementations ────────────────────────────────────
+set(CSILK_CRYPTO_SOURCES
     src/crypto/base64.c
     src/crypto/sha1.c
     src/crypto/cipher_dispatch.c
@@ -34,14 +22,48 @@ set(CSILK_CORE_SOURCES
     src/crypto/crypto.c
     src/crypto/bcrypt.c
     src/drivers/cipher/openssl.c
-    src/core/primitives/header_map.c
-    src/core/primitives/query.c
-    src/core/primitives/url.c
+)
+
+# Compatibility source list.  csilk_core is an interface compatibility target.
+set(CSILK_CORE_SOURCES)
+
+# ── Runtime: context, router, server, config and backend glue ─────────────
+set(CSILK_RUNTIME_SOURCES
+    src/core/cache/mvcc_cache.c
+    src/core/config/config.c
+    src/core/config/logger.c
+    src/core/config/hooks.c
+    src/core/config/hot_reload.c
+    src/core/uring/uring_buf.c
+    src/core/uring/uring_sqpoll.c
+    src/core/uring/uring_vector.c
+    src/core/ctx/context.c
+    src/core/ctx/ctx_accessors.c
+    src/core/ctx/ctx_async.c
+    src/core/ctx/ctx_defer.c
+    src/core/ctx/ctx_json.c
+    src/core/primitives/recovery.c
+    src/core/primitives/response.c
+    src/core/primitives/router.c
+    src/core/primitives/router_simd.c
+    src/core/primitives/router_trie.c
+    src/core/server/connection_pool.c
+    src/core/server/connection_state.c
+    src/core/server/timer_lifetime.c
+    src/core/server/connection_timer.c
+    src/core/server/connection_close.c
+    src/core/server/connection_io.c
+    src/core/server/connection.c
+    src/core/server/server_lifecycle.c
+    src/core/server/server_driver.c
+    src/core/server/server_rcu.c
+    src/core/server/server_shutdown.c
+    src/core/server/server_worker.c
     src/util/flamegraph.c
 )
 
 if(CSILK_USE_URING)
-    list(APPEND CSILK_CORE_SOURCES
+    list(APPEND CSILK_RUNTIME_SOURCES
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
         src/core/uring/uring_io.c
@@ -55,6 +77,11 @@ if(CSILK_USE_URING)
         src/core/uring/uring_run.c
     )
 endif()
+
+# Test helpers are linked only by test executables.
+set(CSILK_TEST_SUPPORT_SOURCES
+    src/core/test_utils.c
+)
 
 # ── JSON Module (yyjson fast serialization engine) ──────────────────────
 set(CSILK_JSON_SOURCES
@@ -88,20 +115,8 @@ set(CSILK_BYPASS_SOURCES
     src/core/io/io_perf_probe.c
 )
 
-# ── HTTP Module (HTTP/1, context, router, connection, server, app, middleware) ─
+# ── HTTP/1 Module ─────────────────────────────────────────────────────────
 set(CSILK_HTTP_SOURCES
-    src/core/ctx/context.c
-    src/core/ctx/ctx_accessors.c
-    src/core/ctx/ctx_async.c
-    src/core/ctx/ctx_defer.c
-    src/core/ctx/ctx_json.c
-    src/core/config/hot_reload.c
-    src/core/test_utils.c
-    src/core/primitives/recovery.c
-    src/core/primitives/response.c
-    src/core/primitives/router.c
-    src/core/primitives/router_simd.c
-    src/core/primitives/router_trie.c
     src/core/http/http1_parse.c
     src/core/http/http1_serialize.c
     src/core/http/http1_write.c
@@ -109,53 +124,6 @@ set(CSILK_HTTP_SOURCES
     src/core/http/http1_response.c
     src/core/http/http1_zerocopy.c
     src/core/http/swar_http.c
-    src/core/server/connection_pool.c
-    src/core/server/connection_state.c
-    src/core/server/timer_lifetime.c
-    src/core/server/connection_timer.c
-    src/core/server/connection_close.c
-
-    src/core/server/connection_io.c
-    src/core/server/connection.c
-    src/core/server/server_lifecycle.c
-    src/core/server/server_driver.c
-    src/core/server/server_rcu.c
-    src/core/server/server_shutdown.c
-    src/core/server/server_worker.c
-    src/app/app.c
-    src/app/app_routes.c
-    src/app/group.c
-    src/app/admin.c
-    src/middleware/auth.c
-    src/middleware/circuit_breaker.c
-    src/middleware/cors.c
-    src/middleware/csrf.c
-    src/middleware/grpc_gateway.c
-    src/middleware/gzip.c
-    src/middleware/jwt.c
-    src/middleware/logger.c
-    src/middleware/metrics.c
-    src/middleware/multipart.c
-    src/middleware/otlp_exporter.c
-    src/middleware/otlp_trace.c
-    src/middleware/ratelimit.c
-    src/middleware/request_id.c
-    src/middleware/session.c
-    src/middleware/sliding_ratelimit.c
-    src/middleware/sse.c
-    src/middleware/static.c
-    src/middleware/validate.c
-    src/middleware/waf.c
-    src/middleware/xdp_waf.c
-    src/protocols/swagger.c
-    src/protocols/websocket.c
-    src/protocols/ws_room.c
-    src/reflection/reflect.c
-    src/reflection/reflect_marshal.c
-    src/reflection/reflect_unmarshal.c
-    src/reflection/reflect_free.c
-    src/drivers/perm/perm.c
-    src/drivers/perm/simple.c
 )
 
 # ── TLS Module (OpenSSL TLS engine & cipher drivers) ─────────────────────
@@ -172,10 +140,15 @@ set(CSILK_HTTP2_SOURCES
     src/protocols/h3.c
 )
 
-# ── Database & Vector Module ─────────────────────────────────────────────
+# ── Database Module ───────────────────────────────────────────────────────
 set(CSILK_DB_SOURCES
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
+)
+
+# Optional database drivers are appended by the top-level CMakeLists.txt.
+# Vector implementations intentionally have their own target and ownership.
+set(CSILK_VECTOR_SOURCES
     src/drivers/vector/vector.c
     src/drivers/vector/vector_simd.c
     src/drivers/vector/vector_hnsw.c
@@ -204,6 +177,66 @@ set(CSILK_MQ_SOURCES
     src/messaging/raft_snapshot.c
 )
 
+# ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
+set(CSILK_PROTOCOLS_SOURCES
+    src/protocols/websocket.c
+    src/protocols/ws_room.c
+    # swagger.c currently contains the OpenAPI generator and Swagger UI
+    # implementations; the split files remain out of this phase-one target.
+    src/protocols/swagger.c
+    src/protocols/mcp/mcp_jsonrpc.c
+    src/protocols/mcp/mcp_server.c
+    src/protocols/mcp/mcp_client.c
+)
+
+# ── Permission Module ─────────────────────────────────────────────────────
+set(CSILK_PERMISSION_SOURCES
+    src/drivers/perm/perm.c
+    src/drivers/perm/simple.c
+)
+
+# ── Middleware Module ─────────────────────────────────────────────────────
+set(CSILK_MIDDLEWARE_SOURCES
+    src/middleware/auth.c
+    src/middleware/circuit_breaker.c
+    src/middleware/cors.c
+    src/middleware/csrf.c
+    src/middleware/grpc_gateway.c
+    src/middleware/gzip.c
+    src/middleware/jwt.c
+    src/middleware/logger.c
+    src/middleware/metrics.c
+    src/middleware/multipart.c
+    src/middleware/otlp_exporter.c
+    src/middleware/otlp_trace.c
+    src/middleware/ratelimit.c
+    src/middleware/request_id.c
+    src/middleware/security_headers.c
+    src/middleware/session.c
+    src/middleware/sliding_ratelimit.c
+    src/middleware/sse.c
+    src/middleware/static.c
+    src/middleware/validate.c
+    src/middleware/waf.c
+    src/middleware/xdp_waf.c
+)
+
+# ── Reflection Module ────────────────────────────────────────────────────
+set(CSILK_REFLECTION_SOURCES
+    src/reflection/reflect.c
+    src/reflection/reflect_marshal.c
+    src/reflection/reflect_unmarshal.c
+    src/reflection/reflect_free.c
+)
+
+# ── Application Module ───────────────────────────────────────────────────
+set(CSILK_APP_SOURCES
+    src/app/app.c
+    src/app/app_routes.c
+    src/app/group.c
+    src/app/admin.c
+)
+
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────
 set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_graph.c
@@ -226,20 +259,24 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/workflow_manager.c
     src/workflow/workflow_debug.c
     src/workflow/wf_cluster_sm.c
-    src/protocols/mcp/mcp_jsonrpc.c
-    src/protocols/mcp/mcp_server.c
-    src/protocols/mcp/mcp_client.c
 )
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────
 set(CSILK_SOURCES
     ${CSILK_BASE_SOURCES}
-    ${CSILK_CORE_SOURCES}
+    ${CSILK_CRYPTO_SOURCES}
     ${CSILK_JSON_SOURCES}
-    ${CSILK_HTTP_SOURCES}
+    ${CSILK_RUNTIME_SOURCES}
     ${CSILK_TLS_SOURCES}
+    ${CSILK_HTTP_SOURCES}
     ${CSILK_HTTP2_SOURCES}
+    ${CSILK_PROTOCOLS_SOURCES}
+    ${CSILK_PERMISSION_SOURCES}
+    ${CSILK_MIDDLEWARE_SOURCES}
+    ${CSILK_REFLECTION_SOURCES}
+    ${CSILK_APP_SOURCES}
     ${CSILK_DB_SOURCES}
+    ${CSILK_VECTOR_SOURCES}
     ${CSILK_AI_SOURCES}
     ${CSILK_MQ_SOURCES}
     ${CSILK_WORKFLOW_SOURCES}
