@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "csilk/csilk.h"
@@ -70,10 +71,51 @@ test_ratelimit_fail_open_on_saturated_table()
     printf("Rate limit fail-open test passed!\n");
 }
 
+static void
+test_ratelimit_retry_after_precise()
+{
+    printf("Testing rate limit precise Retry-After...\n");
+    csilk_ctx_t*    ctx = csilk_test_ctx_new();
+    csilk_handler_t handlers[] = {test_handler, nullptr};
+    csilk_test_ctx_set_handlers(ctx, handlers);
+
+    /* First request from a fresh IP with limit=1 is allowed (fresh handler chain). */
+    handler_called = 0;
+    _csilk_rate_limit_local(ctx, "10.10.10.10", 1);
+    assert(handler_called == 1);
+    assert(csilk_is_aborted(ctx) == 0);
+    csilk_test_ctx_free(ctx);
+
+    /* Second request to the same IP within the window is blocked with a 429.
+     * Use a fresh ctx so the handler chain restarts at index 0 — the shared IP
+     * count lives in the global table, independent of the context. */
+    csilk_ctx_t*    ctx2 = csilk_test_ctx_new();
+    csilk_handler_t handlers2[] = {test_handler, nullptr};
+    csilk_test_ctx_set_handlers(ctx2, handlers2);
+    handler_called = 0;
+    _csilk_rate_limit_local(ctx2, "10.10.10.10", 1);
+    assert(handler_called == 0);
+    assert(csilk_is_aborted(ctx2) == 1);
+
+    /* Retry-After must be a positive integer <= WINDOW_SIZE (60), reflecting
+     * the actual time remaining in the current window, not a hardcoded 60. */
+    const char* retry_hdr = csilk_get_response_header(ctx2, "Retry-After");
+    assert(retry_hdr != NULL);
+    int retry_after = atoi(retry_hdr);
+    assert(retry_after >= 1 && retry_after <= 60);
+
+    csilk_test_ctx_free(ctx2);
+    printf("Rate limit precise Retry-After test passed!\n");
+}
+
 int
 main()
 {
+    /* Order matters: the fail-open test fills (and never empties) the shared
+     * 65536-slot IP table, so any counting test that needs real slots must run
+     * before it. Run the precise Retry-After (counting) test first. */
     test_ratelimit_basic();
+    test_ratelimit_retry_after_precise();
     test_ratelimit_fail_open_on_saturated_table();
     printf("test_ratelimit: ALL PASSED\n");
     return 0;
