@@ -826,7 +826,12 @@ class Context:
         running server.
         """
         lib = get_bindings()
-        ctx_ptr = lib.csilk_test_ctx_new()
+        test_ctx_new = getattr(lib, "csilk_test_ctx_new", None)
+        if test_ctx_new is None:
+            raise RuntimeError(
+                "test context support is unavailable in this production library"
+            )
+        ctx_ptr = test_ctx_new()
         if not ctx_ptr:
             raise RuntimeError("Failed to create test context")
         ctx = cls(ctx_ptr)
@@ -836,7 +841,12 @@ class Context:
     def free_test_context(self):
         """Free a test context created by ``create_test_context``."""
         if hasattr(self, "_owned") and self._owned and self._ctx:
-            self._lib.csilk_test_ctx_free(self._ctx)
+            test_ctx_free = getattr(self._lib, "csilk_test_ctx_free", None)
+            if test_ctx_free is None:
+                raise RuntimeError(
+                    "test context support is unavailable in this production library"
+                )
+            test_ctx_free(self._ctx)
             self._ctx = None
             self._owned = False
 
