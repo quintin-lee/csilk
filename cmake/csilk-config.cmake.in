@@ -152,7 +152,7 @@ endif()
 include("${CMAKE_CURRENT_LIST_DIR}/csilk-targets.cmake")
 
 # ── Convenience Aliases ───────────────────────────────────────────────────
-foreach(_mod base core http tls http2 db ai mq workflow json wasm bypass)
+foreach(_mod base core crypto runtime http tls http2 protocols middleware reflection permission app db vector ai mq workflow json wasm bypass)
   if(TARGET csilk::csilk_${_mod} AND NOT TARGET csilk::${_mod})
     add_library(csilk::${_mod} INTERFACE IMPORTED)
     target_link_libraries(csilk::${_mod} INTERFACE csilk::csilk_${_mod})

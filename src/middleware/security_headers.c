@@ -5,6 +5,7 @@
  */
 
 #include "csilk/core/ctx/response.h"
+#include "csilk/core/middleware.h"
 
 /**
  * @brief Security headers middleware.

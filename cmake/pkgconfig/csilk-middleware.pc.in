@@ -1,0 +1,14 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: csilk-middleware
+Description: Csilk security, traffic, streaming, and observability middleware
+Version: @CSILK_VERSION@
+URL: https://github.com/quintin-lee/csilk
+Requires: @CSILK_MIDDLEWARE_PC_REQUIRES@
+Requires.private: @CSILK_MIDDLEWARE_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lcsilk-middleware
+Libs.private: @CSILK_MIDDLEWARE_PC_LIBS_PRIVATE@
+Cflags: -I${includedir} -D_GNU_SOURCE -pthread
