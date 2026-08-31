@@ -9,6 +9,7 @@ etc.) are provided as module-level functions for convenience.
 """
 
 import ctypes
+import time
 from csilk.lib import get_bindings, CsilkHandler, CsilkCtxPtr
 from csilk.context import Context
 
@@ -87,8 +88,8 @@ class App:
                     self._loop.close()
             except RuntimeError:
                 pass
-        for g in self._groups:
-            g.free()
+        # Native csilk_app_free owns and releases all groups. Drop Python
+        # wrappers without calling csilk_group_free a second time.
         self._groups.clear()
         if self._app:
             self._lib.csilk_app_free(self._app)
@@ -544,11 +545,20 @@ class App:
                     import traceback
                     traceback.print_exc()
 
-    def stop(self):
-        """Gracefully stop the server (non-blocking)."""
+    def stop(self, timeout=5.0):
+        """Gracefully stop the server and wait for active connections to drain."""
         server = self._lib.csilk_app_server(self._app)
-        if server:
-            self._lib.csilk_server_stop(server)
+        if not server:
+            return
+        self._lib.csilk_server_stop(server)
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            stats = self.server_stats
+            if stats["active_connections"] == 0:
+                return
+            time.sleep(0.01)
+        raise RuntimeError("server did not drain active connections before timeout")
 
     def on_server_start(self, callback):
         """Register a callback to run just before the event loop starts."""
