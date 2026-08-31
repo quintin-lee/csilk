@@ -78,21 +78,25 @@ class App:
 
     def free(self):
         """Release all resources held by the application (C backend, handlers, event loop)."""
+        if hasattr(self, '_loop'):
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                if hasattr(self, '_loop_thread') and self._loop_thread.is_alive():
+                    self._loop_thread.join(timeout=1.0)
+                if not self._loop.is_closed():
+                    self._loop.close()
+            except RuntimeError:
+                pass
+        for g in self._groups:
+            g.free()
+        self._groups.clear()
         if self._app:
             self._lib.csilk_app_free(self._app)
             self._app = None
         self._handlers.clear()
-        for g in self._groups:
-            g.free()
-        self._groups.clear()
         self._hooks.clear()
         self._websocket_contexts.clear()
         self._exception_handlers.clear()
-        if hasattr(self, '_loop'):
-            try:
-                self._loop.call_soon_threadsafe(self._loop.stop)
-            except RuntimeError:
-                pass
 
     def exception_handler(self, exc_class):
         """Decorator to register a global exception handler.
@@ -958,6 +962,7 @@ class Group:
         if self._group:
             self._lib.csilk_group_free(self._group)
             self._group = None
+        self._app = None
         self._handlers.clear()
 
     def __del__(self):
