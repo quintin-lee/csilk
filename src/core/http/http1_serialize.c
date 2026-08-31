@@ -191,7 +191,7 @@ CSILK_INTERNAL void
 _csilk_send_response(csilk_ctx_t* c)
 {
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    if (!client) {
+    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
         return;
     }
 

@@ -300,15 +300,21 @@ class TestCsilkIntegration(unittest.TestCase):
         else:
             self.fail("Server did not start in time")
         
-        # Helper to make request with retries
+        # Helper to make request with retries. Every returned response is kept
+        # until the test's finally block so HTTPError and normal responses are
+        # closed even when an assertion fails.
+        open_responses = []
+
         def request_with_retry(url, data=None, headers=None, method='GET'):
             for _ in range(10):
                 try:
                     req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
-                    res = urllib.request.urlopen(req)
-                    return res
+                    response = urllib.request.urlopen(req)
+                    open_responses.append(response)
+                    return response
                 except urllib.error.HTTPError as e:
                     # Return error response directly so we can assert on status codes like 403
+                    open_responses.append(e)
                     return e
                 except Exception:
                     time.sleep(0.1)
@@ -317,58 +323,59 @@ class TestCsilkIntegration(unittest.TestCase):
         
         try:
             # 1. Test GET request
-            res = request_with_retry("http://127.0.0.1:8082/hello")
-            self.assertEqual(res.status, 200)
-            self.assertEqual(res.read().decode('utf-8'), "hello world from python")
+            with request_with_retry("http://127.0.0.1:8082/hello") as res:
+                self.assertEqual(res.status, 200)
+                self.assertEqual(res.read().decode('utf-8'), "hello world from python")
             
             # 2. Test POST JSON request
             req_data = json.dumps({"test": "value"}).encode('utf-8')
-            res2 = request_with_retry(
+            with request_with_retry(
                 "http://127.0.0.1:8082/echo",
                 data=req_data,
                 headers={"Content-Type": "application/json"},
                 method='POST'
-            )
-            self.assertEqual(res2.status, 200)
-            res_data = json.loads(res2.read().decode('utf-8'))
+            ) as res2:
+                self.assertEqual(res2.status, 200)
+                res_data = json.loads(res2.read().decode('utf-8'))
             self.assertEqual(res_data["echoed"]["test"], "value")
 
             # 3. Test Path parameters
-            res3 = request_with_retry("http://127.0.0.1:8082/user/42")
-            self.assertEqual(res3.status, 200)
-            res_params = json.loads(res3.read().decode('utf-8'))
+            with request_with_retry("http://127.0.0.1:8082/user/42") as res3:
+                self.assertEqual(res3.status, 200)
+                res_params = json.loads(res3.read().decode('utf-8'))
             self.assertEqual(res_params["id_direct"], "42")
             self.assertEqual(res_params["id_params"], "42")
             self.assertEqual(res_params["all_params"], {"id": "42"})
 
             # 4. Test Query parameters
-            res4 = request_with_retry("http://127.0.0.1:8082/search?q=gemini&limit=10")
-            self.assertEqual(res4.status, 200)
-            res_query = json.loads(res4.read().decode('utf-8'))
+            with request_with_retry("http://127.0.0.1:8082/search?q=gemini&limit=10") as res4:
+                self.assertEqual(res4.status, 200)
+                res_query = json.loads(res4.read().decode('utf-8'))
             self.assertEqual(res_query["q"], "gemini")
             self.assertEqual(res_query["limit"], "10")
 
             # 5. Test headers get & set
-            res5 = request_with_retry(
+            with request_with_retry(
                 "http://127.0.0.1:8082/headers-test",
                 headers={"X-Request-Test": "custom-val"}
-            )
-            self.assertEqual(res5.status, 200)
-            self.assertEqual(res5.read().decode('utf-8'), "custom-val")
-            self.assertEqual(res5.headers.get("X-Response-Test"), "response-ok")
+            ) as res5:
+                self.assertEqual(res5.status, 200)
+                self.assertEqual(res5.read().decode('utf-8'), "custom-val")
+                self.assertEqual(res5.headers.get("X-Response-Test"), "response-ok")
 
             # 6. Test Global middleware (request header mutation + next)
-            res6 = request_with_retry("http://127.0.0.1:8082/middleware-check")
-            self.assertEqual(res6.status, 200)
-            self.assertEqual(res6.read().decode('utf-8'), "processed")
+            with request_with_retry("http://127.0.0.1:8082/middleware-check") as res6:
+                self.assertEqual(res6.status, 200)
+                self.assertEqual(res6.read().decode('utf-8'), "processed")
 
             # 7. Test Abort middleware (use_group)
-            res7 = request_with_retry("http://127.0.0.1:8082/admin/dashboard")
-            self.assertEqual(res7.status, 403)
-            self.assertEqual(res7.read().decode('utf-8'), "forbidden by middleware")
+            with request_with_retry("http://127.0.0.1:8082/admin/dashboard") as res7:
+                self.assertEqual(res7.status, 403)
+                self.assertEqual(res7.read().decode('utf-8'), "forbidden by middleware")
 
             # 8. Test WebSocket handshake and message echo
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(1.0)
             s.connect(("127.0.0.1", 8082))
             handshake = (
                 "GET /ws HTTP/1.1\r\n"
@@ -391,10 +398,12 @@ class TestCsilkIntegration(unittest.TestCase):
             self.assertEqual(resp_frame[0], 0x81)
             self.assertEqual(resp_frame[1], 0x05)
             self.assertEqual(resp_frame[2:], b"hello")
+            s.shutdown(socket.SHUT_RDWR)
             s.close()
 
             # 8b. Test Class-based WebSocket
             s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s2.settimeout(1.0)
             s2.connect(("127.0.0.1", 8082))
             handshake2 = (
                 "GET /ws-class HTTP/1.1\r\n"
@@ -415,21 +424,22 @@ class TestCsilkIntegration(unittest.TestCase):
             self.assertEqual(resp_frame2[0], 0x81)
             self.assertEqual(resp_frame2[1], 11)
             self.assertEqual(resp_frame2[2:13], b"CLASS:hello")
+            s2.shutdown(socket.SHUT_RDWR)
             s2.close()
 
             # 9. Test route registered with permissions
-            res9 = request_with_retry("http://127.0.0.1:8082/perm-check")
-            self.assertEqual(res9.status, 200)
-            self.assertEqual(res9.read().decode('utf-8'), "has permission")
+            with request_with_retry("http://127.0.0.1:8082/perm-check") as res9:
+                self.assertEqual(res9.status, 200)
+                self.assertEqual(res9.read().decode('utf-8'), "has permission")
 
             # 10. Test Cookies
-            res10 = request_with_retry(
+            with request_with_retry(
                 "http://127.0.0.1:8082/cookies",
                 headers={"Cookie": "my_cookie=hello-cookie"}
-            )
-            self.assertEqual(res10.status, 200)
-            self.assertEqual(res10.read().decode('utf-8'), "hello-cookie")
-            cookie_header = res10.headers.get("Set-Cookie")
+            ) as res10:
+                self.assertEqual(res10.status, 200)
+                self.assertEqual(res10.read().decode('utf-8'), "hello-cookie")
+                cookie_header = res10.headers.get("Set-Cookie")
             self.assertIsNotNone(cookie_header)
             self.assertIn("response_cookie=cookie-ok", cookie_header)
             self.assertIn("Path=/", cookie_header)
@@ -582,7 +592,8 @@ class TestCsilkIntegration(unittest.TestCase):
 
         finally:
             app.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
+            self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
             app.free()
 
 class TestCsilkAi(unittest.TestCase):
@@ -803,21 +814,22 @@ class TestCsilkGroups(unittest.TestCase):
 
         try:
             # 1. Test group route "/api/v1/users"
-            req = urllib.request.urlopen("http://localhost:8085/api/v1/users")
-            body = req.read().decode('utf-8')
+            with urllib.request.urlopen("http://localhost:8085/api/v1/users") as req:
+                body = req.read().decode('utf-8')
             self.assertEqual(req.status, 200)
             self.assertEqual(body, "user1, user2")
             self.assertEqual(calls, ["middleware", "handler"])
 
             # 2. Test nested group route "/api/v1/admin/stats"
-            req2 = urllib.request.urlopen("http://localhost:8085/api/v1/admin/stats")
-            body2 = req2.read().decode('utf-8')
+            with urllib.request.urlopen("http://localhost:8085/api/v1/admin/stats") as req2:
+                body2 = req2.read().decode('utf-8')
             self.assertEqual(req2.status, 200)
             self.assertEqual(body2, "stats")
             self.assertEqual(calls, ["middleware", "handler", "middleware", "admin_handler"])
         finally:
             app.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
+            self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
             app.free()
 
 class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
@@ -917,43 +929,46 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
 
         try:
             # Test 1: add_header (dual custom headers)
-            res1 = urllib.request.urlopen("http://127.0.0.1:8086/add-headers")
-            self.assertEqual(res1.status, 200)
-            self.assertEqual(res1.read().decode('utf-8'), "headers-added")
-            custom_headers = res1.headers.get_all("X-Custom-Header")
+            with urllib.request.urlopen("http://127.0.0.1:8086/add-headers") as res1:
+                self.assertEqual(res1.status, 200)
+                self.assertEqual(res1.read().decode('utf-8'), "headers-added")
+                custom_headers = res1.headers.get_all("X-Custom-Header")
             self.assertEqual(custom_headers, ["value2", "value1"])
 
             # Test 2: redirect_simple
-            res2 = urllib.request.urlopen("http://127.0.0.1:8086/redirect-src")
-            self.assertEqual(res2.status, 200)
-            self.assertEqual(res2.geturl(), "http://127.0.0.1:8086/redirect-dst")
-            self.assertEqual(res2.read().decode('utf-8'), "redirected-ok")
+            with urllib.request.urlopen("http://127.0.0.1:8086/redirect-src") as res2:
+                self.assertEqual(res2.status, 200)
+                self.assertEqual(res2.geturl(), "http://127.0.0.1:8086/redirect-dst")
+                self.assertEqual(res2.read().decode('utf-8'), "redirected-ok")
 
             # Test 3: json_error
             try:
                 urllib.request.urlopen("http://127.0.0.1:8086/json-error")
                 self.fail("Expected HTTPError 400")
             except urllib.error.HTTPError as e:
-                self.assertEqual(e.code, 400)
-                err_data = json.loads(e.read().decode('utf-8'))
-                self.assertEqual(err_data["error"], "bad request parameter")
+                with e:
+                    self.assertEqual(e.code, 400)
+                    err_data = json.loads(e.read().decode('utf-8'))
+                    self.assertEqual(err_data["error"], "bad request parameter")
 
             # Test 4: async streaming response
-            res4 = urllib.request.urlopen("http://127.0.0.1:8086/stream-chunks")
-            self.assertEqual(res4.status, 200)
-            self.assertEqual(res4.read().decode('utf-8'), "chunk_one chunk_two")
+            with urllib.request.urlopen("http://127.0.0.1:8086/stream-chunks") as res4:
+                self.assertEqual(res4.status, 200)
+                self.assertEqual(res4.read().decode('utf-8'), "chunk_one chunk_two")
 
             # Test 5: custom 404 handler
             try:
                 urllib.request.urlopen("http://127.0.0.1:8086/non-existent-route")
                 self.fail("Expected HTTPError 404")
             except urllib.error.HTTPError as e:
-                self.assertEqual(e.code, 404)
-                self.assertEqual(e.read().decode('utf-8'), "custom-404-body")
+                with e:
+                    self.assertEqual(e.code, 404)
+                    self.assertEqual(e.read().decode('utf-8'), "custom-404-body")
 
         finally:
             app.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
+            self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
             app.free()
 
         # Check lifecycle hook triggers
@@ -1063,11 +1078,13 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 urllib.request.urlopen("http://127.0.0.1:8088/error")
                 self.fail("Expected HTTPError 400")
             except urllib.error.HTTPError as e:
-                self.assertEqual(e.code, 400)
-                self.assertEqual(e.read().decode('utf-8'), "Handled: test exception")
+                with e:
+                    self.assertEqual(e.code, 400)
+                    self.assertEqual(e.read().decode('utf-8'), "Handled: test exception")
         finally:
             app.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
+            self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
             app.free()
 
     def test_pydantic_validate_decorator(self):
@@ -1110,11 +1127,11 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             # Test success
             req = urllib.request.Request("http://127.0.0.1:8089/validate-test?age=30", data=b'{"name":"csilk"}', method="POST")
             req.add_header('Content-Type', 'application/json')
-            res = urllib.request.urlopen(req)
-            self.assertEqual(res.status, 200)
-            data = json.loads(res.read().decode('utf-8'))
-            self.assertEqual(data["b_name"], "csilk")
-            self.assertEqual(data["q_age"], "30")
+            with urllib.request.urlopen(req) as res:
+                self.assertEqual(res.status, 200)
+                data = json.loads(res.read().decode('utf-8'))
+                self.assertEqual(data["b_name"], "csilk")
+                self.assertEqual(data["q_age"], "30")
 
             # Test failure
             try:
@@ -1123,11 +1140,13 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 urllib.request.urlopen(req)
                 self.fail("Expected 422 Error")
             except urllib.error.HTTPError as e:
-                self.assertEqual(e.code, 422)
+                with e:
+                    self.assertEqual(e.code, 422)
                 
         finally:
             app.stop()
-            t.join(timeout=1.0)
+            t.join(timeout=5.0)
+            self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
             app.free()
 
 if __name__ == '__main__':

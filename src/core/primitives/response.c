@@ -648,6 +648,9 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
     }
 
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        return -1;
+    }
     csilk_conn_set_state(client, CSILK_CONN_STREAMING);
     size_t q = _csilk_client_get_write_queue_size(client);
 
@@ -771,10 +774,14 @@ csilk_response_end(csilk_ctx_t* c)
         c->is_async = 1;
     }
 
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
+
     _csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
 
-    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    if (client && client->protocol == CSILK_PROTO_HTTP1) {
+    if (client->protocol == CSILK_PROTO_HTTP1) {
         int keep_alive = !client_wants_close(c);
         _csilk_handle_post_response(client, keep_alive);
     }
