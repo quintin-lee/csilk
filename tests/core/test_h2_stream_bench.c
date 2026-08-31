@@ -10,7 +10,7 @@
 #include "core/internal/srv_internal.h"
 #include "core/internal/srv_impl.h"
 #include "core/primitives/header_map.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 
 /* Simple cycle counter for x86 / fallback */
 #if defined(__x86_64__) || defined(_M_X64)

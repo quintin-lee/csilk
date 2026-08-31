@@ -40,7 +40,7 @@
 typedef struct csilk_app_s csilk_app_t;
 
 #include "csilk/core/types.h"
-#include "csilk/core/config.h"
+#include "csilk/core/config/config.h"
 
 /* ---- Lifecycle ---- */
 

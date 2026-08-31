@@ -14,8 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/wasm.h"
-#include "csilk/core/wasm_plugin.h"
+#include "csilk/core/plugin/wasm.h"
+#include "csilk/core/plugin/wasm_plugin.h"
 #include "wasm_internal.h"
 
 /**

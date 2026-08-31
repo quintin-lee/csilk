@@ -7,7 +7,7 @@
 #include <openssl/ssl.h>
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 
 /* --- Buffer allocation --- */
 

@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/codec.h"
+#include "csilk/core/primitives/codec.h"
 
 /**
  * @brief Standard Base64 alphabet per RFC 4648 §4.

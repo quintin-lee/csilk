@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/hot_reload.h"
+#include "csilk/core/server/hot_reload.h"
 
 static void
 test_reload_start_null_server(void)

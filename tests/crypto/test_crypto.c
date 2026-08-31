@@ -7,10 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/codec.h"
-#include "csilk/core/hash.h"
+#include "csilk/core/primitives/codec.h"
+#include "csilk/core/primitives/hash.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 
 /* ---- SHA-256 property tests ---- */
 

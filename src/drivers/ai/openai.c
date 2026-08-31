@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /** @brief Per-instance state for the OpenAI-compatible driver. */
 typedef struct {

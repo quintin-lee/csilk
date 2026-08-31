@@ -21,7 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 
 #ifdef __cplusplus
 extern "C" {

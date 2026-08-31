@@ -8,7 +8,7 @@
  *   h2_response.c   - response sending and push
  */
 
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #include "csilk/csilk.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"

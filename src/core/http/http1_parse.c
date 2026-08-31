@@ -18,7 +18,7 @@
 #include "../internal/srv_internal.h"
 #include "../ctx/ctx_internal.h"
 #include "../primitives/header_map.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #include "../internal/srv_impl.h"
 
 /* --- Zero-copy header persistence --- */

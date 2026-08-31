@@ -14,8 +14,8 @@
 
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
-#include "csilk/core/hooks.h"
-#include "csilk/core/server.h"
+#include "csilk/core/config/hooks.h"
+#include "csilk/core/server/server.h"
 #include "core/internal/srv_internal.h"
 
 /* -------------------------------------------------------------------------- */

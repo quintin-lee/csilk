@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/bounded_buf.h"
+#include "csilk/core/primitives/bounded_buf.h"
 
 /* ===================================================================
  * Bounded string buffer

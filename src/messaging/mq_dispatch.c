@@ -16,7 +16,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/core/internal.h"
 #include "mq_internal.h"
 #include "csilk/core/sync.h"

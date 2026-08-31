@@ -23,13 +23,13 @@
  */
 
 #include "core/ctx/ctx_internal.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #include "core/internal/srv_impl.h"
 #include "core/internal/srv_internal.h"
 #include "core/primitives/header_map.h"
 #include "core/primitives/router_internal.h"
-#include "csilk/core/hot_reload.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/hot_reload.h"
+#include "csilk/core/server/server.h"
 #include "csilk/csilk.h"
 #include "csilk/protocols/sse.h"
 #include "csilk/protocols/websocket.h"

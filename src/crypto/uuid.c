@@ -18,9 +18,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/crypto_dispatch.h"
+#include "csilk/crypto/crypto_dispatch.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 
 /** @brief Generate a version-4 (random) UUID string per RFC 4122.
  *

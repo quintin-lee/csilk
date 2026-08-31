@@ -3,7 +3,7 @@
  * @brief Benchmark arena allocation fast-path across 8, 32, 128, 1024 byte sizes.
  */
 
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 
 #include <assert.h>
 #include <inttypes.h>

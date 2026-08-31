@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/wasm.h"
+#include "csilk/core/plugin/wasm.h"
 
 static void
 test_wasm_fuel_exhaustion_trap(void)

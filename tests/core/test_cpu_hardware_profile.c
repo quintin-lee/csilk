@@ -51,7 +51,7 @@
 #include "core/internal/srv_internal.h"
 #include "core/primitives/header_map.h"
 #include "core/primitives/router_internal.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 

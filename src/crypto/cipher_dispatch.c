@@ -13,7 +13,7 @@
 #include "core/ctx/ctx_internal.h"
 #include <stdlib.h>
 #include "csilk/core/internal.h"
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 #include "csilk/drivers/cipher.h"
 
 #include <openssl/evp.h>

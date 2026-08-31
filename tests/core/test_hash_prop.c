@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "csilk/core/crypto_dispatch.h"
-#include "csilk/core/hash.h"
+#include "csilk/crypto/crypto_dispatch.h"
+#include "csilk/core/primitives/hash.h"
 
 #define PROP_ITERATIONS 10000
 

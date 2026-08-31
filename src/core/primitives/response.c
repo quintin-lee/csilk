@@ -13,7 +13,7 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/reflection/reflect.h"
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_impl.h"
@@ -21,7 +21,7 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "../primitives/header_map.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 
 /* --- Status & string --- */
 

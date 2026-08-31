@@ -1,7 +1,7 @@
 #pragma once
 #ifndef CSILK_CORE_JSON_H
 /**
- * @file csilk/core/json.h
+ * @file csilk/core/json/json.h
  * @brief Opaque JSON value type backed by yyjson.
  *
  * Provides a type-safe, opaque wrapper around yyjson that replaces the

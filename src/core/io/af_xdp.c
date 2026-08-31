@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/af_xdp.h"
+#include "csilk/core/io/af_xdp.h"
 #include <stdlib.h>
 #include <string.h>
 

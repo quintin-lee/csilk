@@ -9,7 +9,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 #include "core/internal/srv_internal.h"
 #include "csilk/reflection/reflect.h"
 

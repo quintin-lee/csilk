@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/hooks.h"
+#include "csilk/core/config/hooks.h"
 #include "csilk/core/middleware.h"
 
 /* ====================================================================

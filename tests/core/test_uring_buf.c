@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/uring_buf.h"
+#include "csilk/core/uring/uring_buf.h"
 
 static void
 test_uring_buf_ring_basic()
