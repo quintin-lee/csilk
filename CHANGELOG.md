@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Data Race on Client State Read (CWE-362)**: Restructured `_csilk_client_check_recycle()` to only read `client->state` on the owning worker thread. Non-owner threads now dispatch recycle tasks exclusively, eliminating a TSAN-flagged data race on the non-atomic state field.
 - **C23 `<stdbool.h>` Compliance**: Removed 4 unnecessary `#include <stdbool.h>` directives from `connection_state.c`, `mvcc_cache.c`, `json.h`, and `mvcc_cache.h`. C23 provides `bool`/`true`/`false` as built-in keywords.
 - **Clang-Tidy SPA Fallback Memory**: Replaced heap allocation in `spa_fallback_handler` with arena-managed memory allocation, resolving static analyzer warnings.
+- **Rate Limit Table Saturation Fail-Open**: `get_or_create_ip_entry` now returns `NULL` (instead of a shared hash slot) when the 65,536-slot IP table saturates, and `_csilk_rate_limit_local` fails open for it — preventing unrelated IPs from being counted against each other.
+- **Exact Retry-After Header**: The local rate limiter no longer emits a hardcoded `Retry-After: 60`; it now reports the actual seconds remaining in the current window (floor 1s). The distributed path keeps the full window as a conservative value since the storage `incr` does not return a TTL.
+- **gzip ASAN-Safe Async Coverage Test**: Replaced a raw thread-pool test that kept worker threads alive past `main()` (crashing ASAN's exit-time teardown) with a synchronous drive of the real `_csilk_gzip_work_cb`/`_csilk_gzip_after_work_cb` callbacks via `src/core/internal/gzip_internal.h`; the mock client is no longer a single-byte stack char.
+
+### Test Coverage
+- **Total tests**: 227 registered CTest cases (~230 source files), all 225 non-integration unit tests passing locally and in CI.
+- **Line coverage**: 69% (12,609/18,281 lines).
+- **bounded_buf.c**: 42% → **100%** (new exhaustive `test_bounded_buf`).
+- **websocket.c**: 40% → **85%** (new unit edge cases + `test_ws_integration` real-TCP round-trip).
+- **gzip.c**: 30% → **68%** (rewritten `test_gzip` covering skip branches + ASAN-safe async path).
+- **ratelimit.c**: fail-open saturation branch now covered by a test that truly fills the 65,536-slot table.
 
 ## [0.5.3] - 2026-08-26
 

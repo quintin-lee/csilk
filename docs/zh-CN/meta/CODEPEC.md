@@ -45,7 +45,7 @@ graph TB
     end
 
     subgraph testing["fa:fa-flask Testing"]
-        TESTS["fa:fa-check-circle tests/ (213 tests)"]
+        TESTS["fa:fa-check-circle tests/ (227 tests)"]
         EXMPL["fa:fa-code examples/"]
     end
 
@@ -101,7 +101,7 @@ src/drivers/cipher/             #   密码驱动（OpenSSL，AES/RSA 加解密�
 src/drivers/perm/               #   权限驱动（manager + simple 后端）
 src/drivers/db/                 #   数据库抽象层 + 后端（SQLite/MySQL/PG/Mongo/Redis）
 src/drivers/vector/             #   向量数据库驱动（Qdrant, Milvus）
-tests/                          # 单元测试（213 个测试文件）
+tests/                          # 单元测试（227 个注册用例）
 examples/                       # 示例程序
 ```
 
@@ -577,7 +577,7 @@ make tidy
 | `CSILK_DEFAULT_MAX_BODY_SIZE` | 1MB | `src/core/server.c` |
 | `CSILK_DEFAULT_MAX_HEADER_SIZE` | 64KB | `src/core/server.c` |
 | `MAX_REG_STRUCTS` | 256 | `src/core/reflect.c` |
-| `MAX_IP_ENTRIES` | 1024 | `src/middleware/ratelimit.c` |
+| `MAX_IP_ENTRIES` | 65536 | `src/middleware/ratelimit.c` |
 
 ---
 
