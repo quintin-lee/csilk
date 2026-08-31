@@ -652,12 +652,16 @@ def get_bindings():
     lib.csilk_get.restype = ctypes.c_void_p
     lib.csilk_get.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
 
-    # Test utilities
-    lib.csilk_test_ctx_new.restype = CsilkCtxPtr
-    lib.csilk_test_ctx_new.argtypes = []
+    # Test utilities are optional: production shared libraries intentionally
+    # do not export the test-only context helpers.
+    try:
+        lib.csilk_test_ctx_new.restype = CsilkCtxPtr
+        lib.csilk_test_ctx_new.argtypes = []
 
-    lib.csilk_test_ctx_free.restype = None
-    lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
+        lib.csilk_test_ctx_free.restype = None
+        lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
+    except AttributeError:
+        pass
 
     # Storage functions
     lib.csilk_set_string.restype = ctypes.c_int
