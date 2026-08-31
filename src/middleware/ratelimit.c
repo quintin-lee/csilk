@@ -140,7 +140,17 @@ _csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int limit)
                     current_count,
                     limit);
         _csilk_metrics_inc_rate_limit_blocks();
-        csilk_set_header(c, "Retry-After", "60");
+        /* Retry-After = seconds remaining in the current window (at least 1).
+         * Re-read last_reset so a window flip racing this request yields the
+         * freshly-claimed window start. */
+        time_t reset_now = atomic_load(&entry->last_reset);
+        time_t retry = (time_t)WINDOW_SIZE - (now - reset_now);
+        if (retry < 1) {
+            retry = 1;
+        }
+        char retry_after[32];
+        snprintf(retry_after, sizeof(retry_after), "%lld", (long long)retry);
+        csilk_set_header(c, "Retry-After", retry_after);
         csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
         csilk_abort(c);
     } else {
@@ -184,7 +194,11 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
                             current_count,
                             limit);
                 _csilk_metrics_inc_rate_limit_blocks();
-                csilk_set_header(c, "Retry-After", "60");
+                /* Distributed store only returns the counter (no TTL); retry with
+                 * the full window as a conservative (non-overstated) value. */
+                char retry_after[32];
+                snprintf(retry_after, sizeof(retry_after), "%lld", (long long)WINDOW_SIZE);
+                csilk_set_header(c, "Retry-After", retry_after);
                 csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
                 csilk_abort(c);
             } else {
