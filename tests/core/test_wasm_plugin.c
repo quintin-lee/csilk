@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/wasm_plugin.h"
+#include "csilk/core/plugin/wasm_plugin.h"
 #include "csilk/test/test.h"
 
 static void

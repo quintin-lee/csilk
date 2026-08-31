@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/csilk.h"
 
 static void

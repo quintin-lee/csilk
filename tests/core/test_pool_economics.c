@@ -10,7 +10,7 @@
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
 #include "core/internal/srv_impl.h"
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #ifdef CSILK_POOL_STATS
 #include "core/internal/pool_stats.h"
 #endif

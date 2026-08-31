@@ -10,7 +10,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /** @brief A single vector point. */
 typedef struct {

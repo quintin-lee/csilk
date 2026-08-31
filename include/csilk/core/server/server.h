@@ -11,8 +11,8 @@
 
 #include "csilk/core/router.h"
 #include "csilk/core/middleware.h"
-#include "csilk/core/hooks.h"
-#include "csilk/core/crypto.h"
+#include "csilk/core/config/hooks.h"
+#include "csilk/crypto/crypto.h"
 
 /**
  * @brief Create a new server instance.

@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "csilk/core/hash.h"
+#include "csilk/core/primitives/hash.h"
 
 /**
  * @brief Initialise a SHA-1 hashing context.

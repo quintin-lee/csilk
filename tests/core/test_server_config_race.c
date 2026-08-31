@@ -6,7 +6,7 @@
 #include "core/internal/srv_impl.h"
 #include "csilk/reflection/reflect.h"
 #include "core/internal/srv_internal.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 
 #include <assert.h>
 #include <inttypes.h>

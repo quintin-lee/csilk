@@ -14,7 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/core/mvcc_cache.h"
+#include "csilk/core/cache/mvcc_cache.h"
 #include "csilk/test/test.h"
 
 #undef assert

@@ -11,7 +11,7 @@
 
 #include "csilk/csilk.h"
 #include "core/internal/srv_internal.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 #include "csilk/core/router.h"
 
 #include <assert.h>

@@ -29,12 +29,12 @@
  * Sub-module headers
  * ================================================================ */
 
-#include "csilk/core/hash.h"
-#include "csilk/core/codec.h"
-#include "csilk/core/ws_frame.h"
-#include "csilk/core/crypto_dispatch.h"
-#include "csilk/core/bounded_buf.h"
-#include "csilk/core/bcrypt.h"
+#include "csilk/core/primitives/hash.h"
+#include "csilk/core/primitives/codec.h"
+#include "csilk/core/http/ws_frame.h"
+#include "csilk/crypto/crypto_dispatch.h"
+#include "csilk/core/primitives/bounded_buf.h"
+#include "csilk/crypto/bcrypt.h"
 
 /* ================================================================
  * Portable secure memory zeroing

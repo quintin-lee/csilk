@@ -15,7 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/core/io_perf.h"
+#include "csilk/core/uring/io_perf.h"
 
 /**
  * @brief Probe the active I/O mode and available fast-I/O features.

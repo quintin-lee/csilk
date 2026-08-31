@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/core/io_perf.h"
+#include "csilk/core/uring/io_perf.h"
 
 /**
  * @brief UMEM memory pool handle for AF_XDP Zero-Copy.

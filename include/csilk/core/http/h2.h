@@ -10,7 +10,7 @@
  */
 
 #include <stdint.h>
-#include "csilk/core/context.h"
+#include "csilk/core/ctx/context.h"
 
 #ifdef __cplusplus
 extern "C" {

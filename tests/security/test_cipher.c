@@ -5,7 +5,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/internal.h"
 #include "csilk/drivers/cipher.h"
-#include "csilk/core/cipher.h"
+#include "csilk/crypto/cipher.h"
 #include "csilk/test/test.h"
 
 static int custom_encrypt_called = 0;

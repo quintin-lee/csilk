@@ -29,7 +29,7 @@
 #include <time.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 

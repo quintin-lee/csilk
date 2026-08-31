@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/response.h"
+#include "csilk/core/ctx/response.h"
 
 /**
  * @brief Security headers middleware.

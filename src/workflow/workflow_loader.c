@@ -8,7 +8,7 @@
 #include <string.h>
 #include <yaml.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/app/workflow.h"
 #include "csilk/csilk.h"
 

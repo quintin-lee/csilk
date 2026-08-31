@@ -8,7 +8,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/http/h2.h"
+#include "csilk/core/http/h2.h"
 #include "csilk/csilk.h"
 #include "../internal/srv_impl.h"
 #include "../primitives/header_map.h"

@@ -10,7 +10,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

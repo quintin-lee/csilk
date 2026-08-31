@@ -11,7 +11,7 @@
  */
 
 #include "csilk/core/types.h"
-#include "csilk/core/context.h"
+#include "csilk/core/ctx/context.h"
 
 /**
  * @brief Opaque main HTTP router handle.

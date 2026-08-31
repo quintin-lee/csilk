@@ -3,7 +3,7 @@
  * @brief Benchmark and stress test for JSON value object accessors and ring-overwrite elimination.
  */
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 #include <assert.h>
 #include <inttypes.h>

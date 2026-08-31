@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 #include "xdp_waf_internal.h"
 
 /**

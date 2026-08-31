@@ -273,7 +273,7 @@ CSILK_INTERNAL int _csilk_verify(csilk_ctx_t*   c,
                                  const uint8_t* signature,
                                  size_t         sig_len);
 
-#include "csilk/core/crypto.h"
+#include "csilk/crypto/crypto.h"
 
 /**
  * @brief Internal: Sign data producing a JWT using the context's cipher

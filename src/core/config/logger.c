@@ -32,7 +32,7 @@
 
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
-#include "csilk/core/server.h"
+#include "csilk/core/server/server.h"
 #include "../primitives/lfqueue.h"
 
 /* Exported atomic level and init flags for zero-overhead inline macro checks */

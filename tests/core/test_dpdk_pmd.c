@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "csilk/core/dpdk_pmd.h"
+#include "csilk/core/io/dpdk_pmd.h"
 
 int
 main(void)

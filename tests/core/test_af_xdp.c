@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "csilk/core/af_xdp.h"
+#include "csilk/core/io/af_xdp.h"
 
 int
 main(void)
