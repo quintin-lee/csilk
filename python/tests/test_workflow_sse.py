@@ -33,12 +33,12 @@ class TestWorkflowSSE:
         events = []
         def sse_client():
             try:
-                r = requests.get("http://localhost:8101/sse_monitor", stream=True, proxies={"http": None, "https": None})
-                for line in r.iter_lines():
-                    if line:
-                        events.append(line.decode('utf-8'))
-                    if len(events) >= 14: # We expect several events: node_start, node_finish, etc.
-                        break
+                with requests.get("http://localhost:8101/sse_monitor", stream=True, proxies={"http": None, "https": None}) as r:
+                    for line in r.iter_lines():
+                        if line:
+                            events.append(line.decode('utf-8'))
+                        if len(events) >= 14: # We expect several events: node_start, node_finish, etc.
+                            break
             except Exception as e:
                 print("SSE error:", e)
         
@@ -48,12 +48,13 @@ class TestWorkflowSSE:
         time.sleep(1) # Let SSE connect and register
         
         # Run workflow
-        wf.run("start")
+        wf.run("hello")
         
         client_thread.join(timeout=3)
         
         app.stop()
-        t.join(timeout=2)
+        t.join(timeout=5)
+        assert not t.is_alive(), "SSE server did not stop"
         app.free()
         
         # Check that we received SSE events formatted properly

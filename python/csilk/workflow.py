@@ -157,9 +157,12 @@ class WorkflowNode:
         def wrapper(input_ptr):
             res = router_fn(WorkflowData(input_ptr))
             # Store in self to prevent GC before C code uses it
-            self._last_router_res = res.encode('utf-8') if res else None
-            return self._last_router_res
+            encoded = res.encode('utf-8') if res else None
+            self._router_results.append(encoded)
+            return encoded
         self._router_wrapper = wrapper
+        if not hasattr(self, "_router_results"):
+            self._router_results = []
         self._lib.csilk_wf_route(self._ptr, wrapper)
 
 class Workflow:
