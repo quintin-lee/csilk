@@ -108,6 +108,7 @@ class AI:
             c_msg_array[i].content = msg["content"].encode('utf-8')
 
         c_req = CsilkAiChatRequest()
+        ctypes.memset(ctypes.byref(c_req), 0, ctypes.sizeof(c_req))
         c_req.model = model.encode('utf-8')
         c_req.messages = ctypes.cast(c_msg_array, ctypes.POINTER(CsilkAiMessage))
         c_req.message_count = len(messages)
