@@ -399,9 +399,20 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     /* --- Step 1: Build JSON request body --- */
     csilk_json_t* root = csilk_json_object();
+    if (!root || !root->u.mval || !root->doc.mdoc) {
+        curl_easy_cleanup(curl);
+        res->error_message = strdup("Failed to allocate AI request JSON");
+        return -1;
+    }
     csilk_json_add_string(root, "model", req->model ? req->model : "gpt-3.5-turbo");
 
     csilk_json_t* msgs = csilk_json_array();
+    if (!msgs || !msgs->u.mval || !msgs->doc.mdoc) {
+        csilk_json_free(root);
+        curl_easy_cleanup(curl);
+        res->error_message = strdup("Failed to allocate AI messages JSON");
+        return -1;
+    }
     for (size_t i = 0; i < req->message_count; i++) {
         const csilk_ai_message_t* m = &req->messages[i];
         csilk_json_t*             obj = csilk_json_object();
@@ -501,6 +512,11 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
+    if (!json_body) {
+        curl_easy_cleanup(curl);
+        res->error_message = strdup("Failed to serialize AI request JSON");
+        return -1;
+    }
 
     /* Validate base_url scheme to prevent SSRF (CWE-918) */
     if (strncmp(state->base_url, "http://", 7) != 0 &&
@@ -669,6 +685,11 @@ openai_embeddings(void*                           state_ptr,
 
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
+    if (!json_body) {
+        curl_easy_cleanup(curl);
+        res->error_message = strdup("Failed to serialize AI request JSON");
+        return -1;
+    }
 
     /* Validate base_url scheme to prevent SSRF (CWE-918) */
     if (strncmp(state->base_url, "http://", 7) != 0 &&

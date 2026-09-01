@@ -640,7 +640,6 @@ class Workflow:
         self._run_callbacks.append(run_cb)
         self._lib.csilk_wf_run_traced(self._wf, c_input, run_cb)
 
-
     def trace_to_json(self, trace_ptr):
         """Serialize a captured trace to JSON.
 

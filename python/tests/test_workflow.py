@@ -27,7 +27,10 @@ class TestWorkflow(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.app.stop()
-        cls.thread.join(timeout=1.0)
+        cls.thread.join(timeout=5.0)
+        if cls.thread.is_alive():
+            raise RuntimeError("workflow test server did not stop")
+        cls.app.free()
 
     def test_workflow_lifecycle(self):
         wf = Workflow("lifecycle_test")
