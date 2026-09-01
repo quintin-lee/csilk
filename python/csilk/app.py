@@ -8,6 +8,7 @@ Built-in middleware wrappers (``logger_middleware``, ``cors``, ``jwt_middleware`
 etc.) are provided as module-level functions for convenience.
 """
 
+import asyncio
 import ctypes
 import time
 from csilk.lib import get_bindings, CsilkHandler, CsilkCtxPtr
@@ -84,6 +85,11 @@ class App:
                 self._loop.call_soon_threadsafe(self._loop.stop)
                 if hasattr(self, '_loop_thread') and self._loop_thread.is_alive():
                     self._loop_thread.join(timeout=1.0)
+                pending = asyncio.all_tasks(self._loop) if not self._loop.is_closed() else set()
+                for task in pending:
+                    task.cancel()
+                if pending and not self._loop.is_closed():
+                    self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
                 if not self._loop.is_closed():
                     self._loop.close()
             except RuntimeError:

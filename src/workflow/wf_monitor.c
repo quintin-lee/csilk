@@ -79,14 +79,17 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
         return;
     }
     csilk_json_t* msg = csilk_json_object();
-    csilk_json_add_string(msg, "event", event);
-    if (node_id) {
-        csilk_json_add_string(msg, "node_id", node_id);
-    }
-    if (payload) {
-        csilk_json_add_string(msg, "data", payload);
+    if (!msg || csilk_json_add_string(msg, "event", event) != 0 ||
+        (node_id && csilk_json_add_string(msg, "node_id", node_id) != 0) ||
+        (payload && csilk_json_add_string(msg, "data", payload) != 0)) {
+        csilk_json_free(msg);
+        return;
     }
     char* json = csilk_json_serialize(msg, NULL);
+    if (!json) {
+        csilk_json_free(msg);
+        return;
+    }
     csilk_mutex_lock(&wf->monitor_mutex);
     for (size_t i = 0; i < wf->monitor_count;) {
         csilk_ctx_t* mc = wf->monitors[i];
@@ -98,7 +101,14 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
             continue;
         }
         if (csilk_is_sse(mc)) {
-            csilk_sse_send(mc, event, json);
+            int sse_result = csilk_sse_send(mc, event, json);
+            if (sse_result < 0) {
+                for (size_t j = i; j + 1 < wf->monitor_count; j++) {
+                    wf->monitors[j] = wf->monitors[j + 1];
+                }
+                wf->monitor_count--;
+                continue;
+            }
         } else {
             csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
         }

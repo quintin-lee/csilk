@@ -527,7 +527,8 @@ class Context:
 
                 self.dispatch(_send_error)
 
-        asyncio.run_coroutine_threadsafe(_runner(), loop)
+        future = asyncio.run_coroutine_threadsafe(_runner(), loop)
+        self._async_future = future
 
     def dispatch(self, func):
         """Schedule *func* to run on the C event-loop thread.
