@@ -54,30 +54,30 @@ csilk_json_array_get_v(const csilk_json_t* arr, size_t index)
 }
 
 const char*
-csilk_json_get_string_v(csilk_json_t obj, const char* key)
+csilk_json_get_string_v(const csilk_json_t* obj, const char* key)
 {
-    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    csilk_json_t* v = csilk_json_get_v(obj, key);
     return csilk_json_string_value(v);
 }
 
 double
-csilk_json_get_number_v(csilk_json_t obj, const char* key)
+csilk_json_get_number_v(const csilk_json_t* obj, const char* key)
 {
-    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    csilk_json_t* v = csilk_json_get_v(obj, key);
     return csilk_json_number_value(v);
 }
 
 int64_t
-csilk_json_get_int_v(csilk_json_t obj, const char* key)
+csilk_json_get_int_v(const csilk_json_t* obj, const char* key)
 {
-    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    csilk_json_t* v = csilk_json_get_v(obj, key);
     return csilk_json_int_value(v);
 }
 
 bool
-csilk_json_get_bool_v(csilk_json_t obj, const char* key)
+csilk_json_get_bool_v(const csilk_json_t* obj, const char* key)
 {
-    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    csilk_json_t* v = csilk_json_get_v(obj, key);
     return csilk_json_bool_value(v);
 }
 

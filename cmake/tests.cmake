@@ -137,7 +137,6 @@ set(CSILK_CORE_TESTS
     test_atomic_lifecycle
     test_rcu_lifecycle_stress
     test_sendfile_workers
-    test_bounded_buf
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -384,46 +383,50 @@ set(CSILK_ALL_TEST_NAMES
 
 # Register tests using per-module source directories
 foreach(_name _dir IN ZIP_LISTS CSILK_CORE_TESTS CSILK_CORE_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    if(_name STREQUAL "test_bounded_buf")
+        add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/${_name}.c")
+    else()
+        add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+    endif()
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_APP_TESTS CSILK_APP_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_WORKFLOW_TESTS CSILK_WORKFLOW_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_MIDDLEWARE_TESTS CSILK_MIDDLEWARE_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_PROTOCOL_TESTS CSILK_PROTOCOL_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_SECURITY_TESTS CSILK_SECURITY_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_DATA_TESTS CSILK_DATA_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_AI_TESTS CSILK_AI_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_REFLECTION_TESTS CSILK_REFLECTION_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_MESSAGING_TESTS CSILK_MESSAGING_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_EXTRA_TESTS CSILK_EXTRA_TEST_DIRS)
-    add_csilk_test(${_name} tests/${_dir}/${_name}.c)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 

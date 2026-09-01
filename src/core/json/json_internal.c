@@ -6,8 +6,8 @@
 #include "json_internal.h"
 
 #define CSILK_JSON_SCRATCH_SIZE 64
-static __thread csilk_json_t tls_view_scratch[CSILK_JSON_SCRATCH_SIZE];
-static __thread size_t       tls_scratch_idx = 0;
+static __thread csilk_json_t* tls_view_scratch[CSILK_JSON_SCRATCH_SIZE];
+static __thread size_t        tls_scratch_idx = 0;
 
 csilk_json_t*
 json_mut_new(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
@@ -50,10 +50,14 @@ json_view_immutable(yyjson_doc* idoc, yyjson_val* val)
         return NULL;
     }
     size_t        idx = (tls_scratch_idx++) % CSILK_JSON_SCRATCH_SIZE;
-    csilk_json_t* j = &tls_view_scratch[idx];
+    csilk_json_t* j = malloc(sizeof(*j));
+    if (!j) {
+        return NULL;
+    }
+    tls_view_scratch[idx] = j;
     j->u.ival = val;
     j->doc.idoc = idoc;
-    j->flags = 0;
+    j->flags = CSILK_JSON_F_HEAP;
     j->_pad = 0;
     return j;
 }
@@ -65,10 +69,14 @@ json_view_mutable(yyjson_mut_doc* mdoc, yyjson_mut_val* mval)
         return NULL;
     }
     size_t        idx = (tls_scratch_idx++) % CSILK_JSON_SCRATCH_SIZE;
-    csilk_json_t* j = &tls_view_scratch[idx];
+    csilk_json_t* j = malloc(sizeof(*j));
+    if (!j) {
+        return NULL;
+    }
+    tls_view_scratch[idx] = j;
     j->u.mval = mval;
     j->doc.mdoc = mdoc;
-    j->flags = CSILK_JSON_F_MUTABLE;
+    j->flags = CSILK_JSON_F_MUTABLE | CSILK_JSON_F_HEAP;
     j->_pad = 0;
     return j;
 }
