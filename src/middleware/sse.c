@@ -79,6 +79,7 @@ csilk_sse_init(csilk_ctx_t* c)
 
     csilk_status(c, CSILK_STATUS_OK);
     csilk_ctx_set_sse(c, 1);
+    c->response.body_len = 0;
 
     void* internal_client = _csilk_get_internal_client(c);
     if (!internal_client) {
