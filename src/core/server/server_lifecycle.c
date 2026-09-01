@@ -722,7 +722,7 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
     int ret = csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
-    for (int i = 0; i < 16 && csilk_io_loop_alive(server->loop); i++) {
+    for (int i = 0; i < 1000 && csilk_io_loop_alive(server->loop); i++) {
         csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
     }
     return ret;

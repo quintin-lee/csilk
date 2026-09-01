@@ -74,6 +74,14 @@ client_list_remove(csilk_server_t* server, csilk_client_t* client)
 
 static _Thread_local worker_pool_t* g_current_worker_pool = NULL;
 
+typedef struct {
+    csilk_io_handle_t* handle;
+    uint64_t           generation;
+} csilk_close_task_payload_t;
+
+static void _csilk_on_close_owner(void* arg);
+void        on_close(csilk_io_handle_t* handle);
+
 void
 _csilk_worker_set_current_pool(worker_pool_t* wp)
 {
@@ -318,6 +326,26 @@ _csilk_ctx_async_ref_decr(csilk_ctx_t* c)
     csilk_client_unref((csilk_client_t*)c->_internal_client);
 }
 
+static void
+_csilk_on_close_owner(void* arg)
+{
+    csilk_close_task_payload_t* payload = (csilk_close_task_payload_t*)arg;
+    if (!payload) {
+        return;
+    }
+    csilk_io_handle_t* handle = payload->handle;
+    uint64_t           generation = payload->generation;
+    free(payload);
+    if (!handle || !handle->data) {
+        return;
+    }
+    csilk_client_t* client = (csilk_client_t*)handle->data;
+    if (client->generation != generation || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
+    on_close(handle);
+}
+
 /* --- Connection close --- */
 
 /**
@@ -334,6 +362,23 @@ on_close(csilk_io_handle_t* handle)
 {
     csilk_client_t* client = (csilk_client_t*)handle->data;
     if (!client) {
+        return;
+    }
+
+    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
+
+    if (!_csilk_is_owner_worker_thread(client->owner_pool)) {
+        csilk_close_task_payload_t* payload = malloc(sizeof(*payload));
+        if (!payload) {
+            return;
+        }
+        payload->handle = handle;
+        payload->generation = client->generation;
+        if (_csilk_dispatch_try(&client->ctx, _csilk_on_close_owner, payload) < 0) {
+            free(payload);
+        }
         return;
     }
 
