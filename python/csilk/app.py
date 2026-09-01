@@ -90,6 +90,7 @@ class App:
                     task.cancel()
                 if pending and not self._loop.is_closed():
                     self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                self._loop_thread = None
                 if not self._loop.is_closed():
                     self._loop.close()
             except RuntimeError:

@@ -35,7 +35,7 @@ class TestWorkflowSSE:
         def sse_client():
             try:
                 with requests.get("http://localhost:8101/sse_monitor", stream=True,
-                                  timeout=(5, 0.5),
+                                  timeout=5,
                                   proxies={"http": None, "https": None}) as r:
                     for line in r.iter_lines():
                         if line:
