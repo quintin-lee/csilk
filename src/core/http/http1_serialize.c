@@ -195,6 +195,10 @@ _csilk_send_response(csilk_ctx_t* c)
         return;
     }
 
+    if (c->is_websocket) {
+        return;
+    }
+
     csilk_conn_set_state(client, CSILK_CONN_WRITING);
 
     if (client->protocol == CSILK_PROTO_HTTP2) {
