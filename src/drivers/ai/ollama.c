@@ -126,15 +126,20 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     /* --- Step 1: Serialise the request into Ollama's JSON format --- */
     csilk_json_t* root = csilk_json_object();
-    if (!root || !root->u.mval || !root->doc.mdoc) {
+    if (!root) {
         curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI request JSON");
         return -1;
     }
-    csilk_json_add_string(root, "model", req->model ? req->model : "llama3");
+    if (!csilk_json_add_string(root, "model", req->model ? req->model : "llama3")) {
+        csilk_json_free(root);
+        curl_easy_cleanup(curl);
+        res->error_message = strdup("Failed to populate AI request JSON");
+        return -1;
+    }
 
     csilk_json_t* msgs = csilk_json_array();
-    if (!msgs || !msgs->u.mval || !msgs->doc.mdoc) {
+    if (!msgs) {
         csilk_json_free(root);
         curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI messages JSON");
