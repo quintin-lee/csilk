@@ -546,19 +546,15 @@ class App:
                     traceback.print_exc()
 
     def stop(self, timeout=5.0):
-        """Gracefully stop the server and wait for active connections to drain."""
-        server = self._lib.csilk_app_server(self._app)
-        if not server:
-            return
-        self._lib.csilk_server_stop(server)
+        """Request graceful shutdown; the server thread owns native cleanup.
 
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            stats = self.server_stats
-            if stats["active_connections"] == 0:
-                return
-            time.sleep(0.01)
-        raise RuntimeError("server did not drain active connections before timeout")
+        ``timeout`` is retained for API compatibility. Callers should join
+        the thread running :meth:`run` before releasing the application.
+        """
+        del timeout
+        server = self._lib.csilk_app_server(self._app)
+        if server:
+            self._lib.csilk_server_stop(server)
 
     def on_server_start(self, callback):
         """Register a callback to run just before the event loop starts."""
