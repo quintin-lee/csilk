@@ -35,6 +35,8 @@ function(add_csilk_test name source)
   add_test(NAME ${name} COMMAND ${name})
   if(name STREQUAL "test_performance_model")
     set_tests_properties(${name} PROPERTIES TIMEOUT 600)
+  elseif(name STREQUAL "test_logger_async_bench")
+    set_tests_properties(${name} PROPERTIES TIMEOUT 120)
   endif()
 endfunction()
 
