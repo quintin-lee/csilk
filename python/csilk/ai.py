@@ -114,6 +114,7 @@ class AI:
         c_req.temperature = temperature
         c_req.max_tokens = max_tokens
         c_req.timeout_ms = timeout_ms
+        c_req.reasoning_effort = None
 
         stream_wrapper = None
         if on_chunk:

@@ -23,53 +23,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-enum {
-    CSILK_JSON_F_OWNER = 1U << 0,   /**< Owns the underlying yyjson doc (free doc on free). */
-    CSILK_JSON_F_MUTABLE = 1U << 1, /**< Backed by yyjson_mut_val / yyjson_mut_doc. */
-    CSILK_JSON_F_HEAP = 1U << 2,    /**< Wrapper struct is heap-allocated (free wrapper on free). */
-};
-
-/**
- * @brief Compact 16-byte JSON value object / handle.
- *
- * Can be passed and returned directly by value in CPU registers (rax:rdx / x0:x1)
- * with zero heap allocation and zero TLS memory overhead.
- */
-struct csilk_json_s {
-    union {
-        void* raw;
-        void* ival; /**< yyjson_val* */
-        void* mval; /**< yyjson_mut_val* */
-    } u;
-    union {
-        void* raw;
-        void* idoc; /**< yyjson_doc* */
-        void* mdoc; /**< yyjson_mut_doc* */
-    } doc;
-    uint32_t flags;
-    uint32_t _pad;
-};
 typedef struct csilk_json_s csilk_json_t;
-
-/** @brief Check if a JSON value object is valid (non-null). */
-static inline bool
-csilk_json_is_valid(csilk_json_t v)
-{
-    return v.u.raw != NULL;
-}
-
-/** @brief Create an empty invalid JSON value object. */
-static inline csilk_json_t
-csilk_json_invalid(void)
-{
-    csilk_json_t v = {0};
-    return v;
-}
 
 /* ====================================================================
  * Creation
@@ -202,16 +162,16 @@ bool csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item);
  * ==================================================================== */
 
 /** @brief Get a child value by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t csilk_json_get_v(csilk_json_t obj, const char* key);
+csilk_json_t* csilk_json_get_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child object by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t csilk_json_get_object_v(csilk_json_t obj, const char* key);
+csilk_json_t* csilk_json_get_object_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child array by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t csilk_json_get_array_v(csilk_json_t obj, const char* key);
+csilk_json_t* csilk_json_get_array_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get the N-th element of an array (returns by value, 0 heap/TLS allocation). */
-csilk_json_t csilk_json_array_get_v(csilk_json_t arr, size_t index);
+csilk_json_t* csilk_json_array_get_v(const csilk_json_t* arr, size_t index);
 
 /** @brief Get a child string by key from a value object. */
 const char* csilk_json_get_string_v(csilk_json_t obj, const char* key);

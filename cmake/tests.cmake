@@ -67,6 +67,7 @@ set(CSILK_CORE_TESTS
     test_json_ext
     test_json_accessor_bench
     test_json_mutate
+    test_json_ai_request
     test_keepalive
     test_async_keepalive
     test_multi_worker

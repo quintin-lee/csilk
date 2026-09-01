@@ -11,6 +11,33 @@
 #include "csilk/core/json/json.h"
 #include <yyjson.h>
 
+enum {
+    CSILK_JSON_F_OWNER = 1U << 0,
+    CSILK_JSON_F_MUTABLE = 1U << 1,
+    CSILK_JSON_F_HEAP = 1U << 2,
+};
+
+static inline csilk_json_t*
+csilk_json_invalid(void)
+{
+    return NULL;
+}
+
+struct csilk_json_s {
+    union {
+        void* raw;
+        void* ival;
+        void* mval;
+    } u;
+    union {
+        void* raw;
+        void* idoc;
+        void* mdoc;
+    } doc;
+    uint32_t flags;
+    uint32_t _pad;
+};
+
 static inline yyjson_val*
 json_get_ival(const csilk_json_t* j)
 {
@@ -45,32 +72,6 @@ static inline bool
 json_is_owner(const csilk_json_t* j)
 {
     return (j->flags & CSILK_JSON_F_OWNER) != 0;
-}
-
-/* ====================================================================
- * Value creation helpers (Zero heap / Zero TLS)
- * ==================================================================== */
-
-static inline csilk_json_t
-json_val_from_mut(yyjson_mut_doc* mdoc, yyjson_mut_val* mval, uint32_t extra_flags)
-{
-    csilk_json_t v;
-    v.u.mval = mval;
-    v.doc.mdoc = mdoc;
-    v.flags = CSILK_JSON_F_MUTABLE | extra_flags;
-    v._pad = 0;
-    return v;
-}
-
-static inline csilk_json_t
-json_val_from_imut(yyjson_doc* idoc, yyjson_val* ival, uint32_t extra_flags)
-{
-    csilk_json_t v;
-    v.u.ival = ival;
-    v.doc.idoc = idoc;
-    v.flags = extra_flags;
-    v._pad = 0;
-    return v;
 }
 
 /* ====================================================================

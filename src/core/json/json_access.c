@@ -9,98 +9,76 @@
  * Value Object Accessors (Zero heap / Zero TLS, Register Return)
  * ==================================================================== */
 
-csilk_json_t
-csilk_json_get_v(csilk_json_t obj, const char* key)
+csilk_json_t*
+csilk_json_get_v(const csilk_json_t* obj, const char* key)
 {
-    if (!obj.u.raw || !key) {
+    return csilk_json_get(obj, key);
+}
+
+csilk_json_t*
+csilk_json_get_object_v(const csilk_json_t* obj, const char* key)
+{
+    return csilk_json_get_object(obj, key);
+}
+
+csilk_json_t*
+csilk_json_get_array_v(const csilk_json_t* obj, const char* key)
+{
+    return csilk_json_get_array(obj, key);
+}
+
+csilk_json_t*
+csilk_json_array_get_v(const csilk_json_t* arr, size_t index)
+{
+    if (!arr || !arr->u.raw) {
+        return NULL;
+    }
+    if (json_is_mutable(arr)) {
+        if (!yyjson_mut_is_arr((yyjson_mut_val*)arr->u.mval)) {
+            return NULL;
+        }
+        yyjson_mut_val* v = yyjson_mut_arr_get((yyjson_mut_val*)arr->u.mval, index);
+        if (!v) {
+            return NULL;
+        }
+        return json_view_mutable((yyjson_mut_doc*)arr->doc.mdoc, v);
+    }
+    if (!yyjson_is_arr((yyjson_val*)arr->u.ival)) {
         return csilk_json_invalid();
     }
-    if (json_is_mutable(&obj)) {
-        yyjson_mut_val* v = yyjson_mut_obj_get((yyjson_mut_val*)obj.u.mval, key);
-        if (!v) {
-            return csilk_json_invalid();
-        }
-        return json_val_from_mut((yyjson_mut_doc*)obj.doc.mdoc, v, 0);
-    }
-    yyjson_val* v = yyjson_obj_get((yyjson_val*)obj.u.ival, key);
+    yyjson_val* v = yyjson_arr_get((yyjson_val*)arr->u.ival, index);
     if (!v) {
         return csilk_json_invalid();
     }
-    return json_val_from_imut((yyjson_doc*)obj.doc.idoc, v, 0);
-}
-
-csilk_json_t
-csilk_json_get_object_v(csilk_json_t obj, const char* key)
-{
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    if (!csilk_json_is_object(&v)) {
-        return csilk_json_invalid();
-    }
-    return v;
-}
-
-csilk_json_t
-csilk_json_get_array_v(csilk_json_t obj, const char* key)
-{
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    if (!csilk_json_is_array(&v)) {
-        return csilk_json_invalid();
-    }
-    return v;
-}
-
-csilk_json_t
-csilk_json_array_get_v(csilk_json_t arr, size_t index)
-{
-    if (!arr.u.raw) {
-        return csilk_json_invalid();
-    }
-    if (json_is_mutable(&arr)) {
-        if (!yyjson_mut_is_arr((yyjson_mut_val*)arr.u.mval)) {
-            return csilk_json_invalid();
-        }
-        yyjson_mut_val* v = yyjson_mut_arr_get((yyjson_mut_val*)arr.u.mval, index);
-        if (!v) {
-            return csilk_json_invalid();
-        }
-        return json_val_from_mut((yyjson_mut_doc*)arr.doc.mdoc, v, 0);
-    }
-    if (!yyjson_is_arr((yyjson_val*)arr.u.ival)) {
-        return csilk_json_invalid();
-    }
-    yyjson_val* v = yyjson_arr_get((yyjson_val*)arr.u.ival, index);
-    if (!v) {
-        return csilk_json_invalid();
-    }
-    return json_val_from_imut((yyjson_doc*)arr.doc.idoc, v, 0);
+    return json_view_immutable((yyjson_doc*)arr->doc.idoc, v);
 }
 
 const char*
 csilk_json_get_string_v(csilk_json_t obj, const char* key)
 {
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    return csilk_json_string_value(&v);
+    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    return csilk_json_string_value(v);
 }
 
 double
 csilk_json_get_number_v(csilk_json_t obj, const char* key)
 {
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    return csilk_json_number_value(&v);
+    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    return csilk_json_number_value(v);
 }
 
 int64_t
 csilk_json_get_int_v(csilk_json_t obj, const char* key)
 {
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    return csilk_json_int_value(&v);
+    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    return csilk_json_int_value(v);
 }
 
 bool
 csilk_json_get_bool_v(csilk_json_t obj, const char* key)
 {
-    csilk_json_t v = csilk_json_get_v(obj, key);
-    return csilk_json_bool_value(&v);
+    csilk_json_t* v = csilk_json_get_v(&obj, key);
+    return csilk_json_bool_value(v);
 }
 
 /* ====================================================================
