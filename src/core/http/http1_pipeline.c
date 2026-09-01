@@ -31,6 +31,7 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
     }
 
     int   is_ws = client->ctx.is_websocket;
+    int   is_sse = client->ctx.is_sse;
     void* ws_msg_cb = client->ctx.on_ws_message;
     void* ws_send_cb = client->ctx.on_ws_send;
 
@@ -44,6 +45,9 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         client->ctx.is_websocket = is_ws;
         client->ctx.on_ws_message = ws_msg_cb;
         client->ctx.on_ws_send = ws_send_cb;
+    }
+    if (is_sse) {
+        client->ctx.is_sse = 1;
     }
 
     if (client->ctx.is_websocket) {

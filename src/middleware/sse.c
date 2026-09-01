@@ -95,7 +95,7 @@ csilk_sse_init(csilk_ctx_t* c)
                       "\r\n";
 
     size_t            hdr_len = strlen(hdr);
-    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+    csilk_io_write_t* req = calloc(1, sizeof(csilk_io_write_t));
     if (!req) {
         CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request");
         return;
@@ -110,9 +110,13 @@ csilk_sse_init(csilk_ctx_t* c)
     memcpy(buf, hdr, hdr_len);
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)hdr_len);
     req->data = buf;
+    req->cb = (void*)on_sse_write;
     csilk_client_t* cl = (csilk_client_t*)internal_client;
     csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+#ifndef CSILK_USE_URING
+    req->handle = stream;
+#endif
     csilk_client_ref(cl);
     _csilk_client_pending_io_inc(cl);
     int r = csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
@@ -187,7 +191,7 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     }
     pos += snprintf(buf + pos, buf_size - pos, "\n");
 
-    csilk_io_write_t* req = malloc(sizeof(csilk_io_write_t));
+    csilk_io_write_t* req = calloc(1, sizeof(csilk_io_write_t));
     if (!req) {
         CSILK_LOG_E("SSE: malloc failed for csilk_io_write_t request structure");
         free(buf);
@@ -196,7 +200,11 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
 
     csilk_io_buf_t uv_buf = csilk_io_buf_init(buf, (unsigned int)pos);
     req->data = buf;
+    req->cb = (void*)on_sse_write;
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+#ifndef CSILK_USE_URING
+    req->handle = stream;
+#endif
     csilk_client_ref(cl);
     _csilk_client_pending_io_inc(cl);
     int r = csilk_io_write(req, stream, &uv_buf, 1, on_sse_write);
