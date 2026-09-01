@@ -96,14 +96,21 @@ csilk_json_add_string(csilk_json_t* obj, const char* key, const char* value)
     if (!obj || !key) {
         return false;
     }
-    if (!json_is_mutable(obj) || !obj->doc.mdoc) {
+    if (!json_is_mutable(obj) || !obj->doc.mdoc || !obj->u.mval) {
         return false;
     }
     if (!value) {
         return csilk_json_add_null(obj, key);
     }
-    return yyjson_mut_obj_add_strcpy(
-        (yyjson_mut_doc*)obj->doc.mdoc, (yyjson_mut_val*)obj->u.mval, key, value);
+    yyjson_mut_val* key_val = yyjson_mut_strcpy((yyjson_mut_doc*)obj->doc.mdoc, key);
+    yyjson_mut_val* value_val = yyjson_mut_strcpy((yyjson_mut_doc*)obj->doc.mdoc, value);
+    if (!key_val || !value_val) {
+        return false;
+    }
+    if (!yyjson_mut_obj_add((yyjson_mut_val*)obj->u.mval, key_val, value_val)) {
+        return false;
+    }
+    return true;
 }
 
 bool
