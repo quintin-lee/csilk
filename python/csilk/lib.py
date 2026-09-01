@@ -111,8 +111,8 @@ class CsilkAiMessage(ctypes.Structure):
     _fields_ = [
         ("role", ctypes.c_char_p),
         ("content", ctypes.c_char_p),
-        ("tool_call_count", ctypes.c_size_t),
         ("tool_calls", CsilkAiToolCallPtr),
+        ("tool_call_count", ctypes.c_size_t),
         ("tool_call_id", ctypes.c_char_p),
     ]
 
@@ -171,7 +171,8 @@ class CsilkAiChatRequest(ctypes.Structure):
         ("timeout_ms", ctypes.c_int),
         ("tools", CsilkAiToolPtr),
         ("tool_count", ctypes.c_size_t),
-        ("tool_choice", ctypes.c_char_p)
+        ("tool_choice", ctypes.c_char_p),
+        ("reasoning_effort", ctypes.c_char_p)
     ]
 
 class CsilkAiContext(ctypes.Structure):
