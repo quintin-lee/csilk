@@ -56,6 +56,7 @@ class App:
 
         import asyncio
         import threading
+        self._threading = threading
         self._loop = asyncio.new_event_loop()
         def _run_loop():
             asyncio.set_event_loop(self._loop)
@@ -82,16 +83,18 @@ class App:
         """Release all resources held by the application (C backend, handlers, event loop)."""
         if hasattr(self, '_loop'):
             try:
-                self._loop.call_soon_threadsafe(self._loop.stop)
-                if hasattr(self, '_loop_thread') and self._loop_thread.is_alive():
-                    self._loop_thread.join(timeout=1.0)
-                pending = asyncio.all_tasks(self._loop) if not self._loop.is_closed() else set()
-                for task in pending:
-                    task.cancel()
-                if pending and not self._loop.is_closed():
-                    self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                self._loop_thread = None
+                loop_thread = getattr(self, '_loop_thread', None)
+                if loop_thread is not None and loop_thread.is_alive():
+                    self._loop.call_soon_threadsafe(self._loop.stop)
+                    loop_thread.join(timeout=1.0)
                 if not self._loop.is_closed():
+                    pending = asyncio.all_tasks(self._loop)
+                    for task in pending:
+                        task.cancel()
+                    if pending:
+                        self._loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
                     self._loop.close()
             except RuntimeError:
                 pass
@@ -534,7 +537,6 @@ class App:
             port: TCP port to listen on.
         """
         if getattr(self, "_asgi_app", None):
-            import asyncio
             from csilk.asgi import LifespanManager
             self._lifespan = LifespanManager(self._asgi_app)
             future = asyncio.run_coroutine_threadsafe(self._lifespan.startup(), self._loop)
@@ -558,10 +560,11 @@ class App:
         ``timeout`` is retained for API compatibility. Callers should join
         the thread running :meth:`run` before releasing the application.
         """
-        del timeout
         server = self._lib.csilk_app_server(self._app)
         if server:
             self._lib.csilk_server_stop(server)
+        # Native shutdown is asynchronous; callbacks remain owned by the App
+        # until the run thread has exited and free() releases them.
 
     def on_server_start(self, callback):
         """Register a callback to run just before the event loop starts."""

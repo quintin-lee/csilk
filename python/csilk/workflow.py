@@ -158,8 +158,10 @@ class WorkflowNode:
             res = router_fn(WorkflowData(input_ptr))
             # Store in self to prevent GC before C code uses it
             encoded = res.encode('utf-8') if res else None
+            if encoded is None:
+                return None
             self._router_results.append(encoded)
-            return encoded
+            return ctypes.cast(ctypes.c_char_p(encoded), ctypes.c_void_p).value
         self._router_wrapper = wrapper
         if not hasattr(self, "_router_results"):
             self._router_results = []
@@ -580,6 +582,8 @@ class Workflow:
                     self._run_callbacks.remove(run_cb)
 
         self._run_callbacks.append(run_cb)
+        self._run_callback_inputs = getattr(self, "_run_callback_inputs", {})
+        self._run_callback_inputs[id(run_cb)] = (c_data, c_input, c_type, c_val)
         res_exec_id = self._lib.csilk_wf_run(self._wf, c_input, run_cb)
         return res_exec_id.decode('utf-8') if res_exec_id else None
 

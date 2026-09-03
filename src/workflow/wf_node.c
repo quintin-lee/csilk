@@ -224,6 +224,11 @@ after_worker_cb(csilk_io_work_t* req, int status)
         int current_active = ctx->nodes_active;
         csilk_mutex_unlock(&ctx->mutex);
         if (current_active == 0) {
+            /* Hold the workflow alive across the user callback: the callback
+             * (e.g. a Python bridge) may free the workflow while we still
+             * touch ctx->trace and unregister the context below. */
+            csilk_wf_t* wf = ctx->wf;
+            atomic_fetch_add(&wf->pending_completions, 1);
             if (ctx->trace_callback) {
                 ctx->trace_callback(NULL, ctx->trace);
             } else if (ctx->callback) {
@@ -233,6 +238,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
                 ctx->trace = NULL;
             }
             _wf_cleanup_ctx(ctx);
+            atomic_fetch_sub(&wf->pending_completions, 1);
         }
         free_work(work);
         return;
@@ -251,6 +257,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
     if (node->router_fn) {
         const char* target_id = node->router_fn(output);
         if (target_id) {
+            CSILK_LOG_D("[Workflow] Dynamic router selected '%s'", target_id);
             for (size_t i = 0; i < ctx->wf->node_count; i++) {
                 if (strcmp(ctx->wf->nodes[i]->id, target_id) == 0) {
                     execute_node(ctx, ctx->wf->nodes[i], output);
@@ -305,8 +312,13 @@ after_worker_cb(csilk_io_work_t* req, int status)
     int current_active = ctx->nodes_active;
     csilk_mutex_unlock(&ctx->mutex);
     if (triggered_count == 0 && current_active == 0) {
+        /* Hold the workflow alive across the user callback: the callback
+         * (e.g. a Python bridge) may free the workflow while we still touch
+         * ctx->trace, the WAL and the active-context registry below. */
+        csilk_wf_t* wf = ctx->wf;
+        atomic_fetch_add(&wf->pending_completions, 1);
         _wf_wal_log_event(ctx, WF_EV_END, NULL, NULL);
-        _wf_broadcast(ctx->wf, "workflow_end", NULL, output ? (char*)output->value : NULL);
+        _wf_broadcast(wf, "workflow_end", NULL, output ? (char*)output->value : NULL);
         if (ctx->trace) {
             ctx->trace->end_time = csilk_io_hrtime() / 1000;
         }
@@ -322,6 +334,7 @@ after_worker_cb(csilk_io_work_t* req, int status)
             ctx->trace = NULL;
         }
         _wf_cleanup_ctx(ctx);
+        atomic_fetch_sub(&wf->pending_completions, 1);
     }
     free_work(work);
 }

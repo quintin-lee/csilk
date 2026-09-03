@@ -196,6 +196,22 @@ _csilk_send_response(csilk_ctx_t* c)
     }
 
     if (c->is_websocket) {
+        csilk_conn_set_state(client, CSILK_CONN_STREAMING);
+        size_t header_len = 0;
+        char*  header = malloc(1024);
+        if (header) {
+            header_len = fast_serialize_status_and_control(header,
+                                                           CSILK_STATUS_SWITCHING_PROTOCOLS,
+                                                           "Switching Protocols",
+                                                           0,
+                                                           "",
+                                                           0,
+                                                           "Upgrade");
+            header_len = append_custom_headers_fast(&c->response.headers, header, header_len);
+            header[header_len++] = '\r';
+            header[header_len++] = '\n';
+            _csilk_send_data_owned(c, header, header_len);
+        }
         return;
     }
 
@@ -255,7 +271,6 @@ _csilk_send_response(csilk_ctx_t* c)
         }
         write_base[pos] = '\0';
 
-        extern void _csilk_send_data_owned(csilk_ctx_t * c, char* data, size_t len);
         _csilk_send_data_owned(c, write_base, pos);
     }
 

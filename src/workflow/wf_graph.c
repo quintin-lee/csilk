@@ -8,6 +8,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 
+#include <stdatomic.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -268,6 +269,14 @@ csilk_wf_free(csilk_wf_t* wf)
         return;
     }
     CSILK_LOG_D("Workflow: destroying workflow instance '%s'", wf->name);
+    /* Wait for any after_worker_cb completion block still running on the
+     * loop thread: its tail (unregister_active_ctx, trace free, cleanup)
+     * touches wf->ctx_mutex and the active-context registry, so destroying
+     * the workflow here would race it. The block always runs to completion
+     * without blocking on wf_free, so a bounded yield loop is safe. */
+    while (atomic_load(&wf->pending_completions) > 0) {
+        csilk_thread_yield();
+    }
     while (wf->active_context_count > 0) {
         _wf_cleanup_ctx(wf->active_contexts[0]);
     }

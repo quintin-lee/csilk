@@ -155,10 +155,15 @@ _wf_run_ext_internal(csilk_wf_t*   wf,
         }
     }
     if (!started) {
+        /* Implicit single entry: start only the FIRST zero-incoming node.
+         * Starting all of them races parallel branches against each other —
+         * with a dynamic router the entry node alone determines the path,
+         * and sibling roots would complete spuriously and win the output. */
         for (size_t i = 0; i < wf->node_count; i++) {
             if (wf->nodes[i]->incoming_count == 0) {
                 execute_node(ctx, wf->nodes[i], input);
                 started = 1;
+                break;
             }
         }
     }
