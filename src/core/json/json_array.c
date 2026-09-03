@@ -28,6 +28,7 @@ csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
             return false;
         }
         if (json_is_owner(item) && item->doc.mdoc) {
+            json_va_release(item);
             yyjson_mut_doc_free((yyjson_mut_doc*)item->doc.mdoc);
         }
         bool is_heap = (item->flags & CSILK_JSON_F_HEAP) != 0;
@@ -48,6 +49,7 @@ csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item)
         return false;
     }
     if (json_is_owner(item) && item->doc.idoc) {
+        json_va_release(item);
         yyjson_doc_free((yyjson_doc*)item->doc.idoc);
     }
     bool is_heap = (item->flags & CSILK_JSON_F_HEAP) != 0;

@@ -41,7 +41,7 @@ csilk_json_array_get_v(const csilk_json_t* arr, size_t index)
         if (!v) {
             return NULL;
         }
-        return json_view_mutable((yyjson_mut_doc*)arr->doc.mdoc, v);
+        return json_view_mutable(arr, v);
     }
     if (!yyjson_is_arr((yyjson_val*)arr->u.ival)) {
         return csilk_json_invalid();
@@ -50,7 +50,7 @@ csilk_json_array_get_v(const csilk_json_t* arr, size_t index)
     if (!v) {
         return csilk_json_invalid();
     }
-    return json_view_immutable((yyjson_doc*)arr->doc.idoc, v);
+    return json_view_immutable(arr, v);
 }
 
 const char*
@@ -96,13 +96,13 @@ csilk_json_get(const csilk_json_t* obj, const char* key)
         if (!v) {
             return NULL;
         }
-        return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc, v);
+        return json_view_mutable(obj, v);
     }
     yyjson_val* v = yyjson_obj_get((yyjson_val*)obj->u.ival, key);
     if (!v) {
         return NULL;
     }
-    return json_view_immutable((yyjson_doc*)obj->doc.idoc, v);
+    return json_view_immutable(obj, v);
 }
 
 csilk_json_t*
@@ -116,13 +116,13 @@ csilk_json_get_object(const csilk_json_t* obj, const char* key)
         if (!v || !yyjson_mut_is_obj(v)) {
             return NULL;
         }
-        return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc, v);
+        return json_view_mutable(obj, v);
     }
     yyjson_val* v = yyjson_obj_get((yyjson_val*)obj->u.ival, key);
     if (!v || !yyjson_is_obj(v)) {
         return NULL;
     }
-    return json_view_immutable((yyjson_doc*)obj->doc.idoc, v);
+    return json_view_immutable(obj, v);
 }
 
 csilk_json_t*
@@ -136,13 +136,13 @@ csilk_json_get_array(const csilk_json_t* obj, const char* key)
         if (!v || !yyjson_mut_is_arr(v)) {
             return NULL;
         }
-        return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc, v);
+        return json_view_mutable(obj, v);
     }
     yyjson_val* v = yyjson_obj_get((yyjson_val*)obj->u.ival, key);
     if (!v || !yyjson_is_arr(v)) {
         return NULL;
     }
-    return json_view_immutable((yyjson_doc*)obj->doc.idoc, v);
+    return json_view_immutable(obj, v);
 }
 
 const char*
@@ -329,7 +329,7 @@ csilk_json_array_get(const csilk_json_t* arr, size_t index)
         if (!v) {
             return NULL;
         }
-        return json_view_mutable((yyjson_mut_doc*)arr->doc.mdoc, v);
+        return json_view_mutable(arr, v);
     }
     if (!yyjson_is_arr((yyjson_val*)arr->u.ival)) {
         return NULL;
@@ -338,7 +338,7 @@ csilk_json_array_get(const csilk_json_t* arr, size_t index)
     if (!v) {
         return NULL;
     }
-    return json_view_immutable((yyjson_doc*)arr->doc.idoc, v);
+    return json_view_immutable(arr, v);
 }
 
 size_t

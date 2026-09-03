@@ -40,6 +40,7 @@ csilk_json_set_string(csilk_json_t* v, const char* new_value)
     }
 
     if (json_is_owner(v) && v->doc.idoc) {
+        json_va_release(v);
         yyjson_doc_free((yyjson_doc*)v->doc.idoc);
     }
     v->u.mval = mnew_str;

@@ -147,6 +147,13 @@ csilk_server_stop(csilk_server_t* server)
     if (!server) {
         return;
     }
+    /* async_handle is only initialized inside csilk_server_run(); sending to a
+     * zeroed (never-run) or closing/closed handle is undefined behavior. */
+    if (!server->async_handle.loop ||
+        csilk_io_is_closing((csilk_io_handle_t*)&server->async_handle)) {
+        CSILK_LOG_D("Server: stop requested before/after run; nothing to signal");
+        return;
+    }
     csilk_io_async_send(&server->async_handle);
 }
 

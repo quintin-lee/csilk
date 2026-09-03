@@ -77,8 +77,7 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
         size_t          i = 0;
         while ((key_val = yyjson_mut_obj_iter_next(&it))) {
             if (i == index) {
-                return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc,
-                                         yyjson_mut_obj_iter_get_val(key_val));
+                return json_view_mutable(obj, yyjson_mut_obj_iter_get_val(key_val));
             }
             i++;
         }
@@ -93,8 +92,7 @@ csilk_json_object_val(const csilk_json_t* obj, size_t index)
     size_t      i = 0;
     while ((key_val = yyjson_obj_iter_next(&it))) {
         if (i == index) {
-            return json_view_immutable((yyjson_doc*)obj->doc.idoc,
-                                       yyjson_obj_iter_get_val(key_val));
+            return json_view_immutable(obj, yyjson_obj_iter_get_val(key_val));
         }
         i++;
     }

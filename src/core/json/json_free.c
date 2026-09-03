@@ -13,6 +13,7 @@ csilk_json_free(csilk_json_t* v)
         return;
     }
     if (v->flags & CSILK_JSON_F_OWNER) {
+        json_va_release(v);
         if (v->flags & CSILK_JSON_F_MUTABLE) {
             if (v->doc.mdoc) {
                 yyjson_mut_doc_free((yyjson_mut_doc*)v->doc.mdoc);

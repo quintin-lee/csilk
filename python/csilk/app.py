@@ -537,6 +537,7 @@ class App:
             port: TCP port to listen on.
         """
         if getattr(self, "_asgi_app", None):
+            import asyncio
             from csilk.asgi import LifespanManager
             self._lifespan = LifespanManager(self._asgi_app)
             future = asyncio.run_coroutine_threadsafe(self._lifespan.startup(), self._loop)
@@ -546,7 +547,6 @@ class App:
             return self._lib.csilk_app_run(self._app, port)
         finally:
             if getattr(self, "_asgi_app", None):
-                import asyncio
                 future = asyncio.run_coroutine_threadsafe(self._lifespan.shutdown(), self._loop)
                 try:
                     future.result(timeout=5.0)
