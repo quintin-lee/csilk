@@ -300,45 +300,62 @@ class CsilkServerConfig(ctypes.Structure):
 
 _cached_lib = None
 
+_TEST_SUPPORT_NAMES = (
+    "libcsilk_test_support_shared.so",
+    "libcsilk-test-support.so",
+    "libcsilk_test_support_shared.dylib",
+    "libcsilk-test-support.dylib",
+)
+
+
+def _attach_test_support(lib, main_lib_path):
+    """Bind csilk_test_ctx_* symbols onto `lib` if a test-support lib is found.
+
+    Probe order: explicit LIBCSILK_TEST_SUPPORT_PATH (file or directory),
+    then common names next to the loaded main library. Silently skips when
+    absent so production wheels keep working; local dev builds (build/)
+    get test context support without extra environment variables.
+    """
+    support = None
+    support_path = os.environ.get("LIBCSILK_TEST_SUPPORT_PATH")
+    candidates = []
+    if support_path:
+        if os.path.isdir(support_path):
+            candidates = [os.path.join(support_path, n) for n in _TEST_SUPPORT_NAMES]
+        else:
+            candidates = [support_path]
+    else:
+        base = os.path.dirname(os.path.abspath(main_lib_path))
+        candidates = [os.path.join(base, n) for n in _TEST_SUPPORT_NAMES]
+
+    for cand in candidates:
+        if os.path.exists(cand) and not cand.endswith(".a"):
+            try:
+                support = ctypes.CDLL(cand, mode=ctypes.RTLD_GLOBAL)
+                break
+            except OSError:
+                support = None
+
+    if support is None:
+        return lib
+
+    test_ctx_new = getattr(support, "csilk_test_ctx_new", None)
+    test_ctx_free = getattr(support, "csilk_test_ctx_free", None)
+    if test_ctx_new is not None and test_ctx_free is not None:
+        lib.csilk_test_ctx_new = test_ctx_new
+        lib.csilk_test_ctx_new.restype = CsilkCtxPtr
+        lib.csilk_test_ctx_new.argtypes = []
+        lib.csilk_test_ctx_free = test_ctx_free
+        lib.csilk_test_ctx_free.restype = None
+        lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
+        lib._csilk_test_support = support
+    return lib
+
+
 def load_lib():
     env_path = os.environ.get("LIBCSILK_PATH")
     if env_path:
-        lib = ctypes.CDLL(env_path)
-        support_path = os.environ.get("LIBCSILK_TEST_SUPPORT_PATH")
-        support = None
-        if support_path:
-            # Accept a bare name (e.g. "/path/build") by probing common names
-            candidates = [support_path] if not os.path.isdir(support_path) else [
-                os.path.join(support_path, n)
-                for n in ("libcsilk_test_support_shared.so", "libcsilk-test-support.so")
-            ]
-            for cand in candidates:
-                if os.path.exists(cand) and not cand.endswith(".a"):
-                    try:
-                        support = ctypes.CDLL(cand, mode=ctypes.RTLD_GLOBAL)
-                        break
-                    except OSError:
-                        support = None
-        elif os.path.isabs(env_path):
-            # Fall back to a test-support lib sitting next to the main lib
-            base = os.path.dirname(env_path)
-            for name in ("libcsilk_test_support_shared.so", "libcsilk-test-support.so"):
-                cand = os.path.join(base, name)
-                if os.path.exists(cand):
-                    try:
-                        support = ctypes.CDLL(cand, mode=ctypes.RTLD_GLOBAL)
-                        break
-                    except OSError:
-                        support = None
-        if support is not None:
-            lib.csilk_test_ctx_new = support.csilk_test_ctx_new
-            lib.csilk_test_ctx_new.restype = CsilkCtxPtr
-            lib.csilk_test_ctx_new.argtypes = []
-            lib.csilk_test_ctx_free = support.csilk_test_ctx_free
-            lib.csilk_test_ctx_free.restype = None
-            lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
-            lib._csilk_test_support = support
-        return lib
+        return _attach_test_support(ctypes.CDLL(env_path), env_path)
     
     if sys.platform.startswith("win"):
         lib_name = "csilk.dll"
@@ -351,18 +368,18 @@ def load_lib():
     pkg_dir = os.path.dirname(os.path.abspath(__file__))
     pkg_path = os.path.join(pkg_dir, lib_name)
     if os.path.exists(pkg_path):
-        return ctypes.CDLL(pkg_path)
+        return _attach_test_support(ctypes.CDLL(pkg_path), pkg_path)
         
     # 2. Look in the build directory (for local dev)
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     build_path = os.path.join(base_dir, "build", lib_name)
     
     if os.path.exists(build_path):
-        return ctypes.CDLL(build_path)
+        return _attach_test_support(ctypes.CDLL(build_path), build_path)
     
     # 3. Fallback to system paths
     try:
-        return ctypes.CDLL(lib_name)
+        return _attach_test_support(ctypes.CDLL(lib_name), lib_name)
     except OSError as e:
         raise OSError(f"Could not load {lib_name}. Please compile csilk as shared library and configure LIBCSILK_PATH.") from e
 
