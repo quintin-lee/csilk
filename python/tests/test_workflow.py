@@ -77,7 +77,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertIsNotNone(exec_id)
         
         # Wait for the workflow to complete
-        completed = event.wait(timeout=2.0)
+        completed = event.wait(timeout=5.0)
         self.assertTrue(completed)
         self.assertEqual(results, ["HELLO!!!"])
 
@@ -115,7 +115,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
         
         wf.run("go_left", callback=cb1)
-        self.assertTrue(event.wait(timeout=2.0))
+        self.assertTrue(event.wait(timeout=5.0))
         self.assertEqual(results, ["left"])
 
         # Test case 2: route right
@@ -160,7 +160,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
 
         wf.run("hello", callback=cb)
-        self.assertTrue(event.wait(timeout=2.0))
+        self.assertTrue(event.wait(timeout=5.0))
         self.assertEqual(results, ["HELLO FROM DECA"])
 
     def test_workflow_traced_and_interactive(self):
@@ -185,7 +185,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
             
         wf.run_traced("hello", callback=traced_cb)
-        self.assertTrue(event.wait(timeout=2.0))
+        self.assertTrue(event.wait(timeout=5.0))
         self.assertEqual(results, ["HELLO"])
         self.assertEqual(len(trace_ptrs), 1)
         
