@@ -1,9 +1,13 @@
 """Unit tests for Python C-ABI bindings for OTLP Trace, Circuit Breaker, and Sliding Limiter."""
 
+import pytest
+
 from csilk.context import Context
 from csilk.middleware import CircuitBreaker, SlidingLimiter, trace_middleware
 
 def test_trace_middleware_binding():
+    if not Context.test_support_available():
+        pytest.skip("test context support unavailable in this library")
     print("Testing Python trace_middleware binding...")
     ctx = Context.create_test_context()
     try:
@@ -29,6 +33,8 @@ def test_circuit_breaker_binding():
     print("PASS: CircuitBreaker state transitions")
 
 def test_sliding_limiter_binding():
+    if not Context.test_support_available():
+        pytest.skip("test context support unavailable in this library")
     print("Testing Python SlidingLimiter binding...")
     lim = SlidingLimiter(limit_per_window=2, window_ms=1000)
     ctx1 = Context.create_test_context()

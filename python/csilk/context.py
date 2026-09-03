@@ -848,6 +848,16 @@ class Context:
         ctx._owned = True
         return ctx
 
+    @classmethod
+    def test_support_available(cls):
+        """Return True when the loaded library exposes test-context symbols.
+
+        Lets test suites skip gracefully instead of failing when running
+        against a production build of the library.
+        """
+        lib = get_bindings()
+        return getattr(lib, "csilk_test_ctx_new", None) is not None
+
     def free_test_context(self):
         """Free a test context created by ``create_test_context``."""
         if hasattr(self, "_owned") and self._owned and self._ctx:

@@ -696,6 +696,8 @@ class TestCsilkCrypto(unittest.TestCase):
 
 class TestCsilkPerm(unittest.TestCase):
     def test_permission_flow(self):
+        if not Context.test_support_available():
+            self.skipTest("test context support unavailable in this library")
         # Initialize permission subsystem
         Perm.init()
         Perm.simple_init()
