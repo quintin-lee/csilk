@@ -209,7 +209,7 @@ CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p,
 CsilkMqHandler = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 
 CsilkWfHandler = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p)
-CsilkWfRouter = ctypes.CFUNCTYPE(ctypes.c_char_p, CsilkDataPtr)
+CsilkWfRouter = ctypes.CFUNCTYPE(ctypes.c_void_p, CsilkDataPtr)
 CsilkWfToolFn = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p)
 CsilkWfRunCallback = ctypes.CFUNCTYPE(None, CsilkDataPtr)
 CsilkWfRunTracedCallback = ctypes.CFUNCTYPE(None, CsilkDataPtr, ctypes.c_void_p)
@@ -303,7 +303,42 @@ _cached_lib = None
 def load_lib():
     env_path = os.environ.get("LIBCSILK_PATH")
     if env_path:
-        return ctypes.CDLL(env_path)
+        lib = ctypes.CDLL(env_path)
+        support_path = os.environ.get("LIBCSILK_TEST_SUPPORT_PATH")
+        support = None
+        if support_path:
+            # Accept a bare name (e.g. "/path/build") by probing common names
+            candidates = [support_path] if not os.path.isdir(support_path) else [
+                os.path.join(support_path, n)
+                for n in ("libcsilk_test_support_shared.so", "libcsilk-test-support.so")
+            ]
+            for cand in candidates:
+                if os.path.exists(cand) and not cand.endswith(".a"):
+                    try:
+                        support = ctypes.CDLL(cand, mode=ctypes.RTLD_GLOBAL)
+                        break
+                    except OSError:
+                        support = None
+        elif os.path.isabs(env_path):
+            # Fall back to a test-support lib sitting next to the main lib
+            base = os.path.dirname(env_path)
+            for name in ("libcsilk_test_support_shared.so", "libcsilk-test-support.so"):
+                cand = os.path.join(base, name)
+                if os.path.exists(cand):
+                    try:
+                        support = ctypes.CDLL(cand, mode=ctypes.RTLD_GLOBAL)
+                        break
+                    except OSError:
+                        support = None
+        if support is not None:
+            lib.csilk_test_ctx_new = support.csilk_test_ctx_new
+            lib.csilk_test_ctx_new.restype = CsilkCtxPtr
+            lib.csilk_test_ctx_new.argtypes = []
+            lib.csilk_test_ctx_free = support.csilk_test_ctx_free
+            lib.csilk_test_ctx_free.restype = None
+            lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
+            lib._csilk_test_support = support
+        return lib
     
     if sys.platform.startswith("win"):
         lib_name = "csilk.dll"

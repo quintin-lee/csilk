@@ -5,8 +5,11 @@
 # Test helpers are compiled into a test-only support library. They remain out
 # of every production module and are linked transitively by test executables.
 add_library(csilk_test_support STATIC ${CSILK_TEST_SUPPORT_SOURCES})
+add_library(csilk_test_support_shared SHARED ${CSILK_TEST_SUPPORT_SOURCES})
 csilk_target_setup(csilk_test_support PRIVATE STATIC)
+csilk_target_setup(csilk_test_support_shared PRIVATE SHARED)
 target_link_libraries(csilk_test_support PRIVATE csilk_runtime csilk_base)
+target_link_libraries(csilk_test_support_shared PRIVATE csilk_runtime csilk_base csilk_http csilk_middleware csilk_app csilk_shared)
 
 # Helper to add a test executable and register with CTest
 function(add_csilk_test name source)

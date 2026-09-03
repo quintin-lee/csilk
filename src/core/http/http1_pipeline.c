@@ -56,6 +56,17 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
 
     CSILK_LOG_I("_csilk_handle_post_response called, keep_alive=%d", keep_alive);
     if (keep_alive) {
+        /* If the server is shutting down and this handle was already queued
+         * for close, restarting the read here would resurrect a closing
+         * connection (read callback firing on a recycled client). */
+        if (csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+            CSILK_LOG_I("_csilk_handle_post_response: handle closing, skipping read restart");
+            extern void csilk_conn_set_state(csilk_client_t * client, csilk_conn_state_t new_state);
+            extern void on_close(csilk_io_handle_t * handle);
+            csilk_conn_set_state(client, CSILK_CONN_CLOSING);
+            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            return;
+        }
         CSILK_LOG_I("_csilk_handle_post_response: restarting read");
         extern void csilk_conn_set_state(csilk_client_t * client, csilk_conn_state_t new_state);
         extern void on_idle_timeout(csilk_io_timer_t * handle);
