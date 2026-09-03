@@ -41,7 +41,11 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
     int            count = 0;
     worker_pool_t* wp = NULL;
     for (int i = 0; i < server->worker_pool_count; i++) {
-        if (&server->worker_pools[i].loop == loop) {
+        /* Match on loop_ptr first: in default-loop (single-worker) mode
+         * wp[0].loop is never initialized (loop_ptr == server->loop), so
+         * matching on &wp->loop silently finds NO pool and leaks zombie
+         * keep-alive handles into the shared loop. */
+        if (server->worker_pools[i].loop_ptr == loop || &server->worker_pools[i].loop == loop) {
             wp = &server->worker_pools[i];
             break;
         }
@@ -55,11 +59,21 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
         csilk_client_t* next = client->next;
         count++;
         if (client->ctx.is_websocket) {
-            csilk_ws_close(&client->ctx, 1001, "Server stopping");
-            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            /* The WS close-echo path (csilk_ws_parse_frame opcode 0x8) may
+             * already be closing this handle — uv_close() asserts on a
+             * handle that is closing, so check first. */
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_ws_close(&client->ctx, 1001, "Server stopping");
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
         } else if (client->ctx.is_sse) {
+            /* Send the terminal SSE event, then close with on_close so the
+             * client object is recycled — csilk_sse_close() passes a NULL
+             * close callback which would strand the client on active list. */
             csilk_sse_send(&client->ctx, "close", "Server stopping");
-            csilk_sse_close(&client->ctx);
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
         } else {
             if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);

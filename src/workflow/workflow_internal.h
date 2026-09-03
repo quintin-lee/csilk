@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/internal.h"
@@ -96,6 +97,12 @@ struct csilk_wf_s {
     size_t                     active_context_count;
     size_t                     active_context_capacity;
     csilk_mutex_t              ctx_mutex;
+    /* Number of after_worker_cb completion blocks in flight on the loop
+     * thread. csilk_wf_free() waits for this to reach 0 before destroying
+     * the workflow, otherwise a completion triggered by a user callback
+     * (e.g. Python waking up and calling free) races the loop thread's
+     * unregister/cleanup tail and destroys ctx_mutex under it. */
+    _Atomic int pending_completions;
 };
 
 typedef struct csilk_wf_mem_node_s {

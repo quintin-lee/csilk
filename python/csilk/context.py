@@ -529,7 +529,15 @@ class Context:
 
         future = asyncio.run_coroutine_threadsafe(_runner(), loop)
         self._async_future = future
-        future.add_done_callback(lambda done: setattr(self, "_async_future", None))
+
+        def _clear_future(done):
+            self._async_future = None
+            try:
+                done.exception()
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        future.add_done_callback(_clear_future)
 
     def dispatch(self, func):
         """Schedule *func* to run on the C event-loop thread.
