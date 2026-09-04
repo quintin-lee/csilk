@@ -9,6 +9,8 @@ on:
 jobs:
   benchmark:
     runs-on: ubuntu-24.04
+    # Full benchmark suite + PR baseline comparison; cap guards a hung runner.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
         with:
@@ -88,6 +90,8 @@ jobs:
   profile:
     name: CPU Profile (FlameGraph)
     runs-on: ubuntu-24.04
+    # Sampling profile run; cap guards a hung runner.
+    timeout-minutes: 30
     if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v5

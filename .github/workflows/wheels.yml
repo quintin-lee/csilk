@@ -10,6 +10,8 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # cibuildwheel builds for the whole matrix; cap guards a hung runner.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +62,7 @@ jobs:
   make_sdist:
     name: Make SDist
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - name: Build SDist

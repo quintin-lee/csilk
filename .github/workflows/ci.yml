@@ -11,6 +11,9 @@ jobs:
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.build_type }})
     runs-on: ${{ matrix.os }}
+    # 4 matrix variants x (build + unit + integration + python); Debug Linux
+    # runs under ASAN. Cap guards a hung runner, not normal slowness.
+    timeout-minutes: 60
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-14]
@@ -119,6 +122,8 @@ jobs:
   lint:
     name: Lint & Static Analysis
     runs-on: ubuntu-24.04
+    # clang-tidy is the long pole here; cap guards a hung runner.
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v5
 
@@ -158,6 +163,8 @@ jobs:
   fuzz:
     name: Fuzz Testing
     runs-on: ubuntu-24.04
+    # 120s + 3x 60s fuzz budgets plus ASAN build; cap guards a hung runner.
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v5
 
@@ -198,6 +205,8 @@ jobs:
   arm64:
     name: ARM64 Cross-Compile
     runs-on: ubuntu-24.04
+    # Cross-build + readelf verification only; cap guards a hung runner.
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v5
 
@@ -329,6 +338,8 @@ jobs:
   benchmark:
     name: Performance Benchmarks
     runs-on: ubuntu-24.04
+    # Full benchmark suite (+ comparison on PRs); cap guards a hung runner.
+    timeout-minutes: 45
     steps:
     - uses: actions/checkout@v5
       with:
@@ -370,6 +381,8 @@ jobs:
   examples:
     name: Examples Smoke Test
     runs-on: ubuntu-24.04
+    # Build + short curl smoke tests; cap guards a hung runner.
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v5
 
