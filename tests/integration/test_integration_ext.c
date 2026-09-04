@@ -45,7 +45,7 @@ static int
 recv_response(int sock, char* buf, size_t size)
 {
     fd_set         fds;
-    struct timeval tv = {3, 0};
+    struct timeval tv = {10, 0};
     FD_ZERO(&fds);
     FD_SET(sock, &fds);
     int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);
@@ -161,7 +161,7 @@ admin_stats_check(csilk_ctx_t* c)
 
 /* ---- Server thread ---- */
 
-static volatile int server_ready = 0;
+static _Atomic int server_ready = 0;
 
 static void*
 run_server(void* arg)

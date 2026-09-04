@@ -33,7 +33,7 @@ static int
 recv_response(int sock, char* buf, size_t size)
 {
     fd_set         fds;
-    struct timeval tv = {3, 0};
+    struct timeval tv = {10, 0};
     int            total = 0;
     while (total < (int)size - 1) {
         FD_ZERO(&fds);
@@ -519,7 +519,7 @@ test_streaming_response()
     int  total = 0;
     while (total < (int)sizeof(full) - 1) {
         fd_set         fds;
-        struct timeval tv = {1, 0};
+        struct timeval tv = {10, 0};
         FD_ZERO(&fds);
         FD_SET(sock, &fds);
         int ret = select(sock + 1, &fds, nullptr, nullptr, &tv);

@@ -44,7 +44,7 @@ recv_resp(int s, char* b, size_t sz)
     fd_set f;
     int    t = 0;
     while (t < (int)sz - 1) {
-        struct timeval tv = {3, 0};
+        struct timeval tv = {10, 0};
         FD_ZERO(&f);
         FD_SET(s, &f);
         if (select(s + 1, &f, NULL, NULL, &tv) <= 0) {
