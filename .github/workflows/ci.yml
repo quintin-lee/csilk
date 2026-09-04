@@ -287,6 +287,9 @@ jobs:
   tsan:
     name: ThreadSanitizer
     runs-on: ubuntu-24.04
+    # TSAN slows execution 5-20x; the unit suite takes ~15 min locally.
+    # Generous cap only guards against a hung runner, not normal slowness.
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v5
 
@@ -313,7 +316,12 @@ jobs:
       run: cmake --build build -j$(nproc)
 
     - name: Run unit tests
-      run: ctest --test-dir build -E test_integration --output-on-failure
+      # --timeout is a per-test default (per-test TIMEOUT properties in
+      # cmake/tests.cmake override it); 600s matches the most generous
+      # dedicated timeout and only truncates genuinely hung tests.
+      # Integration harnesses carry their own 10s client read timeouts
+      # compiled into the test sources.
+      run: ctest --test-dir build -E test_integration --timeout 600 --output-on-failure
       env:
         TSAN_OPTIONS: halt_on_error=1:print_suppressions=0:suppressions=${{ github.workspace }}/cmake/.tsan-suppressions
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
