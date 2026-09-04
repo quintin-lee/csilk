@@ -12,6 +12,24 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 
+/* ThreadSanitizer slows execution 5-20x; scale iteration counts down so
+ * the run stays well under its 600s TIMEOUT (575s was measured un-scaled
+ * under TSAN, vs ~5s native). Detection covers gcc (__SANITIZE_THREAD__)
+ * and clang (__has_feature(thread_sanitizer)). */
+#if defined(__SANITIZE_THREAD__)
+#define PERF_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define PERF_TSAN 1
+#endif
+#endif
+
+#ifdef PERF_TSAN
+#define PERF_IT_SCALE 10
+#else
+#define PERF_IT_SCALE 1
+#endif
+
 #if defined(__x86_64__) || defined(__i386__)
 static inline uint64_t
 read_cycles(void)
@@ -62,7 +80,7 @@ print_result(const char* stage, uint64_t operations, uint64_t elapsed_ns, uint64
 static void
 benchmark_segment_scan(void)
 {
-    enum { operations = 1000000 };
+    enum { operations = 1000000 / PERF_IT_SCALE };
     const char*     path = "/api/v1/users/12345/profile/details";
     volatile size_t total_length = 0;
     uint64_t        start_ns = read_time_ns();
@@ -83,7 +101,7 @@ benchmark_segment_scan(void)
 static void
 benchmark_router_mode(int route_count, int use_simd, const char* pattern, const char* query)
 {
-    enum { lookups = 100000 };
+    enum { lookups = 100000 / PERF_IT_SCALE };
     csilk_router_t* router = csilk_router_new();
     assert(router != NULL);
 
@@ -132,7 +150,7 @@ benchmark_router_mode(int route_count, int use_simd, const char* pattern, const 
 static void
 benchmark_headers_scale(int header_count)
 {
-    enum { lookups = 200000 };
+    enum { lookups = 200000 / PERF_IT_SCALE };
     csilk_ctx_t* context = csilk_test_ctx_new();
     assert(context != NULL);
 
@@ -165,7 +183,7 @@ benchmark_headers_scale(int header_count)
 static void
 benchmark_stream_scale(int stream_count)
 {
-    enum { cycles = 2000 };
+    enum { cycles = 2000 / PERF_IT_SCALE };
     csilk_client_t client;
     memset(&client, 0, sizeof(client));
 
@@ -191,7 +209,7 @@ benchmark_stream_scale(int stream_count)
 static void
 benchmark_arena(void)
 {
-    enum { allocations = 1000000 };
+    enum { allocations = 1000000 / PERF_IT_SCALE };
     csilk_arena_t* arena = csilk_arena_new(65536);
     assert(arena != NULL);
 
