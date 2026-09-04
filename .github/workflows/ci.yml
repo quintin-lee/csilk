@@ -146,6 +146,11 @@ jobs:
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
 
+    - name: Check workflow job timeouts
+      # Every job must set timeout-minutes so a hung runner fails fast
+      # instead of burning GitHub's 360-minute default.
+      run: python3 scripts/check_ci_timeouts.py
+
     - name: Check code formatting
       run: |
         cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
