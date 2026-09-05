@@ -301,7 +301,37 @@ make profile
 
 ---
 
-## 8. 构建 Checklist
+## 8. 构建目录管理
+
+每个 sanitizer/后端组合都需要独立的 `-B build_<variant>` 目录（重复 configure 会污染
+已有目录状态）。实验结束后用 `scripts/clean_builds.sh` 清理：
+
+```bash
+# 列出所有 CMake 构建目录及大小（默认 dry-run，不删除）
+./scripts/clean_builds.sh
+
+# 删除非规范的构建目录
+./scripts/clean_builds.sh --prune
+
+# 自定义保留列表
+./scripts/clean_builds.sh --keep build,build_uring,build_asan --prune
+```
+
+默认保留（与 CI 矩阵对应的规范目录）：
+
+| 目录 | 对应 CI 任务 |
+|---|---|
+| `build` | 主矩阵（libuv） |
+| `build_uring` | io_uring 兼容任务 |
+| `build_asan` | ASAN 运行 |
+| `build_tsan` | TSAN 任务 |
+| `build_fuzz` | libFuzzer 任务 |
+
+只有包含 `CMakeCache.txt` 的目录会被视为构建目录，其他 `build*` 命名的目录不会被触碰。
+
+---
+
+## 9. 构建 Checklist
 
 - [ ] CMake 3.11+ 已安装
 - [ ] GCC 13.0+ 或 Clang 19.0+
@@ -314,7 +344,7 @@ make profile
 
 ---
 
-## 9. 获取帮助
+## 10. 获取帮助
 
 **构建问题**？提交 Issue 时包含：
 

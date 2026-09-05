@@ -33,6 +33,7 @@ Use these rules whenever performing work in this repository. They ensure correct
 ### Building & testing
 
 - **Configure once per variant**: each sanitizer/backend combination needs its own `-B build_*` directory. Do not re-run configure on an existing build dir — it mutates state.
+- **Clean scratch build trees**: after experiments land, run `scripts/clean_builds.sh` (dry-run by default; `--prune` to delete). It keeps the canonical trees — `build`, `build_uring`, `build_asan`, `build_tsan`, `build_fuzz` — and only touches directories containing a `CMakeCache.txt`.
 - **Run tests via `ctest`**: never `make test` or invoke test executables directly. Use `--test-dir build` (or the variant dir) and filter with `-R` / `-E`.
 - **ASAN/TSAN runtime**: mirror CI flags (`ASAN_OPTIONS`, `LSAN_OPTIONS`, `TSAN_OPTIONS`) when running tests under sanitizers locally. Suppressions live under `cmake/`.
 - **Timeout-sensitive tests**: `test_timeout` (10s), `test_multi_worker`/`test_mq_concurrent` (30s), `test_ws_concurrent`/`test_sse_concurrent` (15s). Set `--timeout` explicitly.
@@ -392,6 +393,7 @@ csilk_get(app, "/api/echo", echo_handler);
 | `scripts/tag-release.sh` | Bumps version across all 18 locations (src/, python/, cmake/, docs, ASCII diagrams) |
 | `scripts/profile.sh` | CPU profiler harness (perf, flamegraph) |
 | `scripts/run_benchmarks.sh` | Benchmark runner; compares against prior results via `compare_benchmarks.py` |
+| `scripts/clean_builds.sh` | Lists CMake build trees and prunes all but the canonical set (dry-run default, `--prune` to delete, `--keep a,b,c` to override) |
 | `scripts/generate-sdk.py` | TypeScript/Python SDK generator from OpenAPI spec (`--url` or `--file`, `--lang typescript|python|both`) |
 | `scripts/setup_bench_tools.sh` | Benchmark toolchain installer |
 | `fuzz/fuzz.dict` | libFuzzer dictionary for fuzz_test and fuzz_headers harnesses |
