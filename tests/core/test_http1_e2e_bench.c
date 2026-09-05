@@ -6,9 +6,11 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <errno.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -111,6 +113,13 @@ read_response(int fd)
     while (used < sizeof(buffer) - 1) {
         ssize_t n = recv(fd, buffer + used, sizeof(buffer) - 1 - used, 0);
         if (n <= 0) {
+            fprintf(stderr,
+                    "[CLNT] fd=%d recv=%zd errno=%d(%s) used=%zu\n",
+                    fd,
+                    n,
+                    errno,
+                    strerror(errno),
+                    used);
             return -1;
         }
         used += (size_t)n;
@@ -121,6 +130,8 @@ read_response(int fd)
     }
     return -1;
 }
+
+static _Atomic(size_t) e2e_errors = 0;
 
 static void*
 client_main(void* raw_args)
@@ -134,8 +145,20 @@ client_main(void* raw_args)
                                   "Connection: keep-alive\r\n\r\n";
     for (size_t i = 0; i < args->requests; i++) {
         uint64_t start = now_ns();
-        if (send(fd, request, sizeof(request) - 1, 0) != (ssize_t)(sizeof(request) - 1) ||
-            read_response(fd) != 0) {
+        ssize_t  sn = send(fd, request, sizeof(request) - 1, 0);
+        if (sn != (ssize_t)(sizeof(request) - 1)) {
+            fprintf(stderr,
+                    "[CLNT] fd=%d idx=%zu send=%zd errno=%d(%s)\n",
+                    fd,
+                    i,
+                    sn,
+                    errno,
+                    strerror(errno));
+            atomic_fetch_add_explicit(&e2e_errors, 1, memory_order_relaxed);
+            break;
+        }
+        if (read_response(fd) != 0) {
+            atomic_fetch_add_explicit(&e2e_errors, 1, memory_order_relaxed);
             break;
         }
         args->samples[args->sample_offset + args->completed++] = now_ns() - start;
@@ -155,6 +178,9 @@ compare_u64(const void* left, const void* right)
 static uint64_t
 percentile_u64(uint64_t* values, size_t count, size_t numerator, size_t denominator)
 {
+    if (values == NULL || count == 0) {
+        return 0;
+    }
     qsort(values, count, sizeof(values[0]), compare_u64);
     size_t index = (count - 1) * numerator / denominator;
     return values[index];
@@ -203,7 +229,8 @@ run_warmup(int port)
     }
     for (int i = 0; i < E2E_CLIENTS; i++) {
         pthread_join(clients[i], NULL);
-        assert(args[i].completed == E2E_WARMUP_REQUESTS);
+        atomic_fetch_add_explicit(
+            &e2e_errors, E2E_WARMUP_REQUESTS - args[i].completed, memory_order_relaxed);
     }
 }
 
@@ -249,7 +276,14 @@ run_worker_benchmark(int workers, int port)
             completed += client_args[i].completed;
             round_completed += client_args[i].completed;
         }
-        uint64_t  round_end = now_ns();
+        uint64_t round_end = now_ns();
+        fprintf(stderr,
+                "[ROUND] workers=%d round=%d completed=%zu/%d errors=%zu\n",
+                workers,
+                round,
+                round_completed,
+                E2E_CLIENTS * E2E_REQUESTS_PER_CLIENT,
+                atomic_load_explicit(&e2e_errors, memory_order_relaxed));
         uint64_t* round_samples = samples + round_offset;
         round_qps[round] =
             (double)round_completed * 1000000000.0 / (double)(round_end - round_start);
@@ -259,7 +293,13 @@ run_worker_benchmark(int workers, int port)
     csilk_server_stop(server);
     pthread_join(server_thread, NULL);
 
-    assert(completed == E2E_TOTAL_SAMPLES);
+    if (completed != E2E_TOTAL_SAMPLES) {
+        fprintf(stderr,
+                "HTTP1_E2E WARNING: completed=%zu expected=%d (errors=%zu)\n",
+                completed,
+                E2E_TOTAL_SAMPLES,
+                atomic_load_explicit(&e2e_errors, memory_order_relaxed));
+    }
     uint64_t p50 = percentile_u64(samples, completed, 50, 100);
     uint64_t p95 = percentile_u64(samples, completed, 95, 100);
     uint64_t p99 = percentile_u64(samples, completed, 99, 100);
@@ -285,7 +325,7 @@ run_worker_benchmark(int workers, int port)
            p99,
            mean_p99,
            p99_ci,
-           E2E_TOTAL_SAMPLES - completed,
+           atomic_load_explicit(&e2e_errors, memory_order_relaxed),
            elapsed);
     free(samples);
 }

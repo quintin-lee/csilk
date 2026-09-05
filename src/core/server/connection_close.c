@@ -365,10 +365,18 @@ on_close(csilk_io_handle_t* handle)
         return;
     }
 
-    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    /* Idempotency guard: ctx.conn_closed is set exactly once, when this
+     * teardown actually runs, and cleared again only by pool_get() on reuse.
+     * Testing the connection *state* here is wrong for the io_uring backend:
+     * csilk_io_close() invokes the callback synchronously, so callers that
+     * pre-mark the client CSILK_CONN_CLOSING right before closing (e.g. the
+     * keep-alive teardown in http1_pipeline.c) made the old state-based guard
+     * always fire — the whole teardown was skipped, the client was never
+     * recycled back to the worker pool, and every keep-alive connection
+     * leaked its client struct + arena. */
+    if (client->ctx.conn_closed) {
         return;
     }
-
     if (!_csilk_is_owner_worker_thread(client->owner_pool)) {
         csilk_close_task_payload_t* payload = malloc(sizeof(*payload));
         if (!payload) {

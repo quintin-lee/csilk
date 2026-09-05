@@ -46,17 +46,14 @@ csilk_io_timer_op_complete(csilk_io_op_t* op, int status)
 static void
 csilk_io_timer_op_cancel(csilk_io_op_t* op)
 {
-    csilk_io_timer_op_t* timer_op = (csilk_io_timer_op_t*)op;
-    if (!timer_op || !timer_op->handle) {
-        return;
-    }
-
-    csilk_io_timer_t* handle = timer_op->handle;
-    handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
-    if (handle->loop && handle->loop->active_handles > 0) {
-        handle->loop->active_handles--;
-    }
-    handle->cb = NULL;
+    (void)op;
+    /* No-op on purpose: csilk_io_timer_stop() already deactivated the handle
+     * and dropped the loop's active_handles reference before calling
+     * csilk_io_op_cancel().  Counting the reference here as well decremented
+     * it twice per stopped timer, net-draining one count per one-shot timer
+     * cycle.  After enough cycles the loop's count reached zero while the
+     * listen poll was still armed, so the event loop exited and the server
+     * stopped accepting connections. */
 }
 
 int
@@ -91,6 +88,14 @@ csilk_io_timer_start(csilk_io_timer_t* handle,
     csilk_io_timer_op_t* timer_op = calloc(1, sizeof(*timer_op));
     if (!timer_op) {
         return -1;
+    }
+
+    /* Restarting an active timer overwrites handle->op; the previous wrapper
+     * is pure bookkeeping (its state machine is never driven for timers), so
+     * release it instead of leaking one struct per restart. */
+    if (handle->op) {
+        free(handle->op);
+        handle->op = NULL;
     }
 
     csilk_io_op_init(&timer_op->op, CSILK_IO_OP_TIMER, handle, handle->generation);
@@ -139,26 +144,20 @@ csilk_io_timer_stop(csilk_io_timer_t* handle)
     }
 
     if (handle->op) {
-        csilk_io_op_cancel(&handle->op->op);
-        csilk_io_op_retire(&handle->op->op);
+        /* Timer ops are bookkeeping only; release the wrapper. */
+        free(handle->op);
         handle->op = NULL;
     }
 
-    uint64_t cancel_val = uring_encode_timer_data(URING_OP_TMR_GENERIC, handle);
     handle->generation++;
     handle->cb = NULL;
 
-    csilk_io_loop_t* loop = handle->loop;
-    if (!loop) {
-        return 0;
-    }
-
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
-    if (sqe) {
-        io_uring_prep_cancel64(sqe, cancel_val, 0);
-        io_uring_sqe_set_data64(sqe, 0);
-        io_uring_submit(&loop->ring);
-    }
+    /* No kernel-side io_uring_prep_cancel64 here: it would require the exact
+     * user_data of the original timeout SQE (a different op-context pointer
+     * that is no longer available), so the cancel could never match and the
+     * freshly allocated cancel-key context would leak on every stop.  The
+     * generation bump above already makes any late timeout CQE stale, and
+     * is_stale_timer() drops it in the completion loop. */
     return 0;
 }
 

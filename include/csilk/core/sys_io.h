@@ -72,6 +72,9 @@ typedef struct csilk_io_loop_s {
     uint32_t*           op_free_stack;
     uint32_t            op_free_head;
     uint32_t            op_pool_capacity;
+    /* singly-linked list of overflow-allocated (non-pool) op contexts still
+     * in flight; csilk_io_loop_close() frees any that never complete. */
+    struct uring_op_context_s* op_overflow_head;
 } csilk_io_loop_t;
 
 typedef struct csilk_io_handle_s csilk_io_handle_t;

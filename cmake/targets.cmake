@@ -333,9 +333,19 @@ add_library(csilk INTERFACE)
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24 AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
   # CMake's native RESCAN group keeps all split static archives in one
   # linker group, including back-references from runtime teardown code.
-  target_link_libraries(csilk INTERFACE
-      "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson>"
-  )
+  # The io_uring backend archive must be inside the group: runtime's
+  # uring_*.c objects are only pulled in by later archives' back-references,
+  # and liburing.a placed before the group would be scanned too early and
+  # dropped, leaving io_uring_* undefined at link time.
+  if(CSILK_USE_URING)
+    target_link_libraries(csilk INTERFACE
+        "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson;uring>"
+    )
+  else()
+    target_link_libraries(csilk INTERFACE
+        "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson>"
+    )
+  endif()
 else()
   # CMake 3.11–3.23 fallback. The explicit runtime-first ordering preserves
   # the historical archive scan order on toolchains without LINK_GROUP.

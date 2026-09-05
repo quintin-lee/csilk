@@ -71,6 +71,14 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
     close_op->handle = handle;
     close_op->cb = cb;
 
+    /* The close completes synchronously under io_uring (no kernel SQE is
+     * involved), but csilk_io_op_complete() only fires the callback from the
+     * SUBMITTED state — op_init leaves the op in CREATED.  Without this
+     * submit, the CAS in op_complete always failed and the close callback
+     * (on_close) was NEVER invoked: clients were never recycled, leaked their
+     * structs + arenas, and active connections were never released. */
+    csilk_io_op_submit(&close_op->op);
+
     if (handle->type == CSILK_IO_HANDLE_TIMER) {
         csilk_io_timer_stop((csilk_io_timer_t*)handle);
     } else if (handle->type == CSILK_IO_HANDLE_SIGNAL) {

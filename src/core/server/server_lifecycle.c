@@ -281,6 +281,15 @@ csilk_server_free(csilk_server_t* server)
 
     free(server->spa_doc_root);
     if (server->worker_pools) {
+        /* Make sure no listener is still armed before freeing pool storage:
+         * the NOWAIT loop run below must never dispatch on_new_connection into
+         * a client slot we are about to free (use-after-free under ASAN).
+         * type != 0 guards servers that were never run (handle zeroed —
+         * uv_close() asserts on an unknown handle type). */
+        if (server->server_handle.type != 0 &&
+            !csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
+            csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
+        }
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
             _csilk_worker_drain_dispatch(wp);

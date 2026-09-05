@@ -66,6 +66,8 @@ struct uring_op_context_s {
     uint32_t slot_idx;   /**< Pool slot index for O(1) recycling. */
     void*    owner;      /**< Full 64-bit pointer to owner handle/client. */
     void*    data;       /**< Optional ancillary payload pointer. */
+    struct uring_op_context_s*
+        ovf_next; /**< Overflow-tracking list link (pool slots use UINT32_MAX-free indices) */
 };
 
 /* When the Submission Queue is full, submit pending entries to the kernel
@@ -105,6 +107,11 @@ uring_op_alloc(csilk_io_loop_t* loop)
         uring_op_context_t* ctx = calloc(1, sizeof(uring_op_context_t));
         if (ctx) {
             ctx->slot_idx = UINT32_MAX;
+            /* Overflow contexts are NOT tracked by pool slots; chain them on
+             * the loop so csilk_io_loop_close() can free any that never
+             * complete (armed timers pending at teardown). */
+            ctx->ovf_next = loop->op_overflow_head;
+            loop->op_overflow_head = ctx;
         }
         return ctx;
     }
@@ -124,6 +131,16 @@ uring_op_free(csilk_io_loop_t* loop, uring_op_context_t* ctx)
         return;
     }
     if (ctx->slot_idx == UINT32_MAX) {
+        /* Overflow context: unlink from the loop's overflow list. */
+        if (loop || (loop = csilk_io_default_loop()) != NULL) {
+            uring_op_context_t** pp = &loop->op_overflow_head;
+            while (*pp && *pp != ctx) {
+                pp = &(*pp)->ovf_next;
+            }
+            if (*pp) {
+                *pp = ctx->ovf_next;
+            }
+        }
         free(ctx);
         return;
     }
