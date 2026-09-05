@@ -53,6 +53,7 @@ kb_handler(csilk_ctx_t* c)
 
 typedef struct {
     csilk_server_t* server;
+    csilk_router_t* router;
     pthread_t       thread;
 } server_runner_t;
 
@@ -88,6 +89,7 @@ start_benchmark_server(void)
     csilk_router_add(router, "GET", "/1kb", h_kb, 1);
 
     r->server = csilk_server_new(router);
+    r->router = router;
     csilk_server_config_t cfg = {.worker_threads = 2,
                                  .listen_backlog = 512,
                                  .idle_timeout_ms = 5000,
@@ -111,6 +113,7 @@ stop_benchmark_server(server_runner_t* r)
     csilk_server_stop(r->server);
     pthread_join(r->thread, NULL);
     csilk_server_free(r->server);
+    csilk_router_free(r->router);
     free(r);
 }
 

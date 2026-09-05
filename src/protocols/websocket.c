@@ -454,7 +454,12 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
             csilk_client_t*    cl = (csilk_client_t*)close_client;
             csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
             if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
-                csilk_io_close((csilk_io_handle_t*)stream, NULL);
+                /* on_close (not NULL) is required for the client teardown
+                 * chain: hooks, list unlink, timer stops, and pool recycle.
+                 * A NULL cb under the synchronous io_uring close left the
+                 * client stranded on the active list and leaked its struct
+                 * + arena at shutdown. */
+                csilk_io_close((csilk_io_handle_t*)stream, on_close);
             }
         }
         free(payload);

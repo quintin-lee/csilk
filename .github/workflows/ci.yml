@@ -288,11 +288,68 @@ jobs:
     - name: Build (libuv + io_uring)
       run: cmake --build build -j$(nproc)
 
-    # NOTE: keep only the libuv + UV_USE_IO_URING=1 compatibility path here;
-    # the separate native CSILK_USE_URING build is currently failing in CI
-    # with widespread invalid-free crashes across integration tests.
     - name: Run tests with UV_USE_IO_URING=1
       run: UV_USE_IO_URING=1 ctest --test-dir build --timeout 30 --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+
+  uring-native:
+    # Native io_uring event-loop backend under ASAN, including the HTTP/1
+    # e2e keep-alive benchmark (write ownership, timer accounting, close
+    # callbacks, and teardown-leak paths all live here and only surface
+    # under connection churn). Mirrors the local build_uring_asan2 tree.
+    name: io_uring native (ASAN)
+    runs-on: ubuntu-24.04
+    # ASAN slows the suite ~2x; unit suite took ~3.5 min locally, e2e bench
+    # ~50s under ASAN with leak detection. Cap guards a hung runner.
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Cache dependencies
+      uses: actions/cache@v5
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-uring-native-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-uring-native-deps-
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev libuv1-dev
+
+    - name: Configure (native uring + ASAN)
+      run: |
+        cmake -B build_uring -S . \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCSILK_USE_URING=ON \
+          -DUSE_ASAN=ON \
+          -DENABLE_OOM_TEST=ON
+
+    - name: Build (native uring + ASAN)
+      run: cmake --build build_uring -j$(nproc)
+
+    - name: Run unit tests (native uring + ASAN)
+      run: ctest --test-dir build_uring -E test_integration --timeout 30 --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+
+    - name: Run e2e keep-alive benchmark (native uring + ASAN)
+      # The e2e bench is where the uring write/timer/close ownership bugs
+      # reproduced (20 rounds x 4 clients x 250 keep-alive requests). Run it
+      # explicitly with leak detection so regressions fail the job via the
+      # bench's own error accounting instead of a generic ctest timeout.
+      run: |
+        ctest --test-dir build_uring -R "^test_http1_e2e_bench$" \
+          --timeout 300 --output-on-failure
+        ./build_uring/test_http1_e2e_bench
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions

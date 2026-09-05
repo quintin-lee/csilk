@@ -134,6 +134,13 @@ csilk_io_timer_stop(csilk_io_timer_t* handle)
     if (!handle) {
         return -1;
     }
+    /* Always release the bookkeeping wrapper, even for already-inactive
+     * timers: a one-shot that fired and was never restarted still owns its
+     * op struct here, and the early return below used to leak it. */
+    if (handle->op) {
+        free(handle->op);
+        handle->op = NULL;
+    }
     if (!(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
         handle->cb = NULL;
         return 0;
@@ -141,12 +148,6 @@ csilk_io_timer_stop(csilk_io_timer_t* handle)
     handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
     if (handle->loop && handle->loop->active_handles > 0) {
         handle->loop->active_handles--;
-    }
-
-    if (handle->op) {
-        /* Timer ops are bookkeeping only; release the wrapper. */
-        free(handle->op);
-        handle->op = NULL;
     }
 
     handle->generation++;
