@@ -354,6 +354,17 @@ jobs:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
+    - name: Run integration tests (native uring + ASAN)
+      # Live-server families (base, ext, SSE, WS, session, middleware chain,
+      # OpenAPI, admin) exercise the uring accept/read/close teardown chain
+      # against real connection churn. "_integration" matches every family
+      # (test_integration, test_sse_integration, ...). Separated from the
+      # unit step so a leak here names the family in the step title.
+      run: ctest --test-dir build_uring -R "_integration" --timeout 60 --output-on-failure
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+
 
   tsan:
     name: ThreadSanitizer
