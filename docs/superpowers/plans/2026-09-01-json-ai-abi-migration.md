@@ -17,10 +17,10 @@
 - Create: `python/tests/test_ai_abi.py`
 - Modify: `cmake/tests.cmake`
 
-- [ ] Add a C test that constructs an object, adds strings and arrays, serializes it, and frees the root exactly once.
-- [ ] Add a Python test that asserts `ctypes.sizeof` and field offsets for `CsilkAiMessage` and `CsilkAiChatRequest` against documented C offsets.
-- [ ] Register the C test with CTest.
-- [ ] Run the C test before implementation and require it to fail if ownership or ABI is invalid.
+- [x] Add a C test that constructs an object, adds strings and arrays, serializes it, and frees the root exactly once.
+- [x] Add a Python test that asserts `ctypes.sizeof` and field offsets for `CsilkAiMessage` and `CsilkAiChatRequest` against documented C offsets.
+- [x] Register the C test with CTest.
+- [x] Run the C test before implementation and require it to fail if ownership or ABI is invalid.
 
 ### Task 2: Restore a genuinely opaque public JSON type
 

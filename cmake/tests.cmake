@@ -73,6 +73,7 @@ set(CSILK_CORE_TESTS
     test_json_accessor_bench
     test_json_mutate
     test_json_ai_request
+    test_json_ai_abi
     test_keepalive
     test_async_keepalive
     test_multi_worker
@@ -143,18 +144,13 @@ set(CSILK_CORE_TESTS
     test_rcu_lifecycle_stress
     test_sendfile_workers
 )
-set(CSILK_CORE_TEST_DIRS
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core
-)
+# Every CSILK_CORE_TESTS entry lives in tests/core/. Generate the parallel
+# directory list from the names so the two lists can never drift apart
+# (the hand-maintained `core;core;...` string had already gone out of sync).
+set(CSILK_CORE_TEST_DIRS)
+foreach(_core_test IN LISTS CSILK_CORE_TESTS)
+    list(APPEND CSILK_CORE_TEST_DIRS core)
+endforeach()
 
 
 

@@ -27,9 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate Limit Table Saturation Fail-Open**: `get_or_create_ip_entry` now returns `NULL` (instead of a shared hash slot) when the 65,536-slot IP table saturates, and `_csilk_rate_limit_local` fails open for it — preventing unrelated IPs from being counted against each other.
 - **Exact Retry-After Header**: The local rate limiter no longer emits a hardcoded `Retry-After: 60`; it now reports the actual seconds remaining in the current window (floor 1s). The distributed path keeps the full window as a conservative value since the storage `incr` does not return a TTL.
 - **gzip ASAN-Safe Async Coverage Test**: Replaced a raw thread-pool test that kept worker threads alive past `main()` (crashing ASAN's exit-time teardown) with a synchronous drive of the real `_csilk_gzip_work_cb`/`_csilk_gzip_after_work_cb` callbacks via `src/core/internal/gzip_internal.h`; the mock client is no longer a single-byte stack char.
+- **JSON `set_string` on Borrowed Views (CWE-415 family, silent data loss)**: `csilk_json_set_string()` on a non-owning view of an immutable document rebound the handle onto a private mutable copy that no parent ever observed — the requested mutation was silently discarded and the converted document leaked. Non-owner immutable handles now fail explicitly.
 
 ### Test Coverage
 - **Total tests**: 227 registered CTest cases (~230 source files), all 225 non-integration unit tests passing locally and in CI.
+- **JSON/AI ABI & ownership regression guards** (`test_json_ai_abi` + `python/tests/test_ai_abi.py`): pin the JSON ownership contract (single-shot insertion transfer, failed-insert retention, view lifetime until root free, free idempotency) and the C↔Python AI ABI via C23 `static_assert` layout checks mirrored by ctypes offset/sizeof assertions.
 - **Line coverage**: 69% (12,609/18,281 lines).
 - **bounded_buf.c**: 42% → **100%** (new exhaustive `test_bounded_buf`).
 - **websocket.c**: 40% → **85%** (new unit edge cases + `test_ws_integration` real-TCP round-trip).
