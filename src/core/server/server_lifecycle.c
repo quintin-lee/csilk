@@ -290,6 +290,14 @@ csilk_server_free(csilk_server_t* server)
             !csilk_io_is_closing((csilk_io_handle_t*)&server->server_handle)) {
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
         }
+        /* A run() that failed before the normal shutdown path (e.g. bind
+         * failure) still has an initialized stop async handle on the shared
+         * default loop; close it here so a later server reusing that loop
+         * never dispatches a stale callback with a freed server pointer. */
+        if (server->async_handle.loop &&
+            !csilk_io_is_closing((csilk_io_handle_t*)&server->async_handle)) {
+            csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        }
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
             _csilk_worker_drain_dispatch(wp);
@@ -581,6 +589,10 @@ csilk_server_run(csilk_server_t* server, int port)
         server->loop, &server->server_handle, port, server->config.listen_backlog, workers > 1, 0);
     if (r < 0) {
         CSILK_LOG_E("Server: failed to bind and listen on port %d: %s", port, csilk_io_strerror(r));
+        /* Release the stop async handle: leaving it registered on the shared
+         * default loop would later dispatch on_stop_async with a freed
+         * server pointer when a subsequent server runs the loop. */
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
         return -1;
     }
 

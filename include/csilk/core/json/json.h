@@ -158,32 +158,20 @@ bool csilk_json_add_item(csilk_json_t* obj, csilk_json_t* item);
 bool csilk_json_array_append(csilk_json_t* arr, csilk_json_t* item);
 
 /* ====================================================================
- * Get / inspect (Value Object & Pointer APIs)
+ * Mutate
  * ==================================================================== */
 
-/** @brief Get a child value by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t* csilk_json_get_v(const csilk_json_t* obj, const char* key);
+/**
+ * @brief Replace a mutable string value in place.
+ * @param[in,out] v String value to update.
+ * @param[in] new_value New string value.
+ * @return true on success, false if @p v is NULL, immutable, or not a string.
+ */
+bool csilk_json_set_string(csilk_json_t* v, const char* new_value);
 
-/** @brief Get a child object by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t* csilk_json_get_object_v(const csilk_json_t* obj, const char* key);
-
-/** @brief Get a child array by key (returns by value, 0 heap/TLS allocation). */
-csilk_json_t* csilk_json_get_array_v(const csilk_json_t* obj, const char* key);
-
-/** @brief Get the N-th element of an array (returns by value, 0 heap/TLS allocation). */
-csilk_json_t* csilk_json_array_get_v(const csilk_json_t* arr, size_t index);
-
-/** @brief Get a child string by key from a value object. */
-const char* csilk_json_get_string_v(const csilk_json_t* obj, const char* key);
-
-/** @brief Get a child number by key from a value object. */
-double csilk_json_get_number_v(const csilk_json_t* obj, const char* key);
-
-/** @brief Get a child integer by key from a value object. */
-int64_t csilk_json_get_int_v(const csilk_json_t* obj, const char* key);
-
-/** @brief Get a child boolean by key from a value object. */
-bool csilk_json_get_bool_v(const csilk_json_t* obj, const char* key);
+/* ====================================================================
+ * Get / inspect
+ * ==================================================================== */
 
 /** @brief Get a child value by key, regardless of type.
  *  @param[in] obj Object to search.
@@ -368,36 +356,24 @@ csilk_json_t* csilk_json_copy(const csilk_json_t* v);
  * @brief Return the N-th key in an object.
  * @param[in] obj Object to inspect.
  * @param[in] index Zero-based key index.
- * @return Key string, or NULL if out of bounds. Valid until the json is freed.
+ * @return Key string, or NULL if out of range.
  */
 const char* csilk_json_object_key(const csilk_json_t* obj, size_t index);
 
-/** @brief Return the number of keys in an object.
- *  @param[in] obj Object to inspect.
- *  @return Key count.
- */
-size_t csilk_json_object_size(const csilk_json_t* obj);
-
-/** @brief Get the value at the N-th key position.
- *  @param[in] obj Object to inspect.
- *  @param[in] index Zero-based key index.
- *  @return Value at @p index, or NULL if out of bounds.
+/**
+ * @brief Return the value for the N-th key in an object.
+ * @param[in] obj Object to inspect.
+ * @param[in] index Zero-based key index.
+ * @return Child value, or NULL if out of range.
  */
 csilk_json_t* csilk_json_object_val(const csilk_json_t* obj, size_t index);
 
-/* ====================================================================
- * Mutation (in-place update — requires copying for yyjson immutability)
- * ==================================================================== */
-
 /**
- * @brief Replace the string value of an existing string node.
- * Because yyjson values are immutable, this creates a new string value
- * and replaces the key in the parent object.
- * @param[in,out] v String node whose value is replaced.
- * @param[in] new_value New string contents (copied).
- * @return true on success, false on failure.
+ * @brief Return the number of keys in an object.
+ * @param[in] obj Object to inspect.
+ * @return Key count.
  */
-bool csilk_json_set_string(csilk_json_t* v, const char* new_value);
+size_t csilk_json_object_size(const csilk_json_t* obj);
 
 #ifdef __cplusplus
 }

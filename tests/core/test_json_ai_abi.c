@@ -239,6 +239,7 @@ test_free_null_and_parse_err(void)
     assert(error == nullptr);
     assert(csilk_json_get_int(root, "n") == -42);
     assert(strcmp(csilk_json_get_string(root, "s"), "x") == 0);
+    csilk_json_free(root);
 
     /* parse_len's real contract: parse a NON-NUL-terminated buffer —
      * no strlen/truncation hazard (yyjson reads exactly `len` bytes). */

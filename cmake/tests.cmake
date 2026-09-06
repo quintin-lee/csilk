@@ -139,6 +139,7 @@ set(CSILK_CORE_TESTS
     test_http1_parser_pmu
     test_logger_async_bench
     test_server_config_race
+    test_server_bind_fail_recover
     test_core_concurrency_stress
     test_atomic_lifecycle
     test_rcu_lifecycle_stress
