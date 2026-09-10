@@ -66,7 +66,8 @@ class TestWorkflowDistributed:
 
         wf.run("start", callback=on_done)
 
-        done = done_event.wait(timeout=5)
+        # Asserts completion, not latency; generous for loaded suite runs.
+        done = done_event.wait(timeout=30)
 
         app.stop()
         t.join(timeout=2)

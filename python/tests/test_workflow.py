@@ -18,6 +18,10 @@ def _free_port():
         return s.getsockname()[1]
 
 
+# Completion waits assert results, not latency: generous so loaded
+# full-suite runs don't flake (waits still return immediately when set).
+_COMPLETION_TIMEOUT = 30.0
+
 class TestWorkflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -87,7 +91,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertIsNotNone(exec_id)
         
         # Wait for the workflow to complete
-        completed = event.wait(timeout=5.0)
+        completed = event.wait(timeout=_COMPLETION_TIMEOUT)
         self.assertTrue(completed)
         self.assertEqual(results, ["HELLO!!!"])
 
@@ -125,7 +129,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
         
         wf.run("go_left", callback=cb1)
-        self.assertTrue(event.wait(timeout=5.0))
+        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
         self.assertEqual(results, ["left"])
 
         # Test case 2: route right
@@ -136,7 +140,7 @@ class TestWorkflow(unittest.TestCase):
             event2.set()
         
         wf.run("go_right", callback=cb2)
-        self.assertTrue(event2.wait(timeout=2.0))
+        self.assertTrue(event2.wait(timeout=_COMPLETION_TIMEOUT))
         self.assertEqual(results2, ["right"])
 
     def test_workflow_declarative(self):
@@ -170,7 +174,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
 
         wf.run("hello", callback=cb)
-        self.assertTrue(event.wait(timeout=5.0))
+        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
         self.assertEqual(results, ["HELLO FROM DECA"])
 
     def test_workflow_traced_and_interactive(self):
@@ -195,7 +199,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
             
         wf.run_traced("hello", callback=traced_cb)
-        self.assertTrue(event.wait(timeout=5.0))
+        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
         self.assertEqual(results, ["HELLO"])
         self.assertEqual(len(trace_ptrs), 1)
         
@@ -255,7 +259,7 @@ class TestWorkflow(unittest.TestCase):
         # Signal continue to approve the interactive node and run to completion
         wf2.signal_continue(exec_id, "approved-hello", callback=cb_int)
         
-        self.assertTrue(event_int.wait(timeout=2.0))
+        self.assertTrue(event_int.wait(timeout=_COMPLETION_TIMEOUT))
         self.assertEqual(results_int, ["approved-hello-step1-step2"])
         
         # Free resources
