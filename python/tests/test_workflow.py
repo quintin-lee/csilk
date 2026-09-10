@@ -2,6 +2,7 @@ import socket
 import unittest
 import json
 import ctypes
+import faulthandler
 import threading
 import time
 import sys
@@ -21,6 +22,18 @@ def _free_port():
 # Completion waits assert results, not latency: generous so loaded
 # full-suite runs don't flake (waits still return immediately when set).
 _COMPLETION_TIMEOUT = 30.0
+
+
+def _wait_or_dump(event, timeout=_COMPLETION_TIMEOUT):
+    """Wait for a workflow callback; dump all thread stacks on timeout.
+
+    A timeout here means the completion never dispatched — the traceback
+    snapshot is the only evidence of where the engine stalled.
+    """
+    done = event.wait(timeout=timeout)
+    if not done:
+        faulthandler.dump_traceback()
+    return done
 
 class TestWorkflow(unittest.TestCase):
     @classmethod
@@ -91,7 +104,7 @@ class TestWorkflow(unittest.TestCase):
         self.assertIsNotNone(exec_id)
         
         # Wait for the workflow to complete
-        completed = event.wait(timeout=_COMPLETION_TIMEOUT)
+        completed = _wait_or_dump(event)
         self.assertTrue(completed)
         self.assertEqual(results, ["HELLO!!!"])
 
@@ -129,7 +142,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
         
         wf.run("go_left", callback=cb1)
-        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
+        self.assertTrue(_wait_or_dump(event))
         self.assertEqual(results, ["left"])
 
         # Test case 2: route right
@@ -140,7 +153,7 @@ class TestWorkflow(unittest.TestCase):
             event2.set()
         
         wf.run("go_right", callback=cb2)
-        self.assertTrue(event2.wait(timeout=_COMPLETION_TIMEOUT))
+        self.assertTrue(_wait_or_dump(event2))
         self.assertEqual(results2, ["right"])
 
     def test_workflow_declarative(self):
@@ -174,7 +187,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
 
         wf.run("hello", callback=cb)
-        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
+        self.assertTrue(_wait_or_dump(event))
         self.assertEqual(results, ["HELLO FROM DECA"])
 
     def test_workflow_traced_and_interactive(self):
@@ -199,7 +212,7 @@ class TestWorkflow(unittest.TestCase):
             event.set()
             
         wf.run_traced("hello", callback=traced_cb)
-        self.assertTrue(event.wait(timeout=_COMPLETION_TIMEOUT))
+        self.assertTrue(_wait_or_dump(event))
         self.assertEqual(results, ["HELLO"])
         self.assertEqual(len(trace_ptrs), 1)
         
@@ -259,7 +272,7 @@ class TestWorkflow(unittest.TestCase):
         # Signal continue to approve the interactive node and run to completion
         wf2.signal_continue(exec_id, "approved-hello", callback=cb_int)
         
-        self.assertTrue(event_int.wait(timeout=_COMPLETION_TIMEOUT))
+        self.assertTrue(_wait_or_dump(event_int))
         self.assertEqual(results_int, ["approved-hello-step1-step2"])
         
         # Free resources
