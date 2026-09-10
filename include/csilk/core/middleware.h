@@ -136,6 +136,18 @@ CSILK_INTERNAL void _csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int 
 void csilk_csrf_middleware(csilk_ctx_t* c);
 
 /**
+ * @brief Security response headers middleware.
+ *
+ * Sets defensive response headers (X-Frame-Options, X-Content-Type-Options,
+ * X-XSS-Protection, Referrer-Policy) and delegates to the next handler.
+ * Opt-in: register with csilk_app_use, csilk_server_use, or
+ * csilk_group_use.
+ *
+ * @param c  The request context.
+ */
+void csilk_security_headers_middleware(csilk_ctx_t* c);
+
+/**
  * @brief Gzip response compression middleware.
  *
  * If the client advertises gzip/deflate support (Accept-Encoding header),
