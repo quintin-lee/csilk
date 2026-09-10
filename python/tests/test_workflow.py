@@ -1,3 +1,4 @@
+import socket
 import unittest
 import json
 import ctypes
@@ -10,20 +11,29 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from csilk import App
 from csilk.workflow import Workflow, WorkflowContext, WorkflowData, WorkflowNode
 
+
+def _free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 class TestWorkflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Start a dummy app on a separate port to run the libuv default loop
+        # Start a dummy app on a dynamic port to run the libuv default loop
         cls.app = App()
+        cls.port = _free_port()
         def run_app():
-            cls.app.run(8083)
+            cls.app.run(cls.port)
         cls.thread = threading.Thread(target=run_app)
         cls.thread.daemon = True
         cls.thread.start()
-        
+
         # Wait for the loop to start
         time.sleep(0.5)
-
+        if not cls.thread.is_alive():
+            raise RuntimeError("workflow test server did not start")
     @classmethod
     def tearDownClass(cls):
         cls.app.stop()
