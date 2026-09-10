@@ -29,10 +29,8 @@
  *
  * @param c  The request context.
  *
- * @note Must be registered before any handler that mutates server state.
- * @warning The token is generated from /dev/urandom when available, with a
- *          weak fallback (time + pid). In high-security deployments, ensure
- *          /dev/urandom is accessible.
+ * @note Token generation fails closed when /dev/urandom is unavailable —
+ *       there is no weak-PRNG fallback (CWE-330).
  */
 void
 csilk_csrf_middleware(csilk_ctx_t* c)
@@ -46,13 +44,14 @@ csilk_csrf_middleware(csilk_ctx_t* c)
         CSILK_LOG_T("CSRF: Safe method (%s) bypasses validation for request %p",
                     csilk_get_method(c),
                     (void*)c);
-        // Set CSRF cookie on safe methods so frontend can read it (http_only = 0)
+        // Double-submit cookie: frontend JS must read it, so HttpOnly stays
+        // 0; Secure requires HTTPS transport (CWE-1004).
         const char* existing = csilk_get_cookie(c, "csrf_token");
         if (!existing) {
             char token_buf[33];
             if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
-                csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 0, 0);
+                csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 1, 0);
             }
             explicit_bzero(token_buf, sizeof(token_buf));
         }
@@ -102,17 +101,16 @@ csilk_csrf_middleware(csilk_ctx_t* c)
  * @brief Generate a cryptographically random CSRF token.
  *
  * Reads 16 bytes from /dev/urandom and formats them as a 32-character hex
- * string (plus null terminator). If /dev/urandom cannot be opened, falls
- * back to a weak PRNG seeded with time XOR pid.
+ * string (plus null terminator). If /dev/urandom cannot be opened or the
+ * read is short, generation fails with -1 instead of falling back.
  *
  * @param buf      Output buffer to receive the null-terminated hex token.
  * @param buf_size Size of the output buffer. Must be at least 33 bytes.
  *
  * @return 0 on success, -1 if buf is NULL, buf_size < 33, or fread fails.
  *
- * @warning The fallback path uses rand_r() which is NOT cryptographically
- *          secure. Production deployments should always ensure /dev/urandom
- *          is available.
+ * @note There is no fallback path: callers must ensure /dev/urandom is
+ *       available and treat -1 as a hard failure.
  */
 int
 csilk_csrf_generate_token(char* buf, size_t buf_size)
