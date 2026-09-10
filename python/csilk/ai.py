@@ -102,19 +102,22 @@ class AI:
             RuntimeError: If the API call fails.
         """
         # messages is list of dicts: [{"role": "user", "content": "hi"}]
+        # Retain every encoded buffer: ctypes c_char_p stores the pointer
+        # only, so .encode() temporaries would dangle during the native call.
+        _keepalive = []
         c_msg_array = (CsilkAiMessage * len(messages))()
         for i, msg in enumerate(messages):
-            c_msg_array[i].role = msg["role"].encode('utf-8')
-            c_msg_array[i].content = msg["content"].encode('utf-8')
+            role_b = msg["role"].encode('utf-8')
+            content_b = msg["content"].encode('utf-8')
+            _keepalive.extend((role_b, content_b))
+            c_msg_array[i].role = role_b
+            c_msg_array[i].content = content_b
 
         c_req = CsilkAiChatRequest()
-        c_req.model = model.encode('utf-8')
+        model_b = model.encode('utf-8')
+        _keepalive.append(model_b)
+        c_req.model = model_b
         c_req.messages = ctypes.cast(c_msg_array, ctypes.POINTER(CsilkAiMessage))
-        c_req.message_count = len(messages)
-        c_req.temperature = temperature
-        c_req.max_tokens = max_tokens
-        c_req.timeout_ms = timeout_ms
-        c_req.reasoning_effort = None
 
         stream_wrapper = None
         if on_chunk:
@@ -179,13 +182,18 @@ class AI:
         if isinstance(input_texts, str):
             input_texts = [input_texts]
 
+        _keepalive = []
         c_arr = (ctypes.c_char_p * len(input_texts))()
         for i, text in enumerate(input_texts):
-            c_arr[i] = text.encode('utf-8')
+            text_b = text.encode('utf-8')
+            _keepalive.append(text_b)
+            c_arr[i] = text_b
 
+        model_b = model.encode('utf-8')
+        _keepalive.append(model_b)
         c_res = CsilkAiEmbeddingsResponse()
-        res_code = self._lib.csilk_ai_embeddings(self._ai, model.encode('utf-8'), c_arr,
-                                                  len(input_texts), ctypes.byref(c_res))
+        res_code = self._lib.csilk_ai_embeddings(self._ai, model_b, c_arr,
+                                                 len(input_texts), ctypes.byref(c_res))
 
         if res_code != 0:
             err = c_res.error_message.decode('utf-8') if c_res.error_message else "Unknown embeddings error"
