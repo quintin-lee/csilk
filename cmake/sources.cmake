@@ -55,6 +55,7 @@ set(CSILK_RUNTIME_SOURCES
     src/core/server/connection_io.c
     src/core/server/connection.c
     src/core/server/server_lifecycle.c
+    src/core/server/server_docs.c
     src/core/server/server_driver.c
     src/core/server/server_rcu.c
     src/core/server/server_shutdown.c

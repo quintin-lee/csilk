@@ -280,7 +280,7 @@ CSILK_INTERNAL void _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csil
 CSILK_INTERNAL void csilk_client_read_start(csilk_client_t* client);
 CSILK_INTERNAL void csilk_client_read_stop(csilk_client_t* client);
 
-/* --- Server split (server_lifecycle.c, server_shutdown.c, server_worker.c) --- */
+/* --- Server split (server_lifecycle.c, server_docs.c, server_shutdown.c, server_worker.c) --- */
 typedef struct {
     worker_pool_t*   wp;
     int              port;
@@ -299,6 +299,9 @@ typedef struct {
 CSILK_INTERNAL void on_signal(csilk_io_signal_t* handle, int signum);
 CSILK_INTERNAL void on_stop_async(csilk_io_async_t* handle);
 CSILK_INTERNAL void on_worker_stop_async(csilk_io_async_t* handle);
+
+/* server_docs.c */
+CSILK_INTERNAL void _csilk_server_register_docs_routes(csilk_server_t* server);
 
 /* server_worker.c */
 CSILK_INTERNAL int  bind_and_listen(csilk_io_loop_t* loop,
