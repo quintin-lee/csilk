@@ -78,7 +78,23 @@ else()
   if(TARGET PkgConfig::LIBUV)
     if(NOT TARGET csilk::libuv)
       add_library(csilk::libuv INTERFACE IMPORTED)
-      target_link_libraries(csilk::libuv INTERFACE PkgConfig::LIBUV)
+      # Pin libuv against -Wl,--as-needed dropping (Ubuntu gcc default):
+      # GNU ld discards a mid-line shared lib when no undefined refs are
+      # pending at its scan point, and archives scanned later then dangle
+      # (undefined uv_* refs). The LINKER: triple stays adjacent because
+      # order inside INTERFACE_LINK_LIBRARIES is preserved. GNU/LLVM
+      # linkers only — Apple ld neither needs nor accepts this; the
+      # LINKER: prefix itself needs CMake >= 3.13.
+      if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.13
+         AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"
+         AND NOT APPLE)
+        target_link_libraries(csilk::libuv INTERFACE
+          "LINKER:--push-state,--no-as-needed"
+          PkgConfig::LIBUV
+          "LINKER:--pop-state")
+      else()
+        target_link_libraries(csilk::libuv INTERFACE PkgConfig::LIBUV)
+      endif()
     endif()
     message(STATUS "Found libuv via pkg-config")
   else()
@@ -90,8 +106,22 @@ else()
         add_library(csilk::libuv INTERFACE IMPORTED)
         set_target_properties(csilk::libuv PROPERTIES
           INTERFACE_INCLUDE_DIRECTORIES "${LIBUV_INCLUDE_DIR}"
-          INTERFACE_LINK_LIBRARIES "${LIBUV_LIB}"
         )
+        # Same --as-needed pin as the pkg-config branch above (see comment
+        # there); guards repeated because LINKER: needs CMake >= 3.13 and
+        # GNU/LLVM linkers only.
+        if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.13
+           AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"
+           AND NOT APPLE)
+          target_link_libraries(csilk::libuv INTERFACE
+            "LINKER:--push-state,--no-as-needed"
+            "${LIBUV_LIB}"
+            "LINKER:--pop-state")
+        else()
+          set_target_properties(csilk::libuv PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${LIBUV_LIB}"
+          )
+        endif()
       endif()
     else()
       message(FATAL_ERROR "libuv not found on system. Please install libuv-dev.")

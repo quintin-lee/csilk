@@ -336,7 +336,10 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24 AND CMAKE_C_COMPILER_ID MATCHES "GNU
   # The io_uring backend archive must be inside the group: runtime's
   # uring_*.c objects are only pulled in by later archives' back-references,
   # and liburing.a placed before the group would be scanned too early and
-  # dropped, leaving io_uring_* undefined at link time.
+  # dropped, leaving io_uring_* undefined at link time. NOTE: csilk::libuv
+  # must NOT be added here — CMake silently drops INTERFACE libraries from
+  # LINK_GROUPs (verified: the entry vanishes from the group AND dedups away
+  # the propagated occurrence, leaving no libuv on the link line at all).
   if(CSILK_USE_URING)
     target_link_libraries(csilk INTERFACE
         "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson;uring>"
