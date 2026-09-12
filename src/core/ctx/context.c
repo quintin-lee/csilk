@@ -188,8 +188,8 @@ body_pool_init_key(void)
 static inline void
 body_pool_ensure_cleanup(void)
 {
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, body_pool_init_key);
+    static csilk_once_t once = CSILK_ONCE_INIT;
+    csilk_once(&once, body_pool_init_key);
     if (pthread_getspecific(g_body_pool_key) == NULL) {
         pthread_setspecific(g_body_pool_key, (void*)1);
     }

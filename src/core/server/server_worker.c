@@ -42,8 +42,8 @@ typedef struct {
 
 static _Thread_local csilk_dispatch_tls_cache_t g_dispatch_tls_cache = {.count = 0};
 
-static pthread_key_t  g_dispatch_tls_key;
-static pthread_once_t g_dispatch_tls_once = PTHREAD_ONCE_INIT;
+static pthread_key_t g_dispatch_tls_key;
+static csilk_once_t  g_dispatch_tls_once = CSILK_ONCE_INIT;
 
 static void
 dispatch_tls_cleanup(void* unused)
@@ -68,7 +68,7 @@ static inline void
 ensure_dispatch_tls_registered(void)
 {
     if (__builtin_expect(!g_dispatch_tls_registered, 0)) {
-        pthread_once(&g_dispatch_tls_once, dispatch_init_tls_key);
+        csilk_once(&g_dispatch_tls_once, dispatch_init_tls_key);
         if (!pthread_getspecific(g_dispatch_tls_key)) {
             pthread_setspecific(g_dispatch_tls_key, (void*)1);
         }
