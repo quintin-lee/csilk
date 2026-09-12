@@ -55,6 +55,7 @@ struct csilk_json_s {
      * Written exactly once via CAS when the first view is created; use
      * atomic ops — a plain read would race with the CAS. */
     struct json_view_arena* _Atomic va;
+
     uint32_t flags;
     uint32_t _pad;
 };
