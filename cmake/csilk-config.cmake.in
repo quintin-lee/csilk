@@ -111,6 +111,17 @@ if(NOT TARGET nghttp2)
     endif()
   endif()
 endif()
+# FetchContent builds install upstream's own export set under
+# <prefix>/lib/cmake/nghttp2, while our exported targets reference
+# nghttp2::nghttp2 from that set — pull it in when the system lookup
+# above found nothing (mirrors the yyjson fallback above).
+if(NOT TARGET nghttp2::nghttp2)
+  set(_nghttp2_export "${CMAKE_CURRENT_LIST_DIR}/../nghttp2/nghttp2-targets.cmake")
+  if(EXISTS "${_nghttp2_export}")
+    include("${_nghttp2_export}")
+  endif()
+  unset(_nghttp2_export)
+endif()
 
 # ── Optional Database Drivers ─────────────────────────────────────────────
 set(CSILK_HAS_MYSQL @CSILK_HAS_MYSQL@)
