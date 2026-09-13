@@ -43,13 +43,13 @@ if(NOT CSILK_USE_URING AND NOT TARGET csilk::libuv)
     add_library(csilk::libuv INTERFACE IMPORTED)
     # Same --as-needed pin as the main build (see cmake/dependencies.cmake):
     # keep the propagated libuv on consumer link lines under Ubuntu gcc.
-    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.13
-       AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"
-       AND NOT APPLE)
+    # Plain -Wl flags: the LINKER: prefix is not expanded by CMake 3.28
+    # inside imported INTERFACE libs (emits literal -lLINKER:...).
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
       target_link_libraries(csilk::libuv INTERFACE
-        "LINKER:--push-state,--no-as-needed"
+        "-Wl,--no-as-needed"
         PkgConfig::LIBUV
-        "LINKER:--pop-state")
+        "-Wl,--as-needed")
     else()
       target_link_libraries(csilk::libuv INTERFACE PkgConfig::LIBUV)
     endif()
@@ -62,13 +62,11 @@ if(NOT CSILK_USE_URING AND NOT TARGET csilk::libuv)
         set_target_properties(csilk::libuv PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LIBUV_INCLUDE_DIR}")
       endif()
       # Same --as-needed pin as above for the find_library fallback path.
-      if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.13
-         AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"
-         AND NOT APPLE)
+      if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
         target_link_libraries(csilk::libuv INTERFACE
-          "LINKER:--push-state,--no-as-needed"
+          "-Wl,--no-as-needed"
           "${LIBUV_LIB}"
-          "LINKER:--pop-state")
+          "-Wl,--as-needed")
       else()
         set_target_properties(csilk::libuv PROPERTIES INTERFACE_LINK_LIBRARIES "${LIBUV_LIB}")
       endif()
