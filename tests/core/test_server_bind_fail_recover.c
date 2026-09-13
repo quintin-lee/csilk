@@ -174,11 +174,12 @@ main(void)
     close(sock);
 
     csilk_server_stop(srv2);
+    pthread_join(th2, nullptr);
     /* Startup must have succeeded; the loop exit code is either 0 (drained)
      * or 1 (uv_stop with pending close callbacks) — never a negative
-     * startup error. */
+     * startup error. Read only after join: run_server_thread writes
+     * g_run_result with no other synchronization. */
     assert(g_run_result <= 0);
-    pthread_join(th2, nullptr);
     csilk_server_free(srv2);
     csilk_router_free(r2);
 
