@@ -258,6 +258,16 @@ csilk_server_free(csilk_server_t* server)
         free(server->worker_pools);
     }
 
+    /* uv_close() only queues a close; it completes on a loop iteration. A
+     * run() that failed before worker pools were allocated (e.g. bind
+     * failure) leaves queued closes with no later pump — the per-pool drain
+     * above is skipped when worker_pools is NULL. Pump once so a later
+     * server reusing this (possibly shared) loop never processes a close
+     * for freed handle storage. */
+    if (server->loop) {
+        csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
+    }
+
     cleanup_tls(server);
 
     for (int i = 0; i < CSILK_HOOK_COUNT; i++) {
