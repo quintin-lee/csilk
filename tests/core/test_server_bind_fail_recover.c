@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "csilk/csilk.h"
@@ -104,6 +105,11 @@ hello_handler(csilk_ctx_t* c)
 int
 main(void)
 {
+    /* Phase markers go to stderr (unbuffered under CI log capture) so a
+     * hang on macOS kqueue leaves the last reached phase in the log
+     * instead of a silent 1h timeout. */
+    fprintf(stderr, "[bind-recover] phase-1: occupy port, force bind failure\n");
+    fflush(stderr);
     /* 1. Occupy a port so csilk_server_run() is forced to fail binding. */
     int occupier = bind_ephemeral_and_get_port();
     assert(occupier >= 0);
@@ -132,6 +138,8 @@ main(void)
         csilk_server_free(srv);
         csilk_router_free(r);
     }
+    fprintf(stderr, "[bind-recover] phase-2: failed server torn down, probing free port\n");
+    fflush(stderr);
 
     /* 3. Release the occupied port, then run a FRESH server on the same
      *    shared default event loop; the stale async handle (old code) fires
@@ -162,16 +170,25 @@ main(void)
 
     int sock = connect_to_port(free_port);
     assert(sock >= 0 && "second server did not come up after failed-bind teardown");
+    fprintf(stderr, "[bind-recover] phase-3: connected, sending request\n");
+    fflush(stderr);
 
     const char* req = "GET /hello HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
     assert(send(sock, req, strlen(req), 0) == (ssize_t)strlen(req));
+    /* Bound the wait: on macOS the second server may listen yet never
+     * respond on kqueue; without a timeout this recv hangs until the CI
+     * job timeout (1h) with zero diagnostics. */
+    struct timeval tv = {.tv_sec = 30, .tv_usec = 0};
+    assert(setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0);
     char buf[1024];
     int  n = recv(sock, buf, sizeof(buf) - 1, 0);
-    assert(n > 0);
+    assert(n > 0 && "phase-3 recv timed out or failed: second server deaf on event loop");
     buf[n] = '\0';
     assert(strstr(buf, "200 OK") != nullptr);
     assert(strstr(buf, "hello-world") != nullptr);
     close(sock);
+    fprintf(stderr, "[bind-recover] phase-4: response verified, stopping\n");
+    fflush(stderr);
 
     csilk_server_stop(srv2);
     pthread_join(th2, nullptr);
