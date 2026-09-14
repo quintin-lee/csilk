@@ -40,6 +40,10 @@ function(add_csilk_test name source)
     set_tests_properties(${name} PROPERTIES TIMEOUT 600)
   elseif(name STREQUAL "test_logger_async_bench")
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+  elseif(name STREQUAL "test_server_bind_fail_recover")
+    # Kill fast on hang so per-test output (phase markers) is reported
+    # instead of stalling the whole job until the runner times out.
+    set_tests_properties(${name} PROPERTIES TIMEOUT 60)
   endif()
 endfunction()
 
