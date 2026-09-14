@@ -10,14 +10,9 @@
 #include "core/ctx/ctx_internal.h"
 #include "core/internal/gzip_internal.h"
 
-/* Mock _csilk_send_response to capture the result. */
-static int response_sent = 0;
-void
-_csilk_send_response(csilk_ctx_t* c)
-{
-    (void)c;
-    response_sent = 1;
-}
+/* response_sent is defined here and set by the _csilk_send_response override in
+ * test_gzip_send_mock.c (separate TU keeps the override STRONG; see that file). */
+int response_sent = 0;
 
 /* Configurable mock downstream handler body. */
 static size_t g_mock_body_len = 2000;

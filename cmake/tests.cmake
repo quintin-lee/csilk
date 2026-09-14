@@ -18,6 +18,12 @@ function(add_csilk_test name source)
     target_compile_definitions(${name} PRIVATE CSILK_POOL_STATS)
     target_sources(${name} PRIVATE tests/core/pool_stats.c)
   endif()
+  if(name STREQUAL "test_gzip")
+    # Separate TU keeps the _csilk_send_response override STRONG (see
+    # tests/middleware/test_gzip_send_mock.c); defining it in test_gzip.c
+    # inherits WEAK from crypto_dispatch.h and breaks macOS linkage.
+    target_sources(${name} PRIVATE tests/middleware/test_gzip_send_mock.c)
+  endif()
   target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
