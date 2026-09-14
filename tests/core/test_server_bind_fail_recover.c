@@ -128,20 +128,34 @@ main(void)
     {
         csilk_router_t* r = csilk_router_new();
         assert(r != nullptr);
+        fprintf(stderr, "[bind-recover] phase-1a: router created\n");
+        fflush(stderr);
         csilk_server_t* srv = csilk_server_new(r);
         assert(srv != nullptr);
+        fprintf(stderr, "[bind-recover] phase-1b: server created\n");
+        fflush(stderr);
 
         g_server = srv;
         g_port = busy_port;
         pthread_t th;
         assert(pthread_create(&th, nullptr, run_server_thread, nullptr) == 0);
+        fprintf(stderr, "[bind-recover] phase-1c: thread created\n");
+        fflush(stderr);
         pthread_join(th, nullptr);
+        fprintf(stderr, "[bind-recover] phase-1d: thread joined\n");
+        fflush(stderr);
         assert(g_run_result < 0 && "expected bind failure");
 
         /* Reproduce the Python `App.stop()` + `App.free()` call order. */
         csilk_server_stop(srv);
+        fprintf(stderr, "[bind-recover] phase-1e: server stopped\n");
+        fflush(stderr);
         csilk_server_free(srv);
+        fprintf(stderr, "[bind-recover] phase-1f: server freed\n");
+        fflush(stderr);
         csilk_router_free(r);
+        fprintf(stderr, "[bind-recover] phase-1g: router freed\n");
+        fflush(stderr);
     }
     fprintf(stderr, "[bind-recover] phase-2: failed server torn down, probing free port\n");
     fflush(stderr);
