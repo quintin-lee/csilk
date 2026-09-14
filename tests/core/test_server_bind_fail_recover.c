@@ -37,13 +37,18 @@ bind_ephemeral_and_get_port(void)
     if (fd < 0) {
         return -1;
     }
-    int                yes = 1;
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     addr.sin_port = 0; /* ephemeral */
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    /* Deliberately no SO_REUSEADDR here: on BSD/macOS a listener with
+     * SO_REUSEADDR lets a second binder with the same flag share the
+     * port (both-REUSEADDR bypass), so the forced bind failure would
+     * silently turn into a second live server. Without any reuse flag
+     * on the occupier, neither the both-REUSEADDR nor the
+     * both-REUSEPORT exception can hold and the bind is guaranteed to
+     * fail on every platform. */
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         close(fd);
         return -1;
