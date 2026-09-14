@@ -40,15 +40,16 @@ bind_ephemeral_and_get_port(void)
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    /* Occupy the wildcard address, not loopback: the server under test
+     * binds 0.0.0.0, and libuv sets SO_REUSEADDR on every TCP socket, so
+     * on BSD/macOS a REUSEADDR wildcard bind is allowed to overlap a
+     * non-reuse 127.0.0.1 listener (only Linux rejects it) and the
+     * forced bind failure would silently turn into a second live server.
+     * Binding the identical wildcard address makes this an identical
+     * bind, which conflicts on every platform as long as the occupier
+     * itself carries no reuse flag (hence no SO_REUSEADDR below). */
+    addr.sin_addr.s_addr = inet_addr("0.0.0.0");
     addr.sin_port = 0; /* ephemeral */
-    /* Deliberately no SO_REUSEADDR here: on BSD/macOS a listener with
-     * SO_REUSEADDR lets a second binder with the same flag share the
-     * port (both-REUSEADDR bypass), so the forced bind failure would
-     * silently turn into a second live server. Without any reuse flag
-     * on the occupier, neither the both-REUSEADDR nor the
-     * both-REUSEPORT exception can hold and the bind is guaranteed to
-     * fail on every platform. */
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         close(fd);
         return -1;
