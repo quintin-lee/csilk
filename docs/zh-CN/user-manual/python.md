@@ -287,6 +287,22 @@ uuid_str = Crypto.generate_uuid()
 token = Crypto.generate_csrf_token()
 ```
 
+## ASGI 支持
+
+任何 ASGI 3.0 应用（如 FastAPI/Starlette）都可通过 `ASGIAdapter`（`python/csilk/asgi.py`）挂载到 csilk 路由之后。HTTP 与 WebSocket scope 由 `Context` 自动识别：
+
+```python
+from csilk import App
+from csilk.asgi import ASGIAdapter
+from myservice import fastapi_app  # 任何 ASGI 3.0 可调用对象
+
+app = App()
+app.mount_asgi("/*path", fastapi_app)
+app.run(8080)
+```
+
+`App.run()` 为适配器管理 `asyncio` 事件循环 — 循环导入位于函数作用域内，启动失败时不会留下半启动的服务器。
+
 ---
 
 ## 进一步阅读

@@ -242,3 +242,7 @@ typedef struct uring_thread_pool_s {
 | `src/core/uring/uring_internal.h` | 9KB | 内部数据结构 |
 | `src/core/uring/uring_thread_pool.c` | 13KB | 线程池实现 |
 | `src/core/uring/uring_tcp.c` | 5KB | TCP 操作 |
+
+### 可移植性规则
+
+跨后端代码（含 `src/core/uring/`）**必须**使用 `csilk_io_*`、`csilk_thread_*`、`csilk_mutex_t`/`csilk_cond_t`、`csilk_barrier_*` 封装 — 禁止直接调用原生 `uv_*` / `pthread_*`，以保证 libuv 与 io_uring 后端可互换。

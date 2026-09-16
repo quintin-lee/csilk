@@ -120,3 +120,7 @@ To guard against stale completions on recycled handles, each submitted SQE carri
 | `src/core/uring/uring_thread_pool.c` | Non-blocking background thread pool |
 | `src/core/uring/uring_internal.h` | Internal structures, operation pool, SQE helpers |
 | `docs/design/io_uring.md` | Architecture design specification |
+
+### Portability rule
+
+Cross-backend code (including `src/core/uring/`) **MUST** use the `csilk_io_*`, `csilk_thread_*`, `csilk_mutex_t`/`csilk_cond_t`, and `csilk_barrier_*` wrappers — raw `uv_*` / `pthread_*` calls are prohibited there, so the libuv and io_uring backends stay interchangeable.

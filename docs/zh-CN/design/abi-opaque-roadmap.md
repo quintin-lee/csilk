@@ -44,6 +44,13 @@ void        csilk_set_response_body(csilk_ctx_t* c, const char* data, size_t len
 - 从公共头文件中移除 `csilk_request_t` 和 `csilk_response_t`（已前瞻声明为 `csilk_ctx_t`）
 - 提升 SOVERSION 到 1
 
+### 阶段 F：JSON 所有权 ABI 统一 ✅
+- 从 `include/csilk/core/json/json.h` 删除带 `_v` 后缀的 JSON 变体 — 现在适用单一所有权契约：insert/add 函数取得 item 所有权，失败的插入保留调用方所有权，视图在 root 释放前一直有效，`csilk_json_free` 可重入（由 `test_json_ai_abi` + `python/tests/test_ai_abi.py` 锁定）。
+- 视图从 per-root 视图 arena（`json_view_arena_t`，4 KB chunk）bump 分配，通过 root 的 `_Atomic va` 经 CAS 一次发布 — 取代原来泄漏的 64 槽 TLS 视图环。absorb 路径释放子视图 arena。
+- 在不可变文档的借用视图上调用 `csilk_json_set_string()` 现在明确返回 `false`，而不再静默丢弃修改（旧代码把句柄重绑到无父可见的私有可变拷贝上，且泄漏了转换后的文档）。
+
+**迁移**：将所有 `csilk_json_*_v(...)` 调用替换为去 `_v` 形式（参数相同）；检查 `csilk_json_set_string()` 的 `bool` 返回值 — `false` 现在表示"借用视图，拒绝修改"，而非"设置成功"。
+
 ## 风险
 
 | 风险 | 缓解措施 |

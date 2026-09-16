@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-Request Context Memory Reduction**: Compacted `csilk_ctx_t` layout with 16-bucket chained hash map and compact 4-slot embedded read buffers, reducing per-context memory footprint and improving 0-header throughput by +62.6% (11.35 M req/s).
 - **HTTP/2 Stream Allocation Scaling**: High-performance per-connection adaptive hash table delivering 4.47 M stream-cycles/sec pool throughput, 26.2 ns lookup latency for 10 concurrent streams, and 62.8 ns lookup latency for 10,000 concurrent streams.
 
+### Changed
+- **Unified JSON Ownership ABI (breaking)**: Removed the `_v` suffixed variants from `include/csilk/core/json/json.h`. One contract now applies: insert/add takes ownership, failed inserts retain caller ownership, views live until root free, free is idempotent. Views are allocated from a per-root arena (CAS-published); `csilk_json_set_string()` on a borrowed immutable view returns `false`. Migration: drop the `_v` suffix and check the `set_string` return — see `docs/en/design/abi-opaque-roadmap.md` Phase F.
+
 ### Fixed
 - **Connection UAF on Graceful Shutdown (CWE-416)**: In `close_active_clients()`, snapshot `client->next` before calling `csilk_io_close()` to prevent Use-After-Free when the close callback fires synchronously and modifies the active client linked list.
 - **Data Race on Client State Read (CWE-362)**: Restructured `_csilk_client_check_recycle()` to only read `client->state` on the owning worker thread. Non-owner threads now dispatch recycle tasks exclusively, eliminating a TSAN-flagged data race on the non-atomic state field.
@@ -28,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Exact Retry-After Header**: The local rate limiter no longer emits a hardcoded `Retry-After: 60`; it now reports the actual seconds remaining in the current window (floor 1s). The distributed path keeps the full window as a conservative value since the storage `incr` does not return a TTL.
 - **gzip ASAN-Safe Async Coverage Test**: Replaced a raw thread-pool test that kept worker threads alive past `main()` (crashing ASAN's exit-time teardown) with a synchronous drive of the real `_csilk_gzip_work_cb`/`_csilk_gzip_after_work_cb` callbacks via `src/core/internal/gzip_internal.h`; the mock client is no longer a single-byte stack char.
 - **JSON `set_string` on Borrowed Views (CWE-415 family, silent data loss)**: `csilk_json_set_string()` on a non-owning view of an immutable document rebound the handle onto a private mutable copy that no parent ever observed — the requested mutation was silently discarded and the converted document leaked. Non-owner immutable handles now fail explicitly.
+- **Bind-Failure Recovery in `csilk_server_free`**: pump the event loop to complete closes queued by a failed `csilk_server_run()` (bind/listen error) before releasing resources; pinned by regression test `test_server_bind_fail_recover`.
+- **Python ASGI Startup Crash & JSON View Lifetime**: `App.run()` imports `asyncio` at function scope (a finally-block import made it local, raising `UnboundLocalError` and segfaulting in `uv_async_send` on a never-run server); replaced the leaky 64-slot TLS view ring with per-root owner arenas.
+- **CSRF Cookie Secure Flag (CWE-1004)**: the `csrf_token` double-submit cookie now sets `Secure` (HTTPS only) while keeping `HttpOnly=0` so frontend JS can read it; token comparison uses constant-time `CRYPTO_memcmp` (CWE-208).
+- **io_uring Backend Wrapper Migration**: removed raw `uv_*`/`pthread_*` calls from cross-backend code; `src/core/uring/` and shared paths must use the `csilk_io_*` / `csilk_thread_*` wrappers.
 
 ### Test Coverage
 - **Total tests**: 227 registered CTest cases (~230 source files), all 225 non-integration unit tests passing locally and in CI.

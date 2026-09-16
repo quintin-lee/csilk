@@ -209,7 +209,7 @@ csilk_jwt_middleware(ctx, secret):
 ```
 Safe methods (GET, HEAD, OPTIONS):
   └─ Check if csrf_token cookie exists
-     ├─ No  → Generate 16 random bytes → Set cookie (HttpOnly, path=/)
+     ├─ No  → Generate 16 random bytes → Set cookie (Secure, path=/, HttpOnly=0 so frontend JS can read it for Double Submit)
      └─ Yes → Pass through
   └─ csilk_next()
 
@@ -217,7 +217,7 @@ State-changing methods (POST, PUT, DELETE, etc.):
   ├─ Read X-CSRF-Token header
   │   └─ Missing → 403, abort, increment csrf_violations metric
   ├─ Read csrf_token cookie
-  ├─ Compare header == cookie (strcmp)
+  ├─ Compare header == cookie (CRYPTO_memcmp, constant-time)
   │   ├─ Match → csilk_next()
   │   └─ Mismatch → 403, abort, increment csrf_violations metric
 ```
@@ -388,11 +388,11 @@ csilk_session_start(c);
 
 ### CSRF Token Cookie
 
-CSRF tokens also use `Secure` + `HttpOnly`:
+CSRF tokens use `Secure` but deliberately NOT `HttpOnly` — the Double Submit pattern requires frontend JavaScript to read the cookie and echo it back in the `X-CSRF-Token` header:
 
 ```c
 csilk_app_use(app, csilk_csrf_middleware);
-// Sets: Set-Cookie: csrf_token=<token>; Max-Age=86400; Path=/; Secure; HttpOnly
+// Sets: Set-Cookie: csrf_token=<token>; Max-Age=86400; Path=/; Secure
 ```
 
 ---

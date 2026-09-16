@@ -31,3 +31,10 @@ Implemented comprehensive accessor/mutator API in `include/csilk/core/context.h`
 - Decoupled OpenSSL from public headers: `include/csilk/core/hash.h` uses 64-bit aligned opaque memory buffers (`csilk_sha1_ctx`, `csilk_sha256_ctx`).
 - Decoupled Backend I/O headers from `context.h`: `sys_io.h` and `csilk_get_work_req` relocated to internal headers.
 - Unified 6-tier memory ownership model (`BORROWED`, `ARENA`, `OWNED`, `TRANSFER`, `POOL`, `TLS_CACHE`).
+
+### Phase F: JSON Ownership ABI Unification ✅
+- Removed the `_v` suffixed JSON variants from `include/csilk/core/json/json.h` — a single ownership contract now applies: insert/add functions take ownership of the item, failed inserts retain caller ownership, views stay valid until the root is freed, `csilk_json_free` is idempotent (pinned by `test_json_ai_abi` + `python/tests/test_ai_abi.py`).
+- Views are bump-allocated from a per-root view arena (`json_view_arena_t`, 4 KB chunks), published once via CAS on the root's `_Atomic va` — replacing the leaky 64-slot TLS view ring. Absorb paths release child view arenas.
+- `csilk_json_set_string()` on a borrowed view of an immutable document now returns `false` explicitly instead of silently discarding the mutation (previous code rebound the handle onto a private mutable copy no parent ever observed, leaking the converted doc).
+
+**Migration**: replace every `csilk_json_*_v(...)` call with the non-`_v` form (identical parameters minus the `_v` suffix); check the `bool` return of `csilk_json_set_string()` — `false` now means "borrowed view, mutation refused", not "value set".

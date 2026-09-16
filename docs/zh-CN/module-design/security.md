@@ -202,14 +202,14 @@ csilk_jwt_middleware(ctx, secret):
 ```
 安全方法 (GET, HEAD, OPTIONS):
   └─ 检查 csrf_token cookie 是否存在
-     ├─ 不存在  → 生成 16 个随机字节 → 设置 cookie (HttpOnly, path=/)
+     ├─ 不存在  → 生成 16 个随机字节 → 设置 cookie (Secure, path=/, HttpOnly=0 以便前端 JS 读取做双重提交)
      └─ 存在 → 传递
 
 状态改变方法 (POST, PUT, DELETE 等):
   ├─ 读取 X-CSRF-Token 头
   │   └─ 缺失 → 403，中止，递增 csrf_violations 指标
   ├─ 读取 csrf_token cookie
-  ├─ 比较 header == cookie (strcmp)
+  ├─ 比较 header == cookie (CRYPTO_memcmp 常量时间比较)
   │   ├─ 匹配 → csilk_next()
   │   └─ 不匹配 → 403，中止，递增 csrf_violations 指标
 ```
@@ -217,7 +217,7 @@ csilk_jwt_middleware(ctx, secret):
 ### 令牌生成
 
 1. 主要方法：来自 `/dev/urandom` 的 16 字节，格式化为 32 字符十六进制字符串
-2. 备选方法（如果 `/dev/urandom` 不可用）：使用 `rand_r()` 以 `time() ^ getpid()` 作为种子
+2. 备选方法已删除 — `/dev/urandom` 不可用时直接失败关闭，不再回退到弱 PRNG (CWE-330)
 
 ---
 

@@ -324,6 +324,22 @@ def traced_handler(ctx: Context):
     print("Span ID:", ctx.span_id)
 ```
 
+## ASGI Support
+
+Any ASGI 3.0 app (e.g. FastAPI/Starlette) can be mounted behind a csilk route via `ASGIAdapter` (`python/csilk/asgi.py`). HTTP vs. WebSocket scope is auto-detected from the `Context`:
+
+```python
+from csilk import App
+from csilk.asgi import ASGIAdapter
+from myservice import fastapi_app  # any ASGI 3.0 callable
+
+app = App()
+app.mount_asgi("/*path", fastapi_app)
+app.run(8080)
+```
+
+`App.run()` manages the `asyncio` event loop for the adapter — the loop import lives at function scope so a startup failure can never leave a half-started server behind.
+
 ---
 
 ## Further Reading

@@ -210,6 +210,8 @@ void csilk_server_free(csilk_server_t* server);
 - 释放 worker pool
 - 释放服务器结构体本身
 
+> **Bind-failure recovery**: if `csilk_server_run()` fails during bind/listen, `csilk_server_free()` first pumps the event loop once to complete close callbacks already queued by the failed run, then releases resources. Pinned by regression test `test_server_bind_fail_recover`.
+
 ---
 
 ## 3. 多 Worker 与连接池
