@@ -286,9 +286,10 @@ set(CSILK_SECURITY_TESTS
     test_cipher
     test_crypto_driver
     test_crypto
+    test_totp
 )
 set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security;security;security;security;crypto
+    security;security;security;security;security;security;security;security;crypto;crypto
 )
 
 # -- Data / driver tests --
