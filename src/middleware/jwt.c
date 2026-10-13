@@ -573,6 +573,33 @@ csilk_jwt_middleware_options(csilk_ctx_t*               c,
         return;
     }
 
+    if (options) {
+        if (options->skip_fn && options->skip_fn(c)) {
+            csilk_next(c);
+            return;
+        }
+        const char* path = csilk_get_path(c);
+        if (path) {
+            if (options->exclude_paths) {
+                for (int i = 0; options->exclude_paths[i]; i++) {
+                    if (strcmp(path, options->exclude_paths[i]) == 0) {
+                        csilk_next(c);
+                        return;
+                    }
+                }
+            }
+            if (options->exclude_prefixes) {
+                for (int i = 0; options->exclude_prefixes[i]; i++) {
+                    size_t plen = strlen(options->exclude_prefixes[i]);
+                    if (strncmp(path, options->exclude_prefixes[i], plen) == 0) {
+                        csilk_next(c);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     const char* auth_header = csilk_get_header(c, "Authorization");
     if (!auth_header || strncmp(auth_header, "Bearer ", 7) != 0) {
         CSILK_LOG_W("JWT: Middleware: missing or invalid Authorization header");

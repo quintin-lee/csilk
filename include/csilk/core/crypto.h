@@ -46,13 +46,19 @@ typedef enum {
     CSILK_JWT_REQUIRE_IAT = (1 << 2)  /**< Require 'iat' claim to be present. */
 } csilk_jwt_flags_t;
 
+struct csilk_ctx_s;
+typedef struct csilk_ctx_s csilk_ctx_t;
+
 /**
  * @brief Configuration options for JWT verification and middleware.
  */
 typedef struct {
     csilk_jwt_alg_t algorithm; /**< Expected signing algorithm (HS256, RS256, ES256). */
     uint32_t        flags; /**< Bitwise OR of csilk_jwt_flags_t (e.g., CSILK_JWT_REQUIRE_EXP). */
-    int64_t         leeway_sec; /**< Clock skew tolerance in seconds (default 0). */
+    int64_t         leeway_sec;       /**< Clock skew tolerance in seconds (default 0). */
+    const char**    exclude_paths;    /**< NULL-terminated array of exact paths to bypass. */
+    const char**    exclude_prefixes; /**< NULL-terminated array of path prefixes to bypass. */
+    bool (*skip_fn)(csilk_ctx_t* c);  /**< Custom predicate callback to bypass verification. */
 } csilk_jwt_options_t;
 
 /**

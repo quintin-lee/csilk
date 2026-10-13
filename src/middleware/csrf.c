@@ -35,8 +35,44 @@
  *          /dev/urandom is accessible.
  */
 void
-csilk_csrf_middleware(csilk_ctx_t* c)
+csilk_csrf_middleware_ext(csilk_ctx_t* c, const csilk_csrf_config_t* config)
 {
+    if (!c) {
+        return;
+    }
+
+    /* Check skip predicate and route whitelists */
+    if (config) {
+        if (config->skip_fn && config->skip_fn(c)) {
+            csilk_next(c);
+            return;
+        }
+        const char* path = csilk_get_path(c);
+        if (path) {
+            if (config->exclude_paths) {
+                for (int i = 0; config->exclude_paths[i]; i++) {
+                    if (strcmp(path, config->exclude_paths[i]) == 0) {
+                        csilk_next(c);
+                        return;
+                    }
+                }
+            }
+            if (config->exclude_prefixes) {
+                for (int i = 0; config->exclude_prefixes[i]; i++) {
+                    size_t plen = strlen(config->exclude_prefixes[i]);
+                    if (strncmp(path, config->exclude_prefixes[i], plen) == 0) {
+                        csilk_next(c);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    const char* cookie_name = (config && config->cookie_name) ? config->cookie_name : "csrf_token";
+    const char* header_name =
+        (config && config->header_name) ? config->header_name : "X-CSRF-Token";
+
     /* Safe methods (GET, HEAD, OPTIONS) are considered read-only per HTTP spec
      (RFC 7231 §4.2.1). They set the CSRF cookie so the frontend can obtain
      the token, but do not require validation. */
@@ -47,12 +83,12 @@ csilk_csrf_middleware(csilk_ctx_t* c)
                     csilk_get_method(c),
                     (void*)c);
         // Set CSRF cookie on safe methods so frontend can read it (http_only = 0)
-        const char* existing = csilk_get_cookie(c, "csrf_token");
+        const char* existing = csilk_get_cookie(c, cookie_name);
         if (!existing) {
             char token_buf[33];
             if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
-                csilk_set_cookie(c, "csrf_token", token_buf, 86400, "/", NULL, 0, 0);
+                csilk_set_cookie(c, cookie_name, token_buf, 86400, "/", NULL, 0, 0);
             }
             explicit_bzero(token_buf, sizeof(token_buf));
         }
@@ -64,9 +100,9 @@ csilk_csrf_middleware(csilk_ctx_t* c)
                 (void*)c,
                 csilk_get_method(c) ? csilk_get_method(c) : "none");
 
-    const char* token = csilk_get_header(c, "X-CSRF-Token");
+    const char* token = csilk_get_header(c, header_name);
     if (!token) {
-        CSILK_LOG_W("CSRF: Blocked request %p: missing X-CSRF-Token header", (void*)c);
+        CSILK_LOG_W("CSRF: Blocked request %p: missing %s header", (void*)c, header_name);
         void _csilk_metrics_inc_csrf_violations(void);
         _csilk_metrics_inc_csrf_violations();
         csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: CSRF token missing");
@@ -75,7 +111,7 @@ csilk_csrf_middleware(csilk_ctx_t* c)
     }
 
     /* Double-submit cookie pattern: constant-time comparison against cookie */
-    const char* cookie_token = csilk_get_cookie(c, "csrf_token");
+    const char* cookie_token = csilk_get_cookie(c, cookie_name);
     size_t      cookie_len = cookie_token ? strlen(cookie_token) : 0;
     size_t      token_len = strlen(token);
     int         match = 0;
@@ -96,6 +132,12 @@ csilk_csrf_middleware(csilk_ctx_t* c)
         csilk_json_error(c, CSILK_STATUS_FORBIDDEN, "Forbidden: Invalid CSRF token");
         csilk_abort(c);
     }
+}
+
+void
+csilk_csrf_middleware(csilk_ctx_t* c)
+{
+    csilk_csrf_middleware_ext(c, NULL);
 }
 
 /**

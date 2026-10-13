@@ -219,6 +219,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_cors_ext
     test_csrf
     test_csrf_ext
+    test_csrf_whitelist
     test_gzip
     test_jwt
     test_logger
@@ -251,7 +252,7 @@ set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware
+    middleware;middleware;middleware
 )
 
 # -- Protocol tests --
