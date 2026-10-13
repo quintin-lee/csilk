@@ -282,6 +282,20 @@ sqlite_transaction_rollback(csilk_db_pool_t* pool)
     return sqlite_exec(pool, "ROLLBACK");
 }
 
+static int
+sqlite_in_transaction(csilk_db_pool_t* pool)
+{
+    void* raw_conn = csilk_db_pool_get_connection(pool);
+    if (!raw_conn) {
+        return 0;
+    }
+    sqlite_conn_t* conn = (sqlite_conn_t*)raw_conn;
+    if (!conn->db) {
+        return 0;
+    }
+    return (sqlite3_get_autocommit(conn->db) == 0) ? 1 : 0;
+}
+
 /** @brief Pre-built driver vtable for the SQLite3 database backend.
  *
  * Registered automatically when csilk_db_sqlite_init() is called. Users
@@ -295,6 +309,7 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
     .transaction_begin = sqlite_transaction_begin,
     .transaction_commit = sqlite_transaction_commit,
     .transaction_rollback = sqlite_transaction_rollback,
+    .in_transaction = sqlite_in_transaction,
     .free_result = sqlite_free_result,
 };
 
