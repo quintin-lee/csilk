@@ -39,6 +39,7 @@ set(CSILK_CORE_SOURCES
     src/core/primitives/query.c
     src/core/primitives/url.c
     src/util/flamegraph.c
+    src/util/csv.c
 )
 
 if(CSILK_USE_URING)
