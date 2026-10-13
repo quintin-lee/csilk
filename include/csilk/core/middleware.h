@@ -125,6 +125,25 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
 CSILK_INTERNAL void _csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int limit);
 
 /**
+ * @brief Configuration options for CSRF protection middleware.
+ */
+typedef struct {
+    const char*  cookie_name;        /**< Custom cookie name (default "csrf_token" if NULL). */
+    const char*  header_name;        /**< Custom header name (default "X-CSRF-Token" if NULL). */
+    const char** exclude_paths;      /**< NULL-terminated array of exact paths to bypass. */
+    const char** exclude_prefixes;   /**< NULL-terminated array of path prefixes to bypass. */
+    bool (*skip_fn)(csilk_ctx_t* c); /**< Custom predicate callback to bypass verification. */
+} csilk_csrf_config_t;
+
+/**
+ * @brief Stateless CSRF protection middleware with custom configuration.
+ *
+ * @param c      The request context.
+ * @param config Configuration options (cookie/header names, whitelists, skip predicate).
+ */
+void csilk_csrf_middleware_ext(csilk_ctx_t* c, const csilk_csrf_config_t* config);
+
+/**
  * @brief Stateless CSRF protection middleware.
  *
  * Checks for a valid CSRF token in the request (via header or form field)
