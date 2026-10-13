@@ -298,6 +298,15 @@ int64_t csilk_json_int_value(const csilk_json_t* v);
  */
 bool csilk_json_bool_value(const csilk_json_t* v);
 
+/** @brief Coerce a JSON value (number, string, bool) to int64 with fallback default. */
+int64_t csilk_json_as_int64(const csilk_json_t* val, int64_t default_val);
+
+/** @brief Coerce a JSON value (number, string, bool) to double with fallback default. */
+double csilk_json_as_double(const csilk_json_t* val, double default_val);
+
+/** @brief Coerce a JSON value (bool, number, string) to bool with fallback default. */
+bool csilk_json_as_bool(const csilk_json_t* val, bool default_val);
+
 /** @brief Get the N-th element of an array.
  *  @param[in] arr Array to index.
  *  @param[in] index Zero-based element index.

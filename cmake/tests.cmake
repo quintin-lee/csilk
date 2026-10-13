@@ -58,6 +58,7 @@ set(CSILK_CORE_TESTS
     test_https
     test_ip
     test_json
+    test_json_as
     test_json_ext
     test_json_accessor_bench
     test_json_mutate
@@ -142,7 +143,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core
+    core;core;core;core;core;core;core
 )
 
 

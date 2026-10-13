@@ -3,6 +3,8 @@
  * @brief Value accessors: get-by-key, type extractors, array indexing.
  */
 
+#include <errno.h>
+#include <strings.h>
 #include "json_internal.h"
 
 /* ====================================================================
@@ -379,4 +381,87 @@ csilk_json_array_size(const csilk_json_t* arr)
         return 0;
     }
     return yyjson_arr_size((yyjson_val*)arr->u.ival);
+}
+
+int64_t
+csilk_json_as_int64(const csilk_json_t* val, int64_t default_val)
+{
+    if (!val) {
+        return default_val;
+    }
+    if (csilk_json_is_number(val)) {
+        return csilk_json_int_value(val);
+    }
+    if (csilk_json_is_bool(val)) {
+        return csilk_json_bool_value(val) ? 1 : 0;
+    }
+    if (csilk_json_is_string(val)) {
+        const char* s = csilk_json_string_value(val);
+        if (!s || !*s) {
+            return default_val;
+        }
+        char* end = NULL;
+        errno = 0;
+        long long v = strtoll(s, &end, 10);
+        if (errno != 0 || end == s || *end != '\0') {
+            return default_val;
+        }
+        return (int64_t)v;
+    }
+    return default_val;
+}
+
+double
+csilk_json_as_double(const csilk_json_t* val, double default_val)
+{
+    if (!val) {
+        return default_val;
+    }
+    if (csilk_json_is_number(val)) {
+        return csilk_json_number_value(val);
+    }
+    if (csilk_json_is_bool(val)) {
+        return csilk_json_bool_value(val) ? 1.0 : 0.0;
+    }
+    if (csilk_json_is_string(val)) {
+        const char* s = csilk_json_string_value(val);
+        if (!s || !*s) {
+            return default_val;
+        }
+        char* end = NULL;
+        errno = 0;
+        double v = strtod(s, &end);
+        if (errno != 0 || end == s || *end != '\0') {
+            return default_val;
+        }
+        return v;
+    }
+    return default_val;
+}
+
+bool
+csilk_json_as_bool(const csilk_json_t* val, bool default_val)
+{
+    if (!val) {
+        return default_val;
+    }
+    if (csilk_json_is_bool(val)) {
+        return csilk_json_bool_value(val);
+    }
+    if (csilk_json_is_number(val)) {
+        return csilk_json_number_value(val) != 0.0;
+    }
+    if (csilk_json_is_string(val)) {
+        const char* s = csilk_json_string_value(val);
+        if (!s || !*s) {
+            return default_val;
+        }
+        if (strcasecmp(s, "true") == 0 || strcasecmp(s, "t") == 0 || strcmp(s, "1") == 0) {
+            return true;
+        }
+        if (strcasecmp(s, "false") == 0 || strcasecmp(s, "f") == 0 || strcmp(s, "0") == 0) {
+            return false;
+        }
+    }
+    return default_val;
 }
