@@ -33,6 +33,7 @@ set(CSILK_CORE_SOURCES
     src/crypto/uuid.c
     src/crypto/crypto.c
     src/crypto/bcrypt.c
+    src/crypto/totp.c
     src/drivers/cipher/openssl.c
     src/core/primitives/header_map.c
     src/core/primitives/query.c
