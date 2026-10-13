@@ -44,6 +44,7 @@ set(CSILK_CORE_TESTS
     test_config_load
     test_config_tls
     test_connection
+    test_csv
     test_client_lifetime_stress
     test_context
     test_context_ext
@@ -143,7 +144,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core
 )
 
 
