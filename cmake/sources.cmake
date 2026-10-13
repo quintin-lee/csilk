@@ -178,6 +178,7 @@ set(CSILK_HTTP2_SOURCES
 set(CSILK_DB_SOURCES
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
+    src/drivers/db/tx_scope.c
     src/drivers/vector/vector.c
     src/drivers/vector/vector_simd.c
     src/drivers/vector/vector_hnsw.c

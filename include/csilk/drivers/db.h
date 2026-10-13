@@ -138,10 +138,63 @@ struct csilk_db_driver_s {
    *  @return 0 on success, -1 on failure. */
     int (*transaction_rollback)(csilk_db_pool_t* pool);
 
+    /** @brief Check if the connection is currently inside an active transaction.
+   *  @param pool  Connection pool.
+   *  @return 1 if in transaction, 0 if not, -1 on error. */
+    int (*in_transaction)(csilk_db_pool_t* pool);
+
     /** @brief Free a result set and all associated memory.
    *  @param result  Result set to free (must not be NULL). */
     void (*free_result)(csilk_db_result_t* result);
 };
+
+/**
+ * @brief Transaction and savepoint scope handle.
+ */
+typedef struct {
+    char name[64];
+    bool is_savepoint;
+    bool active;
+} csilk_db_tx_scope_t;
+
+/**
+ * @brief Check if the connection pool is currently inside an active transaction.
+ *
+ * @param pool Connection pool.
+ * @return 1 if in transaction, 0 if not, -1 on error.
+ */
+int csilk_db_in_transaction(csilk_db_pool_t* pool);
+
+/**
+ * @brief Begin a transaction or savepoint scope.
+ *
+ * If the connection is not yet in a transaction, starts a top-level transaction.
+ * If already in a transaction, creates a nested SAVEPOINT with a unique name.
+ *
+ * @param pool  Connection pool.
+ * @param name  Base identifier name for the scope or savepoint.
+ * @param scope Scope struct to populate.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_db_tx_scope_begin(csilk_db_pool_t* pool, const char* name, csilk_db_tx_scope_t* scope);
+
+/**
+ * @brief Commit a transaction or release a savepoint scope.
+ *
+ * @param pool  Connection pool.
+ * @param scope Active scope struct.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_db_tx_scope_commit(csilk_db_pool_t* pool, csilk_db_tx_scope_t* scope);
+
+/**
+ * @brief Roll back a transaction or roll back to a savepoint scope.
+ *
+ * @param pool  Connection pool.
+ * @param scope Active scope struct.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_db_tx_scope_rollback(csilk_db_pool_t* pool, csilk_db_tx_scope_t* scope);
 
 /**
  * @brief Create a new database pool and connect using the named driver.
