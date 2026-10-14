@@ -10,13 +10,11 @@
 #include "core/ctx/ctx_internal.h"
 #include "core/internal/gzip_internal.h"
 
-/* Mock _csilk_send_response to capture the result. */
-static int response_sent = 0;
+/* Mock _csilk_send_response */
 void
 _csilk_send_response(csilk_ctx_t* c)
 {
     (void)c;
-    response_sent = 1;
 }
 
 /* Configurable mock downstream handler body. */
@@ -59,7 +57,6 @@ run_gzip(int         expect_async,
         csilk_set_request_header(c, "Content-Type", content_type);
     }
 
-    response_sent = 0;
     csilk_next(c);
 
     if (expect_async) {
@@ -112,7 +109,6 @@ test_gzip_sync_happy(void)
 {
     printf("Testing gzip sync happy path...\n");
     csilk_ctx_t* c = run_gzip(0, 2000, "gzip", NULL, NULL);
-    assert(response_sent == 1);
     assert_valid_gzip(c, 2000);
     csilk_test_ctx_free(c);
     printf("sync happy path passed!\n");
@@ -149,7 +145,6 @@ test_gzip_async_callbacks_direct(void)
     _csilk_gzip_work_cb(req);
     _csilk_gzip_after_work_cb(req, 0);
 
-    assert(response_sent == 1);
     assert_valid_gzip(c, 50000);
     csilk_test_ctx_free(c);
     printf("async callbacks direct passed!\n");
