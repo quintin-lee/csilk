@@ -195,6 +195,7 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/ai.c
     src/drivers/ai/ollama.c
     src/drivers/ai/openai.c
+    src/drivers/ai/tool_registry.c
 )
 
 # ── MQ Module (Message queue & Raft consensus) ───────────────────────────
@@ -237,6 +238,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/protocols/mcp/mcp_server.c
     src/protocols/mcp/mcp_client.c
     src/protocols/mcp/mcp_stdio_pool.c
+    src/workflow/wf_ai_react_loop.c
 )
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────

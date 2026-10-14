@@ -36,6 +36,7 @@
 
 #include "csilk/app/app.h"
 #include "csilk/drivers/ai.h"
+#include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/drivers/vector.h"
 
 /**
@@ -267,6 +268,34 @@ csilk_wf_node_t* csilk_wf_add_vector_search(csilk_wf_t*                         
  */
 csilk_wf_node_t*
 csilk_wf_add_agent_react(csilk_wf_t* wf, const char* id, const csilk_agent_react_config_t* config);
+
+/**
+ * @brief Execute an autonomous multi-turn ReAct tool-calling loop using an AI driver.
+ *
+ * Drives the conversation: calls the AI model, parses tool_calls, invokes matching
+ * tools from the registry, feeds tool results back as role="tool" messages, and
+ * repeats until the model outputs final content or max_iterations is reached.
+ *
+ * @param ai AI driver instance.
+ * @param model Model name (e.g. "gpt-4o" or "mock").
+ * @param system_prompt Optional system instructions.
+ * @param user_prompt Initial user prompt.
+ * @param reg Tool registry containing available tools (may be NULL).
+ * @param max_iterations Maximum turns (default 10).
+ * @param on_chunk Optional streaming callback for tokens.
+ * @param user_data Stream callback user context.
+ * @param[out] out_final_text Allocated final response text (caller frees).
+ * @return 0 on success, negative error code on failure.
+ */
+int csilk_ai_react_execute_loop(csilk_ai_t*               ai,
+                                const char*               model,
+                                const char*               system_prompt,
+                                const char*               user_prompt,
+                                csilk_ai_tool_registry_t* reg,
+                                int                       max_iterations,
+                                csilk_ai_stream_cb        on_chunk,
+                                void*                     user_data,
+                                char**                    out_final_text);
 
 /**
  * @brief Add a built-in Reflexion (Self-Correction) Agent node.
