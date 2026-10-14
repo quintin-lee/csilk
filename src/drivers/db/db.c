@@ -653,3 +653,94 @@ csilk_db_get_driver(const char* name)
     csilk_mutex_unlock(&registry_mutex);
     return NULL;
 }
+
+int
+csilk_stmt_prepare(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_stmt)
+{
+    if (!pool || !sql || !out_stmt) {
+        return -1;
+    }
+    if (!pool->driver || !pool->driver->stmt_prepare) {
+        return -1;
+    }
+    csilk_mutex_lock(&pool->mutex);
+    int rc = pool->driver->stmt_prepare(pool, sql, out_stmt);
+    csilk_mutex_unlock(&pool->mutex);
+    return rc;
+}
+
+int
+csilk_stmt_bind_int64(csilk_stmt_t* stmt, int index, int64_t val)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_bind_int64) {
+        return -1;
+    }
+    return stmt->pool->driver->stmt_bind_int64(stmt, index, val);
+}
+
+int
+csilk_stmt_bind_double(csilk_stmt_t* stmt, int index, double val)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_bind_double) {
+        return -1;
+    }
+    return stmt->pool->driver->stmt_bind_double(stmt, index, val);
+}
+
+int
+csilk_stmt_bind_text(csilk_stmt_t* stmt, int index, const char* val)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_bind_text) {
+        return -1;
+    }
+    return stmt->pool->driver->stmt_bind_text(stmt, index, val);
+}
+
+int
+csilk_stmt_bind_null(csilk_stmt_t* stmt, int index)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_bind_null) {
+        return -1;
+    }
+    return stmt->pool->driver->stmt_bind_null(stmt, index);
+}
+
+int
+csilk_stmt_execute(csilk_stmt_t* stmt, int64_t* out_affected_rows)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_execute) {
+        return -1;
+    }
+    csilk_mutex_lock(&stmt->pool->mutex);
+    int rc = stmt->pool->driver->stmt_execute(stmt, out_affected_rows);
+    csilk_mutex_unlock(&stmt->pool->mutex);
+    return rc;
+}
+
+csilk_json_t*
+csilk_stmt_query_json(csilk_stmt_t* stmt)
+{
+    if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_query_json) {
+        return NULL;
+    }
+    csilk_mutex_lock(&stmt->pool->mutex);
+    csilk_json_t* res = stmt->pool->driver->stmt_query_json(stmt);
+    csilk_mutex_unlock(&stmt->pool->mutex);
+    return res;
+}
+
+void
+csilk_stmt_close(csilk_stmt_t* stmt)
+{
+    if (!stmt) {
+        return;
+    }
+    csilk_db_pool_t* pool = stmt->pool;
+    if (pool && pool->driver && pool->driver->stmt_close) {
+        csilk_mutex_lock(&pool->mutex);
+        pool->driver->stmt_close(stmt);
+        csilk_mutex_unlock(&pool->mutex);
+    } else {
+        free(stmt);
+    }
+}

@@ -21,6 +21,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "db_internal.h"
 
 /** @brief Per-connection data for the SQLite driver. */
 typedef struct {
@@ -296,6 +297,161 @@ sqlite_in_transaction(csilk_db_pool_t* pool)
     return (sqlite3_get_autocommit(conn->db) == 0) ? 1 : 0;
 }
 
+static int
+sqlite_stmt_prepare(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_stmt)
+{
+    if (!pool || !sql || !out_stmt) {
+        return -1;
+    }
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    if (!conn || !conn->db) {
+        return -1;
+    }
+
+    sqlite3_stmt* s = NULL;
+    int           rc = sqlite3_prepare_v2(conn->db, sql, -1, &s, NULL);
+    if (rc != SQLITE_OK) {
+        CSILK_LOG_E("sqlite_stmt_prepare failed: %s (sql: %s)", sqlite3_errmsg(conn->db), sql);
+        return -1;
+    }
+
+    csilk_stmt_t* stmt = calloc(1, sizeof(csilk_stmt_t));
+    if (!stmt) {
+        sqlite3_finalize(s);
+        return -1;
+    }
+    stmt->pool = pool;
+    stmt->handle = s;
+    *out_stmt = stmt;
+    return 0;
+}
+
+static int
+sqlite_stmt_bind_int64(csilk_stmt_t* stmt, int index, int64_t val)
+{
+    if (!stmt || !stmt->handle) {
+        return -1;
+    }
+    int rc = sqlite3_bind_int64((sqlite3_stmt*)stmt->handle, index, val);
+    return (rc == SQLITE_OK) ? 0 : -1;
+}
+
+static int
+sqlite_stmt_bind_double(csilk_stmt_t* stmt, int index, double val)
+{
+    if (!stmt || !stmt->handle) {
+        return -1;
+    }
+    int rc = sqlite3_bind_double((sqlite3_stmt*)stmt->handle, index, val);
+    return (rc == SQLITE_OK) ? 0 : -1;
+}
+
+static int
+sqlite_stmt_bind_text(csilk_stmt_t* stmt, int index, const char* val)
+{
+    if (!stmt || !stmt->handle) {
+        return -1;
+    }
+    int rc =
+        sqlite3_bind_text((sqlite3_stmt*)stmt->handle, index, val ? val : "", -1, SQLITE_TRANSIENT);
+    return (rc == SQLITE_OK) ? 0 : -1;
+}
+
+static int
+sqlite_stmt_bind_null(csilk_stmt_t* stmt, int index)
+{
+    if (!stmt || !stmt->handle) {
+        return -1;
+    }
+    int rc = sqlite3_bind_null((sqlite3_stmt*)stmt->handle, index);
+    return (rc == SQLITE_OK) ? 0 : -1;
+}
+
+static int
+sqlite_stmt_execute(csilk_stmt_t* stmt, int64_t* out_affected_rows)
+{
+    if (!stmt || !stmt->handle || !stmt->pool) {
+        return -1;
+    }
+    sqlite3_stmt*  s = (sqlite3_stmt*)stmt->handle;
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(stmt->pool);
+
+    int rc = sqlite3_step(s);
+    if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+        CSILK_LOG_E("sqlite_stmt_execute failed: %s", conn ? sqlite3_errmsg(conn->db) : "unknown");
+        sqlite3_reset(s);
+        return -1;
+    }
+
+    if (out_affected_rows && conn && conn->db) {
+        *out_affected_rows = sqlite3_changes(conn->db);
+    }
+    sqlite3_reset(s);
+    return 0;
+}
+
+static csilk_json_t*
+sqlite_stmt_query_json(csilk_stmt_t* stmt)
+{
+    if (!stmt || !stmt->handle) {
+        return NULL;
+    }
+    sqlite3_stmt* s = (sqlite3_stmt*)stmt->handle;
+    csilk_json_t* arr = csilk_json_array();
+    if (!arr) {
+        return NULL;
+    }
+
+    int rc = 0;
+    while ((rc = sqlite3_step(s)) == SQLITE_ROW) {
+        csilk_json_t* row = csilk_json_object();
+        int           col_count = sqlite3_column_count(s);
+        for (int i = 0; i < col_count; i++) {
+            const char* col_name = sqlite3_column_name(s, i);
+            int         col_type = sqlite3_column_type(s, i);
+            switch (col_type) {
+            case SQLITE_INTEGER:
+                csilk_json_add_int(row, col_name, sqlite3_column_int64(s, i));
+                break;
+            case SQLITE_FLOAT:
+                csilk_json_add_number(row, col_name, sqlite3_column_double(s, i));
+                break;
+            case SQLITE_NULL:
+                csilk_json_add_null(row, col_name);
+                break;
+            case SQLITE_TEXT:
+            case SQLITE_BLOB:
+            default: {
+                const unsigned char* txt = sqlite3_column_text(s, i);
+                csilk_json_add_string(row, col_name, txt ? (const char*)txt : "");
+                break;
+            }
+            }
+        }
+        csilk_json_array_append(arr, row);
+    }
+
+    sqlite3_reset(s);
+    if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
+        csilk_json_free(arr);
+        return NULL;
+    }
+    return arr;
+}
+
+static void
+sqlite_stmt_close(csilk_stmt_t* stmt)
+{
+    if (!stmt) {
+        return;
+    }
+    if (stmt->handle) {
+        sqlite3_finalize((sqlite3_stmt*)stmt->handle);
+        stmt->handle = NULL;
+    }
+    free(stmt);
+}
+
 /** @brief Pre-built driver vtable for the SQLite3 database backend.
  *
  * Registered automatically when csilk_db_sqlite_init() is called. Users
@@ -310,6 +466,14 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
     .transaction_commit = sqlite_transaction_commit,
     .transaction_rollback = sqlite_transaction_rollback,
     .in_transaction = sqlite_in_transaction,
+    .stmt_prepare = sqlite_stmt_prepare,
+    .stmt_bind_int64 = sqlite_stmt_bind_int64,
+    .stmt_bind_double = sqlite_stmt_bind_double,
+    .stmt_bind_text = sqlite_stmt_bind_text,
+    .stmt_bind_null = sqlite_stmt_bind_null,
+    .stmt_execute = sqlite_stmt_execute,
+    .stmt_query_json = sqlite_stmt_query_json,
+    .stmt_close = sqlite_stmt_close,
     .free_result = sqlite_free_result,
 };
 

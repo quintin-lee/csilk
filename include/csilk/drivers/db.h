@@ -47,6 +47,9 @@ typedef struct csilk_db_driver_s csilk_db_driver_t;
 /** @brief Opaque database connection pool handle. */
 typedef struct csilk_db_pool_s csilk_db_pool_t;
 
+/** @brief Opaque prepared statement handle. */
+typedef struct csilk_stmt_s csilk_stmt_t;
+
 /**
  * @brief Get the driver-specific connection handle from a pool.
  * @param pool Database pool.
@@ -143,6 +146,16 @@ struct csilk_db_driver_s {
    *  @return 1 if in transaction, 0 if not, -1 on error. */
     int (*in_transaction)(csilk_db_pool_t* pool);
 
+    /** @brief Prepared statement hooks */
+    int (*stmt_prepare)(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_stmt);
+    int (*stmt_bind_int64)(csilk_stmt_t* stmt, int index, int64_t val);
+    int (*stmt_bind_double)(csilk_stmt_t* stmt, int index, double val);
+    int (*stmt_bind_text)(csilk_stmt_t* stmt, int index, const char* val);
+    int (*stmt_bind_null)(csilk_stmt_t* stmt, int index);
+    int (*stmt_execute)(csilk_stmt_t* stmt, int64_t* out_affected_rows);
+    csilk_json_t* (*stmt_query_json)(csilk_stmt_t* stmt);
+    void (*stmt_close)(csilk_stmt_t* stmt);
+
     /** @brief Free a result set and all associated memory.
    *  @param result  Result set to free (must not be NULL). */
     void (*free_result)(csilk_db_result_t* result);
@@ -195,6 +208,62 @@ int csilk_db_tx_scope_commit(csilk_db_pool_t* pool, csilk_db_tx_scope_t* scope);
  * @return 0 on success, -1 on failure.
  */
 int csilk_db_tx_scope_rollback(csilk_db_pool_t* pool, csilk_db_tx_scope_t* scope);
+
+/**
+ * @brief Prepare a SQL statement on the database pool.
+ *
+ * @param pool     Connection pool.
+ * @param sql      SQL query/statement with ? parameter placeholders.
+ * @param out_stmt Pointer to receive prepared statement handle.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_stmt_prepare(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_stmt);
+
+/**
+ * @brief Bind a 64-bit integer to a statement parameter (1-based index).
+ */
+int csilk_stmt_bind_int64(csilk_stmt_t* stmt, int index, int64_t val);
+
+/**
+ * @brief Bind a double float to a statement parameter (1-based index).
+ */
+int csilk_stmt_bind_double(csilk_stmt_t* stmt, int index, double val);
+
+/**
+ * @brief Bind a text string to a statement parameter (1-based index).
+ */
+int csilk_stmt_bind_text(csilk_stmt_t* stmt, int index, const char* val);
+
+/**
+ * @brief Bind SQL NULL to a statement parameter (1-based index).
+ */
+int csilk_stmt_bind_null(csilk_stmt_t* stmt, int index);
+
+/**
+ * @brief Execute a non-query prepared statement (INSERT, UPDATE, DELETE).
+ *
+ * @param stmt              Prepared statement handle.
+ * @param out_affected_rows Optional pointer to receive number of affected rows.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_stmt_execute(csilk_stmt_t* stmt, int64_t* out_affected_rows);
+
+/**
+ * @brief Execute a query prepared statement and return result rows as a JSON array.
+ *
+ * Preserves column types natively (numbers as numbers, text as text, NULL as null).
+ *
+ * @param stmt Prepared statement handle.
+ * @return JSON array of row objects, or NULL on failure. Caller frees.
+ */
+csilk_json_t* csilk_stmt_query_json(csilk_stmt_t* stmt);
+
+/**
+ * @brief Finalize and close a prepared statement.
+ *
+ * @param stmt Prepared statement handle to free. Safe if NULL.
+ */
+void csilk_stmt_close(csilk_stmt_t* stmt);
 
 /**
  * @brief Create a new database pool and connect using the named driver.

@@ -298,9 +298,10 @@ set(CSILK_DATA_TESTS
     test_db_sqlite
     test_db_registry
     test_db_tx_scope
+    test_db_stmt
 )
 set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db
+    drivers;drivers;drivers/db;drivers/db
 )
 
 # -- AI / driver tests --
