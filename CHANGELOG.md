@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Flyway-Style Database Schema Migration Engine** (`csilk/drivers/db/migration.h`):
+  - Discover and sort versioned SQL scripts following `V<num>__<name>.sql` naming conventions.
+  - Distributed concurrency lock table (`schema_migration_lock`) with lease timeouts to prevent multi-instance migration races.
+  - CRLF-normalized SHA-256 checksum calculation for tamper detection and schema validation.
+  - Transactional migration application with auto-baseline support for legacy databases without dropping existing data.
+  - Full PostgreSQL driver support with native prepared statements (`PQprepare`, `PQexecPrepared`, parameter translation from `?` to `$N`) for reliable distributed lock acquisition and statement execution.
+- **Native Prepared Statements & Typed Bindings** (`csilk/drivers/db.h`):
+  - Added unified `csilk_stmt_t` interface for prepared statements with typed bindings (`csilk_stmt_bind_int`, `csilk_stmt_bind_int64`, `csilk_stmt_bind_double`, `csilk_stmt_bind_string`, `csilk_stmt_bind_blob`, `csilk_stmt_bind_null`).
+  - Implemented native prepared statement support for both SQLite (`sqlite3_stmt`) and PostgreSQL (`PQprepare`/`PQexecPrepared`).
+- **Nested Transaction Scope & Savepoint Guard** (`csilk/drivers/db.h`):
+  - Added `csilk_tx_scope_begin`, `csilk_tx_scope_commit`, `csilk_tx_scope_rollback` supporting arbitrary transaction nesting via automatic savepoints (`SAVEPOINT svp_N` / `RELEASE SAVEPOINT svp_N`).
+- **Autonomous Tool-Calling ReAct Agent Loop** (`csilk/app/workflow.h`, `csilk/drivers/ai/tool_registry.h`):
+  - Native tool-calling ReAct agent execution loop (`csilk_ai_react_loop_*`) with budget controls (`max_iterations`, `timeout_ms`, `token_budget`, `tool_budget`).
+  - Centralized tool registry (`csilk_tool_registry_*`) with JSON-schema generation and automatic dispatch.
+- **End-to-End AI Tracing & Observability** (`csilk/drivers/ai.h`):
+  - Unified tracing container (`csilk_ai_trace_t`) capturing end-to-end latency, prompt/completion/total token usage, throughput (tokens/sec), cost accounting, and nested tool execution spans.
+- **MCP Stdio Client Process Pool** (`csilk/protocols/mcp.h`):
+  - Reusable stdio process pool (`csilk_mcp_stdio_pool_*`) for Model Context Protocol servers with process recycling, request pipelining, and graceful TTL idle reclamation.
+- **Tiered Cloud-Native Secret Provider** (`csilk/core/secret.h`):
+  - Multi-tiered secret resolution chain (Environment -> Memory/Vault -> Fallback) with TTL caching and circuit breakers.
+- **RFC 4180 CSV Parsing & Escaping Engine** (`csilk/util/csv.h`):
+  - High-performance, RFC 4180-compliant CSV parser and serializer supporting quoted fields, escaped quotes, BOM headers, and streaming records.
 - **AsyncOp & Stream Lifetime Model**: Introduced reference-counted asynchronous operation lifecycle (`csilk_async_op_t`) with generation tag and request sequence validation against ABA, and asynchronous timer cleanup on event loop to prevent timer Use-After-Free.
 - **HTTP/2 Trailer Support & Exactly-Once Dispatch**: Hardened nghttp2 callback pipeline to strictly distinguish initial request `HEADERS` from trailing `HEADERS` (Trailers), enforce exactly-once application dispatch, handle `RST_STREAM` before dispatch cleanly, and separate passive frame lookups (`csilk_h2_get_stream`) from active stream allocation (`csilk_h2_get_or_create_stream`).
 - **HTTP/2 Zero-Copy Header Materialization**: Implemented `map_set_view` allowing zero-copy string views directly into nghttp2 memory buffers during request header ingestion, and single-pass header counting and `nghttp2_nv` response encoding.
@@ -15,12 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Formalized Worker Ownership**: Worker threads own mutable connection and stream state; cross-worker unrefs dispatch back to owning worker event loop; lazy Message Queue initialization uses lock-free Double-Checked Locking (DCLP) with acquire/release memory barriers.
 - **Modular CMake Target DAG & Package Export**: Established `csilk_base` as foundation, fully exported `yyjson`, bundled `llhttp`, and `nghttp2` targets, and normalized `pkg-config` `.pc` templates with `-D_GNU_SOURCE`.
 
+
 ### Performance & Memory
 - **Per-Request Context Memory Reduction**: Compacted `csilk_ctx_t` layout with 16-bucket chained hash map and compact 4-slot embedded read buffers, reducing per-context memory footprint and improving 0-header throughput by +62.6% (11.35 M req/s).
 - **HTTP/2 Stream Allocation Scaling**: High-performance per-connection adaptive hash table delivering 4.47 M stream-cycles/sec pool throughput, 26.2 ns lookup latency for 10 concurrent streams, and 62.8 ns lookup latency for 10,000 concurrent streams.
 
 ### Fixed
+- **PostgreSQL Prepared Statement Parameter Mapping**: Fixed missing driver implementation of `stmt_prepare` in PostgreSQL driver by implementing automated parameter placeholder rewriting (`?` -> `$N`), explicit SQL statement naming, `PQprepare`/`PQexecPrepared` execution pipeline, and typed parameter serialization.
+- **gzip Test Dispatch Weak Symbol Crash**: Removed invalid `response_sent` tracking in `test_gzip` — `_csilk_send_response` is weak and not always invoked directly by gzip middleware.
+- **macOS ASAN Test Stability**: Eliminated invalid `mock_client_marker` in `test_gzip` to eliminate exit-time AddressSanitizer crashes on macOS runners.
+- **macOS CI Timing Hardening**: Relaxed microsecond timing assertions in `test_ai_trace` and related suites to prevent false CI failures caused by VM scheduling jitter on macOS.
+- **Clang-Format 18 CI Alignment**: Formatted all recently added C sources and headers to strictly pass `clang-format-18` verification in GitHub Actions.
 - **Connection UAF on Graceful Shutdown (CWE-416)**: In `close_active_clients()`, snapshot `client->next` before calling `csilk_io_close()` to prevent Use-After-Free when the close callback fires synchronously and modifies the active client linked list.
+
 - **Data Race on Client State Read (CWE-362)**: Restructured `_csilk_client_check_recycle()` to only read `client->state` on the owning worker thread. Non-owner threads now dispatch recycle tasks exclusively, eliminating a TSAN-flagged data race on the non-atomic state field.
 - **C23 `<stdbool.h>` Compliance**: Removed 4 unnecessary `#include <stdbool.h>` directives from `connection_state.c`, `mvcc_cache.c`, `json.h`, and `mvcc_cache.h`. C23 provides `bool`/`true`/`false` as built-in keywords.
 - **Clang-Tidy SPA Fallback Memory**: Replaced heap allocation in `spa_fallback_handler` with arena-managed memory allocation, resolving static analyzer warnings.

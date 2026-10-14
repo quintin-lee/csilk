@@ -110,6 +110,14 @@ TCP/SSL accept → worker loop receives event (libuv/io_uring)
 | `csilk_app_t` | `include/csilk/app.h` | High-level app builder (hooks, groups, middleware registration) |
 | `csilk_mq_t` | `include/csilk/messaging/mq.h` | Asynchronous thread-safe message queue with PubSub and WAL |
 | `csilk_vector_db_t` | `include/csilk/drivers/db/vector.h` | HNSW skip-graph vector index engine |
+| `csilk_db_stmt_t` | `include/csilk/drivers/db.h` | Native prepared statement with typed parameter bindings |
+| `csilk_migration_t` | `include/csilk/drivers/db/migration.h` | Flyway-style database migration engine with distributed locks |
+| `csilk_ai_trace_t` | `include/csilk/drivers/ai.h` | End-to-end AI latency, token throughput, and tool span tracing |
+| `csilk_ai_react_loop_t` | `include/csilk/app/workflow.h` | Multi-step tool-calling ReAct agent execution loop |
+| `csilk_tool_registry_t` | `include/csilk/drivers/ai/tool_registry.h` | Centralized tool definition, schema generation & dispatch |
+| `csilk_mcp_stdio_pool_t` | `include/csilk/protocols/mcp.h` | Reusable Model Context Protocol stdio client process pool |
+| `csilk_secret_provider_t` | `include/csilk/core/secret.h` | Tiered cloud-native secret provider with circuit breakers |
+
 
 ### Arena allocation model
 
@@ -166,7 +174,7 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 | `src/core/uring/` | io_uring event loop, connection, server, thread pool |
 | `src/core/http/` | HTTP/1.1 server, connection, TLS, router, app, swagger |
 | `src/core/primitives/` | Arena, bounded buffer, KV store, URL decoding |
-| `src/core/config/` | YAML config, logger, lifecycle hooks, admin dashboard |
+| `src/core/config/` | YAML config, logger, tiered secret provider (`secret.c`), lifecycle hooks, admin dashboard |
 | `src/core/ctx/` | Request context, async lifecycle, generation tracking |
 | `src/core/json/` | JSON engine sources (wraps yyjson) |
 | `src/core/cache/` | MVCC cache for DB-abstraction layer |
@@ -175,17 +183,18 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 | `src/core/server/` | Multi-worker server lifecycle, RCU router swap, driver injection, shutdown, worker pool |
 | `src/core/internal/` | Internal-only headers (header_map, query, lfqueue) not exposed in include/ |
 | `src/crypto/` | base64, sha1, bcrypt, blowfish sboxes, cipher/crypto dispatch |
-| `src/drivers/db/` | SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers |
-| `src/drivers/ai/` | OpenAI, Ollama, DeepSeek LLM client drivers |
+| `src/drivers/db/` | SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers, native prepared statements, savepoint scope (`tx_scope.c`), migration engine (`migration/`) |
+| `src/drivers/ai/` | OpenAI, Ollama, DeepSeek LLM client drivers, tool registry (`tool_registry.c`), AI tracing container (`ai_trace.c`) |
 | `src/drivers/cipher/` | OpenSSL-backed AES-256-GCM, RSA-OAEP, RSA-PSS |
 | `src/drivers/vector/` | HNSW SIMD vector index (AVX2 cosine/L2/dot) |
 | `src/middleware/` | auth, cors, csrf, jwt, ratelimit, sliding-ratelimit, session, sse, metrics, otlp, waf, circuit-breaker, grpc-gateway, gzip |
-| `src/protocols/` | WebSocket (RFC 6455), HTTP/2 (nghttp2), HTTP/3 (QUIC), swagger, MCP |
+| `src/protocols/` | WebSocket (RFC 6455), HTTP/2 (nghttp2), HTTP/3 (QUIC), swagger, MCP protocol & stdio client pool (`mcp_stdio_pool.c`) |
 | `src/messaging/` | MQ core, pubsub, WAL, raft RPC, consensus, snapshot |
-| `src/workflow/` | Agent engine, DAG scheduler, DSL parser, WAL, trace |
+| `src/workflow/` | Agent engine, DAG scheduler, DSL parser, autonomous ReAct agent loop (`wf_ai_react_loop.c`), WAL, trace |
 | `src/app/` | High-level app API, groups, routes, admin handlers |
 | `src/reflection/` | Reflection marshal/unmarshal/free (struct binding for JSON) |
-| `src/util/` | CPU flame graph (backtrace sampling) |
+| `src/util/` | CPU flame graph (backtrace sampling), RFC 4180 CSV parser & serializer (`csv.c`) |
+
 | `include/csilk/` | Public headers mirroring src/ layout (opaque handles only) |
 | `fuzz/` | libFuzzer harnesses: fuzz_test, fuzz_url, fuzz_yaml, fuzz_headers + corpus + dict |
 | `tests/` | Unit, integration, stress, and property-based tests per module |

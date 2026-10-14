@@ -710,7 +710,7 @@ sequenceDiagram
 
 ---
 
-## 7. 数据库驱动矩阵
+## 7. 数据库驱动矩阵与数据基础设施
 
 统一数据库驱动实现标准接口（`csilk/drivers/db.h`）：
 
@@ -720,6 +720,55 @@ sequenceDiagram
 | **运维成本** | ⭐ 1/5 无守护进程 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 驱动池管理 |
 | **读写吞吐量** | ~10K QPS（单写入） | ~50K QPS（集群） | ~80K QPS（集群） | ~60K QPS（分片集群） |
 | **数据一致性** | 强一致（单文件） | 最终一致（异步复制） | 强一致（WAL + Raft） | 最终一致（副本集） |
+
+### 7.1 原生预编译语句（Prepared Statements & Typed Bindings）
+
+为避免直接拼接 SQL 导致 SQL 注入风险并显著提升批量查询吞吐，csilk 在驱动层提供了统一的 `csilk_stmt_t` 接口：
+* **跨驱动统一生命周期**：`csilk_stmt_prepare`、`csilk_stmt_step`、`csilk_stmt_reset`、`csilk_stmt_finalize`。
+* **强类型参数绑定**：`csilk_stmt_bind_int`、`csilk_stmt_bind_int64`、`csilk_stmt_bind_double`、`csilk_stmt_bind_string`、`csilk_stmt_bind_blob`、`csilk_stmt_bind_null`。
+* **原生支持实现**：在 SQLite 下直接适配 `sqlite3_stmt`；在 PostgreSQL 驱动下通过 `PQprepare`、`PQexecPrepared` 原生实现，并具备客户端占位符转换（`?` 自动重写为 PostgreSQL 原生 `$1, $2, ...`）。
+
+### 7.2 嵌套事务作用域与 Savepoint 守卫
+
+传统事务模型在跨服务或跨用例调用时极易因为重复 `BEGIN` 或意外 `ROLLBACK` 破坏外层事务上下文。csilk 提供了 `csilk_tx_scope_t`：
+* **多层安全嵌套**：最外层自动开启底层数据库事务（`BEGIN TRANSACTION`），内层调用自动降级为保存点（`SAVEPOINT svp_1`, `svp_2`...）。
+* **部分回滚安全**：内层事务失败时执行 `csilk_tx_scope_rollback`，仅回滚至对应保存点（`ROLLBACK TO SAVEPOINT svp_N`），外层事务可选择捕获或继续。
+
+### 7.3 Flyway 风格数据库版本迁移引擎 (`csilk/drivers/db/migration.h`)
+
+为支撑生产环境无缝升级，csilk 内置了工业级 C 原生数据库迁移引擎：
+* **版本化脚本发现**：自动发现并按语义版本升序排列 `V<num>__<name>.sql` 迁移脚本。
+* **分布式并发互斥锁**：利用 `schema_migration_lock` 表与租约超时（Lease Timeout）心跳机制，确保集群多实例并发启动时严格只有一个实例执行 DDL。
+* **防篡改校验和**：采用 CRLF 归一化 SHA-256 校验和计算，检测历史已执行迁移文件的非法篡改。
+* **存量数据库自动基准化（Auto-Baseline）**：当挂载到非空历史数据库时，自动将基准版本标记为已执行，避免误清空生产数据。
+
+---
+
+## 7A. 智能体与数据增强基础设施
+
+### 7A.1 自主 ReAct Agent 运行循环与工具注册中心 (`csilk/app/workflow.h`, `csilk/drivers/ai/tool_registry.h`)
+
+* **原生工具调用循环**：`csilk_ai_react_loop_*` 提供了开箱即用的多步自主推理循环，严格支持执行预算约束（`max_iterations`, `timeout_ms`, `token_budget`, `tool_budget`）。
+* **动态工具注册中心**：`csilk_tool_registry_*` 统一管理宿主工具，自动生成与 OpenAI/Anthropic/Ollama 兼容的 JSON-Schema 声明，并执行参数校验与分发。
+
+### 7A.2 全链路 AI 追踪与可观测性 (`csilk/drivers/ai.h`)
+
+* **统一追踪容器**：`csilk_ai_trace_t` 纳秒级记录 LLM 请求延迟、Prompt/Completion Token 计数、Token 吞吐率（tokens/sec）及分步花费。
+* **嵌套 Tool Spans**：记录每个工具的输入参数、执行耗时、状态码与工具返回值，无缝桥接 APM 链路。
+
+### 7A.3 MCP Stdio 客户端进程复用池 (`csilk/protocols/mcp.h`)
+
+* **低延迟 IPC 管道**：基于 Model Context Protocol (MCP) JSON-RPC 规范，管理外部 MCP Server 子进程。
+* **资源优雅回收**：支持空闲 TTL 自动回收与按需拉起，杜绝孤儿进程僵尸占用。
+
+### 7A.4 云原生分层 Secret 密钥提供者 (`csilk/core/secret.h`)
+
+* **多级提供者链**：按优先级依次检索环境变量、本地安全内存、远程 Vault 密钥库，并配备断路器机制防止下游密钥库超时雪崩。
+
+### 7A.5 RFC 4180 CSV 解析与序列化引擎 (`csilk/util/csv.h`)
+
+* **高性能文本流解析**：严格遵循 RFC 4180 规范，毫秒级流式处理大规模 CSV 导入与导出，原生支持双引号转义、嵌入换行符以及 UTF-8 BOM 自动识别。
+
 
 ---
 
