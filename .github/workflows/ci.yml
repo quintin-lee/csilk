@@ -88,13 +88,31 @@ jobs:
       run: cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
 
     - name: Run unit tests
-      run: ctest --test-dir build -E test_integration --output-on-failure
+      run: |
+        if ! ctest --test-dir build -E test_integration --output-on-failure; then
+          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            while IFS=: read -r num name; do
+              err_msg=$(grep -A 25 "Test: $name" build/Testing/Temporary/LastTest.log 2>/dev/null | grep -E "Assertion|assert|error|fail|SIG|fault" | head -n 3 | tr '\n' ' ')
+              echo "::error title=Failed Test $num: $name::$name failed: ${err_msg:-check LastTest.log}"
+            done < build/Testing/Temporary/LastTestsFailed.log
+          fi
+          exit 1
+        fi
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
     - name: Run integration tests
-      run: ctest --test-dir build -R test_integration --output-on-failure
+      run: |
+        if ! ctest --test-dir build -R test_integration --output-on-failure; then
+          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            while IFS=: read -r num name; do
+              err_msg=$(grep -A 25 "Test: $name" build/Testing/Temporary/LastTest.log 2>/dev/null | grep -E "Assertion|assert|error|fail|SIG|fault" | head -n 3 | tr '\n' ' ')
+              echo "::error title=Failed Integration Test $num: $name::$name failed: ${err_msg:-check LastTest.log}"
+            done < build/Testing/Temporary/LastTestsFailed.log
+          fi
+          exit 1
+        fi
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
