@@ -746,16 +746,65 @@ sequenceDiagram
 
 ---
 
-## 7. Database Driver Matrix
+## 7. Database Driver Matrix & Data Infrastructure
 
 Unified database drivers implement a standard interface (`csilk/drivers/db.h`):
 
-| 维度 | SQLite | MySQL | PostgreSQL | MongoDB |
-|:-----|:------:|:-----:|:----------:|:------:|
-| **系统复杂度** | ⭐ 1/5 嵌入本地 | ⭐⭐⭐ 3/5 独立服务 | ⭐⭐⭐ 3/5 独立服务 | ⭐⭐⭐ 3/5 独立服务 |
-| **运维成本** | ⭐ 1/5 无守护进程 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 连接池管理 | ⭐⭐⭐ 3/5 驱动池管理 |
-| **读写吞吐量** | ~10K QPS (单写入) | ~50K QPS (集群) | ~80K QPS (集群) | ~60K QPS (分片集群) |
-| **数据一致性** | 强一致 (单文件) | 最终一致 (异步复制) | 强一致 (WAL + Raft) | 最终一致 (副本集) |
+| Metric | SQLite | MySQL | PostgreSQL | MongoDB |
+|:-------|:------:|:-----:|:----------:|:------:|
+| **System Complexity** | ⭐ 1/5 Embedded | ⭐⭐⭐ 3/5 Dedicated Server | ⭐⭐⭐ 3/5 Dedicated Server | ⭐⭐⭐ 3/5 Dedicated Server |
+| **Operational Overhead** | ⭐ 1/5 Daemonless | ⭐⭐⭐ 3/5 Pool Management | ⭐⭐⭐ 3/5 Pool Management | ⭐⭐⭐ 3/5 Driver Pool |
+| **I/O Throughput** | ~10K QPS (Single writer) | ~50K QPS (Clustered) | ~80K QPS (Clustered) | ~60K QPS (Sharded) |
+| **Data Consistency** | Strict (Single file) | Eventual (Async repl) | Strict (WAL + Raft) | Eventual (Replica set) |
+
+### 7.1 Native Prepared Statements & Typed Bindings
+
+To eliminate SQL injection vulnerabilities and achieve maximum batch throughput, csilk provides a unified `csilk_stmt_t` interface across drivers:
+* **Standardized Statement Lifecycle**: `csilk_stmt_prepare`, `csilk_stmt_step`, `csilk_stmt_reset`, `csilk_stmt_finalize`.
+* **Strongly Typed Bindings**: `csilk_stmt_bind_int`, `csilk_stmt_bind_int64`, `csilk_stmt_bind_double`, `csilk_stmt_bind_string`, `csilk_stmt_bind_blob`, `csilk_stmt_bind_null`.
+* **Native Driver Backends**: Directly backed by `sqlite3_stmt` under SQLite; implemented with `PQprepare` and `PQexecPrepared` with automatic client-side parameter rewriting (`?` rewritten to PostgreSQL `$1, $2, ...`).
+
+### 7.2 Nested Transaction Scope & Savepoint Guard
+
+Standard SQL transactions fail when nested services invoke overlapping `BEGIN` or unexpected `ROLLBACK` commands. csilk introduces `csilk_tx_scope_t`:
+* **Multi-Tier Nesting**: The outermost invocation initiates the underlying physical transaction (`BEGIN TRANSACTION`), while nested scopes seamlessly degrade to SQL savepoints (`SAVEPOINT svp_1`, `svp_2`...).
+* **Partial Failure Containment**: Nested failures trigger `csilk_tx_scope_rollback` to roll back exclusively to the designated savepoint (`ROLLBACK TO SAVEPOINT svp_N`), allowing parent orchestrators to handle or recover from errors.
+
+### 7.3 Flyway-Style Database Migration Engine (`csilk/drivers/db/migration.h`)
+
+To enable zero-downtime, automated schema upgrades across development and production:
+* **Versioned Script Discovery**: Automatically locates and orders migration files matching `V<num>__<name>.sql` conventions.
+* **Distributed Concurrency Mutex**: Coordinates multi-instance cluster startup via the `schema_migration_lock` table with lease timeouts and heartbeat renewals.
+* **Tamper-Evident Checksums**: Computes CRLF-normalized SHA-256 hashes to guarantee that applied migration scripts cannot be modified post-deployment.
+* **Auto-Baseline for Legacy Deployments**: Gracefully detects existing schemas and marks baseline migrations as applied without dropping production tables.
+
+---
+
+## 7A. Agentic & Data Infrastructure
+
+### 7A.1 Autonomous ReAct Agent Loop & Tool Registry (`csilk/app/workflow.h`, `csilk/drivers/ai/tool_registry.h`)
+
+* **Autonomous Multi-Step Execution**: `csilk_ai_react_loop_*` implements a production-grade ReAct execution loop with hard budget constraints (`max_iterations`, `timeout_ms`, `token_budget`, `tool_budget`).
+* **Dynamic Tool Registry**: `csilk_tool_registry_*` manages host tools, generates compliant JSON schemas for OpenAI/Anthropic/Ollama APIs, and dispatches validated arguments.
+
+### 7A.2 End-to-End AI Tracing & Observability (`csilk/drivers/ai.h`)
+
+* **Unified Tracing Container**: `csilk_ai_trace_t` measures nanosecond-level LLM latency, token usage (prompt, completion, total), token throughput (tokens/sec), and cost metrics.
+* **Nested Tool Execution Spans**: Records tool arguments, durations, return payloads, and HTTP status codes for full APM trace export.
+
+### 7A.3 Model Context Protocol (MCP) Stdio Client Pool (`csilk/protocols/mcp.h`)
+
+* **Low-Latency Subprocess IPC**: Implements JSON-RPC 2.0 communication with external MCP tool servers.
+* **Graceful Lifecycle & Idle TTL Reclamation**: Pools active client processes, supports request pipelining, and reclaims idle processes after TTL expiration.
+
+### 7A.4 Cloud-Native Tiered Secret Provider (`csilk/core/secret.h`)
+
+* **Tiered Resolution Chain**: Sequentially queries environment variables, local protected memory, and external secret vaults with circuit breakers to prevent downstream timeout cascades.
+
+### 7A.5 RFC 4180 CSV Engine (`csilk/util/csv.h`)
+
+* **High-Throughput Streaming Parser**: Compliant with RFC 4180 specification, supporting quoted fields, escaped quotes, embedded CRLF newlines, and automatic UTF-8 BOM detection.
+
 
 ---
 

@@ -28,8 +28,15 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🔌 **Extensible Hook system** for lifecycle events (Server, Connection, Request)
 - 🔧 **Pluggable Crypto Driver** for custom hashing and UUID algorithms
 - 🔐 **Pluggable Cipher Driver** for AES-256-GCM, RSA-OAEP, and RSA-PSS
-- 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB, Redis
+- 🗄️ **Pluggable Database Drivers** - SQLite, MySQL, PostgreSQL, MongoDB, Redis with **Native Prepared Statements** (`csilk_stmt_prepare`, `csilk_stmt_bind_*`) and **Nested Transaction Savepoint Guards** (`csilk_tx_scope_*`)
+- 🔄 **Flyway-Style Database Migration Engine** (`csilk/drivers/db/migration.h`) — Automatic `V<num>__<name>.sql` script discovery, distributed lease-lock mutex (`schema_migration_lock`), CRLF-normalized SHA-256 tamper checks, transactional execution, and legacy auto-baseline for SQLite & PostgreSQL
+- 🤖 **Autonomous AI ReAct Agent Loop & Tool Registry** (`csilk/app/workflow.h`, `csilk/drivers/ai/tool_registry.h`) — Native multi-step tool-calling ReAct loop (`csilk_ai_react_loop_*`) with budget controls and dynamic JSON-schema generation
+- 📊 **End-to-End AI Tracing & Observability** (`csilk/drivers/ai.h`) — Unified trace container (`csilk_ai_trace_t`) tracking prompt/completion tokens, latency, tokens/sec throughput, and nested tool execution spans
+- 🔌 **Model Context Protocol (MCP) Stdio Client Pool** (`csilk/protocols/mcp.h`) — Reusable process pool (`csilk_mcp_stdio_pool_*`) for MCP tools with TTL reclamation
+- 🔐 **Tiered Cloud-Native Secret Provider** (`csilk/core/secret.h`) — Multi-tiered resolution chain (Env -> Memory/Vault -> Fallback) with circuit breaker protection
+- 📄 **RFC 4180 CSV Engine** (`csilk/util/csv.h`) — Streaming RFC 4180 parser and serializer with BOM and escape handling
 - 🔧 Middleware support (logger, recovery, auth, CORS, CSRF, rate limiting, static files)
+
 - 🌐 RESTful API routing with parameter handling and route groups
 - 📦 High-Performance JSON support via yyjson (parse, serialize, error responses, reflection binding)
 - 🍪 Cookie parsing and setting (with Max-Age, Secure, HttpOnly, etc.)

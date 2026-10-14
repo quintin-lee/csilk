@@ -28,8 +28,15 @@
 - 🔌 **可扩展 Hook 系统** — 覆盖生命周期事件（Server、Connection、Request）
 - 🔧 **可插拔加密驱动** — 用于自定义哈希和 UUID 算法
 - 🔐 **可插拔密码驱动** — 支持 AES-256-GCM、RSA-OAEP 和 RSA-PSS
-- 🗄️ **可插拔数据库驱动** — SQLite、MySQL、PostgreSQL、MongoDB、Redis
+- 🗄️ **可插拔数据库驱动** — SQLite、MySQL、PostgreSQL、MongoDB、Redis，配备**原生预编译语句**（`csilk_stmt_prepare`、`csilk_stmt_bind_*`）与**保存点嵌套事务守卫**（`csilk_tx_scope_*`）
+- 🔄 **Flyway 风格数据库版本迁移引擎** (`csilk/drivers/db/migration.h`) — 自动化 `V<num>__<name>.sql` 发现、分布式并发租约锁（`schema_migration_lock`）、CRLF 归一化 SHA-256 防篡改校验、事务级执行与存量数据库自动基准化（全面支持 SQLite 与 PostgreSQL）
+- 🤖 **自主 AI ReAct Agent 运行循环与工具注册中心** (`csilk/app/workflow.h`, `csilk/drivers/ai/tool_registry.h`) — 原生多步工具调用 ReAct 循环（`csilk_ai_react_loop_*`），配备严格的迭代/超时/Token 预算控制与动态 JSON-Schema 生成
+- 📊 **全链路 AI 追踪与可观测性容器** (`csilk/drivers/ai.h`) — 统一追踪容器（`csilk_ai_trace_t`），记录端到端耗时、Token 吞吐率（tokens/sec）、成本核算与嵌套工具跨度
+- 🔌 **Model Context Protocol (MCP) Stdio 客户端池** (`csilk/protocols/mcp.h`) — 可复用的外部 MCP 服务进程池（`csilk_mcp_stdio_pool_*`），具备请求流水线与空闲 TTL 优雅回收
+- 🔐 **分层云原生 Secret 密钥提供者** (`csilk/core/secret.h`) — 多级密钥解析链（环境 -> 内存/Vault -> 默认），具备缓存与下游熔断器保护
+- 📄 **RFC 4180 CSV 高性能解析与序列化引擎** (`csilk/util/csv.h`) — 流式 RFC 4180 解析器，支持字段引号包裹、转义与 BOM 头处理
 - 🔧 中间件支持（logger、recovery、auth、CORS、CSRF、限流、静态文件）
+
 - 🌐 RESTful API 路由，支持参数处理和路由组
 - 📦 高性能 JSON 支持（通过 yyjson 解析、序列化、错误响应、反射绑定）
 - 🍪 Cookie 解析和设置（支持 Max-Age、Secure、HttpOnly 等）
