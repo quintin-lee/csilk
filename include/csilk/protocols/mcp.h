@@ -114,6 +114,68 @@ void csilk_mcp_client_free(csilk_mcp_client_t* client);
  */
 int csilk_mcp_client_import_tools(csilk_mcp_client_t* client, csilk_wf_t* wf);
 
+/* --- MCP Stdio Client Pool API --- */
+
+/**
+ * @brief Acquire an MCP stdio client associated with a specific key.
+ *
+ * If an idle client with matching key exists in the pool, it is reused.
+ * Otherwise, a new client is spawned and pooled.
+ *
+ * @param key Unique key for client pooling (e.g. server command or "user:server").
+ * @param command Executable command path.
+ * @param argv Command-line arguments array (NULL-terminated).
+ * @return Acquired MCP client pointer, or NULL on failure.
+ */
+csilk_mcp_client_t*
+csilk_mcp_stdio_pool_acquire_keyed(const char* key, const char* command, char* const argv[]);
+
+/**
+ * @brief Acquire an MCP stdio client for a command from the pool.
+ *
+ * Equivalent to csilk_mcp_stdio_pool_acquire_keyed(command, command, argv).
+ *
+ * @param command Executable command path.
+ * @param argv Command-line arguments array (NULL-terminated).
+ * @return Acquired MCP client pointer, or NULL on failure.
+ */
+csilk_mcp_client_t* csilk_mcp_stdio_pool_acquire(const char* command, char* const argv[]);
+
+/**
+ * @brief Release an MCP stdio client back to the pool for reuse.
+ *
+ * If the client was pooled, marks it idle and keeps the process alive.
+ * If the client was short-lived (not pooled), frees it immediately.
+ *
+ * @param client Client to release.
+ */
+void csilk_mcp_stdio_pool_release(csilk_mcp_client_t* client);
+
+/**
+ * @brief Evict idle clients whose inactivity exceeds ttl_seconds.
+ *
+ * @param ttl_seconds Inactivity threshold in seconds (<= 0 uses default 60s or env).
+ * @return Number of evicted clients.
+ */
+int csilk_mcp_stdio_pool_evict_idle(int ttl_seconds);
+
+/**
+ * @brief Shut down all active and idle clients in the pool.
+ *
+ * @return Number of destroyed clients.
+ */
+int csilk_mcp_stdio_pool_shutdown(void);
+
+/**
+ * @brief Get total number of pooled clients.
+ */
+size_t csilk_mcp_stdio_pool_get_count(void);
+
+/**
+ * @brief Get number of idle pooled clients.
+ */
+size_t csilk_mcp_stdio_pool_get_idle_count(void);
+
 #ifdef __cplusplus
 }
 #endif

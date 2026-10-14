@@ -272,9 +272,10 @@ set(CSILK_PROTOCOL_TESTS
     test_mcp_server_client
     test_mcp_server_core
     test_mcp_stdio
+    test_mcp_stdio_pool
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
