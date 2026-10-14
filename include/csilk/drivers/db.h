@@ -58,6 +58,13 @@ typedef struct csilk_stmt_s csilk_stmt_t;
 void* csilk_db_pool_get_connection(csilk_db_pool_t* pool);
 
 /**
+ * @brief Get the driver name of a database pool (e.g., "sqlite", "postgres").
+ * @param pool Database pool.
+ * @return Driver name, or NULL if pool is NULL or driver is unknown.
+ */
+const char* csilk_db_pool_get_driver_name(csilk_db_pool_t* pool);
+
+/**
  * @brief Set the driver-specific connection handle on a pool.
  * @param pool Database pool.
  * @param conn Opaque connection pointer.

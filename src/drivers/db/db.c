@@ -76,6 +76,12 @@ csilk_db_pool_get_connection(csilk_db_pool_t* pool)
     return pool ? pool->connection : NULL;
 }
 
+const char*
+csilk_db_pool_get_driver_name(csilk_db_pool_t* pool)
+{
+    return (pool && pool->driver) ? pool->driver->name : NULL;
+}
+
 /** @brief Store a driver-level connection handle.
  *
  * Typically called by the driver's connect() callback.  The pool takes

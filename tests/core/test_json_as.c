@@ -3,7 +3,9 @@
 #include <string.h>
 #include "csilk/core/json.h"
 
-int main(void) {
+int
+main(void)
+{
     csilk_json_t* obj = csilk_json_object();
     csilk_json_add_string(obj, "str_int", "42");
     csilk_json_add_string(obj, "str_double", "3.14159");
