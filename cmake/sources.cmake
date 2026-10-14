@@ -236,6 +236,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/protocols/mcp/mcp_jsonrpc.c
     src/protocols/mcp/mcp_server.c
     src/protocols/mcp/mcp_client.c
+    src/protocols/mcp/mcp_stdio_pool.c
 )
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────
