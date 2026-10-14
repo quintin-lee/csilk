@@ -24,6 +24,7 @@ set(CSILK_CORE_SOURCES
     src/core/config/config.c
     src/core/config/logger.c
     src/core/config/hooks.c
+    src/core/config/secret.c
     src/core/uring/uring_buf.c
     src/core/uring/uring_sqpoll.c
     src/core/uring/uring_vector.c

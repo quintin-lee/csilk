@@ -133,6 +133,7 @@ set(CSILK_CORE_TESTS
     test_rcu_lifecycle_stress
     test_sendfile_workers
     test_bounded_buf
+    test_secret
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -144,7 +145,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core
 )
 
 
