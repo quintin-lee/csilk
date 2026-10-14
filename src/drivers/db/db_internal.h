@@ -23,4 +23,9 @@ struct csilk_db_pool_s {
     csilk_mutex_t      mutex;
 };
 
+struct csilk_stmt_s {
+    csilk_db_pool_t* pool;
+    void*            handle;
+};
+
 #endif
