@@ -45,8 +45,6 @@ run_gzip(int         expect_async,
 {
     g_mock_body_len = body_len;
     csilk_ctx_t* c = csilk_test_ctx_new();
-    static char  mock_client_marker = 1;
-    _csilk_set_internal_client(c, &mock_client_marker);
 
     csilk_handler_t handlers[] = {csilk_gzip_middleware, mock_handler, nullptr};
     csilk_test_ctx_set_handlers(c, handlers);
