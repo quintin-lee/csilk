@@ -207,11 +207,13 @@ set(CSILK_WORKFLOW_TESTS
     test_workflow_hotreload
     test_wf_cluster_sm
     test_wf_wasm_node
+    test_ai_react_loop
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow
 )
 
 # -- Middleware tests --

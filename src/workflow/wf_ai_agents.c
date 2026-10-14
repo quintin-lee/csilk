@@ -22,25 +22,71 @@ agent_react_config_free(void* ptr)
     free(c);
 }
 
-/* ReAct node handler: runs the Thought/Action/Observation loop via ai_node_handler. */
+/* ReAct node handler: runs native Tool-Calling loop if tools exist, else falls back to ai_node_handler. */
 static csilk_data_t*
 agent_react_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
 {
-    (void)input;
     csilk_agent_react_config_t* config = (csilk_agent_react_config_t*)user_data;
-    if (!config) {
+    if (!config || !ctx) {
         return NULL;
     }
+
     const char* default_sys = "You are an AI ReAct Reasoning Agent. Follow the Thought, Action, "
                               "ActionInput, Observation cycle to solve the problem.";
-    csilk_ai_config_t ai_cfg = {
-        .model = config->model ? config->model : "gpt-3.5-turbo",
-        .system_msg = config->system_prompt ? config->system_prompt : default_sys,
-        .prompt = config->prompt ? config->prompt : "{{node.value}}",
-        .temperature = config->temperature > 0 ? config->temperature : 0.7,
-        .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
-        .stream = 0,
-        .max_history_messages = config->max_iterations > 0 ? config->max_iterations * 2 : 20};
+    const char* sys_msg = config->system_prompt ? config->system_prompt : default_sys;
+    const char* user_prompt = (input && input->value) ? (const char*)input->value
+                                                      : (config->prompt ? config->prompt : "");
+
+    if (ctx->wf && ctx->wf->tool_count > 0) {
+        csilk_ai_tool_registry_t* reg = csilk_ai_tool_registry_new();
+        if (reg) {
+            for (size_t i = 0; i < ctx->wf->tool_count; i++) {
+                csilk_ai_tool_registry_register(reg,
+                                                ctx->wf->tools[i].name,
+                                                ctx->wf->tools[i].description,
+                                                ctx->wf->tools[i].parameters_json,
+                                                (csilk_ai_tool_exec_fn)ctx->wf->tools[i].fn,
+                                                ctx->wf->tools[i].user_data);
+            }
+
+            csilk_ai_t* ai = csilk_ai_new("openai", NULL, NULL);
+            if (ai) {
+                char* final_text = NULL;
+                int   max_iter = config->max_iterations > 0 ? config->max_iterations : 10;
+                int   rc =
+                    csilk_ai_react_execute_loop(ai,
+                                                config->model ? config->model : "gpt-3.5-turbo",
+                                                sys_msg,
+                                                user_prompt,
+                                                reg,
+                                                max_iter,
+                                                NULL,
+                                                NULL,
+                                                &final_text);
+                csilk_ai_free(ai);
+                csilk_ai_tool_registry_free(reg);
+
+                if (rc == 0 && final_text) {
+                    csilk_data_t* out =
+                        csilk_wf_data_new(ctx, "text/plain", csilk_wf_strdup(ctx, final_text));
+                    free(final_text);
+                    return out;
+                }
+                free(final_text);
+            } else {
+                csilk_ai_tool_registry_free(reg);
+            }
+        }
+    }
+
+    csilk_ai_config_t ai_cfg = {.model = config->model ? config->model : "gpt-3.5-turbo",
+                                .system_msg = sys_msg,
+                                .prompt = config->prompt ? config->prompt : "{{node.value}}",
+                                .temperature = config->temperature > 0 ? config->temperature : 0.7,
+                                .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
+                                .stream = 0,
+                                .max_history_messages =
+                                    config->max_iterations > 0 ? config->max_iterations * 2 : 20};
     return ai_node_handler(ctx, input, &ai_cfg);
 }
 
