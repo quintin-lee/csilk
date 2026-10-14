@@ -26,6 +26,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
+#include "csilk/core/json.h"
 
 /** @brief Maximum number of AI driver backends that can be registered. */
 enum { MAX_DRIVERS = 8 };
@@ -284,3 +286,107 @@ void csilk_ai_context_clear(csilk_ai_context_t* ctx);
 
 /** @brief Free a conversation context. */
 void csilk_ai_context_free(csilk_ai_context_t* ctx);
+
+/* --- Full Lifecycle AI Trace & Cost Monitoring --- */
+
+/**
+ * @brief Context for end-to-end AI latency, token throughput, and cost tracing.
+ */
+typedef struct csilk_ai_trace_s {
+    int64_t         id;                /**< Trace identifier */
+    int64_t         user_id;           /**< User ID */
+    int64_t         session_id;        /**< Session / conversation ID */
+    char            provider[64];      /**< AI provider ("openai", "ollama", "deepseek") */
+    char            model[128];        /**< AI model identifier */
+    char*           input_messages;    /**< Serialized input messages JSON */
+    char*           output_content;    /**< Accumulated completion text */
+    char*           system_prompt;     /**< System prompt */
+    int             prompt_tokens;     /**< Prompt tokens */
+    int             completion_tokens; /**< Completion tokens */
+    int             total_tokens;      /**< Total tokens */
+    long            latency_ms;        /**< Total latency in milliseconds */
+    long            first_token_ms;    /**< Time to First Token (TTFT) in ms */
+    double          tokens_per_sec;    /**< Generation throughput (tokens/sec) */
+    double          cost_usd;          /**< Estimated cost in USD */
+    double          temperature;       /**< Sampling temperature */
+    int             max_tokens;        /**< Max tokens parameter */
+    double          top_p;             /**< Top-p parameter */
+    char            status[32];        /**< Completion status ("ok", "error") */
+    char*           error_message;     /**< Error message if failed */
+    char*           metadata;          /**< Custom metadata JSON */
+    struct timespec t_start;           /**< Monotonic start timestamp */
+    struct timespec t_first_token;     /**< Monotonic first token timestamp */
+    struct timespec t_end;             /**< Monotonic end timestamp */
+    int             has_first_token;   /**< Flag whether first token was recorded */
+    long            accumulated_len;   /**< Accumulated length of output bytes */
+    char            tool_spans[3072];  /**< Formatted tool spans JSON array */
+} csilk_ai_trace_t;
+
+/**
+ * @brief Initialize a trace struct on the stack or existing buffer.
+ */
+void csilk_ai_trace_init(csilk_ai_trace_t* t, int64_t user_id, int64_t session_id);
+
+/**
+ * @brief Allocate and initialize a new trace struct on the heap.
+ */
+csilk_ai_trace_t* csilk_ai_trace_new(int64_t user_id, int64_t session_id);
+
+/**
+ * @brief Free resources associated with a trace struct.
+ */
+void csilk_ai_trace_free(csilk_ai_trace_t* t);
+
+/**
+ * @brief Set provider and model identifiers on trace.
+ */
+void csilk_ai_trace_set_provider(csilk_ai_trace_t* t, const char* provider, const char* model);
+
+/**
+ * @brief Set inference parameters on trace.
+ */
+void
+csilk_ai_trace_set_params(csilk_ai_trace_t* t, double temperature, int max_tokens, double top_p);
+
+/**
+ * @brief Set system prompt on trace.
+ */
+void csilk_ai_trace_set_system_prompt(csilk_ai_trace_t* t, const char* prompt);
+
+/**
+ * @brief Append output text chunk and track first token timing if not yet recorded.
+ */
+void csilk_ai_trace_append_output(csilk_ai_trace_t* t, const char* chunk);
+
+/**
+ * @brief Explicitly record first token arrival time (TTFT).
+ */
+void csilk_ai_trace_record_first_token(csilk_ai_trace_t* t);
+
+/**
+ * @brief Heuristically estimate token count from mixed ASCII and CJK text.
+ */
+int csilk_ai_estimate_tokens_from_text(const char* text);
+
+/**
+ * @brief Calculate prompt and completion tokens and estimated cost in USD.
+ */
+void csilk_ai_trace_calculate_tokens_and_cost(csilk_ai_trace_t* t,
+                                              int               prompt_tokens,
+                                              int               completion_tokens);
+
+/**
+ * @brief Append a tool span execution record to the trace.
+ */
+void csilk_ai_trace_add_tool_span(
+    csilk_ai_trace_t* t, const char* name, long latency_ms, size_t bytes, int ok);
+
+/**
+ * @brief Finish trace measurement, compute total latency and tokens/sec throughput.
+ */
+void csilk_ai_trace_finish(csilk_ai_trace_t* t, const char* status, const char* error);
+
+/**
+ * @brief Serialize trace to a JSON object.
+ */
+csilk_json_t* csilk_ai_trace_to_json(const csilk_ai_trace_t* t);

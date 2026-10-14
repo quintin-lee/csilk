@@ -196,6 +196,7 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/ollama.c
     src/drivers/ai/openai.c
     src/drivers/ai/tool_registry.c
+    src/drivers/ai/ai_trace.c
 )
 
 # ── MQ Module (Message queue & Raft consensus) ───────────────────────────
