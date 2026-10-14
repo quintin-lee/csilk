@@ -299,9 +299,10 @@ set(CSILK_DATA_TESTS
     test_db_registry
     test_db_tx_scope
     test_db_stmt
+    test_db_migration
 )
 set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db;drivers/db
+    drivers;drivers;drivers/db;drivers/db;drivers/db
 )
 
 # -- AI / driver tests --

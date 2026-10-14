@@ -179,6 +179,9 @@ set(CSILK_DB_SOURCES
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
     src/drivers/db/tx_scope.c
+    src/drivers/db/migration/migration_checksum.c
+    src/drivers/db/migration/migration_lock.c
+    src/drivers/db/migration/migration_engine.c
     src/drivers/vector/vector.c
     src/drivers/vector/vector_simd.c
     src/drivers/vector/vector_hnsw.c
