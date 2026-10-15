@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <errno.h>
 #include "csilk/core/json.h"
 #include "csilk/reflection/reflect.h"
 #include "../ctx/ctx_internal.h"
@@ -803,4 +804,220 @@ csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path)
         return -1;
     }
     return csilk_h2_submit_push(c, method, path);
+}
+
+/* =========================================================================
+ * RESTful API Response Envelopes & Pagination Implementation
+ * ========================================================================= */
+
+static int64_t
+_csilk_parse_query_int_strict(const char* s, int64_t dflt)
+{
+    if (!s || *s == '\0') {
+        return dflt;
+    }
+    errno = 0;
+    char*     end = NULL;
+    long long v = strtoll(s, &end, 10);
+    if (errno != 0 || end == s || *end != '\0') {
+        return dflt;
+    }
+    return (int64_t)v;
+}
+
+void
+csilk_respond_ok(csilk_ctx_t* c, csilk_json_t* data)
+{
+    if (!c) {
+        if (data) {
+            csilk_json_free(data);
+        }
+        return;
+    }
+
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_int(root, "code", 0);
+    csilk_json_add_string(root, "message", "ok");
+    csilk_json_add_object(root, "data", data ? data : csilk_json_null());
+    csilk_json(c, CSILK_STATUS_OK, root);
+}
+
+void
+csilk_respond_ok_null(csilk_ctx_t* c)
+{
+    csilk_respond_ok(c, NULL);
+}
+
+static const char*
+_csilk_default_status_text(int status)
+{
+    switch (status) {
+    case 400: return "Bad Request";
+    case 401: return "Unauthorized";
+    case 403: return "Forbidden";
+    case 404: return "Not Found";
+    case 409: return "Conflict";
+    case 422: return "Unprocessable Entity";
+    case 429: return "Too Many Requests";
+    case 500: return "Internal Server Error";
+    case 502: return "Bad Gateway";
+    case 503: return "Service Unavailable";
+    case 504: return "Gateway Timeout";
+    default:  return "Error";
+    }
+}
+
+static bool
+_csilk_is_safe_json_string(const char* s)
+{
+    if (!s) {
+        return true;
+    }
+    for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
+        if (*p < 0x20 || *p == '"' || *p == '\\') {
+            return false;
+        }
+    }
+    return true;
+}
+
+void
+csilk_respond_fail(csilk_ctx_t* c, int http_status, int biz_code, const char* message)
+{
+    if (!c) {
+        return;
+    }
+
+    int code = (biz_code != 0) ? biz_code : http_status;
+    const char* msg = (message && message[0]) ? message : _csilk_default_status_text(http_status);
+
+    c->response.status = http_status;
+    csilk_set_header(c, "Content-Type", "application/json");
+    csilk_response_body_release(c);
+
+    /* Fast path: small, safe ASCII/UTF-8 strings formatted directly onto stack */
+    char stack_buf[512];
+    size_t msg_len = strlen(msg);
+    if (msg_len < 384 && _csilk_is_safe_json_string(msg)) {
+        int n = snprintf(stack_buf, sizeof(stack_buf), "{\"code\":%d,\"message\":\"%s\"}", code, msg);
+        if (n > 0 && (size_t)n < sizeof(stack_buf)) {
+            if (c->arena) {
+                c->response.body = csilk_arena_strndup(c->arena, stack_buf, (size_t)n);
+                c->response.body_len = (size_t)n;
+                c->response.body_ownership = CSILK_OWN_ARENA;
+                return;
+            }
+        }
+    }
+
+    /* Fallback: construct full JSON AST for escaping compliance */
+    csilk_json_t* root = csilk_json_object();
+    csilk_json_add_int(root, "code", code);
+    csilk_json_add_string(root, "message", msg);
+    char* body = csilk_json_serialize(root, NULL);
+    csilk_json_free(root);
+
+    if (body) {
+        c->response.body = body;
+        c->response.body_len = strlen(body);
+        c->response.body_ownership = CSILK_OWN_HEAP;
+    }
+}
+
+void
+csilk_respond_bad_request(csilk_ctx_t* c, int biz_code, const char* msg)
+{
+    csilk_respond_fail(c, CSILK_STATUS_BAD_REQUEST, biz_code, msg);
+}
+
+void
+csilk_respond_unauthorized(csilk_ctx_t* c, int biz_code, const char* msg)
+{
+    csilk_respond_fail(c, CSILK_STATUS_UNAUTHORIZED, biz_code, msg);
+}
+
+void
+csilk_respond_forbidden(csilk_ctx_t* c, int biz_code, const char* msg)
+{
+    csilk_respond_fail(c, CSILK_STATUS_FORBIDDEN, biz_code, msg);
+}
+
+void
+csilk_respond_not_found(csilk_ctx_t* c, int biz_code, const char* msg)
+{
+    csilk_respond_fail(c, CSILK_STATUS_NOT_FOUND, biz_code, msg);
+}
+
+void
+csilk_respond_conflict(csilk_ctx_t* c, int biz_code, const char* msg)
+{
+    csilk_respond_fail(c, CSILK_STATUS_CONFLICT, biz_code, msg);
+}
+
+void
+csilk_parse_pagination(csilk_ctx_t* c,
+                       int64_t*     out_page,
+                       int64_t*     out_page_size,
+                       int64_t      default_size,
+                       int64_t      max_size)
+{
+    int64_t dflt_sz = (default_size > 0) ? default_size : 20;
+    int64_t max_sz = (max_size > 0) ? max_size : 500;
+
+    const char* q_page = c ? csilk_get_query(c, "page") : NULL;
+    const char* q_size = c ? csilk_get_query(c, "page_size") : NULL;
+
+    int64_t p = _csilk_parse_query_int_strict(q_page, 1);
+    int64_t s = _csilk_parse_query_int_strict(q_size, dflt_sz);
+
+    if (p < 1) {
+        p = 1;
+    }
+    if (s < 1) {
+        s = dflt_sz;
+    }
+    if (s > max_sz) {
+        s = max_sz;
+    }
+
+    if (out_page) {
+        *out_page = p;
+    }
+    if (out_page_size) {
+        *out_page_size = s;
+    }
+}
+
+void
+csilk_respond_page_ex(csilk_ctx_t* c,
+                      const char*   array_key,
+                      csilk_json_t* items,
+                      int64_t       total,
+                      int64_t       page,
+                      int64_t       page_size)
+{
+    if (!c) {
+        if (items) {
+            csilk_json_free(items);
+        }
+        return;
+    }
+
+    const char* key = (array_key && array_key[0]) ? array_key : "items";
+    csilk_json_t* data = csilk_json_object();
+    csilk_json_add_object(data, key, items ? items : csilk_json_array());
+    csilk_json_add_int(data, "total", total);
+    csilk_json_add_int(data, "page", page);
+    csilk_json_add_int(data, "page_size", page_size);
+    csilk_respond_ok(c, data);
+}
+
+void
+csilk_respond_page(csilk_ctx_t* c,
+                   csilk_json_t* items,
+                   int64_t       total,
+                   int64_t       page,
+                   int64_t       page_size)
+{
+    csilk_respond_page_ex(c, "items", items, total, page, page_size);
 }
