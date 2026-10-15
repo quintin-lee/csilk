@@ -72,6 +72,7 @@ set(CSILK_CORE_TESTS
     test_radix
     test_redirect
     test_response
+    test_response_envelope
     test_response_ownership
     test_router
     test_middleware_chain
@@ -145,7 +146,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
 )
 
 

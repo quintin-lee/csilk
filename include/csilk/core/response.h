@@ -284,3 +284,97 @@ void csilk_response_on_drain(csilk_ctx_t* c,
  * @return The promised stream ID on success, or < 0 on error.
  */
 int32_t csilk_push_promise(csilk_ctx_t* c, const char* method, const char* path);
+
+/* =========================================================================
+ * RESTful API Response Envelopes & Pagination Helpers
+ * ========================================================================= */
+
+/**
+ * @brief Send a standard success response (HTTP 200, code: 0).
+ *
+ * Produces {"code": 0, "message": "ok", "data": <data>}.
+ * Takes ownership of the data JSON node. If data is NULL, sets "data": null.
+ *
+ * @param c    The request context (must not be NULL).
+ * @param data The payload JSON element (ownership transferred to framework).
+ */
+void csilk_respond_ok(csilk_ctx_t* c, csilk_json_t* data);
+
+/**
+ * @brief Send an empty success response (HTTP 200, code: 0, data: null).
+ *
+ * @param c The request context.
+ */
+void csilk_respond_ok_null(csilk_ctx_t* c);
+
+/**
+ * @brief Send a structured business error response.
+ *
+ * Produces {"code": <biz_code>, "message": "<message>"}.
+ *
+ * @param c           The request context.
+ * @param http_status HTTP status code (e.g., 400, 401, 404, 500).
+ * @param biz_code    Application-defined error code (if 0, falls back to http_status).
+ * @param message     Human-readable error description (if NULL, uses default status text).
+ */
+void csilk_respond_fail(csilk_ctx_t* c, int http_status, int biz_code, const char* message);
+
+/* Semantic error helpers (uses default biz_code if biz_code == 0) */
+void csilk_respond_bad_request(csilk_ctx_t* c, int biz_code, const char* msg);  /* 400 */
+void csilk_respond_unauthorized(csilk_ctx_t* c, int biz_code, const char* msg); /* 401 */
+void csilk_respond_forbidden(csilk_ctx_t* c, int biz_code, const char* msg);    /* 403 */
+void csilk_respond_not_found(csilk_ctx_t* c, int biz_code, const char* msg);    /* 404 */
+void csilk_respond_conflict(csilk_ctx_t* c, int biz_code, const char* msg);     /* 409 */
+
+/**
+ * @brief Strictly parse pagination parameters from query string (page, page_size).
+ *
+ * Safely parses with strtoll. Clamps page >= 1 (default 1).
+ * Clamps page_size in [1, max_size] (default default_size).
+ *
+ * @param c             The request context.
+ * @param out_page      Pointer to output page number.
+ * @param out_page_size Pointer to output page size.
+ * @param default_size  Default page size if absent/invalid (<=0 defaults to 20).
+ * @param max_size      Maximum allowed page size (<=0 defaults to 500).
+ */
+void csilk_parse_pagination(csilk_ctx_t* c,
+                            int64_t*     out_page,
+                            int64_t*     out_page_size,
+                            int64_t      default_size,
+                            int64_t      max_size);
+
+/**
+ * @brief Send a standard paginated response with "items" as the array key.
+ *
+ * Produces {"code": 0, "message": "ok", "data": {"items": [...], "total": N, "page": P, "page_size": S}}.
+ * Takes ownership of items JSON array.
+ *
+ * @param c         The request context.
+ * @param items     JSON array of records (ownership transferred; if NULL, uses []).
+ * @param total     Total count of matching records.
+ * @param page      Current page index (1-based).
+ * @param page_size Page size.
+ */
+void csilk_respond_page(csilk_ctx_t* c,
+                        csilk_json_t* items,
+                        int64_t       total,
+                        int64_t       page,
+                        int64_t       page_size);
+
+/**
+ * @brief Send a paginated response with a custom array key (e.g. "list").
+ *
+ * @param c         The request context.
+ * @param array_key The JSON key for the items array (defaults to "items" if NULL/empty).
+ * @param items     JSON array of records (ownership transferred).
+ * @param total     Total record count.
+ * @param page      Current page.
+ * @param page_size Page size.
+ */
+void csilk_respond_page_ex(csilk_ctx_t* c,
+                           const char*   array_key,
+                           csilk_json_t* items,
+                           int64_t       total,
+                           int64_t       page,
+                           int64_t       page_size);
