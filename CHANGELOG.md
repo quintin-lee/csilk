@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **RESTful Response Envelopes & Strict Pagination Query Helpers** (`csilk/core/response.h`):
+  - Standardized success response helpers (`csilk_respond_ok`, `csilk_respond_ok_null`) generating `{"code":0,"message":"ok","data":...}` with automatic JSON ownership transfer.
+  - Hybrid error response helpers (`csilk_respond_fail`, `csilk_respond_bad_request`, `csilk_respond_unauthorized`, `csilk_respond_forbidden`, `csilk_respond_not_found`, `csilk_respond_conflict`) producing `{"code":<biz_code>,"message":"<msg>"}` with explicit HTTP status codes, default status text fallbacks, and an Arena stack-buffer zero-heap fast path.
+  - Robust integer query parser and pagination helper (`csilk_parse_pagination`) with `strtoll` bounds checking, overflow protection, and boundary clamping.
+  - Standardized pagination responses (`csilk_respond_page` with OpenAPI default `"items"` key, and `csilk_respond_page_ex` supporting custom collection keys like `"list"`).
 - **Flyway-Style Database Schema Migration Engine** (`csilk/drivers/db/migration.h`):
   - Discover and sort versioned SQL scripts following `V<num>__<name>.sql` naming conventions.
   - Distributed concurrency lock table (`schema_migration_lock`) with lease timeouts to prevent multi-instance migration races.

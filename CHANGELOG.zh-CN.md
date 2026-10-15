@@ -8,6 +8,11 @@
 ## [Unreleased]
 
 ### 新增
+- **RESTful API 统一响应信封与严格分页解析器** (`csilk/core/response.h`):
+  - 提供标准成功响应函数（`csilk_respond_ok`、`csilk_respond_ok_null`），生成 `{"code":0,"message":"ok","data":...}` 并自动接管 JSON 内存所有权。
+  - 提供灵活混合模式错误响应函数（`csilk_respond_fail`、`csilk_respond_bad_request`、`csilk_respond_unauthorized`、`csilk_respond_forbidden`、`csilk_respond_not_found`、`csilk_respond_conflict`），显式支持 HTTP 状态码与业务 code，并在常见错误路径上利用 Arena 栈缓冲实现零堆内存分配。
+  - 提供基于 `strtoll` 的严格 Query 参数解析与分页提取器（`csilk_parse_pagination`），具备溢出保护、边界截断与默认值回退。
+  - 提供标准化分页响应函数（`csilk_respond_page` 默认使用 OpenAPI `"items"` 键，`csilk_respond_page_ex` 支持 `"list"` 等自定义集合键名）。
 - **Flyway 风格数据库版本迁移引擎** (`csilk/drivers/db/migration.h`):
   - 自动化版本化 SQL 脚本发现与排序（遵循 `V<num>__<name>.sql` 命名约定）。
   - 分布式并发锁表（`schema_migration_lock`）与租约超时机制，杜绝多实例部署环境下的迁移竞态冲突。
