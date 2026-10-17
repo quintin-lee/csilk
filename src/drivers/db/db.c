@@ -623,6 +623,14 @@ csilk_db_register_driver(const char* name, csilk_db_driver_t* driver)
     ensure_registry_init();
 
     csilk_mutex_lock(&registry_mutex);
+    for (int i = 0; i < driver_count; i++) {
+        if (strcmp(drivers[i]->name, name) == 0) {
+            drivers[i] = driver;
+            CSILK_LOG_I("Overwrote database driver: '%s'", name);
+            csilk_mutex_unlock(&registry_mutex);
+            return 0;
+        }
+    }
     if (driver_count >= 16) {
         CSILK_LOG_E("Failed to register database driver '%s': registry is full", name);
         csilk_mutex_unlock(&registry_mutex);
