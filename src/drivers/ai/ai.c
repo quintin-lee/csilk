@@ -450,6 +450,9 @@ free_async_chat_req(async_chat_req_t* ar)
     free((char*)ar->req_copy.model);
     free((char*)ar->req_copy.user);
     free((char*)ar->req_copy.tool_choice);
+    if (ar->req_copy.chat_template_kwargs) {
+        csilk_json_free((csilk_json_t*)ar->req_copy.chat_template_kwargs);
+    }
     if (ar->messages_copy) {
         for (size_t i = 0; i < ar->req_copy.message_count; i++) {
             free((char*)ar->messages_copy[i].role);
@@ -550,6 +553,8 @@ csilk_ai_chat_async(csilk_ai_t*                    ai,
     ar->req_copy.model = req->model ? strdup(req->model) : NULL;
     ar->req_copy.user = req->user ? strdup(req->user) : NULL;
     ar->req_copy.tool_choice = req->tool_choice ? strdup(req->tool_choice) : NULL;
+    ar->req_copy.chat_template_kwargs =
+        req->chat_template_kwargs ? csilk_json_copy((csilk_json_t*)req->chat_template_kwargs) : NULL;
     if (req->messages && req->message_count > 0) {
         ar->messages_copy = calloc(req->message_count, sizeof(csilk_ai_message_t));
         if (ar->messages_copy) {
