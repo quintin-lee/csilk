@@ -131,6 +131,9 @@ typedef struct {
     const char*         tool_choice;       /**< "none", "auto", or "required". */
     const char*
         reasoning_effort; /**< "low", "medium", or "high" for extended reasoning models (o1/o3). */
+    bool                has_enable_thinking; /**< True if enable_thinking was explicitly specified */
+    bool                enable_thinking;     /**< Controls thinking mode via chat_template_kwargs.enable_thinking */
+    const csilk_json_t* chat_template_kwargs; /**< Optional additional template parameters */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
