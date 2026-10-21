@@ -122,6 +122,8 @@ typedef struct {
     const char*         user;              /**< Unique identifier for the end-user. */
     bool                stream;            /**< Enable streaming mode. */
     csilk_ai_stream_cb  on_chunk;          /**< Callback invoked for each chunk in stream mode. */
+    csilk_ai_stream_cb
+        on_reasoning_chunk; /**< Callback invoked for each reasoning/thinking chunk in stream mode. */
     void*               user_data;         /**< User context for the stream callback. */
     int                 timeout_ms;        /**< Request timeout in milliseconds (0 for default). */
     csilk_ai_tool_t*    tools;             /**< Available tools for the model. */
@@ -134,6 +136,7 @@ typedef struct {
 /** @brief Response data from a chat completion. */
 typedef struct {
     char*                 content;           /**< Generated text content (heap-allocated). */
+    char*                 reasoning_content; /**< Generated thinking / reasoning content (heap-allocated). */
     csilk_ai_tool_call_t* tool_calls;        /**< Array of tool calls (heap-allocated). */
     size_t                tool_call_count;   /**< Number of tool calls. */
     int                   prompt_tokens;     /**< Tokens used in the prompt. */

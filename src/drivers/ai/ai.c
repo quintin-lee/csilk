@@ -778,6 +778,7 @@ csilk_ai_chat_response_free(csilk_ai_chat_response_t* res)
         return;
     }
     free(res->content);
+    free(res->reasoning_content);
     if (res->tool_calls) {
         for (size_t i = 0; i < res->tool_call_count; i++) {
             free(res->tool_calls[i].id);

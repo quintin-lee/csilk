@@ -203,7 +203,32 @@ process_stream_line(struct curl_context* ctx, const char* line)
                 }
             }
 
-            /* 2b. Streamed Tool Calling Reassembly (delta.tool_calls) */
+            /* 2b. Real-time reasoning/thinking token dispatch */
+            csilk_json_t* reasoning = csilk_json_get(delta, "reasoning_content");
+            if (!reasoning) {
+                reasoning = csilk_json_get(delta, "reasoning");
+            }
+            if (csilk_json_is_string(reasoning)) {
+                const char* r_str = csilk_json_string_value(reasoning);
+                size_t      rlen = strlen(r_str);
+                if (rlen > 0) {
+                    size_t cur_rlen =
+                        ctx->res->reasoning_content ? strlen(ctx->res->reasoning_content) : 0;
+                    char* new_r = realloc(ctx->res->reasoning_content, cur_rlen + rlen + 1);
+                    if (new_r) {
+                        ctx->res->reasoning_content = new_r;
+                        memcpy(ctx->res->reasoning_content + cur_rlen, r_str, rlen);
+                        ctx->res->reasoning_content[cur_rlen + rlen] = '\0';
+                    }
+
+                    /* Forward reasoning chunk to user streaming callback */
+                    if (ctx->req->on_reasoning_chunk) {
+                        ctx->req->on_reasoning_chunk(r_str, ctx->req->user_data);
+                    }
+                }
+            }
+
+            /* 2c. Streamed Tool Calling Reassembly (delta.tool_calls) */
             csilk_json_t* tool_calls = csilk_json_get(delta, "tool_calls");
             if (csilk_json_is_array(tool_calls)) {
                 size_t tc_count = csilk_json_array_size(tool_calls);
@@ -592,6 +617,13 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
             if (csilk_json_is_string(content)) {
                 res->content = strdup(csilk_json_string_value(content));
             }
+            csilk_json_t* reasoning = csilk_json_get(msg, "reasoning_content");
+            if (!reasoning) {
+                reasoning = csilk_json_get(msg, "reasoning");
+            }
+            if (csilk_json_is_string(reasoning)) {
+                res->reasoning_content = strdup(csilk_json_string_value(reasoning));
+            }
             /* Extract tool calls if the model requested function invocations */
             csilk_json_t* tcalls = csilk_json_get(msg, "tool_calls");
             if (csilk_json_is_array(tcalls)) {
@@ -629,7 +661,9 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     curl_easy_cleanup(curl);
-    return (res->content != NULL || res->tool_call_count > 0) ? 0 : -1;
+    return (res->content != NULL || res->reasoning_content != NULL || res->tool_call_count > 0)
+               ? 0
+               : -1;
 }
 
 /**
