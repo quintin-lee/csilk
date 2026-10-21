@@ -356,11 +356,8 @@ void csilk_parse_pagination(csilk_ctx_t* c,
  * @param page      Current page index (1-based).
  * @param page_size Page size.
  */
-void csilk_respond_page(csilk_ctx_t* c,
-                        csilk_json_t* items,
-                        int64_t       total,
-                        int64_t       page,
-                        int64_t       page_size);
+void csilk_respond_page(
+    csilk_ctx_t* c, csilk_json_t* items, int64_t total, int64_t page, int64_t page_size);
 
 /**
  * @brief Send a paginated response with a custom array key (e.g. "list").
@@ -372,7 +369,7 @@ void csilk_respond_page(csilk_ctx_t* c,
  * @param page      Current page.
  * @param page_size Page size.
  */
-void csilk_respond_page_ex(csilk_ctx_t* c,
+void csilk_respond_page_ex(csilk_ctx_t*  c,
                            const char*   array_key,
                            csilk_json_t* items,
                            int64_t       total,

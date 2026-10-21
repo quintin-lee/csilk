@@ -298,8 +298,8 @@ ensure_schema_migrations_and_baseline(csilk_migration_engine_t* engine)
             int           rc = csilk_stmt_prepare(
                 engine->pool,
                 "INSERT INTO schema_migrations (version, name, checksum, applied_at, "
-                          "execution_time_ms, execution_time) "
-                          "VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0, 0);",
+                "execution_time_ms, execution_time) "
+                "VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0, 0);",
                 &stmt);
             if (rc != 0 || !stmt) {
                 free(items);
@@ -594,8 +594,8 @@ csilk_migration_apply(csilk_migration_engine_t* engine, int* out_applied_count)
         int           ins_rc = csilk_stmt_prepare(
             engine->pool,
             "INSERT INTO schema_migrations (version, name, checksum, applied_at, "
-                      "execution_time_ms, execution_time) "
-                      "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?);",
+            "execution_time_ms, execution_time) "
+            "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?);",
             &ins_stmt);
         if (ins_rc == 0 && ins_stmt) {
             csilk_stmt_bind_int64(ins_stmt, 1, items[i].version);

@@ -17,24 +17,24 @@ static int tests_run = 0;
 static int tests_passed = 0;
 
 #define PASS() (tests_run++, tests_passed++)
-#define FAIL(msg)                                                              \
-    do {                                                                       \
-        tests_run++;                                                           \
-        printf("  FAIL: %s (line %d)\n", msg, __LINE__);                       \
+#define FAIL(msg)                                                                                  \
+    do {                                                                                           \
+        tests_run++;                                                                               \
+        printf("  FAIL: %s (line %d)\n", msg, __LINE__);                                           \
     } while (0)
 
 static void
 test_respond_ok_with_data(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t*  c = csilk_test_ctx_new();
     csilk_json_t* data = csilk_json_object();
     csilk_json_add_string(data, "name", "csilk");
 
     csilk_respond_ok(c, data);
 
-    size_t len = 0;
+    size_t      len = 0;
     const char* body = csilk_get_response_body(c, &len);
-    int status = csilk_get_status(c);
+    int         status = csilk_get_status(c);
 
     if (status != 200) {
         FAIL("status must be 200");
@@ -54,9 +54,9 @@ test_respond_ok_null(void)
     csilk_ctx_t* c = csilk_test_ctx_new();
     csilk_respond_ok_null(c);
 
-    size_t len = 0;
+    size_t      len = 0;
     const char* body = csilk_get_response_body(c, &len);
-    int status = csilk_get_status(c);
+    int         status = csilk_get_status(c);
 
     if (status != 200) {
         FAIL("status must be 200");
@@ -75,9 +75,9 @@ test_respond_fail_and_semantics(void)
     csilk_ctx_t* c = csilk_test_ctx_new();
     csilk_respond_fail(c, 400, 1002, "invalid parameter");
 
-    size_t len = 0;
+    size_t      len = 0;
     const char* body = csilk_get_response_body(c, &len);
-    int status = csilk_get_status(c);
+    int         status = csilk_get_status(c);
 
     if (status != 400) {
         FAIL("status must be 400");
@@ -138,18 +138,17 @@ test_parse_pagination(void)
 static void
 test_respond_page_and_ex(void)
 {
-    csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_ctx_t*  c = csilk_test_ctx_new();
     csilk_json_t* arr = csilk_json_array();
     csilk_json_array_append(arr, csilk_json_string_new("item1"));
 
     csilk_respond_page(c, arr, 42, 2, 20);
 
-    size_t len = 0;
+    size_t      len = 0;
     const char* body = csilk_get_response_body(c, &len);
 
     if (!body || strstr(body, "\"items\":[\"item1\"]") == NULL ||
-        strstr(body, "\"total\":42") == NULL ||
-        strstr(body, "\"page\":2") == NULL ||
+        strstr(body, "\"total\":42") == NULL || strstr(body, "\"page\":2") == NULL ||
         strstr(body, "\"page_size\":20") == NULL) {
         FAIL("default page response must contain items, total, page, page_size");
     } else {

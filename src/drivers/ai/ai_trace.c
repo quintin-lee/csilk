@@ -234,12 +234,12 @@ csilk_ai_trace_add_tool_span(
     }
     char entry[256];
     int  n = snprintf(entry,
-                     sizeof(entry),
-                     "{\"name\":\"%s\",\"latency_ms\":%ld,\"bytes\":%zu,\"ok\":%d}",
-                     name,
-                     latency_ms,
-                     bytes,
-                     ok ? 1 : 0);
+                      sizeof(entry),
+                      "{\"name\":\"%s\",\"latency_ms\":%ld,\"bytes\":%zu,\"ok\":%d}",
+                      name,
+                      latency_ms,
+                      bytes,
+                      ok ? 1 : 0);
     if (n < 0) {
         return;
     }
