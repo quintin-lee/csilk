@@ -852,18 +852,30 @@ static const char*
 _csilk_default_status_text(int status)
 {
     switch (status) {
-    case 400: return "Bad Request";
-    case 401: return "Unauthorized";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 409: return "Conflict";
-    case 422: return "Unprocessable Entity";
-    case 429: return "Too Many Requests";
-    case 500: return "Internal Server Error";
-    case 502: return "Bad Gateway";
-    case 503: return "Service Unavailable";
-    case 504: return "Gateway Timeout";
-    default:  return "Error";
+    case 400:
+        return "Bad Request";
+    case 401:
+        return "Unauthorized";
+    case 403:
+        return "Forbidden";
+    case 404:
+        return "Not Found";
+    case 409:
+        return "Conflict";
+    case 422:
+        return "Unprocessable Entity";
+    case 429:
+        return "Too Many Requests";
+    case 500:
+        return "Internal Server Error";
+    case 502:
+        return "Bad Gateway";
+    case 503:
+        return "Service Unavailable";
+    case 504:
+        return "Gateway Timeout";
+    default:
+        return "Error";
     }
 }
 
@@ -888,7 +900,7 @@ csilk_respond_fail(csilk_ctx_t* c, int http_status, int biz_code, const char* me
         return;
     }
 
-    int code = (biz_code != 0) ? biz_code : http_status;
+    int         code = (biz_code != 0) ? biz_code : http_status;
     const char* msg = (message && message[0]) ? message : _csilk_default_status_text(http_status);
 
     c->response.status = http_status;
@@ -896,10 +908,11 @@ csilk_respond_fail(csilk_ctx_t* c, int http_status, int biz_code, const char* me
     csilk_response_body_release(c);
 
     /* Fast path: small, safe ASCII/UTF-8 strings formatted directly onto stack */
-    char stack_buf[512];
+    char   stack_buf[512];
     size_t msg_len = strlen(msg);
     if (msg_len < 384 && _csilk_is_safe_json_string(msg)) {
-        int n = snprintf(stack_buf, sizeof(stack_buf), "{\"code\":%d,\"message\":\"%s\"}", code, msg);
+        int n =
+            snprintf(stack_buf, sizeof(stack_buf), "{\"code\":%d,\"message\":\"%s\"}", code, msg);
         if (n > 0 && (size_t)n < sizeof(stack_buf)) {
             if (c->arena) {
                 c->response.body = csilk_arena_strndup(c->arena, stack_buf, (size_t)n);
@@ -989,7 +1002,7 @@ csilk_parse_pagination(csilk_ctx_t* c,
 }
 
 void
-csilk_respond_page_ex(csilk_ctx_t* c,
+csilk_respond_page_ex(csilk_ctx_t*  c,
                       const char*   array_key,
                       csilk_json_t* items,
                       int64_t       total,
@@ -1003,7 +1016,7 @@ csilk_respond_page_ex(csilk_ctx_t* c,
         return;
     }
 
-    const char* key = (array_key && array_key[0]) ? array_key : "items";
+    const char*   key = (array_key && array_key[0]) ? array_key : "items";
     csilk_json_t* data = csilk_json_object();
     csilk_json_add_object(data, key, items ? items : csilk_json_array());
     csilk_json_add_int(data, "total", total);
@@ -1013,11 +1026,8 @@ csilk_respond_page_ex(csilk_ctx_t* c,
 }
 
 void
-csilk_respond_page(csilk_ctx_t* c,
-                   csilk_json_t* items,
-                   int64_t       total,
-                   int64_t       page,
-                   int64_t       page_size)
+csilk_respond_page(
+    csilk_ctx_t* c, csilk_json_t* items, int64_t total, int64_t page, int64_t page_size)
 {
     csilk_respond_page_ex(c, "items", items, total, page, page_size);
 }
