@@ -524,6 +524,17 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         csilk_json_add_string(root, "reasoning_effort", req->reasoning_effort);
     }
 
+    /* Thinking / reasoning mode control (Agnes, Qwen, vLLM chat_template_kwargs) */
+    if (req->chat_template_kwargs || req->has_enable_thinking) {
+        csilk_json_t* ctk = req->chat_template_kwargs
+                                ? csilk_json_copy((csilk_json_t*)req->chat_template_kwargs)
+                                : csilk_json_object();
+        if (req->has_enable_thinking) {
+            csilk_json_add_bool(ctk, "enable_thinking", req->enable_thinking);
+        }
+        csilk_json_add_object(root, "chat_template_kwargs", ctk);
+    }
+
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
 
