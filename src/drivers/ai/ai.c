@@ -554,7 +554,8 @@ csilk_ai_chat_async(csilk_ai_t*                    ai,
     ar->req_copy.user = req->user ? strdup(req->user) : NULL;
     ar->req_copy.tool_choice = req->tool_choice ? strdup(req->tool_choice) : NULL;
     ar->req_copy.chat_template_kwargs =
-        req->chat_template_kwargs ? csilk_json_copy((csilk_json_t*)req->chat_template_kwargs) : NULL;
+        req->chat_template_kwargs ? csilk_json_copy((csilk_json_t*)req->chat_template_kwargs)
+                                  : NULL;
     if (req->messages && req->message_count > 0) {
         ar->messages_copy = calloc(req->message_count, sizeof(csilk_ai_message_t));
         if (ar->messages_copy) {

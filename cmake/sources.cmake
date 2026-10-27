@@ -21,6 +21,7 @@ set(CSILK_CRYPTO_SOURCES
     src/crypto/uuid.c
     src/crypto/crypto.c
     src/crypto/bcrypt.c
+    src/crypto/totp.c
     src/drivers/cipher/openssl.c
 )
 
@@ -34,6 +35,7 @@ set(CSILK_RUNTIME_SOURCES
     src/core/config/logger.c
     src/core/config/hooks.c
     src/core/config/hot_reload.c
+    src/core/config/secret.c
     src/core/uring/uring_buf.c
     src/core/uring/uring_sqpoll.c
     src/core/uring/uring_vector.c
@@ -141,13 +143,33 @@ set(CSILK_HTTP2_SOURCES
     src/protocols/h3.c
 )
 
+# ── Vector Module (HNSW + vector DB drivers) ───────────────────────────
+set(CSILK_VECTOR_SOURCES
+    src/drivers/vector/vector.c
+    src/drivers/vector/vector_hnsw.c
+    src/drivers/vector/vector_simd.c
+    src/drivers/vector/milvus.c
+    src/drivers/vector/qdrant.c
+)
+
 # ── Database Module ───────────────────────────────────────────────────────
 set(CSILK_DB_SOURCES
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
+    src/drivers/db/tx_scope.c
+    src/drivers/db/migration/migration_checksum.c
+    src/drivers/db/migration/migration_engine.c
+    src/drivers/db/migration/migration_lock.c
     src/protocols/mcp/mcp_jsonrpc.c
     src/protocols/mcp/mcp_server.c
     src/protocols/mcp/mcp_client.c
+)
+
+# ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
+set(CSILK_PROTOCOLS_SOURCES
+    src/protocols/websocket.c
+    src/protocols/ws_room.c
+    src/protocols/swagger.c
 )
 
 # ── Permission Module ─────────────────────────────────────────────────────
@@ -198,6 +220,29 @@ set(CSILK_APP_SOURCES
     src/app/admin.c
 )
 
+# ── AI Module (LLM client drivers) ───────────────────────────────────────
+set(CSILK_AI_SOURCES
+    src/drivers/ai/ai.c
+    src/drivers/ai/ai_trace.c
+    src/drivers/ai/openai.c
+    src/drivers/ai/ollama.c
+    src/drivers/ai/tool_registry.c
+)
+
+# ── MQ Module (Message queue & Raft consensus) ───────────────────────────
+set(CSILK_MQ_SOURCES
+    src/messaging/mq_context.c
+    src/messaging/mq_core.c
+    src/messaging/mq_dispatch.c
+    src/messaging/mq_offload.c
+    src/messaging/mq_pubsub.c
+    src/messaging/mq_wal.c
+    src/messaging/raft_wal.c
+    src/messaging/raft_consensus.c
+    src/messaging/raft_rpc.c
+    src/messaging/raft_snapshot.c
+)
+
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────
 set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_graph.c
@@ -206,6 +251,8 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_ai_utils.c
     src/workflow/wf_ai_nodes.c
     src/workflow/wf_ai_agents.c
+    src/workflow/wf_ai_react_loop.c
+    src/protocols/mcp/mcp_stdio_pool.c
     src/workflow/wf_tools.c
     src/workflow/wf_scheduler.c
     src/workflow/wf_ctx.c

@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /** @brief Maximum number of AI driver backends that can be registered. */
 enum { MAX_DRIVERS = 8 };
@@ -124,22 +124,22 @@ typedef struct {
     csilk_ai_stream_cb  on_chunk;          /**< Callback invoked for each chunk in stream mode. */
     csilk_ai_stream_cb
         on_reasoning_chunk; /**< Callback invoked for each reasoning/thinking chunk in stream mode. */
-    void*               user_data;         /**< User context for the stream callback. */
-    int                 timeout_ms;        /**< Request timeout in milliseconds (0 for default). */
-    csilk_ai_tool_t*    tools;             /**< Available tools for the model. */
-    size_t              tool_count;        /**< Number of tools. */
-    const char*         tool_choice;       /**< "none", "auto", or "required". */
+    void*            user_data;   /**< User context for the stream callback. */
+    int              timeout_ms;  /**< Request timeout in milliseconds (0 for default). */
+    csilk_ai_tool_t* tools;       /**< Available tools for the model. */
+    size_t           tool_count;  /**< Number of tools. */
+    const char*      tool_choice; /**< "none", "auto", or "required". */
     const char*
-        reasoning_effort; /**< "low", "medium", or "high" for extended reasoning models (o1/o3). */
-    bool                has_enable_thinking; /**< True if enable_thinking was explicitly specified */
-    bool                enable_thinking;     /**< Controls thinking mode via chat_template_kwargs.enable_thinking */
+         reasoning_effort; /**< "low", "medium", or "high" for extended reasoning models (o1/o3). */
+    bool has_enable_thinking; /**< True if enable_thinking was explicitly specified */
+    bool enable_thinking; /**< Controls thinking mode via chat_template_kwargs.enable_thinking */
     const csilk_json_t* chat_template_kwargs; /**< Optional additional template parameters */
 } csilk_ai_chat_request_t;
 
 /** @brief Response data from a chat completion. */
 typedef struct {
-    char*                 content;           /**< Generated text content (heap-allocated). */
-    char*                 reasoning_content; /**< Generated thinking / reasoning content (heap-allocated). */
+    char* content;           /**< Generated text content (heap-allocated). */
+    char* reasoning_content; /**< Generated thinking / reasoning content (heap-allocated). */
     csilk_ai_tool_call_t* tool_calls;        /**< Array of tool calls (heap-allocated). */
     size_t                tool_call_count;   /**< Number of tool calls. */
     int                   prompt_tokens;     /**< Tokens used in the prompt. */

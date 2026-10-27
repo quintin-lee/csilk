@@ -1,5 +1,5 @@
 #include "csilk/drivers/db/migration.h"
-#include "csilk/core/hash.h"
+#include "csilk/core/primitives/hash.h"
 
 #include <ctype.h>
 #include <stdio.h>

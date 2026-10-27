@@ -5,7 +5,7 @@
  */
 
 #include "csilk/core/totp.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 #include <ctype.h>
 #include <openssl/evp.h>

@@ -10,7 +10,7 @@
 #include <stddef.h>
 
 #include "csilk/drivers/ai.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 #ifdef __cplusplus
 extern "C" {

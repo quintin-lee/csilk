@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/drivers/ai.h"
 
 static void

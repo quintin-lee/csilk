@@ -9,8 +9,8 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/json.h"
-#include "csilk/core/response.h"
+#include "csilk/core/json/json.h"
+#include "csilk/core/ctx/response.h"
 #include "csilk/test/test.h"
 
 static int tests_run = 0;
