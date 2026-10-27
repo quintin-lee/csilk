@@ -24,7 +24,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 #include "csilk/drivers/db.h"
 #include "db_internal.h"
 

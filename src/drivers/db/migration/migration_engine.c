@@ -1,5 +1,5 @@
 #include "csilk/drivers/db/migration.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 #include <ctype.h>
 #include <dirent.h>

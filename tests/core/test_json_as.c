@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 int
 main(void)

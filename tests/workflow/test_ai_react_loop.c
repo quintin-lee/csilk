@@ -6,7 +6,7 @@
 #include "csilk/app/workflow.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/drivers/ai.h"
-#include "csilk/core/json.h"
+#include "csilk/core/json/json.h"
 
 /* --- Tool Registry Tests --- */
 
