@@ -174,16 +174,16 @@ csilk_json_t* csilk_json_get_array_v(const csilk_json_t* obj, const char* key);
 csilk_json_t* csilk_json_array_get_v(const csilk_json_t* arr, size_t index);
 
 /** @brief Get a child string by key from a value object. */
-const char* csilk_json_get_string_v(csilk_json_t obj, const char* key);
+const char* csilk_json_get_string_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child number by key from a value object. */
-double csilk_json_get_number_v(csilk_json_t obj, const char* key);
+double csilk_json_get_number_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child integer by key from a value object. */
-int64_t csilk_json_get_int_v(csilk_json_t obj, const char* key);
+int64_t csilk_json_get_int_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child boolean by key from a value object. */
-bool csilk_json_get_bool_v(csilk_json_t obj, const char* key);
+bool csilk_json_get_bool_v(const csilk_json_t* obj, const char* key);
 
 /** @brief Get a child value by key, regardless of type.
  *  @param[in] obj Object to search.
