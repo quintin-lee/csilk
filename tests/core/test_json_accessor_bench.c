@@ -42,13 +42,12 @@ bench_value_vs_pointer_accessor(void)
     uint64_t start_ns = get_monotonic_ns();
     int64_t  v_sum = 0;
     for (int i = 0; i < iterations; i++) {
-        csilk_json_t root_v = *doc;
-        csilk_json_t id_node = csilk_json_get_v(root_v, "id");
-        v_sum += csilk_json_int_value(&id_node);
+        csilk_json_t* id_node = csilk_json_get_v(doc, "id");
+        v_sum += csilk_json_int_value(id_node);
 
-        csilk_json_t meta_node = csilk_json_get_v(root_v, "meta");
-        csilk_json_t nodes_node = csilk_json_get_v(meta_node, "nodes");
-        v_sum += csilk_json_int_value(&nodes_node);
+        csilk_json_t* meta_node = csilk_json_get_v(doc, "meta");
+        csilk_json_t* nodes_node = csilk_json_get_v(meta_node, "nodes");
+        v_sum += csilk_json_int_value(nodes_node);
     }
     uint64_t v_dur_ns = get_monotonic_ns() - start_ns;
     double   v_ns_per_op = (double)v_dur_ns / (double)(iterations * 3);
@@ -104,12 +103,12 @@ test_no_ring_overwrite_large_array(void)
     assert(sz == (size_t)total_items);
 
     /* Store 100,000 value objects on heap array to verify NO overwrite */
-    csilk_json_t* saved_views = malloc(total_items * sizeof(csilk_json_t));
+    csilk_json_t** saved_views = malloc(total_items * sizeof(*saved_views));
     assert(saved_views != NULL);
 
     for (int i = 0; i < total_items; i++) {
-        saved_views[i] = csilk_json_array_get_v(*arr, i);
-        assert(csilk_json_is_valid(saved_views[i]));
+        saved_views[i] = csilk_json_array_get_v(arr, i);
+        assert(saved_views[i] != NULL);
     }
 
     /* Verify all 100,000 value objects still hold their exact unique values! */
@@ -136,9 +135,9 @@ test_no_ring_overwrite_large_array(void)
  * ==================================================================== */
 
 typedef struct {
-    csilk_json_t doc_view;
-    int          thread_id;
-    int          iterations;
+    csilk_json_t* doc_view;
+    int           thread_id;
+    int           iterations;
 } thread_arg_t;
 
 static void*
@@ -146,8 +145,8 @@ reader_thread_fn(void* ptr)
 {
     thread_arg_t* arg = (thread_arg_t*)ptr;
     for (int i = 0; i < arg->iterations; i++) {
-        csilk_json_t id_val = csilk_json_get_v(arg->doc_view, "task_id");
-        int64_t      id = csilk_json_int_value(&id_val);
+        csilk_json_t* id_val = csilk_json_get_v(arg->doc_view, "task_id");
+        int64_t       id = csilk_json_int_value(id_val);
         assert(id == 9999);
 
         const char* name = csilk_json_get_string_v(arg->doc_view, "service");
@@ -170,7 +169,7 @@ test_cross_thread_view_safety(void)
     thread_arg_t args[8];
 
     for (int i = 0; i < num_threads; i++) {
-        args[i].doc_view = *doc;
+        args[i].doc_view = doc;
         args[i].thread_id = i;
         args[i].iterations = 100000;
         pthread_create(&threads[i], NULL, reader_thread_fn, &args[i]);
