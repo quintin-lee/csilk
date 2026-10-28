@@ -295,18 +295,37 @@ foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
   endif()
 endforeach()
 
-csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl)
+# vector_simd.c calls sqrt/pow directly, so -m must ride on the module
+# archive itself: transitive libm ordering after the umbrella --start-group
+# left sqrt undefined on GCC 13 / CMake 3.28 runners.
+if(NOT APPLE AND NOT WIN32)
+  csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl m)
+else()
+  csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl)
+endif()
 csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl)
 csilk_link_module(csilk_reflection csilk_runtime csilk_json)
 csilk_link_module(csilk_permission csilk_runtime csilk_json)
-csilk_link_module(csilk_workflow
-    csilk_runtime
-    csilk_json
-    csilk_ai
-    csilk_mq
-    csilk_wasm
-    csilk::yaml
-)
+if(NOT APPLE AND NOT WIN32)
+  csilk_link_module(csilk_workflow
+      csilk_runtime
+      csilk_json
+      csilk_ai
+      csilk_mq
+      csilk_wasm
+      m
+  )
+  csilk_link_module(csilk_workflow csilk::yaml)
+else()
+  csilk_link_module(csilk_workflow
+      csilk_runtime
+      csilk_json
+      csilk_ai
+      csilk_mq
+      csilk_wasm
+  )
+  csilk_link_module(csilk_workflow csilk::yaml)
+endif()
 csilk_link_module(csilk_protocols
     csilk_http
     csilk_http2
