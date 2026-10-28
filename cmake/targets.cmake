@@ -262,8 +262,18 @@ endif()
 
 csilk_link_module(csilk_wasm csilk_runtime)
 csilk_link_module(csilk_bypass csilk_runtime)
-csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto)
-csilk_link_module(csilk_mq csilk_runtime)
+# csilk_io_* wrappers in <csilk/core/sys_io.h> and <csilk/core/sync.h> are
+# static inline in the libuv backend, so every module whose objects reference
+# them must link the I/O backend directly: transitive ordering inside a
+# --start-group varies across CMake/linker versions (observed on GCC 13 +
+# CMake 3.28), leaving uv_* undefined when only csilk_runtime carries libuv.
+if(TARGET csilk::libuv)
+  csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto csilk::libuv)
+  csilk_link_module(csilk_mq csilk_runtime csilk::libuv)
+else()
+  csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto)
+  csilk_link_module(csilk_mq csilk_runtime)
+endif()
 csilk_link_module(csilk_http2 csilk_runtime csilk_tls nghttp2)
 csilk_link_module(csilk_http
     csilk_runtime
