@@ -294,13 +294,12 @@ ensure_schema_migrations_and_baseline(csilk_migration_engine_t* engine)
 
     for (int i = 0; i < count; i++) {
         if (items[i].version <= engine->baseline_version) {
+            static const char sql[] =
+                "INSERT INTO schema_migrations "
+                "(version, name, checksum, applied_at, execution_time_ms, execution_time) "
+                "VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0, 0);";
             csilk_stmt_t* stmt = NULL;
-            int           rc = csilk_stmt_prepare(
-                engine->pool,
-                "INSERT INTO schema_migrations (version, name, checksum, applied_at, "
-                "execution_time_ms, execution_time) "
-                "VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0, 0);",
-                &stmt);
+            int           rc = csilk_stmt_prepare(engine->pool, sql, &stmt);
             if (rc != 0 || !stmt) {
                 free(items);
                 return -1;
@@ -590,13 +589,12 @@ csilk_migration_apply(csilk_migration_engine_t* engine, int* out_applied_count)
             elapsed_ms = 0;
         }
 
+        static const char sql[] =
+            "INSERT INTO schema_migrations "
+            "(version, name, checksum, applied_at, execution_time_ms, execution_time) "
+            "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?);";
         csilk_stmt_t* ins_stmt = NULL;
-        int           ins_rc = csilk_stmt_prepare(
-            engine->pool,
-            "INSERT INTO schema_migrations (version, name, checksum, applied_at, "
-            "execution_time_ms, execution_time) "
-            "VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?);",
-            &ins_stmt);
+        int           ins_rc = csilk_stmt_prepare(engine->pool, sql, &ins_stmt);
         if (ins_rc == 0 && ins_stmt) {
             csilk_stmt_bind_int64(ins_stmt, 1, items[i].version);
             csilk_stmt_bind_text(ins_stmt, 2, items[i].name);
