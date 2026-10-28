@@ -1,7 +1,16 @@
 # cmake/tooling.cmake — clang-format, clang-tidy, doxygen, coverage, benchmarks, profiling
 
 # ── clang-format ──────────────────────────────────────────────────────────
-find_program(CLANG_FORMAT_EXECUTABLE clang-format)
+# Formatting must be reproducible across contributor machines and CI.  The
+# version is pinned because clang-format changed declaration alignment and
+# argument-continuation behavior in releases after 18, so formatting under a
+# newer release produces drifting output (matching source files would fail
+# the CI lint job pinned to the Ubuntu 24.04 style).  Update the pin and the
+# CI install list together when the whole tree is reformatted.
+set(CSILK_CLANG_FORMAT_VERSION 18)
+find_program(CLANG_FORMAT_EXECUTABLE
+             NAMES clang-format-${CSILK_CLANG_FORMAT_VERSION} clang-format
+                   clang-format-18.0 clang-format-18)
 if(CLANG_FORMAT_EXECUTABLE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
 

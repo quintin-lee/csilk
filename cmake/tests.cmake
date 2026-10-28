@@ -18,7 +18,16 @@ function(add_csilk_test name source)
     target_compile_definitions(${name} PRIVATE CSILK_POOL_STATS)
     target_sources(${name} PRIVATE tests/core/pool_stats.c)
   endif()
-  target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
+  # csilk::libuv transitively reaches consumers via csilk_runtime, but CMake
+  # releases before 4.x drop transitive INTERFACE libraries referenced only
+  # through a $<LINK_GROUP> genex, leaving uv_* symbols unresolved in test
+  # executables.  Link it explicitly so the closure is complete on every
+  # supported CMake version (3.24+ for RESCAN groups).
+  if(TARGET csilk::libuv)
+    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m csilk::libuv)
+  else()
+    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
+  endif()
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
       "${CSILK_COMMON_FLAGS}"

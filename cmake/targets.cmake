@@ -361,6 +361,20 @@ else()
       csilk_base
   )
 endif()
+# Transitive INTERFACE libraries referenced only through a LINK_GROUP genex
+# are dropped by CMake releases before 4.x, which breaks every umbrella
+# consumer (tests, examples, fuzzers, docs build) with undefined uv_*
+# symbols.  Link the I/O backend explicitly here so the closure is complete
+# on every supported CMake generation.
+if(CSILK_USE_URING)
+  if(TARGET uring)
+    target_link_libraries(csilk INTERFACE uring)
+  endif()
+else()
+  if(TARGET csilk::libuv)
+    target_link_libraries(csilk INTERFACE csilk::libuv)
+  endif()
+endif()
 target_include_directories(csilk INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
