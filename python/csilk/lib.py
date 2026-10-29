@@ -300,7 +300,16 @@ class CsilkServerConfig(ctypes.Structure):
 
 _cached_lib = None
 
-_TEST_SUPPORT_NAMES = ("libcsilk_test_support_shared.so", "libcsilk-test-support.so")
+if sys.platform.startswith("win"):
+    _TEST_SUPPORT_SUFFIX = ".dll"
+elif sys.platform == "darwin":
+    _TEST_SUPPORT_SUFFIX = ".dylib"
+else:
+    _TEST_SUPPORT_SUFFIX = ".so"
+_TEST_SUPPORT_NAMES = (
+    "libcsilk_test_support_shared" + _TEST_SUPPORT_SUFFIX,
+    "libcsilk-test-support" + _TEST_SUPPORT_SUFFIX,
+)
 
 def _attach_test_support(lib, search_dirs):
     """Bind csilk_test_ctx_* from a test-support library, when one is present.
