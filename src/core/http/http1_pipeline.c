@@ -50,7 +50,7 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         client->ctx.is_sse = 1;
     }
 
-    if (client->ctx.is_websocket) {
+    if (client->ctx.is_websocket || client->ctx.is_sse) {
         return;
     }
 
@@ -61,10 +61,6 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
          * connection (read callback firing on a recycled client). */
         if (csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
             CSILK_LOG_I("_csilk_handle_post_response: handle closing, skipping read restart");
-            extern void csilk_conn_set_state(csilk_client_t * client, csilk_conn_state_t new_state);
-            extern void on_close(csilk_io_handle_t * handle);
-            csilk_conn_set_state(client, CSILK_CONN_CLOSING);
-            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             return;
         }
         CSILK_LOG_I("_csilk_handle_post_response: restarting read");

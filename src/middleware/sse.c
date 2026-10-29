@@ -248,7 +248,10 @@ csilk_sse_close(csilk_ctx_t* c)
 
     csilk_client_t*    cl = (csilk_client_t*)internal_client;
     csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+    extern void csilk_conn_set_state(csilk_client_t * client, csilk_conn_state_t new_state);
+    extern void on_close(csilk_io_handle_t * handle);
+    csilk_conn_set_state(cl, CSILK_CONN_CLOSING);
     if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
-        csilk_io_close((csilk_io_handle_t*)stream, NULL);
+        csilk_io_close((csilk_io_handle_t*)stream, on_close);
     }
 }
