@@ -23,6 +23,16 @@ leak:pthread_
 
 # Python internals (when using ctypes)
 leak:libpython
+
+# csilk_json_t wrappers for yyjson views are handed out from a per-thread
+# scratch ring buffer (tls_view_scratch, CSILK_JSON_SCRATCH_SIZE slots) that
+# intentionally keeps the most recent allocations alive instead of freeing
+# them after each accessor call. Tests that exercise reflection and the
+# OpenAPI generator therefore report the retained slots as leaks at exit.
+leak:json_view_immutable
+leak:json_view_mutable
+leak:json_view_str
+leak:json_view_unsafe
 leak:PyMem_RawMalloc
 leak:PyObject_Malloc
 leak:_PyObject_Malloc
