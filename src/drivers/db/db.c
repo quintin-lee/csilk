@@ -69,11 +69,203 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 
 /** @brief Get the raw driver-level connection handle.
  * @return The connection pointer, or NULL if pool is NULL.
- * @note The caller must hold the pool mutex if concurrent access is possible. */
+ * @deprecated Use csilk_db_with_conn() for safe cross-thread access, or
+ *             csilk_db_pool_acquire()/csilk_db_pool_put() for explicit
+ *             acquire/release pairs.  The bare getter returns a raw pointer
+ *             with no holder tracking, no lifetime constraint, and no
+ *             mutex acquisition — cross-thread use of the returned pointer
+ *             is undefined behaviour and was the root cause of the
+ *             heap-use-after-free reported in csilk#1 (Minefolio dual-thread
+ *             model driving the same SQLite/PG connection from two threads).
+ *
+ * @note The caller must hold the pool mutex if concurrent access is possible.
+ * @note For new code, prefer csilk_db_with_conn(pool, fn, ctx) which holds
+ *       pool->mutex for the duration of fn and performs holder tracking,
+ *       or csilk_db_pool_acquire() + csilk_db_pool_put() for explicit
+ *       RAII-style acquire/release pairs.
+ */
 void*
 csilk_db_pool_get_connection(csilk_db_pool_t* pool)
 {
     return pool ? pool->connection : NULL;
+}
+
+/** @brief Explicitly acquire the pool's connection with holder tracking.
+ *
+ * Atomically (under pool->mutex) records the calling thread as the holder of
+ * pool->connection.  Must be paired with csilk_db_pool_put() to release.
+ * The pair forms an RAII-style contract: every successful acquire() must be
+ * followed by exactly one put(), even on the SQL-failure path.
+ *
+ * @param pool     Connection pool.  Must not be NULL.
+ * @param conn     [out] Receives the raw driver-level connection pointer.
+ *                 Valid until the matching csilk_db_pool_put() call.
+ * @return 0 on success, -1 if pool is NULL or the connection is not open.
+ *
+ * @note Intended for downstream code that needs to drive the driver API
+ *       (sqlite3_exec / PQexec / etc.) directly.  For pure high-level use,
+ *       csilk_db_with_conn() is preferred because it hides the raw pointer
+ *       and the acquire/put pairing.
+ */
+int
+csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn)
+{
+    if (!pool || !conn) {
+        CSILK_LOG_E("csilk_db_pool_acquire: invalid pool or conn out-param");
+        return -1;
+    }
+
+    csilk_mutex_lock(&pool->mutex);
+    if (!pool->connection) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("csilk_db_pool_acquire: pool '%s' has no open connection",
+                    pool->driver ? pool->driver->name : "(null)");
+        return -1;
+    }
+    /* Reject if the connection is already held by another thread.  This is
+     * what makes the holder check in csilk_db_pool_put meaningful: without
+     * this guard, a second thread could simply re-acquire and overwrite
+     * conn_holder, defeating the cross-thread release refusal. */
+    if (pool->conn_holder_set) {
+        csilk_thread_t me = csilk_thread_self();
+        if (me != pool->conn_holder) {
+            CSILK_LOG_W("csilk_db_pool_acquire: pool '%s' already held by another "
+                        "thread; refusing concurrent acquire",
+                        pool->driver ? pool->driver->name : "(null)");
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+        /* Same thread re-acquiring — idempotent, just return the conn. */
+        *conn = pool->connection;
+        csilk_mutex_unlock(&pool->mutex);
+        return 0;
+    }
+    pool->conn_holder = csilk_thread_self();
+    pool->conn_holder_set = true;
+    *conn = pool->connection;
+    csilk_mutex_unlock(&pool->mutex);
+    return 0;
+}
+
+/** @brief Release a previously-acquired connection back to the pool.
+ *
+ * Performs a holder check under pool->mutex: only the thread that called
+ * csilk_db_pool_acquire() (or the one currently recorded in conn_holder)
+ * may release the connection.  A release by any other thread is refused
+ * with -1 and a CSILK_LOG_W, to prevent the "release someone else's conn"
+ * bug that allowed two threads to share a freed connection (csilk#1).
+ *
+ * The release itself is a single atomic write to pool->conn_holder_set
+ * (while holding the mutex), so it cannot race with a concurrent
+ * csilk_db_pool_acquire() or with the high-level csilk_db_query_* /
+ * csilk_db_exec_* paths which take pool->mutex for their whole duration.
+ *
+ * @param pool     Connection pool.  Must not be NULL.
+ * @param conn     The pointer returned by the matching csilk_db_pool_acquire().
+ *                 Must equal pool->connection; a mismatch returns -1.
+ * @return 0 on success, -1 on any validation failure.
+ */
+int
+csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
+{
+    if (!pool || !conn) {
+        CSILK_LOG_E("csilk_db_pool_put: invalid pool or conn");
+        return -1;
+    }
+
+    csilk_mutex_lock(&pool->mutex);
+
+    /* The connection must still be the one we handed out. */
+    if (pool->connection != conn) {
+        CSILK_LOG_W("csilk_db_pool_put: conn %p does not match pool->connection %p "
+                    "(driver '%s'); refusing to release",
+                    conn,
+                    pool->connection,
+                    pool->driver ? pool->driver->name : "(null)");
+        csilk_mutex_unlock(&pool->mutex);
+        return -1;
+    }
+
+    /* Holder check: only the acquiring thread may release. */
+    if (pool->conn_holder_set) {
+        csilk_thread_t me = csilk_thread_self();
+        if (me != pool->conn_holder) {
+            CSILK_LOG_W("csilk_db_pool_put: called from thread that does not hold "
+                        "the connection (acquired by another thread); refusing "
+                        "cross-thread release (driver '%s')",
+                        pool->driver ? pool->driver->name : "(null)");
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+    }
+    pool->conn_holder_set = false;
+    /* Note: pool->connection is NOT cleared here — the connection remains
+     * open and owned by the pool until csilk_db_pool_free(). */
+    csilk_mutex_unlock(&pool->mutex);
+    return 0;
+}
+
+/** @brief Callback signature for csilk_db_with_conn().
+ *
+ * @param conn     The raw driver-level connection handle.
+ * @param user_ctx Caller-supplied context forwarded verbatim.
+ * @return 0 on success, or any driver-specific error code (e.g. -1) on
+ *         failure.  The return value is propagated to the caller.
+ */
+typedef int (*csilk_db_with_conn_fn)(void* conn, void* user_ctx);
+
+/** @brief Run a callback under the pool mutex with holder tracking.
+ *
+ * This is the recommended safe access pattern for cross-thread database use.
+ * The callback runs while pool->mutex is held and conn_holder is set to the
+ * calling thread, so:
+ *
+ *   - No other thread can concurrently drive the same connection.
+ *   - The caller never sees a raw pointer; the connection is returned to the
+ *     pool automatically on callback exit (success or failure).
+ *   - No "forgot to put on the failure path" bug is possible.
+ *
+ * @param pool     Connection pool.  Must not be NULL.
+ * @param fn       Callback to invoke.  Receives the raw connection pointer
+ *                 and user_ctx.
+ * @param user_ctx Opaque user data forwarded to fn.
+ * @return The return value of fn, or -1 on invalid arguments / no connection.
+ *
+ * @example
+ * @code
+ * int my_query(void* conn, void* ctx) {
+ *     sqlite_conn_t* s = (sqlite_conn_t*)conn;
+ *     // drive sqlite3_exec(s->db, "SELECT ...") directly
+ *     return 0;
+ * }
+ * csilk_db_with_conn(pool, my_query, my_ctx);
+ * @endcode
+ */
+int
+csilk_db_with_conn(csilk_db_pool_t* pool, csilk_db_with_conn_fn fn, void* user_ctx)
+{
+    if (!pool || !fn) {
+        CSILK_LOG_E("csilk_db_with_conn: invalid pool or fn");
+        return -1;
+    }
+
+    csilk_mutex_lock(&pool->mutex);
+    if (!pool->connection) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("csilk_db_with_conn: pool '%s' has no open connection",
+                    pool->driver ? pool->driver->name : "(null)");
+        return -1;
+    }
+    /* Set holder so a concurrent csilk_db_pool_put from another thread is
+     * refused by the holder check. */
+    pool->conn_holder = csilk_thread_self();
+    pool->conn_holder_set = true;
+
+    int rc = fn(pool->connection, user_ctx);
+
+    pool->conn_holder_set = false;
+    csilk_mutex_unlock(&pool->mutex);
+    return rc;
 }
 
 const char*
@@ -193,6 +385,8 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
 
     csilk_mutex_init(&pool->mutex);
     pool->driver = driver;
+    pool->conn_holder_set = false;
+    pool->conn_holder = csilk_thread_self(); /* placeholder; overwritten on acquire */
     if (driver->connect(pool, dsn) != 0) {
         CSILK_LOG_E("Database connection failed for driver '%s' (DSN: '%s')", driver_name, dsn);
         csilk_mutex_destroy(&pool->mutex);
