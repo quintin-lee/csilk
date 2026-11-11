@@ -50,6 +50,52 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
 /** @brief Opaque prepared statement handle. */
 typedef struct csilk_stmt_s csilk_stmt_t;
 
+/**
+ * @brief Parameter value types for typed binding (csilk_db_query_param_json_typed).
+ *
+ * Use these to bind parameters with their native SQL types instead of
+ * letting the driver infer from a string.  `CSILK_DB_PARAM_NULL` binds
+ * SQL NULL; the int64/double/TEXT variants bind the corresponding native
+ * types, eliminating the type-loss and SQL-injection concerns of the
+ * legacy string-substitution path (csilk#5).
+ */
+typedef enum {
+    CSILK_DB_PARAM_INT64,
+    CSILK_DB_PARAM_DOUBLE,
+    CSILK_DB_PARAM_TEXT,
+    CSILK_DB_PARAM_NULL
+} csilk_db_param_kind_t;
+
+/**
+ * @brief A typed SQL parameter binding.
+ *
+ * Passed to csilk_db_query_param_json_typed / csilk_db_exec_param_typed.
+ * The array is NULL-terminated (a sentinel with kind == CSILK_DB_PARAM_NULL
+ * and a zero/NULL value is not sufficient — terminate with a {0} entry whose
+ * kind is a value greater than CSILK_DB_PARAM_NULL, or simply end the array
+ * with a fully-zeroed struct; the binding loop stops at the first all-zero
+ * struct).  For convenience, the helper csilk_db_params_end() returns a
+ * sentinel you can append.
+ */
+typedef struct {
+    csilk_db_param_kind_t kind;
+    int64_t               int64_val;
+    double                double_val;
+    const char*           text_val; /* NUL-terminated; valid only when kind == CSILK_DB_PARAM_TEXT */
+} csilk_db_param_t;
+
+/** @brief Sentinel value to terminate a csilk_db_param_t array. */
+static inline csilk_db_param_t
+csilk_db_params_end(void)
+{
+    csilk_db_param_t p;
+    p.kind = (csilk_db_param_kind_t)(CSILK_DB_PARAM_NULL + 1); /* out-of-range sentinel */
+    p.int64_val = 0;
+    p.double_val = 0.0;
+    p.text_val = NULL;
+    return p;
+}
+
 /** @brief Get the driver-specific connection handle from a pool.
  * @param pool Database pool.
  * @return Opaque connection pointer (driver-specific type).
@@ -399,9 +445,13 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
 /**
  * @brief Execute a parameterised SELECT query with ? placeholders.
  *
- * Each ? in @p sql is substituted with the corresponding value from
- * @p params (escaping is handled by the driver).  Results are returned as
- * a JSON array.
+ * Each ? in @p sql is bound to the corresponding value from @p params via a
+ * real prepared statement (sqlite3_prepare_v2 + sqlite3_bind_* on SQLite;
+ * PQprepare + PQexecPrepared on PostgreSQL).  Parameter values are
+ * auto-typed: a pure integer is bound as INT64, a pure float/double as
+ * DOUBLE, anything else as TEXT.  This eliminates the type-loss and
+ * SQL-injection concerns of the previous string-substitution path
+ * (csilk#5) and returns a type-preserving JSON result (csilk#2).
  *
  * @param pool   Connection pool.
  * @param sql    SQL with ? placeholders.
@@ -409,25 +459,67 @@ int csilk_db_exec(csilk_db_pool_t* pool, const char* sql);
  *               values must match the number of ? placeholders.
  * @return A csilk_json array of row objects, or NULL on failure.  Caller must
  *         free with csilk_json_free.
+ *
+ * @note For full control over parameter types (e.g. binding a specific
+ *       int64 instead of auto-detecting from a string), use
+ *       csilk_db_query_param_json_typed().
  */
 csilk_json_t*
 csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params);
 
 /**
+ * @brief Execute a parameterised SELECT query with ? placeholders, with
+ *        explicit type annotations.
+ *
+ * Like csilk_db_query_param_json but accepts a csilk_db_param_t array so
+ * the caller controls each parameter's SQL type (INT64 / DOUBLE / TEXT /
+ * NULL) instead of relying on auto-detection.  The array must be
+ * terminated by csilk_db_params_end().
+ *
+ * @param pool   Connection pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params Sentinel-terminated csilk_db_param_t array.
+ * @return A type-preserving csilk_json array of row objects, or NULL on failure.
+ */
+csilk_json_t* csilk_db_query_param_json_typed(csilk_db_pool_t* pool,
+                                               const char*      sql,
+                                               const csilk_db_param_t* params);
+
+/**
  * @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
  *        placeholders.
  *
- * Each ? in @p sql is substituted with the corresponding value from
- * @p params (single quotes escaped by doubling).  This prevents SQL injection
- * in DML statements that do not return result rows.
+ * Each ? in @p sql is bound to the corresponding value from @p params via a
+ * real prepared statement (auto-typed: INT64 / DOUBLE / TEXT).  This
+ * prevents SQL injection in DML statements without the type-loss of the
+ * previous string-substitution path (csilk#5).
  *
  * @param pool   Connection pool.
  * @param sql    SQL with ? placeholders.
  * @param params NULL-terminated array of string values.  The number of
  *               values must match the number of ? placeholders.
  * @return 0 on success, -1 on failure.
+ *
+ * @note For full control over parameter types, use csilk_db_exec_param_typed().
  */
 int csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** params);
+
+/**
+ * @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
+ *        placeholders, with explicit type annotations.
+ *
+ * Like csilk_db_exec_param but accepts a csilk_db_param_t array so the
+ * caller controls each parameter's SQL type.  The array must be terminated
+ * by csilk_db_params_end().
+ *
+ * @param pool   Connection pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params Sentinel-terminated csilk_db_param_t array.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_db_exec_param_typed(csilk_db_pool_t* pool,
+                             const char*      sql,
+                             const csilk_db_param_t* params);
 
 /**
  * @brief Register a database driver implementation.
