@@ -974,6 +974,79 @@ csilk_respond_conflict(csilk_ctx_t* c, int biz_code, const char* msg)
     csilk_respond_fail(c, CSILK_STATUS_CONFLICT, biz_code, msg);
 }
 
+/* =========================================================================
+ * JSON-RPC 2.0 Response Frames
+ * =========================================================================
+ * The RESTful envelope helpers above produce {code, message, data}.
+ * JSON-RPC 2.0 (rpc.json) requires a different shape: {result, id} on
+ * success and {error: {code, message, data}, id} on failure.  These two
+ * helpers let a JSON-RPC endpoint emit a well-formed frame without the
+ * caller hand-rolling the JSON (csilk#9d).
+ *
+ * Both helpers take ownership of the @p result / @p error_data / @p id
+ * JSON values and free them after serialization (or on the OOM path).
+ * Passing NULL for @p id emits the JSON-RPC "id omitted" form (the
+ * "id" key is omitted entirely). */
+
+void
+csilk_respond_jsonrpc_result(csilk_ctx_t* c, csilk_json_t* result, csilk_json_t* id)
+{
+    if (!c) {
+        if (result) {
+            csilk_json_free(result);
+        }
+        if (id) {
+            csilk_json_free(id);
+        }
+        return;
+    }
+
+    csilk_json_t* frame = csilk_json_object();
+    csilk_json_add_object(frame, "result", result ? result : csilk_json_null());
+    if (id) {
+        csilk_json_add_object(frame, "id", id);
+    }
+    /* Note: result / id ownership is transferred to frame; frame frees them
+     * when csilk_json(c, ...) serializes and frees frame. */
+    csilk_json(c, CSILK_STATUS_OK, frame);
+}
+
+void
+csilk_respond_jsonrpc_error(csilk_ctx_t* c,
+                            int          error_code,
+                            const char*  error_message,
+                            csilk_json_t* error_data,
+                            csilk_json_t* id,
+                            int          http_status)
+{
+    if (!c) {
+        if (error_data) {
+            csilk_json_free(error_data);
+        }
+        if (id) {
+            csilk_json_free(id);
+        }
+        return;
+    }
+
+    /* Build the error object: {code, message, data?}.  data is optional
+     * (the JSON-RPC 2.0 "error data" field) and omitted when NULL. */
+    csilk_json_t* err_obj = csilk_json_object();
+    csilk_json_add_int(err_obj, "code", error_code);
+    csilk_json_add_string(err_obj, "message", error_message ? error_message : "internal error");
+    if (error_data) {
+        csilk_json_add_object(err_obj, "data", error_data);
+    }
+
+    csilk_json_t* frame = csilk_json_object();
+    csilk_json_add_object(frame, "error", err_obj);
+    if (id) {
+        csilk_json_add_object(frame, "id", id);
+    }
+
+    csilk_json(c, http_status > 0 ? http_status : CSILK_STATUS_INTERNAL_SERVER_ERROR, frame);
+}
+
 void
 csilk_parse_pagination(csilk_ctx_t* c,
                        int64_t*     out_page,
