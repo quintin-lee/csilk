@@ -103,11 +103,11 @@ test_security_headers_custom(void)
     csilk_test_ctx_set_handlers(ctx, handlers);
 
     static const csilk_security_header_t custom[] = {
-        {"X-Frame-Options", "SAMEORIGIN"},
-        {"Content-Security-Policy", "default-src 'self'"},
-        {"Strict-Transport-Security", "max-age=31536000"},
-        {"X-XSS-Protection", NULL}, /* omit */
-        {NULL, NULL} /* terminator */
+        {"X-Frame-Options",           "SAMEORIGIN"        },
+        {"Content-Security-Policy",   "default-src 'self'"},
+        {"Strict-Transport-Security", "max-age=31536000"  },
+        {"X-XSS-Protection",          NULL                }, /* omit */
+        {NULL,                        NULL                }  /* terminator */
     };
 
     csilk_security_headers_middleware_ex(ctx, custom);

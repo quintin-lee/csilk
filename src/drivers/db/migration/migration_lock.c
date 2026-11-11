@@ -138,25 +138,24 @@ csilk_migration_lock_acquire_lease(csilk_db_pool_t* pool,
 
     /* Prepare once, reuse across all attempts. */
     csilk_stmt_t* stmt = NULL;
-    int           rc = csilk_stmt_prepare(
-        pool,
-        "UPDATE schema_migration_lock "
-        "SET is_locked = 1, "
-        "    locked_at = CURRENT_TIMESTAMP, "
-        "    locked_by = ?, "
-        "    lease_expires_at = ? "
-        "WHERE id = 1 AND (is_locked = 0 "
-        "                   OR lease_expires_at IS NULL "
-        "                   OR lease_expires_at <= ?);",
-        &stmt);
+    int           rc = csilk_stmt_prepare(pool,
+                                          "UPDATE schema_migration_lock "
+                                          "SET is_locked = 1, "
+                                          "    locked_at = CURRENT_TIMESTAMP, "
+                                          "    locked_by = ?, "
+                                          "    lease_expires_at = ? "
+                                          "WHERE id = 1 AND (is_locked = 0 "
+                                          "                   OR lease_expires_at IS NULL "
+                                          "                   OR lease_expires_at <= ?);",
+                                          &stmt);
     if (rc != 0 || !stmt) {
         return -1;
     }
 
     for (int attempt = 0; attempt < max_attempts; attempt++) {
-        csilk_stmt_bind_text(stmt, 1, who); /* locked_by */
+        csilk_stmt_bind_text(stmt, 1, who);            /* locked_by */
         csilk_stmt_bind_int64(stmt, 2, expires_epoch); /* lease_expires_at (epoch s) */
-        csilk_stmt_bind_int64(stmt, 3, now_epoch); /* WHERE lease_expires_at < now */
+        csilk_stmt_bind_int64(stmt, 3, now_epoch);     /* WHERE lease_expires_at < now */
 
         int64_t aff = 0;
         rc = csilk_stmt_execute(stmt, &aff);
@@ -180,12 +179,10 @@ csilk_migration_lock_acquire_lease(csilk_db_pool_t* pool,
  * default 300s lease.
  */
 int
-csilk_migration_lock_acquire(csilk_db_pool_t* pool,
-                             const char*      locked_by,
-                             int              timeout_seconds)
+csilk_migration_lock_acquire(csilk_db_pool_t* pool, const char* locked_by, int timeout_seconds)
 {
-    return csilk_migration_lock_acquire_lease(pool, locked_by, timeout_seconds,
-                                               CSILK_MIGRATION_LOCK_DEFAULT_LEASE_SECONDS);
+    return csilk_migration_lock_acquire_lease(
+        pool, locked_by, timeout_seconds, CSILK_MIGRATION_LOCK_DEFAULT_LEASE_SECONDS);
 }
 
 /*
@@ -216,13 +213,12 @@ csilk_migration_lock_release(csilk_db_pool_t* pool, const char* locked_by)
     }
 
     csilk_stmt_t* stmt = NULL;
-    int           rc = csilk_stmt_prepare(
-        pool,
-        "UPDATE schema_migration_lock "
-        "SET is_locked = 0, locked_at = NULL, locked_by = '', "
-        "    lease_expires_at = NULL "
-        "WHERE id = 1 AND locked_by = ?;",
-        &stmt);
+    int           rc = csilk_stmt_prepare(pool,
+                                          "UPDATE schema_migration_lock "
+                                          "SET is_locked = 0, locked_at = NULL, locked_by = '', "
+                                          "    lease_expires_at = NULL "
+                                          "WHERE id = 1 AND locked_by = ?;",
+                                          &stmt);
     if (rc != 0 || !stmt) {
         return -1;
     }

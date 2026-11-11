@@ -30,8 +30,8 @@
 static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 static csilk_app_t*    g_app = nullptr;
-static int g_tests_passed = 0;
-static int g_tests_failed = 0;
+static int             g_tests_passed = 0;
+static int             g_tests_failed = 0;
 
 static void
 test_result(const char* name, int ok)
@@ -131,7 +131,7 @@ send_request(int sock, const char* req)
 static void
 rpc_json_handler(csilk_ctx_t* c)
 {
-    const char* id = csilk_get_query(c, "id");
+    const char*   id = csilk_get_query(c, "id");
     csilk_json_t* id_json = id ? csilk_json_string_new(id) : NULL;
 
     const char* method = csilk_get_query(c, "method");

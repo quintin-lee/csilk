@@ -1012,12 +1012,12 @@ csilk_respond_jsonrpc_result(csilk_ctx_t* c, csilk_json_t* result, csilk_json_t*
 }
 
 void
-csilk_respond_jsonrpc_error(csilk_ctx_t* c,
-                            int          error_code,
-                            const char*  error_message,
+csilk_respond_jsonrpc_error(csilk_ctx_t*  c,
+                            int           error_code,
+                            const char*   error_message,
                             csilk_json_t* error_data,
                             csilk_json_t* id,
-                            int          http_status)
+                            int           http_status)
 {
     if (!c) {
         if (error_data) {

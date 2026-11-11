@@ -351,12 +351,12 @@ void csilk_respond_jsonrpc_result(csilk_ctx_t* c, csilk_json_t* result, csilk_js
  * @param id          The request id to echo back (may be NULL for notifications).
  * @param http_status HTTP status to send (0 → default 500).
  */
-void csilk_respond_jsonrpc_error(csilk_ctx_t* c,
-                                 int          error_code,
-                                 const char*  error_message,
+void csilk_respond_jsonrpc_error(csilk_ctx_t*  c,
+                                 int           error_code,
+                                 const char*   error_message,
                                  csilk_json_t* error_data,
                                  csilk_json_t* id,
-                                 int          http_status);
+                                 int           http_status);
 
 /**
  * @brief Strictly parse pagination parameters from query string (page, page_size).

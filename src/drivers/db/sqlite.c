@@ -611,7 +611,7 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
     .stmt_close = sqlite_stmt_close,
     .free_result = sqlite_free_result,
     .last_error = sqlite_last_error, /* csilk#8 */
-    .set_pragma = sqlite_set_pragma,  /* csilk#4 */
+    .set_pragma = sqlite_set_pragma, /* csilk#4 */
 };
 
 /** @brief Initialize and register the SQLite database driver with csilk.
