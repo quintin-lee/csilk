@@ -35,7 +35,19 @@ test_distributed_lock(csilk_db_pool_t* pool)
     /* Proc B attempts to acquire without timeout -> should fail */
     assert(csilk_migration_lock_acquire(pool, "proc_b", 0) == -1);
 
-    /* Proc A releases lock */
+    /*
+     * csilk#7 regression: a foreign release must be refused.
+     * proc_b did NOT acquire the lock, so it must not be able to
+     * release proc_a's lock.  The old implementation would have
+     * cleared the lock here (WHERE id = 1, no holder check) and
+     * allowed proc_c to grab it while proc_a was still writing.
+     */
+    assert(csilk_migration_lock_release(pool, "proc_b") == -1);
+
+    /* A release with NULL/empty holder identifier must also be refused. */
+    assert(csilk_migration_lock_release(pool, NULL) == -1);
+
+    /* Proc A releases its own lock -> succeeds */
     assert(csilk_migration_lock_release(pool, "proc_a") == 0);
 
     /* Proc B acquires now -> should succeed */
@@ -43,6 +55,31 @@ test_distributed_lock(csilk_db_pool_t* pool)
 
     /* Release */
     assert(csilk_migration_lock_release(pool, "proc_b") == 0);
+}
+
+/*
+ * csilk#7 regression: a crashed holder's lock must auto-expire via the
+ * lease.  We acquire with a 1-second lease, then wait ~1.2s without
+ * releasing; a second acquire should succeed (the lease has expired).
+ */
+static void
+test_distributed_lock_lease_expiry(csilk_db_pool_t* pool)
+{
+    assert(csilk_migration_lock_init(pool) == 0);
+
+    /* Acquire with a 1-second lease. */
+    assert(csilk_migration_lock_acquire_lease(pool, "crashed_holder", 0, 1) == 0);
+
+    /* Simulate the holder crashing: it never releases.  Wait ~1.2s so
+     * the 1-second lease expires. */
+    usleep(1200000);
+
+    /* A second instance should now be able to acquire, because the
+     * expired lease makes the lock re-acquirable. */
+    assert(csilk_migration_lock_acquire(pool, "new_holder", 0) == 0);
+
+    /* Clean up. */
+    assert(csilk_migration_lock_release(pool, "new_holder") == 0);
 }
 
 static void
@@ -189,6 +226,7 @@ main(void)
     assert(pool != NULL);
 
     test_distributed_lock(pool);
+    test_distributed_lock_lease_expiry(pool);
     test_migration_engine_flow(pool);
 
     csilk_db_pool_free(pool);
