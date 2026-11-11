@@ -709,7 +709,7 @@ postgres_stmt_close(csilk_stmt_t* stmt)
 
 /*
  * Map the most recent PostgreSQL failure to a csilk_db_err_t (csilk#8).
- * pq_conn_t does not store the last PQstatus, so this falls back to a
+ * pg_conn_t does not store the last PQstatus, so this falls back to a
  * connection liveness check.
  */
 static int
@@ -718,7 +718,7 @@ postgres_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
     if (!pool || !out_err) {
         return -1;
     }
-    pq_conn_t* conn = (pq_conn_t*)csilk_db_pool_get_connection(pool);
+    pg_conn_t* conn = (pg_conn_t*)csilk_db_pool_get_connection(pool);
     if (!conn) {
         *out_err = CSILK_DB_ERR_CONN;
         return 0;
