@@ -707,6 +707,53 @@ postgres_stmt_close(csilk_stmt_t* stmt)
     free(stmt);
 }
 
+/*
+ * Map the most recent PostgreSQL failure to a csilk_db_err_t (csilk#8).
+ * pq_conn_t does not store the last PQstatus, so this falls back to a
+ * connection liveness check.
+ */
+static int
+postgres_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
+{
+    if (!pool || !out_err) {
+        return -1;
+    }
+    pq_conn_t* conn = (pq_conn_t*)csilk_db_pool_get_connection(pool);
+    if (!conn) {
+        *out_err = CSILK_DB_ERR_CONN;
+        return 0;
+    }
+    *out_err = CSILK_DB_ERR_SQL;
+    return 0;
+}
+
+/*
+ * Apply a dialect-specific optimisation on PostgreSQL (csilk#4).  Most
+ * SQLite PRAGMA kinds have no PG equivalent: they are a no-op that logs a
+ * CSILK_LOG_W.  CSILK_DB_PRAGMA_CUSTOM executes the raw SQL verbatim.
+ */
+static int
+postgres_set_pragma(csilk_db_pool_t* pool, int kind, const char* value)
+{
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return -1;
+    }
+    switch (kind) {
+    case CSILK_DB_PRAGMA_CUSTOM:
+        return postgres_exec(pool, value ? value : "");
+    case CSILK_DB_PRAGMA_JOURNAL_MODE:
+    case CSILK_DB_PRAGMA_BUSY_TIMEOUT:
+    case CSILK_DB_PRAGMA_SYNCHRONOUS:
+    case CSILK_DB_PRAGMA_FOREIGN_KEYS:
+    default:
+        CSILK_LOG_W(
+            "postgres_set_pragma: kind %d has no PostgreSQL equivalent; no-op "
+            "(use CSILK_DB_PRAGMA_CUSTOM with a raw SET statement if needed)",
+            kind);
+        return 0; /* no-op, NOT an error */
+    }
+}
+
 /* -----------------------------------------------------------------------
  * Driver vtable
  * ----------------------------------------------------------------------- */
@@ -731,6 +778,8 @@ csilk_db_driver_t csilk_db_postgres_driver = {
     .stmt_execute = postgres_stmt_execute,
     .stmt_query_json = postgres_stmt_query_json,
     .stmt_close = postgres_stmt_close,
+    .last_error = postgres_last_error, /* csilk#8 */
+    .set_pragma = postgres_set_pragma,  /* csilk#4 */
 };
 
 /**

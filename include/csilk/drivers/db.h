@@ -51,6 +51,47 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
 typedef struct csilk_stmt_s csilk_stmt_t;
 
 /**
+ * @brief Distinguishable database error categories.
+ *
+ * Returned by csilk_db_last_error() after a failed csilk_db_exec /
+ * csilk_db_query_json / csilk_db_exec_param call.  Before this enumeration
+ * (csilk#8), every failure path returned the same -1, so callers could not
+ * tell "SQL syntax error" from "connection dropped" from "the driver does
+ * not support this SQL dialect" from "lock timeout" from "OOM" — downstream
+ * was forced to maintain its own driver-detection static flag (e.g.
+ * Minefolio's g_is_postgres) to branch on dialect.
+ *
+ * @note The category is set by the driver (via the csilk_db_driver_t
+ *       last_error callback when present) or falls back to the core layer's
+ *       generic mapping.  A value of CSILK_DB_OK means the most recent
+ *       operation succeeded (no error recorded).
+ */
+typedef enum {
+    CSILK_DB_OK = 0,          /**< Most recent operation succeeded. */
+    CSILK_DB_ERR_SQL,        /**< SQL syntax / runtime error. */
+    CSILK_DB_ERR_CONN,       /**< Connection dropped / could not connect. */
+    CSILK_DB_ERR_DIALECT,    /**< The driver does not support this SQL dialect. */
+    CSILK_DB_ERR_BUSY,       /**< Lock timeout / database is busy. */
+    CSILK_DB_ERR_OOM         /**< Out of memory. */
+} csilk_db_err_t;
+
+/**
+ * @brief Dialect-specific database optimisation kinds.
+ *
+ * Used by csilk_db_set_pragma() to apply a driver-appropriate optimisation
+ * (SQLite PRAGMA / PostgreSQL SET).  The csilk core renders each kind to
+ * the correct dialect via the driver's set_pragma callback, so callers no
+ * longer need to branch on driver name (csilk#4).
+ */
+typedef enum {
+    CSILK_DB_PRAGMA_JOURNAL_MODE = 1, /**< value: "WAL" / "DELETE" / ... */
+    CSILK_DB_PRAGMA_BUSY_TIMEOUT,      /**< value: milliseconds, e.g. "5000" */
+    CSILK_DB_PRAGMA_SYNCHRONOUS,      /**< value: "NORMAL" / "FULL" / ... */
+    CSILK_DB_PRAGMA_FOREIGN_KEYS,     /**< value: "ON" / "OFF" */
+    CSILK_DB_PRAGMA_CUSTOM            /**< value: raw dialect SQL string */
+} csilk_db_pragma_kind_t;
+
+/**
  * @brief Parameter value types for typed binding (csilk_db_query_param_json_typed).
  *
  * Use these to bind parameters with their native SQL types instead of
@@ -267,6 +308,28 @@ struct csilk_db_driver_s {
     /** @brief Free a result set and all associated memory.
    *  @param result  Result set to free (must not be NULL). */
     void (*free_result)(csilk_db_result_t* result);
+
+    /** @brief Map the most recent failure to a csilk_db_err_t category.
+   *  Optional (NULL for drivers that do not implement it — the core
+   *  layer falls back to a generic mapping).  Called by
+   *  csilk_db_last_error() after an exec/query failure to obtain a
+   *  driver-specific error category (e.g. SQLite maps SQLITE_BUSY to
+   *  CSILK_DB_ERR_BUSY; PostgreSQL maps a disconnected PQstatus to
+   *  CSILK_DB_ERR_CONN).
+   *  @param pool  Connection pool.
+   *  @param[out] out_err  Receives the category.
+   *  @return 0 on success, -1 if the driver could not determine a
+   *          category (in which case the core layer uses its fallback). */
+    int (*last_error)(csilk_db_pool_t* pool, csilk_db_err_t* out_err);
+
+    /** @brief Apply a dialect-specific pragma / SET optimisation.
+   *  Optional (NULL for drivers that do not support dialect tweaks).
+   *  Invoked by csilk_db_set_pragma() to render the appropriate dialect
+   *  string (SQLite PRAGMA / PostgreSQL SET).  @p kind is a
+   *  csilk_db_pragma_kind_t; @p value is the dialect-specific payload
+   *  (e.g. "WAL" for journal_mode, 5000 for busy_timeout).
+   *  @return 0 on success or no-op, -1 on unsupported dialect. */
+    int (*set_pragma)(csilk_db_pool_t* pool, int kind, const char* value);
 };
 
 /**
@@ -386,6 +449,59 @@ void csilk_stmt_close(csilk_stmt_t* stmt);
  *         or the connection fails.
  */
 csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
+
+/**
+ * @brief Register an on-open hook that runs after the driver's connect()
+ *        succeeds.
+ *
+ * The callback is invoked with the pool and the caller-supplied context
+ * right after the connection is established, letting the downstream apply
+ * dialect optimisations (PRAGMA / SET) at connect time rather than in a
+ * separate db_init step (csilk#4).  The hook runs under pool->mutex.
+ *
+ * @param pool   Connection pool.
+ * @param cb     Callback (may be NULL to clear the hook).
+ * @param ctx    Opaque user data forwarded to cb.
+ */
+typedef void (*csilk_db_on_open_fn)(csilk_db_pool_t* pool, void* ctx);
+void csilk_db_pool_on_open(csilk_db_pool_t* pool, csilk_db_on_open_fn cb, void* ctx);
+
+/**
+ * @brief Get the most recent database error category.
+ *
+ * Returns the csilk_db_err_t category recorded by the last failed
+ * csilk_db_exec / csilk_db_query_json / csilk_db_exec_param / typed
+ * variant call.  Returns CSILK_DB_OK if the most recent call succeeded
+ * (no error recorded).  The category is obtained from the driver's
+ * last_error callback when present, otherwise from the core layer's
+ * generic mapping (csilk#8).
+ *
+ * @param pool  Connection pool.  Must not be NULL.
+ * @return The most recent csilk_db_err_t category.
+ */
+csilk_db_err_t csilk_db_last_error(csilk_db_pool_t* pool);
+
+/**
+ * @brief Apply a dialect-specific database optimisation.
+ *
+ * Renders @p kind to the appropriate dialect string for the pool's driver
+ * (SQLite PRAGMA / PostgreSQL SET) and executes it.  This lets callers
+ * express an optimisation intent (e.g. "enable WAL + busy_timeout")
+ * without hand-writing driver-specific SQL (csilk#4).
+ *
+ * For drivers that do not support a given kind (e.g. SQLite PRAGMA on
+ * PostgreSQL, or PG SET on SQLite), the call is a no-op that logs a
+ * CSILK_LOG_W and returns 0 — NOT an error, so callers can safely issue
+ * the same set of optimisations regardless of the active driver.
+ *
+ * @param pool   Connection pool.
+ * @param kind   Optimisation kind (csilk_db_pragma_kind_t).
+ * @param value  Dialect-specific payload (e.g. "WAL", "5000", "ON").
+ *               For CSILK_DB_PRAGMA_CUSTOM, the raw dialect SQL string.
+ * @return 0 on success or no-op (driver does not support the kind),
+ *         -1 on a genuine failure (SQL error, OOM, etc.).
+ */
+int csilk_db_set_pragma(csilk_db_pool_t* pool, int kind, const char* value);
 
 /**
  * @brief Destroy a database pool and disconnect.
