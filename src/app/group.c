@@ -28,35 +28,9 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#include "app_internal.h"
 
-/** @brief Initial capacity for group middleware array. */
-enum { CSILK_GROUP_MW_INIT_CAP = 4 };
-
-/** @brief Route group — holds a URL prefix, middleware chain, and optional
- * parent group for nesting.
- *
- * Groups form a tree via the parent pointer. The full middleware chain
- * for any route is the concatenation of parent middleware (recursively)
- * followed by this group's middleware, followed by the route handlers.
- */
-struct csilk_group_s {
-    char*            prefix;              /**< URL prefix for routes in this group.
-                           *   Combined with parent prefix at creation
-                           *   via join_path(). Freed in csilk_group_free().
-                           *   e.g., parent="/api", child="/v1" → "/api/v1". */
-    csilk_router_t*  router;              /**< Router where routes are registered. Inherited
-                           *   from parent or set explicitly in
-                           *   csilk_group_new(). Not owned by the group. */
-    csilk_handler_t* middlewares;         /**< Dynamically-grown array of middleware
-                                 *   handlers for this group. Grown by
-                                 *   doubling (initial cap = 4). Freed in
-                                 *   csilk_group_free(). */
-    size_t           middleware_count;    /**< Current number of middleware handlers. */
-    size_t           middleware_capacity; /**< Allocated capacity (always ≥ count). */
-    csilk_group_t*   parent;              /**< Parent group in the nesting tree, or NULL
-                                 *   for root groups. Used by gather_handlers()
-                                 *   to walk up the tree. Not owned. */
-};
+/* CSILK_GROUP_MW_INIT_CAP and struct csilk_group_s are in app_internal.h */
 
 /** @brief Internal: join two URL path components with a single '/' separator.
  *
@@ -202,6 +176,14 @@ csilk_group_use(csilk_group_t* group, csilk_handler_t handler)
 {
     if (!group) {
         return -1;
+    }
+    /* Warn if middleware is added after routes are already registered (csilk#9e):
+     * the new middleware will only apply to FUTURE route registrations on this
+     * group, not to existing ones. */
+    if (group->has_routes) {
+        CSILK_LOG_W("Group: middleware added after routes registered on prefix '%s'; "
+                    "will not apply to existing routes",
+                    group->prefix);
     }
     if (group->middleware_count >= group->middleware_capacity) {
         size_t new_cap =
@@ -489,6 +471,7 @@ csilk_group_add_handlers(csilk_group_t*   group,
     if (!group || !handlers || count == 0) {
         return -1;
     }
+    group->has_routes = 1;
 
     char* full_path = join_path(group->prefix, path);
     if (!full_path) {
