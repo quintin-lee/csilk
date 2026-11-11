@@ -85,10 +85,22 @@ find_matching_group_for_path(csilk_app_t* app, const char* path, const char** ou
         const char* prefix = app->groups[i].prefix;
         size_t      prefix_len = strlen(prefix);
         if (prefix_len > best_len && strncmp(path, prefix, prefix_len) == 0) {
-            if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
-                best_group = app->groups[i].group;
-                best_len = prefix_len;
-                *out_relative_path = path + prefix_len;
+            /* For exact-match groups (csilk#9e), require the path to equal
+             * the prefix exactly.  Sub-paths like /mcp/tools do NOT match
+             * a /mcp exact-match group.  Trailing slash (/mcp/) is allowed. */
+            if (app->groups[i].group->exact_match) {
+                if (path[prefix_len] == '\0' ||
+                    (path[prefix_len] == '/' && path[prefix_len + 1] == '\0')) {
+                    best_group = app->groups[i].group;
+                    best_len = prefix_len;
+                    *out_relative_path = path + prefix_len;
+                }
+            } else {
+                if (path[prefix_len] == '\0' || path[prefix_len] == '/') {
+                    best_group = app->groups[i].group;
+                    best_len = prefix_len;
+                    *out_relative_path = path + prefix_len;
+                }
             }
         }
     }
@@ -121,6 +133,34 @@ csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h)
     if (g) {
         csilk_group_use(g, h);
         CSILK_LOG_I("Registered group middleware for prefix '%s': %p", prefix, (void*)h);
+    }
+}
+
+/** @brief Register a middleware handler scoped to an exact URL prefix (csilk#9e).
+ *
+ * Unlike csilk_app_use_group which uses longest-prefix matching, this
+ * registers the middleware ONLY for routes whose path exactly equals the
+ * given prefix (or prefix + trailing slash).  Sub-paths (e.g., /mcp/tools
+ * when prefix is /mcp) do NOT match.  Useful for cases like /mcp where you
+ * want the middleware to apply to /mcp but NOT to /mcp/tools, /mcp/servers,
+ * etc.
+ *
+ * @param app    Application instance.
+ * @param prefix URL path prefix for exact match.
+ * @param h      Middleware handler function.
+ */
+void
+csilk_app_use_group_exact(csilk_app_t* app, const char* prefix, csilk_handler_t h)
+{
+    if (!app || !prefix) {
+        return;
+    }
+    csilk_group_t* g = find_or_create_group(app, prefix);
+    if (g) {
+        g->exact_match = 1;
+        csilk_group_use(g, h);
+        CSILK_LOG_I(
+            "Registered exact-match group middleware for prefix '%s': %p", prefix, (void*)h);
     }
 }
 
