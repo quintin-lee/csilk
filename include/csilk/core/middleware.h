@@ -113,6 +113,23 @@ void csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config);
 void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
 
 /**
+ * @brief Rate-limit by an explicit caller-supplied key instead of the
+ *        client IP (csilk#9a).
+ *
+ * Use this when the throttle dimension is not the source IP but a
+ * business key such as a user_id, tenant_id, API-key, or session id.
+ * The key must be a NUL-terminated string that remains valid for the
+ * duration of the call.  On table saturation the request fails open
+ * (unlimited), matching csilk_rate_limit_middleware.
+ *
+ * @param c     The request context.
+ * @param limit Maximum number of requests allowed per key within the
+ *              60-second sliding window.
+ * @param key   The throttle key (e.g. a user id).  Must not be NULL.
+ */
+void csilk_rate_limit_keyed(csilk_ctx_t* c, int limit, const char* key);
+
+/**
  * @brief Enforce the lockless in-memory rate-limit decision for an explicit IP.
  *
  * Internal hook used by csilk_rate_limit_middleware once the client IP is
