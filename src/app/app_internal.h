@@ -15,6 +15,37 @@
 /** @brief Maximum number of route groups per app. */
 enum { CSILK_MAX_GROUPS = 32 };
 
+/** @brief Maximum number of dual-parameter middleware thunks per app (csilk#9c). */
+enum { CSILK_MAX_MW_THUNKS = 32 };
+
+/** @brief Initial capacity for group middleware array. */
+enum { CSILK_GROUP_MW_INIT_CAP = 4 };
+
+/** @brief Route group — holds a URL prefix, middleware chain, and optional
+ * parent group for nesting.
+ *
+ * Groups form a tree via the parent pointer. The full middleware chain
+ * for any route is the concatenation of parent middleware (recursively)
+ * followed by this group's middleware, followed by the route handlers.
+ */
+struct csilk_group_s {
+    char*            prefix;
+    csilk_router_t*  router;
+    csilk_handler_t* middlewares;
+    size_t           middleware_count;
+    size_t           middleware_capacity;
+    csilk_group_t*   parent;
+    int              has_routes;  /**< Set when any route registered (csilk#9e). */
+    int              exact_match; /**< Exact prefix match only (csilk#9e). */
+};
+
+/** @brief Internal: thunk capturing a csilk_middleware_t + user_data pair so a
+ * dual-parameter middleware can be registered as a csilk_handler_t (csilk#9c). */
+typedef struct {
+    csilk_middleware_t fn;
+    void*              user_data;
+} mw_thunk_t;
+
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
  * mapping. */
 typedef struct {
