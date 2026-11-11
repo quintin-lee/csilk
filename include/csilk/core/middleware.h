@@ -129,6 +129,50 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
  */
 void csilk_rate_limit_keyed(csilk_ctx_t* c, int limit, const char* key);
 
+/** @brief Key source for the keyed rate limiter. */
+typedef enum {
+    CSILK_RATE_KEY_IP,      /**< Use client IP. */
+    CSILK_RATE_KEY_IP_PATH, /**< Use IP + request path. */
+    CSILK_RATE_KEY_CUSTOM,  /**< Use a custom key extracted by key_fn. */
+} csilk_rate_limiter_key_t;
+
+/** @brief Configuration for the keyed rate limiter middleware (csilk#9a). */
+typedef struct {
+    csilk_rate_limiter_key_t key_type;  /**< How to derive the throttle key. */
+    int                      limit;     /**< Max requests per key per window. */
+    uint64_t                 window_ms; /**< Window size in milliseconds. */
+    /* For CSILK_RATE_KEY_IP_PATH: */
+    const char** match_paths;      /**< NULL-terminated paths to rate-limit (NULL = all). */
+    const char** exclude_prefixes; /**< NULL-terminated prefixes to skip (NULL = none). */
+    /* For CSILK_RATE_KEY_CUSTOM: */
+    const char* (*key_fn)(
+        csilk_ctx_t*
+            c); /**< Extract custom key (returns NUL-terminated string, valid for call duration). */
+} csilk_rate_limiter_config_t;
+
+/**
+ * @brief Keyed rate limiter middleware with configurable throttle key (csilk#9a).
+ *
+ * Auto-derives the throttle key from the request according to
+ * @ref csilk_rate_limiter_config_t::key_type:
+ *   - CSILK_RATE_KEY_IP      : per-client-IP (same as csilk_rate_limit_middleware).
+ *   - CSILK_RATE_KEY_IP_PATH : composite key of IP + request path, optionally
+ *     filtered by match_paths / exclude_prefixes.
+ *   - CSILK_RATE_KEY_CUSTOM  : key supplied by the config key_fn callback
+ *     (e.g. user_id / tenant_id / API key).
+ *
+ * Uses the configured @ref csilk_rate_limiter_config_t::window_ms instead of
+ * the hardcoded 60-second window of csilk_rate_limit_middleware. Composite and
+ * custom keys are tracked in a separate lockless keyed table; on table
+ * saturation the request fails open (unlimited), matching the per-IP table.
+ * The existing per-IP csilk_rate_limit_middleware is unaffected and remains
+ * available.
+ *
+ * @param c       The request context.
+ * @param config  Limiter configuration (must remain valid for the call).
+ */
+void csilk_rate_limiter_middleware(csilk_ctx_t* c, const csilk_rate_limiter_config_t* config);
+
 /**
  * @brief Enforce the lockless in-memory rate-limit decision for an explicit IP.
  *
