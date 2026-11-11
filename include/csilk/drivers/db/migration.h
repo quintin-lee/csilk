@@ -77,6 +77,25 @@ int csilk_migration_lock_init(csilk_db_pool_t* pool);
 int csilk_migration_lock_acquire(csilk_db_pool_t* pool, const char* locked_by, int timeout_seconds);
 
 /**
+ * @brief Acquire distributed migration lock with an explicit lease.
+ *
+ * Like csilk_migration_lock_acquire, but allows the caller to set the
+ * lease duration.  A lease longer than the work being done is preferred
+ * so a crashed holder's lock auto-expires after lease_seconds.  The
+ * default lease is 300s.
+ *
+ * @param pool            Database pool handle.
+ * @param locked_by       Identifier of the locker.
+ * @param timeout_seconds Timeout in seconds for the acquire wait (<= 0 for single attempt).
+ * @param lease_seconds   How long the lock remains valid after acquire (auto-expire).
+ * @return 0 on success, -1 on failure or timeout.
+ */
+int csilk_migration_lock_acquire_lease(csilk_db_pool_t* pool,
+                                       const char*      locked_by,
+                                       int              timeout_seconds,
+                                       int              lease_seconds);
+
+/**
  * @brief Release distributed migration lock.
  *
  * @param pool Database pool handle.
