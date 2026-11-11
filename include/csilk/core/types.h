@@ -158,6 +158,16 @@ typedef struct {
  */
 typedef void (*csilk_handler_t)(csilk_ctx_t* c);
 
+/** @brief Dual-parameter middleware handler (csilk#9c).
+ *
+ * Unlike csilk_handler_t which takes only the request context, this type also
+ * receives a caller-supplied user_data pointer, enabling config-driven
+ * middleware registration (e.g. csilk_cors_middleware with a config) without
+ * global/static state. Pair with csilk_app_use_mw() to register such a
+ * handler on the application.
+ */
+typedef void (*csilk_middleware_t)(csilk_ctx_t* c, void* user_data);
+
 /**
  * @brief Interned IDs for well-known standard HTTP header names.
  *
@@ -286,16 +296,26 @@ typedef struct {
  * middleware.
  */
 typedef struct {
-    const char* allow_origin;      /**< Value of the Access-Control-Allow-Origin header
-                               (e.g., "*" or "https://example.com"). */
-    const char* allow_methods;     /**< Value of the Access-Control-Allow-Methods
+    const char*  allow_origin;      /**< Value of the Access-Control-Allow-Origin header
+                               (e.g., "*" or "https://example.com"). Used when
+                               @ref allow_origin_list is NULL. */
+    const char*  allow_methods;     /**< Value of the Access-Control-Allow-Methods
                                  header (e.g., "GET, POST, PUT, DELETE"). */
-    const char* allow_headers;     /**< Value of the Access-Control-Allow-Headers
+    const char*  allow_headers;     /**< Value of the Access-Control-Allow-Headers
                                  header (e.g., "Content-Type, Authorization"). */
-    int         allow_credentials; /**< Non-zero to include
+    int          allow_credentials; /**< Non-zero to include
                                 Access-Control-Allow-Credentials: true. */
-    int         max_age;           /**< Value of Access-Control-Max-Age in seconds (e.g., 86400 for
+    int          max_age;           /**< Value of Access-Control-Max-Age in seconds (e.g., 86400 for
                   24 h). */
+    const char** allow_origin_list; /**< NULL-terminated array of allowed origins (csilk#9c).
+                                 When non-NULL, the request Origin is checked against this
+                                 list; on a match, @ref echo_origin selects whether to echo
+                                 the matched origin back or use the first list entry. When
+                                 NULL, the legacy @ref allow_origin behavior applies. */
+    int          echo_origin;       /**< (csilk#9c) Non-zero: when the request Origin matches an
+                                 entry in @ref allow_origin_list, echo back the request's own
+                                 Origin in Access-Control-Allow-Origin. Zero: use a fixed
+                                 list value instead of echoing. */
 } csilk_cors_config_t;
 
 /**

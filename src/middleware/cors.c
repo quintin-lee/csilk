@@ -50,7 +50,35 @@ csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
 
     /* Per the Fetch spec, Vary: Origin must be set for non-wildcard origins
      so caches do not serve CORS responses across different origins. */
-    if (config->allow_origin) {
+    if (config->allow_origin_list) {
+        /* (csilk#9c) Multi-origin list: check the request Origin against the
+         * NULL-terminated allow_origin_list.  On a match, echo the request's
+         * own Origin back (when echo_origin) or use a fixed list value.
+         * On no match, no Access-Control-Allow-Origin header is set. */
+        int         matched = 0;
+        const char* matched_origin = NULL;
+        for (int i = 0; config->allow_origin_list[i]; i++) {
+            if (origin && config->allow_origin_list[i] &&
+                strcmp(origin, config->allow_origin_list[i]) == 0) {
+                matched = 1;
+                matched_origin = config->allow_origin_list[i];
+                break;
+            }
+        }
+        if (matched) {
+            const char* allow = config->echo_origin ? origin : matched_origin;
+            CSILK_LOG_T("CORS: Origin %s matched allow_origin_list; allowing %s", origin, allow);
+            csilk_set_header(c, "Access-Control-Allow-Origin", allow);
+            /* Echoed (or specific) origin is non-wildcard -> add Vary: Origin. */
+            if (strcmp(allow, "*") != 0) {
+                csilk_set_header(c, "Vary", "Origin");
+            }
+        } else {
+            CSILK_LOG_D("CORS: Origin %s not in allow_origin_list; no allow-origin header",
+                        origin ? origin : "(none)");
+        }
+    } else if (config->allow_origin) {
+        /* Legacy single-origin behavior. */
         /* Reject wildcard origin with credentials (RFC 6454 §6.2) */
         int reject_wildcard = (config->allow_credentials && strcmp(config->allow_origin, "*") == 0);
 
