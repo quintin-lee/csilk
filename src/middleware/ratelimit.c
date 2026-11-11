@@ -210,3 +210,24 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
 
     _csilk_rate_limit_local(c, ip, limit);
 }
+
+/**
+ * @brief Rate-limit by an explicit caller-supplied key (csilk#9a).
+ *
+ * Delegates to the same lockless table as csilk_rate_limit_middleware,
+ * but the throttle dimension is @p key (a user_id / tenant_id /
+ * API-key) rather than the client IP.  The key is treated as an opaque
+ * string and hashed into the same ip_table, so a user throttled here
+ * and an IP throttled there share the same 60-second window budget
+ * only when their strings collide (extremely rare for distinct ids).
+ */
+void
+csilk_rate_limit_keyed(csilk_ctx_t* c, int limit, const char* key)
+{
+    if (!c || !key || !key[0]) {
+        CSILK_LOG_T("RateLimit[Keyed]: no key supplied; skipping rate limiting");
+        csilk_next(c);
+        return;
+    }
+    _csilk_rate_limit_local(c, key, limit);
+}

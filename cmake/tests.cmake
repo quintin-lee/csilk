@@ -244,6 +244,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_multipart
     test_ratelimit
     test_sliding_ratelimit
+    test_keyed_ratelimit_security_headers
     test_recovery
     test_recovery_ext
     test_request_id
@@ -268,7 +269,7 @@ set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware
+    middleware;middleware;middleware;middleware
 )
 
 # -- Protocol tests --
