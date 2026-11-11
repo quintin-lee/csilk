@@ -94,6 +94,24 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
  * @param h Middleware handler function. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
 
+/** @brief Register a dual-parameter middleware with a config pointer (csilk#9c).
+ *
+ * Unlike csilk_app_use(), which only accepts a csilk_handler_t (no way to
+ * carry configuration), this overload takes a csilk_middleware_t together with
+ * a @p user_data pointer. The pair is captured in a small heap-allocated thunk
+ * that is registered as a csilk_handler_t, so config-driven middleware such as
+ * csilk_cors_middleware() can be installed without resorting to a static or
+ * global config variable.
+ *
+ * The thunk is owned by the application and released by csilk_app_free().
+ * @p user_data must remain valid for the lifetime of the app (typically a
+ * config struct that outlives the server).
+ *
+ * @param app Application handle.
+ * @param mw  Dual-parameter middleware handler.
+ * @param user_data Config pointer forwarded to @p mw on every request. */
+void csilk_app_use_mw(csilk_app_t* app, csilk_middleware_t mw, void* user_data);
+
 /** @brief Register a middleware that runs only on a specific prefix group.
  *
  * Group middleware is prepended to routes whose path matches @p prefix.
@@ -104,6 +122,20 @@ void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
  * @param prefix URL path prefix (e.g., "/api").
  * @param h Middleware handler function. */
 void csilk_app_use_group(csilk_app_t* app, const char* prefix, csilk_handler_t h);
+
+/** @brief Register a middleware handler scoped to an exact URL prefix (csilk#9e).
+ *
+ * Unlike csilk_app_use_group which uses longest-prefix matching, this
+ * registers the middleware ONLY for routes whose path exactly equals the
+ * given prefix (or prefix + trailing slash).  Sub-paths do NOT match.
+ * Useful for cases like /mcp where you want the middleware to apply to
+ * /mcp but NOT to /mcp/tools, /mcp/servers, etc.
+ *
+ * @param app    Application handle.
+ * @param prefix URL path prefix for exact match.
+ * @param h      Middleware handler function.
+ */
+void csilk_app_use_group_exact(csilk_app_t* app, const char* prefix, csilk_handler_t h);
 
 /** @brief Auto-apply built-in middleware based on current config.
  *
