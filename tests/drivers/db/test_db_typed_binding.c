@@ -112,7 +112,7 @@ test_injection_via_quotes_neutralised(void)
 
     /* Read it back — the value must round-trip exactly. */
     const char*   sel[] = {"1", NULL};
-    csilk_json_t*   rows =
+    csilk_json_t* rows =
         csilk_db_query_param_json(pool, "SELECT name FROM users WHERE id = ?", sel);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
@@ -120,7 +120,7 @@ test_injection_via_quotes_neutralised(void)
     const char*   got = csilk_json_get_string(row, "name");
     assert(got != nullptr);
     assert(strcmp(got, name) == 0); /* verbatim round-trip */
-    csilk_json_free(rows); /* free the first result before re-querying */
+    csilk_json_free(rows);          /* free the first result before re-querying */
 
     /* Now a classic injection attempt: a value that, if spliced into the
      * SQL string, would terminate the string literal and append a tautology.

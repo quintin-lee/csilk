@@ -19,27 +19,27 @@
 
 #include "csilk/drivers/db.h"
 
+/** @brief Maximum connections per pool (csilk#6). */
+#define CSILK_DB_POOL_MAX_CONNS 32
+
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;
-    void*              connection;
+    void*              connections[CSILK_DB_POOL_MAX_CONNS]; /**< Connection array (csilk#6). */
+    int                max_conns;  /**< Number of connections in this pool. */
+    void*              connection; /**< = connections[0], backward compat. */
     csilk_mutex_t      mutex;
     /*
-     * Owner-thread identifier for the connection. Set by csilk_db_pool_acquire
-     * (or implicitly by csilk_db_with_conn) to the thread that currently holds
-     * the raw connection pointer; reset to NULL on csilk_db_pool_put.
-     * Under the libuv backend this is a uv_thread_t / csilk_thread_t key; under
-     * the uring backend it is a pthread_t. For pools that never use the
-     * acquire/with_conn primitives (i.e. only the high-level csilk_db_query_* /
-     * csilk_db_exec_* / csilk_stmt_* APIs which always hold pool->mutex), this
-     * field stays NULL and acts as a no-op guard.
-     *
-     * Purpose: enables csilk_db_pool_put to validate that the releasing thread
-     * is actually the one that acquired the connection (holder check),
-     * preventing "release someone else's conn" bugs that caused the
-     * multi-thread UAF reported in csilk#1.
+     * Per-connection holder tracking (csilk#6).
+     * conn_holder[i] / conn_holder_set[i] track which thread owns connections[i].
+     * For single-connection pools (max_conns == 1), conn_holder and conn_holder_set
+     * remain as the primary fields (backward compat with all existing code).
+     * For multi-connection pools, the arrays are used by acquire/put to track
+     * per-connection ownership.
      */
-    csilk_thread_t conn_holder;
-    bool           conn_holder_set;
+    csilk_thread_t conn_holder;     /**< Holder of connections[0] (primary). */
+    bool           conn_holder_set; /**< True when connections[0] is held. */
+    csilk_thread_t conn_holders[CSILK_DB_POOL_MAX_CONNS]; /**< Per-conn holder (multi-conn mode). */
+    bool           conn_holder_flags[CSILK_DB_POOL_MAX_CONNS]; /**< Per-conn held flag. */
     /*
      * Most recent error category (csilk#8).  Set by the core layer when a
      * high-level call (csilk_db_exec / csilk_db_query_json / ...) fails,

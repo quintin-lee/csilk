@@ -116,16 +116,47 @@ csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn)
     }
 
     csilk_mutex_lock(&pool->mutex);
+
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+
+    /* For multi-connection pools, scan for a free connection. */
+    if (n > 1) {
+        csilk_thread_t me = csilk_thread_self();
+        for (int i = 0; i < n; i++) {
+            if (!pool->connections[i]) {
+                continue;
+            }
+            /* Same thread re-acquiring — idempotent. */
+            if (pool->conn_holder_flags[i] && pool->conn_holders[i] == me) {
+                *conn = pool->connections[i];
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+            /* Free slot — claim it. */
+            if (!pool->conn_holder_flags[i]) {
+                pool->conn_holder_flags[i] = true;
+                pool->conn_holders[i] = me;
+                *conn = pool->connections[i];
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+        }
+        /* All connections held by other threads — pool exhausted. */
+        CSILK_LOG_W("csilk_db_pool_acquire: pool '%s' exhausted (%d/%d connections in use)",
+                    pool->driver ? pool->driver->name : "(null)",
+                    n,
+                    n);
+        csilk_mutex_unlock(&pool->mutex);
+        return -1;
+    }
+
+    /* Single-connection pool — existing behavior. */
     if (!pool->connection) {
         csilk_mutex_unlock(&pool->mutex);
         CSILK_LOG_E("csilk_db_pool_acquire: pool '%s' has no open connection",
                     pool->driver ? pool->driver->name : "(null)");
         return -1;
     }
-    /* Reject if the connection is already held by another thread.  This is
-     * what makes the holder check in csilk_db_pool_put meaningful: without
-     * this guard, a second thread could simply re-acquire and overwrite
-     * conn_holder, defeating the cross-thread release refusal. */
     if (pool->conn_holder_set) {
         csilk_thread_t me = csilk_thread_self();
         if (me != pool->conn_holder) {
@@ -135,7 +166,6 @@ csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn)
             csilk_mutex_unlock(&pool->mutex);
             return -1;
         }
-        /* Same thread re-acquiring — idempotent, just return the conn. */
         *conn = pool->connection;
         csilk_mutex_unlock(&pool->mutex);
         return 0;
@@ -174,8 +204,36 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
     }
 
     csilk_mutex_lock(&pool->mutex);
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
 
-    /* The connection must still be the one we handed out. */
+    /* Multi-connection pool: find which slot this conn belongs to. */
+    if (n > 1) {
+        for (int i = 0; i < n; i++) {
+            if (pool->connections[i] == conn) {
+                csilk_thread_t me = csilk_thread_self();
+                if (pool->conn_holder_flags[i] && pool->conn_holders[i] != me) {
+                    CSILK_LOG_W("csilk_db_pool_put: called from thread that does not hold "
+                                "conn slot %d (acquired by another thread); refusing "
+                                "cross-thread release (driver '%s')",
+                                i,
+                                pool->driver ? pool->driver->name : "(null)");
+                    csilk_mutex_unlock(&pool->mutex);
+                    return -1;
+                }
+                pool->conn_holder_flags[i] = false;
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+        }
+        CSILK_LOG_W("csilk_db_pool_put: conn %p not found in pool (driver '%s'); "
+                    "refusing to release",
+                    conn,
+                    pool->driver ? pool->driver->name : "(null)");
+        csilk_mutex_unlock(&pool->mutex);
+        return -1;
+    }
+
+    /* Single-connection pool — existing behavior. */
     if (pool->connection != conn) {
         CSILK_LOG_W("csilk_db_pool_put: conn %p does not match pool->connection %p "
                     "(driver '%s'); refusing to release",
@@ -185,8 +243,6 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
         csilk_mutex_unlock(&pool->mutex);
         return -1;
     }
-
-    /* Holder check: only the acquiring thread may release. */
     if (pool->conn_holder_set) {
         csilk_thread_t me = csilk_thread_self();
         if (me != pool->conn_holder) {
@@ -199,8 +255,6 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
         }
     }
     pool->conn_holder_set = false;
-    /* Note: pool->connection is NOT cleared here — the connection remains
-     * open and owned by the pool until csilk_db_pool_free(). */
     csilk_mutex_unlock(&pool->mutex);
     return 0;
 }
@@ -312,7 +366,7 @@ csilk_db_pool_set_connection(csilk_db_pool_t* pool, void* conn)
  * @note The returned csilk_json must be freed by the caller with csilk_json_free().
  * @warning The pool mutex must be held for the duration of this call. */
 static csilk_json_t*
-csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
+csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql, const char* const* json_columns)
 {
     csilk_db_result_t result = {0};
     if (pool->driver->query(pool, sql, &result) != 0) {
@@ -335,11 +389,34 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 
         csilk_db_row_t* row = result.rows[i];
         for (int j = 0; j < row->count; j++) {
-            if (row->values[j]) {
-                csilk_json_add_object(obj,
-                                      result.column_names ? result.column_names[j] : "col",
-                                      csilk_json_string_new(row->values[j]));
+            const char* key = result.column_names ? result.column_names[j] : "col";
+            const char* val = row->values[j];
+            if (!val) {
+                continue;
             }
+
+            /* When json_columns is set and this column is declared a JSON column, attempt
+             * to parse string values that look like JSON (start with '[' or '{') into
+             * native JSON objects/arrays.  On parse failure, fall back to a string scalar
+             * so the value is preserved as-is. */
+            if (json_columns && (val[0] == '[' || val[0] == '{')) {
+                bool is_json_col = false;
+                for (int k = 0; json_columns[k]; k++) {
+                    if (json_columns[k] && strcmp(json_columns[k], key) == 0) {
+                        is_json_col = true;
+                        break;
+                    }
+                }
+                if (is_json_col) {
+                    csilk_json_t* parsed = csilk_json_parse(val);
+                    if (parsed) {
+                        csilk_json_add_object(obj, key, parsed);
+                        continue;
+                    }
+                }
+            }
+
+            csilk_json_add_object(obj, key, csilk_json_string_new(val));
         }
         csilk_json_array_append(array, obj);
     }
@@ -366,9 +443,40 @@ csilk_db_query_json_locked(csilk_db_pool_t* pool, const char* sql)
 csilk_db_pool_t*
 csilk_db_pool_new(const char* driver_name, const char* dsn)
 {
+    return csilk_db_pool_new_ex(driver_name, dsn, 1);
+}
+
+/** @brief Create a multi-connection database pool (csilk#6).
+ *
+ * Opens max_conns connections to the driver and stores them in an idle
+ * list.  csilk_db_pool_acquire picks a free connection; csilk_db_pool_put
+ * returns it.  For single-connection pools (max_conns == 1) the behaviour
+ * is identical to csilk_db_pool_new.
+ *
+ * High-level APIs always use connections[0] under the pool mutex, so they
+ * work unchanged.  The multi-connection value is that concurrent callers of
+ * csilk_db_pool_acquire can each get a DIFFERENT connection and work in
+ * parallel (PostgreSQL / MySQL / Redis).  For SQLite the file-level lock
+ * serialises writes anyway, so max_conns > 1 is mostly useful for
+ * concurrent read-only access.
+ *
+ * @param driver_name  Driver name.
+ * @param dsn          Data source name.
+ * @param max_conns    Number of connections to open (1 to CSILK_DB_POOL_MAX_CONNS).
+ * @return A new pool, or NULL on failure.
+ */
+csilk_db_pool_t*
+csilk_db_pool_new_ex(const char* driver_name, const char* dsn, int max_conns)
+{
     if (!driver_name) {
         CSILK_LOG_E("Failed to create database pool: driver_name is NULL");
         return NULL;
+    }
+    if (max_conns < 1) {
+        max_conns = 1;
+    }
+    if (max_conns > CSILK_DB_POOL_MAX_CONNS) {
+        max_conns = CSILK_DB_POOL_MAX_CONNS;
     }
 
     csilk_db_driver_t* driver = csilk_db_get_driver(driver_name);
@@ -385,17 +493,50 @@ csilk_db_pool_new(const char* driver_name, const char* dsn)
 
     csilk_mutex_init(&pool->mutex);
     pool->driver = driver;
+    pool->max_conns = max_conns;
     pool->conn_holder_set = false;
-    pool->conn_holder = csilk_thread_self(); /* placeholder; overwritten on acquire */
-    if (driver->connect(pool, dsn) != 0) {
-        CSILK_LOG_E("Database connection failed for driver '%s' (DSN: '%s')", driver_name, dsn);
-        csilk_mutex_destroy(&pool->mutex);
-        free(pool);
-        return NULL;
+    pool->conn_holder = csilk_thread_self();
+    for (int i = 0; i < CSILK_DB_POOL_MAX_CONNS; i++) {
+        pool->conn_holder_flags[i] = false;
     }
 
-    CSILK_LOG_I(
-        "Database pool created and connected using driver '%s' (DSN: '%s')", driver_name, dsn);
+    for (int i = 0; i < max_conns; i++) {
+        pool->connection = NULL;
+        if (driver->connect(pool, dsn) != 0) {
+            CSILK_LOG_E("Database connection %d/%d failed for driver '%s' (DSN: '%s')",
+                        i + 1,
+                        max_conns,
+                        driver_name,
+                        dsn);
+            for (int j = 0; j < i; j++) {
+                if (pool->connections[j]) {
+                    pool->connection = pool->connections[j];
+                    if (driver->disconnect) {
+                        driver->disconnect(pool);
+                    }
+                    pool->connections[j] = NULL;
+                }
+            }
+            csilk_mutex_destroy(&pool->mutex);
+            free(pool);
+            return NULL;
+        }
+        pool->connections[i] = pool->connection;
+        pool->connection = NULL;
+
+        if (pool->on_open_cb && pool->connections[i]) {
+            pool->connection = pool->connections[i];
+            pool->on_open_cb(pool, pool->on_open_ctx);
+            pool->connection = NULL;
+        }
+    }
+
+    pool->connection = pool->connections[0];
+
+    CSILK_LOG_I("Database pool created: %d connection(s), driver '%s' (DSN: '%s')",
+                max_conns,
+                driver_name,
+                dsn);
     return pool;
 }
 
@@ -414,10 +555,17 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
     if (!pool) {
         return;
     }
-    CSILK_LOG_D("Freeing database pool and closing connection for driver '%s'",
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    CSILK_LOG_D("Freeing database pool (%d conn) for driver '%s'",
+                n,
                 pool->driver ? pool->driver->name : "unknown");
     if (pool->driver && pool->driver->disconnect) {
-        pool->driver->disconnect(pool);
+        for (int i = 0; i < n; i++) {
+            if (pool->connections[i]) {
+                pool->connection = pool->connections[i];
+                pool->driver->disconnect(pool);
+            }
+        }
     }
     csilk_mutex_destroy(&pool->mutex);
     free(pool);
@@ -555,7 +703,7 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 
     csilk_mutex_lock(&pool->mutex);
     void*         conn_snapshot = pool->connection;
-    csilk_json_t* result = csilk_db_query_json_locked(pool, sql);
+    csilk_json_t* result = csilk_db_query_json_locked(pool, sql, NULL);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
@@ -1076,6 +1224,139 @@ csilk_db_query_param_json_typed(csilk_db_pool_t*        pool,
         return NULL;
     }
     return _csilk_db_run_param_stmt_query_typed(pool, sql, params);
+}
+
+/*
+ * Walk a type-preserving JSON result (an array of row objects) and, for each
+ * declared JSON column, replace string values that look like JSON (start with
+ * '[' or '{') with the parsed JSON node.  On parse failure the original string
+ * is kept.  This gives callers the option to opt specific TEXT columns into
+ * native JSON mounting while keeping other columns as string scalars.
+ *
+ * The result array itself is returned (ownership unchanged); the caller still
+ * owns and must free it with csilk_json_free().
+ */
+static csilk_json_t*
+_csilk_db_detect_json_columns(csilk_json_t* result, const char* const* json_columns)
+{
+    if (!result || !json_columns || !json_columns[0]) {
+        return result;
+    }
+
+    size_t rows = csilk_json_array_size(result);
+    for (size_t i = 0; i < rows; i++) {
+        csilk_json_t* row = csilk_json_array_get(result, i);
+        if (!row || !csilk_json_is_object(row)) {
+            continue;
+        }
+
+        for (int c = 0; json_columns[c]; c++) {
+            const char* col = json_columns[c];
+            if (!col) {
+                continue;
+            }
+            csilk_json_t* val = csilk_json_get(row, col);
+            if (!val || !csilk_json_is_string(val)) {
+                continue; /* only string values are considered; empty/non-JSON strings keep their scalar */
+            }
+            const char* s = csilk_json_string_value(val);
+            if (!s || !(s[0] == '[' || s[0] == '{')) {
+                continue;
+            }
+            csilk_json_t* parsed = csilk_json_parse(s);
+            if (parsed) {
+                /*
+                 * Re-add under the same key: yyjson's mutable object add replaces
+                 * the existing key in place (the old string node is dropped by the
+                 * doc), and json_add_to_obj() handles the cross-document copy of the
+                 * immutable parsed node, freeing its owning doc.  The original string
+                 * value is therefore consumed by this call — no separate free needed.
+                 */
+                (void)csilk_json_add_object(row, col, parsed);
+            }
+        }
+    }
+    return result;
+}
+
+/** @brief Execute a parameterised SELECT query with ? placeholders and opt-in JSON columns.
+ *
+ * Like csilk_db_query_param_json, but for each column name in @p json_columns
+ * (a NULL-terminated array) that contains a string value which looks like JSON
+ * (starts with '[' or '{'), the value is parsed and mounted as a native JSON
+ * object/array instead of a string scalar.  Columns not in the list keep the
+ * default type-preserving behaviour.  See _csilk_db_detect_json_columns().
+ *
+ * @param pool          Connection pool.
+ * @param sql           SQL with ? placeholders.
+ * @param params        NULL-terminated array of string values.
+ * @param json_columns  NULL-terminated array of column names to JSON-decode.
+ * @return A csilk_json array of row objects, or NULL on failure. */
+csilk_json_t*
+csilk_db_query_param_json_with_columns(csilk_db_pool_t*   pool,
+                                       const char*        sql,
+                                       const char**       params,
+                                       const char* const* json_columns)
+{
+    if (!pool || !sql || !params) {
+        CSILK_LOG_E("Parameterized query with columns failed: invalid arguments");
+        return NULL;
+    }
+    csilk_json_t* result = _csilk_db_run_param_stmt_query(pool, sql, params);
+    if (!result) {
+        return NULL;
+    }
+    return _csilk_db_detect_json_columns(result, json_columns);
+}
+
+/** @brief Execute a SELECT query and return the rows as a JSON array with opt-in JSON columns.
+ *
+ * Like csilk_db_query_json, but for each column name in @p json_columns
+ * (a NULL-terminated array) that contains a string value which looks like JSON
+ * (starts with '[' or '{'), the value is parsed and mounted as a native JSON
+ * object/array instead of a string scalar.  Columns not in the list keep the
+ * default all-string behaviour of csilk_db_query_json.
+ *
+ * @param pool         Connection pool.
+ * @param sql          SQL SELECT statement.
+ * @param json_columns NULL-terminated array of column names to JSON-decode.
+ * @return A csilk_json array of row objects, or NULL on failure. */
+csilk_json_t*
+csilk_db_query_json_with_columns(csilk_db_pool_t*   pool,
+                                 const char*        sql,
+                                 const char* const* json_columns)
+{
+    if (!pool || !pool->driver || !pool->driver->query) {
+        CSILK_LOG_E("Database query with columns failed: invalid pool, driver, or query method");
+        return NULL;
+    }
+
+    uint64_t start = csilk_io_hrtime();
+    CSILK_LOG_D("Database query initiated (with JSON columns): %s", sql);
+
+    csilk_mutex_lock(&pool->mutex);
+    void*         conn_snapshot = pool->connection;
+    csilk_json_t* result = csilk_db_query_json_locked(pool, sql, json_columns);
+    csilk_mutex_unlock(&pool->mutex);
+
+    uint64_t duration = (csilk_io_hrtime() - start) / 1000;
+    atomic_fetch_add(&db_duration_us_total, duration);
+
+    if (!result) {
+        atomic_fetch_add(&db_errors_total, 1);
+        _csilk_db_record_error(pool, conn_snapshot != NULL);
+        CSILK_LOG_E("Database query with columns failed (duration: %.2f ms): %s",
+                    (double)duration / 1000.0,
+                    sql);
+        return NULL;
+    }
+
+    pool->last_err = CSILK_DB_OK;
+    atomic_fetch_add(&db_queries_total, 1);
+    CSILK_LOG_T("Database query with columns succeeded (duration: %.2f ms): %s",
+                (double)duration / 1000.0,
+                sql);
+    return result;
 }
 
 /** @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?

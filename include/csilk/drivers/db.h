@@ -451,6 +451,28 @@ void csilk_stmt_close(csilk_stmt_t* stmt);
 csilk_db_pool_t* csilk_db_pool_new(const char* driver_name, const char* dsn);
 
 /**
+ * @brief Create a multi-connection database pool (csilk#6).
+ *
+ * Opens @p max_conns connections to the driver and stores them in an idle
+ * list.  csilk_db_pool_acquire picks a free connection; csilk_db_pool_put
+ * returns it.  For single-connection pools (max_conns == 1) the behaviour
+ * is identical to csilk_db_pool_new.
+ *
+ * High-level APIs (csilk_db_query_json, csilk_db_exec, etc.) always use
+ * connections[0] under the pool mutex.  The multi-connection value is that
+ * concurrent callers of csilk_db_pool_acquire can each get a DIFFERENT
+ * connection and work in parallel (PostgreSQL / MySQL / Redis).  For SQLite
+ * the file-level lock serialises writes, so max_conns > 1 is mostly useful
+ * for concurrent read-only access.
+ *
+ * @param driver_name  Driver identifier (e.g., "postgres").  Must not be NULL.
+ * @param dsn          Data source name (driver-specific format).
+ * @param max_conns    Number of connections to open (1–32).  Clamped to range.
+ * @return A new csilk_db_pool_t on success, or NULL on failure.
+ */
+csilk_db_pool_t* csilk_db_pool_new_ex(const char* driver_name, const char* dsn, int max_conns);
+
+/**
  * @brief Register an on-open hook that runs after the driver's connect()
  *        succeeds.
  *
@@ -600,6 +622,52 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
 csilk_json_t* csilk_db_query_param_json_typed(csilk_db_pool_t*        pool,
                                               const char*             sql,
                                               const csilk_db_param_t* params);
+
+/**
+ * @brief Execute a parameterised SELECT query with ? placeholders and opt-in
+ *        JSON column decoding.
+ *
+ * Like csilk_db_query_param_json, but additionally accepts a NULL-terminated
+ * array of column names (@p json_columns) that should be JSON-decoded.  For
+ * each declared column whose value is a string that looks like JSON (starts
+ * with '[' or '{' and parses successfully), the value is replaced by the
+ * parsed JSON object/array; otherwise the value is kept as a string scalar.
+ * Columns not in @p json_columns keep the default type-preserving behaviour.
+ *
+ * @param pool         Connection pool.
+ * @param sql          SQL with ? placeholders.
+ * @param params       NULL-terminated array of string values.
+ * @param json_columns NULL-terminated array of column names to JSON-decode
+ *                     (csilk#2, option B).
+ * @return A type-preserving csilk_json array of row objects, or NULL on failure.
+ *         Caller must free with csilk_json_free.
+ */
+csilk_json_t* csilk_db_query_param_json_with_columns(csilk_db_pool_t*   pool,
+                                                     const char*        sql,
+                                                     const char**       params,
+                                                     const char* const* json_columns);
+
+/**
+ * @brief Execute a SELECT query and return the rows as a JSON array with
+ *        opt-in JSON column decoding.
+ *
+ * Like csilk_db_query_json, but additionally accepts a NULL-terminated array
+ * of column names (@p json_columns) that should be JSON-decoded.  For each
+ * declared column whose value is a string that looks like JSON (starts with
+ * '[' or '{' and parses successfully), the value is replaced by the parsed
+ * JSON object/array; otherwise the value is kept as a string scalar.
+ * Columns not in @p json_columns keep the default all-string behaviour.
+ *
+ * @param pool         Connection pool.
+ * @param sql          SQL SELECT statement.
+ * @param json_columns NULL-terminated array of column names to JSON-decode
+ *                     (csilk#2, option B).
+ * @return A csilk_json array of row objects, or NULL on failure.  Caller must
+ *         free with csilk_json_free.
+ */
+csilk_json_t* csilk_db_query_json_with_columns(csilk_db_pool_t*   pool,
+                                               const char*        sql,
+                                               const char* const* json_columns);
 
 /**
  * @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
