@@ -137,17 +137,16 @@ csilk_migration_lock_acquire_lease(csilk_db_pool_t* pool,
     long long expires_epoch = now_epoch + (long long)lease_seconds;
 
     /* Prepare once, reuse across all attempts. */
+    const char*   sql = "UPDATE schema_migration_lock "
+                        "SET is_locked = 1, "
+                        "    locked_at = CURRENT_TIMESTAMP, "
+                        "    locked_by = ?, "
+                        "    lease_expires_at = ? "
+                        "WHERE id = 1 AND (is_locked = 0 "
+                        "                   OR lease_expires_at IS NULL "
+                        "                   OR lease_expires_at <= ?);";
     csilk_stmt_t* stmt = NULL;
-    int           rc = csilk_stmt_prepare(pool,
-                                          "UPDATE schema_migration_lock "
-                                          "SET is_locked = 1, "
-                                          "    locked_at = CURRENT_TIMESTAMP, "
-                                          "    locked_by = ?, "
-                                          "    lease_expires_at = ? "
-                                          "WHERE id = 1 AND (is_locked = 0 "
-                                          "                   OR lease_expires_at IS NULL "
-                                          "                   OR lease_expires_at <= ?);",
-                                          &stmt);
+    int           rc = csilk_stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
         return -1;
     }
@@ -212,13 +211,12 @@ csilk_migration_lock_release(csilk_db_pool_t* pool, const char* locked_by)
         return -1;
     }
 
+    const char*   sql = "UPDATE schema_migration_lock "
+                        "SET is_locked = 0, locked_at = NULL, locked_by = '', "
+                        "    lease_expires_at = NULL "
+                        "WHERE id = 1 AND locked_by = ?;";
     csilk_stmt_t* stmt = NULL;
-    int           rc = csilk_stmt_prepare(pool,
-                                          "UPDATE schema_migration_lock "
-                                          "SET is_locked = 0, locked_at = NULL, locked_by = '', "
-                                          "    lease_expires_at = NULL "
-                                          "WHERE id = 1 AND locked_by = ?;",
-                                          &stmt);
+    int           rc = csilk_stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
         return -1;
     }
