@@ -11,11 +11,11 @@
 /* Default security header set (csilk#9b).  Overridable via
  * csilk_security_headers_middleware_ex(). */
 static const csilk_security_header_t s_default_security_headers[] = {
-    {"X-Frame-Options", "DENY"},
-    {"X-Content-Type-Options", "nosniff"},
-    {"X-XSS-Protection", "0"},
-    {"Referrer-Policy", "strict-origin-when-cross-origin"},
-    {NULL, NULL} /* terminator */
+    {"X-Frame-Options",        "DENY"                           },
+    {"X-Content-Type-Options", "nosniff"                        },
+    {"X-XSS-Protection",       "0"                              },
+    {"Referrer-Policy",        "strict-origin-when-cross-origin"},
+    {NULL,                     NULL                             }  /* terminator */
 };
 
 /**

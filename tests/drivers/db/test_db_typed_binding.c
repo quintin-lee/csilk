@@ -61,7 +61,7 @@ test_numeric_param_is_bound_as_int(void)
                          "VALUES (1, 10.5, 1, 'alice')") == 0);
 
     /* Query with an int param — before the fix this was 'WHERE id = '1''. */
-    const char* params[] = {"1", NULL};
+    const char*   params[] = {"1", NULL};
     csilk_json_t* rows = csilk_db_query_param_json(pool, "SELECT * FROM t WHERE id = ?", params);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
@@ -109,12 +109,13 @@ test_injection_via_quotes_neutralised(void)
     assert(rc == 0);
 
     /* Read it back — the value must round-trip exactly. */
-    const char* sel[] = {"1", NULL};
-    csilk_json_t* rows = csilk_db_query_param_json(pool, "SELECT name FROM users WHERE id = ?", sel);
+    const char*   sel[] = {"1", NULL};
+    csilk_json_t* rows =
+        csilk_db_query_param_json(pool, "SELECT name FROM users WHERE id = ?", sel);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
     csilk_json_t* row = csilk_json_array_get(rows, 0);
-    const char* got = csilk_json_get_string(row, "name");
+    const char*   got = csilk_json_get_string(row, "name");
     assert(got != nullptr);
     assert(strcmp(got, name) == 0); /* verbatim round-trip */
 
@@ -163,13 +164,14 @@ test_json_column_type_preserved(void)
      * are no longer string-scalar-ised; the JSON-in-TEXT column is
      * legitimately a string and the caller can parse it.  We verify the
      * numeric column is a real number and the text column round-trips. */
-    const char* params[] = {"1", NULL};
-    csilk_json_t* rows = csilk_db_query_param_json(pool, "SELECT id, tags FROM items WHERE id = ?", params);
+    const char*   params[] = {"1", NULL};
+    csilk_json_t* rows =
+        csilk_db_query_param_json(pool, "SELECT id, tags FROM items WHERE id = ?", params);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
 
     csilk_json_t* row = csilk_json_array_get(rows, 0);
-    assert(csilk_json_is_number(csilk_json_get(row, "id"))); /* id is a number, not "1" */
+    assert(csilk_json_is_number(csilk_json_get(row, "id")));   /* id is a number, not "1" */
     assert(csilk_json_is_string(csilk_json_get(row, "tags"))); /* tags is TEXT */
     const char* tags = csilk_json_get_string(row, "tags");
     assert(tags && strcmp(tags, "[\"a\",\"b\"]") == 0);
@@ -195,20 +197,21 @@ test_typed_param_binding(void)
     assert(csilk_db_exec(pool, "CREATE TABLE kv (k INTEGER PRIMARY KEY, v INTEGER)") == 0);
 
     /* Insert k=100, v=200 via typed exec. */
-    csilk_db_param_t p1 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 100};
-    csilk_db_param_t p2 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 200};
-    csilk_db_param_t p3 = csilk_db_params_end();
+    csilk_db_param_t       p1 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 100};
+    csilk_db_param_t       p2 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 200};
+    csilk_db_param_t       p3 = csilk_db_params_end();
     const csilk_db_param_t typed[] = {p1, p2, p3};
 
     int rc = csilk_db_exec_param_typed(pool, "INSERT INTO kv (k, v) VALUES (?, ?)", typed);
     assert(rc == 0);
 
     /* Read back via typed query — k and v must be JSON numbers. */
-    csilk_db_param_t q1 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 100};
-    csilk_db_param_t q2 = csilk_db_params_end();
+    csilk_db_param_t       q1 = {.kind = CSILK_DB_PARAM_INT64, .int64_val = 100};
+    csilk_db_param_t       q2 = csilk_db_params_end();
     const csilk_db_param_t qtyped[] = {q1, q2};
 
-    csilk_json_t* rows = csilk_db_query_param_json_typed(pool, "SELECT k, v FROM kv WHERE k = ?", qtyped);
+    csilk_json_t* rows =
+        csilk_db_query_param_json_typed(pool, "SELECT k, v FROM kv WHERE k = ?", qtyped);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
     csilk_json_t* row = csilk_json_array_get(rows, 0);

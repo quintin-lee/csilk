@@ -67,12 +67,12 @@ typedef struct csilk_stmt_s csilk_stmt_t;
  *       operation succeeded (no error recorded).
  */
 typedef enum {
-    CSILK_DB_OK = 0,          /**< Most recent operation succeeded. */
-    CSILK_DB_ERR_SQL,        /**< SQL syntax / runtime error. */
-    CSILK_DB_ERR_CONN,       /**< Connection dropped / could not connect. */
-    CSILK_DB_ERR_DIALECT,    /**< The driver does not support this SQL dialect. */
-    CSILK_DB_ERR_BUSY,       /**< Lock timeout / database is busy. */
-    CSILK_DB_ERR_OOM         /**< Out of memory. */
+    CSILK_DB_OK = 0,      /**< Most recent operation succeeded. */
+    CSILK_DB_ERR_SQL,     /**< SQL syntax / runtime error. */
+    CSILK_DB_ERR_CONN,    /**< Connection dropped / could not connect. */
+    CSILK_DB_ERR_DIALECT, /**< The driver does not support this SQL dialect. */
+    CSILK_DB_ERR_BUSY,    /**< Lock timeout / database is busy. */
+    CSILK_DB_ERR_OOM      /**< Out of memory. */
 } csilk_db_err_t;
 
 /**
@@ -85,7 +85,7 @@ typedef enum {
  */
 typedef enum {
     CSILK_DB_PRAGMA_JOURNAL_MODE = 1, /**< value: "WAL" / "DELETE" / ... */
-    CSILK_DB_PRAGMA_BUSY_TIMEOUT,      /**< value: milliseconds, e.g. "5000" */
+    CSILK_DB_PRAGMA_BUSY_TIMEOUT,     /**< value: milliseconds, e.g. "5000" */
     CSILK_DB_PRAGMA_SYNCHRONOUS,      /**< value: "NORMAL" / "FULL" / ... */
     CSILK_DB_PRAGMA_FOREIGN_KEYS,     /**< value: "ON" / "OFF" */
     CSILK_DB_PRAGMA_CUSTOM            /**< value: raw dialect SQL string */
@@ -122,7 +122,7 @@ typedef struct {
     csilk_db_param_kind_t kind;
     int64_t               int64_val;
     double                double_val;
-    const char*           text_val; /* NUL-terminated; valid only when kind == CSILK_DB_PARAM_TEXT */
+    const char* text_val; /* NUL-terminated; valid only when kind == CSILK_DB_PARAM_TEXT */
 } csilk_db_param_t;
 
 /** @brief Sentinel value to terminate a csilk_db_param_t array. */
@@ -597,9 +597,9 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
  * @param params Sentinel-terminated csilk_db_param_t array.
  * @return A type-preserving csilk_json array of row objects, or NULL on failure.
  */
-csilk_json_t* csilk_db_query_param_json_typed(csilk_db_pool_t* pool,
-                                               const char*      sql,
-                                               const csilk_db_param_t* params);
+csilk_json_t* csilk_db_query_param_json_typed(csilk_db_pool_t*        pool,
+                                              const char*             sql,
+                                              const csilk_db_param_t* params);
 
 /**
  * @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
@@ -633,9 +633,8 @@ int csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** par
  * @param params Sentinel-terminated csilk_db_param_t array.
  * @return 0 on success, -1 on failure.
  */
-int csilk_db_exec_param_typed(csilk_db_pool_t* pool,
-                             const char*      sql,
-                             const csilk_db_param_t* params);
+int
+csilk_db_exec_param_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db_param_t* params);
 
 /**
  * @brief Register a database driver implementation.

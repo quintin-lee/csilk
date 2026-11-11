@@ -746,10 +746,9 @@ postgres_set_pragma(csilk_db_pool_t* pool, int kind, const char* value)
     case CSILK_DB_PRAGMA_SYNCHRONOUS:
     case CSILK_DB_PRAGMA_FOREIGN_KEYS:
     default:
-        CSILK_LOG_W(
-            "postgres_set_pragma: kind %d has no PostgreSQL equivalent; no-op "
-            "(use CSILK_DB_PRAGMA_CUSTOM with a raw SET statement if needed)",
-            kind);
+        CSILK_LOG_W("postgres_set_pragma: kind %d has no PostgreSQL equivalent; no-op "
+                    "(use CSILK_DB_PRAGMA_CUSTOM with a raw SET statement if needed)",
+                    kind);
         return 0; /* no-op, NOT an error */
     }
 }
@@ -779,7 +778,7 @@ csilk_db_driver_t csilk_db_postgres_driver = {
     .stmt_query_json = postgres_stmt_query_json,
     .stmt_close = postgres_stmt_close,
     .last_error = postgres_last_error, /* csilk#8 */
-    .set_pragma = postgres_set_pragma,  /* csilk#4 */
+    .set_pragma = postgres_set_pragma, /* csilk#4 */
 };
 
 /**
