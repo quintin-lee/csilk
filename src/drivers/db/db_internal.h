@@ -15,12 +15,31 @@
 #include <csilk/core/sys_io.h>
 #include "csilk/core/sync.h"
 
+#include <stdbool.h>
+
 #include "csilk/drivers/db.h"
 
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;
     void*              connection;
     csilk_mutex_t      mutex;
+    /*
+     * Owner-thread identifier for the connection. Set by csilk_db_pool_acquire
+     * (or implicitly by csilk_db_with_conn) to the thread that currently holds
+     * the raw connection pointer; reset to NULL on csilk_db_pool_put.
+     * Under the libuv backend this is a uv_thread_t / csilk_thread_t key; under
+     * the uring backend it is a pthread_t. For pools that never use the
+     * acquire/with_conn primitives (i.e. only the high-level csilk_db_query_* /
+     * csilk_db_exec_* / csilk_stmt_* APIs which always hold pool->mutex), this
+     * field stays NULL and acts as a no-op guard.
+     *
+     * Purpose: enables csilk_db_pool_put to validate that the releasing thread
+     * is actually the one that acquired the connection (holder check),
+     * preventing "release someone else's conn" bugs that caused the
+     * multi-thread UAF reported in csilk#1.
+     */
+    csilk_thread_t conn_holder;
+    bool           conn_holder_set;
 };
 
 struct csilk_stmt_s {

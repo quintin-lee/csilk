@@ -56,6 +56,45 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
         return -1;
     }
 
+    /*
+     * Enable WAL journal mode + a 5-second busy timeout.
+     *
+     * WAL allows readers to proceed without blocking on writers, which is
+     * essential for the multi-worker HTTP model where two csilk_db_pool_t
+     * instances (or one pool driven by csilk_db_with_conn across threads)
+     * may access the same SQLite file concurrently.  Without WAL the
+     * default rollback-journal mode causes SQLITE_BUSY on the first
+     * concurrent read/write, which is a common source of flaky tests.
+     *
+     * busy_timeout=5000 caps the worst-case wait at 5s, matching the value
+     * downstream users (e.g. Minefolio) set in their db_init PRAGMA block;
+     * embedding it here makes the default safe without requiring callers
+     * to remember the PRAGMA.
+     *
+     * Both PRAGMAs are idempotent: WAL is a no-op if already WAL, and
+     * busy_timeout just overwrites the previous value.  Failure of either
+     * PRAGMA is non-fatal (logged at D level); the pool still functions
+     * with the default rollback journal / no busy timeout.
+     */
+    {
+        char* err = NULL;
+        if (sqlite3_exec(conn->db, "PRAGMA journal_mode=WAL;", NULL, NULL, &err) != SQLITE_OK) {
+            CSILK_LOG_D(
+                "csilk_db_sqlite: PRAGMA journal_mode=WAL on '%s': %s", dsn, err ? err : "(ok)");
+            if (err) {
+                sqlite3_free(err);
+                err = NULL;
+            }
+        }
+        if (sqlite3_exec(conn->db, "PRAGMA busy_timeout=5000;", NULL, NULL, &err) != SQLITE_OK) {
+            CSILK_LOG_D(
+                "csilk_db_sqlite: PRAGMA busy_timeout=5000 on '%s': %s", dsn, err ? err : "(ok)");
+            if (err) {
+                sqlite3_free(err);
+            }
+        }
+    }
+
     csilk_db_pool_set_connection(pool, conn);
     return 0;
 }

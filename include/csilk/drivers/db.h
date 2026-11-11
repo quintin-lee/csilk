@@ -50,12 +50,67 @@ typedef struct csilk_db_pool_s csilk_db_pool_t;
 /** @brief Opaque prepared statement handle. */
 typedef struct csilk_stmt_s csilk_stmt_t;
 
-/**
- * @brief Get the driver-specific connection handle from a pool.
+/** @brief Get the driver-specific connection handle from a pool.
  * @param pool Database pool.
  * @return Opaque connection pointer (driver-specific type).
+ * @deprecated Use csilk_db_with_conn() for cross-thread safe access, or the
+ *             csilk_db_pool_acquire()/csilk_db_pool_put() pair.  The bare
+ *             getter returns a raw pointer with no holder tracking, no
+ *             lifetime constraint, and no mutex acquisition; cross-thread
+ *             use of the returned pointer is undefined behaviour and caused
+ *             the heap-use-after-free reported in csilk#1.
  */
 void* csilk_db_pool_get_connection(csilk_db_pool_t* pool);
+
+/**
+ * @brief Explicitly acquire the pool's connection with holder tracking.
+ *
+ * Records the calling thread as the holder of pool->connection.  Must be
+ * paired with csilk_db_pool_put() to release — every successful acquire()
+ * requires exactly one put(), even on the SQL-failure path.  Forms the
+ * RAII-style "take-and-return" contract that eliminates the UAF class of
+ * bugs reported in csilk#1.
+ *
+ * @param pool  Connection pool.  Must not be NULL.
+ * @param conn  [out] Receives the raw driver-level connection pointer.
+ * @return 0 on success, -1 if pool is NULL or the connection is not open.
+ */
+int csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn);
+
+/**
+ * @brief Release a previously-acquired connection back to the pool.
+ *
+ * Performs a holder check: only the thread that called csilk_db_pool_acquire()
+ * may release the connection.  A release by any other thread is refused with
+ * -1 and a CSILK_LOG_W, to prevent the "release someone else's conn" bug
+ * that allowed two threads to share a freed connection (csilk#1).
+ *
+ * @param pool  Connection pool.  Must not be NULL.
+ * @param conn  The pointer returned by the matching acquire().
+ * @return 0 on success, -1 on validation failure.
+ */
+int csilk_db_pool_put(csilk_db_pool_t* pool, void* conn);
+
+/** @brief Callback signature for csilk_db_with_conn(). */
+typedef int (*csilk_db_with_conn_fn)(void* conn, void* user_ctx);
+
+/**
+ * @brief Run a callback under the pool mutex with holder tracking.
+ *
+ * The recommended safe access pattern for cross-thread database use.  The
+ * callback runs while pool->mutex is held and conn_holder is set to the
+ * calling thread, so no other thread can concurrently drive the same
+ * connection, and the caller never sees a raw pointer — the connection is
+ * returned automatically on callback exit (success or failure).  No
+ * "forgot to put on the failure path" bug is possible.
+ *
+ * @param pool      Connection pool.  Must not be NULL.
+ * @param fn        Callback to invoke; receives the raw connection pointer
+ *                 and user_ctx.
+ * @param user_ctx  Opaque user data forwarded to fn.
+ * @return The return value of fn, or -1 on invalid arguments / no connection.
+ */
+int csilk_db_with_conn(csilk_db_pool_t* pool, csilk_db_with_conn_fn fn, void* user_ctx);
 
 /**
  * @brief Get the driver name of a database pool (e.g., "sqlite", "postgres").
