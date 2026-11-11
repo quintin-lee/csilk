@@ -437,7 +437,7 @@ Built with `-DUSE_COVERAGE=ON` under gcc (ASAN/TSAN incompatible). GCOV excludes
 
 ### CI matrix (`.github/workflows/ci.yml`)
 
-- **test**: ubuntu-24.04 + macos-14 × Debug + Release; ASAN on Linux Debug; Python bindings on Release or Linux.
+- **test**: ubuntu-24.04 + macos-15 × Debug + Release; ASAN on Linux Debug; Python bindings on Release or Linux.
 - **lint**: clang-format check, clang-tidy, version-sync, Mermaid-diagram validation.
 - **fuzz**: clang-19 + ASAN + libFuzzer; 4 harnesses, each with corpus replay.
 - **arm64**: cross-compile via `aarch64-linux-gnu-gcc`.

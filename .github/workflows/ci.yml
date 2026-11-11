@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        os: [ubuntu-24.04, macos-15]
         build_type: [Debug, Release]
       fail-fast: false
 
@@ -46,8 +46,9 @@ jobs:
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang clang-tidy ccache \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev
@@ -150,8 +151,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang clang-format clang-tidy \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev
@@ -189,8 +191,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang-19 \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev
@@ -221,6 +224,7 @@ jobs:
 
     - name: Install cross-compilation toolchain
       run: |
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
         # Restrict default sources to amd64 to avoid 404s on arm64 package lists
         sudo sed -i 's/Types: deb/Types: deb\nArchitectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources
         
@@ -234,8 +238,8 @@ jobs:
           "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee /etc/apt/sources.list.d/ports.sources
         
         sudo dpkg --add-architecture arm64
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
           libyaml-dev:arm64 zlib1g-dev:arm64 libcurl4-openssl-dev:arm64 \
           libpq-dev:arm64 libsqlite3-dev:arm64 libuv1-dev:arm64
@@ -280,8 +284,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev
@@ -318,8 +323,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev
@@ -354,8 +360,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev libuv1-dev wrk
@@ -393,8 +400,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
           libpq-dev libsqlite3-dev curl libuv1-dev

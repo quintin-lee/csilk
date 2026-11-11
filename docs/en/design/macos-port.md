@@ -84,12 +84,12 @@ CMakeLists.txt `find_library` handles this, but CI must set
 
 Once pthread_barrier_t is replaced with uv_barrier_t, add macOS to CI:
 ```yaml
-os: [ubuntu-24.04, macos-14]
+os: [ubuntu-24.04, macos-15]
 # Ubuntu uses GCC (default), macOS uses Homebrew LLVM
 ```
 
 ## Verdict
 
-**Implemented** — macOS 14 ARM64 is now in the CI matrix (Ubuntu 24.04 + macos-14).
+**Implemented** — macOS 15 ARM64 is now in the CI matrix (Ubuntu 24.04 + macos-15).
 All blockers resolved: `pthread_barrier_t` → `uv_barrier_t`, `fdatasync` → `fsync`,
 `SOCK_NONBLOCK` → `fcntl` fallback, ASan false positives suppressed.
