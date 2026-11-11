@@ -581,56 +581,158 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
  * @param pool   Database pool.
  * @param sql    SQL pattern with ? placeholders.
  * @param params NULL-terminated array of string values. */
-csilk_json_t*
-csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
+/*
+ * Auto-detect the SQL type of a string parameter value.
+ *
+ *   - pure integer (optional leading '-', digits) → INT64
+ *   - pure float/double (digits [.digits] [eE[+-]digits]) → DOUBLE
+ *   - anything else → TEXT
+ *
+ * The detection is conservative: any character outside the numeric grammar
+ * (spaces, 'n', 'x', etc.) forces TEXT, so values like "0001" are INT64
+ * (value 1) and "1.5e3" is DOUBLE.  This matches SQLite's column-type
+ * affinity expectations: numeric columns get native numerics, TEXT
+ * columns keep their literal.
+ *
+ * @return The csilk_db_param_kind_t to bind this value with.
+ */
+static csilk_db_param_kind_t
+_csilk_db_auto_detect_param_kind(const char* v)
 {
-    if (!pool || !sql || !params) {
-        CSILK_LOG_E("Parameterized query failed: invalid pool, sql, or params");
+    if (!v || !v[0]) {
+        return CSILK_DB_PARAM_TEXT; /* empty string → TEXT (not NULL; NULL is explicit) */
+    }
+
+    /* INTEGER: optional sign + digits. */
+    const char* p = v;
+    if (*p == '-' || *p == '+') {
+        p++;
+    }
+    if (*p && (unsigned char)*p >= '0' && (unsigned char)*p <= '9') {
+        const char* q = p;
+        while (*q && (unsigned char)*q >= '0' && (unsigned char)*q <= '9') {
+            q++;
+        }
+        if (*q == '\0') {
+            return CSILK_DB_PARAM_INT64;
+        }
+    }
+
+    /* DOUBLE: use strtod; require the whole string to be consumed and the
+     * value to look like a float (contains '.', 'e', 'E', or is a numeric
+     * literal strtod would parse).  We reject pure-integer-looking strings
+     * that already returned INT64 above. */
+    char* end = NULL;
+    double d = strtod(v, &end);
+    if (end && end != v && *end == '\0') {
+        /* strtod consumed the whole string.  If the string had no '.' or
+         * 'e'/'E', it was already an INT64 above; reaching here means it
+         * was a float literal like "1.5", "2e3", ".5", "1e-2". */
+        const char* s = v;
+        while (*s == ' ' || *s == '\t') {
+            s++;
+        }
+        if (*s == '-' || *s == '+') {
+            s++;
+        }
+        bool has_float_part = false;
+        for (const char* r = s; *r; r++) {
+            if (*r == '.' || *r == 'e' || *r == 'E') {
+                has_float_part = true;
+                break;
+            }
+        }
+        if (has_float_part) {
+            return CSILK_DB_PARAM_DOUBLE;
+        }
+    }
+
+    return CSILK_DB_PARAM_TEXT;
+}
+
+/*
+ * Bind a single parameter value (auto-detected from a string) onto a
+ * prepared statement.  Used by the legacy string-based API so the caller
+ * keeps the same const char** signature but gets real typed binding.
+ */
+static int
+_csilk_db_bind_auto_param(csilk_stmt_t* stmt, int index, const char* val)
+{
+    if (!val) {
+        return csilk_stmt_bind_null(stmt, index);
+    }
+    switch (_csilk_db_auto_detect_param_kind(val)) {
+    case CSILK_DB_PARAM_INT64:
+        return csilk_stmt_bind_int64(stmt, index, (int64_t)strtoll(val, NULL, 10));
+    case CSILK_DB_PARAM_DOUBLE:
+        return csilk_stmt_bind_double(stmt, index, strtod(val, NULL));
+    case CSILK_DB_PARAM_NULL:
+        return csilk_stmt_bind_null(stmt, index);
+    case CSILK_DB_PARAM_TEXT:
+    default:
+        return csilk_stmt_bind_text(stmt, index, val);
+    }
+}
+
+/*
+ * Bind an explicit typed parameter onto a prepared statement.
+ */
+static int
+_csilk_db_bind_typed_param(csilk_stmt_t* stmt, int index, const csilk_db_param_t* p)
+{
+    switch (p->kind) {
+    case CSILK_DB_PARAM_INT64:
+        return csilk_stmt_bind_int64(stmt, index, p->int64_val);
+    case CSILK_DB_PARAM_DOUBLE:
+        return csilk_stmt_bind_double(stmt, index, p->double_val);
+    case CSILK_DB_PARAM_NULL:
+        return csilk_stmt_bind_null(stmt, index);
+    case CSILK_DB_PARAM_TEXT:
+        return csilk_stmt_bind_text(stmt, index, p->text_val ? p->text_val : "");
+    default:
+        return -1; /* out-of-range sentinel */
+    }
+}
+
+/*
+ * Run a prepared statement with auto-typed string parameters and return the
+ * result as a type-preserving JSON array.  Shared by csilk_db_query_param_json
+ * and csilk_db_query_param_json_typed.
+ */
+static csilk_json_t*
+_csilk_db_run_param_stmt_query(csilk_db_pool_t* pool, const char* sql, const char** params)
+{
+    if (!pool || !sql) {
         return NULL;
     }
 
     uint64_t start = csilk_io_hrtime();
-    CSILK_LOG_D("Parameterized database query initiated: %s", sql);
+    CSILK_LOG_D("Parameterized database query initiated (prepared): %s", sql);
 
-    /* Pre-scan: compute output size with SQL-escaped param values.
-     * Each ? is replaced with a single-quoted, escaped value. */
-    size_t len = strlen(sql);
-    for (int i = 0; params[i]; i++) {
-        len += 2; /* surrounding single quotes */
-        for (const char* c = params[i]; *c; c++) {
-            len += (*c == '\'') ? 2 : 1;
-        }
-    }
-
-    char* full_sql = malloc(len + 1);
-    if (!full_sql) {
-        CSILK_LOG_E("Failed to allocate memory for full SQL statement");
+    csilk_mutex_lock(&pool->mutex);
+    csilk_stmt_t* stmt = NULL;
+    int rc = pool->driver->stmt_prepare(pool, sql, &stmt);
+    if (rc != 0 || !stmt) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("Parameterized query failed to prepare statement: %s", sql);
+        atomic_fetch_add(&db_errors_total, 1);
         return NULL;
     }
 
-    char* p = full_sql;
-    int   param_idx = 0;
-    for (const char* c = sql; *c; c++) {
-        if (*c == '?' && params[param_idx]) {
-            *p++ = '\'';
-            for (const char* v = params[param_idx]; *v; v++) {
-                if (*v == '\'') {
-                    *p++ = '\'';
-                    *p++ = '\'';
-                } else {
-                    *p++ = *v;
-                }
-            }
-            *p++ = '\'';
-            param_idx++;
-        } else {
-            *p++ = *c;
+    /* Bind each string param with auto-detection. */
+    int bind_ok = 0;
+    for (int i = 0; params[i]; i++) {
+        if (_csilk_db_bind_auto_param(stmt, i + 1, params[i]) != 0) {
+            break;
         }
+        bind_ok = 1;
     }
-    *p = '\0';
 
-    csilk_mutex_lock(&pool->mutex);
-    csilk_json_t* result = csilk_db_query_json_locked(pool, full_sql);
+    csilk_json_t* result = NULL;
+    if (bind_ok) {
+        result = pool->driver->stmt_query_json(stmt);
+    }
+    pool->driver->stmt_close(stmt);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
@@ -640,120 +742,246 @@ csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** p
         atomic_fetch_add(&db_errors_total, 1);
         CSILK_LOG_E("Parameterized database query failed (duration: %.2f ms): %s",
                     (double)duration / 1000.0,
-                    full_sql);
+                    sql);
     } else {
         atomic_fetch_add(&db_queries_total, 1);
         CSILK_LOG_T("Parameterized database query succeeded (duration: %.2f ms): %s",
                     (double)duration / 1000.0,
-                    full_sql);
+                    sql);
     }
-
-    free(full_sql);
     return result;
 }
 
-/** @brief Build a SQL string with escaped parameter substitution.
- *
- * Replaces each '?' in @p sql with the corresponding value from @p params,
- * wrapping each value in single quotes and escaping embedded single quotes
- * by doubling them ('→'').
- *
- * @param sql    SQL pattern with ? placeholders.
- * @param params NULL-terminated array of string values.
- * @return Heap-allocated SQL string (caller must free), or NULL on failure. */
-static char*
-_csilk_db_build_param_sql(const char* sql, const char** params)
+/*
+ * Run a prepared statement with explicit typed parameters and return the
+ * result as a type-preserving JSON array.
+ */
+static csilk_json_t*
+_csilk_db_run_param_stmt_query_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db_param_t* params)
 {
-    if (!sql || !params) {
+    if (!pool || !sql || !params) {
         return NULL;
-    }
-
-    /* Pre-scan: compute output size with SQL-escaped param values. */
-    size_t len = strlen(sql);
-    for (int i = 0; params[i]; i++) {
-        len += 2; /* surrounding single quotes */
-        for (const char* c = params[i]; *c; c++) {
-            len += (*c == '\'') ? 2 : 1;
-        }
-    }
-
-    char* full_sql = malloc(len + 1);
-    if (!full_sql) {
-        return NULL;
-    }
-
-    char* p = full_sql;
-    int   param_idx = 0;
-    for (const char* c = sql; *c; c++) {
-        if (*c == '?' && params[param_idx]) {
-            *p++ = '\'';
-            for (const char* v = params[param_idx]; *v; v++) {
-                if (*v == '\'') {
-                    *p++ = '\'';
-                    *p++ = '\'';
-                } else {
-                    *p++ = *v;
-                }
-            }
-            *p++ = '\'';
-            param_idx++;
-        } else {
-            *p++ = *c;
-        }
-    }
-    *p = '\0';
-    return full_sql;
-}
-
-/** @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
- *  placeholders.
- *
- * Each ? in @p sql is substituted with the corresponding value from
- * @p params (single quotes escaped by doubling).  This prevents SQL injection
- * in DML statements that do not return result rows.
- *
- * @param pool   Database pool.
- * @param sql    SQL with ? placeholders.
- * @param params NULL-terminated array of string values.
- * @return 0 on success, -1 on failure. */
-int
-csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** params)
-{
-    if (!pool || !pool->driver || !pool->driver->exec || !sql || !params) {
-        CSILK_LOG_E("Parameterized exec failed: invalid arguments");
-        return -1;
-    }
-
-    char* full_sql = _csilk_db_build_param_sql(sql, params);
-    if (!full_sql) {
-        CSILK_LOG_E("Parameterized exec failed: could not build SQL");
-        return -1;
     }
 
     uint64_t start = csilk_io_hrtime();
-    CSILK_LOG_D("Parameterized database exec initiated: %s", sql);
+    CSILK_LOG_D("Parameterized database query initiated (typed prepared): %s", sql);
 
     csilk_mutex_lock(&pool->mutex);
-    int rc = pool->driver->exec(pool, full_sql);
+    csilk_stmt_t* stmt = NULL;
+    int rc = pool->driver->stmt_prepare(pool, sql, &stmt);
+    if (rc != 0 || !stmt) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("Typed parameterized query failed to prepare statement: %s", sql);
+        atomic_fetch_add(&db_errors_total, 1);
+        return NULL;
+    }
+
+    /* Bind each typed param; stop at the sentinel (out-of-range kind).
+     * all_binds_ok stays true if we reached the sentinel without any bind
+     * failure; it is false if a bind failed before the sentinel.  An
+     * empty parameter list (sentinel at index 0) leaves all_binds_ok true
+     * and binds nothing — a 0-param SELECT/DML is valid and still runs. */
+    bool all_binds_ok = true;
+    for (int i = 0; ; i++) {
+        if (params[i].kind > CSILK_DB_PARAM_NULL) {
+            break; /* sentinel reached; every prior bind succeeded */
+        }
+        if (_csilk_db_bind_typed_param(stmt, i + 1, &params[i]) != 0) {
+            all_binds_ok = false;
+            break;
+        }
+    }
+
+    csilk_json_t* result = NULL;
+    if (all_binds_ok) {
+        result = pool->driver->stmt_query_json(stmt);
+    }
+    pool->driver->stmt_close(stmt);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
 
-    if (rc != 0) {
+    if (!result) {
         atomic_fetch_add(&db_errors_total, 1);
-        CSILK_LOG_E("Parameterized database exec failed (duration: %.2f ms): %s",
+        CSILK_LOG_E("Typed parameterized database query failed (duration: %.2f ms): %s",
                     (double)duration / 1000.0,
-                    full_sql);
+                    sql);
     } else {
-        atomic_fetch_add(&db_execs_total, 1);
-        CSILK_LOG_T("Parameterized database exec succeeded (duration: %.2f ms): %s",
-                    (double)duration / 1000.0,
-                    full_sql);
+        atomic_fetch_add(&db_queries_total, 1);
+    }
+    return result;
+}
+
+/*
+ * Run a prepared statement with auto-typed string parameters (DML path).
+ */
+static int
+_csilk_db_run_param_stmt_exec(csilk_db_pool_t* pool, const char* sql, const char** params)
+{
+    if (!pool || !sql || !params) {
+        return -1;
     }
 
-    free(full_sql);
-    return rc;
+    uint64_t start = csilk_io_hrtime();
+    CSILK_LOG_D("Parameterized database exec initiated (prepared): %s", sql);
+
+    csilk_mutex_lock(&pool->mutex);
+    csilk_stmt_t* stmt = NULL;
+    int rc = pool->driver->stmt_prepare(pool, sql, &stmt);
+    if (rc != 0 || !stmt) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("Parameterized exec failed to prepare statement: %s", sql);
+        return -1;
+    }
+
+    int bind_ok = 1;
+    for (int i = 0; params[i]; i++) {
+        if (_csilk_db_bind_auto_param(stmt, i + 1, params[i]) != 0) {
+            bind_ok = 0;
+            break;
+        }
+    }
+
+    int64_t aff = 0;
+    int exec_rc = -1;
+    if (bind_ok) {
+        exec_rc = pool->driver->stmt_execute(stmt, &aff);
+    }
+    pool->driver->stmt_close(stmt);
+    csilk_mutex_unlock(&pool->mutex);
+
+    uint64_t duration = (csilk_io_hrtime() - start) / 1000;
+    atomic_fetch_add(&db_duration_us_total, duration);
+
+    if (exec_rc != 0) {
+        atomic_fetch_add(&db_errors_total, 1);
+        CSILK_LOG_E("Parameterized exec failed (duration: %.2f ms): %s",
+                    (double)duration / 1000.0,
+                    sql);
+    } else {
+        atomic_fetch_add(&db_execs_total, 1);
+    }
+    return exec_rc;
+}
+
+/*
+ * Run a prepared statement with explicit typed parameters (DML path).
+ */
+static int
+_csilk_db_run_param_stmt_exec_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db_param_t* params)
+{
+    if (!pool || !sql || !params) {
+        return -1;
+    }
+
+    uint64_t start = csilk_io_hrtime();
+    CSILK_LOG_D("Parameterized database exec initiated (typed prepared): %s", sql);
+
+    csilk_mutex_lock(&pool->mutex);
+    csilk_stmt_t* stmt = NULL;
+    int rc = pool->driver->stmt_prepare(pool, sql, &stmt);
+    if (rc != 0 || !stmt) {
+        csilk_mutex_unlock(&pool->mutex);
+        CSILK_LOG_E("Typed parameterized exec failed to prepare statement: %s", sql);
+        return -1;
+    }
+
+    int bind_ok = 1;
+    for (int i = 0; ; i++) {
+        if (params[i].kind > CSILK_DB_PARAM_NULL) {
+            break; /* sentinel */
+        }
+        if (_csilk_db_bind_typed_param(stmt, i + 1, &params[i]) != 0) {
+            bind_ok = 0;
+            break;
+        }
+    }
+
+    int64_t aff = 0;
+    int exec_rc = -1;
+    if (bind_ok) {
+        exec_rc = pool->driver->stmt_execute(stmt, &aff);
+    }
+    pool->driver->stmt_close(stmt);
+    csilk_mutex_unlock(&pool->mutex);
+
+    uint64_t duration = (csilk_io_hrtime() - start) / 1000;
+    atomic_fetch_add(&db_duration_us_total, duration);
+
+    if (exec_rc != 0) {
+        atomic_fetch_add(&db_errors_total, 1);
+        CSILK_LOG_E("Typed parameterized exec failed (duration: %.2f ms): %s",
+                    (double)duration / 1000.0,
+                    sql);
+    } else {
+        atomic_fetch_add(&db_execs_total, 1);
+    }
+    return exec_rc;
+}
+
+/** @brief Execute a parameterised SELECT query with ? placeholders.
+ *
+ * Now backed by a real prepared statement (csilk#5): parameters are
+ * auto-typed and bound via the driver's stmt_bind_* callbacks instead of
+ * string concatenation.  The result set is type-preserving (csilk#2).
+ *
+ * @param pool   Connection pool.
+ * @param sql    SQL pattern with ? placeholders.
+ * @param params NULL-terminated array of string values. */
+csilk_json_t*
+csilk_db_query_param_json(csilk_db_pool_t* pool, const char* sql, const char** params)
+{
+    if (!pool || !sql || !params) {
+        CSILK_LOG_E("Parameterized query failed: invalid pool, sql, or params");
+        return NULL;
+    }
+    return _csilk_db_run_param_stmt_query(pool, sql, params);
+}
+
+csilk_json_t*
+csilk_db_query_param_json_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db_param_t* params)
+{
+    if (!pool || !sql || !params) {
+        CSILK_LOG_E("Typed parameterized query failed: invalid arguments");
+        return NULL;
+    }
+    return _csilk_db_run_param_stmt_query_typed(pool, sql, params);
+}
+
+/** @brief Execute a parameterised statement (INSERT/UPDATE/DELETE) with ?
+ *  placeholders.
+ *
+ * Now backed by a real prepared statement (csilk#5): parameters are
+ * auto-typed and bound via the driver's stmt_bind_* callbacks instead of
+ * string concatenation, which eliminates both the type-loss (numeric
+ * columns compared as strings) and the SQL-injection escape (incomplete
+ * quote-doubling in LIKE / comment contexts) of the old path.
+ *
+ * @param pool   Database pool.
+ * @param sql    SQL with ? placeholders.
+ * @param params NULL-terminated array of string values.
+ * @return 0 on success, -1 on failure.
+ *
+ * @note For full control over parameter types, use csilk_db_exec_param_typed(). */
+int
+csilk_db_exec_param(csilk_db_pool_t* pool, const char* sql, const char** params)
+{
+    if (!pool || !sql || !params) {
+        CSILK_LOG_E("Parameterized exec failed: invalid arguments");
+        return -1;
+    }
+    return _csilk_db_run_param_stmt_exec(pool, sql, params);
+}
+
+int
+csilk_db_exec_param_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db_param_t* params)
+{
+    if (!pool || !sql || !params) {
+        CSILK_LOG_E("Typed parameterized exec failed: invalid arguments");
+        return -1;
+    }
+    return _csilk_db_run_param_stmt_exec_typed(pool, sql, params);
 }
 
 /* --- Driver Registry --- */
