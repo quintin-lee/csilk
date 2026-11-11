@@ -81,12 +81,12 @@ CMakeLists.txt 的 `find_library` 会处理此问题，但 CI 必须有条件地
 
 将 pthread_barrier_t 替换为 uv_barrier_t 后，将 macOS 添加到 CI：
 ```yaml
-os: [ubuntu-24.04, macos-14]
+os: [ubuntu-24.04, macos-15]
 # Ubuntu 使用 GCC（默认），macOS 使用 Homebrew LLVM
 ```
 
 ## 结论
 
-**已实现** — macOS 14 ARM64 现已在 CI 矩阵中（Ubuntu 24.04 + macos-14）。
+**已实现** — macOS 15 ARM64 现已在 CI 矩阵中（Ubuntu 24.04 + macos-15）。
 所有阻塞项已解决：`pthread_barrier_t` → `uv_barrier_t`，`fdatasync` → `fsync`，
 `SOCK_NONBLOCK` → `fcntl` 回退，ASan 误报已抑制。

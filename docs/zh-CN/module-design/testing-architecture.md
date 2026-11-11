@@ -477,7 +477,7 @@ tests/
 # .github/workflows/ci.yml
 strategy:
   matrix:
-    os: [ubuntu-24.04, macos-14]
+    os: [ubuntu-24.04, macos-15]
     build_type: [Debug, Release]
     
 steps:
