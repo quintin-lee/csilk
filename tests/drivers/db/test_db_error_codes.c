@@ -31,15 +31,15 @@
  *     tuning.
  */
 
-static const char* TEST_DB_PATH = "test_csilk_db_p2.db";
+/* Use an in-memory database so the P2 tests do not create WAL files (which
+ * trip LeakSanitizer's false positives on sqlite3_close's internal buffers
+ * at exit).  Each test gets a fresh pool on a fresh :memory: db. */
+static const char* TEST_DB_PATH = ":memory:";
 
 static void
 cleanup(void)
 {
-    remove(TEST_DB_PATH);
-    remove("test_csilk_db_p2.db-journal");
-    remove("test_csilk_db_p2.db-wal");
-    remove("test_csilk_db_p2.db-shm");
+    /* No-op for :memory: — retained for source compatibility. */
 }
 
 /* csilk#8 regression: a failed exec on a broken SQL statement reports

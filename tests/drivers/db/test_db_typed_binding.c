@@ -30,15 +30,17 @@
  *     callers explicit control over each parameter's SQL type.
  */
 
-static const char* TEST_DB_PATH = "test_csilk_db_p1.db";
+/* Use an in-memory database so the P1/P2 tests do not create WAL files
+ * (which trip LeakSanitizer's false positives on sqlite3_close's internal
+ * buffers at exit).  Each test gets a fresh pool on a fresh :memory: db, so
+ * state does not leak between tests. */
+static const char* TEST_DB_PATH = ":memory:";
 
 static void
 cleanup(void)
 {
-    remove(TEST_DB_PATH);
-    remove("test_csilk_db_p1.db-journal");
-    remove("test_csilk_db_p1.db-wal");
-    remove("test_csilk_db_p1.db-shm");
+    /* No-op for :memory: — retained for source compatibility with any
+     * out-of-tree callers that still reference cleanup(). */
 }
 
 /* csilk#5 regression: numeric parameters are bound as numbers, not strings.
@@ -110,7 +112,7 @@ test_injection_via_quotes_neutralised(void)
 
     /* Read it back — the value must round-trip exactly. */
     const char*   sel[] = {"1", NULL};
-    csilk_json_t* rows =
+    csilk_json_t*   rows =
         csilk_db_query_param_json(pool, "SELECT name FROM users WHERE id = ?", sel);
     assert(rows != nullptr);
     assert(csilk_json_array_size(rows) == 1);
@@ -118,6 +120,7 @@ test_injection_via_quotes_neutralised(void)
     const char*   got = csilk_json_get_string(row, "name");
     assert(got != nullptr);
     assert(strcmp(got, name) == 0); /* verbatim round-trip */
+    csilk_json_free(rows); /* free the first result before re-querying */
 
     /* Now a classic injection attempt: a value that, if spliced into the
      * SQL string, would terminate the string literal and append a tautology.

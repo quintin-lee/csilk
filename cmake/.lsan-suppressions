@@ -11,6 +11,17 @@ leak:CRYPTO_
 leak:BIO_
 leak:SSL_
 
+# libsqlite3 VFS / pager caches are held internally even after
+# sqlite3_close(); the library releases them at process termination,
+# which LeakSanitizer flags as a false positive.  SQLite's own test
+# suite suppresses these; see
+# https://www.sqlite.org/leak_test.html  (csilk db tests that open a
+# pool with a real sqlite3 connection).  Suppress the library's
+# internal allocators, NOT csilk_db_pool_t / sqlite_conn_t (those are
+# freed by csilk_db_pool_free and must still be reported if leaked).
+leak:sqlite3
+leak:sqlite
+
 # libcurl internal state held at exit (test_ai)
 leak:curl_
 
