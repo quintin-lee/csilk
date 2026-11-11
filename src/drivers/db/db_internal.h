@@ -40,6 +40,21 @@ struct csilk_db_pool_s {
      */
     csilk_thread_t conn_holder;
     bool           conn_holder_set;
+    /*
+     * Most recent error category (csilk#8).  Set by the core layer when a
+     * high-level call (csilk_db_exec / csilk_db_query_json / ...) fails,
+     * using either the driver's last_error callback (when present) or the
+     * generic fallback.  Read by csilk_db_last_error().
+     */
+    csilk_db_err_t last_err;
+    /*
+     * Optional on-open hook (csilk#4).  If non-NULL, invoked by the
+     * driver's connect() callback right after the connection is established,
+     * letting the downstream apply dialect optimisations (PRAGMA / SET) at
+     * connect time rather than in a separate db_init step.
+     */
+    void (*on_open_cb)(csilk_db_pool_t* pool, void* ctx);
+    void* on_open_ctx;
 };
 
 struct csilk_stmt_s {

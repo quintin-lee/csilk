@@ -423,6 +423,124 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
     free(pool);
 }
 
+/*
+ * Record the most recent error category on the pool (csilk#8).
+ *
+ * If the driver provides a last_error callback, consult it; otherwise
+ * fall back to the generic core mapping.  The generic mapping is coarse
+ * but still more useful than a bare -1: a NULL connection means ERR_CONN,
+ * a driver that refused the SQL means ERR_SQL.
+ */
+static void
+_csilk_db_record_error(csilk_db_pool_t* pool, bool had_connection)
+{
+    if (!pool) {
+        return;
+    }
+    if (!had_connection) {
+        /* No connection — the failure is a connection-level problem. */
+        pool->last_err = CSILK_DB_ERR_CONN;
+        return;
+    }
+    /* Consult the driver's last_error callback when present. */
+    if (pool->driver && pool->driver->last_error) {
+        csilk_db_err_t err = CSILK_DB_ERR_SQL;
+        if (pool->driver->last_error(pool, &err) == 0) {
+            pool->last_err = err;
+            return;
+        }
+    }
+    /* Generic fallback. */
+    pool->last_err = CSILK_DB_ERR_SQL;
+}
+
+/** @brief Register an on-open hook (csilk#4). */
+void
+csilk_db_pool_on_open(csilk_db_pool_t* pool, csilk_db_on_open_fn cb, void* ctx)
+{
+    if (!pool) {
+        return;
+    }
+    csilk_mutex_lock(&pool->mutex);
+    pool->on_open_cb = cb;
+    pool->on_open_ctx = ctx;
+    /* If a connection is already open, apply the hook now so the pool
+     * benefits immediately (idempotent). */
+    void* conn = pool->connection;
+    csilk_mutex_unlock(&pool->mutex);
+    if (cb && conn) {
+        cb(pool, ctx);
+    }
+}
+
+/** @brief Get the most recent database error category (csilk#8). */
+csilk_db_err_t
+csilk_db_last_error(csilk_db_pool_t* pool)
+{
+    if (!pool) {
+        return CSILK_DB_ERR_CONN;
+    }
+    return pool->last_err;
+}
+
+/**
+ * @brief Apply a dialect-specific database optimisation (csilk#4).
+ *
+ * Delegates to the driver's set_pragma callback when present; otherwise
+ * renders the kind to a SQLite PRAGMA string and executes it (SQLite is
+ * the only dialect csilk has a built-in driver for that exposes PRAGMA).
+ * A driver that does not support the kind returns 0 (no-op) so the same
+ * caller code works regardless of the active driver.
+ */
+int
+csilk_db_set_pragma(csilk_db_pool_t* pool, int kind, const char* value)
+{
+    if (!pool || !pool->driver) {
+        CSILK_LOG_E("csilk_db_set_pragma: invalid pool or driver");
+        return -1;
+    }
+
+    /* Prefer the driver's own rendering when it provides one. */
+    if (pool->driver->set_pragma) {
+        return pool->driver->set_pragma(pool, kind, value);
+    }
+
+    /* Fallback: render a SQLite PRAGMA string and execute it.  This is
+     * correct when the driver is SQLite; for non-SQLite drivers the
+     * PRAGMA string will fail, which the caller should treat as a no-op
+     * (the no-driver-callback path is only reached by drivers that did
+     * not implement set_pragma — currently the built-in SQLite driver,
+     * which does implement it, so this fallback is rarely taken). */
+    char sql[256];
+    switch (kind) {
+    case CSILK_DB_PRAGMA_JOURNAL_MODE:
+        snprintf(sql, sizeof(sql), "PRAGMA journal_mode=%s;", value ? value : "WAL");
+        break;
+    case CSILK_DB_PRAGMA_BUSY_TIMEOUT:
+        snprintf(sql, sizeof(sql), "PRAGMA busy_timeout=%s;", value ? value : "5000");
+        break;
+    case CSILK_DB_PRAGMA_SYNCHRONOUS:
+        snprintf(sql, sizeof(sql), "PRAGMA synchronous=%s;", value ? value : "NORMAL");
+        break;
+    case CSILK_DB_PRAGMA_FOREIGN_KEYS:
+        snprintf(sql, sizeof(sql), "PRAGMA foreign_keys=%s;", value ? value : "ON");
+        break;
+    case CSILK_DB_PRAGMA_CUSTOM:
+    default:
+        snprintf(sql, sizeof(sql), "%s", value ? value : "");
+        break;
+    }
+    if (!sql[0]) {
+        return 0; /* nothing to do */
+    }
+    CSILK_LOG_W("csilk_db_set_pragma: driver '%s' has no set_pragma callback; "
+                "rendering SQLite PRAGMA fallback: %s",
+                pool->driver->name ? pool->driver->name : "unknown",
+                sql);
+    int rc = csilk_db_exec(pool, sql);
+    return rc;
+}
+
 /** @brief Execute a SQL query and return the result as a csilk_json array. */
 csilk_json_t*
 csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
@@ -436,6 +554,7 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
     CSILK_LOG_D("Database query initiated: %s", sql);
 
     csilk_mutex_lock(&pool->mutex);
+    void*         conn_snapshot = pool->connection;
     csilk_json_t* result = csilk_db_query_json_locked(pool, sql);
     csilk_mutex_unlock(&pool->mutex);
 
@@ -444,9 +563,11 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 
     if (!result) {
         atomic_fetch_add(&db_errors_total, 1);
+        _csilk_db_record_error(pool, conn_snapshot != NULL);
         CSILK_LOG_E(
             "Database query failed (duration: %.2f ms): %s", (double)duration / 1000.0, sql);
     } else {
+        pool->last_err = CSILK_DB_OK;
         atomic_fetch_add(&db_queries_total, 1);
         CSILK_LOG_T(
             "Database query succeeded (duration: %.2f ms): %s", (double)duration / 1000.0, sql);
@@ -541,7 +662,8 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
     CSILK_LOG_D("Database exec initiated: %s", sql);
 
     csilk_mutex_lock(&pool->mutex);
-    int rc = pool->driver->exec(pool, sql);
+    void*       conn_snapshot = pool->connection;
+    int         rc = pool->driver->exec(pool, sql);
     csilk_mutex_unlock(&pool->mutex);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
@@ -549,11 +671,13 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 
     if (rc != 0) {
         atomic_fetch_add(&db_errors_total, 1);
+        _csilk_db_record_error(pool, conn_snapshot != NULL);
         CSILK_LOG_E("Database exec failed with rc %d (duration: %.2f ms): %s",
                     rc,
                     (double)duration / 1000.0,
                     sql);
     } else {
+        pool->last_err = CSILK_DB_OK;
         atomic_fetch_add(&db_execs_total, 1);
         CSILK_LOG_T(
             "Database exec succeeded (duration: %.2f ms): %s", (double)duration / 1000.0, sql);

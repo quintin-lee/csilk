@@ -26,6 +26,7 @@
 /** @brief Per-connection data for the SQLite driver. */
 typedef struct {
     sqlite3* db;
+    int      last_sqlite_rc; /* last non-SQLITE_OK rc, for csilk_db_last_error */
 } sqlite_conn_t;
 
 /** @brief Open a connection to a SQLite database file.
@@ -119,6 +120,100 @@ sqlite_disconnect(csilk_db_pool_t* pool)
     }
     free(conn);
     csilk_db_pool_set_connection(pool, NULL);
+    return 0;
+}
+
+/*
+ * Record the most recent SQLite rc on the connection so the last_error
+ * callback can map it to a csilk_db_err_t (csilk#8).  SQLITE_OK is not
+ * recorded (the caller resets the flag via csilk_db_exec success path).
+ */
+static void
+sqlite_record_rc(csilk_db_pool_t* pool, int rc)
+{
+    if (rc == SQLITE_OK) {
+        return;
+    }
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    if (conn) {
+        conn->last_sqlite_rc = rc;
+    }
+}
+
+/*
+ * Map the last recorded SQLite rc to a csilk_db_err_t (csilk#8).
+ * SQLITE_BUSY → CSILK_DB_ERR_BUSY; a connection-level failure
+ * (last_sqlite_rc == 0, i.e. no rc recorded because the connection is
+ * NULL) → CSILK_DB_ERR_CONN; anything else → CSILK_DB_ERR_SQL.
+ */
+static int
+sqlite_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
+{
+    if (!pool || !out_err) {
+        return -1;
+    }
+    sqlite_conn_t* conn = (sqlite_conn_t*)csilk_db_pool_get_connection(pool);
+    if (!conn) {
+        *out_err = CSILK_DB_ERR_CONN;
+        return 0;
+    }
+    int rc = conn->last_sqlite_rc;
+    if (rc == SQLITE_OK || rc == 0) {
+        *out_err = CSILK_DB_OK;
+    } else if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED) {
+        *out_err = CSILK_DB_ERR_BUSY;
+    } else {
+        *out_err = CSILK_DB_ERR_SQL;
+    }
+    return 0;
+}
+
+/*
+ * Apply a dialect-specific pragma (csilk#4).  Renders the requested kind
+ * to the appropriate SQLite PRAGMA string and executes it.  Returns 0 on
+ * success (or no-op when the kind is unsupported on SQLite — currently
+ * all kinds are supported).
+ */
+static int
+sqlite_set_pragma(csilk_db_pool_t* pool, int kind, const char* value)
+{
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return -1;
+    }
+    char sql[256];
+    switch (kind) {
+    case CSILK_DB_PRAGMA_JOURNAL_MODE:
+        snprintf(sql, sizeof(sql), "PRAGMA journal_mode=%s;", value ? value : "WAL");
+        break;
+    case CSILK_DB_PRAGMA_BUSY_TIMEOUT:
+        snprintf(sql, sizeof(sql), "PRAGMA busy_timeout=%s;", value ? value : "5000");
+        break;
+    case CSILK_DB_PRAGMA_SYNCHRONOUS:
+        snprintf(sql, sizeof(sql), "PRAGMA synchronous=%s;", value ? value : "NORMAL");
+        break;
+    case CSILK_DB_PRAGMA_FOREIGN_KEYS:
+        snprintf(sql, sizeof(sql), "PRAGMA foreign_keys=%s;", value ? value : "ON");
+        break;
+    case CSILK_DB_PRAGMA_CUSTOM:
+        snprintf(sql, sizeof(sql), "%s", value ? value : "");
+        if (!value || !value[0]) {
+            return 0; /* empty custom pragma is a no-op */
+        }
+        break;
+    default:
+        CSILK_LOG_W("sqlite_set_pragma: unknown kind %d; no-op", kind);
+        return 0;
+    }
+    char* err = NULL;
+    int   rc = sqlite3_exec(
+        ((sqlite_conn_t*)csilk_db_pool_get_connection(pool))->db, sql, NULL, NULL, &err);
+    if (rc != SQLITE_OK) {
+        CSILK_LOG_E("sqlite_set_pragma: %s: %s", sql, err ? err : "unknown");
+        if (err) {
+            sqlite3_free(err);
+        }
+        return -1;
+    }
     return 0;
 }
 
@@ -283,6 +378,7 @@ sqlite_exec(csilk_db_pool_t* pool, const char* sql)
     char*          err = NULL;
     int            rc = sqlite3_exec(conn->db, sql, NULL, NULL, &err);
     if (rc != SQLITE_OK) {
+        sqlite_record_rc(pool, rc); /* csilk#8: record for last_error */
         CSILK_LOG_E("csilk_db_sqlite: exec failed: %s", err ? err : "unknown");
         if (err) {
             sqlite3_free(err);
@@ -514,6 +610,8 @@ csilk_db_driver_t csilk_db_sqlite_driver = {
     .stmt_query_json = sqlite_stmt_query_json,
     .stmt_close = sqlite_stmt_close,
     .free_result = sqlite_free_result,
+    .last_error = sqlite_last_error, /* csilk#8 */
+    .set_pragma = sqlite_set_pragma,  /* csilk#4 */
 };
 
 /** @brief Initialize and register the SQLite database driver with csilk.
