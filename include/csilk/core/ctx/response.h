@@ -308,6 +308,18 @@ void csilk_respond_ok(csilk_ctx_t* c, csilk_json_t* data);
 void csilk_respond_ok_null(csilk_ctx_t* c);
 
 /**
+ * @brief Send a success response with a caller-supplied business code (csilk#9c).
+ *
+ * Produces {"code": <biz_code>, "message": "ok", "data": <data>} with HTTP 200.
+ * Takes ownership of the data JSON node; if data is NULL, sets "data": null.
+ *
+ * @param c        The request context (must not be NULL).
+ * @param biz_code Application-defined success code.
+ * @param data     The payload JSON element (ownership transferred to framework).
+ */
+void csilk_respond_ok_ex(csilk_ctx_t* c, int biz_code, csilk_json_t* data);
+
+/**
  * @brief Send a structured business error response.
  *
  * Produces {"code": <biz_code>, "message": "<message>"}.
