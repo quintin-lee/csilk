@@ -326,6 +326,38 @@ void csilk_respond_forbidden(csilk_ctx_t* c, int biz_code, const char* msg);    
 void csilk_respond_not_found(csilk_ctx_t* c, int biz_code, const char* msg);    /* 404 */
 void csilk_respond_conflict(csilk_ctx_t* c, int biz_code, const char* msg);     /* 409 */
 
+/* ---------------------------------------------------------------------------
+ * JSON-RPC 2.0 response frames (csilk#9d)
+ * ---------------------------------------------------------------------------
+ * The RESTful helpers above produce {code, message, data}.  JSON-RPC 2.0
+ * requires a different shape: {result, id} on success and
+ * {error: {code, message, data}, id} on failure.  These two helpers let
+ * a JSON-RPC endpoint emit a well-formed frame without hand-rolling the
+ * JSON.
+ *
+ * Both take ownership of the @p result / @p error_data / @p id JSON values
+ * and free them after serialization (or on the null-context path).  Passing
+ * NULL for @p id emits the JSON-RPC "id omitted" form. */
+
+/** @brief Send a JSON-RPC 2.0 success frame: {"result": <result>, "id": <id>}. */
+void csilk_respond_jsonrpc_result(csilk_ctx_t* c, csilk_json_t* result, csilk_json_t* id);
+
+/** @brief Send a JSON-RPC 2.0 error frame: {"error": {"code", "message", "data"?}, "id"?}.
+ *
+ * @param c           The request context.
+ * @param error_code  JSON-RPC error code (e.g. -32601 for Method not found).
+ * @param error_message Human-readable error description.
+ * @param error_data  Optional JSON data associated with the error (may be NULL).
+ * @param id          The request id to echo back (may be NULL for notifications).
+ * @param http_status HTTP status to send (0 → default 500).
+ */
+void csilk_respond_jsonrpc_error(csilk_ctx_t* c,
+                                 int          error_code,
+                                 const char*  error_message,
+                                 csilk_json_t* error_data,
+                                 csilk_json_t* id,
+                                 int          http_status);
+
 /**
  * @brief Strictly parse pagination parameters from query string (page, page_size).
  *
