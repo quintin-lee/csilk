@@ -197,16 +197,23 @@ _csilk_send_response(csilk_ctx_t* c)
 
     if (c->is_websocket) {
         csilk_conn_set_state(client, CSILK_CONN_STREAMING);
-        size_t header_len = 0;
-        char*  header = malloc(1024);
+        size_t custom_headers_len = 0;
+        for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+            for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+                custom_headers_len += h->key_len + 4 + h->value_len;
+            }
+        }
+        size_t needed = 64 + custom_headers_len + 4;
+        size_t alloc_sz = (needed < 1024) ? 1024 : needed;
+        char*  header = malloc(alloc_sz);
         if (header) {
-            header_len = fast_serialize_status_and_control(header,
-                                                           CSILK_STATUS_SWITCHING_PROTOCOLS,
-                                                           "Switching Protocols",
-                                                           0,
-                                                           "",
-                                                           0,
-                                                           "Upgrade");
+            size_t header_len = fast_serialize_status_and_control(header,
+                                                                  CSILK_STATUS_SWITCHING_PROTOCOLS,
+                                                                  "Switching Protocols",
+                                                                  0,
+                                                                  "",
+                                                                  0,
+                                                                  "Upgrade");
             header_len = append_custom_headers_fast(&c->response.headers, header, header_len);
             header[header_len++] = '\r';
             header[header_len++] = '\n';

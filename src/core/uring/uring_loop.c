@@ -63,6 +63,7 @@ csilk_io_loop_close(csilk_io_loop_t* loop)
     if (!loop) {
         return -1;
     }
+    _uring_deferred_drain_all();
     io_uring_queue_exit(&loop->ring);
     if (loop->op_pool) {
         free(loop->op_pool);

@@ -220,9 +220,8 @@ admin_flamegraph_handler(csilk_ctx_t* c)
     if (csilk_flamegraph_stop(&svg, &svg_len) == 0 && svg) {
         csilk_set_header(c, "Content-Type", "image/svg+xml");
         csilk_set_header(c, "Cache-Control", "no-cache");
+        csilk_status(c, 200);
         csilk_set_response_body(c, svg, svg_len, 1);
-        csilk_string(c, 200, "");
-        free(svg);
     } else {
         csilk_json_error(c, 500, "No samples collected");
     }

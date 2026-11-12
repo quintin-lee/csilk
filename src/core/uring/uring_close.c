@@ -32,6 +32,18 @@ csilk_io_close_op_cancel(csilk_io_op_t* op)
     (void)op;
 }
 
+static void
+_csilk_uring_deferred_close_cb(csilk_io_work_t* req, int status)
+{
+    (void)status;
+    csilk_io_close_op_t* close_op = (csilk_io_close_op_t*)req;
+    if (close_op) {
+        csilk_io_op_complete(&close_op->op, 0);
+        csilk_io_op_retire(&close_op->op);
+        free(close_op);
+    }
+}
+
 void
 csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
 {
@@ -102,9 +114,7 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
         handle->fd = -1;
     }
 
-    csilk_io_op_complete(&close_op->op, 0);
-    csilk_io_op_retire(&close_op->op);
-    free(close_op);
+    _uring_deferred_push((csilk_io_work_t*)close_op, _csilk_uring_deferred_close_cb, 0);
 }
 
 #endif

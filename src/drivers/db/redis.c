@@ -26,6 +26,7 @@
  */
 
 #include <hiredis/hiredis.h>
+#include <hiredis/sds.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -292,6 +293,36 @@ redis_reply_to_row(const redisReply* reply, const char* col_name, int col_count,
  * @param result [out] Populated result set (must be freed with
  *               redis_free_csilk_result).
  * @return 0 on success, -1 on error. */
+static redisReply*
+redis_exec_command_str(redisContext* c, const char* sql)
+{
+    if (!c || !sql) {
+        return NULL;
+    }
+    int  argc = 0;
+    sds* argv = sdssplitargs(sql, &argc);
+    if (!argv || argc <= 0) {
+        if (argv) {
+            sdsfreesplitres(argv, argc);
+        }
+        return NULL;
+    }
+
+    size_t* argvlen = malloc(sizeof(size_t) * (size_t)argc);
+    if (!argvlen) {
+        sdsfreesplitres(argv, argc);
+        return NULL;
+    }
+    for (int i = 0; i < argc; i++) {
+        argvlen[i] = sdslen(argv[i]);
+    }
+
+    redisReply* reply = (redisReply*)redisCommandArgv(c, argc, (const char**)argv, argvlen);
+    free(argvlen);
+    sdsfreesplitres(argv, argc);
+    return reply;
+}
+
 static int
 redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
 {
@@ -300,7 +331,7 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
     }
 
     redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
-    redisReply*   reply = redisCommand(conn->c, sql);
+    redisReply*   reply = redis_exec_command_str(conn->c, sql);
     if (!reply) {
         CSILK_LOG_E("csilk_db_redis: connection error: %s", conn->c ? conn->c->errstr : "unknown");
         return -1;
@@ -524,7 +555,7 @@ redis_drv_exec(csilk_db_pool_t* pool, const char* sql)
     }
 
     redis_conn_t* conn = (redis_conn_t*)csilk_db_pool_get_connection(pool);
-    redisReply*   reply = redisCommand(conn->c, sql);
+    redisReply*   reply = redis_exec_command_str(conn->c, sql);
     if (!reply) {
         CSILK_LOG_E("csilk_db_redis: exec connection error: %s",
                     conn->c ? conn->c->errstr : "unknown");
