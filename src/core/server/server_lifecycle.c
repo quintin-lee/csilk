@@ -722,8 +722,27 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_trigger_hooks(server, NULL, CSILK_HOOK_SERVER_START);
 
     int ret = csilk_io_run(server->loop, CSILK_IO_RUN_DEFAULT);
+    /* Drain remaining closing handles (TCP + 4 timers per client) until
+     * csilk_io_loop_alive() returns 0 or a safety cap is reached.  Running
+     * CSILK_IO_RUN_ONCE lets libuv wait briefly for pending close callbacks
+     * that fire after stop_async returns. */
     for (int i = 0; i < 1000 && csilk_io_loop_alive(server->loop); i++) {
         csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
+    }
+    if (server->worker_pools && server->worker_pool_count > 0) {
+        /* Force-teardown any client that remained on active_clients because
+         * the loop exited early or its handle never finished closing. */
+        worker_pool_t* wp0 = &server->worker_pools[0];
+        while (wp0->active_clients) {
+            csilk_client_t* leftover = wp0->active_clients;
+            if (leftover->state != CSILK_CONN_CLOSING) {
+                leftover->state = CSILK_CONN_CLOSING;
+            }
+            extern void client_list_remove(csilk_server_t * s, csilk_client_t * c);
+            client_list_remove(server, leftover);
+            extern void client_destroy(csilk_client_t * c);
+            client_destroy(leftover);
+        }
     }
     return ret;
 }
