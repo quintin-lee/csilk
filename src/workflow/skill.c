@@ -629,23 +629,6 @@ csilk_skill_exec_local(
     int max_output = sk->exec_cfg.max_output_bytes > 0 ? sk->exec_cfg.max_output_bytes
                                                        : SKILL_EXEC_DEFAULT_MAX_OUTPUT;
 
-    /* Child env: minimal (PATH) + any user-supplied env. */
-    char  envbuf[4096];
-    char* eargv[64];
-    int   envc = 0;
-    eargv[envc++] = "PATH=/usr/bin:/bin";
-    if (sk->exec_cfg.env && sk->exec_cfg.env[0]) {
-        memset(envbuf, 0, sizeof(envbuf));
-        strncpy(envbuf, sk->exec_cfg.env, sizeof(envbuf) - 1);
-        char* etok = strtok(envbuf, " ");
-        while (etok && envc < 63) {
-            eargv[envc++] = etok;
-            etok = strtok(NULL, " ");
-        }
-    }
-    eargv[envc] = NULL;
-    char** envp = eargv;
-
     int pipefd[2];
     if (pipe(pipefd) != 0) {
         *out_result = strdup("{\"error\":\"pipe failed\"}");
@@ -675,7 +658,32 @@ csilk_skill_exec_local(
         if (chdir(sk->exec_cfg.root) != 0) {
             _exit(126);
         }
-        execvpe(argv[0], argv, (char* const*)envp);
+        /* Cross-platform env isolation: build a minimal env in the child
+         * rather than passing an explicit `envp` (execvpe is a GNU-only
+         * extension, absent on macOS/BSD).  `clearenv` + `setenv` is POSIX
+         * and available on both glibc and libc, so the child runs with the
+         * same minimal PATH + user-supplied envp as before without leaking
+         * the parent's full environment. */
+        if (clearenv() != 0) {
+            _exit(126);
+        }
+        setenv("PATH", "/usr/bin:/bin", 1);
+        if (sk->exec_cfg.env && sk->exec_cfg.env[0]) {
+            char ebuf[4096];
+            memset(ebuf, 0, sizeof(ebuf));
+            strncpy(ebuf, sk->exec_cfg.env, sizeof(ebuf) - 1);
+            char* etok = strtok(ebuf, " ");
+            while (etok) {
+                /* Each token is KEY=VALUE; split on the first '='. */
+                char* eq = strchr(etok, '=');
+                if (eq) {
+                    *eq = 0;
+                    setenv(etok, eq + 1, 1);
+                }
+                etok = strtok(NULL, " ");
+            }
+        }
+        execvp(argv[0], argv);
         _exit(127); /* exec failed */
     }
 
