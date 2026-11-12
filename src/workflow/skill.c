@@ -629,29 +629,27 @@ csilk_skill_exec_local(
     int max_output = sk->exec_cfg.max_output_bytes > 0 ? sk->exec_cfg.max_output_bytes
                                                        : SKILL_EXEC_DEFAULT_MAX_OUTPUT;
 
-    /* Cross-platform env isolation: we overwrite the inherited `environ`
-     * global in the child element-by-element rather than passing an explicit
-     * `envp` (execvpe is a GNU-only extension, absent on macOS/BSD).  The
-     * mini_env token array and its backing buffers live here so they remain
-     * valid through the execvp call below; the child only ever exec's or
-     * _exit's, so no cleanup is needed.  Writing `environ[i]` element-by-
-     * element is portable to both glibc (char** environ) and macOS (char*
-     * environ[]) because the latter is an array that cannot be assigned
-     * wholesale. */
+    /* Cross-platform env isolation: build a minimal env array (PATH + user-
+     * supplied KEY=VALUE tokens) that the child passes explicitly to execve.
+     * `environ` and `clearenv` are both feature-macro-gated on macOS
+     * (need __DARWIN_C_FULL); `execve` is unconditionally available on
+     * glibc, macOS/BSD, and other POSIX systems.  execve does not search
+     * PATH, so the child resolves argv[0] to an absolute path before the
+     * call. */
     static char s_env_tokens[4096];
-    char*       mini_env[64];
-    int         mini_c = 0;
-    mini_env[mini_c++] = "PATH=/usr/bin:/bin";
+    char*       envp[64];
+    int         envc = 0;
+    envp[envc++] = "PATH=/usr/bin:/bin";
     if (sk->exec_cfg.env && sk->exec_cfg.env[0]) {
         memset(s_env_tokens, 0, sizeof(s_env_tokens));
         strncpy(s_env_tokens, sk->exec_cfg.env, sizeof(s_env_tokens) - 1);
         char* etok = strtok(s_env_tokens, " ");
-        while (etok && mini_c < 63) {
-            mini_env[mini_c++] = etok;
+        while (etok && envc < 63) {
+            envp[envc++] = etok;
             etok = strtok(NULL, " ");
         }
     }
-    mini_env[mini_c] = NULL;
+    envp[envc] = NULL;
 
     int pipefd[2];
     if (pipe(pipefd) != 0) {
@@ -682,16 +680,19 @@ csilk_skill_exec_local(
         if (chdir(sk->exec_cfg.root) != 0) {
             _exit(126);
         }
-        /* Overwrite the inherited environment element-by-element so the child
-         * runs with only the minimal PATH + user-supplied env (parent env is
-         * never leaked).  `environ` is portable across glibc and macOS; we
-         * write `environ[i]` directly rather than assigning the array,
-         * which is required because on macOS `environ` is an array type that
-         * cannot be assigned wholesale. */
-        for (int i = 0; i < mini_c + 1; i++) {
-            environ[i] = mini_env[i];
+        /* execve (not execvpe) is POSIX on glibc, macOS, and BSD: it takes
+         * an explicit envp array so we never need to touch `environ`/`clearenv`
+         * (feature-macro-gated on macOS).  argv[0] is resolved to an absolute
+         * path here so execve can find it regardless of the child's CWD. */
+        char abspath[4096];
+        if (argv[0][0] == '/') {
+            /* Already absolute. */
+            snprintf(abspath, sizeof(abspath), "%s", argv[0]);
+        } else {
+            /* Relative to the exec root — child is already chdir'd here. */
+            snprintf(abspath, sizeof(abspath), "%s/%s", sk->exec_cfg.root, argv[0]);
         }
-        execvp(argv[0], argv);
+        execve(abspath, argv, (char* const*)envp);
         _exit(127); /* exec failed */
     }
 
