@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.1] - 2026-11-12
 
+### Added
+- **Remote Agent Skill Worker Execution & Result Collection** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
+  - Added `csilk_ai_skill_worker_register()` / `csilk_ai_skill_worker_unregister()` subscribing to `csilk.skill.invoke` over `csilk_mq` and executing either bounded `csilk_skill_exec_local()` or the skill's L3 loader.
+  - Wired `csilk_ai_skill_invoke_remote()` to await correlated `csilk.skill.result` replies by `idem` key with bounded timeouts and an idempotent replay cache.
+- **MCP Client Live Tool Discovery & Dispatch** (`csilk/protocols/mcp.h`, `src/protocols/mcp/mcp_client.c`):
+  - Replaced the `"imported_mcp_tool"` placeholder with real JSON-RPC 2.0 `initialize` + `tools/list` + `tools/call` transport over stdio subprocesses and HTTP POST/SSE endpoints.
+  - Added `csilk_mcp_client_call_tool()` and `csilk_mcp_client_import_to_registry()` to bridge remote MCP tool schemas directly into `csilk_ai_tool_registry_t`.
+- **MySQL Native Prepared Statements & Migration Support** (`src/drivers/db/mysql.c`, `src/drivers/db/migration/`):
+  - Implemented `MYSQL_STMT` / `MYSQL_BIND` native prepared statement lifecycle (`stmt_prepare`, typed `stmt_bind_*`, `stmt_execute`, `stmt_query_json`, `stmt_close`), `in_transaction`, and `last_error`.
+  - Updated `migration_engine.c` and `migration_lock.c` with MySQL DDL/upsert/table-discovery dialect support so migrations run across SQLite, PostgreSQL, and MySQL.
+- **Documentation**:
+  - Added `docs/en/meta/ROADMAP.md` and `docs/zh-CN/meta/ROADMAP.md` covering the `v0.6.0 → v1.0.0 LTS` evolution plan.
+
+### Fixed
+- **Multi-Worker Graceful Teardown Leak** (`src/core/server/server_lifecycle.c`, `src/core/server/server_worker.c`):
+  - Increased post-stop loop drain iterations on worker threads and force-destroyed any leftover `wp->active_clients` entries after loop exit, eliminating retained connection/arena leaks in `test_multi_worker` under GCC ASAN.
+
 ## [0.6.0] - 2026-11-12
 
 ### Added
