@@ -48,7 +48,7 @@ jobs:
           # the venv build executes inside cibuildwheel.  setup.py now probes
           # /opt/homebrew (arm64) or /usr/local (x86_64) directly instead of
           # shelling out to `brew`, which may not be on the venv PATH.
-          CIBW_BEFORE_ALL_MACOS: "brew install cmake pkg-config openssl libyaml zlib curl sqlite3 libuv"
+          CIBW_BEFORE_ALL_MACOS: "brew install cmake pkg-config openssl libyaml zlib curl sqlite3 libuv nghttp2"
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_34_x86_64
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y
