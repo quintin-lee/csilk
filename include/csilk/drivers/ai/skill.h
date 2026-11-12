@@ -180,21 +180,45 @@ char* csilk_ai_skill_run_use_skill(csilk_wf_t* wf, const char* args_json);
 /* --- Remote execution (cloud cluster, csilk_mq) --- */
 
 /**
- * @brief Offload a skill's L3 resource execution to the cluster and block for
+ * @brief Register a skill worker handler on an MQ instance for remote L3
+ *        invocation.
+ *
+ * Subscribes to `csilk.skill.invoke` on @p mq (once per MQ), dispatches
+ * matching requests by skill name to `csilk_skill_exec_local()` (or the skill's
+ * L3 loader if no exec config is set), and publishes the JSON envelope back onto
+ * `csilk.skill.result` tagged with the request's `idem` key.  Idempotent
+ * duplicate invocations reuse the cached result envelope without re-executing.
+ *
+ * @param sk  Skill handle whose name and local exec config / loader serve remote calls.
+ * @param mq  Message queue handle (must not be NULL).
+ * @return 0 on success, -1 on NULL args / capacity exceeded.
+ */
+int csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq);
+
+/**
+ * @brief Unregister a skill from remote worker dispatch (called automatically
+ *        by csilk_ai_skill_free()).
+ */
+void csilk_ai_skill_worker_unregister(csilk_ai_skill_t* sk);
+
+/**
+ * @brief Offload a skill's L3 resource execution to the cluster and wait for
  *        the result via csilk_mq.
  *
  * Publishes on `csilk.skill.invoke` and awaits `csilk.skill.result` with an
- * idempotent key and a bounded timeout.  Not usable from a worker thread that
- * must stay lock-free; intended for the ReAct orchestrator on the main loop.
+ * idempotent key and a bounded timeout.  When no remote worker responds
+ * within @p timeout_ms (or none is registered), returns -1 with a timeout
+ * error envelope in @p out_result.  Not usable from an I/O worker thread that
+ * must stay lock-free; intended for the ReAct orchestrator or background tasks.
  *
  * @param sk            Skill handle (must be CSILK_SKILL_REMOTE).
  * @param mq            Message queue handle (cluster bus).
  * @param resource_path L3 resource to execute (e.g. "scripts/run.sh").
- * @param args          JSON arguments forwarded to the worker.
+ * @param args          JSON / CLI arguments forwarded to the worker.
  * @param timeout_ms    Bounded wait (<= 0 uses a framework default).
  * @param[out] out_result [out] Heap-allocated result (caller frees), or an
  *                error envelope on timeout / failure.
- * @return 0 on success, -1 on failure.
+ * @return 0 on success, -1 on failure / timeout.
  */
 int csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
                                  csilk_mq_t*       mq,

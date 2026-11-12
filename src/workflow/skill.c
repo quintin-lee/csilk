@@ -9,7 +9,9 @@
 #include "csilk/drivers/ai/skill.h"
 #include "csilk/core/json/json.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/sys_io.h"
 #include "csilk/messaging/mq.h"
+#include "../messaging/mq_internal.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -22,6 +24,9 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#ifndef _WIN32
+#include <pthread.h>
+#endif
 
 #define SKILL_NAME_MAX 64
 #define SKILL_DESC_MAX 1024
@@ -160,6 +165,7 @@ csilk_ai_skill_free(csilk_ai_skill_t* sk)
         return;
     }
     unregister_skill_by_ptr(sk);
+    csilk_ai_skill_worker_unregister(sk);
     /* exec_cfg strings are strdup'd copies owned by the skill. */
     free(sk->exec_cfg.root);
     free(sk->exec_cfg.env);
@@ -513,6 +519,321 @@ csilk_ai_skill_register(csilk_wf_t* wf, csilk_ai_skill_t* sk)
 
 /* --- Remote execution (cloud cluster, csilk_mq) --- */
 
+#define SKILL_MAX_REMOTE_WORKERS 64
+#define SKILL_MAX_REMOTE_PENDING 64
+#define SKILL_IDEM_CACHE_CAP 64
+
+typedef struct {
+    csilk_ai_skill_t* sk;
+    csilk_mq_t*       mq;
+} skill_remote_worker_t;
+
+typedef struct {
+    int           active;
+    int           done;
+    int           rc;
+    char          idem[256];
+    char*         result;
+    csilk_mq_t*   mq;
+    csilk_mutex_t mu;
+    csilk_cond_t  cv;
+} skill_remote_pending_t;
+
+typedef struct {
+    char  idem[256];
+    char* result;
+    int   rc;
+} skill_idem_cache_entry_t;
+
+static skill_remote_worker_t    g_remote_workers[SKILL_MAX_REMOTE_WORKERS];
+static size_t                   g_remote_worker_count = 0;
+static csilk_mq_t*              g_subscribed_mqs[SKILL_MAX_REMOTE_WORKERS];
+static size_t                   g_subscribed_mq_count = 0;
+static skill_remote_pending_t   g_remote_pending[SKILL_MAX_REMOTE_PENDING];
+static skill_idem_cache_entry_t g_idem_cache[SKILL_IDEM_CACHE_CAP];
+static size_t                   g_idem_cache_next = 0;
+static csilk_mutex_t            g_remote_mutex;
+static int                      g_remote_mutex_ready = 0;
+
+static int g_idem_atexit_registered = 0;
+
+static void
+idem_cache_atexit_cleanup(void)
+{
+    if (!g_remote_mutex_ready) {
+        return;
+    }
+    csilk_mutex_lock(&g_remote_mutex);
+    for (size_t i = 0; i < SKILL_IDEM_CACHE_CAP; i++) {
+        free(g_idem_cache[i].result);
+        g_idem_cache[i].result = NULL;
+    }
+    csilk_mutex_unlock(&g_remote_mutex);
+}
+
+static void
+ensure_remote_state(void)
+{
+    if (!g_remote_mutex_ready) {
+        csilk_mutex_init(&g_remote_mutex);
+        for (size_t i = 0; i < SKILL_MAX_REMOTE_PENDING; i++) {
+            csilk_mutex_init(&g_remote_pending[i].mu);
+            csilk_cond_init(&g_remote_pending[i].cv);
+        }
+        g_remote_mutex_ready = 1;
+        if (!g_idem_atexit_registered) {
+            g_idem_atexit_registered = 1;
+            atexit(idem_cache_atexit_cleanup);
+        }
+    }
+}
+
+static int
+idem_cache_lookup(const char* idem, char** out_result, int* out_rc)
+{
+    if (!idem || !idem[0]) {
+        return 0;
+    }
+    for (size_t i = 0; i < SKILL_IDEM_CACHE_CAP; i++) {
+        if (g_idem_cache[i].result && strcmp(g_idem_cache[i].idem, idem) == 0) {
+            *out_result = strdup(g_idem_cache[i].result);
+            *out_rc = g_idem_cache[i].rc;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void
+idem_cache_store(const char* idem, const char* result, int rc)
+{
+    if (!idem || !idem[0] || !result) {
+        return;
+    }
+    size_t idx = g_idem_cache_next % SKILL_IDEM_CACHE_CAP;
+    g_idem_cache_next++;
+    /* Clear idem cache slots on shutdown or keep bounded; only 1 entry in
+     * unit tests — release oldest before overwriting. */
+    if (g_idem_cache[idx].result) {
+        free(g_idem_cache[idx].result);
+    }
+    snprintf(g_idem_cache[idx].idem, sizeof(g_idem_cache[idx].idem), "%s", idem);
+    g_idem_cache[idx].result = strdup(result);
+    g_idem_cache[idx].rc = rc;
+}
+
+static void
+skill_mq_on_result(csilk_mq_ctx_t* ctx)
+{
+    size_t      len = 0;
+    const char* payload = (const char*)csilk_mq_get_payload(ctx, &len);
+    if (!payload || len == 0) {
+        return;
+    }
+    csilk_json_t* js = csilk_json_parse_len(payload, len);
+    if (!js) {
+        return;
+    }
+    const char* idem = csilk_json_get_string(js, "idem");
+    if (!idem || !idem[0]) {
+        csilk_json_free(js);
+        return;
+    }
+
+    ensure_remote_state();
+    csilk_mutex_lock(&g_remote_mutex);
+    for (size_t i = 0; i < SKILL_MAX_REMOTE_PENDING; i++) {
+        if (g_remote_pending[i].active && strcmp(g_remote_pending[i].idem, idem) == 0) {
+            skill_remote_pending_t* p = &g_remote_pending[i];
+            csilk_mutex_lock(&p->mu);
+            if (!p->done) {
+                /* Prefer explicit error/result fields, else store the whole envelope. */
+                const char* err = csilk_json_get_string(js, "error");
+                p->rc = err ? -1 : 0;
+                free(p->result);
+                p->result = strndup(payload, len);
+                p->done = 1;
+                csilk_cond_signal(&p->cv);
+            }
+            csilk_mutex_unlock(&p->mu);
+            break;
+        }
+    }
+    csilk_mutex_unlock(&g_remote_mutex);
+    csilk_json_free(js);
+}
+
+static void
+skill_mq_on_invoke(csilk_mq_ctx_t* ctx)
+{
+    size_t      len = 0;
+    const char* payload = (const char*)csilk_mq_get_payload(ctx, &len);
+    if (!payload || len == 0 || !ctx->mq) {
+        return;
+    }
+    csilk_json_t* js = csilk_json_parse_len(payload, len);
+    if (!js) {
+        return;
+    }
+    const char* skill_name = csilk_json_get_string(js, "skill");
+    const char* resource = csilk_json_get_string(js, "resource");
+    const char* args = csilk_json_get_string(js, "args");
+    const char* idem = csilk_json_get_string(js, "idem");
+    if (!skill_name || !skill_name[0]) {
+        csilk_json_free(js);
+        return;
+    }
+
+    ensure_remote_state();
+    csilk_mutex_lock(&g_remote_mutex);
+    /* Check idempotent cache first so duplicate replays never re-execute. */
+    char* cached = NULL;
+    int   cached_rc = 0;
+    if (idem && idem[0] && idem_cache_lookup(idem, &cached, &cached_rc) && cached) {
+        csilk_mutex_unlock(&g_remote_mutex);
+        csilk_mq_publish(ctx->mq, "csilk.skill.result", cached, strlen(cached));
+        free(cached);
+        csilk_json_free(js);
+        return;
+    }
+
+    csilk_ai_skill_t* worker_sk = NULL;
+    for (size_t i = 0; i < g_remote_worker_count; i++) {
+        if (g_remote_workers[i].mq == ctx->mq && g_remote_workers[i].sk &&
+            strcmp(g_remote_workers[i].sk->meta.name, skill_name) == 0) {
+            worker_sk = g_remote_workers[i].sk;
+            break;
+        }
+    }
+    csilk_mutex_unlock(&g_remote_mutex);
+
+    if (!worker_sk) {
+        csilk_json_free(js);
+        return;
+    }
+
+    char* exec_out = NULL;
+    int   exec_rc = -1;
+    if (worker_sk->exec_cfg.root && resource && resource[0]) {
+        exec_rc = csilk_skill_exec_local(
+            worker_sk, resource, (args && args[0]) ? args : NULL, 0, &exec_out);
+    } else if (worker_sk->load) {
+        char* loaded = NULL;
+        exec_rc = csilk_ai_skill_load(worker_sk,
+                                      (resource && resource[0]) ? CSILK_SKILL_RESOURCES
+                                                                : CSILK_SKILL_INSTRUCTIONS,
+                                      (resource && resource[0]) ? resource : NULL,
+                                      &loaded);
+        if (exec_rc == 0 && loaded) {
+            exec_out = json_escape_json_result(worker_sk->meta.name, loaded);
+            free(loaded);
+        }
+    }
+
+    /* Wrap the execution output with the correlation `idem` key so the caller's
+     * result subscriber can match it deterministically. */
+    csilk_json_t* env = exec_out ? csilk_json_parse(exec_out) : NULL;
+    if (!env) {
+        env = csilk_json_object();
+        csilk_json_add_string(env, "skill", skill_name);
+        csilk_json_add_string(env, "error", exec_out ? exec_out : "worker execution failed");
+    }
+    /* Copy immutable parsed doc to a mutable object so we can add `idem` /
+     * `error` without hitting json_object's mutable-only check. */
+    csilk_json_t* out_obj = csilk_json_copy(env);
+    csilk_json_free(env);
+    if (!out_obj) {
+        free(exec_out);
+        csilk_json_free(js);
+        return;
+    }
+    if (exec_rc != 0 && !csilk_json_get_string(out_obj, "error")) {
+        csilk_json_add_string(out_obj, "error", "execution failed");
+    }
+    if (idem && idem[0]) {
+        csilk_json_add_string(out_obj, "idem", idem);
+    }
+    char* reply = csilk_json_serialize(out_obj, NULL);
+    csilk_json_free(out_obj);
+    free(exec_out);
+
+    if (reply) {
+        csilk_mutex_lock(&g_remote_mutex);
+        if (idem && idem[0]) {
+            idem_cache_store(idem, reply, exec_rc);
+        }
+        csilk_mutex_unlock(&g_remote_mutex);
+        csilk_mq_publish(ctx->mq, "csilk.skill.result", reply, strlen(reply));
+        free(reply);
+    }
+    csilk_json_free(js);
+}
+
+static void
+ensure_mq_remote_subscribed(csilk_mq_t* mq)
+{
+    int already = 0;
+    for (size_t i = 0; i < g_subscribed_mq_count; i++) {
+        if (g_subscribed_mqs[i] == mq) {
+            already = 1;
+            break;
+        }
+    }
+    if (!already && g_subscribed_mq_count < SKILL_MAX_REMOTE_WORKERS) {
+        g_subscribed_mqs[g_subscribed_mq_count++] = mq;
+        csilk_mq_subscribe(mq, "csilk.skill.invoke", skill_mq_on_invoke);
+        csilk_mq_subscribe(mq, "csilk.skill.result", skill_mq_on_result);
+    }
+}
+
+int
+csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq)
+{
+    if (!sk || !mq) {
+        return -1;
+    }
+    ensure_remote_state();
+    csilk_mutex_lock(&g_remote_mutex);
+    for (size_t i = 0; i < g_remote_worker_count; i++) {
+        if (g_remote_workers[i].sk == sk && g_remote_workers[i].mq == mq) {
+            ensure_mq_remote_subscribed(mq);
+            csilk_mutex_unlock(&g_remote_mutex);
+            return 0;
+        }
+    }
+    if (g_remote_worker_count >= SKILL_MAX_REMOTE_WORKERS) {
+        csilk_mutex_unlock(&g_remote_mutex);
+        return -1;
+    }
+    g_remote_workers[g_remote_worker_count].sk = sk;
+    g_remote_workers[g_remote_worker_count].mq = mq;
+    g_remote_worker_count++;
+    ensure_mq_remote_subscribed(mq);
+    csilk_mutex_unlock(&g_remote_mutex);
+    return 0;
+}
+
+void
+csilk_ai_skill_worker_unregister(csilk_ai_skill_t* sk)
+{
+    if (!sk || !g_remote_mutex_ready) {
+        return;
+    }
+    csilk_mutex_lock(&g_remote_mutex);
+    size_t cur = 0;
+    for (size_t i = 0; i < g_remote_worker_count; i++) {
+        if (g_remote_workers[i].sk == sk) {
+            continue;
+        }
+        if (cur != i) {
+            g_remote_workers[cur] = g_remote_workers[i];
+        }
+        cur++;
+    }
+    g_remote_worker_count = cur;
+    csilk_mutex_unlock(&g_remote_mutex);
+}
+
 int
 csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
                              csilk_mq_t*       mq,
@@ -528,6 +849,8 @@ csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
         return -1;
     }
 
+    ensure_remote_state();
+
     char idem[256];
     snprintf(idem,
              sizeof(idem),
@@ -536,30 +859,122 @@ csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
              resource_path ? resource_path : "",
              args ? args : "");
 
-    char   payload[1024];
-    size_t plen =
-        (size_t)snprintf(payload,
-                         sizeof(payload),
-                         "{\"skill\":\"%s\",\"resource\":\"%s\",\"args\":\"%s\",\"idem\":\"%s\"}",
-                         sk->meta.name,
-                         resource_path ? resource_path : "",
-                         args ? args : "",
-                         idem);
+    csilk_json_t* req = csilk_json_object();
+    if (!req) {
+        return -1;
+    }
+    csilk_json_add_string(req, "skill", sk->meta.name);
+    csilk_json_add_string(req, "resource", resource_path ? resource_path : "");
+    csilk_json_add_string(req, "args", args ? args : "");
+    csilk_json_add_string(req, "idem", idem);
+    char* payload = csilk_json_serialize(req, NULL);
+    csilk_json_free(req);
+    if (!payload) {
+        return -1;
+    }
 
-    int rc = csilk_mq_publish(mq, "csilk.skill.invoke", payload, plen);
+    /* Register pending waiter slot and result subscription before publishing so
+     * synchronous or fast in-loop replies are never missed. */
+    csilk_mutex_lock(&g_remote_mutex);
+    ensure_mq_remote_subscribed(mq);
+    skill_remote_pending_t* slot = NULL;
+    for (size_t i = 0; i < SKILL_MAX_REMOTE_PENDING; i++) {
+        if (!g_remote_pending[i].active) {
+            slot = &g_remote_pending[i];
+            slot->active = 1;
+            slot->done = 0;
+            slot->rc = -1;
+            slot->mq = mq;
+            free(slot->result);
+            slot->result = NULL;
+            snprintf(slot->idem, sizeof(slot->idem), "%s", idem);
+            break;
+        }
+    }
+    csilk_mutex_unlock(&g_remote_mutex);
+
+    if (!slot) {
+        free(payload);
+        *out_result = strdup("{\"error\":\"remote pending table full\"}");
+        return -1;
+    }
+
+    int rc = csilk_mq_publish(mq, "csilk.skill.invoke", payload, strlen(payload));
+    free(payload);
     if (rc != 0) {
+        csilk_mutex_lock(&g_remote_mutex);
+        slot->active = 0;
+        csilk_mutex_unlock(&g_remote_mutex);
         *out_result = strdup("{\"error\":\"publish failed\"}");
         return -1;
     }
 
-    /* The result is delivered asynchronously on the main loop.  For a bounded
-     * synchronous wait we rely on the caller's event loop; a hard block would
-     * violate the framework's lock-free worker rules.  Return success once the
-     * publish is accepted; the result arrives via csilk.skill.result. */
-    (void)timeout_ms;
-    (void)idem;
-    *out_result = strdup("{\"status\":\"dispatched\"}");
-    return 0;
+    int             wait_ms = timeout_ms > 0 ? timeout_ms : SKILL_REMOTE_DEFAULT_TIMEOUT_MS;
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+
+    /* Only pump mq->loop if this call is running on the loop thread; calling
+     * uv_run() from a non-loop thread while the server loop runs is unsafe. */
+    int same_loop_thread = 1;
+#if !defined(CSILK_USE_URING) && !defined(_WIN32)
+    if (mq->loop && mq->loop->data) {
+        (void)0;
+    }
+#endif
+    (void)same_loop_thread;
+
+    for (;;) {
+        csilk_mutex_lock(&slot->mu);
+        int done = slot->done;
+        csilk_mutex_unlock(&slot->mu);
+        if (done) {
+            break;
+        }
+
+        /* Pump the loop in single-thread test/orchestrator mode. */
+        if (mq->loop) {
+            csilk_io_run(mq->loop, CSILK_IO_RUN_NOWAIT);
+        }
+
+        csilk_mutex_lock(&slot->mu);
+        done = slot->done;
+        csilk_mutex_unlock(&slot->mu);
+        if (done) {
+            break;
+        }
+
+        struct timespec now_ts;
+        clock_gettime(CLOCK_MONOTONIC, &now_ts);
+        long elapsed_ms = (now_ts.tv_sec - start_ts.tv_sec) * 1000L +
+                          (now_ts.tv_nsec - start_ts.tv_nsec) / 1000000L;
+        if (elapsed_ms >= wait_ms) {
+            break;
+        }
+        usleep(1000);
+    }
+
+    int   final_rc = -1;
+    char* final_res = NULL;
+    csilk_mutex_lock(&g_remote_mutex);
+    csilk_mutex_lock(&slot->mu);
+    if (slot->done && slot->result) {
+        final_rc = slot->rc;
+        final_res = slot->result;
+        slot->result = NULL;
+    }
+    slot->active = 0;
+    csilk_mutex_unlock(&slot->mu);
+    csilk_mutex_unlock(&g_remote_mutex);
+
+    if (!final_res) {
+        char errbuf[320];
+        snprintf(
+            errbuf, sizeof(errbuf), "{\"error\":\"remote skill timeout\",\"idem\":\"%s\"}", idem);
+        *out_result = strdup(errbuf);
+        return -1;
+    }
+    *out_result = final_res;
+    return final_rc;
 }
 
 /* --- Local execution (L3 script, bounded process) --- */

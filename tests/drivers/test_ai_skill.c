@@ -8,6 +8,8 @@
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/json/json.h"
+#include "csilk/core/router.h"
+#include "csilk/core/server/server.h"
 #include "csilk/drivers/ai/skill.h"
 #include "csilk/messaging/mq.h"
 
@@ -179,20 +181,84 @@ test_trigger_tool(void)
     csilk_wf_free(wf);
 }
 
-/* Remote dispatch publishes to the MQ and returns a "dispatched" envelope. */
+static int
+test_remote_dispatch_load(csilk_ai_skill_t*   sk,
+                          csilk_skill_level_t level,
+                          const char*         resource_path,
+                          char**              out_content,
+                          void*               user_data)
+{
+    (void)sk;
+    (void)user_data;
+    if (level == CSILK_SKILL_RESOURCES && resource_path) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "remote-res:%s", resource_path);
+        *out_content = strdup(buf);
+        return 0;
+    }
+    *out_content = strdup("remote-l2-body");
+    return 0;
+}
+
+/* Remote dispatch publishes to the MQ, runs on the registered worker, and
+ * returns the collected result envelope (with timeout + idempotent cache). */
 static void
 test_remote_dispatch(void)
 {
     csilk_skill_meta_t m = {.name = "remote-skill", .description = "Remote exec."};
-    csilk_ai_skill_t*  sk = csilk_ai_skill_new(&m, CSILK_SKILL_REMOTE, NULL, NULL);
+    csilk_ai_skill_t*  sk =
+        csilk_ai_skill_new(&m, CSILK_SKILL_REMOTE, test_remote_dispatch_load, NULL);
     assert(sk != NULL);
 
-    /* No MQ handle → failure, out_result set to NULL. */
+    /* 1. No MQ handle → failure, out_result set to NULL. */
     char* out = (char*)0x1; /* sentinel */
     assert(csilk_ai_skill_invoke_remote(sk, NULL, "scripts/x.sh", "{}", 0, &out) == -1);
     assert(out == NULL);
 
+    /* 2. Full MQ round-trip via worker subscription + csilk.skill.result. */
+    csilk_router_t* r = csilk_router_new();
+    csilk_server_t* s = csilk_server_new(r);
+    csilk_mq_t*     mq = csilk_server_get_mq(s);
+    assert(mq != NULL);
+
+    /* 2a. Without a registered worker, invoke_remote times out cleanly. */
+    out = NULL;
+    assert(csilk_ai_skill_invoke_remote(sk, mq, "scripts/missing.sh", "{}", 40, &out) == -1);
+    assert(out && strstr(out, "timeout"));
+    free(out);
+
+    /* 2b. Register worker with local exec cfg and run /bin/echo remotely. */
+    csilk_skill_exec_cfg_t ecfg = {
+        .root = "/", .timeout_ms = 5000, .max_output_bytes = 4096, .env = NULL};
+    assert(csilk_ai_skill_set_exec_cfg(sk, &ecfg) == 0);
+    assert(csilk_ai_skill_worker_register(sk, mq) == 0);
+
+    out = NULL;
+    assert(csilk_ai_skill_invoke_remote(sk, mq, "bin/echo", "mq-ok", 2000, &out) == 0);
+    assert(out && strstr(out, "\"exit_code\":0") && strstr(out, "mq-ok"));
+    free(out);
+
+    /* 2c. Idempotent replay with same key hits cached result cleanly. */
+    out = NULL;
+    assert(csilk_ai_skill_invoke_remote(sk, mq, "bin/echo", "mq-ok", 2000, &out) == 0);
+    assert(out && strstr(out, "mq-ok"));
+    free(out);
+
+    /* 2d. Loader fallback when no exec root is configured. */
+    csilk_skill_meta_t m_ld = {.name = "remote-loader", .description = "Remote loader."};
+    csilk_ai_skill_t*  sk_ld =
+        csilk_ai_skill_new(&m_ld, CSILK_SKILL_REMOTE, test_remote_dispatch_load, NULL);
+    assert(sk_ld != NULL);
+    assert(csilk_ai_skill_worker_register(sk_ld, mq) == 0);
+    out = NULL;
+    assert(csilk_ai_skill_invoke_remote(sk_ld, mq, "docs/guide.md", NULL, 2000, &out) == 0);
+    assert(out && strstr(out, "remote-res:docs/guide.md"));
+    free(out);
+
+    csilk_ai_skill_free(sk_ld);
     csilk_ai_skill_free(sk);
+    csilk_server_free(s);
+    csilk_router_free(r);
 }
 
 /* Local exec: fork/execvp a real command, verify stdout/exit code; verify
