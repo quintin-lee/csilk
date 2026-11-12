@@ -248,7 +248,10 @@ test_local_exec(void)
         const char* script = "/tmp/skill_exec_root/skill_esc.sh";
         mkdir(root_dir, 0777);
         mkdir("/tmp/skill_exec_root/bin", 0777);
-        symlink("/usr/bin/sh", "/tmp/skill_exec_root/bin/sh"); /* ignore EEXIST */
+        /* Use /bin/sh (POSIX-mandated on both Linux and macOS); /usr/bin/sh
+         * does not exist on macOS where /bin and /usr/bin are separate. */
+        unlink("/tmp/skill_exec_root/bin/sh");
+        symlink("/bin/sh", "/tmp/skill_exec_root/bin/sh");
 
         /* The script emits each control byte via printf.  We use POSIX
          * octal escapes in the printf *format string* so the bytes are
@@ -282,6 +285,7 @@ test_local_exec(void)
         assert(rc == 0 && out);
         csilk_json_t* js = csilk_json_parse(out);
         assert(js && csilk_json_is_object(js));
+        assert(csilk_json_get_int(js, "exit_code") == 0);
         /* stdout = a<TAB>b\nx<LF>y\na\\b\nq\"r\nz<CR>\n (each printf adds LF
          *    except the last which also adds LF; backslash case emits one
          *    backslash + b + LF; quote case emits q"r + LF). */
@@ -453,14 +457,23 @@ test_exec_cfg_lifecycle(void)
     assert(out && strstr(out, "cfg-ok"));
     free(out);
 
-    /* 3. Override with a different root + env. */
-    csilk_skill_exec_cfg_t cfg2 = {
-        .root = "/usr", .timeout_ms = 10000, .max_output_bytes = 2048, .env = "FOO=bar"};
+    /* 3. Override with a different root + env.  Symlink /bin/echo under
+     *    /tmp/skill_exec_root/bin so this works on macOS too (/usr/bin/echo
+     *    does not exist on macOS). */
+    mkdir("/tmp/skill_exec_root", 0777);
+    mkdir("/tmp/skill_exec_root/bin", 0777);
+    unlink("/tmp/skill_exec_root/bin/echo");
+    symlink("/bin/echo", "/tmp/skill_exec_root/bin/echo");
+    csilk_skill_exec_cfg_t cfg2 = {.root = "/tmp/skill_exec_root",
+                                   .timeout_ms = 10000,
+                                   .max_output_bytes = 2048,
+                                   .env = "FOO=bar"};
     assert(csilk_ai_skill_set_exec_cfg(sk, &cfg2) == 0);
     rc = csilk_skill_exec_local(sk, "bin/echo", "cfg2", 0, &out);
     assert(rc == 0);
     assert(out && strstr(out, "cfg2"));
     free(out);
+    unlink("/tmp/skill_exec_root/bin/echo");
 
     /* 4. NULL cfg rejected. */
     assert(csilk_ai_skill_set_exec_cfg(sk, NULL) == -1);
