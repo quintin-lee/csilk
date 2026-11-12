@@ -13,7 +13,11 @@
  * @copyright MIT License
  */
 
+#if __has_include(<mysql/mysql.h>)
 #include <mysql/mysql.h>
+#elif __has_include(<mysql.h>)
+#include <mysql.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 

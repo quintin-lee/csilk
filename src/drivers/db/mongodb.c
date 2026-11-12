@@ -1,3 +1,4 @@
+#ifdef HAS_MONGODB
 /**
  * @file mongodb.c
  * @brief MongoDB database driver for csilk.
@@ -327,3 +328,4 @@ csilk_db_mongodb_init(void)
 {
     csilk_db_register_driver("mongodb", &csilk_db_mongodb_driver);
 }
+#endif /* HAS_MONGODB */

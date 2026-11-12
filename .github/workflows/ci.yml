@@ -51,7 +51,8 @@ jobs:
         sudo apt-get install -y -o Acquire::Retries=3 \
           cmake clang clang-tidy ccache \
           libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv1-dev
+          libpq-dev libsqlite3-dev libuv1-dev \
+          default-libmysqlclient-dev libhiredis-dev
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
@@ -432,3 +433,108 @@ jobs:
         curl -fsS http://127.0.0.1:8080/api/v1/users && echo " PASS" || echo " FAIL"
         kill $APP_PID 2>/dev/null || true
         wait $APP_PID 2>/dev/null || true
+
+  db_integration:
+    name: Database Drivers (Real Services: PG, MySQL, Redis, Mongo)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: csilk_user
+          POSTGRES_PASSWORD: csilk_password
+          POSTGRES_DB: csilk_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: csilk_test
+          MYSQL_USER: csilk_user
+          MYSQL_PASSWORD: csilk_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_password"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Cache dependencies
+      uses: actions/cache@v5
+      with:
+        path: build/_deps
+        key: ${{ runner.os }}-db-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-db-deps-
+
+    - name: Install dependencies
+      run: |
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev libuv1-dev \
+          libsqlite3-dev libpq-dev default-libmysqlclient-dev libhiredis-dev libmongoc-dev libbson-dev
+
+    - name: Wait for database services
+      run: |
+        echo "Waiting for services to become ready..."
+        timeout 60 bash -c 'until nc -z 127.0.0.1 5432; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z 127.0.0.1 3306; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z 127.0.0.1 6379; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z 127.0.0.1 27017; do sleep 1; done'
+        echo "All database ports are open!"
+
+    - name: Configure
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCSILK_BUILD_SHARED=ON \
+          -DENABLE_OOM_TEST=ON \
+          -DUSE_ASAN=ON
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run Database Driver Real Connection Tests
+      env:
+        CSILK_TEST_POSTGRES_DSN: "host=127.0.0.1 port=5432 user=csilk_user password=csilk_password dbname=csilk_test"
+        CSILK_TEST_POSTGRES_REQUIRED: "1"
+        CSILK_TEST_MYSQL_DSN: "host=127.0.0.1;port=3306;user=csilk_user;password=csilk_password;dbname=csilk_test"
+        CSILK_TEST_MYSQL_REQUIRED: "1"
+        CSILK_TEST_REDIS_DSN: "host=127.0.0.1;port=6379"
+        CSILK_TEST_REDIS_REQUIRED: "1"
+        CSILK_TEST_MONGODB_URI: "mongodb://127.0.0.1:27017/csilk_test"
+        CSILK_TEST_MONGODB_REQUIRED: "1"
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+      run: |
+        ctest --test-dir build -R "test_db|test_mongodb" --timeout 60 --output-on-failure
+

@@ -22,6 +22,10 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   )
   target_compile_definitions(${TARGET} PUBLIC
       _GNU_SOURCE
+      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
       "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
@@ -121,6 +125,10 @@ function(csilk_object_setup TARGET)
   )
   target_compile_definitions(${TARGET} PUBLIC
       _GNU_SOURCE
+      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
       "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"

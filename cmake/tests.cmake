@@ -43,6 +43,10 @@ function(add_csilk_test name source)
   )
   target_compile_definitions(${name} PRIVATE
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
+      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
+      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
+      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
+      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
   )
   add_test(NAME ${name} COMMAND ${name})
   if(name STREQUAL "test_performance_model")
@@ -322,9 +326,12 @@ set(CSILK_DATA_TESTS
     test_db_pool_concurrent
     test_db_typed_binding
     test_db_error_codes
+    test_db_postgres
+    test_db_mysql
+    test_db_redis
 )
 set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db
+    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
 )
 
 # -- AI / driver tests --

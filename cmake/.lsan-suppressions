@@ -63,3 +63,13 @@ leak:PyDict_
 # runs. This is a known shutdown-timing edge case, not a functional leak.
 leak:csilk_client_write
 leak:_csilk_send_data_owned
+
+# Third-party database client libraries one-time allocations
+leak:mysql_
+leak:my_
+leak:libmysqlclient
+leak:PQ
+leak:libpq
+leak:mongoc_
+leak:bson_
+
