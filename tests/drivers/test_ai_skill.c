@@ -250,18 +250,20 @@ test_local_exec(void)
         mkdir("/tmp/skill_exec_root/bin", 0777);
         symlink("/usr/bin/sh", "/tmp/skill_exec_root/bin/sh"); /* ignore EEXIST */
 
-        /* The script emits each control byte via printf.  We use `printf '%s'
-         * '<literal>'` for the quote case: a double-quote inside a shell
-         * single-quoted string is a literal " with no printf-format-escape
-         * ambiguity.  (The original `printf 'q\"r'` relied on the shell's
-         * handling of `\"` in a format string, which dash — the /bin/sh on
-         * Ubuntu CI runners — leaves as a literal backslash-quote, breaking
-         * the assertion.  bash swallowed the backslash and emitted ".) */
-        const char* script_body = "printf 'a\\tb'\n"
-                                  "printf 'x\\ny'\n"
+        /* The script emits each control byte via printf.  We use POSIX
+         * octal escapes in the printf *format string* so the bytes are
+         * produced identically by dash (Ubuntu CI /bin/sh) and bash:
+         *   \011 → TAB, \012 → LF, \015 → CR.
+         * (The C-escape forms \t/\n/\r are silently dropped by dash's
+         *  builtin printf, which broke the control-byte assertions.)
+         * For the quote case we use `printf '%s' '<literal>'`: a
+         * double-quote inside a shell single-quoted string is a literal "
+         * with no printf-format-escape ambiguity. */
+        const char* script_body = "printf 'a\\011b'\n"
+                                  "printf 'x\\012y'\n"
                                   "printf 'a\\\\b'\n"
                                   "printf '%s' 'q\"r'\n"
-                                  "printf 'z\\r'\n";
+                                  "printf 'z\\015'\n";
         FILE*       sf = fopen(script, "w");
         assert(sf);
         size_t slen = strlen(script_body);
