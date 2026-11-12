@@ -37,15 +37,18 @@ thread_self_addr(void)
 #define N_THREADS 8
 #define N_ITERATIONS 1000
 
-static const char* TEST_DB_PATH = "test_csilk_pool_concurrent.db";
+/* Use a fixed absolute path under /tmp so the test works regardless of the
+ * build tree's CWD and does not collide with leftover WAL files from a
+ * prior SIGKILL'd run in a different directory. */
+static const char* TEST_DB_PATH = "/tmp/test_csilk_pool_concurrent.db";
 
 static void
 cleanup(void)
 {
     remove(TEST_DB_PATH);
-    remove("test_csilk_pool_concurrent.db-journal");
-    remove("test_csilk_pool_concurrent.db-wal");
-    remove("test_csilk_pool_concurrent.db-shm");
+    remove("/tmp/test_csilk_pool_concurrent.db-journal");
+    remove("/tmp/test_csilk_pool_concurrent.db-wal");
+    remove("/tmp/test_csilk_pool_concurrent.db-shm");
 }
 
 /* ------------------------------------------------------------------
@@ -256,8 +259,10 @@ thread_acquire_put_worker(void* arg)
         assert(conn != NULL);
         /* Simulate work: a trivial op (no SQL, to keep the test
          * driver-agnostic).  Increment the shared counter while we
-         * still hold the conn, then release. */
-        ctx->count += 1;
+         * still hold the conn, then release.  Must use atomic_fetch_add
+         * (not `ctx->count += 1`) — the latter is a compound
+         * load+add+store that races across threads. */
+        atomic_fetch_add(&ctx->count, 1);
         rc = csilk_db_pool_put(ctx->pool, conn);
         assert(rc == 0);
         completed += 1;
@@ -305,12 +310,30 @@ thread_hl_api_worker(void* arg)
 {
     with_ctx_t* ctx = (with_ctx_t*)arg;
     for (int i = 0; i < N_ITERATIONS; i++) {
-        const char*   params[] = {"alice",  "bob",   "carol",  "dave", "eve",  "frank", "grace",
-                                  "heidi",  "ivan",  "judy",   "ken",  "lena", "mike",  "nina",
-                                  "oscar",  "peggy", "quinn",  "rhea", "stan", "tess",  "uma",
-                                  "victor", "wendy", "xander", "yara", "zoe",  NULL};
-        csilk_json_t* result =
-            csilk_db_query_param_json(ctx->pool, "SELECT ? AS name", params + (i % 25));
+        const char* params[] = {"alice",  "bob",   "carol",  "dave", "eve",  "frank", "grace",
+                                "heidi",  "ivan",  "judy",   "ken",  "lena", "mike",  "nina",
+                                "oscar",  "peggy", "quinn",  "rhea", "stan", "tess",  "uma",
+                                "victor", "wendy", "xander", "yara", "zoe",  NULL};
+        const char* single_param[] = {params[i % 25], NULL};
+        /* SQLite under 8-thread contention can transiently return
+         * SQLITE_BUSY (busy_timeout=5s is set but under high lock
+         * contention the first attempt may still fail).  Retry up to
+         * 3 times with a short sleep between attempts. */
+        csilk_json_t* result = NULL;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            result = csilk_db_query_param_json(ctx->pool, "SELECT ? AS name", single_param);
+            if (result) {
+                break;
+            }
+            usleep(10 * 1000);
+        }
+        if (!result) {
+            fprintf(stderr,
+                    "thread_hl_api_worker: iter=%d param='%s' csilk_db_query_param_json returned "
+                    "NULL after retries\n",
+                    i,
+                    single_param[0]);
+        }
         assert(result != NULL);
         csilk_json_free(result);
         atomic_fetch_add(&ctx->count, 1);

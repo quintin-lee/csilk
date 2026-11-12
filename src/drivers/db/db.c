@@ -992,12 +992,12 @@ _csilk_db_run_param_stmt_query(csilk_db_pool_t* pool, const char* sql, const cha
     }
 
     /* Bind each string param with auto-detection. */
-    int bind_ok = 0;
-    for (int i = 0; params[i]; i++) {
+    int bind_ok = 1;
+    for (int i = 0; params && params[i]; i++) {
         if (_csilk_db_bind_auto_param(stmt, i + 1, params[i]) != 0) {
+            bind_ok = 0;
             break;
         }
-        bind_ok = 1;
     }
 
     csilk_json_t* result = NULL;

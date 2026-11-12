@@ -228,6 +228,29 @@ test_typed_param_binding(void)
     printf("  passed\n");
 }
 
+static void
+test_zero_param_query(void)
+{
+    printf("Running test_zero_param_query...\n");
+    cleanup();
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", TEST_DB_PATH);
+    assert(pool != nullptr);
+
+    const char*   p0[] = {nullptr};
+    csilk_json_t* r = csilk_db_query_param_json(pool, "SELECT 42 AS num", p0);
+    assert(r != nullptr);
+    assert(csilk_json_array_size(r) == 1);
+    csilk_json_t* row = csilk_json_array_get(r, 0);
+    assert(csilk_json_as_int64(csilk_json_get(row, "num"), 0) == 42);
+    csilk_json_free(r);
+
+    csilk_db_pool_free(pool);
+    cleanup();
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -235,6 +258,7 @@ main(void)
     test_injection_via_quotes_neutralised();
     test_json_column_type_preserved();
     test_typed_param_binding();
+    test_zero_param_query();
 
     printf("test_db_typed_binding: ALL PASSED\n");
     return 0;
