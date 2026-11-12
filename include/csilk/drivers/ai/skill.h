@@ -203,6 +203,58 @@ int csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
                                  int               timeout_ms,
                                  char**            out_result);
 
+/**
+ * @brief Configuration for local L3 script execution.
+ *
+ * A skill's L3 script is executed in a *bounded* local process: `fork` +
+ * `execvp`, working directory confined to @p root (path-traversal guard),
+ * a non-inheriting minimal environment, stdout capture capped at @p
+ * max_output_bytes, and a bounded wall-clock wait (@p timeout_ms) that
+ * SIGKILLs the child on expiry — the same "remote must failover, never
+ * hang indefinitely" principle that governs csilk's HTTP clients.
+ *
+ * The framework does *not* build a process sandbox (seccomp/container);
+ * isolation that matters for untrusted scripts is the deployment layer's
+ * job.  What this config guarantees is: relative-path containment, bounded
+ * resources, and no env leakage.
+ */
+typedef struct {
+    char* root;             /**< Working-directory root; @p path must stay inside it. */
+    int   timeout_ms;       /**< Bounded wait for the child (<= 0 → default). */
+    int   max_output_bytes; /**< stdout capture cap (0 → framework default). */
+    char* env;              /**< Optional space-separated KEY=VALUE env for the child. */
+} csilk_skill_exec_cfg_t;
+
+/**
+ * @brief Attach a local-execution configuration to a skill.
+ * @param sk   Skill handle.
+ * @param cfg  Non-NULL config; fields are *copied* (caller keeps ownership).
+ * @return 0 on success, -1 on NULL args / OOM.
+ */
+int csilk_ai_skill_set_exec_cfg(csilk_ai_skill_t* sk, const csilk_skill_exec_cfg_t* cfg);
+
+/**
+ * @brief Execute a skill's L3 resource as a local process.
+ *
+ * Runs @p path (resolved against the skill's exec-cfg root) with @p args
+ * (space-separated argv, or NULL) under the exec config's bounds.  The
+ * result is a JSON envelope:
+ * ```json
+ * {"skill":"..","path":"..","exit_code":0,"stdout":"...","truncated":false}
+ * ```
+ * On timeout the child is SIGKILLed and `exit_code` is -9.  On a path that
+ * escapes the root, -1 is returned and @p out_result gets an error envelope.
+ *
+ * @param sk           Skill handle (must have an exec config set).
+ * @param path         Resource path, relative to the exec root (e.g. "scripts/run.sh").
+ * @param args         Space-separated argument string (NULL for no args).
+ * @param timeout_ms   Bounded wait; <= 0 uses the exec config's default.
+ * @param[out] out_result Heap-allocated JSON result (caller frees); set to NULL on failure.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_skill_exec_local(
+    csilk_ai_skill_t* sk, const char* path, const char* args, int timeout_ms, char** out_result);
+
 #ifdef __cplusplus
 }
 #endif

@@ -191,6 +191,51 @@ test_remote_dispatch(void)
     csilk_ai_skill_free(sk);
 }
 
+/* Local exec: fork/execvp a real command, verify stdout/exit code; verify
+ * timeout SIGKILL and path-traversal rejection. */
+static void
+test_local_exec(void)
+{
+    /* 1. Run /bin/echo via exec (path relative to root "/", args = "hello skill"). */
+    csilk_skill_meta_t m = {.name = "echo-skill", .description = "Run echo."};
+    csilk_ai_skill_t*  sk = csilk_ai_skill_new(&m, CSILK_SKILL_LOCAL, NULL, NULL);
+    assert(sk != NULL);
+
+    csilk_skill_exec_cfg_t cfg = {
+        .root = "/", .timeout_ms = 5000, .max_output_bytes = 1024, .env = NULL};
+    assert(csilk_ai_skill_set_exec_cfg(sk, &cfg) == 0);
+
+    char* out = NULL;
+    int   rc = csilk_skill_exec_local(sk, "bin/echo", "hello skill", 0, &out);
+    assert(rc == 0);
+    assert(out && strstr(out, "\"exit_code\":0"));
+    assert(strstr(out, "hello skill"));
+    free(out);
+
+    /* 2. Absolute path is rejected even when root would "allow" it. */
+    out = (char*)0x1; /* sentinel */
+    rc = csilk_skill_exec_local(sk, "/bin/echo", "hi", 0, &out);
+    assert(rc == -1);
+    assert(out && strstr(out, "path escapes"));
+    free(out);
+
+    /* 3. `..` traversal: rejected. */
+    out = (char*)0x1;
+    rc = csilk_skill_exec_local(sk, "../bin/echo", "hi", 0, &out);
+    assert(rc == -1);
+    assert(out && strstr(out, "path escapes"));
+    free(out);
+
+    /* 4. Timeout: bin/sleep 5s with a 200ms bound → exit_code -9. */
+    out = NULL;
+    rc = csilk_skill_exec_local(sk, "bin/sleep", "5", 200, &out);
+    assert(rc == 0);
+    assert(out && strstr(out, "\"exit_code\":-9"));
+    free(out);
+
+    csilk_ai_skill_free(sk);
+}
+
 int
 main(void)
 {
@@ -200,6 +245,7 @@ main(void)
     test_discovery_injection();
     test_trigger_tool();
     test_remote_dispatch();
+    test_local_exec();
     printf("test_ai_skill: ALL PASSED\n");
     return 0;
 }
