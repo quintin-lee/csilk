@@ -435,7 +435,7 @@ jobs:
         wait $APP_PID 2>/dev/null || true
 
   db_integration:
-    name: Database Drivers (Real Services: PG, MySQL, Redis, Mongo)
+    name: "Database Drivers (Real Services: PG, MySQL, Redis, Mongo)"
     runs-on: ubuntu-24.04
     services:
       postgres:
