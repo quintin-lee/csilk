@@ -55,6 +55,9 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
           INSTALL_RPATH            "@loader_path"
       )
       target_link_options(${TARGET} PRIVATE "-undefined" "dynamic_lookup")
+      if(CMAKE_LIBRARY_PATH AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.13)
+        target_link_directories(${TARGET} PRIVATE ${CMAKE_LIBRARY_PATH})
+      endif()
     else()
       set_target_properties(${TARGET} PROPERTIES
           BUILD_RPATH_USE_ORIGIN   TRUE
@@ -132,6 +135,35 @@ function(csilk_object_setup TARGET)
       $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
       $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>
   )
+  if(CMAKE_INCLUDE_PATH)
+    target_include_directories(${TARGET} PRIVATE ${CMAKE_INCLUDE_PATH})
+  endif()
+  # Internal umbrella headers (include/csilk/core/internal.h,
+  # src/core/internal/srv_internal.h) are included across module boundaries and
+  # pull in <uv.h>, <llhttp.h>, and <nghttp2/nghttp2.h>, while module sources
+  # pull in <openssl/*.h>, <yaml.h>, <zlib.h>, <sqlite3.h>, and <curl/curl.h>.
+  # Give every module OBJECT library PRIVATE visibility to all discovered
+  # third-party targets so non-default include roots (e.g. Homebrew keg-only
+  # prefixes on macOS) are always present on the compile line without altering
+  # the public link interface of exported archives.
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+    foreach(_ext_dep
+        Threads::Threads
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        ZLIB::ZLIB
+        SQLite3::SQLite3
+        CURL::libcurl
+        nghttp2
+        csilk::llhttp
+        csilk::yaml
+        csilk::libuv
+        uring)
+      if(TARGET ${_ext_dep})
+        target_link_libraries(${TARGET} PRIVATE ${_ext_dep})
+      endif()
+    endforeach()
+  endif()
   # OPTIMIZE_DEPENDENCIES drops the build-order edges that linking the module
   # dependencies (csilk_link_module) would otherwise add, so module objects
   # still compile in parallel instead of waiting for upstream archives.
@@ -238,7 +270,11 @@ if(CSILK_BUILD_SHARED)
 endif()
 
 # ── Static module dependencies ────────────────────────────────────────────
-target_link_libraries(csilk_base PUBLIC Threads::Threads)
+if(CSILK_USE_URING)
+  csilk_link_module(csilk_base Threads::Threads uring)
+else()
+  csilk_link_module(csilk_base Threads::Threads csilk::libuv)
+endif()
 if(NOT APPLE AND NOT WIN32)
   target_link_libraries(csilk_base PRIVATE m)
   if(TARGET csilk_base_shared)

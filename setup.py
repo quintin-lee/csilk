@@ -36,11 +36,14 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={csilk_pkg_dir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
             "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
             "-DCSILK_BUILD_TESTS=OFF",
             "-DCSILK_BUILD_EXAMPLES=OFF",
             "-DCSILK_BUILD_FUZZERS=OFF",
-            # Ensure it is built as a shared library
-            "-DBUILD_SHARED_LIBS=ON"
+            # Build libcsilk.so / libcsilk.dylib while keeping fetched C deps
+            # (yyjson, nghttp2, llhttp) as static PIC archives linked inside
+            # libcsilk so delocate/auditwheel do not fail on unversioned dylibs.
+            "-DCSILK_BUILD_SHARED=ON"
         ]
 
         if platform.system() == "Darwin":
@@ -127,6 +130,8 @@ class CMakeBuild(build_ext):
             f.write(f"\n=== RETURN CODE: {result.returncode} ===\n")
         print(f"[csilk] cmake configure output:\n{result.stdout}\n{result.stderr}", flush=True)
         if result.returncode != 0:
+            with open("/tmp/csilk_cmake_error.log", "w") as ef:
+                ef.write((result.stdout or "") + "\n" + (result.stderr or "") + "\n")
             sys.stderr.write(
                 f"[csilk] CMake configure failed (rc={result.returncode}).\n"
                 f"[csilk] Full log saved to: {log_path}\n"
@@ -149,6 +154,9 @@ class CMakeBuild(build_ext):
         sys.stderr.write(result2.stdout)
         sys.stderr.write(result2.stderr)
         sys.stderr.flush()
+        if result2.returncode != 0:
+            with open("/tmp/csilk_cmake_error.log", "w") as ef:
+                ef.write((result2.stdout or "") + "\n" + (result2.stderr or "") + "\n")
         result2.check_returncode()
 
 # Read version from CMake-generated version file (single source of truth)

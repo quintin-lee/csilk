@@ -13,6 +13,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -836,6 +837,30 @@ csilk_skill_exec_local(
             if (errno == EINTR) {
                 continue;
             }
+            break;
+        }
+    }
+    /* Drain any bytes still buffered in the pipe after the loop exits (for
+     * example, when the child wrote its output and exited in the window
+     * between poll() returning 0 and waitpid(WNOHANG) reaping it, which
+     * happens on macOS Debug/ASAN runners where fork+exec takes ~20ms).
+     * Switch pipefd[0] to O_NONBLOCK so this drain cannot block even if a
+     * background grandchild inherited the write end. */
+    int fl = fcntl(pipefd[0], F_GETFL, 0);
+    if (fl >= 0) {
+        (void)fcntl(pipefd[0], F_SETFL, fl | O_NONBLOCK);
+    }
+    while (total < max_output) {
+        int n = (int)read(pipefd[0], output + total, max_output - total);
+        if (n > 0) {
+            total += n;
+            if (total >= max_output) {
+                truncated = 1;
+                break;
+            }
+        } else if (n < 0 && errno == EINTR) {
+            continue;
+        } else {
             break;
         }
     }

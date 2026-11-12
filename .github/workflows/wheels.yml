@@ -34,17 +34,21 @@ jobs:
         run: brew install cmake pkg-config llvm libyaml zlib curl openssl libpq sqlite3 libuv
 
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
+        run: |
+          if ! python -m cibuildwheel --output-dir wheelhouse; then
+            if [ -f /tmp/csilk_cmake_error.log ]; then
+              grep -E "error:|fatal error:|CMake Error|undefined|ld:" /tmp/csilk_cmake_error.log | head -n 10 | while IFS= read -r line; do
+                echo "::error title=Wheel CMake Error::$line"
+              done
+            fi
+            exit 1
+          fi
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_ARCHS_LINUX: "x86_64"
-          # Build with Homebrew LLVM clang, the same compiler as the main macOS
-          # CI job: Apple Clang (the default `cc`) is unsupported (no C23
-          # constexpr).  CMake picks CC up on first configure.  arm64-only, so
-          # the Homebrew prefix is fixed at /opt/homebrew.
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=14.0 CC=/opt/homebrew/opt/llvm/bin/clang"
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=15.0"
           # Point CMake at the Homebrew Cellar prefixes on macOS so the
           # REQUIRED find_package() calls (OpenSSL/ZLIB/SQLite3/CURL) resolve.
           # `brew install` runs on the host in the dedicated step above;
