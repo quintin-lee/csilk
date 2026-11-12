@@ -201,6 +201,10 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    /* Bounded time-outs so a dead/unreachable Ollama host cannot wedge the
+     * request indefinitely (same guard as the OpenAI driver). */
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
@@ -282,6 +286,10 @@ ollama_embeddings(void*                           state_ptr,
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+        curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
 
         CURLcode rc = curl_easy_perform(curl);
         free(json_body);
