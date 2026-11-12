@@ -9,7 +9,7 @@
 int
 csilk_migration_checksum_content(const char* content, size_t len, char out_checksum[65])
 {
-    if (!content || !out_checksum) {
+    if (!content || !out_checksum || len > (size_t)(64 * 1024 * 1024)) {
         return -1;
     }
 
@@ -27,7 +27,10 @@ csilk_migration_checksum_content(const char* content, size_t len, char out_check
     }
 
     /* Trim trailing whitespace and newlines */
-    while (norm_len > 0 && isspace((unsigned char)norm[norm_len - 1])) {
+    while (norm_len > 0 && norm_len <= len &&
+           (norm[norm_len - 1] == ' ' || norm[norm_len - 1] == '\t' || norm[norm_len - 1] == '\n' ||
+            norm[norm_len - 1] == '\r' || norm[norm_len - 1] == '\v' ||
+            norm[norm_len - 1] == '\f')) {
         norm_len--;
     }
     norm[norm_len] = '\0';
@@ -63,24 +66,33 @@ csilk_migration_checksum_file(const char* filepath, char out_checksum[65])
         return -1;
     }
     long len = ftell(f);
-    rewind(f);
-
-    if (len < 0) {
+    if (len < 0 || (unsigned long)len > (unsigned long)(64 * 1024 * 1024)) {
+        fclose(f);
+        return -1;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
         fclose(f);
         return -1;
     }
 
-    char* buf = malloc((size_t)len + 1);
+    size_t fsz = (size_t)len;
+    char*  buf = calloc(fsz + 1, 1);
     if (!buf) {
         fclose(f);
         return -1;
     }
 
-    size_t read_bytes = fread(buf, 1, (size_t)len, f);
+    size_t pos = 0;
+    while (pos < fsz && !feof(f) && !ferror(f)) {
+        size_t n = fread(buf + pos, 1, fsz - pos, f);
+        if (n == 0) {
+            break;
+        }
+        pos += n;
+    }
     fclose(f);
-    buf[read_bytes] = '\0';
 
-    int rc = csilk_migration_checksum_content(buf, read_bytes, out_checksum);
+    int rc = csilk_migration_checksum_content(buf, pos, out_checksum);
     free(buf);
     return rc;
 }

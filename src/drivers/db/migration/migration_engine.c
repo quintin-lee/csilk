@@ -509,20 +509,30 @@ read_file_to_string(const char* filepath)
         return NULL;
     }
     long size = ftell(f);
-    if (size < 0) {
+    if (size < 0 || (unsigned long)size > (unsigned long)(64 * 1024 * 1024)) {
         fclose(f);
         return NULL;
     }
-    rewind(f);
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
 
-    char* buf = malloc((size_t)size + 1);
+    size_t fsz = (size_t)size;
+    char*  buf = calloc(fsz + 1, 1);
     if (!buf) {
         fclose(f);
         return NULL;
     }
 
-    size_t read_bytes = fread(buf, 1, (size_t)size, f);
-    buf[read_bytes] = '\0';
+    size_t pos = 0;
+    while (pos < fsz && !feof(f) && !ferror(f)) {
+        size_t n = fread(buf + pos, 1, fsz - pos, f);
+        if (n == 0) {
+            break;
+        }
+        pos += n;
+    }
     fclose(f);
     return buf;
 }

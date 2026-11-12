@@ -17,6 +17,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* MySQL 8.0+ removed `my_bool` in favour of standard C `bool`, while MariaDB
+ * Connector/C still defines `my_bool` as `char`.  Infer the exact indicator
+ * pointee type directly from MYSQL_BIND::is_null using C23 `typeof` so
+ * mysql.c builds warning-free on both MySQL 8.0+ and MariaDB. */
+typedef typeof(*((MYSQL_BIND*)0)->is_null) csilk_mysql_bool_t;
+
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 #include "db_internal.h"
@@ -377,7 +383,7 @@ typedef struct {
     double                dbl;
     char*                 str;
     unsigned long         str_len;
-    my_bool               is_null;
+    csilk_mysql_bool_t    is_null;
 } mysql_param_slot_t;
 
 typedef struct {
@@ -618,11 +624,11 @@ mysql_drv_stmt_query_json(csilk_stmt_t* stmt)
         return arr;
     }
 
-    MYSQL_BIND*    res_binds = calloc(num_fields, sizeof(MYSQL_BIND));
-    char**         col_bufs = calloc(num_fields, sizeof(char*));
-    unsigned long* col_lens = calloc(num_fields, sizeof(unsigned long));
-    my_bool*       col_nulls = calloc(num_fields, sizeof(my_bool));
-    my_bool*       col_errs = calloc(num_fields, sizeof(my_bool));
+    MYSQL_BIND*         res_binds = calloc(num_fields, sizeof(MYSQL_BIND));
+    char**              col_bufs = calloc(num_fields, sizeof(char*));
+    unsigned long*      col_lens = calloc(num_fields, sizeof(unsigned long));
+    csilk_mysql_bool_t* col_nulls = calloc(num_fields, sizeof(csilk_mysql_bool_t));
+    csilk_mysql_bool_t* col_errs = calloc(num_fields, sizeof(csilk_mysql_bool_t));
     if (!res_binds || !col_bufs || !col_lens || !col_nulls || !col_errs) {
         free(res_binds);
         free(col_bufs);
@@ -709,30 +715,41 @@ mysql_drv_stmt_query_json(csilk_stmt_t* stmt)
                 csilk_json_add_null(row, cname);
                 continue;
             }
-            if (fr == MYSQL_DATA_TRUNCATED && col_lens[i] >= buf_caps[i]) {
+            size_t cap_now = buf_caps[i];
+            if (fr == MYSQL_DATA_TRUNCATED && col_lens[i] >= cap_now &&
+                col_lens[i] < (unsigned long)(16 * 1024 * 1024)) {
                 size_t new_cap = (size_t)col_lens[i] + 1;
-                char*  nb = realloc(col_bufs[i], new_cap);
+                char*  nb = malloc(new_cap);
                 if (nb) {
+                    free(col_bufs[i]);
                     col_bufs[i] = nb;
                     buf_caps[i] = new_cap;
+                    cap_now = new_cap;
                     res_binds[i].buffer = nb;
                     res_binds[i].buffer_length = (unsigned long)new_cap;
                     MYSQL_BIND fetch_one = res_binds[i];
                     mysql_stmt_fetch_column(w->stmt, &fetch_one, i, 0);
                 }
             }
-            size_t flen = col_lens[i] < buf_caps[i] ? (size_t)col_lens[i] : buf_caps[i] - 1;
-            col_bufs[i][flen] = '\0';
+            char*  cbuf = col_bufs[i];
+            size_t flen = (size_t)col_lens[i];
+            if (!cbuf || cap_now == 0) {
+                continue;
+            }
+            if (flen >= cap_now) {
+                flen = cap_now - 1;
+            }
+            memset(cbuf + flen, 0, 1);
 
             enum enum_field_types ft = fields[i].type;
             if (ft == MYSQL_TYPE_TINY || ft == MYSQL_TYPE_SHORT || ft == MYSQL_TYPE_LONG ||
                 ft == MYSQL_TYPE_LONGLONG || ft == MYSQL_TYPE_INT24) {
-                csilk_json_add_int(row, cname, strtoll(col_bufs[i], NULL, 10));
+                csilk_json_add_int(row, cname, strtoll(cbuf, NULL, 10));
             } else if (ft == MYSQL_TYPE_FLOAT || ft == MYSQL_TYPE_DOUBLE ||
                        ft == MYSQL_TYPE_DECIMAL || ft == MYSQL_TYPE_NEWDECIMAL) {
-                csilk_json_add_number(row, cname, strtod(col_bufs[i], NULL));
+                csilk_json_add_number(row, cname, strtod(cbuf, NULL));
             } else {
-                csilk_json_add_string(row, cname, col_bufs[i]);
+                csilk_json_add_string(row, cname, cbuf);
             }
         }
         csilk_json_array_append(arr, row);
