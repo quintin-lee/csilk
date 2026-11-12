@@ -1,6 +1,6 @@
 # Model Context Protocol (MCP) Deep Dive
 
-> **Version**: 0.5.3 | **Last updated**: 2026-08-27
+> **Version**: 0.6.0 | **Last updated**: 2026-11-12
 
 csilk provides first-class support for the Model Context Protocol (MCP), allowing AI agents and LLMs to interact with application tools and context over standard JSON-RPC 2.0 transports.
 

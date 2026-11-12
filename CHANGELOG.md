@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-12
+
 ### Added
 - **Agent Skill Abstraction (Anthropic Agent Skills semantics)** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
   - Progressive-disclosure capability bundle: `csilk_ai_skill_t` / `csilk_skill_meta_t` (L1 kebab-case name[64] + description[1024]), L2 `SKILL.md` instructions, and L3 bundled resources; `csilk_ai_skill_new` / `csilk_ai_skill_free` / `csilk_ai_skill_validate` / `csilk_ai_skill_load`.
