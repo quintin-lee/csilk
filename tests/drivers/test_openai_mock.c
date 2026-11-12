@@ -78,14 +78,21 @@ start_mock_server(void)
         /* Bail out early if the child died before binding. */
         int status;
         if (waitpid(g_mock_pid, &status, WNOHANG) == g_mock_pid) {
+            g_mock_pid = 0;
             fprintf(stderr, "mock server exited early: status=%d\n", status);
             return;
         }
         usleep(MOCK_START_POLL_MS * 1000);
     }
+    /* Fail fast: a not-ready mock means every subsequent request will
+     * trigger the AI driver's 1s+2s retry/backoff path, making the whole
+     * test suite take minutes.  Better to abort immediately so CI reports
+     * a clear failure instead of a long silent hang. */
     fprintf(stderr,
-            "warning: mock server port not ready within %d ms; continuing\n",
+            "FATAL: mock server port not ready within %d ms; aborting test\n",
             MOCK_START_TIMEOUT_MS);
+    g_mock_pid = 0;
+    abort();
 }
 
 static void
@@ -429,9 +436,14 @@ test_free_null_ai(void)
 int
 main(void)
 {
+    /* atexit guard: even if an assert aborts the process, the mock
+     * server child is reaped so the port is released for the next run. */
+    atexit(stop_mock_server);
+
     start_mock_server();
     if (g_mock_pid == 0) {
-        fprintf(stderr, "Failed to start mock server\n");
+        /* start_mock_server either called abort() already or the child
+         * died immediately; nothing left to do. */
         return 1;
     }
 
