@@ -44,7 +44,12 @@ class CMakeBuild(build_ext):
         ]
 
         if platform.system() == "Darwin":
-            brew_prefix = subprocess.check_output(["brew", "--prefix"], text=True).strip()
+            # Homebrew installs to /opt/homebrew on Apple Silicon (arm64) and
+            # /usr/local on Intel.  Probe which prefix is actually present
+            # rather than shelling out to `brew` (which may not be on PATH
+            # inside the cibuildwheel venv, and would raise if missing).  The
+            # sub-path `opt/<pkg>` is Homebrew's Cellar opt-link layout.
+            brew_prefix = "/opt/homebrew" if os.path.isdir("/opt/homebrew") else "/usr/local"
             cmake_args.append(f"-DCMAKE_PREFIX_PATH={brew_prefix};{brew_prefix}/opt/openssl;{brew_prefix}/opt/libyaml;{brew_prefix}/opt/zlib;{brew_prefix}/opt/curl;{brew_prefix}/opt/sqlite3")
         
         build_args = ["--config", cfg, "--parallel", "--target", "csilk_shared"]
