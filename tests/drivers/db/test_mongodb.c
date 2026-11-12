@@ -12,14 +12,22 @@ test_mongodb_basic(void)
 #ifndef HAS_MONGODB
     printf("test_mongodb_basic: SKIPPED (HAS_MONGODB not defined)\n");
     return;
-#endif
+#else
     csilk_db_init();
 
     // Standard local MongoDB URI
-    const char*      uri = "mongodb://localhost:27017/csilk_test";
+    const char* uri = getenv("CSILK_TEST_MONGODB_URI");
+    if (!uri || strlen(uri) == 0) {
+        uri = "mongodb://127.0.0.1:27017/csilk_test";
+    }
     csilk_db_pool_t* pool = csilk_db_pool_new("mongodb", uri);
 
     if (!pool) {
+        if (getenv("CSILK_TEST_MONGODB_REQUIRED")) {
+            fprintf(
+                stderr, "test_mongodb_basic: FAILED to connect to required MongoDB at %s\n", uri);
+            assert(pool != nullptr);
+        }
         printf("test_mongodb_basic: SKIPPED (Could not connect to %s)\n", uri);
         return;
     }
@@ -58,6 +66,7 @@ test_mongodb_basic(void)
     csilk_json_free(users);
     csilk_db_pool_free(pool);
     printf("test_mongodb_basic: PASS\n");
+#endif
 }
 
 int
