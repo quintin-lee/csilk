@@ -248,16 +248,20 @@ void
 on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
 {
     csilk_client_t* client = (csilk_client_t*)stream->data;
-    char*           base = buf->base;
+    char*           base = buf ? buf->base : NULL;
+    size_t          buflen = buf ? buf->len : 0;
     int             is_registered = 0;
 
     if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
         if (base) {
             extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
-            pool_put_read_buf(NULL, base, buf->len);
+            pool_put_read_buf(NULL, base, buflen);
         }
         return;
     }
+
+    worker_pool_t* wp = client->owner_pool;
+    csilk_client_ref(client);
 
     csilk_io_timer_stop(&client->timer);
     unsigned int read_timeout = _csilk_server_get_read_timeout_ms(client->server);
@@ -278,16 +282,18 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
             /* Register the receive buffer so it stays alive for zero-copy header/body views.
              * Use pooled registration when the buffer comes from the worker-local pool
              * (buf->len > 0 indicates a tier-backed buffer). */
-            if (_csilk_ctx_register_pooled_read_buffer(&client->ctx, base, buf->len) != 0) {
+            if (_csilk_ctx_register_pooled_read_buffer(&client->ctx, base, buflen) != 0) {
                 CSILK_LOG_E("Connection: failed to register read buffer, out of memory");
                 if (base) {
                     extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
-                    pool_put_read_buf(client->owner_pool, base, buf->len);
+                    pool_put_read_buf(wp, base, buflen);
+                    base = NULL;
                 }
                 if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
                     extern void on_close(csilk_io_handle_t * handle);
                     csilk_io_close((csilk_io_handle_t*)stream, on_close);
                 }
+                csilk_client_unref(client);
                 return;
             }
             is_registered = 1;
@@ -320,8 +326,10 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
 
     if (base && !is_registered) {
         extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
-        pool_put_read_buf(client->owner_pool, base, buf->len);
+        pool_put_read_buf(wp, base, buflen);
     }
+
+    csilk_client_unref(client);
 }
 
 /* --- Get client IP --- */

@@ -9,6 +9,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "${CSILK_AVX2_FLAGS}"
       "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
       "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
+      "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
       "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
   )
   target_compile_definitions(${TARGET} PRIVATE
@@ -112,6 +113,7 @@ function(csilk_object_setup TARGET)
       "${CSILK_AVX2_FLAGS}"
       "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
       "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
+      "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
       "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
   )
   target_compile_definitions(${TARGET} PRIVATE

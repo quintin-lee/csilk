@@ -122,8 +122,9 @@ _csilk_dispatch_request(csilk_ctx_t* c)
         }
     }
 
+    csilk_server_router_release(server, &c->router_token);
+
     if (!c->is_async) {
-        csilk_server_router_release(server, &c->router_token);
         _csilk_send_response(c);
     }
 }

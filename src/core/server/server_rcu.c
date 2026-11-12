@@ -59,6 +59,8 @@ csilk_server_get_router(csilk_server_t* server)
     return server ? atomic_load_explicit(&server->router, memory_order_acquire) : NULL;
 }
 
+#define CSILK_RCU_GEN_TABLE_SIZE 1024
+static _Atomic(uint32_t) g_active_server_gens[CSILK_RCU_GEN_TABLE_SIZE] = {0};
 static _Atomic(uint32_t) g_rcu_server_gen_seq = 1;
 
 typedef struct {
@@ -75,16 +77,19 @@ static void
 rcu_thread_exit_destructor(void* val)
 {
     (void)val;
-    if (g_tls_rcu.slot) {
-        csilk_rcu_slot_t* slot = g_tls_rcu.slot;
-        atomic_store_explicit(&slot->active_epoch, 0, memory_order_release);
-        atomic_store_explicit(&slot->nesting_depth, 0, memory_order_relaxed);
-        atomic_store_explicit(&slot->owner_tid, 0, memory_order_release);
-
-        g_tls_rcu.slot = NULL;
-        g_tls_rcu.mgr = NULL;
-        g_tls_rcu.server_gen = 0;
+    uint32_t gen = g_tls_rcu.server_gen;
+    if (gen != 0 && atomic_load_explicit(&g_active_server_gens[gen % CSILK_RCU_GEN_TABLE_SIZE],
+                                         memory_order_acquire) == gen) {
+        if (g_tls_rcu.slot) {
+            csilk_rcu_slot_t* slot = g_tls_rcu.slot;
+            atomic_store_explicit(&slot->active_epoch, 0, memory_order_release);
+            atomic_store_explicit(&slot->nesting_depth, 0, memory_order_relaxed);
+            atomic_store_explicit(&slot->owner_tid, 0, memory_order_release);
+        }
     }
+    g_tls_rcu.slot = NULL;
+    g_tls_rcu.mgr = NULL;
+    g_tls_rcu.server_gen = 0;
 }
 
 static void
@@ -120,6 +125,8 @@ _csilk_reload_mgr_init(csilk_server_t* server)
         gen = atomic_fetch_add_explicit(&g_rcu_server_gen_seq, 1, memory_order_relaxed);
     }
     mgr->server_gen = gen;
+    atomic_store_explicit(
+        &g_active_server_gens[gen % CSILK_RCU_GEN_TABLE_SIZE], gen, memory_order_release);
 
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         atomic_init(&mgr->reader_slots[i].active_epoch, 0);
@@ -518,6 +525,11 @@ _csilk_reload_mgr_free(csilk_server_t* server)
         return;
     }
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
+    uint32_t            gen = mgr->server_gen;
+    if (gen != 0) {
+        atomic_store_explicit(
+            &g_active_server_gens[gen % CSILK_RCU_GEN_TABLE_SIZE], 0, memory_order_release);
+    }
 
     /* Invalidate calling thread's cached TLS pointer if it refers to this server */
     if (g_tls_rcu.mgr == mgr) {

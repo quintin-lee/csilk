@@ -383,10 +383,34 @@ test_ws_close_handshake()
     printf("WebSocket close handshake test passed!\n");
 }
 
+static void
+test_handshake_large_headers(void)
+{
+    printf("Testing WebSocket Handshake with large custom headers (>1024 bytes)...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    csilk_set_request_header(ctx, "Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==");
+    csilk_ws_handshake(ctx);
+
+    /* Add multiple large headers that exceed the old 1024-byte limit */
+    char val[200];
+    memset(val, 'A', sizeof(val) - 1);
+    val[sizeof(val) - 1] = '\0';
+    for (int i = 0; i < 10; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "X-Large-Header-%d", i);
+        csilk_set_header(ctx, key, val);
+    }
+
+    _csilk_send_response(ctx);
+    csilk_test_ctx_free(ctx);
+    printf("Handshake large headers test passed!\n");
+}
+
 int
 main()
 {
     test_handshake();
+    test_handshake_large_headers();
     test_handshake_missing_key();
     test_parse_frame_basic();
     test_parse_frame_unmasked();

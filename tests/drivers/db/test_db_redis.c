@@ -50,11 +50,25 @@ test_redis_real_connection(void)
     assert(storage != nullptr);
     free(storage);
 
-    /* 4. DEL command */
+    /* 4. Format-string safety test: keys/values with percent specifiers */
+    rc = csilk_db_exec(pool, "SET csilk_test_redis_%fmt%s%d%n val%s%d%n%x");
+    assert(rc == 0);
+    csilk_json_t* fmt_rows = csilk_db_query_json(pool, "GET csilk_test_redis_%fmt%s%d%n");
+    assert(fmt_rows != nullptr);
+    assert(csilk_json_array_size(fmt_rows) >= 1);
+    csilk_json_t* fmt_row0 = csilk_json_array_get(fmt_rows, 0);
+    csilk_json_t* fmt_val = csilk_json_get(fmt_row0, "value");
+    assert(fmt_val != nullptr);
+    assert(strcmp(csilk_json_string_value(fmt_val), "val%s%d%n%x") == 0);
+    csilk_json_free(fmt_rows);
+    rc = csilk_db_exec(pool, "DEL csilk_test_redis_%fmt%s%d%n");
+    assert(rc == 0);
+
+    /* 5. DEL command */
     rc = csilk_db_exec(pool, "DEL csilk_test_redis_key");
     assert(rc == 0);
 
-    /* 5. Clean up */
+    /* 6. Clean up */
     csilk_db_pool_free(pool);
     printf("test_db_redis: PASS\n");
 #endif
