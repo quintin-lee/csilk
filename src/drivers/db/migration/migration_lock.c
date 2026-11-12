@@ -52,13 +52,20 @@
 
 #define CSILK_MIGRATION_LOCK_DEFAULT_LEASE_SECONDS 300
 
+static bool
+is_mysql_pool(csilk_db_pool_t* pool)
+{
+    const char* drv = csilk_db_pool_get_driver_name(pool);
+    return drv && strcmp(drv, "mysql") == 0;
+}
+
 static int
 _csilk_migration_lock_ensure_lease_column(csilk_db_pool_t* pool)
 {
     /* Add lease_expires_at column (epoch seconds) if missing (idempotent;
      * tolerate the "already exists" failure). */
-    int rc = csilk_db_exec(
-        pool, "ALTER TABLE schema_migration_lock ADD COLUMN lease_expires_at INTEGER;");
+    int rc = csilk_db_exec(pool,
+                           "ALTER TABLE schema_migration_lock ADD COLUMN lease_expires_at BIGINT;");
     return rc; /* caller ignores non-zero (column already present) */
 }
 
@@ -69,13 +76,20 @@ csilk_migration_lock_init(csilk_db_pool_t* pool)
         return -1;
     }
 
-    const char* ddl = "CREATE TABLE IF NOT EXISTS schema_migration_lock ("
-                      "id INTEGER PRIMARY KEY, "
-                      "is_locked INTEGER NOT NULL DEFAULT 0, "
-                      "locked_at TIMESTAMP, "
-                      "locked_by TEXT, "
-                      "lease_expires_at INTEGER" /* epoch seconds */
-                      ");";
+    const char* ddl = is_mysql_pool(pool) ? "CREATE TABLE IF NOT EXISTS schema_migration_lock ("
+                                            "id INT PRIMARY KEY, "
+                                            "is_locked INT NOT NULL DEFAULT 0, "
+                                            "locked_at TIMESTAMP NULL, "
+                                            "locked_by VARCHAR(255), "
+                                            "lease_expires_at BIGINT"
+                                            ");"
+                                          : "CREATE TABLE IF NOT EXISTS schema_migration_lock ("
+                                            "id INTEGER PRIMARY KEY, "
+                                            "is_locked INTEGER NOT NULL DEFAULT 0, "
+                                            "locked_at TIMESTAMP, "
+                                            "locked_by TEXT, "
+                                            "lease_expires_at INTEGER" /* epoch seconds */
+                                            ");";
     if (csilk_db_exec(pool, ddl) != 0) {
         return -1;
     }
@@ -85,8 +99,11 @@ csilk_migration_lock_init(csilk_db_pool_t* pool)
     (void)_csilk_migration_lock_ensure_lease_column(pool);
 
     const char* init_row =
-        "INSERT INTO schema_migration_lock (id, is_locked, locked_by) VALUES (1, 0, '') "
-        "ON CONFLICT(id) DO NOTHING;";
+        is_mysql_pool(pool)
+            ? "INSERT IGNORE INTO schema_migration_lock (id, is_locked, locked_by) VALUES (1, 0, "
+              "'');"
+            : "INSERT INTO schema_migration_lock (id, is_locked, locked_by) VALUES (1, 0, '') "
+              "ON CONFLICT(id) DO NOTHING;";
     return csilk_db_exec(pool, init_row);
 }
 
