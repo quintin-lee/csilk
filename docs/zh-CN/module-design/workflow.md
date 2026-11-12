@@ -152,6 +152,9 @@ csilk_wf_register_tool(wf, "get_weather",
 csilk_wf_add_ai(wf, "agent", &ai_config);
 ```
 
+### Agent Skill（渐进式披露）
+除单个 `csilk_wf_register_tool()` 条目外，csilk 支持 Anthropic 风格的 **Agent Skill**（`csilk_ai_skill_t`，`include/csilk/drivers/ai/skill.h`）——一个含三级披露（L1 元数据、L2 `SKILL.md` 指令、L3 附带脚本）的能力包。在 workflow 上注册 skill（`csilk_ai_skill_register(wf, sk)`）通过 workflow 的工具发现钩子注入一个可发现的 `use_skill` 触发工具，使模型在无需预先加载完整指令的情况下学会*何时*使用某 skill。触发时加载 L2 指令；按需通过 `csilk_skill_exec_local()`（有界本地 fork/execvpe）或 `csilk_ai_skill_invoke_remote()`（经 `csilk_mq` 的集群卸载）执行 L3 脚本。
+
 ### 动态路由
 
 功能路由允许运行时决定下一个节点：
@@ -391,9 +394,12 @@ csilk_wf_t* wf = csilk_wf_load_yaml("workflow.yaml");
 |------|------|
 | `include/csilk/app/workflow.h` | 公共 API (355 行) |
 | `include/csilk/app/workflow_wal.h` | WAL 类型和头格式 |
+| `include/csilk/drivers/ai/skill.h` | Agent Skill 公共 API（`csilk_ai_skill_t`，L1/L2/L3，本地/远端） |
 | `src/app/workflow.c` | 核心引擎 (1163 行) |
 | `src/app/workflow_wal.c` | WAL 实现 (44 行) |
 | `src/app/workflow_loader.c` | 声明式加载器 (268 行) |
+| `src/workflow/skill.c` | Agent Skill 注册表 + L1/L2/L3 分发 + 有界本地 L3 执行器 (fork/execvpe) |
 | `tests/workflow/test_workflow_agentic.c` | 代理循环测试 |
 | `tests/workflow/test_workflow_monitor.c` | 监控集成测试 |
+| `tests/drivers/test_ai_skill.c` | Agent Skill 单元测试 |
 | `examples/ai/example_ai_workflow.c` | 完整工作流示例 |

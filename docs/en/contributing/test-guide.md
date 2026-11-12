@@ -93,9 +93,9 @@ CSILK_TEST_ASSERT_NONNULL(ptr, "Pointer is NULL");
 | WebSocket | 3 | 85%+ | ✅ |
 | Middleware | 12 | 90%+ | ✅ |
 | Security | 3 | 85%+ | ✅ |
-| AI Engine | 2 | 80%+ | ✅ |
+| AI Engine | 3 | 80%+ | ✅ |
 | Workflow | 12 | 85%+ | ✅ |
-| Database | 2 | 85%+ | ✅ |
+| Database | 3 | 85%+ | ✅ |
 | MQ | 6 | 90%+ | ✅ |
 | HTTP/2 | 2 | 85%+ | ✅ |
 

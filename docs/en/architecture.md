@@ -805,6 +805,13 @@ To enable zero-downtime, automated schema upgrades across development and produc
 
 * **High-Throughput Streaming Parser**: Compliant with RFC 4180 specification, supporting quoted fields, escaped quotes, embedded CRLF newlines, and automatic UTF-8 BOM detection.
 
+### 7A.6 Agent Skill Abstraction (`csilk/drivers/ai/skill.h`)
+
+* **Progressive Disclosure**: A *skill* is a capability bundle (Anthropic Agent Skills semantics) modeled as three disclosure levels — `CSILK_SKILL_METADATA` (L1 name+description, always in the system prompt), `CSILK_SKILL_INSTRUCTIONS` (L2 `SKILL.md` body, loaded on trigger), and `CSILK_SKILL_RESOURCES` (L3 bundled scripts/files, executed on demand). `csilk_ai_skill_t` + `csilk_skill_meta_t` carry the validated L1 metadata; `csilk_skill_load_fn` supplies each level's content.
+* **Discoverable Trigger Tool**: `csilk_ai_skill_register()` injects a single `use_skill` trigger tool via the workflow's tool-discovery hook (`csilk_wf_set_tool_discovery`); the model calls it to load L2 (and L3 when requested). `csilk_ai_skill_run_use_skill()` is the programmatic equivalent.
+* **Bounded Local L3 Executor**: `csilk_skill_exec_local()` + `csilk_skill_exec_cfg_t` run a skill's L3 script in a fork/execvpe child confined to a working-directory root (path-traversal guard), a non-inheriting minimal environment, stdout capture capped at `max_output_bytes`, and a wall-clock `timeout_ms` that SIGKILLs the child on expiry (same "remote must failover, never hang" principle as the HTTP clients).
+* **Remote Offload**: `csilk_ai_skill_invoke_remote()` publishes L3 execution on `csilk_mq` (`csilk.skill.invoke` / `csilk.skill.result` topics) with idempotent replay and a bounded wait, for cluster deployments where the work must run on a worker node.
+
 
 ---
 

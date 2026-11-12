@@ -114,6 +114,7 @@ TCP/SSL accept → worker loop receives event (libuv/io_uring)
 | `csilk_migration_t` | `include/csilk/drivers/db/migration.h` | Flyway-style database migration engine with distributed locks |
 | `csilk_ai_trace_t` | `include/csilk/drivers/ai.h` | End-to-end AI latency, token throughput, and tool span tracing |
 | `csilk_ai_react_loop_t` | `include/csilk/app/workflow.h` | Multi-step tool-calling ReAct agent execution loop |
+| `csilk_ai_skill_t` | `include/csilk/drivers/ai/skill.h` | Agent Skill abstraction (L1/L2/L3 progressive disclosure); LOCAL via bounded fork/execvpe, REMOTE via csilk_mq |
 | `csilk_tool_registry_t` | `include/csilk/drivers/ai/tool_registry.h` | Centralized tool definition, schema generation & dispatch |
 | `csilk_mcp_stdio_pool_t` | `include/csilk/protocols/mcp.h` | Reusable Model Context Protocol stdio client process pool |
 | `csilk_secret_provider_t` | `include/csilk/core/secret.h` | Tiered cloud-native secret provider with circuit breakers |
@@ -190,7 +191,7 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 | `src/middleware/` | auth, cors, csrf, jwt, ratelimit, sliding-ratelimit, session, sse, metrics, otlp, waf, circuit-breaker, grpc-gateway, gzip |
 | `src/protocols/` | WebSocket (RFC 6455), HTTP/2 (nghttp2), HTTP/3 (QUIC), swagger, MCP protocol & stdio client pool (`mcp_stdio_pool.c`) |
 | `src/messaging/` | MQ core, pubsub, WAL, raft RPC, consensus, snapshot |
-| `src/workflow/` | Agent engine, DAG scheduler, DSL parser, autonomous ReAct agent loop (`wf_ai_react_loop.c`), WAL, trace |
+| `src/workflow/` | Agent engine, DAG scheduler, DSL parser, autonomous ReAct agent loop (`wf_ai_react_loop.c`), Agent Skill registry + bounded local L3 executor (`skill.c`), WAL, trace |
 | `src/app/` | High-level app API, groups, routes, admin handlers |
 | `src/reflection/` | Reflection marshal/unmarshal/free (struct binding for JSON) |
 | `src/util/` | CPU flame graph (backtrace sampling), RFC 4180 CSV parser & serializer (`csv.c`) |

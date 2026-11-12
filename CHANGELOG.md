@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Agent Skill Abstraction (Anthropic Agent Skills semantics)** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
+  - Progressive-disclosure capability bundle: `csilk_ai_skill_t` / `csilk_skill_meta_t` (L1 kebab-case name[64] + description[1024]), L2 `SKILL.md` instructions, and L3 bundled resources; `csilk_ai_skill_new` / `csilk_ai_skill_free` / `csilk_ai_skill_validate` / `csilk_ai_skill_load`.
+  - Injected as a single discoverable `use_skill` trigger tool through the workflow's tool-discovery hook (`csilk_ai_skill_register` + `csilk_wf_set_tool_discovery`); `csilk_ai_skill_run_use_skill` is the programmatic equivalent.
+  - Bounded local L3 executor (`csilk_skill_exec_local` + `csilk_skill_exec_cfg_t`): fork/execvpe child with working-directory path-traversal guard, non-inheriting minimal environment, stdout capture cap, and SIGKILL on wall-clock timeout.
+  - Remote offload to a cluster worker over `csilk_mq` (`csilk_ai_skill_invoke_remote`; `csilk.skill.invoke` / `csilk.skill.result` topics, idempotent replay + timeout-based failover).
 - **RESTful Response Envelopes & Strict Pagination Query Helpers** (`csilk/core/response.h`):
   - Standardized success response helpers (`csilk_respond_ok`, `csilk_respond_ok_null`) generating `{"code":0,"message":"ok","data":...}` with automatic JSON ownership transfer.
   - Hybrid error response helpers (`csilk_respond_fail`, `csilk_respond_bad_request`, `csilk_respond_unauthorized`, `csilk_respond_forbidden`, `csilk_respond_not_found`, `csilk_respond_conflict`) producing `{"code":<biz_code>,"message":"<msg>"}` with explicit HTTP status codes, default status text fallbacks, and an Arena stack-buffer zero-heap fast path.
@@ -48,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTTP/2 Stream Allocation Scaling**: High-performance per-connection adaptive hash table delivering 4.47 M stream-cycles/sec pool throughput, 26.2 ns lookup latency for 10 concurrent streams, and 62.8 ns lookup latency for 10,000 concurrent streams.
 
 ### Fixed
+- **Zero-Parameter Query Binding** (`src/drivers/db/db.c`): Fixed `_csilk_db_run_param_stmt_query` so that parameterless queries (no bind values) now succeed — `bind_ok` is initialized true and the bind loop is guarded against NULL parameter lists — instead of always reporting failure. Added `test_ai_skill` (Agent Skill) and hardened `test_db_pool_concurrent` (absolute temp path, `atomic_fetch_add`, `SQLITE_BUSY` retry backoff).
 - **PostgreSQL Prepared Statement Parameter Mapping**: Fixed missing driver implementation of `stmt_prepare` in PostgreSQL driver by implementing automated parameter placeholder rewriting (`?` -> `$N`), explicit SQL statement naming, `PQprepare`/`PQexecPrepared` execution pipeline, and typed parameter serialization.
 - **gzip Test Dispatch Weak Symbol Crash**: Removed invalid `response_sent` tracking in `test_gzip` — `_csilk_send_response` is weak and not always invoked directly by gzip middleware.
 - **macOS ASAN Test Stability**: Eliminated invalid `mock_client_marker` in `test_gzip` to eliminate exit-time AddressSanitizer crashes on macOS runners.

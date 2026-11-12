@@ -8,6 +8,11 @@
 ## [Unreleased]
 
 ### 新增
+- **Agent Skill 抽象（Anthropic Agent Skills 语义）** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
+  - 渐进式披露的能力包：`csilk_ai_skill_t` / `csilk_skill_meta_t`（L1 kebab-case 名称[64] + 描述[1024]）、L2 `SKILL.md` 指令、L3 附带资源；`csilk_ai_skill_new` / `csilk_ai_skill_free` / `csilk_ai_skill_validate` / `csilk_ai_skill_load`。
+  - 通过 workflow 的工具发现钩子注入单个可发现的 `use_skill` 触发工具（`csilk_ai_skill_register` + `csilk_wf_set_tool_discovery`）；`csilk_ai_skill_run_use_skill` 为等价的编程接口。
+  - 有界本地 L3 执行器（`csilk_skill_exec_local` + `csilk_skill_exec_cfg_t`）：fork/execvpe 子进程，带工作目录路径穿越防护、非继承最小环境、stdout 捕获上限与墙钟超时 SIGKILL。
+  - 通过 `csilk_mq` 将 L3 执行卸载到集群工作节点（`csilk_ai_skill_invoke_remote`；`csilk.skill.invoke` / `csilk.skill.result` 主题，幂等重放 + 超时故障切换）。
 - **RESTful API 统一响应信封与严格分页解析器** (`csilk/core/response.h`):
   - 提供标准成功响应函数（`csilk_respond_ok`、`csilk_respond_ok_null`），生成 `{"code":0,"message":"ok","data":...}` 并自动接管 JSON 内存所有权。
   - 提供灵活混合模式错误响应函数（`csilk_respond_fail`、`csilk_respond_bad_request`、`csilk_respond_unauthorized`、`csilk_respond_forbidden`、`csilk_respond_not_found`、`csilk_respond_conflict`），显式支持 HTTP 状态码与业务 code，并在常见错误路径上利用 Arena 栈缓冲实现零堆内存分配。
@@ -47,6 +52,7 @@
 - **HTTP/2 多路复用流分配伸缩性**: 高性能连接级自适应哈希表与回收池，达成 **4.47 M stream-cycles/sec** 回收吞吐量，10 并发流查找延迟仅 26.2 ns，10,000 并发流查找延迟仅 62.8 ns。
 
 ### 修复
+- **零参数查询绑定** (`src/drivers/db/db.c`): 修复 `_csilk_db_run_param_stmt_query` 使无绑定值的参数less 查询不再总报失败——`bind_ok` 初始化为 true，且绑定循环对 NULL 参数列表做了保护；新增 `test_ai_skill`（Agent Skill）并加固 `test_db_pool_concurrent`（临时绝对路径、`atomic_fetch_add`、`SQLITE_BUSY` 重试退避）。
 - **PostgreSQL 预编译语句与占位符映射**: 补全 PostgreSQL 驱动层的 `stmt_prepare` 驱动实现，包含 `?` 到 `$N` 的自动占位符转换、显式命名 Prepared Statement 注册与 `PQprepare`/`PQexecPrepared` 参数序列化流水线。
 - **gzip 测试弱符号派发崩溃**: 移除 `test_gzip` 中无效的 `response_sent` 跟踪断言（`_csilk_send_response` 为弱符号且不保证由 gzip 中间件直接调用）。
 - **macOS ASAN 测试崩溃**: 消除 `test_gzip` 中导致进程退出时 ASAN 崩溃的无效 `mock_client_marker`。
