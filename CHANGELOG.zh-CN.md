@@ -9,6 +9,23 @@
 
 ## [0.6.1] - 2026-11-12
 
+### 新增
+- **Agent Skill 远端 Worker MQ 执行与结果回收闭环** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`)：
+  - 新增 `csilk_ai_skill_worker_register()` / `csilk_ai_skill_worker_unregister()`，订阅 `csilk.skill.invoke` 并调度有界 `csilk_skill_exec_local()` 或 Skill Loader 执行，随后回发 `csilk.skill.result`。
+  - 打通 `csilk_ai_skill_invoke_remote()` 按 `idem` 键关联等待结果、有界超时返回及幂等结果缓存。
+- **MCP Client 工具发现与 `csilk_tool_registry_t` 自动桥接** (`csilk/protocols/mcp.h`, `src/protocols/mcp/mcp_client.c`)：
+  - 移除 `"imported_mcp_tool"` 占位工具，基于 JSON-RPC 2.0 实现完整的 Stdio 子进程与 HTTP POST/SSE 远程 `initialize`、`tools/list` 和 `tools/call` 往返通信。
+  - 新增 `csilk_mcp_client_call_tool()` 与 `csilk_mcp_client_import_to_registry()`，将远端 MCP 工具 Schema 与执行代理直接接入 `csilk_ai_tool_registry_t` 与 Workflow。
+- **MySQL 原生预编译语句与迁移引擎全覆盖** (`src/drivers/db/mysql.c`, `src/drivers/db/migration/`)：
+  - 基于 `MYSQL_STMT` / `MYSQL_BIND` 实现 MySQL 原生 `stmt_prepare`、强类型参数绑定、`stmt_execute`、`stmt_query_json`、`stmt_close` 及 `in_transaction` / `last_error`。
+  - 为 `migration_engine.c` 与 `migration_lock.c` 补充 MySQL DDL / `INSERT IGNORE` / `information_schema` 方言支持，实现 SQLite、PostgreSQL、MySQL 三大关系型数据库迁移引擎全覆盖。
+- **演进路线图文档**：
+  - 新增中英文《演进路线图》文档 `docs/zh-CN/meta/ROADMAP.md` 与 `docs/en/meta/ROADMAP.md`（规划 `v0.6.0 → v1.0.0 LTS`）。
+
+### 修复
+- **多 Worker 优雅关闭连接池与 Arena 残留泄漏** (`src/core/server/server_lifecycle.c`, `src/core/server/server_worker.c`)：
+  - 对齐 worker 线程停机排空循环次数，并在事件循环退出后强制回收 `wp->active_clients` 中的残余未闭合连接，彻底消除 GCC ASAN 下 `test_multi_worker` 退出时的 Arena/连接池内存泄漏。
+
 ## [0.6.0] - 2026-11-12
 
 ### 新增
