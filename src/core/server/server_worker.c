@@ -379,8 +379,21 @@ worker_thread(void* arg)
     }
 
     csilk_io_run(loop_ptr, CSILK_IO_RUN_DEFAULT);
-    for (int i = 0; i < 16 && csilk_io_loop_alive(loop_ptr); i++) {
+    for (int i = 0; i < 1000 && csilk_io_loop_alive(loop_ptr); i++) {
         csilk_io_run(loop_ptr, CSILK_IO_RUN_NOWAIT);
+    }
+    /* Ensure any active client whose handle close did not complete inside
+     * the drain window is unlinked and returned to the worker pool before
+     * the loop closes and csilk_server_free() releases pool entries. */
+    while (wp->active_clients) {
+        csilk_client_t* leftover = wp->active_clients;
+        if (leftover->state != CSILK_CONN_CLOSING) {
+            leftover->state = CSILK_CONN_CLOSING;
+        }
+        extern void client_list_remove(csilk_server_t * s, csilk_client_t * c);
+        client_list_remove(server, leftover);
+        extern void client_destroy(csilk_client_t * c);
+        client_destroy(leftover);
     }
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
