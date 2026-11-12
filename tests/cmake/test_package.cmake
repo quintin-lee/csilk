@@ -56,7 +56,7 @@ if(CSILK_BUILD_SHARED)
 endif()
 
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" --build "${CSILK_BUILD_DIR}" --target ${_install_targets}
+    COMMAND "${CMAKE_COMMAND}" --build "${CSILK_BUILD_DIR}" --parallel --target ${_install_targets}
     RESULT_VARIABLE _build_result
     OUTPUT_VARIABLE _build_output
     ERROR_VARIABLE _build_error
@@ -146,7 +146,7 @@ if(NOT _configure_result EQUAL 0)
 endif()
 
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" --build "${_consumer}/build"
+    COMMAND "${CMAKE_COMMAND}" --build "${_consumer}/build" --parallel
     RESULT_VARIABLE _build_result
     OUTPUT_VARIABLE _build_output
     ERROR_VARIABLE _build_error

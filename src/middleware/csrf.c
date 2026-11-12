@@ -30,9 +30,8 @@
  * @param c  The request context.
  *
  * @note Must be registered before any handler that mutates server state.
- * @warning The token is generated from /dev/urandom when available, with a
- *          weak fallback (time + pid). In high-security deployments, ensure
- *          /dev/urandom is accessible.
+ * @note Token generation fails closed when /dev/urandom is unavailable —
+ *       there is no weak-PRNG fallback (CWE-330).
  */
 void
 csilk_csrf_middleware_ext(csilk_ctx_t* c, const csilk_csrf_config_t* config)
@@ -82,13 +81,14 @@ csilk_csrf_middleware_ext(csilk_ctx_t* c, const csilk_csrf_config_t* config)
         CSILK_LOG_T("CSRF: Safe method (%s) bypasses validation for request %p",
                     csilk_get_method(c),
                     (void*)c);
-        // Set CSRF cookie on safe methods so frontend can read it (http_only = 0)
+        // Double-submit cookie: frontend JS must read it, so HttpOnly stays
+        // 0; Secure requires HTTPS transport (CWE-1004).
         const char* existing = csilk_get_cookie(c, cookie_name);
         if (!existing) {
             char token_buf[33];
             if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
-                csilk_set_cookie(c, cookie_name, token_buf, 86400, "/", NULL, 0, 0);
+                csilk_set_cookie(c, cookie_name, token_buf, 86400, "/", NULL, 1, 0);
             }
             explicit_bzero(token_buf, sizeof(token_buf));
         }
@@ -152,9 +152,8 @@ csilk_csrf_middleware(csilk_ctx_t* c)
  *
  * @return 0 on success, -1 if buf is NULL, buf_size < 33, or fread fails.
  *
- * @warning The fallback path uses rand_r() which is NOT cryptographically
- *          secure. Production deployments should always ensure /dev/urandom
- *          is available.
+ * @note There is no fallback path: callers must ensure /dev/urandom is
+ *       available and treat -1 as a hard failure.
  */
 int
 csilk_csrf_generate_token(char* buf, size_t buf_size)

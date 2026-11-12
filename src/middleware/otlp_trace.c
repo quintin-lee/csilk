@@ -238,11 +238,52 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
     free(span);
 }
 
+void
+csilk_otlp_apm_ui_handler(csilk_ctx_t* c)
+{
+    const char* paths[] = {"share/csilk/apm_ui.html",
+                           "../share/csilk/apm_ui.html",
+                           "/usr/local/share/csilk/apm_ui.html"};
+
+    for (int i = 0; i < 3; i++) {
+        FILE* f = fopen(paths[i], "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            if (sz > 0) {
+                char* buf = calloc(1, (size_t)sz + 1);
+                if (buf) {
+                    if (fread(buf, 1, (size_t)sz, f) == (size_t)sz) {
+                        csilk_set_header(c, "Content-Type", "text/html");
+                        csilk_string(c, 200, buf);
+                    }
+                    free(buf);
+                }
+            }
+            fclose(f);
+            return;
+        }
+    }
+
+    /* Embedded fallback if template file is not on disk */
+    static const char g_embedded_apm_ui_html[] =
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head><title>csilk APM Tracing</title></head>\n"
+        "<body><h1>⚡ csilk APM & eBPF Control Plane</h1>\n"
+        "<p>Real-Time OpenTelemetry Distributed Tracing Waterfall & Kernel Drop Counter</p>\n"
+        "</body></html>\n";
+
+    csilk_set_header(c, "Content-Type", "text/html");
+    csilk_string(c, 200, g_embedded_apm_ui_html);
+}
+
 /**
  * @brief Register an APM UI route to serve a trace explorer page.
  *
- * Intended to mount a simple trace-visualization endpoint at the given path on
- * the application. Currently a no-op stub reserved for future implementation.
+ * Mounts the trace visualization APM dashboard endpoint at the given path on
+ * the application.
  *
  * @param app   The csilk application to register the route on. Must not be NULL.
  * @param path  URL path for the APM UI endpoint. Must not be NULL.
@@ -253,4 +294,5 @@ csilk_otlp_serve_apm_ui(csilk_app_t* app, const char* path)
     if (!app || !path) {
         return;
     }
+    csilk_app_add_route(app, "GET", path, csilk_otlp_apm_ui_handler);
 }

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Embedded APM Dashboard Route** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`):
+  - Connected `csilk_otlp_serve_apm_ui()` and exported `csilk_otlp_apm_ui_handler()` to serve the embedded `share/csilk/apm_ui.html` real-time OpenTelemetry trace explorer.
+
+### Fixed
+- **CMake Export Package Target Split Test Parallelization** (`tests/cmake/test_package.cmake`, `CMakeLists.txt`):
+  - Passed `--parallel` to `cmake --build` invocations in `test_package.cmake` and increased test timeout to 180s to prevent cold-build timeouts during full test suite execution.
+- **CSRF Token Security & PRNG Fail-Closed** (`src/middleware/csrf.c`, `tests/middleware/test_csrf_ext.c`):
+  - Added `Secure` flag (`secure = 1`) to the CSRF double-submit cookie to require HTTPS transport (CWE-1004).
+  - Ensured `csilk_csrf_generate_token()` fails closed with an error when `/dev/urandom` cannot be opened or read, preventing fallback to weak PRNG (CWE-330).
+- **JSON Borrowed View Mutation Prevention** (`src/core/json/json_mutate.c`, `tests/core/test_json_mutate.c`):
+  - Prevented illegal `csilk_json_set_string()` mutations on borrowed immutable document views (`!json_is_owner(v)`), avoiding disconnected mutable copy creation and memory leaks.
+
 ## [0.6.1] - 2026-11-12
 
 ### Added
