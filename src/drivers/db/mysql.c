@@ -19,6 +19,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "db_internal.h"
 
 /* strndup is POSIX.1-2008 but may not be visible on musl-based systems
  * (Alpine Linux) without the correct feature test macros. We always
@@ -355,6 +356,447 @@ mysql_drv_transaction_rollback(csilk_db_pool_t* pool)
     return mysql_drv_exec(pool, "ROLLBACK");
 }
 
+/** @brief Check whether the connection currently has an active transaction. */
+static int
+mysql_drv_in_transaction(csilk_db_pool_t* pool)
+{
+    if (!pool || !csilk_db_pool_get_connection(pool)) {
+        return 0;
+    }
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    return (conn->db && (conn->db->server_status & SERVER_STATUS_IN_TRANS)) ? 1 : 0;
+}
+
+/* -----------------------------------------------------------------------
+ * Native Prepared Statements (MYSQL_STMT + MYSQL_BIND)
+ * ----------------------------------------------------------------------- */
+
+typedef struct {
+    enum enum_field_types type;
+    long long             i64;
+    double                dbl;
+    char*                 str;
+    unsigned long         str_len;
+    my_bool               is_null;
+} mysql_param_slot_t;
+
+typedef struct {
+    MYSQL*              db;
+    MYSQL_STMT*         stmt;
+    unsigned int        param_count;
+    MYSQL_BIND*         binds;
+    mysql_param_slot_t* slots;
+} mysql_stmt_wrap_t;
+
+static void
+mysql_stmt_free_param_storage(mysql_stmt_wrap_t* w)
+{
+    if (!w || !w->slots) {
+        return;
+    }
+    for (unsigned int i = 0; i < w->param_count; i++) {
+        free(w->slots[i].str);
+        w->slots[i].str = NULL;
+    }
+}
+
+static int
+mysql_drv_stmt_prepare(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_stmt)
+{
+    if (!pool || !sql || !out_stmt) {
+        return -1;
+    }
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    if (!conn || !conn->db) {
+        return -1;
+    }
+
+    MYSQL_STMT* mstmt = mysql_stmt_init(conn->db);
+    if (!mstmt) {
+        return -1;
+    }
+    if (mysql_stmt_prepare(mstmt, sql, (unsigned long)strlen(sql)) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_stmt_prepare failed: %s", mysql_stmt_error(mstmt));
+        mysql_stmt_close(mstmt);
+        return -1;
+    }
+
+    unsigned int       param_count = mysql_stmt_param_count(mstmt);
+    mysql_stmt_wrap_t* wrap = calloc(1, sizeof(mysql_stmt_wrap_t));
+    if (!wrap) {
+        mysql_stmt_close(mstmt);
+        return -1;
+    }
+    wrap->db = conn->db;
+    wrap->stmt = mstmt;
+    wrap->param_count = param_count;
+    if (param_count > 0) {
+        wrap->binds = calloc(param_count, sizeof(MYSQL_BIND));
+        wrap->slots = calloc(param_count, sizeof(mysql_param_slot_t));
+        if (!wrap->binds || !wrap->slots) {
+            free(wrap->binds);
+            free(wrap->slots);
+            free(wrap);
+            mysql_stmt_close(mstmt);
+            return -1;
+        }
+        for (unsigned int i = 0; i < param_count; i++) {
+            wrap->slots[i].is_null = 1;
+            wrap->binds[i].buffer_type = MYSQL_TYPE_NULL;
+            wrap->binds[i].is_null = &wrap->slots[i].is_null;
+        }
+    }
+
+    csilk_stmt_t* stmt = calloc(1, sizeof(csilk_stmt_t));
+    if (!stmt) {
+        free(wrap->binds);
+        free(wrap->slots);
+        free(wrap);
+        mysql_stmt_close(mstmt);
+        return -1;
+    }
+    stmt->pool = pool;
+    stmt->handle = wrap;
+    *out_stmt = stmt;
+    return 0;
+}
+
+static int
+mysql_drv_stmt_bind_int64(csilk_stmt_t* stmt, int index, int64_t val)
+{
+    if (!stmt || !stmt->handle || index < 1) {
+        return -1;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    unsigned int       i = (unsigned int)(index - 1);
+    if (i >= w->param_count) {
+        return -1;
+    }
+    free(w->slots[i].str);
+    w->slots[i].str = NULL;
+    w->slots[i].i64 = (long long)val;
+    w->slots[i].is_null = 0;
+    memset(&w->binds[i], 0, sizeof(MYSQL_BIND));
+    w->binds[i].buffer_type = MYSQL_TYPE_LONGLONG;
+    w->binds[i].buffer = &w->slots[i].i64;
+    w->binds[i].is_unsigned = 0;
+    w->binds[i].is_null = &w->slots[i].is_null;
+    return 0;
+}
+
+static int
+mysql_drv_stmt_bind_double(csilk_stmt_t* stmt, int index, double val)
+{
+    if (!stmt || !stmt->handle || index < 1) {
+        return -1;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    unsigned int       i = (unsigned int)(index - 1);
+    if (i >= w->param_count) {
+        return -1;
+    }
+    free(w->slots[i].str);
+    w->slots[i].str = NULL;
+    w->slots[i].dbl = val;
+    w->slots[i].is_null = 0;
+    memset(&w->binds[i], 0, sizeof(MYSQL_BIND));
+    w->binds[i].buffer_type = MYSQL_TYPE_DOUBLE;
+    w->binds[i].buffer = &w->slots[i].dbl;
+    w->binds[i].is_null = &w->slots[i].is_null;
+    return 0;
+}
+
+static int
+mysql_drv_stmt_bind_text(csilk_stmt_t* stmt, int index, const char* val)
+{
+    if (!stmt || !stmt->handle || index < 1) {
+        return -1;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    unsigned int       i = (unsigned int)(index - 1);
+    if (i >= w->param_count) {
+        return -1;
+    }
+    free(w->slots[i].str);
+    w->slots[i].str = val ? strdup(val) : NULL;
+    if (val && !w->slots[i].str) {
+        return -1;
+    }
+    memset(&w->binds[i], 0, sizeof(MYSQL_BIND));
+    if (val) {
+        w->slots[i].str_len = (unsigned long)strlen(w->slots[i].str);
+        w->slots[i].is_null = 0;
+        w->binds[i].buffer_type = MYSQL_TYPE_STRING;
+        w->binds[i].buffer = w->slots[i].str;
+        w->binds[i].buffer_length = w->slots[i].str_len;
+        w->binds[i].length = &w->slots[i].str_len;
+    } else {
+        w->slots[i].str_len = 0;
+        w->slots[i].is_null = 1;
+        w->binds[i].buffer_type = MYSQL_TYPE_NULL;
+    }
+    w->binds[i].is_null = &w->slots[i].is_null;
+    return 0;
+}
+
+static int
+mysql_drv_stmt_bind_null(csilk_stmt_t* stmt, int index)
+{
+    if (!stmt || !stmt->handle || index < 1) {
+        return -1;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    unsigned int       i = (unsigned int)(index - 1);
+    if (i >= w->param_count) {
+        return -1;
+    }
+    free(w->slots[i].str);
+    w->slots[i].str = NULL;
+    w->slots[i].str_len = 0;
+    w->slots[i].is_null = 1;
+    memset(&w->binds[i], 0, sizeof(MYSQL_BIND));
+    w->binds[i].buffer_type = MYSQL_TYPE_NULL;
+    w->binds[i].is_null = &w->slots[i].is_null;
+    return 0;
+}
+
+static int
+mysql_drv_stmt_execute(csilk_stmt_t* stmt, int64_t* out_affected_rows)
+{
+    if (!stmt || !stmt->handle) {
+        return -1;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    if (w->param_count > 0 && mysql_stmt_bind_param(w->stmt, w->binds) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_stmt_bind_param failed: %s", mysql_stmt_error(w->stmt));
+        return -1;
+    }
+    if (mysql_stmt_execute(w->stmt) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_stmt_execute failed: %s", mysql_stmt_error(w->stmt));
+        return -1;
+    }
+    if (out_affected_rows) {
+        *out_affected_rows = (int64_t)mysql_stmt_affected_rows(w->stmt);
+    }
+    mysql_stmt_reset(w->stmt);
+    return 0;
+}
+
+static csilk_json_t*
+mysql_drv_stmt_query_json(csilk_stmt_t* stmt)
+{
+    if (!stmt || !stmt->handle) {
+        return NULL;
+    }
+    mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+    if (w->param_count > 0 && mysql_stmt_bind_param(w->stmt, w->binds) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_stmt_bind_param failed: %s", mysql_stmt_error(w->stmt));
+        return NULL;
+    }
+    if (mysql_stmt_execute(w->stmt) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: mysql_stmt_execute failed: %s", mysql_stmt_error(w->stmt));
+        return NULL;
+    }
+
+    csilk_json_t* arr = csilk_json_array();
+    if (!arr) {
+        mysql_stmt_reset(w->stmt);
+        return NULL;
+    }
+
+    MYSQL_RES* meta = mysql_stmt_result_metadata(w->stmt);
+    if (!meta) {
+        mysql_stmt_reset(w->stmt);
+        return arr;
+    }
+
+    unsigned int num_fields = mysql_num_fields(meta);
+    MYSQL_FIELD* fields = mysql_fetch_fields(meta);
+    if (num_fields == 0) {
+        mysql_free_result(meta);
+        mysql_stmt_reset(w->stmt);
+        return arr;
+    }
+
+    MYSQL_BIND*    res_binds = calloc(num_fields, sizeof(MYSQL_BIND));
+    char**         col_bufs = calloc(num_fields, sizeof(char*));
+    unsigned long* col_lens = calloc(num_fields, sizeof(unsigned long));
+    my_bool*       col_nulls = calloc(num_fields, sizeof(my_bool));
+    my_bool*       col_errs = calloc(num_fields, sizeof(my_bool));
+    if (!res_binds || !col_bufs || !col_lens || !col_nulls || !col_errs) {
+        free(res_binds);
+        free(col_bufs);
+        free(col_lens);
+        free(col_nulls);
+        free(col_errs);
+        mysql_free_result(meta);
+        csilk_json_free(arr);
+        mysql_stmt_reset(w->stmt);
+        return NULL;
+    }
+
+    size_t* buf_caps = calloc(num_fields, sizeof(size_t));
+    if (!buf_caps) {
+        free(res_binds);
+        free(col_bufs);
+        free(col_lens);
+        free(col_nulls);
+        free(col_errs);
+        mysql_free_result(meta);
+        csilk_json_free(arr);
+        mysql_stmt_reset(w->stmt);
+        return NULL;
+    }
+
+    for (unsigned int i = 0; i < num_fields; i++) {
+        size_t cap = 256;
+        col_bufs[i] = malloc(cap);
+        if (!col_bufs[i]) {
+            for (unsigned int k = 0; k < i; k++) {
+                free(col_bufs[k]);
+            }
+            free(buf_caps);
+            free(res_binds);
+            free(col_bufs);
+            free(col_lens);
+            free(col_nulls);
+            free(col_errs);
+            mysql_free_result(meta);
+            csilk_json_free(arr);
+            mysql_stmt_reset(w->stmt);
+            return NULL;
+        }
+        buf_caps[i] = cap;
+        res_binds[i].buffer_type = MYSQL_TYPE_STRING;
+        res_binds[i].buffer = col_bufs[i];
+        res_binds[i].buffer_length = (unsigned long)cap;
+        res_binds[i].length = &col_lens[i];
+        res_binds[i].is_null = &col_nulls[i];
+        res_binds[i].error = &col_errs[i];
+    }
+
+    if (mysql_stmt_bind_result(w->stmt, res_binds) != 0 || mysql_stmt_store_result(w->stmt) != 0) {
+        CSILK_LOG_E("csilk_db_mysql: bind/store result failed: %s", mysql_stmt_error(w->stmt));
+        for (unsigned int i = 0; i < num_fields; i++) {
+            free(col_bufs[i]);
+        }
+        free(buf_caps);
+        free(res_binds);
+        free(col_bufs);
+        free(col_lens);
+        free(col_nulls);
+        free(col_errs);
+        mysql_free_result(meta);
+        csilk_json_free(arr);
+        mysql_stmt_reset(w->stmt);
+        return NULL;
+    }
+
+    for (;;) {
+        int fr = mysql_stmt_fetch(w->stmt);
+        if (fr == MYSQL_NO_DATA) {
+            break;
+        }
+        if (fr == 1) {
+            CSILK_LOG_E("csilk_db_mysql: mysql_stmt_fetch failed: %s", mysql_stmt_error(w->stmt));
+            break;
+        }
+
+        csilk_json_t* row = csilk_json_object();
+        for (unsigned int i = 0; i < num_fields; i++) {
+            const char* cname = fields[i].name ? fields[i].name : "";
+            if (col_nulls[i]) {
+                csilk_json_add_null(row, cname);
+                continue;
+            }
+            if (fr == MYSQL_DATA_TRUNCATED && col_lens[i] >= buf_caps[i]) {
+                size_t new_cap = (size_t)col_lens[i] + 1;
+                char*  nb = realloc(col_bufs[i], new_cap);
+                if (nb) {
+                    col_bufs[i] = nb;
+                    buf_caps[i] = new_cap;
+                    res_binds[i].buffer = nb;
+                    res_binds[i].buffer_length = (unsigned long)new_cap;
+                    MYSQL_BIND fetch_one = res_binds[i];
+                    mysql_stmt_fetch_column(w->stmt, &fetch_one, i, 0);
+                }
+            }
+            size_t flen = col_lens[i] < buf_caps[i] ? (size_t)col_lens[i] : buf_caps[i] - 1;
+            col_bufs[i][flen] = '\0';
+
+            enum enum_field_types ft = fields[i].type;
+            if (ft == MYSQL_TYPE_TINY || ft == MYSQL_TYPE_SHORT || ft == MYSQL_TYPE_LONG ||
+                ft == MYSQL_TYPE_LONGLONG || ft == MYSQL_TYPE_INT24) {
+                csilk_json_add_int(row, cname, strtoll(col_bufs[i], NULL, 10));
+            } else if (ft == MYSQL_TYPE_FLOAT || ft == MYSQL_TYPE_DOUBLE ||
+                       ft == MYSQL_TYPE_DECIMAL || ft == MYSQL_TYPE_NEWDECIMAL) {
+                csilk_json_add_number(row, cname, strtod(col_bufs[i], NULL));
+            } else {
+                csilk_json_add_string(row, cname, col_bufs[i]);
+            }
+        }
+        csilk_json_array_append(arr, row);
+    }
+
+    for (unsigned int i = 0; i < num_fields; i++) {
+        free(col_bufs[i]);
+    }
+    free(buf_caps);
+    free(res_binds);
+    free(col_bufs);
+    free(col_lens);
+    free(col_nulls);
+    free(col_errs);
+    mysql_free_result(meta);
+    mysql_stmt_free_result(w->stmt);
+    mysql_stmt_reset(w->stmt);
+    return arr;
+}
+
+static void
+mysql_drv_stmt_close(csilk_stmt_t* stmt)
+{
+    if (!stmt) {
+        return;
+    }
+    if (stmt->handle) {
+        mysql_stmt_wrap_t* w = (mysql_stmt_wrap_t*)stmt->handle;
+        mysql_stmt_free_param_storage(w);
+        free(w->binds);
+        free(w->slots);
+        if (w->stmt) {
+            mysql_stmt_close(w->stmt);
+        }
+        free(w);
+        stmt->handle = NULL;
+    }
+    free(stmt);
+}
+
+static int
+mysql_drv_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
+{
+    if (!pool || !out_err) {
+        return -1;
+    }
+    mysql_conn_t* conn = (mysql_conn_t*)csilk_db_pool_get_connection(pool);
+    if (!conn || !conn->db) {
+        *out_err = CSILK_DB_ERR_CONN;
+        return 0;
+    }
+    unsigned int code = mysql_errno(conn->db);
+    if (code == 0) {
+        *out_err = CSILK_DB_OK;
+    } else if (code == 1205 || code == 1213) { /* ER_LOCK_WAIT_TIMEOUT / ER_LOCK_DEADLOCK */
+        *out_err = CSILK_DB_ERR_BUSY;
+    } else if (code == 2002 || code == 2003 || code == 2006 || code == 2013) {
+        *out_err = CSILK_DB_ERR_CONN;
+    } else {
+        *out_err = CSILK_DB_ERR_SQL;
+    }
+    return 0;
+}
+
 /** @brief Pre-built driver vtable for MySQL. */
 csilk_db_driver_t csilk_db_mysql_driver = {
     .name = "mysql",
@@ -365,7 +807,17 @@ csilk_db_driver_t csilk_db_mysql_driver = {
     .transaction_begin = mysql_drv_transaction_begin,
     .transaction_commit = mysql_drv_transaction_commit,
     .transaction_rollback = mysql_drv_transaction_rollback,
+    .in_transaction = mysql_drv_in_transaction,
+    .stmt_prepare = mysql_drv_stmt_prepare,
+    .stmt_bind_int64 = mysql_drv_stmt_bind_int64,
+    .stmt_bind_double = mysql_drv_stmt_bind_double,
+    .stmt_bind_text = mysql_drv_stmt_bind_text,
+    .stmt_bind_null = mysql_drv_stmt_bind_null,
+    .stmt_execute = mysql_drv_stmt_execute,
+    .stmt_query_json = mysql_drv_stmt_query_json,
+    .stmt_close = mysql_drv_stmt_close,
     .free_result = mysql_free_csilk_result,
+    .last_error = mysql_drv_last_error,
 };
 
 /**

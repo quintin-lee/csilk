@@ -55,8 +55,12 @@ csilk_migration_engine_new(csilk_db_pool_t*           pool,
     }
 
     const char* driver_name = csilk_db_pool_get_driver_name(pool);
-    const char* dialect =
-        (driver_name && strcmp(driver_name, "postgres") == 0) ? "postgres" : "sqlite";
+    const char* dialect = "sqlite";
+    if (driver_name && strcmp(driver_name, "postgres") == 0) {
+        dialect = "postgres";
+    } else if (driver_name && strcmp(driver_name, "mysql") == 0) {
+        dialect = "mysql";
+    }
 
     char dialect_subdir[512];
     snprintf(dialect_subdir, sizeof(dialect_subdir), "%s/%s", engine->base_dir, dialect);
@@ -238,9 +242,13 @@ table_exists(csilk_db_pool_t* pool, const char* table_name)
     }
 
     const char* driver_name = csilk_db_pool_get_driver_name(pool);
-    const char* sql = (driver_name && strcmp(driver_name, "postgres") == 0)
-                          ? "SELECT 1 FROM information_schema.tables WHERE table_name = ?;"
-                          : "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?;";
+    const char* sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?;";
+    if (driver_name && strcmp(driver_name, "postgres") == 0) {
+        sql = "SELECT 1 FROM information_schema.tables WHERE table_name = ?;";
+    } else if (driver_name && strcmp(driver_name, "mysql") == 0) {
+        sql = "SELECT 1 FROM information_schema.tables "
+              "WHERE table_schema = DATABASE() AND table_name = ?;";
+    }
 
     csilk_stmt_t* stmt = NULL;
     if (csilk_stmt_prepare(pool, sql, &stmt) != 0 || !stmt) {
@@ -278,7 +286,21 @@ ensure_schema_migrations_and_baseline(csilk_migration_engine_t* engine)
         }
     }
 
-    if (csilk_db_exec(engine->pool, s_create_schema_migrations_sql) != 0) {
+    const char* driver_name = csilk_db_pool_get_driver_name(engine->pool);
+    const char* create_sql = s_create_schema_migrations_sql;
+    if (driver_name && strcmp(driver_name, "mysql") == 0) {
+        /* MySQL requires VARCHAR length for PRIMARY KEY and TEXT columns, and
+         * disallow DEFAULT CURRENT_TIMESTAMP differences across strict modes. */
+        create_sql = "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                     "    version INT PRIMARY KEY,"
+                     "    name VARCHAR(255) NOT NULL,"
+                     "    checksum VARCHAR(128) NOT NULL,"
+                     "    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                     "    execution_time_ms INT NOT NULL DEFAULT 0,"
+                     "    execution_time INT NOT NULL DEFAULT 0"
+                     ");";
+    }
+    if (csilk_db_exec(engine->pool, create_sql) != 0) {
         return -1;
     }
 
