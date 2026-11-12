@@ -252,6 +252,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_ai_nodes.c
     src/workflow/wf_ai_agents.c
     src/workflow/wf_ai_react_loop.c
+    src/workflow/skill.c
     src/protocols/mcp/mcp_stdio_pool.c
     src/workflow/wf_tools.c
     src/workflow/wf_scheduler.c
