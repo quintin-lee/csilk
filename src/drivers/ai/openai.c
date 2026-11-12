@@ -589,9 +589,20 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
+    /* Bounded time-outs: even when the caller leaves timeout_ms at 0, cap the
+     * connect phase and (for non-streaming) the whole transfer. Without these,
+     * a half-open server (e.g. a slow test mock that accepted but never
+     * responds) would block curl_easy_perform() indefinitely. Streaming
+     * responses are excluded from the total cap so long LLM streams are
+     * unaffected. */
     if (req->timeout_ms > 0) {
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)req->timeout_ms);
+    } else if (!req->stream) {
+        /* Generous default: a slow-but-reachable backend should still fit; the
+         * goal is only to bound the "no data at all" case. */
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
     }
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
 
     /* --- Step 3: Execute --- */
     CURLcode rc = curl_easy_perform(curl);
@@ -768,6 +779,9 @@ openai_embeddings(void*                           state_ptr,
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    /* Same bounded-connect guard as chat(): never hang on a dead endpoint. */
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
