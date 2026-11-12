@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-12
+
 ### 新增
 - **内置 APM 监控仪表盘页面路由** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`)：
   - 接入 `csilk_otlp_serve_apm_ui()` 并导出 `csilk_otlp_apm_ui_handler()`，将内置的 `share/csilk/apm_ui.html` 实时 OpenTelemetry 追踪可视化界面挂载到应用端点。
