@@ -13,10 +13,14 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 #define SKILL_NAME_MAX 64
 #define SKILL_DESC_MAX 1024
@@ -524,11 +528,6 @@ csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
 
 /* --- Local execution (L3 script, bounded process) --- */
 
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
 #define SKILL_EXEC_DEFAULT_TIMEOUT_MS 30000
 #define SKILL_EXEC_DEFAULT_MAX_OUTPUT 65536
 
@@ -680,7 +679,15 @@ csilk_skill_exec_local(
         _exit(127); /* exec failed */
     }
 
-    /* Parent. */
+    /* Parent.  Close the write end: a blocking read on a pipe whose write
+     * end is held only by the child will see EOF once the child closes its
+     * stdout.  A blocking read returns the moment any byte is available, so
+     * a short-output child drains in one or two reads without a 20ms poll
+     * window that previously raced and dropped the data.  The wall-clock
+     * budget is still enforced: after each blocking drain we re-check
+     * `waitpid(WNOHANG)` and the elapsed time, SIGKILLing the child on
+     * expiry — so a silent long-running child that holds the pipe open is
+     * killed at @p timeout_ms, not at end-of-output. */
     close(pipefd[1]);
 
     char* output = malloc((size_t)max_output + 1);
@@ -693,58 +700,89 @@ csilk_skill_exec_local(
         return -1;
     }
 
-    /* Bounded drain + wait: the stdout read blocks until the pipe's write
-     * end closes (i.e. the child exits), so a long-running child would
-     * otherwise stall the whole function past any timeout.  We therefore
-     * drain with non-blocking reads and enforce the wall-clock budget here,
-     * SIGKILLing the child on expiry. */
-    int total = 0;
-    int truncated = 0;
-    int timed_out = 0;
-    int elapsed_ms = 0;
-    int status = 0;
-    int done = 0;
-    fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+    int       total = 0;
+    int       truncated = 0;
+    int       timed_out = 0;
+    int       elapsed_ms = 0;
+    int       status = 0;
+    int       done = 0;
     const int poll_ms = 20;
     while (!done) {
-        int n = read(pipefd[0], output + total, max_output - total);
+        /* poll() with a bounded timeout: returns immediately when data is
+         * available (fast path for short-output children), or wakes at the
+         * poll deadline to re-check the wall-clock budget and the child's
+         * exit (fast path for silent children like `sleep`).  This fixes
+         * the original blocking-read deadlock (a silent child held the
+         * pipe open forever, stalling past any timeout) while avoiding
+         * the 20ms poll-window race that dropped small outputs. */
+        int remaining = timeout - elapsed_ms;
+        if (remaining <= 0) {
+            kill(pid, SIGKILL);
+            int st;
+            waitpid(pid, &st, 0);
+            status = st;
+            timed_out = 1;
+            done = 1;
+            break;
+        }
+        struct pollfd pfd = {.fd = pipefd[0], .events = POLLIN};
+        int           prc = poll(&pfd, 1, remaining > poll_ms ? poll_ms : remaining);
+        elapsed_ms += (remaining > poll_ms) ? poll_ms : remaining;
+        if (prc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        if (prc == 0) {
+            /* No data within the poll window — the child may have already
+             * exited, or is silent.  Check its exit; keep polling until
+             * the budget runs out, then SIGKILL. */
+            pid_t r = waitpid(pid, &status, WNOHANG);
+            if (r == pid) {
+                done = 1;
+                break;
+            }
+            continue;
+        }
+        /* Data available (or EOF). */
+        int n = (int)read(pipefd[0], output + total, max_output - total);
         if (n > 0) {
             total += n;
             if (total >= max_output) {
                 truncated = 1;
+                break;
             }
-        } else if (n < 0 && errno == EAGAIN) {
-            /* No data yet — check the wall-clock budget, then poll. */
+        } else if (n == 0) {
+            /* EOF: child closed stdout.  The process may still be running
+             * (e.g. it spawned a background child); wait for it to fully
+             * exit within the budget, else SIGKILL. */
             pid_t r = waitpid(pid, &status, WNOHANG);
             if (r == pid) {
-                /* Child exited: drain any remaining buffered bytes. */
-                int m;
-                while ((m = read(pipefd[0], output + total, max_output - total)) > 0) {
-                    total += m;
-                    if (total >= max_output) {
-                        truncated = 1;
-                        break;
-                    }
-                }
                 done = 1;
                 break;
             }
-            usleep((long)poll_ms * 1000);
-            elapsed_ms += poll_ms;
-            if (elapsed_ms >= timeout) {
+            while (elapsed_ms < timeout) {
+                usleep((long)poll_ms * 1000);
+                elapsed_ms += poll_ms;
+                r = waitpid(pid, &status, WNOHANG);
+                if (r == pid) {
+                    done = 1;
+                    break;
+                }
+            }
+            if (!done) {
                 kill(pid, SIGKILL);
                 int st;
                 waitpid(pid, &st, 0);
                 status = st;
                 timed_out = 1;
                 done = 1;
-                break;
             }
-        } else if (n == 0) {
-            /* EOF: child closed the write end. */
-            done = 1;
         } else {
-            done = 1;
+            if (errno == EINTR) {
+                continue;
+            }
             break;
         }
     }
