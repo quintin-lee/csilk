@@ -769,6 +769,13 @@ sequenceDiagram
 
 * **高性能文本流解析**：严格遵循 RFC 4180 规范，毫秒级流式处理大规模 CSV 导入与导出，原生支持双引号转义、嵌入换行符以及 UTF-8 BOM 自动识别。
 
+### 7A.6 Agent Skill 抽象 (`csilk/drivers/ai/skill.h`)
+
+* **渐进式披露**：*Skill* 是一个能力包（遵循 Anthropic Agent Skills 语义），建模为三级披露——`CSILK_SKILL_METADATA`（L1 名称+描述，始终写入系统提示词）、`CSILK_SKILL_INSTRUCTIONS`（L2 `SKILL.md` 正文，触发时加载）与 `CSILK_SKILL_RESOURCES`（L3 附带脚本/资源，按需执行）。`csilk_ai_skill_t` + `csilk_skill_meta_t` 承载已校验的 L1 元数据；`csilk_skill_load_fn` 供给各级内容。
+* **可发现触发工具**：`csilk_ai_skill_register()` 通过 workflow 的工具发现钩子（`csilk_wf_set_tool_discovery`）注入单个 `use_skill` 触发工具；模型调用它即可加载 L2（按需再加载 L3）。`csilk_ai_skill_run_use_skill()` 是等价的编程接口。
+* **有界本地 L3 执行器**：`csilk_skill_exec_local()` + `csilk_skill_exec_cfg_t` 在 fork/execvpe 子进程中运行 L3 脚本，工作目录限制在 root（路径穿越防护）、非继承的最小环境变量、stdout 捕获上限 `max_output_bytes`，以及墙钟 `timeout_ms` 到点后 SIGKILL 子进程（与 HTTP 客户端一致的「远端必须故障切换、绝不挂死」原则）。
+* **远端卸载**：`csilk_ai_skill_invoke_remote()` 将 L3 执行发布到 `csilk_mq`（`csilk.skill.invoke` / `csilk.skill.result` 主题），具备幂等重放与有界等待，用于需在工作节点上执行的集群部署。
+
 
 ---
 

@@ -176,6 +176,8 @@ typedef struct {
 
 **注册方式**: 懒加载——`csilk_ai_new()` 首次调用时自动注册两个默认驱动。
 
+**Agent Skill 抽象**: 除 provider vtable 外，`include/csilk/drivers/ai/skill.h` 定义 Anthropic 风格的 Agent Skill（`csilk_ai_skill_t`，L1/L2/L3 渐进式披露），其实现位于 `src/workflow/skill.c`（注册表 + 有界本地 L3 执行器 + `csilk_mq` 远端卸载）。
+
 **数据流**:
 ```
 用户 → csilk_ai_new("openai", key, url) → ai->driver->chat(ai->driver_state, req, res)
@@ -469,6 +471,8 @@ sequenceDiagram
 | `src/drivers/perm/perm.c` | Perm 驱动注册表 + 简单 RBAC 实现 |
 | `src/drivers/ai/openai.c` | OpenAI 驱动实现 (libcurl) |
 | `src/drivers/ai/ollama.c` | Ollama 驱动实现 (libcurl) |
+| `include/csilk/drivers/ai/skill.h` | Agent Skill 抽象（`csilk_ai_skill_t` / `csilk_skill_meta_t` / `csilk_skill_exec_cfg_t`） |
+| `src/workflow/skill.c` | Skill 注册表 + L1/L2/L3 分发 + 有界本地 L3 执行器（fork/execvpe） |
 | `src/drivers/sqlite.c` | SQLite 驱动实现 |
 | `src/drivers/mysql.c` | MySQL 驱动实现 |
 | `src/drivers/postgres.c` | PostgreSQL 驱动实现 |

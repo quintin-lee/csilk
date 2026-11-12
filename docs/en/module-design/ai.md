@@ -49,6 +49,9 @@ Support for Server-Sent Events (SSE) allows for "typewriter-style" real-time out
 ### 4. Function Calling (Tool Use)
 Build autonomous agents by defining C function tools that the model can request to execute. Csilk automatically parses model-requested `tool_calls`.
 
+### 5. Agent Skills (Progressive Disclosure)
+Beyond flat function tools, csilk models an Anthropic-style **Agent Skill** (`csilk_ai_skill_t`, `csilk/drivers/ai/skill.h`) as a capability bundle with three disclosure levels: L1 metadata (name+description, always in the system prompt), L2 `SKILL.md` instructions (loaded on trigger), and L3 bundled resources/scripts (executed on demand). `csilk_ai_skill_register()` injects a single `use_skill` trigger tool via the workflow's tool-discovery hook; `csilk_skill_exec_local()` runs an L3 script in a bounded fork/execvpe child (path-containment guard, non-inheriting env, stdout cap, SIGKILL on timeout), and `csilk_ai_skill_invoke_remote()` offloads L3 execution to a cluster worker over `csilk_mq`.
+
 ### 6. AI Telemetry Integration
 
 The AI engine integrates with the admin dashboard for real-time monitoring:
@@ -57,7 +60,7 @@ The AI engine integrates with the admin dashboard for real-time monitoring:
 - **Dashboard Integration**: AI metrics are exposed via the admin dashboard `/admin/stats` JSON endpoint as `ai_requests_total`, `ai_tokens_total`, and `ai_latency_ms`.
 - **Error Tracking**: Failed AI requests are counted and categorized by error type (timeout, rate-limited, invalid response).
 
-### 5. Automated Robustness
+### 7. Automated Robustness
 - **Automatic Retry**: Built-in exponential backoff handles transient network errors (502, 503) and Rate Limiting (429).
 - **History Management**: `csilk_ai_context_t` manages a FIFO sliding window for conversation history to respect model token limits.
 

@@ -150,6 +150,9 @@ csilk_wf_register_tool(wf, "get_weather",
 csilk_wf_add_ai(wf, "agent", &ai_config);
 ```
 
+### Agent Skills (Progressive Disclosure)
+Beyond individual `csilk_wf_register_tool()` entries, csilk supports Anthropic-style **Agent Skills** (`csilk_ai_skill_t`, `include/csilk/drivers/ai/skill.h`) — a capability bundle with three disclosure levels (L1 metadata, L2 `SKILL.md` instructions, L3 bundled scripts). Registering a skill on a workflow (`csilk_ai_skill_register(wf, sk)`) injects a single discoverable `use_skill` trigger tool through the workflow's tool-discovery hook, so the model learns *when* to use a skill without loading its full instructions up front. On trigger, L2 instructions load; on demand, L3 scripts run via `csilk_skill_exec_local()` (bounded local fork/execvpe) or `csilk_ai_skill_invoke_remote()` (cluster offload over `csilk_mq`).
+
 ### Dynamic Routing
 
 Functional routing allows runtime decision of the next node:
@@ -375,9 +378,12 @@ The `_wf_wal_append()` function in `workflow_wal.c` uses raw POSIX I/O (`open`/`
 |------|---------|
 | `include/csilk/app/workflow.h` | Public API (355 lines) |
 | `include/csilk/app/workflow_wal.h` | WAL types and header format |
+| `include/csilk/drivers/ai/skill.h` | Agent Skill public API (`csilk_ai_skill_t`, L1/L2/L3, local/remote) |
 | `src/app/workflow.c` | Core engine (1163 lines) |
 | `src/app/workflow_wal.c` | WAL implementation (44 lines) |
 | `src/app/workflow_loader.c` | Declarative loader (268 lines) |
+| `src/workflow/skill.c` | Agent Skill registry + L1/L2/L3 dispatch + bounded local L3 executor (fork/execvpe) |
 | `tests/workflow/test_workflow_agentic.c` | Agentic loop test |
 | `tests/workflow/test_workflow_monitor.c` | Monitor integration test |
+| `tests/drivers/test_ai_skill.c` | Agent Skill unit tests |
 | `examples/ai/example_ai_workflow.c` | Full workflow example |

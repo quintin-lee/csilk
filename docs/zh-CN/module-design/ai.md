@@ -49,7 +49,10 @@ Server-Sent Events (SSE) 支持允许进行"打字机样式"的实时输出。
 ### 4. 函数调用 (工具使用)
 通过定义模型可以请求执行的 C 函数工具来构建自主代理。Csilk 自动解析模型请求的 `tool_calls`。
 
-### 5. 自动� robustness
+### 5. Agent Skill（渐进式披露）
+除扁平的函数工具外，csilk 将 Anthropic 风格的 **Agent Skill**（`csilk_ai_skill_t`，`csilk/drivers/ai/skill.h`）建模为一个能力包，含三级披露：L1 元数据（名称+描述，始终写入系统提示词）、L2 `SKILL.md` 指令（触发时加载）与 L3 附带资源/脚本（按需执行）。`csilk_ai_skill_register()` 通过 workflow 的工具发现钩子注入单个 `use_skill` 触发工具；`csilk_skill_exec_local()` 在有界 fork/execvpe 子进程中运行 L3 脚本（路径限制防护、非继承环境、stdout 上限、超时 SIGKILL），`csilk_ai_skill_invoke_remote()` 则通过 `csilk_mq` 将 L3 执行卸载到集群工作节点。
+
+### 7. 自动鲁棒性
 - **自动重试**: 内置指数退避处理瞬时网络错误（502, 503）和速率限制（429）。
 - **历史管理**: `csilk_ai_context_t` 管理 FIFO 滑动窗口的对话历史，以尊重模型令牌限制。
 
