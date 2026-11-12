@@ -114,6 +114,35 @@ void csilk_mcp_client_free(csilk_mcp_client_t* client);
  */
 int csilk_mcp_client_import_tools(csilk_mcp_client_t* client, csilk_wf_t* wf);
 
+/**
+ * @brief Call a tool on the connected MCP server (`tools/call`).
+ *
+ * @param client    Connected MCP client (stdio subprocess or HTTP endpoint).
+ * @param tool_name Tool name registered on the remote server.
+ * @param args_json JSON arguments object string (NULL treated as "{}").
+ * @return Heap-allocated text/JSON result from the server (caller frees), or
+ *         NULL / error JSON on failure.
+ */
+char* csilk_mcp_client_call_tool(csilk_mcp_client_t* client,
+                                 const char*         tool_name,
+                                 const char*         args_json);
+
+/**
+ * @brief Discover tools from the connected MCP server (`tools/list`) and
+ *        register live proxy callbacks into an AI tool registry.
+ *
+ * Performs `initialize` (when not yet initialized) and `tools/list`, parses
+ * each tool's `name`, `description`, and `inputSchema`, and registers a
+ * dispatcher in @p reg that delegates `csilk_ai_tool_dispatch()` calls to
+ * `csilk_mcp_client_call_tool()`.
+ *
+ * @param client Connected MCP client (must stay alive while @p reg dispatches
+ *               the imported tools).
+ * @param reg    Target AI tool registry.
+ * @return Number of tools successfully registered (>= 0), or -1 on error.
+ */
+int csilk_mcp_client_import_to_registry(csilk_mcp_client_t* client, csilk_ai_tool_registry_t* reg);
+
 /* --- MCP Stdio Client Pool API --- */
 
 /**

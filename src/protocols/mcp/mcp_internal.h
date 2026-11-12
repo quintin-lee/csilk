@@ -52,9 +52,16 @@ struct csilk_mcp_server_s {
 struct csilk_mcp_client_s {
     char          server_name[128];
     char          server_version[32];
+    char*         command;
+    char**        argv;
     int           is_stdio;
-    int           pipe_fd[2]; /* [0]: read, [1]: write */
+    int           pipe_fd[2]; /* [0]: read (from child stdout), [1]: write (to child stdin) */
+    int           child_pid;
+    int           initialized;
+    int64_t       next_id;
     char          sse_url[256];
+    char**        imported_names;
+    size_t        imported_count;
     csilk_mutex_t mutex;
 };
 
