@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-12
+
 ### Added
 - **Embedded APM Dashboard Route** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`):
   - Connected `csilk_otlp_serve_apm_ui()` and exported `csilk_otlp_apm_ui_handler()` to serve the embedded `share/csilk/apm_ui.html` real-time OpenTelemetry trace explorer.
