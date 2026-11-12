@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-12
+
 ### 新增
 - **Agent Skill 抽象（Anthropic Agent Skills 语义）** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
   - 渐进式披露的能力包：`csilk_ai_skill_t` / `csilk_skill_meta_t`（L1 kebab-case 名称[64] + 描述[1024]）、L2 `SKILL.md` 指令、L3 附带资源；`csilk_ai_skill_new` / `csilk_ai_skill_free` / `csilk_ai_skill_validate` / `csilk_ai_skill_load`。
