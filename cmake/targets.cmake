@@ -384,6 +384,8 @@ csilk_link_module(csilk_protocols
     csilk_reflection
     csilk_workflow
     csilk_mq
+    csilk_ai
+    CURL::libcurl
 )
 csilk_link_module(csilk_middleware
     csilk_http
