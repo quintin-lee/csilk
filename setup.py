@@ -59,10 +59,26 @@ class CMakeBuild(build_ext):
             # CI runner.
             brew_prefix = "/opt/homebrew" if os.path.isdir("/opt/homebrew") else "/usr/local"
             _brew_pkgs = ["openssl", "libyaml", "zlib", "curl", "sqlite3",
-                          "libuv", "libnghttp2", "nghttp2", "pkg-config"]
+                          "libuv", "libnghttp2", "nghttp2"]
+            # CMAKE_PREFIX_PATH: <prefix>/lib and <prefix>/include search roots.
             cmake_args.append(
                 "-DCMAKE_PREFIX_PATH="
                 + ";".join([brew_prefix] + [f"{brew_prefix}/opt/{p}" for p in _brew_pkgs])
+            )
+            # CMAKE_INCLUDE_PATH / CMAKE_LIBRARY_PATH are searched directly by
+            # find_path() / find_library() and are more reliable than the
+            # prefix-list expansion for Homebrew keg-only packages whose
+            # opt-link layout (<prefix>/opt/<pkg>/include) is not always
+            # honoured by CMake's prefix search inside an isolated venv.
+            cmake_args.append(
+                "-DCMAKE_INCLUDE_PATH="
+                + ";".join([f"{brew_prefix}/opt/{p}/include" for p in _brew_pkgs]
+                          + [f"{brew_prefix}/include"])
+            )
+            cmake_args.append(
+                "-DCMAKE_LIBRARY_PATH="
+                + ";".join([f"{brew_prefix}/opt/{p}/lib" for p in _brew_pkgs]
+                          + [f"{brew_prefix}/lib"])
             )
             # pkg-config searches PKG_CONFIG_PATH (colon-separated on POSIX) for
             # libuv.pc, libnghttp2.pc, yaml.pc — the exact files Homebrew writes
@@ -73,6 +89,9 @@ class CMakeBuild(build_ext):
                 [f"{brew_prefix}/opt/{p}/lib/pkgconfig" for p in _brew_pkgs]
                 + [f"{brew_prefix}/lib/pkgconfig"]
             )
+            # PKG_CONFIG_LIBDIR is an alternate key pkg-config checks before
+            # PKG_CONFIG_PATH; set it too for libuv/yaml resolution robustness.
+            os.environ["PKG_CONFIG_LIBDIR"] = os.environ["PKG_CONFIG_PATH"]
         
         build_args = ["--config", cfg, "--parallel", "--target", "csilk_shared"]
 
