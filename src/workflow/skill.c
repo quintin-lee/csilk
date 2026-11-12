@@ -840,6 +840,14 @@ csilk_skill_exec_local(
         }
     }
     close(pipefd[0]);
+    if (!done) {
+        /* Truncation or read error exited the loop early; ensure the child is
+         * terminated and reaped so no zombie lingers. */
+        if (waitpid(pid, &status, WNOHANG) != pid) {
+            kill(pid, SIGKILL);
+            waitpid(pid, &status, 0);
+        }
+    }
     output[total] = 0;
 
     int exit_code;
