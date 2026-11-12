@@ -49,8 +49,30 @@ class CMakeBuild(build_ext):
             # rather than shelling out to `brew` (which may not be on PATH
             # inside the cibuildwheel venv, and would raise if missing).  The
             # sub-path `opt/<pkg>` is Homebrew's Cellar opt-link layout.
+            #
+            # CMake's find_library() / find_path() / pkg-config all search the
+            # CMAKE_PREFIX_PATH entries for <prefix>/lib and <prefix>/include.
+            # Homebrew keg-only packages (openssl, libyaml, curl, sqlite3,
+            # libuv, libnghttp2, zlib) are NOT on the default search path on
+            # macOS, so each must be listed explicitly.  Missing libuv here
+            # caused `find_library(LIBUV_LIB NAMES uv libuv)` to fail on the
+            # CI runner.
             brew_prefix = "/opt/homebrew" if os.path.isdir("/opt/homebrew") else "/usr/local"
-            cmake_args.append(f"-DCMAKE_PREFIX_PATH={brew_prefix};{brew_prefix}/opt/openssl;{brew_prefix}/opt/libyaml;{brew_prefix}/opt/zlib;{brew_prefix}/opt/curl;{brew_prefix}/opt/sqlite3")
+            _brew_pkgs = ["openssl", "libyaml", "zlib", "curl", "sqlite3",
+                          "libuv", "libnghttp2", "nghttp2", "pkg-config"]
+            cmake_args.append(
+                "-DCMAKE_PREFIX_PATH="
+                + ";".join([brew_prefix] + [f"{brew_prefix}/opt/{p}" for p in _brew_pkgs])
+            )
+            # pkg-config searches PKG_CONFIG_PATH (colon-separated on POSIX) for
+            # libuv.pc, libnghttp2.pc, yaml.pc — the exact files Homebrew writes
+            # into <prefix>/lib/pkgconfig.  Without this, pkg_check_modules()
+            # silently falls through to the find_library fallback which may not
+            # match the package name.
+            os.environ["PKG_CONFIG_PATH"] = ":".join(
+                [f"{brew_prefix}/opt/{p}/lib/pkgconfig" for p in _brew_pkgs]
+                + [f"{brew_prefix}/lib/pkgconfig"]
+            )
         
         build_args = ["--config", cfg, "--parallel", "--target", "csilk_shared"]
 
@@ -79,6 +101,15 @@ class CMakeBuild(build_ext):
             f.write(result.stderr or "")
             f.write(f"\n=== RETURN CODE: {result.returncode} ===\n")
         print(f"[csilk] cmake configure output:\n{result.stdout}\n{result.stderr}", flush=True)
+        if result.returncode != 0:
+            sys.stderr.write(
+                f"[csilk] CMake configure failed (rc={result.returncode}).\n"
+                f"[csilk] Full log saved to: {log_path}\n"
+                f"[csilk] === STDOUT ===\n{result.stdout}\n"
+                f"[csilk] === STDERR ===\n{result.stderr}\n"
+            )
+            sys.stderr.flush()
+            raise RuntimeError(f"CMake configure failed (rc={result.returncode})")
         result.check_returncode()
         
         print(f"[csilk] cmake build: cmake --build . {' '.join(build_args)}", flush=True)
