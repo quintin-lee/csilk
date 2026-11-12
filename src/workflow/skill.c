@@ -155,7 +155,13 @@ static void unregister_skill_by_ptr(csilk_ai_skill_t* sk);
 void
 csilk_ai_skill_free(csilk_ai_skill_t* sk)
 {
+    if (!sk) {
+        return;
+    }
     unregister_skill_by_ptr(sk);
+    /* exec_cfg strings are strdup'd copies owned by the skill. */
+    free(sk->exec_cfg.root);
+    free(sk->exec_cfg.env);
     free(sk);
 }
 
@@ -577,6 +583,7 @@ csilk_ai_skill_set_exec_cfg(csilk_ai_skill_t* sk, const csilk_skill_exec_cfg_t* 
     }
     if (cfg->env && !sk->exec_cfg.env) {
         free(sk->exec_cfg.root);
+        sk->exec_cfg.root = NULL; /* avoid double free in csilk_ai_skill_free */
         return -1;
     }
     return 0;
