@@ -132,7 +132,12 @@ function(csilk_object_setup TARGET)
       $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
       $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>
   )
-  set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  # OPTIMIZE_DEPENDENCIES drops the build-order edges that linking the module
+  # dependencies (csilk_link_module) would otherwise add, so module objects
+  # still compile in parallel instead of waiting for upstream archives.
+  set_target_properties(${TARGET} PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      OPTIMIZE_DEPENDENCIES ON)
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
     target_precompile_headers(${TARGET} PRIVATE
         <stdio.h> <stdlib.h> <string.h> <stdint.h> <time.h> <errno.h>
@@ -147,6 +152,15 @@ endif()
 
 function(csilk_link_module TARGET)
   target_link_libraries(${TARGET} PUBLIC ${ARGN})
+
+  # The OBJECT library is the real compilation owner, so it must see the
+  # dependencies' usage requirements (include dirs of libuv/OpenSSL/yaml/...).
+  # Linking only the static/shared wrappers left third-party headers reachable
+  # solely through compiler default paths: fine on Linux (/usr/include), fatal
+  # on macOS where Homebrew's /opt/homebrew/include is not searched.
+  if(TARGET ${TARGET}_objects AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+    target_link_libraries(${TARGET}_objects PRIVATE ${ARGN})
+  endif()
 
   if(TARGET ${TARGET}_shared)
     set(_shared_dependencies)

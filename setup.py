@@ -58,6 +58,12 @@ class CMakeBuild(build_ext):
             # caused `find_library(LIBUV_LIB NAMES uv libuv)` to fail on the
             # CI runner.
             brew_prefix = "/opt/homebrew" if os.path.isdir("/opt/homebrew") else "/usr/local"
+            # Apple Clang (macOS default `cc`) is unsupported (missing C23
+            # constexpr); use Homebrew LLVM clang when available and the
+            # caller has not already specified a compiler.
+            _llvm_clang = f"{brew_prefix}/opt/llvm/bin/clang"
+            if os.path.isfile(_llvm_clang) and "CC" not in os.environ:
+                cmake_args.append(f"-DCMAKE_C_COMPILER={_llvm_clang}")
             _brew_pkgs = ["openssl", "libyaml", "zlib", "curl", "sqlite3",
                           "libuv", "libnghttp2", "nghttp2"]
             # CMAKE_PREFIX_PATH: <prefix>/lib and <prefix>/include search roots.

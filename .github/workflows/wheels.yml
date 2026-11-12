@@ -40,7 +40,11 @@ jobs:
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS_MACOS: "arm64"
           CIBW_ARCHS_LINUX: "x86_64"
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=14.0"
+          # Build with Homebrew LLVM clang, the same compiler as the main macOS
+          # CI job: Apple Clang (the default `cc`) is unsupported (no C23
+          # constexpr).  CMake picks CC up on first configure.  arm64-only, so
+          # the Homebrew prefix is fixed at /opt/homebrew.
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=14.0 CC=/opt/homebrew/opt/llvm/bin/clang"
           # Point CMake at the Homebrew Cellar prefixes on macOS so the
           # REQUIRED find_package() calls (OpenSSL/ZLIB/SQLite3/CURL) resolve.
           # `brew install` runs on the host in the dedicated step above;
@@ -48,7 +52,7 @@ jobs:
           # the venv build executes inside cibuildwheel.  setup.py now probes
           # /opt/homebrew (arm64) or /usr/local (x86_64) directly instead of
           # shelling out to `brew`, which may not be on the venv PATH.
-          CIBW_BEFORE_ALL_MACOS: "brew install cmake pkg-config openssl libyaml zlib curl sqlite3 libuv nghttp2"
+          CIBW_BEFORE_ALL_MACOS: "brew install cmake pkg-config llvm openssl libyaml zlib curl sqlite3 libuv nghttp2"
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_34_x86_64
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y
