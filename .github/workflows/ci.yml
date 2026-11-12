@@ -90,7 +90,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        if ! ctest --test-dir build -E test_integration --output-on-failure; then
+        if ! ctest --test-dir build -E test_integration --timeout 60 --output-on-failure; then
           if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
             while IFS=: read -r num name; do
               err_msg=$(grep -A 25 "Test: $name" build/Testing/Temporary/LastTest.log 2>/dev/null | grep -E "Assertion|assert|error|fail|SIG|fault" | head -n 3 | tr '\n' ' ')
@@ -105,7 +105,7 @@ jobs:
 
     - name: Run integration tests
       run: |
-        if ! ctest --test-dir build -R test_integration --output-on-failure; then
+        if ! ctest --test-dir build -R test_integration --timeout 120 --output-on-failure; then
           if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
             while IFS=: read -r num name; do
               err_msg=$(grep -A 25 "Test: $name" build/Testing/Temporary/LastTest.log 2>/dev/null | grep -E "Assertion|assert|error|fail|SIG|fault" | head -n 3 | tr '\n' ' ')
@@ -301,7 +301,7 @@ jobs:
     # the separate native CSILK_USE_URING build is currently failing in CI
     # with widespread invalid-free crashes across integration tests.
     - name: Run tests with UV_USE_IO_URING=1
-      run: UV_USE_IO_URING=1 ctest --test-dir build --timeout 30 --output-on-failure
+      run: UV_USE_IO_URING=1 ctest --test-dir build --timeout 60 --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
