@@ -21,6 +21,13 @@ csilk_json_set_string(csilk_json_t* v, const char* new_value)
         return false;
     }
 
+    if (!json_is_owner(v)) {
+        /* Borrowed view of an immutable doc: the value below would be
+         * rebound onto a private mutable copy that no parent ever sees
+         * (and the converted doc would leak), so refuse explicitly. */
+        return false;
+    }
+
     /* Convert immutable doc to mutable, replace root string, then swap. */
     yyjson_mut_doc* mdoc = yyjson_doc_mut_copy((yyjson_doc*)v->doc.idoc, NULL);
     if (!mdoc) {

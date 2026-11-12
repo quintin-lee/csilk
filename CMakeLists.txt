@@ -215,5 +215,5 @@ if(CSILK_BUILD_TESTS AND CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
           -DCSILK_TEST_BINARY_DIR=${CMAKE_BINARY_DIR}/cmake-package-smoke
           -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/test_package.cmake
   )
-  set_tests_properties(test_cmake_package_target_split PROPERTIES TIMEOUT 120)
+  set_tests_properties(test_cmake_package_target_split PROPERTIES TIMEOUT 180)
 endif()

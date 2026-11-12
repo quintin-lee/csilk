@@ -33,6 +33,12 @@ csilk_otlp_span_t* csilk_otlp_tracer_start_span(const char* name, const char* pa
 void csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code);
 
 /**
+ * @brief HTTP handler that serves the embedded APM UI HTML page.
+ * @param c The request context.
+ */
+void csilk_otlp_apm_ui_handler(csilk_ctx_t* c);
+
+/**
  * @brief Registers embedded APM Web Dashboard UI routes.
  * @param app Application handle.
  * @param path Base URL path (e.g., "/admin/apm").

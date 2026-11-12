@@ -110,6 +110,25 @@ test_set_string_empty_string(void)
     printf("  passed\n");
 }
 
+static void
+test_set_string_borrowed_immutable_view(void)
+{
+    printf("Testing csilk_json_set_string on borrowed immutable view...\n");
+    csilk_json_t* doc = csilk_json_parse("{\"name\": \"alice\"}");
+    assert(doc != NULL);
+
+    csilk_json_t* child = csilk_json_get(doc, "name");
+    assert(child != NULL);
+
+    /* Borrowed view of immutable doc cannot be mutated */
+    bool result = csilk_json_set_string(child, "bob");
+    assert(result == false);
+
+    csilk_json_free(child);
+    csilk_json_free(doc);
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -117,6 +136,7 @@ main(void)
     test_set_string_null_new_value();
     test_set_string_immutable_conversion();
     test_set_string_mutable_update();
+    test_set_string_borrowed_immutable_view();
     test_set_string_non_string_value();
     test_set_string_empty_string();
 

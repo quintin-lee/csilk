@@ -152,12 +152,36 @@ test_csrf_middleware_post_with_wrong_token()
     printf("test_csrf_middleware_post_with_wrong_token passed\n");
 }
 
+void
+test_csrf_cookie_secure_flag()
+{
+    printf("Testing CSRF cookie Secure flag...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    csilk_test_ctx_set_request(ctx, "GET", "/test");
+
+    csilk_handler_t handlers[] = {test_handler, nullptr};
+    csilk_test_ctx_set_handlers(ctx, handlers);
+
+    test_handler_called = 0;
+    csilk_csrf_middleware(ctx);
+
+    assert(test_handler_called == 1);
+    /* Secure must be set (CWE-1004); HttpOnly must stay off so the
+     * frontend can double-submit the token via X-CSRF-Token. */
+    assert(csilk_test_ctx_count_response_headers(ctx, "Set-Cookie", "Secure") == 1);
+    assert(csilk_test_ctx_count_response_headers(ctx, "Set-Cookie", "HttpOnly") == 0);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_csrf_cookie_secure_flag passed\n");
+}
+
 int
 main()
 {
     test_csrf_middleware_safe_method_get();
     test_csrf_middleware_safe_method_head();
     test_csrf_middleware_safe_method_options();
+    test_csrf_cookie_secure_flag();
     test_csrf_middleware_post_no_token();
     test_csrf_middleware_post_with_matching_token();
     test_csrf_middleware_post_with_wrong_token();

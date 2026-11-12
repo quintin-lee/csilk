@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### 新增
+- **内置 APM 监控仪表盘页面路由** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`)：
+  - 接入 `csilk_otlp_serve_apm_ui()` 并导出 `csilk_otlp_apm_ui_handler()`，将内置的 `share/csilk/apm_ui.html` 实时 OpenTelemetry 追踪可视化界面挂载到应用端点。
+
+### 修复
+- **CMake 导出包 Target 拆分测试并行化与超时加固** (`tests/cmake/test_package.cmake`, `CMakeLists.txt`)：
+  - 在 `test_package.cmake` 中为 `cmake --build` 补充 `--parallel` 参数，并将全量测试中的执行超时从 120s 提升至 180s，彻底杜绝冷构建全模块编译超时。
+- **CSRF Cookie 安全增强与随机数 Fail-Closed** (`src/middleware/csrf.c`, `tests/middleware/test_csrf_ext.c`)：
+  - 为 CSRF 双重提交 cookie 补齐 `Secure` 标记（`secure = 1`，CWE-1004）。
+  - 在 `csilk_csrf_generate_token()` 中严格执行 Fail-Closed 策略，当 `/dev/urandom` 读取异常时直接返回失败，消除向弱伪随机数 `rand_r()` 回退的安全隐患（CWE-330）。
+- **JSON 借用不可变视图非法 Mutation 修复** (`src/core/json/json_mutate.c`, `tests/core/test_json_mutate.c`)：
+  - 严禁对不可变借用视图（`!json_is_owner(v)`）执行 `csilk_json_set_string()`，避免静默派生悬空可变副本与内存泄漏。
+
 ## [0.6.1] - 2026-11-12
 
 ### 新增
