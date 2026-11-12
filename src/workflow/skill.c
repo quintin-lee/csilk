@@ -34,10 +34,11 @@ typedef struct {
 } skill_wf_entry_t;
 
 struct csilk_ai_skill_s {
-    csilk_skill_meta_t    meta;
-    csilk_skill_backend_t backend;
-    csilk_skill_load_fn   load;
-    void*                 user_data;
+    csilk_skill_meta_t     meta;
+    csilk_skill_backend_t  backend;
+    csilk_skill_load_fn    load;
+    void*                  user_data;
+    csilk_skill_exec_cfg_t exec_cfg;
 };
 
 /* --- Global registry of (wf, skill) registrations --- */
@@ -518,5 +519,302 @@ csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
     (void)timeout_ms;
     (void)idem;
     *out_result = strdup("{\"status\":\"dispatched\"}");
+    return 0;
+}
+
+/* --- Local execution (L3 script, bounded process) --- */
+
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#define SKILL_EXEC_DEFAULT_TIMEOUT_MS 30000
+#define SKILL_EXEC_DEFAULT_MAX_OUTPUT 65536
+
+int
+csilk_ai_skill_set_exec_cfg(csilk_ai_skill_t* sk, const csilk_skill_exec_cfg_t* cfg)
+{
+    if (!sk || !cfg) {
+        return -1;
+    }
+    free(sk->exec_cfg.root);
+    free(sk->exec_cfg.env);
+    sk->exec_cfg.root = cfg->root ? strdup(cfg->root) : NULL;
+    sk->exec_cfg.env = cfg->env ? strdup(cfg->env) : NULL;
+    sk->exec_cfg.timeout_ms = cfg->timeout_ms;
+    sk->exec_cfg.max_output_bytes = cfg->max_output_bytes;
+    if (cfg->root && !sk->exec_cfg.root) {
+        return -1;
+    }
+    if (cfg->env && !sk->exec_cfg.env) {
+        free(sk->exec_cfg.root);
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief Reject any path that escapes @p root: absolute paths, `..` segments,
+ *        or NUL bytes.
+ */
+static int
+path_within_root(const char* root, const char* path)
+{
+    if (!root || !path) {
+        return -1;
+    }
+    if (path[0] == '/' || path[0] == 0) {
+        return -1;
+    }
+    if (strpbrk(path, "\n\r") != NULL) {
+        return -1;
+    }
+    /* Disallow any parent-directory reference. */
+    for (const char* p = path; *p; p++) {
+        if (p[0] == '.' && p[1] == '.') {
+            if (p == path && p[2] == '.') {
+                return -1; /* `.../...` */
+            }
+            if (p[2] == '/' || p[2] == 0) {
+                return -1; /* `..` or `../` */
+            }
+        }
+    }
+    return 0;
+}
+
+int
+csilk_skill_exec_local(
+    csilk_ai_skill_t* sk, const char* path, const char* args, int timeout_ms, char** out_result)
+{
+    if (out_result) {
+        *out_result = NULL;
+    }
+    if (!sk || !out_result) {
+        return -1;
+    }
+
+    if (!sk->exec_cfg.root) {
+        *out_result = strdup("{\"error\":\"no exec root configured\"}");
+        return -1;
+    }
+    if (path_within_root(sk->exec_cfg.root, path) != 0) {
+        *out_result = strdup("{\"error\":\"path escapes exec root\"}");
+        return -1;
+    }
+
+    /* `path` is an executable; `args` are space-separated argv. */
+    char  argbuf[4096];
+    char* argv[256];
+    int   argc = 0;
+    argv[argc++] = strdup(path);
+    if (!argv[0]) {
+        return -1;
+    }
+    if (args && args[0]) {
+        strncpy(argbuf, args, sizeof(argbuf) - 1);
+        argbuf[sizeof(argbuf) - 1] = 0;
+        char* tok = strtok(argbuf, " ");
+        while (tok && argc < (int)(sizeof(argv) / sizeof(argv[0]) - 1)) {
+            argv[argc++] = tok;
+            tok = strtok(NULL, " ");
+        }
+    }
+    argv[argc] = NULL;
+
+    int timeout = timeout_ms > 0 ? timeout_ms : sk->exec_cfg.timeout_ms;
+    if (timeout <= 0) {
+        timeout = SKILL_EXEC_DEFAULT_TIMEOUT_MS;
+    }
+    int max_output = sk->exec_cfg.max_output_bytes > 0 ? sk->exec_cfg.max_output_bytes
+                                                       : SKILL_EXEC_DEFAULT_MAX_OUTPUT;
+
+    /* Child env: minimal (PATH) + any user-supplied env. */
+    char  envbuf[4096];
+    char* eargv[64];
+    int   envc = 0;
+    eargv[envc++] = "PATH=/usr/bin:/bin";
+    if (sk->exec_cfg.env && sk->exec_cfg.env[0]) {
+        memset(envbuf, 0, sizeof(envbuf));
+        strncpy(envbuf, sk->exec_cfg.env, sizeof(envbuf) - 1);
+        char* etok = strtok(envbuf, " ");
+        while (etok && envc < 63) {
+            eargv[envc++] = etok;
+            etok = strtok(NULL, " ");
+        }
+    }
+    eargv[envc] = NULL;
+    char** envp = eargv;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        *out_result = strdup("{\"error\":\"pipe failed\"}");
+        free(argv[0]);
+        return -1;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        free(argv[0]);
+        *out_result = strdup("{\"error\":\"fork failed\"}");
+        return -1;
+    }
+
+    if (pid == 0) {
+        close(pipefd[0]);
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDERR_FILENO);
+            dup2(devnull, STDIN_FILENO);
+            close(devnull);
+        }
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]);
+        if (chdir(sk->exec_cfg.root) != 0) {
+            _exit(126);
+        }
+        execvpe(argv[0], argv, (char* const*)envp);
+        _exit(127); /* exec failed */
+    }
+
+    /* Parent. */
+    close(pipefd[1]);
+
+    char* output = malloc((size_t)max_output + 1);
+    if (!output) {
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, 0);
+        close(pipefd[0]);
+        free(argv[0]);
+        *out_result = strdup("{\"error\":\"oom\"}");
+        return -1;
+    }
+
+    /* Bounded drain + wait: the stdout read blocks until the pipe's write
+     * end closes (i.e. the child exits), so a long-running child would
+     * otherwise stall the whole function past any timeout.  We therefore
+     * drain with non-blocking reads and enforce the wall-clock budget here,
+     * SIGKILLing the child on expiry. */
+    int total = 0;
+    int truncated = 0;
+    int timed_out = 0;
+    int elapsed_ms = 0;
+    int status = 0;
+    int done = 0;
+    fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+    const int poll_ms = 20;
+    while (!done) {
+        int n = read(pipefd[0], output + total, max_output - total);
+        if (n > 0) {
+            total += n;
+            if (total >= max_output) {
+                truncated = 1;
+            }
+        } else if (n < 0 && errno == EAGAIN) {
+            /* No data yet — check the wall-clock budget, then poll. */
+            pid_t r = waitpid(pid, &status, WNOHANG);
+            if (r == pid) {
+                /* Child exited: drain any remaining buffered bytes. */
+                int m;
+                while ((m = read(pipefd[0], output + total, max_output - total)) > 0) {
+                    total += m;
+                    if (total >= max_output) {
+                        truncated = 1;
+                        break;
+                    }
+                }
+                done = 1;
+                break;
+            }
+            usleep((long)poll_ms * 1000);
+            elapsed_ms += poll_ms;
+            if (elapsed_ms >= timeout) {
+                kill(pid, SIGKILL);
+                int st;
+                waitpid(pid, &st, 0);
+                status = st;
+                timed_out = 1;
+                done = 1;
+                break;
+            }
+        } else if (n == 0) {
+            /* EOF: child closed the write end. */
+            done = 1;
+        } else {
+            done = 1;
+            break;
+        }
+    }
+    close(pipefd[0]);
+    output[total] = 0;
+
+    int exit_code;
+    if (timed_out) {
+        exit_code = -9;
+    } else if (WIFEXITED(status)) {
+        exit_code = WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+        exit_code = 128 + WTERMSIG(status);
+    } else {
+        exit_code = -1;
+    }
+
+    /* Build JSON envelope. */
+    size_t osize = (size_t)total * 2 + strlen(sk->meta.name) + 64;
+    char*  result = malloc(osize);
+    if (!result) {
+        free(output);
+        free(argv[0]);
+        *out_result = strdup("{\"error\":\"oom\"}");
+        return -1;
+    }
+    char*  p = result;
+    size_t rem = osize;
+    rem -= (size_t)snprintf(p, rem, "{\"skill\":\"%s\",\"stdout\":\"", sk->meta.name);
+    p += osize - rem;
+    rem = osize - (p - result);
+    for (int i = 0; i < total && rem > 2; i++) {
+        char        c = output[i];
+        const char* rep = NULL;
+        switch (c) {
+        case '"':
+            rep = "\\\"";
+            break;
+        case '\\':
+            rep = "\\\\";
+            break;
+        case '\n':
+            rep = "\\n";
+            break;
+        case '\r':
+            rep = "\\r";
+            break;
+        case '\t':
+            rep = "\\t";
+            break;
+        default:
+            break;
+        }
+        if (rep) {
+            size_t rl = strlen(rep);
+            if (rem > rl + 1) {
+                memcpy(p, rep, rl);
+                p += rl;
+                rem -= rl;
+            }
+        } else {
+            *p++ = c;
+            rem--;
+        }
+    }
+    snprintf(
+        p, rem, "\",\"exit_code\":%d,\"truncated\":%s}", exit_code, truncated ? "true" : "false");
+
+    free(output);
+    free(argv[0]);
+    *out_result = result;
     return 0;
 }
