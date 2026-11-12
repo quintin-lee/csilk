@@ -73,7 +73,9 @@ test_mysql_real_connection(void)
     assert(q_res != nullptr);
     assert(csilk_json_array_size(q_res) == 1);
     csilk_json_t* q_row = csilk_json_array_get(q_res, 0);
-    assert(strcmp(csilk_json_string_value(csilk_json_get(q_row, "score")), "100") == 0);
+    csilk_json_t* score_val = csilk_json_get(q_row, "score");
+    assert(score_val != nullptr);
+    assert(csilk_json_as_int64(score_val, 0) == 100);
     csilk_json_free(q_res);
 
     /* 6. Transaction: Rollback */
