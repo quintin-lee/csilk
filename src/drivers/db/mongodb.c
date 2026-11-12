@@ -181,9 +181,10 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
     }
     mongodb_conn_t* conn = (mongodb_conn_t*)csilk_db_pool_get_connection(pool);
 
-    bson_error_t     error;
-    bson_t*          cmd = NULL;
-    mongoc_cursor_t* cursor = NULL;
+    bson_error_t         error;
+    bson_t*              cmd = NULL;
+    mongoc_cursor_t*     cursor = NULL;
+    mongoc_collection_t* coll = NULL;
 
     if (sql[0] == '{') {
         // Looks like a JSON command
@@ -191,13 +192,25 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
         if (!cmd) {
             return -1;
         }
-        cursor =
-            mongoc_client_command_with_opts(conn->client, conn->db_name, cmd, NULL, NULL, NULL);
+        cursor = mongoc_client_command(
+            conn->client, conn->db_name, MONGOC_QUERY_NONE, 0, 0, 0, cmd, NULL, NULL);
     } else {
         // Treat as collection name
-        mongoc_collection_t* coll = mongoc_client_get_collection(conn->client, conn->db_name, sql);
-        cursor = mongoc_collection_find_with_opts(coll, bson_new(), NULL, NULL);
-        mongoc_collection_destroy(coll);
+        coll = mongoc_client_get_collection(conn->client, conn->db_name, sql);
+        bson_t filter;
+        bson_init(&filter);
+        cursor = mongoc_collection_find_with_opts(coll, &filter, NULL, NULL);
+        bson_destroy(&filter);
+    }
+
+    if (!cursor) {
+        if (cmd) {
+            bson_destroy(cmd);
+        }
+        if (coll) {
+            mongoc_collection_destroy(coll);
+        }
+        return -1;
     }
 
     const bson_t* doc;
@@ -237,6 +250,9 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
         if (cmd) {
             bson_destroy(cmd);
         }
+        if (coll) {
+            mongoc_collection_destroy(coll);
+        }
         mongodb_free_result(result);
         return -1;
     }
@@ -244,6 +260,9 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
     mongoc_cursor_destroy(cursor);
     if (cmd) {
         bson_destroy(cmd);
+    }
+    if (coll) {
+        mongoc_collection_destroy(coll);
     }
     return 0;
 }
