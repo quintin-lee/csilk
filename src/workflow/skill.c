@@ -150,10 +150,39 @@ csilk_ai_skill_new(const csilk_skill_meta_t* meta,
     return sk;
 }
 
+static void unregister_skill_by_ptr(csilk_ai_skill_t* sk);
+
 void
 csilk_ai_skill_free(csilk_ai_skill_t* sk)
 {
+    unregister_skill_by_ptr(sk);
     free(sk);
+}
+
+/* Remove all registry entries that reference @p sk so the global registry
+ * never holds a dangling pointer.  A skill may be registered on several
+ * workflows; every entry referencing it is compacted out (O(n) shift,
+ * preserving order of the remaining valid entries).  Called from
+ * csilk_ai_skill_free before the handle is released. */
+static void
+unregister_skill_by_ptr(csilk_ai_skill_t* sk)
+{
+    if (!sk || !g_skill_mutex_ready) {
+        return;
+    }
+    csilk_mutex_lock(&g_skill_mutex);
+    size_t cur = 0;
+    for (size_t i = 0; i < g_skill_reg_count; i++) {
+        if (g_skill_regs[i].sk == sk) {
+            continue; /* drop this entry */
+        }
+        if (cur != i) {
+            g_skill_regs[cur] = g_skill_regs[i];
+        }
+        cur++;
+    }
+    g_skill_reg_count = cur;
+    csilk_mutex_unlock(&g_skill_mutex);
 }
 
 /* --- Loading --- */
