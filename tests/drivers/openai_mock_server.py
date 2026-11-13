@@ -26,6 +26,8 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
             self.handle_chat_completions(body)
         elif self.path.endswith('/embeddings'):
             self.handle_embeddings(body)
+        elif self.path.endswith('/messages'):
+            self.handle_anthropic_messages(body)
         else:
             self.send_response(404)
             self.end_headers()
@@ -255,6 +257,80 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(out_bytes)))
         self.end_headers()
         self.wfile.write(out_bytes)
+
+    def handle_anthropic_messages(self, body):
+        is_stream = body.get('stream', False)
+        tools = body.get('tools', [])
+        messages = body.get('messages', [])
+        last_msg = messages[-1].get('content', '') if messages else ''
+
+        if is_stream:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Connection', 'close')
+            self.end_headers()
+
+            events = [
+                {"type": "message_start", "message": {"id": "msg_mock", "type": "message", "role": "assistant", "model": "claude-3-5-sonnet", "usage": {"input_tokens": 12, "output_tokens": 0}}}
+            ]
+
+            if tools or "weather" in last_msg.lower():
+                events.extend([
+                    {"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu_mock_001", "name": "get_weather", "input": {}}},
+                    {"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": "{\"city\": \"Beijing\"}"}},
+                    {"type": "content_block_stop", "index": 0},
+                    {"type": "message_delta", "delta": {"stop_reason": "tool_use"}, "usage": {"output_tokens": 8}}
+                ])
+            else:
+                events.extend([
+                    {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+                    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hello Claude!"}},
+                    {"type": "content_block_stop", "index": 0},
+                    {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 5}}
+                ])
+
+            for ev in events:
+                line = f"event: {ev['type']}\ndata: {json.dumps(ev)}\n\n"
+                self.wfile.write(line.encode('utf-8'))
+                self.wfile.flush()
+            self.close_connection = True
+        else:
+            if tools or "weather" in last_msg.lower():
+                resp = {
+                    "id": "msg_mock",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": "claude-3-5-sonnet",
+                    "content": [{
+                        "type": "tool_use",
+                        "id": "toolu_mock_001",
+                        "name": "get_weather",
+                        "input": {"city": "Beijing"}
+                    }],
+                    "stop_reason": "tool_use",
+                    "usage": {"input_tokens": 12, "output_tokens": 8}
+                }
+            else:
+                resp = {
+                    "id": "msg_mock",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": "claude-3-5-sonnet",
+                    "content": [{
+                        "type": "text",
+                        "text": "Hello from Claude mock."
+                    }],
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 6}
+                }
+
+            out_bytes = json.dumps(resp).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(out_bytes)))
+            self.end_headers()
+            self.wfile.write(out_bytes)
 
 
 def run_server(port=18081):

@@ -229,6 +229,7 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/ai_trace.c
     src/drivers/ai/openai.c
     src/drivers/ai/ollama.c
+    src/drivers/ai/anthropic.c
     src/drivers/ai/tool_registry.c
 )
 
