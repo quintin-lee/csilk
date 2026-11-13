@@ -33,17 +33,36 @@ typedef struct {
     csilk_json_t* error;      /* { "code": int, "message": string, "data": optional } */
 } csilk_mcp_msg_t;
 
+typedef struct {
+    char* uri;
+    char* name;
+    char* mime_type;
+    char* static_text;
+    char* (*read_fn)(const char* uri, void* user_data);
+    void* user_data;
+} csilk_mcp_resource_entry_t;
+
+typedef struct {
+    char* name;
+    char* description;
+    char* prompt_template;
+} csilk_mcp_prompt_entry_t;
+
 /**
  * @brief Internal MCP Server structure.
  */
 struct csilk_mcp_server_s {
-    char                    name[128];
-    char                    version[32];
-    csilk_wf_tool_entry_t** tools;
-    size_t                  tool_count;
-    csilk_wf_t**            workflows;
-    size_t                  workflow_count;
-    csilk_mutex_t           mutex;
+    char                         name[128];
+    char                         version[32];
+    csilk_wf_tool_entry_t**      tools;
+    size_t                       tool_count;
+    csilk_mcp_resource_entry_t** resources;
+    size_t                       resource_count;
+    csilk_mcp_prompt_entry_t**   prompts;
+    size_t                       prompt_count;
+    csilk_wf_t**                 workflows;
+    size_t                       workflow_count;
+    csilk_mutex_t                mutex;
 };
 
 /**

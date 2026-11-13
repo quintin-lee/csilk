@@ -43,6 +43,9 @@ run_stdio_test(const char* input, const char* expected)
             .user_data = NULL,
         };
         csilk_mcp_server_register_tool(server, &tool);
+        csilk_mcp_server_register_resource(
+            server, "csilk://readme", "Readme", "text/plain", "MCP Docs", NULL, NULL);
+        csilk_mcp_server_register_prompt(server, "greeting", "User greeting", "Hello {{name}}");
         csilk_mcp_server_start_stdio(server);
         csilk_mcp_server_free(server);
         _exit(0);
@@ -114,12 +117,50 @@ test_missing_params(void)
     printf("  passed\n");
 }
 
+static void
+test_ping(void)
+{
+    printf("Testing MCP ping request...\n");
+    const char* input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n";
+    run_stdio_test(input, "result");
+    printf("  passed\n");
+}
+
+static void
+test_resources(void)
+{
+    printf("Testing MCP resources/list and resources/read...\n");
+    const char* list = "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/list\"}\n";
+    run_stdio_test(list, "csilk://readme");
+
+    const char* read_cmd = "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"resources/"
+                           "read\",\"params\":{\"uri\":\"csilk://readme\"}}\n";
+    run_stdio_test(read_cmd, "MCP Docs");
+    printf("  passed\n");
+}
+
+static void
+test_prompts(void)
+{
+    printf("Testing MCP prompts/list and prompts/get...\n");
+    const char* list = "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"prompts/list\"}\n";
+    run_stdio_test(list, "greeting");
+
+    const char* get_cmd = "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"prompts/"
+                          "get\",\"params\":{\"name\":\"greeting\"}}\n";
+    run_stdio_test(get_cmd, "Hello {{name}}");
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
     test_initialize();
+    test_ping();
     test_tools_list();
     test_tools_call();
+    test_resources();
+    test_prompts();
     test_invalid_method();
     test_missing_params();
     printf("All test_mcp_stdio tests passed!\n");
