@@ -169,7 +169,7 @@ test_async_op_timeout_cancellation_active_timer(void)
 
     /* Run event loop ticks to let timer close callback finish */
     for (int i = 0; i < 5; i++) {
-        csilk_io_run((csilk_io_loop_t*)uv_default_loop(), CSILK_IO_RUN_NOWAIT);
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
     }
 
     csilk_test_ctx_free(c);

@@ -48,6 +48,15 @@ test_sendfile_zero_length(void)
     printf("  passed\n");
 }
 
+static int g_sendfile_cb_called = 0;
+
+static void
+sendfile_zero_len_cb(csilk_io_fs_t* r)
+{
+    (void)r;
+    g_sendfile_cb_called = 1;
+}
+
 static void
 test_sendfile_zero_length_with_callback(void)
 {
@@ -57,18 +66,12 @@ test_sendfile_zero_length_with_callback(void)
 
     csilk_io_fs_t req;
     memset(&req, 0, sizeof(req));
-    int cb_called = 0;
+    g_sendfile_cb_called = 0;
 
-    void cb(csilk_io_fs_t * r)
-    {
-        (void)r;
-        cb_called = 1;
-    }
-
-    int rc = csilk_io_fs_sendfile(&loop, &req, -1, -1, 0, 0, (void*)cb);
+    int rc = csilk_io_fs_sendfile(&loop, &req, -1, -1, 0, 0, (void*)sendfile_zero_len_cb);
     csilk_io_loop_close(&loop);
     assert(rc == 0);
-    assert(cb_called == 1);
+    assert(g_sendfile_cb_called == 1);
     printf("  passed\n");
 }
 

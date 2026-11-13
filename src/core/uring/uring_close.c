@@ -82,6 +82,7 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
     close_op->op.cancel = csilk_io_close_op_cancel;
     close_op->handle = handle;
     close_op->cb = cb;
+    csilk_io_op_submit(&close_op->op);
 
     if (handle->type == CSILK_IO_HANDLE_TIMER) {
         csilk_io_timer_stop((csilk_io_timer_t*)handle);
@@ -114,7 +115,11 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
         handle->fd = -1;
     }
 
-    _uring_deferred_push((csilk_io_work_t*)close_op, _csilk_uring_deferred_close_cb, 0);
+    if (_uring_deferred_push((csilk_io_work_t*)close_op, _csilk_uring_deferred_close_cb, 0) != 0) {
+        csilk_io_op_complete(&close_op->op, 0);
+        csilk_io_op_retire(&close_op->op);
+        free(close_op);
+    }
 }
 
 #endif

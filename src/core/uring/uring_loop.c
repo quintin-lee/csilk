@@ -64,6 +64,15 @@ csilk_io_loop_close(csilk_io_loop_t* loop)
         return -1;
     }
     _uring_deferred_drain_all();
+    struct io_uring_cqe* cqe = NULL;
+    while (io_uring_peek_cqe(&loop->ring, &cqe) == 0 && cqe) {
+        uring_op_context_t* op_ctx = (uring_op_context_t*)(uintptr_t)cqe->user_data;
+        if (op_ctx && op_ctx->slot_idx == UINT32_MAX) {
+            free(op_ctx);
+        }
+        io_uring_cqe_seen(&loop->ring, cqe);
+        cqe = NULL;
+    }
     io_uring_queue_exit(&loop->ring);
     if (loop->op_pool) {
         free(loop->op_pool);
