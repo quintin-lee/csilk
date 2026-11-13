@@ -157,7 +157,11 @@ reset_hot_state(csilk_client_t* client)
     client->read_paused = 0;
     client->read_active = 0;
     client->keep_alive = 0;
-    client->primary_write_in_flight = 0;
+    if (client->primary_write_in_flight) {
+        free(client->primary_write_req.data);
+        client->primary_write_req.data = NULL;
+        client->primary_write_in_flight = 0;
+    }
     client->pending_write_bytes = 0;
     client->protocol = CSILK_PROTO_HTTP1;
     client->total_header_size = 0;
