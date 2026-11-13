@@ -22,9 +22,23 @@ test_wf_cluster_state_machine(void)
     csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
     assert(node != nullptr);
 
+    /* Null safety checks */
+    assert(csilk_wf_cluster_bind_raft(NULL, node) == -1);
+    assert(csilk_wf_cluster_bind_raft(mgr, NULL) == -1);
+    assert(csilk_wf_cluster_replicate_cmd(NULL, 0x11, "cmd") == -1);
+    assert(csilk_wf_cluster_replicate_cmd(node, 0x11, NULL) == -1);
+
     int res = csilk_wf_cluster_bind_raft(mgr, node);
     assert(res == 0);
 
+    /* Follower node cannot replicate commands (rejects non-leader writes) */
+    assert(csilk_wf_cluster_replicate_cmd(node, 0x11, "{\"node\":\"ai_node_1\"}") == -1);
+
+    /* Start node (single node with 0 peers becomes leader automatically) */
+    assert(csilk_raft_node_start(node) == 0);
+    assert(csilk_raft_get_role(node) == CSILK_RAFT_ROLE_LEADER);
+
+    /* Leader mode replicates commands into Raft WAL */
     res = csilk_wf_cluster_replicate_cmd(node, 0x11, "{\"node\":\"ai_node_1\"}");
     assert(res == 0);
 
