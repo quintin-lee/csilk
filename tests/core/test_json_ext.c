@@ -38,8 +38,8 @@ test_json_roundtrip(void)
     size_t      len;
     const char* body = csilk_get_response_body(c, &len);
     int         ok_body = body && strstr(body, "\"id\"") && strstr(body, "42") &&
-                  strstr(body, "\"name\"") && strstr(body, "Alice");
-    int ok_status = csilk_get_status(c) == 200;
+                          strstr(body, "\"name\"") && strstr(body, "Alice");
+    int         ok_status = csilk_get_status(c) == 200;
     int ok_ct = csilk_test_ctx_count_response_headers(c, "Content-Type", "application/json") >= 1;
 
     if (ok_body && ok_status && ok_ct) {
