@@ -1,26 +1,24 @@
-# csilk 演进路线图 (v0.6.2 → v1.0.0 LTS)
+# csilk 演进路线图 (v0.7.0 → v1.0.0 LTS)
 
-> **基线版本**: `0.6.2` | **规划日期**: `2026-11-13` | **目标里程碑**: `v1.0.0 LTS`  
+> **基线版本**: `0.7.0` | **规划日期**: `2026-11-13` | **目标里程碑**: `v1.0.0 LTS`  
 > [English](../../en/meta/ROADMAP.md) | [中文](ROADMAP.md)
 
 ---
 
-## 一、当前基线与现状盘点（v0.6.2）
+## 一、当前基线与现状盘点（v0.7.0）
 
-`v0.6.2` 已完成模块化 CMake Target DAG 拆分、HTTP/1.1 & HTTP/2 零拷贝优化、三大关系型数据库（SQLite / PostgreSQL / MySQL）Flyway 风格迁移引擎与原生预编译语句、真实数据库 CI 容器测试矩阵、Agent Skills（L1/L2/L3 渐进式披露与 MQ 远端闭环执行）、ReAct 自主工具循环、MCP Stdio 进程池与 Tool Registry 自动发现桥接、以及全平台 CI（Ubuntu 24.04 + macOS 15 ARM64 + Wheel 打包）。
+`v0.7.0` 已完成模块化 CMake Target DAG 纯化解耦、原生 Anthropic Messages API (Claude) 驱动、Ollama 流式与工具调用对齐、全栈 MCP Server 端点（resources/prompts/ping/SSE）、Raft WAL 分布式工作流命令复制、集群 Skill Worker 心跳追踪、三大关系型数据库原生预编译语句与迁移引擎、真实数据库 CI 容器测试矩阵、以及停机在途写排空零 LSan 抑制。
 
-通过代码审计，当前主要待收尾的持久化与分布式扩展演进点如下：
+通过代码审计，迈向 `v1.0.0 LTS` 主要待收尾的持久化与分布式扩展演进点如下：
 
 | 领域 | 当前现状 / 已知缺口 | 代码位置 |
 | :--- | :--- | :--- |
-| **Workflow 集群状态机** | 节点关联与派发校验仍为内存占位实现（Placeholder），尚未接入 WAL 与跨节点恢复 | `src/workflow/wf_cluster_sm.c` |
-| **MCP 服务端全栈** | Server 部分方法返回 `Method not implemented`；仅支持本地 Stdio 池与 POST，缺远程持久化 SSE/Streamable HTTP 传输 | `src/protocols/mcp/mcp_server.c` |
-| **LLM 驱动一致性** | `openai.c` 已支持流式 `tool_calls` 重组与用量统计；`ollama.c` 尚待对齐；缺乏原生 Anthropic Messages API 驱动 | `src/drivers/ai/` |
-| **Raft 磁盘落盘** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘落盘与日志截断 | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
+| **Raft 磁盘落盘** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘文件顺序追加落盘与快照压缩 | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
 | **分布式限流 TTL** | Redis 存储后端 `incr` 未返回精确剩余窗口 TTL，分布式限流 `Retry-After` 保守回退为整窗时长 | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
 | **WASM / WASI 沙箱** | 当前仅做魔数校验与 Host Import stub，未接入真实字节码执行引擎（如 WAMR） | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
 | **OTLP 追踪闭环** | `otlp_trace.c` 存在保留 no-op stub，HTTP → DB → AI/Tool 跨模块子 Span 尚未全链路打通 | `src/middleware/otlp_trace.c` |
-| **ABI 不透明化收尾** | Phase A/B 已完成，尚待推进 [ABI 演进路线图](../design/abi-opaque-roadmap.md) Phase C（测试/示例迁移）与 Phase D（彻底移除公共布局头、锁定 SOVERSION 1） | `include/csilk/`, `cmake/libcsilk.map` |
+| **ABI 不透明化最终收尾** | Phase A/B/C 已完成，尚待推进 [ABI 演进路线图](../design/abi-opaque-roadmap.md) Phase D（将内部布局头彻底移入 `src/core/internal/`，导出符号严格收敛，锁定 SOVERSION 1） | `include/csilk/`, `cmake/libcsilk.map` |
+| **原生 io_uring 长期稳定性** | 原生 `CSILK_USE_URING=ON` 仍处于试验期，CI 默认使用 `libuv + UV_USE_IO_URING=1` | `src/core/uring/` |
 
 ---
 

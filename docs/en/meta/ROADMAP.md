@@ -1,23 +1,24 @@
-# csilk Roadmap (v0.6.2 → v1.0.0 LTS)
+# csilk Roadmap (v0.7.0 → v1.0.0 LTS)
 
-> **Baseline**: `0.6.2` | **Planned**: `2026-11-13` | **Target Milestone**: `v1.0.0 LTS`  
+> **Baseline**: `0.7.0` | **Planned**: `2026-11-13` | **Target Milestone**: `v1.0.0 LTS`  
 > [English](ROADMAP.md) | [中文](../../zh-CN/meta/ROADMAP.md)
 
 ---
 
-## 1. Current Baseline & Gap Inventory (v0.6.2)
+## 1. Current Baseline & Gap Inventory (v0.7.0)
 
-`v0.6.2` established the modular CMake target DAG, zero-copy HTTP/1.1 & HTTP/2 paths, three major relational databases (SQLite / PostgreSQL / MySQL) with native prepared statements and Flyway-style database migrations, live database container CI tests, Anthropic-semantics Agent Skills (L1/L2/L3 with remote MQ execution and result collection), an autonomous ReAct tool-calling loop, an MCP stdio process pool and live tool-discovery registry bridge, and full cross-platform CI (Ubuntu 24.04 + macOS 15 ARM64 + Wheel packaging).
+`v0.7.0` completed modular CMake Target DAG decoupling, native Anthropic Messages API (Claude) driver, Ollama streaming and tool calling parity, full-stack MCP Server endpoints (resources/prompts/ping/SSE), Raft WAL distributed command replication, clustered Skill Worker heartbeat tracking, three major relational databases with native prepared statements and migrations, live database container CI tests, and shutdown write drain with zero LSan suppressions.
 
-A codebase audit shows the following remaining items to address on the road to `v1.0.0 LTS`:
+A codebase audit shows the following remaining items on the road to `v1.0.0 LTS`:
 
 | Area | Current State / Known Gap | Primary Files |
 | :--- | :--- | :--- |
-| **Workflow Cluster SM** | Node association and dispatch validation remain in-memory placeholders without WAL durability or cross-node recovery | `src/workflow/wf_cluster_sm.c` |
-| **MCP Server Full-Stack** | Server returns `Method not implemented` on several endpoints; only stdio pool and basic HTTP POST transport exist (no remote persistent SSE / Streamable HTTP) | `src/protocols/mcp/mcp_server.c` |
-| **LLM Driver Parity** | `openai.c` supports streamed `tool_calls` reassembly and usage tracking; `ollama.c` lacks parity; no native Anthropic Messages API driver yet | `src/drivers/ai/` |
-| **Raft Durability** | `raft_wal.c` and `raft_snapshot.c` are in-memory index-advancing stubs rather than disk-persisted logs/snapshots | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
+| **Raft Disk Durability** | `raft_wal.c` and `raft_snapshot.c` are in-memory index-advancing stubs rather than disk-persisted sequential log files and compaction | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
 | **Distributed Rate-Limit TTL** | Storage `incr` does not return remaining window TTL, forcing `ratelimit.c` to fall back to the full window for `Retry-After` | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
+| **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine (such as WAMR) | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
+| **OTLP Trace Closure** | `otlp_trace.c` contains a reserved no-op stub; automatic HTTP → DB → AI/Tool child span propagation is incomplete | `src/middleware/otlp_trace.c` |
+| **ABI Opaque Final Closure** | Phases A, B, and C are complete; [ABI Opaque Roadmap](../design/abi-opaque-roadmap.md) Phase D (moving layout headers to `src/core/internal/`, locking SOVERSION 1) remains | `include/csilk/`, `cmake/libcsilk.map` |
+| **Native io_uring Stability** | Native `CSILK_USE_URING=ON` remains experimental; CI defaults to `libuv + UV_USE_IO_URING=1` | `src/core/uring/` |
 | **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine (such as WAMR) | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
 | **OTLP Trace Closure** | `otlp_trace.c` contains a reserved no-op stub; automatic HTTP → DB → AI/Tool child span propagation is incomplete | `src/middleware/otlp_trace.c` |
 | **ABI Opaque Closure** | Phases A & B are complete; [ABI Opaque Roadmap](../design/abi-opaque-roadmap.md) Phase C (tests/examples migration) and Phase D (internalizing layout headers, locking SOVERSION 1) remain | `include/csilk/`, `cmake/libcsilk.map` |

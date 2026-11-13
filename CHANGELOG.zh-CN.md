@@ -9,6 +9,38 @@
 
 ## [0.7.0] - 2026-11-13
 
+### 新增
+- **原生 Anthropic Messages API (Claude) 驱动** (`csilk/drivers/ai.h`, `src/drivers/ai/anthropic.c`)：
+  - 支持 Anthropic 原生 Messages 接口（`POST /v1/messages`），同时注册 `"anthropic"` 与 `"claude"` 双驱动别名。
+  - 完全适配 Anthropic JSON 结构：顶层 `system` 提示词抽取、`messages` 数组与基于 `input_schema` 的工具定义转换。
+  - 支持 SSE 流式传输（`stream = true`）、`tool_use` 跨块动态参数拼接、思考链（CoT）内容提取至 `res->reasoning_content` 及输入/输出 Token 统计。
+- **Ollama 驱动流式与工具调用能力对齐** (`src/drivers/ai/ollama.c`)：
+  - 新增 NDJSON 流式行解析器，实时触发 `on_chunk` 增量回调。
+  - 增加函数工具定义序列化与 `tool_calls` 响应解析（流式与非流式模式均完全支持）。
+- **全栈 Model Context Protocol (MCP) 服务端端点与 SSE 传输** (`csilk/protocols/mcp.h`, `src/protocols/mcp/mcp_server.c`)：
+  - 新增 `resources/list` 与 `resources/read`：支持静态内容与动态回调资源注册（`csilk_mcp_server_register_resource`）。
+  - 新增 `prompts/list` 与 `prompts/get`：支持参数化模板注册与动态提取（`csilk_mcp_server_register_prompt`）。
+  - 实现 `ping` 探测端点，并在 `initialize` 中完整宣告资源与提示词能力。
+  - 接入双向长连接 SSE 传输层（`GET <prefix>/sse` 发送标准 `endpoint` 初始事件）。
+- **Raft WAL 分布式工作流命令复制实装** (`src/workflow/wf_cluster_sm.c`, `include/csilk/app/workflow_dsl.h`)：
+  - 实装 `csilk_wf_cluster_bind_raft()` 与 `csilk_wf_cluster_replicate_cmd()`，将二进制命令帧直接追加到 Raft Leader 日志序列，并严密拦截非 Leader 节点写入。
+- **集群 Skill Worker 心跳追踪与故障切换 (Failover)** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`)：
+  - 新增 `csilk_ai_skill_worker_heartbeat()` 记录 Worker 节点健康时间戳，用于集群多节点轮询与离线自动故障转移。
+
+### 变更与重构
+- **解耦 MCP 与数据库模块** (`cmake/sources.cmake`, `cmake/targets.cmake`)：
+  - 将 `src/protocols/mcp/*.c` 从 `CSILK_DB_SOURCES` 迁至 `CSILK_PROTOCOLS_SOURCES`，还原 MCP 文件至协议子系统。
+  - 移除 `csilk_db` 对 `CURL::libcurl` 与 `csilk_ai` 的反向依赖，确保 `libcsilk-db.so` 纯粹聚焦数据持久化。
+- **推进 ABI 不透明化转换 (Phase C)** (`cmake/options.cmake`)：
+  - 增加 `CSILK_DEPRECATE_CTX_TYPES` 选项，为未来完全隐藏内部结构体布局提供编译期告警辅助。
+
+### 修复
+- **停机在途写排空与 LSan 白名单清零** (`src/core/server/connection_pool.c`, `cmake/.lsan-suppressions`)：
+  - 在 `reset_hot_state()` 回收连接时释放未完成的 `primary_write_req.data` 缓冲区，杜绝停机时未完成写请求导致的内存残留。
+  - 从 `cmake/.lsan-suppressions` 中彻底移除 `leak:csilk_client_write` 与 `leak:_csilk_send_data_owned` 历史抑制规则。
+- **Anthropic 流式响应内存清理** (`src/drivers/ai/anthropic.c`)：
+  - 消除流式模式下未使用的 `resp_buf.body` 缓冲区分配。
+
 ## [0.6.2] - 2026-11-12
 
 ### 新增
