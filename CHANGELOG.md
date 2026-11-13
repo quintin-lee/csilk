@@ -12,8 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Embedded APM Dashboard Route** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`):
   - Connected `csilk_otlp_serve_apm_ui()` and exported `csilk_otlp_apm_ui_handler()` to serve the embedded `share/csilk/apm_ui.html` real-time OpenTelemetry trace explorer.
+- **Real Database Container Test Matrix in CI** (`.github/workflows/ci.yml`, `tests/drivers/db/`):
+  - Added live service containers for PostgreSQL, MySQL, Redis, and MongoDB in GitHub Actions.
+  - Added real connection, DDL, DML, prepared statement, and migration tests in `test_db_postgres.c`, `test_db_mysql.c`, `test_db_redis.c`, and `test_mongodb.c`.
 
 ### Fixed
+- **ASAN Instrumentation & Core Memory Safety Hardening** (`cmake/targets.cmake`, `src/core/`, `src/drivers/db/redis.c`):
+  - Ensured ASAN flags propagate cleanly to all internal OBJECT libraries and package consumer smoke tests.
+  - Fixed RCU hot-reload manager lifecycle to eliminate graceful-shutdown memory and handle leaks.
+  - Fixed potential buffer overflow in HTTP/1.1 101 Switching Protocols response serialization.
+  - Added format string protection for Redis command construction and fixed double-free / UAF paths.
+  - Preserved MongoDB collection handle lifetime throughout cursor iteration in `mongoc_client_command`.
 - **CMake Export Package Target Split Test Parallelization** (`tests/cmake/test_package.cmake`, `CMakeLists.txt`):
   - Passed `--parallel` to `cmake --build` invocations in `test_package.cmake` and increased test timeout to 180s to prevent cold-build timeouts during full test suite execution.
 - **CSRF Token Security & PRNG Fail-Closed** (`src/middleware/csrf.c`, `tests/middleware/test_csrf_ext.c`):

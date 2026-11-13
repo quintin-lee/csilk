@@ -1,29 +1,26 @@
-# csilk Roadmap (v0.6.0 → v1.0.0 LTS)
+# csilk Roadmap (v0.6.2 → v1.0.0 LTS)
 
-> **Baseline**: `0.6.0` | **Planned**: `2026-11-12` | **Target Milestone**: `v1.0.0 LTS`  
+> **Baseline**: `0.6.2` | **Planned**: `2026-11-13` | **Target Milestone**: `v1.0.0 LTS`  
 > [English](ROADMAP.md) | [中文](../../zh-CN/meta/ROADMAP.md)
 
 ---
 
-## 1. Current Baseline & Gap Inventory (v0.6.0)
+## 1. Current Baseline & Gap Inventory (v0.6.2)
 
-`v0.6.0` established the modular CMake target DAG, zero-copy HTTP/1.1 & HTTP/2 paths, Flyway-style database schema migrations, Anthropic-semantics Agent Skills (L1/L2/L3 progressive disclosure), an autonomous ReAct tool-calling loop, an MCP stdio process pool, and full cross-platform CI (Ubuntu 24.04 + macOS 15 ARM64 + Wheel packaging).
+`v0.6.2` established the modular CMake target DAG, zero-copy HTTP/1.1 & HTTP/2 paths, three major relational databases (SQLite / PostgreSQL / MySQL) with native prepared statements and Flyway-style database migrations, live database container CI tests, Anthropic-semantics Agent Skills (L1/L2/L3 with remote MQ execution and result collection), an autonomous ReAct tool-calling loop, an MCP stdio process pool and live tool-discovery registry bridge, and full cross-platform CI (Ubuntu 24.04 + macOS 15 ARM64 + Wheel packaging).
 
-A codebase audit shows the following remaining stubs, placeholders, and architectural gaps to close on the road to `v1.0.0 LTS`:
+A codebase audit shows the following remaining items to address on the road to `v1.0.0 LTS`:
 
 | Area | Current State / Known Gap | Primary Files |
 | :--- | :--- | :--- |
-| **Agent Skill Remote Exec** | `csilk_ai_skill_invoke_remote()` publishes `csilk.skill.invoke` and returns `dispatched` immediately; worker-side subscriber and `csilk.skill.result` collection are unimplemented | `src/workflow/skill.c` |
 | **Workflow Cluster SM** | Node association and dispatch validation remain in-memory placeholders without WAL durability or cross-node recovery | `src/workflow/wf_cluster_sm.c` |
-| **MCP Full-Stack** | `mcp_client.c` registers placeholder tools; `mcp_server.c` returns `Method not implemented` on several endpoints; only stdio pool transport exists (no remote SSE / Streamable HTTP) | `src/protocols/mcp/mcp_client.c`, `mcp_server.c` |
+| **MCP Server Full-Stack** | Server returns `Method not implemented` on several endpoints; only stdio pool and basic HTTP POST transport exist (no remote persistent SSE / Streamable HTTP) | `src/protocols/mcp/mcp_server.c` |
 | **LLM Driver Parity** | `openai.c` supports streamed `tool_calls` reassembly and usage tracking; `ollama.c` lacks parity; no native Anthropic Messages API driver yet | `src/drivers/ai/` |
 | **Raft Durability** | `raft_wal.c` and `raft_snapshot.c` are in-memory index-advancing stubs rather than disk-persisted logs/snapshots | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
-| **DB Driver Matrix** | SQLite and PostgreSQL provide native `stmt_prepare` typed bindings; MySQL lacks `MYSQL_STMT` support | `src/drivers/db/mysql.c` |
 | **Distributed Rate-Limit TTL** | Storage `incr` does not return remaining window TTL, forcing `ratelimit.c` to fall back to the full window for `Retry-After` | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
-| **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
+| **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine (such as WAMR) | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
 | **OTLP Trace Closure** | `otlp_trace.c` contains a reserved no-op stub; automatic HTTP → DB → AI/Tool child span propagation is incomplete | `src/middleware/otlp_trace.c` |
 | **ABI Opaque Closure** | Phases A & B are complete; [ABI Opaque Roadmap](../design/abi-opaque-roadmap.md) Phase C (tests/examples migration) and Phase D (internalizing layout headers, locking SOVERSION 1) remain | `include/csilk/`, `cmake/libcsilk.map` |
-| **Coverage & Multi-Worker Teardown** | Line coverage stands at **69%** (12,609 / 18,281 lines); `test_multi_worker` shows retained pool/arena leaks on exit under GCC ASAN | `src/core/server/connection_pool.c`, `.gcovr` |
 
 ---
 

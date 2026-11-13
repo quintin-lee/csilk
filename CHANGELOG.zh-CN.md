@@ -12,8 +12,17 @@
 ### 新增
 - **内置 APM 监控仪表盘页面路由** (`csilk/middleware/otlp_trace.h`, `src/middleware/otlp_trace.c`)：
   - 接入 `csilk_otlp_serve_apm_ui()` 并导出 `csilk_otlp_apm_ui_handler()`，将内置的 `share/csilk/apm_ui.html` 实时 OpenTelemetry 追踪可视化界面挂载到应用端点。
+- **真实数据库驱动 CI 容器化测试矩阵** (`.github/workflows/ci.yml`, `tests/drivers/db/`)：
+  - 在 GitHub Actions CI 中引入真实的 PostgreSQL、MySQL、Redis 与 MongoDB 运行容器服务。
+  - 新增 `test_db_postgres.c`、`test_db_mysql.c`、`test_db_redis.c` 与 `test_mongodb.c`，完整覆盖真实网络连接、建表、写入、原生预编译语句及强类型字段提取测试。
 
 ### 修复
+- **ASAN 全量插桩与核心内存安全深度加固** (`cmake/targets.cmake`, `src/core/`, `src/drivers/db/redis.c`)：
+  - 保证 ASAN 编译与链接标志完整透传至内部所有 OBJECT 库以及导出包消费冒烟测试。
+  - 修复 RCU 热重载管理器的生命周期释放竞态，消除优雅停机时的内存与句柄残留。
+  - 修复 HTTP/1.1 101 Switching Protocols 响应序列化可能产生的缓冲区溢出边界风险。
+  - 为 Redis 命令拼接引入格式化字符串防注入保护，并修复相关 Double-Free / UAF 路径。
+  - 在 `mongoc_client_command` 执行与游标遍历期间保持 Collection 句柄生命周期。
 - **CMake 导出包 Target 拆分测试并行化与超时加固** (`tests/cmake/test_package.cmake`, `CMakeLists.txt`)：
   - 在 `test_package.cmake` 中为 `cmake --build` 补充 `--parallel` 参数，并将全量测试中的执行超时从 120s 提升至 180s，彻底杜绝冷构建全模块编译超时。
 - **CSRF Cookie 安全增强与随机数 Fail-Closed** (`src/middleware/csrf.c`, `tests/middleware/test_csrf_ext.c`)：
