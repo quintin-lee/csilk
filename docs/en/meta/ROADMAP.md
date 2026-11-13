@@ -7,21 +7,19 @@
 
 ## 1. Current Baseline & Gap Inventory (v0.7.0)
 
-`v0.7.0` completed modular CMake Target DAG decoupling, native Anthropic Messages API (Claude) driver, Ollama streaming and tool calling parity, full-stack MCP Server endpoints (resources/prompts/ping/SSE), Raft WAL distributed command replication, clustered Skill Worker heartbeat tracking, three major relational databases with native prepared statements and migrations, live database container CI tests, and shutdown write drain with zero LSan suppressions.
+`v0.7.0` completed modular CMake Target DAG decoupling, native Anthropic Messages API (Claude) driver, Ollama streaming and tool calling parity, full-stack MCP Server endpoints (resources/prompts/ping/SSE), Raft WAL distributed command replication, clustered Skill Worker heartbeat tracking, three major relational databases (SQLite/PostgreSQL/MySQL `MYSQL_STMT`) with native prepared statements and migrations, live database container CI tests, and shutdown write drain with zero LSan suppressions.
 
 A codebase audit shows the following remaining items on the road to `v1.0.0 LTS`:
 
 | Area | Current State / Known Gap | Primary Files |
 | :--- | :--- | :--- |
-| **Raft Disk Durability** | `raft_wal.c` and `raft_snapshot.c` are in-memory index-advancing stubs rather than disk-persisted sequential log files and compaction | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
-| **Distributed Rate-Limit TTL** | Storage `incr` does not return remaining window TTL, forcing `ratelimit.c` to fall back to the full window for `Retry-After` | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
+| **Raft Disk Durability** | `raft_wal.c` and `raft_snapshot.c` are in-memory index-advancing stubs rather than disk-persisted sequential log files, compaction, and multi-node election | `src/messaging/raft_wal.c`, `raft_snapshot.c`, `raft_consensus.c` |
+| **Distributed Rate-Limit TTL** | Redis `INCR`+`EXPIRE` is non-atomic and `csilk_storage_driver_t` does not return remaining window TTL, forcing `ratelimit.c` to fall back to the full window for `Retry-After` | `src/drivers/db/redis_storage.c`, `src/middleware/ratelimit.c`, `sliding_ratelimit.c` |
+| **Native io_uring Stability** | Native `CSILK_USE_URING=ON` hits `invalid-free` crashes in integration tests; CI defaults to `libuv + UV_USE_IO_URING=1` and `.gcovr` excludes `uring_vector.c` | `src/core/uring/`, `.github/workflows/ci.yml`, `.gcovr` |
+| **True HNSW Graph Traversal** | `csilk_hnsw_insert` only chains layer-0 predecessors and `csilk_hnsw_search` scans only the first `k` nodes without sorting or multi-layer skip-graph search | `src/drivers/vector/vector_hnsw.c` |
+| **OTLP Trace Closure** | `otlp_trace.c` uses a hardcoded demo `trace_id`; automatic HTTP → DB → AI/Tool child span propagation and async batch export are incomplete | `src/middleware/otlp_trace.c`, `otlp_exporter.c` |
 | **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine (such as WAMR) | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
-| **OTLP Trace Closure** | `otlp_trace.c` contains a reserved no-op stub; automatic HTTP → DB → AI/Tool child span propagation is incomplete | `src/middleware/otlp_trace.c` |
-| **ABI Opaque Final Closure** | Phases A, B, and C are complete; [ABI Opaque Roadmap](../design/abi-opaque-roadmap.md) Phase D (moving layout headers to `src/core/internal/`, locking SOVERSION 1) remains | `include/csilk/`, `cmake/libcsilk.map` |
-| **Native io_uring Stability** | Native `CSILK_USE_URING=ON` remains experimental; CI defaults to `libuv + UV_USE_IO_URING=1` | `src/core/uring/` |
-| **WASM / WASI Sandbox** | Currently limited to magic-number checks and minimal host-import stubs without a bytecode execution engine (such as WAMR) | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
-| **OTLP Trace Closure** | `otlp_trace.c` contains a reserved no-op stub; automatic HTTP → DB → AI/Tool child span propagation is incomplete | `src/middleware/otlp_trace.c` |
-| **ABI Opaque Closure** | Phases A & B are complete; [ABI Opaque Roadmap](../design/abi-opaque-roadmap.md) Phase C (tests/examples migration) and Phase D (internalizing layout headers, locking SOVERSION 1) remain | `include/csilk/`, `cmake/libcsilk.map` |
+| **Opaque ABI & Cross-Language Gate** | `include/csilk/` no longer exposes `ctx_types.h`; remaining work covers `CSILK_DEPRECATE_CTX_TYPES` test/example audit, automated C/Python ABI layout checks, and Phase D symbol/SOVERSION 1 freeze | `include/csilk/`, `cmake/libcsilk.map`, `python/csilk/lib.py` |
 
 ---
 
@@ -29,9 +27,9 @@ A codebase audit shows the following remaining items on the road to `v1.0.0 LTS`
 
 ```mermaid
 flowchart LR
-    V06["v0.6.0 (Baseline)<br/>Agent Skills / DB Migration<br/>Zero-Copy HTTP2 / Modular CMake"] --> V07["v0.7.0<br/>Distributed AI & Agent Closure<br/>Full MCP Stack & Driver Parity"]
-    V07 --> V08["v0.8.0<br/>Real Raft/WAL Persistence<br/>DB Parity & H3/uring Hardening"]
-    V08 --> V09["v0.9.0<br/>Full Opaque ABI (Phase C/D)<br/>WASM Runtime & >=82% Coverage"]
+    V06["v0.6.0 (Baseline)<br/>Agent Skills / DB Migration<br/>Zero-Copy HTTP2 / Modular CMake"] --> V07["v0.7.0 (Released)<br/>Distributed AI & Agent Closure<br/>Full MCP Stack & MySQL STMT"]
+    V07 --> V08["v0.8.0 (Planned)<br/>Native io_uring & Raft Durability<br/>True HNSW / OTLP / ABI Gate"]
+    V08 --> V09["v0.9.0<br/>Full Opaque ABI (Phase D)<br/>WASM Runtime & >=82% Coverage"]
     V09 --> V10["v1.0.0 LTS<br/>SOVERSION 1 ABI Freeze<br/>Python Asyncio & Ecosystem"]
 ```
 
@@ -62,25 +60,31 @@ flowchart LR
 
 ---
 
-### Phase 2: v0.8.0 — Storage / Consensus Persistence & High-Performance I/O
+### Phase 2: v0.8.0 — Storage / Consensus Durability, Kernel I/O Hardening & Observability
 
-**Objective**: Replace in-memory persistence stubs with durable disk implementations and bring all database drivers and I/O backends to parity.
+**Objective**: Replace in-memory persistence and vector stubs with durable/production implementations, resolve native `io_uring` crashes, close the end-to-end OTLP tracing loop, and enforce C/Python ABI layout checks.
 
-1. **Durable Raft WAL & Snapshots (`src/messaging/raft_wal.c`, `raft_snapshot.c`)**
-   - Reuse the `mq_wal.c` CRC32-framed binary log format for Raft append entries, configurable batch `fsync` policies, and atomic `currentTerm`/`votedFor` persistence.
-   - Implement periodic snapshot creation (atomic rename), log compaction, and follower `InstallSnapshot` recovery.
-2. **Database & Rate-Limit Storage Parity (`src/drivers/db/`, `src/middleware/`)**
-   - Implement native `stmt_prepare` / `MYSQL_STMT` typed bindings in `mysql.c` so `csilk_migration_t` distributed locks and migrations work uniformly across SQLite, PostgreSQL, and MySQL.
-   - Extend `csilk_storage_driver_t` atomic `incr` to return remaining window TTL (wired to Redis `PTTL`) so distributed rate limiters emit exact `Retry-After` headers.
-3. **Multi-Worker Pool Cleanup & `io_uring` / HTTP/3 Hardening (`src/core/server/`, `src/core/uring/`, `src/protocols/h3.c`)**
-   - Resolve the retained `connection_pool.c` / `arena.c` allocations observed on exit in `test_multi_worker` under GCC ASAN, ensuring zero-leak multi-worker teardown.
-   - Add real `io_uring` CI integration coverage for `uring_vector.c` (`writev` zero-copy responses) and `uring_sqpoll.c`, removing them from `.gcovr` exclusions.
-   - Pair the existing HTTP/3 Varint/Frame codecs in `h3.c` with an optional QUIC transport adapter (e.g., `ngtcp2` + OpenSSL 3.5 QUIC API) for experimental end-to-end HTTP/3 traffic.
+1. **Phase 1: Native `io_uring` Stability & C/Python ABI Gate**
+   - Fix `invalid-free` and cross-pool teardown bugs in `uring_close.c`, `uring_loop.c`, and `uring_tcp.c` under `-DCSILK_USE_URING=ON`; wire `uring_vector.c` (`writev`) and `uring_sqpoll.c` into live integration tests, re-enable native `CSILK_USE_URING=ON` in CI, and remove `uring_vector.c` from `.gcovr` exclusions.
+   - Add automated C/Python shared-struct `sizeof` and `offsetof` verification tests to catch `python/csilk/lib.py` `ctypes.Structure` drift; add PEP 561 `.pyi` stubs and middleware integration coverage.
+2. **Phase 2: Durable Raft WAL / Snapshots & Multi-Node Election (`src/messaging/`)**
+   - Reuse `mq_wal.c` CRC32-framed binary log design for sequential Raft entries, configurable `ALWAYS`/`BATCH`/`INTERVAL_MS` `fsync` policies, and atomic `current_term`/`voted_for` persistence.
+   - Implement atomic snapshot files (temp file + `fsync` + `rename`), log compaction, and follower `InstallSnapshot` recovery.
+   - Complete randomized election timeouts and `RequestVote`/`AppendEntries` replication so `wf_cluster_sm.c` passes 3-node kill-and-restart failover tests.
+3. **Phase 3: Atomic Distributed Rate Limiting & True HNSW Search (`src/drivers/`, `src/middleware/`)**
+   - Upgrade `redis_storage.c` `incr` to atomic Lua (`INCR + conditional EXPIRE + PTTL`) and extend `csilk_storage_driver_t` to return remaining window TTL so `ratelimit.c` emits exact `Retry-After`; add optional shared backend support to `sliding_ratelimit.c`.
+   - Upgrade `vector_hnsw.c` to true multi-layer random level assignment, `efConstruction` heuristic neighbor selection, greedy top-down + `efSearch` beam search Top-K heap ranking, and binary index persistence.
+4. **Phase 4: End-to-End OTLP Child Spans & Async Export (`src/middleware/otlp_*.c`)**
+   - Remove the hardcoded demo `trace_id` in `otlp_trace.c`; propagate active `trace_id` and `parent_span_id` across `HTTP Request → DB Query → AI / MCP / Tool Call` spans.
+   - Add an async batched HTTP POST exporter thread with backpressure to `otlp_exporter.c` and surface live request waterfall traces in `/admin/apm`.
+5. **Phase 5: Experimental HTTP/3 Transport, Fuzz Expansion & Quality Sprint**
+   - Add opt-in `-DCSILK_ENABLE_HTTP3=ON` (default `OFF`) wiring `h3.c` to `ngtcp2`/OpenSSL QUIC API for UDP/QUIC handshakes and QPACK static-table header coding.
+   - Add `fuzz_mcp` and `fuzz_sql_rewrite` libFuzzer targets, verify zero `CSILK_DEPRECATE_CTX_TYPES` warnings, and raise line coverage from **69%** toward **76%+**.
 
 **Exit Criteria**:
-- 3-node Raft kill-and-restart recovery test passes with zero committed-entry loss;
-- Containerized MySQL prepared statement and migration CI tests pass;
-- `test_multi_worker` passes cleanly under ASAN + LSan.
+- Both native `-DCSILK_USE_URING=ON` and `libuv + UV_USE_IO_URING=1` pass the full `ctest` suite in CI with zero `invalid-free` or leaks;
+- 3-node Raft kill-and-restart failover test passes with zero committed-entry loss;
+- Distributed Redis rate limiter returns accurate `Retry-After`; HNSW recall benchmark and C/Python ABI layout checks pass.
 
 ---
 
@@ -121,12 +125,12 @@ flowchart LR
 
 ---
 
-## 4. Immediate Action Queue (v0.7.0-alpha Starting Point)
+## 4. v0.8.0 Phase 1 Action Queue
 
-| Priority | Area | Action Item | Key Files |
+| Priority | Phase | Action Item | Key Files |
 | :--- | :--- | :--- | :--- |
-| **P0** | Memory Safety | Fix retained `connection_pool.c` / `arena.c` leaks on exit in `test_multi_worker` under GCC ASAN | `src/core/server/connection_pool.c`, `src/core/primitives/arena.c` |
-| **P0** | AI / Agent | Implement worker-side MQ subscriber and `csilk.skill.result` timeout/idempotent collection for `csilk_ai_skill_invoke_remote` | `src/workflow/skill.c`, `tests/drivers/test_ai_skill.c` |
-| **P1** | Protocols / MCP | Wire `mcp_client.c` `tools/list` schemas into `csilk_tool_registry_t` and remove placeholder tools | `src/protocols/mcp/mcp_client.c`, `src/drivers/ai/tool_registry.c` |
-| **P1** | Database | Implement native `MYSQL_STMT` `stmt_prepare` bindings so migrations run uniformly on MySQL | `src/drivers/db/mysql.c`, `src/drivers/db/migration/` |
-| **P2** | Consensus / WAL | Persist Raft WAL entries with CRC32 framing and `fsync` in `raft_wal.c` | `src/messaging/raft_wal.c`, `src/messaging/raft_snapshot.c` |
+| **P0** | Phase 1A | Diagnose and fix `CSILK_USE_URING=ON` integration test `invalid-free` and cross-pool frees; re-enable native uring in CI | `src/core/uring/uring_close.c`, `uring_loop.c`, `uring_tcp.c`, `.github/workflows/ci.yml` |
+| **P0** | Phase 1B | Add automated C/Python shared-struct `sizeof` and `offsetof` ABI verification gate | `tests/`, `python/csilk/lib.py`, `python/tests/test_csilk.py` |
+| **P0** | Phase 2 | Persist Raft WAL entries with CRC32 framing and `fsync`, atomic snapshots, and multi-node election | `src/messaging/raft_wal.c`, `raft_snapshot.c`, `raft_consensus.c` |
+| **P1** | Phase 3 | Atomic Redis Lua `INCR/EXPIRE/PTTL`, accurate `Retry-After`, and true multi-layer `vector_hnsw.c` Top-K search | `src/drivers/db/redis_storage.c`, `src/middleware/ratelimit.c`, `src/drivers/vector/vector_hnsw.c` |
+| **P1** | Phase 4 | Remove hardcoded demo `trace_id` in `otlp_trace.c` and wire end-to-end child spans with async OTLP export | `src/middleware/otlp_trace.c`, `otlp_exporter.c`, `src/app/admin.c` |

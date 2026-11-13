@@ -7,18 +7,19 @@
 
 ## 一、当前基线与现状盘点（v0.7.0）
 
-`v0.7.0` 已完成模块化 CMake Target DAG 纯化解耦、原生 Anthropic Messages API (Claude) 驱动、Ollama 流式与工具调用对齐、全栈 MCP Server 端点（resources/prompts/ping/SSE）、Raft WAL 分布式工作流命令复制、集群 Skill Worker 心跳追踪、三大关系型数据库原生预编译语句与迁移引擎、真实数据库 CI 容器测试矩阵、以及停机在途写排空零 LSan 抑制。
+`v0.7.0` 已完成模块化 CMake Target DAG 纯化解耦、原生 Anthropic Messages API (Claude) 驱动、Ollama 流式与工具调用对齐、全栈 MCP Server 端点（resources/prompts/ping/SSE）、Raft WAL 分布式工作流命令复制、集群 Skill Worker 心跳追踪、三大关系型数据库（SQLite/PostgreSQL/MySQL `MYSQL_STMT`）原生预编译语句与迁移引擎、真实数据库 CI 容器测试矩阵、以及停机在途写排空零 LSan 抑制。
 
 通过代码审计，迈向 `v1.0.0 LTS` 主要待收尾的持久化与分布式扩展演进点如下：
 
 | 领域 | 当前现状 / 已知缺口 | 代码位置 |
 | :--- | :--- | :--- |
-| **Raft 磁盘落盘** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘文件顺序追加落盘与快照压缩 | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
-| **分布式限流 TTL** | Redis 存储后端 `incr` 未返回精确剩余窗口 TTL，分布式限流 `Retry-After` 保守回退为整窗时长 | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
+| **Raft 磁盘落盘** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘文件顺序追加落盘、快照压缩与多节点选举流转 | `src/messaging/raft_wal.c`, `raft_snapshot.c`, `raft_consensus.c` |
+| **分布式限流 TTL** | Redis `INCR`+`EXPIRE` 非原子且 `csilk_storage_driver_t` 未返回精确剩余窗口 TTL，分布式限流 `Retry-After` 保守回退为整窗时长 | `src/drivers/db/redis_storage.c`, `src/middleware/ratelimit.c`, `sliding_ratelimit.c` |
+| **原生 io_uring 稳定性** | 原生 `CSILK_USE_URING=ON` 在集成测试存在 `invalid-free` 崩溃，CI 仅运行 `libuv + UV_USE_IO_URING=1`，`uring_vector.c` 被 `.gcovr` 排除 | `src/core/uring/`, `.github/workflows/ci.yml`, `.gcovr` |
+| **HNSW 向量真跳表** | `csilk_hnsw_insert` 仅串联 0 层前驱，`csilk_hnsw_search` 仅线性扫描前 `k` 个节点，尚未实现多层跳表图检索与持久化 | `src/drivers/vector/vector_hnsw.c` |
+| **OTLP 追踪闭环** | `otlp_trace.c` 存在硬编码 demo `trace_id`，HTTP → DB → AI/Tool 跨模块子 Span 尚未全链路打通，缺乏异步批量导出 | `src/middleware/otlp_trace.c`, `otlp_exporter.c` |
 | **WASM / WASI 沙箱** | 当前仅做魔数校验与 Host Import stub，未接入真实字节码执行引擎（如 WAMR） | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
-| **OTLP 追踪闭环** | `otlp_trace.c` 存在保留 no-op stub，HTTP → DB → AI/Tool 跨模块子 Span 尚未全链路打通 | `src/middleware/otlp_trace.c` |
-| **ABI 不透明化最终收尾** | Phase A/B/C 已完成，尚待推进 [ABI 演进路线图](../design/abi-opaque-roadmap.md) Phase D（将内部布局头彻底移入 `src/core/internal/`，导出符号严格收敛，锁定 SOVERSION 1） | `include/csilk/`, `cmake/libcsilk.map` |
-| **原生 io_uring 长期稳定性** | 原生 `CSILK_USE_URING=ON` 仍处于试验期，CI 默认使用 `libuv + UV_USE_IO_URING=1` | `src/core/uring/` |
+| **ABI 不透明化与跨语言门禁** | 公共头已无 `ctx_types.h`；待完成测试/示例 `CSILK_DEPRECATE_CTX_TYPES` 审计、C/Python ABI 自动化校验以及 Phase D 符号/SOVERSION 1 锁定 | `include/csilk/`, `cmake/libcsilk.map`, `python/csilk/lib.py` |
 
 ---
 
@@ -26,9 +27,9 @@
 
 ```mermaid
 flowchart LR
-    V06["v0.6.0 (当前基线)<br/>Agent Skills / DB Migration<br/>HTTP2 零拷贝 / 模块化 CMake"] --> V07["v0.7.0<br/>AI & Agent 分布式闭环<br/>MCP 全栈化 & 多模型对齐"]
-    V07 --> V08["v0.8.0<br/>Raft/WAL 真实持久化<br/>DB 驱动对齐 & H3/uring 深化"]
-    V08 --> V09["v0.9.0<br/>ABI 完全不透明化 (Phase C/D)<br/>WASM 真实运行时 & 覆盖率 >=82%"]
+    V06["v0.6.0 (基线)<br/>Agent Skills / DB Migration<br/>HTTP2 零拷贝 / 模块化 CMake"] --> V07["v0.7.0 (当前已发布)<br/>AI & Agent 分布式闭环<br/>MCP 全栈化 & MySQL STMT"]
+    V07 --> V08["v0.8.0 (规划中)<br/>原生 io_uring & Raft 持久化<br/>HNSW 真跳表 / OTLP / ABI 门禁"]
+    V08 --> V09["v0.9.0<br/>ABI 完全不透明化 (Phase D)<br/>WASM 真实运行时 & 覆盖率 >=82%"]
     V09 --> V10["v1.0.0 LTS<br/>SOVERSION 1 ABI 锁定<br/>Python Asyncio & 生产生态"]
 ```
 
@@ -59,25 +60,31 @@ flowchart LR
 
 ---
 
-### 阶段二：v0.8.0 —— 存储/共识持久化实装与高性能 I/O 深化
+### 阶段二：v0.8.0 —— 持久化落盘、内核引擎实装与全链路观测
 
-**核心目标**：将框架内预留的内存态持久化 stub 落盘，并打通三大关系型数据库与底层 I/O 优化。
+**核心目标**：消除框架内持久化与向量原型 stub，攻克原生 `io_uring` 稳定性问题，打通 OTLP 跨模块追踪闭环并建立 C/Python ABI 自动防护门禁。
 
-1. **Raft WAL 与 Snapshot 真实落盘（`src/messaging/raft_wal.c`, `raft_snapshot.c`）**
-   - 复用 `mq_wal.c` 的帧格式与 CRC32 校验机制，实现 Raft 日志顺序写盘、批量 `fsync` 刷盘策略、`currentTerm`/`votedFor` 原子元数据持久化。
-   - 实现周期性快照文件生成（原子 rename 替换）、日志压缩截断（Log Compaction）与 Follower 安装快照（`InstallSnapshot`）恢复路径。
-2. **数据库驱动与限流存储能力对齐（`src/drivers/db/`, `src/middleware/`）**
-   - 为 `mysql.c` 实现原生 `stmt_prepare` / `MYSQL_STMT` 强类型参数绑定与二进制结果集读取，使 `csilk_migration_t` 分布式锁与迁移引擎完整覆盖 SQLite / PostgreSQL / MySQL。
-   - 扩展 `csilk_storage_driver_t` 的计数接口返回精确剩余窗口 TTL，打通 `redis.c` `PTTL` 返回，令分布式限流返回精确 `Retry-After`。
-3. **连接池优雅回收与 `io_uring` / HTTP/3 深化（`src/core/server/`, `src/core/uring/`, `src/protocols/h3.c`）**
-   - 排查并修复 GCC ASAN 下 `test_multi_worker` 退出时 `connection_pool.c` 与 `arena.c` 的残留泄漏，确保多 Worker 优雅关闭实现零字节泄漏。
-   - 完善 `uring_vector.c`（`writev` 向量零拷贝写入）与 `uring_sqpoll.c`（SQPOLL 轮询线程绑核）在 CI `io_uring` Job 中的真实集成测试，逐步移除 `.gcovr` 排除项。
-   - 为 `h3.c` 现有 QUIC Varint/Frame 编解码器提供可选的传输对接层（可选依赖 `ngtcp2` + OpenSSL 3.5 QUIC API），支持端到端 HTTP/3 请求收发试验性特性。
+1. **Phase 1：原生 `io_uring` 稳定性突破 & C/Python ABI 自动化门禁**
+   - 排查并修复 `CSILK_USE_URING=ON` 下 `uring_close.c` / `uring_loop.c` / `uring_tcp.c` 在集成测试中的 `invalid-free` 与跨池释放问题；打通 `uring_vector.c`（`writev`）与 `uring_sqpoll.c` 真实集成验证，在 CI `io_uring` Job 启用原生 `uring` 测试并移除 `.gcovr` 排除。
+   - 新增 C / Python 共享结构体 `sizeof` 与关键字段 `offsetof` 自动化校验测试，阻断 `python/csilk/lib.py` `ctypes.Structure` 字段失步隐患；补齐 Python 类型存根与中间件用例。
+2. **Phase 2：Raft WAL / Snapshot 真实持久化 & 选举复制（`src/messaging/`）**
+   - 复用/抽象 `mq_wal.c` CRC32 帧格式，实现 Raft 日志顺序写盘、`ALWAYS`/`BATCH`/`INTERVAL_MS` 刷盘策略与 `current_term`/`voted_for` 原子持久化。
+   - 实现 `raft_snapshot.c` 原子快照文件（临时文件 + `fsync` + `rename`）、前置日志压缩截断（Log Compaction）与 `InstallSnapshot` 追平恢复。
+   - 补齐多节点随机选举超时、`RequestVote`/`AppendEntries` 复制流转，使 `wf_cluster_sm.c` 支持 3 节点杀进程重启恢复与故障切换。
+3. **Phase 3：分布式限流原子化 & HNSW 真跳表索引（`src/drivers/`, `src/middleware/`）**
+   - 升级 `redis_storage.c` 为 Lua 原子 `INCR + 条件 EXPIRE + PTTL`，扩展 `csilk_storage_driver_t` 精确返回剩余窗口 TTL，令 `ratelimit.c` 输出精确 `Retry-After`，并使 `sliding_ratelimit.c` 支持多实例共享计数。
+   - 升级 `vector_hnsw.c`：实现标准多层随机建层、`efConstruction` 启发式选边、入口贪心 + `efSearch` Beam Search 堆排序 Top-K，以及二进制索引快照持久化与召回率验证。
+4. **Phase 4：OTLP 全链路子 Span 串联 & 异步导出（`src/middleware/otlp_*.c`）**
+   - 消除 `otlp_trace.c` 硬编码 demo `trace_id`，基于请求上下文/`_Thread_local` Span 栈自动串联 `HTTP Request → DB Query → AI / MCP / Skill Tool` 子 Span。
+   - 为 `otlp_exporter.c` 增加异步批量 HTTP POST 上报线程与背压机制，联动 `/admin/apm` 展示真实调用链瀑布图。
+5. **Phase 5：HTTP/3 试验性传输、Fuzz 扩展与质量冲刺**
+   - 新增可选 `-DCSILK_ENABLE_HTTP3=ON`（默认关闭）对接 `ngtcp2`/OpenSSL QUIC API，验证端到端 UDP/QUIC 请求收发与 QPACK 静态表基础编解码。
+   - 新增 `fuzz_mcp` 与 `fuzz_sql_rewrite` libFuzzer 目标；审计 `CSILK_DEPRECATE_CTX_TYPES` 零告警；将全库行覆盖率从 **69%** 推进至 **76%+**。
 
 **验收标准**：
-- Raft 3 节点杀进程重启恢复测试通过，数据零丢失；
-- MySQL 原生预处理与迁移引擎在 CI 容器化集成测试中通过；
-- ASAN 下 `test_multi_worker` 零泄漏通过。
+- 原生 `-DCSILK_USE_URING=ON` 与 `libuv + UV_USE_IO_URING=1` 双模式在 CI 全量 `ctest` 通过且零 `invalid-free`/泄漏；
+- Raft 3 节点杀进程重启恢复与故障切换测试通过，数据零丢失；
+- Redis 分布式限流返回精确 `Retry-After`；HNSW Top-K 召回率测试与 C/Python ABI 校验全绿。
 
 ---
 
@@ -118,12 +125,12 @@ flowchart LR
 
 ---
 
-## 四、近期优先行动清单（v0.7.0-alpha 起点）
+## 四、v0.8.0 Phase 1 启动行动清单
 
-| 优先级 | 类别 | 具体任务 | 核心涉及文件 |
+| 优先级 | 阶段 | 具体任务 | 核心涉及文件 |
 | :--- | :--- | :--- | :--- |
-| **P0** | 内存安全 | 排查并修复 GCC ASAN 下 `test_multi_worker` 退出时的 Arena / 连接池残留泄漏 | `src/core/server/connection_pool.c`, `src/core/primitives/arena.c` |
-| **P0** | AI / Agent | 实现 `csilk_ai_skill_invoke_remote` 的 Worker 端 MQ 订阅执行与 `csilk.skill.result` 超时/幂等回收 | `src/workflow/skill.c`, `tests/drivers/test_ai_skill.c` |
-| **P1** | 协议 / MCP | 打通 `mcp_client.c` `tools/list` 到 `csilk_tool_registry_t` 的自动 schema 注册，消除 placeholder | `src/protocols/mcp/mcp_client.c`, `src/drivers/ai/tool_registry.c` |
-| **P1** | 数据库 | 为 MySQL 驱动补齐原生 `stmt_prepare` 绑定，实现三大关系型数据库迁移引擎全覆盖 | `src/drivers/db/mysql.c`, `src/drivers/db/migration/` |
-| **P2** | 共识 / WAL | 基于 `mq_wal.c` CRC32 帧格式实现 `raft_wal.c` 真实日志写盘与 `fsync` 持久化 | `src/messaging/raft_wal.c`, `src/messaging/raft_snapshot.c` |
+| **P0** | Phase 1A | 定位并修复原生 `CSILK_USE_URING=ON` 集成测试 `invalid-free` 与跨池释放问题，恢复 CI 原生 uring 验证 | `src/core/uring/uring_close.c`, `uring_loop.c`, `uring_tcp.c`, `.github/workflows/ci.yml` |
+| **P0** | Phase 1B | 落地 C / Python 共享结构体 `sizeof`/`offsetof` 自动化 ABI 校验门禁 | `tests/`, `python/csilk/lib.py`, `python/tests/test_csilk.py` |
+| **P0** | Phase 2 | 基于 `mq_wal.c` 帧校验实现 `raft_wal.c` 真实日志落盘、`raft_snapshot.c` 原子快照与多节点选举 | `src/messaging/raft_wal.c`, `raft_snapshot.c`, `raft_consensus.c` |
+| **P1** | Phase 3 | Redis Lua 原子 `INCR/EXPIRE/PTTL`、精确 `Retry-After` 与 `vector_hnsw.c` 真跳表 Top-K 检索 | `src/drivers/db/redis_storage.c`, `src/middleware/ratelimit.c`, `src/drivers/vector/vector_hnsw.c` |
+| **P1** | Phase 4 | 消除 `otlp_trace.c` 硬编码 `trace_id`，打通跨模块子 Span 与 OTLP 异步导出 | `src/middleware/otlp_trace.c`, `otlp_exporter.c`, `src/app/admin.c` |
