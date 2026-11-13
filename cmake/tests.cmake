@@ -25,6 +25,8 @@ function(add_csilk_test name source)
   # supported CMake version (3.24+ for RESCAN groups).
   if(TARGET csilk::libuv)
     target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m csilk::libuv)
+  elseif(TARGET uring)
+    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m uring)
   else()
     target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
   endif()
@@ -140,6 +142,7 @@ set(CSILK_CORE_TESTS
     test_http1_zerocopy
     test_af_xdp_zerocopy
     test_uring_sqpoll
+    test_uring_vector
     test_uring_io
     test_uring_fs
     test_ctx_json
@@ -176,7 +179,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core
+    core;core;core;core
 )
 
 

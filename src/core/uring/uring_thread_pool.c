@@ -306,12 +306,12 @@ static _Thread_local uring_deferred_t* tls_deferred_tail = NULL;
  * @note Used by the synchronous fallback path so after_cb runs later during
  *       csilk_io_run(). The queue is thread-local and needs no locking.
  */
-void
+int
 _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status)
 {
     uring_deferred_t* d = (uring_deferred_t*)malloc(sizeof(uring_deferred_t));
     if (!d) {
-        return;
+        return -1;
     }
     d->work = work;
     d->after_cb = after_cb;
@@ -324,6 +324,7 @@ _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int
         tls_deferred_head = d;
     }
     tls_deferred_tail = d;
+    return 0;
 }
 
 /**
@@ -382,9 +383,19 @@ _csilk_uring_queue_work(csilk_io_work_t*       req,
         return uring_tp_enqueue(tls_current_tp, req, work_cb, after_cb);
     }
 
+    int               is_nested = tls_queue_work_depth > 0;
+    uring_deferred_t* d = NULL;
+    if (!is_nested) {
+        /* Pre-allocate the deferred node before running work_cb so OOM fails
+         * cleanly without executing work_cb or leaking resources it acquires. */
+        d = (uring_deferred_t*)malloc(sizeof(uring_deferred_t));
+        if (!d) {
+            return -1;
+        }
+    }
+
     tls_queue_work_depth++;
     work_cb(req);
-    int is_nested = tls_queue_work_depth > 1;
     tls_queue_work_depth--;
 
     if (is_nested) {
@@ -392,7 +403,16 @@ _csilk_uring_queue_work(csilk_io_work_t*       req,
             after_cb(req, 0);
         }
     } else {
-        _uring_deferred_push(req, after_cb, 0);
+        d->work = req;
+        d->after_cb = after_cb;
+        d->status = 0;
+        d->next = NULL;
+        if (tls_deferred_tail) {
+            tls_deferred_tail->next = d;
+        } else {
+            tls_deferred_head = d;
+        }
+        tls_deferred_tail = d;
     }
     return 0;
 }

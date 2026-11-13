@@ -52,6 +52,9 @@ typedef struct {
 
 typedef struct uring_op_context_s uring_op_context_t;
 
+/** @brief Operation context flag indicating the op was stopped/cancelled. */
+#define URING_OP_CTX_CANCELLED 0x0001U
+
 /**
  * @brief Operation context object representing a unique in-flight io_uring SQE.
  *
@@ -258,8 +261,8 @@ typedef struct uring_deferred_s {
     int                      status;
 } uring_deferred_t;
 
-void _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status);
-int  _uring_deferred_drain_all(void);
+int _uring_deferred_push(csilk_io_work_t* work, csilk_io_after_work_cb after_cb, int status);
+int _uring_deferred_drain_all(void);
 
 /* --- Server split (uring_server.c, uring_event_loop.c) --- */
 

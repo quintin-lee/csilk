@@ -155,9 +155,19 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
             uring_op_context_t* op_ctx = (uring_op_context_t*)(uintptr_t)cqe->user_data;
 
             if (op_ctx) {
+                if (op_ctx->flags & URING_OP_CTX_CANCELLED) {
+                    uring_op_free(loop, op_ctx);
+                    continue;
+                }
                 op = (uring_op_type_t)op_ctx->type;
                 ptr = op_ctx->data ? op_ctx->data : op_ctx->owner;
                 gen = op_ctx->generation;
+                if (op == URING_OP_TMR_GENERIC && ptr) {
+                    csilk_io_timer_t* tmr_ptr = (csilk_io_timer_t*)ptr;
+                    if (tmr_ptr->op == (csilk_io_timer_op_t*)op_ctx) {
+                        tmr_ptr->op = NULL;
+                    }
+                }
                 uring_op_free(loop, op_ctx);
             }
 
@@ -367,12 +377,17 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                         struct __kernel_timespec ts;
                         ts.tv_sec = (__kernel_time64_t)(tmr->repeat / 1000);
                         ts.tv_nsec = (long long)(tmr->repeat % 1000) * 1000000LL;
-                        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-                        if (sqe) {
-                            io_uring_prep_timeout(sqe, &ts, 0, 0);
-                            io_uring_sqe_set_data64(
-                                sqe, uring_encode_timer_data(URING_OP_TMR_GENERIC, tmr));
-                            io_uring_submit(ring);
+                        uint64_t next_data = uring_encode_timer_data(URING_OP_TMR_GENERIC, tmr);
+                        if (next_data) {
+                            struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                            if (sqe) {
+                                tmr->op = (csilk_io_timer_op_t*)(uintptr_t)next_data;
+                                io_uring_prep_timeout(sqe, &ts, 0, 0);
+                                io_uring_sqe_set_data64(sqe, next_data);
+                                io_uring_submit(ring);
+                            } else {
+                                uring_op_free(loop, (uring_op_context_t*)(uintptr_t)next_data);
+                            }
                         }
                     } else {
                         /* One-shot timer: deactivate and drop active count. */
