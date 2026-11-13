@@ -132,11 +132,32 @@ int main(void) {
 
 add_executable(csilk_package_consumer "${CMAKE_CURRENT_BINARY_DIR}/consumer.c")
 target_link_libraries(csilk_package_consumer PRIVATE csilk::base)
+if(USE_ASAN)
+  target_compile_options(csilk_package_consumer PRIVATE -fsanitize=address)
+endif()
 ]=])
 
+set(_consumer_cmake_args
+    -S "${_consumer}"
+    -B "${_consumer}/build"
+)
+if(DEFINED CMAKE_PREFIX_PATH AND CMAKE_PREFIX_PATH)
+  list(APPEND _consumer_cmake_args "-DCMAKE_PREFIX_PATH=${_prefix};${CMAKE_PREFIX_PATH}")
+else()
+  list(APPEND _consumer_cmake_args "-DCMAKE_PREFIX_PATH=${_prefix}")
+endif()
+if(DEFINED CMAKE_C_COMPILER AND CMAKE_C_COMPILER)
+  list(APPEND _consumer_cmake_args "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
+endif()
+if(DEFINED CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE)
+  list(APPEND _consumer_cmake_args "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+endif()
+if(DEFINED USE_ASAN AND USE_ASAN)
+  list(APPEND _consumer_cmake_args "-DUSE_ASAN=${USE_ASAN}")
+endif()
+
 execute_process(
-    COMMAND "${CMAKE_COMMAND}" -S "${_consumer}" -B "${_consumer}/build"
-        -DCMAKE_PREFIX_PATH=${_prefix}
+    COMMAND "${CMAKE_COMMAND}" ${_consumer_cmake_args}
     RESULT_VARIABLE _configure_result
     OUTPUT_VARIABLE _configure_output
     ERROR_VARIABLE _configure_error
