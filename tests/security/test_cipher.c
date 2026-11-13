@@ -458,15 +458,15 @@ test_public_symmetric_bad_params(void)
     /* Wrong key size */
     uint8_t bad_key[16] = {0};
     int     rc = csilk_symmetric_encrypt(bad_key,
-                                         sizeof(bad_key),
-                                         (const uint8_t*)"hello",
-                                         5,
-                                         iv,
-                                         sizeof(iv),
-                                         ct,
-                                         &ct_len,
-                                         tag,
-                                         sizeof(tag));
+                                     sizeof(bad_key),
+                                     (const uint8_t*)"hello",
+                                     5,
+                                     iv,
+                                     sizeof(iv),
+                                     ct,
+                                     &ct_len,
+                                     tag,
+                                     sizeof(tag));
     assert(rc == -1);
 
     /* Wrong IV size */
