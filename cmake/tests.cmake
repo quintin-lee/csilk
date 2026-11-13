@@ -167,6 +167,7 @@ set(CSILK_CORE_TESTS
     test_cpu_hardware_profile
     test_io_backend
     test_secret
+    test_python_abi
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -180,6 +181,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core
+    core
 )
 
 
