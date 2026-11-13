@@ -1,29 +1,26 @@
-# csilk 演进路线图 (v0.6.0 → v1.0.0 LTS)
+# csilk 演进路线图 (v0.6.2 → v1.0.0 LTS)
 
-> **基线版本**: `0.6.0` | **规划日期**: `2026-11-12` | **目标里程碑**: `v1.0.0 LTS`  
+> **基线版本**: `0.6.2` | **规划日期**: `2026-11-13` | **目标里程碑**: `v1.0.0 LTS`  
 > [English](../../en/meta/ROADMAP.md) | [中文](ROADMAP.md)
 
 ---
 
-## 一、当前基线与现状盘点（v0.6.0）
+## 一、当前基线与现状盘点（v0.6.2）
 
-`v0.6.0` 已完成模块化 CMake Target DAG 拆分、HTTP/1.1 & HTTP/2 零拷贝优化、数据库 Flyway 风格迁移引擎、Agent Skills（L1/L2/L3 渐进式披露）、ReAct 自主工具循环、MCP Stdio 进程池及全平台 CI（Ubuntu 24.04 + macOS 15 ARM64 + Wheel 打包）。
+`v0.6.2` 已完成模块化 CMake Target DAG 拆分、HTTP/1.1 & HTTP/2 零拷贝优化、三大关系型数据库（SQLite / PostgreSQL / MySQL）Flyway 风格迁移引擎与原生预编译语句、真实数据库 CI 容器测试矩阵、Agent Skills（L1/L2/L3 渐进式披露与 MQ 远端闭环执行）、ReAct 自主工具循环、MCP Stdio 进程池与 Tool Registry 自动发现桥接、以及全平台 CI（Ubuntu 24.04 + macOS 15 ARM64 + Wheel 打包）。
 
-通过代码审计，当前仍存在以下待收尾的占位实现（Stub / Placeholder）与演进缺口：
+通过代码审计，当前主要待收尾的持久化与分布式扩展演进点如下：
 
 | 领域 | 当前现状 / 已知缺口 | 代码位置 |
 | :--- | :--- | :--- |
-| **Agent Skill 远端执行** | `csilk_ai_skill_invoke_remote()` 仅发布 `csilk.skill.invoke` 消息即返回 `dispatched`，缺少 Worker 订阅执行器与 `csilk.skill.result` 回收闭环 | `src/workflow/skill.c` |
 | **Workflow 集群状态机** | 节点关联与派发校验仍为内存占位实现（Placeholder），尚未接入 WAL 与跨节点恢复 | `src/workflow/wf_cluster_sm.c` |
-| **MCP 协议全栈** | Client 工具导入存在 placeholder 注册逻辑；Server 部分方法返回 `Method not implemented`；仅支持本地 Stdio 池，缺远程 SSE/Streamable HTTP 传输 | `src/protocols/mcp/mcp_client.c`, `mcp_server.c` |
+| **MCP 服务端全栈** | Server 部分方法返回 `Method not implemented`；仅支持本地 Stdio 池与 POST，缺远程持久化 SSE/Streamable HTTP 传输 | `src/protocols/mcp/mcp_server.c` |
 | **LLM 驱动一致性** | `openai.c` 已支持流式 `tool_calls` 重组与用量统计；`ollama.c` 尚待对齐；缺乏原生 Anthropic Messages API 驱动 | `src/drivers/ai/` |
-| **Raft 持久化** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘落盘与日志截断 | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
-| **DB 驱动矩阵** | SQLite 与 PostgreSQL 已具备原生 `stmt_prepare` 强类型绑定；MySQL 尚待补齐 `MYSQL_STMT` | `src/drivers/db/mysql.c` |
+| **Raft 磁盘落盘** | `raft_wal.c` 与 `raft_snapshot.c` 当前为内存递增索引 stub，尚未实现真正磁盘落盘与日志截断 | `src/messaging/raft_wal.c`, `raft_snapshot.c` |
 | **分布式限流 TTL** | Redis 存储后端 `incr` 未返回精确剩余窗口 TTL，分布式限流 `Retry-After` 保守回退为整窗时长 | `src/middleware/sliding_ratelimit.c`, `src/middleware/ratelimit.c` |
-| **WASM / WASI 沙箱** | 当前仅做魔数校验与 Host Import stub，未接入真实字节码执行引擎 | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
+| **WASM / WASI 沙箱** | 当前仅做魔数校验与 Host Import stub，未接入真实字节码执行引擎（如 WAMR） | `src/core/plugin/wasm_plugin.c`, `wasm_wasi.c` |
 | **OTLP 追踪闭环** | `otlp_trace.c` 存在保留 no-op stub，HTTP → DB → AI/Tool 跨模块子 Span 尚未全链路打通 | `src/middleware/otlp_trace.c` |
 | **ABI 不透明化收尾** | Phase A/B 已完成，尚待推进 [ABI 演进路线图](../design/abi-opaque-roadmap.md) Phase C（测试/示例迁移）与 Phase D（彻底移除公共布局头、锁定 SOVERSION 1） | `include/csilk/`, `cmake/libcsilk.map` |
-| **覆盖率与多核回收** | 当前全库行覆盖率 **69%**（12,609 / 18,281）；本地 GCC ASAN 下 `test_multi_worker` 退出存在连接池/Arena 残留泄漏 | `src/core/server/connection_pool.c`, `.gcovr` |
 
 ---
 
