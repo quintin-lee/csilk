@@ -43,6 +43,7 @@ endif()
 option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
 option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
+option(CSILK_DEPRECATE_CTX_TYPES "Enable compiler deprecation warnings for direct internal context struct access" ON)
 
 # ── Configurable compile-time constants ──────────────────────────────────
 set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")
