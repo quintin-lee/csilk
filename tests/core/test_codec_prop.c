@@ -189,7 +189,7 @@ test_base64url_encode_charset(void)
         for (const char* p = encoded; *p; p++) {
             char c = *p;
             int  ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-                     c == '-' || c == '_';
+                      c == '-' || c == '_';
             assert(ok);
         }
     }

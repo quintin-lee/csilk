@@ -95,11 +95,11 @@ main()
                                    .name = strdup("get_weather"),
                                    .arguments = strdup("{\"city\":\"Shanghai\"}")};
         csilk_ai_message_t   msg = {
-              .role = "assistant",
-              .content = NULL,
-              .tool_call_count = 1,
-              .tool_calls = &tc,
-              .tool_call_id = NULL,
+            .role = "assistant",
+            .content = NULL,
+            .tool_call_count = 1,
+            .tool_calls = &tc,
+            .tool_call_id = NULL,
         };
 
         csilk_json_t* obj = csilk_json_object();
