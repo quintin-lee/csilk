@@ -775,14 +775,21 @@ def cors(allow_origin="*", allow_methods="GET, POST, PUT, DELETE, OPTIONS", allo
         A ``(Context) -> None`` middleware that sets CORS headers.
     """
     from csilk.lib import CsilkCorsConfig
+    origin_bytes = allow_origin.encode('utf-8') if allow_origin else None
+    methods_bytes = allow_methods.encode('utf-8') if allow_methods else None
+    headers_bytes = allow_headers.encode('utf-8') if allow_headers else None
     config = CsilkCorsConfig(
-        allow_origin=allow_origin.encode('utf-8') if allow_origin else None,
-        allow_methods=allow_methods.encode('utf-8') if allow_methods else None,
-        allow_headers=allow_headers.encode('utf-8') if allow_headers else None,
+        allow_origin=origin_bytes,
+        allow_methods=methods_bytes,
+        allow_headers=headers_bytes,
         allow_credentials=1 if allow_credentials else 0,
-        max_age=max_age
+        max_age=max_age,
+        allow_origin_list=None,
+        echo_origin=0,
     )
     def middleware(ctx):
+        # Keep config and backing byte buffers alive across middleware invocations.
+        _keepalive = (origin_bytes, methods_bytes, headers_bytes)
         get_bindings().csilk_cors_middleware(ctx._ctx, ctypes.byref(config))
     return middleware
 

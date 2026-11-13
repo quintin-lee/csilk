@@ -46,7 +46,9 @@ class CsilkCorsConfig(ctypes.Structure):
         ("allow_methods", ctypes.c_char_p),
         ("allow_headers", ctypes.c_char_p),
         ("allow_credentials", ctypes.c_int),
-        ("max_age", ctypes.c_int)
+        ("max_age", ctypes.c_int),
+        ("allow_origin_list", ctypes.POINTER(ctypes.c_char_p)),
+        ("echo_origin", ctypes.c_int),
     ]
 
 class CsilkData(ctypes.Structure):
@@ -119,6 +121,7 @@ class CsilkAiMessage(ctypes.Structure):
 class CsilkAiChatResponse(ctypes.Structure):
     _fields_ = [
         ("content", ctypes.c_char_p),
+        ("reasoning_content", ctypes.c_char_p),
         ("tool_calls", CsilkAiToolCallPtr),
         ("tool_call_count", ctypes.c_size_t),
         ("prompt_tokens", ctypes.c_int),
@@ -167,12 +170,16 @@ class CsilkAiChatRequest(ctypes.Structure):
         ("user", ctypes.c_char_p),
         ("stream", ctypes.c_bool),
         ("on_chunk", ctypes.c_void_p),
+        ("on_reasoning_chunk", ctypes.c_void_p),
         ("user_data", ctypes.c_void_p),
         ("timeout_ms", ctypes.c_int),
         ("tools", CsilkAiToolPtr),
         ("tool_count", ctypes.c_size_t),
         ("tool_choice", ctypes.c_char_p),
-        ("reasoning_effort", ctypes.c_char_p)
+        ("reasoning_effort", ctypes.c_char_p),
+        ("has_enable_thinking", ctypes.c_bool),
+        ("enable_thinking", ctypes.c_bool),
+        ("chat_template_kwargs", ctypes.c_void_p)
     ]
 
 class CsilkAiContext(ctypes.Structure):
@@ -294,7 +301,10 @@ class CsilkServerConfig(ctypes.Structure):
         
         ("enable_simd", ctypes.c_int),
         ("enable_arena_alignment", ctypes.c_int),
-        
+        ("enable_uring_sqpoll", ctypes.c_int),
+        ("backpressure_max_queue_depth", ctypes.c_size_t),
+        ("backpressure_max_latency_us", ctypes.c_uint),
+
         ("enable_openapi", ctypes.c_int)
     ]
 
