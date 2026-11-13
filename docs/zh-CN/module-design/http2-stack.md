@@ -1,6 +1,6 @@
 # HTTP/2 协议栈深度解析
 
-> **Version**: 0.6.2 | **Last updated**: 2026-11-12
+> **Version**: 0.7.0 | **Last updated**: 2026-11-13
 
 csilk 通过 nghttp2 库实现 HTTP/2 支持，提供多路复用、服务器推送和二进制分帧。本文档深入解析 HTTP/2 会话管理、流控制和优先级调度。
 
