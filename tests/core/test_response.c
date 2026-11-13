@@ -129,7 +129,7 @@ test_json_error_format(void)
     size_t      len;
     const char* body = csilk_get_response_body(c, &len);
     int         ok = csilk_get_status(c) == 400 && body && strstr(body, "\"error\"") &&
-                     strstr(body, "bad input");
+             strstr(body, "bad input");
     if (ok) {
         PASS();
     } else {
