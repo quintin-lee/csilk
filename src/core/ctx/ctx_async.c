@@ -222,27 +222,21 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     csilk_async_dispatch_payload_t* payload =
         (csilk_async_dispatch_payload_t*)malloc(sizeof(csilk_async_dispatch_payload_t));
     if (!payload) {
-        atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
-        if (_csilk_dispatch_try(op->ctx, _csilk_async_cancel_dispatch_cb, op) < 0) {
-            _csilk_async_op_unref(op);
-        }
+        _csilk_async_op_disarm_timer(op);
         _csilk_async_op_unref(op);
         return -1;
     }
     payload->op = op;
     payload->result = result;
 
-    /* Increment reference for dispatch task */
-    atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
     if (_csilk_dispatch_try(op->ctx, _csilk_async_complete_dispatch_cb, payload) < 0) {
         free(payload);
-        /* Release the dispatch reference acquired above. */
+        _csilk_async_op_disarm_timer(op);
         _csilk_async_op_unref(op);
         return -1;
     }
 
-    /* Release caller's reference */
-    _csilk_async_op_unref(op);
+    /* Dispatched successfully: ownership of op reference transferred to callback */
     return 0;
 }
 
@@ -269,11 +263,10 @@ csilk_async_op_cancel(csilk_async_op_t* op)
         return 0;
     }
 
-    /* Cross-thread: must dispatch timer disarm to owner worker event loop */
-    atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
+    /* Cross-thread: transfer caller's reference to dispatched timer disarm task */
     if (_csilk_dispatch_try(op->ctx, _csilk_async_cancel_dispatch_cb, op) < 0) {
+        _csilk_async_op_disarm_timer(op);
         _csilk_async_op_unref(op);
     }
-    _csilk_async_op_unref(op); /* Release caller's reference */
     return 0;
 }
