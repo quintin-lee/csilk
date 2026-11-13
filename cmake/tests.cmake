@@ -53,7 +53,7 @@ function(add_csilk_test name source)
     set_tests_properties(${name} PROPERTIES TIMEOUT 600)
   elseif(name STREQUAL "test_logger_async_bench")
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
-  elseif(name STREQUAL "test_openai_mock")
+  elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic")
     set_tests_properties(${name} PROPERTIES TIMEOUT 60)
   endif()
 endfunction()
@@ -345,6 +345,7 @@ set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
     test_openai_mock
+    test_ai_anthropic
     test_ai_trace
     test_ai_skill
     test_vector_db
@@ -355,7 +356,7 @@ set(CSILK_AI_TESTS
     test_mongodb
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
+    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector
     drivers/db;drivers/db
 )
 

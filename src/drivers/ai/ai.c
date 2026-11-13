@@ -267,6 +267,7 @@ find_driver(const char* name)
 /* Forward declarations for default drivers */
 extern void csilk_ai_openai_init_driver(void);
 extern void csilk_ai_ollama_init_driver(void);
+extern void csilk_ai_anthropic_init_driver(void);
 
 /** @brief Create a new AI engine instance bound to a specific driver backend.
  *
@@ -288,9 +289,10 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
      pulling in unused driver dependencies at process startup. */
     static int initialized = 0;
     if (!initialized) {
-        CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama)...");
+        CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic)...");
         csilk_ai_openai_init_driver();
         csilk_ai_ollama_init_driver();
+        csilk_ai_anthropic_init_driver();
         initialized = 1;
     }
 

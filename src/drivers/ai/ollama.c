@@ -98,6 +98,120 @@ write_cb(void* contents, size_t size, size_t nmemb, void* userp)
     return realsize;
 }
 
+/* Accumulator for streaming NDJSON lines from Ollama */
+struct ollama_stream_ctx {
+    const csilk_ai_chat_request_t* req;
+    csilk_ai_chat_response_t*      res;
+    char*                          line_buf;
+    size_t                         line_size;
+};
+
+static void
+ollama_parse_tool_calls(csilk_json_t* tc_arr, csilk_ai_chat_response_t* res)
+{
+    if (!tc_arr || !csilk_json_is_array(tc_arr)) {
+        return;
+    }
+    size_t count = csilk_json_array_size(tc_arr);
+    if (count == 0) {
+        return;
+    }
+    csilk_ai_tool_call_t* calls = calloc(count, sizeof(csilk_ai_tool_call_t));
+    if (!calls) {
+        return;
+    }
+    size_t valid = 0;
+    for (size_t i = 0; i < count; i++) {
+        csilk_json_t* item = csilk_json_array_get(tc_arr, i);
+        if (!item) {
+            continue;
+        }
+        csilk_json_t* fn = csilk_json_get_object(item, "function");
+        if (!fn) {
+            continue;
+        }
+        const char*   name = csilk_json_get_string(fn, "name");
+        csilk_json_t* args = csilk_json_get_object(fn, "arguments");
+        char*         args_str = args ? csilk_json_serialize(args, NULL) : strdup("{}");
+
+        char id_buf[32];
+        snprintf(id_buf, sizeof(id_buf), "ollama_%zu", valid + 1);
+        calls[valid].id = strdup(id_buf);
+        calls[valid].name = strdup(name ? name : "");
+        calls[valid].arguments = args_str ? args_str : strdup("{}");
+        valid++;
+    }
+    res->tool_calls = calls;
+    res->tool_call_count = valid;
+}
+
+static void
+ollama_parse_ndjson_line(struct ollama_stream_ctx* ctx, const char* json_str)
+{
+    csilk_json_t* js = csilk_json_parse(json_str);
+    if (!js) {
+        return;
+    }
+
+    csilk_json_t* msg = csilk_json_get_object(js, "message");
+    if (msg) {
+        const char* txt = csilk_json_get_string(msg, "content");
+        if (txt && txt[0]) {
+            if (ctx->req->on_chunk) {
+                ctx->req->on_chunk(txt, ctx->req->user_data);
+            }
+            size_t clen = strlen(txt);
+            size_t cur = ctx->res->content ? strlen(ctx->res->content) : 0;
+            char*  nb = realloc(ctx->res->content, cur + clen + 1);
+            if (nb) {
+                memcpy(nb + cur, txt, clen);
+                nb[cur + clen] = '\0';
+                ctx->res->content = nb;
+            }
+        }
+        csilk_json_t* tc = csilk_json_get_array(msg, "tool_calls");
+        if (tc && ctx->res->tool_call_count == 0) {
+            ollama_parse_tool_calls(tc, ctx->res);
+        }
+    }
+
+    bool done = csilk_json_get_bool(js, "done");
+    if (done) {
+        ctx->res->prompt_tokens = (int)csilk_json_get_int(js, "prompt_eval_count");
+        ctx->res->completion_tokens = (int)csilk_json_get_int(js, "eval_count");
+        ctx->res->total_tokens = ctx->res->prompt_tokens + ctx->res->completion_tokens;
+    }
+
+    csilk_json_free(js);
+}
+
+static size_t
+ollama_stream_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
+{
+    size_t                    realsize = size * nmemb;
+    struct ollama_stream_ctx* ctx = (struct ollama_stream_ctx*)userp;
+    const char*               data = (const char*)contents;
+
+    for (size_t i = 0; i < realsize; i++) {
+        char c = data[i];
+        if (c == '\n' || c == '\r') {
+            if (ctx->line_size > 0) {
+                ctx->line_buf[ctx->line_size] = '\0';
+                ollama_parse_ndjson_line(ctx, ctx->line_buf);
+                ctx->line_size = 0;
+            }
+        } else {
+            char* nb = realloc(ctx->line_buf, ctx->line_size + 2);
+            if (!nb) {
+                return 0;
+            }
+            ctx->line_buf = nb;
+            ctx->line_buf[ctx->line_size++] = c;
+        }
+    }
+    return realsize;
+}
+
 /**
  * @brief Execute a chat completion against the Ollama /api/chat endpoint.
  *
@@ -155,9 +269,39 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
     csilk_json_add_object(root, "messages", msgs);
 
-    /* Streaming disabled for simplicity; the response body contains the
-   * complete reply rather than SSE chunks. */
-    csilk_json_add_bool(root, "stream", false);
+    csilk_json_add_bool(root, "stream", req->stream ? true : false);
+
+    /* Serialize tool definitions for Ollama when present */
+    if (req->tools && req->tool_count > 0) {
+        csilk_json_t* tools_arr = csilk_json_array();
+        for (size_t i = 0; i < req->tool_count; i++) {
+            csilk_json_t* t = csilk_json_object();
+            csilk_json_add_string(t, "type", "function");
+            csilk_json_t* fn = csilk_json_object();
+            csilk_json_add_string(fn, "name", req->tools[i].function.name);
+            if (req->tools[i].function.description) {
+                csilk_json_add_string(fn, "description", req->tools[i].function.description);
+            }
+            if (req->tools[i].function.parameters_json) {
+                csilk_json_t* pval = (csilk_json_t*)req->tools[i].function.parameters_json;
+                if (csilk_json_is_object(pval)) {
+                    csilk_json_add_object(fn, "parameters", csilk_json_copy(pval));
+                } else if (csilk_json_is_string(pval)) {
+                    const char*   s = csilk_json_string_value(pval);
+                    csilk_json_t* pobj = s ? csilk_json_parse(s) : NULL;
+                    csilk_json_add_object(fn, "parameters", pobj ? pobj : csilk_json_object());
+                } else {
+                    csilk_json_t* pobj = csilk_json_parse((const char*)pval);
+                    csilk_json_add_object(fn, "parameters", pobj ? pobj : csilk_json_object());
+                }
+            } else {
+                csilk_json_add_object(fn, "parameters", csilk_json_object());
+            }
+            csilk_json_add_object(t, "function", fn);
+            csilk_json_array_append(tools_arr, t);
+        }
+        csilk_json_add_object(root, "tools", tools_arr);
+    }
 
     /* Ollama wraps sampling parameters in a nested "options" object, unlike
    * OpenAI which places them at the JSON root. */
@@ -193,18 +337,34 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
-    struct curl_response cr = {0};
+    struct curl_response     cr = {0};
+    struct ollama_stream_ctx sctx = {
+        .req = req,
+        .res = res,
+        .line_buf = NULL,
+        .line_size = 0,
+    };
+
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+    if (req->stream) {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ollama_stream_write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&sctx);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
+    }
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     /* Bounded time-outs so a dead/unreachable Ollama host cannot wedge the
      * request indefinitely (same guard as the OpenAI driver). */
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
+    if (req->timeout_ms > 0) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)req->timeout_ms);
+    } else if (!req->stream) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
+    }
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
@@ -213,17 +373,28 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     if (rc != CURLE_OK) {
         res->error_message = strdup(curl_easy_strerror(rc));
         free(cr.body);
+        free(sctx.line_buf);
         curl_easy_cleanup(curl);
         return -1;
     }
 
-    /* --- Step 3: Parse the Ollama response --- */
-    csilk_json_t* resp_root = csilk_json_parse(cr.body);
+    if (req->stream) {
+        free(sctx.line_buf);
+        curl_easy_cleanup(curl);
+        return (res->content || res->tool_call_count > 0) ? 0 : -1;
+    }
+
+    /* --- Step 3: Parse the Ollama response (non-streaming) --- */
+    csilk_json_t* resp_root = csilk_json_parse(cr.body ? cr.body : "{}");
     if (resp_root) {
         csilk_json_t* msg = csilk_json_get(resp_root, "message");
         csilk_json_t* content = csilk_json_get(msg, "content");
         if (csilk_json_is_string(content)) {
             res->content = strdup(csilk_json_string_value(content));
+        }
+        csilk_json_t* tc = csilk_json_get_array(msg, "tool_calls");
+        if (tc) {
+            ollama_parse_tool_calls(tc, res);
         }
         /* Ollama uses different field names than OpenAI for token accounting */
         res->prompt_tokens = csilk_json_get_int(resp_root, "prompt_eval_count");
@@ -234,7 +405,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     free(cr.body);
     curl_easy_cleanup(curl);
-    return res->content ? 0 : -1;
+    return (res->content || res->tool_call_count > 0) ? 0 : -1;
 }
 
 /**
