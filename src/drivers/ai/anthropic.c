@@ -395,7 +395,7 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300000L);
     }
 
-    http_response_buf_t         resp_buf = {.body = calloc(1, 1), .size = 0};
+    http_response_buf_t         resp_buf = {.body = req->stream ? NULL : calloc(1, 1), .size = 0};
     struct anthropic_stream_ctx sctx = {
         .req = req,
         .res = res,
@@ -450,6 +450,7 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
     }
 
     if (req->stream) {
+        free(resp_buf.body);
         free(sctx.line_buf);
         if (sctx.tool_count > 0) {
             res->tool_calls = calloc(sctx.tool_count, sizeof(csilk_ai_tool_call_t));
