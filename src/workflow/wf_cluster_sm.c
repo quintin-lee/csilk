@@ -1,7 +1,7 @@
 /**
  * @file wf_cluster_sm.c
  * @brief Cluster state-machine integration binding workflows to Raft for
- *        distributed consensus and command replication.
+ *        distributed consensus, command replication, and snapshot replay.
  *
  * @copyright MIT License
  */
@@ -13,37 +13,110 @@
 #include "csilk/app/workflow_dsl.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/raft.h"
+#include "workflow_internal.h"
 
 #define WF_CLUSTER_MAX_BINDINGS 32
+#define WF_CLUSTER_PAYLOAD_CAP 1024
 
 typedef struct {
     csilk_wf_manager_t* mgr;
     csilk_raft_node_t*  node;
+    size_t              applied_count;
+    uint8_t             has_last_cmd;
+    uint8_t             last_cmd_type;
+    char                last_payload[WF_CLUSTER_PAYLOAD_CAP];
+    uint64_t            last_applied_index;
 } wf_cluster_binding_t;
 
 static wf_cluster_binding_t s_bindings[WF_CLUSTER_MAX_BINDINGS];
 static size_t               s_binding_count = 0;
 static csilk_mutex_t        s_binding_mutex;
-static int                  s_binding_mutex_ready = 0;
+static csilk_once_t         s_binding_once = CSILK_ONCE_INIT;
 
 static void
-ensure_binding_mutex(void)
+wf_cluster_init_mutex(void)
 {
-    if (!s_binding_mutex_ready) {
-        csilk_mutex_init(&s_binding_mutex);
-        s_binding_mutex_ready = 1;
-    }
+    csilk_mutex_init(&s_binding_mutex);
 }
 
-/**
- * @brief Binds a workflow manager to a Raft node for cluster coordination.
- *
- * Validates the arguments and records the association in the cluster registry.
- *
- * @param mgr       The workflow manager to bind (must not be NULL).
- * @param raft_node The Raft node to associate with the manager (must not be NULL).
- * @return 0 on success, or -1 if either argument is NULL or table full.
- */
+static void
+wf_sm_on_entry(uint64_t index, uint64_t term, const uint8_t* data, size_t len, void* user_data)
+{
+    (void)term;
+    wf_cluster_binding_t* slot = (wf_cluster_binding_t*)user_data;
+    if (!slot || !data || len == 0) {
+        return;
+    }
+
+    csilk_mutex_lock(&s_binding_mutex);
+    if (slot->mgr != NULL && index > slot->last_applied_index) {
+        slot->last_applied_index = index;
+        slot->applied_count++;
+        slot->has_last_cmd = 1;
+        slot->last_cmd_type = data[0];
+
+        size_t plen = len - 1U;
+        if (plen >= sizeof(slot->last_payload)) {
+            plen = sizeof(slot->last_payload) - 1U;
+        }
+        if (plen > 0) {
+            memcpy(slot->last_payload, data + 1U, plen);
+        }
+        slot->last_payload[plen] = '\0';
+    }
+    csilk_mutex_unlock(&s_binding_mutex);
+}
+
+static void
+wf_sm_on_snapshot(
+    uint64_t last_index, uint64_t last_term, const uint8_t* data, size_t len, void* user_data)
+{
+    (void)last_term;
+    wf_cluster_binding_t* slot = (wf_cluster_binding_t*)user_data;
+    if (!slot || !data || len == 0) {
+        return;
+    }
+
+    csilk_mutex_lock(&s_binding_mutex);
+    if (slot->mgr != NULL && last_index >= slot->last_applied_index) {
+        slot->last_applied_index = last_index;
+        slot->has_last_cmd = 1;
+        if (len >= 2U) {
+            slot->last_cmd_type = data[0];
+            size_t plen = len - 1U;
+            if (plen >= sizeof(slot->last_payload)) {
+                plen = sizeof(slot->last_payload) - 1U;
+            }
+            memcpy(slot->last_payload, data + 1U, plen);
+            slot->last_payload[plen] = '\0';
+        } else {
+            slot->last_cmd_type = data[0];
+            slot->last_payload[0] = '\0';
+        }
+        if (slot->applied_count == 0) {
+            slot->applied_count = 1;
+        }
+    }
+    csilk_mutex_unlock(&s_binding_mutex);
+}
+
+void
+_wf_cluster_unbind_mgr(csilk_wf_manager_t* mgr)
+{
+    if (!mgr) {
+        return;
+    }
+
+    csilk_once(&s_binding_once, wf_cluster_init_mutex);
+    csilk_mutex_lock(&s_binding_mutex);
+    for (size_t i = 0; i < s_binding_count; i++) {
+        if (s_bindings[i].mgr == mgr) {
+            memset(&s_bindings[i], 0, sizeof(s_bindings[i]));
+        }
+    }
+    csilk_mutex_unlock(&s_binding_mutex);
+}
+
 int
 csilk_wf_cluster_bind_raft(csilk_wf_manager_t* mgr, csilk_raft_node_t* raft_node)
 {
@@ -51,41 +124,69 @@ csilk_wf_cluster_bind_raft(csilk_wf_manager_t* mgr, csilk_raft_node_t* raft_node
         return -1;
     }
 
-    ensure_binding_mutex();
+    csilk_once(&s_binding_once, wf_cluster_init_mutex);
     csilk_mutex_lock(&s_binding_mutex);
 
+    wf_cluster_binding_t* slot = NULL;
+    wf_cluster_binding_t* free_slot = NULL;
     for (size_t i = 0; i < s_binding_count; i++) {
         if (s_bindings[i].mgr == mgr) {
-            s_bindings[i].node = raft_node;
-            csilk_mutex_unlock(&s_binding_mutex);
-            return 0;
+            slot = &s_bindings[i];
+            break;
+        }
+        if (s_bindings[i].mgr == NULL && !free_slot) {
+            free_slot = &s_bindings[i];
         }
     }
 
-    if (s_binding_count >= WF_CLUSTER_MAX_BINDINGS) {
-        csilk_mutex_unlock(&s_binding_mutex);
+    if (!slot) {
+        if (free_slot) {
+            slot = free_slot;
+        } else {
+            if (s_binding_count >= WF_CLUSTER_MAX_BINDINGS) {
+                csilk_mutex_unlock(&s_binding_mutex);
+                return -1;
+            }
+            slot = &s_bindings[s_binding_count++];
+        }
+        memset(slot, 0, sizeof(*slot));
+        slot->mgr = mgr;
+    } else if (slot->node != raft_node) {
+        slot->applied_count = 0;
+        slot->has_last_cmd = 0;
+        slot->last_cmd_type = 0;
+        slot->last_payload[0] = '\0';
+        slot->last_applied_index = 0;
+    }
+    slot->node = raft_node;
+    csilk_mutex_unlock(&s_binding_mutex);
+
+    if (csilk_raft_set_apply_cb(raft_node, wf_sm_on_entry, wf_sm_on_snapshot, slot) != 0) {
         return -1;
     }
-
-    s_bindings[s_binding_count].mgr = mgr;
-    s_bindings[s_binding_count].node = raft_node;
-    s_binding_count++;
-
-    csilk_mutex_unlock(&s_binding_mutex);
+    if (csilk_raft_replay_committed(raft_node) != 0) {
+        return -1;
+    }
     return 0;
 }
 
-/**
- * @brief Replicates a cluster command through Raft for distributed workflows.
- *
- * Encodes the command type and payload into a binary frame and appends it
- * into the Raft node's write-ahead log.
- *
- * @param node      The Raft node that should replicate the command (must not be NULL).
- * @param cmd_type  Opaque command type identifier.
- * @param payload   Command payload bytes (must not be NULL).
- * @return 0 on success, or -1 on NULL args / replication failure.
- */
+static uint8_t*
+wf_encode_cmd_frame(uint8_t cmd_type, const char* payload, size_t* out_len)
+{
+    size_t   plen = strlen(payload);
+    size_t   flen = plen + 1U;
+    uint8_t* frame = malloc(flen);
+    if (!frame) {
+        return NULL;
+    }
+    frame[0] = cmd_type;
+    if (plen > 0) {
+        memcpy(frame + 1U, payload, plen);
+    }
+    *out_len = flen;
+    return frame;
+}
+
 int
 csilk_wf_cluster_replicate_cmd(csilk_raft_node_t* node, uint8_t cmd_type, const char* payload)
 {
@@ -93,17 +194,82 @@ csilk_wf_cluster_replicate_cmd(csilk_raft_node_t* node, uint8_t cmd_type, const 
         return -1;
     }
 
-    size_t   plen = strlen(payload);
-    size_t   flen = plen + 1;
-    uint8_t* frame = malloc(flen);
+    size_t   flen = 0;
+    uint8_t* frame = wf_encode_cmd_frame(cmd_type, payload, &flen);
     if (!frame) {
         return -1;
     }
-    frame[0] = cmd_type;
-    memcpy(frame + 1, payload, plen);
 
     uint64_t idx = csilk_raft_append_log(node, frame, flen);
     free(frame);
 
     return idx > 0 ? 0 : -1;
+}
+
+int
+csilk_wf_cluster_replicate_cmd_wait(csilk_raft_node_t* node,
+                                    uint8_t            cmd_type,
+                                    const char*        payload,
+                                    uint32_t           timeout_ms)
+{
+    if (!node || !payload) {
+        return -1;
+    }
+
+    size_t   flen = 0;
+    uint8_t* frame = wf_encode_cmd_frame(cmd_type, payload, &flen);
+    if (!frame) {
+        return -1;
+    }
+
+    int rc = csilk_raft_replicate_wait(node, frame, flen, timeout_ms, NULL);
+    free(frame);
+    return rc;
+}
+
+size_t
+csilk_wf_cluster_applied_count(const csilk_wf_manager_t* mgr)
+{
+    if (!mgr) {
+        return 0;
+    }
+    csilk_once(&s_binding_once, wf_cluster_init_mutex);
+    csilk_mutex_lock(&s_binding_mutex);
+    size_t count = 0;
+    for (size_t i = 0; i < s_binding_count; i++) {
+        if (s_bindings[i].mgr == mgr) {
+            count = s_bindings[i].applied_count;
+            break;
+        }
+    }
+    csilk_mutex_unlock(&s_binding_mutex);
+    return count;
+}
+
+int
+csilk_wf_cluster_get_last_cmd(const csilk_wf_manager_t* mgr,
+                              uint8_t*                  out_cmd_type,
+                              char*                     out_payload,
+                              size_t                    out_cap)
+{
+    if (!mgr) {
+        return -1;
+    }
+    csilk_once(&s_binding_once, wf_cluster_init_mutex);
+    csilk_mutex_lock(&s_binding_mutex);
+    int rc = -1;
+    for (size_t i = 0; i < s_binding_count; i++) {
+        if (s_bindings[i].mgr == mgr && s_bindings[i].has_last_cmd) {
+            if (out_cmd_type) {
+                *out_cmd_type = s_bindings[i].last_cmd_type;
+            }
+            if (out_payload && out_cap > 0) {
+                snprintf(out_payload, out_cap, "%s", s_bindings[i].last_payload);
+            }
+            rc = 0;
+            break;
+        }
+    }
+    csilk_mutex_unlock(&s_binding_mutex);
+    return rc;
 }

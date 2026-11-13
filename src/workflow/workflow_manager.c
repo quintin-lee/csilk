@@ -71,6 +71,7 @@ csilk_wf_manager_free(csilk_wf_manager_t* mgr)
     }
     csilk_mutex_unlock(&mgr->mutex);
     csilk_mutex_destroy(&mgr->mutex);
+    _wf_cluster_unbind_mgr(mgr);
     free(mgr);
 }
 
