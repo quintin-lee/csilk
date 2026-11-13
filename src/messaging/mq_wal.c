@@ -118,13 +118,12 @@ mq_wal_writer_thread(void* arg)
             uint32_t checksum = mq_wal_checksum(task->topic, topic_len, task->payload, payload_len);
 
             /* Write frame */
-            if (write(task->fd, &topic_len, 4) == 4) {
-                (void)write(task->fd, task->topic, topic_len);
-                (void)write(task->fd, &payload_len, 4);
-                if (payload_len > 0 && task->payload) {
-                    (void)write(task->fd, task->payload, payload_len);
-                }
-                (void)write(task->fd, &checksum, 4);
+            if (_csilk_wal_write_all(task->fd, &topic_len, 4) == 0 &&
+                _csilk_wal_write_all(task->fd, task->topic, topic_len) == 0 &&
+                _csilk_wal_write_all(task->fd, &payload_len, 4) == 0 &&
+                (payload_len == 0 || !task->payload ||
+                 _csilk_wal_write_all(task->fd, task->payload, payload_len) == 0)) {
+                (void)_csilk_wal_write_all(task->fd, &checksum, 4);
             }
 
             if (task->fd >= 0) {
@@ -149,11 +148,7 @@ mq_wal_writer_thread(void* arg)
         /* Sync all unique FDs in the batch */
         for (size_t i = 0; i < sync_fd_count; i++) {
             if (sync_fds[i] >= 0) {
-#ifdef __APPLE__
-                fsync(sync_fds[i]);
-#else
-                fdatasync(sync_fds[i]);
-#endif
+                (void)_csilk_wal_fsync_fd(sync_fds[i]);
             }
         }
 
