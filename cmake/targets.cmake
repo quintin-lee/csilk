@@ -348,7 +348,7 @@ if(TARGET csilk::llhttp)
   csilk_link_module(csilk_http csilk::llhttp)
 endif()
 
-csilk_link_module(csilk_db csilk_runtime csilk_json SQLite3::SQLite3 CURL::libcurl)
+csilk_link_module(csilk_db csilk_runtime csilk_json SQLite3::SQLite3)
 foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
   if(TARGET ${DB_TARGET})
     csilk_link_module(csilk_db ${DB_TARGET})

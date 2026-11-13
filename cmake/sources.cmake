@@ -160,6 +160,7 @@ set(CSILK_DB_SOURCES
     src/drivers/db/migration/migration_checksum.c
     src/drivers/db/migration/migration_engine.c
     src/drivers/db/migration/migration_lock.c
+    src/drivers/db/mysql.c
 )
 
 # ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
