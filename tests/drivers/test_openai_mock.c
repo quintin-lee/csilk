@@ -9,124 +9,211 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <netdb.h>
-#include <netinet/in.h>
 #include <sys/types.h>
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
 
-#define MOCK_PORT 18081
-/* Max time (ms) to wait for the mock server socket to accept a connection.
- * A fixed 300ms sleep is unreliable on slow CI runners (notably macOS ARM
- * where Python cold start can exceed it); poll instead with a cap. */
-#define MOCK_START_TIMEOUT_MS 10000
-#define MOCK_START_POLL_MS 50
+/* Max time (ms) to wait for the mock server to bind an ephemeral port and
+ * report it back over the readiness pipe. */
+#define MOCK_START_TIMEOUT_MS 15000
 
-static pid_t g_mock_pid = 0;
-
-/* Probe 127.0.0.1:MOCK_PORT by attempting a TCP connect. Returns 0 when the
- * port is listening, -1 on failure. The probe socket is closed immediately so
- * it does not disturb the single-threaded Python http.server. */
-static int
-probe_mock_port(void)
-{
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        return -1;
-    }
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(MOCK_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    int rc = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    close(fd);
-    return rc;
-}
+static volatile sig_atomic_t g_mock_pid = 0;
+static int                   g_mock_port = 0;
+static int                   g_parent_pipe_wr = -1;
 
 static void
-start_mock_server(void)
+on_fatal_signal(int sig)
 {
-    g_mock_pid = fork();
-    if (g_mock_pid == 0) {
-        char port_str[8];
-        snprintf(port_str, sizeof(port_str), "%d", MOCK_PORT);
-        const char* script_path = "tests/drivers/openai_mock_server.py";
-        if (access(script_path, R_OK) != 0) {
-            script_path = "../tests/drivers/openai_mock_server.py";
-        }
-        execlp("python3", "python3", script_path, port_str, (char*)NULL);
-        _exit(127);
+    if (g_parent_pipe_wr >= 0) {
+        close(g_parent_pipe_wr);
+        g_parent_pipe_wr = -1;
     }
-
-    /* Poll until the mock port actually accepts a connection, so the first
-     * requests in this test never hit an ECONNREFUSED that would trip the
-     * AI driver's retry/backoff path on slow runners. */
-    for (int waited_ms = 0; waited_ms < MOCK_START_TIMEOUT_MS; waited_ms += MOCK_START_POLL_MS) {
-        if (probe_mock_port() == 0) {
-            return;
-        }
-        /* Bail out early if the child died before binding. */
-        int status;
-        if (waitpid(g_mock_pid, &status, WNOHANG) == g_mock_pid) {
-            g_mock_pid = 0;
-            fprintf(stderr, "mock server exited early: status=%d\n", status);
-            return;
-        }
-        usleep(MOCK_START_POLL_MS * 1000);
+    pid_t pid = (pid_t)g_mock_pid;
+    if (pid > 0) {
+        kill(pid, SIGKILL);
     }
-    /* Fail fast: a not-ready mock means every subsequent request will
-     * trigger the AI driver's 1s+2s retry/backoff path, making the whole
-     * test suite take minutes.  Better to abort immediately so CI reports
-     * a clear failure instead of a long silent hang. */
-    fprintf(stderr,
-            "FATAL: mock server port not ready within %d ms; aborting test\n",
-            MOCK_START_TIMEOUT_MS);
-    g_mock_pid = 0;
-    abort();
+    signal(sig, SIG_DFL);
+    raise(sig);
 }
 
 static void
 stop_mock_server(void)
 {
-    if (g_mock_pid <= 0) {
+    if (g_parent_pipe_wr >= 0) {
+        close(g_parent_pipe_wr);
+        g_parent_pipe_wr = -1;
+    }
+    pid_t pid = (pid_t)g_mock_pid;
+    if (pid <= 0) {
         return;
     }
-    kill(g_mock_pid, SIGTERM);
+    g_mock_pid = 0;
+    kill(pid, SIGTERM);
     int status = 0;
     /* SIGTERM is handled by Python as immediate process termination. Reap
      * the child so no zombie lingers and the port is released. If it is
      * wedged for any reason, escalate to SIGKILL after a short grace. */
     int reaped = 0;
     for (int i = 0; i < 100; i++) { /* up to ~5s */
-        pid_t r = waitpid(g_mock_pid, &status, WNOHANG);
-        if (r == g_mock_pid) {
+        pid_t r = waitpid(pid, &status, WNOHANG);
+        if (r == pid) {
             reaped = 1;
             break;
         }
         usleep(50 * 1000);
     }
     if (!reaped) {
-        kill(g_mock_pid, SIGKILL);
-        waitpid(g_mock_pid, &status, 0);
+        kill(pid, SIGKILL);
+        waitpid(pid, &status, 0);
     }
-    g_mock_pid = 0;
+}
+
+static const char*
+resolve_mock_script(void)
+{
+    static const char* const candidates[] = {
+        "tests/drivers/openai_mock_server.py",
+        "../tests/drivers/openai_mock_server.py",
+        "../../tests/drivers/openai_mock_server.py",
+    };
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+        if (access(candidates[i], R_OK) == 0) {
+            return candidates[i];
+        }
+    }
+    return "../tests/drivers/openai_mock_server.py";
+}
+
+static void
+start_mock_server(void)
+{
+    int ready_pipe[2];
+    if (pipe(ready_pipe) != 0) {
+        perror("pipe");
+        abort();
+    }
+    int parent_pipe[2];
+    if (pipe(parent_pipe) != 0) {
+        perror("pipe");
+        close(ready_pipe[0]);
+        close(ready_pipe[1]);
+        abort();
+    }
+
+    char        ready_fd_str[16];
+    char        parent_fd_str[16];
+    const char* script_path = resolve_mock_script();
+    snprintf(ready_fd_str, sizeof(ready_fd_str), "%d", ready_pipe[1]);
+    snprintf(parent_fd_str, sizeof(parent_fd_str), "%d", parent_pipe[0]);
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        close(ready_pipe[0]);
+        close(ready_pipe[1]);
+        close(parent_pipe[0]);
+        close(parent_pipe[1]);
+        abort();
+    }
+    if (pid == 0) {
+        close(ready_pipe[0]);
+        close(parent_pipe[1]);
+        /* Detach stdin/stdout/stderr from CTest pipes so a failing parent
+         * never blocks CTest waiting for child EOF. */
+        int devnull = open("/dev/null", O_RDWR);
+        if (devnull >= 0) {
+            dup2(devnull, STDIN_FILENO);
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > STDERR_FILENO) {
+                close(devnull);
+            }
+        }
+        execlp("python3",
+               "python3",
+               script_path,
+               "0",
+               "--ready-fd",
+               ready_fd_str,
+               "--parent-fd",
+               parent_fd_str,
+               (char*)NULL);
+        _exit(127);
+    }
+
+    g_mock_pid = (sig_atomic_t)pid;
+    g_parent_pipe_wr = parent_pipe[1];
+    close(ready_pipe[1]);
+    close(parent_pipe[0]);
+
+    char   port_buf[32];
+    size_t used = 0;
+    int    ready = 0;
+    while (used + 1 < sizeof(port_buf)) {
+        struct pollfd pfd = {
+            .fd = ready_pipe[0],
+            .events = POLLIN,
+            .revents = 0,
+        };
+        int prc = poll(&pfd, 1, MOCK_START_TIMEOUT_MS);
+        if (prc <= 0) {
+            if (prc < 0 && errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        ssize_t n = read(ready_pipe[0], port_buf + used, sizeof(port_buf) - 1 - used);
+        if (n <= 0) {
+            if (n < 0 && errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        used += (size_t)n;
+        port_buf[used] = '\0';
+        if (strchr(port_buf, '\n') != NULL) {
+            ready = 1;
+            break;
+        }
+    }
+    close(ready_pipe[0]);
+
+    if (ready) {
+        int port = atoi(port_buf);
+        if (port > 0 && port <= 65535) {
+            g_mock_port = port;
+            return;
+        }
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, WNOHANG) == pid) {
+        g_mock_pid = 0;
+        fprintf(stderr, "FATAL: mock server exited early: status=%d\n", status);
+    } else {
+        fprintf(stderr,
+                "FATAL: mock server port not ready within %d ms; aborting test\n",
+                MOCK_START_TIMEOUT_MS);
+        stop_mock_server();
+    }
+    abort();
 }
 
 static const char*
 get_base_url(void)
 {
     static char url[128];
-    snprintf(url, sizeof(url), "http://127.0.0.1:%d/v1", MOCK_PORT);
+    snprintf(url, sizeof(url), "http://127.0.0.1:%d/v1", g_mock_port);
     return url;
 }
 
@@ -187,6 +274,7 @@ test_chat_non_streaming(void)
     req.message_count = 1;
     req.temperature = 0.7;
     req.max_tokens = 50;
+    req.timeout_ms = 10000;
 
     csilk_ai_chat_response_t res = {0};
     int                      rc = csilk_ai_chat(ai, &req, &res);
@@ -214,6 +302,7 @@ test_chat_streaming(void)
     req.messages = &msg;
     req.message_count = 1;
     req.stream = 1;
+    req.timeout_ms = 10000;
 
     stream_accum_t acc = {.buf = {0}, .len = 0};
     req.on_chunk = stream_cb;
@@ -258,6 +347,7 @@ test_chat_streaming_with_tools(void)
     req.tools = &tool;
     req.tool_count = 1;
     req.stream = 1;
+    req.timeout_ms = 10000;
 
     stream_accum_t acc = {.buf = {0}, .len = 0};
     req.on_chunk = stream_cb;
@@ -302,6 +392,7 @@ test_chat_with_tools(void)
     req.message_count = 1;
     req.tools = &tool;
     req.tool_count = 1;
+    req.timeout_ms = 10000;
 
     csilk_ai_chat_response_t res = {0};
     int                      rc = csilk_ai_chat(ai, &req, &res);
@@ -436,16 +527,12 @@ test_free_null_ai(void)
 int
 main(void)
 {
-    /* atexit guard: even if an assert aborts the process, the mock
-     * server child is reaped so the port is released for the next run. */
     atexit(stop_mock_server);
+    signal(SIGABRT, on_fatal_signal);
+    signal(SIGTERM, on_fatal_signal);
+    signal(SIGINT, on_fatal_signal);
 
     start_mock_server();
-    if (g_mock_pid == 0) {
-        /* start_mock_server either called abort() already or the child
-         * died immediately; nothing left to do. */
-        return 1;
-    }
 
     test_init_null_key();
     test_init_invalid_driver();
