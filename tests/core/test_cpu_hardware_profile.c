@@ -28,6 +28,16 @@
  * @copyright MIT License
  */
 
+#ifndef __linux__
+#include <stdio.h>
+int
+main(void)
+{
+    printf("CPU_HARDWARE_PROFILE: skipped (Linux-only perf_event_open)\n");
+    return 0;
+}
+#else
+
 #define _GNU_SOURCE
 #include <errno.h>
 #include <inttypes.h>
@@ -499,3 +509,4 @@ main(void)
     profile_hotspot_breakdown();
     return 0;
 }
+#endif

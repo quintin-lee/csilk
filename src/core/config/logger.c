@@ -105,9 +105,9 @@ log_pool_pop(void)
 {
     csilk_log_node_t* head = atomic_load_explicit(&g_logger.free_stack, memory_order_acquire);
     while (head) {
-        csilk_log_node_t* next = atomic_load_explicit(&head->next_free, memory_order_relaxed);
+        csilk_log_node_t* next = atomic_load_explicit(&head->next_free, memory_order_acquire);
         if (atomic_compare_exchange_weak_explicit(
-                &g_logger.free_stack, &head, next, memory_order_release, memory_order_acquire)) {
+                &g_logger.free_stack, &head, next, memory_order_acq_rel, memory_order_acquire)) {
             return head;
         }
     }
