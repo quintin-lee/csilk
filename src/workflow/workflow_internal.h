@@ -164,6 +164,8 @@ CSILK_INTERNAL const char* _wf_run_ext_internal(csilk_wf_t*   wf,
                                                  void (*callback)(csilk_data_t*),
                                                  void (*trace_cb)(csilk_data_t*, csilk_wf_trace_t*));
 CSILK_INTERNAL void        _wf_cleanup_stale_ctx(csilk_wf_t* wf, const char* exec_id);
+struct csilk_wf_manager_s;
+CSILK_INTERNAL void        _wf_cluster_unbind_mgr(struct csilk_wf_manager_s* mgr);
 // clang-format on
 
 #endif
