@@ -116,7 +116,7 @@ csilk_async_op_begin(csilk_ctx_t*           c,
     op->on_timeout = on_timeout;
     op->user_data = user_data;
     op->request_seq = c->request_seq;
-    op->stream_gen = (uint32_t)c->stream_gen;
+    op->stream_gen = c->stream_gen;
     atomic_init(&op->completed, 0);
     atomic_init(&op->ref_count, 1); /* User reference */
 
@@ -142,6 +142,17 @@ csilk_async_op_begin(csilk_ctx_t*           c,
     }
 
     return op;
+}
+
+static void
+_csilk_async_cancel_dispatch_cb(void* arg)
+{
+    csilk_async_op_t* op = (csilk_async_op_t*)arg;
+    if (!op) {
+        return;
+    }
+    _csilk_async_op_disarm_timer(op);
+    _csilk_async_op_unref(op);
 }
 
 static void
@@ -211,7 +222,10 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     csilk_async_dispatch_payload_t* payload =
         (csilk_async_dispatch_payload_t*)malloc(sizeof(csilk_async_dispatch_payload_t));
     if (!payload) {
-        _csilk_async_op_disarm_timer(op);
+        atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
+        if (_csilk_dispatch_try(op->ctx, _csilk_async_cancel_dispatch_cb, op) < 0) {
+            _csilk_async_op_unref(op);
+        }
         _csilk_async_op_unref(op);
         return -1;
     }
@@ -245,7 +259,21 @@ csilk_async_op_cancel(csilk_async_op_t* op)
         return -1;
     }
 
-    _csilk_async_op_disarm_timer(op);
+    csilk_ctx_t*    c = op->ctx;
+    csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
+
+    /* If on owner worker thread or standalone mock context without worker pool, execute inline */
+    if (!client || !client->owner_pool || _csilk_is_owner_worker_thread(client->owner_pool)) {
+        _csilk_async_op_disarm_timer(op);
+        _csilk_async_op_unref(op); /* Release caller's reference */
+        return 0;
+    }
+
+    /* Cross-thread: must dispatch timer disarm to owner worker event loop */
+    atomic_fetch_add_explicit(&op->ref_count, 1, memory_order_relaxed);
+    if (_csilk_dispatch_try(op->ctx, _csilk_async_cancel_dispatch_cb, op) < 0) {
+        _csilk_async_op_unref(op);
+    }
     _csilk_async_op_unref(op); /* Release caller's reference */
     return 0;
 }

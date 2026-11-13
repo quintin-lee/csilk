@@ -9,6 +9,7 @@
 #ifndef CSILK_LFQUEUE_H
 #define CSILK_LFQUEUE_H
 
+#include <sched.h>
 #include <stdatomic.h>
 #include <stddef.h>
 
@@ -69,7 +70,17 @@ csilk_lfq_dequeue(csilk_lfqueue_t* q)
 
     csilk_lfq_node_t* head = atomic_load_explicit(&q->head, memory_order_acquire);
     if (tail != head) {
-        return NULL;
+        while ((next = atomic_load_explicit(&tail->next, memory_order_acquire)) == NULL) {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+            __builtin_ia32_pause();
+#elif defined(__aarch64__)
+            __asm__ volatile("yield" ::: "memory");
+#else
+            sched_yield();
+#endif
+        }
+        q->tail = next;
+        return tail;
     }
 
     csilk_lfq_enqueue(q, &q->stub);

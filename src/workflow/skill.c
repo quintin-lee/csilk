@@ -265,7 +265,7 @@ json_escape_json_result(const char* skill_name, const char* content)
         const char* rep = NULL;
         switch (c) {
         case '"':
-            rep = "\"";
+            rep = "\\\"";
             break;
         case '\\':
             rep = "\\\\";
@@ -392,17 +392,16 @@ csilk_ai_skill_run_use_skill(csilk_wf_t* wf, const char* args_json)
 static char*
 use_skill_trigger_fn(const char* args_json, void* user_data)
 {
-    skill_wf_entry_t* self = (skill_wf_entry_t*)user_data;
-    return _use_skill_resolve(self ? self->wf : NULL, args_json);
+    csilk_wf_t* wf = (csilk_wf_t*)user_data;
+    return _use_skill_resolve(wf, args_json);
 }
 
 /**
- * @brief Tool-discovery callback installed (or chained) by a skill registration.
+ * @brief Tool-discovery callback installed by a skill registration.
  *
  * Enumerates every skill registered on this workflow and emits a single
  * `use_skill` trigger tool whose description aggregates the available skill
- * names.  Falls through to the previously-installed discovery callback so
- * user-supplied dynamic tools are preserved.
+ * names.
  */
 static int
 skill_discovery_cb(csilk_wf_t*                  wf,
@@ -414,9 +413,9 @@ skill_discovery_cb(csilk_wf_t*                  wf,
 {
     (void)static_tools;
     (void)static_count;
+    (void)user_data;
 
-    skill_wf_entry_t* self = (skill_wf_entry_t*)user_data;
-    int               rc = ensure_skill_registry();
+    int rc = ensure_skill_registry();
     (void)rc;
 
     /* Aggregate every skill registered on this wf into one description. */
@@ -439,51 +438,32 @@ skill_discovery_cb(csilk_wf_t*                  wf,
     }
     csilk_mutex_unlock(&g_skill_mutex);
 
-    /* Chain to the previously-installed discovery callback (if any). */
-    size_t                 prev_count = 0;
-    csilk_wf_tool_entry_t* prev = NULL;
-    if (self && self->prev_discovery) {
-        self->prev_discovery(
-            wf, static_tools, static_count, &prev, &prev_count, self->prev_user_data);
-    }
-
-    size_t total = (found > 0 ? 1 : 0) + prev_count;
-    if (total == 0) {
+    if (found == 0) {
         *discovered_out = NULL;
         *discovered_count_out = 0;
         return 0;
     }
 
-    csilk_wf_tool_entry_t* out = calloc(total, sizeof(csilk_wf_tool_entry_t));
+    csilk_wf_tool_entry_t* out = calloc(1, sizeof(csilk_wf_tool_entry_t));
     if (!out) {
-        free(prev);
         *discovered_out = NULL;
         *discovered_count_out = 0;
         return -1;
     }
 
-    size_t idx = 0;
-    if (found > 0) {
-        out[idx].name = strdup("use_skill");
-        out[idx].description = strdup(desc);
-        char schema[512];
-        snprintf(schema,
-                 sizeof(schema),
-                 "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\","
-                 "\"description\":\"the skill name\"}},\"required\":[\"name\"]}");
-        out[idx].parameters_json = strdup(schema);
-        out[idx].fn = use_skill_trigger_fn;
-        out[idx].user_data = self;
-        idx++;
-    }
-    for (size_t i = 0; i < prev_count; i++) {
-        out[idx] = prev[i];
-        idx++;
-    }
-    free(prev);
+    out[0].name = strdup("use_skill");
+    out[0].description = strdup(desc);
+    char schema[512];
+    snprintf(schema,
+             sizeof(schema),
+             "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\","
+             "\"description\":\"the skill name\"}},\"required\":[\"name\"]}");
+    out[0].parameters_json = strdup(schema);
+    out[0].fn = use_skill_trigger_fn;
+    out[0].user_data = wf;
 
     *discovered_out = out;
-    *discovered_count_out = total;
+    *discovered_count_out = 1;
     return 0;
 }
 
@@ -510,10 +490,7 @@ csilk_ai_skill_register(csilk_wf_t* wf, csilk_ai_skill_t* sk)
     g_skill_reg_count++;
     csilk_mutex_unlock(&g_skill_mutex);
 
-    /* Install (or chain) the discovery callback on this workflow.  Capture the
-     * previously-installed callback so we can chain to it, then point the
-     * workflow's discovery at our skill callback with `e` as user_data. */
-    csilk_wf_set_tool_discovery(wf, skill_discovery_cb, e);
+    csilk_wf_set_tool_discovery(wf, skill_discovery_cb, wf);
     return 0;
 }
 
@@ -1066,10 +1043,11 @@ csilk_skill_exec_local(
     if (args && args[0]) {
         strncpy(argbuf, args, sizeof(argbuf) - 1);
         argbuf[sizeof(argbuf) - 1] = 0;
-        char* tok = strtok(argbuf, " ");
+        char* saveptr_arg = NULL;
+        char* tok = strtok_r(argbuf, " ", &saveptr_arg);
         while (tok && argc < (int)(sizeof(argv) / sizeof(argv[0]) - 1)) {
             argv[argc++] = tok;
-            tok = strtok(NULL, " ");
+            tok = strtok_r(NULL, " ", &saveptr_arg);
         }
     }
     argv[argc] = NULL;
@@ -1088,17 +1066,18 @@ csilk_skill_exec_local(
      * glibc, macOS/BSD, and other POSIX systems.  execve does not search
      * PATH, so the child resolves argv[0] to an absolute path before the
      * call. */
-    static char s_env_tokens[4096];
-    char*       envp[64];
-    int         envc = 0;
+    char  s_env_tokens[4096];
+    char* envp[64];
+    int   envc = 0;
     envp[envc++] = "PATH=/usr/bin:/bin";
     if (sk->exec_cfg.env && sk->exec_cfg.env[0]) {
         memset(s_env_tokens, 0, sizeof(s_env_tokens));
         strncpy(s_env_tokens, sk->exec_cfg.env, sizeof(s_env_tokens) - 1);
-        char* etok = strtok(s_env_tokens, " ");
+        char* saveptr_env = NULL;
+        char* etok = strtok_r(s_env_tokens, " ", &saveptr_env);
         while (etok && envc < 63) {
             envp[envc++] = etok;
-            etok = strtok(NULL, " ");
+            etok = strtok_r(NULL, " ", &saveptr_env);
         }
     }
     envp[envc] = NULL;

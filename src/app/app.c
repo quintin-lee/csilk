@@ -315,6 +315,8 @@ csilk_app_free(csilk_app_t* app)
     }
     csilk_router_free(app->router);
     csilk_config_free(&app->config);
+    extern void csilk_openapi_cache_invalidate(void);
+    csilk_openapi_cache_invalidate();
     free(app);
 }
 

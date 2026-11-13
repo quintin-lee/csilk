@@ -56,13 +56,9 @@ test_mq_wal_write()
     assert(read(fd, &checksum, 4) == 4);
 
     /* Verify checksum */
-    uint32_t expected_checksum = 0;
-    for (uint32_t i = 0; i < tlen; i++) {
-        expected_checksum ^= (uint8_t)topic[i];
-    }
-    for (uint32_t i = 0; i < plen; i++) {
-        expected_checksum ^= (uint8_t)payload[i];
-    }
+    extern uint32_t mq_wal_checksum(
+        const char* topic, uint32_t topic_len, const void* payload, uint32_t payload_len);
+    uint32_t expected_checksum = mq_wal_checksum(topic, tlen, payload, plen);
     assert(checksum == expected_checksum);
 
     close(fd);

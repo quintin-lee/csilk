@@ -88,7 +88,7 @@ csilk_csrf_middleware_ext(csilk_ctx_t* c, const csilk_csrf_config_t* config)
             char token_buf[33];
             if (csilk_csrf_generate_token(token_buf, sizeof(token_buf)) == 0) {
                 CSILK_LOG_D("CSRF: Generated new CSRF cookie for request %p", (void*)c);
-                csilk_set_cookie(c, cookie_name, token_buf, 86400, "/", NULL, 1, 0);
+                csilk_set_cookie_ex(c, cookie_name, token_buf, 86400, "/", NULL, 1, 0, "Lax");
             }
             explicit_bzero(token_buf, sizeof(token_buf));
         }

@@ -202,25 +202,8 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
     }
     memcpy(frame + header_len, payload, len);
 
-    csilk_io_write_t* write_req = malloc(sizeof(csilk_io_write_t));
-    if (write_req) {
-        csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
-        write_req->data = frame;
-        csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-        csilk_client_ref(cl);
-        _csilk_client_pending_io_inc(cl);
-        int r = csilk_io_write(write_req, stream, &buf, 1, on_ws_write);
-        if (r < 0) {
-            _csilk_client_pending_io_dec(cl);
-            csilk_client_unref(cl);
-            free(frame);
-            free(write_req);
-            return -1;
-        }
-    } else {
-        free(frame);
-        return -1;
-    }
+    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
+    _csilk_send_data_owned(c, (char*)frame, frame_len);
 
     q = _csilk_client_get_write_queue_size(cl);
     if (c->write_high_water_mark > 0 && q >= c->write_high_water_mark) {
@@ -231,47 +214,6 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
     return 1;
 }
 
-/** @brief Write completion callback for WebSocket close frames.
- *
- * Frees the frame buffer and write request. Logs an error if the write
- * failed.
- *
- * @param req    The completed write request (freed by this callback).
- * @param status UV status code (negative indicates error, logged to stderr). */
-static void
-on_close_write(csilk_io_write_t* req, int status)
-{
-    if (status < 0) {
-        CSILK_LOG_E("WS close write error: %s", csilk_io_strerror(status));
-    }
-    csilk_client_t* client = NULL;
-    if (req->handle) {
-        client = (csilk_client_t*)req->handle->data;
-    }
-    if (req->data) {
-        free(req->data);
-    }
-    free(req);
-
-    if (client) {
-        _csilk_client_pending_io_dec(client);
-        csilk_client_unref(client);
-    }
-}
-
-/** @brief Send a WebSocket close frame per RFC 6455 §5.5.1.
- *
- * Constructs and sends a close frame with an optional status code and reason
- * string. The payload is limited to 125 bytes (close frame + reason). After
- * sending, the connection is NOT immediately closed — the peer is expected
- * to respond with its own close frame.
- *
- * @param c           The request context.
- * @param status_code WebSocket close status code (e.g., 1000 for normal,
- *                    1001 for "going away"). Pass 0 to omit the status code.
- * @param reason      Human-readable reason string (may be NULL).
- * @note The frame is sent asynchronously. The connection should be closed
- *       by the caller after receiving the peer's close frame or on timeout. */
 void
 csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 {
@@ -294,18 +236,6 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
         return;
     }
 
-    /*
-   * Close frame layout (RFC 6455 §5.5.1):
-   *   Byte 0: 0x88 = [FIN=1 (0x80) | opcode=0x8 (close)]
-   *   Byte 1: payload length (≤ 125; control frames are limited to 125 bytes)
-   *   Bytes 2-3: optional 2-byte status code (big-endian), e.g. 1000 = normal
-   *   Bytes 4+:  optional UTF-8 reason text
-   *
-   * The close handshake is bidirectional: the initiator sends a close frame,
-   * the peer MUST respond with its own close frame, after which the TCP
-   * connection may be closed.  We do NOT close the connection here — the
-   * caller does so after receiving the peer's close frame or on timeout.
-   */
     frame[0] = 0x88;
     frame[1] = (uint8_t)payload_len;
 
@@ -318,24 +248,9 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
         memcpy(frame + offset, reason, reason_len);
     }
 
-    csilk_io_write_t* write_req = malloc(sizeof(csilk_io_write_t));
-    if (write_req) {
-        csilk_io_buf_t buf = csilk_io_buf_init((char*)frame, (unsigned int)frame_len);
-        write_req->data = frame;
-        csilk_client_t*    cl = (csilk_client_t*)internal_client;
-        csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-        csilk_client_ref(cl);
-        _csilk_client_pending_io_inc(cl);
-        int r = csilk_io_write(write_req, stream, &buf, 1, on_close_write);
-        if (r < 0) {
-            _csilk_client_pending_io_dec(cl);
-            csilk_client_unref(cl);
-            free(frame);
-            free(write_req);
-        }
-    } else {
-        free(frame);
-    }
+    csilk_client_t* cl = (csilk_client_t*)internal_client;
+    csilk_conn_set_state(cl, CSILK_CONN_STREAMING);
+    _csilk_send_data_owned(c, (char*)frame, frame_len);
 }
 
 /** @brief Parse and dispatch an incoming WebSocket frame per RFC 6455 §5.2.
@@ -356,115 +271,122 @@ csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 void
 csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
 {
-    if (nread < 2) {
+    if (!c) {
         return;
     }
 
-    /*
-   * Parse the 2-byte frame header:
-   *   buf[0]: FIN (bit 7), RSV (bits 4-6), opcode (bits 0-3)
-   *   buf[1]: MASK (bit 7), payload length (bits 0-6)
-   *
-   * Opcode dispatch (lower nibble):
-   *   0x1 = text, 0x2 = binary, 0x8 = close, 0x9 = ping, 0xA = pong.
-   *   This implementation only handles single-frame messages (FIN=1).
-   *   FIN=0 (= fragmented message with continuation frames) is not supported
-   *   and would be silently mishandled — future work would need to buffer
-   *   continuation frames across multiple calls and reassemble them.
-   */
-    // uint8_t fin = (buf[0] >> 7) & 0x01;
-    uint8_t  opcode = buf[0] & 0x0F;
-    uint8_t  masked = (buf[1] >> 7) & 0x01;
-    uint64_t payload_len = buf[1] & 0x7F;
+    if (buf && nread > 0) {
+        if (c->ws_buf_len + nread > c->ws_buf_cap) {
+            size_t new_cap = c->ws_buf_cap ? c->ws_buf_cap * 2 : 4096;
+            while (new_cap < c->ws_buf_len + nread) {
+                new_cap *= 2;
+            }
+            uint8_t* new_buf = realloc(c->ws_buf, new_cap);
+            if (!new_buf) {
+                return;
+            }
+            c->ws_buf = new_buf;
+            c->ws_buf_cap = new_cap;
+        }
+        memcpy(c->ws_buf + c->ws_buf_len, buf, nread);
+        c->ws_buf_len += nread;
+    }
 
-    size_t offset = 2;
-    if (payload_len == 126) {
-        if (nread < 4) {
+    while (c->ws_buf_len >= 2) {
+        uint8_t* cur = c->ws_buf;
+        uint8_t  opcode = cur[0] & 0x0F;
+        uint8_t  masked = (cur[1] >> 7) & 0x01;
+        uint64_t payload_len = cur[1] & 0x7F;
+
+        size_t offset = 2;
+        if (payload_len == 126) {
+            if (c->ws_buf_len < 4) {
+                break;
+            }
+            payload_len = ((uint64_t)cur[2] << 8) | cur[3];
+            offset = 4;
+        } else if (payload_len == 127) {
+            if (c->ws_buf_len < 10) {
+                break;
+            }
+            payload_len = 0;
+            for (int i = 0; i < 8; i++) {
+                payload_len = (payload_len << 8) | cur[2 + i];
+            }
+            offset = 10;
+        }
+
+        uint8_t mask[4] = {0};
+        if (masked) {
+            if (c->ws_buf_len < offset + 4) {
+                break;
+            }
+            memcpy(mask, cur + offset, 4);
+            offset += 4;
+        }
+
+        /* Check against integer overflow and enforce maximum frame payload size limit (CWE-190, CWE-122) */
+        enum { CSILK_WS_MAX_FRAME_PAYLOAD = 64 * 1024 * 1024 };
+        if (payload_len > CSILK_WS_MAX_FRAME_PAYLOAD || payload_len > SIZE_MAX - offset - 1) {
+            CSILK_LOG_W("WebSocket: Frame payload length (%llu) exceeds maximum limit",
+                        (unsigned long long)payload_len);
+            c->ws_buf_len = 0;
             return;
         }
-        payload_len = (buf[2] << 8) | buf[3];
-        offset = 4;
-    } else if (payload_len == 127) {
-        if (nread < 10) {
+
+        size_t total_frame_len = offset + (size_t)payload_len;
+        if (c->ws_buf_len < total_frame_len) {
+            break;
+        }
+
+        uint8_t* payload = malloc((size_t)payload_len + 1);
+        if (!payload) {
             return;
         }
-        payload_len = 0;
-        for (int i = 0; i < 8; i++) {
-            payload_len = (payload_len << 8) | buf[2 + i];
-        }
-        offset = 10;
-    }
+        memcpy(payload, cur + offset, (size_t)payload_len);
 
-    uint8_t mask[4] = {0};
-    if (masked) {
-        if (nread < offset + 4) {
-            return;
-        }
-        memcpy(mask, buf + offset, 4);
-        offset += 4;
-    }
-
-    /* Check against integer overflow and enforce maximum frame payload size limit (CWE-190, CWE-122) */
-    enum { CSILK_WS_MAX_FRAME_PAYLOAD = 64 * 1024 * 1024 };
-    if (payload_len > CSILK_WS_MAX_FRAME_PAYLOAD || payload_len > SIZE_MAX - offset - 1) {
-        CSILK_LOG_W("WebSocket: Frame payload length (%llu) exceeds maximum limit",
-                    (unsigned long long)payload_len);
-        return;
-    }
-
-    if (nread < offset + (size_t)payload_len) {
-        return;
-    }
-
-    uint8_t* payload = malloc((size_t)payload_len + 1);
-    if (!payload) {
-        return;
-    }
-    memcpy(payload, buf + offset, (size_t)payload_len);
-
-    /*
-   * Unmask the payload per RFC 6455 §5.3: each payload byte XOR'd with the
-   * masking key at index (i mod 4).  Clients MUST mask all frames they send;
-   * servers MUST unmask them.  The masking key is a 32-bit random value sent
-   * by the client in the frame header.  XOR is applied byte-by-byte because
-   * the key rotates every 4 bytes regardless of memory alignment.
-   */
-    if (masked) {
-        for (uint64_t i = 0; i < payload_len; i++) {
-            payload[i] ^= mask[i % 4];
-        }
-    }
-    payload[payload_len] = '\0';
-
-    /*
-   * Opcode 0x8 = connection close (RFC 6455 §5.5.1).  The payload may
-   * contain a 2-byte status code (big-endian uint16) followed by optional
-   * UTF-8 reason text.  Status 1005 ("no status") is used when the payload
-   * has fewer than 2 bytes.  We send our own close frame (echoing the code)
-   * and then close the underlying TCP stream immediately.
-   */
-    if (opcode == 0x08) {
-        uint16_t close_code = 1005;
-        if (payload_len >= 2) {
-            close_code = (uint16_t)((payload[0] << 8) | payload[1]);
-        }
-        csilk_ws_close(c, close_code, NULL);
-        void* close_client = _csilk_get_internal_client(c);
-        if (close_client) {
-            csilk_client_t*    cl = (csilk_client_t*)close_client;
-            csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
-            if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
-                csilk_io_close((csilk_io_handle_t*)stream, NULL);
+        if (masked) {
+            for (uint64_t i = 0; i < payload_len; i++) {
+                payload[i] ^= mask[i % 4];
             }
         }
+        payload[payload_len] = '\0';
+
+        size_t remaining = c->ws_buf_len - total_frame_len;
+        if (remaining > 0) {
+            memmove(c->ws_buf, c->ws_buf + total_frame_len, remaining);
+        }
+        c->ws_buf_len = remaining;
+
+        if (opcode == 0x08) {
+            uint16_t close_code = 1005;
+            if (payload_len >= 2) {
+                close_code = (uint16_t)(((uint16_t)payload[0] << 8) | payload[1]);
+            }
+            csilk_ws_close(c, close_code, NULL);
+            void* close_client = _csilk_get_internal_client(c);
+            if (close_client) {
+                csilk_client_t*    cl = (csilk_client_t*)close_client;
+                csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
+                if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
+                    csilk_io_close((csilk_io_handle_t*)stream, NULL);
+                }
+            }
+            free(payload);
+            c->ws_buf_len = 0;
+            return;
+        } else if (opcode == 0x09) {
+            csilk_ws_send(c, payload, (size_t)payload_len, 0x0A);
+        } else if (opcode == 0x0A) {
+            /* Pong frame - do nothing */
+        } else {
+            void (*on_ws_msg)(csilk_ctx_t*, const uint8_t*, size_t, int) =
+                csilk_get_on_ws_message(c);
+            if (on_ws_msg) {
+                on_ws_msg(c, payload, (size_t)payload_len, opcode);
+            }
+        }
+
         free(payload);
-        return;
     }
-
-    void (*on_ws_msg)(csilk_ctx_t*, const uint8_t*, size_t, int) = csilk_get_on_ws_message(c);
-    if (on_ws_msg) {
-        on_ws_msg(c, payload, (size_t)payload_len, opcode);
-    }
-
-    free(payload);
 }

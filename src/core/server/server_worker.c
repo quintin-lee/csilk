@@ -42,8 +42,8 @@ typedef struct {
 
 static _Thread_local csilk_dispatch_tls_cache_t g_dispatch_tls_cache = {.count = 0};
 
-static pthread_key_t  g_dispatch_tls_key;
-static pthread_once_t g_dispatch_tls_once = PTHREAD_ONCE_INIT;
+static csilk_key_t  g_dispatch_tls_key;
+static csilk_once_t g_dispatch_tls_once = CSILK_ONCE_INIT;
 
 static void
 dispatch_tls_cleanup(void* unused)
@@ -58,7 +58,7 @@ dispatch_tls_cleanup(void* unused)
 static void
 dispatch_init_tls_key(void)
 {
-    pthread_key_create(&g_dispatch_tls_key, dispatch_tls_cleanup);
+    csilk_key_create(&g_dispatch_tls_key, dispatch_tls_cleanup);
     atexit(_csilk_dispatch_pool_cleanup);
 }
 
@@ -68,9 +68,9 @@ static inline void
 ensure_dispatch_tls_registered(void)
 {
     if (__builtin_expect(!g_dispatch_tls_registered, 0)) {
-        pthread_once(&g_dispatch_tls_once, dispatch_init_tls_key);
-        if (!pthread_getspecific(g_dispatch_tls_key)) {
-            pthread_setspecific(g_dispatch_tls_key, (void*)1);
+        csilk_once(&g_dispatch_tls_once, dispatch_init_tls_key);
+        if (!csilk_key_get(g_dispatch_tls_key)) {
+            csilk_key_set(g_dispatch_tls_key, (void*)1);
         }
         g_dispatch_tls_registered = true;
     }
@@ -369,9 +369,9 @@ worker_thread(void* arg)
         return;
     }
 
-    worker_stop_data_t sd = {loop_ptr, &wp->server_handle, server, wp->worker_index};
+    wp->stop_data = (worker_stop_data_t){loop_ptr, &wp->server_handle, server, wp->worker_index};
     csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
-    wp->stop_async.data = &sd;
+    wp->stop_async.data = &wp->stop_data;
 
     atomic_store_explicit(&data->success, 1, memory_order_release);
     if (barrier) {

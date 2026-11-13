@@ -348,8 +348,9 @@ csilk_admin_serve(csilk_app_t* app, const char* app_path)
 void
 csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t auth_middleware)
 {
-    if (!app || !app_path) {
-        CSILK_LOG_E("Failed to serve admin dashboard: invalid app or app_path");
+    if (!app || !app_path || !auth_middleware) {
+        CSILK_LOG_E(
+            "Failed to serve admin dashboard: invalid app, app_path, or missing auth_middleware");
         return;
     }
 
@@ -365,11 +366,9 @@ csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t
         return;
     }
 
-    /* If a security middleware is provided (e.g., JWT validator), apply it. */
-    if (auth_middleware) {
-        CSILK_LOG_I("Applied security/auth middleware to admin dashboard");
-        csilk_group_use(group, auth_middleware);
-    }
+    /* Apply mandatory security middleware to admin dashboard */
+    CSILK_LOG_I("Applied security/auth middleware to admin dashboard");
+    csilk_group_use(group, auth_middleware);
 
     /* Register sub-handlers. Because these are registered via the group,
       their paths are automatically relative to the group's prefix. */

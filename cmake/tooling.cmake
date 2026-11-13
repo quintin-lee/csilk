@@ -18,6 +18,10 @@ if(CLANG_FORMAT_EXECUTABLE)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.h"
     )
 
     add_custom_target(format
@@ -63,6 +67,7 @@ if(DOXYGEN_EXECUTABLE)
         )
         message(WARNING "curl not found — Mermaid diagrams may not render in Doxygen output")
     endif()
+    add_custom_target(doxygen DEPENDS docs)
 endif()
 
 # ── clang-tidy ────────────────────────────────────────────────────────────

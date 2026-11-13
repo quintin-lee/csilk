@@ -288,13 +288,6 @@ typedef struct {
     _Atomic int      success;
 } worker_data_t;
 
-typedef struct {
-    csilk_io_loop_t* loop;
-    csilk_io_tcp_t*  listen_handle;
-    csilk_server_t*  server;
-    int              worker_index;
-} worker_stop_data_t;
-
 /* server_shutdown.c */
 CSILK_INTERNAL void on_signal(csilk_io_signal_t* handle, int signum);
 CSILK_INTERNAL void on_stop_async(csilk_io_async_t* handle);

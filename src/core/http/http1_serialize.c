@@ -159,12 +159,14 @@ _csilk_serialize_http1_response(csilk_ctx_t* c, char* buf, size_t capacity)
         return 0;
     }
 
-    int         status = c->response.status ? c->response.status : 200;
-    const char* status_text = get_status_text(status);
-    const char* connection_val = "keep-alive";
-    size_t      body_len = c->response.body_len;
-    const char* body = c->response.body ? c->response.body : "";
-    size_t      custom_headers_len = 0;
+    int             status = c->response.status ? c->response.status : 200;
+    const char*     status_text = get_status_text(status);
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    int             keep_alive = client ? client->keep_alive : 1;
+    const char*     connection_val = keep_alive ? "keep-alive" : "close";
+    size_t          body_len = c->response.body_len;
+    const char*     body = c->response.body ? c->response.body : "";
+    size_t          custom_headers_len = 0;
     for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
         for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
             custom_headers_len += h->key_len + 4 + h->value_len;

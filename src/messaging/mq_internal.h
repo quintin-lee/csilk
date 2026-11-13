@@ -150,5 +150,9 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
 CSILK_INTERNAL int  _mq_enqueue(csilk_mq_t* mq, const char* topic, const void* payload, size_t len);
 CSILK_INTERNAL int  _mq_recovery(csilk_mq_t* mq);
 CSILK_INTERNAL void _mq_wal_flush(void);
+CSILK_INTERNAL uint32_t mq_wal_checksum(const char* topic,
+                                        uint32_t    topic_len,
+                                        const void* payload,
+                                        uint32_t    payload_len);
 
 #endif /* CSILK_MQ_TYPES_H */

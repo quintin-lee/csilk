@@ -129,10 +129,10 @@ _csilk_dispatch_request(csilk_ctx_t* c)
     }
 }
 
-#include <pthread.h>
+#include "csilk/core/sync.h"
 
 static _Thread_local csilk_body_pool_t tls_body_pool;
-static pthread_key_t                   g_body_pool_key;
+static csilk_key_t                     g_body_pool_key;
 
 static inline int
 csilk_body_tier_index(size_t size)
@@ -183,16 +183,16 @@ body_pool_tls_destructor(void* val)
 static void
 body_pool_init_key(void)
 {
-    pthread_key_create(&g_body_pool_key, body_pool_tls_destructor);
+    csilk_key_create(&g_body_pool_key, body_pool_tls_destructor);
 }
 
 static inline void
 body_pool_ensure_cleanup(void)
 {
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, body_pool_init_key);
-    if (pthread_getspecific(g_body_pool_key) == NULL) {
-        pthread_setspecific(g_body_pool_key, (void*)1);
+    static csilk_once_t once = CSILK_ONCE_INIT;
+    csilk_once(&once, body_pool_init_key);
+    if (csilk_key_get(g_body_pool_key) == NULL) {
+        csilk_key_set(g_body_pool_key, (void*)1);
     }
 }
 
@@ -447,6 +447,13 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
     }
     c->file_offset = 0;
     c->file_size = 0;
+
+    if (c->ws_buf) {
+        free(c->ws_buf);
+        c->ws_buf = NULL;
+    }
+    c->ws_buf_len = 0;
+    c->ws_buf_cap = 0;
 
     /* 4. Request body — released via unified ownership state */
     csilk_request_body_release(c);

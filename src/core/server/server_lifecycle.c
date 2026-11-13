@@ -577,9 +577,10 @@ csilk_server_run(csilk_server_t* server, int port)
 
     server->worker_pool_count = workers;
     size_t worker_pool_size = (size_t)workers * sizeof(worker_pool_t);
-    server->worker_pools = aligned_alloc(64, worker_pool_size);
+    size_t alloc_size = (worker_pool_size + 63) & ~(size_t)63;
+    server->worker_pools = aligned_alloc(64, alloc_size);
     if (server->worker_pools) {
-        memset(server->worker_pools, 0, worker_pool_size);
+        memset(server->worker_pools, 0, alloc_size);
     }
     if (!server->worker_pools) {
         CSILK_LOG_E("Server: failed to allocate memory for worker pools");
@@ -602,12 +603,30 @@ csilk_server_run(csilk_server_t* server, int port)
         csilk_io_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);
     }
 
+    r = csilk_io_signal_init(server->loop, &server->sig_handle);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
+        return -1;
+    }
+    server->sig_handle.data = server;
+    r = csilk_io_signal_start(&server->sig_handle, on_signal, SIGINT);
+    if (r < 0) {
+        CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", csilk_io_strerror(r));
+        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
+        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
+        return -1;
+    }
+
     if (workers > 1) {
         CSILK_LOG_I("Server: spawning %d worker threads...", workers - 1);
         int nworkers = workers - 1;
         server->worker_tids = malloc((size_t)nworkers * sizeof(csilk_thread_t));
         if (!server->worker_tids) {
             CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
+            csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
             return -1;
@@ -618,6 +637,7 @@ csilk_server_run(csilk_server_t* server, int port)
             CSILK_LOG_E("Server: failed to allocate worker data array");
             free(server->worker_tids);
             server->worker_tids = NULL;
+            csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
             return -1;
@@ -631,6 +651,7 @@ csilk_server_run(csilk_server_t* server, int port)
             free(worker_datas);
             free(server->worker_tids);
             server->worker_tids = NULL;
+            csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
             return -1;
@@ -692,29 +713,13 @@ csilk_server_run(csilk_server_t* server, int port)
             server->worker_tids = NULL;
             server->worker_count = 0;
 
+            csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
             return -1;
         }
 
         CSILK_LOG_I("Server: all %d worker threads spawned and ready", spawned);
-    }
-
-    r = csilk_io_signal_init(server->loop, &server->sig_handle);
-    if (r < 0) {
-        CSILK_LOG_E("Server: failed to initialize signal handle: %s", csilk_io_strerror(r));
-        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
-        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
-        return -1;
-    }
-    server->sig_handle.data = server;
-    r = csilk_io_signal_start(&server->sig_handle, on_signal, SIGINT);
-    if (r < 0) {
-        CSILK_LOG_E("Server: failed to start SIGINT signal handler: %s", csilk_io_strerror(r));
-        csilk_io_close((csilk_io_handle_t*)&server->sig_handle, NULL);
-        csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
-        csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
-        return -1;
     }
 
     CSILK_LOG_I("\n  Server started on port %d with %d worker(s)\n", port, workers);

@@ -340,6 +340,9 @@ typedef struct csilk_conn_scope_s {
     csilk_storage_driver_t* storage_driver;
     csilk_crypto_driver_t*  crypto_driver;
     csilk_cipher_driver_t*  cipher_driver;
+    uint8_t*                ws_buf;
+    size_t                  ws_buf_len;
+    size_t                  ws_buf_cap;
 } csilk_conn_scope_t;
 
 /**
@@ -438,6 +441,9 @@ struct csilk_ctx_s {
             csilk_storage_driver_t* storage_driver;
             csilk_crypto_driver_t*  crypto_driver;
             csilk_cipher_driver_t*  cipher_driver;
+            uint8_t*                ws_buf;
+            size_t                  ws_buf_len;
+            size_t                  ws_buf_cap;
         };
     };
 

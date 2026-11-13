@@ -344,8 +344,14 @@ redis_drv_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* resul
     }
 
     /* Determine column layout based on reply type */
-    int is_hash = 0;
-    if (reply->type == REDIS_REPLY_ARRAY && reply->elements > 0) {
+    int         is_hash = 0;
+    const char* cmd_p = sql;
+    while (*cmd_p == ' ' || *cmd_p == '\t') {
+        cmd_p++;
+    }
+    int is_hgetall = (strncasecmp(cmd_p, "HGETALL", 7) == 0 &&
+                      (cmd_p[7] == ' ' || cmd_p[7] == '\0' || cmd_p[7] == '\t'));
+    if (is_hgetall && reply->type == REDIS_REPLY_ARRAY && reply->elements > 0) {
         /* HGETALL returns alternating field/value pairs → even count */
         is_hash = (reply->elements % 2 == 0) && reply->element[0]->type == REDIS_REPLY_STRING &&
                   reply->element[1]->type == REDIS_REPLY_STRING;

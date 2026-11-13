@@ -406,11 +406,39 @@ test_handshake_large_headers(void)
     printf("Handshake large headers test passed!\n");
 }
 
+static void
+test_parse_coalesced_and_tcp_fragmented(void)
+{
+    printf("Testing WebSocket coalesced frames & TCP fragmentation reassembly...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    csilk_set_on_ws_message(ctx, on_any_message);
+    messages_received = 0;
+
+    /* 1. Coalesced: two unmasked text frames ("hi" + "yo") in one buffer */
+    uint8_t coalesced[] = {0x81, 0x02, 'h', 'i', 0x81, 0x02, 'y', 'o'};
+    csilk_ws_parse_frame(ctx, coalesced, sizeof(coalesced));
+    assert(messages_received == 2);
+    messages_received = 0;
+
+    /* 2. TCP Fragmented: frame with 5 bytes payload split across two calls */
+    uint8_t part1[] = {0x81, 0x05, 'h', 'e'};
+    uint8_t part2[] = {'l', 'l', 'o'};
+    csilk_ws_parse_frame(ctx, part1, sizeof(part1));
+    assert(messages_received == 0); /* incomplete */
+    csilk_ws_parse_frame(ctx, part2, sizeof(part2));
+    assert(messages_received == 1); /* complete now */
+    messages_received = 0;
+
+    csilk_test_ctx_free(ctx);
+    printf("Coalesced & TCP fragmentation test passed!\n");
+}
+
 int
 main()
 {
     test_handshake();
     test_handshake_large_headers();
+    test_parse_coalesced_and_tcp_fragmented();
     test_handshake_missing_key();
     test_parse_frame_basic();
     test_parse_frame_unmasked();
