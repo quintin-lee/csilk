@@ -228,7 +228,7 @@ When reporting benchmark results, include:
 
 ```yaml
 date: 2026-06-29
-csilk_version: 0.6.2
+csilk_version: 0.7.0
 compiler: GCC 13.2
 cmake_flags: -DCMAKE_BUILD_TYPE=Release -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
 kernel: Linux 6.12.91

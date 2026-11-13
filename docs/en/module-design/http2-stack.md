@@ -1,6 +1,6 @@
 # HTTP/2 Protocol Stack Deep Dive
 
-> **Version**: 0.6.2 | **Last updated**: 2026-11-12
+> **Version**: 0.7.0 | **Last updated**: 2026-11-13
 
 csilk integrates the high-performance `nghttp2` library to provide native HTTP/2 capabilities, including connection multiplexing, binary framing, HPACK header compression, and flow control. This document details session management, stream hash-mapping, and lifecycle validation.
 
