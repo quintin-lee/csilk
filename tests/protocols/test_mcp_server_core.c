@@ -190,6 +190,56 @@ test_mcp_server_bind_app_null(void)
     printf("  passed\n");
 }
 
+static char*
+mock_resource_read(const char* uri, void* user_data)
+{
+    (void)user_data;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "content for %s", uri);
+    return strdup(buf);
+}
+
+static void
+test_mcp_server_resources_and_prompts(void)
+{
+    printf("Testing csilk_mcp_server resources and prompts registration...\n");
+    csilk_mcp_server_t* server = csilk_mcp_server_new("resource-server", "1.0");
+    assert(server != NULL);
+
+    /* Null safety checks */
+    assert(csilk_mcp_server_register_resource(
+               NULL, "csilk://r1", "R1", "text/plain", "static", NULL, NULL) == -1);
+    assert(csilk_mcp_server_register_resource(
+               server, NULL, "R1", "text/plain", "static", NULL, NULL) == -1);
+    assert(csilk_mcp_server_register_resource(
+               server, "csilk://r1", NULL, "text/plain", "static", NULL, NULL) == -1);
+
+    assert(csilk_mcp_server_register_prompt(NULL, "p1", "desc", "template") == -1);
+    assert(csilk_mcp_server_register_prompt(server, NULL, "desc", "template") == -1);
+    assert(csilk_mcp_server_register_prompt(server, "p1", "desc", NULL) == -1);
+
+    /* Successful registrations */
+    assert(csilk_mcp_server_register_resource(server,
+                                              "csilk://static",
+                                              "Static Resource",
+                                              "text/plain",
+                                              "hello static",
+                                              NULL,
+                                              NULL) == 0);
+    assert(csilk_mcp_server_register_resource(server,
+                                              "csilk://dynamic",
+                                              "Dynamic Resource",
+                                              "application/json",
+                                              NULL,
+                                              mock_resource_read,
+                                              NULL) == 0);
+    assert(csilk_mcp_server_register_prompt(
+               server, "code_review", "Review code changes", "Please review: {{diff}}") == 0);
+
+    csilk_mcp_server_free(server);
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -204,6 +254,7 @@ main(void)
     test_mcp_server_register_workflow_null();
     test_mcp_server_register_wasm_tool_null();
     test_mcp_server_bind_app_null();
+    test_mcp_server_resources_and_prompts();
 
     printf("All test_mcp_server_core tests passed successfully!\n");
     return 0;

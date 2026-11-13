@@ -46,6 +46,42 @@ void csilk_mcp_server_free(csilk_mcp_server_t* server);
 int csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t* tool);
 
 /**
+ * @brief Register a readable resource with the MCP server (exposed via
+ *        `resources/list` and `resources/read`).
+ *
+ * @param server      MCP server handle.
+ * @param uri         Unique resource URI (e.g. "file:///docs/readme.txt" or "csilk://schema").
+ * @param name        Human-readable name.
+ * @param mime_type   Optional MIME type (defaults to "text/plain").
+ * @param static_text Optional static text returned on read (NULL when @p read_fn is used).
+ * @param read_fn     Optional dynamic read callback (NULL when @p static_text is provided).
+ * @param user_data   User context forwarded to @p read_fn.
+ * @return 0 on success, -1 on invalid arguments / allocation failure.
+ */
+int csilk_mcp_server_register_resource(csilk_mcp_server_t* server,
+                                       const char*         uri,
+                                       const char*         name,
+                                       const char*         mime_type,
+                                       const char*         static_text,
+                                       char* (*read_fn)(const char* uri, void* user_data),
+                                       void* user_data);
+
+/**
+ * @brief Register a prompt template with the MCP server (exposed via
+ *        `prompts/list` and `prompts/get`).
+ *
+ * @param server          MCP server handle.
+ * @param name            Prompt name (e.g. "code_review").
+ * @param description     Prompt description.
+ * @param prompt_template Template string (supports `{{param}}` place-holders).
+ * @return 0 on success, -1 on invalid arguments / allocation failure.
+ */
+int csilk_mcp_server_register_prompt(csilk_mcp_server_t* server,
+                                     const char*         name,
+                                     const char*         description,
+                                     const char*         prompt_template);
+
+/**
  * @brief Registers an AI workflow to be exposed via MCP tools/list and prompts.
  * @param server The server instance.
  * @param wf The workflow to register.

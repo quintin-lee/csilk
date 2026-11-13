@@ -72,6 +72,29 @@ csilk_mcp_server_free(csilk_mcp_server_t* server)
         }
         free(server->tools);
     }
+    if (server->resources) {
+        for (size_t i = 0; i < server->resource_count; i++) {
+            if (server->resources[i]) {
+                free(server->resources[i]->uri);
+                free(server->resources[i]->name);
+                free(server->resources[i]->mime_type);
+                free(server->resources[i]->static_text);
+                free(server->resources[i]);
+            }
+        }
+        free(server->resources);
+    }
+    if (server->prompts) {
+        for (size_t i = 0; i < server->prompt_count; i++) {
+            if (server->prompts[i]) {
+                free(server->prompts[i]->name);
+                free(server->prompts[i]->description);
+                free(server->prompts[i]->prompt_template);
+                free(server->prompts[i]);
+            }
+        }
+        free(server->prompts);
+    }
     if (server->workflows) {
         free(server->workflows);
     }
@@ -123,6 +146,78 @@ csilk_mcp_server_register_tool(csilk_mcp_server_t* server, csilk_wf_tool_entry_t
     server->tools[server->tool_count++] = entry;
     csilk_mutex_unlock(&server->mutex);
 
+    return 0;
+}
+
+int
+csilk_mcp_server_register_resource(csilk_mcp_server_t* server,
+                                   const char*         uri,
+                                   const char*         name,
+                                   const char*         mime_type,
+                                   const char*         static_text,
+                                   char* (*read_fn)(const char* uri, void* user_data),
+                                   void* user_data)
+{
+    if (!server || !uri || !name) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&server->mutex);
+    csilk_mcp_resource_entry_t** next = realloc(
+        server->resources, sizeof(csilk_mcp_resource_entry_t*) * (server->resource_count + 1));
+    if (!next) {
+        csilk_mutex_unlock(&server->mutex);
+        return -1;
+    }
+    server->resources = next;
+
+    csilk_mcp_resource_entry_t* r = calloc(1, sizeof(csilk_mcp_resource_entry_t));
+    if (!r) {
+        csilk_mutex_unlock(&server->mutex);
+        return -1;
+    }
+    r->uri = strdup(uri);
+    r->name = strdup(name);
+    r->mime_type = strdup(mime_type ? mime_type : "text/plain");
+    r->static_text = static_text ? strdup(static_text) : NULL;
+    r->read_fn = read_fn;
+    r->user_data = user_data;
+
+    server->resources[server->resource_count++] = r;
+    csilk_mutex_unlock(&server->mutex);
+    return 0;
+}
+
+int
+csilk_mcp_server_register_prompt(csilk_mcp_server_t* server,
+                                 const char*         name,
+                                 const char*         description,
+                                 const char*         prompt_template)
+{
+    if (!server || !name || !prompt_template) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&server->mutex);
+    csilk_mcp_prompt_entry_t** next =
+        realloc(server->prompts, sizeof(csilk_mcp_prompt_entry_t*) * (server->prompt_count + 1));
+    if (!next) {
+        csilk_mutex_unlock(&server->mutex);
+        return -1;
+    }
+    server->prompts = next;
+
+    csilk_mcp_prompt_entry_t* p = calloc(1, sizeof(csilk_mcp_prompt_entry_t));
+    if (!p) {
+        csilk_mutex_unlock(&server->mutex);
+        return -1;
+    }
+    p->name = strdup(name);
+    p->description = description ? strdup(description) : NULL;
+    p->prompt_template = strdup(prompt_template);
+
+    server->prompts[server->prompt_count++] = p;
+    csilk_mutex_unlock(&server->mutex);
     return 0;
 }
 
@@ -180,9 +275,23 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
         csilk_json_t* tools_cap = csilk_json_object();
         csilk_json_add_bool(tools_cap, "listChanged", false);
         csilk_json_add_object(caps, "tools", tools_cap);
+
+        csilk_json_t* res_cap = csilk_json_object();
+        csilk_json_add_bool(res_cap, "subscribe", false);
+        csilk_json_add_bool(res_cap, "listChanged", false);
+        csilk_json_add_object(caps, "resources", res_cap);
+
+        csilk_json_t* prompt_cap = csilk_json_object();
+        csilk_json_add_bool(prompt_cap, "listChanged", false);
+        csilk_json_add_object(caps, "prompts", prompt_cap);
+
         csilk_json_add_object(res, "capabilities", caps);
 
         return csilk_mcp_msg_create_response(req->id, res);
+    }
+
+    if (strcmp(req->method, "ping") == 0) {
+        return csilk_mcp_msg_create_response(req->id, csilk_json_object());
     }
 
     if (strcmp(req->method, "tools/list") == 0) {
@@ -259,6 +368,131 @@ handle_mcp_request(csilk_mcp_server_t* server, const csilk_mcp_msg_t* req)
         if (tool_res) {
             free(tool_res);
         }
+
+        return csilk_mcp_msg_create_response(req->id, res);
+    }
+
+    if (strcmp(req->method, "resources/list") == 0) {
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_t* arr = csilk_json_array();
+
+        csilk_mutex_lock(&server->mutex);
+        for (size_t i = 0; i < server->resource_count; i++) {
+            csilk_mcp_resource_entry_t* r = server->resources[i];
+            csilk_json_t*               item = csilk_json_object();
+            csilk_json_add_string(item, "uri", r->uri);
+            csilk_json_add_string(item, "name", r->name);
+            csilk_json_add_string(item, "mimeType", r->mime_type ? r->mime_type : "text/plain");
+            csilk_json_array_append(arr, item);
+        }
+        csilk_mutex_unlock(&server->mutex);
+
+        csilk_json_add_object(res, "resources", arr);
+        return csilk_mcp_msg_create_response(req->id, res);
+    }
+
+    if (strcmp(req->method, "resources/read") == 0) {
+        if (!req->params) {
+            return csilk_mcp_msg_create_error(req->id, CSILK_MCP_INVALID_PARAMS, "Missing params");
+        }
+        const char* uri = csilk_json_get_string(req->params, "uri");
+        if (!uri || !uri[0]) {
+            return csilk_mcp_msg_create_error(req->id, CSILK_MCP_INVALID_PARAMS, "Missing uri");
+        }
+
+        csilk_mutex_lock(&server->mutex);
+        csilk_mcp_resource_entry_t* matched = NULL;
+        for (size_t i = 0; i < server->resource_count; i++) {
+            if (strcmp(server->resources[i]->uri, uri) == 0) {
+                matched = server->resources[i];
+                break;
+            }
+        }
+
+        if (!matched) {
+            csilk_mutex_unlock(&server->mutex);
+            return csilk_mcp_msg_create_error(
+                req->id, CSILK_MCP_INVALID_PARAMS, "Resource not found");
+        }
+
+        char* dyn_text = NULL;
+        if (matched->read_fn) {
+            dyn_text = matched->read_fn(matched->uri, matched->user_data);
+        }
+        const char* final_text =
+            dyn_text ? dyn_text : (matched->static_text ? matched->static_text : "");
+
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_t* arr = csilk_json_array();
+        csilk_json_t* item = csilk_json_object();
+        csilk_json_add_string(item, "uri", matched->uri);
+        csilk_json_add_string(
+            item, "mimeType", matched->mime_type ? matched->mime_type : "text/plain");
+        csilk_json_add_string(item, "text", final_text);
+        csilk_json_array_append(arr, item);
+        csilk_json_add_object(res, "contents", arr);
+        csilk_mutex_unlock(&server->mutex);
+
+        free(dyn_text);
+        return csilk_mcp_msg_create_response(req->id, res);
+    }
+
+    if (strcmp(req->method, "prompts/list") == 0) {
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_t* arr = csilk_json_array();
+
+        csilk_mutex_lock(&server->mutex);
+        for (size_t i = 0; i < server->prompt_count; i++) {
+            csilk_mcp_prompt_entry_t* p = server->prompts[i];
+            csilk_json_t*             item = csilk_json_object();
+            csilk_json_add_string(item, "name", p->name);
+            csilk_json_add_string(item, "description", p->description ? p->description : "");
+            csilk_json_array_append(arr, item);
+        }
+        csilk_mutex_unlock(&server->mutex);
+
+        csilk_json_add_object(res, "prompts", arr);
+        return csilk_mcp_msg_create_response(req->id, res);
+    }
+
+    if (strcmp(req->method, "prompts/get") == 0) {
+        if (!req->params) {
+            return csilk_mcp_msg_create_error(req->id, CSILK_MCP_INVALID_PARAMS, "Missing params");
+        }
+        const char* name = csilk_json_get_string(req->params, "name");
+        if (!name || !name[0]) {
+            return csilk_mcp_msg_create_error(
+                req->id, CSILK_MCP_INVALID_PARAMS, "Missing prompt name");
+        }
+
+        csilk_mutex_lock(&server->mutex);
+        csilk_mcp_prompt_entry_t* matched = NULL;
+        for (size_t i = 0; i < server->prompt_count; i++) {
+            if (strcmp(server->prompts[i]->name, name) == 0) {
+                matched = server->prompts[i];
+                break;
+            }
+        }
+
+        if (!matched) {
+            csilk_mutex_unlock(&server->mutex);
+            return csilk_mcp_msg_create_error(
+                req->id, CSILK_MCP_INVALID_PARAMS, "Prompt not found");
+        }
+
+        csilk_json_t* res = csilk_json_object();
+        csilk_json_add_string(res, "description", matched->description ? matched->description : "");
+        csilk_json_t* msgs = csilk_json_array();
+        csilk_json_t* m = csilk_json_object();
+        csilk_json_add_string(m, "role", "user");
+        csilk_json_t* cnt = csilk_json_object();
+        csilk_json_add_string(cnt, "type", "text");
+        csilk_json_add_string(
+            cnt, "text", matched->prompt_template ? matched->prompt_template : "");
+        csilk_json_add_object(m, "content", cnt);
+        csilk_json_array_append(msgs, m);
+        csilk_json_add_object(res, "messages", msgs);
+        csilk_mutex_unlock(&server->mutex);
 
         return csilk_mcp_msg_create_response(req->id, res);
     }
@@ -387,13 +621,31 @@ mcp_sse_post_handler(csilk_ctx_t* c)
     free(req);
 }
 
+static void
+mcp_sse_get_handler(csilk_ctx_t* c)
+{
+    const char* prefix = (const char*)csilk_get_param(c, "_mcp_prefix");
+    if (!prefix) {
+        prefix = "/mcp";
+    }
+
+    csilk_set_status(c, 200);
+    csilk_set_header(c, "Content-Type", "text/event-stream");
+    csilk_set_header(c, "Cache-Control", "no-cache");
+    csilk_set_header(c, "Connection", "keep-alive");
+
+    char endpoint_ev[384];
+    snprintf(endpoint_ev, sizeof(endpoint_ev), "event: endpoint\ndata: %s/message\n\n", prefix);
+    csilk_set_response_body(c, endpoint_ev, strlen(endpoint_ev), 0);
+}
+
 /**
  * @brief Bind the MCP JSON-RPC endpoint as an HTTP POST route on an app.
  *
  * Registers a POST handler at "<route_prefix>/message" (default "/mcp") that
  * parses the request body as a JSON-RPC message and replies with the
- * dispatch result. The server pointer is stashed in the route's "_mcp_server"
- * parameter for later retrieval by the handler.
+ * dispatch result. Also registers a GET handler at "<route_prefix>/sse" that
+ * emits the standard MCP endpoint event.
  *
  * @param[in,out] server       The MCP server handling dispatched requests.
  * @param[in,out] app          The application to register the route on.
@@ -408,10 +660,14 @@ csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const ch
         return -1;
     }
 
-    char path_buf[256];
-    snprintf(path_buf, sizeof(path_buf), "%s/message", route_prefix ? route_prefix : "/mcp");
+    const char* pfx = route_prefix ? route_prefix : "/mcp";
+    char        msg_path[256];
+    char        sse_path[256];
+    snprintf(msg_path, sizeof(msg_path), "%s/message", pfx);
+    snprintf(sse_path, sizeof(sse_path), "%s/sse", pfx);
 
-    csilk_app_add_route(app, "POST", path_buf, mcp_sse_post_handler);
+    csilk_app_add_route(app, "POST", msg_path, mcp_sse_post_handler);
+    csilk_app_add_route(app, "GET", sse_path, mcp_sse_get_handler);
     return 0;
 }
 
