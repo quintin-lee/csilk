@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-11-13
 
+### Added
+- **Native Anthropic Messages API (Claude) Driver** (`csilk/drivers/ai.h`, `src/drivers/ai/anthropic.c`):
+  - Native driver for Anthropic Messages API (`POST /v1/messages`) registered under both `"anthropic"` and `"claude"` aliases.
+  - Full Anthropic JSON schema compatibility: top-level `system` prompt extraction, `messages` array, and `tools` with `input_schema`.
+  - SSE streaming support (`stream = true`), streamed `tool_use` delta reassembly, reasoning/thinking content extraction (CoT) into `res->reasoning_content`, and input/output token usage tracking.
+- **Ollama Driver Streaming & Tool Calling Parity** (`src/drivers/ai/ollama.c`):
+  - Added NDJSON streaming line parser driving `on_chunk` callbacks in real time.
+  - Added function tool definitions serialization and `tool_calls` response parsing for both streaming and non-streaming modes.
+- **Full-Stack MCP Server Endpoints & SSE Transport** (`csilk/protocols/mcp.h`, `src/protocols/mcp/mcp_server.c`):
+  - Added `resources/list` and `resources/read` supporting static text and dynamic callbacks (`csilk_mcp_server_register_resource`).
+  - Added `prompts/list` and `prompts/get` supporting parameterized templates (`csilk_mcp_server_register_prompt`).
+  - Implemented `ping` endpoint returning empty result `{}`.
+  - Added bidirectional MCP SSE transport (`GET <prefix>/sse`) emitting standard MCP `endpoint` events.
+- **Raft WAL Distributed Command Replication** (`src/workflow/wf_cluster_sm.c`, `include/csilk/app/workflow_dsl.h`):
+  - Implemented `csilk_wf_cluster_bind_raft()` and `csilk_wf_cluster_replicate_cmd()`: binary command frames (`cmd_type` + payload) are directly replicated into Raft leader logs via `csilk_raft_append_log()`.
+- **Clustered Skill Worker Heartbeats & Failover** (`csilk/drivers/ai/skill.h`, `src/workflow/skill.c`):
+  - Added `csilk_ai_skill_worker_heartbeat()` to track worker health timestamps for clustered multi-node routing and failover resilience.
+
+### Changed & Refactored
+- **Decoupled MCP from Database Layer** (`cmake/sources.cmake`, `cmake/targets.cmake`):
+  - Moved `src/protocols/mcp/*.c` from `CSILK_DB_SOURCES` to `CSILK_PROTOCOLS_SOURCES`, restoring MCP files to the protocol subsystem.
+  - Removed `CURL::libcurl` and `csilk_ai` from `csilk_db`'s link interface, ensuring `libcsilk-db.so` is completely decoupled from network and AI dependencies.
+- **ABI Opaque Transition (Phase C)** (`cmake/options.cmake`):
+  - Added `CSILK_DEPRECATE_CTX_TYPES` option to prepare compiler deprecation warnings for direct internal context struct access.
+
+### Fixed
+- **Shutdown Write Drain & LSan Zero-Suppression** (`src/core/server/connection_pool.c`, `cmake/.lsan-suppressions`):
+  - Freed in-flight `primary_write_req.data` buffers when recycling connections in `reset_hot_state()`, eliminating memory leaks when writes are interrupted by server shutdown.
+  - Completely cleared `leak:csilk_client_write` and `leak:_csilk_send_data_owned` from `cmake/.lsan-suppressions`.
+- **Anthropic Streaming Memory Cleanup** (`src/drivers/ai/anthropic.c`):
+  - Prevented unused response buffer allocations in SSE streaming mode.
+
 ## [0.6.2] - 2026-11-12
 
 ### Added
