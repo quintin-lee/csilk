@@ -160,16 +160,18 @@ set(CSILK_DB_SOURCES
     src/drivers/db/migration/migration_checksum.c
     src/drivers/db/migration/migration_engine.c
     src/drivers/db/migration/migration_lock.c
-    src/protocols/mcp/mcp_jsonrpc.c
-    src/protocols/mcp/mcp_server.c
-    src/protocols/mcp/mcp_client.c
 )
 
 # ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
 set(CSILK_PROTOCOLS_SOURCES
     src/protocols/websocket.c
     src/protocols/ws_room.c
-    src/protocols/swagger.c
+    src/protocols/openapi_gen.c
+    src/protocols/swagger_serve.c
+    src/protocols/mcp/mcp_jsonrpc.c
+    src/protocols/mcp/mcp_server.c
+    src/protocols/mcp/mcp_client.c
+    src/protocols/mcp/mcp_stdio_pool.c
 )
 
 # ── Permission Module ─────────────────────────────────────────────────────
@@ -253,7 +255,6 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_ai_agents.c
     src/workflow/wf_ai_react_loop.c
     src/workflow/skill.c
-    src/protocols/mcp/mcp_stdio_pool.c
     src/workflow/wf_tools.c
     src/workflow/wf_scheduler.c
     src/workflow/wf_ctx.c

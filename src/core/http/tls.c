@@ -163,6 +163,14 @@ setup_client_tls(csilk_client_t* client)
     client->read_bio = BIO_new(BIO_s_mem());
     client->write_bio = BIO_new(BIO_s_mem());
     if (!client->read_bio || !client->write_bio) {
+        if (client->read_bio) {
+            BIO_free(client->read_bio);
+            client->read_bio = NULL;
+        }
+        if (client->write_bio) {
+            BIO_free(client->write_bio);
+            client->write_bio = NULL;
+        }
         SSL_free(client->ssl);
         client->ssl = NULL;
         return -1;
@@ -217,13 +225,20 @@ process_tls_read(csilk_client_t* client)
     }
 
     while (1) {
-        char* buf = csilk_arena_alloc(client->ctx.arena, 4096);
-        if (!buf) {
-            CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
-            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+        char  stack_buf[4096];
+        char* buf = NULL;
+        int   is_long_lived = (client->ctx.is_websocket || client->protocol == CSILK_PROTO_HTTP2);
+        if (is_long_lived) {
+            buf = stack_buf;
+        } else {
+            buf = csilk_arena_alloc(client->ctx.arena, 4096);
+            if (!buf) {
+                CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
+                if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                    csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+                }
+                break;
             }
-            break;
         }
         n = SSL_read(client->ssl, buf, 4096);
         if (n <= 0) {

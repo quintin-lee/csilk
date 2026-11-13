@@ -362,7 +362,17 @@ csilk_json_error(csilk_ctx_t* c, int status, const char* message)
     char   stack_buf[256];
     size_t needed = strlen(message ? message : "") + 32;
 
-    if (needed < sizeof(stack_buf)) {
+    bool has_special = false;
+    if (message) {
+        for (const char* p = message; *p; p++) {
+            if (*p == '"' || *p == '\\' || (unsigned char)*p < 0x20) {
+                has_special = true;
+                break;
+            }
+        }
+    }
+
+    if (!has_special && needed < sizeof(stack_buf)) {
         int n = snprintf(stack_buf,
                          sizeof(stack_buf),
                          "{\"error\":\"%s\"}",

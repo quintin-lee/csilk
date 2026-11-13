@@ -89,7 +89,7 @@ on_url(llhttp_t* p, const char* at, size_t length)
 {
     csilk_client_t* client = (csilk_client_t*)p->data;
     size_t          max_url = _csilk_server_get_max_url_size(client->server);
-    if (max_url > 0 && length > max_url) {
+    if (max_url > 0 && client->current_url.len + length > max_url) {
         CSILK_LOG_W("URL length (%zu) exceeds max_url_size limit (%zu)", length, max_url);
         client->current_url.data = NULL;
         client->current_url.len = 0;

@@ -78,10 +78,10 @@ deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_
         *(uint32_t*)addr = (uint32_t)csilk_json_int_value(item);
         break;
     case CSILK_TYPE_INT64:
-        *(int64_t*)addr = (int64_t)csilk_json_number_value(item);
+        *(int64_t*)addr = csilk_json_int_value(item);
         break;
     case CSILK_TYPE_UINT64:
-        *(uint64_t*)addr = (uint64_t)csilk_json_number_value(item);
+        *(uint64_t*)addr = csilk_json_uint_value(item);
         break;
     case CSILK_TYPE_FLOAT:
         *(float*)addr = (float)csilk_json_number_value(item);

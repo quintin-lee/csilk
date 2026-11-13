@@ -160,6 +160,10 @@ set(CSILK_CORE_TESTS
     test_atomic_lifecycle
     test_rcu_lifecycle_stress
     test_sendfile_workers
+    test_bounded_buf
+    test_cpu_hardware_profile
+    test_io_backend
+    test_secret
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -171,7 +175,8 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core;core
+    core;core;core
 )
 
 
@@ -311,9 +316,10 @@ set(CSILK_SECURITY_TESTS
     test_crypto_driver
     test_crypto
     test_totp
+    test_admin_auth
 )
 set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security;security;security;security;crypto;crypto
+    security;security;security;security;security;security;security;security;crypto;crypto;security
 )
 
 # -- Data / driver tests --

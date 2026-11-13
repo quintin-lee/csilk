@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "csilk/core/sync.h"
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_internal.h"
 #include "csilk/core/router.h"
@@ -49,10 +50,14 @@ node_children(const csilk_router_node_t* node)
 
 /** @brief Internal layout of the main HTTP router. */
 struct csilk_router_s {
-    csilk_router_node_t* root;      /**< Root node of the segment-based prefix trie. */
+    csilk_router_node_t* root;        /**< Root node of the segment-based prefix trie. */
     csilk_handler_t
-           global_middlewares[32];  /**< Cached global middlewares compiled onto this router. */
-    size_t global_middleware_count; /**< Number of cached global middlewares. */
+             global_middlewares[32];  /**< Cached global middlewares compiled onto this router. */
+    size_t   global_middleware_count; /**< Number of cached global middlewares. */
+    uint64_t route_count;             /**< Monotonic route count for cache invalidation. */
+    char*    openapi_cache;           /**< Per-router cached serialized OpenAPI spec. */
+    uint64_t openapi_cache_routes;    /**< Route count when openapi_cache was generated. */
+    csilk_mutex_t openapi_mutex;      /**< Mutex guarding openapi_cache. */
 };
 
 csilk_router_node_t* node_new(const char* segment, csilk_node_type_t type);

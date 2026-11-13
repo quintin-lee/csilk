@@ -186,6 +186,10 @@ csilk_router_new()
         return NULL;
     }
     r->global_middleware_count = 0;
+    r->route_count = 0;
+    r->openapi_cache = NULL;
+    r->openapi_cache_routes = 0;
+    csilk_mutex_init(&r->openapi_mutex);
     return r;
 }
 
@@ -257,6 +261,11 @@ csilk_router_free(csilk_router_t* r)
     if (!r) {
         return;
     }
+    if (r->openapi_cache) {
+        free(r->openapi_cache);
+        r->openapi_cache = NULL;
+    }
+    csilk_mutex_destroy(&r->openapi_mutex);
     node_free(r->root);
     free(r);
 }
@@ -498,6 +507,7 @@ router_add_full(csilk_router_t*  r,
         mh->perm_resource = perm_resource;
         mh->next = curr->handlers;
         curr->handlers = mh;
+        r->route_count++;
         CSILK_LOG_D("Router: route successfully registered: %s %s", method, path);
         return 0;
     } else {

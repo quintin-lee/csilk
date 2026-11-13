@@ -72,6 +72,33 @@ csilk_once(csilk_once_t* control, void (*cb)(void))
     pthread_once(control, cb);
 }
 
+/** @brief Thread-local storage key type. */
+typedef pthread_key_t csilk_key_t;
+
+static inline int
+csilk_key_create(csilk_key_t* key, void (*destructor)(void*))
+{
+    return pthread_key_create(key, destructor);
+}
+
+static inline void
+csilk_key_delete(csilk_key_t key)
+{
+    pthread_key_delete(key);
+}
+
+static inline void*
+csilk_key_get(csilk_key_t key)
+{
+    return pthread_getspecific(key);
+}
+
+static inline int
+csilk_key_set(csilk_key_t key, const void* value)
+{
+    return pthread_setspecific(key, value);
+}
+
 /** @brief Condition variable type (pthread_cond_t under the uring backend). */
 typedef pthread_cond_t csilk_cond_t;
 /**
@@ -301,6 +328,33 @@ static inline void
 csilk_once(csilk_once_t* control, void (*cb)(void))
 {
     uv_once(control, cb);
+}
+
+/** @brief Thread-local storage key type. */
+typedef pthread_key_t csilk_key_t;
+
+static inline int
+csilk_key_create(csilk_key_t* key, void (*destructor)(void*))
+{
+    return pthread_key_create(key, destructor);
+}
+
+static inline void
+csilk_key_delete(csilk_key_t key)
+{
+    pthread_key_delete(key);
+}
+
+static inline void*
+csilk_key_get(csilk_key_t key)
+{
+    return pthread_getspecific(key);
+}
+
+static inline int
+csilk_key_set(csilk_key_t key, const void* value)
+{
+    return pthread_setspecific(key, value);
 }
 
 /** @brief Condition variable type (uv_cond_t under the libuv backend). */

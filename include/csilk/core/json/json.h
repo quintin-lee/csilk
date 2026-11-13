@@ -252,6 +252,12 @@ double csilk_json_number_value(const csilk_json_t* v);
  */
 int64_t csilk_json_int_value(const csilk_json_t* v);
 
+/** @brief Get the unsigned integer value directly from a number node.
+ *  @param[in] v Number node.
+ *  @return Unsigned integer value, or 0 if not a number.
+ */
+uint64_t csilk_json_uint_value(const csilk_json_t* v);
+
 /** @brief Get the boolean value directly from a bool node.
  *  @param[in] v Bool node.
  *  @return Boolean value.

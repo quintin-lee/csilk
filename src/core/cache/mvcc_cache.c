@@ -5,8 +5,8 @@
  */
 
 #include "csilk/core/cache/mvcc_cache.h"
+#include "csilk/core/sync.h"
 
-#include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -79,7 +79,7 @@ acquire_reader_slot(csilk_mvcc_cache_t* cache)
         return tls_mvcc_slot;
     }
 
-    uintptr_t my_tid = (uintptr_t)pthread_self();
+    uintptr_t my_tid = (uintptr_t)csilk_thread_self();
     if (my_tid == 0) {
         my_tid = 1;
     }

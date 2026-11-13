@@ -1,6 +1,6 @@
 # CMakeLists.txt — thin orchestrator; logic lives in cmake/*.cmake modules
-cmake_minimum_required(VERSION 3.11)
-cmake_policy(VERSION 3.11)
+cmake_minimum_required(VERSION 3.24)
+cmake_policy(VERSION 3.24)
 
 project(c_csilk_framework C)
 

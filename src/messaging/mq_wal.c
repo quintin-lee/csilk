@@ -52,6 +52,24 @@ enum {
     MQ_WAL_MAX_PAYLOAD_LEN = 64 * 1024 * 1024, /**< 64 MB maximum payload length */
 };
 
+CSILK_INTERNAL uint32_t
+mq_wal_checksum(const char* topic, uint32_t topic_len, const void* payload, uint32_t payload_len)
+{
+    uint32_t hash = 2166136261u;
+    for (uint32_t i = 0; i < topic_len; i++) {
+        hash ^= (uint8_t)topic[i];
+        hash *= 16777619u;
+    }
+    const uint8_t* p = (const uint8_t*)payload;
+    if (p) {
+        for (uint32_t i = 0; i < payload_len; i++) {
+            hash ^= p[i];
+            hash *= 16777619u;
+        }
+    }
+    return hash;
+}
+
 static void*
 mq_wal_writer_thread(void* arg)
 {
@@ -89,24 +107,15 @@ mq_wal_writer_thread(void* arg)
         g_mq_wal_writing = 1;
         pthread_mutex_unlock(&g_mq_wal_mutex);
 
-        int            last_fd = -1;
+        int            sync_fds[64];
+        size_t         sync_fd_count = 0;
         mq_wal_task_t* task = batch;
         while (task) {
             mq_wal_task_t* next = task->next;
 
             uint32_t topic_len = (uint32_t)strlen(task->topic);
             uint32_t payload_len = (uint32_t)task->len;
-            uint32_t checksum = 0;
-
-            for (uint32_t i = 0; i < topic_len; i++) {
-                checksum ^= (uint8_t)task->topic[i];
-            }
-            const uint8_t* p = (const uint8_t*)task->payload;
-            if (p) {
-                for (uint32_t i = 0; i < payload_len; i++) {
-                    checksum ^= p[i];
-                }
-            }
+            uint32_t checksum = mq_wal_checksum(task->topic, topic_len, task->payload, payload_len);
 
             /* Write frame */
             if (write(task->fd, &topic_len, 4) == 4) {
@@ -118,7 +127,18 @@ mq_wal_writer_thread(void* arg)
                 (void)write(task->fd, &checksum, 4);
             }
 
-            last_fd = task->fd;
+            if (task->fd >= 0) {
+                bool fd_seen = false;
+                for (size_t i = 0; i < sync_fd_count; i++) {
+                    if (sync_fds[i] == task->fd) {
+                        fd_seen = true;
+                        break;
+                    }
+                }
+                if (!fd_seen && sync_fd_count < sizeof(sync_fds) / sizeof(sync_fds[0])) {
+                    sync_fds[sync_fd_count++] = task->fd;
+                }
+            }
 
             free(task->topic);
             free(task->payload);
@@ -126,14 +146,15 @@ mq_wal_writer_thread(void* arg)
             task = next;
         }
 
-        /* Single fsync for the entire batch — this is the key
-         * performance win: N messages, 1 disk sync instead of N. */
-        if (last_fd >= 0) {
+        /* Sync all unique FDs in the batch */
+        for (size_t i = 0; i < sync_fd_count; i++) {
+            if (sync_fds[i] >= 0) {
 #ifdef __APPLE__
-            fsync(last_fd);
+                fsync(sync_fds[i]);
 #else
-            fdatasync(last_fd);
+                fdatasync(sync_fds[i]);
 #endif
+            }
         }
 
         /* Mark idle and wake any _mq_wal_flush() callers waiting for this
@@ -400,17 +421,8 @@ _mq_recovery(csilk_mq_t* mq)
         }
         offset += 4;
 
-        /* 6. Compute XOR checksum over topic + payload */
-        uint32_t calc_checksum = 0;
-        for (uint32_t i = 0; i < topic_len; i++) {
-            calc_checksum ^= (uint8_t)topic[i];
-        }
-        const uint8_t* p = (const uint8_t*)payload;
-        if (p) {
-            for (uint32_t i = 0; i < payload_len; i++) {
-                calc_checksum ^= p[i];
-            }
-        }
+        /* 6. Compute FNV-1a checksum over topic + payload */
+        uint32_t calc_checksum = mq_wal_checksum(topic, topic_len, payload, payload_len);
 
         /* 7. Validate: enqueue if checksum matches, stop if not */
         if (calc_checksum == checksum) {

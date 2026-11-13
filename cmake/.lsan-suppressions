@@ -20,7 +20,6 @@ leak:SSL_
 # internal allocators, NOT csilk_db_pool_t / sqlite_conn_t (those are
 # freed by csilk_db_pool_free and must still be reported if leaked).
 leak:sqlite3
-leak:sqlite
 
 # libcurl internal state held at exit (test_ai)
 leak:curl_
@@ -57,12 +56,6 @@ leak:PyMarshal_
 leak:PyEval_
 leak:PyTuple_
 leak:PyDict_
-
-# test_integration: a single outstanding client write can remain queued
-# at server shutdown if the process exits before the cancellation callback
-# runs. This is a known shutdown-timing edge case, not a functional leak.
-leak:csilk_client_write
-leak:_csilk_send_data_owned
 
 # Third-party database client libraries one-time allocations
 leak:mysql_

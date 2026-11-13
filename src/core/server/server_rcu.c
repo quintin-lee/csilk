@@ -70,8 +70,8 @@ typedef struct {
 } csilk_tls_rcu_t;
 
 static _Thread_local csilk_tls_rcu_t g_tls_rcu = {0};
-static pthread_key_t                 g_rcu_tls_key;
-static pthread_once_t                g_rcu_tls_once = PTHREAD_ONCE_INIT;
+static csilk_key_t                   g_rcu_tls_key;
+static csilk_once_t                  g_rcu_tls_once = CSILK_ONCE_INIT;
 
 static void
 rcu_thread_exit_destructor(void* val)
@@ -95,15 +95,15 @@ rcu_thread_exit_destructor(void* val)
 static void
 rcu_init_tls_key(void)
 {
-    pthread_key_create(&g_rcu_tls_key, rcu_thread_exit_destructor);
+    csilk_key_create(&g_rcu_tls_key, rcu_thread_exit_destructor);
 }
 
 static inline void
 ensure_rcu_tls_registered(void)
 {
-    pthread_once(&g_rcu_tls_once, rcu_init_tls_key);
-    if (!pthread_getspecific(g_rcu_tls_key)) {
-        pthread_setspecific(g_rcu_tls_key, (void*)1);
+    csilk_once(&g_rcu_tls_once, rcu_init_tls_key);
+    if (!csilk_key_get(g_rcu_tls_key)) {
+        csilk_key_set(g_rcu_tls_key, (void*)1);
     }
 }
 
@@ -144,7 +144,7 @@ acquire_rcu_slot_slow(csilk_reload_mgr_t* mgr)
 {
     ensure_rcu_tls_registered();
 
-    uintptr_t my_tid = (uintptr_t)pthread_self();
+    uintptr_t my_tid = (uintptr_t)csilk_thread_self();
     if (my_tid == 0) {
         my_tid = 1;
     }

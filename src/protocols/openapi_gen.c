@@ -1,21 +1,26 @@
 /**
- * @file openapi_gen.c
- * @brief OpenAPI 3.0 specification generator.
+ * @file swagger.c
+ * @brief OpenAPI 3.0 specification generator and Swagger UI serving.
  *
- * Builds the OpenAPI document in three phases: (1) traversing the route table
- * to populate the "paths" section with endpoint descriptions, parameters,
- * request bodies, and responses; (2) calling add_schema() on each unique
- * input/output type to populate "components/schemas" with JSON Schema objects
- * derived from the reflection registry; (3) scanning all registered reflection
- * types via csilk_reflect_foreach() to ensure even orphan types appear in the
- * spec.
+ * Architecture:
+ *   The OpenAPI document builder (csilk_generate_openapi_json) works in three
+ *   phases: (1) traversing the route table to populate the "paths" section with
+ *   endpoint descriptions, parameters, request bodies, and responses; (2)
+ * calling add_schema() on each unique input/output type to populate
+ * "components/schemas" with JSON Schema objects derived from the reflection
+ * registry; (3) scanning all registered reflection types via
+ * csilk_reflect_foreach() to ensure even orphan types appear in the spec.
  *
- * Path patterns from the router (":param", "*glob") are converted to OpenAPI
- * 3.0 syntax ("{param}", "{glob+}") by path_to_openapi(). Schema generation
- * uses generate_schema_for_type() to walk each reflection type's field
+ *   Path patterns from the router (":param", "*glob") are converted to OpenAPI
+ *   3.0 syntax ("{param}", "{glob+}") by path_to_openapi().  Schema generation
+ *   uses generate_schema_for_type() to walk each reflection type's field
  * descriptors and emit "type" + "properties" maps, with nested structs emitting
- * "$ref" references. Circular type references are handled by add_schema()'s
+ * "$ref" references.  Circular type references are handled by add_schema()'s
  * cycle detection (checks type presence before recursing).
+ *
+ *   The Swagger UI page is compiled into the binary as a static string and
+ * served at a designated route by csilk_serve_swagger_ui().  It loads the
+ * /openapi.json endpoint at runtime.
  *
  * @copyright MIT License
  */
@@ -164,7 +169,6 @@ generate_schema_for_type(const char* type_name)
 
     csilk_json_add_string(schema, "type", "object");
     csilk_json_t* properties = csilk_json_object();
-    csilk_json_add_object(schema, "properties", properties);
     if (!properties) {
         csilk_json_free(schema);
         return NULL;
@@ -213,6 +217,7 @@ generate_schema_for_type(const char* type_name)
         }
     }
 
+    csilk_json_add_object(schema, "properties", properties);
     return schema;
 }
 
@@ -323,26 +328,23 @@ csilk_generate_openapi_json(csilk_router_t* router,
 
     // Info section
     csilk_json_t* info = csilk_json_object();
-    csilk_json_add_object(doc, "info", info);
     if (info) {
         csilk_json_add_string(info, "title", title ? title : "csilk API");
         csilk_json_add_string(info, "version", version ? version : "1.0.0");
         if (description) {
             csilk_json_add_string(info, "description", description);
         }
+        csilk_json_add_object(doc, "info", info);
     }
 
     // Paths section
     csilk_json_t* paths = csilk_json_object();
-    csilk_json_add_object(doc, "paths", paths);
 
     // Components section
     csilk_json_t* components = csilk_json_object();
-    csilk_json_add_object(doc, "components", components);
     csilk_json_t* schemas = NULL;
     if (components) {
         schemas = csilk_json_object();
-        csilk_json_add_object(components, "schemas", schemas);
     }
 
     // Collect all routes
@@ -385,6 +387,10 @@ csilk_generate_openapi_json(csilk_router_t* router,
             csilk_json_t* summary_item = csilk_json_get(route, "summary");
             csilk_json_t* desc_item = csilk_json_get(route, "description");
 
+            if (!method_item || !path_item) {
+                continue;
+            }
+
             const char* method = csilk_json_string_value(method_item);
             const char* raw_path = csilk_json_string_value(path_item);
             if (!method || !raw_path) {
@@ -398,8 +404,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
             // Get or create path item
             csilk_json_t* path_obj = csilk_json_get(paths, oa_path);
             if (!path_obj) {
-                path_obj = csilk_json_object();
-                csilk_json_add_object(paths, oa_path, path_obj);
+                csilk_json_add_object(paths, oa_path, csilk_json_object());
+                path_obj = csilk_json_get(paths, oa_path);
             }
             if (!path_obj) {
                 continue;
@@ -421,8 +427,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                 continue;
             }
 
-            csilk_json_t* operation = csilk_json_object();
-            csilk_json_add_object(path_obj, method_lower, operation);
+            csilk_json_add_object(path_obj, method_lower, csilk_json_object());
+            csilk_json_t* operation = csilk_json_get(path_obj, method_lower);
             if (!operation) {
                 continue;
             }
@@ -438,8 +444,6 @@ csilk_generate_openapi_json(csilk_router_t* router,
                                   desc_item && csilk_json_string_value(desc_item)
                                       ? csilk_json_string_value(desc_item)
                                       : "");
-            csilk_json_add_string(operation, "operationId", "");
-
             // Add Operation ID: method_path
             {
                 char opid[1024];
@@ -463,7 +467,6 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     size_t len = (size_t)(p - start);
 
                     csilk_json_t* param = csilk_json_object();
-                    csilk_json_add_string(param, "name", "");
                     {
                         char   param_name[128];
                         size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
@@ -474,10 +477,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
                     csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_string(schema_obj, "type", "string");
                     csilk_json_add_object(param, "schema", schema_obj);
-                    if (schema_obj) {
-                        csilk_json_add_string(schema_obj, "type", "string");
-                    }
                     csilk_json_array_append(params, param);
                 } else if (*p == '*') {
                     p++;
@@ -488,7 +489,6 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     size_t len = (size_t)(p - start);
 
                     csilk_json_t* param = csilk_json_object();
-                    csilk_json_add_string(param, "name", "");
                     {
                         char   param_name[128];
                         size_t clen = len < sizeof(param_name) - 1 ? len : sizeof(param_name) - 1;
@@ -499,10 +499,8 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     csilk_json_add_string(param, "in", "path");
                     csilk_json_add_bool(param, "required", 1);
                     csilk_json_t* schema_obj = csilk_json_object();
+                    csilk_json_add_string(schema_obj, "type", "string");
                     csilk_json_add_object(param, "schema", schema_obj);
-                    if (schema_obj) {
-                        csilk_json_add_string(schema_obj, "type", "string");
-                    }
                     csilk_json_array_append(params, param);
                 } else {
                     p++;
@@ -517,78 +515,64 @@ csilk_generate_openapi_json(csilk_router_t* router,
                     add_schema(schemas, input_type);
                 }
 
+                csilk_json_t* ref_schema = csilk_json_object();
+                char          ref[256];
+                snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
+                csilk_json_add_string(ref_schema, "$ref", ref);
+
+                csilk_json_t* json_content = csilk_json_object();
+                csilk_json_add_object(json_content, "schema", ref_schema);
+
+                csilk_json_t* content = csilk_json_object();
+                csilk_json_add_object(content, "application/json", json_content);
+
                 csilk_json_t* req_body = csilk_json_object();
+                csilk_json_add_bool(req_body, "required", 1);
+                csilk_json_add_object(req_body, "content", content);
+
                 csilk_json_add_object(operation, "requestBody", req_body);
-                if (req_body) {
-                    csilk_json_add_bool(req_body, "required", 1);
-                    csilk_json_t* content = csilk_json_object();
-                    csilk_json_add_object(req_body, "content", content);
-                    if (content) {
-                        csilk_json_t* json_content = csilk_json_object();
-                        csilk_json_add_object(content, "application/json", json_content);
-                        if (json_content) {
-                            csilk_json_t* ref_schema = csilk_json_object();
-                            char          ref[256];
-                            snprintf(ref, sizeof(ref), "#/components/schemas/%s", input_type);
-                            csilk_json_add_string(ref_schema, "$ref", ref);
-                            csilk_json_add_object(json_content, "schema", ref_schema);
-                        }
-                    }
-                }
             }
 
             // Responses
-            csilk_json_t* responses = csilk_json_object();
-            csilk_json_add_object(operation, "responses", responses);
-            if (responses) {
-                const char* output_type = output_item ? csilk_json_string_value(output_item) : NULL;
-                int         has_output = (output_type && *output_type != '\0');
+            const char* output_type = output_item ? csilk_json_string_value(output_item) : NULL;
+            int         has_output = (output_type && *output_type != '\0');
 
-                if (has_output && schemas) {
-                    add_schema(schemas, output_type);
-                }
-
-                // Default 200 response
-                csilk_json_t* resp200 = csilk_json_object();
-                csilk_json_add_object(responses, "200", resp200);
-                if (resp200) {
-                    csilk_json_add_string(resp200, "description", "Success");
-                    if (has_output) {
-                        csilk_json_t* content = csilk_json_object();
-                        csilk_json_add_object(resp200, "content", content);
-                        if (content) {
-                            csilk_json_t* json_content = csilk_json_object();
-                            csilk_json_add_object(content, "application/json", json_content);
-                            if (json_content) {
-                                csilk_json_t* ref_schema = csilk_json_object();
-                                char          ref[256];
-                                snprintf(ref,
-                                         sizeof(ref),
-                                         "#/components/"
-                                         "schemas/%s",
-                                         output_type);
-                                csilk_json_add_string(ref_schema, "$ref", ref);
-                                csilk_json_add_object(json_content, "schema", ref_schema);
-                            }
-                        }
-                    }
-                }
-
-                csilk_json_t* resp400 = csilk_json_object();
-                csilk_json_add_object(responses, "400", resp400);
-                if (resp400) {
-                    csilk_json_add_string(resp400, "description", "Bad Request");
-                }
-
-                csilk_json_t* resp500 = csilk_json_object();
-                csilk_json_add_object(responses, "500", resp500);
-                if (resp500) {
-                    csilk_json_add_string(resp500, "description", "Internal Server Error");
-                }
+            if (has_output && schemas) {
+                add_schema(schemas, output_type);
             }
-        }
 
-        /*
+            csilk_json_t* responses = csilk_json_object();
+
+            // Default 200 response
+            csilk_json_t* resp200 = csilk_json_object();
+            csilk_json_add_string(resp200, "description", "Success");
+            if (has_output) {
+                csilk_json_t* json_content = csilk_json_object();
+                csilk_json_t* ref_schema = csilk_json_object();
+                char          ref[256];
+                snprintf(ref, sizeof(ref), "#/components/schemas/%s", output_type);
+                csilk_json_add_string(ref_schema, "$ref", ref);
+                csilk_json_add_object(json_content, "schema", ref_schema);
+
+                csilk_json_t* content = csilk_json_object();
+                csilk_json_add_object(content, "application/json", json_content);
+                csilk_json_add_object(resp200, "content", content);
+            }
+            csilk_json_add_object(responses, "200", resp200);
+
+            csilk_json_t* resp400 = csilk_json_object();
+            csilk_json_add_string(resp400, "description", "Bad Request");
+            csilk_json_add_object(responses, "400", resp400);
+
+            csilk_json_t* resp500 = csilk_json_object();
+            csilk_json_add_string(resp500, "description", "Internal Server Error");
+            csilk_json_add_object(responses, "500", resp500);
+
+            csilk_json_add_object(operation, "responses", responses);
+        }
+    }
+
+    /*
    * Phase 2 — Orphan type registration: scan every registered reflection
    * type and add it to components/schemas if not already present.  This
    * catches types that are never directly referenced by any route's
@@ -598,9 +582,17 @@ csilk_generate_openapi_json(csilk_router_t* router,
    * add_schema() skips duplicates internally (cycle detection), so types
    * already registered during Phase 1 are safe no-ops.
    */
-        if (schemas) {
-            csilk_reflect_foreach(auto_register_schema, schemas);
-        }
+    if (schemas) {
+        csilk_reflect_foreach(auto_register_schema, schemas);
+    }
+    if (schemas && components) {
+        csilk_json_add_object(components, "schemas", schemas);
+    }
+    if (components) {
+        csilk_json_add_object(doc, "components", components);
+    }
+    if (paths) {
+        csilk_json_add_object(doc, "paths", paths);
     }
 
     csilk_json_free(routes);

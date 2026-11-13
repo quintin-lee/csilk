@@ -104,6 +104,14 @@ typedef struct csilk_dispatch_task_s {
     csilk_client_t* client; /**< Associated client connection for lifetime safety. */
 } csilk_dispatch_task_t;
 
+/** @brief Payload for worker stop async notification. */
+typedef struct {
+    csilk_io_loop_t* loop;
+    csilk_io_tcp_t*  listen_handle;
+    csilk_server_t*  server;
+    int              worker_index;
+} worker_stop_data_t;
+
 /**
  * @brief Per-worker connection pool and event-loop state.
  *
@@ -123,10 +131,11 @@ typedef struct CSILK_CACHE_ALIGNED {
     csilk_client_t*  client_pool[CSILK_CLIENT_POOL_SIZE]; /**< Worker-local free list. */
     _Atomic(int)
         client_pool_count; /**< Owner-worker pool count; read cross-thread for stats/shutdown. */
-    _Atomic(int)     active_connections; /**< Owner-worker count; read cross-thread for stats. */
-    csilk_io_async_t stop_async;         /**< Async for graceful worker stop. */
-    int              worker_index;       /**< 0 = main loop, 1+ = worker threads. */
-    csilk_arena_t*   arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
+    _Atomic(int)       active_connections; /**< Owner-worker count; read cross-thread for stats. */
+    csilk_io_async_t   stop_async;         /**< Async for graceful worker stop. */
+    worker_stop_data_t stop_data;          /**< Heap-stable stop payload for stop_async. */
+    int                worker_index;       /**< 0 = main loop, 1+ = worker threads. */
+    csilk_arena_t*     arena_pool[CSILK_CLIENT_POOL_SIZE]; /**< Pre-allocated arena pool. */
     _Atomic(int)
           arena_pool_count; /**< Owner-worker pool count; read cross-thread during shutdown. */
     void* read_buf_tiers[CSILK_READ_BUF_TIER_COUNT][CSILK_READ_BUF_POOL_SIZE];

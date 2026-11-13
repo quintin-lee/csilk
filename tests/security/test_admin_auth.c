@@ -1,26 +1,25 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "csilk/csilk.h"
-#include "csilk/test/test.h"
+
+static void
+dummy_auth_middleware(csilk_ctx_t* c)
+{
+    csilk_next(c);
+}
 
 static void
 test_admin_rejects_null_auth(void)
 {
     printf("Testing admin dashboard rejects NULL auth...\n");
 
-    // Verify that csilk_admin_serve() logs critical error and doesn't register routes
-    // This is enforced by the implementation
-    csilk_app_t* app = csilk_app_new();
-    TEST_ASSERT(app != NULL, "App creation should succeed");
+    csilk_app_t* app = csilk_app_new(nullptr);
+    assert(app != nullptr);
 
-    // Calling csilk_admin_serve without auth should not crash
-    // and should log a critical error
-    csilk_admin_serve(app, "/admin");
-
-    // The function should return without registering routes
-    // We verify by checking that admin routes are NOT present
-    // (This is tested indirectly through the logging behavior)
+    // Calling csilk_admin_serve_secure without auth must be rejected safely
+    csilk_admin_serve_secure(app, "/admin", nullptr);
 
     csilk_app_free(app);
     printf("  passed\n");
@@ -31,11 +30,11 @@ test_admin_secure_with_auth(void)
 {
     printf("Testing admin dashboard with auth middleware...\n");
 
-    csilk_app_t* app = csilk_app_new();
-    TEST_ASSERT(app != NULL, "App creation should succeed");
+    csilk_app_t* app = csilk_app_new(nullptr);
+    assert(app != nullptr);
 
-    // This should work - using secure variant with auth
-    csilk_admin_serve_secure(app, "/admin", NULL);
+    // Calling with valid auth handler succeeds
+    csilk_admin_serve_secure(app, "/admin", dummy_auth_middleware);
 
     csilk_app_free(app);
     printf("  passed\n");

@@ -201,6 +201,12 @@ reset_hot_state(csilk_client_t* client)
     client->ctx.read_buffers_count = 0;
     client->ctx.read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;
     client->ctx.read_buf_sizes = client->ctx.read_buf_sizes_embedded;
+    if (client->ctx.ws_buf) {
+        free(client->ctx.ws_buf);
+        client->ctx.ws_buf = NULL;
+    }
+    client->ctx.ws_buf_len = 0;
+    client->ctx.ws_buf_cap = 0;
     memset(client->ctx.request_id, 0, sizeof(client->ctx.request_id));
 }
 

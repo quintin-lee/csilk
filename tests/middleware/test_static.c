@@ -137,6 +137,50 @@ test_static_range_invalid()
     printf("test_static_range_invalid passed\n");
 }
 
+void
+test_static_range_suffix()
+{
+    printf("Testing static file suffix Range request (bytes=-6)...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    csilk_set(ctx, "static_prefix", "/static");
+    csilk_test_ctx_set_request(ctx, "GET", "/static/hello.txt");
+    /* "Hello, Csilk!" is 13 bytes. bytes=-6 should return bytes 7-12/13 */
+    csilk_set_request_header(ctx, "Range", "bytes=-6");
+
+    csilk_static(ctx, "./test_public");
+
+    assert(csilk_is_async(ctx) == 1);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+
+    assert(csilk_get_status(ctx) == CSILK_STATUS_PARTIAL_CONTENT);
+    const char* cr = csilk_get_response_header(ctx, "Content-Range");
+    assert(cr != nullptr && strncmp(cr, "bytes 7-12/13", 13) == 0);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_static_range_suffix passed\n");
+}
+
+void
+test_static_directory_rejected()
+{
+    printf("Testing static file directory request rejected (S_ISREG)...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    csilk_set(ctx, "static_prefix", "/static");
+    csilk_test_ctx_set_request(ctx, "GET", "/static");
+
+    csilk_static(ctx, "./test_public");
+
+    assert(csilk_is_async(ctx) == 1);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+
+    assert(csilk_get_status(ctx) == CSILK_STATUS_FORBIDDEN);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_static_directory_rejected passed\n");
+}
+
 int
 main()
 {
@@ -146,6 +190,8 @@ main()
     test_static_range_first_5();
     test_static_range_middle();
     test_static_range_invalid();
+    test_static_range_suffix();
+    test_static_directory_rejected();
 
     remove("./test_public/hello.txt");
     rmdir("./test_public");

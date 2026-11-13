@@ -23,21 +23,5 @@ race:nghttp2_
 race:uv_barrier_destroy
 race:pthread_barrier_destroy
 
-## Server shares a single arena / request context across its worker threads
-## (arenas are documented as per-thread). Concurrent allocations
-## (csilk_arena_alloc) and response status access (csilk_status /
-## csilk_get_status) on the same context race. Known architectural
-## limitation; single-threaded paths are race-free.
-race:csilk_arena_alloc
-race:csilk_status
-race:csilk_get_status
-
 ## io_uring async eventfd kernel-side race.
-## The eventfd() syscall creates a kernel fd, and write() to that fd is
-## tracked by TSan as a concurrent write to the same kernel memory location.
-## This is a known TSan limitation with kernel synchronization primitives —
-## the eventfd API is inherently designed for exactly this create-then-write
-## pattern across threads. The application-level event_fd field is now
-## atomically accessed (see sys_io.h), eliminating the struct-level race.
-race:write
 race:eventfd

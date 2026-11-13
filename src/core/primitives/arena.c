@@ -35,6 +35,7 @@
 #endif
 
 #include "csilk/core/internal.h"
+#include "csilk/core/sync.h"
 
 #ifdef TEST_OOM
 _Atomic int g_oom_fail_after = -1;
@@ -195,7 +196,7 @@ csilk_arena_flush_free_list(void)
     }
 }
 
-static pthread_key_t g_arena_tls_key;
+static csilk_key_t g_arena_tls_key;
 
 /** @brief Initialize arena subsystem with automatic TLS cleanup. */
 static void
@@ -208,28 +209,28 @@ arena_tls_cleanup(void* unused)
 static void
 arena_init_tls_key(void)
 {
-    pthread_key_create(&g_arena_tls_key, arena_tls_cleanup);
+    csilk_key_create(&g_arena_tls_key, arena_tls_cleanup);
 }
 
 /**
  * @brief Initialize the arena subsystem.
  *
  * Registers the thread-local arena chunk cleanup handler exactly once per
- * process via pthread_once. Safe to call multiple times.
+ * process via csilk_once. Safe to call multiple times.
  */
 void
 csilk_arena_init(void)
 {
-    static pthread_once_t once = PTHREAD_ONCE_INIT;
-    pthread_once(&once, arena_init_tls_key);
+    static csilk_once_t once = CSILK_ONCE_INIT;
+    csilk_once(&once, arena_init_tls_key);
 }
 
 static inline void
 arena_ensure_tls_cleanup_registered(void)
 {
     csilk_arena_init();
-    if (pthread_getspecific(g_arena_tls_key) == NULL) {
-        pthread_setspecific(g_arena_tls_key, (void*)1);
+    if (csilk_key_get(g_arena_tls_key) == NULL) {
+        csilk_key_set(g_arena_tls_key, (void*)1);
     }
 }
 
@@ -314,7 +315,8 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
     size_t chunk_size =
         aligned_size > arena->default_chunk_size ? aligned_size : arena->default_chunk_size;
     /* Guard aligned_size + alignment against overflow before using it. */
-    if (alignment > 8 && chunk_size < aligned_size && chunk_size <= SIZE_MAX - alignment) {
+    if (alignment > 8 && chunk_size - aligned_size < alignment &&
+        chunk_size <= SIZE_MAX - alignment) {
         chunk_size = aligned_size + alignment;
     }
 
@@ -562,6 +564,23 @@ csilk_arena_reset(csilk_arena_t* arena)
     if (!arena) {
         return;
     }
+#ifdef DEBUG_ARENA
+    for (csilk_arena_chunk_t* c = arena->head; c != NULL; c = c->next) {
+        if (c == arena->head && arena->ptr) {
+            c->used = (size_t)(arena->ptr - c->data);
+        }
+        if (c->used > ARENA_REDZONE_SIZE && c->used <= c->size) {
+            if (!arena_check_redzone(c->data, c->used - ARENA_REDZONE_SIZE)) {
+                fprintf(stderr,
+                        "ARENA REDZONE CORRUPTED ON RESET: chunk %p used=%zu size=%zu\n",
+                        (void*)c,
+                        c->used,
+                        c->size);
+                abort();
+            }
+        }
+    }
+#endif
     csilk_arena_chunk_t* head = arena->head;
     if (head) {
         head->used = 0;
