@@ -3,12 +3,32 @@
 Mock OpenAI API server for csilk unit/integration tests.
 Supports /v1/chat/completions (streaming, tools, usage) and /v1/embeddings.
 """
-import sys
+import argparse
 import json
+import os
+import socketserver
+import sys
+import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+class FastThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def server_bind(self):
+        # Skip HTTPServer's socket.getfqdn() reverse DNS lookup, which can
+        # stall startup for >10s on macOS mDNS/DNS before listen() is called.
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host or '127.0.0.1'
+        self.server_port = port
+
 
 class OpenAIMockHandler(BaseHTTPRequestHandler):
+    timeout = 10.0
+
     def log_message(self, format, *args):
         pass
 
@@ -333,10 +353,31 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
             self.wfile.write(out_bytes)
 
 
-def run_server(port=18081):
-    server = HTTPServer(('127.0.0.1', port), OpenAIMockHandler)
+def _watch_parent(parent_fd):
+    try:
+        while os.read(parent_fd, 1):
+            pass
+    except OSError:
+        pass
+    os._exit(0)
+
+
+def run_server(port=18081, ready_fd=None, parent_fd=None):
+    if parent_fd is not None:
+        t = threading.Thread(target=_watch_parent, args=(parent_fd,), daemon=True)
+        t.start()
+    server = FastThreadingHTTPServer(('127.0.0.1', port), OpenAIMockHandler)
+    actual_port = server.server_address[1]
+    if ready_fd is not None:
+        os.write(ready_fd, f"{actual_port}\n".encode('ascii'))
+        os.close(ready_fd)
     server.serve_forever()
 
+
 if __name__ == '__main__':
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 18081
-    run_server(port)
+    parser = argparse.ArgumentParser(description='Mock OpenAI/Anthropic HTTP server')
+    parser.add_argument('port', nargs='?', type=int, default=18081)
+    parser.add_argument('--ready-fd', type=int, default=None)
+    parser.add_argument('--parent-fd', type=int, default=None)
+    args = parser.parse_args()
+    run_server(port=args.port, ready_fd=args.ready_fd, parent_fd=args.parent_fd)
