@@ -241,6 +241,7 @@ set(CSILK_MQ_SOURCES
     src/messaging/mq_offload.c
     src/messaging/mq_pubsub.c
     src/messaging/mq_wal.c
+    src/messaging/wal_common.c
     src/messaging/raft_wal.c
     src/messaging/raft_consensus.c
     src/messaging/raft_rpc.c
