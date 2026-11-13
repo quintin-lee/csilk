@@ -196,6 +196,18 @@ char* csilk_ai_skill_run_use_skill(csilk_wf_t* wf, const char* args_json);
 int csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq);
 
 /**
+ * @brief Record a heartbeat for a registered remote skill worker.
+ *
+ * Updates the worker's last-seen timestamp to maintain healthy status in
+ * clustered load-balancing and failover routing.
+ *
+ * @param sk Skill handle.
+ * @param mq Message queue bus the worker is attached to.
+ * @return 0 on success, -1 if worker not found.
+ */
+int csilk_ai_skill_worker_heartbeat(csilk_ai_skill_t* sk, csilk_mq_t* mq);
+
+/**
  * @brief Unregister a skill from remote worker dispatch (called automatically
  *        by csilk_ai_skill_free()).
  */

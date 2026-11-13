@@ -503,6 +503,8 @@ csilk_ai_skill_register(csilk_wf_t* wf, csilk_ai_skill_t* sk)
 typedef struct {
     csilk_ai_skill_t* sk;
     csilk_mq_t*       mq;
+    uint64_t          last_heartbeat;
+    int               is_healthy;
 } skill_remote_worker_t;
 
 typedef struct {
@@ -763,6 +765,36 @@ ensure_mq_remote_subscribed(csilk_mq_t* mq)
     }
 }
 
+static uint64_t
+now_monotonic_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
+}
+
+int
+csilk_ai_skill_worker_heartbeat(csilk_ai_skill_t* sk, csilk_mq_t* mq)
+{
+    if (!sk || !mq) {
+        return -1;
+    }
+    ensure_remote_state();
+    csilk_mutex_lock(&g_remote_mutex);
+    int      found = 0;
+    uint64_t now = now_monotonic_ms();
+    for (size_t i = 0; i < g_remote_worker_count; i++) {
+        if (g_remote_workers[i].sk == sk && g_remote_workers[i].mq == mq) {
+            g_remote_workers[i].last_heartbeat = now;
+            g_remote_workers[i].is_healthy = 1;
+            found = 1;
+            break;
+        }
+    }
+    csilk_mutex_unlock(&g_remote_mutex);
+    return found ? 0 : -1;
+}
+
 int
 csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq)
 {
@@ -771,8 +803,11 @@ csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq)
     }
     ensure_remote_state();
     csilk_mutex_lock(&g_remote_mutex);
+    uint64_t now = now_monotonic_ms();
     for (size_t i = 0; i < g_remote_worker_count; i++) {
         if (g_remote_workers[i].sk == sk && g_remote_workers[i].mq == mq) {
+            g_remote_workers[i].last_heartbeat = now;
+            g_remote_workers[i].is_healthy = 1;
             ensure_mq_remote_subscribed(mq);
             csilk_mutex_unlock(&g_remote_mutex);
             return 0;
@@ -784,6 +819,8 @@ csilk_ai_skill_worker_register(csilk_ai_skill_t* sk, csilk_mq_t* mq)
     }
     g_remote_workers[g_remote_worker_count].sk = sk;
     g_remote_workers[g_remote_worker_count].mq = mq;
+    g_remote_workers[g_remote_worker_count].last_heartbeat = now;
+    g_remote_workers[g_remote_worker_count].is_healthy = 1;
     g_remote_worker_count++;
     ensure_mq_remote_subscribed(mq);
     csilk_mutex_unlock(&g_remote_mutex);

@@ -255,6 +255,11 @@ test_remote_dispatch(void)
     assert(out && strstr(out, "remote-res:docs/guide.md"));
     free(out);
 
+    /* 2e. Worker heartbeat & null-safety. */
+    assert(csilk_ai_skill_worker_heartbeat(NULL, mq) == -1);
+    assert(csilk_ai_skill_worker_heartbeat(sk, NULL) == -1);
+    assert(csilk_ai_skill_worker_heartbeat(sk, mq) == 0);
+
     csilk_ai_skill_free(sk_ld);
     csilk_ai_skill_free(sk);
     csilk_server_free(s);
