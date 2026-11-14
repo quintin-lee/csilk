@@ -426,7 +426,7 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     return arena_alloc_debug(arena, size);
 #else
     if (__builtin_expect(!arena || size == 0, 0)) {
-        return size == 0 ? (void*)(uintptr_t)1 : NULL;
+        return !arena ? NULL : (void*)(uintptr_t)1;
     }
 
     /* Fast path: 8-byte aligned (default) */

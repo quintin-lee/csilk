@@ -227,10 +227,10 @@ uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint64_t* gen)
 void csilk_uv_on_write_done(void* arg, ssize_t res, uint64_t gen);
 
 /* Thread-local default loop state (defined in uring_loop.c) */
-extern csilk_io_loop_t  g_default_loop;
-extern int              g_default_pending;
-extern int              g_default_loop_inited;
-extern struct io_uring* g_default_ring_ptr;
+extern _Thread_local csilk_io_loop_t  g_default_loop;
+extern _Thread_local int              g_default_pending;
+extern _Thread_local int              g_default_loop_inited;
+extern _Thread_local struct io_uring* g_default_ring_ptr;
 
 /* Forward declarations for functions defined in uring_connection.c */
 void on_read(csilk_client_t* client, ssize_t nread);

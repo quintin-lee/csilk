@@ -170,7 +170,7 @@ csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
     if (!handle) {
         return -1;
     }
-    uint8_t gen = handle->generation ? (uint8_t)(handle->generation + 1) : 1;
+    uint64_t gen = handle->generation ? (handle->generation + 1) : 1;
     memset(handle, 0, sizeof(*handle));
     if (!loop) {
         loop = csilk_io_default_loop();

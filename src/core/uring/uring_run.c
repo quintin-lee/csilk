@@ -33,7 +33,8 @@ extern void client_destroy(csilk_client_t* client);
 extern void csilk_client_close(csilk_client_t* client);
 extern void on_close_done(csilk_client_t* client);
 
-extern void pool_put_read_buf(worker_pool_t* wp, char* buf, size_t len);
+extern void           pool_put_read_buf(worker_pool_t* wp, char* buf, size_t len);
+extern worker_pool_t* _csilk_worker_get_current_pool(void);
 
 /* ====================================================================
  * Helpers
@@ -204,8 +205,9 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
             } else if (op == URING_OP_READ || op == URING_OP_POLL_READ) {
                 csilk_io_stream_t* s = (csilk_io_stream_t*)ptr;
                 if (is_stale_poll((csilk_io_handle_t*)s, gen)) {
-                    if (s && s->recv_buf.base) {
-                        pool_put_read_buf(NULL, s->recv_buf.base, s->recv_buf.len);
+                    if (s && s->recv_buf.base && !s->reading) {
+                        pool_put_read_buf(
+                            _csilk_worker_get_current_pool(), s->recv_buf.base, s->recv_buf.len);
                         s->recv_buf.base = NULL;
                         s->recv_buf.len = 0;
                     }
@@ -257,8 +259,10 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                     /* res < 0: Error */
                     if (res == -ECANCELED) {
                         /* In-flight recv cancelled during read_stop/close */
-                        if (s->recv_buf.base) {
-                            pool_put_read_buf(NULL, s->recv_buf.base, s->recv_buf.len);
+                        if (s->recv_buf.base && !s->reading) {
+                            pool_put_read_buf(_csilk_worker_get_current_pool(),
+                                              s->recv_buf.base,
+                                              s->recv_buf.len);
                             s->recv_buf.base = NULL;
                             s->recv_buf.len = 0;
                         }

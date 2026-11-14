@@ -357,6 +357,10 @@ worker_thread(void* arg)
     _csilk_worker_init_read_buf_pool(wp);
     _csilk_worker_init_dispatch(wp, loop_ptr);
 
+    wp->stop_data = (worker_stop_data_t){loop_ptr, &wp->server_handle, server, wp->worker_index};
+    csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
+    wp->stop_async.data = &wp->stop_data;
+
     int bind_res = bind_and_listen(
         loop_ptr, &wp->server_handle, port, server->config.listen_backlog, true, wp->worker_index);
     if (bind_res < 0) {
@@ -365,13 +369,14 @@ worker_thread(void* arg)
         if (barrier) {
             csilk_barrier_wait(barrier);
         }
+        csilk_io_close((csilk_io_handle_t*)&wp->dispatch_async, NULL);
+        csilk_io_close((csilk_io_handle_t*)&wp->stop_async, NULL);
+        for (int i = 0; i < 100 && csilk_io_loop_alive(loop_ptr); i++) {
+            csilk_io_run(loop_ptr, CSILK_IO_RUN_NOWAIT);
+        }
         csilk_io_loop_close(loop_ptr);
         return;
     }
-
-    wp->stop_data = (worker_stop_data_t){loop_ptr, &wp->server_handle, server, wp->worker_index};
-    csilk_io_async_init(loop_ptr, &wp->stop_async, on_worker_stop_async);
-    wp->stop_async.data = &wp->stop_data;
 
     atomic_store_explicit(&data->success, 1, memory_order_release);
     if (barrier) {
