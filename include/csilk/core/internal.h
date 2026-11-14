@@ -76,3 +76,16 @@ enum { CSILK_UUID_STR_LEN = 36 };
 
 /** @brief Full buffer size for a UUID v4 string (str_len + null terminator). */
 enum { CSILK_UUID_BUF_SIZE = 37 };
+
+/* ================================================================
+ * Cross-module lightweight trace hooks (OTLP APM bridging)
+ * ================================================================ */
+
+typedef struct csilk_tracer_hooks_s {
+    void* (*start_span)(const char* name, const char* parent_span_id);
+    void (*end_span)(void* span, int status_code);
+} csilk_tracer_hooks_t;
+
+void  csilk_tracer_set_hooks(const csilk_tracer_hooks_t* hooks);
+void* csilk_trace_span_start(const char* name);
+void  csilk_trace_span_end(void* span, int status_code);

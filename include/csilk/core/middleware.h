@@ -650,6 +650,24 @@ int csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, s
  * @return Total binary gRPC frame length in bytes, or -1 on error. */
 int csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, size_t buf_size);
 
+/** @brief Start background asynchronous span export worker thread.
+ * @param exp Exporter handle.
+ * @param flush_interval_ms Flush interval in milliseconds (defaults to 1000 if <= 0).
+ * @return 0 on success, -1 on error. */
+int csilk_otlp_exporter_start(csilk_otlp_exporter_t* exp, int flush_interval_ms);
+
+/** @brief Stop background asynchronous span export worker thread.
+ * @param exp Exporter handle. */
+void csilk_otlp_exporter_stop(csilk_otlp_exporter_t* exp);
+
+/** @brief Set custom flush callback invoked by the background worker.
+ * @param exp Exporter handle.
+ * @param cb Callback receiving serialized OTLP JSON string and user data.
+ * @param user_data User context pointer. */
+void csilk_otlp_exporter_set_flush_cb(csilk_otlp_exporter_t* exp,
+                                      void (*cb)(const char* json, void* user_data),
+                                      void* user_data);
+
 /** @brief Free an OTLP Exporter instance.
  * @param exp Exporter handle. */
 void csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp);

@@ -11,6 +11,7 @@
 #include "csilk/core/middleware.h"
 #include "csilk/core/sync.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,13 @@ struct csilk_otlp_exporter_s {
     csilk_otlp_span_t* spans;             /**< Array of buffered spans */
     int                count;             /**< Current buffered span count */
     csilk_mutex_t      mutex;             /**< Mutex protecting span buffer */
+    csilk_cond_t       cond;              /**< Condition variable for worker wakeups */
+    csilk_thread_t     worker;            /**< Background worker thread handle */
+    atomic_bool        running;           /**< Worker active flag */
+    bool               thread_started;    /**< True if worker thread was spawned */
+    int                interval_ms;       /**< Flush interval in milliseconds */
+    void (*flush_cb)(const char* json, void* user_data); /**< Optional flush callback */
+    void* user_data;                                     /**< User context for flush callback */
 };
 
 /**
@@ -48,6 +56,12 @@ csilk_otlp_exporter_new(const char* endpoint_url, int batch_size)
     exp->spans = calloc((size_t)exp->batch_size, sizeof(csilk_otlp_span_t));
     exp->count = 0;
     csilk_mutex_init(&exp->mutex);
+    csilk_cond_init(&exp->cond);
+    atomic_init(&exp->running, false);
+    exp->thread_started = false;
+    exp->interval_ms = 1000;
+    exp->flush_cb = NULL;
+    exp->user_data = NULL;
     return exp;
 }
 
@@ -67,6 +81,9 @@ csilk_otlp_exporter_record_span(csilk_otlp_exporter_t* exp, const csilk_otlp_spa
     if (exp->count < exp->batch_size) {
         exp->spans[exp->count] = *span;
         exp->count++;
+        if (exp->count >= exp->batch_size) {
+            csilk_cond_signal(&exp->cond);
+        }
     }
     csilk_mutex_unlock(&exp->mutex);
 }
@@ -167,6 +184,80 @@ csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, si
     return frame_len;
 }
 
+static void
+_exporter_worker_fn(void* arg)
+{
+    csilk_otlp_exporter_t* exp = (csilk_otlp_exporter_t*)arg;
+    char                   batch_buf[65536];
+
+    while (atomic_load(&exp->running)) {
+        csilk_mutex_lock(&exp->mutex);
+        if (exp->count == 0 && atomic_load(&exp->running)) {
+            uint64_t timeout_ns = (uint64_t)exp->interval_ms * 1000000ULL;
+            csilk_cond_timedwait(&exp->cond, &exp->mutex, timeout_ns);
+        }
+        csilk_mutex_unlock(&exp->mutex);
+
+        if (!atomic_load(&exp->running) && exp->count == 0) {
+            break;
+        }
+
+        int exported = csilk_otlp_exporter_export_json(exp, batch_buf, sizeof(batch_buf));
+        if (exported > 0 && exp->flush_cb) {
+            exp->flush_cb(batch_buf, exp->user_data);
+        }
+    }
+}
+
+int
+csilk_otlp_exporter_start(csilk_otlp_exporter_t* exp, int flush_interval_ms)
+{
+    if (!exp) {
+        return -1;
+    }
+    if (exp->thread_started) {
+        return 0;
+    }
+    exp->interval_ms = flush_interval_ms > 0 ? flush_interval_ms : 1000;
+    atomic_store(&exp->running, true);
+    int rc = csilk_thread_create(&exp->worker, _exporter_worker_fn, exp);
+    if (rc == 0) {
+        exp->thread_started = true;
+    } else {
+        atomic_store(&exp->running, false);
+    }
+    return rc;
+}
+
+void
+csilk_otlp_exporter_stop(csilk_otlp_exporter_t* exp)
+{
+    if (!exp || !exp->thread_started) {
+        return;
+    }
+    atomic_store(&exp->running, false);
+    csilk_mutex_lock(&exp->mutex);
+    csilk_cond_broadcast(&exp->cond);
+    csilk_mutex_unlock(&exp->mutex);
+
+    csilk_thread_join(&exp->worker);
+    exp->thread_started = false;
+}
+
+void
+csilk_otlp_exporter_set_flush_cb(csilk_otlp_exporter_t* exp,
+                                 void (*cb)(const char* json, void* user_data),
+                                 void* user_data)
+{
+    if (!exp) {
+        return;
+    }
+    csilk_mutex_lock(&exp->mutex);
+    exp->flush_cb = cb;
+    exp->user_data = user_data;
+    csilk_mutex_unlock(&exp->mutex);
+}
+
 /**
  * @brief Free resources associated with an OTLP Exporter.
  *
@@ -178,6 +269,8 @@ csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp)
     if (!exp) {
         return;
     }
+    csilk_otlp_exporter_stop(exp);
+    csilk_cond_destroy(&exp->cond);
     csilk_mutex_destroy(&exp->mutex);
     if (exp->spans) {
         free(exp->spans);

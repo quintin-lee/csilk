@@ -146,6 +146,16 @@ csilk_trace_middleware(csilk_ctx_t* c)
         return;
     }
 
+    if (!g_otlp_init) {
+        csilk_mutex_init(&g_otlp_buffer.mutex);
+        csilk_tracer_hooks_t hooks = {
+            .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
+            .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
+        };
+        csilk_tracer_set_hooks(&hooks);
+        g_otlp_init = 1;
+    }
+
     const char* tp = csilk_get_header(c, "traceparent");
     char        trace_id_buf[33] = {0};
     char        span_id_buf[17] = {0};
@@ -246,6 +256,11 @@ csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
 {
     if (!g_otlp_init) {
         csilk_mutex_init(&g_otlp_buffer.mutex);
+        csilk_tracer_hooks_t hooks = {
+            .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
+            .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
+        };
+        csilk_tracer_set_hooks(&hooks);
         g_otlp_init = 1;
     }
 
