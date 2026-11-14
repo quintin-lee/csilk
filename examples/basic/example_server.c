@@ -1,4 +1,3 @@
-#include "csilk/core/internal.h"
 /**
  * @file example_server.c
  * @brief Full-featured example server using the low-level core API.
