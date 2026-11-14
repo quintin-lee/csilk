@@ -24,9 +24,6 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#ifndef _WIN32
-#include <pthread.h>
-#endif
 
 #define SKILL_NAME_MAX 64
 #define SKILL_DESC_MAX 1024
@@ -55,15 +52,18 @@ struct csilk_ai_skill_s {
 static skill_wf_entry_t g_skill_regs[SKILL_MAX_WF_ENTRIES];
 static size_t           g_skill_reg_count = 0;
 static csilk_mutex_t    g_skill_mutex;
-static int              g_skill_mutex_ready = 0;
+static csilk_once_t     g_skill_once = CSILK_ONCE_INIT;
+
+static void
+init_skill_registry_once(void)
+{
+    csilk_mutex_init(&g_skill_mutex);
+}
 
 static int
 ensure_skill_registry(void)
 {
-    if (!g_skill_mutex_ready) {
-        csilk_mutex_init(&g_skill_mutex);
-        g_skill_mutex_ready = 1;
-    }
+    csilk_once(&g_skill_once, init_skill_registry_once);
     return 0;
 }
 
@@ -532,6 +532,7 @@ static skill_remote_pending_t   g_remote_pending[SKILL_MAX_REMOTE_PENDING];
 static skill_idem_cache_entry_t g_idem_cache[SKILL_IDEM_CACHE_CAP];
 static size_t                   g_idem_cache_next = 0;
 static csilk_mutex_t            g_remote_mutex;
+static csilk_once_t             g_remote_once = CSILK_ONCE_INIT;
 static int                      g_remote_mutex_ready = 0;
 
 static int g_idem_atexit_registered = 0;
@@ -551,20 +552,24 @@ idem_cache_atexit_cleanup(void)
 }
 
 static void
+init_remote_state_once(void)
+{
+    csilk_mutex_init(&g_remote_mutex);
+    for (size_t i = 0; i < SKILL_MAX_REMOTE_PENDING; i++) {
+        csilk_mutex_init(&g_remote_pending[i].mu);
+        csilk_cond_init(&g_remote_pending[i].cv);
+    }
+    g_remote_mutex_ready = 1;
+    if (!g_idem_atexit_registered) {
+        g_idem_atexit_registered = 1;
+        atexit(idem_cache_atexit_cleanup);
+    }
+}
+
+static void
 ensure_remote_state(void)
 {
-    if (!g_remote_mutex_ready) {
-        csilk_mutex_init(&g_remote_mutex);
-        for (size_t i = 0; i < SKILL_MAX_REMOTE_PENDING; i++) {
-            csilk_mutex_init(&g_remote_pending[i].mu);
-            csilk_cond_init(&g_remote_pending[i].cv);
-        }
-        g_remote_mutex_ready = 1;
-        if (!g_idem_atexit_registered) {
-            g_idem_atexit_registered = 1;
-            atexit(idem_cache_atexit_cleanup);
-        }
-    }
+    csilk_once(&g_remote_once, init_remote_state_once);
 }
 
 static int

@@ -40,6 +40,28 @@ wf_cluster_init_mutex(void)
 }
 
 static void
+wf_sm_try_apply_dsl(csilk_wf_manager_t* mgr, const char* payload)
+{
+    if (!mgr || !payload || payload[0] != '{') {
+        return;
+    }
+    csilk_wf_t* wf = csilk_wf_from_json_ext(payload, NULL, 0);
+    if (!wf) {
+        return;
+    }
+    const char* name = (wf->name && wf->name[0]) ? wf->name : "default";
+    if (csilk_wf_manager_get(mgr, name) != NULL) {
+        if (csilk_wf_manager_reload(mgr, name, wf) != 0) {
+            csilk_wf_free(wf);
+        }
+    } else {
+        if (csilk_wf_manager_register(mgr, name, wf) != 0) {
+            csilk_wf_free(wf);
+        }
+    }
+}
+
+static void
 wf_sm_on_entry(uint64_t index, uint64_t term, const uint8_t* data, size_t len, void* user_data)
 {
     (void)term;
@@ -47,6 +69,10 @@ wf_sm_on_entry(uint64_t index, uint64_t term, const uint8_t* data, size_t len, v
     if (!slot || !data || len == 0) {
         return;
     }
+
+    csilk_wf_manager_t* mgr = NULL;
+    char                payload_copy[WF_CLUSTER_PAYLOAD_CAP];
+    payload_copy[0] = '\0';
 
     csilk_mutex_lock(&s_binding_mutex);
     if (slot->mgr != NULL && index > slot->last_applied_index) {
@@ -63,8 +89,14 @@ wf_sm_on_entry(uint64_t index, uint64_t term, const uint8_t* data, size_t len, v
             memcpy(slot->last_payload, data + 1U, plen);
         }
         slot->last_payload[plen] = '\0';
+        mgr = slot->mgr;
+        memcpy(payload_copy, slot->last_payload, plen + 1U);
     }
     csilk_mutex_unlock(&s_binding_mutex);
+
+    if (mgr && payload_copy[0] == '{') {
+        wf_sm_try_apply_dsl(mgr, payload_copy);
+    }
 }
 
 static void

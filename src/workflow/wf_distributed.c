@@ -57,7 +57,7 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
                 if (n) {
                     csilk_mutex_lock(&active->mutex);
                     active->node_approved[n->index] = 1;
-                    active->nodes_active--; // Decrement the count we added during offload
+                    atomic_fetch_sub(&active->nodes_active, 1);
                     csilk_mutex_unlock(&active->mutex);
 
                     csilk_data_t* out_data = csilk_wf_data_new(
