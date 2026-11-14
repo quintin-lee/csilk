@@ -1033,8 +1033,9 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertGreaterEqual(stats["active_connections"], 0)
             finally:
                 app.stop()
-                t.join(timeout=1.0)
-                app.free()
+                t.join(timeout=3.0)
+                if not t.is_alive():
+                    app.free()
         finally:
             shutil.rmtree(temp_dir)
 
@@ -1183,5 +1184,6 @@ def test_asyncio_support():
     assert response.json()["async"] == "success"
 
     app.stop()
-    t.join(timeout=2.0)
-    app.free()
+    t.join(timeout=3.0)
+    if not t.is_alive():
+        app.free()
