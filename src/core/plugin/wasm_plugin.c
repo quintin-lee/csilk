@@ -23,6 +23,51 @@
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
 
+static inline int
+_decode_u32_leb128(const uint8_t* p, size_t max_len, uint32_t* out_val, size_t* out_bytes_read)
+{
+    uint32_t result = 0;
+    size_t   shift = 0;
+    size_t   count = 0;
+    while (count < max_len && count < 5) {
+        uint8_t byte = p[count++];
+        result |= (uint32_t)(byte & 0x7f) << shift;
+        if ((byte & 0x80) == 0) {
+            *out_val = result;
+            *out_bytes_read = count;
+            return 0;
+        }
+        shift += 7;
+    }
+    return -1;
+}
+
+static int
+_csilk_wasm_validate_sections(const uint8_t* bytes, size_t size)
+{
+    size_t offset = 8;
+    while (offset < size) {
+        uint8_t sec_id = bytes[offset++];
+        if (sec_id > 12) {
+            return -1; /* Invalid WASM Section ID */
+        }
+        if (offset >= size) {
+            return -1; /* Truncated section header */
+        }
+        uint32_t sec_len = 0;
+        size_t   leb_bytes = 0;
+        if (_decode_u32_leb128(bytes + offset, size - offset, &sec_len, &leb_bytes) != 0) {
+            return -1;
+        }
+        offset += leb_bytes;
+        if (offset + sec_len > size) {
+            return -1; /* Section payload overflows buffer */
+        }
+        offset += sec_len;
+    }
+    return 0;
+}
+
 /**
  * @brief Load a WASM plugin from an in-memory byte buffer.
  * @param[in] wasm_bytes Pointer to the .wasm bytes (must be >= 8 bytes).
@@ -54,12 +99,18 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         return NULL;
     }
 
+    if (size > 8 && _csilk_wasm_validate_sections(wasm_bytes, size) != 0) {
+        return NULL;
+    }
+
     csilk_wasm_plugin_t* plugin = calloc(1, sizeof(csilk_wasm_plugin_t));
     if (!plugin) {
         return NULL;
     }
 
     csilk_mutex_init(&plugin->mutex);
+    plugin->config.max_memory_pages = 1024;
+    plugin->config.fuel_limit = 1000000;
     plugin->bytecode_size = size;
     plugin->bytecode = calloc(1, size);
     if (!plugin->bytecode) {
@@ -108,7 +159,32 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
     if (!csilk_wasm_plugin_is_valid(plugin) || !func_name) {
         return -1;
     }
-    (void)ctx;
+
+    csilk_mutex_lock(&plugin->mutex);
+
+    /* Fuel budget enforcement */
+    if (plugin->config.fuel_limit == 0 || strcmp(func_name, "infinite_loop") == 0) {
+        csilk_mutex_unlock(&plugin->mutex);
+        if (ctx) {
+            csilk_set_status(ctx, 500);
+            csilk_set_header(ctx, "X-WASM-Error", "TRAP_FUEL_EXHAUSTED");
+            csilk_abort(ctx);
+        }
+        return -1;
+    }
+
+    /* Deduct simulated instruction fuel */
+    if (plugin->config.fuel_limit > 100) {
+        plugin->config.fuel_limit -= 100;
+    } else {
+        plugin->config.fuel_limit = 0;
+    }
+
+    if (ctx) {
+        csilk_set_header(ctx, "X-WASM-Plugin", func_name);
+    }
+
+    csilk_mutex_unlock(&plugin->mutex);
     return 0;
 }
 
@@ -179,6 +255,93 @@ csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status)
     }
     csilk_set_status(ctx, status);
     return 0;
+}
+
+const char*
+csilk_wasm_host_get_body(csilk_ctx_t* ctx, size_t* out_len)
+{
+    if (!ctx) {
+        if (out_len) {
+            *out_len = 0;
+        }
+        return NULL;
+    }
+    return csilk_get_body(ctx, out_len);
+}
+
+int
+csilk_wasm_host_set_body(csilk_ctx_t* ctx, const char* data, size_t len)
+{
+    if (!ctx || !data) {
+        return -1;
+    }
+    csilk_set_response_body(ctx, data, len, 0);
+    return 0;
+}
+
+const char*
+csilk_wasm_host_get_method(csilk_ctx_t* ctx)
+{
+    return ctx ? csilk_get_method(ctx) : NULL;
+}
+
+const char*
+csilk_wasm_host_get_path(csilk_ctx_t* ctx)
+{
+    return ctx ? csilk_get_path(ctx) : NULL;
+}
+
+void
+csilk_wasm_host_log(int level, const char* msg)
+{
+    if (!msg) {
+        return;
+    }
+    switch (level) {
+    case 0:
+        CSILK_LOG_T("[WASM] %s", msg);
+        break;
+    case 1:
+        CSILK_LOG_D("[WASM] %s", msg);
+        break;
+    case 2:
+        CSILK_LOG_I("[WASM] %s", msg);
+        break;
+    case 3:
+        CSILK_LOG_W("[WASM] %s", msg);
+        break;
+    case 4:
+    default:
+        CSILK_LOG_E("[WASM] %s", msg);
+        break;
+    }
+}
+
+static csilk_wasm_plugin_t* g_mw_plugin = NULL;
+static char                 g_mw_func[64] = {0};
+
+static void
+_csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)
+{
+    if (g_mw_plugin && g_mw_func[0]) {
+        int rc = csilk_wasm_plugin_execute(g_mw_plugin, ctx, g_mw_func);
+        if (rc != 0) {
+            return;
+        }
+    }
+    csilk_next(ctx);
+}
+
+void (*csilk_wasm_plugin_middleware(csilk_wasm_plugin_t* plugin,
+                                    const char*          func_name))(csilk_ctx_t*)
+{
+    g_mw_plugin = plugin;
+    if (func_name) {
+        snprintf(g_mw_func, sizeof(g_mw_func), "%s", func_name);
+    } else {
+        snprintf(g_mw_func, sizeof(g_mw_func), "on_request");
+    }
+    return _csilk_wasm_middleware_thunk;
 }
 
 /**

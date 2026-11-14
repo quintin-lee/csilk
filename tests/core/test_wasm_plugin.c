@@ -105,6 +105,105 @@ test_wasm_shared_mem()
 #endif
 }
 
+static void
+test_wasm_extended_host_api(void)
+{
+    printf("Testing WASM extended Host APIs (body, method, path, log)...\n");
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    assert(ctx != NULL);
+    csilk_test_ctx_set_request(ctx, "POST", "/api/v1/wasm-test");
+    csilk_test_ctx_set_body(ctx, "{\"ping\":\"pong\"}", 15);
+
+    assert(strcmp(csilk_wasm_host_get_method(ctx), "POST") == 0);
+    assert(strcmp(csilk_wasm_host_get_path(ctx), "/api/v1/wasm-test") == 0);
+
+    size_t      body_len = 0;
+    const char* body = csilk_wasm_host_get_body(ctx, &body_len);
+    assert(body != NULL);
+    assert(body_len == 15);
+    assert(strcmp(body, "{\"ping\":\"pong\"}") == 0);
+
+    assert(csilk_wasm_host_set_body(ctx, "{\"ok\":true}", 11) == 0);
+    size_t      res_len = 0;
+    const char* res_body = csilk_get_response_body(ctx, &res_len);
+    assert(res_body != NULL && res_len == 11);
+    assert(strcmp(res_body, "{\"ok\":true}") == 0);
+
+    csilk_wasm_host_log(2, "Test message from WASM plugin");
+
+    csilk_test_ctx_free(ctx);
+    printf("test_wasm_extended_host_api: PASS\n");
+}
+
+static void
+test_wasm_section_validation(void)
+{
+    printf("Testing WASM binary section format validation...\n");
+
+#if CSILK_ENABLE_EXPERIMENTAL_STUBS
+    /* 8-byte header followed by Section 0 (Custom) len=4 payload="test" */
+    uint8_t wasm_with_section[14] = {
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x04, 't', 'e', 's', 't'};
+    csilk_wasm_plugin_t* p1 = csilk_wasm_plugin_load(wasm_with_section, sizeof(wasm_with_section));
+    assert(p1 != NULL);
+    csilk_wasm_plugin_free(p1);
+
+    /* Invalid section ID 15 */
+    uint8_t wasm_invalid_sec[10] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x0f, 0x01};
+    csilk_wasm_plugin_t* p2 = csilk_wasm_plugin_load(wasm_invalid_sec, sizeof(wasm_invalid_sec));
+    assert(p2 == NULL);
+
+    /* Section length overflows buffer */
+    uint8_t wasm_overflow_sec[10] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x7f};
+    csilk_wasm_plugin_t* p3 = csilk_wasm_plugin_load(wasm_overflow_sec, sizeof(wasm_overflow_sec));
+    assert(p3 == NULL);
+#endif
+    printf("test_wasm_section_validation: PASS\n");
+}
+
+static void
+test_wasm_middleware_integration(void)
+{
+    printf("Testing WASM middleware execution and fuel trap...\n");
+
+#if CSILK_ENABLE_EXPERIMENTAL_STUBS
+    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    assert(plugin != NULL);
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    assert(ctx != NULL);
+    csilk_test_ctx_set_request(ctx, "GET", "/filter-me");
+
+    void (*mw)(csilk_ctx_t*) = csilk_wasm_plugin_middleware(plugin, "custom_filter");
+    assert(mw != NULL);
+    mw(ctx);
+
+    const char* p_hdr = csilk_get_response_header(ctx, "X-WASM-Plugin");
+    assert(p_hdr != NULL);
+    assert(strcmp(p_hdr, "custom_filter") == 0);
+
+    /* Test Fuel exhaustion abort in middleware */
+    csilk_ctx_t* ctx_trap = csilk_test_ctx_new();
+    assert(ctx_trap != NULL);
+    csilk_test_ctx_set_request(ctx_trap, "GET", "/loop");
+
+    void (*mw_loop)(csilk_ctx_t*) = csilk_wasm_plugin_middleware(plugin, "infinite_loop");
+    mw_loop(ctx_trap);
+
+    assert(csilk_is_aborted(ctx_trap) == 1);
+    assert(csilk_get_status(ctx_trap) == 500);
+    const char* err_hdr = csilk_get_response_header(ctx_trap, "X-WASM-Error");
+    assert(err_hdr != NULL && strcmp(err_hdr, "TRAP_FUEL_EXHAUSTED") == 0);
+
+    csilk_test_ctx_free(ctx);
+    csilk_test_ctx_free(ctx_trap);
+    csilk_wasm_plugin_free(plugin);
+#endif
+    printf("test_wasm_middleware_integration: PASS\n");
+}
+
 int
 main()
 {
@@ -112,6 +211,9 @@ main()
     test_wasm_plugin_load_valid();
     test_wasm_host_api();
     test_wasm_shared_mem();
+    test_wasm_extended_host_api();
+    test_wasm_section_validation();
+    test_wasm_middleware_integration();
     printf("All WASM Plugin tests passed successfully!\n");
     return 0;
 }

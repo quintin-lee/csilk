@@ -95,6 +95,53 @@ const char* csilk_wasm_host_get_param(csilk_ctx_t* ctx, const char* name);
 int csilk_wasm_host_set_status(csilk_ctx_t* ctx, int status);
 
 /**
+ * @brief WASM Host API: Get request body buffer and length.
+ * @param ctx Request context.
+ * @param[out] out_len Receives body length in bytes.
+ * @return Pointer to body bytes or NULL if body is empty.
+ */
+const char* csilk_wasm_host_get_body(csilk_ctx_t* ctx, size_t* out_len);
+
+/**
+ * @brief WASM Host API: Set or replace response body data.
+ * @param ctx Request context.
+ * @param data Response payload bytes.
+ * @param len Size of response payload in bytes.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_wasm_host_set_body(csilk_ctx_t* ctx, const char* data, size_t len);
+
+/**
+ * @brief WASM Host API: Get HTTP request method (GET, POST, etc.).
+ * @param ctx Request context.
+ * @return HTTP method string or NULL.
+ */
+const char* csilk_wasm_host_get_method(csilk_ctx_t* ctx);
+
+/**
+ * @brief WASM Host API: Get HTTP request path.
+ * @param ctx Request context.
+ * @return HTTP path string or NULL.
+ */
+const char* csilk_wasm_host_get_path(csilk_ctx_t* ctx);
+
+/**
+ * @brief WASM Host API: Emit a log message via the Host logger.
+ * @param level Log severity level (0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR).
+ * @param msg NUL-terminated message string.
+ */
+void csilk_wasm_host_log(int level, const char* msg);
+
+/**
+ * @brief Creates a csilk middleware handler wrapping a WASM plugin exported function.
+ * @param plugin Loaded WASM plugin.
+ * @param func_name Name of exported function to invoke on each request.
+ * @return Middleware function pointer matching csilk_handler_t.
+ */
+void (*csilk_wasm_plugin_middleware(csilk_wasm_plugin_t* plugin,
+                                    const char*          func_name))(csilk_ctx_t*);
+
+/**
  * @brief Map shared linear memory buffer between Host and WASM plugin sandbox.
  *
  * @param plugin WASM plugin instance handle.
