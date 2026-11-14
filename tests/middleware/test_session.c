@@ -206,6 +206,8 @@ test_session_cleanup_expired_sweep(void)
     csilk_session_start(c);
     const char* sid = csilk_session_get_id(c);
     assert(sid != nullptr);
+    char saved_sid[64];
+    snprintf(saved_sid, sizeof(saved_sid), "%s", sid);
 
     /* Access internal session pointer to simulate past expiry */
     typedef struct {
@@ -223,7 +225,7 @@ test_session_cleanup_expired_sweep(void)
 
     /* Trying to resume with expired sid must yield a new session */
     char cookie_hdr[128];
-    snprintf(cookie_hdr, sizeof(cookie_hdr), "csilk_session=%s", sid);
+    snprintf(cookie_hdr, sizeof(cookie_hdr), "csilk_session=%s", saved_sid);
 
     csilk_ctx_t* c2 = csilk_test_ctx_new();
     csilk_set_request_header(c2, "Cookie", cookie_hdr);
@@ -231,7 +233,7 @@ test_session_cleanup_expired_sweep(void)
 
     const char* sid2 = csilk_session_get_id(c2);
     assert(sid2 != nullptr);
-    assert(strcmp(sid, sid2) != 0); /* Expired session was purged, new UUID issued */
+    assert(strcmp(saved_sid, sid2) != 0); /* Expired session was purged, new UUID issued */
 
     csilk_test_ctx_free(c);
     csilk_test_ctx_free(c2);
