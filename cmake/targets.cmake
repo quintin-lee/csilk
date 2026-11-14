@@ -76,7 +76,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   set_target_properties(${TARGET} PROPERTIES
       PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
       VERSION "${CSILK_VERSION}"
-      SOVERSION "${CSILK_VERSION_MAJOR}"
+      SOVERSION "1"
       INTERFACE_COMPILE_FEATURES c_std_23
       POSITION_INDEPENDENT_CODE ON
   )

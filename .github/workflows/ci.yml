@@ -135,6 +135,7 @@ jobs:
         CSILK_ABI_PROBE_BIN="$PWD/build/test_python_abi" CSILK_REQUIRE_ABI_PROBE=1 python3 python/tests/test_abi_layout.py
         python3 python/tests/test_middleware_bindings.py
         python3 python/tests/test_test_context_compat.py
+        python3 python/tests/test_asyncio_support.py
       env:
         ASAN_OPTIONS: detect_leaks=${{ runner.os == 'Linux' && '1' || '0' }}:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
@@ -175,6 +176,12 @@ jobs:
 
     - name: Check sync primitive abstraction (no raw pthread in src/)
       run: bash ./scripts/check_sync_primitives.sh
+
+    - name: Build shared library for ABI gate
+      run: cmake --build build --target csilk_shared -j$(nproc)
+
+    - name: Check ABI compatibility gate (SOVERSION 1)
+      run: bash ./scripts/check_abi_compatibility.sh build/libcsilk.so
 
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
