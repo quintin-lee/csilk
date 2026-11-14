@@ -98,8 +98,8 @@ class App:
                     self._loop.close()
             except RuntimeError:
                 pass
-        # Native csilk_app_free owns and releases all groups. Drop Python
-        # wrappers without calling csilk_group_free a second time.
+        for g in list(self._groups):
+            g._group = None
         self._groups.clear()
         if self._app:
             self._lib.csilk_app_free(self._app)
