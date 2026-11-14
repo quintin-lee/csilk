@@ -522,7 +522,9 @@ class Context:
                 error_msg = str(e)
 
                 def _send_error():
-                    self.string(500, f"Internal Server Error: {error_msg}")
+                    self.set_header("Content-Type", "text/plain")
+                    self.status_code = 500
+                    self.response_write(f"Internal Server Error: {error_msg}")
                     self.response_end()
 
                 self.dispatch(_send_error)
