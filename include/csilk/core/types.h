@@ -138,6 +138,14 @@ typedef struct {
    *  @return The new value after incrementing, or -1 on error. */
     long long (*incr)(csilk_ctx_t* c, const char* key, int ttl_sec);
 
+    /** @brief Atomic increment with exact remaining window TTL in milliseconds.
+   *  @param c          Owning request context.
+   *  @param key        NUL-terminated key string.
+   *  @param ttl_sec    Time-to-live in seconds for newly created key (0 = no expiry).
+   *  @param out_ttl_ms Pointer to receive remaining window TTL in ms (may be NULL).
+   *  @return The new value after incrementing, or -1 on error. */
+    long long (*incr_with_ttl)(csilk_ctx_t* c, const char* key, int ttl_sec, long long* out_ttl_ms);
+
     /** @brief Atomic distributed cluster state synchronization (Circuit Breaker / Sliding Rate Limiter).
    *  @param c        Owning request context.
    *  @param key      NUL-terminated state key string.

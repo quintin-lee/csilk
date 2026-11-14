@@ -187,13 +187,15 @@ void LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 ```bash
 # 编译 Fuzz 目标
 cmake -B build_fuzz -S . -DCMAKE_C_COMPILER=clang -DUSE_ASAN=ON -DUSE_FUZZER=ON
-cmake --build build_fuzz --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc
+cmake --build build_fuzz --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite
 
 # 运行 Fuzz 测试（10 秒）
 cd build_fuzz && ./fuzz_test -max_total_time=10 ../fuzz/corpus/fuzz_test
 ./fuzz_h2 -max_total_time=10 ../fuzz/corpus/fuzz_h2
 ./fuzz_websocket -max_total_time=10 ../fuzz/corpus/fuzz_websocket
 ./fuzz_raft_rpc -max_total_time=10 ../fuzz/corpus/fuzz_raft_rpc
+./fuzz_mcp -max_total_time=10 ../fuzz/corpus/fuzz_mcp
+./fuzz_sql_rewrite -max_total_time=10 ../fuzz/corpus/fuzz_sql_rewrite
 ```
 
 ---

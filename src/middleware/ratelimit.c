@@ -549,7 +549,8 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
     if (c->storage_driver) {
         char key[128];
         snprintf(key, sizeof(key), "ratelimit:%s", ip);
-        long long current_count = csilk_incr(c, key, WINDOW_SIZE);
+        long long remaining_ttl_ms = 0;
+        long long current_count = csilk_incr_with_ttl(c, key, WINDOW_SIZE, &remaining_ttl_ms);
 
         if (current_count >= 0) {
             if (current_count > limit) {
@@ -559,10 +560,13 @@ csilk_rate_limit_middleware(csilk_ctx_t* c, int limit)
                             current_count,
                             limit);
                 _csilk_metrics_inc_rate_limit_blocks();
-                /* Distributed store only returns the counter (no TTL); retry with
-                 * the full window as a conservative (non-overstated) value. */
+                long long retry_sec = (remaining_ttl_ms > 0) ? (remaining_ttl_ms + 999) / 1000
+                                                             : (long long)WINDOW_SIZE;
+                if (retry_sec <= 0) {
+                    retry_sec = 1;
+                }
                 char retry_after[32];
-                snprintf(retry_after, sizeof(retry_after), "%lld", (long long)WINDOW_SIZE);
+                snprintf(retry_after, sizeof(retry_after), "%lld", retry_sec);
                 csilk_set_header(c, "Retry-After", retry_after);
                 csilk_json_error(c, CSILK_STATUS_TOO_MANY_REQUESTS, "Too Many Requests");
                 csilk_abort(c);

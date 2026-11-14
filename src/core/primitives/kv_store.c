@@ -186,13 +186,21 @@ csilk_get_string(csilk_ctx_t* c, const char* key)
  *                 when a storage driver is set).
  * @return The new value after incrementing, or -1 on error. */
 long long
-csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+csilk_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long long* out_ttl_ms)
 {
+    if (out_ttl_ms) {
+        *out_ttl_ms = (long long)ttl_sec * 1000;
+    }
     if (!c || !key) {
         return -1;
     }
-    if (c->storage_driver && c->storage_driver->incr) {
-        return c->storage_driver->incr(c, key, ttl_sec);
+    if (c->storage_driver) {
+        if (c->storage_driver->incr_with_ttl) {
+            return c->storage_driver->incr_with_ttl(c, key, ttl_sec, out_ttl_ms);
+        }
+        if (c->storage_driver->incr) {
+            return c->storage_driver->incr(c, key, ttl_sec);
+        }
     }
     /* Fallback: increment inside the request context's local map */
     long long val = 0;
@@ -209,4 +217,10 @@ csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
     }
     csilk_set(c, key, arena_val);
     return val;
+}
+
+long long
+csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+{
+    return csilk_incr_with_ttl(c, key, ttl_sec, NULL);
 }

@@ -716,6 +716,16 @@ char* csilk_get_string(csilk_ctx_t* c, const char* key);
 long long csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec);
 
 /**
+ * @brief Increment a numeric value by 1 with an optional TTL and retrieve exact remaining TTL in ms.
+ * @param c          The request context.
+ * @param key        Storage key.
+ * @param ttl_sec    Time-to-live in seconds (set only if newly created; 0 = no expiry).
+ * @param out_ttl_ms Output pointer to receive remaining TTL in milliseconds (may be NULL).
+ * @return The new value after incrementing, or -1 on error.
+ */
+long long csilk_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long long* out_ttl_ms);
+
+/**
  * @brief Bind the request body (JSON) to a cJSON object.
  *
  * Parses the raw request body as JSON.  The returned cJSON object is

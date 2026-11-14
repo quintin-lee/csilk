@@ -46,7 +46,7 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 ### Fuzzing
 
-- **Build fuzzers**: `cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc` (requires clang-19 + ASAN).
+- **Build fuzzers**: `cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite` (requires clang-19 + ASAN).
 - **Run**: `./fuzz_test -max_total_time=120 -dict=fuzz/fuzz.dict fuzz/corpus/fuzz_test` (etc.).
 - **Add corpus**: seed corpora live in `fuzz/corpus/<name>/`; dictionary at `fuzz/fuzz.dict`.
 
@@ -197,7 +197,7 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 | `src/util/` | CPU flame graph (backtrace sampling), RFC 4180 CSV parser & serializer (`csv.c`) |
 
 | `include/csilk/` | Public headers mirroring src/ layout (opaque handles only) |
-| `fuzz/` | libFuzzer harnesses: fuzz_test, fuzz_url, fuzz_yaml, fuzz_headers, fuzz_h2, fuzz_websocket, fuzz_raft_rpc + corpus + dict |
+| `fuzz/` | libFuzzer harnesses: fuzz_test, fuzz_url, fuzz_yaml, fuzz_headers, fuzz_h2, fuzz_websocket, fuzz_raft_rpc, fuzz_mcp, fuzz_sql_rewrite + corpus + dict |
 | `tests/` | Unit, integration, stress, and property-based tests per module |
 | `python/` | CFFI/ctypes bindings + setup.py + Python unit tests |
 | `examples/` | Example apps: basic, ai, database, websocket, middleware, advanced |
@@ -261,7 +261,7 @@ cmake -B build -S . -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug \
 # libFuzzer (requires clang-19+)
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 \
   -DUSE_ASAN=ON -DUSE_FUZZER=ON
-cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc
+cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite
 ```
 
 Runtime flags to mirror CI (suppression files under `cmake/`):
@@ -430,7 +430,7 @@ csilk_get(app, "/api/echo", echo_handler);
 | Unit (core, app, middleware, protocols, security, drivers, reflection, messaging) | `-E test_integration` | 10s | Core property tests (crypto, bcrypt, UUID) use `/dev/urandom` salts — assert-hash tests are `#ifdef TEST_OOM`-guarded |
 | Integration | `-R test_integration` | 30s | Live HTTP server fixture; also SSE, session, middleware-chain, OpenAPI, admin |
 | Stress | `test_*_stress` | 30–60s | Multi-worker, RCU reader storm, hot-reload ramp |
-| Fuzz | `fuzz_*` | Manual (CI: 60–120s) | `fuzz_test`, `fuzz_url`, `fuzz_yaml`, `fuzz_headers`, `fuzz_h2`, `fuzz_websocket`, `fuzz_raft_rpc`; corpus in `fuzz/corpus/`; dict at `fuzz/fuzz.dict` |
+| Fuzz | `fuzz_*` | Manual (CI: 60–120s) | `fuzz_test`, `fuzz_url`, `fuzz_yaml`, `fuzz_headers`, `fuzz_h2`, `fuzz_websocket`, `fuzz_raft_rpc`, `fuzz_mcp`, `fuzz_sql_rewrite`; corpus in `fuzz/corpus/`; dict at `fuzz/fuzz.dict` |
 
 ### Coverage
 

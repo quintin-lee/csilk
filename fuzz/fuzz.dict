@@ -89,3 +89,24 @@
 "Sec-WebSocket-Key:"
 "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 "TFAR"
+
+# MCP JSON-RPC tokens
+"jsonrpc"
+"2.0"
+"tools/list"
+"tools/call"
+"resources/list"
+"resources/read"
+"prompts/list"
+"prompts/get"
+
+# SQL rewrite tokens
+"SELECT"
+"INSERT"
+"UPDATE"
+"DELETE"
+"WHERE"
+"VALUES"
+"LIMIT"
+"?"
+"$"

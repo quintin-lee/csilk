@@ -348,7 +348,28 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
 const char*
 csilk_get_client_ip(csilk_ctx_t* c)
 {
-    if (!c || !c->_internal_client) {
+    if (!c) {
+        return NULL;
+    }
+    const char* xff = csilk_get_header(c, "X-Forwarded-For");
+    if (xff && xff[0] != '\0') {
+        const char* comma = strchr(xff, ',');
+        if (comma) {
+            size_t len = (size_t)(comma - xff);
+            char   ip[64];
+            if (len < sizeof(ip)) {
+                memcpy(ip, xff, len);
+                ip[len] = '\0';
+                return csilk_arena_strdup(c->arena, ip);
+            }
+        }
+        return csilk_arena_strdup(c->arena, xff);
+    }
+    const char* x_real = csilk_get_header(c, "X-Real-IP");
+    if (x_real && x_real[0] != '\0') {
+        return csilk_arena_strdup(c->arena, x_real);
+    }
+    if (!c->_internal_client) {
         return NULL;
     }
     csilk_client_t*         client = (csilk_client_t*)c->_internal_client;
