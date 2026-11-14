@@ -21,6 +21,7 @@
 #include <sys/types.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sys_io.h"
 #include "csilk/drivers/ai.h"
 
 /* Max time (ms) to wait for the mock server to bind an ephemeral port and
@@ -514,6 +515,103 @@ test_embeddings_null_response(void)
     printf("  passed\n");
 }
 
+typedef struct {
+    int  called;
+    int  status;
+    char content[256];
+    int  total_tokens;
+} async_chat_state_t;
+
+static void
+on_async_chat_done(int status, csilk_ai_chat_response_t* res, void* user_data)
+{
+    async_chat_state_t* st = (async_chat_state_t*)user_data;
+    st->called = 1;
+    st->status = status;
+    if (res && res->content) {
+        snprintf(st->content, sizeof(st->content), "%s", res->content);
+    }
+    if (res) {
+        st->total_tokens = res->total_tokens;
+    }
+}
+
+typedef struct {
+    int    called;
+    int    status;
+    size_t count;
+    size_t dimension;
+    float  first_val;
+    float  last_val;
+} async_emb_state_t;
+
+static void
+on_async_emb_done(int status, csilk_ai_embeddings_response_t* res, void* user_data)
+{
+    async_emb_state_t* st = (async_emb_state_t*)user_data;
+    st->called = 1;
+    st->status = status;
+    if (res) {
+        st->count = res->count;
+        st->dimension = res->dimension;
+        if (res->values && res->dimension >= 4) {
+            st->first_val = res->values[0];
+            st->last_val = res->values[3];
+        }
+    }
+}
+
+static void
+test_chat_async(void)
+{
+    printf("Testing chat completion (async)...\n");
+    csilk_ai_t* ai = csilk_ai_new("openai", "mock-key", get_base_url());
+    assert(ai != NULL);
+
+    async_chat_state_t st = {0};
+    {
+        csilk_ai_message_t      msg = {.role = "user", .content = "Hello async"};
+        csilk_ai_chat_request_t req = {0};
+        req.model = "gpt-3.5-turbo";
+        req.messages = &msg;
+        req.message_count = 1;
+        req.timeout_ms = 10000;
+        csilk_ai_chat_async(ai, &req, on_async_chat_done, &st);
+    }
+
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    assert(st.called == 1);
+    assert(st.status == 0);
+    assert(strcmp(st.content, "Mock response from test server.") == 0);
+    assert(st.total_tokens == 15);
+
+    csilk_ai_free(ai);
+    printf("  passed\n");
+}
+
+static void
+test_embeddings_async(void)
+{
+    printf("Testing embeddings (async)...\n");
+    csilk_ai_t* ai = csilk_ai_new("openai", "mock-key", get_base_url());
+    assert(ai != NULL);
+
+    const char*       input = "Hello async embedding";
+    async_emb_state_t st = {0};
+    csilk_ai_embeddings_async(ai, "text-embedding-ada-002", &input, 1, on_async_emb_done, &st);
+
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    assert(st.called == 1);
+    assert(st.status == 0);
+    assert(st.count == 1);
+    assert(st.dimension == 4);
+    assert(st.first_val == 0.1f);
+    assert(st.last_val == 0.4f);
+
+    csilk_ai_free(ai);
+    printf("  passed\n");
+}
+
 static void
 test_free_null_ai(void)
 {
@@ -546,6 +644,8 @@ main(void)
     test_embeddings_batch();
     test_embeddings_null_input();
     test_embeddings_null_response();
+    test_chat_async();
+    test_embeddings_async();
     test_free_null_ai();
 
     stop_mock_server();

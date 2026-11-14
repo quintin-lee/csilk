@@ -723,36 +723,157 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
     return result;
 }
 
+typedef enum {
+    DB_ASYNC_QUERY = 0,
+    DB_ASYNC_EXEC = 1,
+    DB_ASYNC_QUERY_PARAM = 2,
+    DB_ASYNC_EXEC_PARAM = 3
+} db_async_op_t;
+
 typedef struct {
-    csilk_io_work_t   req;
-    csilk_db_pool_t*  pool;
-    char*             sql;
-    csilk_db_async_cb cb;
-    void*             user_data;
-    csilk_json_t*     result;
+    csilk_io_work_t        req;
+    db_async_op_t          op;
+    csilk_db_pool_t*       pool;
+    char*                  sql;
+    char**                 params;
+    size_t                 param_count;
+    csilk_db_async_cb      query_cb;
+    csilk_db_exec_async_cb exec_cb;
+    void*                  user_data;
+    csilk_json_t*          result;
+    int                    exec_rc;
 } db_async_work_ctx_t;
 
-/** @brief Thread-pool work callback — runs the query off the main loop.
- * Stores the resulting JSON in the async context for the after-work callback. */
+static void
+db_async_free_ctx(db_async_work_ctx_t* ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    free(ctx->sql);
+    if (ctx->params) {
+        for (size_t i = 0; i < ctx->param_count; i++) {
+            free(ctx->params[i]);
+        }
+        free(ctx->params);
+    }
+    free(ctx);
+}
+
+static int
+db_async_clone_params(db_async_work_ctx_t* ctx, const char** params)
+{
+    size_t count = 0;
+    if (params) {
+        while (params[count]) {
+            count++;
+        }
+    }
+    ctx->params = calloc(count + 1, sizeof(char*));
+    if (!ctx->params) {
+        return -1;
+    }
+    for (size_t i = 0; i < count; i++) {
+        ctx->params[i] = strdup(params[i]);
+        if (!ctx->params[i]) {
+            ctx->param_count = i;
+            return -1;
+        }
+    }
+    ctx->param_count = count;
+    return 0;
+}
+
+/** @brief Thread-pool work callback — runs the query or statement off the main loop. */
 static void
 db_async_work_cb(csilk_io_work_t* req)
 {
     db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
-    ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
+    switch (ctx->op) {
+    case DB_ASYNC_QUERY:
+        ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
+        break;
+    case DB_ASYNC_EXEC:
+        ctx->exec_rc = csilk_db_exec(ctx->pool, ctx->sql);
+        break;
+    case DB_ASYNC_QUERY_PARAM:
+        ctx->result = csilk_db_query_param_json(ctx->pool, ctx->sql, (const char**)ctx->params);
+        break;
+    case DB_ASYNC_EXEC_PARAM:
+        ctx->exec_rc = csilk_db_exec_param(ctx->pool, ctx->sql, (const char**)ctx->params);
+        break;
+    }
 }
 
 /** @brief After-work callback — invokes the user callback on the main loop
- * thread, then frees the SQL string and the async context. */
+ * thread, then frees the SQL string, cloned parameters, and async context. */
 static void
 db_async_after_work_cb(csilk_io_work_t* req, int status)
 {
     (void)status;
     db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
-    if (ctx->cb) {
-        ctx->cb(ctx->result, ctx->user_data);
+    if (ctx->op == DB_ASYNC_QUERY || ctx->op == DB_ASYNC_QUERY_PARAM) {
+        if (ctx->query_cb) {
+            ctx->query_cb(ctx->result, ctx->user_data);
+        } else if (ctx->result) {
+            csilk_json_free(ctx->result);
+        }
+    } else {
+        if (ctx->exec_cb) {
+            ctx->exec_cb(ctx->exec_rc, ctx->user_data);
+        }
     }
-    free(ctx->sql);
-    free(ctx);
+    db_async_free_ctx(ctx);
+}
+
+static int
+db_async_submit(db_async_op_t          op,
+                csilk_db_pool_t*       pool,
+                const char*            sql,
+                const char**           params,
+                csilk_db_async_cb      query_cb,
+                csilk_db_exec_async_cb exec_cb,
+                void*                  user_data)
+{
+    if (!pool || !sql) {
+        return -1;
+    }
+    if ((op == DB_ASYNC_QUERY || op == DB_ASYNC_QUERY_PARAM) && !query_cb) {
+        return -1;
+    }
+    if ((op == DB_ASYNC_EXEC || op == DB_ASYNC_EXEC_PARAM) && !exec_cb) {
+        return -1;
+    }
+
+    db_async_work_ctx_t* ctx = calloc(1, sizeof(db_async_work_ctx_t));
+    if (!ctx) {
+        return -1;
+    }
+    ctx->op = op;
+    ctx->pool = pool;
+    ctx->sql = strdup(sql);
+    ctx->query_cb = query_cb;
+    ctx->exec_cb = exec_cb;
+    ctx->user_data = user_data;
+    ctx->exec_rc = -1;
+    if (!ctx->sql) {
+        db_async_free_ctx(ctx);
+        return -1;
+    }
+    if (op == DB_ASYNC_QUERY_PARAM || op == DB_ASYNC_EXEC_PARAM) {
+        if (db_async_clone_params(ctx, params) != 0) {
+            db_async_free_ctx(ctx);
+            return -1;
+        }
+    }
+
+    csilk_io_loop_t* loop = csilk_io_default_loop();
+    int rc = csilk_io_queue_work(loop, &ctx->req, db_async_work_cb, db_async_after_work_cb);
+    if (rc != 0) {
+        db_async_free_ctx(ctx);
+        return -1;
+    }
+    return 0;
 }
 
 /**
@@ -774,26 +895,36 @@ csilk_db_query_json_async(csilk_db_pool_t*  pool,
                           csilk_db_async_cb cb,
                           void*             user_data)
 {
-    if (!pool || !sql || !cb) {
-        return -1;
-    }
-    db_async_work_ctx_t* ctx = calloc(1, sizeof(db_async_work_ctx_t));
-    if (!ctx) {
-        return -1;
-    }
-    ctx->pool = pool;
-    ctx->sql = strdup(sql);
-    ctx->cb = cb;
-    ctx->user_data = user_data;
+    return db_async_submit(DB_ASYNC_QUERY, pool, sql, NULL, cb, NULL, user_data);
+}
 
-    csilk_io_loop_t* loop = csilk_io_default_loop();
-    int rc = csilk_io_queue_work(loop, &ctx->req, db_async_work_cb, db_async_after_work_cb);
-    if (rc != 0) {
-        free(ctx->sql);
-        free(ctx);
-        return -1;
-    }
-    return 0;
+int
+csilk_db_exec_async(csilk_db_pool_t*       pool,
+                    const char*            sql,
+                    csilk_db_exec_async_cb cb,
+                    void*                  user_data)
+{
+    return db_async_submit(DB_ASYNC_EXEC, pool, sql, NULL, NULL, cb, user_data);
+}
+
+int
+csilk_db_query_param_json_async(csilk_db_pool_t*  pool,
+                                const char*       sql,
+                                const char**      params,
+                                csilk_db_async_cb cb,
+                                void*             user_data)
+{
+    return db_async_submit(DB_ASYNC_QUERY_PARAM, pool, sql, params, cb, NULL, user_data);
+}
+
+int
+csilk_db_exec_param_async(csilk_db_pool_t*       pool,
+                          const char*            sql,
+                          const char**           params,
+                          csilk_db_exec_async_cb cb,
+                          void*                  user_data)
+{
+    return db_async_submit(DB_ASYNC_EXEC_PARAM, pool, sql, params, NULL, cb, user_data);
 }
 
 /** @brief Execute a SQL statement (INSERT, UPDATE, DELETE, DDL) that does not

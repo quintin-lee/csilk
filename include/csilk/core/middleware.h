@@ -119,8 +119,9 @@ void csilk_rate_limit_middleware(csilk_ctx_t* c, int limit);
  * Use this when the throttle dimension is not the source IP but a
  * business key such as a user_id, tenant_id, API-key, or session id.
  * The key must be a NUL-terminated string that remains valid for the
- * duration of the call.  On table saturation the request fails open
- * (unlimited), matching csilk_rate_limit_middleware.
+ * duration of the call.  Saturation behaviour follows the active policy
+ * configured via csilk_rate_limit_set_saturation_policy() (default:
+ * CSILK_RATE_SATURATION_EVICT_LRU).
  *
  * @param c     The request context.
  * @param limit Maximum number of requests allowed per key within the
@@ -136,6 +137,16 @@ typedef enum {
     CSILK_RATE_KEY_CUSTOM,  /**< Use a custom key extracted by key_fn. */
 } csilk_rate_limiter_key_t;
 
+/** @brief Policy applied when an in-memory rate-limiter table is saturated with active keys. */
+typedef enum {
+    CSILK_RATE_SATURATION_EVICT_LRU =
+        0, /**< Reclaim expired slots first, then evict the least-recently-seen slot (default). */
+    CSILK_RATE_SATURATION_FAIL_OPEN =
+        1, /**< Reclaim expired slots first; if still full, allow the request. */
+    CSILK_RATE_SATURATION_FAIL_CLOSED =
+        2  /**< Reclaim expired slots first; if still full, reject with 429 Too Many Requests. */
+} csilk_rate_saturation_policy_t;
+
 /** @brief Configuration for the keyed rate limiter middleware (csilk#9a). */
 typedef struct {
     csilk_rate_limiter_key_t key_type;  /**< How to derive the throttle key. */
@@ -148,7 +159,22 @@ typedef struct {
     const char* (*key_fn)(
         csilk_ctx_t*
             c); /**< Extract custom key (returns NUL-terminated string, valid for call duration). */
+    csilk_rate_saturation_policy_t
+        saturation_policy; /**< Saturation behaviour when key_table has no free/expired slots. */
 } csilk_rate_limiter_config_t;
+
+/**
+ * @brief Configure the saturation policy for the global per-IP rate-limit table.
+ *
+ * Defaults to CSILK_RATE_SATURATION_EVICT_LRU.
+ * @param policy Saturation policy to apply when all probed slots hold active entries.
+ */
+void csilk_rate_limit_set_saturation_policy(csilk_rate_saturation_policy_t policy);
+
+/**
+ * @brief Query the active saturation policy for the global per-IP rate-limit table.
+ */
+csilk_rate_saturation_policy_t csilk_rate_limit_get_saturation_policy(void);
 
 /**
  * @brief Keyed rate limiter middleware with configurable throttle key (csilk#9a).
@@ -163,8 +189,9 @@ typedef struct {
  *
  * Uses the configured @ref csilk_rate_limiter_config_t::window_ms instead of
  * the hardcoded 60-second window of csilk_rate_limit_middleware. Composite and
- * custom keys are tracked in a separate lockless keyed table; on table
- * saturation the request fails open (unlimited), matching the per-IP table.
+ * custom keys are tracked in a separate lockless keyed table; saturation
+ * behaviour follows @ref csilk_rate_limiter_config_t::saturation_policy
+ * (default: CSILK_RATE_SATURATION_EVICT_LRU).
  * The existing per-IP csilk_rate_limit_middleware is unaffected and remains
  * available.
  *
@@ -178,12 +205,14 @@ void csilk_rate_limiter_middleware(csilk_ctx_t* c, const csilk_rate_limiter_conf
  *
  * Internal hook used by csilk_rate_limit_middleware once the client IP is
  * resolved. Exposed for unit tests, which cannot resolve an IP from a mock
- * socket. On table saturation the request fails open (unlimited).
+ * socket. Saturation behaviour follows csilk_rate_limit_get_saturation_policy().
  * @param c     The request context.
  * @param ip    Client IP string (must outlive the call).
  * @param limit Maximum requests allowed per IP within the 60-second window.
  */
 CSILK_INTERNAL void _csilk_rate_limit_local(csilk_ctx_t* c, const char* ip, int limit);
+CSILK_INTERNAL void _csilk_ratelimit_reset_tables(void);
+CSILK_INTERNAL void _csilk_ratelimit_set_time_offset(time_t offset_secs);
 
 /**
  * @brief Configuration options for CSRF protection middleware.

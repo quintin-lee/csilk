@@ -471,23 +471,7 @@ free_async_chat_req(async_chat_req_t* ar)
         }
         free(ar->messages_copy);
     }
-    if (ar->res.content) {
-        free(ar->res.content);
-    }
-    if (ar->res.raw_response) {
-        free(ar->res.raw_response);
-    }
-    if (ar->res.error_message) {
-        free(ar->res.error_message);
-    }
-    if (ar->res.tool_calls) {
-        for (size_t i = 0; i < ar->res.tool_call_count; i++) {
-            free(ar->res.tool_calls[i].id);
-            free(ar->res.tool_calls[i].name);
-            free(ar->res.tool_calls[i].arguments);
-        }
-        free(ar->res.tool_calls);
-    }
+    csilk_ai_chat_response_free(&ar->res);
     free(ar);
 }
 
@@ -605,7 +589,10 @@ csilk_ai_chat_async(csilk_ai_t*                    ai,
 
     work->data = ar;
     CSILK_LOG_D("Queueing async chat request for model '%s'", req->model ? req->model : "default");
-    csilk_io_queue_work(csilk_io_default_loop(), work, chat_work_cb, chat_after_work_cb);
+    if (csilk_io_queue_work(csilk_io_default_loop(), work, chat_work_cb, chat_after_work_cb) != 0) {
+        free_async_chat_req(ar);
+        free(work);
+    }
 }
 
 /** @brief Generate embeddings for a batch of input strings.
@@ -707,6 +694,7 @@ emb_after_work_cb(csilk_io_work_t* req, int status)
     (void)status;
     async_emb_req_t* ar = (async_emb_req_t*)req->data;
     ar->cb(ar->status, &ar->res, ar->user_data);
+    csilk_ai_embeddings_response_free(&ar->res);
     free(ar);
     free(req);
 }
@@ -757,7 +745,10 @@ csilk_ai_embeddings_async(csilk_ai_t*                  ai,
 
     work->data = ar;
     CSILK_LOG_D("Queueing async embeddings request for model '%s' (inputs: %zu)", model, count);
-    csilk_io_queue_work(csilk_io_default_loop(), work, emb_work_cb, emb_after_work_cb);
+    if (csilk_io_queue_work(csilk_io_default_loop(), work, emb_work_cb, emb_after_work_cb) != 0) {
+        free(ar);
+        free(work);
+    }
 }
 
 /** @brief Free an AI engine handle and its driver state.

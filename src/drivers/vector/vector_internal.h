@@ -47,6 +47,7 @@ typedef struct {
     size_t              ef_construction;
     size_t              ef_search;
     csilk_simd_dist_fn  dist_fn;
+    uint64_t            rng_state;
     csilk_mutex_t       mutex;
 } csilk_hnsw_index_t;
 
@@ -56,7 +57,7 @@ csilk_hnsw_index_t* csilk_hnsw_index_new(size_t dim, int metric);
 void csilk_hnsw_index_free(csilk_hnsw_index_t* index);
 /** @brief Insert a vector into the index under a document id. */
 int csilk_hnsw_insert(csilk_hnsw_index_t* index, const char* doc_id, const float* vector);
-/** @brief Exact nearest-neighbour search over all indexed vectors. */
+/** @brief Approximate nearest-neighbour search using the HNSW graph. */
 int csilk_hnsw_search(csilk_hnsw_index_t* index,
                       const float*        query_vector,
                       size_t              top_k,
