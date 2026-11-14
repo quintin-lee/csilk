@@ -31,9 +31,9 @@ typedef struct {
 
 /** @brief Thread pool state. */
 struct uring_thread_pool_s {
-    int           thread_count; /**< Number of worker threads. */
-    volatile bool running;      /**< Set to false during shutdown. */
-    pthread_t*    threads;      /**< Worker thread IDs. */
+    int             thread_count; /**< Number of worker threads. */
+    volatile bool   running;      /**< Set to false during shutdown. */
+    csilk_thread_t* threads;      /**< Worker thread IDs. */
 
     /* Work queue — single producer (event loop) → multiple consumers (threads). */
     uring_tp_entry_t queue[URING_TP_MAX_WORK];
@@ -74,7 +74,7 @@ uring_tp_set_current(uring_thread_pool_t* tp)
  *       callback on a dequeued entry, pushes the result to the done queue, and
  *       writes to the wakeup eventfd to notify the event loop.
  */
-static void*
+static void
 worker_routine(void* arg)
 {
     uring_thread_pool_t* tp = (uring_thread_pool_t*)arg;
@@ -113,8 +113,6 @@ worker_routine(void* arg)
         ssize_t  w = write(tp->wakeup_fd, &val, sizeof(val));
         (void)w;
     }
-
-    return NULL;
 }
 
 /**
@@ -154,7 +152,7 @@ uring_tp_init(int nthreads)
         nthreads = 1;
     }
     tp->thread_count = nthreads;
-    tp->threads = calloc((size_t)nthreads, sizeof(pthread_t));
+    tp->threads = calloc((size_t)nthreads, sizeof(csilk_thread_t));
     if (!tp->threads) {
         close(tp->wakeup_fd);
         csilk_mutex_destroy(&tp->queue_mutex);
@@ -165,7 +163,7 @@ uring_tp_init(int nthreads)
     }
 
     for (int i = 0; i < nthreads; i++) {
-        pthread_create(&tp->threads[i], NULL, worker_routine, tp);
+        csilk_thread_create(&tp->threads[i], worker_routine, tp);
     }
 
     return tp;
@@ -193,7 +191,7 @@ uring_tp_destroy(uring_thread_pool_t* tp)
     csilk_mutex_unlock(&tp->queue_mutex);
 
     for (int i = 0; i < tp->thread_count; i++) {
-        pthread_join(tp->threads[i], NULL);
+        csilk_thread_join(&tp->threads[i]);
     }
 
     /* Drain any remaining completions — after_work_cb is responsible for
@@ -229,6 +227,7 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
         return -1;
     }
 
+    csilk_mutex_lock(&tp->queue_mutex);
     int count = atomic_load(&tp->queue_tail) - atomic_load(&tp->queue_head);
     if (count >= URING_TP_MAX_WORK) {
         csilk_mutex_unlock(&tp->queue_mutex);
@@ -241,7 +240,7 @@ uring_tp_enqueue(uring_thread_pool_t*   tp,
     tp->queue[idx].status = 0;
     atomic_fetch_add(&tp->queue_tail, 1);
 
-    pthread_cond_signal(&tp->queue_cond);
+    csilk_cond_signal(&tp->queue_cond);
     csilk_mutex_unlock(&tp->queue_mutex);
 
     return 0;
@@ -261,6 +260,7 @@ uring_tp_drain(uring_thread_pool_t* tp)
         return;
     }
 
+    csilk_mutex_lock(&tp->done_mutex);
     while (atomic_load(&tp->done_head) != tp->done_tail) {
         int              idx = atomic_load(&tp->done_head) % URING_TP_MAX_WORK;
         uring_tp_entry_t entry = tp->done[idx];

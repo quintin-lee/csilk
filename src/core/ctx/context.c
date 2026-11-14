@@ -840,14 +840,17 @@ _csilk_ctx_register_pooled_read_buffer(csilk_ctx_t* c, char* base, size_t size)
             }
             memcpy(
                 new_arr, c->read_buffers_embedded, (size_t)c->read_buffers_count * sizeof(char*));
+            memcpy(new_sizes,
+                   c->read_buf_sizes_embedded,
+                   (size_t)c->read_buffers_count * sizeof(size_t));
         } else {
             new_arr = realloc(c->read_buffers, (size_t)new_cap * sizeof(char*));
             if (!new_arr) {
                 return -1;
             }
+            c->read_buffers = new_arr;
             new_sizes = realloc(c->read_buf_sizes, (size_t)new_cap * sizeof(size_t));
             if (!new_sizes) {
-                free(new_arr);
                 return -1;
             }
         }

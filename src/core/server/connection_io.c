@@ -153,6 +153,17 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
 
         _csilk_trigger_hooks(server, &client->ctx, CSILK_HOOK_CONN_OPEN);
 
+        /* Initialize timers before setup_client_tls so on_close can safely
+         * stop and close all 4 timer handles if TLS setup fails. */
+        csilk_io_timer_init(server_stream->loop, &client->timer);
+        client->timer.data = client;
+        csilk_io_timer_init(server_stream->loop, &client->read_timer);
+        client->read_timer.data = client;
+        csilk_io_timer_init(server_stream->loop, &client->write_timer);
+        client->write_timer.data = client;
+        csilk_io_timer_init(server_stream->loop, &client->request_timer);
+        client->request_timer.data = client;
+
         if (server->ssl_ctx) {
             CSILK_LOG_D("Connection: setting up TLS for connection: %p", (void*)client);
             csilk_conn_set_state(client, CSILK_CONN_TLS);
@@ -163,16 +174,6 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
                 return;
             }
         }
-
-        /* Timer initialization */
-        csilk_io_timer_init(server_stream->loop, &client->timer);
-        client->timer.data = client;
-        csilk_io_timer_init(server_stream->loop, &client->read_timer);
-        client->read_timer.data = client;
-        csilk_io_timer_init(server_stream->loop, &client->write_timer);
-        client->write_timer.data = client;
-        csilk_io_timer_init(server_stream->loop, &client->request_timer);
-        client->request_timer.data = client;
 
         CSILK_LOG_T("Connection: connection timers initialized, starting read listener");
         unsigned int read_timeout = _csilk_server_get_read_timeout_ms(server);

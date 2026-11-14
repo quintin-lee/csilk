@@ -14,10 +14,10 @@
  * Thread-local default loop state
  * ==================================================================== */
 
-csilk_io_loop_t  g_default_loop;
-int              g_default_pending = 0;
-int              g_default_loop_inited = 0;
-struct io_uring* g_default_ring_ptr = NULL;
+_Thread_local csilk_io_loop_t  g_default_loop;
+_Thread_local int              g_default_pending = 0;
+_Thread_local int              g_default_loop_inited = 0;
+_Thread_local struct io_uring* g_default_ring_ptr = NULL;
 
 /* ====================================================================
  * Loop lifecycle

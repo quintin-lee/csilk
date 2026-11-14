@@ -697,15 +697,16 @@ csilk_server_run(csilk_server_t* server, int port)
             }
         }
 
-        free(worker_datas);
-
         if (!all_ok) {
             CSILK_LOG_E("Server: worker startup failed (spawned %d of %d)", spawned, nworkers);
-            /* Stop and join any spawned workers */
+            /* Stop and join any spawned workers that entered their event loop */
             for (int i = 0; i < spawned; i++) {
-                int idx = i + 1;
-                csilk_io_async_send(&server->worker_pools[idx].stop_async);
+                if (atomic_load_explicit(&worker_datas[i].success, memory_order_acquire)) {
+                    int idx = i + 1;
+                    csilk_io_async_send(&server->worker_pools[idx].stop_async);
+                }
             }
+            free(worker_datas);
             for (int i = 0; i < spawned; i++) {
                 csilk_thread_join(&server->worker_tids[i]);
             }
@@ -717,6 +718,8 @@ csilk_server_run(csilk_server_t* server, int port)
             csilk_io_close((csilk_io_handle_t*)&server->async_handle, NULL);
             csilk_io_close((csilk_io_handle_t*)&server->server_handle, NULL);
             return -1;
+        } else {
+            free(worker_datas);
         }
 
         CSILK_LOG_I("Server: all %d worker threads spawned and ready", spawned);

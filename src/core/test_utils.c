@@ -109,10 +109,7 @@ csilk_test_ctx_set_handler_metadata(csilk_ctx_t* c,
 {
     if (c) {
         if (!c->current_handler) {
-            c->current_handler = csilk_arena_alloc(c->arena, sizeof(csilk_method_handler_t));
-            if (c->current_handler) {
-                memset(c->current_handler, 0, sizeof(csilk_method_handler_t));
-            }
+            c->current_handler = csilk_arena_calloc(c->arena, 1, sizeof(csilk_method_handler_t));
         }
         if (c->current_handler) {
             c->current_handler->perm_required = (char*)perm_required;
