@@ -62,11 +62,13 @@ csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
     } else {
         snprintf(msg->jsonrpc, sizeof(msg->jsonrpc), "2.0");
     }
+    csilk_json_free(j_ver);
 
     csilk_json_t* j_id = csilk_json_get(root, "id");
     if (j_id) {
         msg->id = csilk_json_copy(j_id);
     }
+    csilk_json_free(j_id);
 
     csilk_json_t* j_method = csilk_json_get(root, "method");
     if (j_method && csilk_json_is_string(j_method)) {
@@ -76,21 +78,25 @@ csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t* arena)
             msg->method = strdup(csilk_json_string_value(j_method));
         }
     }
+    csilk_json_free(j_method);
 
     csilk_json_t* j_params = csilk_json_get(root, "params");
     if (j_params) {
         msg->params = csilk_json_copy(j_params);
     }
+    csilk_json_free(j_params);
 
     csilk_json_t* j_result = csilk_json_get(root, "result");
     if (j_result) {
         msg->result = csilk_json_copy(j_result);
     }
+    csilk_json_free(j_result);
 
     csilk_json_t* j_error = csilk_json_get(root, "error");
     if (j_error) {
         msg->error = csilk_json_copy(j_error);
     }
+    csilk_json_free(j_error);
 
     csilk_json_free(root);
     return msg;
