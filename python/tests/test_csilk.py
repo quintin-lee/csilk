@@ -1033,9 +1033,9 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
                 self.assertGreaterEqual(stats["active_connections"], 0)
             finally:
                 app.stop()
-                t.join(timeout=3.0)
-                if not t.is_alive():
-                    app.free()
+                t.join(timeout=5.0)
+                self.assertFalse(t.is_alive(), "server thread did not stop before app cleanup")
+                app.free()
         finally:
             shutil.rmtree(temp_dir)
 
