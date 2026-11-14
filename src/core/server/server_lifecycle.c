@@ -328,7 +328,9 @@ csilk_server_free(csilk_server_t* server)
     _csilk_dispatch_pool_cleanup();
 
     if (server->loop_owned && server->loop) {
-        csilk_io_loop_close(server->loop);
+        for (int i = 0; i < 50 && csilk_io_loop_close(server->loop) != 0; i++) {
+            csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
+        }
         free(server->loop);
         server->loop = NULL;
     }
