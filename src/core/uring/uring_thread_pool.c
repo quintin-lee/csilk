@@ -214,7 +214,7 @@ uring_tp_destroy(uring_thread_pool_t* tp)
  * @param[in] after_cb Callback executed on the done path after work completes.
  * @return 0 on success, -1 on NULL tp/work_cb or when the queue is full.
  * @note Thread-safe: takes the pool queue mutex and signals a worker via
- *       pthread_cond. The internal ring buffer is bounded by URING_TP_MAX_WORK;
+ *       csilk_cond_t. The internal ring buffer is bounded by URING_TP_MAX_WORK;
  *       a full queue is rejected rather than blocking.
  */
 int

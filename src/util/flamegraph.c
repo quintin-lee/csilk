@@ -20,7 +20,6 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
 
@@ -30,6 +29,7 @@
 #endif
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 /* Maximum call stack depth to capture */
 enum { FG_MAX_DEPTH = 64 };
@@ -64,8 +64,8 @@ typedef struct {
     fg_stack_entry_t* entries;        /**< Aggregated stack entries. */
     int*              hash_table;     /**< Hash bucket heads (-1 = empty). */
     int               entry_count;    /**< Number of entries used. */
-    pthread_t         sampler_thread; /**< Background profiler thread. */
-    pthread_mutex_t   mutex;          /**< Guards entries and hash_table. */
+    csilk_thread_t    sampler_thread; /**< Background profiler thread. */
+    csilk_mutex_t     mutex;          /**< Guards entries and hash_table. */
     useconds_t        interval_us;    /**< Sampling interval. */
     csilk_ctx_t*      notify_ctx;     /**< Admin context for completion notification. */
 } fg_profiler_t;
@@ -131,7 +131,7 @@ fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
  * loop (sampling is not supported).
  *
  * @param arg Pointer to the fg_profiler_t instance. */
-static void*
+static void
 fg_sampler_thread(void* arg)
 {
     fg_profiler_t* p = (fg_profiler_t*)arg;
@@ -166,10 +166,10 @@ fg_sampler_thread(void* arg)
                 }
                 free(symbols);
 
-                pthread_mutex_lock(&p->mutex);
+                csilk_mutex_lock(&p->mutex);
                 fg_entry_insert(p, collapsed, nptrs);
                 atomic_fetch_add(&p->sample_count, 1);
-                pthread_mutex_unlock(&p->mutex);
+                csilk_mutex_unlock(&p->mutex);
             }
         }
 #else
@@ -178,8 +178,6 @@ fg_sampler_thread(void* arg)
 #endif
         usleep(p->interval_us);
     }
-
-    return NULL;
 }
 
 /** @brief Render accumulated samples as a Brendan Gregg-style SVG flame graph.
@@ -329,12 +327,12 @@ csilk_flamegraph_start(unsigned int interval_us)
         p->hash_table[i] = -1;
     }
     p->interval_us = interval_us;
-    pthread_mutex_init(&p->mutex, NULL);
+    csilk_mutex_init(&p->mutex);
     atomic_store(&p->running, 1);
     atomic_store(&p->sample_count, 0);
 
-    if (pthread_create(&p->sampler_thread, NULL, fg_sampler_thread, p) != 0) {
-        pthread_mutex_destroy(&p->mutex);
+    if (csilk_thread_create(&p->sampler_thread, fg_sampler_thread, p) != 0) {
+        csilk_mutex_destroy(&p->mutex);
         free(p->entries);
         free(p->hash_table);
         free(p);
@@ -362,12 +360,12 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
     }
     fg_profiler_t* p = g_profiler;
     atomic_store(&p->running, 0);
-    pthread_join(p->sampler_thread, NULL);
+    csilk_thread_join(&p->sampler_thread);
     g_profiler = NULL;
 
     fg_generate_svg(p, out_svg, out_len);
 
-    pthread_mutex_destroy(&p->mutex);
+    csilk_mutex_destroy(&p->mutex);
     /* entries[i].frames.stack is an inline member array (not heap-allocated),
      * so only the entries array itself needs to be freed. */
     free(p->entries);

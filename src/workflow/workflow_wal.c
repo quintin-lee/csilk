@@ -18,6 +18,7 @@
  */
 
 #include "csilk/app/workflow_wal.h"
+#include "csilk/core/sync.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -26,7 +27,6 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <pthread.h>
 
 typedef struct wal_task_s {
     char*                 wal_path;
@@ -36,25 +36,34 @@ typedef struct wal_task_s {
     struct wal_task_s*    next;
 } wal_task_t;
 
-static wal_task_t*     g_wal_queue_head = NULL;
-static wal_task_t*     g_wal_queue_tail = NULL;
-static pthread_mutex_t g_wal_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t  g_wal_cond = PTHREAD_COND_INITIALIZER;
-static pthread_t       g_wal_thread;
-static int             g_wal_thread_started = 0;
-static int             g_wal_shutdown = 0;
+static wal_task_t*    g_wal_queue_head = NULL;
+static wal_task_t*    g_wal_queue_tail = NULL;
+static csilk_once_t   g_wal_init_once = CSILK_ONCE_INIT;
+static csilk_mutex_t  g_wal_mutex;
+static csilk_cond_t   g_wal_cond;
+static csilk_thread_t g_wal_thread;
+static int            g_wal_thread_started = 0;
+static int            g_wal_shutdown = 0;
+static int            g_wal_writing = 0;
 
-static void*
+static void
+wf_wal_sync_init(void)
+{
+    csilk_mutex_init(&g_wal_mutex);
+    csilk_cond_init(&g_wal_cond);
+}
+
+static void
 wal_writer_thread(void* arg)
 {
     (void)arg;
     while (1) {
-        pthread_mutex_lock(&g_wal_mutex);
+        csilk_mutex_lock(&g_wal_mutex);
         while (g_wal_queue_head == NULL && !g_wal_shutdown) {
-            pthread_cond_wait(&g_wal_cond, &g_wal_mutex);
+            csilk_cond_wait(&g_wal_cond, &g_wal_mutex);
         }
         if (g_wal_shutdown && g_wal_queue_head == NULL) {
-            pthread_mutex_unlock(&g_wal_mutex);
+            csilk_mutex_unlock(&g_wal_mutex);
             break;
         }
 
@@ -64,7 +73,8 @@ wal_writer_thread(void* arg)
         if (g_wal_queue_head == NULL) {
             g_wal_queue_tail = NULL;
         }
-        pthread_mutex_unlock(&g_wal_mutex);
+        g_wal_writing = 1;
+        csilk_mutex_unlock(&g_wal_mutex);
 
         // Process task
         int fd = open(task->wal_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -92,41 +102,47 @@ wal_writer_thread(void* arg)
         free(task->wal_path);
         free(task->payload);
         free(task);
+
+        csilk_mutex_lock(&g_wal_mutex);
+        g_wal_writing = 0;
+        csilk_cond_broadcast(&g_wal_cond);
+        csilk_mutex_unlock(&g_wal_mutex);
     }
-    return NULL;
 }
 
 static void
 wal_cleanup(void)
 {
-    pthread_mutex_lock(&g_wal_mutex);
+    csilk_once(&g_wal_init_once, wf_wal_sync_init);
+    csilk_mutex_lock(&g_wal_mutex);
     g_wal_shutdown = 1;
-    pthread_cond_signal(&g_wal_cond);
-    pthread_mutex_unlock(&g_wal_mutex);
+    int started = g_wal_thread_started;
+    csilk_cond_signal(&g_wal_cond);
+    csilk_mutex_unlock(&g_wal_mutex);
 
-    if (g_wal_thread_started) {
-        pthread_join(g_wal_thread, NULL);
+    if (started) {
+        csilk_thread_join(&g_wal_thread);
     }
 }
 
 /**
  * @brief Blocks until the WAL writer queue has fully drained.
  *
- * Spins (1 ms sleeps) until the background WAL writer thread has consumed all
- * queued records. Used before resuming/replaying to guarantee durability.
+ * Waits on g_wal_cond until both the pending queue is empty and any active
+ * disk write/fsync has completed. Used before resuming/replaying to guarantee
+ * durability.
  *
- * @note Internally locks g_wal_mutex while polling. Thread-safe.
+ * @note Internally locks g_wal_mutex. Thread-safe.
  */
 CSILK_INTERNAL void
 _wf_wal_flush(void)
 {
-    pthread_mutex_lock(&g_wal_mutex);
-    while (g_wal_queue_head != NULL) {
-        pthread_mutex_unlock(&g_wal_mutex);
-        usleep(1000); // 1ms
-        pthread_mutex_lock(&g_wal_mutex);
+    csilk_once(&g_wal_init_once, wf_wal_sync_init);
+    csilk_mutex_lock(&g_wal_mutex);
+    while (g_wal_queue_head != NULL || g_wal_writing) {
+        csilk_cond_wait(&g_wal_cond, &g_wal_mutex);
     }
-    pthread_mutex_unlock(&g_wal_mutex);
+    csilk_mutex_unlock(&g_wal_mutex);
 }
 
 /**
@@ -151,14 +167,15 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
         return -1;
     }
 
-    pthread_mutex_lock(&g_wal_mutex);
+    csilk_once(&g_wal_init_once, wf_wal_sync_init);
+    csilk_mutex_lock(&g_wal_mutex);
     if (!g_wal_thread_started && !g_wal_shutdown) {
-        if (pthread_create(&g_wal_thread, NULL, wal_writer_thread, NULL) == 0) {
+        if (csilk_thread_create(&g_wal_thread, wal_writer_thread, NULL) == 0) {
             g_wal_thread_started = 1;
             atexit(wal_cleanup);
         }
     }
-    pthread_mutex_unlock(&g_wal_mutex);
+    csilk_mutex_unlock(&g_wal_mutex);
 
     wal_task_t* task = malloc(sizeof(wal_task_t));
     if (!task) {
@@ -177,7 +194,7 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
     }
     task->next = NULL;
 
-    pthread_mutex_lock(&g_wal_mutex);
+    csilk_mutex_lock(&g_wal_mutex);
     if (g_wal_queue_tail) {
         g_wal_queue_tail->next = task;
         g_wal_queue_tail = task;
@@ -185,8 +202,8 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
         g_wal_queue_head = task;
         g_wal_queue_tail = task;
     }
-    pthread_cond_signal(&g_wal_cond);
-    pthread_mutex_unlock(&g_wal_mutex);
+    csilk_cond_signal(&g_wal_cond);
+    csilk_mutex_unlock(&g_wal_mutex);
 
     return 0;
 }
