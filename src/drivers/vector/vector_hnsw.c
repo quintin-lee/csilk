@@ -78,6 +78,9 @@ hnsw_heap_init(hnsw_heap_t* h, size_t initial_cap, bool is_max)
 static void
 hnsw_heap_free(hnsw_heap_t* h)
 {
+    if (!h) {
+        return;
+    }
     free(h->data);
     h->data = NULL;
     h->size = 0;
@@ -180,8 +183,8 @@ hnsw_search_layer(const csilk_hnsw_index_t* index,
         return -1;
     }
 
-    hnsw_heap_t candidates;
-    hnsw_heap_t results;
+    hnsw_heap_t candidates = {0};
+    hnsw_heap_t results = {0};
     if (hnsw_heap_init(&candidates, ef * 2, false) != 0 ||
         hnsw_heap_init(&results, ef + 1, true) != 0) {
         free(visited);
@@ -711,6 +714,14 @@ csilk_hnsw_search(csilk_hnsw_index_t* index,
     }
 
     size_t out_n = res_count < k ? res_count : k;
+    if (out_n == 0) {
+        free(results);
+        *out_doc_ids = NULL;
+        *out_scores = NULL;
+        *out_count = 0;
+        csilk_mutex_unlock(&index->mutex);
+        return 0;
+    }
     char** doc_ids = calloc(out_n, sizeof(char*));
     float* scores = calloc(out_n, sizeof(float));
     if (!doc_ids || !scores) {
