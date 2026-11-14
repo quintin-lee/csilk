@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,9 +70,9 @@ test_otlp_exporter_export_grpc()
 static void
 _test_flush_collector(const char* json, void* user_data)
 {
-    int* flush_count = (int*)user_data;
+    atomic_int* flush_count = (atomic_int*)user_data;
     if (json && strstr(json, "resourceSpans")) {
-        (*flush_count)++;
+        atomic_fetch_add(flush_count, 1);
     }
 }
 
@@ -83,7 +84,7 @@ test_otlp_exporter_background_worker(void)
     csilk_otlp_exporter_t* exp = csilk_otlp_exporter_new("http://localhost:4318/v1/traces", 5);
     assert(exp != NULL);
 
-    int flush_count = 0;
+    atomic_int flush_count = 0;
     csilk_otlp_exporter_set_flush_cb(exp, _test_flush_collector, &flush_count);
 
     int rc = csilk_otlp_exporter_start(exp, 50); /* 50ms flush interval */
@@ -100,7 +101,7 @@ test_otlp_exporter_background_worker(void)
     /* Sleep 120ms to allow background worker to flush */
     csilk_io_sleep(120);
 
-    assert(flush_count >= 1);
+    assert(atomic_load(&flush_count) >= 1);
 
     csilk_otlp_exporter_stop(exp);
     csilk_otlp_exporter_free(exp);
