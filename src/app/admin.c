@@ -82,7 +82,18 @@ admin_ui_handler(csilk_ctx_t* c)
             return;
         }
     }
-    csilk_string(c, 404, "Admin UI template not found.");
+
+    /* Embedded fallback if template file is not on disk */
+    static const char g_embedded_admin_ui_html[] =
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head><title>csilk Admin Dashboard</title></head>\n"
+        "<body><h1>⚡ csilk Admin & APM Control Plane</h1>\n"
+        "<p>Real-Time APM & Administration</p>\n"
+        "</body></html>\n";
+
+    csilk_set_header(c, "Content-Type", "text/html");
+    csilk_string(c, 200, g_embedded_admin_ui_html);
 }
 
 /** @brief Aggregates system-wide statistics into a JSON response. */
