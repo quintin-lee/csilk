@@ -104,6 +104,7 @@ struct ollama_stream_ctx {
     csilk_ai_chat_response_t*      res;
     char*                          line_buf;
     size_t                         line_size;
+    size_t                         line_cap;
 };
 
 static void
@@ -201,11 +202,15 @@ ollama_stream_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
                 ctx->line_size = 0;
             }
         } else {
-            char* nb = realloc(ctx->line_buf, ctx->line_size + 2);
-            if (!nb) {
-                return 0;
+            if (ctx->line_size + 2 > ctx->line_cap) {
+                size_t ncap = ctx->line_cap == 0 ? 256 : ctx->line_cap * 2;
+                char*  nb = realloc(ctx->line_buf, ncap);
+                if (!nb) {
+                    return 0;
+                }
+                ctx->line_buf = nb;
+                ctx->line_cap = ncap;
             }
-            ctx->line_buf = nb;
             ctx->line_buf[ctx->line_size++] = c;
         }
     }
