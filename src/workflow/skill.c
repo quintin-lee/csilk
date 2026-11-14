@@ -180,9 +180,10 @@ csilk_ai_skill_free(csilk_ai_skill_t* sk)
 static void
 unregister_skill_by_ptr(csilk_ai_skill_t* sk)
 {
-    if (!sk || !g_skill_mutex_ready) {
+    if (!sk) {
         return;
     }
+    ensure_skill_registry();
     csilk_mutex_lock(&g_skill_mutex);
     size_t cur = 0;
     for (size_t i = 0; i < g_skill_reg_count; i++) {

@@ -72,30 +72,12 @@ string_to_log_level(const char* s)
  *       strdup'd and must be freed later with csilk_config_free().
  * @note The config structure is memset to zero first, then defaults are set.
  *       Callers that have already populated fields will lose them. */
-int
-csilk_load_config(const char* yaml_path, csilk_config_t* config)
+static int
+parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
 {
-    if (!yaml_path || !config) {
-        return -1;
-    }
-
-    FILE* fh = fopen(yaml_path, "rb");
-    if (!fh) {
-        return -1;
-    }
-
-    yaml_parser_t parser;
-    yaml_event_t  event;
-
-    if (!yaml_parser_initialize(&parser)) {
-        fclose(fh);
-        return -1;
-    }
-
-    yaml_parser_set_input_file(&parser, fh);
-
-    char* current_key = NULL;
-    char* current_section = NULL;
+    yaml_event_t event;
+    char*        current_key = NULL;
+    char*        current_section = NULL;
 
     // Default values
     memset(config, 0, sizeof(csilk_config_t));
@@ -120,7 +102,7 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
     int done = 0;
     int error = 0;
     while (!done && !error) {
-        if (!yaml_parser_parse(&parser, &event)) {
+        if (!yaml_parser_parse(parser, &event)) {
             break;
         }
 
@@ -367,9 +349,50 @@ csilk_load_config(const char* yaml_path, csilk_config_t* config)
         free(current_section);
     }
 
+    return error ? -1 : 0;
+}
+
+int
+csilk_load_config(const char* yaml_path, csilk_config_t* config)
+{
+    if (!yaml_path || !config) {
+        return -1;
+    }
+
+    FILE* fh = fopen(yaml_path, "rb");
+    if (!fh) {
+        return -1;
+    }
+
+    yaml_parser_t parser;
+    if (!yaml_parser_initialize(&parser)) {
+        fclose(fh);
+        return -1;
+    }
+
+    yaml_parser_set_input_file(&parser, fh);
+    int rc = parse_yaml_config_stream(&parser, config);
     yaml_parser_delete(&parser);
     fclose(fh);
-    return error ? -1 : 0;
+    return rc;
+}
+
+int
+csilk_load_config_memory(const uint8_t* data, size_t size, csilk_config_t* config)
+{
+    if (!data || !config) {
+        return -1;
+    }
+
+    yaml_parser_t parser;
+    if (!yaml_parser_initialize(&parser)) {
+        return -1;
+    }
+
+    yaml_parser_set_input_string(&parser, data, size);
+    int rc = parse_yaml_config_stream(&parser, config);
+    yaml_parser_delete(&parser);
+    return rc;
 }
 
 /** @brief Free all dynamically allocated strings within a configuration.

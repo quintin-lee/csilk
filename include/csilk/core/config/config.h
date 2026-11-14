@@ -135,6 +135,16 @@ typedef struct {
 int csilk_load_config(const char* yaml_path, csilk_config_t* config);
 
 /**
+ * @brief Load and parse a YAML configuration from an in-memory buffer.
+ *
+ * @param  data   Pointer to YAML bytes in memory.
+ * @param  size   Length of @p data in bytes.
+ * @param[out] config Pointer to a caller-allocated csilk_config_t to populate.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_load_config_memory(const uint8_t* data, size_t size, csilk_config_t* config);
+
+/**
  * @brief Validate configuration values for semantic correctness.
  *
  * Checks for out-of-range ports, conflicting settings, missing required
