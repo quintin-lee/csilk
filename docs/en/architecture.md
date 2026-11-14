@@ -4,6 +4,11 @@
 
 csilk is a lightweight (~150KB static binary, < 2MB RSS per 10K keep-alive connections) HTTP web framework written in C, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. It adopts a **layered event-driven architecture** combined with an **onion middleware model**, inspired by Go's Gin framework and powered by libuv (default) or io_uring (optional, Linux-only), llhttp, nghttp2, and cJSON. The framework supports zero-copy HTTP parsing, SIMD-accelerated radix-tree routing, and lock-free per-worker connection pools for multi-core scalability.
 
+**Stability & Ecosystem Guarantees (v1.0 LTS)**:
+* **ABI Stability**: Opaque handle API boundary (`csilk_ctx_t*`, `csilk_app_t*`, etc.) strictly enforced via `cmake/libcsilk.map`, with `SOVERSION 1` locked in `cmake/targets.cmake` to guarantee binary compatibility for the entire `1.x` cycle.
+* **WASM Plugin Sandbox**: Native WebAssembly plugin runtime with binary LEB128 section validation and instruction fuel budget circuit breakers.
+* **Global Package Ecosystem**: Verified ports for `vcpkg`, `Conan 2.0+`, and Homebrew formula (`Formula/csilk.rb`), plus PyPI Trusted Publishing pipeline (OIDC).
+
 ---
 
 ## 1. Layer Architecture

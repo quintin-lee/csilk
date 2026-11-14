@@ -59,10 +59,17 @@
 - ⏳ **Sliding Window 滑动窗口限流器** — 加权平滑计算，防范窗口边界突发流量 (`csilk_sliding_rate_limit_middleware`)
 - 🌐 **HTTP/JSON <-> gRPC 零拷贝转码网关** — 5-Byte 大端帧编码器 (`csilk_grpc_frame_encode`) 与 JSON 到 gRPC 二进制转码 (`csilk_grpc_gateway_middleware`)
 - 🚀 **SWAR/SIMD 向量化公共前缀匹配** — 64 位并行比较 (`csilk_common_prefix_len_fast`) 与 64-Byte Cache-Line 对齐 Arena 内存池
-- 🐍 **Python CFFI/ctypes 绑定封装** — 原生 Python 封装类 (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
+- 🐍 **Python CFFI/ctypes 绑定封装** — 原生 Python 封装类 (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)，支持原生 `async def` 协程路由
 - **WAF（Web 应用防火墙）** 中间件
 - 🧬 **原生内嵌式 SIMD 向量检索索引引擎** — 32 字节内存对齐 AVX2 SIMD 距离算子（Cosine / L2 / 向量点积）与多层 HNSW 跳表图索引 (`csilk_hnsw_index_t`)，实现 $O(\log N)$ ANN 近似最近邻向量检索与全零依赖内嵌驱动 (`csilk_vector_db_new_embedded`)
 - 🛡️ **eBPF XDP 动态规则 WAF 与 OTLP 全链路追踪 Web 仪表盘** — BPF-Map 无缝热加载内核防火墙规则 (`csilk_xdp_waf_add_ip_rule`) 与 2048-Span W3C 链路追踪无锁环形缓冲区 (`csilk_otlp_tracer_start_span`)，搭配单页嵌入式 Web APM Dashboard (`/admin/apm`)
+
+### 📐 ABI 稳定性与生态 (v1.0 LTS 就绪)
+
+- 🔒 **不透明 ABI 与 SOVERSION 1 锁定** — 100% 不透明句柄封装与 `cmake/libcsilk.map` 符号导出白名单审计，确保整个 1.x 周期二进制向后兼容不可破防。
+- 🧩 **WASM 沙箱插件引擎** — 原生 WebAssembly 插件沙箱 (`csilk_wasm_plugin_*`)，支持 LEB128 段校验、Fuel 预算熔断及零拷贝 Host ABI 接口。
+- 📦 **多语言全局包管理生态** — 提供 `vcpkg` 官方端口 (`cmake/ports/csilk`)、`Conan 2.0+` 配方 (`conanfile.py`)、Homebrew 公式 (`Formula/csilk.rb`) 以及基于 OIDC 的 PyPI 自动发布管线。
+- 📊 **工业级性能基准白皮书** — 官方对比 Nginx / Drogon / Actix-web / Go `net/http` 的极限 QPS、确定性尾部延迟 (P99) 及 100,000 长连接内存底噪 (< 4 MB RSS)，详见 `benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`。
 
 ## 架构概览
 
@@ -171,6 +178,12 @@ graph TB
 - [sqlite3](https://www.sqlite.org/) — 嵌入式 SQL 数据库
 
 libuv（默认）、liburing（可选，`-DCSILK_USE_URING=ON`）、nghttp2 和 cJSON 会在构建时通过 CMake 的 FetchContent 自动获取。llhttp 优先使用系统版本，否则自动获取。libyaml、OpenSSL、zlib、libcurl 和 sqlite3 必须作为系统依赖安装。
+
+在 C/C++ 依赖管理中，`csilk` 已提供主流的全球包管理生态支持：
+
+* **vcpkg (CMake)**: `vcpkg install csilk`
+* **Conan 2.0+**: `conan create . --version 0.9.0`
+* **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### 安装（Debian/Ubuntu）
 ```bash

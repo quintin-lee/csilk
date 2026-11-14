@@ -4,6 +4,11 @@
 
 csilk 是一个轻量级（~150KB 静态二进制，< 2MB RSS 每 10K 保持连接）HTTP Web 框架，用 C 编写，在商品硬件上可实现 **P99 延迟 ≤ 5ms 且在 10K QPS 下**。它采用**分层事件驱动架构**结合**洋葱中间件模型**，灵感来自 Go 的 Gin 框架，由 libuv（默认）或 io_uring（可选，仅 Linux）、llhttp、nghttp2 和 cJSON 支持。框架支持零拷贝 HTTP 解析、SIMD 加速的基数树路由，以及用于多核可伸缩性的无锁每个工作线程连接池。
 
+**稳定性与生态保障 (v1.0 LTS)**:
+* **ABI 稳定性**: 100% 不透明句柄 API 边界（如 `csilk_ctx_t*`、`csilk_app_t*`），通过 `cmake/libcsilk.map` 严格白名单化，`SOVERSION` 锁定为 `1`，以保证整个 1.x 周期内绝对的二进制向后兼容性。
+* **WASM 插件沙箱引擎**: 原生 WebAssembly 插件运行时，支持二进制 LEB128 段结构校验与指令预算 (Fuel) 熔断器拦截。
+* **全球多语言包管理生态**: 已提供 `vcpkg` 官方端口、`Conan 2.0+` 配方、Homebrew 公式（`Formula/csilk.rb`），以及基于 OIDC 的 PyPI 自动发布管线。
+
 ---
 
 ## 1. 层架构

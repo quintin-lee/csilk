@@ -39,10 +39,11 @@ void        csilk_set_response_body(csilk_ctx_t* c, const char* data, size_t len
 - 更新 3 个示例
 - 设置 `CSILK_DEPRECATE_CTX_TYPES` 编译标志作为迁移辅助
 
-### 阶段 D：最终不透明化（v1.0）
-- 将 `ctx_types.h` 从 `include/` 移至 `src/core/`
-- 从公共头文件中移除 `csilk_request_t` 和 `csilk_response_t`（已前瞻声明为 `csilk_ctx_t`）
-- 提升 SOVERSION 到 1
+### 阶段 D：最终不透明化与符号白名单化（v0.9.0 已完成）
+- 将 `ctx_types.h` 等内部布局完全迁出 `include/` 至 `src/core/internal/`
+- 从公共头文件中移除 `csilk_request_t` 和 `csilk_response_t` 直接定义，仅保留前瞻不透明句柄
+- 100% 通过 `cmake/libcsilk.map` 符号导出白名单审计，确保动态库仅暴露 844 个 `csilk_*` 核心 API，彻底拦截私有 `_csilk_` 辅助函数泄露
+- 在 `cmake/targets.cmake` 中正式锁死 `SOVERSION = 1`，并交付自动化 ABI 门禁脚本（`scripts/check_abi_compatibility.sh`）
 
 ## 风险
 
