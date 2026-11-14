@@ -185,6 +185,21 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         target_compile_options(fuzz_headers PRIVATE -fsanitize=fuzzer -std=c23)
         target_link_options(fuzz_headers PRIVATE -fsanitize=fuzzer)
         target_link_libraries(fuzz_headers csilk)
+
+        add_executable(fuzz_h2 fuzz/fuzz_h2.c)
+        target_compile_options(fuzz_h2 PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_h2 PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_h2 csilk)
+
+        add_executable(fuzz_websocket fuzz/fuzz_websocket.c)
+        target_compile_options(fuzz_websocket PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_websocket PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_websocket csilk)
+
+        add_executable(fuzz_raft_rpc fuzz/fuzz_raft_rpc.c)
+        target_compile_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_raft_rpc csilk)
     endif()
   endif()
 
