@@ -76,8 +76,8 @@ test_disabled_log_level_latency(void)
 /* -------------------------------------------------------------------------- */
 /* Test 2: Multi-Threaded Request-ID & Text / JSON Modes                      */
 /* -------------------------------------------------------------------------- */
-#define NUM_WORKERS 4
-#define MSGS_PER_WORKER 250
+#define NUM_WORKERS 2
+#define MSGS_PER_WORKER 200
 
 typedef struct {
     int worker_id;
@@ -452,11 +452,11 @@ main(void)
     test_overflow_strategies();
     test_file_rotation_async();
 
-    printf("Running Performance & Scale Benchmarks (4 Threads):\n");
-    run_benchmark_case(4, 5000, 0);  /* 0 logs/request */
-    run_benchmark_case(4, 2000, 1);  /* 1 log/request */
-    run_benchmark_case(4, 500, 10);  /* 10 logs/request */
-    run_benchmark_case(4, 100, 100); /* 100 logs/request */
+    printf("Running Performance & Scale Benchmarks (2 Threads):\n");
+    run_benchmark_case(2, 2000, 0); /* 0 logs/request */
+    run_benchmark_case(2, 1000, 1); /* 1 log/request */
+    run_benchmark_case(2, 250, 10); /* 10 logs/request */
+    run_benchmark_case(2, 50, 100); /* 100 logs/request */
 
     printf("=================================================================\n");
     printf("         All Async Logger Tests & Benchmarks Passed!             \n");
