@@ -96,6 +96,21 @@ csilk_aligned_free(void* ptr)
 #endif
 }
 
+#if defined(__AVX2__)
+static inline float
+avx2_hsum256_ps(__m256 v)
+{
+    __m128 lo = _mm256_castps256_ps128(v);
+    __m128 hi = _mm256_extractf128_ps(v, 1);
+    lo = _mm_add_ps(lo, hi);
+    __m128 shuf = _mm_movehdup_ps(lo);
+    __m128 sums = _mm_add_ps(lo, shuf);
+    shuf = _mm_movehl_ps(shuf, sums);
+    sums = _mm_add_ss(sums, shuf);
+    return _mm_cvtss_f32(sums);
+}
+#endif
+
 /**
  * @brief Compute 1 - cosine similarity as a distance in [0, 2].
  *
@@ -114,11 +129,28 @@ csilk_simd_cosine_distance(const float* a, const float* b, size_t dim)
         return 1.0f;
     }
 
+    size_t i = 0;
     double dot = 0.0;
     double norm_a = 0.0;
     double norm_b = 0.0;
 
-    for (size_t i = 0; i < dim; i++) {
+#if defined(__AVX2__)
+    __m256 v_dot = _mm256_setzero_ps();
+    __m256 v_na = _mm256_setzero_ps();
+    __m256 v_nb = _mm256_setzero_ps();
+    for (; i + 8 <= dim; i += 8) {
+        __m256 va = _mm256_loadu_ps(a + i);
+        __m256 vb = _mm256_loadu_ps(b + i);
+        v_dot = _mm256_add_ps(v_dot, _mm256_mul_ps(va, vb));
+        v_na = _mm256_add_ps(v_na, _mm256_mul_ps(va, va));
+        v_nb = _mm256_add_ps(v_nb, _mm256_mul_ps(vb, vb));
+    }
+    dot = (double)avx2_hsum256_ps(v_dot);
+    norm_a = (double)avx2_hsum256_ps(v_na);
+    norm_b = (double)avx2_hsum256_ps(v_nb);
+#endif
+
+    for (; i < dim; i++) {
         dot += (double)a[i] * (double)b[i];
         norm_a += (double)a[i] * (double)a[i];
         norm_b += (double)b[i] * (double)b[i];
@@ -156,8 +188,21 @@ csilk_simd_l2_distance(const float* a, const float* b, size_t dim)
         return 0.0f;
     }
 
+    size_t i = 0;
     double dist = 0.0;
-    for (size_t i = 0; i < dim; i++) {
+
+#if defined(__AVX2__)
+    __m256 v_dist = _mm256_setzero_ps();
+    for (; i + 8 <= dim; i += 8) {
+        __m256 va = _mm256_loadu_ps(a + i);
+        __m256 vb = _mm256_loadu_ps(b + i);
+        __m256 diff = _mm256_sub_ps(va, vb);
+        v_dist = _mm256_add_ps(v_dist, _mm256_mul_ps(diff, diff));
+    }
+    dist = (double)avx2_hsum256_ps(v_dist);
+#endif
+
+    for (; i < dim; i++) {
         double diff = (double)a[i] - (double)b[i];
         dist += diff * diff;
     }
@@ -182,8 +227,20 @@ csilk_simd_dot_product(const float* a, const float* b, size_t dim)
         return 0.0f;
     }
 
+    size_t i = 0;
     double dot = 0.0;
-    for (size_t i = 0; i < dim; i++) {
+
+#if defined(__AVX2__)
+    __m256 v_dot = _mm256_setzero_ps();
+    for (; i + 8 <= dim; i += 8) {
+        __m256 va = _mm256_loadu_ps(a + i);
+        __m256 vb = _mm256_loadu_ps(b + i);
+        v_dot = _mm256_add_ps(v_dot, _mm256_mul_ps(va, vb));
+    }
+    dot = (double)avx2_hsum256_ps(v_dot);
+#endif
+
+    for (; i < dim; i++) {
         dot += (double)a[i] * (double)b[i];
     }
     return (float)(-dot);

@@ -49,7 +49,13 @@
 static csilk_reflect_entry_t g_registry[MAX_REG_STRUCTS];
 static size_t                g_registry_count = 0;
 static csilk_mutex_t         g_registry_mutex;
-static int                   g_registry_mutex_init = 0;
+static csilk_once_t          g_registry_once = CSILK_ONCE_INIT;
+
+static void
+reflect_mutex_init_once(void)
+{
+    csilk_mutex_init(&g_registry_mutex);
+}
 
 /** @brief Initialize the reflection system (called once at startup).
  *
@@ -62,10 +68,7 @@ static int                   g_registry_mutex_init = 0;
 void
 csilk_reflect_init(void)
 {
-    if (!g_registry_mutex_init) {
-        csilk_mutex_init(&g_registry_mutex);
-        g_registry_mutex_init = 1;
-    }
+    csilk_once(&g_registry_once, reflect_mutex_init_once);
 }
 
 /** @brief Internal: acquire the global reflection registry mutex.
@@ -75,9 +78,7 @@ csilk_reflect_init(void)
 static void
 registry_lock(void)
 {
-    if (!g_registry_mutex_init) {
-        csilk_reflect_init();
-    }
+    csilk_reflect_init();
     csilk_mutex_lock(&g_registry_mutex);
 }
 

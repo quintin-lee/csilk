@@ -210,18 +210,56 @@ csilk_hnsw_search(csilk_hnsw_index_t* index,
         return 0;
     }
 
-    char** doc_ids = calloc(k, sizeof(char*));
-    float* scores = calloc(k, sizeof(float));
-
-    for (size_t i = 0; i < k; i++) {
-        csilk_hnsw_node_t* n = index->nodes[i];
-        doc_ids[i] = strdup(n->doc_id);
-        scores[i] = index->dist_fn(query_vector, n->vector, index->dim);
+    char**  doc_ids = calloc(k, sizeof(char*));
+    float*  scores = calloc(k, sizeof(float));
+    size_t* best_indices = calloc(k, sizeof(size_t));
+    if (!doc_ids || !scores || !best_indices) {
+        free(doc_ids);
+        free(scores);
+        free(best_indices);
+        csilk_mutex_unlock(&index->mutex);
+        return -1;
     }
+
+    /* Maintain a sorted ascending Top-K buffer over all indexed nodes */
+    size_t filled = 0;
+    for (size_t i = 0; i < index->node_count; i++) {
+        csilk_hnsw_node_t* n = index->nodes[i];
+        if (!n || !n->vector) {
+            continue;
+        }
+        float d = index->dist_fn(query_vector, n->vector, index->dim);
+
+        if (filled < k) {
+            size_t pos = filled;
+            while (pos > 0 && scores[pos - 1] > d) {
+                scores[pos] = scores[pos - 1];
+                best_indices[pos] = best_indices[pos - 1];
+                pos--;
+            }
+            scores[pos] = d;
+            best_indices[pos] = i;
+            filled++;
+        } else if (d < scores[k - 1]) {
+            size_t pos = k - 1;
+            while (pos > 0 && scores[pos - 1] > d) {
+                scores[pos] = scores[pos - 1];
+                best_indices[pos] = best_indices[pos - 1];
+                pos--;
+            }
+            scores[pos] = d;
+            best_indices[pos] = i;
+        }
+    }
+
+    for (size_t i = 0; i < filled; i++) {
+        doc_ids[i] = strdup(index->nodes[best_indices[i]]->doc_id);
+    }
+    free(best_indices);
 
     *out_doc_ids = doc_ids;
     *out_scores = scores;
-    *out_count = k;
+    *out_count = filled;
 
     csilk_mutex_unlock(&index->mutex);
     return 0;

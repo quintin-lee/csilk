@@ -197,12 +197,16 @@ csilk_ai_tool_dispatch(csilk_ai_tool_registry_t* reg, const char* name, const ch
     }
 
     csilk_mutex_lock(&reg->mutex);
-    tool_item_t item = {0};
-    bool        found = false;
+    tool_item_t   item = {0};
+    csilk_json_t* schema_copy = NULL;
+    bool          found = false;
 
     for (size_t i = 0; i < reg->count; i++) {
         if (strcmp(reg->items[i].name, name) == 0) {
             item = reg->items[i];
+            if (item.schema_obj) {
+                schema_copy = csilk_json_copy(item.schema_obj);
+            }
             found = true;
             break;
         }
@@ -210,34 +214,40 @@ csilk_ai_tool_dispatch(csilk_ai_tool_registry_t* reg, const char* name, const ch
     csilk_mutex_unlock(&reg->mutex);
 
     if (!found || !item.fn) {
+        if (schema_copy) {
+            csilk_json_free(schema_copy);
+        }
         return strdup("{\"error\":\"tool not found\"}");
     }
 
     /* JSON Schema validation if schema is present */
-    if (item.schema_obj) {
+    if (schema_copy) {
         csilk_json_t* args = csilk_json_parse(args_json ? args_json : "{}");
         if (!args) {
+            csilk_json_free(schema_copy);
             return strdup("{\"error\":\"invalid JSON arguments\"}");
         }
 
-        csilk_json_t* required = csilk_json_get(item.schema_obj, "required");
+        csilk_json_t* required = csilk_json_get(schema_copy, "required");
         if (required && csilk_json_is_array(required)) {
             size_t n_req = csilk_json_array_size(required);
             for (size_t r = 0; r < n_req; r++) {
                 csilk_json_t* req_field = csilk_json_array_get(required, r);
                 const char*   fname = csilk_json_string_value(req_field);
                 if (fname && !csilk_json_get(args, fname)) {
-                    csilk_json_free(args);
                     char err_msg[256];
                     snprintf(err_msg,
                              sizeof(err_msg),
                              "{\"error\":\"missing required parameter: %s\"}",
                              fname);
+                    csilk_json_free(args);
+                    csilk_json_free(schema_copy);
                     return strdup(err_msg);
                 }
             }
         }
         csilk_json_free(args);
+        csilk_json_free(schema_copy);
     }
 
     return item.fn(args_json ? args_json : "{}", item.user_data);

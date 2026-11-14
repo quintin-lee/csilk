@@ -25,14 +25,18 @@ test_hnsw_index_insertion_and_search(void)
 
     float* v1 = calloc(dim, sizeof(float));
     float* v2 = calloc(dim, sizeof(float));
+    float* v3 = calloc(dim, sizeof(float));
 
     for (size_t i = 0; i < dim; i++) {
         v1[i] = 1.0f;
         v2[i] = (i % 2 == 0) ? 1.0f : 0.0f;
+        v3[i] = -1.0f; /* opposite direction — farthest from v1 */
     }
 
-    assert(csilk_hnsw_insert(idx, "doc_1", v1) == 0);
+    /* Insert farthest first, closest last to verify true Top-K ranking */
+    assert(csilk_hnsw_insert(idx, "doc_far", v3) == 0);
     assert(csilk_hnsw_insert(idx, "doc_2", v2) == 0);
+    assert(csilk_hnsw_insert(idx, "doc_1", v1) == 0);
 
     char** res_ids = nullptr;
     float* res_scores = nullptr;
@@ -43,6 +47,8 @@ test_hnsw_index_insertion_and_search(void)
     assert(count == 2);
     assert(res_ids != nullptr);
     assert(strcmp(res_ids[0], "doc_1") == 0);
+    assert(strcmp(res_ids[1], "doc_2") == 0);
+    assert(res_scores[0] <= res_scores[1]);
 
     for (size_t i = 0; i < count; i++) {
         free(res_ids[i]);
@@ -51,6 +57,7 @@ test_hnsw_index_insertion_and_search(void)
     free(res_scores);
     free(v1);
     free(v2);
+    free(v3);
 
     csilk_hnsw_index_free(idx);
     printf("test_hnsw_index_insertion_and_search passed\n");

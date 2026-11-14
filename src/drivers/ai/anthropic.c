@@ -104,6 +104,7 @@ struct anthropic_stream_ctx {
     csilk_ai_chat_response_t*      res;
     char*                          line_buf;
     size_t                         line_size;
+    size_t                         line_cap;
     streamed_tool_t*               tools;
     size_t                         tool_count;
     size_t                         tool_capacity;
@@ -256,11 +257,15 @@ stream_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
                 ctx->line_size = 0;
             }
         } else {
-            char* nb = realloc(ctx->line_buf, ctx->line_size + 2);
-            if (!nb) {
-                return 0;
+            if (ctx->line_size + 2 > ctx->line_cap) {
+                size_t ncap = ctx->line_cap == 0 ? 256 : ctx->line_cap * 2;
+                char*  nb = realloc(ctx->line_buf, ncap);
+                if (!nb) {
+                    return 0;
+                }
+                ctx->line_buf = nb;
+                ctx->line_cap = ncap;
             }
-            ctx->line_buf = nb;
             ctx->line_buf[ctx->line_size++] = c;
         }
     }
@@ -320,6 +325,49 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
                 nb[sys_len] = '\0';
                 system_buf = nb;
             }
+        } else if (role && strcmp(role, "tool") == 0 && req->messages[i].tool_call_id) {
+            csilk_json_t* m = csilk_json_object();
+            csilk_json_add_string(m, "role", "user");
+            csilk_json_t* blocks = csilk_json_array();
+            csilk_json_t* tr = csilk_json_object();
+            csilk_json_add_string(tr, "type", "tool_result");
+            csilk_json_add_string(tr, "tool_use_id", req->messages[i].tool_call_id);
+            csilk_json_add_string(tr, "content", content);
+            csilk_json_array_append(blocks, tr);
+            csilk_json_add_object(m, "content", blocks);
+            csilk_json_array_append(msgs_arr, m);
+        } else if (role && strcmp(role, "assistant") == 0 && req->messages[i].tool_calls &&
+                   req->messages[i].tool_call_count > 0) {
+            csilk_json_t* m = csilk_json_object();
+            csilk_json_add_string(m, "role", "assistant");
+            csilk_json_t* blocks = csilk_json_array();
+            if (content[0] != '\0') {
+                csilk_json_t* tb = csilk_json_object();
+                csilk_json_add_string(tb, "type", "text");
+                csilk_json_add_string(tb, "text", content);
+                csilk_json_array_append(blocks, tb);
+            }
+            for (size_t tc = 0; tc < req->messages[i].tool_call_count; tc++) {
+                csilk_json_t* tu = csilk_json_object();
+                csilk_json_add_string(tu, "type", "tool_use");
+                csilk_json_add_string(
+                    tu,
+                    "id",
+                    req->messages[i].tool_calls[tc].id ? req->messages[i].tool_calls[tc].id : "");
+                csilk_json_add_string(tu,
+                                      "name",
+                                      req->messages[i].tool_calls[tc].name
+                                          ? req->messages[i].tool_calls[tc].name
+                                          : "");
+                csilk_json_t* in_obj =
+                    req->messages[i].tool_calls[tc].arguments
+                        ? csilk_json_parse(req->messages[i].tool_calls[tc].arguments)
+                        : NULL;
+                csilk_json_add_object(tu, "input", in_obj ? in_obj : csilk_json_object());
+                csilk_json_array_append(blocks, tu);
+            }
+            csilk_json_add_object(m, "content", blocks);
+            csilk_json_array_append(msgs_arr, m);
         } else {
             csilk_json_t* m = csilk_json_object();
             csilk_json_add_string(m, "role", (role && role[0]) ? role : "user");
