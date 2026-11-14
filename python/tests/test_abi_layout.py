@@ -41,12 +41,18 @@ class TestPythonCAbiLayout(unittest.TestCase):
                 self.fail(f"Required ABI probe binary not found: {probe_bin!r}")
             self.skipTest("test_python_abi probe binary not built")
 
+        probe_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES")
+        }
         proc = subprocess.run(
             [probe_bin, "--dump-json"],
             check=True,
             capture_output=True,
             text=True,
             timeout=15,
+            env=probe_env,
         )
         c_structs = json.loads(proc.stdout)
         self.assertGreaterEqual(len(c_structs), 23)

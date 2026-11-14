@@ -1,8 +1,10 @@
 #include <assert.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/config/config.h"
@@ -28,7 +30,12 @@ typedef struct {
     size_t                  field_count;
 } abi_struct_desc_t;
 
-#define ABI_FIELD(type, field) {#field, offsetof(type, field), sizeof(((type){0}).field)}
+#define ABI_FIELD(m_type, m_field)                                                                 \
+    {                                                                                              \
+        .name = #m_field,                                                                          \
+        .offset = offsetof(m_type, m_field),                                                       \
+        .size = sizeof(((m_type){0}).m_field),                                                     \
+    }
 
 static const abi_field_desc_t f_circuit_breaker_config[] = {
     ABI_FIELD(csilk_circuit_breaker_config_t, failure_threshold),
@@ -245,8 +252,14 @@ static const abi_field_desc_t f_server_config[] = {
     ABI_FIELD(csilk_server_config_t, enable_openapi),
 };
 
-#define ABI_STRUCT(py_name, c_type, field_arr)                                                     \
-    {#py_name, #c_type, sizeof(c_type), (field_arr), sizeof(field_arr) / sizeof((field_arr)[0])}
+#define ABI_STRUCT(m_py_name, m_c_type, m_field_arr)                                               \
+    {                                                                                              \
+        .py_name = #m_py_name,                                                                     \
+        .c_name = #m_c_type,                                                                       \
+        .size = sizeof(m_c_type),                                                                  \
+        .fields = (m_field_arr),                                                                   \
+        .field_count = sizeof(m_field_arr) / sizeof((m_field_arr)[0]),                             \
+    }
 
 static const abi_struct_desc_t g_abi_structs[] = {
     ABI_STRUCT(CsilkCircuitBreakerConfig, csilk_circuit_breaker_config_t, f_circuit_breaker_config),
@@ -351,13 +364,13 @@ main(int argc, char** argv)
         return 0;
     }
 
-    char repo_root[1024] = {0};
+    char repo_root[PATH_MAX] = {0};
     if (resolve_repo_root(repo_root, sizeof(repo_root)) != 0) {
         fprintf(stderr, "Failed to resolve repository root from __FILE__ (%s)\n", __FILE__);
         return 1;
     }
 
-    char script_path[1280] = {0};
+    char script_path[PATH_MAX + 64] = {0};
     snprintf(script_path, sizeof(script_path), "%s/python/tests/test_abi_layout.py", repo_root);
 
     FILE* fp = fopen(script_path, "r");
@@ -367,18 +380,16 @@ main(int argc, char** argv)
     }
     fclose(fp);
 
-    char        resolved_bin[1024] = {0};
-    const char* probe_bin = realpath(argv[0], resolved_bin);
-    if (probe_bin == nullptr) {
-        probe_bin = argv[0];
-    }
+    char*       allocated_bin = realpath(argv[0], NULL);
+    const char* probe_bin = (allocated_bin != nullptr) ? allocated_bin : argv[0];
 
     setenv("CSILK_ABI_PROBE_BIN", probe_bin, 1);
     setenv("CSILK_REQUIRE_ABI_PROBE", "1", 1);
 
-    char cmd[1536] = {0};
+    char cmd[PATH_MAX + 128] = {0};
     snprintf(cmd, sizeof(cmd), "python3 \"%s\"", script_path);
     int rc = system(cmd);
+    free(allocated_bin);
     if (rc != 0) {
         fprintf(stderr, "Python ABI layout verification failed (rc=%d)\n", rc);
         return 1;
