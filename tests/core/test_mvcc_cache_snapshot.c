@@ -48,7 +48,9 @@ static void*
 snap_writer(void* arg)
 {
     snap_ctx_t* ctx = (snap_ctx_t*)arg;
-    uint32_t    base = (uint32_t)(pthread_self() >> 4);
+    /* Derive a per-writer base from the argument pointer (portable across
+     * Linux and macOS where pthread_t has different underlying types). */
+    uint32_t base = (uint32_t)((uintptr_t)ctx % 7) + 1;
 
     for (int i = 0; i < SNAP_OPS; i++) {
         uint32_t k = (base + i) % SNAP_KEYS;
