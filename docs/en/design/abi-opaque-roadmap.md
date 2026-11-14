@@ -23,9 +23,11 @@ Implemented comprehensive accessor/mutator API in `include/csilk/core/context.h`
 - Updated all test files and example applications to use opaque handles and public APIs.
 - Zero internal struct header includes in test or example directories.
 
-### Phase D: Router & Server Opaque Encapsulation ✅
+### Phase D: Router & Server Opaque Encapsulation & Symbol Whitelist ✅ (Completed in v0.9.0)
 - Converted `csilk_router_t` and `csilk_server_t` into fully opaque handles.
-- Moved `struct csilk_router_s` and `struct csilk_server_s` into internal implementation units.
+- Moved `struct csilk_router_s` and `struct csilk_server_s` into internal implementation units (`src/core/internal/`).
+- 100% passed `cmake/libcsilk.map` symbol export whitelist audit, ensuring dynamic library exposes exactly 844 `csilk_*` core APIs with zero internal `_csilk_` leakage.
+- Formally locked `SOVERSION = 1` in `cmake/targets.cmake` and delivered automated ABI check script (`scripts/check_abi_compatibility.sh`).
 
 ### Phase E: 3rd-Party & Backend Decoupling ✅
 - Decoupled OpenSSL from public headers: `include/csilk/core/hash.h` uses 64-bit aligned opaque memory buffers (`csilk_sha1_ctx`, `csilk_sha256_ctx`).

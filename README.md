@@ -59,10 +59,17 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - ⏳ **Sliding Window Rate Limiter** — Boundary-burst protection via weighted log/counter sliding windows (`csilk_sliding_rate_limit_middleware`)
 - 🌐 **HTTP/JSON <-> gRPC Transcoding Gateway** — Zero-copy 5-byte frame encoder (`csilk_grpc_frame_encode`) and HTTP/JSON to gRPC transcoding (`csilk_grpc_gateway_middleware`)
 - 🚀 **SWAR/SIMD Parallel Prefix Matching** — 64-bit parallel SWAR comparison (`csilk_common_prefix_len_fast`) and 64-byte cache-line aligned Arena memory pool
-- 🐍 **Python CFFI/ctypes Bindings** — Native Python wrappers (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`)
+- 🐍 **Python CFFI/ctypes Bindings** — Native Python wrappers (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`), plus native `async def` coroutine routing support
 - **WAF (Web Application Firewall)** middleware
 - 🧬 **Embedded SIMD Vector Index Engine** — Native 32-byte aligned AVX2 SIMD vector distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
 - 🛡️ **eBPF XDP Dynamic WAF & OTLP APM Dashboard** — Zero-downtime BPF-Map hot-reloading dynamic WAF rule engine (`csilk_xdp_waf_add_ip_rule`) and lock-free 2048-span W3C trace context ring buffer (`csilk_otlp_tracer_start_span`) with single-page embedded Web APM Dashboard (`/admin/apm`).
+
+### 📐 ABI Stability & Ecosystem (v1.0 LTS Ready)
+
+- 🔒 **Opaque ABI & SOVERSION 1 Lockdown** — 100% opaque handle encapsulation and `libcsilk.map` symbol whitelist enforcement (`cmake/libcsilk.map`), ensuring backward-incompatible binary changes are strictly blocked for the entire 1.x cycle.
+- 🧩 **WASM Sandbox Plugin Engine** — Native WebAssembly plugin sandbox (`csilk_wasm_plugin_*`) with LEB128 section validation, fuel-budget circuit breakers, and zero-copy Host ABI access.
+- 📦 **Global Package Management & Distribution** — Verified `vcpkg` ports (`cmake/ports/csilk`), modern `Conan 2.0+` recipes (`conanfile.py`), Homebrew Formula (`Formula/csilk.rb`), and GitHub Actions OIDC Trusted Publishing for PyPI (`wheels.yml`).
+- 📊 **Industrial-Grade Performance Benchmarks** — 100,000 Keep-Alive connections with **~3.8 MB RSS**, P99 latency **< 2ms**, and up to **228K QPS** (see `benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`).
 
 ## Architecture Overview
 
@@ -171,6 +178,12 @@ graph TB
 - [sqlite3](https://www.sqlite.org/) - Embedded SQL database
 
 libuv (default), liburing (optional, `-DCSILK_USE_URING=ON`), nghttp2, and cJSON are automatically fetched during build via CMake's FetchContent. llhttp is used from the system if available, otherwise fetched. libyaml, OpenSSL, zlib, libcurl, and sqlite3 must be installed as system dependencies.
+
+For global package management support, `csilk` has been integrated with major C/C++ dependency managers:
+
+* **vcpkg (CMake)**: `vcpkg install csilk`
+* **Conan 2.0+**: `conan create . --version 0.9.0`
+* **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### Installation (Debian/Ubuntu)
 ```bash
