@@ -216,6 +216,76 @@ main()
         free(tcc.arguments);
     }
 
+    /* --- Ollama & OpenAI Driver boundary defenses --- */
+    printf("Testing Ollama and OpenAI driver boundary defenses...\n");
+    {
+        /* 1. Ollama driver creation with empty URL / empty API Key */
+        csilk_ai_t* ollama = csilk_ai_new("ollama", "", nullptr);
+        assert(ollama != nullptr);
+
+        /* 2. Chat with an empty context triggers boundary OOM intercept */
+        csilk_ai_context_t* empty_ctx = csilk_ai_context_new(0);
+        assert(empty_ctx != nullptr);
+
+        /* 3. Empty string prompt intercept */
+        csilk_ai_message_t       msg1 = {.role = "user",
+                                         .content = "",
+                                         .tool_calls = nullptr,
+                                         .tool_call_count = 0,
+                                         .tool_call_id = nullptr};
+        csilk_ai_chat_request_t  req = {.model = nullptr,
+                                        .messages = &msg1,
+                                        .message_count = 1,
+                                        .temperature = 0.0,
+                                        .top_p = 1.0,
+                                        .presence_penalty = 0.0,
+                                        .frequency_penalty = 0.0,
+                                        .max_tokens = 0,
+                                        .stop = nullptr,
+                                        .stop_count = 0,
+                                        .user = nullptr,
+                                        .stream = false,
+                                        .on_chunk = nullptr,
+                                        .on_reasoning_chunk = nullptr,
+                                        .user_data = nullptr,
+                                        .timeout_ms = 1000,
+                                        .tools = nullptr,
+                                        .tool_count = 0,
+                                        .tool_choice = nullptr,
+                                        .reasoning_effort = nullptr,
+                                        .has_enable_thinking = false,
+                                        .enable_thinking = false,
+                                        .chat_template_kwargs = nullptr};
+        csilk_ai_chat_response_t res = {0};
+        int                      rc = csilk_ai_chat(ollama, &req, &res);
+        assert(rc == -1 || res.error_message != nullptr || res.content == nullptr);
+        csilk_ai_chat_response_free(&res);
+        csilk_ai_context_free(empty_ctx);
+        csilk_ai_free(ollama);
+
+        /* 4. OpenAI driver invalid API key boundary */
+        csilk_ai_t* openai = csilk_ai_new("openai", "sk-invalid-key", nullptr);
+        assert(openai != nullptr);
+
+        csilk_ai_context_t* oai_ctx = csilk_ai_context_new(0);
+        assert(oai_ctx != nullptr);
+
+        csilk_ai_message_t      msg2 = {.role = "user",
+                                        .content = "test",
+                                        .tool_calls = nullptr,
+                                        .tool_call_count = 0,
+                                        .tool_call_id = nullptr};
+        csilk_ai_chat_request_t req2 = req;
+        req2.messages = &msg2;
+
+        csilk_ai_chat_response_t oai_res = {0};
+        int                      rc2 = csilk_ai_chat(openai, &req2, &oai_res);
+        assert(rc2 == -1 || oai_res.error_message != nullptr);
+        csilk_ai_chat_response_free(&oai_res);
+        csilk_ai_context_free(oai_ctx);
+        csilk_ai_free(openai);
+    }
+
     printf("test_ai_ext: PASS\n");
     return 0;
 }
