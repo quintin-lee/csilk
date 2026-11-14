@@ -209,7 +209,7 @@ jobs:
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
     - name: Build Fuzzers
-      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers -j$(nproc)
+      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc -j$(nproc)
 
     - name: Fuzz — fuzz_test (HTTP routing + query parsing)
       run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_test
@@ -222,6 +222,15 @@ jobs:
 
     - name: Fuzz — fuzz_headers (form parsing + headers)
       run: cd build && ./fuzz_headers -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict
+
+    - name: Fuzz — fuzz_h2 (HTTP/2 session + frame decoding)
+      run: cd build && ./fuzz_h2 -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_h2
+
+    - name: Fuzz — fuzz_websocket (WebSocket handshake + frame decoding)
+      run: cd build && ./fuzz_websocket -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_websocket
+
+    - name: Fuzz — fuzz_raft_rpc (Raft RPC header + payload codecs)
+      run: cd build && ./fuzz_raft_rpc -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_raft_rpc
 
   arm64:
     name: ARM64 Cross-Compile

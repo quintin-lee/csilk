@@ -77,3 +77,15 @@
 # JWT tokens
 "Bearer"
 "eyJ"
+
+# HTTP/2 preface & pseudo-headers
+"PRI * HTTP/2.0\x0d\x0a\x0d\x0aSM\x0d\x0a\x0d\x0a"
+":method"
+":path"
+":authority"
+":scheme"
+
+# WebSocket handshake & Raft magic
+"Sec-WebSocket-Key:"
+"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+"TFAR"
