@@ -5,8 +5,13 @@
  */
 
 #include "csilk/core/io/dpdk_pmd.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 struct csilk_dpdk_engine_s {
     csilk_dpdk_config_t config;
@@ -28,6 +33,11 @@ struct csilk_dpdk_engine_s {
 csilk_dpdk_engine_t*
 csilk_dpdk_engine_new(const csilk_dpdk_config_t* config)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)config;
+    errno = ENOTSUP;
+    return NULL;
+#else
     if (!config) {
         return NULL;
     }
@@ -57,6 +67,7 @@ csilk_dpdk_engine_new(const csilk_dpdk_config_t* config)
     engine->tx_head = 0;
 
     return engine;
+#endif
 }
 
 /**
@@ -88,6 +99,13 @@ csilk_dpdk_engine_free(csilk_dpdk_engine_t* engine)
 int
 csilk_dpdk_rx_burst(csilk_dpdk_engine_t* engine, const uint8_t** pkt_data, size_t* pkt_len)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)engine;
+    (void)pkt_data;
+    (void)pkt_len;
+    errno = ENOTSUP;
+    return -ENOTSUP;
+#else
     if (!engine || !pkt_data || !pkt_len) {
         return -1;
     }
@@ -100,6 +118,7 @@ csilk_dpdk_rx_burst(csilk_dpdk_engine_t* engine, const uint8_t** pkt_data, size_
     engine->rx_head++;
 
     return 0;
+#endif
 }
 
 /**
@@ -113,6 +132,13 @@ csilk_dpdk_rx_burst(csilk_dpdk_engine_t* engine, const uint8_t** pkt_data, size_
 int
 csilk_dpdk_tx_burst(csilk_dpdk_engine_t* engine, const uint8_t* pkt_data, size_t pkt_len)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)engine;
+    (void)pkt_data;
+    (void)pkt_len;
+    errno = ENOTSUP;
+    return -ENOTSUP;
+#else
     if (!engine || !pkt_data || pkt_len == 0) {
         return -1;
     }
@@ -128,4 +154,5 @@ csilk_dpdk_tx_burst(csilk_dpdk_engine_t* engine, const uint8_t* pkt_data, size_t
     engine->tx_head++;
 
     return 0;
+#endif
 }

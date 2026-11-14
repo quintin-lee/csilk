@@ -6,9 +6,14 @@
 #include "csilk/protocols/h3.h"
 #include "csilk/csilk.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 /**
  * @brief Encode a value as an RFC 9000 QUIC variable-length integer.
@@ -236,6 +241,13 @@ struct csilk_h3_listener_s {
 csilk_h3_listener_t*
 csilk_h3_listener_bind(int port)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)port;
+    errno = ENOTSUP;
+    CSILK_LOG_W(
+        "HTTP/3: experimental listener stub disabled (CSILK_ENABLE_EXPERIMENTAL_STUBS=OFF)");
+    return NULL;
+#else
     if (port <= 0 || port > 65535) {
         return NULL;
     }
@@ -249,6 +261,7 @@ csilk_h3_listener_bind(int port)
     l->is_active = 1;
     CSILK_LOG_I("HTTP/3: bound UDP listener to port %d", port);
     return l;
+#endif
 }
 
 /**

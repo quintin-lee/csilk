@@ -243,17 +243,20 @@ make
 # cmake .. -DCSILK_USE_URING=ON
 
 # 可用 CMake 选项：
-#   -DCSILK_BUILD_SHARED=ON   同时构建动态共享库与静态库（默认 ON）
-#   -DCSILK_USE_URING=ON      使用 io_uring 后端替代 libuv（仅 Linux，默认 OFF）
-#   -DUSE_ASAN=ON             启用 AddressSanitizer（默认 OFF）
-#   -DUSE_TSAN=ON             启用 ThreadSanitizer（默认 OFF）
-#   -DUSE_FUZZER=ON           启用 libFuzzer（默认 OFF）
+#   -DCSILK_BUILD_SHARED=ON               同时构建动态共享库与静态库（默认 ON）
+#   -DCSILK_USE_URING=ON                  使用 io_uring 后端替代 libuv（仅 Linux，默认 OFF）
+#   -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF 关闭实验性/模拟桩模块，按 ENOTSUP/NULL 失败关闭（默认 ON）
+#   -DUSE_ASAN=ON                         启用 AddressSanitizer（默认 OFF）
+#   -DUSE_TSAN=ON                         启用 ThreadSanitizer（默认 OFF）
+#   -DUSE_FUZZER=ON                       启用 libFuzzer（默认 OFF）
 
 # 运行测试
 ctest --output-on-failure
 ```
 
 ## 模块化子库与集成方式
+
+> **实验性与模拟模块能力边界声明**：框架核心的 HTTP/1.1、HTTP/2（`nghttp2`）、TLS 1.3（`OpenSSL`）、Trie 路由、Arena、MQ/Raft、SQLite/MySQL/PostgreSQL/Redis 及 HNSW 引擎均为真实完整实现；而 `csilk_bypass`（**AF_XDP** / **DPDK** 进程内内存环模拟及 `io_perf_probe` 权限探测）、`csilk_wasm`（**WASM/WASI** 魔数校验与 fuel 计数桩运行时）、**HTTP/3** `csilk_h3_listener_*`（无 QUIC/TLS/QPACK 传输层的 UDP/ConnID 骨架，完整 HTTP/3 推迟至 v1.1+）以及 **MongoDB 多文档事务**（`transaction_*` 按 `-1` 失败关闭，仅具备单文档原子性）属于实验性或受限边界。在加固构建中可传入 `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF` 使模拟桩入口按 `ENOTSUP`/`NULL` 失败关闭。
 
 csilk 采用高内聚低耦合的模块化设计，提供静态库（`.a`）与动态共享库（`.so`）双重构建产物：
 

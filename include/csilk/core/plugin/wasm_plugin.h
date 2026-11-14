@@ -1,6 +1,11 @@
 /**
  * @file wasm_plugin.h
  * @brief WebAssembly (WASM) Dynamic Sandbox Plugin Engine for csilk.
+ *
+ * @warning EXPERIMENTAL / SIMULATED RUNTIME: Validates the 8-byte WASM header
+ *          and maps linear memory, but csilk_wasm_plugin_execute() does not run
+ *          a real WebAssembly bytecode interpreter/JIT yet. Disable simulation
+ *          mode at configure time with -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF.
  */
 
 #ifndef CSILK_CORE_WASM_PLUGIN_H

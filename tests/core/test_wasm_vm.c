@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,13 @@ test_wasm_vm_parsing_and_exec(void)
     config.fuel_limit = 500000;
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, &config);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(plugin == nullptr);
+    assert(errno == ENOTSUP);
+    remove(dummy_wasm);
+    printf("test_wasm_vm_parsing_and_exec (fail-closed) passed\n");
+    return;
+#else
     assert(plugin != nullptr);
 
     char  err_buf[128];
@@ -34,6 +42,7 @@ test_wasm_vm_parsing_and_exec(void)
     csilk_wasm_plugin_free(plugin);
     remove(dummy_wasm);
     printf("test_wasm_vm_parsing_and_exec passed\n");
+#endif
 }
 
 int

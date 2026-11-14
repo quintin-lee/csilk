@@ -1,6 +1,12 @@
 /**
  * @file h3.h
  * @brief HTTP/3 (RFC 9114) Frame Encoding/Decoding and RFC 9000 QUIC Varint utilities.
+ *
+ * @warning EXPERIMENTAL / PARTIAL SKELETON: RFC 9000 Varint and RFC 9114 frame
+ *          codecs and Alt-Svc header injection are real utilities, whereas
+ *          csilk_h3_listener_*() is an experimental UDP listener/ConnID parser
+ *          skeleton without QUIC transport, TLS 1.3 handshake, QPACK, or stream
+ *          multiplexing (full HTTP/3 via ngtcp2/nghttp3 is deferred to v1.1+).
  */
 
 #ifndef CSILK_PROTOCOLS_H3_H

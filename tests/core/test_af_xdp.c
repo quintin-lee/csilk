@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include "csilk/core/io/af_xdp.h"
@@ -11,6 +12,14 @@ main(void)
     csilk_xdp_config_t cfg = {.ifname = "eth0", .queue_id = 0, .frame_size = 2048, .frame_num = 16};
 
     csilk_xdp_socket_t* xsk = csilk_xdp_socket_new(&cfg);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(xsk == NULL);
+    assert(errno == ENOTSUP);
+    assert(csilk_xdp_tx_burst(NULL, NULL, 0) == -ENOTSUP);
+    assert(csilk_xdp_rx_burst(NULL, NULL, NULL) == -ENOTSUP);
+    printf("test_af_xdp (fail-closed): PASS\n");
+    return 0;
+#else
     assert(xsk != NULL);
 
     /* Test 1: TX packet burst */
@@ -27,4 +36,5 @@ main(void)
     csilk_xdp_socket_free(xsk);
     printf("test_af_xdp: PASS\n");
     return 0;
+#endif
 }

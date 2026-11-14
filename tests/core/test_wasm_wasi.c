@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,13 @@ test_wasm_wasi_and_host_functions(void)
     fclose(f);
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, nullptr);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(plugin == nullptr);
+    assert(errno == ENOTSUP);
+    remove(dummy_wasm);
+    printf("test_wasm_wasi_and_host_functions (fail-closed) passed\n");
+    return;
+#else
     assert(plugin != nullptr);
 
     uint32_t nwritten = csilk_host_get_input(plugin, 0, 64, "{\"msg\":\"wasi_test\"}");
@@ -30,6 +38,7 @@ test_wasm_wasi_and_host_functions(void)
     csilk_wasm_plugin_free(plugin);
     remove(dummy_wasm);
     printf("test_wasm_wasi_and_host_functions passed\n");
+#endif
 }
 
 int

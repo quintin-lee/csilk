@@ -5,6 +5,12 @@
  * Provides capabilities for probing Linux kernel and NIC drivers, enabling AF_XDP
  * hardware zero-copy UMEM packet processing, and configuring zero-syscall io_uring
  * SQPOLL kernel thread polling.
+ *
+ * @warning EXPERIMENTAL / PROBE STUB: csilk_io_perf_probe() reports compile-time
+ *          CSILK_USE_URING capability and effective-UID root status rather than
+ *          probing real NIC XDP capabilities; csilk_io_perf_enable_xdp() and
+ *          csilk_io_perf_enable_sqpoll() are capability-check stubs and do not
+ *          reconfigure live server/app event loops.
  */
 
 #ifndef CSILK_IO_PERF_H

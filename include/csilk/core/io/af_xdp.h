@@ -3,6 +3,12 @@
  * @file af_xdp.h
  * @brief AF_XDP (XSK) kernel bypass zero-copy network socket driver.
  *
+ * @warning EXPERIMENTAL / SIMULATED STUB: Current implementation allocates an
+ *          in-process page-aligned UMEM ring buffer and copies frames in memory
+ *          for API prototyping and unit testing. It does NOT open real Linux
+ *          AF_XDP/XSK kernel sockets or attach to physical NICs. Disable
+ *          simulation mode at configure time with -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF.
+ *
  * @version 0.5.2
  * @copyright MIT License
  */

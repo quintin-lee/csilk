@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include "csilk/core/io/dpdk_pmd.h"
@@ -12,6 +13,14 @@ main(void)
         .port_id = 0, .rx_rings = 1, .tx_rings = 1, .pool_size = 16, .mbuf_size = 2048};
 
     csilk_dpdk_engine_t* engine = csilk_dpdk_engine_new(&cfg);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(engine == NULL);
+    assert(errno == ENOTSUP);
+    assert(csilk_dpdk_tx_burst(NULL, NULL, 0) == -ENOTSUP);
+    assert(csilk_dpdk_rx_burst(NULL, NULL, NULL) == -ENOTSUP);
+    printf("test_dpdk_pmd (fail-closed): PASS\n");
+    return 0;
+#else
     assert(engine != NULL);
 
     /* Test 1: TX burst */
@@ -28,4 +37,5 @@ main(void)
     csilk_dpdk_engine_free(engine);
     printf("test_dpdk_pmd: PASS\n");
     return 0;
+#endif
 }

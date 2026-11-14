@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,12 @@ test_wasm_plugin_load_valid()
     const uint8_t valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(plugin == NULL);
+    assert(errno == ENOTSUP);
+    printf("test_wasm_plugin_load_valid (fail-closed): PASS\n");
+    return;
+#else
     assert(plugin != NULL);
     assert(csilk_wasm_plugin_is_valid(plugin) == 1);
 
@@ -38,6 +45,7 @@ test_wasm_plugin_load_valid()
 
     csilk_wasm_plugin_free(plugin);
     printf("test_wasm_plugin_load_valid: PASS\n");
+#endif
 }
 
 static void
@@ -75,6 +83,12 @@ test_wasm_shared_mem()
 
     const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(plugin == NULL);
+    assert(errno == ENOTSUP);
+    printf("test_wasm_shared_mem (fail-closed): PASS\n");
+    return;
+#else
     assert(plugin != NULL);
 
     char host_buf[256] = "Shared Memory Data";
@@ -88,6 +102,7 @@ test_wasm_shared_mem()
 
     csilk_wasm_plugin_free(plugin);
     printf("test_wasm_shared_mem: PASS\n");
+#endif
 }
 
 int

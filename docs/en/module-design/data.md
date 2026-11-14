@@ -206,9 +206,11 @@ Redis serves two roles in csilk:
 
 ### 6.2 Transaction Support
 
-SQLite, MySQL, PostgreSQL, and MongoDB drivers implement the full transaction vtable (`begin` / `commit` / `rollback`). The transaction methods delegate to the corresponding SQL commands (`BEGIN`, `COMMIT`, `ROLLBACK`) sent through the driver's `exec` function. MongoDB uses `mongoc_client_session_start/commit/abort_transaction`.
+SQLite, MySQL, and PostgreSQL drivers implement the SQL transaction vtable (`begin` / `commit` / `rollback`), delegating to `BEGIN`, `COMMIT`, and `ROLLBACK` via `exec`, and support nested savepoint scopes (`csilk_db_tx_scope_*`).
 
-Redis transactions use `MULTI/EXEC/DISCARD` in its transaction callbacks (separate from the db_driver_t vtable; handled in `redis_drv_transaction_begin/commit/rollback`).
+Redis transactions use `MULTI` / `EXEC` / `DISCARD` in `redis_drv_transaction_begin/commit/rollback`.
+
+MongoDB does **not** implement multi-document ACID transactions (`mongoc_client_session_*` is not wired); `mongodb_transaction_begin/commit/rollback` fail closed returning `-1` (only MongoDB's native single-document atomicity applies), and `csilk_db_tx_scope_*` (which issues SQL `BEGIN TRANSACTION` / `SAVEPOINT`) is SQL-only.
 
 ---
 
