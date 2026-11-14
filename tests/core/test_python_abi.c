@@ -30,12 +30,9 @@ typedef struct {
     size_t                  field_count;
 } abi_struct_desc_t;
 
-#define ABI_FIELD(m_type, m_field)                                                                 \
-    {                                                                                              \
-        .name = #m_field,                                                                          \
-        .offset = offsetof(m_type, m_field),                                                       \
-        .size = sizeof(((m_type){0}).m_field),                                                     \
-    }
+// clang-format off
+#define ABI_FIELD(type, field) {#field, offsetof(type, field), sizeof(((type){0}).field)}
+// clang-format on
 
 static const abi_field_desc_t f_circuit_breaker_config[] = {
     ABI_FIELD(csilk_circuit_breaker_config_t, failure_threshold),
@@ -252,14 +249,10 @@ static const abi_field_desc_t f_server_config[] = {
     ABI_FIELD(csilk_server_config_t, enable_openapi),
 };
 
-#define ABI_STRUCT(m_py_name, m_c_type, m_field_arr)                                               \
-    {                                                                                              \
-        .py_name = #m_py_name,                                                                     \
-        .c_name = #m_c_type,                                                                       \
-        .size = sizeof(m_c_type),                                                                  \
-        .fields = (m_field_arr),                                                                   \
-        .field_count = sizeof(m_field_arr) / sizeof((m_field_arr)[0]),                             \
-    }
+// clang-format off
+#define ABI_STRUCT(py_name, c_type, field_arr)                                                     \
+    {#py_name, #c_type, sizeof(c_type), (field_arr), sizeof(field_arr) / sizeof((field_arr)[0])}
+// clang-format on
 
 static const abi_struct_desc_t g_abi_structs[] = {
     ABI_STRUCT(CsilkCircuitBreakerConfig, csilk_circuit_breaker_config_t, f_circuit_breaker_config),
