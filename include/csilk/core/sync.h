@@ -13,6 +13,7 @@
 
 #ifdef CSILK_USE_URING
 #include <pthread.h>
+#include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
 /** @brief Mutex type (pthread_mutex_t under the uring backend). */
@@ -195,6 +196,12 @@ csilk_thread_yield(void)
     sched_yield();
 }
 
+static inline int
+csilk_thread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    return pthread_sigmask(how, set, oldset);
+}
+
 #ifdef __linux__
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -273,6 +280,7 @@ csilk_barrier_destroy(csilk_barrier_t* barrier)
 }
 #else
 #include <csilk/core/sys_io.h>
+#include <signal.h>
 /** @brief Mutex type (uv_mutex_t under the libuv backend). */
 typedef uv_mutex_t csilk_mutex_t;
 /** @brief Thread handle type (uv_thread_t under the libuv backend). */
@@ -447,6 +455,12 @@ static inline void
 csilk_thread_yield(void)
 {
     sched_yield();
+}
+
+static inline int
+csilk_thread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    return pthread_sigmask(how, set, oldset);
 }
 
 static inline int

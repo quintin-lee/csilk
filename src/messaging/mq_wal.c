@@ -15,7 +15,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <unistd.h>
 #include "mq_internal.h"
 #include "csilk/csilk.h"
@@ -30,13 +29,21 @@ typedef struct mq_wal_task_s {
     struct mq_wal_task_s* next;
 } mq_wal_task_t;
 
-static mq_wal_task_t*  g_mq_wal_queue_head = NULL;
-static mq_wal_task_t*  g_mq_wal_queue_tail = NULL;
-static pthread_mutex_t g_mq_wal_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t  g_mq_wal_cond = PTHREAD_COND_INITIALIZER;
-static pthread_t       g_mq_wal_thread;
-static int             g_mq_wal_thread_started = 0;
-static int             g_mq_wal_shutdown = 0;
+static mq_wal_task_t* g_mq_wal_queue_head = NULL;
+static mq_wal_task_t* g_mq_wal_queue_tail = NULL;
+static csilk_once_t   g_mq_wal_init_once = CSILK_ONCE_INIT;
+static csilk_mutex_t  g_mq_wal_mutex;
+static csilk_cond_t   g_mq_wal_cond;
+static csilk_thread_t g_mq_wal_thread;
+static int            g_mq_wal_thread_started = 0;
+static int            g_mq_wal_shutdown = 0;
+
+static void
+mq_wal_sync_init(void)
+{
+    csilk_mutex_init(&g_mq_wal_mutex);
+    csilk_cond_init(&g_mq_wal_cond);
+}
 /** @brief True while the writer thread is actively flushing a batch to disk.
  *
  *  Set under @c g_mq_wal_mutex immediately after a batch is dequeued, and
@@ -70,13 +77,13 @@ mq_wal_checksum(const char* topic, uint32_t topic_len, const void* payload, uint
     return hash;
 }
 
-static void*
+static void
 mq_wal_writer_thread(void* arg)
 {
     (void)arg;
 
     while (1) {
-        pthread_mutex_lock(&g_mq_wal_mutex);
+        csilk_mutex_lock(&g_mq_wal_mutex);
 
         /* Wait for work or shutdown.
          *
@@ -86,17 +93,11 @@ mq_wal_writer_thread(void* arg)
          * the thread immediately, so the timeout only affects the
          * idle-to-first-message latency. */
         while (g_mq_wal_queue_head == NULL && !g_mq_wal_shutdown) {
-            struct timespec ts;
-            clock_gettime(CLOCK_REALTIME, &ts);
-            ts.tv_nsec += (long)MQ_WAL_FLUSH_TIMEOUT_MS * 1000000L;
-            if (ts.tv_nsec >= 1000000000L) {
-                ts.tv_sec += 1;
-                ts.tv_nsec -= 1000000000L;
-            }
-            pthread_cond_timedwait(&g_mq_wal_cond, &g_mq_wal_mutex, &ts);
+            (void)csilk_cond_timedwait(
+                &g_mq_wal_cond, &g_mq_wal_mutex, (uint64_t)MQ_WAL_FLUSH_TIMEOUT_MS * 1000000ULL);
         }
         if (g_mq_wal_shutdown && g_mq_wal_queue_head == NULL) {
-            pthread_mutex_unlock(&g_mq_wal_mutex);
+            csilk_mutex_unlock(&g_mq_wal_mutex);
             break;
         }
 
@@ -105,7 +106,7 @@ mq_wal_writer_thread(void* arg)
         g_mq_wal_queue_head = NULL;
         g_mq_wal_queue_tail = NULL;
         g_mq_wal_writing = 1;
-        pthread_mutex_unlock(&g_mq_wal_mutex);
+        csilk_mutex_unlock(&g_mq_wal_mutex);
 
         int            sync_fds[64];
         size_t         sync_fd_count = 0;
@@ -154,12 +155,11 @@ mq_wal_writer_thread(void* arg)
 
         /* Mark idle and wake any _mq_wal_flush() callers waiting for this
          * batch to become durable. */
-        pthread_mutex_lock(&g_mq_wal_mutex);
+        csilk_mutex_lock(&g_mq_wal_mutex);
         g_mq_wal_writing = 0;
-        pthread_cond_broadcast(&g_mq_wal_cond);
-        pthread_mutex_unlock(&g_mq_wal_mutex);
+        csilk_cond_broadcast(&g_mq_wal_cond);
+        csilk_mutex_unlock(&g_mq_wal_mutex);
     }
-    return NULL;
 }
 
 /* Signals the WAL writer thread to shut down and joins it.  Registered via
@@ -167,28 +167,31 @@ mq_wal_writer_thread(void* arg)
 static void
 mq_wal_cleanup(void)
 {
-    pthread_mutex_lock(&g_mq_wal_mutex);
+    csilk_once(&g_mq_wal_init_once, mq_wal_sync_init);
+    csilk_mutex_lock(&g_mq_wal_mutex);
     g_mq_wal_shutdown = 1;
-    pthread_cond_signal(&g_mq_wal_cond);
-    pthread_mutex_unlock(&g_mq_wal_mutex);
+    int started = g_mq_wal_thread_started;
+    csilk_cond_signal(&g_mq_wal_cond);
+    csilk_mutex_unlock(&g_mq_wal_mutex);
 
-    if (g_mq_wal_thread_started) {
-        pthread_join(g_mq_wal_thread, NULL);
+    if (started) {
+        csilk_thread_join(&g_mq_wal_thread);
     }
 }
 
 CSILK_INTERNAL void
 _mq_wal_flush(void)
 {
-    pthread_mutex_lock(&g_mq_wal_mutex);
+    csilk_once(&g_mq_wal_init_once, mq_wal_sync_init);
+    csilk_mutex_lock(&g_mq_wal_mutex);
     /* Wait until the queue is empty AND the writer thread has finished
      * flushing its current batch to disk. Only then is it safe to close
      * a WAL fd or to read back a WAL file, since otherwise in-flight writes
      * (which run outside the mutex) could race with the close/read. */
     while (g_mq_wal_queue_head != NULL || g_mq_wal_writing) {
-        pthread_cond_wait(&g_mq_wal_cond, &g_mq_wal_mutex);
+        csilk_cond_wait(&g_mq_wal_cond, &g_mq_wal_mutex);
     }
-    pthread_mutex_unlock(&g_mq_wal_mutex);
+    csilk_mutex_unlock(&g_mq_wal_mutex);
 }
 
 /**
@@ -216,14 +219,15 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
         return 0;
     }
 
-    pthread_mutex_lock(&g_mq_wal_mutex);
+    csilk_once(&g_mq_wal_init_once, mq_wal_sync_init);
+    csilk_mutex_lock(&g_mq_wal_mutex);
     if (!g_mq_wal_thread_started && !g_mq_wal_shutdown) {
-        if (pthread_create(&g_mq_wal_thread, NULL, mq_wal_writer_thread, NULL) == 0) {
+        if (csilk_thread_create(&g_mq_wal_thread, mq_wal_writer_thread, NULL) == 0) {
             g_mq_wal_thread_started = 1;
             atexit(mq_wal_cleanup);
         }
     }
-    pthread_mutex_unlock(&g_mq_wal_mutex);
+    csilk_mutex_unlock(&g_mq_wal_mutex);
 
     mq_wal_task_t* task = malloc(sizeof(mq_wal_task_t));
     if (!task) {
@@ -249,7 +253,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
     }
     task->next = NULL;
 
-    pthread_mutex_lock(&g_mq_wal_mutex);
+    csilk_mutex_lock(&g_mq_wal_mutex);
     if (g_mq_wal_queue_tail) {
         g_mq_wal_queue_tail->next = task;
         g_mq_wal_queue_tail = task;
@@ -257,8 +261,8 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
         g_mq_wal_queue_head = task;
         g_mq_wal_queue_tail = task;
     }
-    pthread_cond_signal(&g_mq_wal_cond);
-    pthread_mutex_unlock(&g_mq_wal_mutex);
+    csilk_cond_signal(&g_mq_wal_cond);
+    csilk_mutex_unlock(&g_mq_wal_mutex);
 
     return 0;
 }

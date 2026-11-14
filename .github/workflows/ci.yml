@@ -173,6 +173,9 @@ jobs:
     - name: Check version sync (CMake vs git tag)
       run: ./scripts/check_version_sync.sh
 
+    - name: Check sync primitive abstraction (no raw pthread in src/)
+      run: bash ./scripts/check_sync_primitives.sh
+
     - name: Configure
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 

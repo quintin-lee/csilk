@@ -10,6 +10,7 @@
 #include <csilk/csilk.h>
 #include <csilk/core/server/server.h>
 #include <csilk/core/internal.h>
+#include <csilk/core/sync.h>
 #include "../ctx/ctx_internal.h"
 #include "../internal/srv_internal.h"
 #include "uring_internal.h"
@@ -114,7 +115,7 @@ csilk_io_signal_start(csilk_io_signal_t* handle, csilk_io_signal_cb cb, int sign
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, signum);
-    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+    csilk_thread_sigmask(SIG_BLOCK, &mask, NULL);
 
     int sfd = signalfd(handle->signal_fd, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
     if (sfd < 0) {
